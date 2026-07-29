@@ -57,8 +57,22 @@ function computeCrossMonth(startIso, endIso) {
   const monthAShort = MON_SHORT[s.getMonth()];
   const monthBName = MON_LONG[e.getMonth()];
   const monthBShort = MON_SHORT[e.getMonth()];
-  const monthARange = `${monthAShort} ${s.getDate()}-${lastOfStartMonth.getDate()}`;
-  const monthBRange = `${monthBShort} 1-${e.getDate()}`;
+  // Single-day sides render as one date, not "N-N". Fires on blocks
+  // that start on the last day of a month (start side collapses) or
+  // spill exactly one day into the next month (end side collapses).
+  // Both are common: any month ending on the last day of a homestand
+  // hits the start-side collapse, and any Sunday-ending month
+  // produces the end-side collapse. HS1 (Mar 26 - Apr 1) is the
+  // end-side pilot; HS12 (Aug 31 - Sep 6) is the start-side pilot.
+  const startDay = s.getDate();
+  const lastDay = lastOfStartMonth.getDate();
+  const endDay = e.getDate();
+  const monthARange = startDay === lastDay
+    ? `${monthAShort} ${startDay}`
+    : `${monthAShort} ${startDay}-${lastDay}`;
+  const monthBRange = endDay === 1
+    ? `${monthBShort} 1`
+    : `${monthBShort} 1-${endDay}`;
   const spanDays = Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
   return { monthAName, monthBName, monthARange, monthBRange, spanDays };
 }
