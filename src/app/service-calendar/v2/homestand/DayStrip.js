@@ -74,11 +74,13 @@ function classifyCell(iso, dayMap, prepSet) {
     };
   }
   if (prepSet && prepSet.has(iso)) return { kind: "prep" };
-  // Defensive default. Every non-GAME cell inside the block span is a
-  // prep proposal per B3, so this branch is unreachable when the caller
-  // populates prepSet correctly. Kept so an incomplete input renders
-  // as an honest neutral cell instead of throwing.
-  return { kind: "prep" };
+  // M-2 defect 2 (2026-07-29 owner ruling): missing data is honest
+  // missing, never a positive claim. A cell whose date has no
+  // schedule record AND is not in the prep proposal set renders
+  // as "unknown" - visually distinct from prep so a chef reading
+  // the strip can tell a proposed-prep day (chef's job to schedule)
+  // from an unknown day (data gap, not the chef's problem to fill).
+  return { kind: "missing" };
 }
 
 function labelFor(iso) {
@@ -132,7 +134,9 @@ export default function DayStrip({
 
     // aria-label carries a full spoken description so screen readers
     // read "Jul 3 game versus PIT, served" without the visual glyphs.
-    let ariaLabel = `${dateLabel} ${c.kind}`;
+    // Missing cells read as "unknown" so the honest state is spoken,
+    // matching the visible dashed-empty treatment.
+    let ariaLabel = `${dateLabel} ${c.kind === "missing" ? "unknown" : c.kind}`;
     if (c.opponent) ariaLabel += ` versus ${c.opponent}`;
     if (c.kind === "game" && c.entered) ariaLabel += ", served";
     if (c.kind === "exception") ariaLabel += ", no service";
@@ -153,6 +157,9 @@ export default function DayStrip({
         )}
         {c.kind === "exception" && (
           <div className="sc-daystrip-cell-marker">no service</div>
+        )}
+        {c.kind === "missing" && (
+          <div className="sc-daystrip-cell-marker">no data</div>
         )}
       </div>
     );

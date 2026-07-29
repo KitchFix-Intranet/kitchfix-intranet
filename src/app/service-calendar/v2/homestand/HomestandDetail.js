@@ -317,11 +317,27 @@ export default function HomestandDetail({
 
           <section className="sc-homestand-rail-section">
             <div className="sc-homestand-rail-label">Service</div>
+            {/* F3 (2026-07-29 owner ruling): servedDays + exceptionDays
+                can be less than gameCount for an ended block - a past
+                game day never entered classifies as overdue or
+                needs-entry and lands in neither bucket. Surface the
+                unentered count explicitly on ended blocks so the rail
+                does not read as though the block is fully accounted
+                for. In-progress blocks read the unaccounted count as
+                "still to enter," which is the operator's job to close
+                out, not a rail-side omission. */}
             <div className="sc-homestand-rail-served">
               {block.servedDays} of {block.gameCount} game days served
               {block.exceptionDays > 0 && (
                 <> ({block.exceptionDays} exception{block.exceptionDays === 1 ? "" : "s"})</>
               )}.
+              {(() => {
+                const unentered = (block.gameCount || 0) - (block.servedDays || 0) - (block.exceptionDays || 0);
+                if (unentered > 0 && block.status === "ended") {
+                  return <> {unentered} not entered.</>;
+                }
+                return null;
+              })()}
             </div>
           </section>
 

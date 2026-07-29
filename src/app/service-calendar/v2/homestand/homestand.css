@@ -246,6 +246,21 @@
   color: var(--sc2-state-overdue-fg);
 }
 
+/* Missing cell (M-2 defect 2 fix, 2026-07-29) - no schedule record
+   AND not in prepSet. Visually distinct from prep (which is a
+   proposal) so a chef reading the strip can tell the two apart at a
+   glance. Dashed border + hollow surface + muted "no data" marker
+   read as "there is a day here but we don't have facts for it." */
+.sc-daystrip-cell--missing {
+  background: transparent;
+  color: var(--sc2-ink-muted);
+  border-style: dashed;
+  border-color: var(--sc2-line);
+}
+.sc-daystrip-cell--missing .sc-daystrip-cell-marker {
+  color: var(--sc2-ink-muted);
+}
+
 /* Month-boundary marker - a thin vertical rule between two cells
    where the calendar month changes. Owner ruling: both months are
    labeled; the label above the marker names the INCOMING month. */
