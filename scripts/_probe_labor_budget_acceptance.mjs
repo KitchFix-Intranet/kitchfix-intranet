@@ -121,23 +121,27 @@ for (const account of MLB) {
     laborRatio: ratio,
   });
 
-  const envSum = envelopes.reduce((s, e) => s + (e.envelope || 0), 0);
-  const seasonHourly = budgets.reduce((s, b) => s + Number(b.hourly_budget || 0), 0);
-  const diff = envSum - seasonHourly;
-  const match = diff === 0;
+  // Compare in CENTS so floating-point drift never masks a real
+  // arithmetic mismatch (the M-1 defect surfaced on TXR-TX-H as
+  // "diff = -2.9e-11" - true cents-exact math prints diff = 0).
+  const envCents = envelopes.reduce((s, e) => s + (e.envelopeCents || 0), 0);
+  const seasonCents = budgets.reduce((s, b) => s + Math.round(Number(b.hourly_budget || 0) * 100), 0);
+  const diffCents = envCents - seasonCents;
+  const match = diffCents === 0;
   if (!match) allExactMatch = false;
-  console.log(`  envelope sum: $${envSum.toLocaleString()}   season hourly: $${seasonHourly.toLocaleString()}   diff: $${diff}  ${match ? "✓ EXACT" : "✗ DRIFT"}`);
+  const fmt$ = (cents) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  console.log(`  envelope sum: ${fmt$(envCents)}   season hourly: ${fmt$(seasonCents)}   diff: ${diffCents}¢  ${match ? "✓ EXACT" : "✗ DRIFT"}`);
 
-  // Show every homestand's envelope.
+  // Show every homestand's envelope with cents where meaningful.
   console.log(`  per-homestand envelopes:`);
   for (const e of envelopes) {
     if (e.envelope == null) {
       console.log(`    ${e.homestandId.padEnd(5)} ${e.startDate}..${e.endDate} (${e.gameCount}g)  NULL - ${e.reason}`);
     } else {
-      const bkStr = e.breakdown.map(b => `${b.period}=$${b.subtotal.toLocaleString()}`).join(" + ");
-      const chk = e.breakdown.reduce((s, b) => s + b.subtotal, 0);
-      const chkMark = chk === e.envelope ? "" : ` ⚠ breakdown-sum=${chk}`;
-      console.log(`    ${e.homestandId.padEnd(5)} ${e.startDate}..${e.endDate} (${e.gameCount}g)  $${e.envelope.toLocaleString()}${chkMark}  [${bkStr}]`);
+      const bkStr = e.breakdown.map(b => `${b.period}=${fmt$(b.subtotalCents)}`).join(" + ");
+      const chkCents = e.breakdown.reduce((s, b) => s + b.subtotalCents, 0);
+      const chkMark = chkCents === e.envelopeCents ? "" : ` ⚠ breakdown-cents=${chkCents} vs envelope-cents=${e.envelopeCents}`;
+      console.log(`    ${e.homestandId.padEnd(5)} ${e.startDate}..${e.endDate} (${e.gameCount}g)  ${fmt$(e.envelopeCents)}${chkMark}  [${bkStr}]`);
     }
   }
   console.log("");
@@ -153,18 +157,21 @@ console.log("──── Straddle receipt: CIN-OH HS7 ────");
   const segments = deriveHomestandSegments(yearData, TODAY, { accountKey: account });
   const hs7 = segments.find(s => s.homestandId === "HS7");
   console.log(`  HS7 span: ${hs7.startDate} .. ${hs7.endDate} (${hs7.gameCount} games)`);
-  const p6 = periodRanges.find(r => r.period === "P6");
-  const p7 = periodRanges.find(r => r.period === "P7");
+  // sc-21 (2026-07-29): period is BARE NUMERIC ("6", "7") - not "P6".
+  const p6 = periodRanges.find(r => r.period === "6");
+  const p7 = periodRanges.find(r => r.period === "7");
   console.log(`  P6: ${p6.start}..${p6.end}   P7: ${p7.start}..${p7.end}`);
   const daysPerPeriod = buildGameDerivedDaysPerPeriod(segments, periodRanges);
-  const p6Budget = budgets.find(b => b.period === "P6");
-  const p7Budget = budgets.find(b => b.period === "P7");
-  console.log(`  P6 hourly=$${p6Budget.hourly_budget} / ${daysPerPeriod.P6} days = $${(Number(p6Budget.hourly_budget) / daysPerPeriod.P6).toFixed(4)}/day`);
-  console.log(`  P7 hourly=$${p7Budget.hourly_budget} / ${daysPerPeriod.P7} days = $${(Number(p7Budget.hourly_budget) / daysPerPeriod.P7).toFixed(4)}/day`);
+  const p6Budget = budgets.find(b => b.period === "6");
+  const p7Budget = budgets.find(b => b.period === "7");
+  console.log(`  P6 hourly=$${p6Budget.hourly_budget} / ${daysPerPeriod["6"]} days = $${(Number(p6Budget.hourly_budget) / daysPerPeriod["6"]).toFixed(4)}/day`);
+  console.log(`  P7 hourly=$${p7Budget.hourly_budget} / ${daysPerPeriod["7"]} days = $${(Number(p7Budget.hourly_budget) / daysPerPeriod["7"]).toFixed(4)}/day`);
   const envelopes = deriveLaborBudgets(segments, budgets, periodRanges, { accountKey: account });
   const hs7Env = envelopes.find(e => e.homestandId === "HS7");
-  console.log(`  HS7 breakdown: ${hs7Env.breakdown.map(b => `${b.period}=$${b.subtotal}`).join(" + ")} = $${hs7Env.envelope}`);
-  console.log(`  HS7 periodsTouched: ${hs7Env.periodsTouched.join(" + ")}`);
+  const fmtP = (p) => `P${p}`;
+  const bkStr = hs7Env.breakdown.map(b => `${fmtP(b.period)}=$${(b.subtotalCents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`).join(" + ");
+  console.log(`  HS7 breakdown: ${bkStr} = $${(hs7Env.envelopeCents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`);
+  console.log(`  HS7 periodsTouched: ${hs7Env.periodsTouched.map(fmtP).join(" + ")}`);
 }
 
 // ─── Missing budget row → null with reason ──────────────────────
@@ -214,9 +221,15 @@ console.log("\n──── TXR-V flex round-trip ────");
     soldRevenueByBlockKey,
   });
   const hs3Env = envelopes.find(e => e.homestandId === "HS3");
-  const expectedAdj = Math.round(27000 * ratio);
+  // sc-21 cents-exact math: expected = round(soldRevenue × ratio × 100) / 100.
+  // (Old integer round would have said $5,192 - imprecise now that
+  // everything else is cent-accurate.)
+  const expectedAdjCents = Math.round(27000 * ratio * 100);
+  const expectedAdj = expectedAdjCents / 100;
+  const gotCents = Math.round(hs3Env.adjustedEnvelope * 100);
+  const flexMatch = gotCents === expectedAdjCents;
   console.log(`  ratio: ${ratio}   HS3 forecast envelope: $${hs3Env.envelope}`);
-  console.log(`  HS3 with soldRevenue=$27,000: adjustedEnvelope = $${hs3Env.adjustedEnvelope}  (expected $${expectedAdj})  ${hs3Env.adjustedEnvelope === expectedAdj ? "✓" : "✗"}`);
+  console.log(`  HS3 with soldRevenue=$27,000: adjustedEnvelope = $${hs3Env.adjustedEnvelope.toFixed(2)}  (expected $${expectedAdj.toFixed(2)})  ${flexMatch ? "✓" : "✗"}`);
 }
 
 console.log(`\n═══ headline: ${allExactMatch ? "✓ every account's derived envelopes sum to season hourly EXACTLY" : "✗ drift detected"} ═══`);
