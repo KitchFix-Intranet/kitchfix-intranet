@@ -12,8 +12,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import "./playbook.css";
+import "../sous/sous.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
 import SlideOverReader from "./SlideOverReader";
+import SousSurface from "../sous/SousSurface";
 
 // Operator-facing catalog filters. The previous "Needs Drive link" owner-only
 // chip was removed once /playbook/admin shipped (the dashboard's worklist
@@ -67,9 +69,10 @@ export default function PlaybookClient() {
   // either axis clobbering the other.
   const [family, setFamily]     = useState("all");
   const [openDocId, setOpenDocId] = useState(null);
-  // Ask SousAI overlay shell. Live caller lands in Phase B; today the overlay
-  // shows a coming-soon state so the affordance is visible end-to-end.
+  // Ask Sous overlay. Train 3 wires the live SousSurface inside the panel.
+  // sousPrefill supports the per-doc ask stub in SlideOverReader.
   const [sousOpen, setSousOpen] = useState(false);
+  const [sousPrefill, setSousPrefill] = useState("");
 
   useEffect(() => {
     fetch("/api/playbook?action=bootstrap")
@@ -100,6 +103,8 @@ export default function PlaybookClient() {
       setOpenDocId={setOpenDocId}
       sousOpen={sousOpen}
       setSousOpen={setSousOpen}
+      sousPrefill={sousPrefill}
+      setSousPrefill={setSousPrefill}
     />
   );
 }
@@ -370,7 +375,7 @@ function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollaps
 // ════════════════════════════════════════════════════════════════════════════
 // Playbook page (owner view)
 // ════════════════════════════════════════════════════════════════════════════
-function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFamily, openDocId, setOpenDocId, sousOpen, setSousOpen }) {
+function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFamily, openDocId, setOpenDocId, sousOpen, setSousOpen, sousPrefill, setSousPrefill }) {
   const { documents, shelves, isOwner, heroImage } = bootstrap;
   const isSearching = !!query.trim() || filter !== "all" || family !== "all";
 
@@ -570,22 +575,40 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
           docId={openDocId}
           onClose={() => setOpenDocId(null)}
           isOwner={isOwner}
+          onOpenSous={(docId) => {
+            setSousPrefill(`In ${docId}: `);
+            setSousOpen(true);
+          }}
         />
       )}
 
-      {sousOpen && <SousAIOverlay onClose={() => setSousOpen(false)} />}
+      {sousOpen && (
+        <SousAIOverlay
+          onClose={() => {
+            setSousOpen(false);
+            setSousPrefill("");
+          }}
+          prefill={sousPrefill}
+        />
+      )}
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SousAI overlay shell - Phase A6 ships the affordance + the panel chrome.
-// The live retrieval+chat caller wires in Phase B; today the overlay shows a
-// coming-soon state so the operator sees the planned UX without a fake chat.
-// ESC closes; backdrop click closes; body scroll-locks while open. Mirrors
-// SlideOverReader's open/close pattern.
+// SousAIOverlay - Train 3 live surface. The .pb-sous-panel chrome (backdrop,
+// header, close button) stays; the interior body + input are replaced by
+// SousSurface with variant="overlay". Chips are fetched from the read-only
+// /api/sousai/chips route on mount (empty-tolerant -> static fallback trio).
+// ESC and backdrop click close. Body scroll-locks while open.
+//
+// prefill: optional string used to seed the ask input when the operator
+// opens the overlay via the per-doc "Ask Sous about this doc" affordance
+// in SlideOverReader.
 // ════════════════════════════════════════════════════════════════════════════
-function SousAIOverlay({ onClose }) {
+function SousAIOverlay({ onClose, prefill = "" }) {
+  const [chips, setChips] = useState(null);
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -597,53 +620,39 @@ function SousAIOverlay({ onClose }) {
     };
   }, [onClose]);
 
+  // Fetch chips on mount. 403 or empty response resolves to null so the
+  // SousSurface falls back to its static trio without a UI regression.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/sousai/chips", { method: "GET" })
+      .then((r) => (r.ok ? r.json() : { chips: [] }))
+      .then((body) => {
+        if (cancelled) return;
+        setChips(Array.isArray(body?.chips) ? body.chips : []);
+      })
+      .catch(() => { if (!cancelled) setChips([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <>
       <div className="pb-sous-backdrop" onClick={onClose} />
-      <aside className="pb-sous-panel" role="dialog" aria-modal="true" aria-label="Ask SousAI">
+      <aside className="pb-sous-panel" role="dialog" aria-modal="true" aria-label="Ask Sous">
         <div className="pb-sous-head">
           <div className="pb-sous-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
             </svg>
-            <h2>Ask SousAI</h2>
+            <h2>Ask Sous</h2>
           </div>
           <button className="pb-sous-close" onClick={onClose} aria-label="Close">×</button>
         </div>
-        <div className="pb-sous-body">
-          <div className="pb-sous-coming">
-            <div className="pb-sous-coming-icon" aria-hidden="true">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-              </svg>
-            </div>
-            <h3>Live SousAI is coming soon</h3>
-            <p>
-              The retrieval engine is proven (the corpus is embedded and the access gate is enforced). The chat wiring lands in Phase B. When it does, this panel becomes the conversation surface for the whole playbook.
-            </p>
-            <p className="pb-sous-meanwhile">
-              Meanwhile: the search bar to the left filters the catalog by title, card line, and keywords - good enough to find a doc when you know roughly what you are looking for.
-            </p>
-          </div>
-        </div>
-        <div className="pb-sous-foot">
-          <div className="pb-sous-input-shell" aria-disabled="true" title="Disabled until Phase B wires the live caller">
-            <input
-              type="text"
-              placeholder="Ask a question..."
-              disabled
-              className="pb-sous-input"
-              aria-label="Ask SousAI a question (disabled)"
-            />
-            <button type="button" className="pb-sous-send" disabled aria-disabled="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </button>
-          </div>
-          <p className="pb-sous-disclaimer">Phase B wiring drops the live caller into this same input.</p>
-        </div>
+        <SousSurface
+          variant="overlay"
+          chips={chips}
+          initialQuestion={prefill}
+          autoFocus
+        />
       </aside>
     </>
   );

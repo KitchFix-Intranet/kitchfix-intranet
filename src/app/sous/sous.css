@@ -1,0 +1,501 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sous surfaces (Train 3) - sa- prefix
+   ═══════════════════════════════════════════════════════════════════════════
+   Consumes UNIVERSE tokens only (--opd-*, --focus-ring-color, --kf-*,
+   --amber-*, --green-*, --red-*, --status-*, --space-*, --size-*). No new
+   raw px literals for type / spacing / radius; structural exceptions carry
+   an in-line cite (tap target, safe-area, viewport math).
+
+   The surface renders inside two hosts:
+     - /sous page: OPD shell column, --opd-r-4 header card
+     - .pb-sous-panel: existing 480px overlay from playbook.css (Train 3
+       replaces the coming-soon interior with the same components)
+   Both hosts embed <SousSurface />.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── /sous page shell ────────────────────────────────────────────────────── */
+
+.sa-page {
+  /* structural: nav height 56 from Train 1 (TopNav.css:23) */
+  min-height: calc(100vh - 56px);
+  background: var(--kf-bg);
+}
+.sa-page-inner {
+  /* structural: OPD shell max-width (Design Scope 7b) */
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+}
+
+/* Header band: navy field with amber underline. */
+.sa-header {
+  background: var(--kf-navy);
+  color: white;
+  border-radius: var(--opd-r-4);
+  padding: var(--space-7) var(--space-7) var(--space-5);
+  margin-bottom: var(--space-6);
+  position: relative;
+  overflow: hidden;
+}
+.sa-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* structural: header underline weight */
+  height: 3px;
+  background: var(--amber-500);
+}
+.sa-header-mark {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-bold);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 var(--space-2);
+}
+.sa-header-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-h1);
+  font-weight: var(--opd-wt-display);
+  color: white;
+  margin: 0 0 var(--space-2);
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+}
+.sa-header-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-caption);
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
+  /* structural: STD-001-style sub-column measure */
+  max-width: 640px;
+}
+
+/* ── Prose column - centered inside the shell. ───────────────────────────── */
+
+.sa-column {
+  /* structural: prose column measure, Design Scope 7b (Sous rides OPD's shell) */
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ── Ask input row ───────────────────────────────────────────────────────── */
+
+.sa-ask-form {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+  margin-bottom: var(--space-3);
+}
+.sa-ask-input {
+  flex: 1;
+  min-width: 0;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--opd-r-3);
+  padding: var(--space-3) var(--space-4);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-body);
+  color: var(--kf-navy);
+  background: white;
+  outline: none;
+  transition: border-color var(--motion-control);
+}
+.sa-ask-input::placeholder { color: var(--text-subtle); }
+.sa-ask-input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-color: var(--kf-navy);
+}
+.sa-ask-input:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+.sa-ask-send {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--opd-teal);
+  color: white;
+  border: none;
+  border-radius: var(--opd-r-3);
+  padding: var(--space-3) var(--space-5);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-h3);
+  font-weight: var(--opd-wt-bold);
+  cursor: pointer;
+  transition: background var(--motion-control);
+  /* structural: tap target floor (Floor-first) */
+  min-height: 48px;
+}
+.sa-ask-send:hover:not(:disabled) { background: var(--opd-teal-dark); }
+.sa-ask-send:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sa-ask-send:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+/* ── Digest chips row (caption + chips + fallback) ───────────────────────── */
+
+.sa-chips-wrap {
+  margin-bottom: var(--space-5);
+}
+.sa-chips-caption {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-subtle);
+  margin: 0 0 var(--space-2);
+}
+.sa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.sa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--opd-r-pill);
+  background: white;
+  border: var(--border-thin) solid var(--border-default);
+  color: var(--kf-navy);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-body);
+  font-weight: var(--opd-wt-semibold);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--motion-control), background var(--motion-control);
+  max-width: 100%;
+}
+.sa-chip:hover { border-color: var(--opd-teal); background: var(--opd-teal-light); }
+.sa-chip:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sa-chip-icon {
+  color: var(--opd-teal);
+  flex-shrink: 0;
+}
+.sa-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── First-run intro card ────────────────────────────────────────────────── */
+
+.sa-firstrun {
+  background: white;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--opd-r-4);
+  padding: var(--space-6) var(--space-7);
+  margin-bottom: var(--space-4);
+  font-family: 'Inter', sans-serif;
+}
+.sa-firstrun-eyebrow {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-semibold);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--kf-navy);
+  margin: 0 0 var(--space-2);
+}
+.sa-firstrun-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-h2);
+  font-weight: var(--opd-wt-display);
+  color: var(--kf-navy);
+  margin: 0 0 var(--space-3);
+  letter-spacing: -0.2px;
+}
+.sa-firstrun p {
+  font-size: var(--opd-caption);
+  line-height: 1.55;
+  color: var(--text-default);
+  margin: 0 0 var(--space-2);
+}
+.sa-firstrun p:last-child { margin-bottom: 0; }
+
+/* ── Answer card ─────────────────────────────────────────────────────────── */
+
+.sa-answer {
+  background: white;
+  border: var(--border-thin) solid var(--border-default);
+  /* structural: 4px rail per Sous surface spec (Design Scope) */
+  border-left: 4px solid var(--kf-navy);
+  border-radius: var(--opd-r-4);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-4);
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 2px 8px rgba(15, 48, 87, 0.04);
+}
+.sa-answer--grounded { border-left-color: var(--green-500); }
+.sa-answer--partial  { border-left-color: var(--amber-500); }
+.sa-answer--declined { border-left-color: var(--kf-navy); }
+.sa-answer--error    { border-left-color: var(--red-500); }
+.sa-answer--streaming { border-left-color: var(--kf-navy); }
+
+.sa-answer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+.sa-badge {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-bold);
+  padding: 3px 10px;
+  border-radius: var(--opd-r-pill);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1.5px solid transparent;
+}
+.sa-badge--grounded { border-color: var(--green-600); color: var(--green-700); }
+.sa-badge--partial  { border-color: var(--amber-500);          color: var(--amber-700); }
+.sa-badge--declined { border-color: var(--kf-navy);            color: var(--kf-navy); }
+.sa-badge--error    { border-color: var(--red-500);            color: var(--red-500); }
+.sa-badge--streaming { border-color: var(--kf-navy); color: var(--kf-navy); }
+
+.sa-question-echo {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-caption);
+  color: var(--text-default);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+  border-radius: var(--opd-r-1);
+  border-left: 3px solid var(--border-default);
+  font-style: italic;
+}
+
+.sa-answer-body {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-body);
+  line-height: var(--opd-leading-body);
+  color: #1f2937;
+  overflow-wrap: break-word;
+}
+.sa-answer-body strong { color: var(--kf-navy); font-weight: var(--opd-wt-display); }
+.sa-answer-body ol, .sa-answer-body ul { margin: var(--space-2) 0 var(--space-2) var(--space-5); padding: 0; }
+.sa-answer-body li { margin: 3px 0; }
+.sa-answer-body br + br { display: none; }
+
+/* Caveat block (partial answers). Amber-tinted; sits below the body. */
+.sa-caveat {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--amber-500) 8%, white);
+  border-left: 3px solid var(--amber-500);
+  border-radius: var(--opd-r-1);
+  font-size: var(--opd-caption);
+  color: #7c2d12;
+}
+.sa-caveat-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-bold);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--amber-700);
+  margin: 0 0 var(--space-1);
+}
+
+/* Source chips - same grammar as OPD's .pb-class-chip. */
+.sa-sources {
+  margin-top: var(--space-3);
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.sa-source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--opd-r-1);
+  background: rgba(15, 110, 86, 0.10);
+  color: var(--opd-teal-dark);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  text-decoration: none;
+  transition: background var(--motion-control);
+}
+.sa-source-chip:hover { background: rgba(15, 110, 86, 0.18); }
+.sa-source-chip:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Provenance line - tool summaries during stream, timing after done. */
+.sa-provenance {
+  margin-top: var(--space-3);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-caption);
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.sa-provenance-dot {
+  display: inline-block;
+  /* structural: dot glyph size */
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--opd-teal);
+  animation: sa-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.sa-provenance--done .sa-provenance-dot {
+  animation: none;
+  background: var(--green-500);
+}
+@keyframes sa-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sa-provenance-dot { animation: none; }
+}
+
+/* Thumbs row */
+.sa-thumbs {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sa-thumb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: white;
+  border: var(--border-thin) solid var(--border-default);
+  border-radius: var(--opd-r-1);
+  padding: var(--space-1) var(--space-2);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-caption);
+  font-weight: var(--opd-wt-semibold);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--motion-control), color var(--motion-control);
+}
+.sa-thumb-btn:hover:not(:disabled) { border-color: var(--opd-teal); color: var(--kf-navy); }
+.sa-thumb-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sa-thumb-btn--active { border-color: var(--opd-teal); color: var(--opd-teal-dark); background: var(--opd-teal-light); }
+.sa-thumb-btn:disabled { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.sa-thumbs-thanks {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-caption);
+  color: var(--text-subtle);
+}
+
+/* Retry affordance under an error state */
+.sa-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  background: transparent;
+  border: var(--border-thin) solid var(--red-500);
+  color: var(--red-500);
+  border-radius: var(--opd-r-1);
+  padding: var(--space-1) var(--space-3);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-caption);
+  font-weight: var(--opd-wt-bold);
+  cursor: pointer;
+}
+.sa-retry:hover { background: color-mix(in srgb, var(--red-500) 8%, white); }
+.sa-retry:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* ── /sous page: mobile full-height sheet with bottom-pinned ask bar ─────── */
+@media (max-width: 767px) {
+  .sa-page-inner {
+    padding: var(--space-3) var(--space-3) 0;
+  }
+  .sa-header {
+    padding: var(--space-5) var(--space-4) var(--space-4);
+    border-radius: var(--opd-r-3);
+    margin-bottom: var(--space-4);
+  }
+  .sa-header-title { font-size: var(--opd-display); }
+  /* /sous mobile: pin ask bar to the bottom (Design Scope). Body scrolls
+     above; the form sits fixed on the safe-area bottom. */
+  .sa-page .sa-column {
+    /* structural: reserve room for the bottom bar + safe area */
+    padding-bottom: 96px;
+  }
+  .sa-page .sa-ask-form {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    background: white;
+    border-top: var(--border-thin) solid var(--border-default);
+    margin: 0;
+    /* structural: above answer cards, below overlays (z-overlay 1200) */
+    z-index: 20;
+    box-shadow: 0 -4px 12px rgba(15, 48, 87, 0.06);
+  }
+  .sa-firstrun { padding: var(--space-4) var(--space-4); }
+  .sa-answer { padding: var(--space-4) var(--space-4); }
+}
+
+/* ── Overlay surface (rides .pb-sous-panel from playbook.css) ────────────── */
+/* The panel provides 480px fixed right at desktop, 100vw < 1024 (playbook.css
+   2112-2126). SousSurface variant="overlay" renders as a two-region flex
+   column that occupies the space under the head: body scrolls, form pinned
+   bottom (Design Scope: input pinned BOTTOM in the overlay). */
+
+.sa-overlay-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  /* structural: allow child overflow-y inside flex parent */
+  min-height: 0;
+}
+.sa-overlay-body-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  min-height: 0;
+}
+.sa-overlay-foot {
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  border-top: var(--border-thin) solid var(--border-default);
+  background: white;
+  flex-shrink: 0;
+}
+.sa-overlay-foot .sa-ask-form { margin: 0; }
+.sa-overlay-chips { margin-bottom: var(--space-3); }
+
+@media (max-width: 1023px) {
+  /* Overlay full-bleed on tablet + phone. .pb-sous-panel already handles
+     the width flip. */
+  .sa-overlay-body-scroll { padding: var(--space-3) var(--space-3) var(--space-2); }
+}
