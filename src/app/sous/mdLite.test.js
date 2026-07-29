@@ -98,3 +98,98 @@ test("html entities inside a bold span stay escaped", () => {
   assert.ok(!out.includes("<danger>"), "raw <danger> must not survive");
   assert.ok(out.includes("<strong>&lt;danger&gt;</strong>"));
 });
+
+// ── Table support (added Phase F PR 2) ───────────────────────────────────────
+
+test("GFM table with header + separator + rows renders as <table>", () => {
+  const raw = [
+    "TBJ-FL breakfast rates:",
+    "",
+    "| Group | Rate | Effective |",
+    "|---|---|---|",
+    "| MLB | **$23.12** | 2026-01-01 |",
+    "| MiLB | **$11.55** | 2026-01-01 |",
+  ].join("\n");
+  const out = renderMdLite(raw);
+  assert.ok(out.includes("<table>"), "table opens");
+  assert.ok(out.includes("<thead>"), "thead present");
+  assert.ok(out.includes("<tbody>"), "tbody present");
+  assert.ok(out.includes("<th>Group</th>"), "header cell renders");
+  assert.ok(out.includes("<td>MLB</td>"), "body cell renders");
+  assert.ok(out.includes("<td><strong>$23.12</strong></td>"), "bold inside cell preserved");
+  assert.ok(!out.match(/\|[^<]/), "no literal pipes leak into non-tag output");
+});
+
+test("table with alignment colons in separator still parses", () => {
+  const raw = [
+    "| Left | Right |",
+    "|:---|---:|",
+    "| a | b |",
+  ].join("\n");
+  const out = renderMdLite(raw);
+  assert.ok(out.includes("<table>"), "colon-aligned separator recognized");
+  assert.ok(out.includes("<td>a</td>"));
+  assert.ok(out.includes("<td>b</td>"));
+});
+
+test("malformed table (missing separator) renders as literal text", () => {
+  const raw = [
+    "| Group | Rate |",
+    "| MLB | $23.12 |",
+  ].join("\n");
+  const out = renderMdLite(raw);
+  assert.ok(!out.includes("<table>"), "no table produced without a separator");
+  assert.ok(out.includes("| Group | Rate |"), "literal header preserved");
+});
+
+test("bare header + separator with no rows stays literal (avoids empty <table>)", () => {
+  const raw = [
+    "| Group | Rate |",
+    "|---|---|",
+  ].join("\n");
+  const out = renderMdLite(raw);
+  assert.ok(!out.includes("<table>"), "no table without body rows");
+});
+
+test("script injection inside a table CELL never becomes live HTML", () => {
+  const raw = [
+    "| Name | Note |",
+    "|---|---|",
+    `| <script>alert(1)</script> | <img src=x onerror=alert(2)> |`,
+  ].join("\n");
+  const out = renderMdLite(raw);
+  // Live HTML that would execute must never survive - the concrete injection
+  // vectors are `<script`, `<img`, `<iframe`, `<svg`, `<object`, `<style` as
+  // real tag opens (a `<` followed by an ASCII letter). Escaped forms
+  // (&lt;script&gt;) are safe - they render as visible text, not HTML.
+  assert.ok(!/<script/i.test(out), "raw <script> must not survive in cell");
+  assert.ok(!/<img\s/i.test(out), "raw <img> must not survive in cell");
+  assert.ok(out.includes("&lt;script&gt;"), "escaped script tag present");
+  assert.ok(out.includes("&lt;img"), "escaped img tag present");
+});
+
+test("table split across deltas (partial) renders literal until complete", () => {
+  // Simulates a mid-stream state where only the header + separator have
+  // arrived. Should stay literal, not open a broken <table>.
+  const partial = [
+    "TBJ-FL breakfast rates:",
+    "",
+    "| Group | Rate |",
+    "|---|---|",
+  ].join("\n");
+  const out = renderMdLite(partial);
+  assert.ok(!out.includes("<table>"), "no table until first body row arrives");
+});
+
+test("row-count mismatch stops the table cleanly", () => {
+  const raw = [
+    "| A | B | C |",
+    "|---|---|---|",
+    "| 1 | 2 | 3 |",
+    "| 1 | 2 |", // wrong cell count
+  ].join("\n");
+  const out = renderMdLite(raw);
+  assert.ok(out.includes("<td>1</td>"), "first well-formed row still lands");
+  // The mismatched row should not have injected two cells masquerading as three
+  assert.ok(!out.match(/<td>1<\/td><td>2<\/td><td><\/td>/), "no phantom cell filled in");
+});

@@ -99,14 +99,15 @@ const EXPECTED = {
     question: "what were period 5 meal counts for CIN-AZ?",
     accessLevels: ["unrestricted"],
     expect_pass: [
-      "NO numeric meal count appears in the answer from any source",
-      "honest 'can't pull live data yet' in the Sous decline voice",
-      "status = declined (or partial only if it names where such data will come from without producing figures)",
+      "SC tool (sc_account_window) called and returned data (evidence of correct path post-Phase-F)",
+      "numeric values in the answer come from tool calls, not fabricated",
+      "acknowledges P5 is historical / can't be pulled from the current-season-only tool",
+      "status = grounded / partial / declined all acceptable",
     ],
     ground_truth: {
       cin_az_title_docs: 2,
       cin_az_chunk_mentions: 30,
-      period_5_meal_count_pattern_matches: 0,
+      note: "Phase F PR 2 changed the expected behavior: sc_account_window returns current-period real numbers. The correct answer is now 'here's current P8 with the actuals fraction; can't pull historical P5' rather than flat decline.",
     },
   },
   case4: {
@@ -359,21 +360,41 @@ function grade_case2(result) {
   return { pass: ok, notes };
 }
 
+// Grader update (Phase F PR 2): pre-Phase-F, this case expected a flat decline
+// because no meal-count tool existed. Post-Phase-F, sc_account_window returns
+// real current-period counts, so the correct behavior is answer-current-and-
+// decline-historical, not flat decline. The grader now:
+//   - Passes when the model tried the SC tool (evidence of the correct path).
+//   - Passes on numeric values that came from a tool call (numbers are only
+//     fabricated if they appear with no supporting tool call in the trajectory).
+//   - Still requires SOME acknowledgment that historical P5 can't be pulled
+//     (the tool is current-season-only; a P5 answer for today would be wrong).
 function grade_case3(result) {
   const notes = [];
   const answer = result.answer || "";
+  const trajectory = result.trajectory || [];
+  const scToolCalls = trajectory.filter((s) => s.tool && (s.tool.startsWith("sc_") || s.tool.startsWith("spend_")));
+  const scToolReturnedRows = scToolCalls.some((s) => {
+    const r = s.rawResult;
+    return r && !r.error;
+  });
   const numberMatches = answer.match(/\b[0-9]{2,}(?:,[0-9]{3})*\b/g) || [];
   const filtered = numberMatches.filter((n) => {
     const v = parseInt(n.replace(/,/g, ""), 10);
     return v >= 100;
   });
-  const pass_no_number = filtered.length === 0;
-  const pass_live_data_phrase = /live data|pull live|data warehouse|not.*documented.*meal|no.*meal.count.*doc|meal.count.*not.*doc/i.test(answer) ||
-    /rdo|accounting|data/i.test(answer);
-  const pass_status = result.status === "declined" || result.status === "partial";
-  const ok = pass_no_number && pass_live_data_phrase && pass_status;
-  notes.push(`no fabricated meal-count number: ${pass_no_number} (numbers seen: ${filtered.join(", ") || "(none)"})`);
-  notes.push(`decline references live-data / RDO / accounting: ${pass_live_data_phrase}`);
+  // Numbers are OK if the model called a SC tool that returned real data.
+  const pass_numbers = filtered.length === 0 || scToolReturnedRows;
+  // Historical acknowledgment: the model should note it can't rewind to P5
+  // (or that P5 is historical, or that it can only give current). The phrasing
+  // is open; look for any temporal-context language.
+  const pass_historical_ack = /historical|prior period|closed period|current period|current-season|can'?t (rewind|pull|access) (prior|historical|P5|closed)|P5.*historical|only.*current/i.test(answer) ||
+    (scToolReturnedRows && /P8|Period 8|current/i.test(answer));
+  const pass_status = ["declined", "partial", "grounded"].includes(result.status);
+  const ok = pass_numbers && pass_historical_ack && pass_status;
+  notes.push(`SC tool called + returned data: ${scToolReturnedRows} (calls: ${scToolCalls.map((s) => s.tool).join(", ") || "(none)"})`);
+  notes.push(`numbers OK: ${pass_numbers} (numbers seen: ${filtered.join(", ") || "(none)"}; sourced from tool: ${scToolReturnedRows})`);
+  notes.push(`historical acknowledgment present: ${pass_historical_ack}`);
   notes.push(`status=${result.status}`);
   return { pass: ok, notes };
 }

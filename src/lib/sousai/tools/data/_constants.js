@@ -66,3 +66,43 @@ export const A1_ROW_CAP = 10;   // A1 (person lookup) rarely returns > 3
 export const A2_ROW_CAP = 20;   // A2 (account list) has 12 rows total
 export const A4_ROW_CAP = 20;   // A4 (by role) - the largest role is EC (9)
 export const A5_ROW_CAP = 15;   // A5 (team roster) - CORP has 9 people
+export const B2_ROW_CAP = 200;  // B2 (homestand detail) - ~10 days x ~20 services
+export const C2_ROW_CAP = 200;  // C2 (vendor purchase history) - larger fan-out
+
+// SC accounts - the 12 team_keys as they appear in accounts.team_key. Cached
+// here so B5 and orientation tools can validate teamKey inputs against a
+// known set without an extra PG lookup.
+export const KNOWN_TEAM_KEYS = Object.freeze([
+  "CIN - AZ", "CIN - KY", "CIN - OH", "CORP",
+  "STL - FL", "STL - MO",
+  "TBJ - FL", "TBJ - NY", "TBR - FL",
+  "TXR - AZ", "TXR - TX - H", "TXR - TX - V",
+]);
+
+// PDC accounts - the 5 team_keys that carry rows in sc_phase_calendar.
+// Non-PDC accounts get no phase dimension by design.
+export const PDC_TEAM_KEYS = Object.freeze([
+  "CIN - AZ", "STL - FL", "TBJ - FL", "TBR - FL", "TXR - AZ",
+]);
+
+// Convention 6 (Phase F PR 2): a revenue figure derived from a null
+// price_effective_date is a DECLINE, not a number. sc_daily_revenue COALESCEs
+// price to 0 but does NOT coalesce price_effective_date, so a null there is
+// the reliable signal that no price was configured for the service on that
+// date. Callers must inspect this signal before totaling.
+//
+// Every revenue-touching tool imports this rule and enforces it identically:
+//   - Split the rows into `priced` and `unpriced`.
+//   - If unpriced.length > 0, name the affected service_ids in the tool
+//     output and REFUSE to total. Do NOT silently drop them - a total that
+//     quietly omits three services is its own lie.
+//   - If unpriced.length === 0, aggregate normally.
+export function partitionRevenueRows(rows) {
+  const priced = [];
+  const unpriced = [];
+  for (const r of rows || []) {
+    if (r.price_effective_date == null) unpriced.push(r);
+    else priced.push(r);
+  }
+  return { priced, unpriced };
+}
