@@ -405,6 +405,29 @@
   color: var(--sc2-rail-text-item);
 }
 
+/* M-4a defect 3: rail progress bar for SPENT vs budget. Thin track,
+   proportional fill. Under-budget = accent; over-budget = overdue
+   color so the visual matches the variance word underneath. Height
+   composed from --sc2-space-1 so the bar reads at a glance without
+   crowding the figure. */
+.sc-homestand-rail-progress {
+  position: relative;
+  width: 100%;
+  height: var(--sc2-space-1);
+  background: var(--sc2-rail-divider);
+  border-radius: var(--sc2-radius-control);
+  overflow: hidden;
+}
+.sc-homestand-rail-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sc2-state-entered-fg);
+  transition: width 0.2s ease-out;
+}
+.sc-homestand-rail-progress--over .sc-homestand-rail-progress-fill {
+  background: var(--sc2-state-overdue-fg);
+}
+
 .sc-homestand-rail-nav {
   display: flex;
   justify-content: space-between;

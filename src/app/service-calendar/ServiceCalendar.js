@@ -3094,6 +3094,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               year={year}
               yearData={yearData}
               today={today}
+              /* M-4a (2026-07-29): MLB rail variant reads homestands[]
+                 to derive SPENT vs BUDGET, NEEDS YOU, IN PROGRESS and
+                 the close-out CTA. Non-MLB accounts render the base
+                 rail path (which ignores homestands entirely). */
+              homestands={yearHomestands}
+              onTargetHomestand={MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) ? (hsKey) => {
+                router.push(
+                  buildScUrl({ account: selectedAccount || undefined, homestand: hsKey }),
+                  { scroll: false }
+                );
+              } : undefined}
               onTargetDay={feeTargetDay}
               onDrillToMonth={overviewDrillMonth}
               onDrillToPeriod={overviewDrillPeriod}
@@ -3286,6 +3297,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               loading={loading && !periodDays}
               incomplete={!!partialError}
               exportControl={null}
+              homestands={yearHomestands}
+              onTargetHomestand={MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) ? (hsKey) => {
+                router.push(
+                  buildScUrl({ account: selectedAccount || undefined, homestand: hsKey }),
+                  { scroll: false }
+                );
+              } : undefined}
               onTargetDay={targetDay}
             />
           ) : (
@@ -3506,6 +3524,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               loading={loading && !monthDays}
               incomplete={!!partialError}
               exportControl={null}
+              homestands={yearHomestands}
+              onTargetHomestand={MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) ? (hsKey) => {
+                router.push(
+                  buildScUrl({ account: selectedAccount || undefined, homestand: hsKey }),
+                  { scroll: false }
+                );
+              } : undefined}
               onTargetDay={targetDay}
             />
           ) : (

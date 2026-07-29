@@ -49,10 +49,28 @@ import { getContractInfo } from "./contract";
 // P3-B (2026-07-28): session strip + Handoff CSS.
 import { useHandoffSafe } from "./handoff/coordinator";
 import "./handoff/handoff.css";
+// M-4a (2026-07-29): MLB variant gate. AAA (CIN-KY, TBJ-NY) both
+// carry hasHomestandSchedule=true today but are NOT in this set;
+// they must keep the pre-M-4a games-hero + to-enter queue shape.
+// Gating on hasHomestandSchedule alone would give AAA a money
+// concept that does not exist for them - the trap owner named in
+// the Round 1 scope-change section.
+import { DERIVE_HOMESTANDS_ACCOUNTS } from "../season/homestandDerivation";
 
 const QUEUE_TOP_N = 4;
 
-export default function OpsRail({
+// Router. MLB homestand-surface accounts get the SPENT-led rail
+// per the M-4a render (C1.3). Every other account (AAA, STL-FL)
+// keeps the pre-M-4a games-hero rail byte-identical - the rest of
+// this file is that unchanged rail.
+export default function OpsRail(props) {
+  if (DERIVE_HOMESTANDS_ACCOUNTS.has(props.accountKey)) {
+    return <OpsRailMlbHomestand {...props} />;
+  }
+  return <OpsRailBase {...props} />;
+}
+
+function OpsRailBase({
   // Common
   mode = "overview",           // "overview" | "drill"
   scopeLabel = "",             // "2026 BOOKS" | "P7" | "Jul 2026"
@@ -398,6 +416,302 @@ export default function OpsRail({
       )}
     </RailShell>
   );
+}
+
+// ═══════════════════════════════════════════════════════════
+// M-4a (2026-07-29): MLB homestand-surface rail variant.
+//
+// Owner scope C1.3: the season rail leads with labor SPENT vs
+// budget - the number a chef's whole year is measured by - then
+// what NEEDS them, then IN PROGRESS, then a rollup, then a CTA.
+// Drill rail carries the same money-first grammar but the hero
+// swaps to GAME DAYS SERVED (scope-native) with the season SPEND
+// riding as a small season-to-date line.
+//
+// Missing-vs-zero applied to the rollup: no live close-out on any
+// homestand -> the SPENT hero is absent entirely (not "$0 of $Y").
+// Non-MLB accounts never reach this function.
+// ═══════════════════════════════════════════════════════════
+function OpsRailMlbHomestand({
+  mode = "overview",
+  scopeLabel = "",
+  accountKey = null,
+  year,
+  today,
+  yearData,
+  homestands,                  // M-3 payload homestands[] (present on MLB)
+  periodDays = null,
+  periodRange = null,
+  periodMetrics = null,
+  loading = false,
+  incomplete = false,
+  exportControl = null,
+  // Homestand-scope routing. onTargetHomestand fires the CTA and
+  // any per-homestand row click; falls back to onTargetDay with
+  // the homestand's start date if the parent does not wire it
+  // (belt-and-braces, keeps the click alive during any callsite
+  // that missed the new prop).
+  onTargetHomestand,
+  onTargetDay,
+  onDrillToMonth,              // reserved for future season list
+  onDrillToPeriod,             // reserved for future season list
+}) {
+  const iso = today || todayISO();
+  const isDrill = mode === "drill";
+  const list = Array.isArray(homestands) ? homestands : [];
+
+  // Season labor rollups. laborActual is emitted ONLY when a live
+  // close-out row exists per the M-3 payload contract. Sum both
+  // fields with a null-sentinel: no close-out anywhere -> null,
+  // not 0. The hero then hides (missing-vs-zero rule for rollups).
+  const closedList = list.filter((h) => h?.laborActual != null);
+  const seasonSpent = closedList.length > 0
+    ? closedList.reduce((s, h) => s + Number(h.laborActual), 0)
+    : null;
+  // Budget sum: every homestand emits budget.amount when the labor
+  // derivation returned a number; blocks with a null envelope
+  // (null-with-reason) contribute nothing. Reads the payload's
+  // envelope, not sc_labor_budgets directly - already server-derived.
+  const seasonBudget = list.reduce((sum, h) => {
+    const amt = h?.budget?.amount;
+    return amt != null ? sum + Number(amt) : sum;
+  }, 0) || null;
+
+  const spendPct = (seasonSpent != null && seasonBudget)
+    ? Math.min(100, Math.round((seasonSpent / seasonBudget) * 100))
+    : null;
+
+  // Status picks. Owner render calls them "the homestand that is
+  // due" (singular) and "in progress" (also singular; at most one).
+  const needsHs = list.find((h) => h?.status === "actuals-due") || null;
+  const inProgressHs = list.find((h) => h?.status === "in-progress") || null;
+  const closedCount = list.filter((h) => h?.status === "closed-out").length;
+  const totalCount = list.length;
+
+  // CTA target. Actuals-due wins over in-progress (needs > active).
+  // Falls back to the next upcoming homestand if the season is
+  // entirely un-started, and to a caught-up label when everything
+  // is closed.
+  const upcomingNext = list.find((h) => h?.status === "upcoming") || null;
+  const cta = needsHs
+    ? { label: `Close out ${needsHs.ordinal || "homestand"}`, target: needsHs, kind: "needs" }
+    : inProgressHs
+      ? { label: `Track ${inProgressHs.ordinal || "homestand"}`, target: inProgressHs, kind: "in-progress" }
+      : upcomingNext
+        ? { label: `Preview ${upcomingNext.ordinal || "next homestand"}`, target: upcomingNext, kind: "next" }
+        : { label: "Season complete", target: null, kind: "caught-up" };
+
+  const handleHsClick = (hs) => {
+    if (!hs) return;
+    if (onTargetHomestand) onTargetHomestand(hs.key);
+    else if (onTargetDay) onTargetDay(hs.startDate);
+  };
+
+  // Drill scope: filter homestands to those overlapping the drill
+  // range. Same shape as opsRailDerive.deriveOpsHomestandLedgerScoped
+  // uses, applied to the payload list.
+  const drillList = (isDrill && periodRange)
+    ? list.filter((h) => h.startDate <= periodRange.end && h.endDate >= periodRange.start)
+    : list;
+
+  // Drill hero: GAME DAYS SERVED in scope. Uses periodMetrics.complete
+  // as the numerator (already computed by aggregateWorkspaceMetrics
+  // for the workspace strip); avoids a parallel derivation.
+  const scopedComplete = periodMetrics?.complete || 0;
+  const scopedTotal = periodMetrics?.total || 0;
+  const scopedPct = scopedTotal > 0 ? Math.round((scopedComplete / scopedTotal) * 100) : 0;
+
+  // Loading skeleton. Same shape as OpsRailBase - do not fall
+  // through to the SPENT branch with zeros during the fetch.
+  if (loading) {
+    return (
+      <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : "LOADING"}>
+        <RailHero value="loading..." label={isDrill ? "GAME DAYS SERVED" : "SPENT"} meta="fetching data" />
+        <RailProgress pct={0} />
+      </RailShell>
+    );
+  }
+
+  return (
+    <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
+      {/* Hero + progress. Overview leads with SPENT; drill leads
+          with GAME DAYS SERVED. Both hide entirely when the data
+          is missing (per missing-vs-zero applied to rollups). */}
+      {isDrill ? (
+        <>
+          <RailHero
+            value={scopedComplete}
+            format={(n) => String(Math.round(n))}
+            label="GAME DAYS SERVED"
+            projection={`of ${scopedTotal || 0}`}
+          />
+          <RailProgress pct={scopedPct} complete={scopedPct === 100} />
+          <RailHeroProgressCaption>
+            {`${scopedComplete} of ${scopedTotal} game days served`}
+          </RailHeroProgressCaption>
+        </>
+      ) : seasonSpent != null ? (
+        <>
+          <RailHero
+            value={seasonSpent}
+            format={(n) => `$${Math.round(n).toLocaleString("en-US")}`}
+            label="SPENT"
+            projection={
+              seasonBudget != null
+                ? `of $${Math.round(seasonBudget).toLocaleString("en-US")} season labor budget`
+                : null
+            }
+          />
+          {spendPct != null && (
+            <>
+              <RailProgress pct={spendPct} complete={spendPct === 100} />
+              <RailHeroProgressCaption>
+                {`${spendPct}% of season labor budget`}
+              </RailHeroProgressCaption>
+            </>
+          )}
+        </>
+      ) : (
+        // No close-outs anywhere: skip the SPENT row entirely per
+        // missing-vs-zero applied to a rollup. Small anchor caption
+        // so the rail still communicates the season budget when
+        // known, or "awaiting" when not - never renders "$0 of $Y".
+        <RailHero
+          value="-"
+          format={(v) => v}
+          label="LABOR"
+          meta={
+            seasonBudget != null
+              ? `Season budget $${Math.round(seasonBudget).toLocaleString("en-US")} · awaiting first close-out`
+              : "Awaiting first close-out"
+          }
+        />
+      )}
+
+      {/* NEEDS YOU - the homestand that is actuals-due (if any). */}
+      {needsHs && (
+        <div className="sc-rail-pinned">
+          <RailSection label="Needs you">
+            <MlbHomestandRow hs={needsHs} onClick={() => handleHsClick(needsHs)} />
+          </RailSection>
+        </div>
+      )}
+
+      {/* IN PROGRESS - the homestand currently spanning today. */}
+      {inProgressHs && (
+        <RailSection label="In progress">
+          <MlbHomestandRow hs={inProgressHs} onClick={() => handleHsClick(inProgressHs)} />
+        </RailSection>
+      )}
+
+      {/* Homestands in scope. On overview this is the season list
+          (all homestands) with the rollup caption. On drill it is
+          only the homestands overlapping this period/month. */}
+      <RailScroll>
+        {drillList.length > 0 && (
+          <RailSection
+            label={isDrill ? "Homestands in scope" : "Season"}
+            meta={isDrill
+              ? `${drillList.length} ${drillList.length === 1 ? "block" : "blocks"}`
+              : `${closedCount} of ${totalCount} closed out`}
+          >
+            {drillList.map((hs) => (
+              <MlbHomestandRow
+                key={hs.key}
+                hs={hs}
+                onClick={() => handleHsClick(hs)}
+              />
+            ))}
+          </RailSection>
+        )}
+
+        {/* Drill only: small season-to-date SPENT line so the drill
+            rail still surfaces the season anchor without duplicating
+            the overview hero. Hides when nothing has closed out. */}
+        {isDrill && seasonSpent != null && (
+          <RailSection label="Season to date">
+            <RailLine
+              label="Labor spent"
+              value={`$${Math.round(seasonSpent).toLocaleString("en-US")}`}
+              sublabel={seasonBudget != null
+                ? `of $${Math.round(seasonBudget).toLocaleString("en-US")} budget`
+                : null}
+              tone="done"
+            />
+          </RailSection>
+        )}
+      </RailScroll>
+
+      <RailFooter
+        kind={cta.kind}
+        label={cta.label}
+        onClick={() => {
+          if (cta.target) handleHsClick(cta.target);
+        }}
+      />
+      {exportControl && (
+        <div className="sc-drill-rail-export">
+          {exportControl}
+        </div>
+      )}
+    </RailShell>
+  );
+}
+
+// One homestand row in the MLB rail. Value = status label + game
+// count; sublabel = date range + labor figure (SPENT if closed,
+// budget if not). Never renders "$0 for a block that has not
+// closed out" - budget-only reads correctly on non-closed rows.
+function MlbHomestandRow({ hs, onClick }) {
+  const status = hs?.status || "upcoming";
+  const tone = status === "closed-out"
+    ? "done"
+    : status === "actuals-due"
+      ? "needs"
+      : status === "in-progress"
+        ? "current"
+        : "upcoming";
+  const statusLabel = status.replace(/-/g, " ");
+  const range = shortRange(hs.startDate, hs.endDate);
+  // Value: game count + status. "9 games · closed out".
+  const gameWord = hs.gameCount === 1 ? "game" : "games";
+  const value = `${hs.gameCount || 0} ${gameWord} · ${statusLabel}`;
+  // Sublabel: date range plus a labor figure appropriate to the
+  // state. Closed = SPENT; anything else = BUDGET (never "$0").
+  const laborLabel = hs.laborActual != null
+    ? `$${Math.round(hs.laborActual).toLocaleString("en-US")} spent`
+    : (hs.budget?.amount != null
+        ? `$${Math.round(hs.budget.amount).toLocaleString("en-US")} budget`
+        : null);
+  const sub = laborLabel ? `${range} · ${laborLabel}` : range;
+  return (
+    <RailLine
+      label={`${hs.ordinal || "HS"} vs ${(hs.opponents || []).join(" / ") || "TBD"}`}
+      value={value}
+      sublabel={sub}
+      tone={tone}
+      onClick={onClick}
+    />
+  );
+}
+
+// Short "Jul 3 - Jul 12" style date range, avoiding the full
+// formatHomestandRange import (this file already carries its own
+// formatDate helper for the queue rows; a second-shape helper
+// here keeps the MLB variant self-contained).
+function shortRange(startIso, endIso) {
+  const s = shortDate(startIso);
+  const e = shortDate(endIso);
+  if (!s) return "";
+  if (!e || e === s) return s;
+  return `${s} - ${e}`;
+}
+function shortDate(iso) {
+  if (!iso || typeof iso !== "string") return "";
+  const d = new Date(iso + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return "";
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${MON[d.getMonth()]} ${d.getDate()}`;
 }
 
 // ─── Queue row that respects the two tone families ────────

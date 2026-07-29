@@ -104,6 +104,32 @@ function monthLabelForBlock(block) {
   };
 }
 
+// M-4a defect 3: homestand rail progress bar. Reads spend vs budget
+// and paints a proportional fill. Clamps to 100% for visual (the
+// numeric variance still tells the truth about over-budget). Uses
+// existing CSS variables so no new px literals ship. Grayscale-safe
+// via the aria-label carrying the ratio verbally.
+function SpendProgress({ spent, budget, label }) {
+  if (!Number.isFinite(spent) || !Number.isFinite(budget) || budget <= 0) return null;
+  const pct = Math.max(0, Math.min(100, Math.round((spent / budget) * 100)));
+  const overBudget = spent > budget;
+  return (
+    <div
+      className={`sc-homestand-rail-progress ${overBudget ? "sc-homestand-rail-progress--over" : "sc-homestand-rail-progress--under"}`}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={pct}
+      aria-label={`${label}, ${pct} percent`}
+    >
+      <div
+        className="sc-homestand-rail-progress-fill"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
 export default function HomestandDetail({
   account,
   year,                 // reserved for future season-scoped nav
@@ -364,7 +390,10 @@ export default function HomestandDetail({
           {/* §5.5 (M-3): rail leads with SPENT + variance once the
               close-out has written a labor actual. Budget appears as
               context under the spend figure. Falls back to the
-              BUDGET-only shape (below) when no close-out exists. */}
+              BUDGET-only shape (below) when no close-out exists.
+
+              M-4a (2026-07-29): adds a progress bar under the SPENT
+              figure so the ratio reads without decoding numbers. */}
           {hasCloseout ? (
             <section className="sc-homestand-rail-section">
               <div className="sc-homestand-rail-label">Spent</div>
@@ -374,6 +403,13 @@ export default function HomestandDetail({
               <div className="sc-homestand-rail-vs-budget">
                 vs {closeoutBudget != null ? fmt$(closeoutBudget) : "no budget snapshot"} budget
               </div>
+              {closeoutBudget != null && closeoutBudget > 0 && (
+                <SpendProgress
+                  spent={closeoutSpent}
+                  budget={closeoutBudget}
+                  label="Homestand spend against budget"
+                />
+              )}
               {closeoutVariance != null && (
                 <div
                   className={`sc-homestand-rail-variance ${varianceClass(closeoutVariance)}`}
@@ -415,39 +451,6 @@ export default function HomestandDetail({
             </section>
           )}
 
-          {/* Season-to-date: only paints once at least one homestand
-              has closed out on this account. Null when nothing has
-              closed out - the row hides rather than reading
-              "$0 vs $0 on budget", which is the missing-vs-zero rule
-              applied to a rollup. */}
-          {seasonToDate && (
-            <section
-              className="sc-homestand-rail-section"
-              aria-label="Season to date"
-            >
-              <div className="sc-homestand-rail-label">Season to date</div>
-              <div className="sc-homestand-rail-std-figure">
-                {fmt$(seasonToDate.actual)}
-              </div>
-              <div className="sc-homestand-rail-std-context">
-                across {seasonToDate.count} closed-out homestand{seasonToDate.count === 1 ? "" : "s"}
-                {seasonToDate.budget != null && (
-                  <> vs {fmt$(seasonToDate.budget)} budget</>
-                )}
-              </div>
-              {seasonToDate.variance != null && (
-                <div
-                  className={`sc-homestand-rail-variance ${varianceClass(seasonToDate.variance)}`}
-                >
-                  <VarianceCell
-                    variance={seasonToDate.variance}
-                    showCarryToSeason={false}
-                  />
-                </div>
-              )}
-            </section>
-          )}
-
           <section className="sc-homestand-rail-section">
             <div className="sc-homestand-rail-label">Service</div>
             {/* F3 (2026-07-29 owner ruling): servedDays + exceptionDays
@@ -477,6 +480,41 @@ export default function HomestandDetail({
               })()}
             </div>
           </section>
+
+          {/* Season-to-date - pinned near the bottom (M-4a defect 2)
+              so the block's own SPENT figure stays the hero. Only
+              paints when at least one homestand has closed out.
+              Dedupe (M-4a defect 1): when only ONE homestand has
+              closed out AND that one is the currently-viewed block,
+              the season-to-date row would repeat the SPENT figure
+              and variance verbatim. Hide in that case. */}
+          {seasonToDate && !(hasCloseout && seasonToDate.count === 1) && (
+            <section
+              className="sc-homestand-rail-section"
+              aria-label="Season to date"
+            >
+              <div className="sc-homestand-rail-label">Season to date</div>
+              <div className="sc-homestand-rail-std-figure">
+                {fmt$(seasonToDate.actual)}
+              </div>
+              <div className="sc-homestand-rail-std-context">
+                across {seasonToDate.count} closed-out homestand{seasonToDate.count === 1 ? "" : "s"}
+                {seasonToDate.budget != null && (
+                  <> vs {fmt$(seasonToDate.budget)} budget</>
+                )}
+              </div>
+              {seasonToDate.variance != null && (
+                <div
+                  className={`sc-homestand-rail-variance ${varianceClass(seasonToDate.variance)}`}
+                >
+                  <VarianceCell
+                    variance={seasonToDate.variance}
+                    showCarryToSeason={false}
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           <nav
             className="sc-homestand-rail-nav"
