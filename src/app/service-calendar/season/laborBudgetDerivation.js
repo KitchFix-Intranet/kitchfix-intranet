@@ -34,7 +34,7 @@
 // sold-revenue value (per-homestand). When sold revenue is absent,
 // `adjustedEnvelope` is null.
 
-import { DERIVE_HOMESTANDS_ACCOUNTS } from "./homestandDerivation";
+import { DERIVE_HOMESTANDS_ACCOUNTS } from "./homestandDerivation.js";
 
 // Public: the M-1 gate. Same set as M-0 - the two planes align by
 // design; a promotion needs both.
@@ -98,18 +98,11 @@ function daysOfBlockPerPeriod(block, periodRanges) {
   return perPeriod;
 }
 
-// Round-once. Compute exact envelope, round at emission. Distribute
-// rounding across the breakdown so the parts sum to the whole -
-// leftover cents attach to the LAST period touched (deterministic).
-function distributeToBreakdown(perPeriodExact, roundedEnvelope) {
-  const periods = Object.keys(perPeriodExact);
-  if (periods.length === 0) return [];
-  const roundedSlices = periods.map(p => Math.round(perPeriodExact[p]));
-  const roundedSum = roundedSlices.reduce((s, x) => s + x, 0);
-  const drift = roundedEnvelope - roundedSum;
-  if (drift !== 0) roundedSlices[roundedSlices.length - 1] += drift;
-  return periods.map((p, i) => ({ period: p, subtotal: roundedSlices[i] }));
-}
+// (Prior `distributeToBreakdown` helper retired 2026-07-29: the
+// per-homestand `Math.round(envelopeExact)` pass accumulated half-cent
+// drift across the season - CIN-OH ran $3 over, STL-MO $1 over at
+// gate. Replaced with per-period cents-conservation (Hamilton method)
+// inside deriveLaborBudgets below.)
 
 /**
  * Derive labor-budget envelopes for the whole season.
@@ -135,27 +128,86 @@ export function deriveLaborBudgets(segments, budgets, periodRanges, opts = {}) {
   // Divisor: game-derived days per period, across the WHOLE season.
   const daysPerPeriod = buildGameDerivedDaysPerPeriod(segments, periodRanges);
 
-  // Per-period budget map (period -> row) for O(1) lookup.
-  const budgetByPeriod = {};
+  // Budget in CENTS for the whole allocation. Integer arithmetic
+  // throughout: sum of block envelopes MUST equal sum of period
+  // budgets to the cent. Under floats, per-homestand Math.round on
+  // an exact-.5-cent split rounded up on both sides and accumulated
+  // drift ($3 over on CIN-OH, $1 over on STL-MO). Cents make the
+  // rounding deterministic AND the season conserves by construction.
+  const budgetCentsByPeriod = {};
   for (const b of budgets) {
-    if (b && b.period) budgetByPeriod[b.period] = b;
+    if (b && b.period && b.hourly_budget != null) {
+      budgetCentsByPeriod[b.period] = Math.round(Number(b.hourly_budget) * 100);
+    }
   }
 
-  const results = [];
-  for (const seg of segments) {
-    const blockDaysPerPeriod = daysOfBlockPerPeriod(seg, periodRanges);
-    const periodsTouched = Object.keys(blockDaysPerPeriod);
+  // Pre-compute per-block days per period once (used by both the
+  // missing-row check and the per-period allocation).
+  const blockDaysPerPeriodArr = segments.map(seg => daysOfBlockPerPeriod(seg, periodRanges));
 
-    // Missing-vs-zero. If ANY touched period has no live budget row
-    // or a null hourly_budget, emit null envelope with a reason. Do
-    // NOT emit zero - a zero envelope reads as "you may spend
-    // nothing," which is a lie.
-    const missing = periodsTouched.filter(p => {
-      const b = budgetByPeriod[p];
-      return !b || b.hourly_budget == null;
+  // Missing-vs-zero. If ANY touched period has no live budget row
+  // (or a null hourly_budget), emit null envelope with a reason. Do
+  // NOT emit zero - a zero envelope reads as "you may spend nothing,"
+  // which is a lie.
+  const missingByBlock = segments.map((_, i) => {
+    const periods = Object.keys(blockDaysPerPeriodArr[i]);
+    return periods.filter(p => budgetCentsByPeriod[p] == null);
+  });
+
+  // Hamilton method (largest-remainder), per-period. For each period
+  // P: allocate its budget_cents across every block touching P such
+  // that the integer shares sum EXACTLY to budget_cents. Ties broken
+  // by original block index for determinism (same input -> same
+  // output on every run).
+  //
+  // subtotalCentsByBlockByPeriod[blockIndex][period] = integer cents.
+  const subtotalCentsByBlockByPeriod = segments.map(() => ({}));
+  for (const P of Object.keys(budgetCentsByPeriod)) {
+    const totalDaysInP = daysPerPeriod[P] || 0;
+    if (totalDaysInP === 0) continue;
+    const budgetC = budgetCentsByPeriod[P];
+    // Blocks that touch P AND are not missing (missing blocks are
+    // emitted with envelope=null and do not receive cents).
+    const touching = [];
+    for (let i = 0; i < segments.length; i++) {
+      if (missingByBlock[i].length > 0) continue;
+      const days = blockDaysPerPeriodArr[i][P];
+      if (days) touching.push({ i, days });
+    }
+    if (touching.length === 0) continue;
+    // Compute exact share per touching block; take floor + fract.
+    const shares = touching.map(({ i, days }) => {
+      const exact = (budgetC * days) / totalDaysInP;
+      const floor = Math.floor(exact);
+      return { i, floor, fract: exact - floor };
     });
-    if (missing.length) {
-      results.push({
+    const floorSum = shares.reduce((s, x) => s + x.floor, 0);
+    let remainder = budgetC - floorSum;
+    // Distribute the (integer) remainder one cent at a time to the
+    // block with the largest fract; ties broken by original block
+    // index (asc). Guaranteed remainder < touching.length under
+    // exact math.
+    if (remainder > 0) {
+      const sorted = [...shares].sort((a, b) => {
+        if (b.fract !== a.fract) return b.fract - a.fract;
+        return a.i - b.i;
+      });
+      for (let k = 0; k < remainder; k++) sorted[k].floor += 1;
+    }
+    for (const s of shares) {
+      subtotalCentsByBlockByPeriod[s.i][P] = s.floor;
+    }
+  }
+
+  // Assemble results. envelope emitted as dollars-with-cents (Number
+  // rounded to 2dp) so downstream currency display is trivial;
+  // envelopeCents also emitted for callers that want to keep integer
+  // precision (e.g. an acceptance probe comparing to sum of budget
+  // cents).
+  return segments.map((seg, i) => {
+    const periodsTouched = Object.keys(blockDaysPerPeriodArr[i]);
+    if (missingByBlock[i].length) {
+      return {
         key: seg.key,
         homestandId: seg.homestandId,
         startDate: seg.startDate,
@@ -164,45 +216,28 @@ export function deriveLaborBudgets(segments, budgets, periodRanges, opts = {}) {
         opponents: seg.opponents,
         periodsTouched,
         envelope: null,
+        envelopeCents: null,
         breakdown: [],
-        reason: `no live sc_labor_budgets row for ${missing.join(", ")} (accountKey=${accountKey})`,
+        reason: `no live sc_labor_budgets row for ${missingByBlock[i].join(", ")} (accountKey=${accountKey})`,
         laborRatio: laborRatio || null,
         soldRevenue: null,
         adjustedEnvelope: null,
-      });
-      continue;
+      };
     }
-
-    // Compute exact per-period subtotal without intermediate rounding.
-    // subtotal = hourly_budget[p] / totalDaysInP × blockDaysInP.
-    const perPeriodExact = {};
-    let envelopeExact = 0;
-    for (const p of periodsTouched) {
-      const b = budgetByPeriod[p];
-      const totalDaysInP = daysPerPeriod[p] || 0;
-      if (totalDaysInP === 0) {
-        // Shouldn't happen (the block itself contributed to
-        // daysPerPeriod), but defensive.
-        perPeriodExact[p] = 0;
-        continue;
-      }
-      const rate = Number(b.hourly_budget) / totalDaysInP;
-      const subtotal = rate * blockDaysPerPeriod[p];
-      perPeriodExact[p] = subtotal;
-      envelopeExact += subtotal;
-    }
-    const envelope = Math.round(envelopeExact);
-    const breakdown = distributeToBreakdown(perPeriodExact, envelope);
-
-    // Revenue-flex: if laborRatio is set + a sold-revenue value is
-    // provided for THIS block, emit adjustedEnvelope. Sold revenue
-    // is per-homestand (not per-period), so it applies uniformly.
+    const perPeriodCents = subtotalCentsByBlockByPeriod[i];
+    const envelopeCents = periodsTouched.reduce((s, p) => s + (perPeriodCents[p] || 0), 0);
+    const envelope = envelopeCents / 100;
+    const breakdown = periodsTouched.map(p => ({
+      period: p,
+      subtotal: (perPeriodCents[p] || 0) / 100,
+      subtotalCents: perPeriodCents[p] || 0,
+    }));
+    // Revenue-flex adjustment - also cents-based for exactness.
     const soldRevenue = soldRevenueByBlockKey[seg.key];
     const adjustedEnvelope = (laborRatio != null && soldRevenue != null)
-      ? Math.round(Number(soldRevenue) * Number(laborRatio))
+      ? Math.round(Number(soldRevenue) * Number(laborRatio) * 100) / 100
       : null;
-
-    results.push({
+    return {
       key: seg.key,
       homestandId: seg.homestandId,
       startDate: seg.startDate,
@@ -211,12 +246,12 @@ export function deriveLaborBudgets(segments, budgets, periodRanges, opts = {}) {
       opponents: seg.opponents,
       periodsTouched,
       envelope,
+      envelopeCents,
       breakdown,
       reason: null,
       laborRatio: laborRatio || null,
       soldRevenue: soldRevenue != null ? Number(soldRevenue) : null,
       adjustedEnvelope,
-    });
-  }
-  return results;
+    };
+  });
 }

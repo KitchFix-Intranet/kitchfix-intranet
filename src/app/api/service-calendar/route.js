@@ -1173,8 +1173,10 @@ export async function POST(request) {
       if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
         return NextResponse.json({ success: false, error: "Labor budgets are MLB-only" }, { status: 400 });
       }
-      if (!period || !/^P([1-9]|1[0-3])$/.test(String(period))) {
-        return NextResponse.json({ success: false, error: "period required (P1..P13)" }, { status: 400 });
+      // sc-21 (2026-08-15): bare numeric ("4"..."13"), matching the
+      // house convention in sc_day_metadata.period. Displays add "P".
+      if (!period || !/^([1-9]|1[0-3])$/.test(String(period))) {
+        return NextResponse.json({ success: false, error: "period required (bare numeric 1..13)" }, { status: 400 });
       }
       if (!effectiveFrom || !/^\d{4}-\d{2}-\d{2}$/.test(String(effectiveFrom))) {
         return NextResponse.json({ success: false, error: "effectiveFrom required (YYYY-MM-DD)" }, { status: 400 });
