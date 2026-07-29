@@ -17,7 +17,7 @@ import { deriveLaborBudgets } from "@/app/service-calendar/season/laborBudgetDer
 // The set is the ONLY signal that gates the top-level homestands[]
 // emit. See v2/pilots.js for why this is separate from
 // DERIVE_HOMESTANDS_ACCOUNTS.
-import { M2_HOMESTAND_ACCOUNTS } from "@/app/service-calendar/v2/pilots";
+import { MLB_HOMESTAND_SURFACE_ACCOUNTS } from "@/app/service-calendar/v2/pilots";
 // M-2: labor budgets live rows for the emit. salary_budget and
 // revenue_forecast are stripped at the boundary here so they never
 // cross the network. Admin fields (changed_by / changed_at /
@@ -1887,12 +1887,15 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
 
   // M-2 (2026-07-29): homestand detail payload.
   //
-  // Emit gate is M2_HOMESTAND_ACCOUNTS (CIN-OH today), NOT
-  // DERIVE_HOMESTANDS_ACCOUNTS. The derivation feeds
-  // homestandSummaryByMonth for all four MLB accounts above; only
-  // the top-level homestands[] emit is pilot-scoped. This preserves
-  // the pre-M-2 payload byte-identically for STL-MO, TXR-TX-H,
-  // TXR-TX-V (Fence 5) and for every non-MLB account (Fences 1-4).
+  // Emit gate is MLB_HOMESTAND_SURFACE_ACCOUNTS (all four MLB as of
+  // M-4a; was CIN - OH only at M-2), NOT DERIVE_HOMESTANDS_ACCOUNTS.
+  // The derivation feeds homestandSummaryByMonth for all four MLB
+  // accounts above; the top-level homestands[] emit is surface-set
+  // gated. This preserves the pre-M-2 payload byte-identically for
+  // every non-MLB account (Fences 1-4). The MLB surface set gains
+  // three accounts at M-4a (STL - MO, TXR - TX - H, TXR - TX - V);
+  // Fence 5 becomes "they gain the homestand surface and nothing
+  // else changes."
   //
   // The `homestands` key is ABSENT from the response for non-pilot
   // accounts, not [] and not null. Mirrors the pattern at :1435 for
@@ -1905,7 +1908,7 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   // rows carry only period + hourly_budget - the fields deriveLaborBudgets
   // reads and nothing else.
   let m2Homestands;
-  if (M2_HOMESTAND_ACCOUNTS.has(accountKey)) {
+  if (MLB_HOMESTAND_SURFACE_ACCOUNTS.has(accountKey)) {
     // Re-derive rather than close over the derivedBlocks scoped inside
     // the outer flat_fee+hasHomestandData branch above. Pure function,
     // ~13-block computation, cost negligible. Keeps the pre-M-2 code
