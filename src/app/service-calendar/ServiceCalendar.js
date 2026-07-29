@@ -2992,6 +2992,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                   { scroll: false }
                 );
               } : undefined}
+              /* M-4a (2026-07-29): forward the payload's homestands[]
+                 into SeasonShell -> SeasonStepper so the strip can
+                 read live billing status per homestand. Null for
+                 non-MLB accounts (server does not emit the key). */
+              homestands={yearHomestands}
               // Lifted view toggle (the action signal moved to the chrome
               // bar, so the season shell no longer carries jump props).
               view={seasonView}

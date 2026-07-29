@@ -57,6 +57,12 @@ export default function SeasonShell({
   // was CIN - OH only at M-2), so non-MLB accounts preserve pre-M-2
   // period-map behavior byte-identically.
   onHomestandClick,         // (segmentKey) => void  (optional)
+  // M-4a (2026-07-29): the payload's homestands[] array carrying live
+  // billing status per homestand. Forwarded to SeasonStepper so the
+  // strip can paint the fourth `actuals-due` state and the tracker
+  // footer's "N need actuals" counter. Absent for non-MLB accounts;
+  // the strip falls back to derived done/now/next byte-identically.
+  homestands,
   // Lifted view toggle (passed from orchestrator). The action signal
   // moved to the ChromeBar, so the shell no longer carries jump props.
   view,                     // "calendar" | "period" - lifted to orchestrator chrome bar
@@ -218,6 +224,7 @@ export default function SeasonShell({
           yearData={yearData}
           todayDate={todayDate}
           accountKey={account?.key}
+          homestands={homestands}
           onSegmentClick={handleSegmentClick}
         />
       ) : (
