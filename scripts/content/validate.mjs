@@ -171,20 +171,37 @@ function isMatchInsideQuotedSpan(line, matchIndex) {
   return count % 2 === 1;
 }
 
+// Same principle as the quoted-span skip, applied to inline backtick spans.
+// An author writing `TBD` in code voice is referring to the token as a
+// literal (documenting the convention or quoting a source system's cell
+// value), not marking their own text as incomplete.
+function isMatchInsideBacktickSpan(line, matchIndex) {
+  let count = 0;
+  for (let i = 0; i < matchIndex; i++) {
+    if (line.charCodeAt(i) === 0x60) count++; // grave accent (backtick)
+  }
+  return count % 2 === 1;
+}
+
 function checkNumberHygiene(body, fm, findings) {
   if (fm.status !== "Live") return; // applies only to Live docs
   const lines = body.split("\n");
   const globalRe = new RegExp(PLACEHOLDER_RE.source, "gi");
   for (let i = 0; i < lines.length; i++) {
     if (isSourceOfRecordLine(lines[i])) continue;
-    // Flag the line only if at least one match sits outside a quoted span.
-    // If every match is inside `"..."`, the line is recording source text.
+    // Flag the line only if at least one match sits outside every kind of
+    // quoting span. If every match is inside `"..."` or inline backticks,
+    // the line is recording source text or referring to the token as a
+    // literal, not authoring its own placeholder.
     const line = lines[i];
     globalRe.lastIndex = 0;
     let m;
     let flagged = false;
     while ((m = globalRe.exec(line)) !== null) {
-      if (!isMatchInsideQuotedSpan(line, m.index)) { flagged = true; break; }
+      if (isMatchInsideQuotedSpan(line, m.index)) continue;
+      if (isMatchInsideBacktickSpan(line, m.index)) continue;
+      flagged = true;
+      break;
     }
     if (flagged) {
       findings.push({ severity: "ERROR", check: "number_hygiene", msg: `Live doc has placeholder text on line ${i + 1}: '${line.trim().slice(0, 80)}'` });
@@ -205,6 +222,55 @@ function checkHeadingHierarchy(body, fm, findings) {
 function checkAudienceScope(fm, findings) {
   if (!fm.audience) {
     findings.push({ severity: "WARN", check: "audience_scope", msg: "no 'audience' set - corpus projection will default to operator (review)" });
+  }
+}
+
+// The <NonCanonical> markup must always appear as a matched pair in body
+// prose. An orphan opening tag survives the reader-side markNonCanonical
+// pass and renders as an escaped literal in the browser (harmless to Sous
+// via the corpus paranoid sweep, but cosmetically broken). This check
+// fires on any body-level open/close imbalance. The whole-body pair count
+// is sufficient: NonCanonical blocks never nest and the projection's own
+// stray counter uses the same shape.
+export function checkNonCanonicalOrphan(body, fm, findings) {
+  const opens = (body.match(/<NonCanonical>/g) || []).length;
+  const closes = (body.match(/<\/NonCanonical>/g) || []).length;
+  if (opens !== closes) {
+    findings.push({
+      severity: "ERROR",
+      check: "noncanonical_orphan",
+      msg: `<NonCanonical> body markup is unbalanced: ${opens} open vs ${closes} close. Every <NonCanonical> needs a matching </NonCanonical> - orphan opens render as escaped literal text in the reader. To refer to the tag by name in prose without invoking it, use \`NonCanonical\` markup instead of \`<NonCanonical>\`.`,
+    });
+  }
+}
+
+// The # Related Documents table's third column must not be Status. The
+// column has no machine consumer (the reader, print pipeline, chunker,
+// and projection all treat it as ordinary body text) and every value in
+// it is a hand-typed claim about a target doc's lifecycle that drifts
+// silently the moment the target changes. Ruled 2026-07-29: delete the
+// column, keep the version annotation as `Reviewed against`. Notes-column
+// tables and versionless two-column tables both pass. Fires ERROR per
+// Kevin's ruling that a warn no one runs into is a rule that doesn't
+// exist.
+export function checkRelatedDocumentsStatus(body, fm, findings) {
+  const lines = body.split("\n");
+  const start = lines.findIndex((l) => /^# Related Documents\s*$/.test(l));
+  if (start === -1) return;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^# /.test(lines[i])) return; // end of section
+    if (!lines[i].startsWith("|")) continue;
+    if (/^\|[\s:|-]+$/.test(lines[i])) continue; // separator
+    // First non-separator table row is the header.
+    const cells = lines[i].split("|").slice(1, -1).map((c) => c.trim().toLowerCase());
+    if (cells[2] === "status" || cells[2] === "current status" || cells[2] === "state") {
+      findings.push({
+        severity: "ERROR",
+        check: "related_documents_status_col",
+        msg: `# Related Documents table has a '${cells[2]}' column. Delete it - the column has no machine consumer and hand-typed values drift from the target's real status. Use two columns (Document ID + Title), three columns with 'Reviewed against' for versioned annotations, or three columns with 'Notes' for descriptive prose.`,
+      });
+    }
+    return; // header inspected, done
   }
 }
 
@@ -250,6 +316,8 @@ export async function validateOne(doc, facts, allDocIds) {
   checkNumberHygiene(doc.body, fm, findings);
   checkHeadingHierarchy(doc.body, fm, findings);
   checkAudienceScope(fm, findings);
+  checkNonCanonicalOrphan(doc.body, fm, findings);
+  checkRelatedDocumentsStatus(doc.body, fm, findings);
   checkBlastRadius(fm, doc.body, findings);
   checkStaleness(fm, findings);
   return findings;

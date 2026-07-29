@@ -49,12 +49,12 @@ TPL-020 is the blank shell for a KitchFix Account Record. Copy it, fill each sec
 Rules for filling it:
 
 - **Every time-boxed fact carries an as-of date.** When a value changes, move the old one to Section 7 History marked superseded, and put the new one in current-state. Never overwrite silently.
-- **Never hand-author a live price.** The rate table (Section 2b) carries service context and effective-dating; the live dollar values resolve from the generated Price Book via Facts. Any dollar figure shown inline is a specimen and is wrapped in `<NonCanonical>`. Facts are governed by STD-004 (Documentation Repository Standard) - they live in the registry, are changed only there, and are dimensioned (account x group x service x rate_type x effective_date); never create or edit a Fact by editing this record.
+- **Never hand-author a live price.** The rate table (Section 2b) carries service context and effective-dating; the live dollar values resolve from the generated Price Book via Facts. Any dollar figure shown inline is a specimen and is wrapped in `NonCanonical` markup. Facts are governed by STD-004 (Documentation Repository Standard) - they live in the registry, are changed only there, and are dimensioned (account x group x service x rate_type x effective_date); never create or edit a Fact by editing this record.
 - **A section that does not apply is marked N/A with a reason** - never left blank.
 - **Section 5 Open Items is a living worklist.** Its rows flip as external paperwork lands - this is expected and does NOT go through supersede-to-History. Only substantive facts (prices, terms, rulings) follow the effective-dated supersession discipline; Open Items flips do not.
 - **Contract terms are not restated here** - Section 1 points to the verbatim digest.
 
-> CRITICAL: Wrap every bracketed write-in prompt, placeholder row, and specimen dollar figure in `<NonCanonical>` markup. This is a blank template; nothing in it is a live value. Unwrapped, a placeholder or specimen can be retrieved and cited as fact.
+> CRITICAL: Wrap every bracketed write-in prompt, placeholder row, and specimen dollar figure in `NonCanonical` markup. This is a blank template; nothing in it is a live value. Unwrapped, a placeholder or specimen can be retrieved and cited as fact.
 
 **Completeness bar - when a record is done.** Mark the Section 0 completeness field against this bar:
 

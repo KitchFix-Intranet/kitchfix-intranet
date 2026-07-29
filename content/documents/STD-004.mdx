@@ -153,7 +153,7 @@ There are two mechanisms, and only one is enforced. Use the enforced one.
 - **`<NonCanonical>...</NonCanonical>` body markup - enforced, use this.** A block wrapped in this markup renders as an Example callout in the reader and is stripped entirely from SousAI ingestion, so it can never be retrieved or cited as a live value. This is the required way to mark a specimen.
 - **The `non_canonical_blocks` frontmatter field - not consumed, do not rely on it.** The field exists in the schema but nothing reads it. Listing a section there does not protect it. It is not a substitute for body markup.
 
-> CRITICAL: Mark specimens with `<NonCanonical>` markup in the body, not the frontmatter field. A figure listed only in `non_canonical_blocks` is still ingested and can be cited as fact.
+> CRITICAL: Mark specimens with the `NonCanonical` body markup, not the frontmatter field. A figure listed only in `non_canonical_blocks` is still ingested and can be cited as fact.
 
 # Access Tiers
 
