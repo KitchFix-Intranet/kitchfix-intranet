@@ -1764,19 +1764,42 @@ export async function POST(request) {
 
       // Call the RPC. Atomic supersede + insert + bulk upsert in one
       // plpgsql transaction.
-      const result = await confirmCloseout({
-        accountKey,
-        homestandKey,
-        laborActual,
-        laborSource,
-        windowStart: block.windowStart,
-        windowEnd: block.windowEnd,
-        budgetSnapshot,
-        notes: notes || null,
-        actualsRows,
-        reopenReason: reopenReason || null,
-        confirmedBy: email,
-      });
+      //
+      // Validation-vs-500 split (2026-07-29 gate ruling): the RPC RAISEs
+      // when a reopen omits reopen_reason. That's a user forgetting a
+      // required field, not the server breaking - it should return 400
+      // with a clean message the panel can render as inline validation,
+      // not 500 which reads as "the server failed" and pollutes error
+      // monitoring. Match on the guard's verbatim message; any other
+      // RPC error still surfaces as 500 via the outer catch.
+      let result;
+      try {
+        result = await confirmCloseout({
+          accountKey,
+          homestandKey,
+          laborActual,
+          laborSource,
+          windowStart: block.windowStart,
+          windowEnd: block.windowEnd,
+          budgetSnapshot,
+          notes: notes || null,
+          actualsRows,
+          reopenReason: reopenReason || null,
+          confirmedBy: email,
+        });
+      } catch (err) {
+        if (err.message.includes("reopen_reason is required")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "A reopen reason is required to amend a closed-out homestand.",
+              field: "reopenReason",
+            },
+            { status: 400 }
+          );
+        }
+        throw err;
+      }
 
       return NextResponse.json({
         success: true,

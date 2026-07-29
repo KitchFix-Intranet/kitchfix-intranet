@@ -60,7 +60,9 @@ function fmtRangeCaption(startIso, endIso) {
 //   < 0 => under budget (good, green)
 //   = 0 => on budget
 // Displayed absolute so the sign doesn't fight the word.
-function VarianceCell({ variance, showCarryToSeason }) {
+// Exported so the homestand rail (§5.5) can reuse the same vocabulary
+// once a live close-out exists. One truth for over/under/on-budget copy.
+export function VarianceCell({ variance, showCarryToSeason }) {
   const isOver = variance > 0;
   const isUnder = variance < 0;
   const abs = Math.abs(variance);
@@ -77,7 +79,7 @@ function VarianceCell({ variance, showCarryToSeason }) {
   );
 }
 
-function varianceClass(variance) {
+export function varianceClass(variance) {
   if (variance > 0) return "sc-closeout-variance--over";
   if (variance < 0) return "sc-closeout-variance--under";
   return "sc-closeout-variance--on";

@@ -25,7 +25,7 @@
 
 import { useMemo } from "react";
 import DayStrip from "./DayStrip";
-import CloseoutPanel from "./CloseoutPanel";
+import CloseoutPanel, { VarianceCell, varianceClass } from "./CloseoutPanel";
 // M-2 defect fix (2026-07-29 owner ruling, live-gate bounce):
 // dedicated legend for the day strip's vocabulary. StateLegend
 // belongs to the day-tile surface and would teach a nine-key
@@ -206,6 +206,50 @@ export default function HomestandDetail({
   const budgetBreakdown = block.budget?.breakdown || [];
   const budgetReason = block.budgetReason;
 
+  // §5.5 (M-3): once a live close-out exists, the rail leads with
+  // SPENT and shows variance against the budget snapshot the confirm
+  // froze. Falls back to the BUDGET-only shape for upcoming /
+  // in-progress / actuals-due. `laborActual` and
+  // `budgetSnapshotAtCloseout` are emitted by
+  // buildHomestandsPayload ONLY when a live closeout row exists, so
+  // presence of laborActual is the correct branch key.
+  const closeoutSpent = block.laborActual;
+  const closeoutBudget = block.budgetSnapshotAtCloseout;
+  const hasCloseout = closeoutSpent != null;
+  const closeoutVariance = (closeoutSpent != null && closeoutBudget != null)
+    ? closeoutSpent - closeoutBudget
+    : null;
+
+  // Season-to-date: sum every homestand carrying a live close-out.
+  // budget is the sum of budget snapshots, actual is the sum of
+  // laborActual, variance the difference. Null when nothing has
+  // closed out yet, so the rail can hide the row cleanly instead of
+  // rendering "$0.00 vs $0.00 on budget".
+  const seasonToDate = useMemo(() => {
+    if (!Array.isArray(homestands)) return null;
+    let actual = 0;
+    let budget = 0;
+    let count = 0;
+    let anyBudgetMissing = false;
+    for (const b of homestands) {
+      if (b?.laborActual == null) continue;
+      actual += Number(b.laborActual);
+      if (b.budgetSnapshotAtCloseout != null) {
+        budget += Number(b.budgetSnapshotAtCloseout);
+      } else {
+        anyBudgetMissing = true;
+      }
+      count += 1;
+    }
+    if (count === 0) return null;
+    return {
+      count,
+      actual,
+      budget: anyBudgetMissing ? null : budget,
+      variance: anyBudgetMissing ? null : actual - budget,
+    };
+  }, [homestands]);
+
   return (
     <div className="sc-homestand">
       <nav className="sc-homestand-breadcrumb" aria-label="Homestand navigation">
@@ -313,36 +357,92 @@ export default function HomestandDetail({
           className="sc-homestand-rail"
           aria-label="Homestand summary"
         >
-          <section className="sc-homestand-rail-section">
-            <div className="sc-homestand-rail-label">Budget</div>
-            {budgetAmount != null ? (
-              <>
-                <div className="sc-homestand-rail-figure">
-                  {fmt$(budgetAmount)}
-                </div>
-                {budgetBreakdown.length > 1 && (
-                  <div
-                    className="sc-homestand-rail-breakdown"
-                    aria-label="Budget breakdown by period"
-                  >
-                    {budgetBreakdown.map((b) => (
-                      <div
-                        key={b.period}
-                        className="sc-homestand-rail-breakdown-row"
-                      >
-                        <span>Period {b.period}</span>
-                        <span>{fmt$(b.subtotal)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="sc-homestand-rail-figure sc-homestand-rail-figure--missing">
-                {budgetReason || "No budget recorded yet."}
+          {/* §5.5 (M-3): rail leads with SPENT + variance once the
+              close-out has written a labor actual. Budget appears as
+              context under the spend figure. Falls back to the
+              BUDGET-only shape (below) when no close-out exists. */}
+          {hasCloseout ? (
+            <section className="sc-homestand-rail-section">
+              <div className="sc-homestand-rail-label">Spent</div>
+              <div className="sc-homestand-rail-figure">
+                {fmt$(closeoutSpent)}
               </div>
-            )}
-          </section>
+              <div className="sc-homestand-rail-vs-budget">
+                vs {closeoutBudget != null ? fmt$(closeoutBudget) : "no budget snapshot"} budget
+              </div>
+              {closeoutVariance != null && (
+                <div
+                  className={`sc-homestand-rail-variance ${varianceClass(closeoutVariance)}`}
+                >
+                  <VarianceCell variance={closeoutVariance} showCarryToSeason={false} />
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className="sc-homestand-rail-section">
+              <div className="sc-homestand-rail-label">Budget</div>
+              {budgetAmount != null ? (
+                <>
+                  <div className="sc-homestand-rail-figure">
+                    {fmt$(budgetAmount)}
+                  </div>
+                  {budgetBreakdown.length > 1 && (
+                    <div
+                      className="sc-homestand-rail-breakdown"
+                      aria-label="Budget breakdown by period"
+                    >
+                      {budgetBreakdown.map((b) => (
+                        <div
+                          key={b.period}
+                          className="sc-homestand-rail-breakdown-row"
+                        >
+                          <span>Period {b.period}</span>
+                          <span>{fmt$(b.subtotal)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="sc-homestand-rail-figure sc-homestand-rail-figure--missing">
+                  {budgetReason || "No budget recorded yet."}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Season-to-date: only paints once at least one homestand
+              has closed out on this account. Null when nothing has
+              closed out - the row hides rather than reading
+              "$0 vs $0 on budget", which is the missing-vs-zero rule
+              applied to a rollup. */}
+          {seasonToDate && (
+            <section
+              className="sc-homestand-rail-section"
+              aria-label="Season to date"
+            >
+              <div className="sc-homestand-rail-label">Season to date</div>
+              <div className="sc-homestand-rail-std-figure">
+                {fmt$(seasonToDate.actual)}
+              </div>
+              <div className="sc-homestand-rail-std-context">
+                across {seasonToDate.count} closed-out homestand{seasonToDate.count === 1 ? "" : "s"}
+                {seasonToDate.budget != null && (
+                  <> vs {fmt$(seasonToDate.budget)} budget</>
+                )}
+              </div>
+              {seasonToDate.variance != null && (
+                <div
+                  className={`sc-homestand-rail-variance ${varianceClass(seasonToDate.variance)}`}
+                >
+                  <VarianceCell
+                    variance={seasonToDate.variance}
+                    showCarryToSeason={false}
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="sc-homestand-rail-section">
             <div className="sc-homestand-rail-label">Service</div>

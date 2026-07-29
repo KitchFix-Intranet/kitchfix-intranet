@@ -373,6 +373,38 @@
   color: var(--sc2-rail-text-item);
 }
 
+/* §5.5 spend-vs-budget rail branch. Spent is the leading figure
+   (--rail-figure), budget renders as caption context, variance rides
+   its own line and takes color from the shared --sc2-state-*-fg
+   tokens (parallel to .sc-closeout-variance--*). */
+.sc-homestand-rail-vs-budget {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+}
+.sc-homestand-rail-variance {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-semibold);
+}
+.sc-homestand-rail-variance.sc-closeout-variance--over {
+  color: var(--sc2-state-overdue-fg);
+}
+.sc-homestand-rail-variance.sc-closeout-variance--under {
+  color: var(--sc2-state-entered-fg);
+}
+.sc-homestand-rail-variance.sc-closeout-variance--on {
+  color: var(--sc2-rail-text-strong);
+}
+.sc-homestand-rail-std-figure {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-rail-text-strong);
+  line-height: 1;
+}
+.sc-homestand-rail-std-context {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+}
+
 .sc-homestand-rail-nav {
   display: flex;
   justify-content: space-between;
