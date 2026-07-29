@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.46
+**Version:** v2.47
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,18 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.47 - 2026-07-29. THE MAP EXISTS.** PR #555 graded and merged: OPD State of Record, the first dated SHA-stamped picture of the library. Every verifiable claim reproduced independently by Chat (129 MDX, 82 Live / 22 In Build / 16 Retired / 7 Pending / 1 Placeholder / 1 Blocked, 41 files with the hand-typed heading, two-file diff, PROJECTION_DRYRUN reverted). Both spot-checked drift rows real: AGR-002 types POL-009 "In Build" against a Live target; CHK-003 types TPL-018 "Live" against an In Build target. CC reconciled its own 35-vs-41 count discrepancy honestly rather than restating one number - the exact self-audit the addendum asked for. Section 2 unblocked by Kevin's authorization of `project-catalog.mjs --dry-run` with `--env-file`; CC stopped at the classifier rather than routing around it, the second correctly-fired guardrail this week.
+
+  **Headline finding: 143 of 228 hand-typed status rows are wrong (63 percent).** The inverse of everything else this week - the four items Chat chased were already fixed; this one had never been measured. **Sous consequence:** those tables live in corpus documents, so Sous can retrieve a hand-typed "Live" for an In Build document and assert it as fact with a citation attached. Doc-answer class, Phase E zero-tolerance relevance.
+
+  **Eight supersede verdicts recorded** - CRITICAL_SUMMARY and PUBLISH_READINESS SUPERSEDED, the other six PARTIALLY STALE with claim-level evidence. The rotted-audit problem that cost four wrongly-scoped work items is now closed by record rather than by memory.
+
+  **Chat recommendation on the table (Kevin's to rule):** delete the Status column across the 41 documents rather than correct 143 rows. A hand-typed status duplicates live PG state into markdown no code path can correct - the same C-1 staleness mechanism ruled on at v2.22 when the billing quick reference was stripped of per-meal rates in favor of pointing at REF-141. Pair with a validate.mjs rule so the column cannot return. Accepted tradeoff: Title stays hand-typed and can drift, but titles change rarely and the ID is the resolving key; full table generation was sized by CC as a pipeline change with print-fence exposure and is not worth the residual risk.
+
+  **Not-only-status, recorded so it does not get lost:** TPL-015 points at Retired REF-005-A and REF-005-B in the hand-typed layer - the same retired-reference class the structured layer was cleaned of, surviving because nothing validates hand-typed tables (structured: 0 retired targets; hand-typed: 2). And 3 stray NonCanonical markers, which matter out of proportion to their count because the NonCanonical strip is what keeps live figures out of the corpus so Sous cannot quote a stale number as current - a pipeline gap there is a money-answer safety question, not an authoring nit.
+
+  **Decision-packet session issued** (read-only forensics, zero repairs) covering all ten open items with evidence, options, and a recommendation each, closing with a terse numbered decision list. Three questions in it can move the whole plan: (A) how many drift rows sit in Sous-retrievable documents, and whether these tables survive chunking at all - if they never reach a chunk the urgency collapses; (B) whether the NonCanonical strays are authoring typos or a brittle strip rule that let other content through; (D) whether part of the 143 is parser artifact from checklist rows being read as reference rows, which would correct the headline number. (I) asks whether the eventual re-embed trips the parked migration-gate root cause, which would make that fix a prerequisite rather than a backlog item.
 
 - **v2.46 - 2026-07-29.** PR #554 graded and merged: single-gate Sous nav visibility. canUseSous helper in opdAcl.js, three call sites (api gate, page gate, layout-resolved nav prop), 5/5 unit tests including a no-backdoor case reproducing both old predicates across six tier x isCorporate combinations, print fence zero-diff, plan v2.45 aboard. The #537 one-gate precedent now covers Sous itself.
 
