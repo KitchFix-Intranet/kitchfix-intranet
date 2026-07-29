@@ -385,11 +385,15 @@ function grade_case3(result) {
   });
   // Numbers are OK if the model called a SC tool that returned real data.
   const pass_numbers = filtered.length === 0 || scToolReturnedRows;
-  // Historical acknowledgment: the model should note it can't rewind to P5
-  // (or that P5 is historical, or that it can only give current). The phrasing
-  // is open; look for any temporal-context language.
-  const pass_historical_ack = /historical|prior period|closed period|current period|current-season|can'?t (rewind|pull|access) (prior|historical|P5|closed)|P5.*historical|only.*current/i.test(answer) ||
-    (scToolReturnedRows && /P8|Period 8|current/i.test(answer));
+  // Historical acknowledgment: the model MUST note it can't answer the P5
+  // part specifically (P5 is historical, or the tools are current-season
+  // only, or it can't pull a prior period). This is the load-bearing check:
+  // without it, an answer that pivots to "here are P8 numbers instead" and
+  // never addresses P5 passes as if it answered the question - and this
+  // case exists precisely to catch that failure mode. The scToolReturnedRows
+  // fallback was removed 2026-07-29 (Kevin ruling PR #567) because it
+  // matched merely mentioning "current" and let the pivot-answer through.
+  const pass_historical_ack = /historical|prior period|closed period|current period|current-season|can'?t (rewind|pull|access) (prior|historical|P5|closed)|P5.*historical|only.*current/i.test(answer);
   const pass_status = ["declined", "partial", "grounded"].includes(result.status);
   const ok = pass_numbers && pass_historical_ack && pass_status;
   notes.push(`SC tool called + returned data: ${scToolReturnedRows} (calls: ${scToolCalls.map((s) => s.tool).join(", ") || "(none)"})`);
