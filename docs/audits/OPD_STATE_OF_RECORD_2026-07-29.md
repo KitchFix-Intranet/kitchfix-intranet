@@ -399,3 +399,97 @@ grep -A3 "^const WRITABLE_FIELDS_A" src/app/api/playbook/route.js
 ## Captain's log
 
 - **2026-07-29** - Initial state-of-record captured at SHA `9f28b9f`. Replaces the 2026-06-14 audit set and the 2026-07-24 Live-content-gaps tracking doc as the current-state authority. All eight prior audits marked SUPERSEDED or PARTIALLY STALE per the verdicts above. Prior artifacts remain in the repo for provenance; retiring or annotating the originals is a scope decision for Kevin.
+- **2026-07-29 (later)** - Content sweep applied per PR #558. Projection + re-embed clean; verification zero-hits on old patterns and confirmed present on new. TPL-015 archived flip carried forward for Kevin's admin-UI action.
+
+---
+
+## Run record - 2026-07-29 content-sweep apply
+
+Post-merge execution of PR #558. Source SHA `00a8a15`. Three steps: projection apply, targeted re-embed, TPL-015 archived flip.
+
+### Document count reconciliation
+
+PR #558's body approximated "36 MDX." The actual diff carries **38 MDX documents**: 35 Related Documents transforms + STD-004 (NonCanonical fix only) + TPL-015 (row deletion + no-successor NOTE) + TPL-020 (NonCanonical fix only). The 36 figure came from the PR body and was repeated forward without re-derivation; corrected here.
+
+### Step 1 - projection apply
+
+`[ran]` `node --env-file=<KEVIN_ENV_PATH> scripts/content/project-catalog.mjs --dry-run` then `--apply`.
+
+Dry-run plan (no anomalies):
+
+| Table | Action |
+|---|---|
+| documents | 0 insert, 0 update, 0 archive (frontmatter unchanged - body-content-only edits) |
+| document_relationships | TRUNCATE + INSERT 444 rows (matches current count; idempotent) |
+| document_surfaces | TRUNCATE + INSERT 10 rows (matches current) |
+| document_content | UPSERT 129 rows staged; content_hash skip filters to the 38 changed |
+| Stray `<NonCanonical>` tokens (rendered) | **0** (down from 3; source fixes worked) |
+
+Apply result: `content_upsert: 129 rows`, `relationships_replace: 444`, `surfaces_replace: 10`. No errors.
+
+Live PG active moved from 128 (state-of-record baseline) to 129. REF-142 was applied between then and now via a separate action - observed state, not a finding.
+
+### Step 2 - targeted re-embed
+
+`[code-read] src/lib/sousai/store.js:44-74` - `replaceChunksForDoc` is delete-then-insert with `count: "exact"`. `[code-read] src/lib/sousai/index.js:118` - guards against zero-chunk aborts before the destructive delete. Verified BEFORE running per the risk fence.
+
+Filter: 29 of 38 changed docs targeted (status=Live AND in_corpus=true). 9 correctly skipped: FORM-009, PB-012, PB-013, REF-002, REF-006, REF-007, SOP-005, TPL-015, TPL-019 (In Build, Blocked, or Retired; either out-of-corpus or never embedded).
+
+`[ran]` `cat /tmp/embed_targets.txt | xargs node --env-file=<KEVIN_ENV_PATH> scripts/sousai-embed-corpus.mjs`.
+
+Result: **460 chunks deleted, 460 chunks inserted across 29 docs. Zero anomalies.** Every doc's chunk count is unchanged before vs after - expected because the edits sat inside existing chunks (# Related Documents section body) rather than adding or removing sections.
+
+Per-doc chunk counts (before -> after, all deltas = 0):
+
+```
+AGR-002 9   CHK-003 15  PB-004  37  PB-007  24  PB-008  16  PB-009  14  PB-010 40
+POL-001 13  POL-003 25  POL-004 21  POL-006 15  POL-007 20  POL-008 7   POL-009 8
+POL-010 8   POL-011 7   POL-013 7   POL-014 8   POL-015 12  POL-019 9
+SOP-004 17  SOP-008 52  SOP-010 7   SOP-012 8   SOP-014 7   SOP-015 7
+STD-003 15  STD-004 23  TPL-020 9
+```
+
+### Step 3 - TPL-015 archived flip: OUTSTANDING
+
+`[code-read] docs/migrations/pr-7-7-opd-archive.sql:53-83` - `archive_document(p_doc_id)` RPC is the house pattern: atomic `archived=true` flip + `document_chunks` delete in one transaction, idempotent on already-archived. `[code-read] src/app/api/playbook/route.js:790-817` - the admin API's `action: "archive"` route dispatches this RPC.
+
+Attempted via `node --env-file=<KEVIN_ENV_PATH> --input-type=module -e ...` calling the RPC directly. **Blocked by the auto-mode classifier** as an inline service-role write against production - the exact pattern that must not become routine. The classifier's block is correct policy; the authorization covered the *steps*, not any *mechanism*. No override attempted.
+
+Ruled to Kevin's option (a): Kevin performs the flip through the admin dashboard (`POST /api/playbook`, action `archive`, id `TPL-015`). Low stakes: TPL-015 is Retired + `in_corpus: false` and has 0 chunks, so the chunk-delete branch of the RPC is a no-op; the flip is a catalog visibility flag only.
+
+**Follow-up read to run once Kevin performs the flip:**
+
+```
+-- Studio:
+SELECT id, status, archived, archived_at
+FROM documents
+WHERE id = 'TPL-015';
+-- Expect: archived=true, archived_at IS NOT NULL.
+```
+
+### Verification - the point of the whole exercise
+
+**Query 1 - old text purged?** Search `document_chunks` for the removed patterns across the 29 re-embedded docs:
+
+```
+SELECT doc_id, chunk_index
+FROM document_chunks
+WHERE doc_id IN (<29 embed targets>)
+  AND (content ILIKE '%| Status |%' OR content ILIKE '%Live (v%');
+```
+
+Result: **0 rows** for both `| Status |` and `Live (v`. Old status text fully purged.
+
+**Query 2 - new text landed?** Spot-check three docs spanning both table shapes (`Reviewed against` header and `Notes` header):
+
+- **SOP-004 (Reviewed against, mixed versioned + bare):** chunk 16, section `Related Documents`. Retrieved text carries `| Document ID | Title | Reviewed against |` with cells `v1.0`, `v1.3`, `-`.
+- **POL-007 (Notes, Class B mixed):** chunk 19, section `Related Documents`. Retrieved text carries `| Document ID | Title | Notes |` with cells `Companion (rates)`, `Companion (workflow)`, `Reviewed against v1.0`, `Reviewed against v2.0`, `-`. Both the prose annotations and the version annotations coexist under `Notes` per the ruling.
+- **CHK-003 (Reviewed against, all bare):** chunk 14, section `Related Documents`. Retrieved text carries `| Document ID | Title | Reviewed against |` with every cell `-` (no versions were recorded for those relationships).
+
+New text confirmed live in Sous chunks across both table shapes.
+
+### Deliberately not fixed
+
+- TPL-015 archived flip - see Step 3.
+- Live PG active count (128 -> 129) since PR #555 - observed state.
+- Nothing else surfaced.
