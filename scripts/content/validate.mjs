@@ -244,7 +244,7 @@ export function checkNonCanonicalOrphan(body, fm, findings) {
   }
 }
 
-// The # Related Documents table's third column must not be Status. The
+// The Related Documents table's third column must not be Status. The
 // column has no machine consumer (the reader, print pipeline, chunker,
 // and projection all treat it as ordinary body text) and every value in
 // it is a hand-typed claim about a target doc's lifecycle that drifts
@@ -253,24 +253,37 @@ export function checkNonCanonicalOrphan(body, fm, findings) {
 // tables and versionless two-column tables both pass. Fires ERROR per
 // Kevin's ruling that a warn no one runs into is a rule that doesn't
 // exist.
+//
+// Heading match is level-flexible (H1 or H2). FORM-007 embeds its
+// Related Documents as an H2 under `# HANDLING & REFERENCES`, which the
+// original H1-only pattern missed - the exact miss this rule exists to
+// prevent recurring. Section-end detection uses the found heading's own
+// level, so an H2 block ends at the next H2 or H1 (whichever comes first)
+// but does not end at an H3 sub-heading beneath it.
 export function checkRelatedDocumentsStatus(body, fm, findings) {
   const lines = body.split("\n");
-  const start = lines.findIndex((l) => /^# Related Documents\s*$/.test(l));
-  if (start === -1) return;
-  for (let i = start + 1; i < lines.length; i++) {
-    if (/^# /.test(lines[i])) return; // end of section
-    if (!lines[i].startsWith("|")) continue;
-    if (/^\|[\s:|-]+$/.test(lines[i])) continue; // separator
-    // First non-separator table row is the header.
-    const cells = lines[i].split("|").slice(1, -1).map((c) => c.trim().toLowerCase());
-    if (cells[2] === "status" || cells[2] === "current status" || cells[2] === "state") {
-      findings.push({
-        severity: "ERROR",
-        check: "related_documents_status_col",
-        msg: `# Related Documents table has a '${cells[2]}' column. Delete it - the column has no machine consumer and hand-typed values drift from the target's real status. Use two columns (Document ID + Title), three columns with 'Reviewed against' for versioned annotations, or three columns with 'Notes' for descriptive prose.`,
-      });
+  const headingRe = /^(#{1,2}) Related Documents\s*$/;
+  for (let start = 0; start < lines.length; start++) {
+    const m = lines[start].match(headingRe);
+    if (!m) continue;
+    const level = m[1].length; // 1 or 2
+    // Section ends at the next heading of the same-or-shallower level.
+    const endRe = new RegExp(`^#{1,${level}} `);
+    for (let i = start + 1; i < lines.length; i++) {
+      if (endRe.test(lines[i])) break; // end of section
+      if (!lines[i].startsWith("|")) continue;
+      if (/^\|[\s:|-]+$/.test(lines[i])) continue; // separator
+      // First non-separator table row is the header.
+      const cells = lines[i].split("|").slice(1, -1).map((c) => c.trim().toLowerCase());
+      if (cells[2] === "status" || cells[2] === "current status" || cells[2] === "state") {
+        findings.push({
+          severity: "ERROR",
+          check: "related_documents_status_col",
+          msg: `Related Documents table has a '${cells[2]}' column. Delete it - the column has no machine consumer and hand-typed values drift from the target's real status. Use two columns (Document ID + Title), three columns with 'Reviewed against' for versioned annotations, or three columns with 'Notes' for descriptive prose.`,
+        });
+      }
+      break; // header inspected for this block, move to next Related Documents heading if any
     }
-    return; // header inspected, done
   }
 }
 

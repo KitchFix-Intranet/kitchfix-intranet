@@ -76,9 +76,15 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheetsApi = google.sheets({ version: "v4", auth });
 
-// Inventory spreadsheet (matches src/lib/sheets.js SHEET_IDS.INVENTORY)
-const INVENTORY_SHEET_ID = process.env.SHEET_INVENTORY
-  || "14oROcj9hyQJfKOm-ZXUDn6qvOviZYX1aLMs27V8zZnk";
+// Inventory spreadsheet id. Fail-loud on absent env var - this script
+// runs against the operator's Sheets, and a silent fall-through to the
+// production id from a laptop with no .env would touch prod data
+// unexpectedly (2026-07-29 hardening).
+const INVENTORY_SHEET_ID = process.env.SHEET_INVENTORY;
+if (!INVENTORY_SHEET_ID) {
+  console.error("[canonicalize-inventory-accounts] SHEET_INVENTORY is not set - refusing to fall back to the production id. Set the env var (e.g. via --env-file) and re-run.");
+  process.exit(1);
+}
 
 // ── Mappings ──
 const MAPPINGS = {

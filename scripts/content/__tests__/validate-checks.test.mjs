@@ -153,3 +153,84 @@ test("related_documents_status_col: does not confuse an unrelated Status column 
   checkRelatedDocumentsStatus(body, {}, findings);
   assert.equal(findings.length, 0);
 });
+
+// FORM-007's block sits at H2 under `# HANDLING & REFERENCES`. The prior
+// H1-only pattern missed it and the file's stale table entered
+// production. These four tests lock the widened matcher.
+
+test("related_documents_status_col: fires on H2 Related Documents with Status header", () => {
+  const findings = [];
+  const body = [
+    "# HANDLING & REFERENCES",
+    "",
+    "## Handling & References",
+    "",
+    "## Related Documents",
+    "",
+    "| Document ID | Title | Status |",
+    "|---|---|---|",
+    "| STD-001 | Doc Format Standard | Live (v1.1) |",
+    "",
+  ].join("\n");
+  checkRelatedDocumentsStatus(body, {}, findings);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].severity, "ERROR");
+  assert.equal(findings[0].check, "related_documents_status_col");
+});
+
+test("related_documents_status_col: silent on H2 Related Documents with Notes header", () => {
+  const findings = [];
+  const body = [
+    "# HANDLING & REFERENCES",
+    "",
+    "## Related Documents",
+    "",
+    "| Document ID | Title | Notes |",
+    "|---|---|---|",
+    "| STD-001 | X | Reviewed against v1.1 |",
+    "",
+  ].join("\n");
+  checkRelatedDocumentsStatus(body, {}, findings);
+  assert.equal(findings.length, 0);
+});
+
+test("related_documents_status_col: silent on H2 Related Documents with Reviewed against header", () => {
+  const findings = [];
+  const body = [
+    "## Related Documents",
+    "",
+    "| Document ID | Title | Reviewed against |",
+    "|---|---|---|",
+    "| STD-001 | X | v1.0 |",
+    "",
+  ].join("\n");
+  checkRelatedDocumentsStatus(body, {}, findings);
+  assert.equal(findings.length, 0);
+});
+
+test("related_documents_status_col: H2 block ends at next H2 or H1 (not an H3 sub-heading)", () => {
+  // If section-end logic were still `^# `, or if it stopped at H3, this
+  // fixture would either miss the Status header (early stop) or misread
+  // a Status column from the next section. The section-end must respect
+  // the found heading level: H2 block ends at next H2/H1, not H3.
+  const findings = [];
+  const body = [
+    "## Related Documents",
+    "",
+    "### Sub-note",
+    "",
+    "Some prose under a sub-heading.",
+    "",
+    "| Document ID | Title | Status |",
+    "|---|---|---|",
+    "| STD-001 | X | Live |",
+    "",
+    "## Something else",
+    "",
+    "| Field | Value | Status |",
+    "|---|---|---|",
+    "| x | y | z |",
+  ].join("\n");
+  checkRelatedDocumentsStatus(body, {}, findings);
+  assert.equal(findings.length, 1); // the one inside the RD block
+});

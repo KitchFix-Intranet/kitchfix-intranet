@@ -72,17 +72,24 @@ const GOOGLE_PRIVATE_KEY        = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g
 const DUAL_WRITE_TABLES = (process.env.DUAL_WRITE_TABLES || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 
-// Spreadsheet IDs - env-supplied so prod vs preview can differ. If a tab's
-// spreadsheet env var is missing, the script falls back to the well-known
-// production IDs baked into the intranet's src/lib/sheets.js (verified there
-// 2026-06-04). This fallback exists so the script runs in this repo with
-// just .env.local; on Railway, set the SHEET_* env vars explicitly.
+// Spreadsheet IDs - env-supplied so prod vs preview can differ. Every id
+// is required; the script fails loudly rather than falling back to a
+// production id (2026-07-29 hardening - a silent fall-through from a
+// laptop with no env configured was silently reading production Sheets).
+// On Railway, set SHEET_HUB / SHEET_COLLECTION / SHEET_GL_CODES /
+// SHEET_AI_LINE_ITEMS / SHEET_INVENTORY. Locally, put them in .env.local.
+const REQUIRED_SHEET_VARS = ["SHEET_HUB", "SHEET_COLLECTION", "SHEET_GL_CODES", "SHEET_AI_LINE_ITEMS", "SHEET_INVENTORY"];
+const missingSheetVars = REQUIRED_SHEET_VARS.filter((v) => !process.env[v]);
+if (missingSheetVars.length > 0) {
+  console.error(`[recon] missing required env var(s): ${missingSheetVars.join(", ")} - refusing to fall back to production sheet ids. Set them (e.g. via --env-file) and re-run.`);
+  process.exit(1);
+}
 const SHEET_IDS = {
-  HUB:           process.env.SHEET_HUB           || "1rvIg9trPCxiEWvzrYbtp1j7V_sbtQnKaysv5BOwA90E",
-  COLLECTION:    process.env.SHEET_COLLECTION    || "1itJh5x1YFBdyHTBr-dyKD_r_nRBfjwIBiR_bWiOyCzQ",
-  GL_CODES:      process.env.SHEET_GL_CODES      || "1Gs7ToEvrsraBt81DctgwImKK-ck2Ch6V2ifvF8VndeY",
-  AI_LINE_ITEMS: process.env.SHEET_AI_LINE_ITEMS || "18mTWaeodOpFVmDSNRkGpNZvCrNWqHxVv3qN8r1b2REo",
-  INVENTORY:     process.env.SHEET_INVENTORY     || "14oROcj9hyQJfKOm-ZXUDn6qvOviZYX1aLMs27V8zZnk",
+  HUB:           process.env.SHEET_HUB,
+  COLLECTION:    process.env.SHEET_COLLECTION,
+  GL_CODES:      process.env.SHEET_GL_CODES,
+  AI_LINE_ITEMS: process.env.SHEET_AI_LINE_ITEMS,
+  INVENTORY:     process.env.SHEET_INVENTORY,
 };
 
 // Env validation deferred to runReconciliationAlarm() so library callers
