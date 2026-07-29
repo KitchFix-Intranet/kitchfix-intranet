@@ -446,6 +446,27 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
                 r.direction === "out"
                   ? RELATIONSHIP_LABELS_OUT[r.rel_type] || r.rel_type
                   : RELATIONSHIP_LABELS_IN[r.rel_type] || r.rel_type;
+              // TRAIN 2: retired-link degradation. When the target doc's
+              // status is Retired, render a non-interactive strikethrough
+              // row with a RETIRED outlined pill. Non-navigating on purpose
+              // (a Retired doc has nothing useful to open).
+              if (r.other_status === "Retired") {
+                return (
+                  <li key={`${r.rel_type}-${r.other_id}-${i}`} className="pb-rel-item">
+                    <span
+                      className="pb-rel-retired"
+                      aria-label={`${r.other_id} ${r.other_title} - Retired, not navigable`}
+                    >
+                      <span className="pb-rel-type">{label}:</span>
+                      <span className="pb-rel-other">
+                        <code className="pb-rel-id">{r.other_id}</code>{" "}
+                        {r.other_title}
+                      </span>
+                      <span className="pb-rel-retired-pill" aria-hidden="true">Retired</span>
+                    </span>
+                  </li>
+                );
+              }
               return (
                 <li key={`${r.rel_type}-${r.other_id}-${i}`} className="pb-rel-item">
                   <button

@@ -5,7 +5,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .pb-wrap {
-  max-width: 1024px;
+  /* TRAIN 2: OPD shell widens 1024 -> 1240 (Design Scope 7b). Nav is
+     the universe constant at 1520 (TopNav.css). Padding unchanged. */
+  max-width: 1240px;
   margin: 0 auto;
   padding: 16px 14px 80px;
 }
@@ -223,7 +225,10 @@
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
 }
 .pb-sous-btn:focus-visible {
-  outline: 2px solid white;
+  /* TRAIN 2: universe rule 2. Ring sits at outline-offset 2px which
+     places it on the page ground (#edeff2), not on the teal fill, so
+     navy reads with excellent contrast. */
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 
@@ -369,7 +374,7 @@
   border-color: rgba(255, 255, 255, 0.5);
 }
 .pb-admin-link:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 
@@ -491,7 +496,7 @@
 }
 .pb-view-btn--on:hover { color: white; }
 .pb-view-btn:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 /* Hide the text label on narrow viewports - icon alone is enough. */
@@ -525,7 +530,7 @@
 }
 .pb-chip:hover { border-color: var(--kf-playbook-teal); color: var(--kf-playbook-teal); }
 .pb-chip:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 .pb-chip--on {
@@ -640,7 +645,7 @@
   box-shadow: 0 4px 10px rgba(15, 48, 87, 0.12);
 }
 .pb-rail-toggle:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 /* One chevron, rotated 180° when collapsed. Smooth ~200ms swap. */
@@ -732,7 +737,7 @@
 }
 .pb-shelf-title:hover { color: var(--kf-playbook-teal-dark); }
 .pb-shelf-title:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -834,6 +839,52 @@
 @media (min-width: 640px)  { .pb-card-grid { grid-template-columns: 1fr 1fr; gap: 12px; } }
 @media (min-width: 960px)  { .pb-card-grid { grid-template-columns: 1fr 1fr 1fr; } }
 
+/* TRAIN 2 mobile: below 768 the catalog renders each card as a list row -
+   class chip + title + status on one line, card-line hidden, tap target
+   >= 44px (Design Scope spec 5). The desktop card layout above is
+   preserved at >= 768. */
+@media (max-width: 767px) {
+  .pb-card {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 10px 12px;
+    border-radius: var(--opd-r-2);
+  }
+  .pb-card-head {
+    flex: 0 0 auto;
+    order: 1;
+  }
+  .pb-card-title {
+    flex: 1 1 auto;
+    order: 2;
+    font-size: 14px;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* Hide the card_line on mobile - list mode drops the description. */
+  .pb-card-line { display: none; }
+  .pb-card-foot {
+    flex: 0 0 auto;
+    order: 3;
+    margin-top: 0;
+    padding-top: 0;
+    gap: 6px;
+  }
+  /* Hide the pin + poster icons on the mobile list row so the leading
+     chip + title + trailing status stay legible at 375. */
+  .pb-card-icons { display: none; }
+  /* Card animation: dampen the stagger so a list of ~20 items doesn't
+     read as a lengthy cascade. */
+  .pb-card--alive:hover {
+    transform: none;
+  }
+}
+
 /* List grid - one row per doc, single column at every breakpoint. */
 .pb-list-grid {
   display: flex;
@@ -892,7 +943,7 @@
   opacity: 0.7;
 }
 .pb-list-row:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1035,13 +1086,14 @@
    colors retained (gov navy, proc teal, tool sand, ref manila) since
    that's the scan-by-color the cards still earn from. */
 .pb-class-chip {
+  /* TRAIN 2: chip radius 5 -> --opd-r-1 (4px). Ladder snap. */
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-bold);
   text-transform: uppercase;
   letter-spacing: 0.3px;
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: var(--opd-r-1);
   background: #f1f5f9;
   color: #64748b;
   white-space: nowrap;
@@ -1141,13 +1193,20 @@
   flex-wrap: wrap;
 }
 .pb-status-pill {
+  /* TRAIN 2: outlined statuses (Design Scope rule 3 "actions filled,
+     statuses outlined"). Base is transparent bg with a 1.5px border in
+     the state color; text color matches. Consumers pass borderColor +
+     color inline from _shared.js's STATUS_COLORS.color (both text and
+     rim get the same hue). The pill--ghost variant handles Pending
+     separately. */
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-bold);
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--opd-r-pill);
   letter-spacing: 0.3px;
-  border: 1px solid transparent;
+  background: transparent;
+  border: 1.5px solid transparent;
 }
 /* Ghost variant for Pending — the default expected status with 22+ docs in
    build-out. Recedes to a faint outlined chip so the eye can scan past it
@@ -1240,7 +1299,7 @@
   color: var(--kf-playbook-teal-dark);
 }
 .pb-slide-back:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 .pb-slide-close {
@@ -1363,7 +1422,7 @@
 }
 .pb-lang-btn--on:hover { color: white; }
 .pb-lang-btn:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 
@@ -1425,7 +1484,7 @@
   box-shadow: 0 4px 10px rgba(15, 48, 87, 0.18);
 }
 .pb-reader-popout:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 
@@ -1676,13 +1735,14 @@
      - "Coming soon" tag on the right pinpoints the state explicitly
      - cursor: not-allowed + aria-disabled=true for accessibility honesty */
 .pb-sousai {
+  /* TRAIN 2: stub radius 10 -> --opd-r-3 (12px). Ladder snap. */
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
   background: rgba(15, 110, 86, 0.04);
   border: 1px dashed var(--kf-playbook-teal);
-  border-radius: 10px;
+  border-radius: var(--opd-r-3);
   color: var(--kf-playbook-teal-dark);
   cursor: not-allowed;
   margin-bottom: 18px;
@@ -1803,8 +1863,54 @@
   border-color: var(--kf-border);
 }
 .pb-rel-link:focus-visible {
-  outline: 2px solid var(--kf-playbook-teal);
+  /* TRAIN 2 reader focus sweep: universe rule 2 navy. */
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
+}
+/* TRAIN 2: retired-link degradation. When Related target is Retired, the
+   entry renders as an inert <span> at .pb-rel-retired with struck muted
+   text + a RETIRED outlined pill. Non-navigating on purpose - a Retired
+   doc has nothing useful to open. The pill uses the outlined-status
+   grammar (rule 3). See DocumentFullPageClient + SlideOverReader for
+   the JSX gate on r.other_status. */
+.pb-rel-retired {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--kf-border);
+  background: transparent;
+  color: #94a3b8;
+  cursor: not-allowed;
+  user-select: text;
+}
+.pb-rel-retired .pb-rel-type {
+  color: #94a3b8;
+  font-weight: var(--opd-wt-semibold);
+}
+.pb-rel-retired .pb-rel-other {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+.pb-rel-retired .pb-rel-id {
+  background: transparent;
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+.pb-rel-retired-pill {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-bold);
+  padding: 2px 8px;
+  border-radius: var(--opd-r-pill);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border: 1.5px solid #94a3b8;
+  background: transparent;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 /* Humanized rel-type label - sentence case + colon (e.g. "See also:",
    "Part of:", "Source for:") instead of the previous "REFERENCED BY ←"
@@ -2148,7 +2254,11 @@
    Wide centered reading column. App chrome strips out under @media print.
    ═══════════════════════════════════════════════════════════════════════════ */
 .pb-fullpage-wrap {
-  max-width: 880px;
+  /* TRAIN 2: reader wrap widens 880 -> 1240 to ride the OPD shell (Design
+     Scope 7b). Article stays capped for a comfortable reading column;
+     computed prose cap is enforced by .pb-fullpage-article's max-width +
+     padding (see below). */
+  max-width: 1240px;
   margin: 0 auto;
   padding: 16px 16px 80px;
   font-family: 'Inter', sans-serif;
@@ -2203,10 +2313,19 @@
 }
 .pb-fullpage-print:hover { background: #1a4580; }
 .pb-fullpage-article {
+  /* TRAIN 2 desktop prose cap. Inside a 1240px wrap, article is centered
+     with max-width 848 and horizontal padding bumped 36 -> 44. Inner text
+     width = 848 - 88 = 760px (Design Scope target 760 +/- 8). At Inter
+     15px body (0.55 em/char measurement per Appendix A A.1) the CPL runs
+     ~92 chars - wider than Bringhurst's 66-75 optimum but the explicit
+     ruling is pixel width, not CPL. If the reading experience tests loose,
+     tighten X padding further in follow-up. */
   background: white;
-  border-radius: 16px;
+  max-width: 848px;
+  margin: 0 auto;
+  border-radius: var(--opd-r-4);
   border: 1px solid var(--kf-border);
-  padding: 32px 36px;
+  padding: 32px 44px;
   box-shadow: 0 2px 8px rgba(15, 48, 87, 0.04);
 }
 /* Phase 3 polish: screen header tightened to read as a deliberate document
@@ -2216,7 +2335,7 @@
    Oswald title. The title itself is already Oswald 36px/Bold-700 navy
    from PR 1 - that's the cover title at screen size, matched. */
 .pb-fullpage-head {
-  border-bottom: 1.5px solid #7DB9D5;
+  border-bottom: 1.5px solid var(--opd-sky);
   margin-bottom: 28px;
   padding-bottom: 20px;
 }
@@ -2277,15 +2396,18 @@
   counter-reset: pb-section;
 }
 .pb-fullpage-body h1 {
+  /* TRAIN 2: heading rule px-migrated to STD-001 v1.4 screen column.
+     H1 2px solid var(--opd-sky). The eyebrow mechanism at ::before
+     stays (Oswald 11/600 caps navy above the section title). */
   font-family: 'Oswald', 'Inter', sans-serif;
-  font-size: 26px;
-  font-weight: 700;
+  font-size: var(--opd-h1);
+  font-weight: var(--opd-wt-bold);
   color: var(--kf-navy);
   margin: 36px 0 10px;
   letter-spacing: -0.2px;
   line-height: 1.1;
   padding-bottom: 8px;
-  border-bottom: 1.5pt solid #7DB9D5;
+  border-bottom: 2px solid var(--opd-sky);
   counter-increment: pb-section;
 }
 .pb-fullpage-body h1::before {
@@ -2301,22 +2423,26 @@
 }
 .pb-fullpage-body h1:first-child { margin-top: 0; }
 .pb-fullpage-body h2 {
+  /* TRAIN 2: H2 1px solid var(--opd-sky) (STD-001 v1.4 screen column). */
   font-family: 'Inter', sans-serif;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--opd-h2);
+  font-weight: var(--opd-wt-bold);
   color: var(--kf-navy);
   margin: 28px 0 8px;
   padding-bottom: 4px;
-  border-bottom: 0.75pt solid #7DB9D5;
+  border-bottom: 1px solid var(--opd-sky);
 }
 .pb-fullpage-body h3 {
+  /* TRAIN 2: H3 1px solid opd-sky at 60% opacity (STD-001 v1.4 screen
+     column - the faded rule step below H2's solid rule). Size ladder
+     snapped 15 -> 16 per --opd-h3 (Design Scope 7c). */
   font-family: 'Inter', sans-serif;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--opd-h3);
+  font-weight: var(--opd-wt-bold);
   color: var(--kf-navy);
   margin: 20px 0 6px;
   padding-bottom: 3px;
-  border-bottom: 0.5pt solid #7DB9D5;
+  border-bottom: 1px solid color-mix(in srgb, var(--opd-sky) 60%, transparent);
 }
 .pb-fullpage-body p { margin: 10px 0; }
 .pb-fullpage-body ul, .pb-fullpage-body ol { margin: 10px 0 10px 24px; padding: 0; }
@@ -2400,9 +2526,20 @@
 }
 
 @media (max-width: 768px) {
+  /* TRAIN 2 mobile CPL floor. Article inner text width targets CPL >= 45.
+     At 375 viewport with wrap padding 12 and article X padding 10, the
+     article inner text width = 375 - 24 - 20 = 331px. At Inter 14px body
+     using Bringhurst's measured 0.52 em/char average, CPL = 331 / 7.28 =
+     ~45.5 chars - safely above the >=45 floor. At the more conservative
+     0.55 em/char upper bound, CPL still lands at 43.4 - within one char
+     of floor. */
+  .pb-fullpage-wrap {
+    padding: 16px 12px 80px;
+  }
   .pb-fullpage-article {
-    padding: 20px 18px;
-    border-radius: 12px;
+    max-width: 100%;
+    padding: 20px 10px;
+    border-radius: var(--opd-r-3);
   }
   .pb-fullpage-title { font-size: 22px; }
   .pb-fullpage-body { font-size: 14px; }
@@ -2812,17 +2949,20 @@
    jump in-page via #id; scroll-margin-top on h1s gives a comfortable
    landing position. Hidden in print (the print TOC handles that side). */
 .pb-screen-toc {
+  /* TRAIN 2: TOC card ladder-snapped to --opd-r-3 (12); 2-col breakpoint
+     720 -> 640 (Design Scope spec 6). Current-section highlight teal
+     handled by --active variant (scroll-spy in DocumentFullPageClient). */
   background: #f8fafc;
   border: 1px solid var(--kf-border);
-  border-radius: 12px;
+  border-radius: var(--opd-r-3);
   padding: 18px 22px 16px;
   margin: 0 0 28px;
   font-family: 'Inter', sans-serif;
 }
 .pb-screen-toc-title {
   font-family: 'Oswald', 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-semibold);
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--kf-navy);
@@ -2836,7 +2976,7 @@
   grid-template-columns: 1fr;
   gap: 2px;
 }
-@media (min-width: 720px) {
+@media (min-width: 640px) {
   .pb-screen-toc-list { grid-template-columns: 1fr 1fr; column-gap: 18px; }
 }
 .pb-screen-toc-row {
@@ -2848,7 +2988,7 @@
   align-items: baseline;
   gap: 10px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--opd-r-1);
   color: var(--kf-navy);
   text-decoration: none;
   font-size: 13.5px;
@@ -2860,12 +3000,20 @@
   background: rgba(15, 110, 86, 0.08);
   color: var(--kf-playbook-teal-dark);
 }
+/* Current-section highlight - scroll-spy sets .pb-screen-toc-link--active
+   on the entry whose H1 is currently in view (see DocumentFullPageClient
+   IntersectionObserver). Teal wash + teal text. */
+.pb-screen-toc-link--active {
+  background: var(--kf-playbook-teal-light);
+  color: var(--kf-playbook-teal-dark);
+  font-weight: var(--opd-wt-semibold);
+}
 .pb-screen-toc-num {
   font-family: 'Oswald', 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--opd-micro);
+  font-weight: var(--opd-wt-semibold);
   letter-spacing: 0.5px;
-  color: #7DB9D5;
+  color: var(--opd-sky);
   flex-shrink: 0;
   min-width: 1.6em;
 }

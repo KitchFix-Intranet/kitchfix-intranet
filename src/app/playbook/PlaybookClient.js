@@ -716,13 +716,13 @@ function Hero({ query, setQuery, isOwner, heroImage, onOpenSous }) {
             type="button"
             className="pb-sous-btn"
             onClick={onOpenSous}
-            aria-label="Ask SousAI"
-            title="Ask SousAI"
+            aria-label="Ask Sous"
+            title="Ask Sous"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
             </svg>
-            <span>Ask SousAI</span>
+            <span>Ask Sous</span>
           </button>
         </div>
       </div>
@@ -982,7 +982,10 @@ function DocumentCard({ doc, onOpen, idx = 0 }) {
       <div className="pb-card-foot">
         <span
           className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
-          style={{ background: status.bg, color: status.color }}
+          /* TRAIN 2: outlined statuses (Design Scope rule 3). Border
+             color + text color both trace to status.color; the .pb-status-pill
+             base rule handles transparent bg. */
+          style={{ borderColor: status.color, color: status.color }}
         >
           {operatorStatusLabel(doc.status)}
         </span>
@@ -1032,7 +1035,10 @@ function DocumentListRow({ doc, onOpen, idx = 0 }) {
         )}
         <span
           className={`pb-status-pill${status.ghost ? " pb-status-pill--ghost" : ""}`}
-          style={{ background: status.bg, color: status.color }}
+          /* TRAIN 2: outlined statuses (Design Scope rule 3). Border
+             color + text color both trace to status.color; the .pb-status-pill
+             base rule handles transparent bg. */
+          style={{ borderColor: status.color, color: status.color }}
         >
           {operatorStatusLabel(doc.status)}
         </span>
