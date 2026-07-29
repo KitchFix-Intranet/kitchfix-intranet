@@ -31,6 +31,14 @@ import FullSeasonCard from "./FullSeasonCard";
 import StateLegend from "./StateLegend";
 import { resolveDayKind } from "../dayResolvers";
 import { derivePhaseTimeline, bucketDaysByPeriod } from "./phaseDerivation";
+// M-4b (2026-07-29): empty-scope suppression on MLB accounts. The
+// two predicates each wrap an existing card-internal one; non-MLB
+// accounts always get false, so PDC / MiLB / STL-FL keep every card.
+import {
+  isEmptyMonthForMlbSuppression,
+  isEmptyPeriodForMlbSuppression,
+} from "./suppression";
+import { MLB_HOMESTAND_SURFACE_ACCOUNTS } from "../v2/pilots";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -240,7 +248,11 @@ export default function SeasonShell({
         <div
           className="sc-season-grid"
           role="grid"
-          aria-label={`${year} months`}
+          aria-label={
+            MLB_HOMESTAND_SURFACE_ACCOUNTS.has(account?.key)
+              ? `${year} months with service`
+              : `${year} months`
+          }
           ref={calendarGridRef}
           onFocus={(e) => {
             /* V3 §9.3 F-C - track the currently-focused card so the
@@ -297,6 +309,17 @@ export default function SeasonShell({
           {MONTH_SHORT.map((_, monthIndex) => {
             const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
             const monthSummary = effectiveYearData.find(m => m.month === monthKey) || null;
+            /* M-4b: empty-scope suppression, MLB accounts only. The
+               predicate delegates to MonthCard.detectNoService so
+               there is ONE truth for "empty month" - card off-state
+               and grid suppression share the same predicate. */
+            if (isEmptyMonthForMlbSuppression({
+              accountKey: account?.key,
+              monthSummary,
+              hasHomestandSchedule,
+              isFeeAccount,
+              isMilb,
+            })) return null;
             return (
               <div role="gridcell" key={monthIndex}>
                 <MonthCard
@@ -354,6 +377,15 @@ export default function SeasonShell({
         />
       )}
       </div>
+
+      {/* M-4b: suppression caption. Fires on MLB accounts only, so
+          non-MLB shells stay byte-identical. Explains the policy at
+          the point of use per owner ruling. */}
+      {MLB_HOMESTAND_SURFACE_ACCOUNTS.has(account?.key) && (
+        <p className="sc-season-suppression-caption">
+          Empty scopes are hidden on MLB accounts only. PDC and MiLB keep every month.
+        </p>
+      )}
 
       {/* Legend as the card's bottom band - moved out of .sc-season so it
           sits flush as a sibling, like the chrome bar is the top band.
@@ -440,30 +472,43 @@ function PeriodGrid({
       </div>
     );
   }
+  const isMlbSurface = MLB_HOMESTAND_SURFACE_ACCOUNTS.has(accountKey);
   return (
-    <div className="sc-season-period-grid" role="list" aria-label={`${year} fiscal periods`}>
-      {periodRanges.map((r) => (
-        <div role="listitem" key={r.period}>
-          <PeriodCard
-            periodRange={r}
-            days={periodBuckets.get(r.period) || []}
-            todayDate={todayDate}
-            kind={kind}
-            hasHomestandSchedule={hasHomestandSchedule}
-            isFeeAccount={isFeeAccount}
-            timeline={timeline}
-            loadState={loadState}
-            onClick={onPeriodClick}
-            syncingDates={syncingDates}
-            springDateSet={springDateSet}
-            /* M-0: for the homestand subtitle, PeriodCard derives
-               full-season blocks and filters to this period so
-               ordinal labels line up with the SeasonStepper. */
-            yearData={yearData}
-            accountKey={accountKey}
-          />
-        </div>
-      ))}
+    <div
+      className="sc-season-period-grid"
+      role="list"
+      aria-label={isMlbSurface ? `${year} fiscal periods with service` : `${year} fiscal periods`}
+    >
+      {periodRanges.map((r) => {
+        const days = periodBuckets.get(r.period) || [];
+        /* M-4b: empty-scope suppression, MLB accounts only. Wraps
+           PeriodCard.detectOffSeason so the "empty" definition
+           inside the card and the "suppress" decision at the grid
+           share ONE truth. */
+        if (isEmptyPeriodForMlbSuppression({ accountKey, days, kind })) return null;
+        return (
+          <div role="listitem" key={r.period}>
+            <PeriodCard
+              periodRange={r}
+              days={days}
+              todayDate={todayDate}
+              kind={kind}
+              hasHomestandSchedule={hasHomestandSchedule}
+              isFeeAccount={isFeeAccount}
+              timeline={timeline}
+              loadState={loadState}
+              onClick={onPeriodClick}
+              syncingDates={syncingDates}
+              springDateSet={springDateSet}
+              /* M-0: for the homestand subtitle, PeriodCard derives
+                 full-season blocks and filters to this period so
+                 ordinal labels line up with the SeasonStepper. */
+              yearData={yearData}
+              accountKey={accountKey}
+            />
+          </div>
+        );
+      })}
       {!scV2 && (
         <div role="listitem" className="sc-season-period-grid-summary">
           <FullSeasonCard

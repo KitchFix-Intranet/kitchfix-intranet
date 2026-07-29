@@ -575,7 +575,13 @@ function isFutureMonth(year, monthIndex, todayDate) {
   return firstOfMonth > todayDate;
 }
 
-function detectNoService({ monthSummary, hasHomestandSchedule, isFeeAccount, isMilb }) {
+// Exported so season/suppression.js can call it from SeasonShell's
+// month loop without duplicating the predicate. M-4b (2026-07-29):
+// the empty-scope suppression policy for MLB accounts reuses this
+// EXACTLY - the predicate that decides "off inside the card" is the
+// same predicate that decides "hide the card entirely on MLB." Two
+// symmetric concerns, one truth. Do not fork a second copy.
+export function detectNoService({ monthSummary, hasHomestandSchedule, isFeeAccount, isMilb }) {
   if (!monthSummary) return true;
   if (hasHomestandSchedule) {
     const hs = monthSummary.homestandSummary;

@@ -215,6 +215,32 @@ export function pickFocusSegment(segments) {
   return null;
 }
 
+// M-4b (2026-07-29): dateToHomestandKey - resolves a date to the
+// stable key of the homestand block that contains it, or null when
+// the date is inside no block (AWAY / gap / off-season / prep).
+//
+// Reads the M-3 payload homestands[] array (NOT the derived-segments
+// output) so the key matches what the URL uses and what
+// sc_homestand_closeout.homestand_key stores. Callers pass the array
+// as-is from `data.homestands`.
+//
+// Owner ruling 2026-07-29 (M-4b §1): the click gate on MLB day-tiles
+// routes to `?homestand=<key>`. A tile whose date is not inside any
+// homestand does nothing - no dead click, no error - so this returns
+// null and the caller omits onClick entirely, keeping DaySquare's
+// display-only shape (no cursor, no button role).
+//
+// Complexity: linear scan over the array (13 entries for CIN - OH).
+// A pre-indexed date -> key map is not worth the code today.
+export function dateToHomestandKey(dateIso, homestands) {
+  if (!dateIso || !Array.isArray(homestands)) return null;
+  for (const hs of homestands) {
+    if (!hs?.key) continue;
+    if (dateIso >= hs.startDate && dateIso <= hs.endDate) return hs.key;
+  }
+  return null;
+}
+
 // "Jun 22 - Jun 28" / "Jun 28 - Jul 5" - the date-range caption used
 // by the stepper + spotlight. Returns "Jun 28" alone when the range
 // is a single day.
