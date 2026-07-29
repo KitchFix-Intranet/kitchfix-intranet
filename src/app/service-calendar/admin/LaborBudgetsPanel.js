@@ -51,11 +51,53 @@ export default function LaborBudgetsPanel({ accountKey, showToast }) {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetch(`/api/service-calendar?action=sc-admin-labor-budgets-list&account=${encodeURIComponent(accountKey)}`, {
+    // M-2 rider #4 (2026-07-29): INSTRUMENT ONLY. Owner ruling
+    // "no fix ships on this project without a named file:line mechanism,
+    // and I have one observation, not a diagnosis." Four traces cover
+    // the two competing hypotheses:
+    //   (a) the fetch never re-runs after save (deps stale or unmount)
+    //   (b) the fetch re-runs and reads stale JSON from HTTP cache
+    // Trace #1 (effect fired) + trace #4 (URL constructed) distinguish
+    // (a) from (b). Trace #2 (response headers) + trace #3 (status
+    // + payload freshness) distinguish (b) from a genuine server-side
+    // stale read. All four keyed on "[m2-inst]" for a clean filter in
+    // the console. Do NOT patch until the trace narrows the diagnosis.
+    const url = `/api/service-calendar?action=sc-admin-labor-budgets-list&account=${encodeURIComponent(accountKey)}`;
+    if (typeof console !== "undefined") {
+      console.debug("[m2-inst] LaborBudgetsPanel effect fired", {
+        accountKey,
+        reloadKey,
+        url,
+      });
+    }
+    fetch(url, {
       signal: controller.signal,
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (typeof console !== "undefined") {
+          console.debug("[m2-inst] LaborBudgetsPanel response headers", {
+            url,
+            status: r.status,
+            xVercelCache: r.headers.get("x-vercel-cache"),
+            cacheControl: r.headers.get("cache-control"),
+            etag: r.headers.get("etag"),
+            age: r.headers.get("age"),
+          });
+        }
+        return r.json();
+      })
       .then((res) => {
+        if (typeof console !== "undefined") {
+          const firstHourly = Array.isArray(res.budgets) && res.budgets[0]
+            ? res.budgets[0].hourly_budget
+            : null;
+          console.debug("[m2-inst] LaborBudgetsPanel payload received", {
+            success: res.success,
+            budgetsCount: Array.isArray(res.budgets) ? res.budgets.length : null,
+            firstHourly,
+            reloadKey,
+          });
+        }
         if (!res.success) { setError(res.error || "Failed to load labor budgets"); return; }
         setBudgets(res.budgets || []);
         setLaborRatio(res.laborRatio ?? null);
@@ -66,6 +108,13 @@ export default function LaborBudgetsPanel({ accountKey, showToast }) {
   }, [accountKey, reloadKey]);
 
   const onSaved = useCallback(() => {
+    // M-2 rider #4 (2026-07-29): trace the save-close cycle so a
+    // stale-panel report can be isolated to (a) onSaved never firing,
+    // (b) reloadKey bump not tripping the effect deps, or (c) effect
+    // fires but response is stale.
+    if (typeof console !== "undefined") {
+      console.debug("[m2-inst] LaborBudgetsPanel onSaved invoked");
+    }
     setReloadKey((k) => k + 1);
     setEditingPeriod(null);
     setEditingRatio(false);
@@ -123,7 +172,7 @@ export default function LaborBudgetsPanel({ accountKey, showToast }) {
                   <td>{b?.hourly_budget != null ? fmtAmount(b.hourly_budget) : <em style={{ color: "var(--text-muted, #888)" }}>not set</em>}</td>
                   <td>{b?.salary_budget != null ? fmtAmount(b.salary_budget) : <em style={{ color: "var(--text-muted, #888)" }}>not set</em>}</td>
                   <td>{b?.revenue_forecast != null ? fmtAmount(b.revenue_forecast) : <em style={{ color: "var(--text-muted, #888)" }}>not set</em>}</td>
-                  <td>{b?.effective_from ? fmtDate(b.effective_from) : <em style={{ color: "var(--text-muted, #888)" }}>—</em>}</td>
+                  <td>{b?.effective_from ? fmtDate(b.effective_from) : <em style={{ color: "var(--text-muted, #888)" }}>not set</em>}</td>
                   <td>
                     <button
                       type="button"

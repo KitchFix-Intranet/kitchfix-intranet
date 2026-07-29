@@ -49,6 +49,15 @@
 - **Corner grammar** (top-right = event, bottom-left = season) documented in the same + [`SC_DRILLDOWN_DECISIONS.md`](SC_DRILLDOWN_DECISIONS.md).
 - **API depth survey** promoted to [`audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md`](audits/SC_MLB_API_DEPTH_SURVEY_2026-07-12.md).
 
+### M-1 labor budget plane (2026-07-28, sc-20 + sc-21, PRs #546-#550)
+
+- **sc-20** - `sc_labor_budgets` table (per account, per period; supersede-rather-than-update; hourly + salary + revenue_forecast + effective_from + superseded_at + reason CHECK 1..280 chars). Partial UNIQUE `(account_key, period) WHERE superseded_at IS NULL` for one live row per tuple. `accounts.labor_ratio NUMERIC(6,4)` CHECK `IS NULL OR (> 0 AND < 1)`. Extends `sc_config_changelog.entity_type` CHECK to include `labor_ratio`.
+- **sc-21** - period convention correction: sc-20 stored `"P4"..."P10"` but `sc_day_metadata.period` is bare numeric (`"4".."10"`, matching the URL contract `?period=8`). Every homestand envelope emitted `null` at gate because `deriveLaborBudgets` joins on the raw string. sc-21 strips the P prefix, corrects TXR-TX-H P10 to 15714.26 (7 × 15714.29 = 110,000.03; owner ruling: P10 absorbs the 3¢ so the season sums to exactly $110K), swaps the CHECK to bare-numeric. Statement order matters: DROP-check must precede UPDATE (fresh-apply defect fixed in PR #550).
+- **`src/app/service-calendar/season/laborBudgetDerivation.js`** - the M-1 allocator. Cents-based Hamilton (largest-remainder) allocation per period. Formula: `dailyRate(P) = P.hourly_budget / (game-derived homestand days in P)`; `homestandBudget(H) = SUM over touched P of dailyRate(P) × (days of H in P)`. Round ONCE at the emitted envelope; the per-period breakdown reconciles by construction. Missing-vs-zero discipline: any missing budget row returns `{ envelope: null, reason: ... }` for touched blocks. NEVER $0.
+- **`src/app/service-calendar/admin/LaborBudgetsPanel.js`** - admin editor for per-period budgets + the TXR-V labor ratio. Supersede-rather-than-update wired end-to-end.
+- **`scripts/_probe_labor_budget_acceptance.mjs`** - acceptance gate. Compares cents-integer envelope sums to cents-integer P&L season totals. Four accounts diff = 0¢ EXACT.
+- **M-2 pending** as the envelope's first production consumer. Detail surface + click retarget on the pilot account.
+
 ### Migration gate CI (#416, mechanical enforcement of the DRAFT rule)
 
 - **What shipped**: `.github/workflows/migration-gate.yml` emits a `Migration gate` status check on every PR. Job A (`pull_request`) scans for added `docs/migrations/*.sql` - none -> pass instantly; any -> FAIL with a summary listing the files + the canonical phrase. Job B (`issue_comment`) matches `applied in Studio: YES` from an `OWNER`-association comment, resolves the PR head SHA, emits a `Migration gate` check_run as success on that SHA. Per-SHA reset: any push re-runs the scan.

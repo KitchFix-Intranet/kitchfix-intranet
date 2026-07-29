@@ -26,6 +26,11 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+// M-2 pilot set. Re-exported from the non-hook pilots.js so both the
+// client render layer and the server payload builder can import from
+// the same source without pulling React into a server module.
+export { M2_HOMESTAND_ACCOUNTS } from "./pilots";
+
 // ─── Generic flag helpers ───────────────────────────────────
 // Same shape reused for every SC v2 sub-flag. Extracted so
 // useScEntryV2 (W7) sits next to useScV2 without copy-paste divergence.

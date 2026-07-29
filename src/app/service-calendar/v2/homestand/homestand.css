@@ -1,0 +1,401 @@
+/* M-2 (2026-07-29): homestand detail surface + day strip.
+   Reads only --sc2-* tokens (per scope §13A - no new px literals for
+   type, spacing, or radius). Cell dimensions declared as ratios of
+   the existing spacing scale so the strip breathes with the ladder
+   and never drifts out of alignment with the rail primitives. */
+
+.sc-homestand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-5);
+  padding: var(--sc2-space-4) var(--sc2-space-5);
+  color: var(--sc2-ink);
+  font-family: var(--sc2-font-ui);
+  font-size: var(--sc2-size-body);
+  line-height: 1.5;
+}
+
+/* ── Breadcrumb ──────────────────────────────────────────────────── */
+/* Scope A3: the homestand is a PEER of month and period, not a modal.
+   Breadcrumb reads "< Season - < July - < HS9 >" (hyphens per §5
+   non-negotiable). Every crumb except the current one is a real
+   button + link so back navigation works from the keyboard. */
+.sc-homestand-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+  flex-wrap: wrap;
+}
+
+.sc-homestand-breadcrumb-link {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: var(--sc2-space-1) var(--sc2-space-2);
+  cursor: pointer;
+  color: var(--sc2-cmd-bg);
+  font: inherit;
+  border-radius: var(--sc2-radius-cell);
+}
+.sc-homestand-breadcrumb-link:hover {
+  background: var(--sc2-surface);
+}
+.sc-homestand-breadcrumb-link:focus-visible {
+  outline: 2px solid var(--sc2-cmd-bg);
+  outline-offset: 2px;
+}
+
+.sc-homestand-breadcrumb-sep {
+  color: var(--sc2-ink-muted);
+  user-select: none;
+}
+
+.sc-homestand-breadcrumb-current {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-semibold);
+  padding: var(--sc2-space-1) var(--sc2-space-2);
+}
+
+/* ── Two-pane layout: main body + rail ─────────────────────────── */
+.sc-homestand-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--sc2-space-5);
+  align-items: start;
+}
+@media (max-width: 1099px) {
+  .sc-homestand-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sc-homestand-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-5);
+  min-width: 0;
+}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+.sc-homestand-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+
+.sc-homestand-header-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sc2-space-3);
+  flex-wrap: wrap;
+}
+
+.sc-homestand-title {
+  font-size: var(--sc2-size-h2);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-strong);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.sc-homestand-daterange {
+  font-size: var(--sc2-size-subhead);
+  color: var(--sc2-ink-muted);
+}
+
+.sc-homestand-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-1);
+  padding: var(--sc2-space-1) var(--sc2-space-3);
+  border-radius: var(--sc2-radius-pill);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sc-homestand-status--upcoming {
+  background: var(--sc2-state-upcoming-bg);
+  color: var(--sc2-state-upcoming-fg);
+}
+.sc-homestand-status--in-progress {
+  background: var(--sc2-state-entered-bg);
+  color: var(--sc2-state-entered-fg);
+}
+.sc-homestand-status--ended {
+  background: var(--sc2-state-off-bg);
+  color: var(--sc2-state-off-fg);
+}
+
+.sc-homestand-meta {
+  display: flex;
+  gap: var(--sc2-space-4);
+  flex-wrap: wrap;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+}
+
+.sc-homestand-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-1);
+}
+.sc-homestand-meta-value {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-semibold);
+}
+
+/* ── Day strip ───────────────────────────────────────────────────── */
+
+.sc-daystrip {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--sc2-space-1);
+  padding: var(--sc2-space-3);
+  background: var(--sc2-surface);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  overflow-x: auto;
+}
+
+.sc-daystrip-cell {
+  --sc2-daystrip-cell-w: calc(var(--sc2-space-7) * 2);
+  --sc2-daystrip-cell-h: calc(var(--sc2-space-8) * 1.6);
+  flex: 0 0 var(--sc2-daystrip-cell-w);
+  min-width: var(--sc2-daystrip-cell-w);
+  height: var(--sc2-daystrip-cell-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sc2-space-1);
+  border-radius: var(--sc2-radius-cell);
+  padding: var(--sc2-space-2);
+  border: 1px solid transparent;
+  background: var(--sc2-surface-card);
+}
+
+.sc-daystrip-cell-date {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-medium);
+  letter-spacing: 0.02em;
+}
+
+.sc-daystrip-cell-opponent {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.01em;
+}
+
+.sc-daystrip-cell-marker {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Game cell - the workhorse. Filled surface, opponent code centered.
+   Border stays transparent by default; the served treatment adds a
+   green rule so entered vs unentered is legible at a glance. */
+.sc-daystrip-cell--game {
+  background: var(--sc2-state-upcoming-bg);
+  color: var(--sc2-state-upcoming-fg);
+}
+.sc-daystrip-cell--game .sc-daystrip-cell-opponent {
+  color: var(--sc2-state-upcoming-fg);
+}
+
+/* Served treatment (game day with status === "entered"). Additive on
+   top of --game. Border adopts the entered-bd token so the pair
+   reads as a state pair with the DaySquare's entered state. */
+.sc-daystrip-cell--served {
+  background: var(--sc2-state-entered-bg);
+  color: var(--sc2-state-entered-fg);
+  border-color: var(--sc2-state-entered-bd);
+}
+.sc-daystrip-cell--served .sc-daystrip-cell-opponent {
+  color: var(--sc2-state-entered-fg);
+}
+
+/* Prep cell - outlined dim, "prep" marker. Reads as neutral (not a
+   state that owes anything), matching the daySquare off/prep spine. */
+.sc-daystrip-cell--prep {
+  background: var(--sc2-state-off-bg);
+  color: var(--sc2-state-off-fg);
+  border-style: dashed;
+  border-color: var(--sc2-line-2);
+}
+.sc-daystrip-cell--prep .sc-daystrip-cell-marker {
+  color: var(--sc2-state-off-fg);
+}
+
+/* Exception cell - marked-no-service on a game day. Red-family fill,
+   opponent code + "no service" marker. */
+.sc-daystrip-cell--exception {
+  background: var(--sc2-state-overdue-bg);
+  color: var(--sc2-state-overdue-fg);
+  border-color: var(--sc2-state-overdue-bd);
+}
+.sc-daystrip-cell--exception .sc-daystrip-cell-opponent,
+.sc-daystrip-cell--exception .sc-daystrip-cell-marker {
+  color: var(--sc2-state-overdue-fg);
+}
+
+/* Month-boundary marker - a thin vertical rule between two cells
+   where the calendar month changes. Owner ruling: both months are
+   labeled; the label above the marker names the INCOMING month. */
+.sc-daystrip-monthbreak {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--sc2-space-1);
+  padding: 0 var(--sc2-space-2);
+  border-left: 2px solid var(--sc2-state-needs-bd);
+  color: var(--sc2-state-needs-fg-strong);
+}
+
+.sc-daystrip-monthbreak-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sc2-state-needs-fg-strong);
+}
+
+/* ── Scheduling instruction ─────────────────────────────────────── */
+/* Verbatim copy per prompt §4.4: "Schedule days include the prep day
+   before the homestand. The budget is calculated on game days only."
+   Owner instruction: do not invent alternative wording. */
+.sc-homestand-instruction {
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  padding: var(--sc2-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+
+.sc-homestand-instruction-head {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-ink-strong);
+}
+
+.sc-homestand-instruction-figure {
+  font-size: var(--sc2-size-h3);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-strong);
+}
+
+.sc-homestand-instruction-note {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+}
+
+/* ── Rail (BUDGET-led per scope §4.5) ──────────────────────────── */
+.sc-homestand-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-4);
+  padding: var(--sc2-space-4);
+  background: var(--sc2-rail-bg);
+  border-radius: var(--sc2-radius-container);
+  color: var(--sc2-rail-text);
+}
+
+.sc-homestand-rail-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+
+.sc-homestand-rail-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-rail-text-section);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sc-homestand-rail-figure {
+  font-size: var(--sc2-size-h1);
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-rail-text-strong);
+  line-height: 1;
+}
+
+.sc-homestand-rail-figure--missing {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-medium);
+  color: var(--sc2-rail-text-muted);
+}
+
+.sc-homestand-rail-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+}
+
+.sc-homestand-rail-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sc2-space-3);
+}
+
+.sc-homestand-rail-served {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+}
+
+.sc-homestand-rail-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sc2-space-2);
+  border-top: 1px solid var(--sc2-rail-divider);
+  padding-top: var(--sc2-space-3);
+}
+
+.sc-homestand-rail-navbtn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--sc2-rail-border);
+  border-radius: var(--sc2-radius-control);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  color: var(--sc2-rail-text);
+  font: inherit;
+  font-size: var(--sc2-size-caption);
+  cursor: pointer;
+}
+.sc-homestand-rail-navbtn:hover:not(:disabled) {
+  background: var(--sc2-rail-bg-shade);
+}
+.sc-homestand-rail-navbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.sc-homestand-rail-navbtn:focus-visible {
+  outline: 2px solid var(--sc2-rail-text-strong);
+  outline-offset: 2px;
+}
+
+/* ── Empty state (key-mismatch or missing payload) ─────────────── */
+.sc-homestand-empty {
+  padding: var(--sc2-space-6);
+  text-align: center;
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-body);
+  background: var(--sc2-surface);
+  border: 1px dashed var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+}
