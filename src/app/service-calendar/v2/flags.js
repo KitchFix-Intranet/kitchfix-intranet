@@ -26,10 +26,12 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-// M-2 pilot set. Re-exported from the non-hook pilots.js so both the
-// client render layer and the server payload builder can import from
-// the same source without pulling React into a server module.
-export { M2_HOMESTAND_ACCOUNTS } from "./pilots";
+// MLB homestand-surface set. Re-exported from the non-hook pilots.js
+// so both the client render layer and the server payload builder can
+// import from the same source without pulling React into a server
+// module. Renamed from M2_HOMESTAND_ACCOUNTS at M-4a - "M2" was a
+// phase name that outlived the phase.
+export { MLB_HOMESTAND_SURFACE_ACCOUNTS } from "./pilots";
 
 // ─── Generic flag helpers ───────────────────────────────────
 // Same shape reused for every SC v2 sub-flag. Extracted so

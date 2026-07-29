@@ -143,19 +143,23 @@
 .sc-stepper-spotlight-sep { color: var(--text-subtle); }
 
 /* ── Segmented bar ─────────────────────────────────────────── */
+/* M-4a: segments align to the bottom so tall variants stick up. Bar
+   rows have a fixed conceptual baseline; the height difference
+   between "regular" (done / next) and "attention" (actuals-due /
+   in-progress / focus) is the second grayscale-safe signal. */
 .sc-stepper-bar {
   display: flex;
+  align-items: flex-end;
   gap: var(--space-1);
   list-style: none;
   margin: 0;
   padding: 0;
 }
+/* Base segment: proportional flex value set inline per segment
+   (style={{ flex: dayCount }}). Removing the flex: 1 default so
+   inline styles carry unambiguously. */
 .sc-stepper-bar-segment {
-  flex: 1;
   display: flex;
-}
-.sc-stepper-bar-segment--focus {
-  flex: 1.7;
 }
 .sc-stepper-bar-segment-button {
   display: flex;
@@ -172,9 +176,12 @@
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
-.sc-stepper-bar-segment--done  .sc-stepper-bar-segment-button { background: var(--action-primary-bg); }
-.sc-stepper-bar-segment--next  .sc-stepper-bar-segment-button { background: var(--border-default); }
-.sc-stepper-bar-segment--focus .sc-stepper-bar-segment-button {
+/* Color per state. Focus keeps the widened + ringed emphasis. */
+.sc-stepper-bar-segment--done         .sc-stepper-bar-segment-button { background: var(--action-primary-bg); }
+.sc-stepper-bar-segment--next         .sc-stepper-bar-segment-button { background: var(--border-default); }
+.sc-stepper-bar-segment--actuals-due  .sc-stepper-bar-segment-button { background: var(--accent); }
+.sc-stepper-bar-segment--in-progress  .sc-stepper-bar-segment-button { background: var(--accent); }
+.sc-stepper-bar-segment--focus        .sc-stepper-bar-segment-button {
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--status-needs-subtle), inset 0 0 0 1px rgba(255,255,255,0.4);
 }
@@ -185,11 +192,63 @@
   letter-spacing: var(--track-caps);
 }
 
-/* Desktop bar reads as a band so the focus label sits comfortably. */
+/* Base + tall height variants. Base uses --cell-size (existing) on
+   desktop and --row-height on mobile; tall adds --space-2 without
+   introducing a new size token. Owner's rubric part 3: color +
+   height together survive grayscale. */
 .sc-stepper-desktop .sc-stepper-bar-segment-button {
   min-height: var(--cell-size);
 }
-/* Mobile bar respects the floor-first tap target (Comfortable). */
+.sc-stepper-desktop .sc-stepper-bar-segment--actuals-due  .sc-stepper-bar-segment-button,
+.sc-stepper-desktop .sc-stepper-bar-segment--in-progress  .sc-stepper-bar-segment-button,
+.sc-stepper-desktop .sc-stepper-bar-segment--focus        .sc-stepper-bar-segment-button {
+  min-height: calc(var(--cell-size) + var(--space-2));
+}
 .sc-stepper-mobile .sc-stepper-bar-segment-button {
   min-height: var(--row-height);
+}
+.sc-stepper-mobile .sc-stepper-bar-segment--actuals-due  .sc-stepper-bar-segment-button,
+.sc-stepper-mobile .sc-stepper-bar-segment--in-progress  .sc-stepper-bar-segment-button,
+.sc-stepper-mobile .sc-stepper-bar-segment--focus        .sc-stepper-bar-segment-button {
+  min-height: calc(var(--row-height) + var(--space-2));
+}
+
+/* ── Affordance hint + tracker footer (M-4a) ───────────────── */
+.sc-stepper-hint {
+  margin: var(--space-2) 0 0 0;
+  font-size: var(--size-caption);
+  color: var(--text-muted);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-stepper-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-thin) solid var(--border-default);
+}
+.sc-stepper-footer-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-stepper-footer-cell--middle { align-items: center; text-align: center; }
+.sc-stepper-footer-cell--last   { align-items: flex-end;  text-align: right; }
+.sc-stepper-footer-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-display);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sc-stepper-footer-value {
+  font-size: var(--size-body);
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+}
+.sc-stepper-footer-detail {
+  font-size: var(--size-caption);
+  color: var(--text-default);
 }

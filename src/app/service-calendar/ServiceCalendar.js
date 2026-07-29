@@ -23,7 +23,7 @@ import { useScV2, useScEntryV2Effective } from "./v2/flags";
 // surface. Client-side gate at every render decision that could route
 // a non-pilot account into the new surface. Server payload emit uses
 // the same set (see lib/dataStore/serviceCalendar.js).
-import { M2_HOMESTAND_ACCOUNTS } from "./v2/pilots";
+import { MLB_HOMESTAND_SURFACE_ACCOUNTS } from "./v2/pilots";
 // M-3 (2026-08-XX): MLB-wide tile inertness gate. Counts are agreed
 // annually and static (owner ruling 2026-07-29 - Phase 4 never
 // happens). Day tiles on MLB accounts become fully inert: no count
@@ -31,7 +31,7 @@ import { M2_HOMESTAND_ACCOUNTS } from "./v2/pilots";
 // derivation gate - all four MLB accounts, not just the M-2 pilot.
 import { DERIVE_HOMESTANDS_ACCOUNTS } from "./season/homestandDerivation";
 // M-2 (2026-07-29): homestand detail surface. Mounted only on
-// scope === "homestand" AND M2_HOMESTAND_ACCOUNTS.has(account).
+// scope === "homestand" AND MLB_HOMESTAND_SURFACE_ACCOUNTS.has(account).
 import HomestandDetail from "./v2/homestand/HomestandDetail";
 import "./v2/homestand/homestand.css";
 import Ribbon from "./v2/Ribbon";
@@ -558,7 +558,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // monthKey. Value is the segment's stable key (game_pk or
   // startDate), never the "HS7" ordinal. URL-sync effect below sets
   // this from ?homestand=; the render gates on both scope === "homestand"
-  // AND M2_HOMESTAND_ACCOUNTS.has(selectedAccount).
+  // AND MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount).
   const [homestandKey, setHomestandKey] = useState(null);
   // Month drill: which calendar month ("YYYY-MM") the user drilled into
   // from the Calendar overview. Mutually exclusive with periodKey - the
@@ -623,7 +623,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // conditions; effects must depend on the underlying `scope` /
   // `homestandKey` state so they don't over-fire. The account gate
   // stays OFF this predicate on purpose - it lives at the render
-  // boundary via M2_HOMESTAND_ACCOUNTS.has(selectedAccount) so the
+  // boundary via MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) so the
   // URL-sync effect at :927 can remain account-blind and keep its
   // pre-#399 dep shape [searchParams, isAdmin].
   const isHomestandView = !isAdminView && scope === "homestand";
@@ -640,8 +640,8 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // been." A companion effect below strips ?homestand= from the URL
   // so the visible state and the URL agree - shareable link works
   // for anyone who reaches it later.
-  const isHomestandOnPilot = isHomestandView && M2_HOMESTAND_ACCOUNTS.has(selectedAccount);
-  const isHomestandOnNonPilot = isHomestandView && selectedAccount && !M2_HOMESTAND_ACCOUNTS.has(selectedAccount);
+  const isHomestandOnPilot = isHomestandView && MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount);
+  const isHomestandOnNonPilot = isHomestandView && selectedAccount && !MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount);
   const isYearViewEffective = isYearView || isHomestandOnNonPilot;
 
   // URL ?view=admin sync (App Router shallow update).
@@ -859,7 +859,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         setYearToday(d.today || null);
         if (d.periodRanges) setPeriodRanges(d.periodRanges);
         // M-2 (2026-07-29): homestands[] arrives only for pilot
-        // accounts (server gates on M2_HOMESTAND_ACCOUNTS). Null
+        // accounts (server gates on MLB_HOMESTAND_SURFACE_ACCOUNTS). Null
         // otherwise - `isHomestandView` renders never reach into
         // this when it is null (mount checks account first).
         setYearHomestands(d.homestands || null);
@@ -1013,7 +1013,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       // deps are [searchParams, isAdmin] and adding selectedAccount
       // re-opens the #399 self-refire loop the URL-sync effect was
       // built to avoid. The gate lives at the render boundary via
-      // M2_HOMESTAND_ACCOUNTS.has(selectedAccount) - a non-pilot
+      // MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) - a non-pilot
       // account with ?homestand= in the URL falls to the Season
       // overview with no scope side effects.
       //
@@ -2986,12 +2986,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                  fallback period-map path runs unchanged. Includes
                  the three non-pilot MLB accounts (STL-MO, TXR-TX-H,
                  TXR-TX-V) - they stay on period routing until M-4. */
-              onHomestandClick={M2_HOMESTAND_ACCOUNTS.has(selectedAccount) ? (segmentKey) => {
+              onHomestandClick={MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) ? (segmentKey) => {
                 router.push(
                   buildScUrl({ account: selectedAccount || undefined, homestand: segmentKey }),
                   { scroll: false }
                 );
               } : undefined}
+              /* M-4a (2026-07-29): forward the payload's homestands[]
+                 into SeasonShell -> SeasonStepper so the strip can
+                 read live billing status per homestand. Null for
+                 non-MLB accounts (server does not emit the key). */
+              homestands={yearHomestands}
               // Lifted view toggle (the action signal moved to the chrome
               // bar, so the season shell no longer carries jump props).
               view={seasonView}
@@ -3089,6 +3094,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               year={year}
               yearData={yearData}
               today={today}
+              /* M-4a (2026-07-29): MLB rail variant reads homestands[]
+                 to derive SPENT vs BUDGET, NEEDS YOU, IN PROGRESS and
+                 the close-out CTA. Non-MLB accounts render the base
+                 rail path (which ignores homestands entirely). */
+              homestands={yearHomestands}
+              onTargetHomestand={MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) ? (hsKey) => {
+                router.push(
+                  buildScUrl({ account: selectedAccount || undefined, homestand: hsKey }),
+                  { scroll: false }
+                );
+              } : undefined}
               onTargetDay={feeTargetDay}
               onDrillToMonth={overviewDrillMonth}
               onDrillToPeriod={overviewDrillPeriod}
@@ -3281,6 +3297,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               loading={loading && !periodDays}
               incomplete={!!partialError}
               exportControl={null}
+              homestands={yearHomestands}
+              onTargetHomestand={MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) ? (hsKey) => {
+                router.push(
+                  buildScUrl({ account: selectedAccount || undefined, homestand: hsKey }),
+                  { scroll: false }
+                );
+              } : undefined}
               onTargetDay={targetDay}
             />
           ) : (
@@ -3501,6 +3524,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               loading={loading && !monthDays}
               incomplete={!!partialError}
               exportControl={null}
+              homestands={yearHomestands}
+              onTargetHomestand={MLB_HOMESTAND_SURFACE_ACCOUNTS.has(selectedAccount) ? (hsKey) => {
+                router.push(
+                  buildScUrl({ account: selectedAccount || undefined, homestand: hsKey }),
+                  { scroll: false }
+                );
+              } : undefined}
               onTargetDay={targetDay}
             />
           ) : (

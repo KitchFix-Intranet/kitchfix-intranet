@@ -316,6 +316,32 @@
   color: var(--sc2-ink-muted);
 }
 
+/* M-4a: budget-detail sentence directly under the instruction
+   note. Slightly stronger than note-muted so the overtime + period-
+   source facts read as an anchor, not an afterthought - but still
+   below the primary figure so scanning order stays intact. */
+.sc-homestand-instruction-detail {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink);
+  font-weight: var(--sc2-wt-medium);
+  margin-top: var(--sc2-space-1);
+}
+
+/* M-4a: month-boundary explainer. Own section under the
+   instruction card; lightly-tinted so it reads as informational
+   context rather than a warning. Only paints on blocks that
+   straddle a calendar month; HS10 (Jul 27 - Aug 6) is the pilot
+   test case. */
+.sc-homestand-crossmonth {
+  padding: var(--sc2-space-3) var(--sc2-space-4);
+  background: var(--sc2-surface-sunken);
+  border-left: 3px solid var(--sc2-line-2);
+  border-radius: var(--sc2-radius-control);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink);
+  line-height: 1.5;
+}
+
 /* ── Rail (BUDGET-led per scope §4.5) ──────────────────────────── */
 .sc-homestand-rail {
   display: flex;
@@ -403,6 +429,29 @@
 .sc-homestand-rail-std-context {
   font-size: var(--sc2-size-caption);
   color: var(--sc2-rail-text-item);
+}
+
+/* M-4a defect 3: rail progress bar for SPENT vs budget. Thin track,
+   proportional fill. Under-budget = accent; over-budget = overdue
+   color so the visual matches the variance word underneath. Height
+   composed from --sc2-space-1 so the bar reads at a glance without
+   crowding the figure. */
+.sc-homestand-rail-progress {
+  position: relative;
+  width: 100%;
+  height: var(--sc2-space-1);
+  background: var(--sc2-rail-divider);
+  border-radius: var(--sc2-radius-control);
+  overflow: hidden;
+}
+.sc-homestand-rail-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sc2-state-entered-fg);
+  transition: width 0.2s ease-out;
+}
+.sc-homestand-rail-progress--over .sc-homestand-rail-progress-fill {
+  background: var(--sc2-state-overdue-fg);
 }
 
 .sc-homestand-rail-nav {

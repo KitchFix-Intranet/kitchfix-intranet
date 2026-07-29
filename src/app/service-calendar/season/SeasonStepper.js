@@ -16,14 +16,26 @@
 //     fee footer + DayDetail untouched, MLB rendering unchanged,
 //     read-side only, zero write-path.
 //
-// Segments: one per homestand, status encoded by fill (done = navy,
-// next = grey, focus = amber). The focus segment is the deriveFocus
-// segment - live homestand when one is in progress, else the next
-// upcoming, else the last done. The focus segment widens and carries
-// the HS id label inside.
+// Segments: one per homestand. Status class carries the visual state:
+//   - focus       amber, widened + labeled; the caption/spotlight anchor
+//   - actuals-due amber fill, tall; needs the chef's attention (M-4a)
+//   - in-progress amber fill, tall; the block that spans today (M-4a)
+//   - done        navy; a closed-out block (or a past block before M-3)
+//   - next        grey; upcoming
 //
-// DESKTOP (>=1024px): caption + bar.
-// MOBILE  (<1024px): spotlight card + bar (>=44px tap target).
+// Status source (M-4a): the payload's homestands[] carries the true
+// billing status (upcoming | in-progress | actuals-due | closed-out)
+// per the M-3 emit. It is joined onto derived segments by
+// `segment.key` - the first game's gamePk, stable across schedule
+// changes and the same key sc_homestand_closeout stores. NEVER by
+// ordinal (HS3 shifts when a game reschedules; the M-0 phase removed
+// that coupling deliberately). When the payload is absent (non-MLB
+// account, or account not in MLB_HOMESTAND_SURFACE_ACCOUNTS), the
+// strip falls back to the derived done/now/next vocabulary
+// byte-identically to pre-M-4a.
+//
+// DESKTOP (>=1024px): caption + bar + hint + footer.
+// MOBILE  (<1024px): spotlight card + bar + hint + footer.
 //
 // Engine fence: derives from yearData via homestandDerivation.
 
@@ -34,21 +46,86 @@ import {
 } from "./homestandDerivation";
 import "./seasonStepper.css";
 
+// Map the M-3 payload status onto the strip's visual class. Focus
+// wins over payload status at render time (see SeasonBar), so this
+// only decides what a non-focus segment paints as.
+function payloadStatusToClass(payloadStatus) {
+  switch (payloadStatus) {
+    case "closed-out":  return "done";
+    case "actuals-due": return "actuals-due";
+    case "in-progress": return "in-progress";
+    case "upcoming":    return "next";
+    default:            return null;
+  }
+}
+
+// Build the join map once per render. Small (<= 13 entries).
+function buildStatusByKey(homestands) {
+  const m = new Map();
+  if (!Array.isArray(homestands)) return m;
+  for (const h of homestands) {
+    if (h?.key != null) m.set(String(h.key), h.status);
+  }
+  return m;
+}
+
+// Which visual class a segment paints at. Focus overrides.
+function classForSegment(seg, isFocus, statusByKey) {
+  if (isFocus) return "focus";
+  const payloadStatus = statusByKey.get(String(seg.key));
+  const fromPayload = payloadStatusToClass(payloadStatus);
+  if (fromPayload) return fromPayload;
+  // Fallback to derived done/now/next when the payload is absent.
+  if (seg.status === "now") return "in-progress";
+  if (seg.status === "done") return "done";
+  return "next";
+}
+
+const MON_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// Days between two ISO dates, inclusive. Anchored to noon so DST
+// shifts don't bump the count on the boundary days.
+function spanDaysInclusive(startIso, endIso) {
+  if (!startIso || !endIso) return 1;
+  const s = new Date(startIso + "T12:00:00");
+  const e = new Date(endIso + "T12:00:00");
+  const ms = e.getTime() - s.getTime();
+  if (!Number.isFinite(ms)) return 1;
+  return Math.max(1, Math.round(ms / 86400000) + 1);
+}
+
+// Compact date label for the tracker footer. "Apr 12" style.
+function shortDate(iso) {
+  if (!iso || typeof iso !== "string") return "";
+  const d = new Date(iso + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return "";
+  return `${MON_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
+
 export default function SeasonStepper({
   yearData,                   // months[] from sc-year-summary
   todayDate,                  // "YYYY-MM-DD" | null
   accountKey,                 // M-0: MLB-only gate inside deriveHomestandSegments
+  homestands,                 // M-4a: payload homestands[] for status join
   onSegmentClick,             // (homestandId) => void; drills into the period
 }) {
   const segments = deriveHomestandSegments(yearData, todayDate, { accountKey });
   if (!segments.length) return null;
   const focus = pickFocusSegment(segments);
+  const statusByKey = buildStatusByKey(homestands);
 
   return (
     <section className="sc-stepper" aria-label="Homestand season tracker">
       <div className="sc-stepper-desktop">
         <Caption focus={focus} totalCount={segments.length} />
-        <SeasonBar segments={segments} focus={focus} onSegmentClick={onSegmentClick} />
+        <SeasonBar
+          segments={segments}
+          focus={focus}
+          statusByKey={statusByKey}
+          onSegmentClick={onSegmentClick}
+        />
+        <StripHint />
+        <TrackerFooter segments={segments} statusByKey={statusByKey} />
       </div>
 
       <div className="sc-stepper-mobile">
@@ -59,7 +136,14 @@ export default function SeasonStepper({
             onClick={() => onSegmentClick?.(focus.segment)}
           />
         )}
-        <SeasonBar segments={segments} focus={focus} onSegmentClick={onSegmentClick} />
+        <SeasonBar
+          segments={segments}
+          focus={focus}
+          statusByKey={statusByKey}
+          onSegmentClick={onSegmentClick}
+        />
+        <StripHint />
+        <TrackerFooter segments={segments} statusByKey={statusByKey} />
       </div>
     </section>
   );
@@ -138,11 +222,14 @@ function Spotlight({ focus, totalCount, onClick }) {
   );
 }
 
-// 13-segment season bar. The focus segment widens (flex: 1.7) and
-// carries the HS id label inside; non-focus segments stay flex: 1 and
-// fall to done (navy) or next (grey) by status.
-function SeasonBar({ segments, focus, onSegmentClick }) {
+// Season bar. Width proportional to block length; focus block widens
+// 1.7x on top of that. Height encoded per state so due + in-progress
+// blocks read differently even in grayscale (second signal beyond
+// color per rubric Part 3).
+function SeasonBar({ segments, focus, statusByKey, onSegmentClick }) {
   const focusId = focus?.segment?.homestandId;
+  // Day-count sum for aria completeness. Empty-focus falls to
+  // gameCount + 1 nominal so no segment collapses to flex:0.
   return (
     <ol
       className="sc-stepper-bar"
@@ -151,18 +238,26 @@ function SeasonBar({ segments, focus, onSegmentClick }) {
     >
       {segments.map((seg) => {
         const isFocus = seg.homestandId === focusId;
-        const cls = isFocus ? "focus" : seg.status === "done" ? "done" : "next";
+        const cls = classForSegment(seg, isFocus, statusByKey);
+        // Proportional flex: span days, not gameCount. Owner phrased
+        // "three-day and eleven-day" - length is calendar days between
+        // startDate and endDate inclusive. HS10 has 10 games across
+        // 11 span-days (a home off-day in the block). Focus gets a
+        // 1.7x multiplier on top of that base.
+        const base = spanDaysInclusive(seg.startDate, seg.endDate);
+        const flexUnits = isFocus ? base * 1.7 : base;
         return (
           <li
             key={seg.homestandId}
             className={`sc-stepper-bar-segment sc-stepper-bar-segment--${cls}`}
+            style={{ flex: flexUnits }}
           >
             <button
               type="button"
               className="sc-stepper-bar-segment-button"
               onClick={() => onSegmentClick?.(seg)}
-              aria-label={ariaLabelForSegment(seg)}
-              title={ariaLabelForSegment(seg)}
+              aria-label={ariaLabelForSegment(seg, statusByKey)}
+              title={ariaLabelForSegment(seg, statusByKey)}
             >
               {isFocus && (
                 <span className="sc-stepper-bar-segment-label">{seg.homestandId}</span>
@@ -175,6 +270,55 @@ function SeasonBar({ segments, focus, onSegmentClick }) {
   );
 }
 
+// Affordance hint. Owner render item 4: without it, proportional
+// width reads as arbitrary. Two facts, one line.
+function StripHint() {
+  return (
+    <p className="sc-stepper-hint" aria-hidden="true">
+      width shows length · click to open
+    </p>
+  );
+}
+
+// Three-part tracker footer. Replaces the "homestand N of M" counter
+// with three anchor facts a chef reads at a glance:
+//   - the season's first homestand + start date
+//   - how many blocks currently need actuals
+//   - the season's last homestand + end date
+//
+// "Need actuals" counts segments that carry status === "actuals-due"
+// on the payload. Non-MLB accounts have no such segments; the counter
+// reads 0 and the middle cell renders "on track".
+function TrackerFooter({ segments, statusByKey }) {
+  if (!segments.length) return null;
+  const first = segments[0];
+  const last = segments[segments.length - 1];
+  const needCount = segments.filter(
+    (s) => statusByKey.get(String(s.key)) === "actuals-due"
+  ).length;
+  const middleLabel = needCount === 0
+    ? "on track"
+    : `${needCount} need${needCount === 1 ? "s" : ""} actuals`;
+  return (
+    <div className="sc-stepper-footer" aria-label="Season summary">
+      <div className="sc-stepper-footer-cell sc-stepper-footer-cell--first">
+        <span className="sc-stepper-footer-label">First</span>
+        <span className="sc-stepper-footer-value">{first.homestandId}</span>
+        <span className="sc-stepper-footer-detail">{shortDate(first.startDate)}</span>
+      </div>
+      <div className="sc-stepper-footer-cell sc-stepper-footer-cell--middle">
+        <span className="sc-stepper-footer-label">Actuals</span>
+        <span className="sc-stepper-footer-value">{middleLabel}</span>
+      </div>
+      <div className="sc-stepper-footer-cell sc-stepper-footer-cell--last">
+        <span className="sc-stepper-footer-label">Last</span>
+        <span className="sc-stepper-footer-value">{last.homestandId}</span>
+        <span className="sc-stepper-footer-detail">{shortDate(last.endDate)}</span>
+      </div>
+    </div>
+  );
+}
+
 // "homestand 8 of 13" - the ordinal hint. Uses the homestand_id
 // number for the ordinal (assumes HS1..HS13 numbering, which matches
 // the seed-script data shape).
@@ -184,14 +328,19 @@ function idxLabel(segment, total) {
   return `homestand ${n} of ${total}`;
 }
 
-// SC-006 (2026-07-08): every segment button (not just the current
-// focus) carries this label as its accessible name + hover title.
-// Format: "HS3 · Apr 12 to Apr 18 · vs ARI / MIL" - a compact readable
-// line derived from the data the segment already holds, no fetches.
-function ariaLabelForSegment(seg) {
+// Screen-reader label for one segment. Every button carries this
+// name + title. M-4a: append the payload's billing status word so
+// the strip reads as: "HS9 · Jul 3 to Jul 12 · vs ARI · closed out."
+// Falls back to the derived status word when the payload has no
+// entry (non-MLB accounts stay on done/now/next vocabulary).
+function ariaLabelForSegment(seg, statusByKey) {
   const range = formatHomestandRange(seg.startDate, seg.endDate);
   const opp = seg.opponents.length > 0
     ? `vs ${seg.opponents.join(" / ")}`
     : "vs opponent TBD";
-  return `${seg.homestandId} · ${range} · ${opp}`;
+  const payloadStatus = statusByKey?.get?.(String(seg.key));
+  const statusWord = payloadStatus
+    ? payloadStatus.replace(/-/g, " ")           // "actuals due" not "actuals-due"
+    : (seg.status === "now" ? "in progress" : seg.status);
+  return `${seg.homestandId} · ${range} · ${opp} · ${statusWord}`;
 }

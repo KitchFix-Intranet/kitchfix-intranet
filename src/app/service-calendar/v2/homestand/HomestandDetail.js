@@ -41,6 +41,50 @@ const MON_LONG = [
 
 const MON_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// M-4a (2026-07-29): month-boundary explainer helper. Returns
+// { crosses, monthAName, monthBName, monthARange, monthBRange,
+// spanDays } when the block straddles a calendar month boundary,
+// or null otherwise. Sole reader is CrossMonthExplainer below.
+function computeCrossMonth(startIso, endIso) {
+  if (!startIso || !endIso) return null;
+  if (startIso.slice(0, 7) === endIso.slice(0, 7)) return null;
+  const s = new Date(startIso + "T12:00:00");
+  const e = new Date(endIso + "T12:00:00");
+  // Last day of the start month = first-of-next-month minus one.
+  const firstOfNextMonth = new Date(s.getFullYear(), s.getMonth() + 1, 1);
+  const lastOfStartMonth = new Date(firstOfNextMonth.getTime() - 86400000);
+  const monthAName = MON_LONG[s.getMonth()];
+  const monthAShort = MON_SHORT[s.getMonth()];
+  const monthBName = MON_LONG[e.getMonth()];
+  const monthBShort = MON_SHORT[e.getMonth()];
+  // Single-day sides render as one date, not "N-N". Fires on blocks
+  // that start on the last day of a month (start side collapses) or
+  // spill exactly one day into the next month (end side collapses).
+  // Both are common: any month ending on the last day of a homestand
+  // hits the start-side collapse, and any Sunday-ending month
+  // produces the end-side collapse. HS1 (Mar 26 - Apr 1) is the
+  // end-side pilot; HS12 (Aug 31 - Sep 6) is the start-side pilot.
+  const startDay = s.getDate();
+  const lastDay = lastOfStartMonth.getDate();
+  const endDay = e.getDate();
+  const monthARange = startDay === lastDay
+    ? `${monthAShort} ${startDay}`
+    : `${monthAShort} ${startDay}-${lastDay}`;
+  const monthBRange = endDay === 1
+    ? `${monthBShort} 1`
+    : `${monthBShort} 1-${endDay}`;
+  const spanDays = Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
+  return { monthAName, monthBName, monthARange, monthBRange, spanDays };
+}
+
+// "P6 + P7" from a budget breakdown. Preserves the array order the
+// derivation emitted (chronological by period number). Returns null
+// when the breakdown is empty so the caller can skip the clause.
+function formatDrawsFrom(breakdown) {
+  if (!Array.isArray(breakdown) || breakdown.length === 0) return null;
+  return breakdown.map((b) => `P${b.period}`).join(" + ");
+}
+
 // Two independent locators. First tries strict === (numeric game_pk
 // paths). Falls back to string compare because the URL always
 // stringifies. Guards against a URL carrying "24812345" matching a
@@ -102,6 +146,32 @@ function monthLabelForBlock(block) {
     long: MON_LONG[d.getMonth()],
     monthKey: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
   };
+}
+
+// M-4a defect 3: homestand rail progress bar. Reads spend vs budget
+// and paints a proportional fill. Clamps to 100% for visual (the
+// numeric variance still tells the truth about over-budget). Uses
+// existing CSS variables so no new px literals ship. Grayscale-safe
+// via the aria-label carrying the ratio verbally.
+function SpendProgress({ spent, budget, label }) {
+  if (!Number.isFinite(spent) || !Number.isFinite(budget) || budget <= 0) return null;
+  const pct = Math.max(0, Math.min(100, Math.round((spent / budget) * 100)));
+  const overBudget = spent > budget;
+  return (
+    <div
+      className={`sc-homestand-rail-progress ${overBudget ? "sc-homestand-rail-progress--over" : "sc-homestand-rail-progress--under"}`}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={pct}
+      aria-label={`${label}, ${pct} percent`}
+    >
+      <div
+        className="sc-homestand-rail-progress-fill"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
 }
 
 export default function HomestandDetail({
@@ -339,7 +409,47 @@ export default function HomestandDetail({
               Schedule days include the prep day before the homestand.
               The budget is calculated on game days only.
             </div>
+            {/* M-4a: budget-detail line - the designed home for the
+                overtime + period-source facts. Owner note: this also
+                closes an M-3 rail regression - the rail dropped the
+                period breakdown once a block closed out because it
+                only lived in the budget branch. Hosting the source
+                list here means it fires for open AND closed blocks.
+                Skips when no budget exists (missing-vs-zero on copy). */}
+            {budgetAmount != null && (() => {
+              const drawsFrom = formatDrawsFrom(budgetBreakdown);
+              return (
+                <div className="sc-homestand-instruction-detail">
+                  Budget includes overtime at 1.5x for hours over 40/wk
+                  {drawsFrom && (
+                    <> · draws from {drawsFrom}</>
+                  )}.
+                </div>
+              );
+            })()}
           </section>
+
+          {/* M-4a: month-boundary explainer. Renders only when the
+              block straddles a calendar month boundary (e.g. HS10
+              Jul 27 - Aug 6). The month cards will show partial
+              spans (Jul 27-31 in July, Aug 1-6 in August), so the
+              homestand scope carrying all N days needs a plain-
+              English note that this is by design, not a rendering
+              bug. Sits under the instruction so it is one glance
+              from the scheduling copy that already talks about
+              days. */}
+          {(() => {
+            const cm = computeCrossMonth(block.startDate, block.endDate);
+            if (!cm) return null;
+            return (
+              <section
+                className="sc-homestand-crossmonth"
+                aria-label="Homestand crosses a month boundary"
+              >
+                This homestand crosses a month boundary. {cm.monthAName} shows {cm.monthARange}, {cm.monthBName} shows {cm.monthBRange}. All {cm.spanDays} days appear here because a homestand is its own scope.
+              </section>
+            );
+          })()}
 
           {/* M-3 close-out panel. Rendering is state-driven inside
               CloseoutPanel:
@@ -364,7 +474,10 @@ export default function HomestandDetail({
           {/* §5.5 (M-3): rail leads with SPENT + variance once the
               close-out has written a labor actual. Budget appears as
               context under the spend figure. Falls back to the
-              BUDGET-only shape (below) when no close-out exists. */}
+              BUDGET-only shape (below) when no close-out exists.
+
+              M-4a (2026-07-29): adds a progress bar under the SPENT
+              figure so the ratio reads without decoding numbers. */}
           {hasCloseout ? (
             <section className="sc-homestand-rail-section">
               <div className="sc-homestand-rail-label">Spent</div>
@@ -374,6 +487,13 @@ export default function HomestandDetail({
               <div className="sc-homestand-rail-vs-budget">
                 vs {closeoutBudget != null ? fmt$(closeoutBudget) : "no budget snapshot"} budget
               </div>
+              {closeoutBudget != null && closeoutBudget > 0 && (
+                <SpendProgress
+                  spent={closeoutSpent}
+                  budget={closeoutBudget}
+                  label="Homestand spend against budget"
+                />
+              )}
               {closeoutVariance != null && (
                 <div
                   className={`sc-homestand-rail-variance ${varianceClass(closeoutVariance)}`}
@@ -415,39 +535,6 @@ export default function HomestandDetail({
             </section>
           )}
 
-          {/* Season-to-date: only paints once at least one homestand
-              has closed out on this account. Null when nothing has
-              closed out - the row hides rather than reading
-              "$0 vs $0 on budget", which is the missing-vs-zero rule
-              applied to a rollup. */}
-          {seasonToDate && (
-            <section
-              className="sc-homestand-rail-section"
-              aria-label="Season to date"
-            >
-              <div className="sc-homestand-rail-label">Season to date</div>
-              <div className="sc-homestand-rail-std-figure">
-                {fmt$(seasonToDate.actual)}
-              </div>
-              <div className="sc-homestand-rail-std-context">
-                across {seasonToDate.count} closed-out homestand{seasonToDate.count === 1 ? "" : "s"}
-                {seasonToDate.budget != null && (
-                  <> vs {fmt$(seasonToDate.budget)} budget</>
-                )}
-              </div>
-              {seasonToDate.variance != null && (
-                <div
-                  className={`sc-homestand-rail-variance ${varianceClass(seasonToDate.variance)}`}
-                >
-                  <VarianceCell
-                    variance={seasonToDate.variance}
-                    showCarryToSeason={false}
-                  />
-                </div>
-              )}
-            </section>
-          )}
-
           <section className="sc-homestand-rail-section">
             <div className="sc-homestand-rail-label">Service</div>
             {/* F3 (2026-07-29 owner ruling): servedDays + exceptionDays
@@ -477,6 +564,41 @@ export default function HomestandDetail({
               })()}
             </div>
           </section>
+
+          {/* Season-to-date - pinned near the bottom (M-4a defect 2)
+              so the block's own SPENT figure stays the hero. Only
+              paints when at least one homestand has closed out.
+              Dedupe (M-4a defect 1): when only ONE homestand has
+              closed out AND that one is the currently-viewed block,
+              the season-to-date row would repeat the SPENT figure
+              and variance verbatim. Hide in that case. */}
+          {seasonToDate && !(hasCloseout && seasonToDate.count === 1) && (
+            <section
+              className="sc-homestand-rail-section"
+              aria-label="Season to date"
+            >
+              <div className="sc-homestand-rail-label">Season to date</div>
+              <div className="sc-homestand-rail-std-figure">
+                {fmt$(seasonToDate.actual)}
+              </div>
+              <div className="sc-homestand-rail-std-context">
+                across {seasonToDate.count} closed-out homestand{seasonToDate.count === 1 ? "" : "s"}
+                {seasonToDate.budget != null && (
+                  <> vs {fmt$(seasonToDate.budget)} budget</>
+                )}
+              </div>
+              {seasonToDate.variance != null && (
+                <div
+                  className={`sc-homestand-rail-variance ${varianceClass(seasonToDate.variance)}`}
+                >
+                  <VarianceCell
+                    variance={seasonToDate.variance}
+                    showCarryToSeason={false}
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           <nav
             className="sc-homestand-rail-nav"
