@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.52
+**Version:** v2.53
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,18 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.53 - 2026-07-29. CLEANUP ARC CLOSED. DECISION 5 REOPENED AFTER FOUR DAYS.** PR #562 merged and the STD-001 + FORM-007 apply run completed. Chat verified independently with the widened H1-or-H2 matcher: **zero Status columns remain anywhere in the corpus**, STD-001 is at v1.4, FORM-007's chunks carry the new text and none of the old. Delete-then-insert confirmed by counts again (FORM-007 6/6, STD-001 36/36).
+
+  **What #562 landed:** FORM-007 Class B transform; the validator heading blind spot widened to `^(#{1,2}) Related Documents\s*$` with section-end honoring the found heading level, plus four H2 fixtures (18/18 green, corpus zero errors); eight other checks audited for the same assumption and correctly left alone as level-agnostic by design; six hardcoded production sheet ids removed from the two reconciliation scripts, which now fail loudly naming the missing variable; and the GRANT hygiene audit.
+
+  **GRANT finding assessed more sharply than CC framed it.** CC argued nothing breaks on revoke because the app does not use TRUNCATE. Chat verified the stronger reason: **no Supabase anon key is shipped to any client and no browser-side code creates a Supabase client**, so the `anon` and `authenticated` roles cannot be assumed by anyone at all. The 35 tables carry destructive grants to roles with no key in existence - latent surface area, not a live hole. R1 is a clean single-block revoke at Kevin's convenience.
+
+  **The day's arc, recorded because the shape matters:** it began scoping Phase E and became a cleanup only because the project's own audit documents were stale enough to produce four wrongly-scoped work items. What that cleanup then removed was real - the hand-typed status column from 42 documents and the corpus, FORM-007 (a Live in-corpus doc Sous could quote wrongly, missed by Chat's own H1-only sweep pattern), a validator rule carrying that same blind spot, four stale audits replaced by one dated SHA-stamped record, 38 undocumented env vars including the database credentials, a nav link that 404'd for most of the company, six hardcoded production sheet ids, and 35 enumerated destructive grants.
+
+  **Outstanding, Kevin's, neither blocking:** TPL-015 archive via admin UI; GRANT revoke per R1. **Parked with a named trigger:** migration-gate root cause, fires on the next PR adding `docs/migrations/*.sql`.
+
+  **Decision 5 discovery issued** - open since 2026-07-25, commissioned then, never returned, walked past repeatedly in this plan. Read-only survey producing a candidate tool menu that Kevin and Chat pick from; it explicitly does not choose. Scoped to answer the five v2.50 Phase F requirements rather than merely list tables: growth shape and temporal expression per table (requirement 4), views assessed as the design surface with view-shaped leverage named (requirement 2), row-cap and aggregate-or-rows per candidate (requirement 1), season-scope answered per candidate (requirement 5), and **the decline log read first as the only real demand evidence** (requirement 3) - with an explicit instruction to state the volume honestly and refuse to manufacture a ranking from thin data, since Sous has been live a short time behind an SLT-and-corporate gate. Join traps enumerated as their own deliverable because that is where a confident wrong number comes from; the known `sc_service_prices` case (no `account_key`, join via `sc_services`) is named as the seed. Decision 2's PAF wage and reimbursement carve-out restated as not-surveyed-at-all, enforced by absence. A deliberate-exclusions section is required and called out as being as valuable as the menu itself.
 
 - **v2.52 - 2026-07-29. THE GUARD HAD THE SAME HOLE.** PR #560 graded and merged: UNIVERSE.md re-derived against the working tree (shells all corrected to shipped 1240, prose cap 760 inner, Sous accent recorded as riding --opd-teal with no distinct token, Fence E rewritten as historical, all seven §6 open items re-checked with evidence, Captain's log gains Trains 2 and 3), STD-001 bumped to v1.4 with the two-column heading-rule table, the two ENV_VARS corrections, and the dead `font-mulish` class removed from four sites after proving zero occurrences in built CSS.
 
