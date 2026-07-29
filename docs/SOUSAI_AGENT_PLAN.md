@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.51
+**Version:** v2.52
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,22 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.52 - 2026-07-29. THE GUARD HAD THE SAME HOLE.** PR #560 graded and merged: UNIVERSE.md re-derived against the working tree (shells all corrected to shipped 1240, prose cap 760 inner, Sous accent recorded as riding --opd-teal with no distinct token, Fence E rewritten as historical, all seven §6 open items re-checked with evidence, Captain's log gains Trains 2 and 3), STD-001 bumped to v1.4 with the two-column heading-rule table, the two ENV_VARS corrections, and the dead `font-mulish` class removed from four sites after proving zero occurrences in built CSS.
+
+  **Task 4 earned its place and found the sweep's one escape.** The corpus-wide unscoped query surfaced **FORM-007** - `status: Live`, `in_corpus: true`, carrying a stale `| Status |` table with a `Live (v1.1)` cell that Sous can quote today. Cause: its Related Documents block sits at **H2** (`## Related Documents` under `# HANDLING & REFERENCES`), and PR #558's sweep matched `^# Related Documents$`, H1 only. Chat verified FORM-007 is the **only** H2 case in the corpus, so this is a single miss rather than a class. Its table is the same mixed shape as POL-007/REF-006/REF-007, so Class B applies verbatim and no new ruling is needed.
+
+  **The finding behind the finding, and the more important one:** `validate.mjs:258` uses the identical H1-only pattern. **The rule written to prevent recurrence has the same blind spot as the sweep that caused it** - it would not have caught the one case that escaped, and would not catch the next. A guard with the same hole as the thing it guards is worse than no guard because it manufactures confidence. Both the heading match and the section-end detection need widening, and every other check gets audited for the same hard-coded-heading-level assumption.
+
+  **Eleven false positives correctly characterized:** REC-101 through REC-111 carry legitimate `| Status |` columns in Rulings-and-Decisions and Open-Items tables ("CLOSED", "OPEN"), which the substring query could not distinguish from the sweep target. CC did not treat them as findings.
+
+  **One honest non-answer recorded:** the six predicted in-corpus-not-Live docs already show `Reviewed against` in their stored chunks, and CC could not reconstruct why from the session. It reported this as observed state rather than inventing a mechanism. The outcome that matters - the corpus is clean except FORM-007 - holds regardless. Not chasing it.
+
+  **Safety batch issued:** FORM-007 Class B transform, the validator blind-spot fix with H2 fixtures, the GRANT hygiene audit (read-only, every flagged grant carrying a what-breaks-if-revoked column so the list is decidable, no revocations), and prod-fallback hardening on the two reconciliation scripts that silently fall back to hardcoded production sheet ids.
+
+  **Migration-gate root cause deliberately parked with a named trigger.** Its verification event is the next migration-bearing PR and nothing in the queue adds one. Shipping an unverified fix to a guardrail is precisely how the current problem started; the fix and its proof should land together. Trigger: the next PR that adds `docs/migrations/*.sql`.
+
+  **After-merge tail is now two documents** - STD-001 (from #560) and FORM-007 - in one projection-and-embed run. After that the cleanup arc is closed and Phase H testing begins with nothing known-broken behind it.
 
 - **v2.51 - 2026-07-29. THE SWEEP REACHED SOUS.** PR #559 graded and merged. Projection applied (content_upsert 129 rows, content-hash skip filtering to the changed set; documents/relationships/surfaces all no-op because the edits were body-only), 29 Sous-visible docs re-embedded, **460 chunks deleted and 460 inserted with zero anomalies**. Verification returned **0 rows** for both `| Status |` and the `Live (v` construct, and spot-checks confirmed the new text present in stored chunks across both table shapes. Stray NonCanonical tokens 3 to 0. The hand-typed status lie surface is gone from the corpus, not just the repo.
 
