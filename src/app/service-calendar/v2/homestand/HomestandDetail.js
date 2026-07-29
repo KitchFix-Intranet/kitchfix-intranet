@@ -41,6 +41,36 @@ const MON_LONG = [
 
 const MON_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// M-4a (2026-07-29): month-boundary explainer helper. Returns
+// { crosses, monthAName, monthBName, monthARange, monthBRange,
+// spanDays } when the block straddles a calendar month boundary,
+// or null otherwise. Sole reader is CrossMonthExplainer below.
+function computeCrossMonth(startIso, endIso) {
+  if (!startIso || !endIso) return null;
+  if (startIso.slice(0, 7) === endIso.slice(0, 7)) return null;
+  const s = new Date(startIso + "T12:00:00");
+  const e = new Date(endIso + "T12:00:00");
+  // Last day of the start month = first-of-next-month minus one.
+  const firstOfNextMonth = new Date(s.getFullYear(), s.getMonth() + 1, 1);
+  const lastOfStartMonth = new Date(firstOfNextMonth.getTime() - 86400000);
+  const monthAName = MON_LONG[s.getMonth()];
+  const monthAShort = MON_SHORT[s.getMonth()];
+  const monthBName = MON_LONG[e.getMonth()];
+  const monthBShort = MON_SHORT[e.getMonth()];
+  const monthARange = `${monthAShort} ${s.getDate()}-${lastOfStartMonth.getDate()}`;
+  const monthBRange = `${monthBShort} 1-${e.getDate()}`;
+  const spanDays = Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
+  return { monthAName, monthBName, monthARange, monthBRange, spanDays };
+}
+
+// "P6 + P7" from a budget breakdown. Preserves the array order the
+// derivation emitted (chronological by period number). Returns null
+// when the breakdown is empty so the caller can skip the clause.
+function formatDrawsFrom(breakdown) {
+  if (!Array.isArray(breakdown) || breakdown.length === 0) return null;
+  return breakdown.map((b) => `P${b.period}`).join(" + ");
+}
+
 // Two independent locators. First tries strict === (numeric game_pk
 // paths). Falls back to string compare because the URL always
 // stringifies. Guards against a URL carrying "24812345" matching a
@@ -365,7 +395,47 @@ export default function HomestandDetail({
               Schedule days include the prep day before the homestand.
               The budget is calculated on game days only.
             </div>
+            {/* M-4a: budget-detail line - the designed home for the
+                overtime + period-source facts. Owner note: this also
+                closes an M-3 rail regression - the rail dropped the
+                period breakdown once a block closed out because it
+                only lived in the budget branch. Hosting the source
+                list here means it fires for open AND closed blocks.
+                Skips when no budget exists (missing-vs-zero on copy). */}
+            {budgetAmount != null && (() => {
+              const drawsFrom = formatDrawsFrom(budgetBreakdown);
+              return (
+                <div className="sc-homestand-instruction-detail">
+                  Budget includes overtime at 1.5x for hours over 40/wk
+                  {drawsFrom && (
+                    <> · draws from {drawsFrom}</>
+                  )}.
+                </div>
+              );
+            })()}
           </section>
+
+          {/* M-4a: month-boundary explainer. Renders only when the
+              block straddles a calendar month boundary (e.g. HS10
+              Jul 27 - Aug 6). The month cards will show partial
+              spans (Jul 27-31 in July, Aug 1-6 in August), so the
+              homestand scope carrying all N days needs a plain-
+              English note that this is by design, not a rendering
+              bug. Sits under the instruction so it is one glance
+              from the scheduling copy that already talks about
+              days. */}
+          {(() => {
+            const cm = computeCrossMonth(block.startDate, block.endDate);
+            if (!cm) return null;
+            return (
+              <section
+                className="sc-homestand-crossmonth"
+                aria-label="Homestand crosses a month boundary"
+              >
+                This homestand crosses a month boundary. {cm.monthAName} shows {cm.monthARange}, {cm.monthBName} shows {cm.monthBRange}. All {cm.spanDays} days appear here because a homestand is its own scope.
+              </section>
+            );
+          })()}
 
           {/* M-3 close-out panel. Rendering is state-driven inside
               CloseoutPanel:

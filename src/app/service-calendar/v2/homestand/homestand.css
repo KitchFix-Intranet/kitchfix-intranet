@@ -316,6 +316,32 @@
   color: var(--sc2-ink-muted);
 }
 
+/* M-4a: budget-detail sentence directly under the instruction
+   note. Slightly stronger than note-muted so the overtime + period-
+   source facts read as an anchor, not an afterthought - but still
+   below the primary figure so scanning order stays intact. */
+.sc-homestand-instruction-detail {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink);
+  font-weight: var(--sc2-wt-medium);
+  margin-top: var(--sc2-space-1);
+}
+
+/* M-4a: month-boundary explainer. Own section under the
+   instruction card; lightly-tinted so it reads as informational
+   context rather than a warning. Only paints on blocks that
+   straddle a calendar month; HS10 (Jul 27 - Aug 6) is the pilot
+   test case. */
+.sc-homestand-crossmonth {
+  padding: var(--sc2-space-3) var(--sc2-space-4);
+  background: var(--sc2-surface-sunken);
+  border-left: 3px solid var(--sc2-line-2);
+  border-radius: var(--sc2-radius-control);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink);
+  line-height: 1.5;
+}
+
 /* ── Rail (BUDGET-led per scope §4.5) ──────────────────────────── */
 .sc-homestand-rail {
   display: flex;
