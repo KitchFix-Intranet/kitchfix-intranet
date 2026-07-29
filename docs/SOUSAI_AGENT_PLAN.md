@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.47
+**Version:** v2.48
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,18 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.48 - 2026-07-29. THE 143 WAS 24.** PR #557 (cleanup decision packet) graded and merged. **CC corrected a number CC itself produced one PR earlier** - the state-of-record's 143 drift rows are really 24. The inflation was strict string-matching: tables type `Live (v1.1)`, a correct status carrying a version annotation, and comparing that literal against `Live` scored it as drift. 49 such instances verified independently by Chat. Self-audit working as designed; the addendum asking CC to reconcile its own counts earned its place twice.
+
+  **Verified independently by Chat:** 28 of 41 hand-typed-table docs are Sous-visible (Live + in_corpus), two-file commit fence held against CC's own merge base (main moved under it via #556), `.scratch/` output correctly gitignored, sanctioned instrument only (`snapshot-overlay-state.mjs`, which Chat had not named - CC found the right tool rather than writing a probe).
+
+  **Section A answered the question that re-ranked everything:** the chunker code-read confirms Related Documents tables reach stored chunks verbatim, so Sous CAN quote a false status with a citation attached, and 23 of the 24 real drift rows sit inside Sous-visible parents. Small number, nearly undiluted operational exposure.
+
+  **Section B cleared the item Chat was most worried about:** the 3 NonCanonical strays are backticked prose references teaching the markup (STD-004:156, TPL-020:52,57 - the latter is literally a CRITICAL callout instructing authors to use the tag). Authoring pattern, not a brittle strip rule. The money-answer safety concern behind that item is closed. Migration gate confirmed NOT tripped by this work or the follow-on sweep.
+
+  **Chat's recommendation refined on the evidence, not reversed.** `Live (v1.1)` conflates two facts: a lifecycle status that duplicates PG and drifts, and a reviewed-against version that is a historical fact about the referencing document and cannot drift. Deleting the column wholesale would have destroyed real information along with the lie. Ruling: transform to a `Reviewed against` column preserving every version, `-` where none was recorded. Chat also pushed back on CC's warn-only validator severity - validate.mjs is a manual tool, not a CI gate, so a warning nobody runs into is a rule that does not exist. **Kevin took all ten leans as marked.**
+
+  **Content sweep issued** with two deliberate stop-points: CC transforms ONE representative file and waits for Kevin's nod before touching the other 40, and the projection-apply plus re-embed run AFTER merge as separately authorized PG writes rather than inside the PR. Content change and PG mutation stay separate acts. Six Notes-column tables explicitly fenced out of the transform - their prose is by design, determined from header text not cell contents. Two batches queue behind: docs (UNIVERSE refresh, STD-001 v1.4, INVENTORY_SHEET_ID, the opdAcl.js:76-should-be-:57 cite fix) and safety (GRANT sweep, migration-gate root cause, prod-fallback hardening).
 
 - **v2.47 - 2026-07-29. THE MAP EXISTS.** PR #555 graded and merged: OPD State of Record, the first dated SHA-stamped picture of the library. Every verifiable claim reproduced independently by Chat (129 MDX, 82 Live / 22 In Build / 16 Retired / 7 Pending / 1 Placeholder / 1 Blocked, 41 files with the hand-typed heading, two-file diff, PROJECTION_DRYRUN reverted). Both spot-checked drift rows real: AGR-002 types POL-009 "In Build" against a Live target; CHK-003 types TPL-018 "Live" against an In Build target. CC reconciled its own 35-vs-41 count discrepancy honestly rather than restating one number - the exact self-audit the addendum asked for. Section 2 unblocked by Kevin's authorization of `project-catalog.mjs --dry-run` with `--env-file`; CC stopped at the classifier rather than routing around it, the second correctly-fired guardrail this week.
 

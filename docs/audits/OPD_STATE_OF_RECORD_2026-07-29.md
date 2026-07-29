@@ -268,7 +268,7 @@ Findings that survive re-derivation, severity-ranked, each with the evidence est
 
 8. **REF-006 / REF-007 pay-band verification (from CRITICAL_SUMMARY §6a)** was NOT re-verified in this pass; carried forward as a spot-check item. Finance validation status against Rippling would need a targeted read.
 9. **BUILD_DASHBOARD_AUDIT_CC's rework verdict** (IA, KPI choice, New Document flow) survives its silent-data-loss claim being resolved; whether the broader rework is still the right disposition is a Kevin scoping call.
-10. **PLAYBOOK_ENGINE_AUDIT's "Drive is decoration" characterization** is stale - Train 3 slidover reader uses `content_html` (see verdict evidence above).
+10. **PLAYBOOK_ENGINE_AUDIT's "Drive is decoration" characterization** is stale - Train 3 slidover reader uses `content_html` (see verdict evidence above). **Retired 2026-07-29 as stale post-Train-3.**
 
 ---
 
@@ -293,6 +293,14 @@ node --env-file=<KEVIN_ENV_PATH> scripts/content/project-catalog.mjs --dry-run
 # Read the Headlines + Diff-vs-live table from the generated docs/opd/foundation/PROJECTION_DRYRUN.md.
 # When done reading:
 git checkout -- docs/opd/foundation/PROJECTION_DRYRUN.md
+```
+
+To enumerate archived PG-only ids (invisible to the dry-run because they short-circuit computeDiff's archive planner):
+
+```
+node --env-file=<KEVIN_ENV_PATH> scripts/content/snapshot-overlay-state.mjs
+# Reads {id, status, access_level, archived, archived_at} for every row and
+# writes .scratch/overlay-snapshot-<ISO>.json (gitignored). Filter r.archived=true.
 ```
 
 Kevin's env path is filled in by the caller; Node reads it, the human never opens the file. See the CLAUDE.md `.env*` rule.
