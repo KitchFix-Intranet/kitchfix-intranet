@@ -49,6 +49,40 @@ function fmtRangeCaption(startIso, endIso) {
   return `${startLabel} - ${endLabel}`;
 }
 
+// M-3 Defect 5 fix (2026-08-XX live-gate bounce): variance display.
+// The over case labels itself ("over budget, carries to season
+// total"); the under case renders a naked negative number in green
+// and a chef has to stop and decode the mixed signal. Match the two
+// shapes: absolute figure + word.
+//
+// Signed convention: variance = actual - budget.
+//   > 0 => over budget  (bad, red)
+//   < 0 => under budget (good, green)
+//   = 0 => on budget
+// Displayed absolute so the sign doesn't fight the word.
+function VarianceCell({ variance, showCarryToSeason }) {
+  const isOver = variance > 0;
+  const isUnder = variance < 0;
+  const abs = Math.abs(variance);
+  const label = isOver
+    ? (showCarryToSeason ? " over budget, carries to season total" : " over budget")
+    : isUnder
+      ? " under budget"
+      : " on budget";
+  return (
+    <>
+      {isOver ? "+" : ""}{fmt$(abs)}
+      <span className="sc-closeout-variance-note">{label}</span>
+    </>
+  );
+}
+
+function varianceClass(variance) {
+  if (variance > 0) return "sc-closeout-variance--over";
+  if (variance < 0) return "sc-closeout-variance--under";
+  return "sc-closeout-variance--on";
+}
+
 // Day-strip domain intersected with game-only dates: iterate the
 // dayMap keyed on dates inside [startDate, endDate] and pick the
 // ones that carry dayType === "GAME". Same source of truth the
@@ -114,7 +148,15 @@ export default function CloseoutPanel({
     setMissingProjections([]);
     setSkippedByArchive([]);
 
-    const laborActual = Number(laborActualInput);
+    // M-3 Defect 3 fix (2026-08-XX): presence check before coerce.
+    // See the validLabor comment below - "" is missing, not zero.
+    const trimmed = laborActualInput.trim();
+    if (trimmed.length === 0) {
+      setSaveError("Enter the labor actual before confirming.");
+      setSaving(false);
+      return;
+    }
+    const laborActual = Number(trimmed);
     if (!Number.isFinite(laborActual) || laborActual < 0) {
       setSaveError("Enter a non-negative labor actual.");
       setSaving(false);
@@ -217,11 +259,10 @@ export default function CloseoutPanel({
             <dd>{budgetSnap != null ? fmt$(budgetSnap) : (block.budgetReason || "no budget at close-out")}</dd>
           </div>
           {variance != null && (
-            <div className={`sc-closeout-summary-row sc-closeout-variance ${variance > 0 ? "sc-closeout-variance--over" : "sc-closeout-variance--under"}`}>
+            <div className={`sc-closeout-summary-row sc-closeout-variance ${varianceClass(variance)}`}>
               <dt>Variance</dt>
               <dd>
-                {variance > 0 ? "+" : ""}{fmt$(variance)}
-                {variance > 0 && <span className="sc-closeout-variance-note"> over budget</span>}
+                <VarianceCell variance={variance} showCarryToSeason={false} />
               </dd>
             </div>
           )}
@@ -246,8 +287,26 @@ export default function CloseoutPanel({
 
   // actuals-due (first confirm) OR closed-out with reopenMode true.
   const enteredCount = gameDays.length - exceptionSet.size;
-  const laborActualNum = Number(laborActualInput);
-  const validLabor = Number.isFinite(laborActualNum) && laborActualNum >= 0;
+
+  // M-3 Defect 3 fix (2026-08-XX live-gate bounce): guard on the
+  // RAW STRING BEING PRESENT before coercing to a number. Number("")
+  // is 0, which passes every downstream shape check (isFinite, >= 0,
+  // schema CHECK). An empty labor field is missing, not zero -
+  // clicking Confirm without typing would permanently record $0 on
+  // a write path where it becomes permanent data. The whole missing-
+  // vs-zero rule exists to stop exactly this. Server also refuses
+  // laborActual==null (see sc-submit-closeout route) but the client
+  // gate is the primary defense.
+  //
+  // A chef who explicitly types "0" (all-salaried homestand, chef
+  // worked zero hourly) is a legitimate entry. String "0" is present
+  // and passes; empty string does not.
+  const laborInputTrimmed = laborActualInput.trim();
+  const laborInputPresent = laborInputTrimmed.length > 0;
+  const laborActualNum = laborInputPresent ? Number(laborInputTrimmed) : NaN;
+  const validLabor = laborInputPresent
+    && Number.isFinite(laborActualNum)
+    && laborActualNum >= 0;
   const budgetForVariance = block.budget?.amount ?? null;
   const varianceLive = (validLabor && budgetForVariance != null)
     ? laborActualNum - budgetForVariance
@@ -377,16 +436,23 @@ export default function CloseoutPanel({
         </div>
         <div className="sc-closeout-summary-row">
           <dt>Actual</dt>
-          <dd>{validLabor ? fmt$(laborActualNum) : "-"}</dd>
+          {/* M-3 Defect 4 fix (2026-08-XX): "not entered" is not
+              "$0.00." Renders the honest empty state until a value
+              is present - matches the standing missing-vs-zero rule
+              the rest of the system already holds
+              (laborBudgetDerivation null-with-reason, admin panel
+              "not set"). Muted to distinguish from real figures. */}
+          <dd className={!validLabor ? "sc-closeout-actual-empty" : undefined}>
+            {validLabor ? fmt$(laborActualNum) : "not entered"}
+          </dd>
         </div>
+        {/* Variance row hides until an actual is present. Owner
+            ruling: nothing to compare, nothing to display. */}
         {varianceLive != null && (
-          <div className={`sc-closeout-summary-row sc-closeout-variance ${varianceLive > 0 ? "sc-closeout-variance--over" : "sc-closeout-variance--under"}`}>
+          <div className={`sc-closeout-summary-row sc-closeout-variance ${varianceClass(varianceLive)}`}>
             <dt>Variance</dt>
             <dd>
-              {varianceLive > 0 ? "+" : ""}{fmt$(varianceLive)}
-              {varianceLive > 0 && (
-                <span className="sc-closeout-variance-note"> over budget, carries to season total</span>
-              )}
+              <VarianceCell variance={varianceLive} showCarryToSeason={true} />
             </dd>
           </div>
         )}

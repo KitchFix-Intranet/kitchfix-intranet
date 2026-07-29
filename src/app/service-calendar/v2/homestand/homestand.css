@@ -689,6 +689,19 @@
   color: var(--sc2-state-entered-fg);
 }
 
+.sc-closeout-variance--on dd {
+  color: var(--sc2-ink);
+}
+
+/* M-3 Defect 4 fix: honest empty state for Actual. Muted italic
+   matches the admin-panel "not set" pattern the rest of the
+   system already holds. */
+.sc-closeout-actual-empty {
+  color: var(--sc2-ink-muted);
+  font-style: italic;
+  font-weight: var(--sc2-wt-regular);
+}
+
 .sc-closeout-variance-note {
   font-size: var(--sc2-size-caption);
   color: var(--sc2-ink-muted);
