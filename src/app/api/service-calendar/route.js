@@ -24,6 +24,10 @@ import {
   reactivateServiceGroup,
   addServiceWithAudit,
   addServiceGroup,
+  // M-3 (2026-08-XX): homestand close-out. Route decides exceptions
+  // + missing-projection guard; confirmCloseout is the RPC wrapper.
+  confirmCloseout,
+  readCloseoutHistory,
 } from "@/lib/dataStore/serviceCalendar";
 // M-1 (2026-08-09): labor budget plane. MLB-only via the
 // DERIVE_HOMESTANDS_ACCOUNTS set from M-0 - matched at the API layer
@@ -651,6 +655,22 @@ export async function GET(request) {
       }
       const history = await readLaborBudgetHistory(accountKey, period);
       return NextResponse.json({ success: true, accountKey, period, history });
+    }
+
+    // ── sc-closeout-history: full history for one homestand's close-outs.
+    //    Feeds the reopen surface's "prior figure" render (H6). Non-admin;
+    //    the chef needs to see prior figures on their own homestand.
+    if (action === "sc-closeout-history") {
+      const accountKey = searchParams.get("account");
+      const homestandKey = searchParams.get("homestand");
+      if (!accountKey || !homestandKey) {
+        return NextResponse.json({ success: false, error: "Missing account or homestand param" }, { status: 400 });
+      }
+      if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
+        return NextResponse.json({ success: false, error: "Close-out is MLB-only" }, { status: 400 });
+      }
+      const history = await readCloseoutHistory(accountKey, homestandKey);
+      return NextResponse.json({ success: true, accountKey, homestandKey, history });
     }
 
     // ── sc-admin-labor-ratio-history: full sc_config_changelog history
@@ -1483,6 +1503,315 @@ export async function POST(request) {
         email
       );
       return NextResponse.json(result);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // M-3 (2026-08-XX): homestand close-out.
+    // ══════════════════════════════════════════════════════════════
+    //
+    // The route decides which days are exceptions, what count each
+    // service gets, and whether a projection is missing. The RPC
+    // (sc_confirm_closeout) is a transaction wrapper only - no
+    // business logic in plpgsql. Owner ruling 2026-07-29.
+    //
+    // Missing-projection rule (owner standing rule 2026-07-29): a
+    // game day with no projection gets NO count written, not zero.
+    // The route refuses the confirm with a 400 and names every
+    // missing (date, service) pair. The chef then either marks the
+    // day as an exception (rainout) or asks admin to fix the
+    // projection.
+    //
+    // Exception scope (owner ruling Q7B): game days inside
+    // [block.startDate, block.endDate]. Not the attribution window,
+    // not prep days.
+    //
+    // Atomicity: the RPC wraps supersede + insert + bulk actuals
+    // upsert in one plpgsql transaction. Pre-checks live here;
+    // once we call the RPC, either every write lands or none.
+    if (action === "sc-submit-closeout") {
+      const {
+        accountKey,
+        homestandKey,
+        exceptions,       // Array<ISO date> - game days in span
+        laborActual,      // Number, dollars, non-negative
+        laborSource,      // "manual" | "rippling_import"
+        notes,            // optional
+        reopenReason,     // null on first confirm; required on reopen
+        clientToday: bodyClientToday,  // "YYYY-MM-DD" from browser
+      } = body;
+      const clientToday = parseClientToday(bodyClientToday);
+
+      if (!accountKey || !homestandKey || laborActual == null || !laborSource) {
+        return NextResponse.json(
+          { success: false, error: "Missing required fields" },
+          { status: 400 }
+        );
+      }
+      if (!DERIVE_HOMESTANDS_ACCOUNTS.has(accountKey)) {
+        return NextResponse.json(
+          { success: false, error: "Close-out is MLB-only" },
+          { status: 400 }
+        );
+      }
+      if (laborSource !== "manual" && laborSource !== "rippling_import") {
+        return NextResponse.json(
+          { success: false, error: "labor_source must be manual or rippling_import" },
+          { status: 400 }
+        );
+      }
+      if (Number(laborActual) < 0 || !Number.isFinite(Number(laborActual))) {
+        return NextResponse.json(
+          { success: false, error: "labor_actual must be a non-negative number" },
+          { status: 400 }
+        );
+      }
+
+      // Load the block from the year-summary payload so windowStart,
+      // windowEnd, and budget snapshot come from the SAME derivation
+      // the client showed. A client-side value could rewrite the
+      // budget snapshot incorrectly; the server must not trust it.
+      //
+      // M-3 Defect 2 (2026-08-XX owner ruling): derive the year from
+      // clientToday, NEVER from new Date().getFullYear(). The server
+      // clock ignores the operator's calendar day - trap §10.12
+      // class. Two failure modes: (a) December 31 after 7pm ET, the
+      // UTC year is already next year so this lookup 404s; (b) a
+      // chef closing out an October homestand in January hits the
+      // wrong season entirely (2027 budgets have already loaded per
+      // owner's plan). clientToday validated shape "^\d{4}-\d{2}-\d{2}$"
+      // above; first 4 chars are the year.
+      const currentYear = clientToday
+        ? Number(clientToday.slice(0, 4))
+        : new Date().getFullYear();
+      const yearSummary = await loadYearSummary(accountKey, currentYear, { clientToday });
+      const block = (yearSummary.homestands || []).find((h) => String(h.key) === String(homestandKey));
+      if (!block) {
+        return NextResponse.json(
+          { success: false, error: "Homestand not found for account+year" },
+          { status: 404 }
+        );
+      }
+      // Status gate: confirm can only fire on actuals-due (first) or
+      // closed-out (reopen-then-reconfirm). Upcoming or in-progress
+      // blocks refuse - a chef confirming before the block ends would
+      // write actuals for game days that had not happened yet, and
+      // the enum was designed to make that state unreachable.
+      const allowedStatuses = new Set(["actuals-due", "closed-out"]);
+      if (!allowedStatuses.has(block.status)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Cannot confirm a ${block.status} homestand. Confirm opens after the last game.`,
+            status: block.status,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Exceptions must be game-day dates inside the block span.
+      // Load the schedule to know which dates are GAME rows. Owner
+      // ruling Q7B: span-only, game days only. Reject anything else.
+      const supa = getServiceClient();
+      const scheduleRes = await supa.from("sc_homestand_schedule")
+        .select("service_date, day_type")
+        .eq("account_key", accountKey)
+        .eq("day_type", "GAME")
+        .gte("service_date", block.startDate)
+        .lte("service_date", block.endDate)
+        .order("service_date", { ascending: true });
+      if (scheduleRes.error) throw new Error(`schedule read: ${scheduleRes.error.message}`);
+      const gameDates = scheduleRes.data.map((r) => r.service_date);
+      const gameDateSet = new Set(gameDates);
+
+      const exceptionSet = new Set(Array.isArray(exceptions) ? exceptions : []);
+      const badExceptions = [...exceptionSet].filter((d) => !gameDateSet.has(d));
+      if (badExceptions.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Exceptions must be game days inside the block span",
+            badExceptions,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Load services + projections for the block span.
+      //
+      // M-3 Defect 1 (2026-08-XX owner ruling): the archive-relevant
+      // field is `active_until`, not `active`. `active` is a vestigial
+      // UI-only boolean the billing views deliberately ignore (see
+      // serviceCalendar.js:2401 lineage note). Filtering on `active`
+      // would (a) still write counts for services archived mid-season
+      // - because `active` stays true and only `active_until` moves -
+      // and (b) skip services with `active=false` that never got
+      // archived (TBJ - NY Snack/Shake are in that state).
+      //
+      // Per-date resolution against `active_until` mirrors the
+      // sc_daily_revenue view's catalog JOIN (sc-6b) and the client's
+      // DayDetail archive-edge guard at DayDetail.js:243-246
+      // (isInServiceOnDay). Cannot literally reuse that export - it
+      // lives in a "use client" module - so the two-line predicate is
+      // inlined below. Comment updates propagate to both call sites.
+      const servicesRes = await supa.from("sc_services")
+        .select("id, service_name, active_until")
+        .eq("account_key", accountKey)
+        .order("sort_order", { ascending: true });
+      if (servicesRes.error) throw new Error(`services read: ${servicesRes.error.message}`);
+      const services = servicesRes.data;
+
+      // Archive-edge predicate (mirrors DayDetail.js:243-246). A
+      // (service, day) pair is in service iff the service has no
+      // active_until OR the day is on or before active_until.
+      const isInServiceOnDay = (svc, dayDate) => {
+        if (!svc.active_until) return true;
+        return dayDate <= String(svc.active_until).slice(0, 10);
+      };
+
+      const projRes = await supa.from("sc_daily_projections")
+        .select("service_id, service_date, projected_count")
+        .eq("account_key", accountKey)
+        .gte("service_date", block.startDate)
+        .lte("service_date", block.endDate);
+      if (projRes.error) throw new Error(`projections read: ${projRes.error.message}`);
+      const projByPair = new Map();
+      for (const p of projRes.data) {
+        projByPair.set(`${p.service_date}|${p.service_id}`, Number(p.projected_count));
+      }
+
+      // Missing-projection guard. Iterate NON-EXCEPTION game dates x
+      // IN-SERVICE services; refuse the whole confirm if any pair has
+      // no projection. Owner standing rule: no lie is permitted. The
+      // chef sees the gap and either marks the day as an exception
+      // (rainout) or asks admin to add the projection. Archived
+      // services skip out entirely - they belong to skippedByArchive
+      // below, not to missingProjections.
+      const missingProjections = [];
+      for (const d of gameDates) {
+        if (exceptionSet.has(d)) continue;
+        for (const s of services) {
+          if (!isInServiceOnDay(s, d)) continue;
+          const key = `${d}|${s.id}`;
+          if (!projByPair.has(key)) {
+            missingProjections.push({
+              service_date: d,
+              service_id: s.id,
+              service_name: s.service_name,
+            });
+          }
+        }
+      }
+      if (missingProjections.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Cannot confirm: game days with missing projections. "
+              + "Mark them as exceptions or ask admin to fix the projection.",
+            missingProjections,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Assemble actualsRows and skippedByArchive together in one
+      // pass. Owner ruling: the chef should SEE that some days write
+      // fewer services than others (mid-block archives), not
+      // discover it in the data later. skippedByArchive rides back
+      // on the success response so the panel can render an
+      // "N services skipped (archived)" note.
+      //
+      //   non-exception + in-service game day: actual_count = projected_count
+      //   exception + in-service game day:     actual_count = 0
+      //   archived (any day):                  skipped, recorded in skippedByArchive
+      //
+      // The route NEVER produces an empty actualsRows on a real
+      // homestand. If services archive out entirely mid-block, the
+      // remaining game days still write actuals for the still-active
+      // services and the response names the archived ones.
+      const actualsRows = [];
+      const skippedByArchive = [];
+      for (const d of gameDates) {
+        const isException = exceptionSet.has(d);
+        for (const s of services) {
+          if (!isInServiceOnDay(s, d)) {
+            skippedByArchive.push({
+              service_date: d,
+              service_id: s.id,
+              service_name: s.service_name,
+              active_until: s.active_until,
+            });
+            continue;
+          }
+          const projected = projByPair.get(`${d}|${s.id}`);
+          actualsRows.push({
+            service_id: s.id,
+            service_date: d,
+            actual_count: isException ? 0 : projected,
+          });
+        }
+      }
+      if (actualsRows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "Assembled zero actuals; every service archived out before this block?" },
+          { status: 400 }
+        );
+      }
+
+      // Budget snapshot: use the derivation's current envelope. When
+      // the envelope was null-with-reason, carry null - the surface
+      // will render the reason at close-out just like it did before.
+      const budgetSnapshot = block.budget ? block.budget.amount : null;
+
+      // Call the RPC. Atomic supersede + insert + bulk upsert in one
+      // plpgsql transaction.
+      //
+      // Validation-vs-500 split (2026-07-29 gate ruling): the RPC RAISEs
+      // when a reopen omits reopen_reason. That's a user forgetting a
+      // required field, not the server breaking - it should return 400
+      // with a clean message the panel can render as inline validation,
+      // not 500 which reads as "the server failed" and pollutes error
+      // monitoring. Match on the guard's verbatim message; any other
+      // RPC error still surfaces as 500 via the outer catch.
+      let result;
+      try {
+        result = await confirmCloseout({
+          accountKey,
+          homestandKey,
+          laborActual,
+          laborSource,
+          windowStart: block.windowStart,
+          windowEnd: block.windowEnd,
+          budgetSnapshot,
+          notes: notes || null,
+          actualsRows,
+          reopenReason: reopenReason || null,
+          confirmedBy: email,
+        });
+      } catch (err) {
+        if (err.message.includes("reopen_reason is required")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "A reopen reason is required to amend a closed-out homestand.",
+              field: "reopenReason",
+            },
+            { status: 400 }
+          );
+        }
+        throw err;
+      }
+
+      return NextResponse.json({
+        success: true,
+        closeoutId: result.closeoutId,
+        supersededCount: result.supersededCount,
+        actualsWritten: result.actualsWritten,
+        // Owner ruling: mid-block archive skips are named on the
+        // response so the chef sees them (not "discovered in the
+        // data later"). Empty array on the happy path; the panel
+        // renders a note when non-empty.
+        skippedByArchive,
+      });
     }
 
     // ── Deferred actions (Sheets-only features not yet on PG) ──

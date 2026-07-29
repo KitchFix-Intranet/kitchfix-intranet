@@ -1113,6 +1113,101 @@ export async function loadScheduleOverlay(accountKey, firstDate, lastDate) {
 }
 
 
+// M-3 (2026-08-XX): closeout table readers. Live rows only for the
+// year-summary status derivation; history is read on the reopen
+// surface via readCloseoutHistory.
+//
+// homestand_key is stored as TEXT (matches how deriveHomestandSegments
+// emits block.key: gamePk or startDate). Comparisons are string-based
+// in-JS; callers stringify block.key at lookup time.
+//
+// Graceful pre-migration behavior: if sc_homestand_closeout does not
+// exist yet (owner applies migrations in Studio, not on deploy), this
+// helper returns []. The M-3 payload just emits every past block as
+// `actuals-due` in that window, which is the honest state until the
+// table is available.
+async function readLiveCloseouts(accountKey) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from("sc_homestand_closeout")
+    .select("homestand_key, service_confirmed_at, confirmed_by, "
+      + "labor_actual, labor_source, window_start, window_end, "
+      + "budget_snapshot, notes")
+    .eq("account_key", accountKey)
+    .is("superseded_at", null);
+  if (error) {
+    if (String(error.message || "").includes("Could not find the table")) {
+      return [];   // pre-migration; treat as empty
+    }
+    throwOnError(error, "readLiveCloseouts");
+  }
+  return data || [];
+}
+
+// M-3: atomic close-out write. Calls sc_confirm_closeout RPC which
+// wraps supersede + insert + bulk actuals-upsert in one plpgsql
+// transaction. NO BUSINESS LOGIC HERE - the route decides which days
+// are exceptions, what count each service gets, and whether a
+// projection is missing. This function is a thin passthrough.
+//
+// params:
+//   accountKey        - "CIN - OH" etc
+//   homestandKey      - block.key stringified (game_pk or startDate)
+//   laborActual       - Number, dollars, non-negative
+//   laborSource       - "manual" | "rippling_import"
+//   windowStart, windowEnd - ISO date strings
+//   budgetSnapshot    - Number or null (null when derivation returned
+//                       null-with-reason at close-out)
+//   notes             - optional
+//   actualsRows       - [{ service_id, service_date, actual_count }, ...]
+//   reopenReason      - null on first confirm; required on reopen
+//   confirmedBy       - email
+//
+// Returns { closeout_id, superseded_count, actuals_written } on
+// success; throws with the RPC's error message otherwise.
+export async function confirmCloseout(params) {
+  const supa = getServiceClient();
+  const { data, error } = await supa.rpc("sc_confirm_closeout", {
+    p_account_key:     params.accountKey,
+    p_homestand_key:   String(params.homestandKey),
+    p_labor_actual:    Number(params.laborActual),
+    p_labor_source:    params.laborSource,
+    p_window_start:    params.windowStart,
+    p_window_end:      params.windowEnd,
+    p_budget_snapshot: params.budgetSnapshot != null ? Number(params.budgetSnapshot) : null,
+    p_notes:           params.notes || null,
+    p_confirmed_by:    params.confirmedBy,
+    p_actuals:         params.actualsRows,
+    p_reopen_reason:   params.reopenReason || null,
+  });
+  if (error) throw new Error(`confirmCloseout: ${error.message}`);
+  // supabase-js unwraps RETURNS TABLE into an array of rows; the RPC
+  // yields exactly one.
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    closeoutId:      row?.closeout_id || null,
+    supersededCount: row?.superseded_count || 0,
+    actualsWritten:  row?.actuals_written || 0,
+  };
+}
+
+// Full history for one (account, homestand_key). Ordered newest-first
+// by service_confirmed_at. Includes superseded rows for the reopen
+// surface's "prior figure" render (H6 transparency).
+export async function readCloseoutHistory(accountKey, homestandKey) {
+  const supa = getServiceClient();
+  const { data, error } = await supa
+    .from("sc_homestand_closeout")
+    .select("id, homestand_key, service_confirmed_at, confirmed_by, "
+      + "labor_actual, labor_source, window_start, window_end, "
+      + "budget_snapshot, notes, superseded_at, reopened_by, reopen_reason")
+    .eq("account_key", accountKey)
+    .eq("homestand_key", String(homestandKey))
+    .order("service_confirmed_at", { ascending: false });
+  throwOnError(error, "readCloseoutHistory");
+  return data || [];
+}
+
 // M-2 helpers - local date math for the homestands[] emit.
 // enumerateDatesInclusive("2026-07-03", "2026-07-12") -> 10 ISO
 // strings. Guards on end < start (empty array). Uses noon-anchored
@@ -1148,46 +1243,74 @@ function m2SpanInclusiveDays(startISO, endISO) {
   return Math.round((b - a) / 86400000) + 1;
 }
 
-// M-2 homestands[] payload builder. Assembles the B7 subset from
-// derived blocks + derived envelopes + a date-keyed day lookup.
-// Pure function. Does NOT compute budgets - deriveLaborBudgets is
-// the sole owner of that math per the M-1 acceptance gate.
+// Homestands payload builder (M-2 + M-3). Assembles the per-block
+// payload from derived blocks + derived envelopes + a date-keyed day
+// lookup + live closeout lookup. Pure function. Does NOT compute
+// budgets - deriveLaborBudgets is the sole owner of that math per
+// the M-1 acceptance gate.
 //
 // Emits per block:
 //   { key, ordinal, startDate, endDate, dayCount, gameCount,
 //     opponents, periodsTouched, budget, budgetReason, status,
-//     servedDays, exceptionDays, meals, prepDays, windowStart, windowEnd }
+//     servedDays, exceptionDays, meals, prepDays,
+//     windowStart, windowEnd,
+//     laborActual, laborSource, budgetSnapshotAtCloseout,
+//     confirmedAt, confirmedBy }
 //
-// STATUS enum: upcoming | in-progress | ended. `closed-out` is a
-// close-out concept that arrives in M-3 with sc_homestand_closeout;
-// emitting it here without a source table would state an obligation
-// the product cannot accept. Same missing-vs-zero discipline the
-// M-1 envelope carries.
+// STATUS enum (M-3, 2026-08-XX):
+//   upcoming    - block.startDate > todayIso
+//   in-progress - block.startDate <= todayIso <= block.endDate
+//   actuals-due - block.endDate < todayIso AND no live closeout row
+//   closed-out  - live closeout row present
+//
+// `ended` retires. It was M-2's placeholder for the "past but no
+// close-out concept yet" state; sc_homestand_closeout now gives
+// that state a source table, so the enum expresses it truthfully.
 //
 // PREP DAYS (per scope B3): the day BEFORE the block's first game,
 // plus each internal off-day inside the block span. This is a
-// derived proposal - no stored adjustments in M-2. The day strip's
-// domain is (startDate - 1) through endDate.
+// derived proposal - no stored adjustments. The day strip's domain
+// is (startDate - 1) through endDate.
 //
 // WINDOW (per scope B5): from the day AFTER the previous block's
 // last day through THIS block's last day. First block opens 14 days
 // before its first game (season opener onboarding + training). The
 // window is a labor-attribution concept for M-3 close-out and is
 // carried on the payload so the surface can display the range where
-// close-out land.
-function buildM2Homestands(blocks, envelopes, daysByDate, todayIso, accountKey) {
+// close-out lands.
+//
+// CLOSEOUT FIELDS (M-3): laborActual, laborSource,
+// budgetSnapshotAtCloseout, confirmedAt, confirmedBy emit ONLY when
+// a live closeout row exists for (accountKey, block.key). Absent
+// otherwise so a healthy pre-closeout payload stays minimal.
+function buildHomestandsPayload(blocks, envelopes, daysByDate, todayIso, accountKey, closeoutByKey) {
   if (!Array.isArray(blocks) || blocks.length === 0) return [];
   const envByKey = new Map(envelopes.map((e) => [e.key, e]));
 
   return blocks.map((block, i) => {
     const env = envByKey.get(block.key);
+    // Closeout lookup uses the same stringified stable key as
+    // sc_homestand_closeout.homestand_key stores. The derivation
+    // emits block.key as game_pk (numeric) or startDate (string);
+    // stringify both sides so the compare works either way.
+    const closeout = closeoutByKey
+      ? (closeoutByKey.get(String(block.key)) || null)
+      : null;
 
-    // Status derivation. `ended` includes every past block until
-    // M-3 gives close-out state a home. No `actuals-due` in M-2 per
-    // owner ruling - it would state an obligation with no surface
-    // for the response.
+    // Status priority chain (M-3, 2026-08-XX):
+    //   1. closed-out  - a live sc_homestand_closeout row exists
+    //   2. actuals-due - past block, no live closeout
+    //   3. in-progress - today inside span
+    //   4. upcoming    - future block
+    //
+    // The chain reads top-down: presence of a closeout row wins over
+    // pastness. If a closeout gets reopened (superseded_at set on the
+    // prior live row and no new row yet), the block falls back to
+    // actuals-due because the closeoutByKey Map is built from live
+    // rows only.
     let status;
-    if (block.endDate < todayIso) status = "ended";
+    if (closeout) status = "closed-out";
+    else if (block.endDate < todayIso) status = "actuals-due";
     else if (block.startDate <= todayIso && todayIso <= block.endDate) status = "in-progress";
     else status = "upcoming";
 
@@ -1257,18 +1380,18 @@ function buildM2Homestands(blocks, envelopes, daysByDate, todayIso, accountKey) 
     // Invariant (owner ruling, trap §11.2 vanishing schedule days):
     // within a block span, `block.gameCount === gamesInSpan` AND
     // `gamesInSpan + internalOffInSpan === dayCount` MUST hold by
-    // construction. deriveHomestandSegments and buildM2Homestands
-    // walk the same daysByMonth feed, so a mismatch means a GAME
-    // row went missing between the two walks - the exact class of
-    // silent-defect trap §11.2 exists to catch. Surface it (server
-    // log + payload flag) rather than silently absorb into prep.
+    // construction. deriveHomestandSegments and this walk read the
+    // same daysByMonth feed, so a mismatch means a GAME row went
+    // missing between the two walks - the exact class of silent-
+    // defect trap §11.2 exists to catch. Surface it (server log +
+    // payload flag) rather than silently absorb into prep.
     const gameCountMatches = gamesInSpan === (block.gameCount || 0);
     const spanBalances = gamesInSpan + internalOffInSpan === dayCount;
     const hasScheduleGap = !(gameCountMatches && spanBalances);
     if (hasScheduleGap) {
       // eslint-disable-next-line no-console
       console.warn(
-        `[buildM2Homestands] invariant fail: ${accountKey} ${block.homestandId} `
+        `[buildHomestandsPayload] invariant fail: ${accountKey} ${block.homestandId} `
         + `${block.startDate}..${block.endDate}: `
         + `derivation gameCount=${block.gameCount}, gamesInSpan=${gamesInSpan}, `
         + `internalOff=${internalOffInSpan}, dayCount=${dayCount}. `
@@ -1342,11 +1465,23 @@ function buildM2Homestands(blocks, envelopes, daysByDate, todayIso, accountKey) 
       //   AND gamesInSpan + internalOffInSpan === dayCount
       // fails. Under normal operation this stays false; a true value
       // means a GAME row went missing between deriveHomestandSegments
-      // and buildM2Homestands (trap §11.2). Server also logged a
-      // warning; this field lets the client surface a UI hint if
-      // wanted. Only emitted when true so a healthy payload stays
-      // minimal.
+      // and this walk (trap §11.2). Server also logged a warning;
+      // this field lets the client surface a UI hint if wanted. Only
+      // emitted when true so a healthy payload stays minimal.
       ...(hasScheduleGap ? { hasScheduleGap: true } : {}),
+      // M-3 closeout fields emit ONLY when a live closeout row
+      // exists. Absent otherwise so a fresh block stays minimal. The
+      // budget_snapshot at close-out is preserved verbatim - a later
+      // sc_labor_budgets edit does NOT rewrite closed variance.
+      ...(closeout ? {
+        laborActual: Number(closeout.labor_actual),
+        laborSource: closeout.labor_source,
+        budgetSnapshotAtCloseout: closeout.budget_snapshot != null
+          ? Number(closeout.budget_snapshot)
+          : null,
+        confirmedAt: closeout.service_confirmed_at,
+        confirmedBy: closeout.confirmed_by,
+      } : {}),
     };
   });
 }
@@ -1812,9 +1947,21 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
         for (const d of days) daysByDate.set(d.date, d);
       }
 
+      // M-3 (2026-08-XX): live closeout rows for the priority chain
+      // in buildHomestandsPayload's status derivation. Keyed by
+      // homestand_key stringified so game_pk (numeric) and startDate
+      // (string) both look up cleanly.
+      const closeouts = await readLiveCloseouts(accountKey);
+      const closeoutByKey = new Map();
+      for (const c of closeouts) {
+        closeoutByKey.set(String(c.homestand_key), c);
+      }
+
       // M-2 defect 1 fix (2026-07-29): same today string used for the
       // derivation status derivation. See :1522-1531 for why.
-      m2Homestands = buildM2Homestands(m2Blocks, envelopes, daysByDate, todayStr, accountKey);
+      m2Homestands = buildHomestandsPayload(
+        m2Blocks, envelopes, daysByDate, todayStr, accountKey, closeoutByKey
+      );
     } else {
       // Derivation returned [] (self-guard tripped or no AWAY rows
       // in this year's stream). Do NOT emit a stub - a surface

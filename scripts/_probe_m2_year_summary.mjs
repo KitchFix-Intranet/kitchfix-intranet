@@ -56,8 +56,11 @@ for (const { key, shouldEmit, role } of CASES) {
       console.log(`    ⚠ null budget without reason on first block`);
       allPass = false;
     }
-    if (!["upcoming","in-progress","ended"].includes(first.status)) {
-      console.log(`    ⚠ status not in M-2 enum: ${first.status}`);
+    // M-3 (2026-08-XX): status enum widened. `ended` retires - server
+    // never emits it once sc_homestand_closeout gives close-out state
+    // a home. actuals-due + closed-out join upcoming + in-progress.
+    if (!["upcoming","in-progress","actuals-due","closed-out"].includes(first.status)) {
+      console.log(`    ⚠ status not in M-3 enum: ${first.status}`);
       allPass = false;
     }
     const raw = JSON.stringify(resp.homestands);

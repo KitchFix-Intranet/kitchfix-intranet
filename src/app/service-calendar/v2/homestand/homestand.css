@@ -373,6 +373,38 @@
   color: var(--sc2-rail-text-item);
 }
 
+/* §5.5 spend-vs-budget rail branch. Spent is the leading figure
+   (--rail-figure), budget renders as caption context, variance rides
+   its own line and takes color from the shared --sc2-state-*-fg
+   tokens (parallel to .sc-closeout-variance--*). */
+.sc-homestand-rail-vs-budget {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+}
+.sc-homestand-rail-variance {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-semibold);
+}
+.sc-homestand-rail-variance.sc-closeout-variance--over {
+  color: var(--sc2-state-overdue-fg);
+}
+.sc-homestand-rail-variance.sc-closeout-variance--under {
+  color: var(--sc2-state-entered-fg);
+}
+.sc-homestand-rail-variance.sc-closeout-variance--on {
+  color: var(--sc2-rail-text-strong);
+}
+.sc-homestand-rail-std-figure {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-rail-text-strong);
+  line-height: 1;
+}
+.sc-homestand-rail-std-context {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+}
+
 .sc-homestand-rail-nav {
   display: flex;
   justify-content: space-between;
@@ -480,4 +512,328 @@
 
 .sc-hs-legend-label {
   color: var(--sc2-ink);
+}
+
+/* ── Status pills: extended for M-3 (2026-08-XX) ────────────────
+   actuals-due (amber, urgency family) and closed-out (neutral
+   entered family) join the M-2 upcoming / in-progress / ended set.
+   ended retires; status derivation never emits it once M-3 lands. */
+.sc-homestand-status--actuals-due {
+  background: var(--sc2-state-needs-bg);
+  color: var(--sc2-state-needs-fg-strong);
+}
+.sc-homestand-status--closed-out {
+  background: var(--sc2-state-off-bg);
+  color: var(--sc2-state-off-fg);
+}
+
+/* ── Close-out panel (M-3, 2026-08-XX) ─────────────────────────
+   Sits below the day strip and scheduling instruction in
+   HomestandDetail. Visibility is state-driven via the
+   isHomestandView flow - see CloseoutPanel.js. */
+.sc-closeout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-4);
+  padding: var(--sc2-space-4);
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+}
+
+.sc-closeout-title {
+  font-size: var(--sc2-size-h3);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-ink-strong);
+  margin: 0;
+}
+
+.sc-closeout--in-progress {
+  color: var(--sc2-ink-muted);
+}
+
+.sc-closeout-locked-note {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-body);
+  margin: 0;
+}
+
+.sc-closeout-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+
+.sc-closeout-section-title {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-ink-strong);
+  margin: 0;
+}
+
+.sc-closeout-section-caption {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+  margin: 0;
+}
+
+.sc-closeout-daylist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sc-closeout-daylist-item {
+  display: flex;
+}
+
+.sc-closeout-daylist-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-2);
+  border-radius: var(--sc2-radius-cell);
+  border: 1px solid var(--sc2-line);
+  cursor: pointer;
+  flex: 1;
+}
+
+.sc-closeout-daylist-label:hover {
+  background: var(--sc2-surface);
+}
+
+.sc-closeout-daylist-date {
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-ink-strong);
+  min-width: calc(var(--sc2-space-7) * 2);
+}
+
+.sc-closeout-daylist-opp {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink);
+}
+
+.sc-closeout-daylist-flag {
+  margin-left: auto;
+  font-size: var(--sc2-size-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sc2-state-overdue-fg);
+  background: var(--sc2-state-overdue-bg);
+  padding: var(--sc2-space-1) var(--sc2-space-2);
+  border-radius: var(--sc2-radius-pill);
+}
+
+.sc-closeout-labor-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  flex-wrap: wrap;
+}
+
+.sc-closeout-labor-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-1);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-control);
+  background: var(--sc2-surface);
+  min-width: calc(var(--sc2-space-8) * 4);
+}
+
+.sc-closeout-labor-input-dollar {
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-semibold);
+}
+
+.sc-closeout-labor-input input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: var(--sc2-size-subhead);
+  color: var(--sc2-ink-strong);
+  flex: 1;
+  min-width: 0;
+  outline: none;
+}
+
+.sc-closeout-labor-input:focus-within {
+  border-color: var(--sc2-cmd-bg);
+}
+
+.sc-closeout-notes-input,
+.sc-closeout-reason-input {
+  width: 100%;
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-control);
+  background: var(--sc2-surface);
+  color: var(--sc2-ink);
+  font-family: var(--sc2-font-ui);
+  font-size: var(--sc2-size-body);
+  outline: none;
+  resize: vertical;
+}
+
+.sc-closeout-notes-input:focus,
+.sc-closeout-reason-input:focus {
+  border-color: var(--sc2-cmd-bg);
+}
+
+.sc-closeout-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+  padding: var(--sc2-space-3);
+  background: var(--sc2-surface);
+  border-radius: var(--sc2-radius-container);
+  margin: 0;
+}
+
+.sc-closeout-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sc2-space-3);
+  font-size: var(--sc2-size-body);
+}
+
+.sc-closeout-summary-row dt {
+  color: var(--sc2-ink-muted);
+  margin: 0;
+}
+
+.sc-closeout-summary-row dd {
+  color: var(--sc2-ink-strong);
+  font-weight: var(--sc2-wt-semibold);
+  margin: 0;
+}
+
+.sc-closeout-variance--over dd {
+  color: var(--sc2-state-overdue-fg);
+}
+
+.sc-closeout-variance--under dd {
+  color: var(--sc2-state-entered-fg);
+}
+
+.sc-closeout-variance--on dd {
+  color: var(--sc2-ink);
+}
+
+/* M-3 Defect 4 fix: honest empty state for Actual. Muted italic
+   matches the admin-panel "not set" pattern the rest of the
+   system already holds. */
+.sc-closeout-actual-empty {
+  color: var(--sc2-ink-muted);
+  font-style: italic;
+  font-weight: var(--sc2-wt-regular);
+}
+
+.sc-closeout-variance-note {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-regular);
+}
+
+.sc-closeout-summary-provenance dd {
+  font-weight: var(--sc2-wt-regular);
+  color: var(--sc2-ink-muted);
+}
+
+.sc-closeout-reopen-context {
+  padding: var(--sc2-space-3);
+  background: var(--sc2-state-needs-bg);
+  color: var(--sc2-state-needs-fg-strong);
+  border-radius: var(--sc2-radius-container);
+  font-size: var(--sc2-size-caption);
+}
+
+.sc-closeout-reopen-context p {
+  margin: 0;
+}
+
+.sc-closeout-missing {
+  padding: var(--sc2-space-3);
+  background: var(--sc2-state-overdue-bg);
+  color: var(--sc2-state-overdue-fg);
+  border: 1px solid var(--sc2-state-overdue-bd);
+  border-radius: var(--sc2-radius-container);
+  font-size: var(--sc2-size-caption);
+}
+
+.sc-closeout-missing ul {
+  margin: var(--sc2-space-2) 0 0 var(--sc2-space-4);
+  padding: 0;
+}
+
+.sc-closeout-error {
+  padding: var(--sc2-space-3);
+  background: var(--sc2-state-overdue-bg);
+  color: var(--sc2-state-overdue-fg);
+  border: 1px solid var(--sc2-state-overdue-bd);
+  border-radius: var(--sc2-radius-container);
+  font-size: var(--sc2-size-caption);
+}
+
+/* M-3 Defect 1 fix: mid-block archive-skip note. Muted amber -
+   an operational note, not an error. */
+.sc-closeout-archive-skip {
+  padding: var(--sc2-space-3);
+  background: var(--sc2-state-needs-bg);
+  color: var(--sc2-state-needs-fg-strong);
+  border: 1px solid var(--sc2-state-needs-bd);
+  border-radius: var(--sc2-radius-container);
+  font-size: var(--sc2-size-caption);
+}
+
+.sc-closeout-archive-skip ul {
+  margin: var(--sc2-space-2) 0 0 var(--sc2-space-4);
+  padding: 0;
+}
+
+.sc-closeout-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sc2-space-3);
+}
+
+.sc-closeout-btn {
+  appearance: none;
+  padding: var(--sc2-space-2) var(--sc2-space-4);
+  border-radius: var(--sc2-radius-control);
+  font: inherit;
+  font-size: var(--sc2-size-body);
+  cursor: pointer;
+  border: 1px solid var(--sc2-line);
+  background: var(--sc2-surface);
+  color: var(--sc2-ink-strong);
+}
+
+.sc-closeout-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sc-closeout-btn--primary {
+  background: var(--sc2-cmd-bg);
+  color: var(--sc2-cmd-text);
+  border-color: var(--sc2-cmd-bg);
+}
+
+.sc-closeout-btn--primary:hover:not(:disabled) {
+  background: var(--sc2-cmd-bg-deep);
+}
+
+.sc-closeout-btn--secondary:hover:not(:disabled) {
+  background: var(--sc2-surface-card);
+}
+
+.sc-closeout-btn--rippling {
+  border-style: dashed;
+  color: var(--sc2-ink-muted);
 }

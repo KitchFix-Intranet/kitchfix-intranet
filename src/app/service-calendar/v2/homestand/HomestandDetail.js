@@ -1,31 +1,31 @@
 "use client";
 
 // M-2 (2026-07-29): homestand detail surface. Owner scope C3.1 - the
-// screen the build exists for. Answers the chef's questions in the
-// order they ask them: what does this homestand look like, how much
-// can I spend, what do I owe.
+// screen the build exists for. M-3 adds the close-out surface below
+// the scheduling instruction; the rail can lead with spend once a
+// labor_actual exists.
 //
-// STRUCTURE (per prompt §4.5):
+// STRUCTURE:
 //   - breadcrumb: "< Season - < July - < HS9 >" (hyphens per §5)
 //   - header: ordinal, date range, day/game counts, opponents, status
 //   - day strip
 //   - scheduling instruction (VERBATIM copy per prompt §4.4)
-//   - rail (BUDGET FIRST - no spend source until M-3)
+//   - close-out panel (M-3)
+//   - rail (BUDGET + spend when closeout exists)
 //   - state legend (visible; non-negotiable for tracker screens)
 //
-// M-2 FENCES (per prompt §4.5, §9):
-//   - Rail leads with BUDGET, not SPENT. Spend comes from
-//     sc_homestand_closeout, which arrives in M-3.
-//   - Season-to-date omitted (same reason).
-//   - No week summaries. No overtime dividers on the strip. The
-//     payroll week convention is open (Round 1 Q1 to owner).
-//   - No Handoff motion (scope E3: MLB does not adopt it).
-//   - status enum is upcoming | in-progress | ended. Owner ruling
-//     (Round 1 §4): `actuals-due` is a close-out concept and arrives
-//     in M-3 with the thing that makes it actionable.
+// STATUS ENUM (M-3, 2026-08-XX):
+//   upcoming    - block not yet started
+//   in-progress - today inside span
+//   actuals-due - past block, no live closeout
+//   closed-out  - live closeout row exists
+//
+// The M-2 `ended` status retires. Server never emits it once M-3
+// lands.
 
 import { useMemo } from "react";
 import DayStrip from "./DayStrip";
+import CloseoutPanel, { VarianceCell, varianceClass } from "./CloseoutPanel";
 // M-2 defect fix (2026-07-29 owner ruling, live-gate bounce):
 // dedicated legend for the day strip's vocabulary. StateLegend
 // belongs to the day-tile surface and would teach a nine-key
@@ -114,6 +114,12 @@ export default function HomestandDetail({
   loadState,            // "idle" | "loading" | "loaded" | "failed"
   onClimbToSeason,
   onNavHomestand,       // (segmentKey) => void
+  // M-3 (2026-08-XX): close-out plumbing. showToast surfaces the
+  // "closed out" / "reopened" confirmations; onReload bumps the
+  // parent's reloadKey after a successful confirm so the payload
+  // (including status transitions) refetches.
+  showToast,
+  onReload,
 }) {
   // Hooks-first (rules-of-hooks): every useMemo runs on every render,
   // regardless of the early-return branches below. `block` may be
@@ -126,6 +132,38 @@ export default function HomestandDetail({
     () => new Set(block?.prepDays || []),
     [block?.prepDays]
   );
+
+  // Season-to-date rollup for the §5.5 rail. Reads `homestands` only,
+  // NOT `block`, so it survives when the URL points at an unknown key.
+  // Hoisted above the early returns to preserve hook order between
+  // loading -> loaded transitions - the exact rule the top-of-function
+  // comment warns about and the reason M-2's dayMap + prepSet live up
+  // here. Adding a hook below the early returns is a client-side
+  // crash on every mount.
+  const seasonToDate = useMemo(() => {
+    if (!Array.isArray(homestands)) return null;
+    let actual = 0;
+    let budget = 0;
+    let count = 0;
+    let anyBudgetMissing = false;
+    for (const b of homestands) {
+      if (b?.laborActual == null) continue;
+      actual += Number(b.laborActual);
+      if (b.budgetSnapshotAtCloseout != null) {
+        budget += Number(b.budgetSnapshotAtCloseout);
+      } else {
+        anyBudgetMissing = true;
+      }
+      count += 1;
+    }
+    if (count === 0) return null;
+    return {
+      count,
+      actual,
+      budget: anyBudgetMissing ? null : budget,
+      variance: anyBudgetMissing ? null : actual - budget,
+    };
+  }, [homestands]);
 
   // Loading + failed short-circuit. A homestand surface with an empty
   // day strip and no budget reads as "0 game days, no budget yet",
@@ -200,6 +238,22 @@ export default function HomestandDetail({
   const budgetBreakdown = block.budget?.breakdown || [];
   const budgetReason = block.budgetReason;
 
+  // §5.5 (M-3): once a live close-out exists, the rail leads with
+  // SPENT and shows variance against the budget snapshot the confirm
+  // froze. Falls back to the BUDGET-only shape for upcoming /
+  // in-progress / actuals-due. `laborActual` and
+  // `budgetSnapshotAtCloseout` are emitted by
+  // buildHomestandsPayload ONLY when a live closeout row exists, so
+  // presence of laborActual is the correct branch key.
+  const closeoutSpent = block.laborActual;
+  const closeoutBudget = block.budgetSnapshotAtCloseout;
+  const hasCloseout = closeoutSpent != null;
+  const closeoutVariance = (closeoutSpent != null && closeoutBudget != null)
+    ? closeoutSpent - closeoutBudget
+    : null;
+
+  // seasonToDate is hoisted above the early returns (see top of function).
+
   return (
     <div className="sc-homestand">
       <nav className="sc-homestand-breadcrumb" aria-label="Homestand navigation">
@@ -231,7 +285,10 @@ export default function HomestandDetail({
                 {formatRangeCaption(block.startDate, block.endDate)}
               </span>
               <span className={`sc-homestand-status sc-homestand-status--${block.status}`}>
-                {block.status === "in-progress" ? "in progress" : block.status}
+                {block.status === "in-progress" ? "in progress"
+                  : block.status === "actuals-due" ? "actuals due"
+                  : block.status === "closed-out" ? "closed out"
+                  : block.status}
               </span>
             </div>
             <div className="sc-homestand-meta">
@@ -283,54 +340,129 @@ export default function HomestandDetail({
               The budget is calculated on game days only.
             </div>
           </section>
+
+          {/* M-3 close-out panel. Rendering is state-driven inside
+              CloseoutPanel:
+                upcoming    -> nothing
+                in-progress -> disabled "opens after..." note
+                actuals-due -> active confirm form
+                closed-out  -> summary + reopen (or reopen form) */}
+          <CloseoutPanel
+            account={account}
+            block={block}
+            dayMap={dayMap}
+            todayIso={todayIso}
+            showToast={showToast}
+            onSaved={onReload}
+          />
         </div>
 
         <aside
           className="sc-homestand-rail"
           aria-label="Homestand summary"
         >
-          <section className="sc-homestand-rail-section">
-            <div className="sc-homestand-rail-label">Budget</div>
-            {budgetAmount != null ? (
-              <>
-                <div className="sc-homestand-rail-figure">
-                  {fmt$(budgetAmount)}
-                </div>
-                {budgetBreakdown.length > 1 && (
-                  <div
-                    className="sc-homestand-rail-breakdown"
-                    aria-label="Budget breakdown by period"
-                  >
-                    {budgetBreakdown.map((b) => (
-                      <div
-                        key={b.period}
-                        className="sc-homestand-rail-breakdown-row"
-                      >
-                        <span>Period {b.period}</span>
-                        <span>{fmt$(b.subtotal)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="sc-homestand-rail-figure sc-homestand-rail-figure--missing">
-                {budgetReason || "No budget recorded yet."}
+          {/* §5.5 (M-3): rail leads with SPENT + variance once the
+              close-out has written a labor actual. Budget appears as
+              context under the spend figure. Falls back to the
+              BUDGET-only shape (below) when no close-out exists. */}
+          {hasCloseout ? (
+            <section className="sc-homestand-rail-section">
+              <div className="sc-homestand-rail-label">Spent</div>
+              <div className="sc-homestand-rail-figure">
+                {fmt$(closeoutSpent)}
               </div>
-            )}
-          </section>
+              <div className="sc-homestand-rail-vs-budget">
+                vs {closeoutBudget != null ? fmt$(closeoutBudget) : "no budget snapshot"} budget
+              </div>
+              {closeoutVariance != null && (
+                <div
+                  className={`sc-homestand-rail-variance ${varianceClass(closeoutVariance)}`}
+                >
+                  <VarianceCell variance={closeoutVariance} showCarryToSeason={false} />
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className="sc-homestand-rail-section">
+              <div className="sc-homestand-rail-label">Budget</div>
+              {budgetAmount != null ? (
+                <>
+                  <div className="sc-homestand-rail-figure">
+                    {fmt$(budgetAmount)}
+                  </div>
+                  {budgetBreakdown.length > 1 && (
+                    <div
+                      className="sc-homestand-rail-breakdown"
+                      aria-label="Budget breakdown by period"
+                    >
+                      {budgetBreakdown.map((b) => (
+                        <div
+                          key={b.period}
+                          className="sc-homestand-rail-breakdown-row"
+                        >
+                          <span>Period {b.period}</span>
+                          <span>{fmt$(b.subtotal)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="sc-homestand-rail-figure sc-homestand-rail-figure--missing">
+                  {budgetReason || "No budget recorded yet."}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Season-to-date: only paints once at least one homestand
+              has closed out on this account. Null when nothing has
+              closed out - the row hides rather than reading
+              "$0 vs $0 on budget", which is the missing-vs-zero rule
+              applied to a rollup. */}
+          {seasonToDate && (
+            <section
+              className="sc-homestand-rail-section"
+              aria-label="Season to date"
+            >
+              <div className="sc-homestand-rail-label">Season to date</div>
+              <div className="sc-homestand-rail-std-figure">
+                {fmt$(seasonToDate.actual)}
+              </div>
+              <div className="sc-homestand-rail-std-context">
+                across {seasonToDate.count} closed-out homestand{seasonToDate.count === 1 ? "" : "s"}
+                {seasonToDate.budget != null && (
+                  <> vs {fmt$(seasonToDate.budget)} budget</>
+                )}
+              </div>
+              {seasonToDate.variance != null && (
+                <div
+                  className={`sc-homestand-rail-variance ${varianceClass(seasonToDate.variance)}`}
+                >
+                  <VarianceCell
+                    variance={seasonToDate.variance}
+                    showCarryToSeason={false}
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="sc-homestand-rail-section">
             <div className="sc-homestand-rail-label">Service</div>
             {/* F3 (2026-07-29 owner ruling): servedDays + exceptionDays
-                can be less than gameCount for an ended block - a past
-                game day never entered classifies as overdue or
+                can be less than gameCount for an actuals-due block -
+                a past game day never entered classifies as overdue or
                 needs-entry and lands in neither bucket. Surface the
-                unentered count explicitly on ended blocks so the rail
-                does not read as though the block is fully accounted
-                for. In-progress blocks read the unaccounted count as
-                "still to enter," which is the operator's job to close
-                out, not a rail-side omission. */}
+                unentered count explicitly on actuals-due blocks so
+                the rail does not read as though the block is fully
+                accounted for.
+                M-3 (2026-08-XX): status enum change - `ended` retires;
+                `actuals-due` is the new "past + not closed" state.
+                A closed-out block cannot have unentered game days by
+                construction (the confirm wrote counts for every
+                non-exception day), so the unentered branch cannot
+                paint on `closed-out`. */}
             <div className="sc-homestand-rail-served">
               {block.servedDays} of {block.gameCount} game days served
               {block.exceptionDays > 0 && (
@@ -338,7 +470,7 @@ export default function HomestandDetail({
               )}.
               {(() => {
                 const unentered = (block.gameCount || 0) - (block.servedDays || 0) - (block.exceptionDays || 0);
-                if (unentered > 0 && block.status === "ended") {
+                if (unentered > 0 && block.status === "actuals-due") {
                   return <> {unentered} not entered.</>;
                 }
                 return null;
