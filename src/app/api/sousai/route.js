@@ -57,7 +57,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { auth } from "@/lib/auth";
-import { viewerTier, isCorporateEmail, allowedAccessLevels } from "@/lib/opdAcl";
+import { viewerTier, canUseSous, allowedAccessLevels } from "@/lib/opdAcl";
 import { getServiceClient } from "@/lib/supabase";
 import { runSousAgent, SOUSAI_AGENT_MODEL } from "@/lib/sousai/agent.js";
 import { evaluateGates } from "./gate.js";
@@ -72,7 +72,7 @@ export const maxDuration = 60;
 // route forwards them as `token` events one delta at a time.
 
 // Deps bundle for the gate (module-level constant, no per-request rebuild).
-const GATE_DEPS = { viewerTier, isCorporateEmail, allowedAccessLevels };
+const GATE_DEPS = { viewerTier, canUseSous, allowedAccessLevels };
 
 // ── Small SSE writers ────────────────────────────────────────────────────────
 
