@@ -139,7 +139,8 @@
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.09);
 }
 .sc-admin-back:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -256,7 +257,7 @@
 }
 .sc-admin-row--clickable { cursor: pointer; transition: border-color var(--motion-control), box-shadow var(--motion-control), transform var(--motion-control); }
 .sc-admin-row--clickable:hover { border-color: var(--accent-sc); box-shadow: 0 2px 8px rgba(15, 110, 86, 0.08); transform: translateY(-1px); }
-.sc-admin-row--clickable:focus-visible { outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset); }
+.sc-admin-row--clickable:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset); }
 .sc-admin-row--disabled { opacity: 0.7; cursor: default; }
 
 .sc-admin-row-key { font-weight: var(--wt-bold); color: var(--text-link); font-size: var(--size-body); letter-spacing: 0.02em; min-width: 90px; }
@@ -365,7 +366,7 @@
   user-select: none;
 }
 .sc-admin-svc-row:hover { background: var(--surface-sunken); }
-.sc-admin-svc-row:focus-visible { outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: -2px; }
+.sc-admin-svc-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
 /* ItemCatalog name treatment: body/500/navy. */
 .sc-admin-svc-name {
   color: var(--text-link);

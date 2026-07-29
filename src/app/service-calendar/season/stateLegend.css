@@ -236,7 +236,8 @@
   border-color: var(--text-subtle);
 }
 .sc-state-legend-info:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 /* SC-034 (2026-07-08): pressed feedback on the legend info trigger. */

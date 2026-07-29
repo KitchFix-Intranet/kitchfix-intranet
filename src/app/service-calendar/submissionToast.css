@@ -42,7 +42,11 @@
   width: 100%;
 }
 .sc-toast-recorded:focus-visible {
-  outline: 2px solid var(--n-0);
+  /* Universe TRAIN 1 rule 2: focus is always navy. Prior white ring
+     assumed a navy-fill context; the toast fill is amber (milestone
+     gradient), so navy is the correct rule-2 result and reads with
+     good contrast on the amber gradient. */
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 .sc-toast-recorded--milestone {

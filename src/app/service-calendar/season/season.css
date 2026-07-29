@@ -423,7 +423,8 @@
 /* SC-034 (cards): pressed feedback on the collapsed row button. */
 .sc-season-month-card-collapsed-trigger:active { transform: translateY(1px); }
 .sc-season-month-card-collapsed-trigger:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-season-month-card-chevron--static {
@@ -501,7 +502,7 @@
   .sc-season-month-card-chevron:active { transform: none; }
 }
 .sc-season-month-card-chevron:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -519,7 +520,7 @@
   border-radius: inherit;
 }
 .sc-season-month-card-drill:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: calc(-1 * var(--focus-ring-width));
 }
 

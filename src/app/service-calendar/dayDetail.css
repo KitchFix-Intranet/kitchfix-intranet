@@ -24,7 +24,8 @@
 .sc-day-nav-btn { width: 32px; height: 32px; border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-card); cursor: pointer; font-size: var(--size-h3); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-family: inherit; transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control); }
 .sc-day-nav-btn:hover { border-color: var(--accent-sc); color: var(--accent-sc); }
 .sc-day-nav-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-nav-label { font-size: var(--size-caption); color: var(--text-subtle); font-variant-numeric: var(--num-tabular); }
@@ -33,7 +34,7 @@
 .sc-day-close { width: 32px; height: 32px; border: var(--border-thin) solid transparent; border-radius: var(--radius-control); background: transparent; cursor: pointer; color: var(--text-subtle); display: flex; align-items: center; justify-content: center; transition: border-color var(--motion-control), color var(--motion-control), background var(--motion-control); margin-left: var(--space-1); }
 .sc-day-close:hover { border-color: var(--status-overdue-bd); color: var(--feedback-danger); background: var(--status-overdue-subtle); }
 .sc-day-close:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -414,7 +415,7 @@
 }
 .sc-day-match-btn:hover { background: var(--accent-sc-tint); }
 .sc-day-match-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-match-btn-icon {
@@ -458,7 +459,7 @@
 }
 .sc-day-extras-btn:focus-visible,
 .sc-day-extras-hide:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-day-extras-btn-icon {
@@ -519,7 +520,7 @@
 }
 .sc-day-extras-band:active { transform: translateY(1px); }
 .sc-day-extras-band:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: -2px;
 }
 .sc-day-extras-band-label {
@@ -598,7 +599,7 @@
   border-color: var(--text-subtle);
 }
 .sc-day-collapsed-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 /* SC-074: collapsed +/- glyph adopts the same bordered-square chip as
@@ -663,7 +664,7 @@
 }
 .sc-day-notes-input { width: 100%; padding: var(--space-2) var(--space-3); border: var(--border-thin) solid var(--border-default); border-radius: var(--radius-control); font-size: var(--size-body); font-family: inherit; color: var(--text-default); background: var(--surface-card); resize: vertical; min-height: 44px; transition: border-color var(--motion-control); }
 .sc-day-notes-input:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
   border-color: var(--accent-sc);
 }
@@ -1156,7 +1157,10 @@
 }
 .sc-btn--danger:hover { background: #b91c1c; border-color: #b91c1c; }
 .sc-btn--danger:focus-visible {
-  outline: var(--focus-ring-width) solid var(--feedback-danger);
+  /* Universe TRAIN 1 rule 2: focus is always navy, even on danger
+     buttons - the fill still signals danger; the focus ring is the
+     a11y mechanism, not the semantic signal. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 
