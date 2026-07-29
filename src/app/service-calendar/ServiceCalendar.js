@@ -1325,13 +1325,18 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // (activeDrillDays), NOT the year-scoped handleJumpToNeeds/Overdue
   // above - those would jump out of the current period/month.
   const handleJumpFirstOverdueInDrill = useCallback(() => {
+    // MLB fence (2026-07-29): jumps open the day-entry modal, which
+    // per the M-3 rulings does not exist for MLB. Same gate as the
+    // period/month tile onDayClick handlers below.
+    if (DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount)) return;
     const first = activeDrillDays?.find(d => d.status === "overdue");
     if (first) setFocusDay(first.date);
-  }, [activeDrillDays]);
+  }, [activeDrillDays, selectedAccount]);
   const handleJumpFirstNeedsInDrill = useCallback(() => {
+    if (DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount)) return;
     const first = activeDrillDays?.find(d => d.status === "needs-entry");
     if (first) setFocusDay(first.date);
-  }, [activeDrillDays]);
+  }, [activeDrillDays, selectedAccount]);
 
   // Iterator handler for DayDetail's post-save Next-needing-entry
   // button. Finds the next exception STRICTLY AFTER the current
@@ -2397,6 +2402,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
 
   const jumpToDay = useCallback((t) => {
     if (!t) return;
+    // MLB fence (2026-07-29): year-scope "needs entry" / "overdue" chip
+    // jumps route through here into setFocusDay, which opens the
+    // day-entry modal. Per M-3 rulings, MLB accounts do not enter
+    // meal counts at the day level; the modal must not open.
+    if (DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount)) return;
     if (t.period) {
       router.push(buildScUrl({ account: selectedAccount || undefined, period: t.period }), { scroll: false });
     }
@@ -3006,6 +3016,14 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           // the HS section (Step 2).
           const overviewTargetDay = (date, period /*, source */) => {
             if (period) {
+              // MLB fence (2026-07-29): rail queue rows on MLB accounts
+              // must not open the day-entry modal. Skip pendingRailFocusRef
+              // (nothing to preserve when the modal isn't opening) and
+              // setFocusDay entirely. The URL navigation is also skipped
+              // - a rail row on an MLB account is inert until M-4a
+              // rebuilds the rail. Same intent as the onDayClick gate
+              // at the period-tile branch below.
+              if (DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount)) return;
               // B2/B8a interaction (2026-07-24): this handler crosses
               // the overview -> drill boundary (periodKey null -> N),
               // which fires the view-context reset effect and would
@@ -3042,6 +3060,10 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           // year-view URL - but ?day= is drill-only. Route through
           // the containing period so the target lands on a drill.
           const feeTargetDay = (date) => {
+            // MLB fence (2026-07-29): see overviewTargetDay above.
+            // MLB fee accounts (all four) close out at the homestand
+            // level, not day-by-day; queue rows must not open the modal.
+            if (DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount)) return;
             const containingPeriod = periodRanges?.find(r => date >= r.start && date <= r.end);
             if (containingPeriod) {
               // B2/B8a interaction (2026-07-24): same overview-to-drill
@@ -3222,6 +3244,10 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           const useDrillRail = scV2 && !isAdminView;
           if (!useDrillRail) return workspace;
           const targetDay = (date) => {
+            // MLB fence (2026-07-29): period drill rail rows on MLB
+            // accounts must not open the day-entry modal. Same intent
+            // as the tile onDayClick gate below.
+            if (DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount)) return;
             router.push(buildScUrl({
               account: selectedAccount || undefined,
               period: periodKey,
@@ -3437,6 +3463,10 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           const useDrillRail = scV2 && !isAdminView;
           if (!useDrillRail) return workspace;
           const targetDay = (date) => {
+            // MLB fence (2026-07-29): month drill rail rows on MLB
+            // accounts must not open the day-entry modal. Same intent
+            // as the tile onDayClick gate below.
+            if (DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount)) return;
             router.push(buildScUrl({
               account: selectedAccount || undefined,
               month: monthKey,
