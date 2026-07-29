@@ -621,6 +621,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // URL-sync effect at :927 can remain account-blind and keep its
   // pre-#399 dep shape [searchParams, isAdmin].
   const isHomestandView = !isAdminView && scope === "homestand";
+  // M-2 defect fix (2026-07-29 owner ruling, live-gate bounce): a
+  // non-pilot account with `?homestand=` in the URL used to render
+  // an empty .sc-body - the mount check gated on the pilot set but
+  // the season view's `isYearView` gate was still false (scope
+  // !== "year"). Shareable URL that degrades to a blank page.
+  //
+  // Corrected: derive an EFFECTIVE isYearView that also fires when
+  // scope === "homestand" but the account is not in the pilot set.
+  // Renders the same year overview a chef would have seen without
+  // the ?homestand= param. Matches "land them where they would have
+  // been." A companion effect below strips ?homestand= from the URL
+  // so the visible state and the URL agree - shareable link works
+  // for anyone who reaches it later.
+  const isHomestandOnPilot = isHomestandView && M2_HOMESTAND_ACCOUNTS.has(selectedAccount);
+  const isHomestandOnNonPilot = isHomestandView && selectedAccount && !M2_HOMESTAND_ACCOUNTS.has(selectedAccount);
+  const isYearViewEffective = isYearView || isHomestandOnNonPilot;
 
   // URL ?view=admin sync (App Router shallow update).
   const router = useRouter();
@@ -1022,6 +1038,26 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null); setHomestandKey(null);
     }
   }, [searchParams, isAdmin]);
+
+  // M-2 defect fix (2026-07-29 owner ruling, live-gate bounce): if a
+  // non-pilot account lands with `?homestand=<key>` in the URL, strip
+  // the param so the URL matches what the operator sees (year view).
+  // The render layer already falls through to isYearViewEffective so
+  // there is no visual flash; this effect just cleans the URL so a
+  // shared link is honest.
+  //
+  // Deliberately NOT inside the URL-sync effect: that effect's deps
+  // are [searchParams, isAdmin] (#399 shape). Adding selectedAccount
+  // to those deps re-opens the self-refire loop. Instead this effect
+  // owns its own dep set on the account gate and the derived
+  // isHomestandOnNonPilot boolean.
+  useEffect(() => {
+    if (!isHomestandOnNonPilot) return;
+    router.replace(
+      buildScUrl({ account: selectedAccount || undefined }),
+      { scroll: false }
+    );
+  }, [isHomestandOnNonPilot, selectedAccount, router]);
 
   // Floor-role default landing (preserved behavior): a floor user with a
   // clean URL lands on the current period workspace. Fires once
@@ -2893,7 +2929,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       )}
 
       <div className="sc-body">
-        {isYearView && (() => {
+        {/* M-2 defect fix (2026-07-29): isYearViewEffective covers
+            both scope=year AND scope=homestand-on-non-pilot fall-
+            through. A non-pilot deep-linked `?homestand=<key>` URL
+            lands here (immediate render) while the URL-cleanup
+            effect above strips the param. Matches "land them where
+            they would have been" per owner ruling. */}
+        {isYearViewEffective && (() => {
           const seasonShell = (
             <SeasonShell
               account={data?.account}
@@ -3528,7 +3570,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             in the Ribbon. A key-mismatch (block not in payload) is
             handled INSIDE HomestandDetail so the surface can render
             an empty state instead of blanking. */}
-        {isHomestandView && M2_HOMESTAND_ACCOUNTS.has(selectedAccount) && (
+        {isHomestandOnPilot && (
           <HomestandDetail
             account={data?.account}
             year={year}

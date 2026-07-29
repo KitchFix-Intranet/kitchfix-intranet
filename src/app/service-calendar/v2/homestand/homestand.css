@@ -414,3 +414,70 @@
   border: 1px dashed var(--sc2-line);
   border-radius: var(--sc2-radius-container);
 }
+
+/* ── Homestand legend (M-2 defect fix, 2026-07-29) ─────────────── */
+/* Dedicated to the day strip's vocabulary. Swatches mirror the
+   .sc-daystrip-cell--* fills at a smaller scale so the legend is a
+   direct key to what the strip paints (visual parity by design).
+   See HomestandLegend.js for the rationale on not reusing
+   StateLegend. */
+.sc-hs-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sc2-space-4);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  background: var(--sc2-surface);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink);
+}
+
+.sc-hs-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+}
+
+.sc-hs-legend-swatch {
+  --sc2-hs-legend-swatch-w: calc(var(--sc2-space-5) * 1);
+  --sc2-hs-legend-swatch-h: calc(var(--sc2-space-5) * 1);
+  display: inline-block;
+  width: var(--sc2-hs-legend-swatch-w);
+  height: var(--sc2-hs-legend-swatch-h);
+  border-radius: var(--sc2-radius-cell);
+  border: 1px solid transparent;
+}
+
+.sc-hs-legend-swatch--game {
+  background: var(--sc2-state-upcoming-bg);
+}
+.sc-hs-legend-swatch--served {
+  background: var(--sc2-state-entered-bg);
+  border-color: var(--sc2-state-entered-bd);
+}
+.sc-hs-legend-swatch--prep {
+  background: var(--sc2-state-off-bg);
+  border-style: dashed;
+  border-color: var(--sc2-line-2);
+}
+.sc-hs-legend-swatch--exception {
+  background: var(--sc2-state-overdue-bg);
+  border-color: var(--sc2-state-overdue-bd);
+}
+
+/* New-month marker mirrors the strip's amber vertical rule
+   (.sc-daystrip-monthbreak). Small tick with the same border-left
+   color so a chef pattern-matches immediately. */
+.sc-hs-legend-swatch--monthbreak {
+  background: transparent;
+  border: 0;
+  width: calc(var(--sc2-space-3) * 1);
+  border-left: 2px solid var(--sc2-state-needs-bd);
+  border-radius: 0;
+}
+
+.sc-hs-legend-label {
+  color: var(--sc2-ink);
+}

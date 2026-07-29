@@ -26,7 +26,12 @@
 
 import { useMemo } from "react";
 import DayStrip from "./DayStrip";
-import StateLegend from "../../season/StateLegend";
+// M-2 defect fix (2026-07-29 owner ruling, live-gate bounce):
+// dedicated legend for the day strip's vocabulary. StateLegend
+// belongs to the day-tile surface and would teach a nine-key
+// vocabulary the strip cannot paint - the exact §16 legend audit
+// failure. See HomestandLegend.js for the rationale.
+import HomestandLegend from "./HomestandLegend";
 import { fmt$ } from "../../season/format";
 
 const MON_LONG = [
@@ -367,17 +372,12 @@ export default function HomestandDetail({
         </aside>
       </div>
 
-      {/* Visible state legend - non-negotiable for tracker screens
-          (prompt §4.5 + rubric). CIN-OH is a homestand-fee account so
-          the HOMESTAND branch renders. dropDayNight matches how the
-          season overview handles the sm-only pill (lg-only glyph
-          would be an orphan key here). */}
-      <StateLegend
-        hasHomestandSchedule={true}
-        isFeeAccount={true}
-        isMilb={false}
-        dropDayNight={true}
-      />
+      {/* Visible legend - non-negotiable for tracker screens (prompt
+          §4.5 + rubric). Homestand-specific: covers only what the
+          day strip paints (game / served / prep proposal / no
+          service / new month). See HomestandLegend.js for why this
+          is a dedicated component rather than a StateLegend variant. */}
+      <HomestandLegend />
     </div>
   );
 }
