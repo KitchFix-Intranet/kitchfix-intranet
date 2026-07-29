@@ -72,6 +72,43 @@ export function canViewSousReports(actualEmail) {
   return allowlist.includes(email);
 }
 
+// ── Sous access gate ──────────────────────────────────────────────────────────
+//
+// SINGLE SOURCE OF TRUTH for who can use Sous. Three surfaces call this:
+//   1. src/app/api/sousai/gate.js         (POST /api/sousai gate order step 3)
+//   2. src/app/sous/page.js               (server-component page gate)
+//   3. src/components/TopNav.js           (nav-link visibility, resolved
+//                                          server-side in src/app/layout.js)
+// Widening happens here; there is no fourth surface to keep in sync. A link
+// that renders for someone who then gets a 404 would be a bug, and two
+// independent gates guarantee that bug eventually - so there is only one
+// gate. This mirrors the canViewSousReports precedent above.
+//
+// Semantics preserved exactly from the pre-helper world:
+//   - gate.js:36-40 computed `tier === "slt" || isCorp` with an unconditional
+//     PG lookup (the POST streaming route is fine with the ambient DB cost).
+//   - sous/page.js:78-80 computed the same predicate with an SLT
+//     synchronous short-circuit (SLT users pay 0 DB, non-SLT pay 1).
+// The helper adopts the short-circuit shape so the layout gate (which runs
+// on every render of every route) does not incur a DB round trip for the
+// six-person SLT team. Same email in, same boolean out as both existing
+// gates - see the truth-table unit test in opdAcl.test.js.
+//
+// Deps injection matches gate.js's pattern so acceptance harnesses can wire
+// stubs without booting the module graph. Default deps use the real helpers.
+export async function canUseSous(email, deps = {
+  viewerTier: canUseSous_defaultViewerTier,
+  isCorporateEmail: canUseSous_defaultIsCorporateEmail,
+}) {
+  if (!email) return false;
+  if (deps.viewerTier(email) === 'slt') return true;
+  return await deps.isCorporateEmail(email);
+}
+// The default bindings are captured as function references so that a test
+// file supplying `deps` is not accidentally shadowed by a hoist issue.
+function canUseSous_defaultViewerTier(email) { return viewerTier(email); }
+async function canUseSous_defaultIsCorporateEmail(email) { return await isCorporateEmail(email); }
+
 // ── pr-7-11: 3-tier access gate ─────────────────────────────────────────────
 //
 // Hierarchical. A viewer sees their tier AND all tiers below:

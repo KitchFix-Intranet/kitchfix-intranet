@@ -10,7 +10,9 @@
 // Gate order (unchanged from the CC prompt binding):
 //   1. flag
 //   2. auth (session present)
-//   3. tier (SLT OR corporate)
+//   3. tier (SLT OR corporate) - delegated to deps.canUseSous(email), the
+//      single-source-of-truth Sous access helper (src/lib/opdAcl.js). Same
+//      helper gates the /sous page and the nav-link visibility.
 //   4. input (action + per-action fields validated)
 //
 // Two actions supported:
@@ -28,17 +30,17 @@ export const MAX_FEEDBACK_COMMENT_CHARS = 1000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function evaluateGates({ session, flagEnabled, body, deps }) {
-  const { viewerTier, isCorporateEmail, allowedAccessLevels } = deps;
+  const { viewerTier, canUseSous, allowedAccessLevels } = deps;
 
   if (!flagEnabled) return { pass: false, kind: "disabled", status: 404 };
   if (!session?.user?.email) return { pass: false, kind: "auth", status: 401 };
 
   const email = session.user.email;
-  const tier = viewerTier(email);
-  const isCorp = await isCorporateEmail(email);
-  if (tier !== "slt" && !isCorp) {
+  const allowed = await canUseSous(email);
+  if (!allowed) {
     return { pass: false, kind: "tier", status: 403 };
   }
+  const tier = viewerTier(email);
 
   if (!body || typeof body !== "object") {
     return { pass: false, kind: "input", status: 400, hint: "body must be JSON object" };
