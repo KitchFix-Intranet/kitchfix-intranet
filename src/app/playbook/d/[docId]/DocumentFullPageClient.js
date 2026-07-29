@@ -99,6 +99,10 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lang, setLang] = useState(initialLang);
+  // TRAIN 2: scroll-spy for the screen TOC. IntersectionObserver watches
+  // each H1 and sets activeTocId to whichever section is currently in
+  // view; the TOC link with matching id gets .pb-screen-toc-link--active.
+  const [activeTocId, setActiveTocId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,6 +222,37 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
         h1.id = tocEntries[idx].id;
       }
     });
+  }, [previewActiveHtml, tocEntries]);
+
+  // TRAIN 2: scroll-spy. IntersectionObserver keyed on the H1 elements
+  // now carrying stable ids. When multiple H1s are in view, pick the one
+  // closest to the top - that's the current section per Bringhurst's
+  // "reading eye tracks the newest heading." Top-margin bias lets the
+  // active section stick when the section title has just scrolled past
+  // the top edge but its body is still on screen.
+  useEffect(() => {
+    if (!bodyRef.current || tocEntries.length === 0) return;
+    const h1s = Array.from(bodyRef.current.querySelectorAll("h1"));
+    if (h1s.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length === 0) return;
+        const top = visible.reduce((a, b) =>
+          a.boundingClientRect.top < b.boundingClientRect.top ? a : b
+        );
+        if (top.target.id) setActiveTocId(top.target.id);
+      },
+      {
+        // Only fire once the H1 is comfortably above the fold; -35% at
+        // bottom keeps the previous section active until the new one
+        // reaches the upper third of the viewport.
+        rootMargin: "-80px 0px -35% 0px",
+        threshold: 0,
+      }
+    );
+    h1s.forEach((h1) => observer.observe(h1));
+    return () => observer.disconnect();
   }, [previewActiveHtml, tocEntries]);
 
   if (loading) {
@@ -402,7 +437,11 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
           <ol className="pb-screen-toc-list">
             {tocEntries.map((entry, i) => (
               <li key={entry.id} className="pb-screen-toc-row">
-                <a className="pb-screen-toc-link" href={`#${entry.id}`}>
+                <a
+                  className={`pb-screen-toc-link${activeTocId === entry.id ? " pb-screen-toc-link--active" : ""}`}
+                  href={`#${entry.id}`}
+                  aria-current={activeTocId === entry.id ? "location" : undefined}
+                >
                   <span className="pb-screen-toc-num">
                     {String(i + 1).padStart(2, "0")}
                   </span>
@@ -426,7 +465,8 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
             </span>
             <span
               className={`pb-status-pill pb-status-pill--lg${status.ghost ? " pb-status-pill--ghost" : ""}`}
-              style={{ background: status.bg, color: status.color }}
+              /* TRAIN 2: outlined statuses (Design Scope rule 3). */
+              style={{ borderColor: status.color, color: status.color }}
             >
               {operatorStatusLabel(doc.status)}
             </span>
