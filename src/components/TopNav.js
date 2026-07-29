@@ -59,6 +59,13 @@ people: (
       <line x1="8" y1="11" x2="14" y2="11" />
     </svg>
   ),
+  sous: (
+    // Sparkle / spark icon - the tool-progress mark shared with the Ask
+    // Sous button in playbook.css.
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+    </svg>
+  ),
 };
 
 const navLinks = [
@@ -67,6 +74,12 @@ const navLinks = [
   { href: '/ops',              label: 'Ops Hub',   icon: icons.ops       },
   { href: '/service-calendar', label: 'Service',   icon: icons.calendar  },
   { href: '/playbook',         label: 'Playbook',  icon: icons.playbook  },
+  // Train 3 A1: Chat's assumption - Sous sits between Playbook and Directory.
+  // Kevin to strike or approve. Rationale: adjacent to Playbook because both
+  // surface Playbook content; before Directory because the Directory jump is
+  // a lookup destination, whereas Sous is a workflow tool the operator returns
+  // to constantly.
+  { href: '/sous',             label: 'Sous',      icon: icons.sous      },
   { href: '/directory',        label: 'Directory', icon: icons.directory },
 ];
 

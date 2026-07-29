@@ -23,7 +23,7 @@ import {
   RELATIONSHIP_LABELS_IN,
 } from "./_shared";
 
-export default function SlideOverReader({ docId, onClose, isOwner = false, onEdit }) {
+export default function SlideOverReader({ docId, onClose, isOwner = false, onEdit, onOpenSous }) {
   // Nav stack supports relationship click-through: clicking a related doc
   // pushes its id onto the stack; back pops. The fetch effect keys off the
   // top of the stack so the panel swaps docs in place. Stack initialized
@@ -119,6 +119,7 @@ export default function SlideOverReader({ docId, onClose, isOwner = false, onEdi
             navigateTo={navigateTo}
             isOwner={isOwner}
             onEdit={onEdit}
+            onOpenSous={onOpenSous}
           />
         ) : null}
       </aside>
@@ -126,7 +127,7 @@ export default function SlideOverReader({ docId, onClose, isOwner = false, onEdi
   );
 }
 
-function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner, onEdit }) {
+function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner, onEdit, onOpenSous }) {
   const {
     document: doc,
     relationships,
@@ -353,26 +354,41 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         )}
       </div>
 
-      {/* SousAI doc-scoped affordance — UI placeholder, NOT wired yet.
-          Rendered as a dashed-border aspirational tile so it reads as
-          designed-but-coming, not a broken button. The hero's global ask-bar
-          is separate; this one is scoped to the open doc. Wire-up lands in
-          a future change. */}
-      <div
-        className="pb-sousai"
-        role="button"
-        aria-disabled="true"
-        tabIndex={-1}
-        title="SousAI is coming soon - this doc-scoped chat isn't wired yet"
-      >
-        <span className="pb-sousai-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
-          </svg>
-        </span>
-        <span className="pb-sousai-text">Ask SousAI about this doc…</span>
-        <span className="pb-sousai-tag">Coming soon</span>
-      </div>
+      {/* Per-doc Ask Sous. Train 3: live. Clicking opens the overlay with
+          the ask prefilled "In {DOC-ID}: " and focus in the input. If the
+          parent didn't pass onOpenSous (e.g. admin dashboard), stays inert. */}
+      {typeof onOpenSous === "function" ? (
+        <button
+          type="button"
+          className="pb-sousai pb-sousai--live"
+          onClick={() => onOpenSous(doc.id)}
+          aria-label={`Ask Sous about ${doc.id}`}
+          title={`Ask Sous about ${doc.id}`}
+        >
+          <span className="pb-sousai-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+            </svg>
+          </span>
+          <span className="pb-sousai-text">Ask Sous about this doc</span>
+        </button>
+      ) : (
+        <div
+          className="pb-sousai"
+          role="button"
+          aria-disabled="true"
+          tabIndex={-1}
+          title="Ask Sous is only available inside the Playbook browse view"
+        >
+          <span className="pb-sousai-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+            </svg>
+          </span>
+          <span className="pb-sousai-text">Ask Sous about this doc</span>
+          <span className="pb-sousai-tag">Browse view only</span>
+        </div>
+      )}
 
       {reportOpen && (
         <ReportIssueForm

@@ -1735,7 +1735,10 @@
      - "Coming soon" tag on the right pinpoints the state explicitly
      - cursor: not-allowed + aria-disabled=true for accessibility honesty */
 .pb-sousai {
-  /* TRAIN 2: stub radius 10 -> --opd-r-3 (12px). Ladder snap. */
+  /* TRAIN 2: stub radius 10 -> --opd-r-3 (12px). Ladder snap.
+     TRAIN 3: the .pb-sousai--live variant flips this from a dashed
+     placeholder into a real filled-teal button; the plain .pb-sousai
+     rendering remains as the inert admin fallback. */
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1747,6 +1750,29 @@
   cursor: not-allowed;
   margin-bottom: 18px;
   user-select: none;
+}
+.pb-sousai--live {
+  /* Train 3: live per-doc ask. Filled teal like the hero Ask Sous button. */
+  background: var(--opd-teal);
+  border: 1px solid var(--opd-teal);
+  color: white;
+  cursor: pointer;
+  transition: background var(--motion-control, 120ms ease);
+  width: 100%;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: var(--opd-wt-bold);
+}
+.pb-sousai--live:hover { background: var(--opd-teal-dark); border-color: var(--opd-teal-dark); }
+.pb-sousai--live:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+.pb-sousai--live .pb-sousai-icon { color: white; }
+.pb-sousai--live .pb-sousai-text {
+  color: white;
+  font-style: normal;
 }
 .pb-sousai-icon {
   display: inline-flex;
