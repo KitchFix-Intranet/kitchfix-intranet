@@ -32,7 +32,8 @@
   color: var(--accent-sc-dark);
 }
 .sc-export-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: 1px;
 }
 .sc-export-btn:active { transform: translateY(1px); }

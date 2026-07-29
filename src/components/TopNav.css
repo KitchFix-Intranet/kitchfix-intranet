@@ -14,7 +14,10 @@
 }
 
 .kf-topnav-inner {
-  max-width: 1200px;
+  /* Universe TRAIN 1: nav is the universe constant; inner widens to
+     1520 so every product's shell (SC 1520/1240, OPD 1240, Sous
+     ride-along) reads the same nav width. Design Scope rule 4. */
+  max-width: 1520px;
   margin: 0 auto;
   padding: 0 20px;
   height: 56px;

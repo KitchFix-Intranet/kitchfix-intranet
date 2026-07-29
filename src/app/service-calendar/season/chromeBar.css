@@ -76,7 +76,8 @@
   color: var(--action-primary-text);
 }
 .sc-chrome-bar-toggle-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 /* SC-034 (2026-07-08): pressed feedback on click/tap. */
@@ -137,7 +138,7 @@
   color: var(--accent-sc);
 }
 .sc-chrome-bar-asof-refresh:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: 1px;
 }
 /* SC-034 (2026-07-08): pressed feedback. */
@@ -217,7 +218,7 @@
 .sc-chrome-bar-stats-count:hover { text-decoration: none; }
 .sc-chrome-bar-stats-count:active { transform: translateY(1px); }
 .sc-chrome-bar-stats-count:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -307,7 +308,7 @@
 }
 .sc-chrome-drill-back:hover { background: var(--surface-sunken); border-color: var(--action-primary-bg); }
 .sc-chrome-drill-back:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-control);
 }
 /* SC-034 (2026-07-08): pressed feedback on the drill controls. */
@@ -322,7 +323,7 @@
 .sc-chrome-drill-step-btn:hover:not(:disabled) { background: var(--surface-sunken); }
 .sc-chrome-drill-step-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .sc-chrome-drill-step-btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
 }
 .sc-chrome-drill-step-btn:active:not(:disabled) { transform: translateY(1px); }
 .sc-chrome-drill-period {
@@ -384,7 +385,7 @@
 }
 .sc-chrome-drill-today:hover { background: var(--action-primary-bg-hover); }
 .sc-chrome-drill-today:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc); outline-offset: var(--focus-ring-offset);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
 }
 .sc-chrome-drill-today:active:not(.sc-chrome-drill-today--here) { transform: translateY(1px); }
 .sc-chrome-drill-today--here { background: var(--surface-sunken); color: var(--text-muted); cursor: default; }

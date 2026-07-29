@@ -14,7 +14,7 @@
   --kf-green: #10b981;
   --kf-red: #ef4444;
   --kf-purple: #6366f1;
-  --kf-bg: #f0f4f8;
+  --kf-bg: #edeff2;
   --kf-border: #e2e8f0;
   --kf-card: #ffffff;
   --kk-teal: #0d9488;
@@ -38,7 +38,7 @@
    BASE & LAYOUT
    ═══════════════════════════════════════════════════════════ */
 body {
-  font-family: 'Mulish', sans-serif;
+  font-family: var(--font-ui);
   background: var(--kf-bg);
   color: var(--kf-navy);
   margin: 0;
@@ -420,7 +420,7 @@ body {
 .kf-loading-inner { text-align: center; }
 .kf-loading-logo { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: var(--kf-navy); border-radius: 16px; margin-bottom: 16px; }
 .kf-loading-logo span { color: white; font-weight: 800; font-size: 18px; font-family: 'Inter', sans-serif; }
-.kf-loading-text { color: #94a3b8; font-size: 13px; font-family: 'Mulish', sans-serif; }
+.kf-loading-text { color: #94a3b8; font-size: 13px; font-family: 'Inter', sans-serif; }
 
 @media (max-width: 768px) {
   .kf-launch-grid { grid-template-columns: 1fr; gap: 14px; }
@@ -1330,7 +1330,7 @@ body {
 
 .kf-help-textarea {
   width: 100%; border: 1px solid var(--kf-border); border-radius: 10px;
-  padding: 12px; font-family: 'Mulish', sans-serif; font-size: 13px;
+  padding: 12px; font-family: 'Inter', sans-serif; font-size: 13px;
   color: var(--kf-navy); resize: none; outline: none;
   transition: border-color 0.2s;
 }
@@ -1448,7 +1448,7 @@ body {
 }
 
 .kf-login-brand-sub {
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 18px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.4);
@@ -1460,7 +1460,7 @@ body {
 }
 
 .kf-login-motto {
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   font-style: bold;
   color: #E53530;
@@ -1508,7 +1508,7 @@ body {
 }
 
 .kf-login-desc {
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   color: #64748b;
   line-height: 1.5;
@@ -1547,7 +1547,7 @@ body {
 
 /* ── Copyright ── */
 .kf-login-copy {
-  font-family: 'Mulish', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 10px;
   color: #cbd5e1;
   margin: 20px 0 0;

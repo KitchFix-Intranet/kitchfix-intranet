@@ -59,7 +59,14 @@
   --text-subtle:var(--n-500); --text-inverse:var(--n-0); --text-link:var(--navy-700);
   --text-success:var(--green-600); --text-danger:var(--red-500);
   /* surface */
-  --surface-page:var(--n-100); --surface-card:var(--n-0); --surface-sunken:var(--n-50); --surface-overlay:var(--n-0);
+  /* --surface-page flipped from --n-100 (#F4F2EC warm cream) to #edeff2
+     (cool grey) in Universe TRAIN 1 - unifies the page ground across
+     OPD, Sous, and SC v2's L0 canvas (docs/UNIVERSE.md §Ground). The
+     warm-cream intent retires; --n-100 stays available as a primitive
+     for any surface that still wants it, but --surface-page no longer
+     resolves there. Consumer `body { background: var(--kf-bg) }` also
+     flipped to #edeff2 in globals.css:17. */
+  --surface-page:#edeff2; --surface-card:var(--n-0); --surface-sunken:var(--n-50); --surface-overlay:var(--n-0);
   /* border */
   --border-subtle:var(--n-200); --border-default:var(--n-300); --border-strong:var(--n-400);
   /* action */
@@ -148,6 +155,63 @@
      transparent. Hoisting here fixes without changing any consumer
      rule; the :has(.scv2) gate keeps non-scv2 ops pages untouched. */
   --sc2-canvas: #edeff2;
+
+  /* ---------- OPD scoped token layer (Universe TRAIN 1) ----------
+     Architected off the proven --sc2-* pattern: published at :root
+     with an `--opd-*` prefix so no other module collides, no wrapper
+     class needed. OPD components consume these; migration in Train 2.
+     Documented in docs/UNIVERSE.md. Zero consumers migrate this
+     train - tokens land first, sweep after.
+
+     Radii - the OPD ladder (declared in the Design Scope):
+       --opd-r-1  4px   fine chip / callout radius
+       --opd-r-2  8px   small controls, tight surfaces
+       --opd-r-3 12px   cards, standard controls
+       --opd-r-4 16px   reader article, large containers
+       --opd-r-5 20px   hero band
+       --opd-r-pill     status pill (999px)
+     Note - `.pb-class-chip` today ships at 5px (Appendix A A.5); the
+     Design Scope calls chips down to 4px. Sweep is Train 2.
+
+     Type - Oswald display + Inter body ladder, from STD-001 v1.3
+     mapped to shipped px values (Appendix A A.3). Weights are
+     STD-001's four screen weights. Body leading 1.6 (STD-001 §4).
+     Roles are OPD-scoped - they do NOT feed the SC scale.
+
+     Palette additions - STD-001 v1.3 §5 sky-blue + anchor tint
+     (source: content/documents/STD-001.mdx:210-211). Teal aliases
+     the existing --kf-playbook-teal* declared in globals.css:32-34
+     so consumers can migrate to `--opd-teal*` without a hue change. */
+  --opd-r-1: 4px;
+  --opd-r-2: 8px;
+  --opd-r-3: 12px;
+  --opd-r-4: 16px;
+  --opd-r-5: 20px;
+  --opd-r-pill: 9999px;
+
+  --opd-font-display: 'Oswald', 'Inter', sans-serif;
+  --opd-font-body: 'Inter', sans-serif;
+
+  --opd-display: 36px;   /* .pb-fullpage-title */
+  --opd-h1: 26px;        /* body H1 */
+  --opd-h2: 18px;        /* body H2 */
+  --opd-h3: 16px;        /* body H3 - Design Scope tightened from shipped 15 */
+  --opd-body: 15px;      /* body copy */
+  --opd-caption: 12.5px; /* card sub-line */
+  --opd-micro: 10px;     /* chips, pills, eyebrows */
+
+  --opd-wt-regular: 400;
+  --opd-wt-semibold: 600;
+  --opd-wt-bold: 700;
+  --opd-wt-display: 800;
+
+  --opd-leading-body: 1.6;
+
+  --opd-sky: #7DB9D5;       /* STD-001 sky-blue: heading rules, cover accent */
+  --opd-anchor: #C4E3E8;    /* STD-001 anchor-banner fill; reader callout-anchor ground */
+  --opd-teal: var(--kf-playbook-teal);           /* #0F6E56 - primary tool accent */
+  --opd-teal-dark: var(--kf-playbook-teal-dark); /* #0a5a45 - hover / pressed */
+  --opd-teal-light: var(--kf-playbook-teal-light); /* #d4ebe2 - subtle wash */
 }
 
 /* Density mode - remaps SEMANTIC tokens only (primitives stay fixed). Compact branch. */

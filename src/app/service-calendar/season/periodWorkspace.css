@@ -273,7 +273,8 @@
 }
 .sc-workspace-frame-chip:hover { filter: brightness(0.96); }
 .sc-workspace-frame-chip:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 /* SC-049 (2026-07-08): pressed feedback on the drill-band chips. */
@@ -405,7 +406,7 @@
 }
 .sc-workspace-frame-today-cta:hover { background: var(--accent-sc-dark); }
 .sc-workspace-frame-today-cta:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 /* SC-049 (2026-07-08): pressed feedback. */
@@ -435,7 +436,7 @@
 }
 .sc-workspace-frame-today-bulk:hover { background: var(--surface-sunken); border-color: var(--text-subtle); }
 .sc-workspace-frame-today-bulk:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 /* SC-049 (2026-07-08): pressed feedback. Shared class - covers both

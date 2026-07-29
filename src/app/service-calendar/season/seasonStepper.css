@@ -93,7 +93,8 @@
 .sc-stepper-spotlight--next { border-left-color: var(--text-link); background: var(--surface-sunken); }
 .sc-stepper-spotlight--done { border-left-color: var(--accent-sc); background: var(--accent-sc-tint); }
 .sc-stepper-spotlight:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  /* Universe TRAIN 1 rule 2: focus is always navy. */
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -168,7 +169,7 @@
   cursor: pointer;
 }
 .sc-stepper-bar-segment-button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--accent-sc);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
 .sc-stepper-bar-segment--done  .sc-stepper-bar-segment-button { background: var(--action-primary-bg); }
