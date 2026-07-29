@@ -276,9 +276,16 @@ function getInitials(email) {
   return local.slice(0, 2).toUpperCase();
 }
 
-export default function TopNav({ canViewSousReports = false }) {
+export default function TopNav({ canViewSousReports = false, canUseSous = false }) {
   const pathname  = usePathname();
   const router    = useRouter();
+  // Filter the /sous item out of the nav when the resolved visibility says
+  // no. The layout resolves visibility server-side via canUseSous(email)
+  // in src/lib/opdAcl.js and passes it in as a prop; TopNav never inspects
+  // the session itself. Same single-gate pattern as canViewSousReports.
+  const visibleNavLinks = canUseSous
+    ? navLinks
+    : navLinks.filter(({ href }) => href !== '/sous');
   const [email, setEmail]                     = useState("");
   const [firstName, setFirstName]             = useState("");
   const [userObj, setUserObj]                 = useState(null);
@@ -424,7 +431,7 @@ export default function TopNav({ canViewSousReports = false }) {
           {/* ── Right: Links + Bell + Avatar ── */}
           <div className="kf-topnav-right">
             <div className="kf-topnav-links">
-              {navLinks.map(({ href, label, icon }) => {
+              {visibleNavLinks.map(({ href, label, icon }) => {
                 const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
                 // Same-route Service click emits an EXPLICIT fresh-landing
                 // intent via `?reset=1`. Distinguishes top-nav click from

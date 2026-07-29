@@ -14,7 +14,7 @@
 
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { viewerTier, isCorporateEmail } from "@/lib/opdAcl";
+import { canUseSous } from "@/lib/opdAcl";
 import { fetchReportRows } from "@/app/sousai/reports/data";
 import { repeatQuestions, declineGaps, isoDay, daysAgo, serverToday } from "@/app/sousai/reports/aggregate";
 import SousSurface from "./SousSurface";
@@ -75,9 +75,8 @@ export default async function SousPage() {
   const session = await auth();
   const email = session?.user?.email;
   if (!email) notFound();
-  const tier = viewerTier(email);
-  const corp = tier === "slt" ? true : await isCorporateEmail(email);
-  if (tier !== "slt" && !corp) notFound();
+  // Single-source-of-truth gate. See src/lib/opdAcl.js canUseSous.
+  if (!(await canUseSous(email))) notFound();
 
   const chips = await loadChipsInline(email, new Date());
 
