@@ -133,6 +133,38 @@ export default function HomestandDetail({
     [block?.prepDays]
   );
 
+  // Season-to-date rollup for the §5.5 rail. Reads `homestands` only,
+  // NOT `block`, so it survives when the URL points at an unknown key.
+  // Hoisted above the early returns to preserve hook order between
+  // loading -> loaded transitions - the exact rule the top-of-function
+  // comment warns about and the reason M-2's dayMap + prepSet live up
+  // here. Adding a hook below the early returns is a client-side
+  // crash on every mount.
+  const seasonToDate = useMemo(() => {
+    if (!Array.isArray(homestands)) return null;
+    let actual = 0;
+    let budget = 0;
+    let count = 0;
+    let anyBudgetMissing = false;
+    for (const b of homestands) {
+      if (b?.laborActual == null) continue;
+      actual += Number(b.laborActual);
+      if (b.budgetSnapshotAtCloseout != null) {
+        budget += Number(b.budgetSnapshotAtCloseout);
+      } else {
+        anyBudgetMissing = true;
+      }
+      count += 1;
+    }
+    if (count === 0) return null;
+    return {
+      count,
+      actual,
+      budget: anyBudgetMissing ? null : budget,
+      variance: anyBudgetMissing ? null : actual - budget,
+    };
+  }, [homestands]);
+
   // Loading + failed short-circuit. A homestand surface with an empty
   // day strip and no budget reads as "0 game days, no budget yet",
   // which is a lie during regular season. Same missing-vs-zero rule
@@ -220,35 +252,7 @@ export default function HomestandDetail({
     ? closeoutSpent - closeoutBudget
     : null;
 
-  // Season-to-date: sum every homestand carrying a live close-out.
-  // budget is the sum of budget snapshots, actual is the sum of
-  // laborActual, variance the difference. Null when nothing has
-  // closed out yet, so the rail can hide the row cleanly instead of
-  // rendering "$0.00 vs $0.00 on budget".
-  const seasonToDate = useMemo(() => {
-    if (!Array.isArray(homestands)) return null;
-    let actual = 0;
-    let budget = 0;
-    let count = 0;
-    let anyBudgetMissing = false;
-    for (const b of homestands) {
-      if (b?.laborActual == null) continue;
-      actual += Number(b.laborActual);
-      if (b.budgetSnapshotAtCloseout != null) {
-        budget += Number(b.budgetSnapshotAtCloseout);
-      } else {
-        anyBudgetMissing = true;
-      }
-      count += 1;
-    }
-    if (count === 0) return null;
-    return {
-      count,
-      actual,
-      budget: anyBudgetMissing ? null : budget,
-      variance: anyBudgetMissing ? null : actual - budget,
-    };
-  }, [homestands]);
+  // seasonToDate is hoisted above the early returns (see top of function).
 
   return (
     <div className="sc-homestand">
