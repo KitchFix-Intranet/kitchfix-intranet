@@ -86,6 +86,11 @@ export default function CloseoutPanel({
   const [notesInput, setNotesInput] = useState("");
   const [reopenMode, setReopenMode] = useState(false);
   const [reopenReasonInput, setReopenReasonInput] = useState("");
+  // M-3 Defect 1 fix (2026-08-XX owner ruling): mid-block archive
+  // skips are shown to the chef post-confirm so nothing gets
+  // discovered in the data later. Clears on the next render (the
+  // reload refetches the payload and remounts the summary).
+  const [skippedByArchive, setSkippedByArchive] = useState([]);
 
   const gameDays = useMemo(
     () => gameDaysFromDayMap(dayMap, block?.startDate, block?.endDate),
@@ -107,6 +112,7 @@ export default function CloseoutPanel({
     setSaving(true);
     setSaveError(null);
     setMissingProjections([]);
+    setSkippedByArchive([]);
 
     const laborActual = Number(laborActualInput);
     if (!Number.isFinite(laborActual) || laborActual < 0) {
@@ -145,7 +151,15 @@ export default function CloseoutPanel({
         setSaving(false);
         return;
       }
-      if (showToast) showToast(reopenMode ? "Homestand reopened + reconfirmed" : "Homestand closed out", "success");
+      const skips = Array.isArray(result.skippedByArchive) ? result.skippedByArchive : [];
+      setSkippedByArchive(skips);
+      if (showToast) {
+        const skipNote = skips.length > 0 ? `; ${skips.length} archived-service skip${skips.length === 1 ? "" : "s"}` : "";
+        showToast(
+          (reopenMode ? "Homestand reopened + reconfirmed" : "Homestand closed out") + skipNote,
+          "success"
+        );
+      }
       // Reset inputs; parent refetches the payload.
       setLaborActualInput("");
       setNotesInput("");
@@ -398,6 +412,25 @@ export default function CloseoutPanel({
 
       {saveError && !missingProjections.length && (
         <div className="sc-closeout-error" role="alert">{saveError}</div>
+      )}
+
+      {/* Post-confirm archive-skip surface (M-3 Defect 1 fix).
+          Cleared on the next mount when the reload refetches the
+          payload. */}
+      {skippedByArchive.length > 0 && (
+        <div className="sc-closeout-archive-skip" role="status">
+          <strong>{skippedByArchive.length} archived-service skip{skippedByArchive.length === 1 ? "" : "s"}:</strong>
+          <ul>
+            {skippedByArchive.slice(0, 8).map((s, i) => (
+              <li key={`${s.service_date}-${s.service_id}-${i}`}>
+                {fmtDayLabel(s.service_date)} - {s.service_name} (archived {String(s.active_until).slice(0, 10)})
+              </li>
+            ))}
+            {skippedByArchive.length > 8 && (
+              <li>… and {skippedByArchive.length - 8} more</li>
+            )}
+          </ul>
+        </div>
       )}
 
       <div className="sc-closeout-actions">

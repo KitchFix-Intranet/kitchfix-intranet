@@ -1570,7 +1570,19 @@ export async function POST(request) {
       // windowEnd, and budget snapshot come from the SAME derivation
       // the client showed. A client-side value could rewrite the
       // budget snapshot incorrectly; the server must not trust it.
-      const currentYear = new Date().getFullYear();
+      //
+      // M-3 Defect 2 (2026-08-XX owner ruling): derive the year from
+      // clientToday, NEVER from new Date().getFullYear(). The server
+      // clock ignores the operator's calendar day - trap §10.12
+      // class. Two failure modes: (a) December 31 after 7pm ET, the
+      // UTC year is already next year so this lookup 404s; (b) a
+      // chef closing out an October homestand in January hits the
+      // wrong season entirely (2027 budgets have already loaded per
+      // owner's plan). clientToday validated shape "^\d{4}-\d{2}-\d{2}$"
+      // above; first 4 chars are the year.
+      const currentYear = clientToday
+        ? Number(clientToday.slice(0, 4))
+        : new Date().getFullYear();
       const yearSummary = await loadYearSummary(accountKey, currentYear, { clientToday });
       const block = (yearSummary.homestands || []).find((h) => String(h.key) === String(homestandKey));
       if (!block) {
@@ -1625,13 +1637,36 @@ export async function POST(request) {
       }
 
       // Load services + projections for the block span.
+      //
+      // M-3 Defect 1 (2026-08-XX owner ruling): the archive-relevant
+      // field is `active_until`, not `active`. `active` is a vestigial
+      // UI-only boolean the billing views deliberately ignore (see
+      // serviceCalendar.js:2401 lineage note). Filtering on `active`
+      // would (a) still write counts for services archived mid-season
+      // - because `active` stays true and only `active_until` moves -
+      // and (b) skip services with `active=false` that never got
+      // archived (TBJ - NY Snack/Shake are in that state).
+      //
+      // Per-date resolution against `active_until` mirrors the
+      // sc_daily_revenue view's catalog JOIN (sc-6b) and the client's
+      // DayDetail archive-edge guard at DayDetail.js:243-246
+      // (isInServiceOnDay). Cannot literally reuse that export - it
+      // lives in a "use client" module - so the two-line predicate is
+      // inlined below. Comment updates propagate to both call sites.
       const servicesRes = await supa.from("sc_services")
-        .select("id, service_name")
+        .select("id, service_name, active_until")
         .eq("account_key", accountKey)
-        .eq("active", true)
         .order("sort_order", { ascending: true });
       if (servicesRes.error) throw new Error(`services read: ${servicesRes.error.message}`);
       const services = servicesRes.data;
+
+      // Archive-edge predicate (mirrors DayDetail.js:243-246). A
+      // (service, day) pair is in service iff the service has no
+      // active_until OR the day is on or before active_until.
+      const isInServiceOnDay = (svc, dayDate) => {
+        if (!svc.active_until) return true;
+        return dayDate <= String(svc.active_until).slice(0, 10);
+      };
 
       const projRes = await supa.from("sc_daily_projections")
         .select("service_id, service_date, projected_count")
@@ -1645,14 +1680,17 @@ export async function POST(request) {
       }
 
       // Missing-projection guard. Iterate NON-EXCEPTION game dates x
-      // services; refuse the whole confirm if any pair has no
-      // projection. Owner standing rule: no lie is permitted. The
+      // IN-SERVICE services; refuse the whole confirm if any pair has
+      // no projection. Owner standing rule: no lie is permitted. The
       // chef sees the gap and either marks the day as an exception
-      // (rainout) or asks admin to add the projection.
+      // (rainout) or asks admin to add the projection. Archived
+      // services skip out entirely - they belong to skippedByArchive
+      // below, not to missingProjections.
       const missingProjections = [];
       for (const d of gameDates) {
         if (exceptionSet.has(d)) continue;
         for (const s of services) {
+          if (!isInServiceOnDay(s, d)) continue;
           const key = `${d}|${s.id}`;
           if (!projByPair.has(key)) {
             missingProjections.push({
@@ -1675,17 +1713,35 @@ export async function POST(request) {
         );
       }
 
-      // Assemble actualsRows:
-      //   non-exception game day: actual_count = projected_count
-      //   exception game day:      actual_count = 0
-      // The route NEVER produces an empty actualsRows. A whole-
-      // homestand cancellation still writes zeros for every (game
-      // day, service) pair, not nothing. If we assemble empty, that
-      // is a bug and the route refuses.
+      // Assemble actualsRows and skippedByArchive together in one
+      // pass. Owner ruling: the chef should SEE that some days write
+      // fewer services than others (mid-block archives), not
+      // discover it in the data later. skippedByArchive rides back
+      // on the success response so the panel can render an
+      // "N services skipped (archived)" note.
+      //
+      //   non-exception + in-service game day: actual_count = projected_count
+      //   exception + in-service game day:     actual_count = 0
+      //   archived (any day):                  skipped, recorded in skippedByArchive
+      //
+      // The route NEVER produces an empty actualsRows on a real
+      // homestand. If services archive out entirely mid-block, the
+      // remaining game days still write actuals for the still-active
+      // services and the response names the archived ones.
       const actualsRows = [];
+      const skippedByArchive = [];
       for (const d of gameDates) {
         const isException = exceptionSet.has(d);
         for (const s of services) {
+          if (!isInServiceOnDay(s, d)) {
+            skippedByArchive.push({
+              service_date: d,
+              service_id: s.id,
+              service_name: s.service_name,
+              active_until: s.active_until,
+            });
+            continue;
+          }
           const projected = projByPair.get(`${d}|${s.id}`);
           actualsRows.push({
             service_id: s.id,
@@ -1696,7 +1752,7 @@ export async function POST(request) {
       }
       if (actualsRows.length === 0) {
         return NextResponse.json(
-          { success: false, error: "Assembled zero actuals; homestand has no game days?" },
+          { success: false, error: "Assembled zero actuals; every service archived out before this block?" },
           { status: 400 }
         );
       }
@@ -1727,6 +1783,11 @@ export async function POST(request) {
         closeoutId: result.closeoutId,
         supersededCount: result.supersededCount,
         actualsWritten: result.actualsWritten,
+        // Owner ruling: mid-block archive skips are named on the
+        // response so the chef sees them (not "discovered in the
+        // data later"). Empty array on the happy path; the panel
+        // renders a note when non-empty.
+        skippedByArchive,
       });
     }
 
