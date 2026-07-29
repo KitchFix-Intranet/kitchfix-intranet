@@ -18,18 +18,28 @@
 -- table holds 28 rows and is a day old - the cheapest this
 -- correction will ever be.
 --
--- WHAT THIS FILE DOES
--- 1. UPDATE all sc_labor_budgets rows to strip the "P" prefix from
---    `period`. Idempotent - no-op after first apply (the regex on
---    the WHERE clause misses bare-numeric values).
--- 2. UPDATE TXR-TX-H P10's hourly_budget from 15714.29 to 15714.26.
+-- WHAT THIS FILE DOES (order matters - see next paragraph)
+-- 1. DROP the P-anchored CHECK. This has to come FIRST: sc-20's
+--    constraint enforces ^P([1-9]|1[0-3])$, so any UPDATE that writes
+--    a bare "4" is rejected while the constraint is live. First
+--    apply of this file with the DROP after the UPDATE fails with
+--    "value violates check constraint" and rolls back the whole
+--    migration.
+-- 2. UPDATE all sc_labor_budgets rows to strip the "P" prefix from
+--    `period`. Idempotent - the WHERE clause matches only rows that
+--    still have a P.
+-- 3. UPDATE TXR-TX-H P10's hourly_budget from 15714.29 to 15714.26.
 --    Root cause: $15,714.29 × 7 = $110,000.03; owner spec named the
 --    rounded per-period figure but demands an exact season total.
 --    Six rows stay at 15714.29; P10 (row #7) absorbs the 3¢ drift
 --    so the season sums to $110,000.00 exactly. Comment records the
 --    reason so nobody later "corrects" the odd row back to uniform.
--- 3. DROP the P-anchored CHECK, ADD a bare-numeric CHECK that
---    matches sc_day_metadata's convention.
+-- 4. ADD the bare-numeric CHECK. Comes LAST for symmetry with step 1
+--    and because the row values have to be in the new shape before
+--    the new constraint gets validated.
+--
+-- Every step is idempotent - re-applying this file after a partial
+-- or complete apply is a no-op.
 --
 -- POST-APPLY VERIFY
 --   SELECT account_key, period, hourly_budget FROM sc_labor_budgets ORDER BY 1, 2;
@@ -42,14 +52,36 @@
 -- Apply in Supabase Studio.
 -- ═══════════════════════════════════════════════════════════════════
 
--- ─── 1. Strip P-prefix on existing rows ─────────────────────────────
+-- ─── 1. DROP the P-anchored CHECK ──────────────────────────────────
+-- Detect by regex signature on pg_get_constraintdef, not by a guessed
+-- name (the sc-20 CHECK was named implicitly at CREATE TABLE time).
+-- Same lesson as fix/sc-20-do-block: match on definition, never on
+-- the literal `IN` token (Postgres normalises to `= ANY (ARRAY[...])`
+-- on storage). Idempotent - the block is a no-op after the drop.
+DO $$
+DECLARE
+  cname text;
+BEGIN
+  SELECT c.conname INTO cname
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+   WHERE t.relname = 'sc_labor_budgets'
+     AND c.contype = 'c'
+     AND pg_get_constraintdef(c.oid) LIKE '%^P(%'
+   LIMIT 1;
+  IF cname IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE sc_labor_budgets DROP CONSTRAINT %I', cname);
+  END IF;
+END $$;
+
+-- ─── 2. Strip P-prefix on existing rows ─────────────────────────────
 -- REGEXP_REPLACE only fires for rows that still have a P; a re-apply
 -- is a no-op. Preserves the id + effective_from + change trail.
 UPDATE sc_labor_budgets
    SET period = REGEXP_REPLACE(period, '^P', '')
  WHERE period ~ '^P[0-9]';
 
--- ─── 2. TXR-TX-H P10 drift correction ───────────────────────────────
+-- ─── 3. TXR-TX-H P10 drift correction ───────────────────────────────
 -- Owner-anchored: seven periods × $15,714.29 = $110,000.03 (3¢ drift).
 -- Owner ruling: nudge P10 (the last chronological slot) to $15,714.26
 -- so the season sums to $110,000.00 exactly. Do NOT restore the
@@ -61,32 +93,19 @@ UPDATE sc_labor_budgets
    AND period       = '10'
    AND hourly_budget = 15714.29;
 
--- ─── 3. CHECK - swap P-anchored for bare-numeric ────────────────────
--- Detect by constraint name so re-applies are idempotent. Same
--- pattern lesson as sc-20's DO-block correction (fix/sc-20-do-block):
--- match on NAME + a NOT-LIKE on the definition text; do NOT match on
--- the literal `IN` token (Postgres normalises to `= ANY (ARRAY[...])`
--- on storage).
+-- ─── 4. ADD bare-numeric CHECK ──────────────────────────────────────
+-- Only add if a bare-numeric CHECK isn't already present. Detect by
+-- the same regex-signature technique as step 1 (this time positive:
+-- look for the bare-numeric anchor).
 DO $$
 BEGIN
-  IF EXISTS (
+  IF NOT EXISTS (
     SELECT 1 FROM pg_constraint c
     JOIN pg_class t ON t.oid = c.conrelid
     WHERE t.relname = 'sc_labor_budgets'
       AND c.contype = 'c'
-      AND pg_get_constraintdef(c.oid) LIKE '%^P(%'
+      AND pg_get_constraintdef(c.oid) LIKE '%^([1-9]%'
   ) THEN
-    -- The CHECK was named implicitly at CREATE TABLE time; look it up
-    -- by column + regex signature rather than a guessed name.
-    EXECUTE (
-      SELECT format('ALTER TABLE sc_labor_budgets DROP CONSTRAINT %I', c.conname)
-      FROM pg_constraint c
-      JOIN pg_class t ON t.oid = c.conrelid
-      WHERE t.relname = 'sc_labor_budgets'
-        AND c.contype = 'c'
-        AND pg_get_constraintdef(c.oid) LIKE '%^P(%'
-      LIMIT 1
-    );
     ALTER TABLE sc_labor_budgets
       ADD CONSTRAINT sc_labor_budgets_period_check
         CHECK (period ~ '^([1-9]|1[0-3])$');
