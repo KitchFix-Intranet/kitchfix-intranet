@@ -1175,7 +1175,7 @@ function m2SpanInclusiveDays(startISO, endISO) {
 // window is a labor-attribution concept for M-3 close-out and is
 // carried on the payload so the surface can display the range where
 // close-out land.
-function buildM2Homestands(blocks, envelopes, daysByDate, todayIso) {
+function buildM2Homestands(blocks, envelopes, daysByDate, todayIso, accountKey) {
   if (!Array.isArray(blocks) || blocks.length === 0) return [];
   const envByKey = new Map(envelopes.map((e) => [e.key, e]));
 
@@ -1193,42 +1193,32 @@ function buildM2Homestands(blocks, envelopes, daysByDate, todayIso) {
 
     const dayCount = m2SpanInclusiveDays(block.startDate, block.endDate);
 
-    // Prep proposal (M-2 defect 2 fix + F1 guard, 2026-07-29 owner ruling).
+    // Prep proposal (M-2 Round 2 owner reversal, 2026-07-29).
     //
-    // TWO rules, distinguished by source of authority:
+    // The block's own boundaries are the authority. Inside
+    // [block.startDate, block.endDate]:
+    //   - date has a GAME record  -> game day
+    //   - date has NO GAME record -> internal off-day -> prep proposal
     //
-    // 1. Leading pre-day (definitional per scope B3): the day before
-    //    the block's first game. This is a proposal from B3, not
-    //    from data. It is pushed UNLESS a record for that date shows
-    //    EXHIBITION - schedule truth overrides the definitional rule
-    //    per M27 (exhibitions are separately billed catering,
-    //    excluded from labor budgets).
+    // This is derivable from the span itself; the missing-versus-zero
+    // rule governs FACTS you would need a record to know (served
+    // counts, meals, labor) - not DATES the span itself defines.
+    // Post-sc-13's schedule table has no PREP rows by design, which
+    // is exactly why B3 is a derivation rule rather than a lookup.
     //
-    //    AWAY does NOT block. A leading pre-day is often AWAY (team
-    //    on the last day of a road trip) and per scope B5 the labor
-    //    attribution window includes road-trip cleaning and prep
-    //    "attributed to the homestand they serve." So the ballpark
-    //    kitchen is prepping while the team is traveling; the AWAY
-    //    row on the schedule is orthogonal to whether the chef is
-    //    prepping.
+    // Owner ruling verified against every CIN-OH homestand: M20a
+    // shows HS9 = 9 games in 10 days, 1 internal off-day, 2 prep
+    // (leading + 1 internal). The rule matches that count by
+    // construction.
     //
-    // 2. Internal prep (data-derived): only a PRESENT record whose
-    //    dayType is not GAME (and not EXHIBITION, and not AWAY)
-    //    becomes a prep proposal. A missing record is missing - the
-    //    day strip renders it as `missing` (missing-vs-zero rule).
-    //
-    //    Consequence, reported: post-sc-13, sc_homestand_schedule
-    //    contains only GAME + AWAY + EXHIBITION rows (PREP/OPEN/
-    //    CLOSE/CLEAN were deleted in sc-13). An internal off-day
-    //    between two home games often has NO row anywhere. Under
-    //    this rule that date is honest missing, not a positive
-    //    prep claim. The schedule instruction count is games + the
-    //    prep proposals we can derive; a chef reading it against a
-    //    day strip that shows a "no data" cell in the middle is
-    //    seeing the truth, not a rendering bug. If a future M-N
-    //    wants internal-off-day-as-prep-by-definition, that is a
-    //    schema decision (revive PREP rows, or introduce a
-    //    prepDay-as-fact table) - not a truthy check on data absence.
+    // Leading pre-day (definitional per B3): the day BEFORE the
+    // block's first game. Pushed UNLESS a record for that date shows
+    // EXHIBITION (M27: exhibitions are separately billed catering).
+    // AWAY does NOT block - per B5 the labor attribution window
+    // includes road-trip cleaning and prep "attributed to the
+    // homestand they serve"; the ballpark kitchen is prepping while
+    // the team travels. AWAY on the schedule is orthogonal to
+    // whether the chef is prepping.
     //
     // At M-4 the pilot widens to the TXR pair, which carries the
     // EXHIBITION rows on Mar 23-24 immediately before the opener.
@@ -1237,23 +1227,53 @@ function buildM2Homestands(blocks, envelopes, daysByDate, todayIso) {
     //
     // Naming note: the M-2 payload's `prepDays` is a derived
     // proposal per B3. It is a different concept from
-    // `classifyDayStatus`'s `"prep"` return value (see line ~:314),
-    // which is a per-day operational status enum used by DaySquare
-    // CSS. The classifyDayStatus prep path is dormant post-sc-13 (no
-    // PREP-typed schedule rows exist in the DB anymore). B3
-    // derivation is authoritative for the M-2 surface.
+    // `classifyDayStatus`'s `"prep"` return value at ~:314, which is
+    // a per-day operational status enum used by DaySquare CSS. The
+    // classifyDayStatus prep path is dormant post-sc-13 (no PREP-
+    // typed schedule rows exist in the DB anymore). B3 derivation
+    // is authoritative for the M-2 surface.
     const prepDays = [];
     const leadingIso = m2AddDaysIso(block.startDate, -1);
     const leadingRec = daysByDate.get(leadingIso);
     const leadingBlocked = leadingRec && leadingRec.dayType === "EXHIBITION";
     if (!leadingBlocked) prepDays.push(leadingIso);
+
+    // Internal walk. Every date inside [startDate, endDate] with no
+    // GAME record is definitionally an internal off-day and becomes
+    // a prep proposal. Count games in the span so we can enforce the
+    // invariant below.
+    let gamesInSpan = 0;
+    let internalOffInSpan = 0;
     for (const iso of m2EnumerateDatesInclusive(block.startDate, block.endDate)) {
       const d = daysByDate.get(iso);
-      if (!d) continue;                            // defect 2: missing != prep
-      if (d.dayType === "GAME") continue;
-      if (d.dayType === "EXHIBITION") continue;    // M27
-      if (d.dayType === "AWAY") continue;          // definitionally impossible mid-block
-      prepDays.push(iso);
+      if (d && d.dayType === "GAME") {
+        gamesInSpan++;
+      } else {
+        internalOffInSpan++;
+        prepDays.push(iso);
+      }
+    }
+
+    // Invariant (owner ruling, trap §11.2 vanishing schedule days):
+    // within a block span, `block.gameCount === gamesInSpan` AND
+    // `gamesInSpan + internalOffInSpan === dayCount` MUST hold by
+    // construction. deriveHomestandSegments and buildM2Homestands
+    // walk the same daysByMonth feed, so a mismatch means a GAME
+    // row went missing between the two walks - the exact class of
+    // silent-defect trap §11.2 exists to catch. Surface it (server
+    // log + payload flag) rather than silently absorb into prep.
+    const gameCountMatches = gamesInSpan === (block.gameCount || 0);
+    const spanBalances = gamesInSpan + internalOffInSpan === dayCount;
+    const hasScheduleGap = !(gameCountMatches && spanBalances);
+    if (hasScheduleGap) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[buildM2Homestands] invariant fail: ${accountKey} ${block.homestandId} `
+        + `${block.startDate}..${block.endDate}: `
+        + `derivation gameCount=${block.gameCount}, gamesInSpan=${gamesInSpan}, `
+        + `internalOff=${internalOffInSpan}, dayCount=${dayCount}. `
+        + `Vanishing GAME row (trap §11.2).`
+      );
     }
 
     // Served / exception / meals from the day records inside the
@@ -1317,6 +1337,16 @@ function buildM2Homestands(blocks, envelopes, daysByDate, todayIso) {
       prepDays,
       windowStart,
       windowEnd,
+      // hasScheduleGap flips to true when the invariant
+      //   block.gameCount === gamesInSpan
+      //   AND gamesInSpan + internalOffInSpan === dayCount
+      // fails. Under normal operation this stays false; a true value
+      // means a GAME row went missing between deriveHomestandSegments
+      // and buildM2Homestands (trap §11.2). Server also logged a
+      // warning; this field lets the client surface a UI hint if
+      // wanted. Only emitted when true so a healthy payload stays
+      // minimal.
+      ...(hasScheduleGap ? { hasScheduleGap: true } : {}),
     };
   });
 }
@@ -1568,7 +1598,21 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
       const yearDataForDerive = [...daysByMonth.entries()].map(
         ([month, days]) => ({ month, days })
       );
-      const todayIso = today.toISOString().slice(0, 10);
+      // M-2 Rider 5 (2026-07-29 owner ruling): the M-0 UTC twin. Same
+      // one-line defect as :1687 - `today.toISOString().slice(0, 10)`
+      // re-applies UTC and, in Cincinnati (UTC-4), flips block status
+      // a day early after 8pm local. This site sets `status` on the
+      // homestand strip for all four MLB accounts and ships in
+      // production today; leaving it in place to protect the
+      // per-M-2 rider cap was the wrong trade.
+      //
+      // The shared `todayStr` at ~:1674 is declared LATER in this
+      // function and is not in scope here (owner authorized a local
+      // computation rather than restructuring the function to reach
+      // it). Same clientToday-aware pattern, verbatim.
+      const todayIso = opts.clientToday && /^\d{4}-\d{2}-\d{2}$/.test(opts.clientToday)
+        ? opts.clientToday
+        : today.toISOString().slice(0, 10);
       derivedBlocks = deriveHomestandSegments(yearDataForDerive, todayIso, { accountKey });
     }
     const useDerived = isDerivedAccount && derivedBlocks.length > 0;
@@ -1770,7 +1814,7 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
 
       // M-2 defect 1 fix (2026-07-29): same today string used for the
       // derivation status derivation. See :1522-1531 for why.
-      m2Homestands = buildM2Homestands(m2Blocks, envelopes, daysByDate, todayStr);
+      m2Homestands = buildM2Homestands(m2Blocks, envelopes, daysByDate, todayStr, accountKey);
     } else {
       // Derivation returned [] (self-guard tripped or no AWAY rows
       // in this year's stream). Do NOT emit a stub - a surface

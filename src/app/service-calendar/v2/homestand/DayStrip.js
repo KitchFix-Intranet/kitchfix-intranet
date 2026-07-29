@@ -74,12 +74,23 @@ function classifyCell(iso, dayMap, prepSet) {
     };
   }
   if (prepSet && prepSet.has(iso)) return { kind: "prep" };
-  // M-2 defect 2 (2026-07-29 owner ruling): missing data is honest
-  // missing, never a positive claim. A cell whose date has no
-  // schedule record AND is not in the prep proposal set renders
-  // as "unknown" - visually distinct from prep so a chef reading
-  // the strip can tell a proposed-prep day (chef's job to schedule)
-  // from an unknown day (data gap, not the chef's problem to fill).
+  // M-2 Round 2 owner reversal (2026-07-29): the block's own
+  // boundaries are the authority for prep. Server's
+  // buildM2Homestands walks every date in [startDate, endDate] and
+  // pushes non-GAME dates into prepSet by construction. So inside
+  // a block span this branch is EXPECTED UNREACHABLE - a cell here
+  // means the trap §11.2 (vanishing GAME row) invariant fired on
+  // the server (block.gameCount != gamesInSpan). The payload's
+  // hasScheduleGap flag names that state; the visible dashed
+  // "no data" tile is the operator's signal that the schedule
+  // itself, not the derivation, dropped a row.
+  //
+  // Outside the span the only cell is the leading pre-day at
+  // startDate - 1. It reaches this branch only when the leading
+  // pre-day was blocked (record shows EXHIBITION per M27) AND the
+  // caller did not push it into prepSet. That's a real state
+  // reachable at M-4 for TXR openers; the M-2 pilot (CIN-OH) never
+  // hits it.
   return { kind: "missing" };
 }
 

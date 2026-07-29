@@ -69,6 +69,14 @@ for (const { key, shouldEmit, role } of CASES) {
       console.log(`    ⚠ revenue_forecast leaked into wire payload!`);
       allPass = false;
     }
+    // Round 2 reversal invariant: any hasScheduleGap flag is a
+    // vanishing-GAME-row alarm (trap §11.2). Surface it, do not fail
+    // the probe on it - the flag exists precisely to make this
+    // condition visible.
+    const gaps = resp.homestands.filter((b) => b.hasScheduleGap);
+    if (gaps.length > 0) {
+      console.log(`    ⚠ hasScheduleGap on ${gaps.length} block(s): ${gaps.map((b) => b.ordinal).join(", ")}`);
+    }
   }
 }
 
