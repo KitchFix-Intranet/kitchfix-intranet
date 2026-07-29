@@ -81,7 +81,7 @@ This is a discipline aid, not a CI check. Do not automate it.
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
 | `SOUSAI_ROUTE_ENABLED` | Kill switch for `/api/sousai` and `/sous`. Only `"true"` (string) opens the door. Read at `src/app/api/sousai/route.js:143` (gate order: flag -> auth -> tier -> input) and `src/app/sous/page.js:74` (page notFound). | Prod, Preview | Route returns 404-shaped `{error:"not found"}` on `POST /api/sousai`; `/sous` page calls `notFound()`. Nothing leaks that the endpoint exists |
-| `SOUSAI_REPORTS_VIEWERS` | Comma-separated email allowlist for `/sousai/reports` + `/api/sousai/chips` + the profile-dropdown "Sous Reports" nav link. Read at `src/lib/opdAcl.js:71` via `parseSousReportsViewers(...)`; case-insensitive, per-item trimmed, empty items dropped. | Prod, Preview | **Fail-closed hardcoded default:** collapses to `SOUS_REPORTS_DEFAULT_VIEWERS = ["k.fietek@kitchfix.com"]` at `src/lib/opdAcl.js:76`. A missing env var never widens access |
+| `SOUSAI_REPORTS_VIEWERS` | Comma-separated email allowlist for `/sousai/reports` + `/api/sousai/chips` + the profile-dropdown "Sous Reports" nav link. Read at `src/lib/opdAcl.js:71` via `parseSousReportsViewers(...)`; case-insensitive, per-item trimmed, empty items dropped. | Prod, Preview | **Fail-closed hardcoded default:** collapses to `SOUS_REPORTS_DEFAULT_VIEWERS = ["k.fietek@kitchfix.com"]` at `src/lib/opdAcl.js:57`. A missing env var never widens access |
 | `SOUSAI_REPORT_RECIPIENTS` | Comma-separated recipient list for the weekly + monthly digest email crons. Read at `src/lib/sousai/reports/emailShared.js:22` via `resolveRecipients()`; case-insensitive, per-item trimmed, empty items dropped. | Prod, Preview | **Fail-closed hardcoded default:** falls back to `DEFAULT_RECIPIENTS = ["k.fietek@kitchfix.com"]` at `src/lib/sousai/reports/emailShared.js:22-29`. Digests still ship, just narrower audience |
 | `SOUSAI_REPORT_SENDER` | Sender identity for the weekly + monthly digest emails. Read at `src/lib/sousai/reports/emailShared.js:33` via `senderIdentity()`. | Prod, Preview | Falls back to the module `DEFAULT_SENDER`; digest still ships |
 | `SLACK_SOUSAI_WEBHOOK_URL` | Incoming-webhook URL for the daily SousAI Slack digest cron (`/api/cron/sousai-daily`). Read at `src/app/api/cron/sousai-daily/route.js:41`. | Prod, Preview | Daily digest logs a "webhook missing" line and returns 200 with `sent: 0`; doesn't take the cron surface down |
@@ -126,7 +126,7 @@ This is a discipline aid, not a CI check. Do not automate it.
 
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
-| `INVENTORY_SHEET_ID` | Sheet ID for inventory module (8-tab schema) | Prod, Preview | Inventory module fails |
+| `INVENTORY_SHEET_ID` | **Legacy env var name; no consumers read it today.** The reconciliation-alarm and canonicalize-inventory-accounts scripts read `SHEET_INVENTORY` (see Script / operator-only section below). Row retained here for provenance of the pre-rename name. | (not read) | (no effect) |
 
 ### Postgres cutover
 

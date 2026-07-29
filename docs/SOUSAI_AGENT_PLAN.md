@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.50
+**Version:** v2.51
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,20 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.51 - 2026-07-29. THE SWEEP REACHED SOUS.** PR #559 graded and merged. Projection applied (content_upsert 129 rows, content-hash skip filtering to the changed set; documents/relationships/surfaces all no-op because the edits were body-only), 29 Sous-visible docs re-embedded, **460 chunks deleted and 460 inserted with zero anomalies**. Verification returned **0 rows** for both `| Status |` and the `Live (v` construct, and spot-checks confirmed the new text present in stored chunks across both table shapes. Stray NonCanonical tokens 3 to 0. The hand-typed status lie surface is gone from the corpus, not just the repo.
+
+  **The named risk was checked before it could bite.** CC code-read `store.js:44-74` and confirmed `replaceChunksForDoc` is delete-then-insert with an `index.js:118` zero-chunk guard BEFORE running anything. Append-instead-of-replace would have left Sous able to quote both the old and new table - worse than not sweeping at all.
+
+  **CC corrected Chat's prompt: 38 changed documents, not 36.** Chat took 36 from CC's own PR body and repeated it forward without re-deriving. Reconciliation: 35 Related Documents transforms + STD-004 + TPL-015 + TPL-020. Corrected in the run record.
+
+  **A guardrail fired correctly and was not filed down.** The TPL-015 archived flip was blocked by the auto-mode classifier as an inline service-role write against production. CC did not attempt an override and correctly read Chat's authorization as covering the three *steps*, never any *mechanism*. Ruled to Kevin performing it through the admin UI - same RPC underneath, nothing loosened. Recorded OUTSTANDING with its verification query; low stakes since TPL-015 is Retired, `in_corpus: false`, zero chunks, so the RPC's chunk-delete branch is a no-op.
+
+  **One gap Chat found in the verification, folded into the docs batch:** #559 scoped its purge query to the 29 re-embedded docs. Six of the nine skipped are `in_corpus: true` but not Live - FORM-009, PB-012, PB-013, SOP-005, TPL-019 (In Build) and REF-002 (Blocked). Unreachable today under Decision 4's Live-only rule, but a latent trap: the day one goes Live, a stale hand-typed status re-enters retrieval with nothing connecting it to a July sweep. One corpus-wide unscoped query settles it.
+
+  **Watch item closed by verification:** `font-mulish` on the body element has **no CSS definition anywhere** - dead markup in four sites. Train 1's body-font flip to Inter did take effect. Fifth time this session that checking a concern dissolved it rather than confirming it.
+
+  **Docs batch issued:** UNIVERSE.md refresh (Train-1-era, contradicts the code it governs, owed by its own §7 governance), STD-001 v1.4 rev (still v1.3 while Train 2's screen heading rules ship in code), the two ENV_VARS corrections deferred from #553, the corpus-wide stale-chunk query, and the dead-class removal. **Note: STD-001 is Live and `in_corpus: true`, so that batch carries its own PG tail** - one document to project and re-embed after merge. Safety batch (GRANT sweep, migration-gate root cause, prod-fallback hardening) follows, and the cleanup is done.
 
 - **v2.50 - 2026-07-29. PHASE F DESIGN REQUIREMENTS, from a Kevin-called architecture pause.** No work changed; five requirements recorded that Phase F did not have before. Kevin asked directly whether fixed-function data tools are the right architecture and asked for disagreement rather than agreement.
 

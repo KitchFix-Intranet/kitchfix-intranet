@@ -493,3 +493,23 @@ New text confirmed live in Sous chunks across both table shapes.
 - TPL-015 archived flip - see Step 3.
 - Live PG active count (128 -> 129) since PR #555 - observed state.
 - Nothing else surfaced.
+
+### Follow-up - 2026-07-29 corpus-wide stale-chunk check
+
+Ran the corpus-wide unscoped variant of Verification Query 1 (not just the 29 re-embedded docs):
+
+```
+SELECT doc_id, count(*) FROM document_chunks
+WHERE content ILIKE '%| Status |%' OR content ILIKE '%Live (v%'
+GROUP BY doc_id ORDER BY doc_id;
+```
+
+Result: **1 real finding, 11 false positives.**
+
+**Real finding - FORM-007 (Live, in_corpus=true, 1 chunk):** Its Related Documents block sits at H2 (`## Related Documents` under `# HANDLING & REFERENCES`), not top-level H1. PR #558's sweep pattern was `^# Related Documents$` (H1-only), so FORM-007 was missed. The chunk carries `| Document ID | Title | Status |` header and one `Live (v1.1)` cell (STD-001 row). Sous can quote this today. **Not fixed in this PR** per prompt fence; re-embed candidate on Kevin's ruling.
+
+**False positives (11 docs):** REC-101 through REC-111 have `| ID | Status | as-of | LEDGER ref |` tables under `Rulings & Decisions` and `| Item | Status | Owner | Blocking cert? |` under `Open Items`. Those Status columns are legitimate ruling/task status ("CLOSED", "OPEN"), not the Related Documents drift pattern. The query's substring match couldn't tell them apart from the sweep target.
+
+**The 6 predicted docs (FORM-009, PB-012, PB-013, SOP-005, TPL-019, REF-002) all show `Reviewed against` in their stored chunks today** - the prediction that non-Live changed docs would still carry old text did not hold. Cause not fully reconstructable from this session; noted as observed state.
+
+Recommendation for Kevin's ruling: FORM-007 is Live and in-corpus, so it is exactly the risk class this arc was neutralizing. Re-embed FORM-007 targeted, same mechanism as PR #559 Step 2 (`sousai-embed-corpus.mjs FORM-007`). Small (1 chunk affected). Fix the H2 case in a future validator rule if the shape recurs.

@@ -5,8 +5,10 @@
 > and what is fenced (do not touch). Builders read this before touching any
 > reskin PR; reviewers grade against it.
 >
-> **Status.** Foundation - TRAIN 1 landed 2026-07-29. Trains 2, 3, 4
-> reskin the products against this spec.
+> **Status.** Foundation. TRAIN 1 landed 2026-07-29 (#549). TRAIN 2 (OPD
+> reskin) landed 2026-07-29 (#551). TRAIN 3 (Sous surfaces) landed
+> 2026-07-29 (#552). TRAIN 4 (Build Dashboard rework) deferred pending
+> its rework decision; not yet scoped.
 >
 > **Companion docs.** [`DESIGN_PRINCIPLES.md`](DESIGN_PRINCIPLES.md) -
 > philosophy (Floor-first, Four Gates, EI lens).
@@ -70,7 +72,7 @@ Every surface, non-negotiable. Ratified 2026-07-28.
 | People Portal | `--accent-people` | `#7C3AED` (purple) | PP module theming |
 | Directory | `--accent-directory` | `#C41E3A` (Cardinals red) | Directory cards |
 | Playbook / SC (shared) | `--accent-playbook` / `--accent-sc` | `#0F6E56` | OPD reader interactives, SC v1 buttons + focus rings (before Train 1 sweep) |
-| Sous | (Train 3) | (TBD Train 3) | To be added when the Sous surface lands. |
+| Sous | rides OPD's `--opd-teal` (`#0F6E56`) | no distinct accent token | Train 3 shipped without a Sous-specific accent token; Sous surfaces reuse the OPD teal family. `grep '--sa-\|--sous' src/app/tokens.css` returns no matches. |
 
 ### Shells
 
@@ -82,10 +84,10 @@ Nav is 1520 (universe constant, rule 4). Product shells:
 | Service Calendar v2 overview | **1520** | `--sc2-shell-max` [`src/app/tokens.css:136`] |
 | Service Calendar v2 DayEntry | **1240** | `--sc2-entry-max` [`src/app/tokens.css:137`] |
 | SC v1 `.oh-bound` | 1024 (legacy) | `src/app/ops/css/ops-shared.css` |
-| OPD browsing shell (`.pb-shell`) | 1024 today - **1240 in Train 2** | `src/app/playbook/playbook.css:8-10` |
-| OPD reader (`.pb-fullpage-wrap`) | 880 today - **1240 in Train 2** | `src/app/playbook/playbook.css:2150-2156` |
-| OPD reader prose cap | 776 today - **~760 in Train 2** (72 CPL) | Appendix A A.1 CPL method |
-| Sous page | rides OPD's shell (**1240**) | Train 3 |
+| OPD browsing shell (`.pb-shell`) | **1240** | `src/app/playbook/playbook.css:10` |
+| OPD reader (`.pb-fullpage-wrap`) | **1240** | `src/app/playbook/playbook.css:2287` |
+| OPD reader prose cap | **760 inner** (848 article max-width - 88 horizontal padding at 32/44) | `src/app/playbook/playbook.css:2350, 2354`; Appendix A A.1 CPL method |
+| Sous page | rides OPD's shell (**1240**) | Train 3 shipped |
 | Global default (`.kf-desktop-wrapper`) | 1024 | `src/app/globals.css:48-52` |
 
 Prose cap ~760 targets 72 CPL at Inter 15px body (0.55 em advance);
@@ -238,9 +240,9 @@ tool-progress line + live text stream + rail/badge settle. This fence
 exists so future PRs do not steal SC's celebration language for a chat
 surface.
 
-### Fence E - Train 1 in-scope surfaces (this PR)
+### Fence E - Train 1's in-scope surfaces (historical)
 
-Train 1 touches ONLY the surfaces the CC prompt named:
+Train 1 (PR #549) landed with a deliberately narrow surface set:
 - `docs/UNIVERSE.md` (new)
 - `src/app/tokens.css` - `--opd-*` block + `--surface-page` value flip
 - `src/app/globals.css` - `--kf-bg` flip + `body` font + six residual
@@ -251,6 +253,10 @@ Train 1 touches ONLY the surfaces the CC prompt named:
   (`.pb-card:focus-visible`)
 
 No other `playbook.css` change. No SC v2 change. No print pipeline touch.
+Recorded here as the discipline template later trains matched: name the
+in-scope surface set, exclude the rest by fence. Trains 2 (#551) and 3
+(#552) followed the same pattern for OPD reader and Sous surfaces
+respectively.
 
 ### Fence F - OPD Build Dashboard (`playbook/admin/admin.css`)
 
@@ -262,41 +268,44 @@ sites at [`src/app/playbook/admin/admin.css`] still read
 
 ---
 
-## 6. Named open items (not this train)
+## 6. Named open items (re-checked 2026-07-29 post-Trains 2 + 3)
 
-Items surfaced by Train 1 or by Appendix B that the reskin will need
-Kevin's ruling on later. Recorded here so nothing gets silently absorbed.
+Each item stated with current evidence. Closed items retained (struck
+through in intent, not markup) so future readers see the decision trail.
 
-1. **`--oh-font-body: "Mulish"`** at `src/app/ops/css/ops-shared.css:30`.
-   Flipping it to Inter restyles SC v1, Vendor Portal, People Portal, and
-   the entire ops shell. Out of Train 1 scope. Kevin ruling wanted:
-   flip in a future train, or accept Mulish as the ops-shell body face.
-2. **OPD reader focus sweep (11 sites) and OPD admin focus sweep
-   (~11 sites).** Reader sites sweep in Train 2 alongside the reader
-   work. Admin sites sweep in Train 4 alongside the admin rework.
-3. **The `.sc-day-notes-input:focus-visible` still sets
-   `border-color: var(--accent-sc)`.** The outline is now navy per rule
-   2; the border-color hint at accent-sc remains as SC's input focus
-   decoration. If Kevin wants that also navy, small follow-up sweep.
-4. **`outline: none` + custom box-shadow / border patterns on inputs**
-   (e.g. `.sc-day-activity-composer-input:focus-visible` uses
-   `outline: none`; `.sc-admin-eff-date:focus` uses `:focus` not
-   `:focus-visible` with a box-shadow-based ring). Rule 2 is about the
-   `outline` property; these custom patterns are left alone in Train 1.
-   If Kevin wants them normalized to `outline: 2px solid var(--focus-ring-color)`,
-   small follow-up sweep.
-5. **The submissionToast focus ring flipped white -> navy.** Amber gradient
-   background reads with a navy ring. If Kevin dislikes the visual on the
-   milestone celebration, roll back to white with a comment noting rule 2
-   exception "toast celebrates over amber gradient."
-6. **STD-001 v1.4 screen heading rules** (H1 2px / H2 1px / H3 1px at 60%
-   opacity sky-blue) - Design Scope (5a) sanctions the rev. The reader
-   currently ships H1/H2/H3 rules in `pt` (browsers render sub-1px pt
-   unpredictably). Rev + reader sweep are Train 2 work.
-7. **Amber fork `#D9892F`.** Design Scope rules `#D9892F` as brand-book
-   print-collateral canonical; `#D97706` remains digital canonical. If
-   `#D9892F` ever needs to appear on screen (e.g. a print-preview render
-   inside the intranet), it enters as a scoped token then, not now.
+1. **STILL OPEN. `--oh-font-body: "Mulish"`** at
+   `src/app/ops/css/ops-shared.css:30`. Not flipped in Train 1, Train 2,
+   or Train 3. Ops shell still reads Mulish for body face.
+2. **PARTIALLY CLOSED.** OPD reader focus sweep (11 sites) is CLOSED -
+   every `.pb-*` focus-visible in `src/app/playbook/playbook.css` reads
+   `outline: 2px solid var(--focus-ring-color)` (grep-verified). OPD
+   admin focus sweep (~11 sites) STILL OPEN - `src/app/playbook/admin/admin.css`
+   focus-visible sites still read `var(--kf-ops-amber)` or
+   `var(--kf-playbook-teal)` (12 sites, grep-verified). Sweeps at
+   Train 4 alongside the admin rework.
+3. **STILL OPEN.** `.sc-day-notes-input:focus-visible` at
+   `src/app/service-calendar/dayDetail.css:666-670` still sets
+   `border-color: var(--accent-sc)` alongside the navy outline. Kevin's
+   original note applies unchanged.
+4. **STILL OPEN.** `outline: none` on inputs plus custom box-shadow
+   patterns persist across SC files - `DaySquare.css:652, 1227`,
+   `dayDetail.css:303, 753`, `admin/ops-sc-admin.css:496, 536, 553`,
+   `season/exportControl.css:121`. Rule 2 unenforced on these. Kevin's
+   original ruling stands.
+5. **UNCHANGED.** submissionToast focus ring behavior recorded in Train 1;
+   no report of the visual reading wrong. Item stays as-is.
+6. **CLOSES WITH THIS PR.** STD-001 v1.4 screen heading rules ship in
+   code (`playbook.css:2436, 2460, 2470` - H1 2px solid `--opd-sky`; H2
+   1px solid `--opd-sky`; H3 1px solid `color-mix(in srgb, var(--opd-sky)
+   60%, transparent)`). Task 2 of this PR adds the screen column to the
+   MDX standard and bumps `version: "1.4"`. Reader-side ships were done
+   in Train 2.
+7. **STILL OPEN with minor drift.** `#D9892F` now has ONE code hit at
+   `src/lib/sousai/reports/formatDigests.js:46` (email/Slack digest
+   formatting, non-screen). The "zero code presence today" phrasing in
+   §2 is technically stale but the fence intent holds (screen keeps
+   `#D97706`; brand/print/email context is the only place `#D9892F`
+   ships). No screen violation.
 
 ---
 
@@ -317,7 +326,20 @@ Kevin's ruling on later. Recorded here so nothing gets silently absorbed.
 
 ## Captain's log
 
-- **2026-07-29** - Initial spec, TRAIN 1 foundation PR. Seven universe
-  rules ratified; `--opd-*` token layer + focus sweep + nav width + ground
-  unification + globals-scope Mulish body sweep landed. Six named open
-  items recorded.
+- **2026-07-29** - Initial spec, TRAIN 1 foundation PR (#549). Seven
+  universe rules ratified; `--opd-*` token layer + focus sweep + nav
+  width + ground unification + globals-scope Mulish body sweep landed.
+  Six named open items recorded.
+- **2026-07-29** - TRAIN 2 OPD reskin landed (#551). Reader wrap widened
+  880 -> 1240; article prose cap set to 848 max-width with 32/44 padding
+  (760 inner); STD-001 v1.4 screen heading rules shipped in code
+  (`playbook.css` H1/H2/H3 rules migrated from pt to px against
+  `--opd-sky`); OPD reader focus sweep completed (11 sites).
+- **2026-07-29** - TRAIN 3 Sous surfaces landed (#552). `/sous` page,
+  live overlay panel, per-doc ask, digest-fed chips, mdLite renderer,
+  five states plus first-run. Sous rides `--opd-teal` (no distinct
+  accent token); the motion fence held.
+- **2026-07-29** - Post-Train-3 re-derivation against the working tree
+  (this PR). All Shell values corrected to shipped; Sous accent row
+  updated; Fence E rewritten as historical; §6 open items re-checked
+  against evidence.
