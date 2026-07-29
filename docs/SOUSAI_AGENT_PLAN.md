@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.45
+**Version:** v2.46
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,16 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.46 - 2026-07-29.** PR #554 graded and merged: single-gate Sous nav visibility. canUseSous helper in opdAcl.js, three call sites (api gate, page gate, layout-resolved nav prop), 5/5 unit tests including a no-backdoor case reproducing both old predicates across six tier x isCorporate combinations, print fence zero-diff, plan v2.45 aboard. The #537 one-gate precedent now covers Sous itself.
+
+  **Task 2 falsified Chat's premise, correctly.** Chat claimed `# Related Documents` was an empty heading filled downstream, and scoped a projection-pipeline fix off it. CC proved the tables are HAND-AUTHORED markdown with a HAND-TYPED Status column, 41 files carrying the pattern. Chat's claim came from a sed range that terminated at the first blank line - a bad command, not a stale audit. Fifth Chat correction of the session and the only one not traceable to audit rot. Task 2 was worth its place in the prompt.
+
+  **The finding is worse than the bug it replaced.** Hand-typed statuses are snapshots that drift silently: when a target goes Retired, every typed "Live" pointing at it keeps asserting the old value and no code path can degrade what a human typed into markdown. This is a data-integrity problem for the state-of-record audit, not a reader fix. Retired-link degradation for the full-page reader is accordingly parked pending that audit. Also observed and unflagged by CC: SOP-015 lists SOP-002 twice in its own table, suggesting these tables have never been validated.
+
+  **Named watch item (not merge-blocking):** canUseSous short-circuits synchronously for SLT, so the six-person SLT team pays zero DB calls - but every non-SLT authenticated user now pays a contacts lookup on every render of every route, which is most of the company on the critical path. One indexed ilike against an already-async layout, so milliseconds. React.cache does not help (single call per render); the real fix is resolving once per session. Revisit if latency traces show it.
+
+  **Phase H item 7 issued as the OPD State of Record audit** - read-only, replaces the rotted audit corpus with one dated SHA-stamped picture. Governing rule: re-derive everything, cite nothing from a prior audit as fact. Includes a supersede verdict on all eight existing audit documents so the rot cannot recur, and a full 41-file sweep of hand-typed Related tables against actual target statuses. Block 0's remaining items (UNIVERSE refresh, STD-001 v1.4, INVENTORY_SHEET_ID, GRANT sweep, migration-gate root cause, prod-fallback hardening) queue behind it.
 
 - **v2.45 - 2026-07-29. THE AUDIT DOCS ARE STALE - STANDING DISCIPLINE ADDED.** PR #553 graded and merge-called; gate-verified independently rather than on report (residual sweep rerun to zero, docs-only diff confirmed against origin/main, plan byte-identity diffed, secret-shape and em-dash greps clean, six file:line cites spot-checked with one off-by-19 defect noted not bounced). CC exceeded scope usefully by sweeping doc-to-code as well as code-to-doc, surfacing 11 documented-but-unread vars each with a reason. Two new queue items from its recorded findings: prod-fallback hardening and the INVENTORY_SHEET_ID rename.
 
