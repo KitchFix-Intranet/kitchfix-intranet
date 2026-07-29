@@ -24,6 +24,12 @@ import { useScV2, useScEntryV2Effective } from "./v2/flags";
 // a non-pilot account into the new surface. Server payload emit uses
 // the same set (see lib/dataStore/serviceCalendar.js).
 import { M2_HOMESTAND_ACCOUNTS } from "./v2/pilots";
+// M-3 (2026-08-XX): MLB-wide tile inertness gate. Counts are agreed
+// annually and static (owner ruling 2026-07-29 - Phase 4 never
+// happens). Day tiles on MLB accounts become fully inert: no count
+// entry, no mark-no-service, no click target. Same set as M-0's
+// derivation gate - all four MLB accounts, not just the M-2 pilot.
+import { DERIVE_HOMESTANDS_ACCOUNTS } from "./season/homestandDerivation";
 // M-2 (2026-07-29): homestand detail surface. Mounted only on
 // scope === "homestand" AND M2_HOMESTAND_ACCOUNTS.has(account).
 import HomestandDetail from "./v2/homestand/HomestandDetail";
@@ -3160,7 +3166,12 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               loading={loading && !periodDays}
               loadState={workspaceLoadState}
               partialError={partialError}
-              onDayClick={(date) => setFocusDay(date)}
+              /* M-3 (2026-08-XX): MLB day tiles become inert. Owner
+                 ruling B: no count entry, no mark-no-service, no
+                 click target on any of the four MLB accounts. The
+                 DayDetail overlay never mounts because focusDay
+                 never gets set. Non-MLB behavior is preserved. */
+              onDayClick={DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount) ? undefined : (date) => setFocusDay(date)}
               bulkMode={bulkMode}
               onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
               bulkSelected={bulkSelected}
@@ -3396,7 +3407,12 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               today={today}
               loading={loading && !monthDays}
               partialError={partialError}
-              onDayClick={(date) => setFocusDay(date)}
+              /* M-3 (2026-08-XX): MLB day tiles become inert. Owner
+                 ruling B: no count entry, no mark-no-service, no
+                 click target on any of the four MLB accounts. The
+                 DayDetail overlay never mounts because focusDay
+                 never gets set. Non-MLB behavior is preserved. */
+              onDayClick={DERIVE_HOMESTANDS_ACCOUNTS.has(selectedAccount) ? undefined : (date) => setFocusDay(date)}
               bulkMode={bulkMode}
               onBulkModeToggle={(next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }}
               bulkSelected={bulkSelected}
@@ -3584,6 +3600,12 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               buildScUrl({ account: selectedAccount || undefined, homestand: nextKey }),
               { scroll: false }
             )}
+            /* M-3 (2026-08-XX): close-out plumbing. onReload bumps
+               reloadKey so the year-summary refetches after a
+               confirm, transitioning the block from actuals-due to
+               closed-out on the next render. */
+            showToast={showToast}
+            onReload={() => setReloadKey((k) => k + 1)}
           />
         )}
 

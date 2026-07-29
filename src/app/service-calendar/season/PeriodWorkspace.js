@@ -1116,7 +1116,13 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     justFlipped={!!(justFlippedDates && justFlippedDates.has(d.date))}
                     role="gridcell"
                     tabIndex={isRoving ? 0 : -1}
-                    onClick={isDisplayOnly ? undefined : () => {
+                    /* M-3 (2026-08-XX): if the parent provides no
+                       onDayClick AND bulk mode is off, there is
+                       nothing to do on click; render the tile as
+                       fully inert (no cursor pointer, no aria role
+                       button) rather than truthy-but-noop. MLB
+                       accounts follow this path per ruling B. */
+                    onClick={(isDisplayOnly || (!onDayClick && !bulkMode)) ? undefined : () => {
                       setFocusIdx(flatIdx);
                       if (bulkMode) {
                         if (isBulkSelectable) onBulkTileClick?.(d.date);

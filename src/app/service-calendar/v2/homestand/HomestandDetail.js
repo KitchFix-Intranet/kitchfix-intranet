@@ -1,31 +1,31 @@
 "use client";
 
 // M-2 (2026-07-29): homestand detail surface. Owner scope C3.1 - the
-// screen the build exists for. Answers the chef's questions in the
-// order they ask them: what does this homestand look like, how much
-// can I spend, what do I owe.
+// screen the build exists for. M-3 adds the close-out surface below
+// the scheduling instruction; the rail can lead with spend once a
+// labor_actual exists.
 //
-// STRUCTURE (per prompt §4.5):
+// STRUCTURE:
 //   - breadcrumb: "< Season - < July - < HS9 >" (hyphens per §5)
 //   - header: ordinal, date range, day/game counts, opponents, status
 //   - day strip
 //   - scheduling instruction (VERBATIM copy per prompt §4.4)
-//   - rail (BUDGET FIRST - no spend source until M-3)
+//   - close-out panel (M-3)
+//   - rail (BUDGET + spend when closeout exists)
 //   - state legend (visible; non-negotiable for tracker screens)
 //
-// M-2 FENCES (per prompt §4.5, §9):
-//   - Rail leads with BUDGET, not SPENT. Spend comes from
-//     sc_homestand_closeout, which arrives in M-3.
-//   - Season-to-date omitted (same reason).
-//   - No week summaries. No overtime dividers on the strip. The
-//     payroll week convention is open (Round 1 Q1 to owner).
-//   - No Handoff motion (scope E3: MLB does not adopt it).
-//   - status enum is upcoming | in-progress | ended. Owner ruling
-//     (Round 1 §4): `actuals-due` is a close-out concept and arrives
-//     in M-3 with the thing that makes it actionable.
+// STATUS ENUM (M-3, 2026-08-XX):
+//   upcoming    - block not yet started
+//   in-progress - today inside span
+//   actuals-due - past block, no live closeout
+//   closed-out  - live closeout row exists
+//
+// The M-2 `ended` status retires. Server never emits it once M-3
+// lands.
 
 import { useMemo } from "react";
 import DayStrip from "./DayStrip";
+import CloseoutPanel from "./CloseoutPanel";
 // M-2 defect fix (2026-07-29 owner ruling, live-gate bounce):
 // dedicated legend for the day strip's vocabulary. StateLegend
 // belongs to the day-tile surface and would teach a nine-key
@@ -114,6 +114,12 @@ export default function HomestandDetail({
   loadState,            // "idle" | "loading" | "loaded" | "failed"
   onClimbToSeason,
   onNavHomestand,       // (segmentKey) => void
+  // M-3 (2026-08-XX): close-out plumbing. showToast surfaces the
+  // "closed out" / "reopened" confirmations; onReload bumps the
+  // parent's reloadKey after a successful confirm so the payload
+  // (including status transitions) refetches.
+  showToast,
+  onReload,
 }) {
   // Hooks-first (rules-of-hooks): every useMemo runs on every render,
   // regardless of the early-return branches below. `block` may be
@@ -231,7 +237,10 @@ export default function HomestandDetail({
                 {formatRangeCaption(block.startDate, block.endDate)}
               </span>
               <span className={`sc-homestand-status sc-homestand-status--${block.status}`}>
-                {block.status === "in-progress" ? "in progress" : block.status}
+                {block.status === "in-progress" ? "in progress"
+                  : block.status === "actuals-due" ? "actuals due"
+                  : block.status === "closed-out" ? "closed out"
+                  : block.status}
               </span>
             </div>
             <div className="sc-homestand-meta">
@@ -283,6 +292,21 @@ export default function HomestandDetail({
               The budget is calculated on game days only.
             </div>
           </section>
+
+          {/* M-3 close-out panel. Rendering is state-driven inside
+              CloseoutPanel:
+                upcoming    -> nothing
+                in-progress -> disabled "opens after..." note
+                actuals-due -> active confirm form
+                closed-out  -> summary + reopen (or reopen form) */}
+          <CloseoutPanel
+            account={account}
+            block={block}
+            dayMap={dayMap}
+            todayIso={todayIso}
+            showToast={showToast}
+            onSaved={onReload}
+          />
         </div>
 
         <aside
@@ -323,14 +347,18 @@ export default function HomestandDetail({
           <section className="sc-homestand-rail-section">
             <div className="sc-homestand-rail-label">Service</div>
             {/* F3 (2026-07-29 owner ruling): servedDays + exceptionDays
-                can be less than gameCount for an ended block - a past
-                game day never entered classifies as overdue or
+                can be less than gameCount for an actuals-due block -
+                a past game day never entered classifies as overdue or
                 needs-entry and lands in neither bucket. Surface the
-                unentered count explicitly on ended blocks so the rail
-                does not read as though the block is fully accounted
-                for. In-progress blocks read the unaccounted count as
-                "still to enter," which is the operator's job to close
-                out, not a rail-side omission. */}
+                unentered count explicitly on actuals-due blocks so
+                the rail does not read as though the block is fully
+                accounted for.
+                M-3 (2026-08-XX): status enum change - `ended` retires;
+                `actuals-due` is the new "past + not closed" state.
+                A closed-out block cannot have unentered game days by
+                construction (the confirm wrote counts for every
+                non-exception day), so the unentered branch cannot
+                paint on `closed-out`. */}
             <div className="sc-homestand-rail-served">
               {block.servedDays} of {block.gameCount} game days served
               {block.exceptionDays > 0 && (
@@ -338,7 +366,7 @@ export default function HomestandDetail({
               )}.
               {(() => {
                 const unentered = (block.gameCount || 0) - (block.servedDays || 0) - (block.exceptionDays || 0);
-                if (unentered > 0 && block.status === "ended") {
+                if (unentered > 0 && block.status === "actuals-due") {
                   return <> {unentered} not entered.</>;
                 }
                 return null;
