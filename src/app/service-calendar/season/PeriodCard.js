@@ -33,6 +33,8 @@ import { countActionableDays, countEnteredActionable } from "./dayPredicates";
 // `homestand_id`. Full-season is required so the ordinal labels
 // (HS1..HSN) line up with the SeasonStepper's numbering.
 import { deriveHomestandSegments } from "./homestandDerivation";
+// M-4b (2026-07-30): budget + scoped homestand list below the tiles.
+import ScopeCardMoneySection from "./ScopeCardMoneySection";
 
 export default function PeriodCard({
   periodRange,                // { period, start, end } from sc-year-summary
@@ -48,6 +50,14 @@ export default function PeriodCard({
   springDateSet,              // sc-19: Set<YYYY-MM-DD> for Spring Training dates (client-derived from phaseCalendar.js)
   yearData,                   // M-0: full year for the homestand-subtitle re-derivation
   accountKey,                 // M-0: MLB-only gate is applied inside deriveHomestandSegments
+  // M-4b (2026-07-30): per-period labor budgets + all-period
+  // ranges for straddle detection + M-3 homestands[] payload for
+  // status join + click routing to homestand scope. All null on
+  // non-MLB accounts; renderer null-guards.
+  periodBudgets,
+  periodRanges,
+  homestands,
+  onHomestandClick,
 }) {
   // Design Batch 3 (audit P2-3, CC-11): for homestand-shaped accounts,
   // derive a homestand-based subtitle from full-season blocks scoped
@@ -186,6 +196,25 @@ export default function PeriodCard({
           days={sortedDays}
           hasHomestandSchedule={hasHomestandSchedule}
           isFeeAccount={isFeeAccount}
+        />
+      )}
+
+      {/* M-4b (2026-07-30): budget line + scoped homestand list.
+          Fires on MLB accounts only (periodBudgets / homestands both
+          null on non-MLB). Sits below the pre-M-4b footer so the
+          existing signals stay put; new content is additive. */}
+      {hasHomestandSchedule && !isOffSeasonPeriod && (
+        <ScopeCardMoneySection
+          scopeKind="period"
+          periodNumber={periodNum}
+          periodRange={periodRange}
+          periodRanges={periodRanges}
+          periodBudgets={periodBudgets}
+          homestands={homestands}
+          yearData={yearData}
+          todayDate={todayDate}
+          accountKey={accountKey}
+          onHomestandClick={onHomestandClick}
         />
       )}
     </article>

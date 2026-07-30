@@ -1,0 +1,108 @@
+/* M-4b (2026-07-30): scope card money + homestand list section.
+   Shared by MonthCard and PeriodCard. Tokens only. */
+
+.sc-scope-money {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+
+.sc-scope-money-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--size-body);
+  color: var(--text-default);
+  font-variant-numeric: var(--num-tabular);
+}
+
+.sc-scope-money-label {
+  font-size: var(--size-micro);
+  font-weight: var(--wt-display);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.sc-scope-money-value {
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+}
+
+.sc-scope-money-value--missing {
+  font-style: italic;
+  font-weight: var(--wt-medium);
+  color: var(--text-muted);
+}
+
+.sc-scope-homestand-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sc-scope-hs-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-cell);
+  font-size: var(--size-caption);
+  color: var(--text-default);
+  font-variant-numeric: var(--num-tabular);
+}
+
+.sc-scope-hs-row--interactive {
+  cursor: pointer;
+}
+.sc-scope-hs-row--interactive:hover {
+  background: var(--surface-sunken);
+}
+.sc-scope-hs-row--interactive:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.sc-scope-hs-id {
+  font-weight: var(--wt-bold);
+  color: var(--text-heading);
+}
+
+.sc-scope-hs-opp {
+  color: var(--text-default);
+}
+
+.sc-scope-hs-count {
+  color: var(--text-muted);
+  justify-self: end;
+}
+
+.sc-scope-hs-status,
+.sc-scope-hs-span {
+  grid-column: 1 / -1;
+  font-size: var(--size-micro);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.sc-scope-hs-status {
+  text-transform: uppercase;
+  font-weight: var(--wt-semibold);
+}
+
+.sc-scope-hs-row--actuals-due .sc-scope-hs-status {
+  color: var(--status-needs-fg);
+}
+.sc-scope-hs-row--closed-out .sc-scope-hs-status {
+  color: var(--accent-sc);
+}
+.sc-scope-hs-row--in-progress .sc-scope-hs-status {
+  color: var(--accent);
+}
