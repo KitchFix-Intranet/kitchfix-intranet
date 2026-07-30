@@ -165,7 +165,18 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
   // unchanged. This replaces the previous split behavior where intermediate
   // turns used messages.create and only the budget-exhausted terminal used
   // streaming - now terminal turns stream too, which is the whole point.
+  // Inter-turn text separator. Fixes the run-together in Kevin's Phase F
+  // spot-check ("Let me check:TBJ-FL breakfast rates"): text emitted before
+  // a tool_use and text emitted after the tool result land back-to-back in
+  // the client's answerText accumulator. Insert a "\n\n" once at the start
+  // of any subsequent turn that emits its first text, if the prior turn
+  // ended with text. Emitted BEFORE the first real chunk of the new turn
+  // so the client's mdLite sees proper paragraph breaks.
+  let priorTurnEndedWithText = false;
+  let thisTurnEmittedText = false;
+
   async function streamedTurn() {
+    thisTurnEmittedText = false;
     const stream = client.messages.stream({
       model: SOUSAI_AGENT_MODEL,
       max_tokens: MAX_OUTPUT_TOKENS,
@@ -178,9 +189,18 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
         firstTokenFired = true;
         emit({ kind: "first-token", t: Date.now() });
       }
+      if (!thisTurnEmittedText && priorTurnEndedWithText) {
+        // First text delta of this turn AND the prior turn also emitted text -
+        // separate them so the client's text accumulator doesn't concatenate
+        // "Let me check:" + "TBJ-FL breakfast rates" without a break.
+        emit({ kind: "text-delta", t: "\n\n" });
+      }
+      thisTurnEmittedText = true;
       emit({ kind: "text-delta", t: chunk });
     });
-    return await stream.finalMessage();
+    const finalMsg = await stream.finalMessage();
+    priorTurnEndedWithText = thisTurnEmittedText;
+    return finalMsg;
   }
 
   while (true) {

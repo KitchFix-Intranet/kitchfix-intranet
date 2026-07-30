@@ -34,8 +34,15 @@ import { findContact } from "./data/findContact.js";
 import { listAccounts } from "./data/listAccounts.js";
 import { listContactsByRole } from "./data/listContactsByRole.js";
 import { getAccountTeam } from "./data/getAccountTeam.js";
+import { scAccountWindow } from "./data/scAccountWindow.js";
+import { scHomestandDetail } from "./data/scHomestandDetail.js";
+import { scServicePrice } from "./data/scServicePrice.js";
+import { scOrientation } from "./data/scOrientation.js";
+import { spendSummary } from "./data/spendSummary.js";
+import { spendVendorHistory } from "./data/spendVendorHistory.js";
 import {
   KNOWN_ROLES,
+  KNOWN_TEAM_KEYS,
 } from "./data/_constants.js";
 
 const GET_DOCUMENT_MAX_BATCH = 6;
@@ -314,9 +321,180 @@ const DATA_TOOLS = [
   },
 ];
 
+// ── SC + spend data tools (Phase F PR 2 - the four SC tools + two spend tools)
+
+const SC_AND_SPEND_TOOLS = [
+  {
+    definition: {
+      name: "sc_account_window",
+      description:
+        "Aggregate summary of Service Calendar performance for one account over one window. Returns a SINGLE record per call: projected + actual meal counts and revenue, days_with_actuals fraction, window boundaries. Never returns rows - sc_homestand_detail is the rows tool. Window options: 'month' (calendar month), 'homestand' (the current homestand or most recent if today is off-homestand), 'period' (the current P1-P13 period). asOf defaults to today. Partial windows are ALWAYS marked partial via is_partial + days_with_actuals - do not present a mid-window total as complete. Revenue is a DECLINE (revenue.available=false) when any service in the window has no configured price (price_effective_date IS NULL) - name the unpriced services rather than silently totaling.",
+      input_schema: {
+        type: "object",
+        properties: {
+          accountKey: { type: "string", description: "e.g. 'CIN - AZ'" },
+          window: { type: "string", enum: ["month", "homestand", "period"], description: "defaults to 'month'" },
+          asOf: { type: "string", description: "YYYY-MM-DD; defaults to today" },
+        },
+        required: ["accountKey"],
+      },
+    },
+    async execute(input) { return scAccountWindow(input || {}); },
+    summarize(result) {
+      return {
+        kind: "sc-window",
+        accountKey: result?.parameters?.accountKey,
+        window: result?.parameters?.window,
+        is_partial: result?.is_partial,
+        revenue_available: result?.revenue?.available,
+      };
+    },
+    kind: "data",
+    collectIds() { return []; },
+  },
+  {
+    definition: {
+      name: "sc_homestand_detail",
+      description:
+        "Row-per-(day, service) detail for a homestand. Returns ROWS capped at 200 with honest truncation - never aggregates. Days with no actuals entered carry actual_meals=null (DISTINCT from a zero-meal day - the whole point of this tool is chasing entry gaps). Services with no configured price carry revenue_available=false; meal counts still land. homestandRef 'current', 'next', 'previous', or explicit YYYY-MM-DD within a homestand.",
+      input_schema: {
+        type: "object",
+        properties: {
+          accountKey: { type: "string" },
+          homestandRef: { type: "string", description: "'current' (default), 'next', 'previous', or YYYY-MM-DD" },
+        },
+        required: ["accountKey"],
+      },
+    },
+    async execute(input) { return scHomestandDetail(input || {}); },
+    summarize(result) {
+      return {
+        kind: "sc-homestand-detail",
+        accountKey: result?.parameters?.accountKey,
+        homestand_id: result?.homestand_id,
+        rows: result?.row_count ?? 0,
+        no_entry_days: result?.days_without_actuals ?? 0,
+      };
+    },
+    kind: "data",
+    collectIds() { return []; },
+  },
+  {
+    definition: {
+      name: "sc_service_price",
+      description:
+        "Look up the current price for a service at an account, as of a date. Encapsulates the F8 join trap (sc_service_prices has no account_key; the tool joins through sc_services). serviceNameOrId can be a substring of the service name or an exact service UUID. Optional includeHistory returns prior price rows. NO PRICE FOUND IS A DECLINE, not a $0 - each matched service carries price_available and price_decline_reason so the model can tell the user 'no configured price' rather than fabricating a rate.",
+      input_schema: {
+        type: "object",
+        properties: {
+          accountKey: { type: "string" },
+          serviceNameOrId: { type: "string", description: "substring of service name, or exact service UUID" },
+          asOf: { type: "string", description: "YYYY-MM-DD; defaults to today" },
+          includeHistory: { type: "boolean", description: "include prior price rows" },
+        },
+        required: ["accountKey", "serviceNameOrId"],
+      },
+    },
+    async execute(input) { return scServicePrice(input || {}); },
+    summarize(result) {
+      return {
+        kind: "sc-price",
+        matches: result?.total ?? 0,
+        priced: result?.priced_count ?? 0,
+        unpriced: result?.unpriced_count ?? 0,
+      };
+    },
+    kind: "data",
+    collectIds() { return []; },
+  },
+  {
+    definition: {
+      name: "sc_orientation",
+      description:
+        `Answers "where are we" for an account: current homestand, current P1-P13 period, and (for the 5 PDC accounts CIN-AZ, STL-FL, TBJ-FL, TBR-FL, TXR-AZ) the current PDC phase. Period is COMPANY-WIDE - a bare "what period are we in" question can be answered without an accountKey by calling scope='period' with no accountKey; the answer applies to all 11 service accounts (CORP has no service calendar). Homestand and PDC phase remain per-account. Returns whichever dimensions the account actually has; a missing dimension is a STRUCTURAL ANSWER, not a data gap ("no homestand schedule - this is a PDC facility"). Period output normalizes to "Period 8" / "P8" - never bare "8". Known team_keys: ${KNOWN_TEAM_KEYS.join(", ")}. scope: 'homestand' | 'period' | 'phase' | 'both' | 'all' (default all).`,
+      input_schema: {
+        type: "object",
+        properties: {
+          accountKey: { type: "string", description: "Optional when scope='period' (period is company-wide); required for homestand or phase." },
+          date: { type: "string", description: "accepted but currently CURRENT_DATE-only via views (extension pending)" },
+          scope: { type: "string", enum: ["homestand", "period", "phase", "both", "all"], description: "defaults to 'all'" },
+        },
+      },
+    },
+    async execute(input) { return scOrientation(input || {}); },
+    summarize(result) {
+      return {
+        kind: "sc-orientation",
+        accountKey: result?.parameters?.accountKey,
+        dimensions: result?.account_shape?.dimensions_available ?? [],
+      };
+    },
+    kind: "data",
+    collectIds() { return []; },
+  },
+  {
+    definition: {
+      name: "spend_summary",
+      description:
+        "Aggregate invoice spend by category, vendor, and/or account, over a window. Corrections-chain resolved via v_invoice_submissions_current so totals don't double-count. Vendor names resolved through vendor_aliases (spelling varies across invoices). Historical rows (batch_rebuild) included by default; set excludeHistorical=true for live-only totals. Confidence caveat surfaces when many lines are OCR-flagged 'Review'. window: 'month' | 'year' | 'ytd' | 'date_range' (date_range requires dateFrom + dateTo).",
+      input_schema: {
+        type: "object",
+        properties: {
+          accountKey: { type: "string", description: "optional - omit for portfolio total" },
+          vendorName: { type: "string", description: "vendor name substring (resolved via aliases)" },
+          category: { type: "string", description: "line-item category substring (Food, Snacks, Packaging, etc.)" },
+          window: { type: "string", enum: ["month", "year", "ytd", "date_range"], description: "defaults to 'month'" },
+          dateFrom: { type: "string", description: "required when window=date_range" },
+          dateTo: { type: "string", description: "required when window=date_range" },
+          asOf: { type: "string", description: "YYYY-MM-DD; defaults to today" },
+          excludeHistorical: { type: "boolean", description: "exclude batch_rebuild rows" },
+        },
+      },
+    },
+    async execute(input) { return spendSummary(input || {}); },
+    summarize(result) {
+      return {
+        kind: "spend-summary",
+        line_count: result?.totals?.line_count ?? 0,
+        dollar_total: result?.totals?.dollar_total ?? 0,
+      };
+    },
+    kind: "data",
+    collectIds() { return []; },
+  },
+  {
+    definition: {
+      name: "spend_vendor_history",
+      description:
+        "Per-line vendor purchase history between two dates. Returns rows capped at 200 with honest truncation. Vendor alias resolution as in spend_summary. Use for 'what did we buy from Sysco between X and Y' questions.",
+      input_schema: {
+        type: "object",
+        properties: {
+          vendorName: { type: "string" },
+          dateFrom: { type: "string", description: "YYYY-MM-DD" },
+          dateTo: { type: "string", description: "YYYY-MM-DD" },
+          accountKey: { type: "string", description: "optional filter" },
+          excludeHistorical: { type: "boolean" },
+        },
+        required: ["vendorName", "dateFrom", "dateTo"],
+      },
+    },
+    async execute(input) { return spendVendorHistory(input || {}); },
+    summarize(result) {
+      return {
+        kind: "spend-history",
+        rows: result?.row_count ?? 0,
+        total_dollars: result?.total_dollars ?? 0,
+      };
+    },
+    kind: "data",
+    collectIds() { return []; },
+  },
+];
+
 // ── The registry (flat array; document tools first for prompt-cache stability)
 
-export const TOOL_REGISTRY = [...DOC_TOOLS, ...DATA_TOOLS];
+export const TOOL_REGISTRY = [...DOC_TOOLS, ...DATA_TOOLS, ...SC_AND_SPEND_TOOLS];
 
 const BY_NAME = new Map(TOOL_REGISTRY.map((t) => [t.definition.name, t]));
 

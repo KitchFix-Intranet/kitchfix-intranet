@@ -9,14 +9,22 @@
 // The pipeline is intentionally minimal - only what Sous emits often:
 //   1. Escape every HTML entity first (& < > " ')                      SECURITY
 //   2. Bold spans: **text** -> <strong>text</strong>
-//   3. List blocks: consecutive lines starting with "1. " / "- " / "* "
+//   3. Table blocks: GFM-style pipe tables -> <table>                  (PR #566)
+//   4. List blocks: consecutive lines starting with "1. " / "- " / "* "
 //      get wrapped in <ol> / <ul>
-//   4. Remaining line breaks become <br>
+//   5. Remaining line breaks become <br>
+//
+// Table support added 2026-07-29 (Phase F PR 2). Sous emits tables when the
+// answer is tabular (per-account price rows, category breakdowns) and the
+// pre-PR renderer left them as literal pipes. A malformed table (bad
+// separator row, mismatched cell count) stays literal rather than producing
+// broken HTML - same degraded-until-complete behavior as unbalanced bold.
 //
 // Applied per delta during streaming: unbalanced markers (an odd count of `**`,
-// or a list opener without a following item) render as literal text until the
-// closing token arrives. This is acceptable per the Train 3 prompt - the tiny
-// visual jitter beats streaming a partial DOM tree.
+// a list opener without a following item, or a table split across deltas)
+// render as literal text until the closing token arrives. This is acceptable
+// per the Train 3 prompt - the tiny visual jitter beats streaming a partial
+// DOM tree.
 //
 // ONE HARD RULE: escape before ANY substitution. If a future variant adds a
 // pattern that emits inline HTML from user text, escape that user text first.
@@ -97,11 +105,102 @@ function applyLineBreaks(text) {
   return text.replace(/\n(?!<\/?(ol|ul|li)>)|(?<!<\/?(ol|ul|li)>)\n/g, "<br>");
 }
 
-// The main entry. Escape first, then bold, then lists, then line breaks.
+// GFM-style pipe tables. Matches a header row + separator row + one or more
+// body rows. Escape has already run, so pipe chars are literal `|` (not HTML
+// entities) - the parser reads them directly. Cell content is trusted only
+// because it went through escapeHtml at step 1; the ONLY new HTML we emit is
+// the table structure. That is the entire security posture.
+//
+// Shape:
+//   | col1 | col2 |
+//   |---|---|
+//   | a1  | a2   |
+//   | b1  | b2   |
+//
+// Rules:
+//   - Header row: starts with `|`, ends with `|`, has 2+ pipes.
+//   - Separator row (next line): each cell is `-`+ optionally colon-padded
+//     for alignment. Cell count must equal header cell count.
+//   - Body rows: same shape as header until a non-`|` line, blank line, or
+//     row-shape mismatch. Rows with fewer/more cells than the header are
+//     dropped from the table and left as literal text - safer than
+//     silently backfilling.
+//   - Malformed table (missing separator, no rows, cell mismatch): the
+//     block stays as its original lines, unchanged.
+function applyTables(text) {
+  const lines = text.split("\n");
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (isTableRow(lines[i]) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const headerCells = splitTableRow(lines[i]);
+      const sepCells = splitTableRow(lines[i + 1]);
+      if (headerCells.length >= 2 && sepCells.length === headerCells.length) {
+        // Collect body rows.
+        const bodyRows = [];
+        let j = i + 2;
+        while (j < lines.length && isTableRow(lines[j])) {
+          const cells = splitTableRow(lines[j]);
+          if (cells.length !== headerCells.length) break; // shape mismatch stops the table
+          bodyRows.push(cells);
+          j += 1;
+        }
+        // A table needs at least one body row to be worth emitting; a bare
+        // header + separator with no rows stays literal.
+        if (bodyRows.length > 0) {
+          out.push(buildTableHtml(headerCells, bodyRows));
+          i = j;
+          continue;
+        }
+      }
+    }
+    out.push(lines[i]);
+    i += 1;
+  }
+  return out.join("\n");
+}
+
+function isTableRow(line) {
+  if (!line) return false;
+  const t = line.trimEnd();
+  return t.startsWith("|") && t.endsWith("|") && t.length >= 3 && (t.match(/\|/g) || []).length >= 2;
+}
+
+function isTableSeparator(line) {
+  if (!isTableRow(line)) return false;
+  const cells = splitTableRow(line);
+  if (cells.length < 2) return false;
+  // Each cell must match the alignment pattern: optional colon, one-or-more
+  // dashes, optional colon, surrounded by optional whitespace.
+  return cells.every((c) => /^:?-+:?$/.test(c.trim()));
+}
+
+function splitTableRow(line) {
+  // Strip leading/trailing `|` then split on `|`. Preserve inner whitespace
+  // and trim only surrounding whitespace on each cell.
+  const t = line.trim();
+  const inner = t.replace(/^\|/, "").replace(/\|$/, "");
+  return inner.split("|").map((c) => c.trim());
+}
+
+function buildTableHtml(headerCells, bodyRows) {
+  const head = "<tr>" + headerCells.map((c) => `<th>${applyBold(c)}</th>`).join("") + "</tr>";
+  const body = bodyRows
+    .map((row) => "<tr>" + row.map((c) => `<td>${applyBold(c)}</td>`).join("") + "</tr>")
+    .join("");
+  return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
+// The main entry. Escape first, then bold, then tables, then lists, then
+// line breaks. Table pass runs AFTER bold so cell content can still carry
+// **strong** spans; runs BEFORE lists because a table row starts with `|`
+// and would otherwise pass through untouched. Tables and lists never
+// intersect - a line starts with `|` XOR `- ` XOR `1. ` XOR normal prose.
 export function renderMdLite(input) {
   if (input == null) return "";
   const escaped = escapeHtml(input);
   const bolded = applyBold(escaped);
-  const listed = applyLists(bolded);
+  const tabled = applyTables(bolded);
+  const listed = applyLists(tabled);
   return applyLineBreaks(listed);
 }

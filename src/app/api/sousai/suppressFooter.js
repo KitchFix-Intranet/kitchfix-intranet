@@ -11,25 +11,32 @@
 // writes the footer and it leaks to the client.
 //
 // This helper sits between the agent's text-delta emit and the route's
-// SSE `token` write. It watches for the sentinel `[[STATUS`. When it appears
-// in the stream, everything before it is forwarded; the sentinel itself and
-// all subsequent deltas are dropped. This also handles the optional
-// `[[REASON: ...]]` line since REASON only ever precedes STATUS.
+// SSE `token` write. It watches for TWO sentinels - `[[REASON` and
+// `[[STATUS` - and suppresses everything from the FIRST one that appears.
+// Under a decline, the prompt (agentPrompt.js) instructs REASON first, then
+// STATUS - so a single-sentinel watch on `[[STATUS` alone was inverted; it
+// let the whole `[[REASON: <cause>]]` line leak to the client on every
+// decline. Fixed 2026-07-29 (Phase F PR 2).
 //
 // The tricky case is a sentinel split across multiple deltas. The helper
-// maintains a small pending buffer of at most `SENTINEL.length - 1` chars
+// maintains a small pending buffer of at most (max-sentinel-length - 1) chars
 // (the longest suffix of the concatenated stream that could still turn into
-// the sentinel). On each delta, the helper appends, decides how much to
+// EITHER sentinel). On each delta, the helper appends, decides how much to
 // forward, and returns the remaining suffix.
 //
 // End of stream: if any pending chars are still held back, flush them -
-// they never became the sentinel and are real prose.
+// they never became either sentinel and are real prose.
 //
 // State shape: { pending: string, suppressed: boolean }
-// Sentinel: literal string `[[STATUS`
+// Sentinels (module-visible for tests): `[[REASON`, `[[STATUS`
 // ═══════════════════════════════════════════════════════════════════════════
 
+export const SENTINELS = ["[[REASON", "[[STATUS"];
+// Kept as an alias for callers/tests that reference the singular; both are
+// watched now and either flips suppression.
 export const SENTINEL = "[[STATUS";
+
+const MAX_SENTINEL_LEN = Math.max(...SENTINELS.map((s) => s.length));
 
 export function initFooterState() {
   return { pending: "", suppressed: false };
@@ -38,9 +45,8 @@ export function initFooterState() {
 // advance(state, delta) -> { forward, next, hit }
 //   forward - the text to send onto the SSE wire (may be "")
 //   next    - the new state to keep for the next delta
-//   hit     - true iff the sentinel was found and suppression flipped on in
-//             this call. false otherwise. (Useful for the route to log or
-//             assert; not required for correctness.)
+//   hit     - true iff a sentinel was found and suppression flipped on in
+//             this call. false otherwise.
 export function advance(state, delta) {
   // Already suppressed: everything downstream is dropped.
   if (state.suppressed) {
@@ -51,10 +57,19 @@ export function advance(state, delta) {
   }
 
   const combined = state.pending + delta;
-  const sentinelIdx = combined.indexOf(SENTINEL);
+
+  // Find the earliest occurrence of ANY sentinel. Whichever comes first
+  // triggers suppression - REASON is emitted before STATUS on declines, so
+  // watching STATUS alone would let REASON leak.
+  let sentinelIdx = -1;
+  for (const s of SENTINELS) {
+    const idx = combined.indexOf(s);
+    if (idx !== -1 && (sentinelIdx === -1 || idx < sentinelIdx)) {
+      sentinelIdx = idx;
+    }
+  }
 
   if (sentinelIdx !== -1) {
-    // Sentinel appeared. Everything before it is legit prose.
     const forward = combined.slice(0, sentinelIdx);
     return {
       forward,
@@ -64,8 +79,8 @@ export function advance(state, delta) {
   }
 
   // No full sentinel yet. Hold back the longest suffix of `combined` that
-  // is a prefix of SENTINEL - that suffix could still become the sentinel
-  // on a later delta. Everything before that suffix is safe to forward.
+  // is a prefix of ANY sentinel - that suffix could still become one on a
+  // later delta. Everything before it is safe to forward.
   const holdLen = longestSentinelPrefixSuffix(combined);
   const forward = combined.slice(0, combined.length - holdLen);
   const pending = combined.slice(combined.length - holdLen);
@@ -77,21 +92,23 @@ export function advance(state, delta) {
 }
 
 // flush(state) -> string
-//   Called on stream end. If pending chars never completed the sentinel,
+//   Called on stream end. If pending chars never completed a sentinel,
 //   they were prose after all - return them so the route can send them.
 export function flush(state) {
   if (state.suppressed) return "";
   return state.pending || "";
 }
 
-// Longest k such that combined.slice(-k) === SENTINEL.slice(0, k), for k
-// in [0, SENTINEL.length - 1]. Range excludes the full sentinel length
-// because that case is handled separately (full-sentinel appearance is
-// caught by indexOf above).
+// Longest k such that combined.slice(-k) === some_sentinel.slice(0, k), for k
+// in [1, MAX_SENTINEL_LEN - 1]. Range excludes full sentinel length because
+// full-sentinel appearance is caught by indexOf above.
 function longestSentinelPrefixSuffix(combined) {
-  const maxK = Math.min(SENTINEL.length - 1, combined.length);
+  const maxK = Math.min(MAX_SENTINEL_LEN - 1, combined.length);
   for (let k = maxK; k > 0; k -= 1) {
-    if (combined.slice(-k) === SENTINEL.slice(0, k)) return k;
+    const suffix = combined.slice(-k);
+    for (const s of SENTINELS) {
+      if (k <= s.length && suffix === s.slice(0, k)) return k;
+    }
   }
   return 0;
 }

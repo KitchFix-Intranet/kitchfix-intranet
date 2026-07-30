@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.54
+**Version:** v2.57
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,57 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.57 - 2026-07-29. TWO OF NINE. THE PAUSE WAS WRONG AND CHAT'S EVIDENCE WAS NEVER OPENED.** Kevin ran nine real questions through the live /sous surface. **Sous answered two.** Four failures were data sitting in stable Postgres with no tool built; both working answers were disfigured by a sentinel leaking into the UI.
+
+  **Three defects, all presentation:**
+  1. **`[[REASON:]]` leaks on every decline.** `suppressFooter.js:32` watches only `SENTINEL = "[[STATUS"`, and its own comment at line 17 asserts this "also handles the optional `[[REASON: ...]]` line since REASON only ever precedes STATUS." **Inverted reasoning** - `agentPrompt.js:189` instructs REASON *then* STATUS, so REASON has already streamed before the suppressor sees anything. Downstream of #542, which Chat graded and approved with that assumption intact; it only manifests on declines and no decline was ever tested through the UI.
+  2. **Run-together text** - "your RDO.Source:", "date.[[REASON:", "Let me check:TBJ-FL". Cause not yet diagnosed (model vs mdLite); the prompt requires evidence before a fix.
+  3. **Markdown tables render as raw pipes.** mdLite was scoped in Train 3 to bold, breaks, lists only. Sous emits tables naturally, so the scope was wrong.
+
+  **Chat's pause was wrong, and the way it was wrong is the day's lesson repeating.** The v2.56 pause rested on "SC schema is moving," evidenced by migration filenames. **Neither file was opened.** `sc-18-day-metadata-counter-patches` is a **five-row data patch** fixing `game_type` misclassifications - it never touches `period` and alters no structure. `sc-22-homestand-closeout` **only creates a new table**; its single ALTER is on that new table and it never touches `sc_homestand_schedule`. **The columns B5 and B2 read were never moving.** This is precisely the discipline written into v2.44 - never cite a source as current state without re-deriving it - applied to audit documents in the morning and then violated with a migration list in the afternoon.
+
+  **Recovered from the file Chat skimmed:** `sc_homestand_schedule.day_type` is **calendar truth** per Kevin's 2026-07-14 schedule-truth doctrine, and `sc_day_metadata.game_type` was patched to agree with it. That authority ordering is exactly what a homestand tool needs and it was sitting in the header of the unopened file.
+
+  **What was buildable the whole time:** period (`sc_day_metadata.period`), homestand (`sc_homestand_schedule`, 408 rows), vendor and category spend (`ai_line_items` carries `vendor_name`, `account_key`, `invoice_date`, `extended_price`, `category`), service prices. **Genuinely unanswerable:** next inventory date - no scheduled-date concept exists in any table; `count_sessions` records only sessions that happened.
+
+  **The root failure named honestly: Chat ranked the build by data cleanliness, not by what Kevin asks.** Eleven candidates existed; the four with no arithmetic and no traps shipped first as "proving the pattern," which is also the version least likely to be visibly wrong. The questions Kevin actually asks were sequenced behind them, then paused on unread evidence. Three consecutive Kevin corrections - on drift detection, on build ordering, and on Chat's own evidence - share that axis.
+
+  **Kevin's ruling: all of it in the next PR.** One large PR, deliberately: the smaller-PRs-grade-cleaner argument is the same over-caution that produced two of nine. **B1 and B2 are IN** - Chat's read of "all of it," stated openly for Kevin to strike. Rationale: incomplete actuals are a disclosure problem, not a refusal problem, and "14 of 22 service days entered" is the correct answer.
+
+  **Scope: three presentation fixes + three orientation views (period over `sc_day_metadata`, homestand over `sc_homestand_schedule`, PDC phase over `sc_phase_calendar` - all three dimensions, since PDC facilities have no homestands and the phase IS their orientation) + the invoice corrections-resolving view + B1, B2, B4, B5, C1, C2 + the inventory decline rewording.** Only B3 stays deferred (cross-account peer comparison needs its own meaningfulness guard). **Acceptance is Kevin's nine questions run live with outputs pasted verbatim** - six expected to flip to answered, two to decline correctly, one to decline with honest not-scheduled-anywhere wording.
+
+- **v2.56 - 2026-07-29. PR 2 PAUSED - SC SCHEMA IS MOVING. Kevin's call, and the evidence backs it.** CC stopped at PR 2's Task 0 with a semantic finding; chasing it confirmed that SC's schema is actively changing in exactly the area three of PR 2's four tools would read.
+
+  **Chat's spec was wrong and CC caught it.** The prompt assumed `sc_phase_calendar` held the P1-P13 period concept. It does not. **The finding, recorded so it survives the paused session:**
+  - `sc_phase_calendar` holds **PDC phases** (OFF, Battery Camp, Fantasy Camp, MLB ST, ST, Extended, ACL, ACL/Draft, Bridge, Instructs/Camps) for **5 PDC accounts only** - CIN-AZ, TXR-AZ, TBR-FL, TBJ-FL, STL-FL. The other 7 accounts have zero rows. Per-account with a CHECK [`code-read` docs/migrations/sc-11-phase-calendar.sql:52-58].
+  - **The P1-P13 period concept operators actually use lives at `sc_day_metadata.period`**, per `(account_key, service_date)`. `sc_labor_budgets.period` shares that vocabulary.
+  - Different concepts. "What period is CIN-OH on" is unanswerable from `sc_phase_calendar` - CIN-OH is MLB with no PDC phases. Building the view as specced would have produced a tool that answers nothing for 7 of 12 accounts while reading as a data gap rather than a design error.
+  - **Consequence for the eventual B5:** PDC facilities have no homestands and no visiting teams, so for those 5 accounts the phase *is* the seasonal orientation. B5 needs both dimensions, and must present a structural absence ("no homestand schedule - this is a PDC facility") as an answer rather than as missing data - the missing-versus-zero rule applied to account shape rather than to cells.
+
+  **Why the pause, with the line drawn on evidence.** Recent migrations show SC moving: **`sc-22-homestand-closeout.sql` just landed as an M-3 CIN-OH pilot** (new table, per-account rollout, not universal) and `sc-18-day-metadata-counter-patches.sql` patched `sc_day_metadata`. Split: **stable** = `sc_services`, `sc_service_groups`, `sc_service_prices`, `sc_daily_projections`, `sc_daily_actuals`, `sc_daily_revenue` (all sc-1 to sc-5, June era); **moving** = `sc_day_metadata`, homestand close-out, labor budgets and their period convention (sc-18 to sc-22). B4 alone is safe; B1, B2, B5 all read moving tables.
+
+  **Full pause, not partial, on two grounds.** (1) Every Phase F PR carries a prompt round and a full 7/7 re-cert, so shipping B4 alone pays the whole ceremony cost for one tool - a bad ratio. (2) Testing is the better use of the same window and is Kevin's own original sequencing: he put testing before F, then moved F ahead because tool routing was untestable without data tools. **Four directory tools now exist**, which is enough surface to test documents, directory data, tool choice between them, the precedence rule, and refusals. It also fixes what Decision 5's Section 1 could not - a four-day log too thin to rank demand. Hard testing generates that demand data, which then picks the SC tools instead of a July wishlist doing it.
+
+  **KPI stays out of architecture** (standing rule). Nothing in the current menu touches it, and it is a second reason to wait: if revenue tooling and a future KPI surface would answer overlapping questions, SC's final shape should be known before either is built.
+
+  **Open question to Kevin, gating what comes next:** what remains in SC's build and roughly how long. Short arc means test now and resume SC right after; longer arc makes the invoice tools (C1/C2, needing the corrections-resolving view first) the next real candidate instead.
+
+  **PR 2 state:** paused, nothing committed, worktree and branch removed, close-out issued. Phase F PR sequence unchanged otherwise - PR 2 (SC) deferred, PR 3 (spend) and PR 4 (period pace) still queued behind it.
+
+- **v2.55 - 2026-07-29. SOUS READS POSTGRES.** PR #565 merged. Four directory tools live: find_contact, list_accounts, list_contacts_by_role, get_account_team. **Chef Kelsey resolves** - the question Kevin asked as an example is now answerable end to end. Data-driven registry landed; agent.js lost 117 lines of hard-coded tool blocks and every tool now flows through `tools/registry.js`.
+
+  **Grading integrity checked, and it held.** CC added a Path C to spike case 1a ("which accounts are flat-fee") so the data-tool route counts as admissible enumeration. That is precisely what the standing rule guards against, so Chat verified the underlying data rather than the claim: **REF-140 §(c) line 176 lists Flat_fee = CIN-OH, STL-MO, STL-FL, TXR-TX-H, TXR-TX-V, and `accounts.billing_model` returns the identical five.** The canonical taxonomy and the data table agree exactly, so Path C is a route to the correct answer, not a loosened criterion. Ground truth genuinely changed - a new authoritative source appeared - which is the one condition the rule permits. The `has()` grader normalization is the same story: the table stores `CIN - OH`, the corpus uses `CIN-OH`, and without normalizing the grader would fail a correct answer.
+
+  **Real bug CC caught in re-cert and fixed:** agent.js validated grounding via doc-id citations only, so every data-tool answer downgraded to `partial` regardless of correctness. Fixed with a `kind: "doc" | "data"` field on every registry entry plus a `hadSuccessfulDataToolCall` signal. **Named gap, not merge-blocking:** that signal checks a tool *ran and returned rows*, not that the answer follows from them - weaker than the document path, which matches cited ids against retrieved ids. Sous could call list_accounts, get 12 rows, assert something they do not support, and still read grounded. **Phase E requirement added: data-answer grounding needs a content check, not a call-succeeded check** - the same principle as the parked cited-sources-contain-their-supporting-text requirement for documents.
+
+  **Chat correction, recorded:** the registry refactor was oversold as removing the re-cert cost. It removes the `agent.js` diff, but the system prompt still has to describe what new tools do, so **every Phase F PR carries a prompt round and a full 7/7 re-cert.** One re-cert for four tools instead of four is still the win; the claim was too strong.
+
+  **PR 2 issued: two SC views + four Service Calendar tools.** The views (`v_current_homestand_by_account`, `v_current_period_by_account`) exist so four tools plus every future SC tool share one interval lookup instead of reimplementing it - the requirement-2 leverage. B1 always returns an aggregate, B2 always returns rows, per Kevin's split ruling: a tool whose output shape changes with its parameters is harder to eval and harder for the model to reason about.
+
+  **The sixth Phase F requirement, and PR 2's headline risk: the missing-price trap.** `sc_daily_revenue` computes `COALESCE(pr.price, 0)`, so a service with no configured price yields $0 revenue, indistinguishable from a genuinely zero-revenue day. That is a confidently wrong money answer in the zero-tolerance class. The view hands over the fix - `price_effective_date` is not coalesced, so a null there is the signal. **Binding: a revenue figure derived from a null price is not a number, it is a decline.** Neither total it nor silently drop it; name the unpriced services. This is the "no rows is no rows, never zero" rule one layer deeper, inside a view that launders the distinction.
+
+  **The migration-gate trigger has fired.** PR 2's views are a migration, which is the named verification event for the parked root cause. Ruling: do NOT pre-emptively fix it - run the known ceremony (Studio apply, probe, Kevin's canonical comment, green, merge) and diagnose only if it misbehaves again, with a live failing case in hand. Shipping an unverified fix to a guardrail is how the current problem started.
 
 - **v2.54 - 2026-07-29. DECISION 5 CLOSED. PHASE F STARTS.** PR #563 merged (PG data-surface discovery). Kevin reviewed the menu and ruled: **all candidates in, shipped in four domain-grouped PRs rather than ten separate ones or one large one.** The deciding argument was not gradeability but measurement - Sous goes from 3 tools to 13, quadrupling the model's decision space, and wrong tool choice is the plan's named worst failure. Waves let a degradation be attributed; one batch would not.
 
