@@ -268,18 +268,6 @@
   .sc-season-grid { grid-auto-rows: 1fr; }
 }
 
-/* M-4b (2026-07-29): suppression caption. Fires on MLB accounts
-   only, sits below the grid, explains the hidden-scope policy at
-   the point of use. Muted so it reads as informational context
-   rather than an alert; tokens only. */
-.sc-season-suppression-caption {
-  margin: var(--space-3) 0 0 0;
-  padding: 0 var(--space-4);
-  font-size: var(--size-caption);
-  color: var(--text-muted);
-  font-style: italic;
-}
-
 /* SC-016: card-shaped loading skeleton. The outer container reads as
    a card shell (border, radius, background), and three inner elements
    carry the shimmer:

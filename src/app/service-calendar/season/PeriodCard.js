@@ -288,9 +288,7 @@ function PeriodCardFooter({ days, hasHomestandSchedule, isFeeAccount }) {
 // across the period AND no future days (all upcoming/off). For
 // homestand: no game days at all. Matches the Stage 1 MonthCard
 // discipline of NEVER calling a productive period "offseason".
-// Exported so season/suppression.js can call it from SeasonShell's
-// period loop. See MonthCard.detectNoService for the shape rationale.
-export function detectOffSeason(days, kind) {
+function detectOffSeason(days, kind) {
   if (!days?.length) return true;
   const hasService = days.some(d =>
     d.status === "entered" || d.status === "needs-entry"
