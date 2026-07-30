@@ -85,6 +85,44 @@ export const PDC_TEAM_KEYS = Object.freeze([
   "CIN - AZ", "STL - FL", "TBJ - FL", "TBR - FL", "TXR - AZ",
 ]);
 
+// Convention 1 (Pagination): Supabase's PostgREST default caps `.select()` at
+// 1000 rows. Any table read that could exceed that ceiling MUST paginate via
+// `.range()` sweeps and complete the read, or MUST report truncation honestly
+// as "showing N of M". Aggregates built on a silently-truncated read publish
+// wrong numbers - the 2026-07-30 Sysco portfolio undercount ($46,444 vs
+// $275,970 real) came from spend_summary reading ai_line_items without
+// pagination.
+//
+// Every registry entry declares `pagination` (see registry.js): "safe" (bounded
+// reads, cannot exceed 1000 today) or "paginated" (uses paginateAll below).
+// A tool that cannot answer confidently is BROKEN until proven otherwise.
+export const SUPABASE_PAGE_SIZE = 1000;
+
+/**
+ * Sweep a Supabase query in `SUPABASE_PAGE_SIZE` chunks until exhausted.
+ * The `queryBuilder` callback is called once per page with an `.range(from, to)`
+ * that the tool applies to its base query. Returns a single flat array with
+ * every row.
+ *
+ * @param {(from: number, to: number) => Promise<{data: any[]|null, error: any}>} runPage
+ * @param {object} [opts]
+ * @param {number} [opts.pageSize=SUPABASE_PAGE_SIZE]
+ * @returns {Promise<any[]>}
+ */
+export async function paginateAll(runPage, { pageSize = SUPABASE_PAGE_SIZE } = {}) {
+  const all = [];
+  let from = 0;
+  for (;;) {
+    const to = from + pageSize - 1;
+    const { data, error } = await runPage(from, to);
+    if (error) throw new Error(`paginateAll: ${error.code || "?"} ${error.message}`);
+    const rows = data || [];
+    all.push(...rows);
+    if (rows.length < pageSize) return all;
+    from += pageSize;
+  }
+}
+
 // Convention 6 (Phase F PR 2): a revenue figure derived from a null
 // price_effective_date is a DECLINE, not a number. sc_daily_revenue COALESCEs
 // price to 0 but does NOT coalesce price_effective_date, so a null there is

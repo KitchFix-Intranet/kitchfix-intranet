@@ -23,6 +23,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { paginateAll } from "./_constants.js";
 
 const VALID_WINDOWS = ["month", "year", "ytd", "period", "date_range"];
 
@@ -97,43 +98,45 @@ export async function spendSummary({
   // Build the ai_line_items query. Join through v_invoice_submissions_current
   // by fetching current invoice ids first (so corrections resolved), then
   // filter line items by invoice_uuid IN that set OR is_historical=TRUE.
-  let currentInvoiceIds = new Set();
+  // Both reads paginate - portfolio YTD hits ~1500 invoices and ~15000 line
+  // items, well past PostgREST's 1000-row default.
+  const currentInvoiceIds = new Set();
   {
-    let invQ = sb.from("v_invoice_submissions_current").select("id");
-    if (accountKey) invQ = invQ.eq("account_key", accountKey);
-    // Filter invoices by date range too (uses invoice_date as the temporal key)
-    invQ = invQ.gte("invoice_date", bounds.start).lte("invoice_date", bounds.end);
-    const { data: invRows, error: invErr } = await invQ;
-    if (invErr) throw new Error(`spendSummary: invoice query failed: ${invErr.code || "?"} ${invErr.message}`);
-    for (const r of invRows ?? []) currentInvoiceIds.add(r.id);
+    const invRows = await paginateAll((from, to) => {
+      let q = sb.from("v_invoice_submissions_current").select("id");
+      if (accountKey) q = q.eq("account_key", accountKey);
+      q = q.gte("invoice_date", bounds.start).lte("invoice_date", bounds.end);
+      return q.order("id", { ascending: true }).range(from, to);
+    });
+    for (const r of invRows) currentInvoiceIds.add(r.id);
   }
 
-  // Now line items
-  let liQ = sb.from("ai_line_items")
-    .select("id, invoice_uuid, invoice_date, extended_price, category, vendor_name, description, confidence, is_historical, historical_invoice_ref, account_key");
-  if (accountKey) liQ = liQ.eq("account_key", accountKey);
-  if (category) liQ = liQ.ilike("category", `%${category.trim()}%`);
+  // Resolve vendor name/alias set once so the paginated read filters on it.
+  let vendorNameList = null;
   if (vendorMatch) {
-    // Vendor filter via vendor_name on line item (since ai_line_items has no vendor_id)
-    // Get canonical names for the resolved ids
     const { data: vendorNames } = await sb.from("vendors").select("id, name").in("id", vendorMatch.vendor_ids);
     const nameList = (vendorNames ?? []).map((v) => v.name);
     const { data: aliases2 } = await sb.from("vendor_aliases").select("vendor_id, alias").in("vendor_id", vendorMatch.vendor_ids);
     const aliasList = (aliases2 ?? []).map((a) => a.alias);
-    const all = [...new Set([...nameList, ...aliasList])];
-    if (all.length === 0) {
+    vendorNameList = [...new Set([...nameList, ...aliasList])];
+    if (vendorNameList.length === 0) {
       return errorPayload(`vendor resolution collapsed to empty set for '${vendorName}'`);
     }
-    liQ = liQ.in("vendor_name", all);
   }
-  liQ = liQ.gte("invoice_date", bounds.start).lte("invoice_date", bounds.end);
 
-  const { data: lineItems, error: liErr } = await liQ;
-  if (liErr) throw new Error(`spendSummary: line items query failed: ${liErr.code || "?"} ${liErr.message}`);
+  const lineItems = await paginateAll((from, to) => {
+    let q = sb.from("ai_line_items")
+      .select("id, invoice_uuid, invoice_date, extended_price, category, vendor_name, description, confidence, is_historical, historical_invoice_ref, account_key");
+    if (accountKey) q = q.eq("account_key", accountKey);
+    if (category) q = q.ilike("category", `%${category.trim()}%`);
+    if (vendorNameList) q = q.in("vendor_name", vendorNameList);
+    q = q.gte("invoice_date", bounds.start).lte("invoice_date", bounds.end);
+    return q.order("id", { ascending: true }).range(from, to);
+  });
 
   // Now filter: keep items whose invoice_uuid is in current set (corrections-
   // resolved) OR is_historical=TRUE (unless excluded).
-  const kept = (lineItems ?? []).filter((li) => {
+  const kept = lineItems.filter((li) => {
     if (li.is_historical) return !excludeHistorical;
     return li.invoice_uuid && currentInvoiceIds.has(li.invoice_uuid);
   });

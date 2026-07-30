@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
-import { C2_ROW_CAP } from "./_constants.js";
+import { C2_ROW_CAP, paginateAll } from "./_constants.js";
 
 /**
  * @param {object} args
@@ -58,28 +58,38 @@ export async function spendVendorHistory({ vendorName, dateFrom, dateTo, account
   const allNames = [...new Set([...(vendorNames ?? []).map((v) => v.name), ...(aliases2 ?? []).map((a) => a.alias)])];
 
   // Fetch invoice ids in the current set for the date range + account (for
-  // corrections resolution)
-  let invQ = sb.from("v_invoice_submissions_current").select("id");
-  if (accountKey) invQ = invQ.eq("account_key", accountKey);
-  invQ = invQ.gte("invoice_date", dateFrom).lte("invoice_date", dateTo);
-  const { data: invRows } = await invQ;
-  const currentInvoiceIds = new Set((invRows ?? []).map((r) => r.id));
+  // corrections resolution). Paginated - portfolio YTD invoices exceed the
+  // 1000-row PostgREST default.
+  const invRows = await paginateAll((from, to) => {
+    let q = sb.from("v_invoice_submissions_current").select("id");
+    if (accountKey) q = q.eq("account_key", accountKey);
+    q = q.gte("invoice_date", dateFrom).lte("invoice_date", dateTo);
+    return q.order("id", { ascending: true }).range(from, to);
+  });
+  const currentInvoiceIds = new Set(invRows.map((r) => r.id));
 
-  let liQ = sb.from("ai_line_items")
-    .select("id, invoice_uuid, invoice_date, description, quantity, unit, unit_price, extended_price, category, vendor_name, confidence, is_historical, historical_invoice_ref, account_key")
-    .in("vendor_name", allNames)
-    .gte("invoice_date", dateFrom)
-    .lte("invoice_date", dateTo)
-    .order("invoice_date", { ascending: false });
-  if (accountKey) liQ = liQ.eq("account_key", accountKey);
+  // Fetch every matching line item so total_dollars stays complete. Order by
+  // invoice_date desc is applied after the sweep - .range() pagination needs a
+  // stable server-side sort key (id) to avoid duplicate/missing rows across
+  // pages, so we sort the collected array in JS.
+  const lineItems = await paginateAll((from, to) => {
+    let q = sb.from("ai_line_items")
+      .select("id, invoice_uuid, invoice_date, description, quantity, unit, unit_price, extended_price, category, vendor_name, confidence, is_historical, historical_invoice_ref, account_key")
+      .in("vendor_name", allNames)
+      .gte("invoice_date", dateFrom)
+      .lte("invoice_date", dateTo);
+    if (accountKey) q = q.eq("account_key", accountKey);
+    return q.order("id", { ascending: true }).range(from, to);
+  });
 
-  const { data: lineItems, error } = await liQ;
-  if (error) throw new Error(`spendVendorHistory: query failed: ${error.code || "?"} ${error.message}`);
-
-  const kept = (lineItems ?? []).filter((li) => {
+  const kept = lineItems.filter((li) => {
     if (li.is_historical) return !excludeHistorical;
     return li.invoice_uuid && currentInvoiceIds.has(li.invoice_uuid);
   });
+
+  // Sort the collected rows client-side to invoice_date desc for display,
+  // since the .range() sweep required an id sort key for correctness.
+  kept.sort((a, b) => (a.invoice_date < b.invoice_date ? 1 : a.invoice_date > b.invoice_date ? -1 : 0));
 
   const total = kept.length;
   const truncated = total > C2_ROW_CAP;

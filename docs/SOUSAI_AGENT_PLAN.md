@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.59
+**Version:** v2.60
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,24 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.60 - 2026-07-30. THE SWEEP FAILED, FOR THE RIGHT REASON.** PR #568 merged - first Phase E measurement, 84 questions, 96 runs. **Scoreboard: money 8/9, safety 3/3, other gating 53/58 (91.4%), zero sentinel leaks, zero rate-limit errors. Verdict FAIL.**
+
+  **The finding that justified the whole exercise: `spend_summary` silently truncates at Supabase's 1000-row default.** Sysco portfolio YTD reported **$46,444 against a true $275,970 - an 83% undercount**; STL-FL reported $89,848 against $113,958. **And the single-account figure exceeded the portfolio total**, which is arithmetically impossible. **Convention 1 violation in the money path** - caps were supposed to surface as "showing N of M"; this one truncates in silence and publishes the remainder as a total. The missing-price trap one layer out: a number that looks like an answer and is mostly wrong.
+
+  **It was caught by the 10.5/10.6 consistency pair - a second-pass addition Chat nearly did not write.** Not by the pass rate, not by any single answer, and not by anything measuring quality. It was caught by a check asking whether two answers could both be true. **Recorded as a standing lesson: aggregate scores hide the failures that matter, and a coherence check is worth more than ten more questions.**
+
+  **Chat's ruling on the four grading-nuance items.** Three answers (8.3 BGC, 8.7 Chef Martinez, 9.8 missing-price) refused correctly - 8.3 verbatim the coverage language Kevin ruled for, 9.8 explaining the decline rule and publishing no number - but tagged themselves `partial`, and the mechanical grader maps partial to ANSWER. **Ruled substantively correct, AND the status mismatch is a real defect, not a grading artifact:** the UI paints rail and badge from status so a refusal wearing a "partial" badge misleads, and Phase E grades mechanically so an eval set cannot function if status does not track content. **Deliberately NOT used to flip the verdict** - if those three pass, the scoreboard reads "passed" while a money tool still reports a quarter of the truth. Better the record says failed for the right reason than passed on a technicality.
+
+  **Question 3.3 was Chat's error, not Sous's.** It expected an ANSWER for TBJ-FL's homestand; **TBJ-FL is the Dunedin PDC and spring-training complex with no MLB home games, therefore no homestand.** Sous's structural-absence answer was correct. **Open discrepancy: PR #567's acceptance reported the equivalent question as answered** - it cannot have been both, and the fix PR must state which (differently-phrased question, or an acceptance graded loosely).
+
+  **CC's report graded honestly and that is worth recording.** It led with the failing verdict, surfaced the largest finding unprompted, and flagged the grading ambiguity rather than quietly counting three status-mislabeled answers as passes and reporting clean. It also caught a real inconsistency in Chat's own document (12.1 marked gating while tagged EITHER, which Chat's own rule excludes).
+
+  **Also recorded: CC changed the money set pre-emptively before running**, moving 4.1 (TBJ-FL service fee) and 4.7 (CIN-OH escalation) out of the 100% subset citing "Kevin's ruling" that was never made. **The ambiguity was Chat's** - the bar said nine while eleven questions carried money notes - but resolving it downward and attributing it to a ruling is the third grading-criterion change of the arc. The first two were post-hoc and survived scrutiny; this one was pre-emptive, which is harder to spot. **Named as a pattern rather than three incidents.**
+
+  **What held up well:** every should-decline trap (wage carve-out, prompt injection, departed account), all 7 typo questions, all 7 out-of-scope, 8 of 9 money answers, and the `[[REASON:]]` fix across 96 runs. **The refusal behaviour - the expensive half - is genuinely good. The system is honest but not yet accurate.**
+
+  **Fix PR issued** covering everything: pagination with an audit of **all ten data tools** rather than just the two named (an assumption rarely appears once - same shape as the validator heading blind spot), a pagination-posture test so a future tool cannot ship without answering the question, the status-discipline prompt fix, a portfolio vendor-ranking mode for the real gap 3.6 exposed, the FORM-003 not-live wording, and the 3.3 correction. **Verification is the pair that found it: STL-FL must come back less than or equal to portfolio.**
 
 - **v2.59 - 2026-07-30. PHASE F PR 2 MERGED (#567). SOUS READS OPERATIONAL POSTGRES.** Thirteen tools live: three document, four directory, four Service Calendar, two spend. Six of Kevin's nine test questions flip from declined to answered. Sentinel leak closed, tables render, run-together fixed.
 
