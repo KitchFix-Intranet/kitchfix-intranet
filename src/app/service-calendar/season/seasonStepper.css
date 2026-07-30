@@ -49,28 +49,35 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-/* Colour per state - drained wash for everything but the current
-   block. Owner rule: "only the current homestand is saturated."
-     done         - closed out - quiet green wash
-     actuals-due  - pale amber wash
-     next         - upcoming - near-neutral grey
-     current      - saturated navy, tall, ordinal inside */
+/* Colour per state - matches the day-tile palette so the strip
+   and the calendar below it speak one language. Owner rule
+   2026-07-30: reuse the existing state tokens rather than invent
+   new ones. Text colour is the state's matching foreground so
+   the bare number reads at proper contrast.
+     done (closed out) - pale green entered fill + dark green text
+     actuals-due       - pale amber needs fill + dark amber text
+     next (upcoming)   - light grey + muted grey text
+     current           - solid blue in-progress fill + white text */
 .sc-stepper-bar-segment--done         .sc-stepper-bar-segment-button {
-  background: var(--status-entered-subtle);
+  background: var(--sc2-state-entered-bg);
+  color: var(--sc2-state-entered-fg);
 }
 .sc-stepper-bar-segment--actuals-due  .sc-stepper-bar-segment-button {
-  background: var(--status-needs-subtle);
+  background: var(--sc2-state-needs-bg);
+  color: var(--sc2-state-needs-fg-strong);
 }
 .sc-stepper-bar-segment--next         .sc-stepper-bar-segment-button {
   background: var(--border-default);
+  color: var(--text-muted);
 }
 .sc-stepper-bar-segment--current      .sc-stepper-bar-segment-button {
-  background: var(--action-primary-bg);
+  background: var(--sc2-state-in-progress-bg);
+  color: var(--sc2-state-in-progress-fg);
 }
 .sc-stepper-bar-segment-label {
   font-size: var(--size-micro);
   font-weight: var(--wt-display);
-  color: #fff;
+  color: inherit;
   letter-spacing: var(--track-caps);
 }
 

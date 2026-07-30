@@ -135,8 +135,14 @@ export default function SeasonStepper({
 }
 
 // Season bar. Width proportional to block length (span days);
-// current block reads taller than the others and carries its
-// ordinal inside. Everything else drains to a pale wash by state.
+// current block reads taller than the others and carries WHITE
+// text on a solid blue fill. Every block carries a bare number
+// (`1`, `5`, `10`) - not `HSn`, because HS10 is ~28px wide and a
+// three-day block renders about 20px; bare numbers fit every
+// block down to the shortest. The full HSn ordinal + status word
+// live in the aria-label - owner ruling 2026-07-30: "The visible
+// number is for scanning; the accessible name is where the
+// meaning lives."
 function SeasonBar({ segments, currentId, statusByKey, onSegmentClick }) {
   return (
     <ol
@@ -148,9 +154,11 @@ function SeasonBar({ segments, currentId, statusByKey, onSegmentClick }) {
         const isCurrent = currentId != null && seg.homestandId === currentId;
         const cls = classForSegment(seg, isCurrent, statusByKey);
         // Proportional flex: span days. Current block widens on top
-        // of that base so the ordinal label has room to sit inside.
+        // of that base so the bare number has more space at the
+        // one block a chef needs to find first.
         const base = spanDaysInclusive(seg.startDate, seg.endDate);
         const flexUnits = isCurrent ? base * 1.7 : base;
+        const number = String(seg.homestandId).replace(/^HS/i, "");
         return (
           <li
             key={seg.homestandId}
@@ -164,9 +172,7 @@ function SeasonBar({ segments, currentId, statusByKey, onSegmentClick }) {
               aria-label={ariaLabelForSegment(seg, statusByKey)}
               title={ariaLabelForSegment(seg, statusByKey)}
             >
-              {isCurrent && (
-                <span className="sc-stepper-bar-segment-label">{seg.homestandId}</span>
-              )}
+              <span className="sc-stepper-bar-segment-label">{number}</span>
             </button>
           </li>
         );

@@ -463,6 +463,14 @@
   --sc2-state-overdue-bd: #dd8a7b;             /* T-table border */
   --sc2-state-overdue-fg: #8a3a2c;             /* T-table numeral (Lc 67.8) */
 
+  /* in-progress - solid blue with white numeral. M-4b
+     (2026-07-30): the SeasonStepper's current block needs a
+     distinct fill from the pale amber/green washes. Navy would
+     collide with closed-out under grayscale, so a real blue.
+     Text is white; contrast 7.7:1 AAA. */
+  --sc2-state-in-progress-bg: #1e5aa8;
+  --sc2-state-in-progress-fg: #ffffff;
+
   /* off - warm neutral, non-actionable (no border per 6.10). Numeral
      bumped from prior #a9a69d (Lc 39.0 FAIL) to spec T-table #8f8b80
      (verify Lc >= 45 at build; spec 7.7 rider). */
