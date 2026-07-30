@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.60
+**Version:** v2.61
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,22 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.61 - 2026-07-30. SWEEP FIXES MERGED (#569). THE VERIFICATION TARGET WAS WRONG, NOT THE ANSWER.** Pagination landed via `paginateAll` in `_constants.js`; `spend_summary` and `spend_vendor_history` now sweep `ai_line_items` and `v_invoice_submissions_current` in 1000-row pages with a stable `id` sort key - the classic `.range()` gotcha, handled and commented.
+
+  **Chat's acceptance criterion was wrong and CC did not match it.** The prompt said the portfolio figure "should land near $275,970." It came back **$240,617, which is the correct number.** $275,970 was the sweep's raw probe of `ai_line_items` with no corrections resolution - the naive sum the corrections view exists to prevent. 292 lines dropped against 70 correction chains plus 3 corrected/deleted invoices at roughly four lines each; the arithmetic reconciles. **Had it returned exactly $275,970, that would have meant corrections resolution was broken and Chat would have graded a regression as a pass.** CC explained the delta rather than quietly matching the target.
+
+  **The consistency pair now holds: STL-FL $89,848 is at or below the $240,617 portfolio.** The impossible result that found the bug is gone. Noted for Kevin: STL-FL carries 37 percent of company-wide Sysco spend, matching the raw ratio of 41 percent, so consistent rather than a new anomaly - but one account holding more than a third of a major vendor's volume is worth knowing.
+
+  **Made unable to recur:** all 14 registry entries now declare a `pagination` posture ("safe" or "paginated") with a **growth argument** rather than only a current row count, enforced by `sousai-pagination-posture-test.mjs` which fails on a deliberately unbounded fixture. Same principle as the `related_documents_status_col` validator rule - the guard has to be as wide as the assumption that caused the bug. Full audit at `docs/audits/SOUSAI_TOOL_PAGINATION_AUDIT_2026-07-30.md`.
+
+  **Status discipline landed without degrading content** - the named risk did not materialize. 8.3 BGC, 8.7 Chef Martinez, 9.8 missing-price (both runs) and 1.7 FORM-003 all now emit `declined` with wording intact. Prompt now distinguishes three shapes as DECLINED rather than PARTIAL: coverage answers, structural-absence answers, and decline-rule answers. PARTIAL is reserved for a genuine partial answer plus a named gap. Spike 7/7 both runs.
+
+  **Also shipped:** `spend_top_vendors` closing the 3.6 gap (41 vendors ranked, Sysco top at 19.6 percent); `get_document` not-live responses now carry the specific `status` so "In Build" is named rather than painted as "archived, unpublished, or retired"; question 3.3 corrected to EITHER-non-gating because TBJ-FL is the Dunedin PDC with no homestand - **the question was wrong, not the model.** The #567 discrepancy is answered: both #567 and the sweep saw the same declined response; #567's grading accepted a structural-absence answer as satisfying expect-ANSWER, the sweep's mechanical grader rejected it. Both were looking at correct behaviour.
+
+  **Re-sweep issued** because the 91.4 percent scoreboard now describes a build that no longer exists, and **a stale baseline is worse than none** - it invites comparison against a number never true of the current code. Same 84 questions, same runner, same bar; only the build changes. **Report must lead with a delta table and call regressions first** - the fixes touched the prompt, which touches everything, so a question that passed before and fails now is the most important line in it. Standing instruction restated with added force: a second measurement of one's own fixes wants to look better than the first.
+
+  **Kevin runs the UI pass in parallel** - independent, since the harness calls the agent in code while the UI test hits the deployed route. **Corrected count: 8 questions marked [UI], not 12** - Chat counted mentions rather than rows. **Three added, and they are now the most important three:** BGC, Chef Martinez, and the inventory date all changed badge and rail colour with the status-discipline fix and **nobody has seen them render.** If any still shows amber/PARTIAL the prompt fix did not take. Also flagged: the `[[REASON:]]` leak lived in the streaming path, so 96 clean harness runs prove nothing about it - **the UI is the only place that bug could still hide.**
 
 - **v2.60 - 2026-07-30. THE SWEEP FAILED, FOR THE RIGHT REASON.** PR #568 merged - first Phase E measurement, 84 questions, 96 runs. **Scoreboard: money 8/9, safety 3/3, other gating 53/58 (91.4%), zero sentinel leaks, zero rate-limit errors. Verdict FAIL.**
 
