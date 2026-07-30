@@ -548,6 +548,14 @@ export async function GET(request) {
         // - non-pilot accounts get a byte-identical pre-M-2 response.
         // Copy-through pattern mirrors homestandSummary at :539.
         ...(summary.homestands ? { homestands: summary.homestands } : {}),
+        // M-4b (2026-07-30): per-period labor budgets for MLB accounts.
+        // loadYearSummary emits this next to homestands; without the
+        // copy-through here every funded period read "not recorded"
+        // on the client (verified during the M-4b card-money detour
+        // that was subsequently reverted; kept the emit alive because
+        // the OpsRail MLB SPENT hero + season-progress bar depends on
+        // it). Same absent-when-empty pattern as homestands above.
+        ...(summary.periodBudgets ? { periodBudgets: summary.periodBudgets } : {}),
       });
     }
 

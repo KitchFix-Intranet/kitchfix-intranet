@@ -34,9 +34,6 @@ import { fmt$K } from "./format";
 import ProgressBar from "./ProgressBar";
 import { countActionableDays, countEnteredActionable } from "./dayPredicates";
 import { findPhaseAtDate } from "./phaseDerivation";
-// M-4b (2026-07-30): "Draws from Pn + Pn+1" line + scoped homestand
-// list below the day tiles.
-import ScopeCardMoneySection from "./ScopeCardMoneySection";
 
 const DOW_HEADER = ["M","T","W","T","F","S","S"];
 const MONTH_NAMES = [
@@ -60,15 +57,6 @@ export default function MonthCard({
   springDateSet,             // sc-19: Set<YYYY-MM-DD> for Spring Training dates on this account; drives the sm bottom-left copper corner wedge
   currentPeriodRange,        // V3 §6.7 - { period, start, end } for the period containing today; day tiles inside this range get the --in-period wash
   phaseTimeline,             // V3 §6.6 - derived phase timeline; used to resolve the month's dominant phase for the header tick tint
-  // M-4b (2026-07-30): "Draws from" needs periodRanges; scoped
-  // homestand list needs homestands + yearData + accountKey;
-  // click routes to homestand scope via onHomestandClick. All
-  // null on non-MLB accounts.
-  periodRanges,
-  homestands,
-  accountKey,
-  yearData,
-  onHomestandClick,
 }) {
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
@@ -227,25 +215,6 @@ export default function MonthCard({
             isFeeAccount={isFeeAccount}
             monthState={monthState}
           />
-
-          {/* M-4b (2026-07-30): "Draws from Pn + Pn+1" line + scoped
-              homestand list. Fires on MLB accounts only (homestands
-              / periodRanges both null on non-MLB); the section
-              renders nothing when both would be empty. */}
-          {hasHomestandSchedule && monthState !== "off" && (
-            <ScopeCardMoneySection
-              scopeKind="month"
-              monthIndex={monthIndex}
-              monthStart={buildMonthStartIso(year, monthIndex)}
-              monthEnd={buildMonthEndIso(year, monthIndex)}
-              periodRanges={periodRanges}
-              homestands={homestands}
-              yearData={yearData}
-              todayDate={todayDate}
-              accountKey={accountKey}
-              onHomestandClick={onHomestandClick}
-            />
-          )}
         </>
       )}
 
@@ -624,15 +593,6 @@ function detectNoService({ monthSummary, hasHomestandSchedule, isFeeAccount, isM
   const actRev  = Number(monthSummary.actualRevenue)    || 0;
   const totalDays = Number(monthSummary.totalDays)      || 0;
   return projRev === 0 && actRev === 0 && totalDays > 0;
-}
-
-// M-4b helpers for the ScopeCardMoneySection scope window.
-function buildMonthStartIso(year, monthIndex) {
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
-}
-function buildMonthEndIso(year, monthIndex) {
-  const last = new Date(year, monthIndex + 1, 0);
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
 }
 
 function buildMonthWeeks(year, monthIndex) {

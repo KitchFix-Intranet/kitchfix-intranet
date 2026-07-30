@@ -63,12 +63,6 @@ export default function SeasonShell({
   // footer's "N need actuals" counter. Absent for non-MLB accounts;
   // the strip falls back to derived done/now/next byte-identically.
   homestands,
-  // M-4b (2026-07-30): live labor budgets by fiscal period,
-  // `{ period, hourly_budget }[]`. Emitted alongside homestands[]
-  // for MLB accounts; null on non-MLB. Forwarded to MonthCard
-  // (drives the "Draws from Pn + Pn+1" label) and PeriodCard
-  // (drives the "Budget: $X" line).
-  periodBudgets,
   // Lifted view toggle (passed from orchestrator). The action signal
   // moved to the ChromeBar, so the shell no longer carries jump props.
   view,                     // "calendar" | "period" - lifted to orchestrator chrome bar
@@ -331,16 +325,6 @@ export default function SeasonShell({
                   /* V3 §6.6 - phase timeline for the header 3px tick
                      (phase-family tint of the month's dominant phase). */
                   phaseTimeline={phaseTimeline}
-                  /* M-4b: MonthCard uses periodRanges to derive
-                     "Draws from Pn + Pn+1" and homestands+yearData
-                     to render the scope-native homestand list with
-                     straddle labels. Empty on non-MLB accounts;
-                     card renders the pre-M-4b footer only. */
-                  periodRanges={periodRanges}
-                  homestands={homestands}
-                  accountKey={account?.key}
-                  yearData={effectiveYearData}
-                  onHomestandClick={onHomestandClick}
                 />
               </div>
             );
@@ -367,12 +351,6 @@ export default function SeasonShell({
              blocks scoped to this period, so both yearData and the
              account key thread down through PeriodGrid. */
           accountKey={account?.key}
-          /* M-4b: PeriodCard uses periodBudgets to render its own
-             "Budget: $X" line and homestands to render the
-             scope-native homestand list with straddle labels. */
-          periodBudgets={periodBudgets}
-          homestands={homestands}
-          onHomestandClick={onHomestandClick}
         />
       )}
       </div>
@@ -452,10 +430,6 @@ function PeriodGrid({
   // M-0: forwarded to PeriodCard so its `deriveHomestandSubtitle`
   // can re-derive full-season blocks and filter to this period.
   accountKey,
-  // M-4b: card money + homestand list props.
-  periodBudgets,
-  homestands,
-  onHomestandClick,
 }) {
   if (!periodRanges?.length) {
     return (
@@ -487,11 +461,6 @@ function PeriodGrid({
                ordinal labels line up with the SeasonStepper. */
             yearData={yearData}
             accountKey={accountKey}
-            /* M-4b: card money + homestand list. */
-            periodBudgets={periodBudgets}
-            periodRanges={periodRanges}
-            homestands={homestands}
-            onHomestandClick={onHomestandClick}
           />
         </div>
       ))}

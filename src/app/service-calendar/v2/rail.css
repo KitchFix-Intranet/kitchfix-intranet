@@ -103,6 +103,105 @@
   line-height: 1.4;
 }
 
+/* ─── MLB rail Direction A (2026-07-30) ───────────────────────
+   Three parts: hero + one action card + one-line summary. The
+   subtitle wraps beneath the hero so long amounts do not
+   truncate in RailHero's projection slot (which is baseline-
+   inline and clips). */
+.scv2 .sc-rail-mlb-subtitle {
+  margin: var(--sc2-space-1) 0 var(--sc2-space-2) 0;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.scv2 .sc-rail-mlb-summary {
+  margin: var(--sc2-space-3) 0 0 0;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+  text-align: left;
+}
+
+/* The action card - a small block with tag + title + detail
+   + optional CTA + optional "more waiting" link. */
+.scv2 .sc-rail-mlb-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-3);
+  margin-top: var(--sc2-space-3);
+  border-radius: var(--sc2-radius-container);
+  border: var(--sc2-border-thin) solid var(--sc2-rail-border);
+  background: var(--sc2-surface-card);
+}
+
+.scv2 .sc-rail-mlb-action-tag {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-muted);
+}
+
+.scv2 .sc-rail-mlb-action-title {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-rail-text-strong);
+  line-height: 1.25;
+}
+.scv2 .sc-rail-mlb-action-title--due {
+  color: var(--sc2-state-needs-fg-strong);
+}
+
+.scv2 .sc-rail-mlb-action-detail {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.scv2 .sc-rail-mlb-action-btn {
+  appearance: none;
+  border: none;
+  border-radius: var(--sc2-radius-control);
+  background: var(--sc2-rail-cta-bg);
+  color: var(--sc2-rail-cta-text);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
+  cursor: pointer;
+}
+.scv2 .sc-rail-mlb-action-btn:hover {
+  background: var(--sc2-rail-cta-bg-hover);
+}
+.scv2 .sc-rail-mlb-action-btn:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
+.scv2 .sc-rail-mlb-action-more {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-strong);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+.scv2 .sc-rail-mlb-action-more:hover {
+  filter: brightness(1.1);
+}
+
+.scv2 .sc-rail-mlb-action-note {
+  margin: 0;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+  line-height: 1.4;
+}
+
 /* ─── Contract block (Phase 2B, 2026-07-25) ────────────────────
    STL-FL fee-no-dollar rail addition. States the annual fee once
    so the operator sees where the money went even though nothing

@@ -534,12 +534,6 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // Non-pilot accounts leave this null - `isHomestandView` guards
   // every consumer.
   const [yearHomestands, setYearHomestands] = useState(null);
-  // M-4b (2026-07-30): live labor budgets rows for the MLB surface set
-  // (`{ period, hourly_budget }[]`), emitted by loadYearSummary next
-  // to homestands[]. Threaded to SeasonShell -> PeriodCard (own
-  // figure) and MonthCard (drives the "Draws from Pn + Pn+1" label).
-  // Null on non-MLB accounts by construction; consumers null-guard.
-  const [yearPeriodBudgets, setYearPeriodBudgets] = useState(null);
   // SC-033: track the year-summary fetch state so a whole-fetch failure
   // renders the failed atoms on every overview cell instead of silently
   // stalling on the loading skeleton (the pre-fix behavior).
@@ -773,7 +767,6 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     // M-2 (2026-07-29): homestands[] is per-account. Clear on switch
     // so the prior account's data cannot flash on a slow refetch.
     setYearHomestands(null);
-    setYearPeriodBudgets(null);
     setYearToday(null);
     // PR-B2: also clear period state on account-switch. monthCache
     // is per-account; without clearing it a switch would render the
@@ -876,7 +869,6 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         // otherwise - `isHomestandView` renders never reach into
         // this when it is null (mount checks account first).
         setYearHomestands(d.homestands || null);
-        setYearPeriodBudgets(d.periodBudgets || null);
         setYearLoadState("loaded");
         // Design Batch 2: stamp the load time once data lands.
         setAsOf(new Date());
@@ -3015,7 +3007,6 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                  read live billing status per homestand. Null for
                  non-MLB accounts (server does not emit the key). */
               homestands={yearHomestands}
-              periodBudgets={yearPeriodBudgets}
               // Lifted view toggle (the action signal moved to the chrome
               // bar, so the season shell no longer carries jump props).
               view={seasonView}
