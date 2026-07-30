@@ -402,6 +402,16 @@
   /* Rail accents (highlighted line values) */
   --sc2-rail-accent-success:#8fd6ab;   /* AAA (8.92) - ln .a .ok, queue chevron */
   --sc2-rail-accent-warn:   #f2d49a;   /* AAA (10.57) - ln.att attention line */
+  --sc2-rail-accent-active: #9dc7e8;   /* AAA (8.4) - in-progress left border */
+
+  /* Rail card surface (M-4b 2026-07-30). One step lighter than
+     --sc2-rail-bg so a nested card reads as raised without leaving
+     the navy palette. Do NOT use --sc2-surface-card (white/light-
+     mode surface) inside the rail: text tokens are calibrated for
+     dark-on-light and will fail contrast. Sits between bg (#15273c)
+     and bg-shade (#23405f) so it does not compete with the
+     progress-bar track. */
+  --sc2-rail-card-bg:       #1c3450;
 
   /* Rail CTA (primary footer button + quiet secondary) */
   --sc2-rail-cta-bg:        #37a866;   /* render --green-bright */

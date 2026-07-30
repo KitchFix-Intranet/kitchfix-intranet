@@ -433,18 +433,39 @@ function OpsRailBase({
 // Non-MLB accounts never reach this function.
 // ═══════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════
-// M-4b (2026-07-30, Direction A): MLB rail is exactly three things.
-//   1. Hero: SEASON · $spent · of $budget · progress bar · N%
-//      Subtitle moved BELOW the hero line so it wraps instead of
-//      truncating at "of $110,000 season la...".
-//   2. One action card, state-dependent:
-//        actuals-due -> earliest; "Close out HSn" button + N more waiting link
-//        in-progress -> that block; NO button (info only)
-//        upcoming    -> next block, as context; NO button
-//        all closed  -> "Season complete" (only when EVERY block closed)
-//   3. One line: "N of M closed out".
-// No list. No mini strip. The tracker strip above already lists all
-// thirteen blocks.
+// M-4b (2026-07-30 rev2): MLB rail = past · now · future.
+//
+// TOP:
+//   Hero + progress bar + caption.
+//   Caption merges the progress % and "N of M closed out"
+//   ("12% · 1 of 13 closed out"). No separate summary row.
+//   Missing-vs-zero removed from the rollup: $0 is a fact
+//   (nothing recorded), and the dash reads as broken.
+//
+// PAST (above the card):
+//   ONE collapsed group: "Closed out". Never auto-expands.
+//   In September it will hold 12; the header stays one row.
+//
+// NOW:
+//   ONE action card, state-shaped and navy-native. Left border
+//   carries the state accent. Chevron buttons step between all
+//   blocks in scope, disabled at ends, no wrapping.
+//   Card contents by status:
+//     actuals-due -> title + detail + Close out button
+//     closed-out  -> title + detail + SPENT + variance
+//     in-progress -> title + detail (no button)
+//     upcoming    -> title + detail (no button)
+//     season-done -> "Season complete" (only when every block closed)
+//
+// FUTURE (below the card):
+//   Two collapsed groups: "Actuals due" and "Upcoming".
+//   No "In progress" group - when nothing is due it becomes
+//   the card, and a group of one duplicates the thing being
+//   looked at.
+//
+// Group headers toggle; expanded rows list ordinal + date range
+// + right-aligned money (budget for open blocks, spend for closed).
+// Clicking a row loads it into the card. All navy-native tokens.
 // ═══════════════════════════════════════════════════════════
 function OpsRailMlbHomestand({
   mode = "overview",
@@ -465,80 +486,91 @@ function OpsRailMlbHomestand({
   onDrillToMonth,
   onDrillToPeriod,
 }) {
-  const iso = today || todayISO();
   const isDrill = mode === "drill";
   const list = Array.isArray(homestands) ? homestands : [];
 
-  // Season labor rollups. laborActual is emitted ONLY when a live
-  // close-out row exists per the M-3 payload contract. Sum with a
-  // null-sentinel: no close-out anywhere -> null, not 0.
-  const closedList = list.filter((h) => h?.laborActual != null);
-  const seasonSpent = closedList.length > 0
-    ? closedList.reduce((s, h) => s + Number(h.laborActual), 0)
-    : null;
+  // Season labor rollups.
+  // Missing-vs-zero rev2 (owner ruling 2026-07-30): SPENT = sum of
+  // recorded close-outs. Nothing closed out is $0 recorded, a fact.
+  // The dash the previous pass rendered read as broken and made the
+  // progress bar meaningless.
+  const seasonSpent = list.reduce((s, h) => (
+    h?.laborActual != null ? s + Number(h.laborActual) : s
+  ), 0);
   const seasonBudget = list.reduce((sum, h) => {
     const amt = h?.budget?.amount;
     return amt != null ? sum + Number(amt) : sum;
-  }, 0) || null;
-
-  const spendPct = (seasonSpent != null && seasonBudget)
+  }, 0);
+  const hasBudget = seasonBudget > 0;
+  const spendPct = hasBudget
     ? Math.min(100, Math.round((seasonSpent / seasonBudget) * 100))
-    : null;
+    : 0;
 
   // Drill scope: filter to blocks overlapping the drill window.
   const drillList = (isDrill && periodRange)
     ? list.filter((h) => h.startDate <= periodRange.end && h.endDate >= periodRange.start)
     : list;
-
-  // Status picks. actuals-due WINS over in-progress (needs > active).
-  // Owner scope: earliest actuals-due (there may be more than one).
   const inScope = isDrill ? drillList : list;
-  const dueList = inScope.filter((h) => h?.status === "actuals-due");
-  const needsHs = dueList[0] || null;
-  const additionalDue = Math.max(0, dueList.length - 1);
-  const inProgressHs = inScope.find((h) => h?.status === "in-progress") || null;
-  const upcomingNext = inScope.find((h) => h?.status === "upcoming") || null;
-  const closedCount = inScope.filter((h) => h?.status === "closed-out").length;
-  const totalCount = inScope.length;
-  const totalUpcoming = inScope.filter((h) => h?.status === "upcoming").length;
+
+  // Sort by startDate to guarantee left-to-right past/present/future
+  // ordering matches the tracker strip above.
+  const orderedScope = [...inScope].sort((a, b) =>
+    String(a.startDate).localeCompare(String(b.startDate))
+  );
+
+  // Group buckets (order preserved from orderedScope).
+  const dueList = orderedScope.filter((h) => h?.status === "actuals-due");
+  const closedList = orderedScope.filter((h) => h?.status === "closed-out");
+  const upcomingList = orderedScope.filter((h) => h?.status === "upcoming");
+  const inProgressHs = orderedScope.find((h) => h?.status === "in-progress") || null;
+
+  const closedCount = closedList.length;
+  const totalCount = orderedScope.length;
   const seasonComplete = totalCount > 0 && closedCount === totalCount;
 
-  // Action card state machine.
-  // "Season complete" ONLY when every block is closed. Middle state
-  // (nothing due, nothing in progress, but future blocks exist) is
-  // "Caught up" - not "Season complete" - because it is not.
-  let actionCard;
-  if (needsHs) {
-    actionCard = { kind: "actuals-due", block: needsHs, more: additionalDue };
-  } else if (inProgressHs) {
-    actionCard = { kind: "in-progress", block: inProgressHs };
-  } else if (upcomingNext) {
-    actionCard = { kind: "upcoming", block: upcomingNext };
-  } else if (seasonComplete) {
-    actionCard = { kind: "season-complete" };
-  } else {
-    actionCard = { kind: "caught-up" };
+  // Default card: earliest due > in-progress > earliest upcoming >
+  // earliest closed. Held in state so chevrons and row clicks work.
+  const defaultCard = dueList[0] || inProgressHs || upcomingList[0] || closedList[0] || null;
+  const defaultKey = defaultCard?.key || null;
+  const [currentKey, setCurrentKey] = useState(defaultKey);
+  // Reset when the payload's default key changes (account switch,
+  // homestand added). React "adjusting state when props change"
+  // pattern - set-during-render + a companion state variable holding
+  // the last known default. Avoids the useEffect + setState pair.
+  const [prevDefaultKey, setPrevDefaultKey] = useState(defaultKey);
+  if (defaultKey !== prevDefaultKey) {
+    setPrevDefaultKey(defaultKey);
+    setCurrentKey(defaultKey);
   }
 
-  const handleHsClick = (hs) => {
-    if (!hs) return;
-    if (onTargetHomestand) onTargetHomestand(hs.key);
-    else if (onTargetDay) onTargetDay(hs.startDate);
-  };
+  const currentBlock = currentKey
+    ? orderedScope.find((h) => h.key === currentKey) || defaultCard
+    : defaultCard;
+  const currentIndex = currentBlock
+    ? orderedScope.findIndex((h) => h.key === currentBlock.key)
+    : -1;
 
-  const focusTrackerStripDueBlock = () => {
-    if (typeof document === "undefined") return;
-    const target = document.querySelector(
-      ".sc-stepper .sc-stepper-bar-segment--actuals-due .sc-stepper-bar-segment-button"
-    );
-    if (target) {
-      const strip = document.querySelector(".sc-stepper");
-      strip?.scrollIntoView({ behavior: "smooth", block: "start" });
-      // Delay focus so the scroll completes first.
-      setTimeout(() => target.focus(), 300);
-      return;
-    }
-    document.querySelector(".sc-stepper")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Group open/closed state. Closed-out never auto-opens per owner
+  // ruling: an auto-expanding past section would dwarf the card by
+  // September. All three groups default closed.
+  const [openGroups, setOpenGroups] = useState({
+    "closed-out":  false,
+    "actuals-due": false,
+    "upcoming":    false,
+  });
+  const toggleGroup = (kind) => setOpenGroups((s) => ({ ...s, [kind]: !s[kind] }));
+
+  const goPrev = currentIndex > 0
+    ? () => setCurrentKey(orderedScope[currentIndex - 1].key)
+    : null;
+  const goNext = currentIndex >= 0 && currentIndex < orderedScope.length - 1
+    ? () => setCurrentKey(orderedScope[currentIndex + 1].key)
+    : null;
+
+  const handleClose = () => {
+    if (!currentBlock) return;
+    if (onTargetHomestand) onTargetHomestand(currentBlock.key);
+    else if (onTargetDay) onTargetDay(currentBlock.startDate);
   };
 
   // Drill hero: GAME DAYS SERVED in scope.
@@ -557,11 +589,8 @@ function OpsRailMlbHomestand({
 
   return (
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
-      {/* THING 1: Hero + progress bar + caption.
-          Subtitle "of $X labor budget" moved OFF the hero baseline
-          into its own wrapping line so a long amount no longer
-          truncates. Owner: "a hero that clips its own denominator
-          is worse than no hero." */}
+      {/* HERO + progress + merged caption.
+          Owner: "$0, not a dash" - the SPENT hero always paints. */}
       {isDrill ? (
         <>
           <RailHero
@@ -572,58 +601,88 @@ function OpsRailMlbHomestand({
           <MlbHeroSubtitle>{`of ${scopedTotal || 0}`}</MlbHeroSubtitle>
           <RailProgress pct={scopedPct} complete={scopedPct === 100} />
           <RailHeroProgressCaption>
-            {`${scopedComplete} of ${scopedTotal} game days served`}
+            {formatCombinedCaption(scopedPct, closedCount, totalCount, scopeLabel)}
           </RailHeroProgressCaption>
         </>
-      ) : seasonSpent != null ? (
+      ) : (
         <>
           <RailHero
             value={seasonSpent}
             format={(n) => `$${Math.round(n).toLocaleString("en-US")}`}
             label="SPENT"
           />
-          {seasonBudget != null && (
-            <MlbHeroSubtitle>
-              {`of $${Math.round(seasonBudget).toLocaleString("en-US")} labor budget`}
-            </MlbHeroSubtitle>
-          )}
-          {spendPct != null && (
-            <>
-              <RailProgress pct={spendPct} complete={spendPct === 100} />
-              <RailHeroProgressCaption>
-                {`${spendPct}% of season labor budget`}
-              </RailHeroProgressCaption>
-            </>
-          )}
-        </>
-      ) : (
-        <>
-          <RailHero value="-" format={(v) => v} label="SPENT" />
           <MlbHeroSubtitle>
-            {seasonBudget != null
-              ? `of $${Math.round(seasonBudget).toLocaleString("en-US")} labor budget · awaiting first close-out`
-              : "Awaiting first close-out"}
+            {hasBudget
+              ? `of $${Math.round(seasonBudget).toLocaleString("en-US")} labor budget`
+              : "No budget recorded"}
           </MlbHeroSubtitle>
+          <RailProgress pct={spendPct} complete={spendPct === 100} />
+          <RailHeroProgressCaption>
+            {formatCombinedCaption(spendPct, closedCount, totalCount, null)}
+          </RailHeroProgressCaption>
         </>
       )}
 
-      {/* THING 2: One action card. */}
-      <MlbActionCard
-        card={actionCard}
-        onClose={() => actionCard.block && handleHsClick(actionCard.block)}
-        onFocusStripDue={focusTrackerStripDueBlock}
-      />
-
-      {/* THING 3: One-line season summary. On drill, the summary is
-          scope-native ("in this <scope>"). Owner shape: single line.
-          Hides when the scope is empty (drill with no homestands). */}
-      {totalCount > 0 && (
-        <MlbSeasonSummary
-          closed={closedCount}
-          total={totalCount}
-          scopeLabel={isDrill ? scopeLabel : null}
+      {/* PAST: Closed-out group, above the card. Header always
+          one-row tall - clicking expands the list, does not
+          auto-open. */}
+      {closedList.length > 0 && (
+        <MlbGroup
+          kind="closed-out"
+          label="Closed out"
+          count={closedList.length}
+          open={openGroups["closed-out"]}
+          onToggle={() => toggleGroup("closed-out")}
+          rows={closedList}
+          currentKey={currentBlock?.key || null}
+          onRowClick={(hs) => setCurrentKey(hs.key)}
         />
       )}
+
+      {/* NOW: one action card. Chevrons walk the whole scope in
+          startDate order, so a chef can step through past->present->
+          future without expanding a group. */}
+      {seasonComplete ? (
+        <MlbActionCardComplete />
+      ) : orderedScope.length > 0 ? (
+        <MlbActionCard
+          block={currentBlock}
+          canPrev={!!goPrev}
+          canNext={!!goNext}
+          onPrev={goPrev}
+          onNext={goNext}
+          onClose={handleClose}
+        />
+      ) : null}
+
+      {/* FUTURE: Actuals-due + Upcoming groups. No in-progress
+          group - the in-progress block is on the card whenever
+          nothing is due. */}
+      {dueList.length > 0 && (
+        <MlbGroup
+          kind="actuals-due"
+          label="Actuals due"
+          count={dueList.length}
+          open={openGroups["actuals-due"]}
+          onToggle={() => toggleGroup("actuals-due")}
+          rows={dueList}
+          currentKey={currentBlock?.key || null}
+          onRowClick={(hs) => setCurrentKey(hs.key)}
+        />
+      )}
+      {upcomingList.length > 0 && (
+        <MlbGroup
+          kind="upcoming"
+          label="Upcoming"
+          count={upcomingList.length}
+          open={openGroups["upcoming"]}
+          onToggle={() => toggleGroup("upcoming")}
+          rows={upcomingList}
+          currentKey={currentBlock?.key || null}
+          onRowClick={(hs) => setCurrentKey(hs.key)}
+        />
+      )}
+
       {exportControl && (
         <div className="sc-drill-rail-export">
           {exportControl}
@@ -633,37 +692,177 @@ function OpsRailMlbHomestand({
   );
 }
 
-// ─── MLB rail Direction A components ────────────────────────
+// ─── MLB rail rev2 components ───────────────────────────────
 
-// Wrapping subtitle line beneath the RailHero. Sits between the
-// hero and the progress bar so long amounts wrap instead of
-// truncating in RailHero's projection slot. Small text, muted.
+// Wrapping subtitle line beneath the RailHero. Long amounts wrap
+// instead of truncating in RailHero's projection slot.
 function MlbHeroSubtitle({ children }) {
   return <p className="sc-rail-mlb-subtitle">{children}</p>;
 }
 
-// One-line season summary. Reads "N of M closed out." Owner shape
-// per Direction A: single line, no list, no meter, no chevron.
-// On drill mode carries the scope name so the line reads
-// "N of M closed out in P6" (scope-native context).
-function MlbSeasonSummary({ closed, total, scopeLabel }) {
-  const scoped = scopeLabel ? ` in ${scopeLabel.replace(/\s+·.*$/, "").trim()}` : "";
+// "12% · 1 of 13 closed out" - progress + season summary merged
+// onto the hero caption line so it no longer needs its own row.
+function formatCombinedCaption(pct, closed, total, scopeLabel) {
+  const scopeSuffix = scopeLabel
+    ? ` in ${scopeLabel.replace(/\s+·.*$/, "").trim()}`
+    : "";
+  const summary = total > 0 ? `${closed} of ${total} closed out${scopeSuffix}` : null;
+  const parts = [];
+  parts.push(`${pct}%`);
+  if (summary) parts.push(summary);
+  return parts.join(" · ");
+}
+
+// Collapsed group header + optional expanded list. Header ALWAYS
+// one row tall so the past section stays one row in September
+// (owner constraint). Each row loads its block into the card on
+// click.
+function MlbGroup({ kind, label, count, open, onToggle, rows, currentKey, onRowClick }) {
   return (
-    <p className="sc-rail-mlb-summary">
-      {closed} of {total} closed out{scoped}
-    </p>
+    <div className={`sc-rail-mlb-group sc-rail-mlb-group--${kind}`} data-open={open ? "true" : "false"}>
+      <button
+        type="button"
+        className="sc-rail-mlb-group-header"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
+        <span className="sc-rail-mlb-group-label">{label}</span>
+        <span className="sc-rail-mlb-group-count">{count}</span>
+        <span className="sc-rail-mlb-group-chevron" aria-hidden="true">
+          <ChevronDown />
+        </span>
+      </button>
+      {open && (
+        <ul className="sc-rail-mlb-group-list">
+          {rows.map((hs) => (
+            <li key={hs.key}>
+              <button
+                type="button"
+                className={`sc-rail-mlb-group-row ${currentKey === hs.key ? "sc-rail-mlb-group-row--current" : ""}`.trim()}
+                onClick={() => onRowClick?.(hs)}
+              >
+                <span className="sc-rail-mlb-group-row-id">{hs.ordinal || "HS"}</span>
+                <span className="sc-rail-mlb-group-row-range">{shortRange(hs.startDate, hs.endDate)}</span>
+                <span className="sc-rail-mlb-group-row-money">
+                  {formatRowMoney(hs)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
-// The one action card. State-dependent shape per owner Direction A.
-function MlbActionCard({ card, onClose, onFocusStripDue }) {
-  if (!card) return null;
-  const { kind, block, more } = card;
+function formatRowMoney(hs) {
+  // Closed: spend (what actually was). Open (any other status):
+  // budget (what was planned). Never $0 for a block that hasn't
+  // closed yet - budget is a real figure, spend is meaningless
+  // until close-out.
+  if (hs.laborActual != null) {
+    return `$${Math.round(hs.laborActual).toLocaleString("en-US")}`;
+  }
+  if (hs.budget?.amount != null) {
+    return `$${Math.round(hs.budget.amount).toLocaleString("en-US")}`;
+  }
+  return "";
+}
 
-  if (kind === "actuals-due") {
-    return (
-      <div className="sc-rail-mlb-action sc-rail-mlb-action--due">
-        <MlbActionCardHead block={block} tone="due" />
+// Small chevron for group headers.
+function ChevronDown() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+// The one action card. State-shaped: left-border accent per status,
+// title + detail + optional money-with-variance + optional CTA.
+// Chevron controls step through the whole scope in startDate order.
+function MlbActionCard({ block, canPrev, canNext, onPrev, onNext, onClose }) {
+  if (!block) return null;
+  const status = block.status || "upcoming";
+  const opponents = (block.opponents && block.opponents.length > 0)
+    ? block.opponents.join(" / ")
+    : "TBD";
+  const range = shortRange(block.startDate, block.endDate);
+  const gameWord = block.gameCount === 1 ? "game" : "games";
+  const tag = statusTag(status);
+
+  // Money line depends on status.
+  //   actuals-due, upcoming, in-progress: show budget
+  //   closed-out: show SPENT + variance vs frozen budget snapshot
+  let moneyLine = null;
+  if (status === "closed-out") {
+    const spent = block.laborActual;
+    const snap = block.budgetSnapshotAtCloseout;
+    if (spent != null) {
+      const variance = (snap != null) ? Number(spent) - Number(snap) : null;
+      moneyLine = (
+        <div className="sc-rail-mlb-action-money">
+          <span>Spent ${Math.round(spent).toLocaleString("en-US")}</span>
+          {snap != null && (
+            <>
+              {" · "}
+              <span>of ${Math.round(snap).toLocaleString("en-US")} budget</span>
+            </>
+          )}
+          {variance != null && variance !== 0 && (
+            <>
+              {" · "}
+              <span className={variance > 0
+                ? "sc-rail-mlb-action-money-variance--over"
+                : "sc-rail-mlb-action-money-variance--under"}>
+                {variance > 0 ? "+" : "-"}${Math.round(Math.abs(variance)).toLocaleString("en-US")} {variance > 0 ? "over" : "under"}
+              </span>
+            </>
+          )}
+        </div>
+      );
+    }
+  } else if (block.budget?.amount != null) {
+    moneyLine = (
+      <div className="sc-rail-mlb-action-money">
+        ${Math.round(block.budget.amount).toLocaleString("en-US")} budget
+      </div>
+    );
+  }
+
+  return (
+    <div className={`sc-rail-mlb-action sc-rail-mlb-action--${status}`}>
+      <div className="sc-rail-mlb-action-topbar">
+        <span className="sc-rail-mlb-action-tag">{tag}</span>
+        <div className="sc-rail-mlb-nav" aria-label="Step to previous or next homestand">
+          <button
+            type="button"
+            className="sc-rail-mlb-nav-btn"
+            onClick={onPrev}
+            disabled={!canPrev}
+            aria-label="Previous homestand"
+          >
+            <ChevronLeft />
+          </button>
+          <button
+            type="button"
+            className="sc-rail-mlb-nav-btn"
+            onClick={onNext}
+            disabled={!canNext}
+            aria-label="Next homestand"
+          >
+            <ChevronRightSmall />
+          </button>
+        </div>
+      </div>
+      <div className="sc-rail-mlb-action-title">
+        {block.ordinal || "HS"} vs {opponents}
+      </div>
+      <div className="sc-rail-mlb-action-detail">
+        {range} · {block.gameCount || 0} {gameWord}
+      </div>
+      {moneyLine}
+      {status === "actuals-due" && (
         <button
           type="button"
           className="sc-rail-mlb-action-btn"
@@ -671,83 +870,42 @@ function MlbActionCard({ card, onClose, onFocusStripDue }) {
         >
           Close out {block.ordinal || "homestand"}
         </button>
-        {more > 0 && (
-          <button
-            type="button"
-            className="sc-rail-mlb-action-more"
-            onClick={onFocusStripDue}
-            aria-label={`${more} more homestand${more === 1 ? "" : "s"} waiting - jump to tracker strip`}
-          >
-            {more} more waiting
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (kind === "in-progress") {
-    return (
-      <div className="sc-rail-mlb-action sc-rail-mlb-action--in-progress">
-        <div className="sc-rail-mlb-action-tag">In progress</div>
-        <MlbActionCardHead block={block} tone="in-progress" />
-      </div>
-    );
-  }
-
-  if (kind === "upcoming") {
-    return (
-      <div className="sc-rail-mlb-action sc-rail-mlb-action--upcoming">
-        <div className="sc-rail-mlb-action-tag">Up next</div>
-        <MlbActionCardHead block={block} tone="upcoming" />
-      </div>
-    );
-  }
-
-  if (kind === "season-complete") {
-    return (
-      <div className="sc-rail-mlb-action sc-rail-mlb-action--complete">
-        <div className="sc-rail-mlb-action-tag">Season complete</div>
-        <p className="sc-rail-mlb-action-note">Every homestand closed out.</p>
-      </div>
-    );
-  }
-
-  // kind === "caught-up" - mid-season, nothing due, no in-progress,
-  // no upcoming. This is the "caught up" state, distinct from
-  // "season complete" (which requires every block closed).
-  return (
-    <div className="sc-rail-mlb-action sc-rail-mlb-action--caughtup">
-      <div className="sc-rail-mlb-action-tag">Caught up</div>
-      <p className="sc-rail-mlb-action-note">Nothing due right now.</p>
+      )}
     </div>
   );
 }
 
-// Head line inside the action card - shared by actuals-due,
-// in-progress, and upcoming shapes. Reads:
-//   HS<n> vs <opponents>
-//   <dates> · <games> games · <budget>
-function MlbActionCardHead({ block, tone }) {
-  if (!block) return null;
-  const opponents = (block.opponents && block.opponents.length > 0)
-    ? block.opponents.join(" / ")
-    : "TBD";
-  const range = shortRange(block.startDate, block.endDate);
-  const gameWord = block.gameCount === 1 ? "game" : "games";
-  const dollar = block.budget?.amount != null
-    ? `$${Math.round(block.budget.amount).toLocaleString("en-US")} budget`
-    : null;
-  const detailParts = [range, `${block.gameCount || 0} ${gameWord}`];
-  if (dollar) detailParts.push(dollar);
+// Season complete: every block closed. Terminal state.
+function MlbActionCardComplete() {
   return (
-    <>
-      <div className={`sc-rail-mlb-action-title sc-rail-mlb-action-title--${tone}`}>
-        {block.ordinal || "HS"} vs {opponents}
-      </div>
-      <div className="sc-rail-mlb-action-detail">
-        {detailParts.join(" · ")}
-      </div>
-    </>
+    <div className="sc-rail-mlb-action sc-rail-mlb-action--closed-out">
+      <div className="sc-rail-mlb-action-tag">Season complete</div>
+      <p className="sc-rail-mlb-action-note">Every homestand closed out.</p>
+    </div>
+  );
+}
+
+function statusTag(status) {
+  switch (status) {
+    case "actuals-due": return "Actuals due";
+    case "closed-out":  return "Closed out";
+    case "in-progress": return "In progress";
+    default:            return "Upcoming";
+  }
+}
+
+function ChevronLeft() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 6 9 12 15 18" />
+    </svg>
+  );
+}
+function ChevronRightSmall() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
   );
 }
 
