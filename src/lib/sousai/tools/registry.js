@@ -16,6 +16,21 @@
 //                                  valid set (data tools return [] since
 //                                  their results are not doc-citations)
 //
+// Every entry also declares `pagination`:
+//   - "safe"      : the tool's reads cannot exceed PostgREST's 1000-row default
+//                   today AND have a stated ceiling that won't reach it. A
+//                   `paginationNote` field carries the growth argument that
+//                   justifies the classification.
+//   - "paginated" : the tool uses `paginateAll` (or an equivalent .range()
+//                   sweep) to complete reads that could exceed 1000 rows.
+//
+// A tool without an explicit `pagination` declaration is BROKEN by default -
+// the pagination-posture test (scripts/sousai-pagination-posture-test.mjs)
+// fails on missing or unrecognized values. Rationale: on 2026-07-30 the Sousai
+// sweep uncovered `spend_summary` publishing $46,444 where the truth was
+// $275,970 because ai_line_items silently truncated at 1000. The guard has to
+// be as wide as the assumption that caused the bug (Kevin, plan v2.60).
+//
 // The ctx carries accessLevels for document tools. Data tools ignore it (the
 // directory tables carry no access-tier gating; the route-level gate at
 // canUseSous is what enforces access to the whole surface).
@@ -40,6 +55,7 @@ import { scServicePrice } from "./data/scServicePrice.js";
 import { scOrientation } from "./data/scOrientation.js";
 import { spendSummary } from "./data/spendSummary.js";
 import { spendVendorHistory } from "./data/spendVendorHistory.js";
+import { spendTopVendors } from "./data/spendTopVendors.js";
 import {
   KNOWN_ROLES,
   KNOWN_TEAM_KEYS,
@@ -95,6 +111,8 @@ const DOC_TOOLS = [
       };
     },
     kind: "doc",
+    pagination: "safe",
+    paginationNote: "match_document_chunks RPC bounded by match_count=30. The follow-up documents fetch selects only the candidate ids (max 30). documents.id is a UUID PK - the .in() list drives the read.",
     collectIds(result) {
       return Array.isArray(result) ? result.map((d) => d.docId).filter(Boolean) : [];
     },
@@ -103,7 +121,7 @@ const DOC_TOOLS = [
     definition: {
       name: "get_document",
       description:
-        "Fetch the full SousAI-safe text of a document by its ID, or up to 6 documents in one call. Use once search points you at a doc, or when the user gives an exact doc ID. Use the BATCH form for enumeration questions after listing the class. Refusals carry a `reason` field (not_found, access, archived, not_live) and no content.",
+        "Fetch the full SousAI-safe text of a document by its ID, or up to 6 documents in one call. Use once search points you at a doc, or when the user gives an exact doc ID. Use the BATCH form for enumeration questions after listing the class. Refusals carry a `reason` field (not_found, access, archived, not_live) and no content. When reason='not_live' the response also carries the specific `status` value (e.g. 'In Build', 'Under Review', 'Draft') - name that state to the user rather than paraphrasing as 'archived, unpublished, or retired'.",
       input_schema: {
         type: "object",
         properties: {
@@ -146,11 +164,13 @@ const DOC_TOOLS = [
       for (const [id, r] of Object.entries(result || {})) {
         per[id] = r?.available
           ? { available: true, tokens: r.tokenTotal, truncated: !!r.truncated }
-          : { available: false, reason: r?.reason };
+          : { available: false, reason: r?.reason, status: r?.status };
       }
       return per;
     },
     kind: "doc",
+    pagination: "safe",
+    paginationNote: "hard-capped at GET_DOCUMENT_MAX_BATCH=6 ids per call. Each doc is a single row lookup.",
     collectIds(result) {
       const ids = [];
       for (const [id, r] of Object.entries(result || {})) {
@@ -193,6 +213,8 @@ const DOC_TOOLS = [
       };
     },
     kind: "doc",
+    pagination: "safe",
+    paginationNote: "documents table probed 2026-07-30: 82 Live rows across all doc classes. Grows at ~50 rows/year based on the corpus arc; ceiling below 500 for years. Filters (archived=false, status=Live, access_level IN) narrow further.",
     collectIds(result) {
       return Array.isArray(result) ? result.map((d) => d.id).filter(Boolean) : [];
     },
@@ -225,6 +247,8 @@ const DATA_TOOLS = [
       return { kind: "contact-search", total: result?.total ?? 0, returned: result?.matches?.length ?? 0 };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "contacts probed 2026-07-30: 30 rows. Scope is EC/Sous/HM/corporate leadership only (line and hourly staff not tracked). Even 3x growth (90 rows) stays well below 1000.",
     collectIds() { return []; },
   },
   {
@@ -253,6 +277,8 @@ const DATA_TOOLS = [
       return { kind: "accounts", total: result?.total ?? 0, returned: result?.accounts?.length ?? 0 };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "accounts probed 2026-07-30: 12 rows. One row per current-season account; retired accounts are physically deleted, not flagged. Growth ceiling ~30 (portfolio expansion is measured in accounts per year, not per month).",
     collectIds() { return []; },
   },
   {
@@ -287,6 +313,8 @@ const DATA_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "same table as find_contact - 30 rows. Largest single-role slice is Executive Chef (9 rows).",
     collectIds() { return []; },
   },
   {
@@ -317,6 +345,8 @@ const DATA_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "accounts + contacts reads all bounded (12 accounts, ~9 contacts max per team_key). validTeamKeys fallback fetches the accounts table (12 rows).",
     collectIds() { return []; },
   },
 ];
@@ -350,6 +380,8 @@ const SC_AND_SPEND_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "sc_daily_revenue filtered by single account_key + single window (month/homestand/period). Probed 2026-07-30: busiest 28-day period at a single account = 454 rows (TBR-FL). Month ceiling ~500. Even 2x growth in services stays under 1000. YTD windows are not supported by this tool - callers who want year-scale ranges use spend_summary window='ytd' which is paginated.",
     collectIds() { return []; },
   },
   {
@@ -377,6 +409,8 @@ const SC_AND_SPEND_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "single homestand (10-14 days) x per-account services. Sc_daily_revenue rows for one homestand slice = ~200-280 max. Output cap B2_ROW_CAP=200 with honest 'showing N of M' truncation. sc_homestand_schedule per account probed 2026-07-30: max 83 rows total, so the schedule reads (filtered by account+homestand_id) return < 15 rows.",
     collectIds() { return []; },
   },
   {
@@ -405,6 +439,8 @@ const SC_AND_SPEND_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "sc_services probed 2026-07-30: 105 rows total across all accounts. Sc_service_prices: 161 rows total. Per-service history reads are always < 20 rows. Single account service catalog is ~10-20.",
     collectIds() { return []; },
   },
   {
@@ -430,6 +466,8 @@ const SC_AND_SPEND_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "safe",
+    paginationNote: "three view reads all use .maybeSingle() or .limit(1). Company-wide period fallback uses .limit(1). Bounded by explicit query limits, not table size.",
     collectIds() { return []; },
   },
   {
@@ -460,6 +498,8 @@ const SC_AND_SPEND_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "paginated",
+    paginationNote: "v_invoice_submissions_current YTD portfolio = 1,489 rows and ai_line_items YTD portfolio = 14,677 rows. Both reads sweep via paginateAll (see data/_constants.js). This tool was BROKEN in Phase F PR 2 - the 2026-07-30 sweep caught it via the 10.5/10.6 consistency pair (STL-FL $89,848 > portfolio $46,444, impossible). Fixed 2026-07-30.",
     collectIds() { return []; },
   },
   {
@@ -488,6 +528,40 @@ const SC_AND_SPEND_TOOLS = [
       };
     },
     kind: "data",
+    pagination: "paginated",
+    paginationNote: "Same underlying tables as spend_summary (v_invoice_submissions_current + ai_line_items). Both reads sweep via paginateAll so total_lines and total_dollars stay complete; the output rows array is capped at C2_ROW_CAP=200 with honest 'showing N of M' truncation.",
+    collectIds() { return []; },
+  },
+  {
+    definition: {
+      name: "spend_top_vendors",
+      description:
+        "Portfolio-wide vendor ranking - answers 'which vendors did we spend the most with this year' with no filter required. Aggregates ai_line_items over a window and returns top-N vendors by dollar_total (default 10, max 25) with line_count and share_pct. Corrections-chain resolved via v_invoice_submissions_current. Optional filters: category (e.g. 'Food'), accountKey. window: 'month' | 'year' | 'ytd' (default) | 'date_range'. When date_range, supply dateFrom + dateTo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          window: { type: "string", enum: ["month", "year", "ytd", "date_range"], description: "defaults to 'ytd'" },
+          category: { type: "string", description: "optional line-item category filter" },
+          accountKey: { type: "string", description: "optional account filter" },
+          topN: { type: "integer", description: "defaults to 10, max 25" },
+          dateFrom: { type: "string", description: "required when window=date_range (YYYY-MM-DD)" },
+          dateTo: { type: "string", description: "required when window=date_range (YYYY-MM-DD)" },
+          asOf: { type: "string", description: "YYYY-MM-DD; defaults to today" },
+          excludeHistorical: { type: "boolean", description: "exclude batch_rebuild rows" },
+        },
+      },
+    },
+    async execute(input) { return spendTopVendors(input || {}); },
+    summarize(result) {
+      return {
+        kind: "top-vendors",
+        top: (result?.top_vendors ?? []).slice(0, 5).map((v) => v.vendor_name),
+        total_vendors: result?.totals?.total_vendors ?? 0,
+      };
+    },
+    kind: "data",
+    pagination: "paginated",
+    paginationNote: "Same paginated read pattern as spend_summary against v_invoice_submissions_current + ai_line_items. Aggregation runs across the full corrections-resolved set before top-N selection, so the ranking cannot be biased by a truncated page.",
     collectIds() { return []; },
   },
 ];

@@ -34,7 +34,7 @@ export const TOKEN_CAP = 12000;
  * @param {object} opts
  * @param {string[]} opts.accessLevels - pre-resolved tier array
  * @returns {Promise<
- *   | { available: false, reason: 'not_found' | 'access' | 'archived' | 'not_live' }
+ *   | { available: false, reason: 'not_found' | 'access' | 'archived' | 'not_live', status?: string }
  *   | { available: true, docId, title, docClass, sections: string[], text: string, tokenTotal: number, truncated?: boolean, omittedSections?: string[] }
  * >}
  */
@@ -58,7 +58,11 @@ export async function getDocument(docId, { accessLevels } = {}) {
     return { available: false, reason: "access" };
   }
   if (doc.archived) return { available: false, reason: "archived" };
-  if (doc.status !== "Live") return { available: false, reason: "not_live" };
+  // Surface the specific status ("In Build", "Under Review", "Draft", ...) so
+  // the model can name the actual state rather than paint every non-Live doc
+  // with the same "archived, unpublished, or retired" brush. Kevin's ruling
+  // 2026-07-30: FORM-003 is In Build, which is none of those.
+  if (doc.status !== "Live") return { available: false, reason: "not_live", status: doc.status };
 
   // documents has no lang column; the SousAI corpus is English by default.
   // document_chunks.language segregates translations (e.g. es for the
