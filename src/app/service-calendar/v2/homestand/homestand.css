@@ -285,6 +285,20 @@
   color: var(--sc2-state-needs-fg-strong);
 }
 
+/* Payroll-week divider (M-4b step 6 rider, 2026-07-30). Hairline
+   between a Sunday cell and the next Monday cell so the strip
+   shows where the overtime week breaks. Deliberately quiet -
+   owner: "if it competes with the month-boundary marker, it is
+   too loud." Half the width of the month-boundary rule and no
+   colour beyond the divider line itself; label lives on the aria
+   attribute rather than a visible chip. */
+.sc-daystrip-weekbreak {
+  flex: 0 0 auto;
+  align-self: stretch;
+  border-left: 1px solid var(--sc2-line-2);
+  margin: 0 var(--sc2-space-1);
+}
+
 /* ── Scheduling instruction ─────────────────────────────────────── */
 /* Verbatim copy per prompt §4.4: "Schedule days include the prep day
    before the homestand. The budget is calculated on game days only."
@@ -556,6 +570,17 @@
   border: 0;
   width: calc(var(--sc2-space-3) * 1);
   border-left: 2px solid var(--sc2-state-needs-bd);
+  border-radius: 0;
+}
+
+/* Payroll-week marker mirrors the strip's quiet hairline
+   (.sc-daystrip-weekbreak). Half-weight border to distinguish
+   from the month-break tick above. */
+.sc-hs-legend-swatch--weekbreak {
+  background: transparent;
+  border: 0;
+  width: calc(var(--sc2-space-3) * 1);
+  border-left: 1px solid var(--sc2-line-2);
   border-radius: 0;
 }
 

@@ -34,6 +34,9 @@ import { fmt$K } from "./format";
 import ProgressBar from "./ProgressBar";
 import { countActionableDays, countEnteredActionable } from "./dayPredicates";
 import { findPhaseAtDate } from "./phaseDerivation";
+// M-4b step 6 (2026-07-30): tile navigation on MLB game-day tiles.
+// One helper, one gate, one line to remove per owner constraint.
+import { makeTileHomestandClick } from "./homestandDerivation";
 
 const DOW_HEADER = ["M","T","W","T","F","S","S"];
 const MONTH_NAMES = [
@@ -57,7 +60,15 @@ export default function MonthCard({
   springDateSet,             // sc-19: Set<YYYY-MM-DD> for Spring Training dates on this account; drives the sm bottom-left copper corner wedge
   currentPeriodRange,        // V3 §6.7 - { period, start, end } for the period containing today; day tiles inside this range get the --in-period wash
   phaseTimeline,             // V3 §6.6 - derived phase timeline; used to resolve the month's dominant phase for the header tick tint
+  // M-4b step 6: MLB tile-navigation gate. Null on non-MLB
+  // accounts (helper returns null); on MLB, produces a per-tile
+  // click builder consulted at renderCell. Threaded from
+  // SeasonShell.
+  accountKey,
+  homestands,
+  onHomestandClick,
 }) {
+  const buildTileClick = makeTileHomestandClick(accountKey, homestands, onHomestandClick);
   const monthName = MONTH_NAMES[monthIndex];
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
   const isCurrentMonth = todayMonth != null && todayMonth === monthIndex;
@@ -202,7 +213,7 @@ export default function MonthCard({
 
           <div className="sc-season-month-card-grid">
             {buildMonthWeeks(year, monthIndex).flat().map((cell, i) => renderCell({
-              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates, springDateSet, currentPeriodRange,
+              cell, monthIndex, daysByDate: indexDays(monthSummary), todayDate, kind, loadState, syncingDates, springDateSet, currentPeriodRange, buildTileClick,
             })).map((node, i) => (
               <span key={i} className="sc-season-month-card-cell">{node}</span>
             ))}
@@ -416,11 +427,16 @@ function MonthPhaseTick({ monthIndex, year, phaseTimeline }) {
 /* OV-3 Wave 3 - MonthPeriodTag REMOVED. P{n} identity now lives on
    the ribbon phase title (§S5 rebuild, Wave 3a). */
 
-function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet, currentPeriodRange }) {
+function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState = "loaded", syncingDates, springDateSet, currentPeriodRange, buildTileClick }) {
   if (cell.month !== monthIndex) {
     return <span className="sc-season-month-card-cell-empty" aria-hidden="true" />;
   }
   const day = daysByDate.get(cell.dateStr);
+  // M-4b step 6: MLB tile-navigation. buildTileClick returns null
+  // for non-MLB accounts, non-GAME days, and dates not inside any
+  // homestand. When null, no onClick reaches DaySquare and the
+  // tile stays display-only. No dead clicks per owner constraint.
+  const onTileClick = buildTileClick ? buildTileClick(day, cell.dateStr) : null;
   // SC-033: loadState="failed" overrides every in-month cell to the
   // failed atom regardless of whether a per-day record exists. Content
   // is dropped so the atom renders its dashed shell + ⚠ badge only.
@@ -458,6 +474,7 @@ function renderCell({ cell, monthIndex, daysByDate, todayDate, kind, loadState =
       // (period-scope orientation, not alarm). Range comes from
       // SeasonShell (periodRanges + today).
       isInPeriod={!!(currentPeriodRange && cell.dateStr >= currentPeriodRange.start && cell.dateStr <= currentPeriodRange.end)}
+      onClick={onTileClick || undefined}
     />
   );
 }

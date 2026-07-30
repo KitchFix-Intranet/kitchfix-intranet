@@ -32,7 +32,7 @@ import { countActionableDays, countEnteredActionable } from "./dayPredicates";
 // full-season GAME/AWAY blocks rather than grouping by the stored
 // `homestand_id`. Full-season is required so the ordinal labels
 // (HS1..HSN) line up with the SeasonStepper's numbering.
-import { deriveHomestandSegments } from "./homestandDerivation";
+import { deriveHomestandSegments, makeTileHomestandClick } from "./homestandDerivation";
 
 export default function PeriodCard({
   periodRange,                // { period, start, end } from sc-year-summary
@@ -48,7 +48,13 @@ export default function PeriodCard({
   springDateSet,              // sc-19: Set<YYYY-MM-DD> for Spring Training dates (client-derived from phaseCalendar.js)
   yearData,                   // M-0: full year for the homestand-subtitle re-derivation
   accountKey,                 // M-0: MLB-only gate is applied inside deriveHomestandSegments
+  // M-4b step 6: MLB tile-navigation gate. Null on non-MLB
+  // accounts; on MLB, wires onClick per game-day tile inside a
+  // homestand. Threaded from SeasonShell -> PeriodGrid.
+  homestands,
+  onHomestandClick,
 }) {
+  const buildTileClick = makeTileHomestandClick(accountKey, homestands, onHomestandClick);
   // Design Batch 3 (audit P2-3, CC-11): for homestand-shaped accounts,
   // derive a homestand-based subtitle from full-season blocks scoped
   // to this period. M-0 (2026-08-04): the subtitle used to group by
@@ -151,6 +157,8 @@ export default function PeriodCard({
           // dropped so the atom renders its dashed shell + ⚠ badge only.
           const status = loadState === "failed" ? "failed" : resolveDayStatus(cell.day.status);
           const content = loadState === "failed" ? null : buildCompactContent(cell.day, kind);
+          // M-4b step 6: tile navigation, same helper as MonthCard.
+          const onTileClick = buildTileClick ? buildTileClick(cell.day, cell.day.date) : null;
           return (
             <span key={cell.day.date} className="sc-season-period-card-cell">
               <DaySquare
@@ -173,6 +181,7 @@ export default function PeriodCard({
                 // sc-19 (2026-07-12): Spring Training corner wedge.
                 // Client-derived from phaseCalendar.js via springDateSet.
                 isSpringPhase={!!springDateSet?.has(cell.day.date)}
+                onClick={onTileClick || undefined}
               />
             </span>
           );

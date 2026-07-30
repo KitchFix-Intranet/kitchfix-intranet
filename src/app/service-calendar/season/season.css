@@ -519,6 +519,18 @@
   cursor: pointer;
   border-radius: inherit;
 }
+
+/* M-4b step 6 (2026-07-30): interactive game-day tiles on MLB
+   MonthCard need a stacking context above the whole-card drill
+   overlay (z-index: 1). Without this the drill button intercepts
+   every tile click and the tile's homestand navigation never
+   fires. Applies only when the tile is interactive
+   (sc-daysq--interactive, added by DaySquare when onClick is
+   passed) so non-MLB cards are byte-identical. */
+.sc-season-month-card-cell .sc-daysq--interactive {
+  position: relative;
+  z-index: 2;
+}
 .sc-season-month-card-drill:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: calc(-1 * var(--focus-ring-width));
