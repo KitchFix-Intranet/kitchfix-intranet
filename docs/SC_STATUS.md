@@ -2,7 +2,7 @@
 
 > **Purpose:** the live current-state doc for the Service Calendar module. Architecture reference = [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md). This doc is the ship-state audit + remaining-work punch list.
 >
-> **Last verified:** 2026-07-12
+> **Last verified:** 2026-07-30
 >
 > **Ledger discipline:** every claim in "Shipped" traces to a PR#, commit, or migration file. Every item in "Remaining" says who's blocking it (Kevin ruling / Kevin schedule / no owner). Unknowns stay labeled unknown.
 
@@ -68,6 +68,37 @@
 - **MLB tile inertness (Q7A ruling)**: `onDayClick` on period + month tiles gates on `DERIVE_HOMESTANDS_ACCOUNTS`. MLB accounts derive counts from projections + exceptions at close-out; no day-level count entry.
 - **MLB entry fence (2026-07-29, PR #564)**: closes the seven other openers into `setFocusDay(date)` that M-3 left open: overview rail queue rows, fee-account rail queue rows, period drill rail rows, month drill rail rows, plus year-scope + drill-scope needs/overdue chip jumps. Two remaining `setFocusDay(date)` sites (`onNextExceptionHandler`, `navDay`) reachable only from an already-open modal are naturally unreachable once the openers are gated.
 - **`scripts/_probe_m3_no_projection.mjs`** - the safety-rule probe. Transiently deletes one projection row, POSTs the confirm, asserts HTTP 400 + named pair + no writes, restores the projection. Uses a NextAuth session minted in-probe under identity `probe@kitchfix.com` (never a real person per standing rule).
+
+### M-4a homestand overview + rail SPENT hero + spring wedge (2026-07-29, sc-23 + sc-24, PR #566)
+
+- **sc-23** - stranded projection resolution on STL - MO (row shape divergence between projections and homestand span, isolated to that team). Applied in Studio 2026-07-29.
+- **sc-24** - `sc_day_metadata.game_type` populated for STL - MO carry-over dates so the homestand derivation sees the game shape (was NULL, dropped by the derivation's game-type filter). Applied in Studio 2026-07-29.
+- **Homestand overview** (`src/app/service-calendar/v2/homestand/HomestandDetail.js`) - SPENT hero + progress bar; season-to-date pinned bottom; single-closeout dedupe; month-boundary explainer with the single-day range collapse fix. `resolveSpringDateSet` marks the spring window on the strip using the PDC-sibling map.
+- **PDC sibling map** (`src/app/service-calendar/season/mlbSpringSibling.js`) - `MLB_TO_PDC_SIBLING` maps CIN-OH -> CIN-AZ, STL-MO -> STL-FL, TXR-TX-H -> TXR-AZ, TXR-TX-V -> TXR-AZ. Feeds the spring wedge on the strip. The map lives in one place so a re-sibling ripple has one edit point.
+- **`periodBudgets` copy-through** - `src/app/api/service-calendar/route.js` sc-year-summary handler was dropping `periodBudgets` on the way out; `src/lib/dataStore/serviceCalendar.js` now emits it from `strippedBudgets`. The M-4b rail depends on this shape.
+
+### M-4b MLB rail rev3 + tile nav + slim stepper + payroll dividers (2026-07-30, `feat/sc-m4b-cards`)
+
+**Built then reversed - do NOT rebuild these.**
+
+- **M22 empty-scope suppression (REVERSED)**: hid accounts with no season activity on the account switcher. Wrong model: MLB chefs support other accounts outside their own season, so an empty scope for THEIR team does not mean the switcher should hide neighbor teams. Owner ruling: "Suppression assertions are dead. Do not carry them over." Suppression code removed; the account list stays comprehensive.
+- **Card money (REVERSED)**: month + period cards briefly rendered per-card money summaries (BUDGET / SPENT / DIFF). Owner ruling: cards are pure calendar. Money lives on the rail (season-scope) + the homestand detail (block-scope). The reversal took out `deriveCardMoney` and its wiring; the ONLY money surface on a card is the tracker strip's aggregate.
+- **MiLB fence breach (M-0 documented trap, third recorded instance)**: card money was gated on the data-shaped `hasHomestandSchedule` boolean, which is `true` for CIN - KY and TBJ - NY (AAA accounts). Both accounts rendered "BUDGET not recorded" on every period card until the card-money revert. **Standing rule**: any gate on an MLB-only surface uses the explicit `MLB_HOMESTAND_SURFACE_ACCOUNTS` set, never `hasHomestandSchedule` or any other data-shaped boolean. The set is a hard fence; `hasHomestandSchedule` is a data shape and includes AAA by construction.
+
+**Built and kept.**
+
+- **MLB rail rev3** (`src/app/service-calendar/v2/OpsRail.js` + `rail.css`) - past · now · future. Hero + pinned in-progress card (when in-progress exists; no placeholder when it does not) + three groups: Closed out (collapsed default), Actuals due (open default), Upcoming (collapsed default). Row-that-expands-inline-card pattern. Continuous 3px left accent via `--sc-item-accent` CSS custom property propagating to row + card border-left. **Only actuals-due gets the green filled CTA**; every other row uses the outlined variant. **One row open at a time across ALL groups**. Took four passes (rev1 broken, rev2 shape wrong, rev3 approved after live review).
+- **Slim stepper** (`src/app/service-calendar/season/SeasonStepper.js` + `seasonStepper.css`) - strip + month anchors only; no spotlight / footer / hint / caption. Bare numbers on every block; proportional flex by span days. Standard state tokens matching day tiles (`--sc2-state-entered-bg/fg`, `--sc2-state-needs-bg/fg-strong`, `--sc2-state-in-progress-bg/fg`). Current block: solid blue `#1e5aa8` (via `--sc2-state-in-progress-bg` in `src/app/tokens.css`) + white text + tallest. Mobile tap target `calc(var(--row-height) + var(--space-1))` = 44px minimum on Compact density.
+- **Tile navigation (step 6)** - MLB game-day tiles on the season grid open the homestand detail via `?homestand=<key>`. `makeTileHomestandClick(accountKey, homestands, onHomestandClick)` factory in `src/app/service-calendar/season/homestandDerivation.js` returns per-tile handler or null. `dateToHomestandKey(dateIso, homestands)` maps a game date to its block key by linear scan over the M-3 payload. Non-game-day tiles + non-MLB tiles + AAA tiles stay inert on the season grid.
+- **Payroll-week divider (rider)** (`src/app/service-calendar/v2/homestand/DayStrip.js`) - 1px hairline between a Sunday cell and the next Monday cell inside the strip domain. Monday-Sunday payroll week (Kevin, 2026-07-30). Skips the leading pre-day seam (`i > 1` guard); skips seams that already carry a month-boundary marker. HS10 (Jul 27 - Aug 6) fires exactly one divider between Aug 2 (Sun) and Aug 3 (Mon). Short blocks inside one payroll week fire zero. Legend entry `Payroll week` ships with the divider.
+
+**Found - do NOT rediscover these.**
+
+- **Stale `.scv2` overrides in `src/app/service-calendar/v2/overview.css:976-1082`** - painted the stepper `#2b466b` / `#c8a24a` / `#e6e9ed` / `height: 16px` etc., outranking the base `seasonStepper.css` via `.scv2` prefix specificity. Entire block deleted. Discipline: when a stepper token change does not show up in the paint, grep the whole SC CSS tree for the class before assuming the token wiring is wrong. Owner: "Your own test caught it by comparing the painted value to the token. That is the right instinct."
+- **Drill-overlay z-index interaction with interactive tiles**: `MonthCard`'s `.sc-season-month-card-drill { z-index: 1; position: absolute; inset: 0 }` covers the entire card and swallows every tile click. Interactive tiles need `z-index: 2`. Fix: `.sc-season-month-card-cell .sc-daysq--interactive { position: relative; z-index: 2; }` in `src/app/service-calendar/season/season.css`. PeriodCard's article-button pattern also required `stopPropagation` inside `makeTileHomestandClick`'s returned handler so tile clicks do not bubble up and fire the period drill.
+- **Spring wedge + PDC sibling map**: an MLB account's spring window comes from its PDC sibling's schedule (owner ruling; MLB rosters travel to PDC in spring). `resolveSpringDateSet` reads `MLB_TO_PDC_SIBLING` to pick the sibling; the sibling's game dates paint the wedge on the MLB strip.
+- **Payroll week: Mon-Sun (Kevin, 2026-07-30)**. Payroll runs through Rippling; budget includes overtime at 1.5x over 40 hours per week. Dividers shipped inside the strip domain; **week summaries are OUT OF SCOPE** for this arc (would surface hours-per-week on the strip; owner ruled a wrong overtime read on a schedule surface is worse than an absent one, and this arc did not have the payroll import to source it correctly).
+- **The rail took four passes.** rev1 shipped `- SPENT` dash instead of `$0`, used `--sc2-surface-card` (light-mode white) on the navy rail causing contrast failure, and fired "Season complete" mid-season. rev2 shape was wrong - owner wanted past · now · future with pinned in-progress + three groups, not a single action card with chevron nav. rev3 is the approved shape. Discipline for future rail work: sketch the pinned-vs-grouped layout against the owner spec before wiring state.
 
 ### Migration gate CI (#416, mechanical enforcement of the DRAFT rule)
 
