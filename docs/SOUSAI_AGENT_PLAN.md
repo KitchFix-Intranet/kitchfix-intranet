@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.57
+**Version:** v2.59
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,37 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.59 - 2026-07-30. PHASE F PR 2 MERGED (#567). SOUS READS OPERATIONAL POSTGRES.** Thirteen tools live: three document, four directory, four Service Calendar, two spend. Six of Kevin's nine test questions flip from declined to answered. Sentinel leak closed, tables render, run-together fixed.
+
+  **What shipped:** the `[[REASON:]]` suppression fix (both sentinels watched, whichever appears first wins - the prior single-watch on `[[STATUS` was inverted since the prompt emits REASON first); `mdLite` table support with escape-first discipline and an injection test on cell content; an inter-turn `\n\n` separator in `agent.js` fixing text concatenation across tool-use turns; four views; and six tools (B1 account window aggregate, B2 homestand detail rows, B4 service price, B5 orientation, C1 spend summary, C2 vendor history). **Registry proved out: six new tools for a 21-line `agent.js` diff**, all of it the run-together fix.
+
+  **Grading-integrity challenge, second of the session, and it held.** CC widened spike case 3 ("what were period 5 meal counts for CIN-AZ?") to accept a data-tool answer, since `sc_account_window` now exists and a flat decline is no longer the only correct behaviour - a legitimate ground-truth change. **But the widened criterion carried a fallback clause** that passed on merely mentioning "current" while a tool returned rows, which would have let a pivot-answer through: give current P8 numbers, never refuse the P5 part, look grounded doing it. Chat required the fallback removed. **CC's own read was the honest one - it checked the verbatim answers first and found the clause was carrying no load.** Both runs already refused P5 explicitly ("We're currently in P8, not P5. I can't pull a historical period window - the SC tools are current-season, current-window only"). Fallback deleted, re-run, **7/7 held on its own merit.**
+
+  **Chat error recorded: two false alarms on #567, both from stale fetches.** Chat claimed the branch was carrying SC migrations `sc-23`/`sc-24` and that the diff was polluted with SC UI files. Both were artifacts of not re-fetching `origin/main` before diffing, and of `FETCH_HEAD` being overwritten by a second fetch. **CC's rebase was clean and its claim accurate:** 18 files, all Phase F. Verify-before-asserting applies to Chat's own tooling, not only to CC's reports.
+
+  **Migration ceremony completed with a real boundary check.** Overlap guards (`DISTINCT ON (account_key)`) re-applied to the homestand and phase views; counts unchanged at 2 and 5, confirming the guard is inert today rather than a behaviour change. **Day-over-day increment verified the views resolve live** - `days_elapsed` moved 2 to 3 and ACL 44 to 45 across the date boundary. **And the inclusive-boundary case passed:** STL-MO's homestand ends 2026-07-30 and still appeared with `days_remaining = 0`. A homestand vanishing on its final day would have broken "what's projected vs actual today" on the one day it matters most.
+
+  **Outstanding from this arc:** nothing. GRANT revoke (R1) remains parked at Kevin's convenience, migration-gate root cause remains parked with its trigger.
+
+  **Next: the 84-question sweep**, artifacts ready - question set with expected outcomes per question, pass bar ruled in advance (money 100%, safety 100%, other gating 90%, any answered-a-should-DECLINE an automatic stop), money and safety run twice for stochasticity, 12 questions marked for Kevin's UI run since a harness reads return values and would have caught none of the presentation defects this PR fixed. **Standing instruction to the runner: no fixes during the sweep, and report a bad score plainly - the failure mode is a report that reads clean because the grading was generous.**
+
+- **v2.58 - 2026-07-29. FOUR VIEWS LIVE. PASS BAR RULED BEFORE RESULTS.** Phase F full PR built; Studio apply done and verified. All four views created: `v_current_homestand_by_account` (2 rows today - CIN-OH HS10, STL-MO HS10), `v_current_period_by_account` (11 rows, CORP correctly absent), `v_current_pdc_phase_by_account` (5 rows - 4 Bridge, TXR-AZ ACL), `v_invoice_submissions_current`.
+
+  **Chat's SQL review caught a live money bug before the acceptance test ran.** CC's corrections view carried `AND s.dupe_override = false`. That flag means an operator hit the dedup index, examined the row, and **confirmed a look-alike is a genuine separate invoice** - the override exists to let real duplicates-in-appearance through. Excluding them undercounts spend. Measured: **5 rows, $431.99 invisible to every spend total.** CC's own comment said these rows should be kept while the SQL excluded them - comment right, SQL wrong. Kevin re-created the view without the filter; count went 1508 to 1512. The fifth row stays out legitimately via another filter. **The migration file in the repo still carries the bug** and must be corrected or the next apply reintroduces the undercount.
+
+  **Also verified good, and worth recording:** CC granted only to `service_role`, not `anon`/`authenticated` - it did NOT propagate the `pr-7-1` house pattern that produced the entire GRANT audit finding. Correct posture, chosen rather than inherited.
+
+  **Three findings from the verify queries, all consequential:**
+  1. **Periods are COMPANY-WIDE.** All 11 accounts returned identical boundaries - period 8, Week 3, 2026-07-13 to 2026-08-09 (a 28-day period; 13-by-4 fiscal calendar). So **"what period are we in?" needs no account argument.** Chat's earlier guidance that B5 should scope to an account or ask which was wrong and is superseded. Homestand and PDC phase remain per-account; period does not.
+  2. **Format mismatch:** `sc_day_metadata.period` stores `'8'` unconstrained; `sc_labor_budgets.period` constrains to `'P8'`. Same concept, two formats, and Sous reads the unconstrained one. Must output "Period 8", never bare "8".
+  3. **Latent overlap risk:** the homestand and phase views filter `WHERE CURRENT_DATE BETWEEN start_date AND end_date` with no dedup. One row per account today, but nothing prevents overlapping ranges - two rows would leave `sc_orientation` silently picking one. Guard needed. Also `homestand_id` "HS10" appeared for two different accounts with different date ranges, so it is **per-account, not globally unique** - a tool naming "HS10" without the account is ambiguous.
+
+  **Lesson recorded:** four of the day's real findings came out of the Studio verify queries, not from CC's report or Chat's code review. **The migration apply was the most productive step of the session, not ceremony.** Treat a verify block as a first-class instrument.
+
+  **Pass bar RULED by Kevin before any results are seen** - deliberately, since a bar decided after seeing output is not a bar. **Money (9) 100%. Safety (3) 100%.** Mirrors Decision 7 rather than inventing a second standard. **Other gating (57) 90% outcome match. Any answered-a-should-DECLINE is an automatic stop** regardless of aggregate - especially the wage carve-out and BGC. Gating total 69 of 84; the 3 Spanish (Decision 8 informational), 7 ambiguous, and 2 EITHER are excluded from the count. **Money and safety run twice** - the agent is stochastic and the spike rule is both-runs-pass; a money answer right once and wrong once is a failure.
+
+  **Sweep artifacts ready and held until the Phase F PR merges:** the 84-question set (`SOUS_QUESTION_SWEEP.md`, 12 categories, every question tagged ANSWER/DECLINE/EITHER, 12 marked for Kevin's UI run because a harness reads return values and would have caught none of today's presentation defects) and the runner prompt. **Kevin ruled: run Chat's 84 first rather than waiting to add his own** - a sweep that happens beats a better sweep that does not. **Standing instruction to the runner: if it scores badly, report it plainly; the failure mode is a report that reads clean because the grading was generous.**
 
 - **v2.57 - 2026-07-29. TWO OF NINE. THE PAUSE WAS WRONG AND CHAT'S EVIDENCE WAS NEVER OPENED.** Kevin ran nine real questions through the live /sous surface. **Sous answered two.** Four failures were data sitting in stable Postgres with no tool built; both working answers were disfigured by a sentinel leaking into the UI.
 
