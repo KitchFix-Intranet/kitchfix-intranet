@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.68
+**Version:** v2.69
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,26 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.69 - 2026-07-31. SOUS REDESIGN PROGRAMME OPENED. PR 1 ISSUED.** Five-PR programme to take Sous from working-but-unfinished to something that belongs in the intranet. Governed by **`docs/SOUS_REDESIGN_MASTER.md`**, which lands in PR 1 and is **the running tracker - every PR in the programme updates its status table and delivery log.**
+
+  **The design audit (PR #581) found the real gap.** Sous was designed against the token file and the design docs; held against the live intranet it read as a different product. **Four breaks:** no photographic hero where six modules have one; **no accent colour of its own** while every other module has a dedicated token; none of the recognised card, status, or pill patterns; and it was wearing **Ops Hub's amber** on its header underline.
+
+  **Also surfaced: Sous appears in none of the five design docs**, heroes are copy-pasted across six modules rather than shared, and **two right-side slide-over panels already exist with duplicated CSS** (`.pb-slide` 580px doc reader, `.pb-sous-panel` 480px current chat). Sous makes a seventh hero and a third panel. **Debt recorded, knowingly taken, not extracted in this programme.**
+
+  **Sixteen decisions locked.** Headline ones: **accent is Flame `#0891B2`** - the blue of a gas burner, kitchen-native, the only cool accent in a warm-heavy palette, clearly separate from both greens. Panel goes to **580px matching `.pb-slide`** rather than the 420px Chat first specified, which would have made a third width of an already-duplicated pattern. **Page scope chips cut** - a picker competing with a text field that pays nothing back without inheritance. **Document context in the panel kept**, because automatic context is free precision while manual context is a worse text field.
+
+  **Conversational memory moved INTO scope, and Chat's earlier deferral was wrong.** The failing exchange is: *"what's tomorrow's service count"* → *"which account?"* → *"TBR"* → *"your message came through blank."* **Sous asks a question it cannot hear the answer to.** Chat had called threading architectural and deferred it wholesale; that is true of nesting and inheritance, **not of this.** The agent loop already builds a `messages` array for the tool loop - this adds prior turns to an array that exists. Client holds the last three question-and-answer pairs in React state. **No table, no migration, roughly half a day to a day.**
+
+  **The rule that rides with it, and it is the money risk: history tells you what the question MEANS; tools tell you what the answer IS.** Ask about May, then ask "what about June" - Sous now has May in context and could infer rather than query, producing a confident number nobody computed. **PR 3 is held on an eval case proving a follow-up numeric question re-queries.** Second rule: citations come from the current turn's tools only.
+
+  **The rail was argued twice and both arguments were weak** - cutting it rested on an untested assumption about revisiting, keeping it rested on atmosphere. **Memory makes it load-bearing:** with three turns held, consecutive questions are genuinely related, so the rail becomes where the current thread lives and gains a job nothing else can do - **showing what Sous currently remembers.** Top three entries carry an `In context` marker. **Ships as presentation in PR 1 and becomes truthful in PR 3**, stated plainly in the PR body, because a marker claiming Sous remembers something it does not is exactly the confident-and-wrong this project has spent a week removing.
+
+  **Non-Live documents ruled: the panel entry is always shown**, and the panel opens with an honest state naming the document's status and offering related Live documents. Hiding it creates a second mystery; a disabled button invites a click and then explains itself. **Same principle as the rest of the design - name the limit rather than let it be discovered, and stay useful while doing it.**
+
+  **Not-helpful capture added** - six tags plus optional text, persisted against the existing `sousai_questions` row with the question, tools, and sources. A thumbs-down with no context says something is wrong; with the trajectory it says what. **The six tags are roughly the failure taxonomy an eval set needs**, so this feeds Phase E rather than being a nicety.
+
+  **PR 1 opens with a reads-first Phase 0** on the pattern the SC agent asked for and that worked: does `/sous` have a bootstrap API for the shared hero pool (if not, this PR grows materially), and can `sousai_questions` carry feedback columns without a migration (which decides whether PR 5 is an afternoon or a session). **Sized there, not built there.**
 
 - **v2.68 - 2026-07-31. HYPOTHESIS CONFIRMED, AND THE COLUMN'S WRITE PATH WAS AIMED AT 2 PERCENT.** PR #579 merged - read-only service-pattern audit, no fix proposed, Kevin rules.
 

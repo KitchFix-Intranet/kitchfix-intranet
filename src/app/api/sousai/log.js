@@ -132,15 +132,21 @@ export async function logSousaiQuestion(supabase, payload) {
 // Feedback update. Asker-only: WHERE id AND user_email. Returns the count of
 // updated rows so the route can distinguish "not found / not yours" (0)
 // from "updated" (1). Never throws.
-export async function updateSousaiFeedback(supabase, { question_id, user_email, value, comment }) {
+export async function updateSousaiFeedback(supabase, { question_id, user_email, value, comment, tags }) {
   try {
+    const patch = {
+      feedback: value,
+      feedback_comment: comment,
+      feedback_at: new Date().toISOString(),
+    };
+    // Column added via sousai-2-feedback-tags. Only stamp on -1 rows; +1
+    // rows leave tags null even if the client sends them.
+    if (value === -1 && Array.isArray(tags) && tags.length > 0) {
+      patch.feedback_tags = tags;
+    }
     const { data, error } = await supabase
       .from("sousai_questions")
-      .update({
-        feedback: value,
-        feedback_comment: comment,
-        feedback_at: new Date().toISOString(),
-      })
+      .update(patch)
       .eq("id", question_id)
       .eq("user_email", user_email)
       .select("id");

@@ -361,7 +361,13 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         <button
           type="button"
           className="pb-sousai pb-sousai--live"
-          onClick={() => onOpenSous(doc.id)}
+          onClick={() => onOpenSous({
+            id: doc.id,
+            title: doc.title,
+            version: doc.version || null,
+            status: doc.status,
+            docClass: doc.doc_class,
+          })}
           aria-label={`Ask Sous about ${doc.id}`}
           title={`Ask Sous about ${doc.id}`}
         >

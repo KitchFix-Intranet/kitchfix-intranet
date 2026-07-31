@@ -74,6 +74,18 @@ export async function evaluateGates({ session, flagEnabled, body, deps }) {
     if (comment.length > MAX_FEEDBACK_COMMENT_CHARS) {
       return { pass: false, kind: "input", status: 400, hint: `comment exceeds ${MAX_FEEDBACK_COMMENT_CHARS} characters` };
     }
+    // tags: optional string[] of failure-taxonomy tags. Client-enforced
+    // vocabulary; server accepts an array of short strings and stores as-is.
+    // Only meaningful on value=-1; ignored on value=+1.
+    let tags = null;
+    if (Array.isArray(body.tags)) {
+      const clean = body.tags
+        .filter((t) => typeof t === "string")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 48)
+        .slice(0, 12);
+      if (clean.length > 0) tags = clean;
+    }
     return {
       pass: true,
       action: "feedback",
@@ -83,6 +95,7 @@ export async function evaluateGates({ session, flagEnabled, body, deps }) {
       question_id: qid,
       value,
       comment: comment.length > 0 ? comment : null,
+      tags: value === -1 ? tags : null,
     };
   }
 
