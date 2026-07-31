@@ -1315,6 +1315,53 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // mutually exclusive scopes).
   const activeDrillDays = periodDays || monthDays || null;
 
+  /* R1-1 (2026-07-31) - arrival pulse. The three Today handlers set
+     pendingTodayPulseRef to today's ISO before router.push. When the
+     drill days for the target scope populate, this effect fires,
+     locates the today tile via `.sc-daysq--today`, adds the pulse
+     class for ~1.2s (three quick pulses per the CSS animation), then
+     removes it. Mirrors the imperative pattern that ships the
+     month-card pulse (season.css:376-399) - same ClassList add +
+     force-reflow + setTimeout remove shape. Reduced-motion drops
+     the animation via the CSS branch; the today tile keeps its
+     always-on ring so arrival is still legible.
+
+     Ref declared here (not near the handlers below) so the
+     react-hooks/immutability rule can see the declaration before
+     the effect that reads + clears it - same shape as the existing
+     pendingRailFocusRef pair at :1565 / effect :805.
+     Deps: activeDrillDays so the effect re-runs whenever the drill
+     scope's data first arrives after a nav; no ref-based dependency
+     because refs are not reactive - the effect polls the ref value
+     at the moment it fires. Multiple fires without a matching ref
+     are silent no-ops. */
+  const pendingTodayPulseRef = useRef(null);
+  useEffect(() => {
+    const target = pendingTodayPulseRef.current;
+    if (!target) return;
+    if (!activeDrillDays?.length) return;
+    // Guard: only fire if the current drill actually contains today.
+    // Off-scope pulses would land on nothing - be quiet instead.
+    if (!activeDrillDays.some(d => d.date === target)) return;
+    // rAF gives the DOM one frame to paint the tile before we query
+    // for it - avoids a race where the effect runs before the tile
+    // mounts. Same pattern as scrollIntoViewRM elsewhere.
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector(".sc-daysq--today");
+      if (!el) return;
+      el.classList.remove("sc-daysq--today-pulse");
+      // Force reflow so the animation restarts cleanly (owner clicks
+      // Today twice in a row from within the same drill).
+      void el.offsetWidth;
+      el.classList.add("sc-daysq--today-pulse");
+      pendingTodayPulseRef.current = null;
+      setTimeout(() => {
+        el.classList.remove("sc-daysq--today-pulse");
+      }, 1250);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeDrillDays]);
+
   // Drill-in exception queue (overdue + needs-entry, in date order).
   // Backs the strip's clickable chips AND the DayDetail post-save
   // iterator ("Next needing entry"). Overdue days are older by
@@ -2508,10 +2555,19 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     const idx = periodRanges.findIndex(r => r.period === periodKey);
     if (idx >= 0 && idx < periodRanges.length - 1) router.push(buildScUrl({ account: selectedAccount || undefined, period: periodRanges[idx + 1].period }), { scroll: false });
   }, [periodRanges, periodKey, router, selectedAccount]);
+  /* R1-1 (2026-07-31) - pending-pulse ref shared by all three Today
+     handlers. Set to today's ISO date immediately before router.push;
+     the drill-mount pulse effect above reads it once, applies the
+     arrival pulse to the today tile, and clears it. A ref (not
+     state) so setting it does not trigger a re-render.
+     Declared with the effect at :1358 so the immutability rule sees
+     the declaration first. */
   const handleTodayJump = useCallback(() => {
     if (!periodRanges?.length) return;
     const containingToday = periodRanges.find(r => today >= r.start && today <= r.end);
-    if (containingToday) router.push(buildScUrl({ account: selectedAccount || undefined, period: containingToday.period }), { scroll: false });
+    if (!containingToday) return;
+    pendingTodayPulseRef.current = today;
+    router.push(buildScUrl({ account: selectedAccount || undefined, period: containingToday.period }), { scroll: false });
   }, [periodRanges, today, router, selectedAccount]);
 
   const drillPeriodRange = periodRanges?.find(r => r.period === periodKey) || null;
@@ -2540,30 +2596,37 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const handleMonthTodayJump = useCallback(() => {
     const mk = today ? today.slice(0, 7) : null;
     if (!mk) return;
+    pendingTodayPulseRef.current = today; // R1-1 - pulse the today tile on arrival
     router.push(buildScUrl({ account: selectedAccount || undefined, month: mk }), { scroll: false });
   }, [today, router, selectedAccount]);
-  // HF-7 (2026-07-20) - overview Today-jump. Finds the current-month
-  // card ([data-state="current"] on MonthCard's article - see
-  // MonthCard.js:134), scrolls it into view, and one-shot-pulses it
-  // via .sc-season-month-card--today-pulse (~1200ms; see
-  // season.css:376-399 for the keyframes). Silent no-op if no
-  // current-month card exists in the DOM (off-season / wrong year -
-  // the OverviewTodayChip also hides itself in that case via its
-  // `hasCurrentMonth` prop, so the button shouldn't have been
-  // clickable in the first place).
+  /* R1-1 (2026-07-31) - overview Today-jump becomes a lens-aware drill
+     dispatch. WAS (HF-7 2026-07-20): scroll the current-month card into
+     view + pulse it in place. Owner ruling: from the overview, Today
+     drills into the scope containing today - Calendar lens -> month
+     drill, Period lens -> period drill. Both target handlers already
+     exist (handleMonthTodayJump / handleTodayJump). Both go through
+     router.push and never reach setFocusDay, so the MLB entry fence
+     stays closed. The arrival pulse fires on the day tile via the
+     drill-mount effect below, matching the drill-scope Today chip's
+     new behaviour (owner: "Inside a drill the button already works.
+     Leave that behaviour. Add the same arrival pulse.").
+     Disabled state gated at the render layer via `overviewTodayEnabled`
+     (see below); this handler no-ops if that gate ever leaks through. */
   const handleOverviewTodayJump = useCallback(() => {
-    const el = document.querySelector('.sc-season-month-card[data-state="current"]');
-    if (!el) return;
-    scrollIntoViewRM(el, { block: "center" });
-    el.classList.remove("sc-season-month-card--today-pulse");
-    // Force reflow so the animation restarts if the user clicks Today
-    // twice in a row without leaving the current month.
-    void el.offsetWidth;
-    el.classList.add("sc-season-month-card--today-pulse");
-    setTimeout(() => {
-      el.classList.remove("sc-season-month-card--today-pulse");
-    }, 1250);
-  }, []);
+    if (seasonView === "period") {
+      handleTodayJump();
+    } else {
+      handleMonthTodayJump();
+    }
+  }, [seasonView, handleTodayJump, handleMonthTodayJump]);
+  /* R1-1 - button disable gate. Calendar lens: today must be in the
+     current year (the month card exists). Period lens: today must
+     also fall inside some periodRange (off-season would return null).
+     Both branches fold into one boolean passed to OverviewTodayChip. */
+  const isCurrentYearForToday = year === new Date().getFullYear();
+  const overviewTodayEnabled = seasonView === "period"
+    ? (isCurrentYearForToday && !!periodRanges?.some(r => today >= r.start && today <= r.end))
+    : isCurrentYearForToday;
 
   const drillMonthIdx = monthKey ? Number(monthKey.slice(5, 7)) : -1;
   const canPrevMonth = drillMonthIdx > 1;
@@ -2760,14 +2823,16 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               />
             ) : null)
           : null;
-        // HF-7 (2026-07-20) - drillNavEndSlot now covers YEAR view too:
-        // OverviewTodayChip scrolls the current-month card into view +
-        // pulses it. The chip hides itself when hasCurrentMonth is
-        // false (viewing a non-current year - never rendered as a dead
-        // control per owner ruling). isCurrentYear compares the fixed
-        // season year (2026) to the client wall clock so an operator
-        // reading the intranet in 2027 sees no Today button.
-        const isCurrentYear = year === new Date().getFullYear();
+        /* R1-1 (2026-07-31) - the overview chip's semantics changed
+           from "scroll the current month card into view" to "drill
+           into the scope containing today, lens-aware." The old
+           `hasCurrentMonth` gate handled Calendar lens only; Period
+           lens off-season would have been a dead click. `enabled` is
+           computed above (overviewTodayEnabled) with the correct
+           per-lens rule. Drill-scope chips are unchanged - owner
+           ruling ("Inside a drill the button already works") - they
+           only pick up the arrival pulse for free through the drill-
+           mount effect above. */
         const drillNavEndSlot = !isAdminView
           ? (isPeriodView ? (
               <PeriodTodayChip
@@ -2783,7 +2848,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               />
             ) : isYearView ? (
               <OverviewTodayChip
-                hasCurrentMonth={isCurrentYear}
+                enabled={overviewTodayEnabled}
                 onTodayJump={handleOverviewTodayJump}
               />
             ) : null)

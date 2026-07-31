@@ -295,16 +295,24 @@ export function RailQueueRow({ date, status, aging, periodLabel, onClick }) {
   );
 }
 
-// ─── "N more" overflow row (still a whole-row target) ──────────
-export function RailQueueMore({ count, onClick }) {
+// ─── "N more" / "Show less" overflow row (still a whole-row target) ──────
+// R1-4 (2026-07-31) - same button toggles both directions. When
+// collapsed shows "+ N more"; when expanded shows "Show less". The
+// bounded-scroll on the row list is done via a data-attribute
+// on `.sc-rail-queue-list` in the consumer, so this component is
+// unaware of the container and only owns its label.
+export function RailQueueMore({ count, expanded, onClick }) {
+  const label = expanded ? "Show less" : `+ ${count} more`;
+  const aria = expanded ? "Show less" : `Show ${count} more`;
   return (
     <button
       type="button"
-      className="sc-rail-queue-more"
+      className={`sc-rail-queue-more${expanded ? " sc-rail-queue-more--expanded" : ""}`}
       onClick={onClick}
-      aria-label={`Show ${count} more`}
+      aria-label={aria}
+      aria-expanded={expanded ? "true" : "false"}
     >
-      <span className="sc-rail-queue-more-label">+ {count} more</span>
+      <span className="sc-rail-queue-more-label">{label}</span>
       <span className="sc-rail-queue-chevron" aria-hidden="true">
         <ChevronRight />
       </span>

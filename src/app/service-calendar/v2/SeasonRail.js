@@ -37,6 +37,18 @@ import {
 
 const QUEUE_TOP_N = 4; // top rows shown, rest folded under "+ N more"
 
+// R1-2 (2026-07-31) - whole-dollar formatter for the Books hero,
+// replacing the fmtOverviewMoney "$X.XM" reading. Owner ruling: the
+// hero value is what the operator entered to date; "$1.1M" hid
+// resolution behind rounding, and adjacency with a days-driven
+// progress bar was implying a target the entered figure was not
+// measured against. Preserves useAnimatedNumber ticking (250ms ease-
+// out) - each frame passes an integer through toLocaleString.
+function fmtWholeDollars(n) {
+  const v = Math.round(Number(n) || 0);
+  return "$" + v.toLocaleString("en-US");
+}
+
 export default function SeasonRail({
   mode,           // "calendar" | "period"
   year,
@@ -82,14 +94,17 @@ export default function SeasonRail({
   // stat rehomed here (per bundle F4: every FullSeasonCard figure
   // must live in the rail before the card retires). totals.mealsYTD
   // is computed by the shared derive module - no new derivation path.
-  /* OV-3 Wave 4a + G2 (2026-07-19) - hero rebuild: projection joins
-     the value line (RailHero.projection); "N of M days entered"
-     moves BELOW the progress bar via RailHeroProgressCaption.
-     G2 shortening: "of ~$1.38M" (drop "projected" and the leading
-     dot separator) so the projection fits inline next to the label
-     at rail min-width. Meals YTD stays on the caption line only in
-     Period mode. */
-  const heroProjection = `of ~${fmtOverviewMoney(totals.projectedRevenue)}`;
+  /* R1-2 (2026-07-31) - Books hero reframe. WAS: value + label +
+     "of ~$X.XM" on one baseline, with the ~$1.1M "of ~$1.38M" reading
+     as 80% while the bar below it sat at 56% (bar tracks DAYS, not
+     money). Actuals here are client-driven and the projection is not
+     a target the operator is measured against, so the fraction is a
+     lie. NOW: whole-dollar entered figure, no "of", projection appears
+     ONCE as a labelled caption BELOW the days caption. Bar unchanged
+     (still days). Days caption unchanged. Season list futures and
+     month-card footers unchanged (owner ruling: adjacency is the
+     problem, not the number existing). */
+  const heroProjectionCaption = `Season projected ~${fmtOverviewMoney(totals.projectedRevenue)}`;
   const heroCaptionCal = `${totals.daysEntered} of ${totals.totalActionableDays} days entered`;
   const heroCaptionPeriod = `${totals.daysEntered} of ${totals.totalActionableDays} days entered · ${totals.mealsYTD.toLocaleString("en-US")} meals YTD`;
   const [showAllQueue, setShowAllQueue] = useState(false);
@@ -99,7 +114,7 @@ export default function SeasonRail({
       <CalendarRail
         year={year}
         totals={totals}
-        heroProjection={heroProjection}
+        heroProjectionCaption={heroProjectionCaption}
         heroCaption={heroCaptionCal}
         yearData={yearData}
         periodRanges={periodRanges}
@@ -115,7 +130,7 @@ export default function SeasonRail({
     <PeriodRail
       year={year}
       totals={totals}
-      heroProjection={heroProjection}
+      heroProjectionCaption={heroProjectionCaption}
       heroCaption={heroCaptionPeriod}
       yearData={yearData}
       periodRanges={periodRanges}
@@ -132,7 +147,7 @@ export default function SeasonRail({
 // Calendar mode - 12 month lines + flat needs queue.
 // ═══════════════════════════════════════════════════════════════
 function CalendarRail({
-  year, totals, heroProjection, heroCaption,
+  year, totals, heroProjectionCaption, heroCaption,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToMonth,
   showAllQueue, setShowAllQueue,
@@ -140,8 +155,12 @@ function CalendarRail({
   const monthLines = deriveMonthLines(yearData, year, today);
   const queue = deriveQueue(yearData, periodRanges, today);
   const footerAction = deriveFooterAction(yearData, periodRanges, today);
+  /* R1-4 (2026-07-31) - visibleQueue always shows all rows when
+     expanded, but the container caps height and scrolls internally so
+     the rail's total height and the CTA position never change. */
   const visibleQueue = showAllQueue ? queue : queue.slice(0, QUEUE_TOP_N);
   const overflow = queue.length - visibleQueue.length;
+  const canToggle = queue.length > QUEUE_TOP_N;
 
   /* V3 §S8.5 F-F - Aug-Dec collapse row. Session-local toggle:
      collapsed (default) shows primary lines + a single "AUG - DEC
@@ -168,13 +187,14 @@ function CalendarRail({
     <RailShell label={`SEASON · ${year} BOOKS`}>
       <RailHero
         value={totals.actualRevenue}
-        format={fmtOverviewMoney}
+        format={fmtWholeDollars}
         label="ENTERED YTD"
-        projection={heroProjection}
         ariaSuffix={`${totals.actualRevenue > 0 ? "" : "no revenue entered yet, "}${totals.pctComplete}% complete`}
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
       <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
+      {/* R1-2 - projection as its own caption BELOW the days line. */}
+      <div className="sc-rail-hero-projection-caption">{heroProjectionCaption}</div>
 
       {/* V3 §S8.3 - NEEDS ENTRY pinned ABOVE the season scroll region.
           The queue stays visible while the season list inner-scrolls.
@@ -199,20 +219,29 @@ function CalendarRail({
           {queue.length === 0 && (
             <p className="sc-rail-queue-empty">Nothing needs entry right now.</p>
           )}
-          {visibleQueue.map(row => (
-            <RailQueueRow
-              key={row.date}
-              date={row.date}
-              status={row.status}
-              aging={row.aging}
-              periodLabel={row.period}
-              onClick={() => onDrillToDay?.(row.date, row.period, "queue")}
-            />
-          ))}
-          {overflow > 0 && (
+          {queue.length > 0 && (
+            <div
+              className="sc-rail-queue-list"
+              data-expanded={showAllQueue ? "true" : "false"}
+              style={{ "--queue-visible-count": QUEUE_TOP_N }}
+            >
+              {visibleQueue.map(row => (
+                <RailQueueRow
+                  key={row.date}
+                  date={row.date}
+                  status={row.status}
+                  aging={row.aging}
+                  periodLabel={row.period}
+                  onClick={() => onDrillToDay?.(row.date, row.period, "queue")}
+                />
+              ))}
+            </div>
+          )}
+          {canToggle && (
             <RailQueueMore
               count={overflow}
-              onClick={() => setShowAllQueue(true)}
+              expanded={showAllQueue}
+              onClick={() => setShowAllQueue(v => !v)}
             />
           )}
             </RailSection>
@@ -368,7 +397,7 @@ function MonthRailLine({ line, onClick }) {
 // Period mode - 13 period lines + period-grouped queue.
 // ═══════════════════════════════════════════════════════════════
 function PeriodRail({
-  year, totals, heroProjection, heroCaption,
+  year, totals, heroProjectionCaption, heroCaption,
   yearData, periodRanges, today,
   onDrillToDay, onDrillToPeriod,
   showAllQueue, setShowAllQueue,
@@ -378,17 +407,19 @@ function PeriodRail({
   const footerAction = derivePeriodFooterAction(yearData, periodRanges, today);
   const visibleGroups = showAllQueue ? groupedQueue : groupedQueue.slice(0, QUEUE_TOP_N);
   const overflow = groupedQueue.length - visibleGroups.length;
+  const canToggle = groupedQueue.length > QUEUE_TOP_N;
 
   return (
     <RailShell label={`SEASON · ${year} BOOKS`}>
       <RailHero
         value={totals.actualRevenue}
-        format={fmtOverviewMoney}
+        format={fmtWholeDollars}
         label="ENTERED YTD"
-        projection={heroProjection}
       />
       <RailProgress pct={totals.pctComplete} complete={totals.pctComplete === 100} />
       <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
+      {/* R1-2 - projection as its own caption BELOW the days line. */}
+      <div className="sc-rail-hero-projection-caption">{heroProjectionCaption}</div>
 
       {/* V3 §S8.3 F-E2 + OV-3 G13 - PeriodRail pins NEEDS ENTRY with
           the same severity-pill meta as CalendarRail. groupedQueue
@@ -411,17 +442,26 @@ function PeriodRail({
               {groupedQueue.length === 0 && (
                 <p className="sc-rail-queue-empty">Every period is caught up.</p>
               )}
-              {visibleGroups.map(g => (
-                <PeriodQueueRow
-                  key={g.period}
-                  group={g}
-                  onClick={() => onDrillToPeriod?.(g.period)}
-                />
-              ))}
-              {overflow > 0 && (
+              {groupedQueue.length > 0 && (
+                <div
+                  className="sc-rail-queue-list"
+                  data-expanded={showAllQueue ? "true" : "false"}
+                  style={{ "--queue-visible-count": QUEUE_TOP_N }}
+                >
+                  {visibleGroups.map(g => (
+                    <PeriodQueueRow
+                      key={g.period}
+                      group={g}
+                      onClick={() => onDrillToPeriod?.(g.period)}
+                    />
+                  ))}
+                </div>
+              )}
+              {canToggle && (
                 <RailQueueMore
                   count={overflow}
-                  onClick={() => setShowAllQueue(true)}
+                  expanded={showAllQueue}
+                  onClick={() => setShowAllQueue(v => !v)}
                 />
               )}
             </RailSection>
@@ -496,16 +536,21 @@ function PeriodQueueRow({ group, onClick }) {
     ? `${overdue} overdue · oldest ${oldestOverdueAging} ${oldestOverdueAging === 1 ? "day" : "days"}`
     : `${needs} to enter`;
   const bucketStatus = overdue > 0 ? "overdue" : "needs-entry";
+  /* R1-5 (2026-07-31) - spell out "Period N". The bare number
+     (`7`, `8`) beside "24 overdue" reads as a count, not an
+     identifier. Deliberate divergence from the period cards'
+     "P7 · late Jun" - the rail is a standalone reading context. */
+  const periodLabel = `Period ${period}`;
   return (
     <button
       type="button"
       className={`sc-rail-queue-row sc-rail-queue-row--${overdue > 0 ? "overdue" : "needs"}`}
       onClick={onClick}
-      aria-label={`${period}, ${status}, open`}
+      aria-label={`${periodLabel}, ${status}, open`}
     >
       <span className={`sc-rail-queue-dot sc-rail-queue-dot--${overdue > 0 ? "overdue" : "needs"}`} aria-hidden="true" />
       <span className="sc-rail-queue-body">
-        <span className="sc-rail-queue-date">{period}</span>
+        <span className="sc-rail-queue-date">{periodLabel}</span>
         <span className="sc-rail-queue-status">{status}</span>
       </span>
       <span className="sc-rail-queue-chevron" aria-hidden="true">

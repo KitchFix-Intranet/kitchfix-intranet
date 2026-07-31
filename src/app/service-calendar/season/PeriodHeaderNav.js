@@ -192,21 +192,28 @@ export function PeriodTodayChip({ today, isCurrentPeriod, onTodayJump }) {
   );
 }
 
-// HF-7 (2026-07-20) - overview ribbon Today-jump. Scrolls the current-
-// month card into view + pulses it briefly. Rendered inside the
-// overview ribbon's Today-group (same visual as PeriodTodayChip's
-// button variant, same .sc-chrome-drill-today class). If the current-
-// month card cannot be located (e.g. viewing a non-current year, or
-// off-season with no [data-state="current"] card), the component
-// returns null - hidden rather than present-but-dead per owner ruling.
-export function OverviewTodayChip({ hasCurrentMonth, onTodayJump }) {
-  if (!hasCurrentMonth) return null;
+// R1-1 (2026-07-31) - overview ribbon Today control. WAS (HF-7 shape):
+// scroll the current-month card into view + pulse it in place, and
+// hide the chip entirely when off-season. NOW: dispatch to the drill
+// scope containing today (lens-aware, handled by the parent), with a
+// disabled state when today is outside every defined scope for the
+// current lens (Calendar lens: not current year; Period lens: today
+// not in any periodRange). Renders disabled rather than absent, so
+// the operator can see the affordance exists and read its aria label
+// to learn why it will not click. Same .sc-chrome-drill-today class
+// so the visual carries the disabled treatment from that stylesheet.
+export function OverviewTodayChip({ enabled = true, onTodayJump }) {
+  const ariaLabel = enabled
+    ? "Jump to today"
+    : "Today is outside the current scope";
   return (
     <button
       type="button"
       className="sc-chrome-drill-today"
-      onClick={onTodayJump}
-      aria-label="Jump to the current month"
+      onClick={enabled ? onTodayJump : undefined}
+      disabled={!enabled}
+      aria-label={ariaLabel}
+      aria-disabled={!enabled}
     >
       <TargetIcon />
       Today
