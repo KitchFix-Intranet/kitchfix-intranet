@@ -23,7 +23,6 @@ import { useEffect, useRef, useState } from "react";
 // value, ancestor visibility restore, then the new value trip the
 // transition on a painted node. Gate-4 receipt: STL-FL Jul 8, pct
 // 10 -> 14, transitionrun @249858 + transitionend @249133 (274ms).
-import { useHandoffSafe } from "./handoff/coordinator";
 import useAnimatedNumber from "../useAnimatedNumber";
 import "./rail.css";
 // P3-A (2026-07-25): accent-rail primitive shared across surfaces
@@ -105,138 +104,32 @@ export function RailProgress({ pct, complete }) {
 }
 
 // ─── Progress block (R2-2, 2026-07-31) ─────────────────────────
-// Bar + caption in one wrapping node. Replaces RailRing on the
-// drill in both DrillRail (per-meal + AAA) and OpsRailBase (STL - FL
-// fee-no-dollar). MLB (OpsRailMlbHomestand) does not mount this -
-// it keeps its own group cards and never had a ring.
+// Bar + caption in one wrapping node. Used on the drill in both
+// DrillRail (per-meal + AAA) and OpsRailBase (STL - FL fee-no-dollar).
+// MLB (OpsRailMlbHomestand) uses <RailProgress> + separate caption
+// as siblings, byte-identical to before R2-2.
 //
-// Registers itself as the Handoff flight destination via
-// registerFlightTarget (renamed from registerRingTarget). Owner
-// ruling on the retarget: the flight lands on the block, not on
-// the 4px `.sc-rail-progress-fill`. The block has real height,
-// contains both the bar that fills AND the caption that increments,
-// and "1 of 24 -> 2 of 24" appearing under the arriving pill is a
-// stronger arrival cue than either element alone.
+// Percent digit is intentionally NOT in the visible caption (matches
+// the overview shape exactly). Percent is exposed via RailProgress's
+// `role="progressbar" aria-valuenow=` for screen readers; sighted
+// users read percent off the bar's fill.
 //
-// Percent digit is intentionally NOT in the visible caption
-// (matches the overview shape exactly). Percent is exposed via
-// RailProgress's `role="progressbar" aria-valuenow=` for screen
-// readers; sighted users read percent off the bar's fill.
+// Retirement note (2026-07-31): the block previously registered
+// itself as the Handoff flight destination via `registerFlightTarget`.
+// The flight was retired (never fired on any account - phase machine
+// skipped even phases + pill source race). See SC_STATUS.md. The
+// wrapping div now exists purely for layout - it groups the bar and
+// caption so they cannot be inserted between; the ref registration
+// went with the flight.
 export function RailProgressBlock({ pct, complete, caption, ariaLabel }) {
-  const containerRef = useRef(null);
-  const { registerFlightTarget } = useHandoffSafe();
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return undefined;
-    return registerFlightTarget(el);
-  }, [registerFlightTarget]);
   return (
     <div
-      ref={containerRef}
       className="sc-rail-progress-block"
       aria-label={ariaLabel || caption}
     >
       <RailProgress pct={pct} complete={complete} />
       {caption && (
         <RailHeroProgressCaption>{caption}</RailHeroProgressCaption>
-      )}
-    </div>
-  );
-}
-
-// ─── Progress ring (P3-A, 2026-07-25) ──────────────────────────
-// Peer primitive to RailProgress. RailProgress is UNTOUCHED because
-// MLB rail composition must stay byte-identical (owner ruling: MLB
-// keeps <RailProgress + RailHeroProgressCaption>). RailRing is a
-// per-meal / fee-no-dollar swap-in.
-//
-// Geometry (SVG values from RENDER_HANDOFF_BLENDED.html:65-73):
-//   viewBox 0 0 92 92, cx=46, cy=46, r=39, stroke-width 8, dasharray
-//   2*pi*r = 245.04. Rotated -90deg so the arc starts at the top.
-//   Compact size (owner pick: 92px wrap; ring geometry is structural
-//   sizing, not type/spacing/radius, so px is sanctioned).
-//
-// Ambient sweep: CSS transition on `stroke-dashoffset` via a duration
-// token (rail.css). Any pct change animates the arc; prefers-reduced-
-// motion collapses the duration to 0ms via the --duration-* token
-// cascade (motion.js header rule).
-//
-// Variants:
-//   default (per-meal): `label` renders the percent inside the ring
-//     (e.g. "72%"). Caption OUTSIDE the ring (adjacent
-//     RailHeroProgressCaption) carries the fraction "N of M days
-//     entered". Both come from consumer scope.
-//   showLabel={false} (fee-no-dollar / STL-FL): arc only, no inner
-//     label. Caller keeps the existing hero + caption above / beside
-//     - the 2B days-confirmed hero already carries the fraction, so
-//     duplicating it inside the small ring is redundant (owner pick:
-//     option A).
-export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) {
-  const clamped = Math.max(0, Math.min(100, Math.round(pct || 0)));
-  const C = 245.04; // 2 * PI * 39
-  const dashOffset = C - (C * clamped) / 100;
-  // P3-B (2026-07-28): double-rAF defer of the SVG style write. When
-  // the pct actually changes from the last rendered value, we buy two
-  // animation frames before writing the new dashoffset. Frame 1
-  // paints the current (old) value. Frame 2 sets the new value on a
-  // painted node, tripping the CSS transition. First mount + no-op
-  // updates short-circuit (no lag steady-state).
-  const [committedOffset, setCommittedOffset] = useState(dashOffset);
-  useEffect(() => {
-    if (committedOffset === dashOffset) return undefined;
-    const target = dashOffset;
-    let raf2 = null;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        setCommittedOffset(target);
-      });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2 != null) cancelAnimationFrame(raf2);
-    };
-  }, [dashOffset, committedOffset]);
-  /* R2-2 (2026-07-31) - RailRing is no longer the Handoff flight
-     destination. The registerFlightTarget call moved to
-     RailProgressBlock, which is the new bar-plus-caption wrapper
-     used on the drill in both DrillRail and OpsRailBase (STL - FL).
-     RailRing is retained as a primitive but has no live consumer;
-     scheduled for removal once R2-2's gate passes. */
-  return (
-    <div
-      className={`sc-rail-ring${complete ? " sc-rail-ring--complete" : ""}`}
-      role="progressbar"
-      aria-valuenow={clamped}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={ariaLabel || `${clamped} percent complete`}
-    >
-      <svg
-        className="sc-rail-ring-svg"
-        viewBox="0 0 92 92"
-        aria-hidden="true"
-      >
-        <circle
-          className="sc-rail-ring-bg"
-          cx="46"
-          cy="46"
-          r="39"
-          fill="none"
-        />
-        <circle
-          className="sc-rail-ring-fg"
-          cx="46"
-          cy="46"
-          r="39"
-          fill="none"
-          strokeLinecap="round"
-          style={{ strokeDasharray: C, strokeDashoffset: committedOffset }}
-        />
-      </svg>
-      {showLabel && (
-        <div className="sc-rail-ring-txt" aria-hidden="true">
-          <span className="sc-rail-ring-n">{label ?? `${clamped}%`}</span>
-        </div>
       )}
     </div>
   );

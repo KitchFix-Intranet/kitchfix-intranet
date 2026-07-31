@@ -23,7 +23,6 @@ import {
   RailHeroProgressCaption,
   RailProgress,
   RailProgressBlock,
-  RailRing,
   RailSection,
   RailScroll,
   RailQueueRow,

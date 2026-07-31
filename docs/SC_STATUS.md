@@ -135,14 +135,25 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **Not investigating.** Logged so it is not rediscovered.
 - **Owner**: Kevin to rule which side is correct - hide the menu item on pure PDC, or teach the Season loader to render one honestly.
 
-### P3-B Handoff clone flight never animates on drill saves (2026-07-31)
+### P3-B Handoff clone flight retired (2026-07-31)
 
-- **Measured on CIN - AZ P8 at 1440, real save (Lunch 80 -> 81) with the clone sampled every frame for 2.5s**: 288 samples, zero above opacity 0.05, transform never left `matrix(1, 0, 0, 1, 0, 0)`. The pill does not fly.
-- **The retarget introduced by R2-2 is NOT the cause.** Owner walked the React fiber and read the coordinator's refs directly across a save: `flightTargetRef` populated from phase 0; both `flightTargetRef` and `pillSourceRef` populated at phase 3. `HandoffLayer.js:41`'s early-return did not fire. `RailProgressBlock`'s `registerFlightTarget` works as designed.
-- **The failure is downstream of the ref check**, inside `HandoffLayer.js:32-72`'s phase-3 effect body. Three candidates: (a) transform applied then immediately reset by a re-render before paint; (b) clone's CSS never allows it to show (opacity 0, reveal class or keyframe missing); (c) effect reads geometry before layout settles and computes a zero delta.
-- **Anomaly worth chasing first**: phase 2 never appeared in the trace. Sequence went `0 -> 1 -> 3`, one sample at phase 3. Owner's polling rate was 50ms and the scheduled window at phase 2 is ~460ms, so this is not a sampling artifact. If phase 2 is skipped or fires in the same tick as phase 3, `HandoffPill` may mount and register in a race with the flight schedule, which would be a pre-existing P3-B defect independent of the flight itself.
-- **This motion has never demonstrably run in a gate.** Every P3-A, P3-B and R2-2 gate verified the target existed, not that the pill arrived. R1-2's ring-tween measurement was on the RING, not the CLONE. So this may have been dead since P3-B shipped.
-- **Owner**: decide whether to fix or retire the flight motion. The Handoff's ambient effects (session strip, tile flip, queue clear, ring sweep, next-day advance) all work; only the modal-to-rail pill CLONE flight is dead. Fix cost = an evening's diagnosis + a small commit; retire cost = deleting `HandoffLayer.js` + the pill's `--flying` class + `registerFlightTarget` / `RailProgressBlock`'s target registration.
+- **Owner ruling 2026-07-31**: delete. Motion never fired on any account; every save-feedback effect an operator relies on is independent of it.
+- **Root cause diagnosed before removal, one save with the coordinator instrumented**:
+
+  ```
+  t=19290   startHandoff called   RM=false
+  t=19333   commit phase=1
+  t=19977   phase-3 effect   source=false   target=true   clone=true
+  t=19978   HandoffPill mount+register   phase=3
+  t=19979   commit phase=3
+  t=20990   commit phase=5
+  t=21961   commit phase=0
+  ```
+
+  Two defects, both structural: (1) **Even phases (2 and 4) never commit.** Observed sequence `0 -> 1 -> 3 -> 5 -> 0` on every save. (2) **HandoffLayer's phase-3 effect fires BEFORE HandoffPill registers the source ref.** Because phase 2 was skipped, `HandoffPill` did not mount at the pillIn beat and only mounted on the phase-3 commit - at which point `HandoffLayer` had already read `pillSourceRef.current` and got null. The flight was structurally impossible on any save since P3-B shipped.
+- **What was removed**: `HandoffLayer.js` entirely, its mount site in `ServiceCalendar.js`, `HandoffPill` in `DayEntryV2.js`, `RailRing` primitive + its CSS + `ringbox` wrapper CSS, the pill's `--flying` class + its keyframes + `sc-pillIn`/`sc-pillFade`/`sc-handoff-*` styles, and every phase-machine mechanic in the coordinator (`phase` state + all `setPhase` calls + `handoffDay` / `handoffTotals` state + `isFlippingDate` + `registerFlightTarget` + `registerPillSource` + `flightTargetRef` + `pillSourceRef` + `_refs`).
+- **What stayed**: everything visible on a save. `commitSession` + `commitSessionOnly` + `sessionMap` (session strip). `showMonthComplete` + `monthComplete` + `dismissMonthComplete` (month-complete card). `resetSession`. `startHandoff` simplified to one job - commit the session entry and fire `onFinalize` after 1350ms (same cadence, same "one clock" property as before). `RailProgressBlock` retained as a layout wrapper for the bar + caption; the ref-registration `useEffect` was the only thing that went. Tile flip stays (workspace-level via `prevHasActualsMap`, was never phase-driven). Queue clear stays (natural re-derivation).
+- **The lesson worth keeping past the feature**: three gates - P3-A, P3-B, R2-2 - each verified the flight target existed. **None watched the pill arrive.** A gate that confirms a destination has not confirmed a journey.
 
 ### Authed preview e2e (follow-up from #408's honest limitation)
 

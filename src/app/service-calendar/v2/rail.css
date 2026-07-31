@@ -414,69 +414,12 @@
   background: var(--sc2-rail-accent-success);
 }
 
-/* ─── Progress ring (P3-A, 2026-07-25) ─────────────────────────
-   Peer to .sc-rail-progress. See Rail.js RailRing for props +
-   design notes. Geometry per RENDER_HANDOFF_BLENDED.html:65-73:
-   92x92 wrap, 8px stroke, r=39, circumference 245.04. Rotated
-   -90deg so the arc starts at the top and sweeps clockwise.
-   Ambient sweep via duration token - RM cascade at the token
-   layer collapses it to 0ms.
-   px on width/height is structural sizing (not type/spacing/
-   radius), so §13A allows it. Cited to the render source. */
-.scv2 .sc-rail-ring {
-  position: relative;
-  width: 92px;
-  height: 92px;
-  flex: none;
-}
-.scv2 .sc-rail-ring-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-.scv2 .sc-rail-ring-bg {
-  stroke: rgba(255, 255, 255, 0.14);
-  stroke-width: 8;
-}
-.scv2 .sc-rail-ring-fg {
-  stroke: var(--sc2-accent-green);
-  stroke-width: 8;
-  transition:
-    stroke-dashoffset var(--duration-slow, 380ms) var(--ease-standard, cubic-bezier(.22, 1, .36, 1)),
-    stroke var(--duration-base, 240ms) var(--ease-standard, cubic-bezier(.22, 1, .36, 1));
-}
-.scv2 .sc-rail-ring--complete .sc-rail-ring-fg {
-  stroke: var(--sc2-rail-accent-success);
-}
-.scv2 .sc-rail-ring-txt {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-.scv2 .sc-rail-ring-n {
-  font-size: var(--sc2-size-h2);
-  font-weight: var(--sc2-wt-display);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  color: var(--sc2-rail-text-strong);
-}
-/* Horizontal ringbox for per-meal DrillRail: ring left, fraction
-   caption right ("18 of 25 days entered"). Render structure at
-   RENDER_HANDOFF_BLENDED.html:65 (.ringbox). */
-.scv2 .sc-rail-ringbox {
-  display: flex;
-  align-items: center;
-  gap: var(--sc2-space-3);
-  margin: var(--sc2-space-3) 0;
-}
-.scv2 .sc-rail-ringbox-caption {
-  font-size: var(--sc2-size-caption);
-  color: var(--sc2-rail-text-muted);
-  line-height: 1.4;
-}
+/* Progress ring (RailRing / .sc-rail-ring*) + ringbox wrapper
+   retired 2026-07-31 with the Handoff flight. The drill now uses
+   the bar-plus-caption RailProgressBlock (.sc-rail-progress-block
+   at line 122) on per-meal + STL - FL, and MLB keeps <RailProgress>
+   + separate caption byte-identical. See SC_STATUS.md for the
+   trace and rationale. */
 
 /* ─── Section headings ─────────────────────────────────────── */
 .scv2 .sc-rail-section {

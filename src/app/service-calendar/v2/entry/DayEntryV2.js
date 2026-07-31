@@ -1316,16 +1316,6 @@ function DayEntryV2({
         </aside>
       </div>
 
-      {/* P3-B (2026-07-28): confirmed pill. Renders only during the
-          Handoff sequence (phase >= 2). Absolute positioning inside
-          the actions row so its rect stays reliable for the flight
-          layer's source rect. The pill's <span> ref is registered
-          with the coordinator on mount so HandoffLayer can read
-          `getBoundingClientRect()` for the pillFly beat. Copy: "Confirmed"
-          on all shapes (fee vocab is already captured by the sequence's
-          totals hand-off). */}
-      <HandoffPill />
-
       {/* B3 (2026-07-24): pinned actions row per §8C. Desktop-only
           via CSS media query; mobile keeps its MobileBooksBar stickyAction
           below. Confirm & save was previously the last child of BillRail
@@ -1984,52 +1974,6 @@ function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnt
           <button className="sc-btn sc-btn--primary" onClick={onConfirm}>Mark no service</button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// P3-B (2026-07-28): confirmed pill for the Handoff. Renders
-// exclusively during phase >= 2 (pillIn beat onward). Source ref
-// registered with the coordinator so HandoffLayer's fixed-position
-// clone reads its viewport rect for the pillFly beat. Positioned
-// absolutely relative to .sc-v2-entry so it does not perturb the
-// actions row layout.
-function HandoffPill() {
-  const handoff = useHandoffSafe();
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!ref.current) return undefined;
-    /* DIAG (2026-07-31, retirement step 1) - HandoffPill only mounts
-       when phase >= 2. This log fires post-mount, so its timestamp
-       is when the pill DOM node is present + the ref set. Compare
-       against the coordinator's commit-phase log: if pill mount time
-       equals phase-3 commit time, phase 2 was skipped and the pill
-       registers in the same commit as HandoffLayer's phase-3 read =
-       race that kills the flight. Removed in the deletion commit. */
-    if (typeof window !== "undefined") {
-      // eslint-disable-next-line no-console
-      console.log(`[handoff-diag] HandoffPill mount+register t=${Math.round(performance.now())} phase=${handoff.phase}`);
-    }
-    return handoff.registerPillSource(ref.current);
-  }, [handoff]);
-  const active = handoff.phase >= 2;
-  if (!active) return null;
-  const flying = handoff.phase >= 3;
-  return (
-    <div
-      ref={ref}
-      className={`sc-v2-entry-pill sc-ar sc-ar--success${flying ? " sc-v2-entry-pill--flying" : ""}`}
-      role="status"
-      aria-live="polite"
-    >
-      <span className="sc-ar-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      </span>
-      <span className="sc-ar-content">
-        <span className="sc-ar-title">Confirmed</span>
-      </span>
     </div>
   );
 }

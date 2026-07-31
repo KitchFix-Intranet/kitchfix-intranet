@@ -22,55 +22,12 @@
    The token cascade collapses to 0ms under prefers-reduced-motion.
 */
 
-/* ─── Confirmed pill (inside DayEntryV2) ───────────────────────
-   Renders during phase >= 2. Absolute positioning so its rect stays
-   stable for HandoffLayer's source-rect capture. On phase 2 entry,
-   pillIn keyframe forms it with an overshoot bezier. On phase 3
-   entry, --flying triggers a fade-away in place (HandoffLayer's
-   fixed clone carries the visual flight). */
-.sc-v2-entry-pill {
-  position: fixed;
-  right: var(--sc2-space-5, 20px);
-  bottom: calc(var(--sc2-space-8, 40px) + var(--sc2-space-5, 20px));
-  animation: sc-pillIn .3s cubic-bezier(.34, 1.56, .64, 1) both;
-  z-index: 20;
-  pointer-events: none;
-}
-.sc-v2-entry-pill--flying {
-  animation: sc-pillFade .3s ease-out forwards;
-}
-@keyframes sc-pillIn {
-  0%   { opacity: 0; transform: scale(.9); }
-  70%  { opacity: 1; transform: scale(1.04); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes sc-pillFade {
-  to { opacity: 0; transform: scale(.7); }
-}
-
-/* ─── HandoffLayer flight clone ────────────────────────────────
-   Fixed-position clone at page level. Transform + opacity carry the
-   flight. Timing: .55s cubic-bezier(.4, 0, .2, 1). Reduced-motion:
-   the JS coordinator skips this beat entirely; CSS is safe by omit. */
-.sc-handoff-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 10001;
-}
-.sc-handoff-clone {
-  transition:
-    transform .55s cubic-bezier(.4, 0, .2, 1),
-    opacity   .55s cubic-bezier(.4, 0, .2, 1);
-}
-.sc-handoff-clone--flying {
-  /* Marker class set by JS after the start-position snap. Transform
-     target values are set inline via style. */
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-handoff-clone { transition: none; }
-  .sc-v2-entry-pill { animation: none; opacity: 0; }
-}
+/* Confirmed pill + HandoffLayer flight clone retired 2026-07-31.
+   Both existed to serve the modal-to-rail pill flight; the flight
+   never fired on any account (phase machine skipped even phases +
+   pill source race - see SC_STATUS.md). Kept animations that fire
+   independently and outlive the retirement: tile flip, queue-row
+   clear, badge tick, slide-next, month-complete card. */
 
 /* ─── Session strip ────────────────────────────────────────────
    Below the ring caption (per Ruling 3). Accent-rail --success on
