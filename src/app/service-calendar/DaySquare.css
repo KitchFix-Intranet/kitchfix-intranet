@@ -645,6 +645,32 @@
   box-shadow: 0 0 0 2px var(--status-today-ring), 0 0 0 5px var(--accent-sc), inset 0 0 0 1.5px var(--accent-sc);
 }
 
+/* R1-1 (2026-07-31) - arrival pulse on the today tile. Fires once
+   for ~1.2s when the operator drills in via Today (from the
+   overview or the drill-scope chip). Three quick pulses on the
+   ring, then stops - owner ruling: "not a loop." The keyframes
+   modulate the OUTER shadow ring only; the tile keeps its base
+   `--status-today-ring` static border underneath so the pulse
+   reads as an intensified today halo rather than a new state
+   colour. Class added imperatively by the ServiceCalendar
+   drill-mount effect + removed after 1250ms, mirroring the
+   month-card pattern at season.css:376-399.
+
+   Reduced-motion drops the animation entirely; the tile keeps
+   its always-on ring so arrival is still legible without motion. */
+@keyframes sc-daysq-today-pulse {
+  0%,   100% { box-shadow: 0 0 0 2px var(--status-today-ring),
+                           0 0 0 0   rgba(15, 32, 74, 0); }
+  50%        { box-shadow: 0 0 0 2px var(--status-today-ring),
+                           0 0 0 5px rgba(15, 32, 74, 0.32); }
+}
+.sc-daysq--today-pulse {
+  animation: sc-daysq-today-pulse 400ms var(--ease-standard, ease-out) 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-daysq--today-pulse { animation: none; }
+}
+
 /* :focus-visible (keyboard focus) reuses the focused ring even if
    the consumer didn't pass isFocused - so tab nav is never
    unringed. */
