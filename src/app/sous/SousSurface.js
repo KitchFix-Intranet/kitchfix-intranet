@@ -310,61 +310,68 @@ export default function SousSurface({
   // ── Rail (page variant only) ─────────────────────────────────────────────
   const railEl = !isOverlay && (
     <aside className="sa-rail" aria-label="Session history">
-      <button type="button" className="sa-rail-newbtn" onClick={onNewQuestion}>
-        <span className="sa-rail-newbtn-lead">
-          <Plus size={14} strokeWidth={2.4} />
-          <span>New question</span>
-        </span>
-        <span className="sa-rail-newbtn-kbd" aria-hidden="true">⌘K</span>
-      </button>
-      <p className="sa-rail-heading">This session</p>
-      {sessionTurns.length === 0 ? (
-        <p className="sa-rail-empty">Nothing yet - questions you ask will collect here.</p>
-      ) : (
-        <>
-          <ul className="sa-rail-list">
-            {sessionTurns.slice(0, IN_CONTEXT_WINDOW).map((t, i) => (
-              <li key={t.id}>
-                {i === 0 && (
-                  <span
-                    className="sa-rail-incontext-marker"
-                    title="Sous can refer back to these three (presentation only in PR A - true after PR B ships memory)."
-                  >
-                    In context
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className={`sa-rail-item sa-rail-item--incontext${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
-                  onClick={() => { setQuestion(t.question); }}
-                >
-                  <span className="sa-rail-item-time">{formatTime(t.at)}</span>
-                  <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {sessionTurns.length > IN_CONTEXT_WINDOW && (
-            <>
-              <div className="sa-rail-context-boundary" />
-              <ul className="sa-rail-list">
-                {sessionTurns.slice(IN_CONTEXT_WINDOW).map((t) => (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      className={`sa-rail-item sa-rail-item--outside-context${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
-                      onClick={() => { setQuestion(t.question); }}
+      <div className="sa-rail-head">
+        <button type="button" className="sa-rail-newbtn" onClick={onNewQuestion}>
+          <span className="sa-rail-newbtn-lead">
+            <Plus size={14} strokeWidth={2.4} />
+            <span>New question</span>
+          </span>
+          <span className="sa-rail-newbtn-kbd" aria-hidden="true">⌘K</span>
+        </button>
+      </div>
+      <div className="sa-rail-scroll">
+        <p className="sa-rail-heading">This session</p>
+        {sessionTurns.length === 0 ? (
+          <div className="sa-rail-empty">
+            <b>Nothing yet</b>
+            Questions you ask will collect here.
+          </div>
+        ) : (
+          <>
+            <ul className="sa-rail-list">
+              {sessionTurns.slice(0, IN_CONTEXT_WINDOW).map((t, i) => (
+                <li key={t.id}>
+                  {i === 0 && (
+                    <span
+                      className="sa-rail-incontext-marker"
+                      title="Sous can refer back to these three (presentation only in PR A - true after PR B ships memory)."
                     >
-                      <span className="sa-rail-item-time">{formatTime(t.at)}</span>
-                      <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
+                      In context
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className={`sa-rail-item sa-rail-item--incontext${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
+                    onClick={() => { setQuestion(t.question); }}
+                  >
+                    <span className="sa-rail-item-time">{formatTime(t.at)}</span>
+                    <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {sessionTurns.length > IN_CONTEXT_WINDOW && (
+              <>
+                <div className="sa-rail-context-boundary" />
+                <ul className="sa-rail-list">
+                  {sessionTurns.slice(IN_CONTEXT_WINDOW).map((t) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        className={`sa-rail-item sa-rail-item--outside-context${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
+                        onClick={() => { setQuestion(t.question); }}
+                      >
+                        <span className="sa-rail-item-time">{formatTime(t.at)}</span>
+                        <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
+        )}
+      </div>
       <p className="sa-rail-footer">Session only - clears when you reload.</p>
     </aside>
   );
@@ -455,7 +462,7 @@ export default function SousSurface({
               >
                 <span className="sa-source-idchip">{docId}</span>
                 <span className="sa-source-title">{docId}</span>
-                <ExternalLink size={11} aria-hidden="true" />
+                <ExternalLink size={13} className="sa-source-go" aria-hidden="true" />
               </a>
             ))}
           </div>
@@ -547,27 +554,28 @@ export default function SousSurface({
   const composerEl = (
     <div className="sa-composer">
       <form className="sa-ask-form" onSubmit={onFormSubmit}>
-        <input
-          ref={inputRef}
-          type="text"
-          className="sa-ask-input"
-          placeholder="Ask Sous a question..."
-          aria-label="Ask Sous a question"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          disabled={submitting}
-          maxLength={2000}
-          autoComplete="off"
-        />
-        <button
-          type="submit"
-          className="sa-ask-send"
-          disabled={submitting || !question.trim()}
-          aria-label="Send question"
-        >
-          <ArrowUp size={14} aria-hidden="true" />
-          <span>{submitting ? "..." : "Send"}</span>
-        </button>
+        <div className="sa-ask-row">
+          <input
+            ref={inputRef}
+            type="text"
+            className="sa-ask-input"
+            placeholder="Ask about a policy, a person, an account, a number..."
+            aria-label="Ask Sous a question"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            disabled={submitting}
+            maxLength={2000}
+            autoComplete="off"
+          />
+          <button
+            type="submit"
+            className="sa-ask-send"
+            disabled={submitting || !question.trim()}
+            aria-label="Send question"
+          >
+            <ArrowUp size={16} aria-hidden="true" />
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -585,15 +593,19 @@ export default function SousSurface({
 
   return (
     <>
-      {railEl}
-      <main className="sa-main">
-        {heroSlot}
-        <div className="sa-pane">
-          {firstRunEl}
-          {turnEl}
-        </div>
-        {composerEl}
-      </main>
+      {heroSlot}
+      <div className="sa-workspace">
+        {railEl}
+        <main className="sa-main">
+          <div className="sa-pane-scroll">
+            <div className="sa-pane">
+              {firstRunEl}
+              {turnEl}
+            </div>
+          </div>
+          {composerEl}
+        </main>
+      </div>
     </>
   );
 }

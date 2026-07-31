@@ -25,7 +25,7 @@
 /* Reset + base */
 .sa-page {
   min-height: 100vh;
-  background: var(--bg-canvas, #F6F8FB);
+  background: #EDEFF2;              /* reference surface-page, warmer than default canvas */
   color: var(--text-default);
   font-family: 'Inter', system-ui, sans-serif;
 }
@@ -33,26 +33,55 @@
 /* ── 1. Shell + rail (page variant) ──────────────────────────────────────── */
 
 .sa-shell {
-  display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
-  gap: 0;
-  min-height: 100vh;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-@media (max-width: 1023px) {
-  .sa-shell { grid-template-columns: 1fr; }
-  .sa-rail { display: none; }
-}
-
-.sa-rail {
-  background: white;
-  border-right: 1px solid var(--kf-border, #E4E8EC);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding: 20px 16px 16px;
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: 20px 24px 0;
+  gap: 16px;
 }
+@media (max-width: 767px) {
+  .sa-shell { padding: 12px 16px 0; gap: 12px; }
+}
+
+.sa-workspace {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 20px;
+}
+@media (max-width: 1023px) {
+  .sa-workspace { grid-template-columns: 1fr; }
+  .sa-rail { display: none; }
+}
+
+/* Rail is a CARD - matches reference .rail (bordered, rounded, distinct) */
+.sa-rail {
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  padding: 0;
+}
+.sa-rail-head {
+  padding: 16px;
+  border-bottom: 1px solid #F0EEE7;
+  flex: none;
+}
+.sa-rail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 12px 16px;
+}
+.sa-rail-scroll::-webkit-scrollbar { width: 6px; }
+.sa-rail-scroll::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 3px; }
 
 .sa-rail-newbtn {
   display: inline-flex;
@@ -85,12 +114,14 @@
 .sa-rail-newbtn-lead { display: inline-flex; align-items: center; gap: 6px; }
 
 .sa-rail-heading {
-  font-size: 11px;
-  font-weight: 800;
-  color: #6B7785;
-  letter-spacing: 0.6px;
+  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: #94A3B8;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
-  margin: 20px 4px 8px;
+  padding: 0 12px 8px;
+  margin: 0;
 }
 
 .sa-rail-list {
@@ -165,24 +196,38 @@
 }
 
 .sa-rail-empty {
-  padding: 12px 10px;
+  padding: 28px 12px;
+  text-align: center;
+  color: #94A3B8;
   font-size: 12px;
-  color: #6B7785;
-  font-style: italic;
+  line-height: 1.6;
+}
+.sa-rail-empty b {
+  display: block;
+  color: #475569;
+  font-weight: 600;
+  margin-bottom: 4px;
 }
 
 .sa-rail-footer {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid var(--kf-border, #E4E8EC);
-  font-size: 11px;
-  color: #6B7785;
+  flex: none;
+  padding: 12px 16px;
+  border-top: 1px solid #F0EEE7;
+  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-size: 9.5px;
+  color: #94A3B8;
+  line-height: 1.5;
 }
 
+/* Pane is a CARD - matches reference .pane */
 .sa-main {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 0;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 /* ── 2. Hero (page variant only, mirrors oh-hero) ────────────────────────── */
@@ -198,11 +243,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: 20px 24px 0;
   background-color: #0F3057; /* fallback if no image */
+  flex: none;
 }
 @media (max-width: 767px) {
-  .sa-hero { min-height: 84px; padding: 14px 18px; margin: 12px 16px 0; }
+  .sa-hero { min-height: 84px; padding: 14px 18px; }
 }
 .sa-hero-bg {
   position: absolute;
@@ -431,9 +476,17 @@
 
 /* ── 4. Turn treatment - BOTH variants ──────────────────────────────────── */
 
-/* Answer pane host */
+/* Pane scroll area inside the .sa-main card */
+.sa-pane-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.sa-pane-scroll::-webkit-scrollbar { width: 9px; }
+.sa-pane-scroll::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 5px; }
+
 .sa-pane {
-  padding: 20px 24px 20px;
+  padding: 24px 20px;
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
@@ -441,7 +494,7 @@
   flex-direction: column;
   gap: 16px;
 }
-@media (max-width: 767px) { .sa-pane { padding: 12px 16px; } }
+@media (max-width: 767px) { .sa-pane { padding: 16px 14px; } }
 
 .sa-turn { display: flex; flex-direction: column; gap: 10px; }
 
@@ -523,78 +576,96 @@
 }
 .sa-answer-body strong { font-weight: 700; }
 
-/* Tables - real borders, tabular figures */
+/* Tables - subtle borders (bottoms only), tabular figures - mirrors ref .tbl */
 .sa-answer-body table {
   border-collapse: collapse;
   width: 100%;
-  margin: 8px 0 12px;
+  margin: 8px 0 14px;
   font-size: 13px;
 }
-.sa-answer-body th,
-.sa-answer-body td {
-  border: 1px solid var(--kf-border, #E4E8EC);
-  padding: 6px 10px;
-  text-align: left;
-  vertical-align: top;
-}
 .sa-answer-body th {
-  background: #F8FAFC;
+  text-align: left;
+  padding: 0 12px 8px;
+  border-bottom: 1.5px solid #D3CFC4;
+  font-size: 10px;
   font-weight: 700;
-  color: var(--kf-navy);
-  font-size: 12px;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  color: #64748B;
+  white-space: nowrap;
 }
-.sa-answer-body tr:nth-child(2n) td { background: #FBFCFE; }
-/* Numeric cells - tabular */
-.sa-answer-body td { font-variant-numeric: tabular-nums; }
+.sa-answer-body td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #F0EEE7;
+  vertical-align: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.sa-answer-body tfoot td {
+  border-top: 1.5px solid #D3CFC4;
+  border-bottom: none;
+  font-weight: 700;
+  color: #0A2548;
+  padding-top: 10px;
+}
 
 /* ── 5. Source cards + provenance stamp + KPI ────────────────────────────── */
 
+/* Source cards - full-row layout matching reference .src */
 .sa-sources {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   padding: 0 18px 12px;
 }
 .sa-source-card {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px;
-  border: 1px solid var(--kf-border, #E4E8EC);
-  border-radius: 8px;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
   background: white;
   text-decoration: none;
   color: inherit;
-  font-size: 12px;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition: border-color 0.18s cubic-bezier(.2,0,0,1), transform 0.18s cubic-bezier(.2,0,0,1), box-shadow 0.18s cubic-bezier(.2,0,0,1);
 }
 .sa-source-card:hover {
   border-color: var(--accent-sous);
-  background: var(--accent-sous-subtle);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transform: translateY(-1px);
 }
 .sa-source-idchip {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 6px;
+  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 7px;
   background: var(--accent-sous-subtle);
-  color: var(--accent-sous-deep);
+  color: var(--accent-sous);
   border-radius: 4px;
-  letter-spacing: 0.3px;
+  letter-spacing: -0.02em;
+  flex: none;
 }
 .sa-source-title {
   font-weight: 600;
-  color: var(--text-default);
+  color: #0A2548;
+  font-size: 12.5px;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 260px;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 .sa-source-section {
-  color: #6B7785;
-  font-size: 11px;
+  color: #64748B;
+  font-size: 10.5px;
+  margin-top: 1px;
+  display: block;
+}
+.sa-source-go {
+  margin-left: auto;
+  color: #94A3B8;
+  flex: none;
 }
 
 /* Provenance stamp - mono, tabular */
@@ -796,56 +867,67 @@
   font-style: italic;
 }
 
-/* ── 7. Composer ─────────────────────────────────────────────────────────── */
+/* ── 7. Composer - matches reference .comp with focus-within border ─────── */
 
 .sa-composer {
-  padding: 12px 24px 16px;
-  border-top: 1px solid var(--kf-border, #E4E8EC);
+  flex: none;
+  padding: 16px 20px;
+  border-top: 1px solid #F0EEE7;
   background: white;
-  position: sticky;
-  bottom: 0;
 }
-@media (max-width: 767px) { .sa-composer { padding: 10px 16px 12px; } }
+@media (max-width: 767px) { .sa-composer { padding: 12px 14px; } }
 
 .sa-ask-form {
-  display: flex;
-  gap: 8px;
-  align-items: center;
   max-width: 900px;
   margin: 0 auto;
+  background: white;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 12px;
+  transition: border-color 0.18s cubic-bezier(.2,0,0,1);
+}
+.sa-ask-form:focus-within {
+  border-color: var(--accent-sous);
+}
+.sa-ask-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
 }
 .sa-ask-input {
   flex: 1 1 auto;
-  border: 1px solid var(--kf-border, #E4E8EC);
-  border-radius: 10px;
-  padding: 10px 14px;
+  border: none;
+  outline: none;
+  padding: 0;
   font-family: inherit;
   font-size: 14px;
   min-width: 0;
-  background: white;
-  color: var(--text-default);
+  background: transparent;
+  color: #0A2548;
+  min-height: 22px;
+  line-height: 1.5;
 }
-.sa-ask-input:focus-visible { outline: 2px solid var(--accent-sous); outline-offset: 1px; border-color: var(--accent-sous); }
+.sa-ask-input::placeholder { color: #94A3B8; }
 .sa-ask-input:disabled { opacity: 0.6; }
 .sa-ask-send {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   background: var(--accent-sous);
   color: white;                          /* 4.6:1 - AA */
   border: none;
   border-radius: 10px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  flex-shrink: 0;
+  flex: none;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-sous) 25%, transparent);
   transition: background 0.15s ease;
 }
 .sa-ask-send:hover { background: var(--accent-sous-deep); }
 .sa-ask-send[disabled] { opacity: 0.5; cursor: not-allowed; }
-.sa-ask-send svg { width: 14px; height: 14px; }
+.sa-ask-send svg { width: 15px; height: 15px; }
 
 /* ── 8. Load sequence keyframes + prefers-reduced-motion suppression ────── */
 

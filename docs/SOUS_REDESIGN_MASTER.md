@@ -64,6 +64,26 @@ Diverged from spec:
 - Panel first-open state (section-coverage chips + section-tagged starters + "More in this document" suggestions after each answer) deferred. This requires a per-doc section-header enumeration surface that doesn't exist yet. **The non-Live honest state (D14) DID land.** Section-tagged suggestions can ride the next Playbook-side PR once section-header enumeration is scoped.
 - Rail's "Selected" state implemented by matching the rail item's question to `askedQuestion` rather than tracking a separate `selectedTurnId`. Same visual outcome; simpler state model. Noted for PR B when memory turns the rail into a real thread controller.
 
+**Addendum 2026-07-31 - visual reference `sous-prA-reference.html` applied to composition:**
+
+- **Rail is a card.** Previously rendered as a bare column with a right border; now `background: white; border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden` with internal `.sa-rail-head` (new-question button) + `.sa-rail-scroll` (list) + `.sa-rail-footer` (session-only note). Matches reference `.rail`.
+- **Pane is a card.** `.sa-main` now `background: white; border: 1px solid #E5E7EB; border-radius: 12px` and its scroll region moved into `.sa-pane-scroll`. Composer stays flush at the card bottom via `border-top` rather than a page-sticky positioning. Matches reference `.pane`.
+- **New shell wrapper `.sa-workspace`** grid-columns (264px + fluid) sits inside `.sa-shell` (which now provides the max-width bound + hero spacing). Hero is a sibling of `.sa-workspace` rather than a child of `.sa-main` - matches the reference layout where the hero band sits above the rail+pane grid.
+- **Table borders lightened.** Was full grid (`border: 1px solid`); now only column bottoms, `th` uppercase mono-labeled, tfoot on a stronger top-border rule. Matches reference `.tbl`.
+- **Source cards restructured to full-row layout** - id chip + title + go-arrow across the full width instead of horizontal inline pills. Matches reference `.src` shape (`hover: translateY(-1px) + shadow-sm + Flame border`).
+- **Composer wrapped in a focus-within bordered box.** Was a horizontal input+button; now `.sa-ask-form` is a `1.5px` bordered card that turns Flame on `:focus-within`, and the send button is a 36x36 icon-only square (matches reference `.comp` + `.send`). Textarea/input placeholder updated to "Ask about a policy, a person, an account, a number..." matching the reference tone.
+- **Rail heading, footer, and empty state** use the mono-caps convention (`JetBrains Mono` 9.5px, 0.13em letter-spacing) matching reference `.rail-lbl` + `.rail-ft`. Empty state gets the two-line "**Nothing yet** / Questions you ask..." shape.
+
+Judgment call - where reference and prompt differ, prompt wins:
+
+- The reference shows `.q` as a 20px/800 headline styled like an h1. The prompt explicitly says "compact marked line, 15px, muted, left rule, NOT an h1." **Prompt wins.** The question stays at 15px/500 with a Flame left rule. The reference's visual weight is closer to the D9 "not chat bubbles" direction; the 15px/muted stays truer to the "research notebook" framing.
+- Reference has a Slack button in the action row. **Prompt wins (D12: Slack deferred).** No Slack.
+- Reference has section-tagged suggestions ("More in this document") in the panel. **Deferred with PR A per the earlier deferral above** - needs the section-header enumeration surface. Not added by the addendum.
+- Reference includes a scope-chip strip above the pane (`5 PDC accounts · Window 2026-05 · + Add`). **Prompt is silent on this.** Per Chat's directive to use judgment and note it: not added here. Scope chips were cut under D5, and reintroducing them under an unspecified surface would re-open that decision. Recorded rather than sneakily reversed.
+- Reference uses `#EDEFF2` as the page surface (warmer than my default canvas). **Adopted** - it visibly separates the card frames from the page.
+
+Reference's own known divergences (text glyphs, hardcoded counts, `?v=` switcher) were not ported per Chat's directive - the build already uses Lucide, live counts, and no view switcher.
+
 Phase 0 + build surfaced that the spec did not anticipate:
 - `getContacts()` returns a length-checkable array (not a count), so the People domain-card count is `contacts.length`. Slower than `count: exact`, but the data-store abstraction doesn't expose an exact-count variant. Fine at 30 rows; worth noting if the directory ever grows large.
 - Load-sequence animations depend on the `sa-animate` class being on `.sa-page` (server component) rather than an internal client element. Nothing broke, but the delegation is worth calling out.
