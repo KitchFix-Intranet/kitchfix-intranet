@@ -165,7 +165,14 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
   // and food cost) but do not frame low entry as outstanding work.
   const totalServiceDays = actionableDays;
   const daysWithActuals = enteredDays;
-  const isPartial = isFeeBranch ? false : daysWithActuals < totalServiceDays;
+  // is_partial is boolean | null. `null` says "completeness does not apply"
+  // for fee-branch accounts - the calendar never marks these days needs-
+  // entry, so there is no completeness target to be partial against.
+  // Returning `false` here would assert "this window is complete," a
+  // different and untrue claim. A boolean that cannot express "not
+  // applicable" should not be forced to answer. (Plan v2.66; same
+  // correction the SC team made to the no_service spec today.)
+  const isPartial = isFeeBranch ? null : daysWithActuals < totalServiceDays;
 
   // Revenue: two decline paths.
   //   (1) fee-branch account - the contracted fee does not move with
@@ -206,8 +213,8 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
     },
     // Partial-window discipline: fraction is always visible. Counts follow
     // the Service Calendar rule - no-service days drop out of both sides.
-    // For fee-branch accounts, is_partial is fixed at false (the calendar
-    // never treats a fee-branch day as unentered work).
+    // For fee-branch accounts, is_partial is `null` (completeness does not
+    // apply) rather than `false` (which would assert "complete").
     days_with_actuals: daysWithActuals,
     total_service_days: totalServiceDays,
     no_service_days: noServiceDays,

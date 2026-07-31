@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.65
+**Version:** v2.66
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,20 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.66 - 2026-07-31. ACCOUNT-SHAPE AWARENESS MERGED (#576). ONE CORRECTION SHIPPED WRONG THE SAME DAY THE PRINCIPLE WAS ACCEPTED.** STL-FL returns `classifier_branch: per_meal` with revenue computing normally - **the case that proves the predicate**, since a `billing_model`-only rule would have sent it down the fee branch. STL-MO returns fee branch with revenue declined and pointed at REF-141 plus its REC record. CIN-AZ holds at 24 of 24. CORP's null handled without a crash. Predicate mirrored from `serviceCalendar.js:292` rather than invented; both halves read from `accounts`; no hardcoded MLB list. Provenance caveat carried into the tool's own comments. Spike 7/7 both runs, clean on first attempt.
+
+  **The flake amendment landed properly** - `GRANT_HYGIENE_2026-07-29.md` §8 now records "the model took the snippet shortcut on 1 of 4 runs" rather than model variance, with the reasoning that case 1a exists precisely to catch that shortcut and re-running to green hides a real datum.
+
+  **The correction owed: `is_partial: false` for fee-branch accounts asserts "this window is complete."** The true statement is "completeness does not apply here." A fee-branch account has no completeness target - the Service Calendar never marks those days needs-entry - so `false` tells a future consumer the window finished, which is a different claim and an untrue one.
+
+  **This is the identical correction the Service Calendar team made to Chat's `no_service` spec earlier the same day.** That spec said `NOT NULL DEFAULT false`, which would have asserted 535 measured no-service days had service; their point was that `NULL` says "ask elsewhere" and `false` cannot. **Chat accepted the argument, then shipped the same mistake one file over, hours later.** Recorded as a standing principle rather than an incident: **a boolean that cannot express "not applicable" should not be forced to answer.**
+
+  **Fixed immediately rather than deferred**, on the reasoning that "fold it in next time" assumes a next time - and the next item on the queue is the eval set, which does not touch `scAccountWindow.js`. A deferred cosmetic error gets read by whatever ships in between.
+
+  **Operational note, not a defect:** STL-FL sits at 4 of 29 entered for July and 71 of 163 season to date. It is per-meal branch, so the classifier genuinely does expect entry there - this is a real backlog rather than a classification artifact, and the furthest behind of any account measured. Flagged to Kevin as an ops question.
+
+  **Queue after this: empty on our side.** SC's `no_service` column is behind their polish round; the Sunday-closure fragility is theirs to rule on. **The eval set is the only remaining item, and it is the gate before anyone but Kevin uses Sous.**
 
 - **v2.65 - 2026-07-31. THE SC TEAM CORRECTED A RULE CHAT WAS ABOUT TO SHIP WRONG.** PR #575 merged - grant audit corrected from 36 to 59, method gap named, catalog-driven revoke block replacing the hardcoded list, standing lesson recorded in both the audit and the plan.
 
