@@ -5,6 +5,8 @@
 > **Last verified:** 2026-07-30
 >
 > **Ledger discipline:** every claim in "Shipped" traces to a PR#, commit, or migration file. Every item in "Remaining" says who's blocking it (Kevin ruling / Kevin schedule / no owner). Unknowns stay labeled unknown.
+>
+> **Build history through M-4b:** [`archive/ENTRY_REDESIGN_MASTER_SCOPE_2026-07-30.md`](archive/ENTRY_REDESIGN_MASTER_SCOPE_2026-07-30.md). This doc is the living record from there on. Rulings that change behaviour land here in the session they are made.
 
 ---
 
