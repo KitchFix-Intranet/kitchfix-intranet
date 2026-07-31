@@ -551,12 +551,20 @@
 }
 
 /* ─── Queue row (whole-row button) ────────────────────────── */
+/* R1-4 v2 (2026-07-31) - row height pinned to `--sc-rail-queue-row-h`
+   so the expanded-list cap below can multiply it by the visible-count
+   without drifting apart. If someone tightens the row's padding, they
+   have to update this variable in step, and the cap follows. */
+.scv2 {
+  --sc-rail-queue-row-h: 48px;
+}
 .scv2 .sc-rail-queue-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--sc2-space-2);
   padding: 8px var(--sc2-space-2);
+  min-height: var(--sc-rail-queue-row-h);
   width: 100%;
   background: transparent;
   border: none;
@@ -620,19 +628,26 @@
   color: var(--sc2-rail-text-item);
 }
 
-/* R1-4 (2026-07-31) - queue row list. Collapsed shows all N rows
-   (usually 4); expanded caps at the collapsed height and scrolls
-   internally so the rail's total height and the CTA position never
-   change regardless of queue depth. `max-height: 264px` = four
-   ~62px queue rows plus their gaps; if the row height changes,
-   raise this in step. `overscroll-behavior: contain` keeps the
-   surrounding rail from pulling into the scroll gesture. */
+/* R1-4 v2 (2026-07-31) - queue row list. Collapsed shows N rows
+   (JS constant QUEUE_TOP_N, passed to the container as the CSS
+   custom property `--queue-visible-count`). Expanded caps at
+   `row-height * visible-count` so the rail's total height and the
+   CTA position never change regardless of queue depth. The two
+   inputs the cap depends on cannot drift apart:
+     - `--sc-rail-queue-row-h`  pins the row via min-height above.
+     - `--queue-visible-count`  is the JS QUEUE_TOP_N passed inline.
+   v1 hardcoded 264px on the assumption of "four ~62px rows"; live
+   measurement 2026-07-31 showed rows at 48px with 0px gap, so the
+   cap overshot by 72px and the rail grew 57px on expand. `calc()`
+   removes the possibility of that drift.
+   `overscroll-behavior: contain` keeps the surrounding rail from
+   pulling into the scroll gesture. */
 .scv2 .sc-rail-queue-list {
   display: flex;
   flex-direction: column;
 }
 .scv2 .sc-rail-queue-list[data-expanded="true"] {
-  max-height: 264px;
+  max-height: calc(var(--sc-rail-queue-row-h) * var(--queue-visible-count, 4));
   overflow-y: auto;
   overscroll-behavior: contain;
 }

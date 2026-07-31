@@ -223,6 +223,7 @@ function CalendarRail({
             <div
               className="sc-rail-queue-list"
               data-expanded={showAllQueue ? "true" : "false"}
+              style={{ "--queue-visible-count": QUEUE_TOP_N }}
             >
               {visibleQueue.map(row => (
                 <RailQueueRow
@@ -445,6 +446,7 @@ function PeriodRail({
                 <div
                   className="sc-rail-queue-list"
                   data-expanded={showAllQueue ? "true" : "false"}
+                  style={{ "--queue-visible-count": QUEUE_TOP_N }}
                 >
                   {visibleGroups.map(g => (
                     <PeriodQueueRow

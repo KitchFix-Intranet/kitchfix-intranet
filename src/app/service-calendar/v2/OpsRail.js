@@ -341,6 +341,7 @@ function OpsRailBase({
                 <div
                   className="sc-rail-queue-list"
                   data-expanded={showAllQueue ? "true" : "false"}
+                  style={{ "--queue-visible-count": QUEUE_TOP_N }}
                 >
                   {visibleQueue.map(row => (
                     <OpsQueueRow
