@@ -203,6 +203,7 @@ function OpsRailBase({
   });
   const visibleQueue = showAllQueue ? queueRows : queueRows.slice(0, QUEUE_TOP_N);
   const overflow = queueRows.length - visibleQueue.length;
+  const canToggle = queueRows.length > QUEUE_TOP_N; // R1-4 - toggle shows for both directions
 
   // ─── Homestand ledger (MLB fee variant only) ─────────────
   const ledger = hasHomestandSchedule
@@ -336,18 +337,26 @@ function OpsRailBase({
                   {hasHomestandSchedule ? "No unentered game days." : "Nothing needs confirmation right now."}
                 </p>
               )}
-              {visibleQueue.map(row => (
-                <OpsQueueRow
-                  key={row.date}
-                  row={row}
-                  hasHomestandSchedule={hasHomestandSchedule}
-                  onClick={() => onTargetDay?.(row.date)}
-                />
-              ))}
-              {overflow > 0 && (
+              {queueRows.length > 0 && (
+                <div
+                  className="sc-rail-queue-list"
+                  data-expanded={showAllQueue ? "true" : "false"}
+                >
+                  {visibleQueue.map(row => (
+                    <OpsQueueRow
+                      key={row.date}
+                      row={row}
+                      hasHomestandSchedule={hasHomestandSchedule}
+                      onClick={() => onTargetDay?.(row.date)}
+                    />
+                  ))}
+                </div>
+              )}
+              {canToggle && (
                 <RailQueueMore
                   count={overflow}
-                  onClick={() => setShowAllQueue(true)}
+                  expanded={showAllQueue}
+                  onClick={() => setShowAllQueue(v => !v)}
                 />
               )}
             </RailSection>

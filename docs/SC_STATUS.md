@@ -125,6 +125,14 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **Kevin enters the real fee amount** via the admin surface after merge. If a future per_meal account also bills a fee, add its team_key to `FEE_ELIGIBLE_PER_MEAL` (one-line code change; no migration).
 - **Was**: "CIN - AZ fee decision (awaiting Kevin)" - resolved as of 2026-07-12.
 
+### Season PDF fails on PDC accounts - unknown whether by design (2026-07-31)
+
+- **Measured in production**: `GET /api/service-calendar/print?scope=season&account=CIN - AZ&year=2026` returns `500 {"error":"Account CIN - AZ has no schedule to print","phase":"load","elapsedMs":61}`.
+- Same call for TBJ - FL and CIN - OH returns `200 application/pdf`. The failure is confined to accounts with neither `has_homestand_schedule` nor `has_schedule_overlay` - i.e. pure PDC.
+- **Unknown whether pure PDC accounts are meant to have a printable season sheet.** The Season sheet's own conditional (`available only for accounts with has_homestand_schedule OR has_schedule_overlay` per the module doc) suggests no; the ExportControl menu offering it on CIN - AZ suggests yes. One of the two is wrong.
+- **Not investigating.** Logged so it is not rediscovered.
+- **Owner**: Kevin to rule which side is correct - hide the menu item on pure PDC, or teach the Season loader to render one honestly.
+
 ### Authed preview e2e (follow-up from #408's honest limitation)
 
 - **Gap**: the preview-smoke job cannot reach the API surface (Vercel Preview Protection). Would need a `VERCEL_AUTOMATION_BYPASS_SECRET` header in the smoke request.

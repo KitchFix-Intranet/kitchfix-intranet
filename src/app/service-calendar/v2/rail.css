@@ -102,6 +102,16 @@
   margin-top: var(--sc2-space-2);
   line-height: 1.4;
 }
+/* R1-2 (2026-07-31) - projection caption sits BELOW the days
+   caption. Same visual weight as the days line (both are
+   micro/muted). Tight top-margin so the two lines read as a pair. */
+.scv2 .sc-rail-hero-projection-caption {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-muted);
+  margin-top: var(--sc2-space-1);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ─── MLB rail rev3 (2026-07-30) ───────────────────────────────
    Pinned in-progress card (always open when a block is
@@ -610,7 +620,24 @@
   color: var(--sc2-rail-text-item);
 }
 
-/* Overflow "+ N more" row */
+/* R1-4 (2026-07-31) - queue row list. Collapsed shows all N rows
+   (usually 4); expanded caps at the collapsed height and scrolls
+   internally so the rail's total height and the CTA position never
+   change regardless of queue depth. `max-height: 264px` = four
+   ~62px queue rows plus their gaps; if the row height changes,
+   raise this in step. `overscroll-behavior: contain` keeps the
+   surrounding rail from pulling into the scroll gesture. */
+.scv2 .sc-rail-queue-list {
+  display: flex;
+  flex-direction: column;
+}
+.scv2 .sc-rail-queue-list[data-expanded="true"] {
+  max-height: 264px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Overflow "+ N more" / "Show less" toggle row */
 .scv2 .sc-rail-queue-more {
   display: flex;
   justify-content: space-between;
@@ -627,6 +654,11 @@
 .scv2 .sc-rail-queue-more:hover {
   background: rgba(255, 255, 255, 0.04);
   color: var(--sc2-rail-text-item);
+}
+/* R1-4 - chevron rotates 90deg when expanded so the affordance
+   reads as a toggle rather than another "more" button. */
+.scv2 .sc-rail-queue-more--expanded .sc-rail-queue-chevron {
+  transform: rotate(90deg);
 }
 
 /* Empty queue message */
