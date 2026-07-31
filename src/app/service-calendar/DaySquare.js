@@ -672,8 +672,15 @@ function renderFeeNoDollar(content) {
       {dayNight && (
         <DayNightPill type={dayNight} timeText={pillTime} />
       )}
+      {/* R3-1 (2026-07-31) - tile label reads "meals" on every
+          account. Owner ruling: match the per-meal tile so operators
+          switching accounts do not relearn the unit. Note the OTHER
+          fee vocabulary ("confirmed", "DAYS CONFIRMED", the modal
+          footer's "3 of 4 confirmed") stays intact - `meals` is the
+          unit counted; `confirmed` is what the operator did. Those
+          are different jobs and only the unit changes here. */}
       {n != null && (
-        <span className="sc-daysq-mid-meals">{fmtMeals(n)} served</span>
+        <span className="sc-daysq-mid-meals">{fmtMeals(n)} meals</span>
       )}
     </div>
   );

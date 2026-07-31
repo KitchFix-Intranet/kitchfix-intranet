@@ -222,6 +222,22 @@ function transformServiceGroups(config) {
     }));
 }
 
+/* R3-4b (2026-07-31) - fee-no-dollar accounts (STL - FL) match:
+   billing_model=flat_fee AND has_homestand_schedule=false. Same
+   shape isFeeNoDollar() picks up in `src/app/service-calendar/v2/
+   vocab.js`; kept as a route-local helper to avoid pulling a client
+   module into the server bundle. If a second fee-no-dollar account
+   ever appears it will match automatically.
+
+   Owner ruling 2026-07-31: fence revenue at the payload boundary.
+   Loaders keep computing (server-side reports + annual-fee
+   reconciliation still have the numbers). Route nulls them before
+   they cross the wire so no client component can render a figure
+   that should not exist for this account shape. */
+function isFeeNoDollarAccount(billingModel, hasHomestandSchedule) {
+  return billingModel === "flat_fee" && !hasHomestandSchedule;
+}
+
 // Transform orchestrator days -> legacy days shape (projected/actual
 // keyed by colIndex = serviceId UUID).
 function transformDays(orchDays) {
@@ -428,10 +444,26 @@ export async function GET(request) {
 
       const category = levelToCategory(accountInfo.level);
       const serviceGroups = transformServiceGroups(config);
-      const days = transformDays(monthData.days);
+      const rawDays = transformDays(monthData.days);
       const billingModel = accountInfo.billing_model || null;
       const hasHomestandScheduleFlag = !!accountInfo.has_homestand_schedule;
       const hasScheduleOverlayFlag = !!accountInfo.has_schedule_overlay;
+      /* R3-4b - fence revenue for STL - FL only. Predicate matches
+         flat_fee + !has_homestand_schedule. Nulls the four revenue
+         paths per-day (totals.projectedRevenue, totals.actualRevenue,
+         per-service projectedRevenue map, per-service actualRevenue
+         map). priceAtDate stays - it is a service-price snapshot,
+         not itself a revenue figure, and future reconciliation may
+         want it. Counts (projected/actual) stay - those are the
+         operator's data. */
+      const days = isFeeNoDollarAccount(billingModel, hasHomestandScheduleFlag)
+        ? rawDays.map(d => ({
+            ...d,
+            totals: { projectedRevenue: null, actualRevenue: null },
+            projectedRevenue: null,
+            actualRevenue: null,
+          }))
+        : rawDays;
 
       // Month-range bounds match the loadMonthData month exactly.
       // Computed here so both the homestand fetch and the sc-17
@@ -508,6 +540,22 @@ export async function GET(request) {
       const clientToday = parseClientToday(searchParams.get("clientToday"));
       const summary = await loadYearSummary(accountKey, year, { clientToday });
 
+      /* R3-4b (2026-07-31) - fetch the fee-no-dollar flags for the
+         revenue fence below. Two-column read against the same accounts
+         table sc-load reads; cheap. Alternative was to have the loader
+         emit account shape, but that touches shared dataStore code
+         when a route-local read is sufficient. */
+      const accountShapeRes = await getServiceClient()
+        .from("accounts")
+        .select("billing_model, has_homestand_schedule")
+        .eq("team_key", accountKey)
+        .maybeSingle();
+      const stripYearRevenue = !accountShapeRes.error && accountShapeRes.data
+        && isFeeNoDollarAccount(
+          accountShapeRes.data.billing_model,
+          !!accountShapeRes.data.has_homestand_schedule,
+        );
+
       return NextResponse.json({
         success: true,
         accountKey,
@@ -531,8 +579,11 @@ export async function GET(request) {
             camp:              "",
             totalDays:         m.totalServiceDays,
             daysWithActuals:   m.daysWithActuals,
-            projectedRevenue:  m.totalProjectedRevenue,
-            actualRevenue:     m.totalActualRevenue,
+            /* R3-4b - fee-no-dollar accounts (STL - FL) emit null
+               revenue on the wire. Counts + day arrays stay so the
+               heatmap + activity gauges render normally. */
+            projectedRevenue:  stripYearRevenue ? null : m.totalProjectedRevenue,
+            actualRevenue:     stripYearRevenue ? null : m.totalActualRevenue,
             projectedCovers:   m.totalProjectedMeals,
             actualCovers:      m.totalActualMeals,
             days:              m.days,

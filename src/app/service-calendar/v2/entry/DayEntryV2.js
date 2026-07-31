@@ -1284,7 +1284,7 @@ function DayEntryV2({
         <aside
           id="sc-v2-entry-rail-mobile"
           className="sc-v2-entry-rail"
-          aria-label={feeNoDollar ? "Confirmation summary" : "Forming invoice"}
+          aria-label="Save summary"
         >
           {feeNoDollar ? (
             <BillRailFee
