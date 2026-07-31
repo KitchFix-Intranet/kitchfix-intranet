@@ -135,6 +135,15 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **Not investigating.** Logged so it is not rediscovered.
 - **Owner**: Kevin to rule which side is correct - hide the menu item on pure PDC, or teach the Season loader to render one honestly.
 
+### P3-B Handoff clone flight never animates on drill saves (2026-07-31)
+
+- **Measured on CIN - AZ P8 at 1440, real save (Lunch 80 -> 81) with the clone sampled every frame for 2.5s**: 288 samples, zero above opacity 0.05, transform never left `matrix(1, 0, 0, 1, 0, 0)`. The pill does not fly.
+- **The retarget introduced by R2-2 is NOT the cause.** Owner walked the React fiber and read the coordinator's refs directly across a save: `flightTargetRef` populated from phase 0; both `flightTargetRef` and `pillSourceRef` populated at phase 3. `HandoffLayer.js:41`'s early-return did not fire. `RailProgressBlock`'s `registerFlightTarget` works as designed.
+- **The failure is downstream of the ref check**, inside `HandoffLayer.js:32-72`'s phase-3 effect body. Three candidates: (a) transform applied then immediately reset by a re-render before paint; (b) clone's CSS never allows it to show (opacity 0, reveal class or keyframe missing); (c) effect reads geometry before layout settles and computes a zero delta.
+- **Anomaly worth chasing first**: phase 2 never appeared in the trace. Sequence went `0 -> 1 -> 3`, one sample at phase 3. Owner's polling rate was 50ms and the scheduled window at phase 2 is ~460ms, so this is not a sampling artifact. If phase 2 is skipped or fires in the same tick as phase 3, `HandoffPill` may mount and register in a race with the flight schedule, which would be a pre-existing P3-B defect independent of the flight itself.
+- **This motion has never demonstrably run in a gate.** Every P3-A, P3-B and R2-2 gate verified the target existed, not that the pill arrived. R1-2's ring-tween measurement was on the RING, not the CLONE. So this may have been dead since P3-B shipped.
+- **Owner**: decide whether to fix or retire the flight motion. The Handoff's ambient effects (session strip, tile flip, queue clear, ring sweep, next-day advance) all work; only the modal-to-rail pill CLONE flight is dead. Fix cost = an evening's diagnosis + a small commit; retire cost = deleting `HandoffLayer.js` + the pill's `--flying` class + `registerFlightTarget` / `RailProgressBlock`'s target registration.
+
 ### Authed preview e2e (follow-up from #408's honest limitation)
 
 - **Gap**: the preview-smoke job cannot reach the API surface (Vercel Preview Protection). Would need a `VERCEL_AUTOMATION_BYPASS_SECRET` header in the smoke request.

@@ -36,7 +36,7 @@ export default function HandoffLayer() {
     // sequence still advances via the coordinator's beat clock.
     if (phase !== 3) return;
     const source = _refs.pillSourceRef.current;
-    const target = _refs.ringTargetRef.current;
+    const target = _refs.flightTargetRef.current;
     const clone = cloneRef.current;
     if (!source || !target || !clone) return;
 

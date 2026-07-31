@@ -73,10 +73,16 @@ export function HandoffProvider({ children }) {
   // Month complete card. Populated on a save that completes the month.
   const [monthComplete, setMonthComplete] = useState(null);
 
-  // Refs registered by RailRing (target) and DayEntryV2 (pill source).
-  // useRef here holds the CURRENT element; a stable reference the
-  // coordinator can read at the moment of startHandoff.
-  const ringTargetRef = useRef(null);
+  /* Refs registered by the drill rail (target) and DayEntryV2 (pill
+     source). useRef here holds the CURRENT element; a stable reference
+     the coordinator can read at the moment of startHandoff.
+     R2-2 (2026-07-31) - renamed from ringTargetRef. The ring is no
+     longer the flight destination anywhere - the target is now the
+     bar-plus-caption block (`.sc-rail-progress-block`) registered by
+     the new RailProgressBlock primitive. The ref name is generic
+     because the destination shape may evolve; the coordinator does
+     not care what visual sits at the rect. */
+  const flightTargetRef = useRef(null);
   const pillSourceRef = useRef(null);
   const timeoutIdsRef = useRef([]);
   // P3-B gate-2 fix (2026-07-28): finalize (onNextException / onClose)
@@ -98,10 +104,10 @@ export function HandoffProvider({ children }) {
     if (typeof fn === "function") fn();
   }, []);
 
-  const registerRingTarget = useCallback((el) => {
-    ringTargetRef.current = el;
+  const registerFlightTarget = useCallback((el) => {
+    flightTargetRef.current = el;
     return () => {
-      if (ringTargetRef.current === el) ringTargetRef.current = null;
+      if (flightTargetRef.current === el) flightTargetRef.current = null;
     };
   }, []);
 
@@ -231,7 +237,7 @@ export function HandoffProvider({ children }) {
     monthComplete,
     startHandoff,
     cancelHandoff,
-    registerRingTarget,
+    registerFlightTarget,
     registerPillSource,
     isFlippingDate,
     resetSession,
@@ -241,10 +247,10 @@ export function HandoffProvider({ children }) {
     // Ref accessors for HandoffLayer (does not participate in React
     // subscription - reads the current DOM element at the moment it
     // schedules the flight).
-    _refs: { ringTargetRef, pillSourceRef },
+    _refs: { flightTargetRef, pillSourceRef },
   }), [
     phase, handoffDay, handoffTotals, sessionMap, monthComplete,
-    startHandoff, cancelHandoff, registerRingTarget, registerPillSource,
+    startHandoff, cancelHandoff, registerFlightTarget, registerPillSource,
     isFlippingDate, resetSession, dismissMonthComplete,
     showMonthComplete, commitSessionOnly,
   ]);
@@ -272,13 +278,13 @@ export function useHandoffSafe() {
     monthComplete: null,
     startHandoff: () => {},
     cancelHandoff: () => {},
-    registerRingTarget: () => () => {},
+    registerFlightTarget: () => () => {},
     registerPillSource: () => () => {},
     isFlippingDate: () => false,
     resetSession: () => {},
     dismissMonthComplete: () => {},
     showMonthComplete: () => {},
     commitSessionOnly: () => {},
-    _refs: { ringTargetRef: { current: null }, pillSourceRef: { current: null } },
+    _refs: { flightTargetRef: { current: null }, pillSourceRef: { current: null } },
   };
 }

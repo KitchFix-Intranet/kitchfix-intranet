@@ -29,7 +29,7 @@ import { useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
-  RailRing,
+  RailProgressBlock,
   RailSection,
   RailScroll,
   RailQueueRow,
@@ -42,7 +42,11 @@ import { deriveOpsHomestandLedgerScoped } from "./opsRailDerive";
 import { scrollIntoViewRM } from "./motion";
 import { useHandoffSafe } from "./handoff/coordinator";
 
-const QUEUE_TOP_N = 4;
+/* R2-3 (2026-07-31) - drill queue tightens from 4 rows to 3. Drops
+   ~48px from the resting rail height and matches the drill's own
+   scope (drill queue is bounded by the drill window, so 3 is enough
+   headroom for oldest-first triage; the toggle exposes the rest). */
+const QUEUE_TOP_N = 3;
 
 export default function DrillRail({
   scope,             // "period" | "month"
@@ -159,8 +163,13 @@ export default function DrillRail({
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  /* R2-3 (2026-07-31) - always expose all rows when expanded; the
+     container caps height + scrolls internally via R1-4's CSS var
+     pair, so the rail's total height stays put. `canToggle` gates
+     the RailQueueMore render regardless of direction. */
   const visibleQueue = showAllQueue ? queueRows : queueRows.slice(0, QUEUE_TOP_N);
   const overflow = queueRows.length - visibleQueue.length;
+  const canToggle = queueRows.length > QUEUE_TOP_N;
 
   // Primary footer action - pinned per bundle scope:
   //   1. today in scope + needs-entry -> Enter today
@@ -212,11 +221,17 @@ export default function DrillRail({
   // First-load (loading && !ringData) still shows the minimal
   // skeleton hero + empty rail per the pre-P3-A behavior.
 
-  // Drill P1 PR-C (2026-07-20) DP1-14 - hero matches SeasonRail's
-  // per-meal grammar (Wave 4a / G2 / F10):
-  //   Line 1: value + label + projection inline on one baseline.
-  //   Ring + caption below.
-  const heroProjection = `of ${fmt$(heroProjRev)}`;
+  /* R2-1 (2026-07-31) - drill hero reframe, one level down from R1-2
+     on the overview. WAS (DP1-14): value + label + "of $X" inline on
+     one baseline, with the fraction reading as a target the operator
+     is not measured against. NOW: value + label only on the top line;
+     projection appears once as a labelled caption BELOW the days
+     caption (see the ringbox block in the RailShell body). Scope-
+     aware label because drill scope is period or month, not season.
+     Uses `fmt$` (exact 2dp) to preserve the drill's billing precision
+     - the drill hero is scope-scale, not season-scale, so no rounding
+     to K/M like the overview did. */
+  const heroProjectionCaption = `${scope === "month" ? "Month" : "Period"} projected ${fmt$(heroProjRev)}`;
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
@@ -233,14 +248,12 @@ export default function DrillRail({
       value={heroActRev}
       format={fmt$}
       label="ENTERED"
-      projection={heroProjection}
     />
   ) : (
     <RailHero
       value={heroActRev}
       format={fmt$}
       label="ENTERED"
-      projection={heroProjection}
     />
   );
 
@@ -255,15 +268,29 @@ export default function DrillRail({
           DOM node stays mounted across refetch cycles and the CSS
           transition on stroke-dashoffset fires old->new.
           P3-B (2026-07-28): SessionStrip below the ring caption. */}
+      {/* R2-2 (2026-07-31) - ring becomes bar. Match the overview
+          shape exactly: horizontal progress, caption below, no
+          visible percent digit (percent stays on RailProgress's
+          role="progressbar" aria-valuenow for screen readers).
+          RailProgressBlock is also the Handoff flight destination
+          via registerFlightTarget - the block has real height + the
+          caption increments under an arriving pill. */}
       {ringData && (
-        <div className="sc-rail-ringbox">
-          <RailRing
-            pct={ringData.pct}
-            complete={ringData.complete}
-            ariaLabel={ringData.caption}
-          />
-          <span className="sc-rail-ringbox-caption">{ringData.caption}</span>
-        </div>
+        <RailProgressBlock
+          pct={ringData.pct}
+          complete={ringData.complete}
+          caption={ringData.caption}
+          ariaLabel={ringData.caption}
+        />
+      )}
+      {/* R2-1 - projection caption sits BELOW the days caption. Same
+          class + treatment as the overview's post-R1-2 pattern; scope-
+          aware wording per the drill. Gated on !incomplete && m to
+          avoid a second ref-derived access (see the ringData
+          computation above); m is a prop, incomplete is a prop, so
+          this branch does not add to the react-hooks/refs lint count. */}
+      {!incomplete && m && (
+        <div className="sc-rail-hero-projection-caption">{heroProjectionCaption}</div>
       )}
       <SessionStrip variant="per-meal" />
 
@@ -296,19 +323,28 @@ export default function DrillRail({
           {queueRows.length === 0 && (
             <p className="sc-rail-queue-empty">Nothing needs entry in this scope.</p>
           )}
-          {visibleQueue.map(row => (
-            <RailQueueRow
-              key={row.date}
-              date={row.date}
-              status={row.status}
-              aging={row.aging}
-              onClick={() => onTargetDay?.(row.date)}
-            />
-          ))}
-          {overflow > 0 && (
+          {queueRows.length > 0 && (
+            <div
+              className="sc-rail-queue-list"
+              data-expanded={showAllQueue ? "true" : "false"}
+              style={{ "--queue-visible-count": QUEUE_TOP_N }}
+            >
+              {visibleQueue.map(row => (
+                <RailQueueRow
+                  key={row.date}
+                  date={row.date}
+                  status={row.status}
+                  aging={row.aging}
+                  onClick={() => onTargetDay?.(row.date)}
+                />
+              ))}
+            </div>
+          )}
+          {canToggle && (
             <RailQueueMore
               count={overflow}
-              onClick={() => setShowAllQueue(true)}
+              expanded={showAllQueue}
+              onClick={() => setShowAllQueue(v => !v)}
             />
           )}
         </RailSection>

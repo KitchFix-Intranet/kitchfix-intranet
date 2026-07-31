@@ -104,6 +104,46 @@ export function RailProgress({ pct, complete }) {
   );
 }
 
+// ─── Progress block (R2-2, 2026-07-31) ─────────────────────────
+// Bar + caption in one wrapping node. Replaces RailRing on the
+// drill in both DrillRail (per-meal + AAA) and OpsRailBase (STL - FL
+// fee-no-dollar). MLB (OpsRailMlbHomestand) does not mount this -
+// it keeps its own group cards and never had a ring.
+//
+// Registers itself as the Handoff flight destination via
+// registerFlightTarget (renamed from registerRingTarget). Owner
+// ruling on the retarget: the flight lands on the block, not on
+// the 4px `.sc-rail-progress-fill`. The block has real height,
+// contains both the bar that fills AND the caption that increments,
+// and "1 of 24 -> 2 of 24" appearing under the arriving pill is a
+// stronger arrival cue than either element alone.
+//
+// Percent digit is intentionally NOT in the visible caption
+// (matches the overview shape exactly). Percent is exposed via
+// RailProgress's `role="progressbar" aria-valuenow=` for screen
+// readers; sighted users read percent off the bar's fill.
+export function RailProgressBlock({ pct, complete, caption, ariaLabel }) {
+  const containerRef = useRef(null);
+  const { registerFlightTarget } = useHandoffSafe();
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    return registerFlightTarget(el);
+  }, [registerFlightTarget]);
+  return (
+    <div
+      ref={containerRef}
+      className="sc-rail-progress-block"
+      aria-label={ariaLabel || caption}
+    >
+      <RailProgress pct={pct} complete={complete} />
+      {caption && (
+        <RailHeroProgressCaption>{caption}</RailHeroProgressCaption>
+      )}
+    </div>
+  );
+}
+
 // ─── Progress ring (P3-A, 2026-07-25) ──────────────────────────
 // Peer primitive to RailProgress. RailProgress is UNTOUCHED because
 // MLB rail composition must stay byte-identical (owner ruling: MLB
@@ -156,20 +196,14 @@ export function RailRing({ pct, label, showLabel = true, complete, ariaLabel }) 
       if (raf2 != null) cancelAnimationFrame(raf2);
     };
   }, [dashOffset, committedOffset]);
-  // P3-B (2026-07-28): register the ring container as the handoff
-  // target. Deps pinned to the STABLE `registerRingTarget` callback -
-  // NOT the full context value, which re-identifies on every phase
-  // change and caused cleanup+register churn 5x per save.
-  const containerRef = useRef(null);
-  const { registerRingTarget } = useHandoffSafe();
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return undefined;
-    return registerRingTarget(el);
-  }, [registerRingTarget]);
+  /* R2-2 (2026-07-31) - RailRing is no longer the Handoff flight
+     destination. The registerFlightTarget call moved to
+     RailProgressBlock, which is the new bar-plus-caption wrapper
+     used on the drill in both DrillRail and OpsRailBase (STL - FL).
+     RailRing is retained as a primitive but has no live consumer;
+     scheduled for removal once R2-2's gate passes. */
   return (
     <div
-      ref={containerRef}
       className={`sc-rail-ring${complete ? " sc-rail-ring--complete" : ""}`}
       role="progressbar"
       aria-valuenow={clamped}
