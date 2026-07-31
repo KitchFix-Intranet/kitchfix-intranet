@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.67
+**Version:** v2.68
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,26 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.68 - 2026-07-31. HYPOTHESIS CONFIRMED, AND THE COLUMN'S WRITE PATH WAS AIMED AT 2 PERCENT.** PR #579 merged - read-only service-pattern audit, no fix proposed, Kevin rules.
+
+  **The decisive datum: all seven served CIN-AZ Sundays fall in MLB ST (6) or ST (1), Feb 15 to Mar 29.** Every other Sunday in every other phase is dark. **The PDC closure is phase-shaped, and a `closed_sundays` flag would have worked all year and broken every spring** - correct long enough to be trusted, then wrong during the busiest period, with the symptom reading as operators stopping entry rather than a rule being wrong.
+
+  **Two findings nobody asked for and both consequential:**
+  1. **AAA is day-shaped, not phase-shaped.** Mondays uniformly dark, 0 of 27 served at both CIN-KY and TBJ-NY, **and no phase table exposes it** since AAA has no phases. **There is not one closure rule - there are two**, and any design assuming a single shape gets the other account class wrong. Non-Sunday closures exist at PDC too: Saturdays go dark in Camps and Instructs phases.
+  2. **The four MLB fee accounts each carry 30-33 dates with zero projection rows in-window, roughly 17 percent of their season.** Already invisible to the `hasProj && !anyNonZeroProj` signal. **The import fragility is not hypothetical - that shape is in production today.** TXR-AZ has 10 such gaps (3.1 percent); every other account is zero-gap.
+
+  **Task 2 changed the column's design more than anything else in the audit.** Kevin's warning that actuals carry test inputs turned out not to be detectable by identity - the test-signature regex catches **zero rows** across 7,728 actuals and 48 history rows. **But creator identity on all-zero days shows: `import-script` 204, `k.fietek@kitchfix.com` 10.**
+
+  **So the mark-no-service action accounts for roughly 10 of 535 no-service days. Under 2 percent.** The SC agent's review said Chat's write path covered 39 percent of the phenomenon; **it is far worse than that**, and hanging the write on that action would produce a column authoritative for a fiftieth of the case.
+
+  **Chat's reading, and the one that makes the column still worth building: if the import writes zeros for days with no service, the import already knows which days those are.** The fact exists at ingest and is flattened into zeros on the way in. **A discarded fact, not a missing one** - exactly where the SC agent's correction 2 was pointing. Note the two tables are distinct: the 204 are `sc_daily_actuals` (post-mark shape), the 327 planned-zero days are `sc_daily_projections`, and **they may be different import paths that both need to write.**
+
+  **CC drew the interpretation line correctly** - it cannot distinguish an import-script zero encoding a real cancellation from a bulk-populate artifact, and said "I cannot cleanly distinguish test-inserted from real from this table" rather than producing a number built on a guess. **The 208 figure is measured correctly; its interpretation as operator marks was wrong.** From here it is cited as "31 percent of days end up all-zero from any source," not as operator cancellation prevalence.
+
+  **Design ruling: store the day, not the rule.** Storing "PDC serves Sundays only during ST" is tempting and wrong - **a rule that is 95 percent right is the failure shape this whole arc keeps surfacing**, and the seven served Sundays are the exceptions that prove it. A per-day fact cannot be wrong about a specific day, and per-day is the only shape covering both the PDC phase rule and the AAA day rule with one mechanism.
+
+  **Revised SC prompt issued**, leading with a **reads-only Phase 0** since the SC agent asked for one and was right: how projections actually load (**if manual SQL there is no code path to hang a write on and the design changes shape - answer first**), every all-zero write path across both tables with file and line, whether MLB close-out exceptions touch `sc_day_metadata` at all given M-3 removed mark-no-service from those four accounts, and the five inference sites for phase 2. **Report and stop; the build decision comes after.** The upsert requirement now matters more - if the import is the primary writer it may be creating metadata rows in bulk for days that have none.
 
 - **v2.67 - 2026-07-31. THE SUNDAY CLOSURE IS PROBABLY A PHASE RULE, AND OUR 208 MAY BE CONTAMINATED.** Kevin confirmed Sundays are **not** uniformly off at the PDC accounts - **spring training runs Sunday service.** That matches the SC team's finding of 7 CIN-AZ Sundays carrying non-zero projections against 44 without.
 
