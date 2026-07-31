@@ -1,24 +1,24 @@
-# Sous — Redesign Scope & Implementation Master
+# Sous - Redesign Scope & Implementation Master
 
 **Version:** 1.3
 **Date:** 2026-07-31
 **Owner:** Kevin Fietek
 **Audience for the release:** SLT and Regional Directors
 **Status:** open questions ruled 2026-07-31. PR 1 issued.
-**Location:** `docs/SOUS_REDESIGN_MASTER.md` — **this document is the running tracker for the redesign and is updated by every PR in the programme.**
+**Location:** `docs/SOUS_REDESIGN_MASTER.md` - **this document is the running tracker for the redesign and is updated by every PR in the programme.**
 
 ---
 
 ## 0. Programme status
 
-**Rebundled 2026-07-31 from five PRs to two.** Phase 0 found that **`SousSurface` already serves both surfaces** — `variant="page"` from `/sous/page.js:93`, `variant="overlay"` from `PlaybookClient.js:650`. **There is no clean page-only change.** Gating every edit behind a variant check and unwinding it later is more work and leaves a half-styled panel in production in between.
+**Rebundled 2026-07-31 from five PRs to two.** Phase 0 found that **`SousSurface` already serves both surfaces** - `variant="page"` from `/sous/page.js:93`, `variant="overlay"` from `PlaybookClient.js:650`. **There is no clean page-only change.** Gating every edit behind a variant check and unwinding it later is more work and leaves a half-styled panel in production in between.
 
-Feedback also folded in: `feedback`, `feedback_comment`, and `feedback_at` **already exist** in `sousai_questions`. The mechanism is built and thumbs already persist. Only `feedback_tags text[]` is new — one additive ALTER riding an already-large PR rather than a PR of its own.
+Feedback also folded in: `feedback`, `feedback_comment`, and `feedback_at` **already exist** in `sousai_questions`. The mechanism is built and thumbs already persist. Only `feedback_tags text[]` is new - one additive ALTER riding an already-large PR rather than a PR of its own.
 
 | PR | Scope | State | Merged |
 |---|---|---|---|
-| **A** | The surface, both variants — accent, hero, shell, rail, load sequence, first-run, answer components, panel refit, feedback tags | **Issued** | — |
-| **B** | Conversational memory, alone | Queued | — |
+| **A** | The surface, both variants: accent, hero, shell, rail, load sequence, first-run, answer components, panel refit, feedback tags | **Issued** | - |
+| **B** | Conversational memory, alone | Queued | - |
 
 **PR B stays solo whatever its size.** Architectural, needs the full spike re-cert, and carries the money risk. If something breaks there should be one suspect.
 
@@ -34,7 +34,7 @@ Feedback also folded in: `feedback`, `feedback_comment`, and `feedback_at` **alr
 
 ### Delivery log
 
-Every PR appends an entry here before merge: what shipped, what changed against this spec and why, what was found that the spec did not anticipate, and any decision that moved. **A PR that changes the spec updates section 2 in the same commit** — the decision table is the record, not the conversation that produced it.
+Every PR appends an entry here before merge: what shipped, what changed against this spec and why, what was found that the spec did not anticipate, and any decision that moved. **A PR that changes the spec updates section 2 in the same commit** - the decision table is the record, not the conversation that produced it.
 
 **PR A · 2026-07-31 · draft, pending Kevin's Studio-apply of `sousai-2-feedback-tags.sql`**
 
@@ -84,6 +84,15 @@ Judgment call - where reference and prompt differ, prompt wins:
 
 Reference's own known divergences (text glyphs, hardcoded counts, `?v=` switcher) were not ported per Chat's directive - the build already uses Lucide, live counts, and no view switcher.
 
+**Pre-merge corrections 2026-07-31 (three defects caught before merge):**
+
+- **52 em-dashes purged from this file.** Hyphens-only is a hard rule and this doc carried the largest violation count in the branch. Read each occurrence: 48 became spaced hyphens, 3 became placeholders / colon / period where a spaced hyphen crashed into a table cell delimiter or bold clause. Scoped to this one file per fence; the repo has pre-existing em-dashes elsewhere that stay.
+- **`↗` text glyph in the panel band header** at `PlaybookClient.js:665` (the "Open in Sous" link) replaced with Lucide `ExternalLink` at 13px, `strokeWidth={2.2}`, `aria-hidden`. Import added. The PR body's original completeness map claimed `ExternalLink` was in use; the diff did not include the import - claim now matches the diff.
+- **`?doc=` query param dropped** from `openInSousHref` at `PlaybookClient.js:649`. `[code-read]` confirmed no consumer in `page.js` or `SousSurface.js` (neither reads `searchParams`, `useSearchParams`, or a `doc` param). The link previously encoded a parameter that would silently land the user on a blank first-run Sous page with no indication the document context was dropped. Link now goes to `/sous` unconditionally. Wiring the deep link properly needs a page-variant band header that does not exist and D9 did not scope; recorded as deferred follow-up in section 8.
+
+**Carried as debt (not fixed here):**
+- The inline `<svg>` star mark and the `×` close glyph in the panel band header at `PlaybookClient.js:658-660` and `:672` are pre-existing text/glyph patterns this PR moved but did not author. Left in place; converting them to Lucide is a follow-up polish PR.
+
 Phase 0 + build surfaced that the spec did not anticipate:
 - `getContacts()` returns a length-checkable array (not a count), so the People domain-card count is `contacts.length`. Slower than `count: exact`, but the data-store abstraction doesn't expose an exact-count variant. Fine at 30 rows; worth noting if the directory ever grows large.
 - Load-sequence animations depend on the `sa-animate` class being on `.sa-page` (server component) rather than an internal client element. Nothing broke, but the delegation is worth calling out.
@@ -92,7 +101,7 @@ Phase 0 + build surfaced that the spec did not anticipate:
 ### How this document is maintained
 
 - **Rides every PR in the programme**, same as `SOUSAI_AGENT_PLAN.md`.
-- **Decisions only move on evidence or a Kevin ruling.** Never because a build turned out harder than expected — that gets logged as a finding, and the ruling is separate.
+- **Decisions only move on evidence or a Kevin ruling.** Never because a build turned out harder than expected - that gets logged as a finding, and the ruling is separate.
 - **Findings that contradict the spec are recorded even when the PR ships anyway.** A spec quietly diverging from the build is how the audits this project spent a week correcting came to exist.
 
 ---
@@ -101,7 +110,7 @@ Phase 0 + build surfaced that the spec did not anticipate:
 
 Sous answers well and looks unfinished. **The gap between how careful it is and how careless it looks costs it trust it has already earned.**
 
-Held against the live intranet, the current surface breaks the system in four ways: no photographic hero where six other modules have one, no accent identity of its own, none of the card or status patterns people already recognise, and a conversational contract it cannot honour — it asks a clarifying question it is unable to hear the answer to.
+Held against the live intranet, the current surface breaks the system in four ways: no photographic hero where six other modules have one, no accent identity of its own, none of the card or status patterns people already recognise, and a conversational contract it cannot honour - it asks a clarifying question it is unable to hear the answer to.
 
 **This release fixes the surface, gives Sous an identity, and closes the conversational gap.** It does not add capability.
 
@@ -132,11 +141,11 @@ Held against the live intranet, the current surface breaks the system in four wa
 | D15 | First-run examples | **Hard-coded for V1.** The log can drive them later. |
 | D16 | Session rail | **Keep, and make it show the memory window.** |
 
-### D1 — the colour, and why
+### D1 - the colour, and why
 
 Every module owns an accent: People purple, Ops amber, Service and Playbook green, Directory crimson. **Sous owned none and borrowed navy plus Ops Hub's amber.**
 
-**Flame `#0891B2` is the blue of a gas burner** — kitchen-native, so it carries meaning rather than being a pleasant teal. It is the only cool accent in a warm-heavy palette, which makes Sous legible at a glance in the nav, and it is clearly separate from both greens.
+**Flame `#0891B2` is the blue of a gas burner** - kitchen-native, so it carries meaning rather than being a pleasant teal. It is the only cool accent in a warm-heavy palette, which makes Sous legible at a glance in the nav, and it is clearly separate from both greens.
 
 ```css
 --accent-sous:        #0891B2;   /* fills, active states, links */
@@ -145,32 +154,32 @@ Every module owns an accent: People purple, Ops amber, Service and Playbook gree
 --accent-sous-line:   #A5F3FC;   /* borders on tinted surfaces */
 ```
 
-**Contrast:** `#0891B2` on white is 3.6:1 — **acceptable for large text, UI components, and borders; not for body copy.** Body text on tinted surfaces uses `--text-default`. White on `#0891B2` is 4.6:1 and passes AA for the button and band cases where it is used.
+**Contrast:** `#0891B2` on white is 3.6:1 - **acceptable for large text, UI components, and borders; not for body copy.** Body text on tinted surfaces uses `--text-default`. White on `#0891B2` is 4.6:1 and passes AA for the button and band cases where it is used.
 
-### D9 — why not chat bubbles
+### D9 - why not chat bubbles
 
-Answers carry tables, KPI strips, and source cards. **A bubble makes a report look like a message and burns horizontal space a five-column table needs.** But once memory lands there will be several turns on screen, and the question cannot remain an `h1` — multiple page titles in one scroll is wrong.
+Answers carry tables, KPI strips, and source cards. **A bubble makes a report look like a message and burns horizontal space a five-column table needs.** But once memory lands there will be several turns on screen, and the question cannot remain an `h1` - multiple page titles in one scroll is wrong.
 
 **Question:** compact, marked, 15px, muted, left-aligned with a rule.
 **Answer:** a card with the status rail on top, full width, dense.
 
 That reads as a thread of results. A research notebook, not a chat.
 
-### D13 — CSV everywhere
+### D13 - CSV everywhere
 
 A row threshold is a rule someone has to maintain and explain, and *"why does this table have CSV and that one doesn't"* becomes a support question. **A three-row table someone wants in a deck is as valid as a fifty-row one.** One button beats a rule.
 
-### D14 — the panel tells the truth rather than hiding
+### D14 - the panel tells the truth rather than hiding
 
 `get_document` returns `not_live` for anything outside the corpus, so on an In Build document **Sous genuinely has nothing.**
 
-Hiding the entry creates a second mystery — *why does this document have Ask Sous and that one doesn't*. A disabled button invites a click and then explains itself. **So the entry is always present, and the panel opens with an honest state:**
+Hiding the entry creates a second mystery - *why does this document have Ask Sous and that one doesn't*. A disabled button invites a click and then explains itself. **So the entry is always present, and the panel opens with an honest state:**
 
 > **SOP-014 is In Build.** It isn't in the corpus yet, so I can't answer from it. I can answer about the Live documents it relates to.
 
-Followed by those related Live documents as starters. **Same principle as the rest of the design — name the limit rather than let it be discovered**, and stay useful while doing it.
+Followed by those related Live documents as starters. **Same principle as the rest of the design - name the limit rather than let it be discovered**, and stay useful while doing it.
 
-### D16 — the rail earns its width once memory lands
+### D16 - the rail earns its width once memory lands
 
 This was argued twice and both arguments were weak. Cutting it rested on an untested assumption about revisiting; keeping it rested on atmosphere.
 
@@ -178,7 +187,7 @@ This was argued twice and both arguments were weak. Cutting it rested on an unte
 
 That gives it a job nothing else can do: **show what Sous currently remembers.**
 
-- The **top three entries** carry a Flame edge marker and a label — `In context`
+- The **top three entries** carry a Flame edge marker and a label - `In context`
 - Entries below it are dimmed slightly
 - A hairline rule sits under the third entry
 - Hovering the marker explains: *"Sous can refer back to these three."*
@@ -189,56 +198,56 @@ That gives it a job nothing else can do: **show what Sous currently remembers.**
 
 ## 3. Surfaces
 
-### 3.1 `/sous` — the page
+### 3.1 `/sous` - the page
 
-**Shell:** two columns. Rail 264px, answer pane fluid. **Rail collapses below 1024px** — a graceful narrow-desktop case, not a phone layout.
+**Shell:** two columns. Rail 264px, answer pane fluid. **Rail collapses below 1024px** - a graceful narrow-desktop case, not a phone layout.
 
-**Hero** — matches `oh-hero` verbatim:
+**Hero** - matches `oh-hero` verbatim:
 - `min-height: 96px` desktop, 84px below 768px
 - Overlay `linear-gradient(90deg, rgba(15,48,87,.95) 0%, rgba(15,48,87,.78) 38%, rgba(15,48,87,.32) 72%, rgba(15,48,87,.18) 100%)`
 - Photograph from the shared `hero_images` pool, `team_key NULL`
 - Star mark, 34px, translucent white on the photograph
-- Headline "Sous" — 24px / 800 / `-0.025em`
-- Greeting — 13px / white 88%: **"Hello {firstName} — ask me for anything in the Playbook, the directory, the service calendar, or spend."**
-- Right slot: freshness chip mirroring `sc-chrome-bar-asof` — pulsing green dot, mono tabular, `PG live · HH:MM`
+- Headline "Sous" - 24px / 800 / `-0.025em`
+- Greeting - 13px / white 88%: **"Hello {firstName} - ask me for anything in the Playbook, the directory, the service calendar, or spend."**
+- Right slot: freshness chip mirroring `sc-chrome-bar-asof` - pulsing green dot, mono tabular, `PG live · HH:MM`
 - **No eyebrow.** No module has one.
 
 **Session rail:**
 - Header: `＋ New question` in Flame with `⌘K`
 - One group, **This session**, newest first, timestamp plus truncated question
 - Selected: `--accent-sous-subtle` fill, 2px Flame inset edge
-- Empty: *"Nothing yet — questions you ask will collect here."*
-- Footer, permanent: *"Session only — clears when you reload."*
+- Empty: *"Nothing yet - questions you ask will collect here."*
+- Footer, permanent: *"Session only - clears when you reload."*
 
 **Answer pane:** turns in sequence, newest last, scrolls independently. Composer in its own bar at the bottom of the pane. **The composer never floats over empty space.**
 
-**First-run state** — the screen that decides whether a Regional trusts this:
+**First-run state** - the screen that decides whether a Regional trusts this:
 - `What can I look up for you?`
 - One line on what Sous is and that it declines rather than guessing
-- **Four domain cards** — Playbook, People, Service Calendar, Spend — each with a count and two working examples, each card marked with the source module's own accent
+- **Four domain cards** - Playbook, People, Service Calendar, Spend - each with a count and two working examples, each card marked with the source module's own accent
 - **Limits block, verbatim:**
 
 > **What it won't do yet**
-> No wages or reimbursement information. No P&L — that's coming soon. No prior seasons, that information is coming soon; the tools are current-season only and a 2024 question would return a valid-looking wrong number.
+> No wages or reimbursement information. No P&L - that's coming soon. No prior seasons, that information is coming soon; the tools are current-season only and a 2024 question would return a valid-looking wrong number.
 
-### 3.2 Playbook panel — the slide-out
+### 3.2 Playbook panel - the slide-out
 
 **580px**, right side, over a `rgba(9,43,85,.22)` scrim. Playbook stays visible and scrolled where it was.
 
 **Navy-to-Flame band header** carrying identity *and* context as one object, not two strips:
 - Star, "Ask Sous", `Open in Sous ↗`, close
 - `ASKING ABOUT` label
-- **Document card** — id chip, title, `v2.1 · Live · 11 sections`, dismiss
+- **Document card** - id chip, title, `v2.1 · Live · 11 sections`, dismiss
 
 **Deliberately not a narrow page:** no rail, no KPI strip, source subtitles hidden, action labels shortened.
 
-**First open** — currently a placeholder, and it is the screen people actually meet:
+**First open** - currently a placeholder, and it is the screen people actually meet:
 - *"What do you need from this document?"*
-- *"I've read all 11 sections. Ask in your own words — or start with one of these."*
+- *"I've read all 11 sections. Ask in your own words - or start with one of these."*
 - Section chips showing coverage
 - Four starters, each tagged with the section that answers it
 
-**After an answer: "More in this document"** — three further questions, section-tagged. **Pre-written questions are how the panel gets continuity cheaply**, and they are navigation rather than padding.
+**After an answer: "More in this document"** - three further questions, section-tagged. **Pre-written questions are how the panel gets continuity cheaply**, and they are navigation rather than padding.
 
 **Suggested questions derive from the document's own section headings.** Every document has them, they are already in the corpus, and it scales to 129 documents with nobody maintaining a list.
 
@@ -257,16 +266,16 @@ That gives it a job nothing else can do: **show what Sous currently remembers.**
 
 ### How
 
-The agent loop **already builds a `messages` array** — it must, for the tool loop. Today it starts fresh with one user message. This adds prior turns to an array that already exists.
+The agent loop **already builds a `messages` array** - it must, for the tool loop. Today it starts fresh with one user message. This adds prior turns to an array that already exists.
 
 - **Client holds the last 3 question-and-answer pairs** in React state and sends them with the request. No table, no migration, no backend.
-- **Compact pairs only** — the question, a one-line answer summary, tools called, scope resolved. **Never raw tool results.**
+- **Compact pairs only** - the question, a one-line answer summary, tools called, scope resolved. **Never raw tool results.**
 
 ### The rule that must ride with it
 
 > **History tells you what the question *means*. Tools tell you what the answer *is*.**
 
-Prior turns resolve "TBR" and "what about June." **They must never supply a figure.** Ask about May, get numbers; ask "what about June" and Sous now has May in context and could infer rather than query — producing a confident number nobody computed.
+Prior turns resolve "TBR" and "what about June." **They must never supply a figure.** Ask about May, get numbers; ask "what about June" and Sous now has May in context and could infer rather than query - producing a confident number nobody computed.
 
 **Second rule:** citations come from *this* turn's tools. A document retrieved in turn one does not ground turn three.
 
@@ -287,7 +296,7 @@ Clicking `▼ Not helpful` opens an inline block:
 - `Send feedback` / `Skip`
 - Visible note: *"logged with the question + tools + sources"*
 
-**Persisted against the existing `sousai_questions` row** — tags, text, timestamp. No new table if the row can carry them.
+**Persisted against the existing `sousai_questions` row** - tags, text, timestamp. No new table if the row can carry them.
 
 **The six tags are roughly the failure taxonomy an eval set needs**, so this feeds Phase E directly rather than being a nicety.
 
@@ -312,11 +321,13 @@ All `cubic-bezier(.2,0,0,1)`. **Everything inside `prefers-reduced-motion: reduc
 
 ---
 
-## 7. Implementation — five PRs
+## 7. Implementation - five PRs
+
+*Superseded by section 0 - the programme rebundled to two PRs (A and B) on 2026-07-31 after Phase 0 found `SousSurface` already served both surfaces via its `variant` prop. This decomposition is retained as the original scoping for reference.*
 
 Each is independently mergeable and independently testable.
 
-### PR 1 — Foundation
+### PR 1 - Foundation
 Accent token minted. Amber underline removed. Hero built against `oh-hero`. Two-column shell. Session rail with empty state and the session-only footer. Load sequence. First-run state with the four domain cards and the limits block.
 
 **No behaviour change.** Answers render as they do today inside the new shell.
@@ -325,26 +336,26 @@ Accent token minted. Amber underline removed. Hero built against `oh-hero`. Two-
 
 **Note:** the marker ships in PR 1 as presentation. It becomes truthful in PR 3 when memory is real. Until then it reflects the intended window, and PR 3's acceptance re-verifies it against the actual retained turns.
 
-### PR 2 — Answer components
-Turn treatment per D9. Status pills matching `pb-status-pill` — 10px, 800, 6px radius, transparent with 1.5px border. Source cards with id, title, section. Table with tabular figures and real borders. KPI strip. Action row: Copy · CSV · feedback. **No Slack — deferred per D12.**
+### PR 2 - Answer components
+Turn treatment per D9. Status pills matching `pb-status-pill` - 10px, 800, 6px radius, transparent with 1.5px border. Source cards with id, title, section. Table with tabular figures and real borders. KPI strip. Action row: Copy · CSV · feedback. **No Slack - deferred per D12.**
 
-**Shared components** — the panel consumes these in PR 4.
+**Shared components** - the panel consumes these in PR 4.
 
 **Acceptance:** every status shape rendered · a table with a long account name at 1024px · a decline · sources clickable through to the document · **no run-together text and no collapsed table** in any live answer.
 
-### PR 3 — Conversational memory
+### PR 3 - Conversational memory
 The architectural one. Client holds three turns; route accepts them; agent prepends to `messages`. Prompt round for both rules.
 
 **Acceptance:** **spike 7/7 both runs** · the TBR exchange resolves correctly · **an eval case proving a follow-up numeric question re-queries rather than reusing a prior figure** · citations from the current turn only · a fourth turn correctly drops the first.
 
 **Hold the PR on the numeric-reuse case.** It is the money risk.
 
-### PR 4 — Panel refit
+### PR 4 - Panel refit
 580px. Band header carrying document context. First-open state with section coverage and starters. Section-tagged suggestions after each answer. Reuses PR 2 components.
 
 **Acceptance:** width matches `.pb-slide` · `Ask Sous about this doc` opens with context already set · first-open renders before any question · suggestions derive from real section headings · `Open in Sous ↗` carries the question across · **a non-Live document opens the honest state naming its status and offering related Live documents**.
 
-### PR 5 — Feedback capture
+### PR 5 - Feedback capture
 The `▼` flow, tags, text, persistence against `sousai_questions`.
 
 **Acceptance:** tags and text persist and are queryable · skip closes without writing · the note about what gets logged is visible before sending.
@@ -364,6 +375,7 @@ The `▼` flow, tags, text, persistence against `sousai_questions`.
 | Slack send | D12. Needs new integration work; nothing else in the release does. |
 | Shared `<HeroBanner>` extraction | Six modules already copy it; Sous makes a seventh. Real debt, not this release. |
 | Shared `<SlideOverPanel>` extraction | Two exist with duplicated CSS; Sous makes a third. Same. |
+| Panel `Open in Sous` deep link carrying document context | The panel knows the doc, the /sous page has no band to carry it, and building one is a scoped design change rather than a link fix. Panel `Open in Sous` opens the plain /sous page for now; a deep link would silently lose context into a first-run screen. |
 
 ---
 
@@ -374,13 +386,13 @@ The `▼` flow, tags, text, persistence against `sousai_questions`.
 - **Hyphens only. No em-dashes.**
 - Limits are stated permanently, never dismissible. **Discovering a limitation feels like a bug; being told feels like a boundary.**
 - Actions name what happens: `Send feedback` produces "Feedback sent."
-- **The composer no longer warns about memory** — that warning ships out with PR 3.
+- **The composer no longer warns about memory** - that warning ships out with PR 3.
 
 ---
 
 ## 10. Risks
 
-**Contrast on Flame.** `#0891B2` is 3.6:1 on white — fine for components, not for body copy. Every use gets checked in PR 1.
+**Contrast on Flame.** `#0891B2` is 3.6:1 on white - fine for components, not for body copy. Every use gets checked in PR 1.
 
 **Memory leaking into answers.** The money risk. Mitigated by the prompt rule and held by an eval case.
 
@@ -392,14 +404,14 @@ The `▼` flow, tags, text, persistence against `sousai_questions`.
 
 ---
 
-## 11. Open questions — ruled 2026-07-31
+## 11. Open questions - ruled 2026-07-31
 
 All five closed. Recorded as D12 through D16 above.
 
 | Q | Ruling |
 |---|---|
 | Slack action | **Deferred.** |
-| CSV threshold | **None — every table.** |
+| CSV threshold | **None. Every table.** |
 | Panel on non-Live documents | **Entry always shown; the panel states the limit and offers related Live documents.** |
 | First-run examples | **Hard-coded for V1.** |
 | Session rail | **Kept, and repurposed to show the memory window.** |

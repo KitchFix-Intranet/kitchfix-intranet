@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import "./playbook.css";
 import "../sous/sous.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
@@ -645,7 +646,12 @@ function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc 
   }, []);
 
   const isNonLive = docContext && docContext.status && docContext.status !== "Live";
-  const openInSousHref = docContext ? `/sous?doc=${encodeURIComponent(docContext.id)}` : "/sous";
+  // Open in Sous link goes to the plain /sous page. The panel knows the doc,
+  // but the /sous page has no band header to carry that context - wiring a
+  // ?doc= deep link would silently drop it into a first-run screen with no
+  // indication the context was lost. Recorded as deferred follow-up in
+  // docs/SOUS_REDESIGN_MASTER.md section 8.
+  const openInSousHref = "/sous";
 
   return (
     <>
@@ -661,7 +667,8 @@ function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc 
               <h2>Ask Sous</h2>
             </div>
             <a href={openInSousHref} className="pb-sous-openinsous" target="_blank" rel="noopener">
-              Open in Sous ↗
+              <span>Open in Sous</span>
+              <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
             </a>
             <button className="pb-sous-close" onClick={onClose} aria-label="Close">×</button>
           </div>
