@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.66
+**Version:** v2.67
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,22 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.67 - 2026-07-31. THE SUNDAY CLOSURE IS PROBABLY A PHASE RULE, AND OUR 208 MAY BE CONTAMINATED.** Kevin confirmed Sundays are **not** uniformly off at the PDC accounts - **spring training runs Sunday service.** That matches the SC team's finding of 7 CIN-AZ Sundays carrying non-zero projections against 44 without.
+
+  **Consequence for any fix: a `closed_sundays` flag would be correct most of the year and silently wrong every spring.** The worst failure shape available - it works long enough to be trusted, then breaks during the busiest period, and the symptom reads as operators stopping entry rather than as a rule being wrong. Same class as the `NOT NULL DEFAULT false` correction: a field asserting something true-in-general and false-in-particular.
+
+  **Hypothesis: the closure is phase-dependent, not day-of-week-dependent.** `sc_phase_calendar` already carries the phases for exactly the five PDC accounts. If Sundays are dark during Bridge and ACL but served during ST and Battery Camp, then day-of-week is a proxy that correlates and the real fact is about phase. **The 7 CIN-AZ served Sundays are the decisive test** - if they cluster inside ST or Battery Camp, the hypothesis holds.
+
+  **Kevin ruled the audit runs on our side rather than through SC chat**, and gave a data-quality direction that reshaped it: **actuals contain test inputs; projections are the trustworthy source.** That is also right on the merits - the closure is about *intent*, and projections record intent. A day projected with service and later cancelled still proves the account is not structurally closed that day.
+
+  **The consequence Chat flagged from that direction: our 208 post-mark cancellations were derived entirely from actuals** (`hasAct && !anyNonZeroAct`). **That figure is load-bearing in the case for the `no_service` column.** If a meaningful share is test data, the case is weaker than recorded. Folded into the audit as its own task, with an explicit instruction that **"I cannot distinguish test from real" is a better answer than a number built on a guess** - in which case the 208 carries an unknown error bar and should be cited that way.
+
+  **Audit scope, issued read-only:** all seven days of the week rather than Sundays alone (a dark Monday nobody has mentioned is worth as much as confirming the Sunday story); day-of-week crossed with phase per account; past and future projections reported separately since future rows show intent but can still change; whether any non-Sunday day goes dark within a phase, which would mean day-of-week is not the axis at all; whether the non-PDC accounts show any weekday pattern despite having no phases; and a count of dates carrying **zero** projection rows inside an active window, since those are already invisible to the pattern and are the exact shape an import change would create at scale.
+
+  **CC is explicitly barred from proposing a fix, a schema change, or a flag design.** This is Service Calendar territory. Measure and stop; Kevin rules.
+
+  **Also recorded: the SC-chat route was declined by Kevin.** The phase hypothesis was drafted as a note to their side and is instead being tested directly, which avoids the duplicate-measurement problem that produced the CIN-AZ 5-versus-62 confusion - one measurement, ours, shared with them.
 
 - **v2.66 - 2026-07-31. ACCOUNT-SHAPE AWARENESS MERGED (#576). ONE CORRECTION SHIPPED WRONG THE SAME DAY THE PRINCIPLE WAS ACCEPTED.** STL-FL returns `classifier_branch: per_meal` with revenue computing normally - **the case that proves the predicate**, since a `billing_model`-only rule would have sent it down the fee branch. STL-MO returns fee branch with revenue declined and pointed at REF-141 plus its REC record. CIN-AZ holds at 24 of 24. CORP's null handled without a crash. Predicate mirrored from `serviceCalendar.js:292` rather than invented; both halves read from `accounts`; no hardcoded MLB list. Provenance caveat carried into the tool's own comments. Spike 7/7 both runs, clean on first attempt.
 
