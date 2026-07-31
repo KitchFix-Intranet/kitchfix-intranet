@@ -1,4 +1,4 @@
-// Fresh grant-state re-derivation for the R1 revoke.
+// Grant-state re-derivation for a grant audit.
 // Read-only against information_schema. Reports every public.table_name
 // that grants any of TRUNCATE / REFERENCES / TRIGGER / DELETE / UPDATE to
 // anon or authenticated.
@@ -6,6 +6,22 @@
 // Run: node --env-file=.env.local scripts/_probe-grant-hygiene.mjs
 //
 // Referenced from docs/audits/GRANT_HYGIENE_2026-07-29.md.
+//
+// ─── Known limitation (2026-07-31) ────────────────────────────────────────
+// PostgREST does NOT project information_schema by default. This script
+// therefore returns PGRST106 against production Supabase and its error
+// branch prints the Studio query as fallback. The Studio query is the
+// primary path; this script is a convenience wrapper for the day PostgREST
+// exposes information_schema (or the day this repo lands an SQL-executing
+// RPC that surfaces the catalog to app code).
+//
+// **Do not use migration-file grep as a fallback for this question.**
+// The pre-apply re-derivation on 2026-07-31 fell back to file grep after
+// this script's PGRST106 and produced 36 tables. The catalog held 59.
+// The 23-table blind spot is exactly the class of table created directly
+// in Supabase without a migration file (accounts, contacts, hero_images,
+// and twenty others). See GRANT_HYGIENE_2026-07-29.md §9 for the standing
+// lesson and SOUSAI_AGENT_PLAN.md §22 for the plan-level rule.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -97,33 +113,11 @@ for (const [p, n] of Object.entries(perPrivCount)) {
 }
 console.log("");
 
-// Compare vs the audit's 35 tables named in docs/audits/GRANT_HYGIENE_2026-07-29.md
-const AUDIT_TABLES = new Set([
-  "documents", "document_relationships", "document_surfaces",
-  "document_issues", "document_pins", "document_content", "document_chunks",
-  "vendors", "vendor_aliases", "vendor_accounts",
-  "invoice_submissions", "invoice_rejections", "ai_line_items", "gl_codes",
-  "inventory_items", "item_aliases", "storage_locations",
-  "count_sessions", "count_items", "price_history", "review_queue",
-  "merge_history", "merge_history_items",
-  "sc_service_groups", "sc_services", "sc_service_prices",
-  "sc_daily_projections", "sc_daily_actuals", "sc_day_metadata",
-  "sc_daily_actuals_history", "sc_homestand_schedule",
-  "sc_day_note_entries", "sc_config_changelog",
-  "sc_labor_budgets", "sc_fee_schedule",
-]);
+// No hardcoded baseline for the delta. The catalog is the primary source; a
+// hardcoded set from migration files is exactly the blind spot the 2026-07-31
+// correction exists to record. Compare against a prior JSON dump of this
+// same script if a delta view is wanted.
 
-const nowNames = new Set(flaggedTables.map((t) => t.table));
-const addedSinceAudit = [...nowNames].filter((n) => !AUDIT_TABLES.has(n)).sort();
-const removedSinceAudit = [...AUDIT_TABLES].filter((n) => !nowNames.has(n)).sort();
-
-console.log(`Delta vs the 2026-07-29 audit's 35 tables:`);
-console.log(`  audit total:       ${AUDIT_TABLES.size}`);
-console.log(`  live total now:    ${nowNames.size}`);
-console.log(`  added since audit: ${addedSinceAudit.length}  ${addedSinceAudit.length > 0 ? addedSinceAudit.join(", ") : "(none)"}`);
-console.log(`  cleaned / gone:    ${removedSinceAudit.length}  ${removedSinceAudit.length > 0 ? removedSinceAudit.join(", ") : "(none)"}`);
-console.log("");
-
-// Emit JSON for downstream consumption / audit doc update
+// Emit JSON for downstream consumption / audit doc update.
 console.log("---JSON---");
-console.log(JSON.stringify({ probed_at: new Date().toISOString(), flagged_tables: flaggedTables, per_privilege_count: perPrivCount, delta: { audit_total: AUDIT_TABLES.size, live_total: nowNames.size, added_since_audit: addedSinceAudit, cleaned_since_audit: removedSinceAudit } }, null, 2));
+console.log(JSON.stringify({ probed_at: new Date().toISOString(), flagged_tables: flaggedTables, per_privilege_count: perPrivCount }, null, 2));

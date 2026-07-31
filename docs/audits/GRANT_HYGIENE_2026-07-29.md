@@ -235,108 +235,98 @@ ORDER BY tablename, policyname;
 
 ---
 
-## 8. R1 revoke - 2026-07-31 update
+## 8. R1 revoke - 2026-07-31 APPLIED (correction to the pre-apply count)
 
-**Date:** 2026-07-31 (fresh re-derivation ahead of Kevin's Studio-apply)
-**SHA at re-derive:** `e0e4877` (main HEAD; worktree `fix/grant-hygiene`)
-**Method:** Section 3's migration-file grep, re-run against current `docs/migrations/*.sql`. `[ran]` `grep -HnE "GRANT.*(TRUNCATE|REFERENCES|TRIGGER).*(anon|authenticated)" docs/migrations/*.sql | wc -l` → **36 lines** (was 35 at audit time). Live PostgREST re-derivation was attempted via `scripts/_probe-grant-hygiene.mjs` and returned `PGRST106 Invalid schema: information_schema` - PostgREST does not project `information_schema`, so the probe falls back to the migration-file source. Kevin's Section 6 Studio queries remain the only live-derived cross-check.
+**Date:** 2026-07-31, applied in Studio by Kevin.
+**Live count at apply:** **59 tables**, not the 36 my pre-apply re-derivation produced. The migration-file grep was short by 23. Correcting the record here rather than leaving a stale count in this file.
 
-### Delta from the 2026-07-29 audit's 35 tables
+### The count was wrong. Why.
 
-| Change | Table | Migration | Grants | Notes |
-|---|---|---|---|---|
-| **+1 added** | `sc_homestand_closeout` | `sc-22-homestand-closeout.sql:265` | REFERENCES, TRIGGER (no TRUNCATE) | Same pattern class as `sc_config_changelog` / `sc_labor_budgets` / `sc_fee_schedule` in Group D. |
-| 0 cleaned | - | - | - | No tables from the audit's list have been Studio-revoked since dfac0b5 per repo history. |
-| 0 DELETE/UPDATE grants | - | - | - | `grep -HnE "GRANT.*(DELETE\|UPDATE).*(anon\|authenticated)" docs/migrations/*.sql` returns zero hits across the tree. |
+The pre-apply re-derivation used `grep -HnE "GRANT.*(TRUNCATE|REFERENCES|TRIGGER).*(anon|authenticated)" docs/migrations/*.sql` because live PostgREST rejected the `information_schema` probe with `PGRST106 Invalid schema`. The grep found 36 grant statements across the migration tree. The catalog held 59 tables carrying the same grant set.
 
-**New live total: 36 tables.** `sc_homestand_closeout` joins Group D and is folded into the R1 revoke below.
+**The gap: migration-file enumeration cannot see tables created directly in Supabase.** Supabase Studio's table editor and the initial project bootstrap both write tables into `public` without ever touching `docs/migrations/*.sql`. 23 tables sit in that shape - `accounts`, `contacts`, `hero_images`, and twenty others. `information_schema.table_privileges` sees them; the migration tree does not.
 
-### Per-privilege safety argument (what would break if the grant were in use)
+Both facts belong in the record:
 
-- **TRUNCATE.** All in-app TRUNCATE calls run as `service_role` (verified 2026-07-31 `[code-read]`: `scripts/apply-pr-7-2-opd-seed.mjs:28` uses `SUPABASE_SERVICE_ROLE_KEY`; `scripts/content/project-catalog.mjs:262` same; `scripts/verify-opd-atomic-replace.mjs:105` is a comment about a Studio-run operation, not a client-issued TRUNCATE). service_role holds TRUNCATE via a separate grant surface, unaffected by the anon/authenticated revoke. **Nothing breaks.**
-- **REFERENCES.** Needed to `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY ... REFERENCES this_table`. Migrations apply via Supabase Studio (per `docs/MIGRATION_PROJECT_CLOSEOUT.md` §260: "Schema lives in `docs/migrations/` SQL files; applied manually in Supabase Studio"), and Studio's SQL editor runs statements as the `postgres` role, not `anon` or `authenticated`. Revoking REFERENCES from those two roles cannot affect any future migration. **Nothing breaks.**
-- **TRIGGER.** Needed to `CREATE TRIGGER`. Same shape as REFERENCES - triggers land during migrations under the postgres owner role, and no runtime path issues `CREATE TRIGGER` (`grep -RnE "CREATE TRIGGER" src/ scripts/` returns zero hits at the SQL layer; the only matches are in migration files themselves). **Nothing breaks.**
+- The `scripts/_probe-grant-hygiene.mjs` probe was correct to attempt the catalog path first (that path would have surfaced all 59) and correct to fall back to file grep when PostgREST refused (`information_schema` is not a projected schema).
+- The file-grep fallback was **not complete**. Its blind spot is exactly the class of table Kevin's look-first Studio query caught.
 
-**Nothing in the destructive three is genuinely used by the anon or authenticated roles.** All three are safe to revoke.
+The lesson is Section 9. It is a repeat lesson.
 
-**Not in scope:** SELECT, INSERT. The audit already flagged them out per Section 5's boundary, and no live-usage flag has surfaced since.
+### What was actually applied
 
-### R1 revoke block - copy-paste to Studio (`applied in Studio: YES` triggers the migration gate)
+Kevin ran a catalog-driven block that reads `information_schema.table_privileges` and revokes the privilege set from **whatever it finds**, rather than a hardcoded list that can only cover what the author knew about at write-time. The block below is the shape that landed. It is the one to use going forward for any REVOKE of this class - the hardcoded list is preserved only as a footnote of what CC's grep enumerated, not as a canonical set.
+
+Before revoking, Kevin also confirmed `DELETE` and `UPDATE` were absent from the catalog for both `anon` and `authenticated` on the whole schema. They were.
 
 ```sql
--- R1: revoke destructive grants from anon and authenticated on 36 public tables.
--- Applied 2026-07-31 in Studio by Kevin. See docs/audits/GRANT_HYGIENE_2026-07-29.md §8.
--- Rollback: replace REVOKE with GRANT; same privilege list; same table list. Idempotent both directions.
+-- R1: revoke destructive grants from anon and authenticated across every
+-- public table the catalog knows about. Applied 2026-07-31 in Studio.
+-- Catalog-driven: any table created directly in Supabase without a migration
+-- file is covered automatically. Any table added later is picked up by re-running
+-- the same block. Idempotent (REVOKE is a no-op when the privilege isn't held).
 DO $$
 DECLARE
   t text;
 BEGIN
   FOR t IN
-    SELECT unnest(ARRAY[
-      'documents','document_relationships','document_surfaces',
-      'document_issues','document_pins','document_content',
-      'document_chunks',
-      'vendors','vendor_aliases','vendor_accounts',
-      'invoice_submissions','invoice_rejections','ai_line_items','gl_codes',
-      'inventory_items','item_aliases','storage_locations',
-      'count_sessions','count_items','price_history','review_queue',
-      'merge_history','merge_history_items',
-      'sc_service_groups','sc_services','sc_service_prices',
-      'sc_daily_projections','sc_daily_actuals','sc_day_metadata',
-      'sc_daily_actuals_history','sc_homestand_schedule',
-      'sc_day_note_entries','sc_config_changelog',
-      'sc_labor_budgets','sc_fee_schedule',
-      'sc_homestand_closeout'
-    ])
+    SELECT DISTINCT table_name
+    FROM information_schema.table_privileges
+    WHERE table_schema = 'public'
+      AND grantee IN ('anon','authenticated')
+      AND privilege_type IN ('TRUNCATE','TRIGGER','REFERENCES')
   LOOP
-    -- REVOKE is idempotent: if the privilege isn't held, it's a no-op.
-    -- The three tables that never got TRUNCATE (sc_config_changelog,
-    -- sc_labor_budgets, sc_fee_schedule, sc_homestand_closeout) still pass
-    -- cleanly here.
     EXECUTE format('REVOKE TRUNCATE, TRIGGER, REFERENCES ON %I FROM anon, authenticated', t);
   END LOOP;
 END $$;
 ```
 
-### Studio verify queries (re-run after apply)
+**Rollback:** replace `REVOKE` with `GRANT` and the same privilege list. Idempotent both directions. The Section 6 flagged-privilege query is the audit; run it and any table the block re-grants surfaces there.
 
-**Expected result: zero rows.** Section 6's flagged-privilege query serves as the after check:
+### Post-apply Studio verification (Kevin ran)
 
-```sql
-SELECT grantee, table_name, privilege_type
-FROM information_schema.table_privileges
-WHERE table_schema = 'public'
-  AND grantee IN ('anon','authenticated')
-  AND privilege_type IN ('TRUNCATE','TRIGGER','REFERENCES','DELETE','UPDATE')
-ORDER BY table_name, grantee, privilege_type;
-```
+**Flagged-privilege query returned zero rows** for anon and authenticated on TRUNCATE / TRIGGER / REFERENCES / DELETE / UPDATE across the public schema. The revoke is complete for the class.
 
-**Expected: still-present SELECT grants stay.** Section 3's "SELECT-only" grants (`sc_phase_calendar` view + the six inventory views) remain unchanged:
+SELECT grants on views (`sc_phase_calendar`, the six inventory views enumerated in Section 3) are unchanged - they were never in scope for this pass.
 
-```sql
-SELECT grantee, table_name, privilege_type
-FROM information_schema.table_privileges
-WHERE table_schema = 'public'
-  AND grantee IN ('anon','authenticated')
-  AND privilege_type = 'SELECT'
-ORDER BY table_name, grantee;
-```
+### App-verify checks - scope stated honestly (`[ran]` 2026-07-31)
 
-### App-verify checks (post-apply)
+**What these checks CAN prove:** the service-role read/write path is healthy. Every table this project consumes at runtime goes through the Next.js server layer on the `service_role` key; service_role holds its own grants via a separate surface entirely, and the anon/authenticated revoke does not touch it.
 
-`nothing uses it` was the pre-apply prediction. Post-apply, name what you ran:
+**What these checks CANNOT prove:** that the revoke was safe. The revoke landed on `anon` and `authenticated`. Nothing in the app exercises those roles - `NEXT_PUBLIC_SUPABASE_ANON_KEY` ships to the browser for the NextAuth handshake surface only, and no client-side `createClient` call issues DML. The absence of `anon`/`authenticated` DML in the codebase is exactly why the revoke was safe; a clean app run does not prove that absence, it presupposes it. Kevin's Section 6 catalog verify is what proves the revoke landed correctly on the roles it did touch.
 
-1. `[ran] npm run build` - clean (the build exercises no runtime grant path but proves nothing regressed at compile).
-2. `[ran] npm run lint` - clean.
-3. `[ran] node --env-file=.env.local scripts/sousai-agent-test.mjs` - spike harness passes 7/7 on both runs (exercises service_role reads across contacts, accounts, sc_daily_revenue, documents, document_chunks, ai_line_items, vendor_aliases). Same set that runs against production PG.
-4. **UI smoke on the Vercel preview** (Kevin): load /playbook, /service-calendar, /vendor, and /sous. Each surface should render without regression. If any read fails with a permission error, it will surface as a 500 in the API route.
+With that scope stated, the following ran clean against production PG through the service-role client:
 
-The service-role bypass posture is the ground truth here - all reads and writes for these tables flow through server routes on the service_role key. The revoke touches only the anon/authenticated surface, which has no in-app consumer.
+1. `[ran] npm run build` - clean.
+2. `[ran] npm run lint` - unchanged repo-baseline noise (201 pre-existing errors / 63 warnings; probe script and audit-doc change contribute zero new issues).
+3. `[ran] scripts/sousai-data-tools-test.mjs` - **15/15 pass**, exercising A1 find_contact, A2 list_accounts, A4 list_contacts_by_role, A5 get_account_team across hit / miss / edge cases.
+4. `[ran] scripts/sousai-sc-tools-test.mjs` - **15/15 pass**, exercising B1 sc_account_window, B2 sc_homestand_detail, B4 sc_service_price, B5 sc_orientation, C1 spend_summary, C2 spend_vendor_history.
+5. `[ran] scripts/sousai-agent-test.mjs` - **spike harness 7/7 both runs on the second attempt.** First attempt was 6/7 (case 1a run 1 miss - the model's `search_documents` snippet-based answer still landed at the correct 5 flat-fee accounts and `grader.VERDICT: PASS` printed for that individual run, but the top-level `run1=F` flag fired). Second attempt was clean 7/7. Model-variance flake on the enumeration-shortcut heuristic in case 1a's grader, not a permission error - the underlying reads landed identically on both attempts (search_documents against the corpus, all through service_role).
+6. `[ran] scripts/_verify-grants-app.mjs` - direct calls to `find_contact({ nameQuery: "Kelsey" })` and `list_accounts({})`. `contacts` returns Kelsey Atherton (CIN-OH); `accounts` returns all 12 rows. Both tables live in the "created outside migrations" bucket that the file-grep enumeration missed, so exercising them directly is the least-hypothetical way to sanity-check the revoke landed without incident.
+7. Kevin's UI smoke on Vercel preview - deferred until he runs it; any 500 on /playbook, /service-calendar, /vendor, /sous surfaces here.
+
+Nothing failed. **The service-role bypass posture is the ground truth.**
 
 ### Recommendation R2 status
 
-Migration-template guard still open. Should be a follow-up PR that touches `pr-7-1-opd-schema.sql:29-31` header comments. Not landed here to keep this PR to the revoke + verify + audit doc.
+Migration-template guard still open. Should be a follow-up PR that touches `pr-7-1-opd-schema.sql:29-31` header comments with a "do not copy this grant block; grants for anon/authenticated ship as SELECT-only, if at all" note. Not landed here.
 
 ### Recommendation R3 status
 
-Regression-guard probe still open. Fits as a post-migration smoke test that asserts `anon` / `authenticated` hold none of TRUNCATE / TRIGGER / REFERENCES on public tables. Deferred to a follow-up PR; the current probe (`scripts/_probe-grant-hygiene.mjs`) is the sanctioned read-only pattern to build it on.
+Regression-guard probe still open. Fits as a post-migration smoke test that asserts `anon` / `authenticated` hold none of TRUNCATE / TRIGGER / REFERENCES on public tables. The correct implementation uses `information_schema`, not the migration files, because migration files cannot see Supabase-created tables. `scripts/_probe-grant-hygiene.mjs` still returns `PGRST106` today; the pattern needs an SQL-executing RPC or a scheduled Studio check to land as a real regression guard.
+
+## 9. Standing lesson - when the question is about database state, query the database
+
+Third repeat in one week:
+
+- **Decision 5's PG survey** (2026-07-29) missed seven tables when enumerating from migrations, including `contacts` and `accounts` - the two highest-value candidates on the whole SousAI menu.
+- **The grant audit** (2026-07-29) missed 23 tables when enumerating from migrations, including all of the same set.
+- **This PR** repeated the same pattern - the pre-apply re-derivation ran the same file grep, hit the same PostgREST refusal, made the same fallback, and produced the same 36 that missed 23.
+
+The blind spot is stable and the fix is stable:
+
+- **Repo files describe intent. The catalog holds state.** Migration files are what the maintainer wrote; `information_schema` is what is actually there. When the question is "what does the database look like right now," ask the database.
+- **Migration-file grep is a fallback**, not a primary. Its blind spot has a name (tables created outside migrations - Supabase Studio, initial project bootstrap, ad-hoc Studio DDL) and every use of the fallback must acknowledge it.
+- **When PostgREST refuses `information_schema`** (default behavior; the schema is not projected) the answer is not "fall back and hope." The answer is a Studio query or an SQL-executing RPC. Both cost less than a wrong count.
+
+This lesson also lives in the plan (v2.64 §22) so a future re-derivation from any surface can find it.

@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.63
+**Version:** v2.64
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,20 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.64 - 2026-07-31. GRANT REVOKE APPLIED - AND THE LIST WAS 59, NOT 36. THIRD MIGRATION-FILE UNDERCOUNT THIS WEEK.** PR #574 merged (docs, probe script, per-privilege safety arguments). **Kevin ran a look-first query before revoking rather than executing CC's block, and that caught it.**
+
+  **CC's enumeration said 36 tables. The live catalog held 59.** Its PostgREST probe hit `PGRST106 Invalid schema: information_schema` - PostgREST does not project the catalog - so it fell back to grepping `docs/migrations/*.sql`, which was a reasonable fallback and an incomplete one. **The 23 missed tables are the ones created directly in Supabase with no migration file**, including `accounts` and `contacts` - the two that hold every account record and every phone number in the company. Neither appeared in the safety analysis.
+
+  **Chat's catch, and the reason it mattered:** the Decision 5 survey had already been burned by exactly this on 2026-07-29, missing seven Supabase-created tables including those same two. Recognising the shape is what prompted the look-first instruction. **A hardcoded 36-table revoke would have left `contacts` and `accounts` granting TRUNCATE to `anon` and `authenticated` while the audit recorded the job as done** - the worst outcome available, since a closed finding stops being looked at.
+
+  **Applied via a catalog-driven revoke** that reads `information_schema` and revokes from whatever it finds, so the list cannot drift. `DELETE` and `UPDATE` confirmed absent across all 59 before running. **Verify query returns zero rows.** R1 closed.
+
+  **STANDING PRACTICE, ADDED: when the question is about database state, query the database.** Repo files describe intent; the catalog holds state. **Three undercounts this week from the same method** - Decision 5 missed seven, the grant audit missed twenty-three. Migration-file enumeration is a fallback, and any audit using it must label it as one and name its blind spot in the same breath. Chat's v2.44 discipline (never cite a source as current state without re-deriving it) now extends explicitly to the repo describing the database.
+
+  **Verification prompt issued** with a deliberate honesty requirement: **CC must state that its checks prove the app is healthy but cannot prove the revoke was safe**, because every check it can run goes through the service-role key and nothing in the app exercises `anon` or `authenticated`. That is exactly why the revoke was safe, and claiming broader coverage would misrepresent it. `find_contact` and `list_accounts` exercised directly since `contacts` and `accounts` were never in the original analysis.
+
+  **Audit doc correction required in the same PR.** `GRANT_HYGIENE_2026-07-29.md` §8 records 36 and a hardcoded list; left alone it becomes the fifth stale audit of the week, cited later as fact. Corrected to 59, with the method gap named and the hardcoded block replaced by the catalog-driven one actually run.
 
 - **v2.63 - 2026-07-31. PR #572 MERGED. THE INVESTIGATION ANSWERED THE COLUMN QUESTION AND SURFACED ONE MORE BUG OF THE SAME SHAPE.** CIN-AZ July now returns **24 of 24**, matching the Service Calendar - `scAccountWindow` applies the calendar's own `classifyDayStatus` rule so no-service days drop out of both numerator and denominator. Truncation handled at the parser: `agent.js` captures `stop_reason=max_tokens`, **never defaults to declined**, appends a visible note, and returns a `truncated` flag. Prompt fixes for pipe tables and the source-line break. Five tag corrections, each with its factual reason recorded.
 
