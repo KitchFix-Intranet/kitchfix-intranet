@@ -38,6 +38,16 @@ export default function HandoffLayer() {
     const source = _refs.pillSourceRef.current;
     const target = _refs.flightTargetRef.current;
     const clone = cloneRef.current;
+    /* DIAG (2026-07-31, retirement step 1) - state of the three refs
+       AT THE MOMENT the phase-3 effect fires. Owner's fiber walk
+       polled AFTER phase 3 and saw all three set. If this log shows
+       source=false at effect time, HandoffPill mounted + registered
+       AFTER this effect ran (race in the same commit). Removed in
+       the deletion commit. */
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.log(`[handoff-diag] phase-3 effect t=${Math.round(performance.now())} source=${!!source} target=${!!target} clone=${!!clone}`);
+    }
     if (!source || !target || !clone) return;
 
     const srcRect = source.getBoundingClientRect();

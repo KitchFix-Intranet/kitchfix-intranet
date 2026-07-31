@@ -1999,6 +1999,17 @@ function HandoffPill() {
   const ref = useRef(null);
   useEffect(() => {
     if (!ref.current) return undefined;
+    /* DIAG (2026-07-31, retirement step 1) - HandoffPill only mounts
+       when phase >= 2. This log fires post-mount, so its timestamp
+       is when the pill DOM node is present + the ref set. Compare
+       against the coordinator's commit-phase log: if pill mount time
+       equals phase-3 commit time, phase 2 was skipped and the pill
+       registers in the same commit as HandoffLayer's phase-3 read =
+       race that kills the flight. Removed in the deletion commit. */
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.log(`[handoff-diag] HandoffPill mount+register t=${Math.round(performance.now())} phase=${handoff.phase}`);
+    }
     return handoff.registerPillSource(ref.current);
   }, [handoff]);
   const active = handoff.phase >= 2;

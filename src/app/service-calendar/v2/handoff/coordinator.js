@@ -43,6 +43,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -64,6 +65,19 @@ const HandoffContext = createContext(null);
 export function HandoffProvider({ children }) {
   // Phase state - drives CSS classes and consumer readouts.
   const [phase, setPhase] = useState(0);
+
+  /* DIAG (2026-07-31, retirement step 1) - log every committed phase
+     transition with a monotonic timestamp. Owner's R2-2 fiber trace
+     saw `0 -> 1 -> 3` and no phase 2. This effect confirms whether
+     the browser actually commits phase 2 or skips it, and the delta
+     against BEAT_DELAYS' 200/660/1020/1350/1850ms schedule tells us
+     whether the timers are late, batched, or missing. Remove in the
+     deletion commit. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line no-console
+    console.log(`[handoff-diag] commit phase=${phase} t=${Math.round(performance.now())}`);
+  }, [phase]);
   const [handoffDay, setHandoffDay] = useState(null);
   const [handoffTotals, setHandoffTotals] = useState(null);
   // Session strip. Map<date, {units, revenue}>. Kept as a plain object
@@ -153,6 +167,9 @@ export function HandoffProvider({ children }) {
   // side effects on the day sequence.
   const startHandoff = useCallback(({ dayDate, totals, onFinalize }) => {
     if (!dayDate) return;
+    // DIAG (2026-07-31) - anchor point for the commit-phase logs above.
+    // eslint-disable-next-line no-console
+    if (typeof window !== "undefined") console.log(`[handoff-diag] startHandoff called t=${Math.round(performance.now())}  RM=${prefersReducedMotion()}`);
     clearTimers();
     finalizeRef.current = typeof onFinalize === "function" ? onFinalize : null;
     commitSession(dayDate, totals);
