@@ -513,6 +513,38 @@ Flat list of format-explicit menu items:
 
 **Export UI** (`src/app/service-calendar/season/ExportControl.js`) - flat list of format-explicit menu items (UX shape: flat list rather than a Format submenu; picked flat because the list stays at <= 3 items). Drill-in (period/month) shows Excel this scope / PDF this scope / Excel full year fallback. Overview (year) shows Excel full year / PDF - season schedule (schedule-accounts-only) / PDF - year at a glance (ALL accounts).
 
+## Design decisions
+
+Durable rulings that shaped how SC surfaces are built. Kept here rather than in `SC_STATUS.md` because they outlive the state entries that record their landing. Recovered from the ENTRY REDESIGN arc (see [`../archive/ENTRY_REDESIGN_MASTER_SCOPE_2026-07-30.md`](../archive/ENTRY_REDESIGN_MASTER_SCOPE_2026-07-30.md)).
+
+### Cards are the calendar; money lives on the rail and the homestand detail
+
+Month and period cards render calendar only - no budget line, no `Draws from` label, no per-card homestand list, no money of any kind. Money surfaces on the season view live on the rail (season-scope) and on the homestand detail (block-scope). Ruled on MLB after a build attempt (M-4b step 5) was reversed whole; applies to every account shape by construction, since cards are shared shells.
+
+### Months carry no budget - name the periods instead
+
+Every in-season month straddles exactly two fiscal periods - measured, all eight months - because 28-day periods never align with 30 and 31-day months. So there is no honest "month labor budget" to display. Month cards that need to speak to money name the periods they draw from (`Draws from P7 + P8`) rather than pro-rating a figure that reconciles against nothing.
+
+The same reasoning governs **week summaries on the homestand day strip**: budgets are per-homestand, not per-day, so a week-level figure requires pro-rating a block's envelope across weeks - a manufactured number. Payroll import does not change this; the shape of the budget does.
+
+### MLB rail shape (M-4b)
+
+Past · now · future. Hero, pinned in-progress card (present only when in-progress exists; no placeholder), three collapsed groups: Closed out, Actuals due (open by default), Upcoming. Rows expand into inline cards, one open at a time across all groups. Only actuals-due rows carry the green filled CTA; every other state uses the outlined variant - a chef finds what needs them by colour alone. Closed-out never auto-expands, because by season end it holds twelve blocks and would sink the card.
+
+### Season stepper strip vocabulary (M-4b)
+
+Proportional width by span days (a 3-day block renders ~29px against a 10-day block's ~98px). Bare numbers on every block - `HS10` does not fit a 3-day block at 32px. Standard day-tile state tokens, no bespoke palette. Current block is solid blue (`#1e5aa8` via `--sc2-state-in-progress-bg`) with white text and the tallest of the three states, so state survives grayscale.
+
+### MLB-only surfaces gate on `MLB_HOMESTAND_SURFACE_ACCOUNTS`, never a data-shaped boolean
+
+`hasHomestandSchedule` is `true` for CIN - KY and TBJ - NY (AAA) as well as the four MLB accounts. Every time an MLB-only feature has been gated on it, both AAA accounts have inherited the feature (three recorded breaches through M-4b). The rule: any gate on an MLB-only surface uses the explicit `MLB_HOMESTAND_SURFACE_ACCOUNTS` set. The set is a hard fence; `hasHomestandSchedule` describes data shape and includes AAA by construction.
+
+### Missing versus zero
+
+A number nobody has recorded is missing and reads as "not set" or "not recorded" - never `$0`, never `- SPENT`. A rollup of recorded values that happens to sum to nothing is `$0`. Getting the two backward turns absent data into an affirmative empty claim, or turns a real zero into a hidden field. The M-3 close-out phase found four instances of this rule broken in one PR - the labor input, the summary, the variance display, and the prep-day proposal - all under different code paths. First thing to look for when a new field is added.
+
+---
+
 ## Danger zones (SC-specific)
 
 Standard danger-zone rules from [`CLAUDE.md`](../../CLAUDE.md) apply. SC-specific hot spots:
