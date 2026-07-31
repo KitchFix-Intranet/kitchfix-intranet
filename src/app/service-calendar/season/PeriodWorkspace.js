@@ -1004,7 +1004,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                   </span>
                   <span className="sc-workspace-band-sum">
                     {isFeeAccount
-                      ? `${(wm.actMeals || 0).toLocaleString()} served`
+                      ? `${(wm.actMeals || 0).toLocaleString()} meals`
                       : fmt$(wm.actRev)}
                   </span>
                 </div>

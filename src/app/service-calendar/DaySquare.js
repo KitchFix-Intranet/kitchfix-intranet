@@ -672,8 +672,20 @@ function renderFeeNoDollar(content) {
       {dayNight && (
         <DayNightPill type={dayNight} timeText={pillTime} />
       )}
+      {/* R3-1 v2 (2026-07-31) - fee branch tile uses the SAME
+          markup as the per-meal branch above (:533), with the unit
+          wrapped in .sc-daysq-mid-meals-unit so it inherits the
+          quiet-suffix treatment (10px/600 vs the number's 14.5px/700).
+          v1 emitted a flat text node here, which made the unit as
+          loud as the count and diverged visibly from CIN - AZ tiles.
+          Pluralize on exact-1 to match per-meal. `confirmed` /
+          `DAYS CONFIRMED` / `3 of 4 confirmed` still stay elsewhere
+          - the unit is what got aligned, not the verb. */}
       {n != null && (
-        <span className="sc-daysq-mid-meals">{fmtMeals(n)} served</span>
+        <span className="sc-daysq-mid-meals">
+          {fmtMeals(n)}
+          <span className="sc-daysq-mid-meals-unit">{n === 1 ? "meal" : "meals"}</span>
+        </span>
       )}
     </div>
   );

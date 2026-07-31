@@ -546,9 +546,20 @@ function SessionStrip({ variant }) {
   // P3-B re-gate 6 rider (2026-07-28): per-meal figure runs through
   // fmt$ so a no-service-only session reads "$0" (money), not a bare
   // "0" (count). Matches the rail hero + queue money format. Fee
-  // variant is a count of served units, no currency by design.
+  // variant is a count of meals, no currency by design.
+  //
+  // R3-1 v3 (2026-07-31) - unit word aligned to `meals` for
+  // consistency with the tile / week band / rail hero caption.
+  //
+  // NOTE: this isFee branch is DEAD CODE today. DrillRail's only
+  // SessionStrip call site (line 295) always passes
+  // variant="per-meal" - isFee is never true here at runtime. Fee
+  // accounts use OpsRail (OpsSessionStrip at OpsRail.js:1213), not
+  // DrillRail. Kept the branch swapped anyway so the string cannot
+  // trap a future consumer that flips the variant. If this branch
+  // is still unreachable at a future cleanup, delete it entirely.
   const detail = isFee
-    ? `${unitsSum.toLocaleString()} served`
+    ? `${unitsSum.toLocaleString()} meals`
     : fmt$(revenueSum);
   // P3-B gate-3 (2026-07-28): clean structural split (count vs prose)
   // restored - owner asked for the gap TOKEN, not text tricks. CSS
