@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.62
+**Version:** v2.63
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,19 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.63 - 2026-07-31. PR #572 MERGED. THE INVESTIGATION ANSWERED THE COLUMN QUESTION AND SURFACED ONE MORE BUG OF THE SAME SHAPE.** CIN-AZ July now returns **24 of 24**, matching the Service Calendar - `scAccountWindow` applies the calendar's own `classifyDayStatus` rule so no-service days drop out of both numerator and denominator. Truncation handled at the parser: `agent.js` captures `stop_reason=max_tokens`, **never defaults to declined**, appends a visible note, and returns a `truncated` flag. Prompt fixes for pipe tables and the source-line break. Five tag corrections, each with its factual reason recorded.
+
+  **The investigation settled it: 1,723 projected days, 535 no-service, 31.1 percent.** Split 208 post-mark (operator actively cancelled) and 327 planned (projections entered as all zero). **Not the rare edge where a heuristic holds indefinitely.** MLB fee accounts show zero post-mark and entirely planned no-service; PDC accounts show real operator cancellations (CIN-AZ 40, STL-FL 39); AAA accounts run high on planned. **Five separate implementations of the collapse pattern found across three roles.** Chat's recommendation: add the column - 31 percent with five re-derivations is past the point where inference beats storage. **Kevin ruled yes**, to be done by the Service Calendar agent with the hard requirement that it not break SC.
+
+  **One more bug of the same shape, visible in CC's own table and unflagged by it.** Three accounts show zero entered days across the entire season - STL-MO 0 of 60, TXR-TX-H 0 of 53, TXR-TX-V 0 of 53 - **and those are exactly the flat-fee accounts**, confirmed against REF-140's Flat_fee row and `accounts.billing_model`. A flat fee does not depend on meal counts, so nobody enters them. **Sous would report "0 of 60 service days entered" as if it were a catastrophic data-entry failure when it is the billing model working as designed.** Same family as the no-service count and the missing-price trap: a structural characteristic reported as a gap. Compounding it, `scAccountWindow` computes revenue as meals times per-meal price without checking billing model - **for a flat-fee account that product is a confident number with no operational meaning.**
+
+  **Design ruling on the fix: expose `billing_model`, do not encode policy in the tool.** The tool reports facts; the prompt decides what they mean. And **no hard-coded flat-fee list** - STL-FL is flat-fee and tracks 71 days, CIN-OH is flat-fee and tracks 16, so any rule of the form "flat-fee means no actuals expected" is already false for two of five. Report the model and the counts; let the answer characterise it. Meal counts stay reportable at every account regardless of billing - only the revenue derivation breaks.
+
+  **Three prompts issued:**
+  1. **Service Calendar agent - `no_service BOOLEAN NOT NULL DEFAULT false` on `sc_day_metadata`.** Written standalone since that agent has no SousAI context. **Phased deliberately: phase one writes the column and changes no read path**, so acceptance is that nothing on screen moves - if any displayed number changes, that is a bug. Three details flagged: mark-no-service must **upsert** (metadata rows do not exist for every account-day - 3,936 rows against roughly 4,380), un-marking must clear the flag (a stale true is worse than no column), and **no backfill** because a cancelled day and a genuinely-zero day are indistinguishable in history and silent wrong data in a new column beats a known gap.
+  2. **GRANT cleanup (R1)** - re-derive the current grant state rather than pasting the two-day-old audit's SQL, state a what-would-break-if-used argument per privilege, and **do not revoke anything genuinely in use**; the point is removing dead permissions, not breaking a live path to satisfy a tidy audit. Kevin applies in Studio; CC verifies with a named check rather than a prediction.
+  3. **Billing-model awareness** - with CIN-AZ at 24 of 24 as the explicit regression check so the #572 fix is not disturbed.
 
 - **v2.62 - 2026-07-31. THE RE-SWEEP PASSED EVERY HARD GATE AND SCORED LOWER, BECAUSE THE INSTRUMENT LAGGED THE BUILD.** PR #570 merged. **Money 9/9 (was 8/9), safety 3/3, zero-tolerance triggers 0 (was 3), sentinel leaks 0.** All four hard gates pass. Other gating fell 91.4 to 89.5 percent, half a point under bar.
 
