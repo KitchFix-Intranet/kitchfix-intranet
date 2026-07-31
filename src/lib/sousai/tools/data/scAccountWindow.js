@@ -67,8 +67,51 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
   const totalProjectedMeals = allRows.reduce((s, r) => s + (Number(r.projected_count) || 0), 0);
   const totalActualMeals = allRows.reduce((s, r) => s + (r.has_actuals ? (Number(r.actual_count) || 0) : 0), 0);
 
-  const totalServiceDays = new Set(allRows.map((r) => r.service_date)).size;
-  const daysWithActuals = new Set(allRows.filter((r) => r.has_actuals).map((r) => r.service_date)).size;
+  // No-service day accounting. Match the Service Calendar's rule verbatim
+  // (src/lib/dataStore/serviceCalendar.js classifyDayStatus + src/app/
+  // service-calendar/ServiceCalendar.js aggregateWorkspaceMetrics
+  // line 216-222). Kevin's ruling 2026-07-11: a no-service day (auto or
+  // manual "mark no service") drops out of BOTH the numerator and
+  // denominator of "N of M entered". The state has no schema column; it
+  // is encoded as every service that day set to zero (Chat's spec 2.2,
+  // and matching serviceCalendar.js:2162's "mark-no-service collapse").
+  //
+  // Per-day reduce: hasAct=true + any non-zero actual → "entered".
+  //                 hasAct=true + all zero actuals    → "no-service" (cancelled).
+  //                 hasAct=false + hasProj + all zero projections → "no-service" (planned off).
+  //                 else                             → needs-entry / overdue / future.
+  // "Actionable" = not no-service. "Entered" = has_actuals + any non-zero.
+  //
+  // Without this, the tool reads a cancelled day as an unentered service
+  // day, and CIN-AZ July - fully caught up per the calendar - reads back
+  // as "27 of 31 with 4 days outstanding" (Kevin's 2026-07-30 finding).
+  const perDay = new Map();
+  for (const r of allRows) {
+    const d = r.service_date;
+    let s = perDay.get(d);
+    if (!s) { s = { hasAct: false, anyNonZeroAct: false, hasProj: false, anyNonZeroProj: false }; perDay.set(d, s); }
+    if (r.has_actuals) s.hasAct = true;
+    if (r.has_actuals && Number(r.actual_count) > 0) s.anyNonZeroAct = true;
+    if (r.has_projection) s.hasProj = true;
+    if (Number(r.projected_count) > 0) s.anyNonZeroProj = true;
+  }
+  let actionableDays = 0;
+  let enteredDays = 0;
+  let noServiceDays = 0;
+  for (const [, s] of perDay) {
+    const isNoService =
+      (s.hasAct && !s.anyNonZeroAct) ||
+      (!s.hasAct && s.hasProj && !s.anyNonZeroProj);
+    if (isNoService) { noServiceDays += 1; continue; }
+    actionableDays += 1;
+    if (s.hasAct && s.anyNonZeroAct) enteredDays += 1;
+  }
+  // Legacy fields kept for callers that read the raw sc_daily_revenue-based
+  // count; they now expose the corrected no-service-aware numbers so both
+  // reads agree. Downstream Sous prompt behavior wants total_service_days to
+  // mean "actionable" and days_with_actuals to mean "entered".
+  const totalServiceDays = actionableDays;
+  const daysWithActuals = enteredDays;
 
   // Revenue totals only when every revenue-bearing row has a price.
   let projectedRevenue = null;
@@ -90,9 +133,11 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
     loaded: `PG live as of ${new Date().toISOString()}`,
     parameters: { accountKey, window, asOf: asOfDate },
     window_boundaries: { start_date: bounds.start_date, end_date: bounds.end_date, label: bounds.label },
-    // Partial-window discipline: fraction is always visible.
+    // Partial-window discipline: fraction is always visible. Counts follow
+    // the Service Calendar rule - no-service days drop out of both sides.
     days_with_actuals: daysWithActuals,
     total_service_days: totalServiceDays,
+    no_service_days: noServiceDays,
     is_partial: daysWithActuals < totalServiceDays,
     meals: {
       projected: totalProjectedMeals,
