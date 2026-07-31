@@ -14,10 +14,10 @@
 //
 // Content (per RENDER_STL_FL.html, owner-approved):
 //   - Label: "CONFIRMED" (touched) or "SCHEDULED" (pristine)
-//   - Hero: {served} served (count, no dollars anywhere)
+//   - Hero: {count} meals, with a "~" prefix when pristine (:102)
 //   - Progress: enteredCount / totalToEnter services (existing primitive)
 //   - Per-service list: name + count, NO amount cell
-//   - Month block: Days confirmed X/Y · Served to date · Billing: Flat fee
+//   - Month block: Days confirmed X/Y · Meals to date · Billing: Flat fee
 //
 // Reuses:
 //   - .sc-v2-entry-rail-shell (container geometry)
@@ -165,7 +165,7 @@ export default function BillRailFee({
             </span>
           </div>
           <div className="sc-v2-entry-rail-month-row">
-            <span className="sc-v2-entry-rail-month-label">Served to date</span>
+            <span className="sc-v2-entry-rail-month-label">Meals to date</span>
             <span className="sc-v2-entry-rail-month-value">
               {periodStats.servedToDate.toLocaleString()}
             </span>

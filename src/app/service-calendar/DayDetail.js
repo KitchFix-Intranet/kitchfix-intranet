@@ -221,13 +221,13 @@ export const LEDGER_HEAD_NO_AMOUNT = (
 
 // 2-col fee variant for fee-no-dollar accounts (STL-FL). NO Rate cell
 // (prices are $0 by design; a rate column would leak "$0.00 / meal"
-// on every row) and NO Amount cell. Column word is "Served" per the
-// vocab swap, not "Qty". Pairs with .sc-day-ledger--fee on the
-// wrapper (dayEntryV2.css). Phase 2B gate-2 fix (2026-07-25).
+// on every row) and NO Amount cell. Column word is "Qty" to match
+// the per-meal header (LEDGER_HEAD). Pairs with .sc-day-ledger--fee
+// on the wrapper (dayEntryV2.css). Phase 2B gate-2 fix (2026-07-25).
 export const LEDGER_HEAD_FEE = (
   <div className="sc-day-ledger-head" aria-hidden="true">
     <span className="sc-lh-name">Service</span>
-    <span className="sc-lh-qty">Served</span>
+    <span className="sc-lh-qty">Qty</span>
   </div>
 );
 

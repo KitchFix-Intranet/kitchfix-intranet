@@ -1209,7 +1209,7 @@ function DayEntryV2({
               groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
               projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
               variant={feeNoDollar ? "fee" : undefined}
-              unit={feeNoDollar ? "served" : "meals"}
+              unit="meals"
               expanded={true}
             />
           ))}
@@ -1232,7 +1232,7 @@ function DayEntryV2({
                   groupSummary={feeNoDollar ? feeGroupSummary : groupSummary}
                   projectedGroupSummary={feeNoDollar ? feeProjectedGroupSummary : projectedGroupSummary}
                   variant={feeNoDollar ? "fee" : undefined}
-                  unit={feeNoDollar ? "served" : "meals"}
+                  unit="meals"
                   expanded={false}
                 />
               ))}
@@ -1353,7 +1353,7 @@ function DayEntryV2({
               <span className="sc-v2-entry-actions-total-value">
                 {hasTouchedAny ? "" : "~"}
                 {(hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled).toLocaleString()}
-                {" served"}
+                {" meals"}
               </span>
             </>
           ) : (
@@ -1401,7 +1401,7 @@ function DayEntryV2({
         barLabel={hasTouchedAny ? (feeNoDollar ? "Confirmed" : "Entered") : (feeNoDollar ? "Scheduled" : "Projected")}
         barValue={
           feeNoDollar
-            ? `${hasTouchedAny ? "" : "~"}${(hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled).toLocaleString()} served`
+            ? `${hasTouchedAny ? "" : "~"}${(hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled).toLocaleString()} meals`
             : `${hasTouchedAny ? "" : "~"}${fmt$(hasTouchedAny ? enteredTotals.revenue : dayProjection.revenue)}`
         }
         barStatus={`${enteredCount} of ${totalToEnter} ${feeNoDollar ? "confirmed" : "entered"}`}
@@ -1457,7 +1457,7 @@ export function GroupBlock({
   groupSummary, projectedGroupSummary,
   expanded,
   variant,           // undefined | "perMeal" | "bulk" | "fee"
-  unit = "meals",    // Phase 2B: fee-no-dollar variant passes "served"
+  unit = "meals",
 }) {
   const wrapperClass = variant === "fee"
     ? "sc-day-ledger sc-day-ledger--fee"
@@ -1970,11 +1970,7 @@ function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnt
         <h4 className="sc-v2-entry-modal-title">{title}</h4>
         {hasEnteredCounts ? (
           <p className="sc-v2-entry-modal-body">
-            This day has <strong>
-              {feeNoDollar
-                ? `${enteredMeals.toLocaleString()} served`
-                : `${enteredMeals.toLocaleString()} meal${enteredMeals === 1 ? "" : "s"}`}
-            </strong> {feeNoDollar ? "confirmed" : "recorded"} across <strong>{enteredServices} service{enteredServices === 1 ? "" : "s"}</strong>. Every service will be set to zero and an audit note added to the Ledger.
+            This day has <strong>{`${enteredMeals.toLocaleString()} meal${enteredMeals === 1 ? "" : "s"}`}</strong> {feeNoDollar ? "confirmed" : "recorded"} across <strong>{enteredServices} service{enteredServices === 1 ? "" : "s"}</strong>. Every service will be set to zero and an audit note added to the Ledger.
           </p>
         ) : (
           <p className="sc-v2-entry-modal-body">Every in-service service records zero. An audit note is appended.</p>
