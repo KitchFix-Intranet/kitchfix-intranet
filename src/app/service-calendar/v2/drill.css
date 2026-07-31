@@ -273,6 +273,27 @@
   line-height: 1.5;
 }
 
+/* R2-3 (2026-07-31) - drill-scoped section spacing tightens by one
+   token step across the two axes the RailShell composes on. Applies
+   ONLY to the drill via the .sc-drill-rail prefix; the overview
+   (SeasonRail via .sc-overview-rail) keeps its existing spacing.
+   The three targets, per token:
+     .sc-rail padding      space-4 (13.02px)  -> space-3 (9.77px)
+     .sc-rail child gap    space-3 (9.77px)   -> space-2 (6.51px)
+     .sc-rail-section pad  space-3            -> space-2
+     .sc-rail-section gap  space-2 (6.51px)   -> space-1 (3.26px)
+   Recovered on the resting rail, additive to R2-3's 48px queue-row
+   drop. Owner ruling: do not compress the hero or entry buttons;
+   only the between-section vertical gets tightened here. */
+.scv2 .sc-drill-rail .sc-rail {
+  padding: var(--sc2-space-3) var(--sc2-space-3);
+  gap: var(--sc2-space-2);
+}
+.scv2 .sc-drill-rail .sc-rail-section {
+  padding-top: var(--sc2-space-2);
+  gap: var(--sc2-space-1);
+}
+
 /* F1 (law 4): "totals incomplete" tag rendered inside the Weeks
    section header meta slot. Warn family, subordinate but distinct
    from the hero's dashed incomplete treatment above. */
