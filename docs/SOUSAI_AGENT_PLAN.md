@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.64
+**Version:** v2.65
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,24 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.65 - 2026-07-31. THE SC TEAM CORRECTED A RULE CHAT WAS ABOUT TO SHIP WRONG.** PR #575 merged - grant audit corrected from 36 to 59, method gap named, catalog-driven revoke block replacing the hardcoded list, standing lesson recorded in both the audit and the plan.
+
+  **The correction that matters: the flat-fee predicate is `flat_fee && hasHomestandData`, not `billing_model` alone.** Chat's draft prompt said read `billing_model` and treat `flat_fee` as actuals-not-expected. **`classifyDayStatus` has a fee branch taken on both halves, and that branch emits only `entered / future / away / exhibition / prep / off-season` - it has no path to `overdue` or `needs-entry` at all.**
+
+  **This explains the thing Chat guessed at and got wrong.** STL-FL tracks 71 days while three flat-fee siblings track zero. Chat speculated per-account policy or operator drift. **It is neither: STL-FL is `flat_fee` but `has_homestand_schedule` is false - its rows sit on `has_schedule_overlay` - so it falls to the per-meal branch and inherits overdue and needs-entry.** The classifier is internally consistent; Chat's model of it was wrong. **Shipping the original would have produced a rule wrong for two of five accounts**, and the SC review is the only reason it did not.
+
+  **`billing_model` provenance, verified by the SC team and now a build caveat:** all twelve rows carry `updated_at` of `2026-05-27T16:52:35` within a millisecond - a single bulk write. **And the values have since drifted from what `sc-1` seeds** (the migration sets `projections_drive_invoice` for the four MLB accounts and CIN-KY; today those hold `flat_fee` and `actuals_drive_invoice`) **with no row's `updated_at` moving.** Either the drift predates the stamp or the column has no update trigger. Either way it has not been touched through a tracked write path in sixty days. **Usable, but not authoritative-and-current the way a live view is.** Values: `actuals_drive_invoice` 6, `flat_fee` 5, `projections_drive_invoice` 0 (seeded, unused), **NULL 1 - CORP**, which is correct since CORP has no service calendar.
+
+  **Chat's CIN-AZ figure confirmed correct, the SC reviewer's withdrawn.** Their 62 planned days included 57 future days; Chat's 5 was bounded at today. Post-mark matched exactly at 40 on both sides. Their agent reproduced the 5 independently. **Chat's window was Jan 1 to Jul 31 - CIN-AZ's 212 projected days equals exactly that range, which is what confirms the bound.** The portfolio 327 stands.
+
+  **A finding from their side that is theirs to own but worth recording:** "this account does not serve Sundays" **exists nowhere as a fact.** All four PDC accounts are Sunday-heavy on planned no-service (TXR-AZ 73%, TBJ-FL 61%, TBR-FL 50%, CIN-AZ 42%); neither AAA account is. `sc_service_config` does not exist, `sc_services.active_until` is set on 0 of 105, and there is no day-of-week column anywhere. **The closure exists as roughly 52 individually zeroed projection rows per account per year.** The fragility: the planned-no-service clause requires `hasProj && !anyNonZeroProj`, so **if a projection import ever writes nothing instead of zeros, four PDC accounts sprout a fake year-long backlog overnight** - and the symptom would look like an entry failure, not an import change. CIN-AZ already has 7 Sundays carrying non-zero projections, so the pattern is not internally consistent even today. **Chat's position: guard the fragility first; it is live now and needs nothing we are building to become a problem.**
+
+  **Chat's position on their day-versus-rule question, recorded because it constrains our own argument:** solve the day, name the rule, do not merge them. **But the `no_service` column must be justified on its specifics - 31 percent incidence, five inference sites, one consumer that already broke - not on the general principle that consumers should not re-derive meaning from value patterns.** That principle applies at least as hard to the Sunday closure, and the column leaves it untouched. Arguing the general principle means owing the closure too.
+
+  **One record correction owed on our side.** PR #575 logged the first spike attempt's 6/7 as a model-variance flake. **It was not.** Case 1a run 1 answered from `search_documents` snippets and happened to land the correct five flat-fee accounts. **The prompt forbids answering an enumeration question from snippets and case 1a exists precisely to catch that - the grader fired correctly.** The standing rule is both-runs-pass, so 1a failed that attempt, and re-running to green is how a stochastic failure gets hidden. To be amended in the audit as a measured behaviour - the snippet shortcut taken on one of four runs - and it is a real datum for the eval set's flake tracking.
+
+  **Account-shape prompt issued** with the corrected predicate, the provenance caveat carried into the tool's own comments, four verification shapes (STL-MO fee branch, **STL-FL as the case that proves the predicate**, CIN-AZ as the 24-of-24 regression guard, CORP for the null), and an explicit instruction to report a failing spike run rather than re-run to green.
 
 - **v2.64 - 2026-07-31. GRANT REVOKE APPLIED - AND THE LIST WAS 59, NOT 36. THIRD MIGRATION-FILE UNDERCOUNT THIS WEEK.** PR #574 merged (docs, probe script, per-privilege safety arguments). **Kevin ran a look-first query before revoking rather than executing CC's block, and that caught it.**
 

@@ -18,6 +18,29 @@
 // Partial-window discipline: `days_with_actuals` and `total_service_days`
 // are always returned together, so a mid-window total reads as partial
 // even when arithmetically correct.
+//
+// Account-shape awareness (2026-07-31, plan v2.65): the tool now returns
+// billing_model + has_homestand_schedule so the model can name the shape.
+// The classifier's fee branch (see serviceCalendar.js:292) is taken when
+// `billing_model === "flat_fee" && hasHomestandData`. That branch never
+// emits `overdue` or `needs-entry` - a fee-branch account with zero actuals
+// is the expected shape, not outstanding work.
+//
+// Both halves of the predicate matter: STL-FL is flat_fee but has zero
+// homestand rows (uses has_schedule_overlay instead), so it goes through
+// the per-meal branch and the entry fraction there IS meaningful. Do NOT
+// classify by billing_model alone.
+//
+// Revenue on fee-branch: declined. The contracted fee does not move with
+// volume, so meals * per-meal price is a number with no meaning. The fee
+// lives in REF-141 and the account's REC record, not in any queryable
+// table. Same family as the missing-price rule.
+//
+// Provenance caveat on billing_model: all 12 accounts.updated_at land at
+// 2026-05-27T16:52:35 within a millisecond (single bulk write), and
+// values have since drifted from what sc-1's INSERT seeds - the column
+// has no trigger that stamps updated_at on hand edits. Treat billing_model
+// as an account attribute, not a freshly-verified fact.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
@@ -45,6 +68,21 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
   }
 
   const sb = getSupabase();
+
+  // Read the account row for shape awareness. Mirror the classifier's
+  // predicate exactly (serviceCalendar.js:292): fee branch is taken when
+  // billing_model === "flat_fee" AND the window actually has homestand
+  // rows. The `has_homestand_schedule` flag is the necessary gate; the
+  // window-level presence is validated when we compute hasHomestandData
+  // below.
+  const { data: acctRow, error: acctErr } = await sb
+    .from("accounts")
+    .select("billing_model, has_homestand_schedule, has_schedule_overlay")
+    .eq("team_key", accountKey)
+    .maybeSingle();
+  if (acctErr) throw new Error(`scAccountWindow: accounts fetch failed: ${acctErr.code || "?"} ${acctErr.message}`);
+  const billingModel = acctRow?.billing_model || null;
+  const hasHomestandScheduleFlag = !!acctRow?.has_homestand_schedule;
 
   // Resolve window boundaries.
   const bounds = await resolveWindowBounds(sb, accountKey, window, asOfDate);
@@ -106,20 +144,42 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
     actionableDays += 1;
     if (s.hasAct && s.anyNonZeroAct) enteredDays += 1;
   }
-  // Legacy fields kept for callers that read the raw sc_daily_revenue-based
-  // count; they now expose the corrected no-service-aware numbers so both
-  // reads agree. Downstream Sous prompt behavior wants total_service_days to
-  // mean "actionable" and days_with_actuals to mean "entered".
+
+  // Account-shape branch selection. Mirrors serviceCalendar.js:292 -
+  // `billing_model === "flat_fee" && hasHomestandData`. The tool answers
+  // at whole-window scope, so `has_homestand_schedule` (the account-level
+  // gate the classifier uses to decide whether to even fetch a homestand
+  // map) is the correct mirror here. That keeps STL-MO fee-branch in
+  // January when no homestand rows exist in-window - the account's
+  // persistent shape does not flip with the season.
+  //
+  // STL-FL trap: STL-FL is flat_fee but has_homestand_schedule=false
+  // (it uses has_schedule_overlay instead). The classifier sends it
+  // through the per-meal branch. Both halves matter - do not classify
+  // by billing_model alone.
+  const isFeeBranch = billingModel === "flat_fee" && hasHomestandScheduleFlag;
+
+  // Fee-branch accounts: the calendar itself never marks these days
+  // needs-entry, so entered/actionable ratio is not a completeness
+  // measure. Present the raw counts (meal counts still drive staffing
+  // and food cost) but do not frame low entry as outstanding work.
   const totalServiceDays = actionableDays;
   const daysWithActuals = enteredDays;
+  const isPartial = isFeeBranch ? false : daysWithActuals < totalServiceDays;
 
-  // Revenue totals only when every revenue-bearing row has a price.
+  // Revenue: two decline paths.
+  //   (1) fee-branch account - the contracted fee does not move with
+  //       meal counts, so meals * per-meal price is a number with no
+  //       meaning. Point at REF-141 and the account's REC record.
+  //   (2) unpriced services in-window (existing missing-price rule).
   let projectedRevenue = null;
   let actualRevenue = null;
   let revenueDeclineReason = null;
   const unpricedServices = [...new Set(unpriced.map((r) => `${r.service_name} (id ${r.service_id})`))];
 
-  if (unpriced.length === 0) {
+  if (isFeeBranch) {
+    revenueDeclineReason = `${accountKey} is a fee-branch account (billing_model='flat_fee' + has_homestand_schedule=true). The contracted fee does not move with meal counts, so meals * per-meal price is not the revenue figure. The fee lives in REF-141 (Billing Model Quick Reference) and the account's REC record, not in any queryable table.`;
+  } else if (unpriced.length === 0) {
     projectedRevenue = priced.reduce((s, r) => s + (Number(r.projected_revenue) || 0), 0);
     actualRevenue = priced.filter((r) => r.has_actuals)
       .reduce((s, r) => s + (Number(r.actual_revenue) || 0), 0);
@@ -128,23 +188,36 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
   }
 
   return {
-    source: "sc_daily_revenue" + (window === "month" ? " (+ sc_month_summary spot-check)" : ""),
+    source: "sc_daily_revenue + accounts" + (window === "month" ? " (+ sc_month_summary spot-check)" : ""),
     scope: "current-season Service Calendar. Revenue excludes is_non_revenue services (Fun Money etc.); meal counts include all services.",
     loaded: `PG live as of ${new Date().toISOString()}`,
     parameters: { accountKey, window, asOf: asOfDate },
     window_boundaries: { start_date: bounds.start_date, end_date: bounds.end_date, label: bounds.label },
+    // Account shape - lets the prompt name the account rather than
+    // encoding "flat-fee means no actuals expected" in the tool. Both
+    // halves are exposed so a caller can see the STL-FL trap directly.
+    account_shape: {
+      billing_model: billingModel,
+      has_homestand_schedule: hasHomestandScheduleFlag,
+      classifier_branch: isFeeBranch ? "fee" : "per_meal",
+      note: isFeeBranch
+        ? "Fee branch. The Service Calendar's fee branch never marks days needs-entry or overdue - a low entry rate here is the expected shape, not outstanding work."
+        : "Per-meal branch. Entry fraction is a real completeness measure; unentered days are gaps worth chasing.",
+    },
     // Partial-window discipline: fraction is always visible. Counts follow
     // the Service Calendar rule - no-service days drop out of both sides.
+    // For fee-branch accounts, is_partial is fixed at false (the calendar
+    // never treats a fee-branch day as unentered work).
     days_with_actuals: daysWithActuals,
     total_service_days: totalServiceDays,
     no_service_days: noServiceDays,
-    is_partial: daysWithActuals < totalServiceDays,
+    is_partial: isPartial,
     meals: {
       projected: totalProjectedMeals,
       actual: totalActualMeals,
     },
     revenue: revenueDeclineReason
-      ? { available: false, decline_reason: revenueDeclineReason, unpriced_services: unpricedServices }
+      ? { available: false, decline_reason: revenueDeclineReason, unpriced_services: unpricedServices, fee_branch: isFeeBranch }
       : { available: true, projected: projectedRevenue, actual: actualRevenue, variance: (actualRevenue ?? 0) - (projectedRevenue ?? 0) },
     row_count: allRows.length,
   };
