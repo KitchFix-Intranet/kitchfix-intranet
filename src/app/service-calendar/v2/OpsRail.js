@@ -154,26 +154,31 @@ function OpsRailBase({
     ? scopedTotal
     : (hasHomestandSchedule ? seasonTotals.totalGameDays : seasonTotals.totalActionableDays);
   // Phase 2B (2026-07-25): STL-FL branch (!hasHomestandSchedule under
-  // isFeeAccount at the mount) swaps "ENTERED" -> "CONFIRMED" and
-  // "meals" -> "served". MLB branch (hasHomestandSchedule) untouched.
-  // OpsRail is fee-only at the mount site (ServiceCalendar.js:2857),
-  // so the !hasHomestandSchedule branch is guaranteed STL-FL and the
-  // swap does not perturb any per-meal surface.
+  // isFeeAccount at the mount) swaps "ENTERED" -> "CONFIRMED". MLB
+  // branch (hasHomestandSchedule) untouched. OpsRail is fee-only at
+  // the mount site (ServiceCalendar.js:2857), so the
+  // !hasHomestandSchedule branch is guaranteed STL-FL and the swap
+  // does not perturb any per-meal surface.
+  //
+  // R3-1 v2 (2026-07-31): the unit word aligned to "meals" everywhere
+  // (owner ruling). The label VERB "DAYS CONFIRMED" stays on the fee
+  // branch - describes what the operator did on a flat-fee account,
+  // which is different from what they do on per-meal. Only the unit
+  // COUNTED (formerly "served" here) aligned.
   const heroLabelText = hasHomestandSchedule ? "GAME DAYS" : "DAYS CONFIRMED";
   const heroLongLabel = hasHomestandSchedule ? "GAME DAYS ENTERED" : "DAYS CONFIRMED";
   // Caption:
-  //  - Drill: confirmed/total + scoped served. Homestand-count fact
+  //  - Drill: confirmed/total + scoped meals. Homestand-count fact
   //    dropped on drill (aggregateWorkspaceMetrics doesn't carry
   //    homestand rollups; owner-accepted 2026-07-21 - strip doesn't
   //    show it either, so this matches the strip's minimalism).
-  //  - Overview: confirmed/total + season served + (MLB) season
+  //  - Overview: confirmed/total + season meals + (MLB) season
   //    homestand count - unchanged from OV-3 F10.
-  const unitWord = hasHomestandSchedule ? "meals" : "served";
   const heroCaption = isDrill
-    ? `${scopedComplete} of ${scopedTotal} · ${scopedMeals.toLocaleString("en-US")} ${unitWord}`
+    ? `${scopedComplete} of ${scopedTotal} · ${scopedMeals.toLocaleString("en-US")} meals`
     : (hasHomestandSchedule
         ? `${seasonTotals.gameDaysEntered} of ${seasonTotals.totalGameDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} meals · ${seasonTotals.homestandsComplete} of ${seasonTotals.totalHomestands} homestands`
-        : `${seasonTotals.daysEntered} of ${seasonTotals.totalActionableDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} served`);
+        : `${seasonTotals.daysEntered} of ${seasonTotals.totalActionableDays} · ${seasonTotals.mealsYTD.toLocaleString("en-US")} meals`);
   // Projection on drill: "of {total}" - value + label + projection on
   // one baseline, matching DrillRail.js:163 + 176's per-meal shape.
   const heroProjection = isDrill ? `of ${heroTotal || 0}` : null;
