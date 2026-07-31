@@ -103,6 +103,242 @@
   line-height: 1.4;
 }
 
+/* ─── MLB rail rev3 (2026-07-30) ───────────────────────────────
+   Pinned in-progress card (always open when a block is
+   in-progress) + three collapsed groups (closed-out, actuals-due,
+   upcoming). Group items are rows that expand into inline cards
+   beneath them. Single 3px left accent runs unbroken through the
+   row + card as one visual unit.
+
+   Every surface is navy-native. Do not use --sc2-surface-card. */
+
+.scv2 .sc-rail-mlb-subtitle {
+  margin: var(--sc2-space-1) 0 var(--sc2-space-2) 0;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pinned in-progress card. Sits directly below the hero, always
+   open, no header, no toggle. Left accent uses the in-progress
+   blue token so it reads distinct from the group items below. */
+.scv2 .sc-rail-mlb-pinned {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+  margin-top: var(--sc2-space-3);
+  padding: var(--sc2-space-3);
+  border-radius: var(--sc2-radius-container);
+  border-left: 3px solid var(--sc2-rail-accent-active);
+  background: var(--sc2-rail-card-bg);
+}
+.scv2 .sc-rail-mlb-pinned-tag {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-muted);
+}
+.scv2 .sc-rail-mlb-pinned-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--sc2-space-2);
+  align-items: baseline;
+  font-size: var(--sc2-size-subhead);
+  color: var(--sc2-rail-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.scv2 .sc-rail-mlb-pinned-id {
+  font-weight: var(--sc2-wt-bold);
+}
+.scv2 .sc-rail-mlb-pinned-opp {
+  font-weight: var(--sc2-wt-medium);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scv2 .sc-rail-mlb-pinned-money {
+  justify-self: end;
+  font-weight: var(--sc2-wt-semibold);
+}
+.scv2 .sc-rail-mlb-pinned-detail {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Collapsed group. Header ALWAYS one row tall regardless of count. */
+.scv2 .sc-rail-mlb-group {
+  margin-top: var(--sc2-space-3);
+}
+.scv2 .sc-rail-mlb-group-header {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  width: 100%;
+  padding: var(--sc2-space-2) 0;
+  background: transparent;
+  border: none;
+  border-top: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+  color: var(--sc2-rail-text-item);
+  cursor: pointer;
+  text-align: left;
+}
+.scv2 .sc-rail-mlb-group-header:hover {
+  color: var(--sc2-rail-text-strong);
+}
+.scv2 .sc-rail-mlb-group-header:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+.scv2 .sc-rail-mlb-group-label {
+  flex: 1 1 auto;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+}
+.scv2 .sc-rail-mlb-group-count {
+  flex: 0 0 auto;
+  color: var(--sc2-rail-text-strong);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-caption);
+}
+.scv2 .sc-rail-mlb-group-chevron {
+  flex: 0 0 auto;
+  transition: transform 0.15s ease;
+  display: inline-flex;
+  color: var(--sc2-rail-text-muted);
+}
+.scv2 .sc-rail-mlb-group[data-open="true"] .sc-rail-mlb-group-chevron {
+  transform: rotate(180deg);
+}
+
+.scv2 .sc-rail-mlb-group-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--sc2-space-1) 0 var(--sc2-space-2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+}
+
+/* Item wrapper. Each item = one row (button) plus an optional
+   inline card. The wrapper carries the state accent as a CSS
+   custom property so both the row and the card share the same
+   3px left border - visually a single unbroken stripe. */
+.scv2 .sc-rail-mlb-item {
+  --sc-item-accent: var(--sc2-rail-text-muted);
+}
+.scv2 .sc-rail-mlb-item--actuals-due  { --sc-item-accent: var(--sc2-rail-accent-warn); }
+.scv2 .sc-rail-mlb-item--closed-out   { --sc-item-accent: var(--sc2-rail-accent-success); }
+.scv2 .sc-rail-mlb-item--in-progress  { --sc-item-accent: var(--sc2-rail-accent-active); }
+.scv2 .sc-rail-mlb-item--upcoming     { --sc-item-accent: var(--sc2-rail-text-muted); }
+
+.scv2 .sc-rail-mlb-item-row {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--sc2-space-2);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--sc2-space-2);
+  background: var(--sc2-rail-card-bg);
+  border: none;
+  border-left: 3px solid var(--sc-item-accent);
+  border-radius: var(--sc2-radius-cell);
+  color: var(--sc2-rail-text-item);
+  font-size: var(--sc2-size-caption);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  text-align: left;
+}
+.scv2 .sc-rail-mlb-item-row:hover {
+  color: var(--sc2-rail-text-strong);
+}
+.scv2 .sc-rail-mlb-item-row:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
+/* When the item is open, the row's bottom corners lose their
+   rounding so it reads continuous with the card below (which drops
+   its top-corner rounding). Closed rows keep full rounding. */
+.scv2 .sc-rail-mlb-item--open .sc-rail-mlb-item-row {
+  border-radius: var(--sc2-radius-cell) var(--sc2-radius-cell) 0 0;
+}
+
+.scv2 .sc-rail-mlb-item-id {
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-rail-text-strong);
+}
+.scv2 .sc-rail-mlb-item-opp {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sc2-rail-text-item);
+}
+.scv2 .sc-rail-mlb-item-money {
+  justify-self: end;
+  color: var(--sc2-rail-text-strong);
+  font-weight: var(--sc2-wt-semibold);
+}
+
+/* Inline card that opens beneath a row. Shares the row's left
+   accent so the 3px stripe reads unbroken. Top corners flat (they
+   merge with the row's bottom edge). */
+.scv2 .sc-rail-mlb-item-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-3);
+  background: var(--sc2-rail-card-bg);
+  border-left: 3px solid var(--sc-item-accent);
+  border-radius: 0 0 var(--sc2-radius-cell) var(--sc2-radius-cell);
+}
+.scv2 .sc-rail-mlb-item-detail {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-item);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons. CTA green (filled) for actuals-due, outlined for
+   everything else. Owner: only actionable things are green. */
+.scv2 .sc-rail-mlb-btn {
+  appearance: none;
+  border-radius: var(--sc2-radius-control);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
+  cursor: pointer;
+  text-align: center;
+}
+.scv2 .sc-rail-mlb-btn--cta {
+  border: none;
+  background: var(--sc2-rail-cta-bg);
+  color: var(--sc2-rail-cta-text);
+}
+.scv2 .sc-rail-mlb-btn--cta:hover {
+  background: var(--sc2-rail-cta-bg-hover);
+}
+.scv2 .sc-rail-mlb-btn--outlined {
+  border: var(--sc2-border-thin) solid var(--sc2-rail-border);
+  background: transparent;
+  color: var(--sc2-rail-text-strong);
+}
+.scv2 .sc-rail-mlb-btn--outlined:hover {
+  background: var(--sc2-rail-bg-shade);
+}
+.scv2 .sc-rail-mlb-btn:focus-visible {
+  outline: 2px solid var(--sc2-rail-accent-warn);
+  outline-offset: 2px;
+}
+
 /* ─── Contract block (Phase 2B, 2026-07-25) ────────────────────
    STL-FL fee-no-dollar rail addition. States the annual fee once
    so the operator sees where the money went even though nothing

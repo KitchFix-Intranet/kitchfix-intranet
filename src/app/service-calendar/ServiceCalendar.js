@@ -14,7 +14,13 @@ import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
 import { fmt$, fmtDateShort } from "./season/format";
 import { isActionableDay } from "./season/dayPredicates";
-import { derivePhaseTimeline, collectSpringDates } from "./season/phaseDerivation";
+import { derivePhaseTimeline } from "./season/phaseDerivation";
+// M-4b (2026-07-30): MLB accounts inherit their PDC sibling's
+// spring window so the copper corner wedge marks the weeks when
+// the affiliate complex is running and a chef may be pulled in.
+// Zero effect on non-MLB accounts (falls through to the own-
+// timeline path).
+import { resolveSpringDateSet } from "./season/mlbSpringSibling";
 import { isScAdmin } from "@/lib/admin";
 import AdminPanel from "./admin/AdminPanel";
 import { tierFromRoles, computeInitialView } from "./computeInitialView";
@@ -1457,9 +1463,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     () => derivePhaseTimeline(data?.account?.key, data?.account?.category, year),
     [data?.account?.key, data?.account?.category, year]
   );
+  // M-4b (2026-07-30): spring set redirects to the PDC sibling on
+  // MLB accounts. `phaseTimeline` above stays account-own so tints,
+  // PhaseStrip, and the ribbon rider are unchanged; only the wedge
+  // data source changes here.
   const springDateSet = useMemo(
-    () => collectSpringDates(phaseTimeline),
-    [phaseTimeline]
+    () => resolveSpringDateSet(data?.account?.key, data?.account?.category, year),
+    [data?.account?.key, data?.account?.category, year]
   );
 
   // Momentum toast helpers - the four submission successes below emit a

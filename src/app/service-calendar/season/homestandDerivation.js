@@ -1,3 +1,5 @@
+import { MLB_HOMESTAND_SURFACE_ACCOUNTS } from "../v2/pilots";
+
 // Homestand derivation - the SeasonStepper's data source.
 //
 // M-0 (2026-08-04): derivation switched from grouping by
@@ -213,6 +215,77 @@ export function pickFocusSegment(segments) {
   const done = [...segments].reverse().find((s) => s.status === "done");
   if (done) return { segment: done, kind: "done" };
   return null;
+}
+
+// M-4b (2026-07-29): dateToHomestandKey - resolves a date to the
+// stable key of the homestand block that contains it, or null when
+// the date is inside no block (AWAY / gap / off-season / prep).
+//
+// Reads the M-3 payload homestands[] array (NOT the derived-segments
+// output) so the key matches what the URL uses and what
+// sc_homestand_closeout.homestand_key stores. Callers pass the array
+// as-is from `data.homestands`.
+//
+// Owner ruling 2026-07-29 (M-4b §1): the click gate on MLB day-tiles
+// routes to `?homestand=<key>`. A tile whose date is not inside any
+// homestand does nothing - no dead click, no error - so this returns
+// null and the caller omits onClick entirely, keeping DaySquare's
+// display-only shape (no cursor, no button role).
+//
+// Complexity: linear scan over the array (13 entries for CIN - OH).
+// A pre-indexed date -> key map is not worth the code today.
+export function dateToHomestandKey(dateIso, homestands) {
+  if (!dateIso || !Array.isArray(homestands)) return null;
+  for (const hs of homestands) {
+    if (!hs?.key) continue;
+    if (dateIso >= hs.startDate && dateIso <= hs.endDate) return hs.key;
+  }
+  return null;
+}
+
+// M-4b (2026-07-30 step 6): tile navigation factory.
+//
+// Owner ruling: `MLB_HOMESTAND_SURFACE_ACCOUNTS.has(accountKey) &&
+// day?.dayType === "GAME" && dateToHomestandKey(...) !== null` at
+// both card renderCell sites. Both import this one helper so
+// removal is one place.
+//
+// Contract:
+//   - Non-MLB accounts (per_meal + STL - FL + AAA): returns null.
+//     The card never wires onClick and DaySquare stays display-only.
+//   - MLB accounts: returns a per-tile factory that yields either a
+//     bound click handler (when the tile is a GAME day inside a
+//     homestand) or null (any other case).
+//   - A tile with no containing homestand gets no onClick at all -
+//     no dead clicks per owner constraint.
+//
+// Interaction with the M-3 inertness fence (PR #564): none. This
+// helper's click routes via `onHomestandClick` -> router.push
+// (`?homestand=<key>`) at the parent. `setFocusDay` is never
+// called. The fence's job (block every setFocusDay opener on MLB)
+// is unaffected.
+export function makeTileHomestandClick(accountKey, homestands, onHomestandClick) {
+  if (typeof onHomestandClick !== "function") return null;
+  if (!isMlbSurface(accountKey)) return null;
+  return (day, dateIso) => {
+    if (day?.dayType !== "GAME") return null;
+    const key = dateToHomestandKey(dateIso, homestands);
+    if (!key) return null;
+    // stopPropagation prevents the click from also firing the
+    // article-level drill handlers on PeriodCard (article is
+    // role="button") and MonthCard (drill overlay is a sibling
+    // absolute button). A tile click routes to the homestand
+    // scope; it must NOT also open the period/month drill.
+    return (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      onHomestandClick(key);
+    };
+  };
+}
+
+// Membership test kept local so the helper reads self-contained.
+function isMlbSurface(accountKey) {
+  return MLB_HOMESTAND_SURFACE_ACCOUNTS.has(accountKey);
 }
 
 // "Jun 22 - Jun 28" / "Jun 28 - Jul 5" - the date-range caption used

@@ -76,6 +76,16 @@ export default function HomestandLegend() {
         />
         <span className="sc-hs-legend-label">New month</span>
       </div>
+      {/* M-4b step 6 rider (2026-07-30): payroll-week divider.
+          Owner ruling: a mark nobody can decode is worse than no
+          mark, so this legend entry ships with the divider itself. */}
+      <div className="sc-hs-legend-item" role="listitem">
+        <span
+          className="sc-hs-legend-swatch sc-hs-legend-swatch--weekbreak"
+          aria-hidden="true"
+        />
+        <span className="sc-hs-legend-label">Payroll week</span>
+      </div>
     </div>
   );
 }

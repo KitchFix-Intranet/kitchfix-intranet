@@ -108,6 +108,19 @@ function monthName(iso) {
   return MON_SHORT[d.getMonth()];
 }
 
+// Monday starts the payroll week (owner ruling 2026-07-30). A
+// divider falls BETWEEN a Sunday cell and the next Monday cell so
+// a chef sees where the overtime week breaks inside the strip.
+// Noon anchor sidesteps DST.
+function dayOfWeek(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return d.getDay();   // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+}
+function isSundayToMondaySeam(prevIso, iso) {
+  if (!prevIso || !iso) return false;
+  return dayOfWeek(prevIso) === 0 && dayOfWeek(iso) === 1;
+}
+
 export default function DayStrip({
   domainStart,   // ISO, inclusive - block.startDate - 1
   domainEnd,     // ISO, inclusive - block.endDate
@@ -125,7 +138,8 @@ export default function DayStrip({
     // Month-boundary marker BETWEEN two cells where the month changes.
     // Renders a thin vertical rule with the incoming month labeled
     // above it so both sides are named (owner ruling, prompt §4.4).
-    if (prevIso && monthOf(iso) !== monthOf(prevIso)) {
+    const monthBreak = prevIso && monthOf(iso) !== monthOf(prevIso);
+    if (monthBreak) {
       nodes.push(
         <div
           key={`brk-${iso}`}
@@ -135,6 +149,28 @@ export default function DayStrip({
         >
           <span className="sc-daystrip-monthbreak-label">{monthName(iso)}</span>
         </div>
+      );
+    }
+
+    // Payroll-week divider BETWEEN a Sunday and the next Monday.
+    // Owner ruling 2026-07-30: Monday-Sunday payroll week. Budget
+    // includes overtime at 1.5x over 40 hours per week, so a chef
+    // scheduling an eleven-day homestand needs to see where the
+    // seven-day and four-day slices break. Quiet hairline - if it
+    // competes with the month-boundary marker it is too loud
+    // (owner). Skip when:
+    //   - the seam already carries a month break (avoid doubling)
+    //   - the seam is the very first (leading pre-day to first
+    //     game day), because the pre-day is contextual scaffolding
+    //     rather than part of the payroll week's work
+    if (!monthBreak && i > 1 && isSundayToMondaySeam(prevIso, iso)) {
+      nodes.push(
+        <div
+          key={`wbrk-${iso}`}
+          className="sc-daystrip-weekbreak"
+          role="separator"
+          aria-label={`New payroll week ${labelFor(iso)}`}
+        />
       );
     }
 

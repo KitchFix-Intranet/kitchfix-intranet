@@ -1908,6 +1908,7 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
   // rows carry only period + hourly_budget - the fields deriveLaborBudgets
   // reads and nothing else.
   let m2Homestands;
+  let m4bPeriodBudgets;
   if (MLB_HOMESTAND_SURFACE_ACCOUNTS.has(accountKey)) {
     // Re-derive rather than close over the derivedBlocks scoped inside
     // the outer flat_fee+hasHomestandData branch above. Pure function,
@@ -1935,6 +1936,13 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
         period: r.period,
         hourly_budget: r.hourly_budget,
       }));
+
+      // M-4b (2026-07-30): also expose the stripped budgets to the
+      // client so PeriodCard can render "Budget: $X" and MonthCard can
+      // name "Draws from P6 + P7" without re-reading sc_labor_budgets
+      // from the client. Same array deriveLaborBudgets reads below;
+      // no new server call.
+      m4bPeriodBudgets = strippedBudgets;
 
       const envelopes = deriveLaborBudgets(m2Blocks, strippedBudgets, periodRanges, {
         accountKey,
@@ -1981,6 +1989,7 @@ async function loadYearSummaryPostgres(accountKey, year, opts = {}) {
     today: todayBlock,
     periodRanges,
     ...(m2Homestands ? { homestands: m2Homestands } : {}),
+    ...(m4bPeriodBudgets ? { periodBudgets: m4bPeriodBudgets } : {}),
   };
 }
 

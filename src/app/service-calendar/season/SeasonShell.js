@@ -325,6 +325,14 @@ export default function SeasonShell({
                   /* V3 §6.6 - phase timeline for the header 3px tick
                      (phase-family tint of the month's dominant phase). */
                   phaseTimeline={phaseTimeline}
+                  /* M-4b step 6: tile navigation on MLB game days.
+                     accountKey + homestands + onHomestandClick feed
+                     makeTileHomestandClick inside MonthCard. Non-MLB
+                     accounts see null everywhere and tiles stay
+                     display-only. */
+                  accountKey={account?.key}
+                  homestands={homestands}
+                  onHomestandClick={onHomestandClick}
                 />
               </div>
             );
@@ -351,6 +359,9 @@ export default function SeasonShell({
              blocks scoped to this period, so both yearData and the
              account key thread down through PeriodGrid. */
           accountKey={account?.key}
+          /* M-4b step 6: tile navigation. */
+          homestands={homestands}
+          onHomestandClick={onHomestandClick}
         />
       )}
       </div>
@@ -430,6 +441,9 @@ function PeriodGrid({
   // M-0: forwarded to PeriodCard so its `deriveHomestandSubtitle`
   // can re-derive full-season blocks and filter to this period.
   accountKey,
+  // M-4b step 6: forwarded to PeriodCard for tile navigation.
+  homestands,
+  onHomestandClick,
 }) {
   if (!periodRanges?.length) {
     return (
@@ -461,6 +475,10 @@ function PeriodGrid({
                ordinal labels line up with the SeasonStepper. */
             yearData={yearData}
             accountKey={accountKey}
+            /* M-4b step 6: tile navigation on MLB game days inside
+               the period grid. */
+            homestands={homestands}
+            onHomestandClick={onHomestandClick}
           />
         </div>
       ))}
