@@ -29,7 +29,7 @@ import { useRef, useState } from "react";
 import {
   RailShell,
   RailHero,
-  RailRing,
+  RailProgressBlock,
   RailSection,
   RailScroll,
   RailQueueRow,
@@ -268,15 +268,20 @@ export default function DrillRail({
           DOM node stays mounted across refetch cycles and the CSS
           transition on stroke-dashoffset fires old->new.
           P3-B (2026-07-28): SessionStrip below the ring caption. */}
+      {/* R2-2 (2026-07-31) - ring becomes bar. Match the overview
+          shape exactly: horizontal progress, caption below, no
+          visible percent digit (percent stays on RailProgress's
+          role="progressbar" aria-valuenow for screen readers).
+          RailProgressBlock is also the Handoff flight destination
+          via registerFlightTarget - the block has real height + the
+          caption increments under an arriving pill. */}
       {ringData && (
-        <div className="sc-rail-ringbox">
-          <RailRing
-            pct={ringData.pct}
-            complete={ringData.complete}
-            ariaLabel={ringData.caption}
-          />
-          <span className="sc-rail-ringbox-caption">{ringData.caption}</span>
-        </div>
+        <RailProgressBlock
+          pct={ringData.pct}
+          complete={ringData.complete}
+          caption={ringData.caption}
+          ariaLabel={ringData.caption}
+        />
       )}
       {/* R2-1 - projection caption sits BELOW the days caption. Same
           class + treatment as the overview's post-R1-2 pattern; scope-

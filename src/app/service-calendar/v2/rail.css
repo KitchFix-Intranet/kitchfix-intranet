@@ -113,6 +113,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* R2-2 (2026-07-31) - Handoff flight destination wrapper for the
+   drill. Groups the bar + its caption as one node so the flight has
+   a rect with real height + area (registerFlightTarget reads it via
+   getBoundingClientRect). Layout is passive - bar and caption still
+   render at their existing sizes and spacing; the wrapper's only job
+   is to be a target and to keep them structurally paired. */
+.scv2 .sc-rail-progress-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+
 /* ─── MLB rail rev3 (2026-07-30) ───────────────────────────────
    Pinned in-progress card (always open when a block is
    in-progress) + three collapsed groups (closed-out, actuals-due,

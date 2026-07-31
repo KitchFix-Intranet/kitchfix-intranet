@@ -22,6 +22,7 @@ import {
   RailHero,
   RailHeroProgressCaption,
   RailProgress,
+  RailProgressBlock,
   RailRing,
   RailSection,
   RailScroll,
@@ -264,26 +265,38 @@ function OpsRailBase({
   return (
     <RailShell label={scopeLabel ? scopeLabel.toUpperCase() : ""}>
       {heroBlock}
-      {/* P3-A (2026-07-25): STL-FL (!hasHomestandSchedule) swaps the
-          progress bar for an arc-only ring per owner pick "option A" -
-          the 2B days-confirmed hero already carries the fraction, so
-          no inner label duplicates it. MLB (hasHomestandSchedule)
-          keeps <RailProgress + RailHeroProgressCaption> byte-identical
-          - the composition here is the ONLY place OpsRail branches on
-          hasHomestandSchedule for the hero visualization. */}
+      {/* R2-2 (2026-07-31) - STL-FL (!hasHomestandSchedule) swaps
+          from arc-only ring to bar-plus-caption via RailProgressBlock.
+          Owner ruling: match the overview's shape exactly - no
+          visible percent digit, percent stays on RailProgress's
+          role="progressbar" for screen readers. STL - FL vocabulary
+          preserved: heroCaption reads its 2B "confirmed / served"
+          text and passes through the block unchanged.
+          RailProgressBlock also registers as the Handoff flight
+          target on STL - FL - same code path as DrillRail's block
+          mount, so the pill still lands there.
+          MLB (hasHomestandSchedule) keeps <RailProgress> plus
+          separate <RailHeroProgressCaption> byte-identical per
+          owner ruling on R2-2's fences. MLB does not use v2 entry
+          (§7 fence) so no Handoff fires there, so no flight target
+          is needed. */}
       {!incomplete && (
-        hasHomestandSchedule
-          ? <RailProgress pct={heroPct} complete={heroPct === 100} />
-          : ringData && (
-              <RailRing
-                pct={ringData.pct}
-                showLabel={false}
-                complete={ringData.complete}
-                ariaLabel={ringData.caption}
-              />
-            )
+        hasHomestandSchedule ? (
+          <>
+            <RailProgress pct={heroPct} complete={heroPct === 100} />
+            <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>
+          </>
+        ) : (
+          ringData && (
+            <RailProgressBlock
+              pct={ringData.pct}
+              complete={ringData.complete}
+              caption={heroCaption}
+              ariaLabel={heroCaption}
+            />
+          )
+        )
       )}
-      {!incomplete && <RailHeroProgressCaption>{heroCaption}</RailHeroProgressCaption>}
       {!hasHomestandSchedule && <OpsSessionStrip />}
 
       {contractInfo && (
