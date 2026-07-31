@@ -152,6 +152,7 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
 
   let toolsUsed = 0;
   let finalRawText = null;
+  let finalStopReason = null;
   let firstTokenFired = false;
 
   // Every turn streams. Text deltas emit as `text-delta` events on the fly;
@@ -219,6 +220,7 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
         .filter((c) => c.type === "text")
         .map((c) => c.text)
         .join("");
+      finalStopReason = finalResp.stop_reason;
       trajectory.push({ tool: null, kind: "final", stop_reason: finalResp.stop_reason });
       break;
     }
@@ -234,6 +236,7 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
         .filter((c) => c.type === "text")
         .map((c) => c.text)
         .join("");
+      finalStopReason = resp.stop_reason;
       trajectory.push({ tool: null, kind: "final", stop_reason: resp.stop_reason });
       break;
     }
@@ -312,7 +315,38 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
     return false;
   });
 
-  let status = rawStatus || ((validSources.length === 0 && !hadSuccessfulDataToolCall) ? "declined" : "partial");
+  // Truncation handling. When the model hits max_tokens the stream ends
+  // mid-answer with no [[STATUS]] footer and (usually) no closing citation
+  // line, so parseAnswer returns rawStatus=null and cited=[]. The unfixed
+  // status fallback would treat the fragment as a refusal - that is the
+  // truncation-published-as-decline bug the 2026-07-30 re-sweep flagged on
+  // Q4.6 (40-line comparison table cut off mid-word on "Source",
+  // reported status=declined with empty sources).
+  //
+  // Rule (plan v2.62, mirroring the pagination "truncation must be visible"
+  // rule one layer up): a cut-off answer is a PARTIAL answer, never a
+  // decline. The answer text says so; the return carries a `truncated`
+  // flag; a trajectory event makes it countable.
+  const truncated = finalStopReason === "max_tokens";
+  let cleanedWithNote = cleaned;
+  if (truncated) {
+    trajectory.push({ tool: null, kind: "truncation", stop_reason: "max_tokens" });
+    emit({ kind: "truncation", stop_reason: "max_tokens" });
+    const note = "\n\n_[Response was cut off at the output-token cap. What is above is a partial answer; ask again for the rest or narrow the question.]_";
+    cleanedWithNote = cleaned + note;
+  }
+
+  let status;
+  if (truncated) {
+    // Never default to declined on truncation. Partial is honest - some
+    // answer landed, more was intended. If the fragment happens to include
+    // grounded citations, promote to grounded; otherwise stay partial.
+    status = rawStatus === "grounded" && validSources.length > 0 && phantomCitations.length === 0
+      ? "grounded"
+      : "partial";
+  } else {
+    status = rawStatus || ((validSources.length === 0 && !hadSuccessfulDataToolCall) ? "declined" : "partial");
+  }
   const flags = [];
   if (phantomCitations.length > 0) {
     flags.push({ phantom_citation: phantomCitations });
@@ -326,16 +360,17 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
 
   const declined = status === "declined";
 
-  emit({ kind: "done", status, sources: validSources });
+  emit({ kind: "done", status, sources: validSources, truncated });
 
   return {
-    answer: cleaned,
+    answer: cleanedWithNote,
     status,
     declined,
     decline_reason: declined ? decline_reason : null,
     sources: validSources,
     trajectory,
     usage,
+    truncated,
   };
 }
 

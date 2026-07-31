@@ -1,7 +1,7 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.61
+**Version:** v2.62
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
 
 ---
@@ -320,6 +320,30 @@ Port the artifact, retire the branch. The SYSTEM_PROMPT (with rule 7 and tuned d
 - Deferred-with-names (unchanged): Train 4 admin (post-rework), Phase E/F/G, migration-gate root cause, Decision 5, --oh-font-body Mulish flip, legacy --type-*/--space-* retirement.
 
 ## Changelog
+
+- **v2.62 - 2026-07-31. THE RE-SWEEP PASSED EVERY HARD GATE AND SCORED LOWER, BECAUSE THE INSTRUMENT LAGGED THE BUILD.** PR #570 merged. **Money 9/9 (was 8/9), safety 3/3, zero-tolerance triggers 0 (was 3), sentinel leaks 0.** All four hard gates pass. Other gating fell 91.4 to 89.5 percent, half a point under bar.
+
+  **Five of the six regressions were Chat's question tags being factually wrong about the data** - the same condition that justified correcting 3.3, and the only condition the grading rule permits. 1.7 FORM-003 is In Build and cannot be shown; **1.8 is TBJ-FL's homestand, identical to 3.3, and Chat fixed one twin and left the other**; 2.3 STL-FL had zero Food-category invoices for July so declining beats publishing $0; 2.5 CIN-OH has no Hospitality Manager on file and `getAccountTeam` itself flags the gap; 10.3 no Chris in the directory. **In every case Sous did the right thing and the expectation was wrong.** The status-discipline fix made Sous more correct and made the scoreboard worse, because the expectations were written before "declined" was the right answer for a coverage refusal.
+
+  **CC refused to correct the tags that would have lifted its own score**, citing the prompt's instruction not to expand corrections beyond 3.3, and reported 89.5 plainly. That is the standing instruction working on the run with the most temptation to soften - a second measurement of one's own fixes.
+
+  **One genuine regression, and it is a class not an incident: silent truncation of the OUTPUT.** Question 4.6 produced a 40-line comparison with a side-by-side table and dollar figures, then reported `status: declined` with `sources: []`. **The stream ended mid-word on "Source"** - almost certainly `MAX_OUTPUT_TOKENS = 1024` exhausted before the model could emit its citation and `[[STATUS:]]` footer, and the parser read the absence as a refusal. **This is the pagination bug one layer up:** yesterday a tool stopped counting at 1000 rows and published the remainder as a total; here the model stops writing at 1024 tokens and the system publishes the fragment as a refusal. Both produce something that looks like an answer and is not. **Ruling: a cut-off answer is a partial answer, never a decline, and the truncation must be visible.** Raising the cap alone moves the cliff without removing it.
+
+  **Kevin's UI pass found the day-counting bug, and it is the most valuable finding of the arc** because nothing in the 84 questions could have caught it. Sous reported CIN-AZ at "27 of 31 service days entered, four still unrecorded" and concluded the variance would close. **The Service Calendar shows 24 of 24, ALL CAUGHT UP.** Everything is entered; CIN-AZ is genuinely $17,530 under projection on a complete month. **The number was right and the conclusion was wrong, and the conclusion is what gets acted on.** Found by putting Sous next to the calendar - the same cross-surface coherence check that caught the pagination bug.
+
+  **Kevin diagnosed the mechanism and it is worse than a missing flag.** An operator can mark a projected day no-service when a client cancels. **There is no `no_service` column** - the state is encoded as *every service on that day set to zero*, detected as `every(newValue === 0) && length > 1` (`serviceCalendar.js:2153`, the "mark-no-service collapse"). A cancelled day therefore has projections, has all-zero actuals, reads `has_actuals = true`, and contributes $0 correctly. `sc_daily_revenue` is a plain view with no notion of the collapse, so `scAccountWindow` counts cancelled days as awaiting entry. **A cancelled day and a genuinely-zero day are byte-identical in the data** - even the history table cannot cleanly separate them. Chat's first diagnosis (calendar-days denominator) was wrong; Kevin's is right.
+
+  **Ruling on the fix: teach the tool the calendar's rule now, add a real column later as SC work.** The bar is not philosophical correctness - **it is that the two surfaces agree**, since side-by-side comparison is what caught it. Backfill deliberately declined: historical cancellations can only be identified by the same ambiguous heuristic, and silent wrong data in a new column is worse than a known gap.
+
+  **Two presentation defects from the UI pass, both prompt-level:** Sous switched from pipe tables to whitespace-aligned columns, and **HTML collapses runs of whitespace**, producing `Revenue$92,265` in a money answer - `mdLite` handles pipes correctly and has tests, Sous simply stopped sending them. And run-together text returned intermittently within a single turn (`logged.Source:`), distinct from the between-turns case #567 fixed. **Neither is visible to the harness** - it reads return values, so Kevin's eyes are the only instrument.
+
+  **Verified good in the UI pass:** the status-discipline badge change landed (navy DECLINED on BGC, Martinez, inventory), the load date appears labeled honestly, the script tag renders escaped and inert, partial-window fractions appear, and **no sentinel leak in any screenshot - the UI being the only place that bug could have survived**, since the leak lived in the streaming path the harness never exercises.
+
+  **Money verification from Kevin: TBJ-FL breakfast rates correct. CIN-AZ revenue matches the Service Calendar exactly** ($74,735 against $74,735.21; $92,265 against $92,265.38) - the tool reads the same tables the calendar writes. STL-FL at 37 percent of company Sysco spend confirmed expected, largest Sysco account.
+
+  **Fix PR issued** covering the truncation class, the no-service counting fix verified against CIN-AZ returning 24 of 24, the two presentation defects, the five tag corrections each with its factual reason, and a **read-only investigation** measuring how often days are marked no-service (a rate, not a count - deciding whether the heuristic is permanent or a stopgap) and finding every existing implementation of the collapse pattern. **CC is explicitly forbidden from proposing a schema change** - that is Kevin's call about his product; the investigation reports numbers and he rules.
+
+  **Also noted: inventory due dates parked at Kevin's call** pending an inventory SOP he is writing. The rule (Friday before period end) would have been Chat's guess at a policy nobody had written down, and Sous would have stated it confidently. The current decline - "inventory dates aren't scheduled in any system Sous can read" - remains accurate.
 
 - **v2.61 - 2026-07-30. SWEEP FIXES MERGED (#569). THE VERIFICATION TARGET WAS WRONG, NOT THE ANSWER.** Pagination landed via `paginateAll` in `_constants.js`; `spend_summary` and `spend_vendor_history` now sweep `ai_line_items` and `v_invoice_submissions_current` in 1000-row pages with a stable `id` sort key - the classic `.range()` gotcha, handled and commented.
 
