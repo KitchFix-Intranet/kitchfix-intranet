@@ -116,7 +116,11 @@ await run("sc_account_window - CIN-OH month view returns summary shape", async (
   });
   assert(typeof r.days_with_actuals === "number", "days_with_actuals number");
   assert(typeof r.total_service_days === "number", "total_service_days number");
-  assert(typeof r.is_partial === "boolean", "is_partial boolean");
+  // is_partial contract widened to boolean | null (plan v2.66): `null` for
+  // fee-branch accounts where completeness does not apply. CIN - OH is fee-
+  // branch (flat_fee + has_homestand_schedule), so this specific run
+  // returns null. The assertion tracks the intended contract change.
+  assert(typeof r.is_partial === "boolean" || r.is_partial === null, "is_partial boolean or null");
   assert(r.meals && typeof r.meals.projected === "number", "meals.projected number");
   assert(r.window_boundaries?.label, "label present");
 });
