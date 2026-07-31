@@ -43,7 +43,17 @@ export const CONTRACT_INFO = {
   "STL - FL": {
     annualFee: 2300000,
     model: "Flat fee",
-    note: "Counts are planning only",
+    /* R3-1 v3 (2026-07-31) - was "Counts are planning only". Owner
+       ruling: that phrasing means "your counts do not generate the
+       invoice" to the writer and "your counts do not matter" to the
+       reader. On a flat-fee account the counts ARE the record of
+       what was delivered - the client's planning data and the basis
+       for the next contract conversation. After R3-4b removed every
+       dollar figure from this account except the ANNUAL FEE block,
+       something has to say what the counts are for or the missing
+       dollars read as a bug. Standing constraint: say what the
+       counts are FOR, never what they are NOT. */
+    note: "Counts are the service record",
   },
 };
 

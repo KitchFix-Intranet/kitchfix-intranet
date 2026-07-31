@@ -1225,7 +1225,7 @@ function OpsSessionStrip() {
     <div className="sc-rail-session" role="status" aria-live="polite">
       <span className="sc-rail-session-n">{days}</span>
       <span className="sc-rail-session-label">
-        {" "}{dayWord} confirmed · {unitsSum.toLocaleString()} served this session
+        {" "}{dayWord} confirmed · {unitsSum.toLocaleString()} meals this session
       </span>
     </div>
   );

@@ -99,11 +99,11 @@ export default function BillRailFee({
         className={`sc-v2-entry-rail-hero${!hasTouchedAny ? " sc-v2-entry-rail-hero--pristine" : ""}`}
       >
         <span className="sc-v2-entry-rail-hero-value" aria-hidden="true">
-          {hasTouchedAny ? "" : "~"}{Math.round(heroAnimated).toLocaleString()} served
+          {hasTouchedAny ? "" : "~"}{Math.round(heroAnimated).toLocaleString()} meals
         </span>
         <span className="sc-visually-hidden" aria-live="polite">
           {hasTouchedAny ? "Confirmed total " : "Scheduled total "}
-          {heroValue.toLocaleString()} served
+          {heroValue.toLocaleString()} meals
         </span>
         <span className="sc-v2-entry-rail-hero-meta">
           {enteredCount} of {totalToEnter} services confirmed
