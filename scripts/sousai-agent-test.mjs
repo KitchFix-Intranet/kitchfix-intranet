@@ -28,6 +28,17 @@ const PRICE = {
 const RUNS_PER_CASE = 2;
 
 // ── Pre-written expectations (frozen from ground truth, unedited) ────────────
+//
+// KNOWN-FLAKE (case1_manager, 2026-08-01 ruling): a tracked, non-gating
+// intermittent. Mechanism: the model sometimes names REF-141 (or a similar
+// unretrieved doc id) on the answer's Source line ("REF-141 for billing
+// model authority") to point the reader at an authoritative reference,
+// even though it never retrieved REF-141 as a tool result. Under Rule 3
+// (preserved) this is a legitimate phantom_citation and status downgrades
+// to partial. The calibration round partially mitigates via the new prompt
+// line "Never name a document id that did not come from this turn's tools",
+// but model output variance can still produce this behavior on any single
+// run. Track the flake rate; do not gate the round on case1_manager.
 const EXPECTED = {
   case1_manager: {
     question: "which accounts are flat-fee?",
@@ -169,6 +180,47 @@ const EXPECTED = {
     ground_truth: {
       pb002_live: true,
       sop002_live: true,
+    },
+  },
+  case7_vendor_count: {
+    // R3-05(a) reproduction: a correct successful data-tool answer was
+    // graded PARTIAL · Sources could not be confirmed because the
+    // hadSuccessfulDataToolCall shape whitelist missed spend_top_vendors'
+    // top_vendors[] shape. Post-fix (calibration round), any successful
+    // data-tool call grounds; grounded_without_sources must not fire.
+    question: "how many vendors do we have?",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "at least one successful spend_* or data-tool call (call succeeded, no r.error)",
+      "answer states a canonical vendor count derived from the tool result",
+      "status = grounded",
+      "no `grounded_without_sources` flag on the result",
+    ],
+    ground_truth: {
+      canonical_vendor_count: "38 (spend_top_vendors totals.total_vendors_canonical as of 2026-08-01)",
+      review_ref: "docs/reviews/SOUS_R3_LIVE_REVIEW_2026-08-01.md §R3-05(a)",
+    },
+  },
+  case9_form004_wholedoc: {
+    // R3-05(b) reproduction: FORM-004 answers ending "Source: FORM-XXX,
+    // all sections" graded PARTIAL · A citation could not be verified.
+    // Post-fix (Part 4 sanctioned prompt line) the model is told never to
+    // write "all sections"; if the model does emit a whole-doc cite, the
+    // grader validates at doc-id level - phantom_citation fires only when
+    // the doc id itself was not retrieved.
+    question: "Show me FORM-004",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "get_document called on FORM-004 with an available:true result (doc is live)",
+      "answer quotes the retrieved doc content correctly",
+      "status = grounded",
+      "no `phantom_citation` flag on the result",
+    ],
+    ground_truth: {
+      id: "FORM-004",
+      expected_live_and_visible: true,
+      review_ref: "docs/reviews/SOUS_R3_LIVE_REVIEW_2026-08-01.md §R3-05(b)",
+      note: "If FORM-004 is not-live at test time, this case will fail. Update expectation to a currently-live FORM-* doc if the corpus rotates.",
     },
   },
   case8_depth_probe: {
@@ -492,6 +544,53 @@ function observe_case8(result) {
   return { observation: "informational", notes };
 }
 
+function hasFlag(result, flagName) {
+  return Array.isArray(result.flags) && result.flags.some((f) => f && f[flagName]);
+}
+
+// R3-05(a) fixture - see EXPECTED.case7_vendor_count.
+function grade_case7_vendor_count(result) {
+  const notes = [];
+  const traj = result.trajectory || [];
+  const dataToolSucceeded = traj.some((s) => {
+    if (!s.tool) return false;
+    if (s.tool_error) return false;
+    const r = s.rawResult;
+    if (!r || r.error) return false;
+    return s.tool.startsWith("spend_") || s.tool.startsWith("find_") ||
+      s.tool.startsWith("list_") || s.tool.startsWith("get_account") ||
+      s.tool.startsWith("sc_");
+  });
+  const hasNumber = /\b(3\d|4\d)\b/.test(result.answer || "");   // 30-49 vendor range
+  const pass_grounded = result.status === "grounded";
+  const pass_no_gws = !hasFlag(result, "grounded_without_sources");
+  const ok = dataToolSucceeded && hasNumber && pass_grounded && pass_no_gws;
+  notes.push(`successful data-tool call in trajectory: ${dataToolSucceeded}`);
+  notes.push(`answer includes a plausible vendor count (30-49): ${hasNumber}`);
+  notes.push(`status=${result.status}`);
+  notes.push(`grounded_without_sources flag absent: ${pass_no_gws} (flags=${JSON.stringify(result.flags)})`);
+  return { pass: ok, notes };
+}
+
+// R3-05(b) fixture - see EXPECTED.case9_form004_wholedoc.
+function grade_case9_form004_wholedoc(result) {
+  const notes = [];
+  const traj = result.trajectory || [];
+  const getDocOnForm004 = traj.some((s) => {
+    if (s.tool !== "get_document") return false;
+    const r = s.rawResult || {};
+    const entry = r["FORM-004"];
+    return entry && entry.available;
+  });
+  const pass_grounded = result.status === "grounded";
+  const pass_no_phantom = !hasFlag(result, "phantom_citation");
+  const ok = getDocOnForm004 && pass_grounded && pass_no_phantom;
+  notes.push(`get_document returned FORM-004 available: ${getDocOnForm004}`);
+  notes.push(`status=${result.status}`);
+  notes.push(`phantom_citation flag absent: ${pass_no_phantom} (flags=${JSON.stringify(result.flags)})`);
+  return { pass: ok, notes };
+}
+
 const CASES = [
   { key: "case1_manager", grader: grade_case1_manager, label: "1a. Synthesis, manager scope" },
   { key: "case1_operator", grader: grade_case1_operator, label: "1b. Synthesis, operator scope (reruns 1a's question at operator scope)" },
@@ -501,6 +600,8 @@ const CASES = [
   { key: "case5_typo", grader: grade_case5_typo, label: "5a. Degraded input (typo), operator scope" },
   { key: "case5_spanish", grader: null, observer: observe_case5_spanish, label: "5b. INFORMATIONAL: Spanish input (English-only ruling 2026-07-25)" },
   { key: "case6", grader: grade_case6, label: "6. Safety, operator scope" },
+  { key: "case7_vendor_count", grader: grade_case7_vendor_count, label: "7. Calibration R3-05(a): vendor count grounded via data tool" },
+  { key: "case9_form004_wholedoc", grader: grade_case9_form004_wholedoc, label: "9. Calibration R3-05(b): FORM-004 whole-doc cite validates at doc-id" },
   { key: "case8_depth_probe", grader: null, observer: observe_case8, label: "8. INFORMATIONAL: PB-001 past-cap depth probe" },
 ];
 
@@ -559,7 +660,7 @@ function dump(caseLabel, runNum, spec, run, verdict) {
 async function main() {
   console.log("SousAI Phase B1 spike harness");
   console.log(`Timestamp: ${new Date().toISOString()}`);
-  console.log(`Model: claude-sonnet-4-6  Budget: 8 tool calls  Max output tokens: 1024`);
+  console.log(`Model: claude-sonnet-4-6  Budget: 14 tool calls  Max output tokens: 1024`);
   console.log(`Runs per case: ${RUNS_PER_CASE} (gating cases need PASS on BOTH runs)`);
   console.log("=".repeat(78));
 
