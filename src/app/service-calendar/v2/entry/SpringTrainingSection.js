@@ -27,7 +27,7 @@
 // only services with a defined projection (R3-2 skip); explicit
 // projected 0 fills.
 
-import { ServiceRow } from "./DayEntryV2";
+import ServiceRow from "./ServiceRow";
 
 export const SPRING_TRAINING_GROUP_KEY = "__spring_training__";
 

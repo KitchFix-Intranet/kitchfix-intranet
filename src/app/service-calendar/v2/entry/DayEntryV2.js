@@ -22,7 +22,10 @@
 //
 // Reused display helpers imported verbatim from ../../DayDetail:
 //   formatDate, formatEntryStamp, mergeActivity, groupNameCarriesSegment,
-//   deltaChip, deriveUnit, renderRate, LEDGER_HEAD, isInServiceOnDay
+//   LEDGER_HEAD, LEDGER_HEAD_NO_AMOUNT, LEDGER_HEAD_FEE, isInServiceOnDay
+// ServiceRow moved to ./ServiceRow.js (2026-08-01) to break its
+// import cycle with SpringTrainingSection. deltaChip / deriveUnit /
+// renderRate travel with it.
 // Reused money primitives: fmt$, round2 from season/format
 // Reused status: isPastDate from dayResolvers
 // Reused animation: useAnimatedNumber (W2-W4 F3 pattern)
@@ -45,9 +48,6 @@ import {
   formatEntryStamp,
   mergeActivity,
   groupNameCarriesSegment,
-  deltaChip,
-  deriveUnit,
-  renderRate,
   LEDGER_HEAD,
   LEDGER_HEAD_NO_AMOUNT,
   LEDGER_HEAD_FEE,
@@ -58,6 +58,7 @@ import {
 // tree stays consistent on STL-FL without perturbing per-meal or MLB.
 import BillRailFee from "./BillRailFee";
 import SpringTrainingSection, { SPRING_TRAINING_GROUP_KEY } from "./SpringTrainingSection";
+import ServiceRow from "./ServiceRow";
 import { isFeeNoDollar, unitLabel, verbLabel, verbLabelPast, verbLabelPastUpper } from "../vocab";
 // P3-B (2026-07-28): handoff coordinator - executeConfirm success
 // branch drives the sequence via startHandoff. Pill source ref
@@ -1087,7 +1088,19 @@ function DayEntryV2({
   }, [serviceGroups]);
 
   // Group active/inactive - DayDetail.js:536-547.
+  //
+  // R3-5 fix (2026-08-01, owner ruling on #585): when the Spring
+  // Training section renders at top (in-phase on STL - FL), regular
+  // groups do NOT collapse - rule 4 says the fallback MiLB Breakfast
+  // and Lunch must always render in-phase, in phase or out. On a real
+  // spring day those services carry no projections, so the old
+  // active/inactive split sent them to the drawer on exactly the day
+  // rule 4 was written for. Scope: fee-shape AND in-phase only. Out
+  // of phase, the semantics are byte-identical to pre-R3-5.
   const { activeGroups, inactiveGroups } = useMemo(() => {
+    if (stRenderTop) {
+      return { activeGroups: regularServiceGroups, inactiveGroups: [] };
+    }
     const active = [], inactive = [];
     for (const g of regularServiceGroups) {
       const hasAnyValue = g.services.some(s =>
@@ -1098,7 +1111,7 @@ function DayEntryV2({
       else inactive.push(g);
     }
     return { activeGroups: active, inactiveGroups: inactive };
-  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals]);
+  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, stRenderTop]);
 
   const hasTouchedAny = touched.size > 0;
   // Phase 1 Ledger (2026-07-24): swapped mergeActivity -> groupActivity
@@ -1680,89 +1693,9 @@ export function GroupBlock({
   );
 }
 
-// One service row - reuses the v1 CSS class names so the atom style
-// inherits automatically. See DayDetail.js:837-914 for the shape.
-// Exported alongside GroupBlock (2026-07-24, owner Ruling 2) for
-// bulk custom-entry reuse.
-//
-// Cell drops (GroupBlock composes these from its `variant` prop):
-//   hideAmount  - drop the trailing amount cell (bulk + fee)
-//   hideRate    - drop the rate cell (fee only; Phase 2B gate-2)
-// Caller's ledger wrapper must carry the matching subgrid variant:
-//   .sc-day-ledger--no-amount (3-col) for hideAmount
-//   .sc-day-ledger--fee (2-col) for both hideAmount and hideRate
-export function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false, hideRate = false }) {
-  const projVal = day.projected[svc.colIndex] ?? 0;
-  const editVal = editValues[svc.colIndex] ?? "";
-  const isTouched = touched.has(svc.colIndex);
-  const isEmpty = editVal === "";
-  const inService = isInServiceOnDay(svc, day.date);
-  const archiveDate = !inService ? String(svc.activeUntil).slice(0, 10) : null;
-  // W7 PR 2/3 motion: `flashDelay` is a stagger delay in ms (0 for
-  // single-input flash; N*60 for the Match-projections cascade). When
-  // defined, the row gets the `sc-v2-entry-row--flash` class + inline
-  // animation-delay style. Undefined = no class = no animation.
-  const isFlashing = flashDelay != null;
-
-  let chip = null;
-  if (inService && isTouched && !isEmpty) {
-    chip = deltaChip(Number(editVal), projVal);
-  }
-
-  const qtyCell = inService ? (
-    <div className="sc-day-row-right">
-      <input
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        aria-label={svc.name}
-        className={`sc-day-input ${isTouched && !isEmpty ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
-        placeholder={String(projVal)}
-        value={editVal}
-        onChange={e => onChange(svc.colIndex, e.target.value)}
-      />
-      {chip ? (
-        <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>
-      ) : (
-        <span className="sc-day-row-delta" />
-      )}
-    </div>
-  ) : (
-    <span className="sc-day-row-archived-chip" title={`Archived as of ${archiveDate}`}>
-      Archived {archiveDate}
-    </span>
-  );
-
-  const rate = day.priceAtDate?.[svc.colIndex] ?? svc.price ?? 0;
-  const unit = deriveUnit(svc.name, svc.isFlatFee);
-  const entered = inService && isTouched && !isEmpty;
-
-  return (
-    <div
-      className={`sc-day-row sc-day-row--ledger${!inService ? " sc-day-row--archived" : ""}${isFlashing ? " sc-v2-entry-row--flash" : ""}`}
-      style={isFlashing ? { animationDelay: `${flashDelay}ms` } : undefined}
-    >
-      <div className="sc-day-row-left">
-        <span className="sc-day-row-name">{svc.name}</span>
-      </div>
-      {!hideRate && (
-        <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>
-      )}
-      {qtyCell}
-      {!hideAmount && (
-        <span className="sc-day-row-amount">
-          {svc.isNonRevenue
-            ? <span className="sc-day-amount-none" title="Not billed">—</span>
-            : entered
-              ? fmt$(Number(editVal) * rate)
-              : inService
-                ? <span className="sc-day-amount-ghost">~{fmt$(projVal * rate)}</span>
-                : <span className="sc-day-amount-pending">–</span>}
-        </span>
-      )}
-    </div>
-  );
-}
+// ServiceRow extracted to ./ServiceRow.js (2026-08-01) to break the
+// SpringTrainingSection <-> DayEntryV2 import cycle. Imported at the
+// top of this file; still consumed by GroupBlock below verbatim.
 
 // ═════════════════════════════════════════════════════════════════
 // BillRail - the live forming-invoice rail (Phase 2).
