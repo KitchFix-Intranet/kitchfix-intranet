@@ -1,8 +1,27 @@
 # SousAI Agent Plan - Scope + Implementation Plan
 
 **Status:** RATIFIED by Kevin, 2026-07-25 (Decision 1 closed). Living document.
-**Version:** v2.69
+**Version:** v2.70
 **Repo home:** `docs/SOUSAI_AGENT_PLAN.md` - committed by CC in each phase PR. The repo copy is canonical; `docs/PROJECT_DASHBOARD.md` points here for the SousAI workstream.
+
+## v2.70 (2026-08-01, PR B - conversational memory + testing constitution + spec v1.1)
+
+**Delivered in one PR** because `docs/SOUSAI_CHARACTER_SPEC.md` v1.1's governance lock requires spec + system prompt land together, and PR B rebuilds both. Testing constitution (`docs/SOUS_TESTING_PLAN.md`) commits alongside the harness additions that implement it.
+
+**Ratified scope shipped:**
+- **Memory (client-state, no persistence).** `SousSurface` holds the last 3 Q&A pairs, session-only. Reload clears. New Question / ⌘K clears the memory window (rail entries stay visible; IN CONTEXT marker resets). Route + agent accept `priorTurns` and prepend as alternating user/assistant turns; questions verbatim, answers capped at 2000 chars with a `[... answer truncated for context ...]` marker. Trajectories / meta / sources not shipped in history - Q&A text only. Follow-ups get the full `TOOL_BUDGET`.
+- **Truthful rail.** IN CONTEXT marker binds to actual memory-window ids (not top-3 presentation). Per-item status dots (grounded green / partial amber / declined navy / error red) rendered before the timestamp. CODE-14 landed: rail timestamps carry the timezone abbreviation via `timeZoneName: "short"`.
+- **Panel parity by construction.** Memory + rail behavior lives in `SousSurface`, so `variant="overlay"` inherits both. The panel's docContext + prior turns coexist.
+- **Testing constitution.** Tier 1 receipt check (every number in a data-answer traces to that turn's tool payload; integer-prefix normalization for money-rounding), Tier 2 guards (no-plumbing with body-vs-Source-line split, engagement-bait, decline shape, no-clock-in-prose, no-unretrieved-doc-ids), Tier 2c numeric run-stability (subset-aware; skips status-variance), Tier 2d permission-leak probe (hard-fail case). Two ship-gate two-turn cases (memory meaning + memory temptation) enforce the parked re-query eval per Kevin's Testing Plan.
+- **Spec v1.1** (see `docs/SOUSAI_CHARACTER_SPEC.md`) implements A1-A14 + A4-expanded (**ten sanctioned lines**: the four from prior rounds plus in-PR ruling additions - Source-line completeness; line 6 amended to cover tools; line 7 phantom-table ban; line 8 arithmetic-without-receipt ban; **line 9 previous-answer-is-never-a-source and line 10 zero-tool-call self-check landed after the acceptance-run-1 M1 fail identified two-turn memory-quote as a distinct failure mode**) + governance lock.
+- **Agent-prompt rebuild.** `agentPrompt.js` derived from spec v1.1 rather than appended to; tool-use section preserved verbatim; hard-floor + STATUS footer + decline voice content intact.
+
+**Blast-radius surveys pasted in the PR body:**
+- Part 6 decline-cluster over 30 days: 26 declines, ranked by topic bucket for documentation-demand triage.
+
+**Ship gate result:** Ratified over three acceptance runs. Run 1 fired the ship-gate stop-condition on M1 (model memory-quoted T1's Sysco figures at $244,954 / 19.5% in T2 with zero tool calls); mechanical-cause check ruled it out (priorTurns assembled correctly, T1 answer well under the 2000-char cap, T2 chose not to call any tool). Chat's prompt-tuning ruling landed lines 9 + 10 (governance lock: same commit in prompt and spec canonical block) plus a two-turn gallery entry with M2's real passing transcript and a corrected-M1. **Runs 2 and 3 (post-ruling): M1 SHIP-GATE PASS 2/2, M2 SHIP-GATE PASS 2/2, PL HARD-FAIL PASS 2/2, 10 gating PASS, 0 FAIL both runs.** Cases 1a, 2, 5a annotated KNOWN-FLAKE per ruling (non-gating, tracked in R-Chat digest dials list via `docs/SOUS_TESTING_PLAN.md` Tier 3 - the 1a precedent). Case 7 (calibration R3-05a) held its 2/2 across all three runs.
+
+**Fences held:** No persistence, no tables, no migrations (PR C territory). No batch tools (Phase F). No digest / R-Chat / mark / motion / visual changes beyond rail dots + timezone label. Decline logic + money/safety rules + access control untouched.
 
 ---
 

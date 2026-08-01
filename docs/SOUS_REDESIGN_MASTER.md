@@ -221,6 +221,23 @@ Landed in nine logical commits, one per prompt Part:
 
 ---
 
+**PR B 2026-08-01 (`feat/sous-pr-b-memory`) - DRAFT.** Largest PR of the programme; the ratified prompt + memory + testing constitution + spec-v1.1 round. One PR because `docs/SOUSAI_CHARACTER_SPEC.md` v1.1's governance lock requires spec + system prompt land together. Delivers:
+
+- **Spec v1.1** with A1-A14 + expansions + governance-lock elevation, per `docs/reviews/CHARACTER_SPEC_REVIEW_2026-08-01.md` (Kevin's KEEP-ALL marks). **Ten-line canonical block** (five carried from prior rounds + line 6 amended to cover tools + line 7 phantom-table ban + line 8 arithmetic-without-receipt ban + line 9 previous-answer-is-never-a-source + line 10 zero-tool-call self-check; lines 9 + 10 landed after acceptance-run-1 M1 fail identified two-turn memory-quote as a distinct failure mode from phantom-tables). Gallery repaired with dated production examples per A14; the June "I don't have live financials" fiction retired; new two-turn section carries M2's real passing transcript and a corrected-M1 as the ship-gate shape.
+- **Prompt rebuild.** `agentPrompt.js` derived from spec v1.1; tool-use section preserved; hard-floor + STATUS footer + decline voice content intact.
+- **Conversational memory** (client-state, no persistence). Last-3 Q&A pairs held in `SousSurface`; route + agent accept `priorTurns` and prepend as alternating user/assistant. Session-only per D8; New Question / ⌘K clears the memory window. Answers cap at 2000 chars with a truncation marker for context; questions never truncate. Panel parity by construction.
+- **Truthful rail.** IN CONTEXT marker binds to actual memory-window ids; per-item status dots; timezone abbrev on timestamps (CODE-14).
+- **Testing constitution.** Tier 1 (receipt check) + Tier 2 (no-plumbing, voice guards, decline shape, no-clock-in-prose, no-unretrieved-doc-ids, numeric run-stability, permission-leak probe) added to the harness. Ship-gate two-turn cases (M1 memory meaning, M2 memory temptation) evaluated in the acceptance battery.
+- **Docs.** `docs/SOUS_TESTING_PLAN.md` committed verbatim; `docs/SOUSAI_AGENT_PLAN.md` bumps to v2.70 with the PR B section; `docs/reviews/CHARACTER_SPEC_REVIEW_2026-08-01.md` committed verbatim.
+
+**Rulings landed mid-build:** Source-line completeness rule (every doc used, including inline references, listed on the Source line); four additional sanctioned lines across two rulings - phantom-table ban + arithmetic-without-receipt ban (Ruling 2 after case 7 pressure), then line 6 amended to cover tools + line 9 previous-answer-is-never-a-source + line 10 zero-tool-call self-check (Ruling 3 after acceptance-run-1 M1 ship-gate fail); cases 1a, 2, 5a KNOWN-FLAKE annotations (1a carried forward; case 2 exact-id sensitivity, case 5a typo sensitivity - both added 2026-08-01 with the ruling, non-gating, tracked in Tier 3 digest dials list).
+
+**Acceptance ratification (three runs).** Run 1 fired ship-gate STOP on M1 (model memory-quoted T1's Sysco figures at $244,954 / 19.5% in T2 with zero tool calls). Mechanical cause ruled out (priorTurns assembled correctly, T1 answer under the 2000-char cap, T2 chose zero tool calls); handed to Chat per Part 5 protocol. Ruling 3 landed lines 6-amended, 9, 10 (governance lock in prompt + spec canonical block, same commit). Runs 2 and 3 (post-ruling): M1 SHIP-GATE PASS 2/2, M2 SHIP-GATE PASS 2/2, PL HARD-FAIL PASS 2/2, 10 gating PASS + 0 FAIL both runs, KNOWN-FLAKE surfaced twice (1a run1=F run2=P, case2 both patterns).
+
+See `docs/SOUSAI_AGENT_PLAN.md` v2.70 delivery entry for the full acceptance battery + ship-gate results.
+
+---
+
 ## Sous mark system
 
 The mark spec is canonical in `docs/SOUS_MARK_SPEC.md` (committed alongside this PR). Reference implementation for motion + composition sits in the polish-pass mock bundle (`sous-mark-final.html`, `sous-pra-update-mocks.html`) - spec wins on any disagreement. Component + CSS lands in `src/app/sous/SousMark.js` and the `.sa-mark-*` block of `src/app/sous/sous.css`. See PR A polish pass delivery log entry above for how each surface landed.

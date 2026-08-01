@@ -57,7 +57,23 @@ export async function evaluateGates({ session, flagEnabled, body, deps }) {
     if (question.length > MAX_QUESTION_CHARS) {
       return { pass: false, kind: "input", status: 400, hint: `question exceeds ${MAX_QUESTION_CHARS} characters` };
     }
-    return { pass: true, action: "ask", email, tier, accessLevels, question };
+    // PR B memory: accept an optional priorTurns array of {question, answer}.
+    // Client caps to 3 turns; server double-caps + validates shape + clamps
+    // per-field length. Q&A text only; anything else on the object is
+    // ignored. Malformed entries are dropped silently rather than rejecting
+    // the request (memory is a nicety, not load-bearing).
+    let priorTurns = [];
+    if (Array.isArray(body.priorTurns)) {
+      priorTurns = body.priorTurns
+        .filter((t) => t && typeof t.question === "string" && typeof t.answer === "string")
+        .map((t) => ({
+          question: t.question.trim().slice(0, MAX_QUESTION_CHARS),
+          answer: t.answer.slice(0, 2500),   // agent.js re-caps at 2000 with marker
+        }))
+        .filter((t) => t.question.length > 0)
+        .slice(0, 3);
+    }
+    return { pass: true, action: "ask", email, tier, accessLevels, question, priorTurns };
   }
 
   if (body.action === "feedback") {

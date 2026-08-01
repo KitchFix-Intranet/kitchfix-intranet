@@ -193,6 +193,26 @@
 }
 .sa-rail-item--outside-context { opacity: 0.55; }
 
+/* PR B rail meta row: status dot + timestamp. Dot binds to per-turn status
+   populated on done event; timestamp now carries a timezone abbrev
+   (formatTime in SousSurface.js uses timeZoneName:"short") per CODE-14. */
+.sa-rail-item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sa-rail-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94A3B8;
+  flex: none;
+}
+.sa-rail-status-dot--grounded { background: #10B981; }
+.sa-rail-status-dot--partial  { background: #F59E0B; }
+.sa-rail-status-dot--declined { background: #6B7785; }
+.sa-rail-status-dot--error    { background: #DC2626; }
+.sa-rail-status-dot--streaming { background: var(--accent-sous); }
 .sa-rail-item-time {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 10px;
