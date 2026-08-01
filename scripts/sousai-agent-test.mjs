@@ -28,6 +28,17 @@ const PRICE = {
 const RUNS_PER_CASE = 2;
 
 // ── Pre-written expectations (frozen from ground truth, unedited) ────────────
+//
+// KNOWN-FLAKE (case1_manager, 2026-08-01 ruling): a tracked, non-gating
+// intermittent. Mechanism: the model sometimes names REF-141 (or a similar
+// unretrieved doc id) on the answer's Source line ("REF-141 for billing
+// model authority") to point the reader at an authoritative reference,
+// even though it never retrieved REF-141 as a tool result. Under Rule 3
+// (preserved) this is a legitimate phantom_citation and status downgrades
+// to partial. The calibration round partially mitigates via the new prompt
+// line "Never name a document id that did not come from this turn's tools",
+// but model output variance can still produce this behavior on any single
+// run. Track the flake rate; do not gate the round on case1_manager.
 const EXPECTED = {
   case1_manager: {
     question: "which accounts are flat-fee?",

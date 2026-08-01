@@ -205,7 +205,7 @@ Landed in nine logical commits, one per prompt Part:
 
 ---
 
-**Round 3 calibration mini-round 2026-08-01 (`fix/sous-calibration`) - DRAFT.** Follows R3-05 from the live review - two reproduced mis-grading mechanisms that plausibly explained a large slice of the partial-rate. No UI, no tool changes, no memory scope; grader precedence + one prompt line + tool-budget rider + two eval fixtures.
+**Round 3 calibration mini-round 2026-08-01 (`fix/sous-calibration`) - DRAFT.** Follows R3-05 from the live review - two reproduced mis-grading mechanisms that plausibly explained a large slice of the partial-rate. No UI, no tool changes, no memory scope; grader precedence + two prompt lines + tool-budget rider + two eval fixtures.
 
 - **R3-05(a) data-path fix (agent.js `hadSuccessfulDataToolCall`).** The signal previously used a shape whitelist (`r.total>0 || r.matches[] || r.accounts[] || r.team[]`); it missed `spend_top_vendors`' `top_vendors[]` return so "how many vendors do we have?" graded PARTIAL despite a successful spend_top_vendors call. Broadened to any successful data-tool call (`!step.tool_error && !r.error`). Grader Rule 1 (Kevin, calibration prompt): if the answer's citations are data-tool references only AND `hadSuccessfulDataToolCall` then `grounded_without_sources` must not fire - now satisfied by construction. Named-open gap (data signal is call-succeeded, not answer-follows-from-rows) is a Phase E content-check requirement, out of scope here.
 
