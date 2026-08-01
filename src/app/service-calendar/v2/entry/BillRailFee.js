@@ -130,6 +130,12 @@ export default function BillRailFee({
         {stSectionRail && stSectionRail.length > 0 && (
           <div key="__spring_training__" className="sc-v2-entry-rail-group">
             <div className="sc-v2-entry-rail-group-name">SPRING TRAINING</div>
+            {/* R3-item6 (2026-08-01): per-group column header. Fee
+                shape is 2-col (Service | Qty) - no amount column. */}
+            <div className="sc-v2-entry-rail-line-head sc-v2-entry-rail-line-head--fee" aria-hidden="true">
+              <span className="sc-v2-entry-rail-lh-name">Service</span>
+              <span className="sc-v2-entry-rail-lh-count">Qty</span>
+            </div>
             {stSectionRail.map((s) => {
               const proj = day.projected[s.colIndex] ?? 0;
               const editVal = editValues[s.colIndex] ?? "";
@@ -157,6 +163,11 @@ export default function BillRailFee({
           return (
             <div key={group.name} className="sc-v2-entry-rail-group">
               <div className="sc-v2-entry-rail-group-name">{group.name}</div>
+              {/* R3-item6 (2026-08-01): per-group column header. */}
+              <div className="sc-v2-entry-rail-line-head sc-v2-entry-rail-line-head--fee" aria-hidden="true">
+                <span className="sc-v2-entry-rail-lh-name">Service</span>
+                <span className="sc-v2-entry-rail-lh-count">Qty</span>
+              </div>
               {lines.map(s => {
                 const proj = day.projected[s.colIndex] ?? 0;
                 const editVal = editValues[s.colIndex] ?? "";
