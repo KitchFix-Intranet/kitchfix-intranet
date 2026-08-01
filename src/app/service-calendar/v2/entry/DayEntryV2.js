@@ -59,7 +59,7 @@ import {
 import BillRailFee from "./BillRailFee";
 import SpringTrainingSection, { SPRING_TRAINING_GROUP_KEY } from "./SpringTrainingSection";
 import ServiceRow from "./ServiceRow";
-import { isFeeNoDollar, unitLabel, verbLabel, verbLabelPast, verbLabelPastUpper } from "../vocab";
+import { isFeeNoDollar, unitLabel } from "../vocab";
 // P3-B (2026-07-28; flight retired 2026-08-01): handoff coordinator.
 // executeConfirm success calls startHandoff to commit the session
 // entry and schedule the drill-advance callback on the finalize
@@ -257,7 +257,7 @@ function DayEntryV2({
   // entirely - the media query gates every rule that reads it.
   const [mobileBillOpen, setMobileBillOpen] = useState(false);
   // ═══════════════════════════════════════════════════════════════
-  // Match/Clear (2026-08-01) - per-group pre-Match snapshot.
+  // Match/Clear (2026-07-28) - per-group pre-Match snapshot.
   // ═══════════════════════════════════════════════════════════════
   // matchSnapshots :: { [groupName]: { editValues: {colIndex: str},
   //                                    touched:    Set<colIndex> } }
@@ -566,7 +566,7 @@ function DayEntryV2({
   }, [justSaved, onClose]);
 
   const fillGroupWithProjections = useCallback((group) => {
-    // Match/Clear (2026-08-01): capture the pre-Match snapshot for
+    // Match/Clear (2026-07-28): capture the pre-Match snapshot for
     // THIS group before we mutate. Snapshot holds the group's own
     // service values + touched flags exactly - restoring later
     // returns the group to the instant before Match was clicked
@@ -621,7 +621,7 @@ function DayEntryV2({
     setTouched(newTouched);
   }, [editValues, touched, day.projected, day.date, markFlash]);
 
-  // Match/Clear (2026-08-01): Clear undoes THIS group's Match by
+  // Match/Clear (2026-07-28): Clear undoes THIS group's Match by
   // restoring the pre-Match snapshot. Non-snapshot columns (other
   // groups' services) are untouched. Snapshot is consumed on Clear
   // - Match must be re-clicked to arm Clear again.
@@ -650,7 +650,7 @@ function DayEntryV2({
     });
   }, [matchSnapshots]);
 
-  // Match/Clear (2026-08-01): drop every snapshot on day nav. Matches
+  // Match/Clear (2026-07-28): drop every snapshot on day nav. Matches
   // justSaved's [day.date] lifecycle - snapshots are strictly local
   // to the panel-day session, never cross days or survive close.
   useEffect(() => {
@@ -1578,7 +1578,7 @@ function DayEntryV2({
 export function GroupBlock({
   group, day, editValues, touched, flashMap, accountSegment,
   onChange, onFillProjections,
-  // Match/Clear (2026-08-01): Clear renders when parent flags a live
+  // Match/Clear (2026-07-28): Clear renders when parent flags a live
   // snapshot for this group. onClearToPreMatch restores the group to
   // pre-Match state. Both undefined = pre-2026-08 caller (bulk paths
   // etc. do not participate in Match/Clear).
@@ -1619,7 +1619,7 @@ export function GroupBlock({
             <span className="sc-v2-entry-group-seg">{accountSegment}</span>
           )}
         </div>
-        {/* Match/Clear (2026-08-01):
+        {/* Match/Clear (2026-07-28):
             - `data-cleared` on the actions container drives Clear's
               slide-out transform (`--duration-slow` token = 300ms;
               collapses to 0ms under reduced-motion via the token

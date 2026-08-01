@@ -221,7 +221,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sc2-space-2);
-  /* Match/Clear (2026-08-01): overflow: hidden so the Clear button
+  /* Match/Clear (2026-07-28): overflow: hidden so the Clear button
      hides visually behind Match's rect while translated off. */
   overflow: hidden;
   border-radius: var(--sc2-radius-control);
@@ -236,7 +236,7 @@
   font-weight: var(--sc2-wt-bold);
   cursor: pointer;
   letter-spacing: 0.03em;
-  /* Match/Clear (2026-08-01): the "holds state" half of the ruling.
+  /* Match/Clear (2026-07-28): the "holds state" half of the ruling.
      Match transitions to the held look on --held; --duration-slow
      token so RM collapses this too. */
   transition:
@@ -251,7 +251,7 @@
   outline: 2px solid var(--sc2-accent-green);
   outline-offset: 2px;
 }
-/* Match/Clear (2026-08-01): held state - Match keeps the "filled"
+/* Match/Clear (2026-07-28): held state - Match keeps the "filled"
    look after click. Same accent-green wash the hover state uses; adds
    the accent-line border so it reads as a settled state, not a
    transient hover. Clear peeks out from behind via the sibling rules
@@ -260,7 +260,7 @@
   background: var(--sc2-accent-green-wash);
   border-color: var(--sc2-accent-green-line);
 }
-/* Match/Clear (2026-08-01): Clear button.
+/* Match/Clear (2026-07-28): Clear button.
    Rest: translated 100% + gap to the RIGHT of its natural slot,
    which - given source order (Clear left, Match right) + the actions
    container's `overflow: hidden` - places it directly under Match's

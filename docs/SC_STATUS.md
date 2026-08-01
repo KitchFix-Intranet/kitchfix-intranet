@@ -2,7 +2,7 @@
 
 > **Purpose:** the live current-state doc for the Service Calendar module. Architecture reference = [`modules/SERVICE_CALENDAR.md`](modules/SERVICE_CALENDAR.md). This doc is the ship-state audit + remaining-work punch list.
 >
-> **Last verified:** 2026-07-30
+> **Last verified:** 2026-08-01
 >
 > **Ledger discipline:** every claim in "Shipped" traces to a PR#, commit, or migration file. Every item in "Remaining" says who's blocking it (Kevin ruling / Kevin schedule / no owner). Unknowns stay labeled unknown.
 >
@@ -102,6 +102,16 @@
 - **Payroll week: Mon-Sun (Kevin, 2026-07-30)**. Payroll runs through Rippling; budget includes overtime at 1.5x over 40 hours per week. Dividers shipped inside the strip domain. **Week summaries are OUT OF SCOPE** for the same reason cards carry no money: the budget is per-homestand, not per-day, so any week-level figure would require pro-rating a block's envelope across weeks - a manufactured number that reconciles against nothing. Adding a payroll import later does not unblock the summary; the shape of the budget does.
 - **The rail took four passes.** rev1 shipped `- SPENT` dash instead of `$0`, used `--sc2-surface-card` (light-mode white) on the navy rail causing contrast failure, and fired "Season complete" mid-season. rev2 shape was wrong - owner wanted past · now · future with pinned in-progress + three groups, not a single action card with chevron nav. rev3 is the approved shape. Discipline for future rail work: sketch the pinned-vs-grouped layout against the owner spec before wiring state.
 
+### Polish rounds R1 - R3 (2026-07-30 through 2026-08-01)
+
+- **R1** (PR #577, 2026-07-30) - `sc-polish-r1: Today button, Books hero, queue bound, Period prefix, print doc note`. Today button drills + pulses on arrival; row-cap on the expanded queue from the row + JS constant.
+- **R2** (PR #580, 2026-07-30/31) - `sc-polish-r2: drill hero reframe, queue-to-3, ring to bar, Handoff retarget`. R2-1 hero reframe on OpsRailBase; R2-2 ring replaced by `RailProgressBlock` (bar + caption); R2-3 queue-to-3 + drill spacing. Surfaced the P3-B Handoff flight defect at gate; retirement decision deferred (landed as PR #588).
+- **R3-1 unit-word alignment** (PRs #582, four in-branch commits from `e81f2bf` through `0c9cc0b`) - fee-shape tile + rail + subtotal + no-service dialog swept from "served" to "meals". Owner ruling on the LEDGER_HEAD_FEE column: "Qty" to match per-meal, not "Meals" (would create a new mismatch). Missed-then-caught site at `NoServiceConfirm` (`DayEntryV2.js:1975`); folded on v4 per grep-pattern lesson (tight patterns miss ternary-nested literals). `contract.js` note reworded from "Counts are planning only" to "Counts are the service record" per owner's standing constraint "say what counts are FOR, never what they are NOT".
+- **R3-4 dollar fence** (PR #582 alongside R3-1) - route-local `isFeeNoDollarAccount(billingModel, hasHomestandSchedule)` at `route.js:237` nulls revenue on `sc-load` + `sc-year-summary` emissions when `billing_model === "flat_fee" && !hasHomestandSchedule`. STL - FL only among current active accounts. Counts + priceAtDate preserved. ANNUAL FEE $2,300,000 rail block kept per R3-4a.
+- **R3-2 Match gate + skip guard** (PR #584) - `hasProjectedRevenue` in GroupBlock renamed to `hasProjectedMeals`; test becomes `gsProjected.meals > 0` at three sites (`DayEntryV2.js:1476, :1500, :1502`). Fee-shape's revenue-always-zero broke the old revenue-based gate silently; meals-based gate opens the buttons on STL - FL correctly and is byte-identical on per-meal (measured: `_probe_sc_r3_2_gate.mjs` across 6 ENTRY_V2 non-fee accounts, 3857 rows, zero flip sites). Match fill loop at `fillGroupWithProjections` gains `if (day.projected[s.colIndex] == null) continue;` - skips services with absent projections; explicit projected 0 still fills. Trap population before fix (`_probe_sc_r3_2_trap.mjs` since 2026-07-18, no-service-excluded): 9 rows across TBR - FL (7) and TXR - AZ (2), all on 2 (account, day) pairs.
+- **R3-5 Spring Training section** (PR #585) - synthetic display construct on STL - FL for the four " - ST" services (self-fencing via name-suffix match per `_probe_sc_r3_5_st_names.mjs` - only account carrying " - ST" services is STL - FL). Section renders at top when in the spring block or when any ST service carries projection/actual (rule 3 override); off-phase, collapses into the inactive-groups drawer. `springDateSet` threaded via `dayEntryProps` at `ServiceCalendar.js:3852` (one line). New file `v2/entry/SpringTrainingSection.js` (extracted with `ServiceRow.js` to break an import cycle in the fix). Rule 4 fix: while ST renders at top, regular groups do not collapse (fallback MiLB Breakfast + Lunch + Palm Beach Cardinals stay at top-level on in-phase days). Fee rail hero now reads `feeServedTotals` from parent (one source, cannot drift from the pinned bar) - was a local sum over ST-stripped groups that read ~0 while the bar read 800.
+- **Handoff flight retirement** (PR #588) - see the retirement entry below in Remaining.
+
 ### Migration gate CI (#416, mechanical enforcement of the DRAFT rule)
 
 - **What shipped**: `.github/workflows/migration-gate.yml` emits a `Migration gate` status check on every PR. Job A (`pull_request`) scans for added `docs/migrations/*.sql` - none -> pass instantly; any -> FAIL with a summary listing the files + the canonical phrase. Job B (`issue_comment`) matches `applied in Studio: YES` from an `OWNER`-association comment, resolves the PR head SHA, emits a `Migration gate` check_run as success on that SHA. Per-SHA reset: any push re-runs the scan.
@@ -127,6 +137,31 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **Kevin enters the real fee amount** via the admin surface after merge. If a future per_meal account also bills a fee, add its team_key to `FEE_ELIGIBLE_PER_MEAL` (one-line code change; no migration).
 - **Was**: "CIN - AZ fee decision (awaiting Kevin)" - resolved as of 2026-07-12.
 
+### R3-3 - REMOVED FROM POLISH ROUND (2026-08-01)
+
+- **Was**: wire a bulk-entry trigger on the STL - FL surface. `DrillRail` renders the `Bulk entry` button at `:487-497` gated on `onBulkModeToggle`; STL - FL is fee-routed to `OpsRail` which has no bulk trigger and no `onBulkModeToggle` wiring. Operator on STL - FL cannot reach bulk at all today.
+- **Recon finding (2026-08-01)**: bulk on a fee account is not a button, it is a project. `BulkEntry` passes `variant="bulk"` to `GroupBlock` unconditionally - hides the amount cell but SHOWS the rate cell. On STL - FL every service has price $0; `ServiceRow` renders the rate string per row (`renderRate` output). **R3-4's dollar fence is bypassed** because it fences payload emission on `sc-load`/`sc-year-summary`, not the service-catalog data path bulk consumes. R3-5's Spring Training section has no meaning in bulk - the four " - ST" services would render as loose rows inside their real MLB / MiLB groups. `sc-bulk-submit` write path has no server-side projection-presence check; a manually-typed 0 for an unprojected service goes to the server (R3-2's client-side skip covers Match only).
+- **Ruling**: R3-3 is its own future piece, not polish. Wiring the trigger today would expose an STL - FL operator to the fee-shape rendering the last three rounds removed from the single-day path. Concrete gaps to close before the button is safe: fee variant in `BulkEntry` (drop the rate cell), ST-section rendering decision, cross-period backlog reach (`bulkSelected` is scoped to `activeDrillDays` today).
+- **Owner**: Kevin (schedule).
+
+### R3-6 - CLOSED with NO CHANGE (2026-08-01)
+
+- **Was**: move the MiLB Snack service on STL - FL into the Palm Beach Cardinals group. `sc_services.group_id` is a plain FK; a single UPDATE would re-parent every historical row in `sc_daily_revenue` and shift past-month "BY GROUP" export totals (MiLB decreases, PBC increases).
+- **Recon finding (2026-08-01, `_probe_sc_r3_6_snack.mjs`)**: Snack has zero alignment with Palm Beach Cardinals game days. Snack has 357 projection rows (all zero-valued) spanning 2025-12-29 to 2026-12-20 - matches the MiLB catalog structure. 51 actual rows, 2 non-zero: (a) 2026-03-05 with Snack=1 on a day where every LIVE service on the account has actual=1 (catalog-wide artifact, not operational), (b) 2026-05-22 with Snack=15 alongside regular MiLB Breakfast=81 + Lunch=117 and zero PBC service entries (pure MiLB-only day). Snack's non-zero usage aligns with regular MiLB operations, not PBC game days.
+- **Ruling**: Snack is a MiLB service that sees rare use. The complaint about a "lonely zero row" is about display, not classification. No migration.
+- **Follow-up**: whether the display should treat a low-frequency MiLB service differently on off-days is a separate ruling; not owned in R3.
+
+### Seed marker for actuals imports (owner decision, 2026-08-01)
+
+- **Decision**: when actuals are seeded from the team spreadsheets, every imported row carries `created_by = "spreadsheet_seed"`. Applied at import time; cannot be reconstructed afterwards.
+- **No new column and no migration.** `sc_daily_actuals` already carries `created_by` and `updated_by`. The three states this yields:
+  - `created_by="spreadsheet_seed"` + `updated_by="spreadsheet_seed"` -> imported and never touched.
+  - `created_by="spreadsheet_seed"` + `updated_by=<person>` -> imported, then confirmed by a human.
+  - `created_by=<person>` -> entered from scratch (no import phase).
+  A boolean flag could not answer that third distinction.
+- **Only visible surface**: the existing Ledger row renders the author verbatim - a seeded day reads `spreadsheet_seed entered counts` when someone opens it. No badge, no tile change, no new UI. Deliberate.
+- **Owner**: Kevin (scheduling the import). CC (executing the import once ruled).
+
 ### Season PDF fails on PDC accounts - unknown whether by design (2026-07-31)
 
 - **Measured in production**: `GET /api/service-calendar/print?scope=season&account=CIN - AZ&year=2026` returns `500 {"error":"Account CIN - AZ has no schedule to print","phase":"load","elapsedMs":61}`.
@@ -135,14 +170,16 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **Not investigating.** Logged so it is not rediscovered.
 - **Owner**: Kevin to rule which side is correct - hide the menu item on pure PDC, or teach the Season loader to render one honestly.
 
-### P3-B Handoff clone flight never animates on drill saves (2026-07-31)
+### P3-B Handoff clone flight - RETIRED (2026-08-01, PR #588)
 
-- **Measured on CIN - AZ P8 at 1440, real save (Lunch 80 -> 81) with the clone sampled every frame for 2.5s**: 288 samples, zero above opacity 0.05, transform never left `matrix(1, 0, 0, 1, 0, 0)`. The pill does not fly.
-- **The retarget introduced by R2-2 is NOT the cause.** Owner walked the React fiber and read the coordinator's refs directly across a save: `flightTargetRef` populated from phase 0; both `flightTargetRef` and `pillSourceRef` populated at phase 3. `HandoffLayer.js:41`'s early-return did not fire. `RailProgressBlock`'s `registerFlightTarget` works as designed.
-- **The failure is downstream of the ref check**, inside `HandoffLayer.js:32-72`'s phase-3 effect body. Three candidates: (a) transform applied then immediately reset by a re-render before paint; (b) clone's CSS never allows it to show (opacity 0, reveal class or keyframe missing); (c) effect reads geometry before layout settles and computes a zero delta.
-- **Anomaly worth chasing first**: phase 2 never appeared in the trace. Sequence went `0 -> 1 -> 3`, one sample at phase 3. Owner's polling rate was 50ms and the scheduled window at phase 2 is ~460ms, so this is not a sampling artifact. If phase 2 is skipped or fires in the same tick as phase 3, `HandoffPill` may mount and register in a race with the flight schedule, which would be a pre-existing P3-B defect independent of the flight itself.
-- **This motion has never demonstrably run in a gate.** Every P3-A, P3-B and R2-2 gate verified the target existed, not that the pill arrived. R1-2's ring-tween measurement was on the RING, not the CLONE. So this may have been dead since P3-B shipped.
-- **Owner**: decide whether to fix or retire the flight motion. The Handoff's ambient effects (session strip, tile flip, queue clear, ring sweep, next-day advance) all work; only the modal-to-rail pill CLONE flight is dead. Fix cost = an evening's diagnosis + a small commit; retire cost = deleting `HandoffLayer.js` + the pill's `--flying` class + `registerFlightTarget` / `RailProgressBlock`'s target registration.
+- **Diagnosis**: phase 2 never committed. Observed sequence `0 -> 1 -> 3 -> 5 -> 0` on every save on every account. `HandoffPill` mounted on the phase-3 commit; `HandoffLayer`'s phase-3 effect read `pillSourceRef` in the same tick and got null, hit the early return at `HandoffLayer.js:41`, aborted. Structurally impossible on every save.
+- **Owner ruling (2026-08-01)**: retire, not fix. Every save-feedback path an operator relies on is independent of the flight - session strip, tile flip, modal close/advance, month-complete card. Cost to keep it working was unbounded (three code-visible gaps + one runtime unknown); cost to retire was bounded (373 net LOC removed).
+- **Removed (PR #588)**: `v2/handoff/HandoffLayer.js` (whole file), `HandoffPill` component + mount + `registerPillSource` call in `DayEntryV2.js`, `registerFlightTarget` wiring in `Rail.js`'s `RailProgressBlock`, `<HandoffLayer />` mount + import in `ServiceCalendar.js`, phase machine + `BEAT_DELAYS` + `flightTargetRef` + `pillSourceRef` + `isFlippingDate` in `coordinator.js`, pill + clone CSS + three orphan selectors (`.sc-rail-queue-row--clearing`, `.sc-rail-section-meta--ticked`, `.sc-v2-entry--sliding-next`) in `handoff.css`.
+- **Kept**: `sessionMap` + `commitSession` / `commitSessionOnly` (read by DrillRail `SessionStrip` + OpsRail `OpsSessionStrip`), `MonthCompleteCard` + `showMonthComplete`, finalize timer at 1350ms (single setTimeout that fires `onFinalize` for next-day advance / modal close), `HandoffProvider` wrapping the root export, tile flip (workspace-level via `prevHasActualsMap`, always was independent), rail queue re-derive (always was independent).
+- **Module keeps its name.** `v2/handoff/` + `coordinator.js` not renamed in the same commit that gutted them; separate decision, later, if ever.
+- **On v2 after retirement**: operator sees tile flip + session strip update + modal close/advance + (when applicable) month-complete card. No pill, no toast. `silentSuccess: true` on `executeConfirm` still suppresses the recorded toast. Owner is designing the replacement save-confirmation as its own piece; no stopgap toast added.
+- **v1 (MLB fee)** toast still fires - byte-identical to pre-P3-B. MLB never mounted the Handoff.
+- **Audit reference**: SC_STATUS commit body of `297f28f`; audit narrative in the PR #588 description.
 
 ### Authed preview e2e (follow-up from #408's honest limitation)
 
