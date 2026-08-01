@@ -993,6 +993,21 @@
 }
 .sa-ask-send svg { width: 15px; height: 15px; }
 
+/* CODE-02 - focus-visible coverage for the seven previously-bare classes.
+   All use the same 2px accent outline + 2px offset the rail's new-question
+   button uses (sous.css above), so keyboard users see one consistent
+   focus treatment across the surface + panel. */
+.sa-ask-send:focus-visible,
+.sa-action-btn:focus-visible,
+.sa-source-card:focus-visible,
+.sa-rail-item:focus-visible,
+.sa-feedback-tag:focus-visible,
+.sa-feedback-send:focus-visible,
+.sa-feedback-skip:focus-visible {
+  outline: 2px solid var(--accent-sous);
+  outline-offset: 2px;
+}
+
 /* ── Sous mark - the identity system per docs/SOUS_MARK_SPEC.md ───────── */
 
 /* Yellow paths + hollow-navy declined tint live only here - not palette
@@ -1194,7 +1209,11 @@
 .sa-animate .sa-brief               { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 420ms both; }
 .sa-animate .sa-composer            { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 840ms both; }
 
-/* Suppressed, not reduced. */
+/* Suppressed, not reduced. CODE-07 broadens this block to also drop the
+   transition (not just animation) on every class that carries one.
+   Explicit per-class selectors - deliberately not a wildcard, because a
+   `* { transition: none }` inside .sa- would still bleed into cross-module
+   :host contexts that transitively import this file. */
 @media (prefers-reduced-motion: reduce) {
   .sa-animate .sa-hero-star,
   .sa-animate .sa-hero-sweep,
@@ -1204,7 +1223,14 @@
   .sa-animate .sa-brief,
   .sa-animate .sa-composer,
   .sa-freshness-dot,
-  .sa-provenance--streaming .sa-provenance-dot {
+  .sa-provenance--streaming .sa-provenance-dot,
+  .sa-source-card,
+  .sa-action-btn,
+  .sa-feedback-tag,
+  .sa-ask-form,
+  .sa-rail-item,
+  .sa-rail-newbtn,
+  .sa-brow-example {
     animation: none !important;
     transition: none !important;
     transform: none !important;

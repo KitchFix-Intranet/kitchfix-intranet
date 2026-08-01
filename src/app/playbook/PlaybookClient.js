@@ -1023,7 +1023,7 @@ function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle, view, s
         <span className="pb-shelf-count" aria-label={`${count} documents`}>{count}</span>
         {empty && (
           <span className="pb-shelf-empty-inline">
-            — {isSearching ? "no matches" : "no documents yet"}
+            - {isSearching ? "no matches" : "no documents yet"}
           </span>
         )}
         <span className="pb-shelf-rule" aria-hidden="true" />
@@ -1090,7 +1090,7 @@ function DocumentCard({ doc, onOpen, idx = 0 }) {
             </span>
           )}
           {doc.print_required && (
-            <span className="pb-poster-mark" title="Wall poster — print and post" aria-label="Wall poster — print and post">
+            <span className="pb-poster-mark" title="Wall poster - print and post" aria-label="Wall poster - print and post">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="6 9 6 2 18 2 18 9" />
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
@@ -1148,7 +1148,7 @@ function DocumentListRow({ doc, onOpen, idx = 0 }) {
           </span>
         )}
         {doc.print_required && (
-          <span className="pb-poster-mark" title="Wall poster — print and post" aria-label="Wall poster — print and post">
+          <span className="pb-poster-mark" title="Wall poster - print and post" aria-label="Wall poster - print and post">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 6 2 18 2 18 9" />
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />

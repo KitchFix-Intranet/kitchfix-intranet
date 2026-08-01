@@ -574,14 +574,14 @@ function ReportIssueForm({ docId, onCancel, onSuccess }) {
   };
 
   if (done) {
-    return <div className="pb-report-success">Filed — thanks. Slack ping sent.</div>;
+    return <div className="pb-report-success">Filed - thanks. Slack ping sent.</div>;
   }
 
   return (
     <div className="pb-report-form">
       <textarea
         className="pb-report-textarea"
-        placeholder="Describe the issue — typo, outdated info, broken link, missing context, etc."
+        placeholder="Describe the issue - typo, outdated info, broken link, missing context, etc."
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
