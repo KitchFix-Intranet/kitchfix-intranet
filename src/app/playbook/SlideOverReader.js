@@ -176,7 +176,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
 
   return (
     <div className="pb-slide-body">
-      {/* Header block — status sits in the top class-row alongside the class
+      {/* Header block - status sits in the top class-row alongside the class
           chip so it's the second thing the eye lands on, not buried in the
           small meta line. */}
       <div className="pb-slide-head-block">
@@ -206,7 +206,7 @@ function SlideOverContent({ data, reportOpen, setReportOpen, navigateTo, isOwner
         </div>
       </div>
 
-      {/* Language toggle — only when the doc has both EN and ES Drive files
+      {/* Language toggle - only when the doc has both EN and ES Drive files
           (currently just POSTER-001). The iframe + Open in Drive + Print all
           act on the active language; navigating to a different doc resets
           this back to EN via the useEffect above. */}

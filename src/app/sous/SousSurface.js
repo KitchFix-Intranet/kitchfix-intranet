@@ -461,7 +461,7 @@ export default function SousSurface({
           onExampleClick={onExampleClick}
         />
         <p className="sa-brief-limits">
-          <strong>Not yet:</strong> no wages, no reimbursements, no P&amp;L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong.
+          No wages, no reimbursements, no P&amp;L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong.
         </p>
       </div>
     </div>

@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // One-shot bootstrap → render hero + ask bar + filter chips + 6 shelves +
 // cards or list rows. Card/row click opens the slide-over reader (imported
-// from ./SlideOverReader — same component the admin dashboard uses).
+// from ./SlideOverReader - same component the admin dashboard uses).
 // Shared data maps live in ./_shared. CSS prefix pb-.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -22,7 +22,7 @@ import { DOMAIN_CARD_EXAMPLES, PANEL_DOC_STARTERS } from "../sous/examples";
 // Operator-facing catalog filters. The previous "Needs Drive link" owner-only
 // chip was removed once /playbook/admin shipped (the dashboard's worklist
 // covers it). The "Critical" chip was also dropped here once the critical
-// visual treatment came off cards — the chip filtered to docs that look
+// visual treatment came off cards - the chip filtered to docs that look
 // identical to non-critical ones, so it had no signal-to-action ratio in
 // the operator view. The `critical` column stays in the data model intact.
 // Status filter values now feed the StatusFilterSelect dropdown (A6 polish);
@@ -30,7 +30,7 @@ import { DOMAIN_CARD_EXAMPLES, PANEL_DOC_STARTERS } from "../sous/examples";
 // options (Ready, In Build, etc.) drawn from whatever statuses exist in the
 // visible documents.
 
-// Operator-readable status labels. Only "Live" → "Ready" right now — the
+// Operator-readable status labels. Only "Live" → "Ready" right now - the
 // floor reads "ready to use" more naturally than the workflow term "Live".
 // All other status values stay canonical (Draft, Pending, Placeholder,
 // In Build, Blocked) so the chip row + cards still reflect the granular
@@ -42,7 +42,7 @@ function operatorStatusLabel(s) {
   return OPERATOR_STATUS_LABEL[s] || s;
 }
 
-// Canonical workflow order — used to render status filter chips in a stable
+// Canonical workflow order - used to render status filter chips in a stable
 // order regardless of which subset actually appears in the data. Mirrors
 // _shared.ALL_STATUSES but defined locally to keep the chip-row import
 // surface tight.
@@ -192,7 +192,7 @@ function slugify(s) {
 }
 
 // Persist which shelves are collapsed across page loads. Default: all expanded.
-// Wider app pattern (TopNav.js stores kf_user_email in localStorage) — casual
+// Wider app pattern (TopNav.js stores kf_user_email in localStorage) - casual
 // browser-level UI state. No server roundtrip; OK to lose on browser-clear.
 function useCollapsedShelves() {
   const [collapsed, setCollapsed] = useState(() => new Set());
@@ -202,7 +202,7 @@ function useCollapsedShelves() {
       if (!raw) return;
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) setCollapsed(new Set(arr));
-    } catch { /* ignore parse / quota errors — fall back to all-expanded */ }
+    } catch { /* ignore parse / quota errors - fall back to all-expanded */ }
   }, []);
   const toggle = useCallback((name) => {
     setCollapsed((prev) => {
@@ -221,7 +221,7 @@ function useCollapsedShelves() {
 // Scroll-spy: which shelf is currently active in the viewport.
 //
 // PR 7.3 Batch A finish (bug 3): swapped from IntersectionObserver to a direct
-// scroll-position scan. IO's "entry/exit" semantics left gaps — during the
+// scroll-position scan. IO's "entry/exit" semantics left gaps - during the
 // transition from one shelf to the next, neither was reported as intersecting,
 // so `active` stuck on the previous value. The scan approach reads each
 // shelf's `rect.top` directly on every scroll (rAF-throttled) and picks the
@@ -235,7 +235,7 @@ function useActiveShelf(shelves) {
   const key = shelves.join("|");
   useEffect(() => {
     let rafId = null;
-    const ACTIVE_LINE = 100; // px from viewport top — under TopNav (56px)
+    const ACTIVE_LINE = 100; // px from viewport top - under TopNav (56px)
 
     const update = () => {
       rafId = null;
@@ -319,7 +319,7 @@ function useStickyHero() {
 }
 
 // Persist card vs list view choice. Same casual-browser-state pattern as
-// rail/shelf collapse — display preference, not server-persisted.
+// rail/shelf collapse - display preference, not server-persisted.
 const VIEW_STORAGE_KEY = "kf_playbook_view";
 function useViewMode() {
   const [view, setView] = useState("cards");
@@ -340,7 +340,7 @@ function useViewMode() {
 // Sticky left rail (PR 7.3 Batch A items 2 + 5 + 6)
 // ════════════════════════════════════════════════════════════════════════════
 function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollapse }) {
-  // Single chevron icon — CSS rotates 180° via .pb-rail--collapsed so the
+  // Single chevron icon - CSS rotates 180° via .pb-rail--collapsed so the
   // open/close animation is one smooth control, not two swapped points.
   return (
     <nav
@@ -426,7 +426,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
   }, [documents]);
 
   // Permanently-empty shelves (zero docs in the UNFILTERED set) are hidden
-  // from the operator view — Finance is currently a dead room in the rail.
+  // from the operator view - Finance is currently a dead room in the rail.
   // Shelves emptied by an active filter still render with the "no matches"
   // inline marker so the user can see the filter actually applied. Admin
   // dashboard keeps all shelves so its Gaps callout can flag the empties.
@@ -483,7 +483,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
     return map;
   }, [filteredDocs, visibleShelves]);
 
-  // Per-shelf visible counts (post-filter, post-search) — rail + header chip read this.
+  // Per-shelf visible counts (post-filter, post-search) - rail + header chip read this.
   const counts = useMemo(() => {
     const c = {};
     for (const s of visibleShelves) c[s] = (docsByShelf[s] || []).length;
@@ -501,7 +501,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
   // currently collapsed (bug 2), then (c) scroll to it AFTER React has flushed
   // the expand to the DOM (otherwise scrollIntoView measures against the
   // still-collapsed layout). We queue (c) via a "pendingJump" state that
-  // triggers a useEffect post-render — by then DOM has the new layout.
+  // triggers a useEffect post-render - by then DOM has the new layout.
   const [pendingJump, setPendingJump] = useState(null);
 
   const jumpToShelf = useCallback(
@@ -854,7 +854,7 @@ function Hero({ query, setQuery, isOwner, heroImage, onOpenSous }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Sticky search — slim navy bar that slides in from above when the hero has
+// Sticky search - slim navy bar that slides in from above when the hero has
 // scrolled out of view. Keeps search reachable for a director hitting the
 // playbook 10x/day without leaving the navy hero parked on every scroll.
 // Always rendered; transform: translateY(-100%) hides it until the sentinel
@@ -960,7 +960,7 @@ function TypeFilterSelect({ family, setFamily }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// View-mode toggle — segmented Cards / List control
+// View-mode toggle - segmented Cards / List control
 // ════════════════════════════════════════════════════════════════════════════
 function ViewToggle({ view, setView }) {
   return (
@@ -1119,7 +1119,7 @@ function DocumentCard({ doc, onOpen, idx = 0 }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// List-view row — denser rendering of the same grouped/filtered docs as
+// List-view row - denser rendering of the same grouped/filtered docs as
 // DocumentCard. Toggled via ViewToggle; clicking a row opens the same
 // slide-over reader. Same data wiring, different presentation.
 // ════════════════════════════════════════════════════════════════════════════
