@@ -28,7 +28,6 @@ import {
   BookOpen, Users, Calendar, Receipt,
 } from "lucide-react";
 import { renderMdLite } from "./mdLite";
-import SousMark from "./SousMark";
 
 const IN_CONTEXT_WINDOW = 3;   // Matches PR B's memory window.
 
@@ -315,24 +314,17 @@ export default function SousSurface({
 
   const status = doneEnv?.status || (phase === "error" ? "error" : phase === "streaming" ? "streaming" : "grounded");
   const statusLabel = STATUS_LABEL[status] || "Answer";
-
-  // Status-companion mark state (spec §8). Turn while tools run; on done it
-  // settles/holds/declines to match the pill. Error re-uses the "off" hollow
-  // treatment since the spec has no error frame.
-  const markState = phase === "streaming"
-    ? "turn"
-    : status === "grounded"
-      ? "settled"
-      : status === "partial"
-        ? "part"
-        : status === "declined" || status === "error"
-          ? "off"
-          : "rest";
+  // Status-companion mark removed for r2 hotfix - the 19px mark rendered at
+  // .sa-answer-head's top-left overlapped the status rail and got clipped by
+  // the card's border-radius. Correct placement (inside the tool-trail well)
+  // ships with the design round.
 
   const provenance = useMemo(() => {
     if (phase === "streaming") {
-      const last = toolTrail[toolTrail.length - 1];
-      return { streaming: true, text: last?.summary ? `${last.summary}...` : "Thinking..." };
+      // Generic stage indicator - the per-tool detail lives in the trail
+      // above, so the companion never repeats "list_contacts_by_role" from
+      // the last tool_start event.
+      return { streaming: true, text: "Working..." };
     }
     if (phase === "done") {
       const total = startedAtRef.current ? Date.now() - startedAtRef.current : null;
@@ -341,7 +333,10 @@ export default function SousSurface({
       const parts = [];
       if (nTools) parts.push(`${nTools} tool${nTools === 1 ? "" : "s"}`);
       if (total != null) parts.push(formatMs(total));
-      if (sources.length) parts.push(`sources: ${sources.join(", ")}`);
+      // I2 hydrated sources to {docId, title}; normalise back to id strings
+      // for the meta row before joining so we never render "[object Object]".
+      const ids = sources.map((s) => typeof s === "string" ? s : s?.docId).filter(Boolean);
+      if (ids.length) parts.push(`sources: ${ids.join(", ")}`);
       return { streaming: false, text: parts.join(" · ") };
     }
     return null;
@@ -474,7 +469,6 @@ export default function SousSurface({
       {askedQuestion && <p className="sa-question">{askedQuestion}</p>}
       <div className={`sa-answer sa-answer--${status}`}>
         <div className="sa-answer-head">
-          <SousMark variant="small" state={markState} size={19} />
           <span className={`sa-status-pill sa-status-pill--${status}`}>{statusLabel}</span>
           {reasonText && <span className="sa-reason-chip">{reasonText}</span>}
         </div>

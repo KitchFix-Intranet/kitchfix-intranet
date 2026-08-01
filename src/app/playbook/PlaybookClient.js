@@ -17,7 +17,7 @@ import "../sous/sous.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
 import SlideOverReader from "./SlideOverReader";
 import SousSurface from "../sous/SousSurface";
-import { DOMAIN_CARD_EXAMPLES, PANEL_DOC_STARTERS } from "../sous/examples";
+import { PANEL_DOC_STARTERS, starterSetForHost } from "../sous/examples";
 
 // Operator-facing catalog filters. The previous "Needs Drive link" owner-only
 // chip was removed once /playbook/admin shipped (the dashboard's worklist
@@ -742,21 +742,26 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
                   Sous reads the Playbook, people, the service calendar, and spend - every answer names its source.
                 </p>
                 <div className="pb-sous-empty-chips" role="group" aria-label="Example questions">
-                  {Object.values(DOMAIN_CARD_EXAMPLES).map((examples, i) => (
+                  {/* I5: panel starters follow the host. In the Playbook the
+                      operator has Playbook context, so surface Playbook-domain
+                      asks. Future hosts register their own set in
+                      PANEL_HOST_STARTERS; unknown hosts fall back to the
+                      four-domain mix. */}
+                  {starterSetForHost("playbook").map((q, i) => (
                     <button
                       key={i}
                       type="button"
                       className="pb-sous-empty-chip"
-                      onClick={() => setPrefill(examples[0])}
+                      onClick={() => setPrefill(q)}
                     >
-                      {examples[0]}
+                      {q}
                     </button>
                   ))}
                 </div>
               </>
             )}
             <p className="pb-sous-empty-limits">
-              <strong>Not yet:</strong> no wages, no reimbursements, no P&amp;L yet - all coming. Current season only.
+              Not yet: wages, reimbursements, P&amp;L - all coming. Current season only.
             </p>
           </div>
         )}

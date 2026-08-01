@@ -2,6 +2,14 @@
    KITCHFIX TOP NAV BAR
    Unified header: brand + links + bell + avatar
    ═══════════════════════════════════════════ */
+:root {
+  /* Sticky nav height - consumed by product surfaces that need the fit
+     floor to sit under the nav (e.g. Sous's .sa-page uses
+     calc(100dvh - var(--kf-topnav-h)) so its landing fits without
+     overflowing by 56px). Kept as a var so this is the single source of
+     truth if the nav ever resizes. */
+  --kf-topnav-h: 56px;
+}
 .kf-topnav {
   position: sticky;
   top: 0;
@@ -20,7 +28,7 @@
   max-width: 1520px;
   margin: 0 auto;
   padding: 0 20px;
-  height: 56px;
+  height: var(--kf-topnav-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
