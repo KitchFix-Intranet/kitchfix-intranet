@@ -27,6 +27,7 @@ import {
   ACCOUNTS_SCOPE,
   A2_ROW_CAP,
 } from "./_constants.js";
+import { pgLiveAsOf } from "../_freshness.js";
 
 const SELECT_COLUMNS = [
   "team_key",
@@ -75,7 +76,7 @@ export async function listAccounts({ level, teamKey } = {}) {
   const result = {
     source: "accounts",
     scope: ACCOUNTS_SCOPE,
-    loaded: DIRECTORY_LOAD_DATE,
+    loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
     parameters: { level: level || null, teamKey: teamKey || null },
     accounts: capped,
     total,

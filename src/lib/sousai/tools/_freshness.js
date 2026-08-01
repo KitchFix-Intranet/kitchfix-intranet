@@ -1,18 +1,17 @@
-// Shared freshness stamp for tool payloads. Emits the human form
-// "PG live as of {h:mm AM} {short-zone}" so the model never has a raw ISO
-// to echo. The complementary system-prompt line asks the model to state
-// freshness only as "PG live" - but even if it echoes the payload verbatim
-// the output remains human-readable.
+// Freshness stamps for tool payloads. Round 3 (R3-04): the tool layer no
+// longer emits a clock time - the model was quoting the SERVER clock into
+// answer prose ("PG live as of 4:01 PM UTC") while the UI freshness chip
+// correctly showed the browser-local time. The interface owns the clock;
+// the tools own the date.
 //
-// On Vercel the runtime timezone is UTC so this renders "6:41 AM UTC" in
-// production; locally it renders the machine's zone. Either shape is
-// preferable to the raw ISO the pre-PR-A tools emitted.
+// pgLiveNow() - for tools that read Postgres at request time. The data IS
+// current, so no date qualifier is needed - the string is just "PG live".
+// pgLiveAsOf(date) - for tools whose data is a bulk-load snapshot
+// (directory), the loaded date is meaningful. Renders "PG live · YYYY-MM-DD".
 export function pgLiveNow() {
-  const d = new Date();
-  const time = d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
-  return `PG live as of ${time}`;
+  return "PG live";
+}
+export function pgLiveAsOf(dateStr) {
+  if (!dateStr) return "PG live";
+  return `PG live · ${dateStr}`;
 }

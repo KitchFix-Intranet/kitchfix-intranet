@@ -26,6 +26,7 @@ import {
   ROLE_ORDER,
   A5_ROW_CAP,
 } from "./_constants.js";
+import { pgLiveAsOf } from "../_freshness.js";
 
 const SELECT_COLUMNS = "name, role, team_key, email, phone, slack_handle";
 
@@ -39,7 +40,7 @@ export async function getAccountTeam({ teamKey } = {}) {
     return {
       source: "contacts",
       scope: CONTACTS_SCOPE,
-      loaded: DIRECTORY_LOAD_DATE,
+      loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
       parameters: { teamKey: teamKey || "" },
       team: [],
       total: 0,
@@ -70,7 +71,7 @@ export async function getAccountTeam({ teamKey } = {}) {
     return {
       source: "contacts",
       scope: CONTACTS_SCOPE,
-      loaded: DIRECTORY_LOAD_DATE,
+      loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
       parameters: { teamKey: trimmed },
       team: [],
       total: 0,
@@ -116,7 +117,7 @@ export async function getAccountTeam({ teamKey } = {}) {
   const result = {
     source: "contacts + accounts",
     scope: CONTACTS_SCOPE,
-    loaded: DIRECTORY_LOAD_DATE,
+    loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
     parameters: { teamKey: trimmed },
     account: { team_key: acctRow.team_key, name: acctRow.name, level: acctRow.level },
     team: capped,

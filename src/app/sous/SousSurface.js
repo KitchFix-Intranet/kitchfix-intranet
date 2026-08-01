@@ -22,7 +22,7 @@
 // in PR A - memory arrives in PR B; the marker becomes truthful then.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   Copy, Download, ThumbsUp, ThumbsDown, Plus, ArrowUp, ExternalLink,
   BookOpen, Users, Calendar, Receipt,
@@ -40,6 +40,10 @@ const FEEDBACK_TAGS = [
   { id: "out_of_date",          label: "Out of date" },
   { id: "hard_to_follow",       label: "Hard to follow" },
   { id: "should_have_declined", label: "Should have declined" },
+  // R3-10 (Kevin ruling) - seventh tag added after should_have_declined
+  // so the taxonomy covers the calibration case ("the status label is
+  // wrong") without a detail-only path. Payload plumbing identical.
+  { id: "wrong_status_label",   label: "Wrong status label" },
 ];
 
 const STATUS_LABEL = {
@@ -108,7 +112,7 @@ function truncate(s, n) {
   return t.length <= n ? t : t.slice(0, n - 1) + "…";
 }
 
-export default function SousSurface({
+const SousSurface = forwardRef(function SousSurface({
   chips = null,
   variant = "page",
   initialQuestion = "",
@@ -116,8 +120,12 @@ export default function SousSurface({
   heroSlot = null,
   domainCounts = {},
   domainExamples = {},
-}) {
+  onFirstAsk = null,
+}, ref) {
   const isOverlay = variant === "overlay";
+  // Fires once per mount when the first ask (chip, imperative, or typed)
+  // goes out. Panel uses it to hide its starter block per R3-08.
+  const firstAskFiredRef = useRef(false);
   const [question, setQuestion] = useState(initialQuestion);
   const [phase, setPhase] = useState("idle");
   const [answerText, setAnswerText] = useState("");
@@ -155,6 +163,10 @@ export default function SousSurface({
   const submitAsk = useCallback(async (rawQuestion) => {
     const q = String(rawQuestion || "").trim();
     if (!q || submitting) return;
+    if (!firstAskFiredRef.current && typeof onFirstAsk === "function") {
+      firstAskFiredRef.current = true;
+      onFirstAsk();
+    }
     setAskedQuestion(q);
     setAnswerText("");
     setToolTrail([]);
@@ -224,6 +236,13 @@ export default function SousSurface({
     }
   }, [submitting]);
 
+  // Imperative API for parents that need to fire an ask from an external
+  // control (panel starter chips, R3-02). Fires the same submit path a
+  // typed submission uses; onFirstAsk fires exactly once per mount.
+  useImperativeHandle(ref, () => ({
+    askQuestion: (q) => submitAsk(q),
+  }), [submitAsk]);
+
   const onFormSubmit = (e) => { e.preventDefault(); submitAsk(question); };
   const onExampleClick = (q) => { setQuestion(q); submitAsk(q); };
   const onRetry = () => { if (question.trim()) submitAsk(question); };
@@ -238,6 +257,33 @@ export default function SousSurface({
     setFeedbackState(null);
     if (inputRef.current) inputRef.current.focus();
   };
+
+  // R3-07 - window-level ⌘K / Ctrl+K listener. The rail's + New question
+  // button carries a ⌘K badge that was previously decorative (no listener);
+  // now it works regardless of focus location. Modal guard: if a dialog
+  // with aria-modal="true" is open, only the SousSurface INSIDE that
+  // dialog responds (so the panel's ⌘K doesn't also fire the page's).
+  const newQuestionRef = useRef(onNewQuestion);
+  newQuestionRef.current = onNewQuestion;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return;
+      const myInput = inputRef.current;
+      if (!myInput) return;
+      const modalOpen = typeof document !== "undefined" && document.querySelector('[aria-modal="true"]');
+      if (modalOpen && !modalOpen.contains(myInput)) return;
+      e.preventDefault();
+      if (isOverlay) {
+        myInput.focus();
+        myInput.select?.();
+      } else {
+        // Page: mirror the + New question rail button (reset + focus).
+        newQuestionRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOverlay]);
 
   const onFeedbackClick = useCallback((value) => {
     if (!doneEnv?.question_id) return;
@@ -350,7 +396,7 @@ export default function SousSurface({
   const railEl = !isOverlay && (
     <aside className="sa-rail" aria-label="Session history">
       <div className="sa-rail-head">
-        <button type="button" className="sa-rail-newbtn" onClick={onNewQuestion}>
+        <button type="button" className="sa-rail-newbtn" onClick={onNewQuestion} aria-label="New question">
           <span className="sa-rail-newbtn-lead">
             <Plus size={14} strokeWidth={2.4} />
             <span>New question</span>
@@ -563,6 +609,7 @@ export default function SousSurface({
               onClick={() => onFeedbackClick(1)}
               disabled={feedbackState != null}
               aria-label="Helpful"
+              aria-pressed={feedbackState === "sent-pos"}
             >
               <ThumbsUp size={13} aria-hidden="true" /> Helpful
             </button>
@@ -572,6 +619,7 @@ export default function SousSurface({
               onClick={() => onFeedbackClick(-1)}
               disabled={feedbackState != null && feedbackState !== -1}
               aria-label="Not helpful"
+              aria-pressed={feedbackState === "sent-neg"}
             >
               <ThumbsDown size={13} aria-hidden="true" /> Not helpful
             </button>
@@ -680,7 +728,9 @@ export default function SousSurface({
       </div>
     </>
   );
-}
+});
+SousSurface.displayName = "SousSurface";
+export default SousSurface;
 
 function BriefRow({ modifier, icon, title, count, example, onExampleClick }) {
   return (

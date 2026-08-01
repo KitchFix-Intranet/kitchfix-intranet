@@ -186,6 +186,25 @@ Landed in nine logical commits, one per prompt Part:
 
 ---
 
+**Round 3 live-review fixes 2026-08-01 (`fix/sous-r3`) - DRAFT.** Findings from the first hands-on live review (`docs/reviews/SOUS_R3_LIVE_REVIEW_2026-08-01.md`) - Chat-Claude driving production via Claude for Chrome, two passes (pre- and post-compaction), every P1 independently reproduced. Nine fixes, one commit, no migration:
+
+- **R3-01 large-viewport fill.** `.sa-page` becomes `display: flex; flex-direction: column`; `.sa-shell` swaps `min-height: 100%` (which no-op'd on a parent with only `min-height` set) for `flex: 1 1 auto`. `.sa-pane-scroll` becomes flex-column so `.sa-pane` can `flex: 1` fill the scroll region; `.sa-firstrun` uses `margin: auto` to center in the vertical slack. Width step: `.sa-shell max-width: 1520px` bumps to `1680px` at `min-width: 1720px`. Downward behavior untouched.
+- **R3-02 panel starter chips wired.** `SousSurface` converted to `forwardRef` + `useImperativeHandle`; exposes `askQuestion(q)` that fires the same submit path a typed ask uses. Panel starter chips now call `sousRef.current?.askQuestion(q)` instead of just setting prefill.
+- **R3-08 panel clears starters after first ask.** New `onFirstAsk` callback prop on `SousSurface` fires once per mount inside `submitAsk`. PlaybookClient tracks `panelAsked` state; the `.pb-sous-empty` block hides once true.
+- **R3-04 tool clock drops the time.** `_freshness.js` `pgLiveNow()` now returns `"PG live"` (no time - the data IS current). New `pgLiveAsOf(dateStr)` helper for tools whose data is a bulk-load snapshot (directory tools). All 9 directory `loaded: DIRECTORY_LOAD_DATE` sites across 4 tool files (`listAccounts`, `listContactsByRole`, `findContact`, `getAccountTeam`) swapped to `loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE)`. Grep proof: no `AM`/`PM`/timezone abbrev in any tool `loaded` string. UI freshness chip is untouched (owns time, client-local).
+- **R3-03 + R3-04 prose - two sanctioned system-prompt lines added verbatim** to `agentPrompt.js` answer-style section: `Never reference a table, list, or content that is not actually rendered in your answer - include it or do not mention it.` and `Never state a clock time in prose. Freshness is "PG live" plus a date only if the data is not current - the interface displays the time.`
+- **R3-06 vote states.** `.sa-action-btn--pressed[disabled] { opacity: 1 }` added so the selected vote button keeps its Flame ring at full opacity (was fading behind the generic `[disabled] opacity: 0.5`). Both vote buttons carry `aria-pressed` reflecting cast state (feeds Fix 8's a11y batch).
+- **R3-10 seventh feedback tag.** `FEEDBACK_TAGS` gains `{id: "wrong_status_label", label: "Wrong status label"}` after `should_have_declined`. Payload plumbing identical (gate accepts any string ≤48 chars).
+- **R3-07 window-level ⌘K.** `useEffect` in `SousSurface` registers a global `keydown` listener. Modal guard: if a `[aria-modal="true"]` is open, only the `SousSurface` inside that modal responds. Page ⌘K = New Question (mirrors the rail button + badge); overlay ⌘K = focus composer.
+- **R3-11 a11y labels.** `New question` rail button gains explicit `aria-label`. Playbook shelf-toggle buttons gain `aria-label="Toggle <shelf name>"`.
+- **R3-09 panel question dedupe - not reproduced.** Code inspection: `.sa-question-text` renders `{askedQuestion}` in a single span; the panel's `pb-sous-doccard-title` renders `docContext.title`, not the question. No duplication path in JSX source. Logged as judgment call per the prompt's conditional.
+
+**Deferred (own round):** R3-05 grader calibration - the two reproduced mis-grading mechanisms (data-path partial firing on grounded vendor count, doc-path phantom_citation firing on the stylistic "all sections" tail) plausibly explain a large slice of the 23-33% partial/declined distribution. The two fixtures in `SOUS_R3_LIVE_REVIEW_2026-08-01.md` §R3-05 become eval anchors.
+
+**Rulings recorded:** R3-08 (panel clears - built), R3-10 (seventh tag - built).
+
+---
+
 ## Sous mark system
 
 The mark spec is canonical in `docs/SOUS_MARK_SPEC.md` (committed alongside this PR). Reference implementation for motion + composition sits in the polish-pass mock bundle (`sous-mark-final.html`, `sous-pra-update-mocks.html`) - spec wins on any disagreement. Component + CSS lands in `src/app/sous/SousMark.js` and the `.sa-mark-*` block of `src/app/sous/sous.css`. See PR A polish pass delivery log entry above for how each surface landed.

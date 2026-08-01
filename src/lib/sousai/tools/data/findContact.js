@@ -25,6 +25,7 @@ import {
   CONTACTS_SCOPE,
   A1_ROW_CAP,
 } from "./_constants.js";
+import { pgLiveAsOf } from "../_freshness.js";
 
 const SELECT_COLUMNS = "name, role, team_key, email, phone, slack_handle";
 
@@ -47,7 +48,7 @@ export async function findContact({ nameQuery } = {}) {
     return {
       source: "contacts",
       scope: CONTACTS_SCOPE,
-      loaded: DIRECTORY_LOAD_DATE,
+      loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
       parameters: { nameQuery: nameQuery || "" },
       matches: [],
       total: 0,
@@ -85,7 +86,7 @@ export async function findContact({ nameQuery } = {}) {
   const result = {
     source: "contacts",
     scope: CONTACTS_SCOPE,
-    loaded: DIRECTORY_LOAD_DATE,
+    loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
     parameters: { nameQuery: trimmed },
     matches,
     total,
