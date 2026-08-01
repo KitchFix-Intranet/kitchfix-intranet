@@ -31,10 +31,16 @@ import ServiceRow from "./ServiceRow";
 
 export const SPRING_TRAINING_GROUP_KEY = "__spring_training__";
 
-// Owner-approved subtitles (RENDER_STL_FL_SPRING_TRAINING.html):
+// Owner-approved subtitles (RENDER_STL_FL_SPRING_TRAINING.html).
+// WHY_OFF_PHASE_DRAWER added 2026-08-01: prior label "Off schedule ·
+// entered for this day" was the promoted-off-phase copy; when the
+// section sat in the inactive drawer without any entries, that copy
+// falsely claimed something had been entered. Owner-approved
+// alternative from the same render: "Not scheduled today".
 const WHY_IN_PHASE_PROJECTED    = "Shared dining room";
 const WHY_IN_PHASE_UNPROJECTED  = "Shared dining room · nothing scheduled yet";
 const WHY_OFF_PHASE_PROMOTED    = "Off schedule · entered for this day";
+const WHY_OFF_PHASE_DRAWER      = "Not scheduled today";
 
 export default function SpringTrainingSection({
   stServices,             // [{ ...svc, tier }] flat, in-service on day
@@ -81,11 +87,15 @@ export default function SpringTrainingSection({
     );
   }
 
-  // Subtitle per state.
+  // Subtitle per state. Drawer state (expanded=false) takes precedence:
+  // off-phase without any ST value, section sits in the inactive-
+  // groups drawer and reads "Not scheduled today". Promoted state
+  // (expanded=true) then splits by phase + projection presence.
   let why;
-  if (isSpringDate && hasProjectedMeals)      why = WHY_IN_PHASE_PROJECTED;
-  else if (isSpringDate && !hasProjectedMeals) why = WHY_IN_PHASE_UNPROJECTED;
-  else                                          why = WHY_OFF_PHASE_PROMOTED;
+  if (!expanded)                                why = WHY_OFF_PHASE_DRAWER;
+  else if (isSpringDate && hasProjectedMeals)   why = WHY_IN_PHASE_PROJECTED;
+  else if (isSpringDate && !hasProjectedMeals)  why = WHY_IN_PHASE_UNPROJECTED;
+  else                                           why = WHY_OFF_PHASE_PROMOTED;
 
   // Group services by real group name (their tier). Preserve encounter
   // order so MLB renders before MiLB as the render spec shows.

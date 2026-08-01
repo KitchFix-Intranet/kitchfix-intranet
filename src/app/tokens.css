@@ -533,6 +533,18 @@
   --sc2-accent-green-wash: #f1f9f4;
   --sc2-accent-green-line: #cae3d6;
 
+  /* Red family - 2026-08-01. Derived from the T-table overdue-state
+     hues (--sc2-state-overdue-bg / -bd / -fg above) so the product
+     has ONE red rather than two. Quieter register than green - used
+     for Clear, mark-no-service hover, and other "available but not
+     the primary action" affordances. Do NOT use for danger banners
+     (those keep their state-* tokens with the dedicated ring/border
+     treatment). Measured contrast: -deep on -wash = 5.72:1 (AA
+     4.5:1 for normal text, verified). */
+  --sc2-accent-red-deep:   #8a3a2c;
+  --sc2-accent-red-line:   #dd8a7b;
+  --sc2-accent-red-wash:   #f8d9d3;
+
   /* ---------- Corner-mark family ----------
      Two-color grammar preserved from v1: top-right game wedge
      (indigo), bottom-left season wedge (copper - shares
