@@ -201,7 +201,11 @@ function isNumericCell(text) {
     .replace(/[$,%()]/g, "")
     .replace(/\s+/g, "")
     .trim();
-  if (stripped === "" || stripped === "-" || stripped === "—") return true;
+  // "-" and "—" (em-dash) are both common "no value" placeholders in
+  // tabular payloads. Treat them as neutral so a single such cell doesn't
+  // flip an otherwise-numeric column non-numeric. The em-dash literal is
+  // escaped to keep this source file hyphens-only per the copy rule.
+  if (stripped === "" || stripped === "-" || stripped === "\u2014") return true;
   return Number.isFinite(Number(stripped));
 }
 
