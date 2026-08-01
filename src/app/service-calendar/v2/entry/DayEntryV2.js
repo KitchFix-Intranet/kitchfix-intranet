@@ -593,8 +593,16 @@ function DayEntryV2({
     let staggerIdx = 0;
     for (const s of group.services) {
       if (!isInServiceOnDay(s, day.date)) continue;
+      // R3-2 (2026-08-01): Match projections fills only what was projected.
+      // Absence (null/undefined) skips - never enter newVals, never enter
+      // newTouched, so executeConfirm's entries loop never carries a zero
+      // for an unprojected service. Explicit projected 0 still fills; we
+      // told the client zero, we confirm zero. On STL - FL a written 0
+      // is a service claim; on per-meal it removes a 23-row live-audit
+      // wound where unprojected services had been persisted as 0.
+      if (day.projected[s.colIndex] == null) continue;
       const wasEmpty = (newVals[s.colIndex] ?? "") === "";
-      newVals[s.colIndex] = String(day.projected[s.colIndex] ?? 0);
+      newVals[s.colIndex] = String(day.projected[s.colIndex]);
       newTouched.add(s.colIndex);
       if (wasEmpty) {
         markFlash(s.colIndex, staggerIdx * 60);
@@ -1473,7 +1481,13 @@ export function GroupBlock({
   const hideRate = variant === "fee";
   const gsEntered = groupSummary(group);
   const gsProjected = projectedGroupSummary(group);
-  const hasProjectedRevenue = gsProjected.revenue > 0;
+  // R3-2 (2026-08-01): meals-based gate. Revenue was a proxy for "is
+  // there anything to match," but revenue is zero by shape on fee-no-
+  // dollar accounts, which hid the buttons where they belonged. Meals
+  // > 0 is the semantic test. Verified against every ENTRY_V2 non-fee
+  // account 2026-01-01+: zero groups have meals > 0 with revenue = 0,
+  // so per-meal behavior is byte-identical.
+  const hasProjectedMeals = gsProjected.meals > 0;
 
   return (
     <section className="sc-v2-entry-group" data-active={expanded ? "true" : "false"}>
@@ -1497,9 +1511,9 @@ export function GroupBlock({
               CSS + pointer-events gate visibility + focusability. */}
         <div
           className="sc-v2-entry-group-actions"
-          data-cleared={hasProjectedRevenue && hasMatchSnapshot ? "true" : "false"}
+          data-cleared={hasProjectedMeals && hasMatchSnapshot ? "true" : "false"}
         >
-          {hasProjectedRevenue && (
+          {hasProjectedMeals && (
             <>
               <button
                 type="button"
