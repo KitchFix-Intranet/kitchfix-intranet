@@ -1114,6 +1114,36 @@ function DayEntryV2({
     return { activeGroups: active, inactiveGroups: inactive };
   }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, stRenderTop]);
 
+  // R3-cleanup (2026-08-01): rail-scope groups.
+  //
+  // `activeGroups` above drives ledger-vs-drawer placement and must NOT
+  // change on `touched` - a group flipping from drawer to top the
+  // moment the operator types into it would yank the row they are
+  // typing into out from under them.
+  //
+  // BillRail iterates a rail-scoped set that INCLUDES groups with any
+  // touched service in the current edit session, on top of the
+  // proj > 0 / actual > 0 rule. Fixes the display-truth defect where
+  // typing into a drawer group made the hero rise ($4,382.08 on
+  // owner's Jul 16 case) while the itemization stayed at the
+  // pre-drawer subtotal ($4,181.34 - $200.74 short).
+  //
+  // Regression envelope: with `touched.size === 0`, this set equals
+  // activeGroups exactly (same predicate, third clause vacuous). A
+  // per-meal day with no drawer entries renders byte-identical to
+  // pre-fix. Only diverges once the operator types into a drawer
+  // group - the case the fix exists for.
+  const railGroups = useMemo(() => {
+    return regularServiceGroups.filter((g) => {
+      return g.services.some((s) => {
+        if ((day.projected[s.colIndex] ?? 0) > 0) return true;
+        if (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0) return true;
+        if (touched.has(s.colIndex)) return true;
+        return false;
+      });
+    });
+  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, touched]);
+
   const hasTouchedAny = touched.size > 0;
   // Phase 1 Ledger (2026-07-24): swapped mergeActivity -> groupActivity
   // (v2-specific). Preserves bucket structure (hybrid summary + expand
@@ -1444,7 +1474,7 @@ function DayEntryV2({
               hasTouchedAny={hasTouchedAny}
               enteredCount={enteredCount}
               totalToEnter={totalToEnter}
-              serviceGroups={activeGroups}
+              serviceGroups={railGroups}
               day={day}
               editValues={editValues}
               touched={touched}
@@ -1790,7 +1820,12 @@ function BillRail({
         <div className="sc-v2-entry-rail-progress-fill" style={{ width: `${pctComplete}%` }} />
       </div>
 
-      {/* Forming invoice - every in-service service as a line */}
+      {/* Forming invoice - every group the parent scoped to the rail.
+          Parent (DayEntryV2) passes `railGroups`: groups with any
+          projection, actual, or session-touched service. In-service
+          services within each rail-scoped group render as lines;
+          groups with zero in-service services on the day short-circuit
+          via the lines-length guard below. */}
       <div className="sc-v2-entry-rail-invoice">
         {serviceGroups.map(group => {
           const gsEntered = groupSummary(group);
