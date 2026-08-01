@@ -3844,6 +3844,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 isFeeAccount,
                 account: data?.account || null,
                 periodStats,
+                springDateSet,
                 homestandContext: (periodHomestandMap || homestandMap)[focusDay] || null,
                 onPrev: canPrev ? () => navDay(-1) : null,
                 onNext: canNext ? () => navDay(1) : null,

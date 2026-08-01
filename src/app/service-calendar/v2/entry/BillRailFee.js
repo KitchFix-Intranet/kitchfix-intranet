@@ -47,26 +47,25 @@ export default function BillRailFee({
   enteredCount,
   totalToEnter,
   periodStats,   // { daysConfirmed, daysTotal, servedToDate } | null
+  // R3-5 (2026-08-01): Spring Training rail section. Non-null +
+  // non-empty = render SPRING TRAINING as the first rail group, with
+  // tier-prefixed service names ("MLB Breakfast - ST" etc.). Parent
+  // controls visibility - the rail matches the ledger by construction.
+  // Passed as [{colIndex, name, tier, ...svc}] shape (already
+  // in-service-filtered upstream).
+  stSectionRail = null,
+  // R3-5 gate-bounce fix (2026-08-01): parent-owned totals memo. Was
+  // computed locally over the `serviceGroups` prop; after R3-5 the
+  // parent passes activeGroups (regularServiceGroups-derived, " - ST"
+  // stripped), so the local sum omitted every ST service and the hero
+  // read ~0 while the pinned bar and section subtotal read the correct
+  // day total. Owner ruling: hero reads the same memo the pinned bar
+  // reads - one number, one source. Parent's feeServedTotals iterates
+  // the raw unfiltered serviceGroups (DayEntryV2.js:768), so every
+  // in-service service on the day contributes exactly once.
+  feeServedTotals,
 }) {
-  // Served-count derivations. Ignore isFlatFee here (unlike per-meal's
-  // `summary.meals` which skips flat-fee services because they have
-  // no per-meal count). On STL-FL the operator's typed value IS the
-  // served count for every line - flatFee is a billing signal, not a
-  // rendering one.
-  let enteredServed = 0;
-  let projectedServed = 0;
-  for (const g of serviceGroups) {
-    for (const s of g.services) {
-      if (!isInServiceOnDay(s, day.date)) continue;
-      const proj = day.projected[s.colIndex] ?? 0;
-      projectedServed += proj;
-      const v = editValues[s.colIndex];
-      if (v !== "" && v !== undefined && touched.has(s.colIndex)) {
-        enteredServed += Number(v) || 0;
-      }
-    }
-  }
-  const heroValue = hasTouchedAny ? enteredServed : projectedServed;
+  const heroValue = hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled;
   const heroAnimated = useAnimatedNumber(heroValue);
 
   // Hero pulse - mirrors BillRail's pattern verbatim so the two rails
@@ -123,6 +122,35 @@ export default function BillRailFee({
       {/* Per-service list - counts only, no amount cell (redline #11
           shape, same rationale as BulkEntry's hideAmount). */}
       <div className="sc-v2-entry-rail-invoice">
+        {/* R3-5 (2026-08-01): SPRING TRAINING rail section, promoted
+            when parent flags this day in-phase (spring block OR any
+            ST value on the day). Reuses the same rail-group + rail-
+            line classes as regular groups; tier prefix distinguishes
+            MLB / MiLB rows. Rail matches the ledger. */}
+        {stSectionRail && stSectionRail.length > 0 && (
+          <div key="__spring_training__" className="sc-v2-entry-rail-group">
+            <div className="sc-v2-entry-rail-group-name">SPRING TRAINING</div>
+            {stSectionRail.map((s) => {
+              const proj = day.projected[s.colIndex] ?? 0;
+              const editVal = editValues[s.colIndex] ?? "";
+              const isTouched = touched.has(s.colIndex);
+              const isEmpty = editVal === "";
+              const entered = isTouched && !isEmpty;
+              const displayVal = entered ? Number(editVal) : proj;
+              return (
+                <div
+                  key={s.colIndex}
+                  className={`sc-v2-entry-rail-line-fee ${entered ? "sc-v2-entry-rail-line-fee--solid" : "sc-v2-entry-rail-line-fee--ghost"}`}
+                >
+                  <span className="sc-v2-entry-rail-line-name">{s.tier} {s.name}</span>
+                  <span className="sc-v2-entry-rail-line-count">
+                    {entered ? displayVal.toLocaleString() : `~${displayVal.toLocaleString()}`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {serviceGroups.map(group => {
           const lines = group.services.filter(s => isInServiceOnDay(s, day.date));
           if (!lines.length) return null;
