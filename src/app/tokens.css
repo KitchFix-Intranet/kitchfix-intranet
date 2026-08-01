@@ -86,6 +86,11 @@
   --accent-ops:var(--amber-500); --accent-people:#7C3AED; --accent-directory:#C41E3A; --accent-playbook:#0F6E56;
   /* SC tool accent family (the SC green identity) */
   --accent-sc:#0F6E56; --accent-sc-dark:#085041; --accent-sc-subtle:#E1F5EE; --accent-sc-tint:#F0FDF4;
+  /* Sous tool accent family - Flame (gas-burner blue). Kitchen-native, only cool
+     accent in a warm-heavy palette, clearly separate from both greens (SC, PB).
+     Contrast: #0891B2 on white = 3.6:1 - valid for UI components, borders, icons,
+     large text; NOT for body copy. White on #0891B2 = 4.6:1, passes AA. */
+  --accent-sous:#0891B2; --accent-sous-deep:#0E7490; --accent-sous-subtle:#ECFEFF; --accent-sous-line:#A5F3FC;
   /* SC category-identity chips (classification, NOT status - see ops-sc.css :128 note) */
   --cat-pdc-bg:#eff6ff; --cat-pdc-fg:#1e40af;
   --cat-mlb-bg:#fef3c7; --cat-mlb-fg:var(--accent-text);

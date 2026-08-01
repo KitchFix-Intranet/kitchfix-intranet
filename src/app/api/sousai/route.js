@@ -165,6 +165,7 @@ async function handleFeedback(gate) {
     user_email: gate.email,
     value: gate.value,
     comment: gate.comment,
+    tags: gate.tags,
   });
   if (error) return jsonResponse(500, { error: "feedback write failed" });
   if (updated === 0) return jsonResponse(404, { error: "not found" });

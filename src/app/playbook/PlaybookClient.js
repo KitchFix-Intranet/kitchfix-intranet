@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import "./playbook.css";
 import "../sous/sous.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
@@ -71,8 +72,11 @@ export default function PlaybookClient() {
   const [openDocId, setOpenDocId] = useState(null);
   // Ask Sous overlay. Train 3 wires the live SousSurface inside the panel.
   // sousPrefill supports the per-doc ask stub in SlideOverReader.
+  // sousDocContext carries the document meta object when opened from the
+  // doc panel (Redesign PR A: powers the ASKING ABOUT band + first-open state).
   const [sousOpen, setSousOpen] = useState(false);
   const [sousPrefill, setSousPrefill] = useState("");
+  const [sousDocContext, setSousDocContext] = useState(null);
 
   useEffect(() => {
     fetch("/api/playbook?action=bootstrap")
@@ -105,6 +109,8 @@ export default function PlaybookClient() {
       setSousOpen={setSousOpen}
       sousPrefill={sousPrefill}
       setSousPrefill={setSousPrefill}
+      sousDocContext={sousDocContext}
+      setSousDocContext={setSousDocContext}
     />
   );
 }
@@ -375,7 +381,7 @@ function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollaps
 // ════════════════════════════════════════════════════════════════════════════
 // Playbook page (owner view)
 // ════════════════════════════════════════════════════════════════════════════
-function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFamily, openDocId, setOpenDocId, sousOpen, setSousOpen, sousPrefill, setSousPrefill }) {
+function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFamily, openDocId, setOpenDocId, sousOpen, setSousOpen, sousPrefill, setSousPrefill, sousDocContext, setSousDocContext }) {
   const { documents, shelves, isOwner, heroImage } = bootstrap;
   const isSearching = !!query.trim() || filter !== "all" || family !== "all";
 
@@ -575,8 +581,12 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
           docId={openDocId}
           onClose={() => setOpenDocId(null)}
           isOwner={isOwner}
-          onOpenSous={(docId) => {
-            setSousPrefill(`In ${docId}: `);
+          onOpenSous={(docMeta) => {
+            // SlideOverReader now passes { id, title, version, status, docClass }.
+            // Redesign PR A: no prefill string - the doc lives in the band-header
+            // context object instead, and the composer stays empty for a fresh ask.
+            setSousDocContext(docMeta);
+            setSousPrefill("");
             setSousOpen(true);
           }}
         />
@@ -587,8 +597,11 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
           onClose={() => {
             setSousOpen(false);
             setSousPrefill("");
+            setSousDocContext(null);
           }}
           prefill={sousPrefill}
+          docContext={sousDocContext}
+          onDismissDoc={() => setSousDocContext(null)}
         />
       )}
     </div>
@@ -606,7 +619,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
 // opens the overlay via the per-doc "Ask Sous about this doc" affordance
 // in SlideOverReader.
 // ════════════════════════════════════════════════════════════════════════════
-function SousAIOverlay({ onClose, prefill = "" }) {
+function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc }) {
   const [chips, setChips] = useState(null);
 
   useEffect(() => {
@@ -620,8 +633,6 @@ function SousAIOverlay({ onClose, prefill = "" }) {
     };
   }, [onClose]);
 
-  // Fetch chips on mount. 403 or empty response resolves to null so the
-  // SousSurface falls back to its static trio without a UI regression.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/sousai/chips", { method: "GET" })
@@ -634,19 +645,65 @@ function SousAIOverlay({ onClose, prefill = "" }) {
     return () => { cancelled = true; };
   }, []);
 
+  const isNonLive = docContext && docContext.status && docContext.status !== "Live";
+  // Open in Sous link goes to the plain /sous page. The panel knows the doc,
+  // but the /sous page has no band header to carry that context - wiring a
+  // ?doc= deep link would silently drop it into a first-run screen with no
+  // indication the context was lost. Recorded as deferred follow-up in
+  // docs/SOUS_REDESIGN_MASTER.md section 8.
+  const openInSousHref = "/sous";
+
   return (
     <>
       <div className="pb-sous-backdrop" onClick={onClose} />
       <aside className="pb-sous-panel" role="dialog" aria-modal="true" aria-label="Ask Sous">
+        {/* Band header - identity + document context as one object */}
         <div className="pb-sous-head">
-          <div className="pb-sous-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
-            </svg>
-            <h2>Ask Sous</h2>
+          <div className="pb-sous-head-row">
+            <div className="pb-sous-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+              </svg>
+              <h2>Ask Sous</h2>
+            </div>
+            <a href={openInSousHref} className="pb-sous-openinsous" target="_blank" rel="noopener">
+              <span>Open in Sous</span>
+              <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
+            </a>
+            <button className="pb-sous-close" onClick={onClose} aria-label="Close">×</button>
           </div>
-          <button className="pb-sous-close" onClick={onClose} aria-label="Close">×</button>
+          {docContext && (
+            <div className="pb-sous-context">
+              <p className="pb-sous-context-label">Asking about</p>
+              <div className="pb-sous-doccard">
+                <span className="pb-sous-doccard-id">{docContext.id}</span>
+                <span className="pb-sous-doccard-title" title={docContext.title}>{docContext.title || docContext.id}</span>
+                <span className="pb-sous-doccard-meta">
+                  {docContext.version ? `v${docContext.version} · ` : ""}{docContext.status || ""}
+                </span>
+                <button
+                  type="button"
+                  className="pb-sous-doccard-dismiss"
+                  onClick={onDismissDoc}
+                  aria-label="Ask without this document"
+                  title="Ask without this document"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Non-Live honest state - fires only when docContext.status is not Live */}
+        {isNonLive && (
+          <div className="pb-sous-notlive">
+            <p>
+              <strong>{docContext.id} is {docContext.status}.</strong> It isn't in the corpus yet, so I can't answer from it. Ask something else, or try one of the recent live questions in the composer below.
+            </p>
+          </div>
+        )}
+
         <SousSurface
           variant="overlay"
           chips={chips}

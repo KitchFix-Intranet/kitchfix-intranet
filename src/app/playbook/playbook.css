@@ -2126,12 +2126,17 @@
   /* Summary section stays plain - non-collapsible. No chevron, no toggle. */
 }
 
-/* ─── Ask SousAI overlay (A6 shell) ─────────────────────────────────────── */
+/* ─── Ask Sous overlay (Redesign PR A) ────────────────────────────────────
+   Was max-width: 480px + navy border-bottom head. Sous Redesign PR A:
+   580px matching .pb-slide (the doc reader people already know), scrim
+   dimmed to rgba(9,43,85,.22) - context not modal, Flame gradient band
+   header carrying identity + document context as one object.
+   ─── */
 .pb-sous-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(2px);
+  background: rgba(9, 43, 85, 0.22);          /* was 0.55 - context, not modal */
+  backdrop-filter: blur(1.5px);
   z-index: 4000;
   animation: pb-fade-in 0.18s ease;
 }
@@ -2141,7 +2146,7 @@
   right: 0;
   bottom: 0;
   width: 100%;
-  max-width: 480px;
+  max-width: 580px;                            /* was 480; matches .pb-slide */
   background: white;
   z-index: 4001;
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
@@ -2152,39 +2157,208 @@
 @media (max-width: 1023px) {
   .pb-sous-panel { max-width: 100vw; }
 }
+
+/* Band header: navy-to-Flame gradient carrying identity AND context as one
+   object. Not two strips. */
 .pb-sous-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--kf-border);
+  background: linear-gradient(90deg, #0F3057 0%, var(--accent-sous-deep) 100%);
+  color: white;
+  padding: 14px 18px 16px;
+  border-bottom: none;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.pb-sous-title {
+.pb-sous-head-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--kf-navy);
+}
+.pb-sous-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
 }
 .pb-sous-title h2 {
   font-family: 'Inter', sans-serif;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   margin: 0;
-  color: var(--kf-navy);
+  color: white;
+  letter-spacing: -0.01em;
 }
+.pb-sous-openinsous {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: white;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pb-sous-openinsous:hover { background: rgba(255, 255, 255, 0.22); }
 .pb-sous-close {
   background: transparent;
   border: none;
-  color: #6B7785;
-  font-size: 26px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
-  margin-left: auto;
-  padding: 0 6px;
+  padding: 2px 6px;
   border-radius: 6px;
 }
-.pb-sous-close:hover { background: #f1f5f9; }
+.pb-sous-close:hover { background: rgba(255, 255, 255, 0.15); color: white; }
+
+/* ASKING ABOUT + document card - the context object */
+.pb-sous-context {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pb-sous-context-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: rgba(255, 255, 255, 0.68);
+  margin: 0;
+  text-transform: uppercase;
+}
+.pb-sous-doccard {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pb-sous-doccard-id {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.pb-sous-doccard-title {
+  font-size: 13px;
+  color: white;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pb-sous-doccard-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.pb-sous-doccard-dismiss {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.pb-sous-doccard-dismiss:hover { color: white; background: rgba(255, 255, 255, 0.15); }
+
+/* First-open state - what people meet when they click "Ask Sous about this doc" */
+.pb-sous-firstopen {
+  padding: 18px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pb-sous-firstopen-lead {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--kf-navy);
+  margin: 0;
+}
+.pb-sous-firstopen-tag {
+  font-size: 13px;
+  color: #475569;
+  margin: 0;
+  line-height: 1.5;
+}
+.pb-sous-starters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pb-sous-starter {
+  background: white;
+  border: 1px solid var(--kf-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--kf-navy);
+  transition: border-color 0.12s, background 0.12s;
+}
+.pb-sous-starter:hover { border-color: var(--accent-sous); background: var(--accent-sous-subtle); }
+.pb-sous-starter-tag {
+  display: inline-block;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-sous-deep);
+  background: var(--accent-sous-subtle);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-right: 8px;
+}
+
+/* Non-Live honest state */
+.pb-sous-notlive {
+  padding: 16px 18px 14px;
+  background: #FFFBEB;
+  border-bottom: 1px solid #FDE68A;
+  color: #713F12;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pb-sous-notlive strong { color: #92400E; }
+.pb-sous-notlive-related {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 0;
+  list-style: none;
+}
+.pb-sous-notlive-related-item {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid #FDE68A;
+  font-size: 12.5px;
+  cursor: pointer;
+  color: var(--kf-navy);
+  font-family: inherit;
+  text-align: left;
+}
+.pb-sous-notlive-related-item:hover { border-color: #F59E0B; }
 .pb-sous-body {
   flex: 1 1 auto;
   overflow-y: auto;
