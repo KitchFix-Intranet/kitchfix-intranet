@@ -53,6 +53,10 @@
   min-height: 0;
   padding-bottom: 20px;
 }
+@media (min-width: 1024px) and (max-width: 1279px) {
+  /* Narrow desktop band: rail trims from 264 to 220 so the pane breathes. */
+  .sa-workspace { grid-template-columns: 220px minmax(0, 1fr); }
+}
 @media (max-width: 1023px) {
   .sa-workspace { grid-template-columns: 1fr; }
   .sa-rail { display: none; }
@@ -248,6 +252,10 @@
 }
 @media (max-width: 767px) {
   .sa-hero { min-height: 84px; padding: 14px 18px; }
+}
+@media (min-width: 768px) and (max-height: 800px) {
+  /* Height fit-floor: at short laptops the landing must hold zero scroll. */
+  .sa-hero { min-height: 84px; padding: 16px 22px; }
 }
 .sa-hero-bg {
   position: absolute;
@@ -592,7 +600,6 @@
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: #64748B;
-  white-space: nowrap;
 }
 .sa-answer-body td {
   padding: 9px 12px;
@@ -600,6 +607,15 @@
   vertical-align: baseline;
   font-variant-numeric: tabular-nums;
 }
+/* Numeric columns: mdLite tags th+td with data-num when every body cell parses
+   as a number. Right-align + tabular-nums so digits align on the decimal. */
+.sa-answer-body th[data-num],
+.sa-answer-body td[data-num] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Zebra rows for scan-ability on multi-row tables. */
+.sa-answer-body tbody tr:nth-child(2n) { background: #FAFBFC; }
 .sa-answer-body tfoot td {
   border-top: 1.5px solid #D3CFC4;
   border-bottom: none;

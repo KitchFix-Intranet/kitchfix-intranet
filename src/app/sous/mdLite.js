@@ -183,10 +183,41 @@ function splitTableRow(line) {
   return inner.split("|").map((c) => c.trim());
 }
 
+// Numeric-cell heuristic. Strips bold, currency, commas, percent, parens (for
+// negatives), leading/trailing whitespace - then asks if what's left parses as
+// a finite number. Empty cells are neutral (don't flip a column non-numeric).
+function isNumericCell(text) {
+  if (text == null) return true;
+  const stripped = String(text)
+    .replace(/\*\*/g, "")
+    .replace(/[$,%()]/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+  if (stripped === "" || stripped === "-" || stripped === "—") return true;
+  return Number.isFinite(Number(stripped));
+}
+
 function buildTableHtml(headerCells, bodyRows) {
-  const head = "<tr>" + headerCells.map((c) => `<th>${applyBold(c)}</th>`).join("") + "</tr>";
+  // For each column, check if every non-empty body cell parses numeric. If so,
+  // tag th+td with data-num so CSS can right-align + tabular-nums.
+  const numericCols = headerCells.map((_, colIdx) => {
+    let sawAny = false;
+    for (const row of bodyRows) {
+      const cell = row[colIdx];
+      if (cell != null && String(cell).trim() !== "") {
+        sawAny = true;
+        if (!isNumericCell(cell)) return false;
+      }
+    }
+    return sawAny;
+  });
+  const head = "<tr>" + headerCells
+    .map((c, i) => `<th${numericCols[i] ? " data-num" : ""}>${applyBold(c)}</th>`)
+    .join("") + "</tr>";
   const body = bodyRows
-    .map((row) => "<tr>" + row.map((c) => `<td>${applyBold(c)}</td>`).join("") + "</tr>")
+    .map((row) => "<tr>" + row
+      .map((c, i) => `<td${numericCols[i] ? " data-num" : ""}>${applyBold(c)}</td>`)
+      .join("") + "</tr>")
     .join("");
   return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
