@@ -314,6 +314,89 @@
 .sc-v2-entry-group-subtotal-label { color: var(--sc2-ink-muted); }
 .sc-v2-entry-group-subtotal-amount { color: var(--sc2-ink-strong); font-variant-numeric: tabular-nums; }
 
+/* R3-5 (2026-08-01): Spring Training section - inherits group-block
+   container shape, adds tier sub-headers + "why" subtitle. Renders
+   at top of ledger when in-phase; inside inactive-groups drawer
+   when off-phase. Same visual weight as .sc-v2-entry-group so the
+   ledger reads as one continuous stack. */
+.sc-v2-entry-st-section {
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  background: var(--sc2-surface-card);
+  padding: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sc-v2-entry-st-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-3) var(--sc2-space-4);
+  background: var(--sc2-surface-sunken);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.sc-v2-entry-st-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.sc-v2-entry-st-name {
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-strong);
+}
+.sc-v2-entry-st-why {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-medium);
+}
+.sc-v2-entry-st-body {
+  display: flex;
+  flex-direction: column;
+}
+.sc-v2-entry-st-tier + .sc-v2-entry-st-tier {
+  border-top: var(--sc2-border-thin) dashed var(--sc2-line-2);
+}
+.sc-v2-entry-st-tier-head {
+  padding: var(--sc2-space-2) var(--sc2-space-4);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--sc2-surface-card);
+}
+.sc-v2-entry-st-tier-ledger {
+  border-top: 0;
+}
+.sc-v2-entry-st-subtotal {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--sc2-space-2) var(--sc2-space-4);
+  background: var(--sc2-surface-sunken);
+  border-top: var(--sc2-border-thin) solid var(--sc2-line);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-soft);
+  font-weight: var(--sc2-wt-semibold);
+  font-variant-numeric: tabular-nums;
+}
+/* Missing state (Acceptance 2): explicit, not silent. Fires only
+   when construct is fee-shape AND spring date AND name match empty.
+   Same container chrome as the normal section so the operator sees
+   a real thing rendered, not a formatting glitch. */
+.sc-v2-entry-st-section--missing .sc-v2-entry-st-missing-body {
+  padding: var(--sc2-space-3) var(--sc2-space-4);
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-caption);
+  line-height: 1.4;
+}
+
 /* Inactive-groups collapser */
 .sc-v2-entry-inactive {
   border: var(--sc2-border-thin) dashed var(--sc2-line-2);

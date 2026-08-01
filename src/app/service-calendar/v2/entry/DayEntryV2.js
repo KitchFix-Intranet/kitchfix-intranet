@@ -57,6 +57,7 @@ import {
 // helper. Both key on the same isFeeNoDollar predicate so the entry
 // tree stays consistent on STL-FL without perturbing per-meal or MLB.
 import BillRailFee from "./BillRailFee";
+import SpringTrainingSection, { SPRING_TRAINING_GROUP_KEY } from "./SpringTrainingSection";
 import { isFeeNoDollar, unitLabel, verbLabel, verbLabelPast, verbLabelPastUpper } from "../vocab";
 // P3-B (2026-07-28): handoff coordinator - executeConfirm success
 // branch drives the sequence via startHandoff. Pill source ref
@@ -195,6 +196,11 @@ function DayEntryV2({
   periodStats = null,     // { daysConfirmed, daysTotal, servedToDate } - fee Month block
   homestandContext,
   scopeLabel = "period",
+  // R3-5 (2026-08-01): Set<YYYY-MM-DD> of spring-training dates for
+  // this account+year, threaded from ServiceCalendar.js:1517 via the
+  // shared dayEntryProps bundle. DayDetail receives it too for free
+  // (same bundle) but does not consume this round - out of scope.
+  springDateSet = null,
 }, ref) {
   // Fee-no-dollar shape flag - keyed on the account, not isFeeAccount.
   // MLB (flat_fee + hasHomestandSchedule) reads false here; STL-FL
@@ -1015,10 +1021,75 @@ function DayEntryV2({
     "entered":     { tone: "entered", text: "Actuals recorded. Edit and re-save if needed." },
   }[status];
 
+  // R3-5 (2026-08-01): Spring Training display construct. Membership
+  // is a name-suffix match on " - ST", self-fencing per probe A (only
+  // account carrying " - ST" services is STL - FL). Services keep
+  // their real group membership (Acceptance 3 - data untouched). The
+  // tier value here is the display-only sub-header inside the section.
+  //
+  // stServices flattens the " - ST" services across all real groups,
+  // tagged with their real group name as `tier`. In-service filter
+  // fires now so downstream code does not need to re-check.
+  const stServices = useMemo(() => {
+    const out = [];
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        if (!isInServiceOnDay(s, day.date)) continue;
+        if (typeof s.name === "string" && s.name.endsWith(" - ST")) {
+          out.push({ ...s, tier: g.name });
+        }
+      }
+    }
+    return out;
+  }, [serviceGroups, day.date]);
+
+  const isSpringDate = !!springDateSet?.has(day.date);
+
+  // Rule 3 override: promote to top when any ST service has a
+  // projection or an entered count on the day. Covers camp running
+  // long past phaseCalendar's spring block window.
+  const hasSTValue = useMemo(() => {
+    return stServices.some((s) => {
+      if ((day.projected[s.colIndex] ?? 0) > 0) return true;
+      if (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0) return true;
+      return false;
+    });
+  }, [stServices, day.projected, day.actual, day.hasActuals]);
+
+  // "In phase" = section belongs at the top (rule 1 + rule 3 override).
+  // Off-phase without any ST value = section goes in the inactive drawer.
+  const stInPhase = isSpringDate || hasSTValue;
+
+  // Render gates. `feeNoDollar` scopes the construct to STL - FL, per
+  // round title. Missing state (Acceptance 2) fires when we would have
+  // rendered the top mount but name-match returned nothing; component
+  // handles that early return internally.
+  const stRenderTop = feeNoDollar && stInPhase && (stServices.length > 0 || isSpringDate);
+  const stRenderDrawer = feeNoDollar && !stInPhase && stServices.length > 0;
+
+  // Regular groups = serviceGroups with " - ST" services stripped for
+  // display iteration. Empty resulting groups drop out (an MLB group
+  // holding only ST services would be empty here and should not render
+  // its own empty header). Aggregators (feeServedTotals,
+  // executeConfirm's write loop, feeGroupSummary called on real groups)
+  // still see the raw serviceGroups - ST counts contribute to the day
+  // total by construction. Only the top-of-ledger + drawer displays
+  // use this filtered view.
+  const regularServiceGroups = useMemo(() => {
+    return serviceGroups
+      .map((g) => ({
+        ...g,
+        services: g.services.filter(
+          (s) => !(typeof s.name === "string" && s.name.endsWith(" - ST")),
+        ),
+      }))
+      .filter((g) => g.services.length > 0);
+  }, [serviceGroups]);
+
   // Group active/inactive - DayDetail.js:536-547.
   const { activeGroups, inactiveGroups } = useMemo(() => {
     const active = [], inactive = [];
-    for (const g of serviceGroups) {
+    for (const g of regularServiceGroups) {
       const hasAnyValue = g.services.some(s =>
         (day.projected[s.colIndex] ?? 0) > 0 ||
         (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0)
@@ -1027,7 +1098,7 @@ function DayEntryV2({
       else inactive.push(g);
     }
     return { activeGroups: active, inactiveGroups: inactive };
-  }, [serviceGroups, day.projected, day.actual, day.hasActuals]);
+  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals]);
 
   const hasTouchedAny = touched.size > 0;
   // Phase 1 Ledger (2026-07-24): swapped mergeActivity -> groupActivity
@@ -1201,6 +1272,31 @@ function DayEntryV2({
           onFocus={handleListFocus}
           aria-keyshortcuts="Enter ArrowUp ArrowDown PageUp PageDown Control+Enter Meta+Enter"
         >
+          {/* R3-5 (2026-08-01): Spring Training section at top when
+              in-phase (spring block OR any ST value on the day).
+              Composes with R3-2 via the shared fillGroupWithProjections
+              handler + a synthetic group keyed by
+              SPRING_TRAINING_GROUP_KEY; snapshot state at
+              matchSnapshots[SPRING_TRAINING_GROUP_KEY] does not
+              collide with real groups. */}
+          {stRenderTop && (
+            <SpringTrainingSection
+              stServices={stServices}
+              day={day}
+              editValues={editValues}
+              touched={touched}
+              flashMap={flashMap}
+              isSpringDate={isSpringDate}
+              hasSTValue={hasSTValue}
+              expanded={true}
+              onChange={handleChange}
+              onFillProjections={fillGroupWithProjections}
+              onClearToPreMatch={clearGroupToPreMatch}
+              hasMatchSnapshot={!!matchSnapshots[SPRING_TRAINING_GROUP_KEY]}
+              feeGroupSummary={feeGroupSummary}
+              feeProjectedGroupSummary={feeProjectedGroupSummary}
+            />
+          )}
           {activeGroups.map(group => (
             <GroupBlock
               key={group.name}
@@ -1221,9 +1317,27 @@ function DayEntryV2({
               expanded={true}
             />
           ))}
-          {inactiveGroups.length > 0 && (
+          {(inactiveGroups.length > 0 || stRenderDrawer) && (
             <details className="sc-v2-entry-inactive">
-              <summary>Show {inactiveGroups.length} inactive {inactiveGroups.length === 1 ? "group" : "groups"}</summary>
+              <summary>Show {inactiveGroups.length + (stRenderDrawer ? 1 : 0)} inactive {inactiveGroups.length + (stRenderDrawer ? 1 : 0) === 1 ? "group" : "groups"}</summary>
+              {stRenderDrawer && (
+                <SpringTrainingSection
+                  stServices={stServices}
+                  day={day}
+                  editValues={editValues}
+                  touched={touched}
+                  flashMap={flashMap}
+                  isSpringDate={isSpringDate}
+                  hasSTValue={hasSTValue}
+                  expanded={false}
+                  onChange={handleChange}
+                  onFillProjections={fillGroupWithProjections}
+                  onClearToPreMatch={clearGroupToPreMatch}
+                  hasMatchSnapshot={!!matchSnapshots[SPRING_TRAINING_GROUP_KEY]}
+                  feeGroupSummary={feeGroupSummary}
+                  feeProjectedGroupSummary={feeProjectedGroupSummary}
+                />
+              )}
               {inactiveGroups.map(group => (
                 <GroupBlock
                   key={group.name}
@@ -1304,6 +1418,7 @@ function DayEntryV2({
               enteredCount={enteredCount}
               totalToEnter={totalToEnter}
               periodStats={periodStats}
+              stSectionRail={stInPhase ? stServices : null}
             />
           ) : (
             <BillRail

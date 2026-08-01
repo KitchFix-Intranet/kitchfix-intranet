@@ -47,6 +47,13 @@ export default function BillRailFee({
   enteredCount,
   totalToEnter,
   periodStats,   // { daysConfirmed, daysTotal, servedToDate } | null
+  // R3-5 (2026-08-01): Spring Training rail section. Non-null +
+  // non-empty = render SPRING TRAINING as the first rail group, with
+  // tier-prefixed service names ("MLB Breakfast - ST" etc.). Parent
+  // controls visibility - the rail matches the ledger by construction.
+  // Passed as [{colIndex, name, tier, ...svc}] shape (already
+  // in-service-filtered upstream).
+  stSectionRail = null,
 }) {
   // Served-count derivations. Ignore isFlatFee here (unlike per-meal's
   // `summary.meals` which skips flat-fee services because they have
@@ -123,6 +130,35 @@ export default function BillRailFee({
       {/* Per-service list - counts only, no amount cell (redline #11
           shape, same rationale as BulkEntry's hideAmount). */}
       <div className="sc-v2-entry-rail-invoice">
+        {/* R3-5 (2026-08-01): SPRING TRAINING rail section, promoted
+            when parent flags this day in-phase (spring block OR any
+            ST value on the day). Reuses the same rail-group + rail-
+            line classes as regular groups; tier prefix distinguishes
+            MLB / MiLB rows. Rail matches the ledger. */}
+        {stSectionRail && stSectionRail.length > 0 && (
+          <div key="__spring_training__" className="sc-v2-entry-rail-group">
+            <div className="sc-v2-entry-rail-group-name">SPRING TRAINING</div>
+            {stSectionRail.map((s) => {
+              const proj = day.projected[s.colIndex] ?? 0;
+              const editVal = editValues[s.colIndex] ?? "";
+              const isTouched = touched.has(s.colIndex);
+              const isEmpty = editVal === "";
+              const entered = isTouched && !isEmpty;
+              const displayVal = entered ? Number(editVal) : proj;
+              return (
+                <div
+                  key={s.colIndex}
+                  className={`sc-v2-entry-rail-line-fee ${entered ? "sc-v2-entry-rail-line-fee--solid" : "sc-v2-entry-rail-line-fee--ghost"}`}
+                >
+                  <span className="sc-v2-entry-rail-line-name">{s.tier} {s.name}</span>
+                  <span className="sc-v2-entry-rail-line-count">
+                    {entered ? displayVal.toLocaleString() : `~${displayVal.toLocaleString()}`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {serviceGroups.map(group => {
           const lines = group.services.filter(s => isInServiceOnDay(s, day.date));
           if (!lines.length) return null;
