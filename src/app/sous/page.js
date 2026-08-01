@@ -156,9 +156,11 @@ function nowClockLabel() {
 }
 
 function SousHero({ heroImage, firstName, clockLabel }) {
+  // U7 verbatim - "about" not "for"; "the intranet knows" replaces the
+  // enumerated modules. All Sous copy says "people", never "directory".
   const greeting = firstName
-    ? `Hello ${firstName} - ask me for anything in the Playbook, the directory, the service calendar, or spend.`
-    : `Hello - ask me for anything in the Playbook, the directory, the service calendar, or spend.`;
+    ? `Hello ${firstName} - ask me about anything the intranet knows.`
+    : `Hello - ask me about anything the intranet knows.`;
   return (
     <div className="sa-hero">
       <div

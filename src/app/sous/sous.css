@@ -384,103 +384,84 @@
   max-width: 640px;
 }
 
-.sa-domain-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.sa-domain-card {
+/* V2 simplified briefing (ratified U1) - one elevated card, four domain
+   rows, limits copy as the card's footer. Replaces the V1 four-card grid. */
+.sa-brief {
   background: white;
   border: 1px solid var(--kf-border, #E4E8EC);
   border-radius: 12px;
-  padding: 16px 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-}
-.sa-domain-card:hover {
-  border-color: currentColor;
-  box-shadow: 0 4px 12px rgba(15, 48, 87, 0.06);
-}
-.sa-domain-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.sa-domain-title {
-  font-size: 14px;
-  font-weight: 800;
-  margin: 0;
-}
-.sa-domain-count {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.04);
-}
-.sa-domain-examples {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.sa-domain-example {
-  background: transparent;
-  border: none;
-  padding: 6px 8px;
-  border-radius: 6px;
-  text-align: left;
-  font-size: 12px;
-  color: #334155;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.12s ease;
-  line-height: 1.35;
-}
-.sa-domain-example:hover { background: #F1F5F9; }
-.sa-domain-example:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
-
-/* Per-domain accent tinting (uses each module's own accent token) */
-.sa-domain-card--pb  { color: var(--accent-playbook); }
-.sa-domain-card--pp  { color: var(--accent-people); }
-.sa-domain-card--sc  { color: var(--accent-sc); }
-.sa-domain-card--ops { color: var(--accent-ops); }
-.sa-domain-card--sous { color: var(--accent-sous-deep); }
-.sa-domain-title-with-icon {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: currentColor;
-}
-.sa-domain-title-with-icon svg { width: 16px; height: 16px; }
-
-/* Limits block - permanent, never dismissible */
-.sa-limits {
-  background: #FEF9E7;
-  border: 1px solid #FDE68A;
-  border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 20px;
 }
-.sa-limits-title {
-  font-size: 13px;
-  font-weight: 800;
-  color: #92400E;
-  margin: 0 0 4px;
-}
-.sa-limits-body {
+.sa-brow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid #F1F5F9;
   font-size: 12.5px;
-  color: #713F12;
-  line-height: 1.5;
-  margin: 0;
 }
+.sa-brow:last-of-type { border-bottom: none; }
+.sa-brow-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
+}
+.sa-brow-title {
+  font-weight: 700;
+  color: var(--kf-navy, #0F3057);
+  width: 128px;
+  flex: none;
+}
+.sa-brow-count {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 9.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sa-brow-example {
+  margin-left: auto;
+  background: #F8FAFC;
+  color: var(--accent-sous-deep);
+  border: 1px solid #EEF2F6;
+  border-radius: 7px;
+  padding: 4px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.sa-brow-example:hover {
+  background: var(--accent-sous-subtle);
+  border-color: var(--accent-sous-line);
+}
+/* Per-row accent - icon takes accent, count chip takes tinted background */
+.sa-brow--pb   { color: var(--accent-playbook, #0F6E56); }
+.sa-brow--pb .sa-brow-count   { background: #ECFDF5; color: var(--accent-playbook, #0F6E56); }
+.sa-brow--pp   { color: var(--accent-people, #7C3AED); }
+.sa-brow--pp .sa-brow-count   { background: #F5F3FF; color: var(--accent-people, #7C3AED); }
+.sa-brow--sc   { color: var(--accent-sc, #0F6E56); }
+.sa-brow--sc .sa-brow-count   { background: #ECFDF5; color: var(--accent-sc, #0F6E56); }
+.sa-brow--ops  { color: var(--accent-ops, #D9892F); }
+.sa-brow--ops .sa-brow-count  { background: #FFF7ED; color: #B45309; }
+/* Limits copy - card footer, warm-tinted, permanent per D9 copy rules */
+.sa-brief-limits {
+  font-size: 10.5px;
+  color: #92400E;
+  margin: 9px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid #F1F5F9;
+  line-height: 1.5;
+}
+.sa-brief-limits strong { color: #92400E; font-weight: 700; }
 
 /* ── 4. Turn treatment - BOTH variants ──────────────────────────────────── */
 
@@ -967,11 +948,7 @@
 .sa-animate .sa-hero-title          { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 100ms both; }
 .sa-animate .sa-hero-greeting       { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 220ms both; }
 .sa-animate .sa-freshness           { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 340ms both; }
-.sa-animate .sa-domain-card:nth-child(1) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 420ms both; }
-.sa-animate .sa-domain-card:nth-child(2) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 500ms both; }
-.sa-animate .sa-domain-card:nth-child(3) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 580ms both; }
-.sa-animate .sa-domain-card:nth-child(4) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 660ms both; }
-.sa-animate .sa-limits              { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 760ms both; }
+.sa-animate .sa-brief               { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 420ms both; }
 .sa-animate .sa-composer            { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 840ms both; }
 
 /* Suppressed, not reduced. */
@@ -981,8 +958,7 @@
   .sa-animate .sa-hero-title,
   .sa-animate .sa-hero-greeting,
   .sa-animate .sa-freshness,
-  .sa-animate .sa-domain-card,
-  .sa-animate .sa-limits,
+  .sa-animate .sa-brief,
   .sa-animate .sa-composer,
   .sa-freshness-dot,
   .sa-provenance--streaming .sa-provenance-dot {

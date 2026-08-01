@@ -24,7 +24,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Star, Copy, Download, ThumbsUp, ThumbsDown, Plus, ArrowUp, ExternalLink,
+  Copy, Download, ThumbsUp, ThumbsDown, Plus, ArrowUp, ExternalLink,
+  BookOpen, Users, Calendar, Receipt,
 } from "lucide-react";
 import { renderMdLite } from "./mdLite";
 
@@ -376,49 +377,52 @@ export default function SousSurface({
     </aside>
   );
 
-  // ── First-run block (page variant only, when idle) ───────────────────────
+  // ── First-run block V2 (simplified briefing, ratified U1) ────────────────
+  // One elevated card, four domain rows, limits copy in the card's footer.
+  // Icons: book/users/calendar/receipt in each module's own accent. Counts
+  // fall back to a "live" / "on file" label if the read failed. Example chip
+  // right-aligned per row - reuses the wired onExampleClick path.
   const firstRunEl = !isOverlay && !hasAnswer && (
     <div className="sa-firstrun">
       <p className="sa-firstrun-lead">What can I look up for you?</p>
-      <p className="sa-firstrun-tag">
-        Sous answers from what KitchFix has written down and what Postgres holds right now; every answer says where it came from, and it declines rather than guessing.
-      </p>
-      <div className="sa-domain-grid">
-        <DomainCard
+      <p className="sa-firstrun-tag">Every answer names its source. Sous declines rather than guessing.</p>
+      <div className="sa-brief">
+        <BriefRow
           modifier="pb"
+          icon={<BookOpen size={14} strokeWidth={2} aria-hidden="true" />}
           title="Playbook"
           count={domainCounts.playbook != null ? `${domainCounts.playbook} live` : "live"}
-          examples={domainExamples.playbook || []}
+          example={(domainExamples.playbook || [])[0]}
           onExampleClick={onExampleClick}
         />
-        <DomainCard
+        <BriefRow
           modifier="pp"
+          icon={<Users size={14} strokeWidth={2} aria-hidden="true" />}
           title="People"
-          count={domainCounts.people != null ? `${domainCounts.people} on file` : "directory"}
-          examples={domainExamples.people || []}
+          count={domainCounts.people != null ? `${domainCounts.people} on file` : "on file"}
+          example={(domainExamples.people || [])[0]}
           onExampleClick={onExampleClick}
         />
-        <DomainCard
+        <BriefRow
           modifier="sc"
+          icon={<Calendar size={14} strokeWidth={2} aria-hidden="true" />}
           title="Service Calendar"
           count={domainCounts.sc != null ? `${domainCounts.sc} accounts` : "live"}
-          examples={domainExamples.sc || []}
+          example={(domainExamples.sc || [])[0]}
           onExampleClick={onExampleClick}
         />
-        <DomainCard
+        <BriefRow
           modifier="ops"
+          icon={<Receipt size={14} strokeWidth={2} aria-hidden="true" />}
           title="Spend"
           count={domainCounts.spend != null ? `${domainCounts.spend} vendors` : "live"}
-          examples={domainExamples.spend || []}
+          example={(domainExamples.spend || [])[0]}
           onExampleClick={onExampleClick}
         />
-      </div>
-      <aside className="sa-limits" role="note">
-        <p className="sa-limits-title">What it won't do yet</p>
-        <p className="sa-limits-body">
-          No wages or reimbursement information. No P&amp;L - that's coming soon. No prior seasons, that information is coming soon; the tools are current-season only and a 2024 question would return a valid-looking wrong number.
+        <p className="sa-brief-limits">
+          <strong>Not yet:</strong> no wages, no reimbursements, no P&amp;L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong.
         </p>
-      </aside>
+      </div>
     </div>
   );
 
@@ -610,25 +614,17 @@ export default function SousSurface({
   );
 }
 
-function DomainCard({ modifier, title, count, examples, onExampleClick }) {
+function BriefRow({ modifier, icon, title, count, example, onExampleClick }) {
   return (
-    <div className={`sa-domain-card sa-domain-card--${modifier}`}>
-      <div className="sa-domain-head">
-        <h3 className="sa-domain-title sa-domain-title-with-icon">
-          <Star size={14} aria-hidden="true" />
-          {title}
-        </h3>
-        <span className="sa-domain-count">{count}</span>
-      </div>
-      <ul className="sa-domain-examples">
-        {examples.map((q, i) => (
-          <li key={i}>
-            <button type="button" className="sa-domain-example" onClick={() => onExampleClick(q)}>
-              {q}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <div className={`sa-brow sa-brow--${modifier}`}>
+      <span className="sa-brow-icon">{icon}</span>
+      <span className="sa-brow-title">{title}</span>
+      <span className="sa-brow-count">{count}</span>
+      {example && (
+        <button type="button" className="sa-brow-example" onClick={() => onExampleClick(example)}>
+          {example}
+        </button>
+      )}
     </div>
   );
 }
