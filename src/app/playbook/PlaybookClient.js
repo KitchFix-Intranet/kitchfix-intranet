@@ -622,11 +622,18 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
 // ════════════════════════════════════════════════════════════════════════════
 function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = null, onDismissDoc }) {
   const [chips, setChips] = useState(null);
-  // Local prefill state so I1 empty-state chip clicks can seed the composer
-  // without re-mounting SousSurface. initialPrefill hydrates once from the
-  // parent (e.g. slide-over reader's "Ask Sous about this doc" affordance).
+  // Local prefill state so any external "Ask Sous about this doc" seed
+  // (from SlideOverReader) still populates the composer without a submit.
   const [prefill, setPrefill] = useState(initialPrefill);
   useEffect(() => { setPrefill(initialPrefill); }, [initialPrefill]);
+  // R3-02 - imperative ref so panel starter chips can fire the same
+  // submit path a typed ask uses. Ref points at SousSurface's
+  // askQuestion (registered via forwardRef + useImperativeHandle).
+  const sousRef = useRef(null);
+  // R3-08 - panel clears its starter block after the first ask, matching
+  // the page's first-run clear behavior. Any ask (chip, typed, prefilled)
+  // fires SousSurface's onFirstAsk exactly once per mount.
+  const [panelAsked, setPanelAsked] = useState(false);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -716,12 +723,13 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
           </div>
         )}
 
-        {/* I1 - panel empty state. With docContext: three doc-scoped
-            starters. Without: capability line + the four V2 domain example
-            chips. Both modes carry the U6 limits copy compact. Suppressed
-            when the doc is not-live (the notlive block above owns that
-            slot). Chip click seeds the composer via setPrefill. */}
-        {!isNonLive && (
+        {/* I1 - panel empty state. Cleared after the first ask per R3-08
+            (panelAsked flips on SousSurface's onFirstAsk callback). Chip
+            clicks now fire the same submit path a typed ask uses via the
+            SousSurface imperative ref (R3-02); the .askQuestion call
+            triggers submitAsk which fires onFirstAsk which hides this
+            whole block. */}
+        {!panelAsked && !isNonLive && (
           <div className="pb-sous-empty">
             {docContext ? (
               <div className="pb-sous-empty-chips" role="group" aria-label="Starter questions">
@@ -730,7 +738,7 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
                     key={q}
                     type="button"
                     className="pb-sous-empty-chip"
-                    onClick={() => setPrefill(q)}
+                    onClick={() => sousRef.current?.askQuestion(q)}
                   >
                     {q}
                   </button>
@@ -752,7 +760,7 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
                       key={i}
                       type="button"
                       className="pb-sous-empty-chip"
-                      onClick={() => setPrefill(q)}
+                      onClick={() => sousRef.current?.askQuestion(q)}
                     >
                       {q}
                     </button>
@@ -767,6 +775,8 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
         )}
 
         <SousSurface
+          ref={sousRef}
+          onFirstAsk={() => setPanelAsked(true)}
           variant="overlay"
           chips={chips}
           initialQuestion={prefill}
@@ -1023,6 +1033,7 @@ function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle, view, s
         className="pb-shelf-title"
         onClick={() => onToggle(name)}
         aria-expanded={!isCollapsed}
+        aria-label={`Toggle ${name}`}
       >
         <span className="pb-shelf-name">{name}</span>
         <span className="pb-shelf-count" aria-label={`${count} documents`}>{count}</span>

@@ -18,6 +18,7 @@ import {
   KNOWN_ROLES,
   A4_ROW_CAP,
 } from "./_constants.js";
+import { pgLiveAsOf } from "../_freshness.js";
 
 const SELECT_COLUMNS = "name, role, team_key, email, phone, slack_handle";
 
@@ -32,7 +33,7 @@ export async function listContactsByRole({ role, teamKey } = {}) {
     return {
       source: "contacts",
       scope: CONTACTS_SCOPE,
-      loaded: DIRECTORY_LOAD_DATE,
+      loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
       parameters: { role: role || "", teamKey: teamKey || null },
       matches: [],
       total: 0,
@@ -52,7 +53,7 @@ export async function listContactsByRole({ role, teamKey } = {}) {
     return {
       source: "contacts",
       scope: CONTACTS_SCOPE,
-      loaded: DIRECTORY_LOAD_DATE,
+      loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
       parameters: { role: trimmedRole, teamKey: teamKey || null },
       matches: [],
       total: 0,
@@ -78,7 +79,7 @@ export async function listContactsByRole({ role, teamKey } = {}) {
   const result = {
     source: "contacts",
     scope: CONTACTS_SCOPE,
-    loaded: DIRECTORY_LOAD_DATE,
+    loaded: pgLiveAsOf(DIRECTORY_LOAD_DATE),
     parameters: { role: canonicalRole, teamKey: teamKey || null },
     matches: capped,
     total,

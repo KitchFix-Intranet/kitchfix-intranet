@@ -26,7 +26,12 @@
 .sa-page {
   /* Fit-floor accounts for the sticky TopNav sitting above .sa-page.
      Without this subtraction the landing overflows by the nav's height at
-     every viewport height. --kf-topnav-h lives in TopNav.css :root. */
+     every viewport height. --kf-topnav-h lives in TopNav.css :root.
+     R3-01: flex column so .sa-shell can flex-fill the page's height at
+     large viewports (previously the shell hugged content, leaving a
+     137-439px void below the composer). */
+  display: flex;
+  flex-direction: column;
   min-height: calc(100dvh - var(--kf-topnav-h, 56px));
   background: #EDEFF2;              /* reference surface-page, warmer than default canvas */
   color: var(--text-default);
@@ -48,10 +53,12 @@
 .sa-shell {
   display: flex;
   flex-direction: column;
-  /* Fills the nav-adjusted .sa-page; the parent's min-height already
-     accounts for the sticky TopNav, so 100% here is the actual usable
-     area (was min-height: 100vh which double-counted and overflowed). */
-  min-height: 100%;
+  /* R3-01: flex-1 fills the nav-adjusted .sa-page (which is now
+     display:flex). Was `min-height: 100%` which only fired against
+     parents with explicit height - .sa-page has min-height, not height,
+     so the % rule silently no-op'd and the shell hugged content. */
+  flex: 1 1 auto;
+  width: 100%;
   max-width: 1520px;
   margin: 0 auto;
   padding: 20px 24px 0;
@@ -59,6 +66,11 @@
 }
 @media (max-width: 767px) {
   .sa-shell { padding: 12px 16px 0; gap: 12px; }
+}
+@media (min-width: 1720px) {
+  /* R3-01: step content width up on true large viewports so the ~439px
+     void at 2300w becomes breathing room in the answer column instead. */
+  .sa-shell { max-width: 1680px; }
 }
 
 .sa-workspace {
@@ -381,7 +393,12 @@
 .sa-firstrun {
   padding: 24px 24px 16px;
   max-width: 900px;
-  margin: 0 auto;
+  /* R3-01: `margin: auto` (not just `0 auto`) so the briefing centers
+     vertically in the pane's slack at large viewports. .sa-pane fills
+     its scroll region and lets this auto margin absorb the extra
+     height. At smaller viewports the block sits naturally at the top. */
+  margin: auto;
+  width: 100%;
 }
 @media (max-width: 767px) { .sa-firstrun { padding: 16px 16px 12px; } }
 
@@ -517,6 +534,11 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* R3-01: flex-column so .sa-pane's flex:1 fills the scroll area's
+     height at large viewports, letting the first-run briefing center
+     vertically in the slack via .sa-firstrun's auto margins. */
+  display: flex;
+  flex-direction: column;
 }
 .sa-pane-scroll::-webkit-scrollbar { width: 9px; }
 .sa-pane-scroll::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 5px; }
@@ -529,6 +551,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* R3-01: fill the scroll region's height so children can center. */
+  flex: 1;
 }
 @media (max-width: 767px) { .sa-pane { padding: 16px 14px; } }
 
@@ -927,6 +951,10 @@
   background: var(--accent-sous-subtle);
   color: var(--accent-sous-deep);
 }
+/* R3-06: the cast vote keeps its selected style even when disabled - the
+   generic .sa-action-btn[disabled] opacity 0.5 was killing the pressed
+   visual so a voted button looked identical to any faded button. */
+.sa-action-btn--pressed[disabled] { opacity: 1; cursor: default; }
 
 /* ── 6. Feedback tag flow - BOTH variants ────────────────────────────────── */
 
