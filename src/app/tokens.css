@@ -542,6 +542,16 @@
      treatment). Measured contrast: -deep on -wash = 5.72:1 (AA
      4.5:1 for normal text, verified). */
   --sc2-accent-red-deep:   #8a3a2c;
+  --sc2-accent-red-mid:    #b85440;    /* 2026-08-01 - control boundary
+                                          against sunken header 4.09:1
+                                          (WCAG 1.4.11 pass). Sits between
+                                          -line and -deep so Clear's
+                                          border reads at the same
+                                          strength as Match's border
+                                          (--sc2-accent-green 4.30:1) while
+                                          staying under Clear's -deep label
+                                          so hierarchy inside the button
+                                          survives. */
   --sc2-accent-red-line:   #dd8a7b;
   --sc2-accent-red-wash:   #f8d9d3;
 
