@@ -1095,15 +1095,23 @@
      still the row's primary target. */
   font-size: var(--sc2-size-body);
 }
-/* Item 3 desktop-only min-height reduction. Below 1024px the dual-
-   mode density rule holds Comfortable tokens, so row + input keep
-   their 44px + 40px floors (v1 base + mobile bump). At >=1024px the
-   operator is on a mouse and 40px is a safe target; the row's
-   min-height also drops so the reduction actually reads. */
+/* Item 3 desktop-only tighten. Below 1024px the dual-mode density
+   rule holds Comfortable tokens, so row + input keep their 44px +
+   40px floors (v1 base + mobile bump). At >=1024px we tighten by
+   pulling the input's OWN vertical padding down - which is what
+   was actually setting row height. First pass (v1) reduced
+   min-height only; input padding still governed the box, so rows
+   measured 58px on gate. Corrected v2: reduce input padding + drop
+   the input min-height floor + hold row min-height at 44px (owner
+   target = mid-to-high forties, not thirties). Result on gate at
+   1280: row lands in the 44-48px band. Below 1024px: unchanged
+   from base (mobile 44px floor preserved by construction). */
 @media (min-width: 1024px) {
-  .scv2 .sc-v2-entry-list .sc-day-input     { min-height: 36px; }
+  .scv2 .sc-v2-entry-list .sc-day-input {
+    min-height: 36px;
+    padding: 4px var(--sc2-space-2);
+  }
   .scv2 .sc-v2-entry-list .sc-day-row--ledger {
-    min-height: 40px;
     padding: 6px var(--sc2-space-4);
   }
 }
@@ -1142,26 +1150,15 @@
   font-weight: var(--sc2-wt-medium);
 }
 
-/* P1.3 - Match-projections quiet tier ------------------------------
-   Replace the mid-weight green-tinted button with the same quiet-tier
-   language the drill rail's secondary CTA uses. On light ground the
-   quiet border + muted ink render as calm; hover promotes to the
-   green wash accent to signal action without shouting. */
-.scv2 .sc-v2-entry-group-match {
-  background: transparent;
-  border: var(--sc2-border-thin) solid var(--sc2-line-2);
-  color: var(--sc2-ink-muted);
-  font-weight: var(--sc2-wt-semibold);
-  letter-spacing: 0.04em;
-  transition: background var(--duration-fast) var(--ease-standard),
-              color var(--duration-fast) var(--ease-standard),
-              border-color var(--duration-fast) var(--ease-standard);
-}
-.scv2 .sc-v2-entry-group-match:hover {
-  background: var(--sc2-accent-green-wash);
-  color: var(--sc2-accent-green-deep);
-  border-color: var(--sc2-accent-green-line);
-}
+/* P1.3 was the "Match quiet-tier" override (transparent + muted
+   ink at rest, green wash only on hover). Owner overruled the quiet
+   intent for this surface 2026-08-01 - see the rewritten
+   .sc-v2-entry-group-match rule at :229. That rule is the single
+   source of truth for Match's resting + hover treatment; the .scv2
+   override was deleted so specificity does not compete with itself.
+   Clear's rule at :278 stays symmetric with Match by construction -
+   both live at the same class-only specificity, neither carries a
+   .scv2 counterpart. */
 
 /* P1.4 - Sticky elevation cue -------------------------------------- */
 .scv2 .sc-v2-entry-group-header {
