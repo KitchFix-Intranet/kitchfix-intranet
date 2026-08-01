@@ -2008,7 +2008,11 @@ function LedgerBand({ entries, draft, onDraftChange, onPost, isPosting, inputRef
                 >
                   <span className={`sc-v2-entry-ledger-pip sc-v2-entry-ledger-pip--${e.type}`} aria-hidden="true" />
                   <span className="sc-v2-entry-ledger-summary">
-                    {e.type === "note" && e.note}
+                    {e.type === "note" && (
+                      <>
+                        <strong>{e.author || "Someone"}</strong>{": "}{e.note}
+                      </>
+                    )}
                     {e.type === "edit-event" && (
                       <>
                         <strong>{e.author || "Someone"}</strong>{" "}updated {nEntries} service{nEntries === 1 ? "" : "s"}
