@@ -1,76 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════
-   Handoff sequence (Phase 3-B, 2026-07-28)
+   Handoff (Phase 3-B, 2026-07-28; flight retired 2026-08-01)
    ═══════════════════════════════════════════════════════════════════
 
    Beat timings anchored to RENDER_HANDOFF_BLENDED.html:
-     fadeSvc   .26s (@0ms, stagger .02/.05/.08/.11 - handled inline)
-     pillIn    .3s  (@.2s, overshoot)
-     pillFly   .55s (@.66s)
-     ringSweep .95s (@1.02s, ambient CSS transition already live)
-     flipIn    .46s (@.96s)
-     clearRow  .48s (@1.05s)
-     slideNext .5s  (@1.35s)
-     closeRing 1.15s (month-complete only)
-     checkDraw .5s  (@1s, month-complete)
+     flipIn    .46s (@.96s)                        - kept
+     closeRing 1.15s (month-complete only)         - kept
+     checkDraw .5s  (@1s, month-complete)          - kept
 
-   §13A: durations use --duration-* tokens where available; specific
-   named animations use literal ms since the token ladder does not
-   name every beat. Structural motion values (transform distances,
-   opacity endpoints) are pattern-locked to the render.
+   RM: every remaining animation uses --duration-* or wraps in a
+   media query. The token cascade collapses to 0ms under
+   prefers-reduced-motion.
 
-   RM: every animation uses --duration-* or wraps in a media query.
-   The token cascade collapses to 0ms under prefers-reduced-motion.
+   Removed 2026-08-01 (owner ruling, retirement audit):
+     pillIn / pillFly / clone flight (`.sc-v2-entry-pill*`,
+       `.sc-handoff-layer`, `.sc-handoff-clone*`) - the flight was
+       structurally impossible on every save; see SC_STATUS.md.
+     clearRow (`.sc-rail-queue-row--clearing`) - orphan; no consumer.
+     badgeTick (`.sc-rail-section-meta--ticked`) - orphan; no consumer.
+     slideNext (`.sc-v2-entry--sliding-next`) - orphan; no consumer.
 */
-
-/* ─── Confirmed pill (inside DayEntryV2) ───────────────────────
-   Renders during phase >= 2. Absolute positioning so its rect stays
-   stable for HandoffLayer's source-rect capture. On phase 2 entry,
-   pillIn keyframe forms it with an overshoot bezier. On phase 3
-   entry, --flying triggers a fade-away in place (HandoffLayer's
-   fixed clone carries the visual flight). */
-.sc-v2-entry-pill {
-  position: fixed;
-  right: var(--sc2-space-5, 20px);
-  bottom: calc(var(--sc2-space-8, 40px) + var(--sc2-space-5, 20px));
-  animation: sc-pillIn .3s cubic-bezier(.34, 1.56, .64, 1) both;
-  z-index: 20;
-  pointer-events: none;
-}
-.sc-v2-entry-pill--flying {
-  animation: sc-pillFade .3s ease-out forwards;
-}
-@keyframes sc-pillIn {
-  0%   { opacity: 0; transform: scale(.9); }
-  70%  { opacity: 1; transform: scale(1.04); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes sc-pillFade {
-  to { opacity: 0; transform: scale(.7); }
-}
-
-/* ─── HandoffLayer flight clone ────────────────────────────────
-   Fixed-position clone at page level. Transform + opacity carry the
-   flight. Timing: .55s cubic-bezier(.4, 0, .2, 1). Reduced-motion:
-   the JS coordinator skips this beat entirely; CSS is safe by omit. */
-.sc-handoff-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 10001;
-}
-.sc-handoff-clone {
-  transition:
-    transform .55s cubic-bezier(.4, 0, .2, 1),
-    opacity   .55s cubic-bezier(.4, 0, .2, 1);
-}
-.sc-handoff-clone--flying {
-  /* Marker class set by JS after the start-position snap. Transform
-     target values are set inline via style. */
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-handoff-clone { transition: none; }
-  .sc-v2-entry-pill { animation: none; opacity: 0; }
-}
 
 /* ─── Session strip ────────────────────────────────────────────
    Below the ring caption (per Ruling 3). Accent-rail --success on
@@ -114,42 +62,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-daysq--flipped-in { animation: none; }
-}
-
-/* ─── Queue row exit (clearRow) ────────────────────────────────
-   Applied to a queue row that just cleared. Height collapses to 0,
-   opacity fades. Natural DOM removal happens after the animation.
-   Consumers apply .sc-rail-queue-row--clearing on props diff. */
-.sc-rail-queue-row--clearing {
-  animation: sc-clearRow .48s cubic-bezier(.4, 0, .2, 1) forwards;
-  overflow: hidden;
-}
-@keyframes sc-clearRow {
-  0%   { max-height: 40px; opacity: 1; margin: initial; padding: initial; }
-  100% { max-height: 0; opacity: 0; margin: 0; padding: 0; }
-}
-
-/* ─── Badge tick (RailSection meta pulse) ──────────────────────
-   One-shot flash on count change. Consumers apply
-   .sc-rail-section-meta--ticked; class clears via animationend. */
-.sc-rail-section-meta--ticked {
-  animation: sc-badgeTick .38s cubic-bezier(.34, 1.56, .64, 1) both;
-}
-@keyframes sc-badgeTick {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.14); }
-  100% { transform: scale(1); }
-}
-
-/* ─── Slide next (DayEntryV2 modal on onNextException) ─────────
-   The modal's content re-seeds with the new day's data; the class
-   fires a horizontal slide. */
-.sc-v2-entry--sliding-next {
-  animation: sc-slideNext .5s cubic-bezier(.4, 0, .2, 1) both;
-}
-@keyframes sc-slideNext {
-  from { transform: translateX(12%); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
 }
 
 /* ─── Month-complete card ──────────────────────────────────────

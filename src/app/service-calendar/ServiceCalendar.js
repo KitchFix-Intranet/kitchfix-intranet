@@ -51,9 +51,11 @@ import MobileBooksBar from "./v2/MobileBooksBar";
 import BulkEntry from "./v2/bulk/BulkEntry";
 import BulkReview from "./v2/bulk/BulkReview";
 import "./v2/bulk/bulk.css";
-// Phase 3-B (2026-07-28): Handoff sequence.
+// Phase 3-B (2026-07-28; flight retired 2026-08-01): Handoff coordinator.
+// Owns sessionMap, month-complete card state, and the finalize timer
+// that closes/advances the modal on save. No flight layer after
+// retirement - the pill + clone motion never fired on any account.
 import { HandoffProvider, useHandoffSafe } from "./v2/handoff/coordinator";
-import HandoffLayer from "./v2/handoff/HandoffLayer";
 import MonthCompleteCard from "./v2/handoff/MonthCompleteCard";
 import "./v2/handoff/handoff.css";
 // HF-7 (2026-07-20) - overview ribbon Today-jump routes through
@@ -2742,11 +2744,6 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
     >
-      {/* P3-B (2026-07-28): Handoff flight layer. Fixed-position clone
-          under .sc-root - sibling of the modal overlay so its
-          viewport-relative positioning is not trapped by the modal's
-          backdrop-filter containing block. */}
-      <HandoffLayer />
       {/* M-2 (2026-07-29) scope-ternary audit:
           These four sites all had shape `scope === "month" ? X : Y`
           with Y implicitly "period". A third scope value ("homestand")
