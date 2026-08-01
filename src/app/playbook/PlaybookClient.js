@@ -17,6 +17,7 @@ import "../sous/sous.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
 import SlideOverReader from "./SlideOverReader";
 import SousSurface from "../sous/SousSurface";
+import { DOMAIN_CARD_EXAMPLES, PANEL_DOC_STARTERS } from "../sous/examples";
 
 // Operator-facing catalog filters. The previous "Needs Drive link" owner-only
 // chip was removed once /playbook/admin shipped (the dashboard's worklist
@@ -619,8 +620,13 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
 // opens the overlay via the per-doc "Ask Sous about this doc" affordance
 // in SlideOverReader.
 // ════════════════════════════════════════════════════════════════════════════
-function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc }) {
+function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = null, onDismissDoc }) {
   const [chips, setChips] = useState(null);
+  // Local prefill state so I1 empty-state chip clicks can seed the composer
+  // without re-mounting SousSurface. initialPrefill hydrates once from the
+  // parent (e.g. slide-over reader's "Ask Sous about this doc" affordance).
+  const [prefill, setPrefill] = useState(initialPrefill);
+  useEffect(() => { setPrefill(initialPrefill); }, [initialPrefill]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -706,6 +712,51 @@ function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc 
           <div className="pb-sous-notlive">
             <p>
               <strong>{docContext.id} is {docContext.status}.</strong> It isn't in the corpus yet, so I can't answer from it. Ask something else, or try one of the recent live questions in the composer below.
+            </p>
+          </div>
+        )}
+
+        {/* I1 - panel empty state. With docContext: three doc-scoped
+            starters. Without: capability line + the four V2 domain example
+            chips. Both modes carry the U6 limits copy compact. Suppressed
+            when the doc is not-live (the notlive block above owns that
+            slot). Chip click seeds the composer via setPrefill. */}
+        {!isNonLive && (
+          <div className="pb-sous-empty">
+            {docContext ? (
+              <div className="pb-sous-empty-chips" role="group" aria-label="Starter questions">
+                {PANEL_DOC_STARTERS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="pb-sous-empty-chip"
+                    onClick={() => setPrefill(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <p className="pb-sous-empty-lead">
+                  Sous reads the Playbook, people, the service calendar, and spend - every answer names its source.
+                </p>
+                <div className="pb-sous-empty-chips" role="group" aria-label="Example questions">
+                  {Object.values(DOMAIN_CARD_EXAMPLES).map((examples, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="pb-sous-empty-chip"
+                      onClick={() => setPrefill(examples[0])}
+                    >
+                      {examples[0]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <p className="pb-sous-empty-limits">
+              <strong>Not yet:</strong> no wages, no reimbursements, no P&amp;L yet - all coming. Current season only.
             </p>
           </div>
         )}

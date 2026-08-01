@@ -500,19 +500,27 @@ export default function SousSurface({
 
         {Array.isArray(doneEnv?.sources) && doneEnv.sources.length > 0 && (
           <div className="sa-sources">
-            {doneEnv.sources.map((docId) => (
-              <a
-                key={docId}
-                className="sa-source-card"
-                href={`/playbook/d/${encodeURIComponent(docId)}`}
-                target="_blank"
-                rel="noopener"
-              >
-                <span className="sa-source-idchip">{docId}</span>
-                <span className="sa-source-title">{docId}</span>
-                <ExternalLink size={13} className="sa-source-go" aria-hidden="true" />
-              </a>
-            ))}
+            {doneEnv.sources.map((s) => {
+              // I2 - route.js now hydrates sources to {docId, title}. Legacy
+              // shape (bare string) still renders because we normalise here;
+              // when title is missing or equals the id, render the chip alone.
+              const docId = typeof s === "string" ? s : s?.docId;
+              const rawTitle = typeof s === "string" ? null : s?.title;
+              const showTitle = rawTitle && rawTitle !== docId;
+              return (
+                <a
+                  key={docId}
+                  className="sa-source-card"
+                  href={`/playbook/d/${encodeURIComponent(docId)}`}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <span className="sa-source-idchip">{docId}</span>
+                  {showTitle && <span className="sa-source-title">{rawTitle}</span>}
+                  <ExternalLink size={13} className="sa-source-go" aria-hidden="true" />
+                </a>
+              );
+            })}
           </div>
         )}
 

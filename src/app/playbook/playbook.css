@@ -2149,7 +2149,10 @@
   max-width: 580px;                            /* was 480; matches .pb-slide */
   background: white;
   z-index: 4001;
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+  /* Panel overlay elevation: --elev-3 from sous.css (scoped via :where so
+     this class picks it up transitively). Falls back to the prior single-
+     shadow if a caller loads this file without sous.css - unlikely. */
+  box-shadow: var(--elev-3, -8px 0 32px rgba(0, 0, 0, 0.18));
   display: flex;
   flex-direction: column;
   animation: pb-slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2339,6 +2342,54 @@
   line-height: 1.5;
 }
 .pb-sous-notlive strong { color: #92400E; }
+
+/* I1 - panel empty state, both modes. Compact, top-aligned, sits above
+   SousSurface. Chip click seeds the composer via setPrefill. */
+.pb-sous-empty {
+  padding: 12px 18px 14px;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: white;
+}
+.pb-sous-empty-lead {
+  margin: 0;
+  font-size: 12.5px;
+  color: #64748B;
+  line-height: 1.4;
+}
+.pb-sous-empty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pb-sous-empty-chip {
+  font-size: 11.5px;
+  color: var(--accent-sous-deep);
+  background: white;
+  border: 1px solid var(--kf-border, #E4E8EC);
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.pb-sous-empty-chip:hover {
+  border-color: var(--accent-sous);
+  background: var(--accent-sous-subtle);
+}
+.pb-sous-empty-chip:focus-visible {
+  outline: 2px solid var(--accent-sous);
+  outline-offset: 2px;
+}
+.pb-sous-empty-limits {
+  font-size: 10.5px;
+  color: #92400E;
+  margin: 0;
+  line-height: 1.4;
+}
+.pb-sous-empty-limits strong { color: #92400E; font-weight: 700; }
 .pb-sous-notlive-related {
   margin-top: 10px;
   display: flex;

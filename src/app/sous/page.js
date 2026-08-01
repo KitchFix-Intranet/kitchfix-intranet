@@ -33,31 +33,11 @@ import { countYtdCanonicalVendors } from "@/lib/sousai/tools/data/spendTopVendor
 import SousSurface from "./SousSurface";
 import SousMark from "./SousMark";
 import FreshnessChip from "./FreshnessChip";
+import { DOMAIN_CARD_EXAMPLES } from "./examples";
 import "./sous.css";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sous - KitchFix" };
-
-// The four first-run domain cards. Live counts fetched below; hardcoded
-// example questions per D15 (log can drive them later).
-const DOMAIN_CARD_EXAMPLES = {
-  playbook: [
-    "What's our allergen procedure?",
-    "Show me FORM-004",
-  ],
-  people: [
-    "Who's the EC at CIN-OH?",
-    "Which accounts don't have a Sous Chef?",
-  ],
-  sc: [
-    "How's CIN-AZ tracking this month?",
-    "What homestand is STL-MO on?",
-  ],
-  spend: [
-    "How much have we spent with Sysco this year?",
-    "Which vendors did we spend the most with this year?",
-  ],
-};
 
 async function loadChipsInline(now) {
   try {
