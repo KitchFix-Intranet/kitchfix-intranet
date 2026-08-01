@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { pgLiveNow } from "../_freshness.js";
 import { B2_ROW_CAP } from "./_constants.js";
 
 const VALID_REFS = ["current", "next", "previous"];
@@ -72,7 +73,7 @@ export async function scHomestandDetail({ accountKey, homestandRef = "current" }
       return {
         source: "sc_daily_revenue + sc_homestand_schedule",
         scope: "current-season Service Calendar",
-        loaded: `PG live as of ${new Date().toISOString()}`,
+        loaded: pgLiveNow(),
         parameters: { accountKey, homestandRef, resolved_date: targetDate },
         homestand_id: null,
         rows: [],
@@ -158,7 +159,7 @@ export async function scHomestandDetail({ accountKey, homestandRef = "current" }
   const result = {
     source: "sc_daily_revenue + sc_homestand_schedule",
     scope: "current-season Service Calendar",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     parameters: { accountKey, homestandRef },
     homestand_id: homestandId,
     date_range: { start: startDate, end: endDate },
@@ -185,7 +186,7 @@ function errorPayload(msg) {
   return {
     source: "sc_daily_revenue + sc_homestand_schedule",
     scope: "current-season Service Calendar",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     error: msg,
   };
 }

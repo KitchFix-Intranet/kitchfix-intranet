@@ -44,6 +44,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { pgLiveNow } from "../_freshness.js";
 import { DIRECTORY_LOAD_DATE, partitionRevenueRows } from "./_constants.js";
 
 const VALID_WINDOWS = ["month", "homestand", "period"];
@@ -197,7 +198,7 @@ export async function scAccountWindow({ accountKey, window = "month", asOf } = {
   return {
     source: "sc_daily_revenue + accounts" + (window === "month" ? " (+ sc_month_summary spot-check)" : ""),
     scope: "current-season Service Calendar. Revenue excludes is_non_revenue services (Fun Money etc.); meal counts include all services.",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     parameters: { accountKey, window, asOf: asOfDate },
     window_boundaries: { start_date: bounds.start_date, end_date: bounds.end_date, label: bounds.label },
     // Account shape - lets the prompt name the account rather than
@@ -294,7 +295,7 @@ function errorPayload(msg) {
   return {
     source: "sc_daily_revenue",
     scope: "current-season Service Calendar",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     error: msg,
   };
 }

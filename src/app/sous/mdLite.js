@@ -10,15 +10,22 @@
 //   1. Escape every HTML entity first (& < > " ')                      SECURITY
 //   2. Bold spans: **text** -> <strong>text</strong>
 //   3. Table blocks: GFM-style pipe tables -> <table>                  (PR #566)
-//   4. List blocks: consecutive lines starting with "1. " / "- " / "* "
+//   4. Headings: `##` -> <h3>, `###` -> <h4>                           (PR A polish)
+//   5. Horizontal rule: `---` on its own line -> <hr>                  (PR A polish)
+//   6. List blocks: consecutive lines starting with "1. " / "- " / "* "
 //      get wrapped in <ol> / <ul>
-//   5. Remaining line breaks become <br>
+//   7. Remaining line breaks become <br>
 //
 // Table support added 2026-07-29 (Phase F PR 2). Sous emits tables when the
 // answer is tabular (per-account price rows, category breakdowns) and the
 // pre-PR renderer left them as literal pipes. A malformed table (bad
 // separator row, mismatched cell count) stays literal rather than producing
 // broken HTML - same degraded-until-complete behavior as unbalanced bold.
+//
+// Headings + hr added 2026-08-01 (PR A polish). The model was emitting
+// `## FORM-004` and `---` in tabular answers and the renderer left them as
+// literal characters. Downshifted one level (`##` -> h3 not h2) so h2 stays
+// reserved for the surface hero. Escape order remains: HTML always first.
 //
 // Applied per delta during streaming: unbalanced markers (an odd count of `**`,
 // a list opener without a following item, or a table split across deltas)
@@ -101,8 +108,9 @@ function applyLists(text) {
 // become <ol><br><li>... which browsers ignore fine, so we strip the \n
 // only between text runs).
 function applyLineBreaks(text) {
-  // Replace \n with <br>, but not immediately before/after <ol>/<ul>/</ol>/</ul>/<li>/</li>
-  return text.replace(/\n(?!<\/?(ol|ul|li)>)|(?<!<\/?(ol|ul|li)>)\n/g, "<br>");
+  // Replace \n with <br>, but not adjacent to a block element opening/closing
+  // tag. h3/h4/hr added for the PR A heading + rule pass.
+  return text.replace(/\n(?!<\/?(ol|ul|li|h3|h4|hr)>)|(?<!<\/?(ol|ul|li|h3|h4|hr)>)\n/g, "<br>");
 }
 
 // GFM-style pipe tables. Matches a header row + separator row + one or more
@@ -222,16 +230,36 @@ function buildTableHtml(headerCells, bodyRows) {
   return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
-// The main entry. Escape first, then bold, then tables, then lists, then
-// line breaks. Table pass runs AFTER bold so cell content can still carry
-// **strong** spans; runs BEFORE lists because a table row starts with `|`
-// and would otherwise pass through untouched. Tables and lists never
-// intersect - a line starts with `|` XOR `- ` XOR `1. ` XOR normal prose.
+// Block-level `##`/`###` on their own line become <h3>/<h4>. `---` on its
+// own line becomes <hr>. Runs on already-escaped, already-bold-substituted
+// text; needs to run BEFORE lists so a `## Foo` line isn't accidentally
+// swept into a list block. Downshift: `##` -> h3 (not h2) because h2 stays
+// reserved for the surface hero.
+function applyHeadingsAndRule(text) {
+  const lines = text.split("\n");
+  return lines.map((line) => {
+    const t = line.trim();
+    if (/^---+$/.test(t)) return "<hr>";
+    let m = t.match(/^###\s+(.+)$/);
+    if (m) return `<h4>${m[1]}</h4>`;
+    m = t.match(/^##\s+(.+)$/);
+    if (m) return `<h3>${m[1]}</h3>`;
+    return line;
+  }).join("\n");
+}
+
+// The main entry. Escape first, then bold, then tables, then headings+hr,
+// then lists, then line breaks. Table pass runs AFTER bold so cell content
+// can still carry **strong** spans; runs BEFORE headings because a `|` row
+// is not a heading. Headings run BEFORE lists so `## Foo` doesn't become
+// part of a hyphen-bullet block. Tables/headings/hr/lists never overlap -
+// each pattern owns its own line shape.
 export function renderMdLite(input) {
   if (input == null) return "";
   const escaped = escapeHtml(input);
   const bolded = applyBold(escaped);
   const tabled = applyTables(bolded);
-  const listed = applyLists(tabled);
+  const headed = applyHeadingsAndRule(tabled);
+  const listed = applyLists(headed);
   return applyLineBreaks(listed);
 }

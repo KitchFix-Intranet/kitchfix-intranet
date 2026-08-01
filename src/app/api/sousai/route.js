@@ -276,6 +276,8 @@ async function handleAsk(gate) {
           decline_reason: result.decline_reason,
           sources: result.sources,
           usage: result.usage,
+          truncated: result.truncated ?? false,
+          flags: result.flags ?? [],
         });
       }
       try {

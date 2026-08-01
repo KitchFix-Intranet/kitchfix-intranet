@@ -31,6 +31,7 @@ import { getHeroImages, getContacts } from "@/lib/dataStore/directory";
 import { getSupabase } from "@/lib/sousai/tools/_client";
 import SousSurface from "./SousSurface";
 import SousMark from "./SousMark";
+import FreshnessChip from "./FreshnessChip";
 import "./sous.css";
 
 export const dynamic = "force-dynamic";
@@ -150,12 +151,7 @@ function extractFirstName(session) {
   return null;
 }
 
-function nowClockLabel() {
-  const d = new Date();
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-function SousHero({ heroImage, firstName, clockLabel }) {
+function SousHero({ heroImage, firstName }) {
   // U7 verbatim - "about" not "for"; "the intranet knows" replaces the
   // enumerated modules. All Sous copy says "people", never "directory".
   const greeting = firstName
@@ -180,10 +176,7 @@ function SousHero({ heroImage, firstName, clockLabel }) {
         </div>
       </div>
       <div className="sa-hero-right">
-        <span className="sa-freshness" title="Live Postgres, current session">
-          <span className="sa-freshness-dot" aria-hidden="true" />
-          PG live · {clockLabel}
-        </span>
+        <FreshnessChip />
       </div>
     </div>
   );
@@ -203,7 +196,6 @@ export default async function SousPage() {
     loadDomainCounts(),
   ]);
   const firstName = extractFirstName(session);
-  const clockLabel = nowClockLabel();
 
   return (
     <div className="sa-page sa-animate">
@@ -212,7 +204,7 @@ export default async function SousPage() {
           variant="page"
           chips={chips}
           autoFocus
-          heroSlot={<SousHero heroImage={heroImage} firstName={firstName} clockLabel={clockLabel} />}
+          heroSlot={<SousHero heroImage={heroImage} firstName={firstName} />}
           domainCounts={counts}
           domainExamples={DOMAIN_CARD_EXAMPLES}
         />

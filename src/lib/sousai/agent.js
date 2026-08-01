@@ -371,6 +371,7 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
     trajectory,
     usage,
     truncated,
+    flags,
   };
 }
 

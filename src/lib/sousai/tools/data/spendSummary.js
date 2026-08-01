@@ -23,6 +23,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { pgLiveNow } from "../_freshness.js";
 import { paginateAll } from "./_constants.js";
 
 const VALID_WINDOWS = ["month", "year", "ytd", "period", "date_range"];
@@ -86,7 +87,7 @@ export async function spendSummary({
       return {
         source: "ai_line_items + v_invoice_submissions_current + vendors",
         scope: "current + historical invoice line items",
-        loaded: `PG live as of ${new Date().toISOString()}`,
+        loaded: pgLiveNow(),
         parameters: { accountKey, vendorName: trimmed, category, window, dateFrom: bounds.start, dateTo: bounds.end, excludeHistorical },
         totals: { line_count: 0, dollar_total: 0 },
         note: `no vendor found matching '${trimmed}' (searched vendors.name and vendor_aliases.alias). Vendor spelling varies across invoices; if the answer should exist, check with the invoice module admin.`,
@@ -164,7 +165,7 @@ export async function spendSummary({
     scope: excludeHistorical
       ? "app-scanned invoice line items (excluding batch_rebuild historical rows)"
       : "invoice line items including batch_rebuild historical",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     parameters: { accountKey: accountKey || null, vendorName: vendorName || null, category: category || null, window, dateFrom: bounds.start, dateTo: bounds.end, excludeHistorical },
     totals: {
       line_count: kept.length,
@@ -212,7 +213,7 @@ function errorPayload(msg) {
   return {
     source: "ai_line_items",
     scope: "invoice line items",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     error: msg,
   };
 }

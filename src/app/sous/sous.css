@@ -522,11 +522,12 @@
   box-shadow: var(--elev-2);
 }
 
-/* Status rail across the top of the answer card - via border color */
+/* Status rail across the top of the answer card - via border color.
+   ERROR family is #DC2626 (Tailwind red-600) matched by the pill below. */
 .sa-answer--grounded { border-top: 3px solid #10B981; }
 .sa-answer--partial  { border-top: 3px solid #F59E0B; }
 .sa-answer--declined { border-top: 3px solid #6B7785; }
-.sa-answer--error    { border-top: 3px solid #EF4444; }
+.sa-answer--error    { border-top: 3px solid #DC2626; }
 .sa-answer--streaming{ border-top: 3px solid var(--accent-sous); }
 
 /* Status pill - matches pb-status-pill (10px / 800 / 6px / transparent border).
@@ -552,8 +553,47 @@
 .sa-status-pill--grounded { border-color: #065F46; color: #065F46; }
 .sa-status-pill--partial  { border-color: #92400E; color: #92400E; }
 .sa-status-pill--declined { border-color: #475569; color: #475569; }
-.sa-status-pill--error    { border-color: #991B1B; color: #991B1B; }
+.sa-status-pill--error    { border-color: #DC2626; color: #DC2626; }
 .sa-status-pill--streaming{ border-color: var(--accent-sous-deep); color: var(--accent-sous-deep); }
+
+/* Reason chip - quietest amber tint below a PARTIAL pill, one line max.
+   Names WHY the answer is partial so users don't have to guess. */
+.sa-reason-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #92400E;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  padding: 3px 8px;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+
+/* Error body - one-line message + Try again. role=alert on the container
+   so screen readers announce; visually distinct from a normal answer. */
+.sa-answer-body--error {
+  padding: 14px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sa-error-msg {
+  margin: 0;
+  color: #7F1D1D;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.sa-action-btn--tryagain {
+  align-self: flex-start;
+  border-color: #DC2626;
+  color: #DC2626;
+  background: white;
+}
+.sa-action-btn--tryagain:hover {
+  background: #FEF2F2;
+  border-color: #B91C1C;
+  color: #B91C1C;
+}
 
 .sa-answer-body {
   padding: 14px 18px 16px;
@@ -566,7 +606,9 @@
 
 /* mdLite output - keep readable */
 .sa-answer-body p { margin: 0 0 10px; }
-.sa-answer-body h2, .sa-answer-body h3 { font-weight: 800; color: var(--kf-navy); margin: 14px 0 6px; }
+.sa-answer-body h3 { font-weight: 800; font-size: 14px; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: -0.01em; }
+.sa-answer-body h4 { font-weight: 700; font-size: 12.5px; color: var(--kf-navy, #0F3057); margin: 12px 0 4px; letter-spacing: 0; text-transform: uppercase; }
+.sa-answer-body hr { border: none; border-top: 1px solid #EEF2F6; margin: 14px 0; }
 .sa-answer-body ul, .sa-answer-body ol { padding-left: 22px; margin: 0 0 12px; }
 .sa-answer-body li { margin: 0 0 3px; }
 .sa-answer-body code {

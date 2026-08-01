@@ -49,6 +49,22 @@ const STATUS_LABEL = {
   streaming: "Thinking",
 };
 
+// Reason chip mapping for PARTIAL answers. The route.js done envelope now
+// carries `flags` + `truncated` from the agent's downgrade computation;
+// the UI translates the first one that fires into a human-readable
+// sentence. Priority: truncated > phantom_citation > grounded_without_
+// sources > U9 fallback ("some sections could not be verified").
+function partialReason(doneEnv) {
+  if (!doneEnv) return null;
+  if (doneEnv.truncated) return "Answer was cut short";
+  const flags = Array.isArray(doneEnv.flags) ? doneEnv.flags : [];
+  for (const f of flags) {
+    if (f?.phantom_citation) return "A citation could not be verified";
+    if (f?.grounded_without_sources) return "Sources could not be confirmed";
+  }
+  return "Some sections could not be verified";
+}
+
 async function* parseSse(response) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8");
@@ -452,16 +468,18 @@ export default function SousSurface({
   );
 
   // ── Turn (answer card) ───────────────────────────────────────────────────
+  const reasonText = status === "partial" ? partialReason(doneEnv) : null;
   const turnEl = hasAnswer && (
-    <article className="sa-turn" aria-live="polite">
+    <article className="sa-turn">
       {askedQuestion && <p className="sa-question">{askedQuestion}</p>}
       <div className={`sa-answer sa-answer--${status}`}>
         <div className="sa-answer-head">
           <SousMark variant="small" state={markState} size={19} />
           <span className={`sa-status-pill sa-status-pill--${status}`}>{statusLabel}</span>
+          {reasonText && <span className="sa-reason-chip">{reasonText}</span>}
         </div>
         {phase === "streaming" && toolTrail.length > 0 && (
-          <div className="sa-tooltrail">
+          <div className="sa-tooltrail" role="status" aria-live="polite">
             {toolTrail.map((t, i) => (
               <div key={i} className="sa-tooltrail-item">
                 <span className="sa-tooltrail-tool">{t.tool}</span>
@@ -472,12 +490,12 @@ export default function SousSurface({
           </div>
         )}
         {phase === "error" ? (
-          <div className="sa-answer-body">
-            <p>{errorInfo?.message || "Sous did not answer."}</p>
-            <button type="button" className="sa-action-btn" onClick={onRetry}>Retry</button>
+          <div className="sa-answer-body sa-answer-body--error" role="alert">
+            <p className="sa-error-msg">{errorInfo?.message || "Sous did not answer."}</p>
+            <button type="button" className="sa-action-btn sa-action-btn--tryagain" onClick={onRetry}>Try again</button>
           </div>
         ) : (
-          <div className="sa-answer-body" dangerouslySetInnerHTML={{ __html: renderMdLite(answerText) }} />
+          <div className="sa-answer-body" aria-live="polite" dangerouslySetInnerHTML={{ __html: renderMdLite(answerText) }} />
         )}
 
         {Array.isArray(doneEnv?.sources) && doneEnv.sources.length > 0 && (

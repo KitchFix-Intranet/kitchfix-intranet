@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { pgLiveNow } from "../_freshness.js";
 import { C2_ROW_CAP, paginateAll } from "./_constants.js";
 
 /**
@@ -45,7 +46,7 @@ export async function spendVendorHistory({ vendorName, dateFrom, dateTo, account
     return {
       source: "ai_line_items + vendors/vendor_aliases",
       scope: "invoice line items",
-      loaded: `PG live as of ${new Date().toISOString()}`,
+      loaded: pgLiveNow(),
       parameters: { vendorName: trimmed, dateFrom, dateTo, accountKey: accountKey || null, excludeHistorical },
       rows: [],
       row_count: 0,
@@ -114,7 +115,7 @@ export async function spendVendorHistory({ vendorName, dateFrom, dateTo, account
   const result = {
     source: "ai_line_items + v_invoice_submissions_current + vendors/vendor_aliases",
     scope: excludeHistorical ? "app-scanned invoice line items only" : "invoice line items including batch_rebuild historical",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     parameters: { vendorName: trimmed, dateFrom, dateTo, accountKey: accountKey || null, excludeHistorical },
     matched_vendor_names: allNames,
     total_lines: total,
@@ -133,7 +134,7 @@ function errorPayload(msg) {
   return {
     source: "ai_line_items",
     scope: "invoice line items",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     error: msg,
   };
 }
