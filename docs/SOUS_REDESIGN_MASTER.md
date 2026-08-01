@@ -95,7 +95,37 @@ Reference's own known divergences (text glyphs, hardcoded counts, `?v=` switcher
 
 **PR A polish pass 2026-08-01 (`fix/sous-pra-v1-polish`) - DRAFT, pending Chat's diff review + smoke**
 
-Ratified decisions U1-U12 and panel items I1-I4 recorded here; scope traces to `docs/SOUS_V1_CODE_REVIEW_2026-08-01.md`, the corrected v3 build prompt, `docs/SOUS_MARK_SPEC.md`, and the two reference HTMLs (mocks + mark-final) that shipped alongside.
+Ratified decisions U1-U12 and panel items I1-I4 recorded here; scope traces to `docs/reviews/SOUS_V1_CODE_REVIEW_2026-08-01.md`, the corrected v3 build prompt, `docs/SOUS_MARK_SPEC.md`, and the two reference HTMLs (mocks + mark-final) that shipped alongside. Review triad and rulings: `docs/reviews/` (2026-08-01).
+
+**Ratified decisions - 2026-08-01, Kevin** (transcribed verbatim from `docs/reviews/SOUS_PRA_UPDATE_BUNDLE_v1.1.md`):
+
+| # | Decision | Ruling |
+|---|---|---|
+| U1 | Landing direction | **V2 simplified briefing** - one composed card: four domain rows (module icon, ink title, accent count chip, right-aligned example chip), limits line as the card's footer. Domain cards retired. |
+| U2 | Q and A treatment | **A - question above the elevated card.** D9 notebook rhythm stands; answer card gains elev-2 + hairline + status rail. Flat-on-flat retired. |
+| U3 | Composer | As mocked: 52px, vertically centered text, elev-2 at rest, Flame focus ring, Flame send with real disabled state. Scroll FAB restyles neutral. |
+| U4 | Height floor | Design target stays 1280x800. **Fit floor 720:** landing renders fully, zero vertical scroll, at any viewport 720 and taller; graceful scroll below, nothing breaks. Hero compresses 84 to 72 under 800. Sweep battery gains height axis 800 / 768 / 720. `DESIGN_SYSTEM_REFERENCE.md` browser matrix gains the height-floor paragraph (cross-module doc touch, flagged). *(Implemented per prompt and height ledgers as 96 to 84 under 800h; the "84 to 72" phrasing in the bundle was a transcription slip - 84 is the ratified compressed height.)* |
+| U5 | Viewport gates | SC matrix adopted verbatim for Sous: 1280x800 target, nothing breaks to 1024 wide, 375 mobile floor, Chrome only, laptop matrix 1024/1152/1280/1366/1536. Landing fits, answers scroll. |
+| U6 | Limits copy | Candidate 2: "No wages, no reimbursements, no P&L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong." |
+| U7 | Naming | Sous copy says "people" throughout; greeting future-proofed to "ask me about anything the intranet knows." Intranet People-vs-Directory IA untouched. |
+| U8 | First-run icons | Module icons in module accents; headings ink; four stars retired. |
+| U9 | Partial reason | Human-readable line beside the pill; fallback "Some sections could not be verified." Calibration ruling waits on CC's distribution. |
+| U10 | Elevation | Three tokens as mocked (elev-1 rest, elev-2 composer/answer cards, elev-3 overlays), calibrated under the existing hero shadow. |
+| U11 | Mark + nav | Per `SOUS_MARK_SPEC.md` in full: 1C display / 1A small, wake on load, transition handoff, nav swap with Flame active rule, favicon. |
+| U12 | Calcu pill | Desktop artifact - closed, no action. |
+
+**Workstream I - Panel parity and polish** (transcribed verbatim from `docs/reviews/SOUS_PRA_UPDATE_BUNDLE_v1.1.md`):
+
+**Cross-variant confirmations - the panel shots prove three shared findings live in both surfaces, which hardens their priority:** DR-01 (composer retains the fired question - visible in four of five shots), DR-03 (literal `---` in both FORM answers), DR-12 (SPEND and SHARE columns left-aligned in the panel table). DR-06, DR-13, U3, U10, and the mark band swap all apply to the panel by inheritance - the prompt states parity explicitly so nothing ships page-only.
+
+**Panel-specific items - locked by lean:**
+
+- **I1 - The empty void.** Panel first-run is a blank white sheet from band to composer. Fix: compact top-aligned first-run in two modes. With docContext: the ASKING ABOUT card plus three starter chips ("Summarize this doc", "What changed in the latest version?", "Who does this apply to?"). Without: one capability line ("Sous reads the Playbook, people, the service calendar, and spend - every answer names its source.") plus the four domain starter chips from V2, plus the U6 limits line in its compact form. Total content well under 300px, composer parity per U3.
+- **I2 - Source-card title duplication.** `POL-008  POL-008` - the id chip and the title render the same string, the documented PR A divergence now visibly ugly. Fix: wire real document titles into source cards (both variants); when a title is unavailable or equals the id, render the chip alone.
+- **I3 - Trajectory polish.** The during-flight staged tool lines (`search_documents ... 2093ms`) are excellent and stay; formatting fix: durations at 1000ms and above render as seconds (`2.1s`), sharing the meta-row formatter. The mark's working state joins the trajectory per `SOUS_MARK_SPEC.md`; lines collapse into the meta row on settle exactly as today.
+- **I4 - Panel elevation.** The overlay takes elev-3; the answer card inside takes the page's A treatment (elev-1, hairline, status rail) so the two surfaces read as one product.
+
+**Protect:** the declined-with-sources composition (holiday pay shot) - decline, referral to the owning human, and the documents it checked. That is the data-access policy rendered perfectly; the prompt marks it do-not-touch.
 
 Landed in nine logical commits, one per prompt Part:
 
@@ -144,7 +174,18 @@ Landed in nine logical commits, one per prompt Part:
 
 ## Sous mark system
 
-The mark spec is canonical in `docs/SOUS_MARK_SPEC.md` (committed alongside this PR). Reference implementation for motion + composition sits in the polish-pass mock bundle (`sous-mark-final.html`, `sous-pra-update-mocks.html`) - spec wins on any disagreement. Component + CSS lands in `src/app/sous/SousMark.js` and the `.sa-mark-*` block of `src/app/sous/sous.css`. Deployment table in spec §8 lists the five active surfaces (hero, panel band, status companion, top nav, favicon). See PR A polish pass delivery log entry above for how each landed.
+The mark spec is canonical in `docs/SOUS_MARK_SPEC.md` (committed alongside this PR). Reference implementation for motion + composition sits in the polish-pass mock bundle (`sous-mark-final.html`, `sous-pra-update-mocks.html`) - spec wins on any disagreement. Component + CSS lands in `src/app/sous/SousMark.js` and the `.sa-mark-*` block of `src/app/sous/sous.css`. See PR A polish pass delivery log entry above for how each surface landed.
+
+**Deployment (transcribed from `docs/SOUS_MARK_SPEC.md` §8):**
+
+| Surface | Size | Variant |
+|---|---|---|
+| /sous hero | 34 | 1C white-on-navy, rest state, wake on load |
+| Playbook panel band | 16 | 1A white |
+| Status companion (answer card) | 19 | 1A, turn while tools run, settles with answer |
+| First-run block | 64 | 1C, rest *(Superseded by U1 - the V2 briefing landing carries no 64px mark slot; recorded as a PR #586 judgment call.)* |
+| Favicon /sous | 16/32 | 1A |
+| Top nav | 18 | 1A filled, `currentColor`, inherits row opacity (.6 idle, 1 active); one scoped rule: `.kf-topnav-link.active .sa-navmark { color: var(--accent-sous) }` |
 
 Phase 0 + build surfaced that the spec did not anticipate:
 - `getContacts()` returns a length-checkable array (not a count), so the People domain-card count is `contacts.length`. Slower than `count: exact`, but the data-store abstraction doesn't expose an exact-count variant. Fine at 30 rows; worth noting if the directory ever grows large.
