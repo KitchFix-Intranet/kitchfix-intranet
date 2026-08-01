@@ -154,7 +154,9 @@ function SousHero({ heroImage, firstName }) {
       <div className="sa-hero-sweep" aria-hidden="true" />
       <div className="sa-hero-inner">
         <span className="sa-hero-star" aria-hidden="true">
-          <SousMark variant="display" state="rest" size={34} wake onNavy />
+          {/* Round 2: wake moved to SousLockup (the landing lockup mark).
+              The hero mark holds rest drift only - one wake per page. */}
+          <SousMark variant="display" state="rest" size={34} onNavy />
         </span>
         <div className="sa-hero-text">
           <h1 className="sa-hero-title">Sous</h1>

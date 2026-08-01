@@ -167,8 +167,22 @@ Landed in nine logical commits, one per prompt Part:
 | CODE-14 | P3 | **Deferred.** Rail timezone label is a follow-up polish; the wall-clock signal today is close enough to accurate not to bite users |
 
 **Deferred:**
-- Spec §8's 64px first-run mark deployment has no surface in V2 briefing landing. The four active deployments (hero 34 / panel band 16 / status companion 19 / top nav 18 + favicon) all landed. Re-introduce if a first-run mark surface is added.
+- Spec §8's 64px first-run mark deployment has no surface in V2 briefing landing. The four active deployments (hero 34 / panel band 16 / status companion 19 / top nav 18 + favicon) all landed. Re-introduce if a first-run mark surface is added. *(Round 2 update: superseded by the L-A lockup at 48px on the landing - see round 2 delivery log entry.)*
 - Original review's DR-04 "orphan" list was a false negative from a wrong probe column; corrected in Part 6. No further vendor-alias work needed.
+
+---
+
+**Round 2 design pass 2026-08-01 (`fix/sous-r2-design`) - DRAFT.** Follows the r2 review + render sheet (`docs/reviews/`); scope traces to `CC_PROMPT_sous_r2_design.md`. No migration. Four picks land on top of the r2 hotfix (PR #587):
+
+- **QA-2 (docked header, both variants).** The round-1 external question line (`.sa-question`, "question stays above the elevated card") is superseded - the question now docks INTO the answer card as a tinted header (`#F8FAFC` bg, `#EEF2F6` hairline bottom border, 11px vertical padding; teal 3x14 micro-bar leading; question at 14.5px/650 ink; status pill right-aligned on the same line). The status rail (3px, status color) stays on the card's top edge above the header zone. Partial reason chip becomes the first row under the header (unchanged text mapping). Error state carries `ERROR` pill in the header; alert body + Try again unchanged. Thinking state carries `THINKING` pill in the header + brings the status companion back at the correct placement: **19px 1A mark in `turn` state INSIDE the tool-trail well, beside the trajectory lines - never touching the rail.** Interior depth applies: provenance meta row moves into a `.sa-well` (`#FAFBFC`, `#EEF2F6` hairline, radius 9); source cards restyle as `.sa-source-row` contained rows (`#F8FAFC` tinted, hairline, radius 9). Parity: page and panel render identically. Rail session-item brackets + timestamps untouched.
+
+- **L-A (lockup at 48, wake move, living mark).** The `/sous` landing heading block becomes a lockup: **48px 1C mark** left of the heading + subcopy (40px under 768px wide). The wake choreography moves here - the hero mark now holds rest drift only, one wake per page. **Idle flourishes** run on this instance only. New client component `src/app/sous/SousLockup.js` owns a single timer.
+
+- **Icon tiles + depth tokens (Part 3).** Each briefing row's icon sits in a 28px radius-8 tinted tile per module (`#ECFDF5` Playbook, `#F5F3FF` People, `#ECFDF5` Service, `#FFF7ED` Spend); icon strokes unchanged (inherit the row's per-domain accent via `currentColor`). Optical alignment fixed by the tile. `.sa-well` + `.sa-source-row` formalized as shared classes; both apply to page + panel variants automatically via `SousSurface`.
+
+**Superseded by round 2:**
+- Round-1 external question line (`.sa-question` above the card) → **superseded by QA-2**; question docks INTO the card as `.sa-answer-header`. Legacy CSS retained dormant for a future cleanup pass.
+- Round-1 status companion placement (inside `.sa-answer-head` at card top-left, clipped by border-radius) → **removed in r2 hotfix, re-introduced correctly in QA-2** at the tool-trail well.
 
 ---
 
@@ -183,9 +197,16 @@ The mark spec is canonical in `docs/SOUS_MARK_SPEC.md` (committed alongside this
 | /sous hero | 34 | 1C white-on-navy, rest state, wake on load |
 | Playbook panel band | 16 | 1A white |
 | Status companion (answer card) | 19 | 1A, turn while tools run, settles with answer |
-| First-run block | 64 | 1C, rest *(Superseded by U1 - the V2 briefing landing carries no 64px mark slot; recorded as a PR #586 judgment call.)* |
+| First-run block | 64 | 1C, rest *(Superseded by U1 - the V2 briefing landing carries no 64px mark slot; recorded as a PR #586 judgment call. Round 2 lands a 48px mark on the landing via the L-A lockup, filling this deployment slot with an updated size.)* |
+| Landing lockup (round 2) | 48 | 1C, wake on load, idle-flourish system runs on this instance only. 40px under 768w. |
 | Favicon /sous | 16/32 | 1A |
 | Top nav | 18 | 1A filled, `currentColor`, inherits row opacity (.6 idle, 1 active); one scoped rule: `.kf-topnav-link.active .sa-navmark { color: var(--accent-sous) }` |
+
+### Idle flourishes (round 2)
+
+While the landing is visible and no ask is in flight, the lockup mark performs one flourish at a random interval drawn uniformly from 20-45 seconds, the first no sooner than 12 seconds after the wake completes. Flourish set, random pick each time: (1) **the check** - one sequential base-lift lap, ~1.3s; (2) **one leg** - a single synchronized quarter-step of the turn, then settle, ~1.5s (the formation is 4-fold symmetric, so one leg ends at a valid rest); (3) **the glint**. Between flourishes: rest drift. Suppressed entirely under `prefers-reduced-motion`; paused while a question is in flight and for 8 seconds after any state change; timer suspends on `document.visibilitychange` so background tabs never animate. Implementation: a small hook owning one timer; flourishes are one-shot animation classes removed on `animationend`.
+
+The flourish system exists ONLY on the landing lockup instance - hero, nav, panel band, and companion marks are unaffected.
 
 Phase 0 + build surfaced that the spec did not anticipate:
 - `getContacts()` returns a length-checkable array (not a count), so the People domain-card count is `contacts.length`. Slower than `count: exact`, but the data-store abstraction doesn't expose an exact-count variant. Fine at 30 rows; worth noting if the directory ever grows large.
