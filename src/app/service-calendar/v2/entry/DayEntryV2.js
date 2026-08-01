@@ -1432,6 +1432,7 @@ function DayEntryV2({
               totalToEnter={totalToEnter}
               periodStats={periodStats}
               stSectionRail={stInPhase ? stServices : null}
+              feeServedTotals={feeServedTotals}
             />
           ) : (
             <BillRail

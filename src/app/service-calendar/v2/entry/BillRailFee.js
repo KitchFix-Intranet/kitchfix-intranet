@@ -54,26 +54,18 @@ export default function BillRailFee({
   // Passed as [{colIndex, name, tier, ...svc}] shape (already
   // in-service-filtered upstream).
   stSectionRail = null,
+  // R3-5 gate-bounce fix (2026-08-01): parent-owned totals memo. Was
+  // computed locally over the `serviceGroups` prop; after R3-5 the
+  // parent passes activeGroups (regularServiceGroups-derived, " - ST"
+  // stripped), so the local sum omitted every ST service and the hero
+  // read ~0 while the pinned bar and section subtotal read the correct
+  // day total. Owner ruling: hero reads the same memo the pinned bar
+  // reads - one number, one source. Parent's feeServedTotals iterates
+  // the raw unfiltered serviceGroups (DayEntryV2.js:768), so every
+  // in-service service on the day contributes exactly once.
+  feeServedTotals,
 }) {
-  // Served-count derivations. Ignore isFlatFee here (unlike per-meal's
-  // `summary.meals` which skips flat-fee services because they have
-  // no per-meal count). On STL-FL the operator's typed value IS the
-  // served count for every line - flatFee is a billing signal, not a
-  // rendering one.
-  let enteredServed = 0;
-  let projectedServed = 0;
-  for (const g of serviceGroups) {
-    for (const s of g.services) {
-      if (!isInServiceOnDay(s, day.date)) continue;
-      const proj = day.projected[s.colIndex] ?? 0;
-      projectedServed += proj;
-      const v = editValues[s.colIndex];
-      if (v !== "" && v !== undefined && touched.has(s.colIndex)) {
-        enteredServed += Number(v) || 0;
-      }
-    }
-  }
-  const heroValue = hasTouchedAny ? enteredServed : projectedServed;
+  const heroValue = hasTouchedAny ? feeServedTotals.entered : feeServedTotals.scheduled;
   const heroAnimated = useAnimatedNumber(heroValue);
 
   // Hero pulse - mirrors BillRail's pattern verbatim so the two rails
