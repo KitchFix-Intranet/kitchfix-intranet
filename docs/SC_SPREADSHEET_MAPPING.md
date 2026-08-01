@@ -33,9 +33,15 @@ only.
 - "Blank" placeholder columns at $0 in row 2 are deliberate spare slots the
   field teams can fill in mid-season. They should be detected and skipped
   by the importer.
-- All accounts share the same calendar shell: 13 periods of 4 weeks each
-  (= 52 weeks = 364 days), padded to 357-366 actual rows depending on file.
-  The Week label resets to `Week 1` at the start of each Period.
+- All accounts share the same calendar shell: **12 periods of 4 weeks + 1
+  three-week P13 = 51 weeks = 357 days**, running 2025-12-29 through
+  2026-12-20. The Week label resets to `Week 1` at the start of each Period.
+  (Corrected 2026-08-01. The prior "13 periods of 4 weeks each = 52 weeks =
+  364 days, padded to 357-366" line was internally inconsistent - measured
+  P1-P12 are exactly 28 days each and P13 as authored on 10 accounts is
+  21 days, summing to the doc's own 357-day total. TBR-FL's B&G subtab
+  extension to 2026-12-29 is a workbook artifact, not a P13 length claim.
+  See sc-25 migration + prior recon `SC_STATUS.md` P13-tail probe.)
 
 ---
 

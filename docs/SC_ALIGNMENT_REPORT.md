@@ -500,7 +500,7 @@ Per `docs/PROJECT_DASHBOARD.md:21` + `docs/SC_CC_HANDOFF.md:501-506`:
 |---|---|---|
 | **Admin Dashboard** | Cross-account ops overview surface (separate page from the inline `ServiceConfig` drawer) | Not started; scoped |
 | **Fun Money Tracker** | Non-revenue catalog tracking surface (absorbs the per-account "Fun $$$" allocations SC currently carries) | Not started; scoped |
-| **Close Day button** | One-tap per-day lock / confirmation UX. Data-layer question: per-day flag on new table vs `sc-submit-day` all-zeros + note. Currently NO formal Close Day mechanic in code (grep of `src/app/service-calendar` + `src/lib/dataStore` per `SC_BUNDLE1_RECON.md:260`) | Not started; scoped |
+| ~~**Close Day button**~~ | ~~One-tap per-day lock / confirmation UX.~~ **REMOVED from backlog 2026-08-01.** The scope split cleanly into two features that shipped separately: zeros half = **Mark day as no service** (`sc-submit-day` with `noService: true` writes zeros + audit note; live since #365-#367); lock half = **period lock** (sc-25 migration + `assertDaysUnlockedForWrite` helper; server-side lock on every write path, SLT override, unknown days fail safe). Nothing per-day-flag ever needed a new table. Kept struck rather than deleted so the "was scoped, was resolved as two shipped features" trail survives. | REMOVED - see the two features above |
 
 ### 8d. Stage 4 — right now
 
@@ -613,7 +613,7 @@ Post-sc-9, notes live in `sc_day_note_entries` (author + timestamp per entry; ap
 - **Stage-4 visual treatment for flat_fee accounts' per-meal $0 rows** — planning-only badge? hidden? Pending Kevin per `HANDOFF_STAGE4.md:92`.
 - **Group-header price for mixed-rate groups** — no design ruling yet; per-service inline is one option, mixed-group suppression is another (see Drift #1).
 - **FullSeasonCard branch-order intent** — code branches on `hasHomestandSchedule` first; module doc + design docs treat homestand + per-meal as orthogonal via the "AAA per-meal + PDC overlay + PDC per-meal" framing (`docs/modules/SERVICE_CALENDAR.md:382`). Whether the current branch order is deliberate (schedule presence "wins" the summary treatment) or accidental (drift after sc-16 added homestand rows to two AAA per-meal accounts) is UNKNOWN.
-- **Close Day button data-layer shape** — per-day flag on new table vs `sc-submit-day` with all zeros + a note (`SC_CC_HANDOFF.md:514`). Not scoped.
+- ~~**Close Day button data-layer shape**~~ - RESOLVED 2026-08-01: Close Day was removed from the backlog. Neither per-day flag nor new table were needed; the two halves of the scope shipped as separate features (mark-no-service + sc-25 period lock).
 - **Signed v4 two-cell refresh queue timing** — TBJ-FL Media Meals $15 → $16 and STL-FL MiLB Snack `NEEDS PRICE` → $0. Waiting on next Joe touchpoint; non-blocking for Stage 4 (PG is correct per Kevin's Stage-1 directive).
 - **Some sc-N migration PR numbers** — a few sc-2 / sc-3 / sc-6a / sc-6b / sc-7 / sc-8a / sc-8b landed via commits without an obvious PR merge; `no-PR-found` recorded in §2 rather than fabricated.
 - **KPI dashboard timing / owner** — `SC_KPI_PUSH_CONTRACT.md` is spec / pre-build; no dates in the repo. Explicitly out of Stage 4 scope.
