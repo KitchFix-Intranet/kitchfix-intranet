@@ -30,6 +30,16 @@
   font-family: 'Inter', system-ui, sans-serif;
 }
 
+/* Elevation tokens (U2). Both variants get them - values verbatim from the
+   PR A mocks so composer / answer card / panel overlay stay coherent.
+   Scoped low-specificity via :where so the shadow tokens don't pollute
+   other modules that transitively import this file. */
+:where(.sa-page, .pb-sous-panel) {
+  --elev-1: 0 1px 2px rgba(15, 48, 87, 0.05), 0 4px 12px -4px rgba(15, 48, 87, 0.08);
+  --elev-2: 0 2px 4px rgba(15, 48, 87, 0.06), 0 10px 24px -8px rgba(15, 48, 87, 0.14);
+  --elev-3: 0 24px 48px -12px rgba(15, 48, 87, 0.22);
+}
+
 /* ── 1. Shell + rail (page variant) ──────────────────────────────────────── */
 
 .sa-shell {
@@ -499,14 +509,17 @@
   background: transparent;
 }
 
-/* Answer card */
+/* Answer card - treatment A (U10). Question stays above the card; the
+   card itself lifts on --elev-2 with a hairline #EEF2F6 border, keeps
+   the status top-rail via border-top on the status modifier. */
 .sa-answer {
   background: white;
-  border: 1px solid var(--kf-border, #E4E8EC);
+  border: 1px solid #EEF2F6;
   border-radius: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--elev-2);
 }
 
 /* Status rail across the top of the answer card - via border color */
@@ -874,22 +887,30 @@
 }
 @media (max-width: 767px) { .sa-composer { padding: 12px 14px; } }
 
+/* Composer - 52px tall, text vertically centered, --elev-2 at rest, Flame
+   focus-within ring (elev-2 + 3px flame-line). U3. */
 .sa-ask-form {
   max-width: 900px;
   margin: 0 auto;
   background: white;
   border: 1.5px solid #E5E7EB;
   border-radius: 12px;
-  padding: 12px;
-  transition: border-color 0.18s cubic-bezier(.2,0,0,1);
+  padding: 8px 8px 8px 16px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  box-shadow: var(--elev-2);
+  transition: border-color 0.18s cubic-bezier(.2,0,0,1), box-shadow 0.18s cubic-bezier(.2,0,0,1);
 }
 .sa-ask-form:focus-within {
   border-color: var(--accent-sous);
+  box-shadow: var(--elev-2), 0 0 0 3px var(--accent-sous-line, #A5F3FC);
 }
 .sa-ask-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 12px;
+  width: 100%;
 }
 .sa-ask-input {
   flex: 1 1 auto;
@@ -901,8 +922,7 @@
   min-width: 0;
   background: transparent;
   color: #0A2548;
-  min-height: 22px;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 .sa-ask-input::placeholder { color: #94A3B8; }
 .sa-ask-input:disabled { opacity: 0.6; }
@@ -919,11 +939,16 @@
   justify-content: center;
   cursor: pointer;
   flex: none;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-sous) 25%, transparent);
   transition: background 0.15s ease;
 }
 .sa-ask-send:hover { background: var(--accent-sous-deep); }
-.sa-ask-send[disabled] { opacity: 0.5; cursor: not-allowed; }
+/* Real disabled state - grey-200 bg, grey-400 glyph (U3). Replaces the
+   generic opacity fade so idle vs streaming vs empty all read the same. */
+.sa-ask-send[disabled] {
+  background: #E5E7EB;
+  color: #94A3B8;
+  cursor: not-allowed;
+}
 .sa-ask-send svg { width: 15px; height: 15px; }
 
 /* ── 8. Load sequence keyframes + prefers-reduced-motion suppression ────── */

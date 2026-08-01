@@ -160,6 +160,10 @@ export default function SousSurface({
         setPhase("error");
         return;
       }
+      // Clear the composer now that the request is en route (CODE-04). On
+      // error the field is left alone (see catch + error event) so the user
+      // can retry with the same text without retyping.
+      setQuestion("");
       for await (const { event, data } of parseSse(resp)) {
         if (event === "tool_start") {
           setToolTrail((prev) => [...prev, { tool: data.tool, summary: data.summary, input: data.input }]);
