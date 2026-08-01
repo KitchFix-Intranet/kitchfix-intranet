@@ -28,6 +28,8 @@ import {
   BookOpen, Users, Calendar, Receipt,
 } from "lucide-react";
 import { renderMdLite } from "./mdLite";
+import SousMark from "./SousMark";
+import SousLockup from "./SousLockup";
 
 const IN_CONTEXT_WINDOW = 3;   // Matches PR B's memory window.
 
@@ -420,8 +422,10 @@ export default function SousSurface({
   // right-aligned per row - reuses the wired onExampleClick path.
   const firstRunEl = !isOverlay && !hasAnswer && (
     <div className="sa-firstrun">
-      <p className="sa-firstrun-lead">What can I look up for you?</p>
-      <p className="sa-firstrun-tag">Every answer names its source. Sous declines rather than guessing.</p>
+      <SousLockup>
+        <p className="sa-firstrun-lead">What can I look up for you?</p>
+        <p className="sa-firstrun-tag">Every answer names its source. Sous declines rather than guessing.</p>
+      </SousLockup>
       <div className="sa-brief">
         <BriefRow
           modifier="pb"
@@ -462,25 +466,41 @@ export default function SousSurface({
     </div>
   );
 
-  // ── Turn (answer card) ───────────────────────────────────────────────────
+  // ── Turn (answer card) - QA-2 docked header ──────────────────────────────
+  // Round 2 restructure: the question line moves INTO the card as a tinted
+  // header (teal micro-bar + question + status pill on one row). Reason chip
+  // sits directly below the header when PARTIAL. Streaming brings the status
+  // companion back - 19px mark inside the tool-trail well, beside the
+  // trajectory lines (never touching the rail this time). Provenance and
+  // sources both live in interior-depth containers (.sa-well, .sa-source-row).
   const reasonText = status === "partial" ? partialReason(doneEnv) : null;
   const turnEl = hasAnswer && (
     <article className="sa-turn">
-      {askedQuestion && <p className="sa-question">{askedQuestion}</p>}
       <div className={`sa-answer sa-answer--${status}`}>
-        <div className="sa-answer-head">
-          <span className={`sa-status-pill sa-status-pill--${status}`}>{statusLabel}</span>
-          {reasonText && <span className="sa-reason-chip">{reasonText}</span>}
-        </div>
+        {askedQuestion && (
+          <div className="sa-answer-header">
+            <span className="sa-question-bar" aria-hidden="true" />
+            <span className="sa-question-text">{askedQuestion}</span>
+            <span className={`sa-status-pill sa-status-pill--${status}`}>{statusLabel}</span>
+          </div>
+        )}
+        {reasonText && (
+          <div className="sa-reason-row">
+            <span className="sa-reason-chip">{reasonText}</span>
+          </div>
+        )}
         {phase === "streaming" && toolTrail.length > 0 && (
-          <div className="sa-tooltrail" role="status" aria-live="polite">
-            {toolTrail.map((t, i) => (
-              <div key={i} className="sa-tooltrail-item">
-                <span className="sa-tooltrail-tool">{t.tool}</span>
-                <span className="sa-tooltrail-summary">{typeof t.summary === "string" ? t.summary : ""}</span>
-                {t.ms != null && <span className="sa-tooltrail-ms">{formatMs(t.ms)}</span>}
-              </div>
-            ))}
+          <div className="sa-well sa-tooltrail-well" role="status" aria-live="polite">
+            <SousMark variant="small" state="turn" size={19} />
+            <div className="sa-tooltrail">
+              {toolTrail.map((t, i) => (
+                <div key={i} className="sa-tooltrail-item">
+                  <span className="sa-tooltrail-tool">{t.tool}</span>
+                  <span className="sa-tooltrail-summary">{typeof t.summary === "string" ? t.summary : ""}</span>
+                  {t.ms != null && <span className="sa-tooltrail-ms">{formatMs(t.ms)}</span>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {phase === "error" ? (
@@ -495,16 +515,16 @@ export default function SousSurface({
         {Array.isArray(doneEnv?.sources) && doneEnv.sources.length > 0 && (
           <div className="sa-sources">
             {doneEnv.sources.map((s) => {
-              // I2 - route.js now hydrates sources to {docId, title}. Legacy
-              // shape (bare string) still renders because we normalise here;
-              // when title is missing or equals the id, render the chip alone.
+              // I2 - route.js hydrates sources to {docId, title}. Legacy
+              // string shape still renders because we normalise here; when
+              // title is missing or equals the id, render the chip alone.
               const docId = typeof s === "string" ? s : s?.docId;
               const rawTitle = typeof s === "string" ? null : s?.title;
               const showTitle = rawTitle && rawTitle !== docId;
               return (
                 <a
                   key={docId}
-                  className="sa-source-card"
+                  className="sa-source-row"
                   href={`/playbook/d/${encodeURIComponent(docId)}`}
                   target="_blank"
                   rel="noopener"
@@ -519,10 +539,12 @@ export default function SousSurface({
         )}
 
         {provenance && (
-          <p className={`sa-provenance${provenance.streaming ? " sa-provenance--streaming" : ""}`}>
-            <span className="sa-provenance-dot" aria-hidden="true" />
-            <span>{provenance.text}</span>
-          </p>
+          <div className={`sa-well sa-provenance-well${provenance.streaming ? " sa-provenance-well--streaming" : ""}`}>
+            <p className="sa-provenance">
+              <span className="sa-provenance-dot" aria-hidden="true" />
+              <span>{provenance.text}</span>
+            </p>
+          </div>
         )}
 
         {phase === "done" && doneEnv?.question_id && feedbackState !== "panel" && (
