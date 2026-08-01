@@ -250,9 +250,10 @@ CC never merges.
 3. **Fee accounts stay on v1** for now (recommended) - confirm.
 4. **Mobile scope:** "quick edits / a service or two on the floor" vs "full day entry on a phone."
    This changes how hard we push the bottom-sheet and whether mobile is a Phase 5 must or a fast-follow.
-5. **Priority:** where this sits relative to Stage 5 (finance CSVs), the Admin Dashboard, the Fun
-   Money Tracker, and the Close Day button. My default: it stays parked behind Stage 5 unless you
-   want the entry win sooner.
+5. **Priority:** where this sits relative to Stage 5 (finance CSVs), the Admin Dashboard, and the
+   Fun Money Tracker. My default: it stays parked behind Stage 5 unless you want the entry win
+   sooner. (Close Day was previously in this list; removed 2026-08-01 - shipped as mark-no-service
+   + sc-25 period lock.)
 
 ---
 

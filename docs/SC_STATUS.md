@@ -112,6 +112,34 @@
 - **R3-5 Spring Training section** (PR #585) - synthetic display construct on STL - FL for the four " - ST" services (self-fencing via name-suffix match per `_probe_sc_r3_5_st_names.mjs` - only account carrying " - ST" services is STL - FL). Section renders at top when in the spring block or when any ST service carries projection/actual (rule 3 override); off-phase, collapses into the inactive-groups drawer. `springDateSet` threaded via `dayEntryProps` at `ServiceCalendar.js:3852` (one line). New file `v2/entry/SpringTrainingSection.js` (extracted with `ServiceRow.js` to break an import cycle in the fix). Rule 4 fix: while ST renders at top, regular groups do not collapse (fallback MiLB Breakfast + Lunch + Palm Beach Cardinals stay at top-level on in-phase days). Fee rail hero now reads `feeServedTotals` from parent (one source, cannot drift from the pinned bar) - was a local sum over ST-stripped groups that read ~0 while the bar read 800.
 - **Handoff flight retirement** (PR #588) - see the retirement entry below in Remaining.
 
+### Period lock + undo, step 1 of 2 (2026-08-01, sc-25)
+
+Server-side only; no UI in this step. UI wires in step 2 once the rules hold.
+
+- **Migration sc-25 (`docs/migrations/sc-25-period-lock.sql`)** adds:
+  - `sc_daily_actuals_history.change_type TEXT NOT NULL DEFAULT 'update' CHECK IN ('update','delete')`. A save-of-zero (change_type='update', new_count=0) is now distinguishable from a reset (change_type='delete', new_count=0). Reader convention: distinguish by change_type, not by the value.
+  - `sc_daily_actuals` BEFORE DELETE trigger + `sc_daily_actuals_delete_audit()` function. Every DELETE now writes a history row. Prior state: DELETE removed rows silently, so an undo with no record was impossible to add safely without this.
+  - `sc_is_period_closed(TEXT, TEXT) RETURNS BOOLEAN`. **Swap point.** v1 body: `MAX(service_date) < CURRENT_DATE` from `sc_day_metadata` for the (account, period) pair. v2 (future): consult a `sc_period_locks` table populated when AP pulls a period. Migration comment documents the swap contract so a future rewrite touches this one function, not every caller.
+  - `sc_is_day_locked(TEXT, DATE) RETURNS BOOLEAN`. Resolves the day's period from `sc_day_metadata`; delegates to `sc_is_period_closed`. Unknown days (no metadata row OR period IS NULL) return TRUE - **unknown fails safe: locked.**
+- **Shared helper `src/lib/scPeriodLock.js`** - `assertDaysUnlockedForWrite(accountKey, dates, email)`. Short-circuits on `isScAdmin(email)` (SLT override = `SC_ADMIN_EMAILS`, same 8 people). Returns null on permit, `{ code: 'PERIOD_LOCKED', lockedDates, message }` on refusal.
+- **Wired into three write paths** in `src/app/api/service-calendar/route.js`:
+  - `sc-submit-day` (single-day save + mark-no-service via `noService: true`)
+  - `sc-bulk-submit` (multi-day save; every date in the batch checked; one locked date fails the whole batch to stay consistent with the existing all-or-nothing contract)
+  - `sc-submit-closeout` (MLB close-out; every game date in the block span checked)
+- **NOT wired**: `sc-add-note` (notes stay open on a locked period per owner ruling - annotation is separate from the number). Also not the `sc-admin-*` actions (they change catalog, not day data; already `isScAdmin`-gated).
+- **Grace window (v1 date-proxy only)**: `sc_is_period_closed` carries a `c_grace_days CONSTANT INT := 3`. A period stays open for 3 days after its `MAX(service_date)`. Reason: operators enter yesterday's counts today; a Sunday-close entered Monday would otherwise be an operator's first experience of a "closed" refusal on the last day of every period. The grace window disappears under v2 - once AP has actually pulled a period, "closed" means closed with no grace math. Named constant so the swap is one delete.
+- **Fail-safe alignment**: both `sc_is_day_locked` and `sc_is_period_closed` return TRUE for the unknown case. The first fires when no metadata row exists for the day (or period IS NULL); the second when no rows exist in `sc_day_metadata` for the (account, period) pair. Same direction so a future direct caller of `sc_is_period_closed` (nothing today) does not stumble into an "unknown reads as open" trap.
+- **Step-2 ledger reader needs `change_type` awareness**: the delete trigger writes a history row that today's ledger reader renders as "someone updated N services." A reset will read as an update until step 2 teaches the ledger to distinguish `change_type='delete'`. Carried into step 2's scope; step 1 is server-only.
+- **New action `sc-reset-day`** in the same route: deletes actuals for one (account, date), appends a companion note via `addDayNoteEntry` (author from session). Refuses when locked unless caller is SLT. Placeholder note wording ("Day reset - all counts cleared") pending owner ruling before step-2 ships.
+- **Distinct error shape**: refusals return HTTP 403 with `{ code: 'PERIOD_LOCKED', lockedDates: [...], message }`. Machine-readable so step 2's UI can render specific copy instead of "something went wrong."
+
+### Fiscal calendar generator gap (recorded 2026-08-01)
+
+There is **no fiscal-calendar generator** in the codebase. `sc_day_metadata` is populated exclusively by `scripts/_seed_sc_from_xlsx.mjs` reading each account's workbook and mirroring its own date span. Consequences:
+- Ten accounts stopped at 2026-12-20 (their workbooks' end); TBR-FL's B&G subtab extended to 2026-12-29 (Christmas-week rows). Not a period-definition disagreement - a workbook-artifact.
+- P13 as authored is a 3-week period (Nov 30 - Dec 20) - documented in the corrected `SC_SPREADSHEET_MAPPING.md:36` comment.
+- **2027 calendar will drift the same way unless the 2027 workbooks are audited to a common date span BEFORE the seed script runs**, OR a fiscal-calendar generator lands (independent of workbooks; writes rows across a canonical `(fiscal_year, period, week)` grid) so the seed script only supplies operational data. No action taken this PR; recorded so the drift class is known before the reseed arc.
+
 ### Migration gate CI (#416, mechanical enforcement of the DRAFT rule)
 
 - **What shipped**: `.github/workflows/migration-gate.yml` emits a `Migration gate` status check on every PR. Job A (`pull_request`) scans for added `docs/migrations/*.sql` - none -> pass instantly; any -> FAIL with a summary listing the files + the canonical phrase. Job B (`issue_comment`) matches `applied in Studio: YES` from an `OWNER`-association comment, resolves the PR head SHA, emits a `Migration gate` check_run as success on that SHA. Per-SHA reset: any push re-runs the scan.
