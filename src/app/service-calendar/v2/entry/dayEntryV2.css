@@ -469,6 +469,43 @@
   outline-offset: 2px;
 }
 
+/* sc-25 step 2 (2026-08-01): Reset day. Same button family as
+   Mark-no-service - both are quiet destructive controls that undo
+   the day. Muted at rest, red wash on hover, red focus ring.
+   Distinct row so the two vocabularies stay separate visually. */
+.sc-v2-entry-reset {
+  display: flex;
+  justify-content: center;
+  padding: var(--sc2-space-1) 0 var(--sc2-space-2);
+}
+.sc-v2-entry-reset-btn {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line-2);
+  color: var(--sc2-ink-muted);
+  cursor: pointer;
+  padding: 6px var(--sc2-space-3);
+  border-radius: var(--sc2-radius-control);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.sc-v2-entry-reset-btn:hover:not(:disabled) {
+  background: var(--sc2-accent-red-wash);
+  border-color: var(--sc2-accent-red-line);
+  color: var(--sc2-accent-red-deep);
+}
+.sc-v2-entry-reset-btn:focus-visible {
+  outline: 2px solid var(--sc2-accent-red-line);
+  outline-offset: 2px;
+}
+.sc-v2-entry-reset-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ─── Ledger (Phase 1 rename from Activity) ────────────────
    Same shell grammar as the pre-rename block: card with composer
    on top, chronological entries beneath. Ledger adds a title,

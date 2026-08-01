@@ -57,6 +57,7 @@ export default function SpringTrainingSection({
   hasMatchSnapshot,       // for the synthetic group
   feeGroupSummary,        // shared aggregator (fee-shape returns {meals, revenue:0})
   feeProjectedGroupSummary,
+  readOnly = false,
 }) {
   // Synthetic group for Match/Clear. Snapshot stores keyed by this
   // name; parent's matchSnapshots[SPRING_TRAINING_GROUP_KEY] flows.
@@ -129,7 +130,7 @@ export default function SpringTrainingSection({
           className="sc-v2-entry-group-actions"
           data-cleared={hasProjectedMeals && hasMatchSnapshot ? "true" : "false"}
         >
-          {hasProjectedMeals && (
+          {hasProjectedMeals && !readOnly && (
             <>
               <button
                 type="button"
@@ -167,6 +168,7 @@ export default function SpringTrainingSection({
                   onChange={onChange}
                   hideAmount={true}
                   hideRate={true}
+                  readOnly={readOnly}
                 />
               ))}
             </div>

@@ -2064,6 +2064,50 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     }
   }, [data, showToast]);
 
+  // sc-25 step 2 (2026-08-01): reset a day's actuals via sc-reset-day.
+  // Same fetch shape as handleAddNote; on success, drop the containing
+  // month from monthCache + bump reloadKey so the day refetches fresh
+  // (empty actuals + new "reset" ledger row from the DELETE trigger).
+  // A 403 PERIOD_LOCKED response is defensive: the button is already
+  // gated on !isLockedForViewer, but a stale client would surface the
+  // server's message as a toast rather than silently swallow it.
+  const handleResetDay = useCallback(async (day) => {
+    if (!data?.account) return { success: false, error: "No account loaded" };
+    const controller = new AbortController();
+    inFlightControllersRef.current.add(controller);
+    try {
+      const res = await fetch("/api/service-calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sc-reset-day",
+          accountKey: data.account.key,
+          date: day.date,
+        }),
+        signal: controller.signal,
+      });
+      const result = await res.json();
+      if (!isMountedRef.current) return result;
+      if (!result.success) {
+        showToast(result.message || result.error || "Reset failed", "error");
+        return result;
+      }
+      const mk = day.date.slice(0, 7);
+      setMonthCache(prev => {
+        if (!(mk in prev)) return prev;
+        const next = { ...prev }; delete next[mk]; return next;
+      });
+      setReloadKey(k => k + 1);
+      return result;
+    } catch (err) {
+      if (err?.name === "AbortError") return { success: false, error: "aborted" };
+      if (isMountedRef.current) showToast("Reset failed - check connection", "error");
+      return { success: false, error: "Network error" };
+    } finally {
+      inFlightControllersRef.current.delete(controller);
+    }
+  }, [data, showToast]);
+
   // ── Bulk save: writes same values to all selected days ──
   const handleBulkSave = useCallback(async () => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
@@ -3831,6 +3875,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 overrides: data?.overrides?.filter(o => o.date === focusDay) || [],
                 onSave: handleSave,
                 onAddNote: handleAddNote,
+                onReset: handleResetDay,
                 saving,
                 dayIndex: focusIdx,
                 totalDays: dayList.length,
@@ -3847,6 +3892,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 onNext: canNext ? () => navDay(1) : null,
                 onNextException: onNextExceptionHandler,
                 onClose: () => setFocusDay(null),
+                // sc-25 step 2 (2026-08-01): server-derived SLT override
+                // signal from sc-load. Consumed by DayEntryV2 to
+                // distinguish "locked and you cannot" from "locked and
+                // you can". Default false when the payload predates the
+                // flag (safer to render locked than to accidentally
+                // permit).
+                viewerCanEditPastPeriods: !!data?.viewerCanEditPastPeriods,
               };
               // W7 PR 3/3 Phase 6 - scEntryV2 is the effective gate
               // (scV2 folded in via useScEntryV2Effective at the top of

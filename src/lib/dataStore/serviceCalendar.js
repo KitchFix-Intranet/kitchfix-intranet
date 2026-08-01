@@ -2168,7 +2168,12 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
       supa,
       (q) => q
         .from("sc_daily_actuals_history")
-        .select("service_date, service_id, old_count, new_count, changed_by, changed_at")
+        // sc-25 (2026-08-01): change_type distinguishes update rows
+        // from delete rows. groupActivity groups delete rows into a
+        // single "reset" ledger entry; without this column a reset
+        // would collapse into the mark-no-service `allZero` branch
+        // because delete rows carry new_count = 0 by convention.
+        .select("service_date, service_id, old_count, new_count, changed_by, changed_at, change_type")
         .eq("account_key", accountKey)
         .gte("service_date", first)
         .lte("service_date", last)
@@ -2220,6 +2225,10 @@ export async function readHistoryEntriesForRange(accountKey, first, last) {
       newValue:    Number(r.new_count),
       author:      r.changed_by || null,
       changedAt:   r.changed_at,
+      // sc-25: 'update' | 'delete'. Default null on backfilled rows
+      // written before sc-25 landed (nothing wrote deletes before the
+      // trigger existed, so null-here == 'update'-in-practice).
+      changeType:  r.change_type || null,
     });
   }
   // Append the synthetic first-entered row per date. changedAt = the
