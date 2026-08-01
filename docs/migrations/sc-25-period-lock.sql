@@ -46,6 +46,27 @@
 -- route changes is a no-op. Applying the route changes without the
 -- migration would 500 on the RPC calls - see MIGRATION_STATUS.md
 -- + the migration gate on the PR.
+--
+-- Retroactive effect (owner acknowledged 2026-08-01):
+--   The moment this migration + the route changes land, every past
+--   period closes for every non-SLT caller. All of the owner's test
+--   data from January through 2026-08 (P1-P7) becomes read-only
+--   for anyone outside SC_ADMIN_EMAILS the instant the deploy goes
+--   green. The current period (P8 as of the write date) stays open,
+--   plus the 3-day grace window (see sc_is_period_closed below).
+--   Intended behavior: no operator has access yet, and the lock is
+--   what the seeding + rollout are gating on. Not gradual, not
+--   obvious - stated here so it does not get rediscovered as a
+--   surprise.
+--
+-- Re-apply safety: all statements are idempotent.
+--   - ADD COLUMN IF NOT EXISTS
+--   - DO $$ block that inspects pg_constraint before adding the CHECK
+--   - CREATE OR REPLACE FUNCTION for both functions (signatures
+--     unchanged across revisions; body + LANGUAGE may change)
+--   - DROP TRIGGER IF EXISTS + CREATE TRIGGER
+-- Second pass runs cleanly against a database that already has
+-- sc-25. Verified against the current schema after the first apply.
 -- ═══════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -153,33 +174,70 @@ CREATE TRIGGER sc_daily_actuals_delete_trigger
 -- comparison. Zero caller changes required.
 --
 -- v1 input (2026-08-01):
---   "The period's last date has passed" - the period is closed the
---   day after MAX(service_date) for that (account_key, period).
+--   "The period's last date has passed, PLUS a 3-day grace window
+--   for operators to enter yesterday's counts." The period is
+--   closed on day (MAX(service_date) + c_grace_days + 1).
 --   Metadata is derived per-account (each account's sc_day_metadata
 --   is the source), so P13 for TBR - FL ending 2026-12-29 and P13
 --   for the other 10 accounts ending 2026-12-20 are respected
 --   independently.
 --
--- Future input:
+-- Grace window (c_grace_days = 3):
+--   Operators enter the prior day's counts the following morning.
+--   Without a grace window, a period ending on Sunday closes the
+--   Monday morning an operator sits down to enter Sunday's counts -
+--   the last day of every period becomes their first experience of
+--   a "closed" refusal, in their training week. Three days covers a
+--   Sunday-close entered Monday plus a missed day. Named constant
+--   here so a future adjustment lives in one place.
+--
+--   THE GRACE WINDOW DISAPPEARS UNDER v2. Once AP has actually pulled
+--   a period, "closed" is closed with no grace math - the pull IS
+--   the confirmation the period is settled. The v2 body reads
+--   sc_period_locks EXISTS and returns without the grace constant.
+--   Delete c_grace_days when you swap; the constant is an artifact
+--   of the date proxy, not part of the concept.
+--
+-- Fail-safe direction:
+--   Unknown period (no rows in sc_day_metadata for the pair) returns
+--   TRUE. Matches sc_is_day_locked's own unknown-day fail-safe -
+--   both functions locked in the same direction so a direct caller
+--   of sc_is_period_closed (nothing today; possible future admin
+--   surface) does not stumble into an "unknown reads as open" trap.
+--
+-- Future input (v2, for the reader who will make the swap):
 --   "AP has pulled this period" - a row in a new sc_period_locks
 --   table with (account_key, period, locked_at) marks the closure.
 --   The function body becomes:
---     SELECT EXISTS (
---       SELECT 1 FROM sc_period_locks
---       WHERE account_key = p_account_key AND period = p_period
---     );
---   No other change needed anywhere.
+--     BEGIN
+--       RETURN EXISTS (
+--         SELECT 1 FROM sc_period_locks
+--         WHERE account_key = p_account_key AND period = p_period
+--       );
+--     END;
+--   No other change needed anywhere. Delete c_grace_days.
 CREATE OR REPLACE FUNCTION sc_is_period_closed(
   p_account_key TEXT,
   p_period      TEXT
 ) RETURNS BOOLEAN
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 AS $$
-  SELECT COALESCE(MAX(service_date), CURRENT_DATE) < CURRENT_DATE
+DECLARE
+  c_grace_days CONSTANT INT := 3;
+  v_max_date DATE;
+BEGIN
+  SELECT MAX(service_date) INTO v_max_date
   FROM sc_day_metadata
   WHERE account_key = p_account_key
     AND period = p_period;
+
+  IF v_max_date IS NULL THEN
+    RETURN TRUE;
+  END IF;
+
+  RETURN (v_max_date + c_grace_days) < CURRENT_DATE;
+END;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────
@@ -247,7 +305,10 @@ COMMIT;
 -- Verify (run manually in Studio after apply; not part of the txn):
 --
 --   SELECT sc_is_period_closed('CIN - AZ', '1');
---     -> TRUE (P1 ended 2026-01-25, well past today)
+--     -> TRUE (P1 ended 2026-01-25, well past today + 3-day grace)
+--
+--   SELECT sc_is_period_closed('CIN - AZ', 'nonexistent-period');
+--     -> TRUE (unknown period; fail-safe aligned with sc_is_day_locked)
 --
 --   SELECT sc_is_day_locked('CIN - AZ', '2026-01-15');
 --     -> TRUE (in P1, closed)
@@ -257,6 +318,13 @@ COMMIT;
 --
 --   SELECT sc_is_day_locked('CIN - AZ', '2029-01-01');
 --     -> TRUE (no metadata row; fail safe)
+--
+--   -- Grace window verification: assume today is 2026-08-13.
+--   -- P8 ends 2026-08-09 for CIN - AZ. + 3 grace = 2026-08-12.
+--   -- Closed on 2026-08-13 (when 2026-08-12 < CURRENT_DATE).
+--   SELECT sc_is_period_closed('CIN - AZ', '8');
+--     -> On 2026-08-12: FALSE  (still in grace)
+--     -> On 2026-08-13: TRUE   (grace expired the morning of)
 --
 --   SELECT column_name, data_type, is_nullable
 --   FROM information_schema.columns
