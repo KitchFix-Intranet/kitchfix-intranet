@@ -1133,7 +1133,24 @@ function DayEntryV2({
   // per-meal day with no drawer entries renders byte-identical to
   // pre-fix. Only diverges once the operator types into a drawer
   // group - the case the fix exists for.
+  //
+  // Rule-4 mirror (2026-08-01, added on the fee-rail gate bounce):
+  // when the ST section renders at top (stRenderTop = true) the
+  // ledger's activeGroups early-returns regularServiceGroups
+  // unconditionally per R3-5 rule 4 - regular groups do not collapse
+  // in phase. The rail must not contradict the ledger, so railGroups
+  // mirrors that early return. Without it, an in-phase fee day would
+  // hide 0-projection regular groups from the rail while the ledger
+  // showed them (Palm Beach Cardinals, Fun Money, quiet MiLB days
+  // all have 0 projections on STL - FL) - a ledger-rail split in the
+  // opposite direction of the drawer bug this file exists to fix.
+  //
+  // Per-meal is unaffected by the early return: stRenderTop gates on
+  // feeNoDollar which is false everywhere except STL - FL, so the
+  // early return never fires on per-meal accounts and railGroups on
+  // per-meal is identical to the prior single-clause filter.
   const railGroups = useMemo(() => {
+    if (stRenderTop) return regularServiceGroups;
     return regularServiceGroups.filter((g) => {
       return g.services.some((s) => {
         if ((day.projected[s.colIndex] ?? 0) > 0) return true;
@@ -1142,7 +1159,7 @@ function DayEntryV2({
         return false;
       });
     });
-  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, touched]);
+  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, touched, stRenderTop]);
 
   const hasTouchedAny = touched.size > 0;
   // Phase 1 Ledger (2026-07-24): swapped mergeActivity -> groupActivity
@@ -1455,7 +1472,7 @@ function DayEntryV2({
         >
           {feeNoDollar ? (
             <BillRailFee
-              serviceGroups={activeGroups}
+              serviceGroups={railGroups}
               day={day}
               editValues={editValues}
               touched={touched}
