@@ -112,7 +112,12 @@ function mapSdkError(err) {
 }
 
 // ── Human-readable tool-start summaries ──────────────────────────────────────
+// Human action label per tool. Every tool in the registry must appear here;
+// the fallback returns "running" (never the raw tool name - a "list_contacts_
+// by_role list_contacts_by_role" bug in the tool trail traced to the previous
+// tool-name fallback echoing on both the summary AND the tool-name column).
 function summarizeToolStart(tool, input) {
+  // Document tools
   if (tool === "search_documents") {
     const q = String(input?.query || "");
     return q ? `searching the Playbook for "${q}"` : "searching the Playbook";
@@ -126,7 +131,48 @@ function summarizeToolStart(tool, input) {
   if (tool === "list_documents") {
     return input?.docClass ? `listing ${input.docClass} documents` : "listing documents";
   }
-  return tool;
+  // Directory tools
+  if (tool === "find_contact") {
+    const q = String(input?.nameQuery || "").trim();
+    return q ? `looking up ${q}` : "looking up a contact";
+  }
+  if (tool === "list_accounts") {
+    return input?.level ? `listing ${input.level} accounts` : "listing accounts";
+  }
+  if (tool === "list_contacts_by_role") {
+    const role = String(input?.role || "").trim();
+    const ak = input?.teamKey ? ` at ${input.teamKey}` : "";
+    return role ? `looking up ${role}s${ak}` : "looking up contacts";
+  }
+  if (tool === "get_account_team") {
+    return input?.teamKey ? `looking up the ${input.teamKey} team` : "looking up an account team";
+  }
+  // Service Calendar tools
+  if (tool === "sc_orientation") {
+    return input?.accountKey ? `checking ${input.accountKey}'s orientation` : "checking calendar orientation";
+  }
+  if (tool === "sc_account_window") {
+    const ak = input?.accountKey ? ` ${input.accountKey}` : "";
+    const w = input?.window ? ` ${input.window}` : "";
+    return `pulling${ak} calendar${w}`.trim() || "pulling calendar data";
+  }
+  if (tool === "sc_homestand_detail") {
+    return input?.accountKey ? `reading ${input.accountKey}'s homestand` : "reading homestand detail";
+  }
+  if (tool === "sc_service_price") {
+    return input?.accountKey ? `looking up ${input.accountKey}'s price` : "looking up a service price";
+  }
+  // Spend tools
+  if (tool === "spend_summary") {
+    return "reading spending";
+  }
+  if (tool === "spend_vendor_history") {
+    return input?.vendorName ? `reading ${input.vendorName}'s history` : "reading vendor history";
+  }
+  if (tool === "spend_top_vendors") {
+    return "ranking top vendors";
+  }
+  return "running";
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────

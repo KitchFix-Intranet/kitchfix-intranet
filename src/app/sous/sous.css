@@ -24,7 +24,10 @@
 
 /* Reset + base */
 .sa-page {
-  min-height: 100vh;
+  /* Fit-floor accounts for the sticky TopNav sitting above .sa-page.
+     Without this subtraction the landing overflows by the nav's height at
+     every viewport height. --kf-topnav-h lives in TopNav.css :root. */
+  min-height: calc(100dvh - var(--kf-topnav-h, 56px));
   background: #EDEFF2;              /* reference surface-page, warmer than default canvas */
   color: var(--text-default);
   font-family: 'Inter', system-ui, sans-serif;
@@ -45,7 +48,10 @@
 .sa-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  /* Fills the nav-adjusted .sa-page; the parent's min-height already
+     accounts for the sticky TopNav, so 100% here is the actual usable
+     area (was min-height: 100vh which double-counted and overflowed). */
+  min-height: 100%;
   max-width: 1520px;
   margin: 0 auto;
   padding: 20px 24px 0;
@@ -1012,9 +1018,16 @@
 
 /* Yellow paths + hollow-navy declined tint live only here - not palette
    tokens because no other surface consumes them. */
-.sa-mark-wrap { display: inline-flex; flex: none; align-items: center; justify-content: flex-start; }
+/* r2 hotfix: wrap uses relative positioning + absolutely-positioned .sa-mark
+   so the 64x64 layout box doesn't overflow the sized wrap. Fixes the hero
+   mark not centering against the two-line hero text - the previous flex
+   layout tried to align a 64x64 child inside a 34x34 flex container.
+   transform-origin: top left still anchors the scaled mark at the wrap's
+   top-left, filling it exactly. */
+.sa-mark-wrap { display: inline-block; flex: none; position: relative; }
 .sa-mark {
-  position: relative;
+  position: absolute;
+  top: 0; left: 0;
   width: 64px;
   height: 64px;
 }
