@@ -23,7 +23,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { notFound } from "next/navigation";
-import { Star } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { canUseSous } from "@/lib/opdAcl";
 import { fetchReportRows } from "@/app/sousai/reports/data";
@@ -31,6 +30,7 @@ import { repeatQuestions, declineGaps, isoDay, daysAgo, serverToday } from "@/ap
 import { getHeroImages, getContacts } from "@/lib/dataStore/directory";
 import { getSupabase } from "@/lib/sousai/tools/_client";
 import SousSurface from "./SousSurface";
+import SousMark from "./SousMark";
 import "./sous.css";
 
 export const dynamic = "force-dynamic";
@@ -172,7 +172,7 @@ function SousHero({ heroImage, firstName, clockLabel }) {
       <div className="sa-hero-sweep" aria-hidden="true" />
       <div className="sa-hero-inner">
         <span className="sa-hero-star" aria-hidden="true">
-          <Star strokeWidth={2} />
+          <SousMark variant="display" state="rest" size={34} wake onNavy />
         </span>
         <div className="sa-hero-text">
           <h1 className="sa-hero-title">Sous</h1>

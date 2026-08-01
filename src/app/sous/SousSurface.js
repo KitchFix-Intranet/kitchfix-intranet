@@ -28,6 +28,7 @@ import {
   BookOpen, Users, Calendar, Receipt,
 } from "lucide-react";
 import { renderMdLite } from "./mdLite";
+import SousMark from "./SousMark";
 
 const IN_CONTEXT_WINDOW = 3;   // Matches PR B's memory window.
 
@@ -76,6 +77,13 @@ async function* parseSse(response) {
 
 function formatTime(d) {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+// Shared duration formatter for the tool trail + provenance meta row.
+// ≥1000ms renders as "N.Ns" (one decimal); <1000ms stays as "Nms". I3.
+function formatMs(ms) {
+  if (ms == null) return "";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
 function truncate(s, n) {
@@ -292,6 +300,19 @@ export default function SousSurface({
   const status = doneEnv?.status || (phase === "error" ? "error" : phase === "streaming" ? "streaming" : "grounded");
   const statusLabel = STATUS_LABEL[status] || "Answer";
 
+  // Status-companion mark state (spec §8). Turn while tools run; on done it
+  // settles/holds/declines to match the pill. Error re-uses the "off" hollow
+  // treatment since the spec has no error frame.
+  const markState = phase === "streaming"
+    ? "turn"
+    : status === "grounded"
+      ? "settled"
+      : status === "partial"
+        ? "part"
+        : status === "declined" || status === "error"
+          ? "off"
+          : "rest";
+
   const provenance = useMemo(() => {
     if (phase === "streaming") {
       const last = toolTrail[toolTrail.length - 1];
@@ -303,7 +324,7 @@ export default function SousSurface({
       const sources = Array.isArray(doneEnv?.sources) ? doneEnv.sources : [];
       const parts = [];
       if (nTools) parts.push(`${nTools} tool${nTools === 1 ? "" : "s"}`);
-      if (total != null) parts.push(`${(total / 1000).toFixed(1)}s`);
+      if (total != null) parts.push(formatMs(total));
       if (sources.length) parts.push(`sources: ${sources.join(", ")}`);
       return { streaming: false, text: parts.join(" · ") };
     }
@@ -436,6 +457,7 @@ export default function SousSurface({
       {askedQuestion && <p className="sa-question">{askedQuestion}</p>}
       <div className={`sa-answer sa-answer--${status}`}>
         <div className="sa-answer-head">
+          <SousMark variant="small" state={markState} size={19} />
           <span className={`sa-status-pill sa-status-pill--${status}`}>{statusLabel}</span>
         </div>
         {phase === "streaming" && toolTrail.length > 0 && (
@@ -444,7 +466,7 @@ export default function SousSurface({
               <div key={i} className="sa-tooltrail-item">
                 <span className="sa-tooltrail-tool">{t.tool}</span>
                 <span className="sa-tooltrail-summary">{typeof t.summary === "string" ? t.summary : ""}</span>
-                {t.ms != null && <span className="sa-tooltrail-ms">{t.ms}ms</span>}
+                {t.ms != null && <span className="sa-tooltrail-ms">{formatMs(t.ms)}</span>}
               </div>
             ))}
           </div>

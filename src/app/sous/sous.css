@@ -529,12 +529,12 @@
 .sa-answer--error    { border-top: 3px solid #EF4444; }
 .sa-answer--streaming{ border-top: 3px solid var(--accent-sous); }
 
-/* Status pill - matches pb-status-pill (10px / 800 / 6px / transparent border) */
+/* Status pill - matches pb-status-pill (10px / 800 / 6px / transparent border).
+   Left-aligned so the SousMark status companion sits beside the pill. */
 .sa-answer-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   padding: 10px 16px 8px;
   border-bottom: 1px solid #F1F5F9;
 }
@@ -950,6 +950,182 @@
   cursor: not-allowed;
 }
 .sa-ask-send svg { width: 15px; height: 15px; }
+
+/* ── Sous mark - the identity system per docs/SOUS_MARK_SPEC.md ───────── */
+
+/* Yellow paths + hollow-navy declined tint live only here - not palette
+   tokens because no other surface consumes them. */
+.sa-mark-wrap { display: inline-flex; flex: none; align-items: center; justify-content: flex-start; }
+.sa-mark {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+.sa-mark-paths { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sa-mark-paths path {
+  fill: none;
+  stroke: #DFA968;
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  transition: stroke 0.24s, opacity 0.24s;
+}
+.sa-mark--small .sa-mark-paths,
+.sa-mark--nav   .sa-mark-paths { display: none; }
+.sa-mark-mound {
+  position: absolute;
+  left: 28.8px; top: 28.8px;
+  width: 6.4px; height: 6.4px;
+  border-radius: 50%;
+  background: var(--accent-sous);
+  transition: background-color 0.24s;
+}
+.sa-mark-b {
+  position: absolute;
+  width: 17px; height: 17px;
+  border-radius: 5px;
+  background: var(--accent-sous);
+  border: 2.2px solid transparent;         /* permanent transparent border */
+  box-sizing: border-box;                  /* so partial/declined don't jump */
+  transform: rotate(45deg);
+  transition: background-color 0.24s, border-color 0.24s;
+}
+.sa-mark-bN { left: 23.5px; top:  7.5px; }
+.sa-mark-bE { left: 39.5px; top: 23.5px; }
+.sa-mark-bS { left: 23.5px; top: 39.5px; }
+.sa-mark-bW { left:  7.5px; top: 23.5px; }
+
+/* White-on-navy tint - hero + panel band */
+.sa-mark--on-navy .sa-mark-b,
+.sa-mark--on-navy .sa-mark-mound { background: rgba(255, 255, 255, 0.92); }
+
+/* State 1 - At rest, near-still drift */
+.sa-mark--st-rest .sa-mark-b { animation: sa-mark-drift 5.2s ease-in-out infinite alternate; }
+.sa-mark--st-rest .sa-mark-bE { animation-delay: 0.7s; }
+.sa-mark--st-rest .sa-mark-bS { animation-delay: 1.4s; }
+.sa-mark--st-rest .sa-mark-bW { animation-delay: 2.1s; }
+@keyframes sa-mark-drift {
+  from { transform: rotate(45deg) translate(0, 0); }
+  to   { transform: rotate(45deg) translate(0.5px, -0.5px); }
+}
+
+/* State 2 - Working (the turn). Bases orbit one base counterclockwise. */
+.sa-mark--st-turn .sa-mark-bS { animation: sa-mark-runS 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+.sa-mark--st-turn .sa-mark-bE { animation: sa-mark-runE 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+.sa-mark--st-turn .sa-mark-bN { animation: sa-mark-runN 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+.sa-mark--st-turn .sa-mark-bW { animation: sa-mark-runW 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes sa-mark-runS {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(16px, -16px) rotate(45deg); }
+  32%, 50% { transform: translate(0, -32px) rotate(45deg); }
+  57%, 75% { transform: translate(-16px, -16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+@keyframes sa-mark-runE {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(-16px, -16px) rotate(45deg); }
+  32%, 50% { transform: translate(-32px, 0) rotate(45deg); }
+  57%, 75% { transform: translate(-16px, 16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+@keyframes sa-mark-runN {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(-16px, 16px) rotate(45deg); }
+  32%, 50% { transform: translate(0, 32px) rotate(45deg); }
+  57%, 75% { transform: translate(16px, 16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+@keyframes sa-mark-runW {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(16px, 16px) rotate(45deg); }
+  32%, 50% { transform: translate(32px, 0) rotate(45deg); }
+  57%, 75% { transform: translate(16px, -16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+
+/* State 3 - Writing. Opacity pulse, base order E N W S. */
+.sa-mark--st-write .sa-mark-b { animation: sa-mark-plate 1.8s ease-in-out infinite; }
+.sa-mark--st-write .sa-mark-bE { animation-delay: 0s; }
+.sa-mark--st-write .sa-mark-bN { animation-delay: 0.24s; }
+.sa-mark--st-write .sa-mark-bW { animation-delay: 0.48s; }
+.sa-mark--st-write .sa-mark-bS { animation-delay: 0.72s; }
+@keyframes sa-mark-plate {
+  0%, 34%, 100% { opacity: 1; }
+  14% { opacity: 0.5; }
+}
+
+/* State 4 - Settled. One-shot glint driven by the .sa-mark--glint class
+   the component attaches for 700ms after handoff. */
+.sa-mark--glint { animation: sa-mark-glint 650ms linear 1; }
+@keyframes sa-mark-glint {
+  0%, 100% { filter: brightness(1); }
+  45%      { filter: brightness(1.12); }
+}
+
+/* State 5 - Held (partial). South base opens on an amber border. */
+.sa-mark--st-part .sa-mark-bS {
+  background: transparent;
+  border-color: #D97706;
+}
+
+/* State 6 - Honest no (declined). All hollow navy, mound solid, paths 40%. */
+.sa-mark--st-off .sa-mark-b {
+  background: transparent;
+  border-color: #123A63;
+}
+.sa-mark--st-off .sa-mark-mound { background: #123A63; }
+.sa-mark--st-off .sa-mark-paths path { stroke: #123A63; opacity: 0.4; }
+
+/* Attend - composer focus brightens the mark 4%. CSS-only via :has() so
+   there's no state plumbing between composer and mark. Works for both the
+   page hero and the panel band header. */
+.sa-shell:has(.sa-ask-form:focus-within) .sa-mark,
+.pb-sous-panel:has(.sa-ask-form:focus-within) .sa-mark {
+  filter: brightness(1.04);
+  transition: filter 0.18s ease;
+}
+
+/* Wake - runs once on mount, 1C surfaces. Paths draw, bases drop in
+   E-N-W-S, mound scales in. Inside PR A's 50-840ms load window. */
+.sa-mark--wake .sa-mark-paths path {
+  stroke-dasharray: 91;
+  stroke-dashoffset: 91;
+  animation: sa-mark-pdraw 260ms cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes sa-mark-pdraw { to { stroke-dashoffset: 0; } }
+.sa-mark--wake .sa-mark-b {
+  opacity: 0;
+  animation: sa-mark-bdrop 200ms cubic-bezier(.4,0,.2,1) forwards;
+}
+.sa-mark--wake .sa-mark-bE { animation-delay: 180ms; }
+.sa-mark--wake .sa-mark-bN { animation-delay: 270ms; }
+.sa-mark--wake .sa-mark-bW { animation-delay: 360ms; }
+.sa-mark--wake .sa-mark-bS { animation-delay: 450ms; }
+@keyframes sa-mark-bdrop {
+  from { opacity: 0; transform: rotate(45deg) translateY(-4px); }
+  to   { opacity: 1; transform: rotate(45deg) translateY(0); }
+}
+.sa-mark--wake .sa-mark-mound {
+  opacity: 0;
+  animation: sa-mark-mpop 140ms cubic-bezier(.4,0,.2,1) 560ms forwards;
+}
+@keyframes sa-mark-mpop {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Reduced motion - all mark animation suppressed, wake renders as its
+   settled frame instantly. Belt-and-suspenders with the reduced-motion
+   block further down that covers the wider surface. */
+@media (prefers-reduced-motion: reduce) {
+  .sa-mark, .sa-mark * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .sa-mark--wake .sa-mark-b,
+  .sa-mark--wake .sa-mark-mound { opacity: 1; transform: rotate(45deg) translateY(0); }
+  .sa-mark--wake .sa-mark-mound { transform: scale(1); }
+  .sa-mark--wake .sa-mark-paths path { stroke-dashoffset: 0; }
+}
 
 /* ── 8. Load sequence keyframes + prefers-reduced-motion suppression ────── */
 

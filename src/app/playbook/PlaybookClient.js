@@ -661,8 +661,14 @@ function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc 
         <div className="pb-sous-head">
           <div className="pb-sous-head-row">
             <div className="pb-sous-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+              {/* Panel band mark - 24-basis 1A rendered at 16px, white via
+                  currentColor on the navy-to-flame band. SOUS_MARK_SPEC §8. */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="8.8" y="2.8"  width="6.4" height="6.4" rx="1.9" transform="rotate(45 12 6)"/>
+                <rect x="14.8" y="8.8" width="6.4" height="6.4" rx="1.9" transform="rotate(45 18 12)"/>
+                <rect x="8.8" y="14.8" width="6.4" height="6.4" rx="1.9" transform="rotate(45 12 18)"/>
+                <rect x="2.8" y="8.8"  width="6.4" height="6.4" rx="1.9" transform="rotate(45 6 12)"/>
+                <circle cx="12" cy="12" r="1.25"/>
               </svg>
               <h2>Ask Sous</h2>
             </div>

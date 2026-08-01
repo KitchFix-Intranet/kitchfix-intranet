@@ -60,10 +60,16 @@ people: (
     </svg>
   ),
   sous: (
-    // Sparkle / spark icon - the tool-progress mark shared with the Ask
-    // Sous button in playbook.css.
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+    // Sous identity mark - 24-basis 1A rendered at 18px on currentColor.
+    // Geometry matches docs/SOUS_MARK_SPEC.md §2 (nav cut): 6.4 tiles at
+    // orbit 6, 1.9 corner radius, mound r 1.25. TopNav.css carries the
+    // one scoped rule that swaps active color to var(--accent-sous).
+    <svg className="sa-navmark" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="8.8" y="2.8"  width="6.4" height="6.4" rx="1.9" transform="rotate(45 12 6)"/>
+      <rect x="14.8" y="8.8" width="6.4" height="6.4" rx="1.9" transform="rotate(45 18 12)"/>
+      <rect x="8.8" y="14.8" width="6.4" height="6.4" rx="1.9" transform="rotate(45 12 18)"/>
+      <rect x="2.8" y="8.8"  width="6.4" height="6.4" rx="1.9" transform="rotate(45 6 12)"/>
+      <circle cx="12" cy="12" r="1.25"/>
     </svg>
   ),
 };
