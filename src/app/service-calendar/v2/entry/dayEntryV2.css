@@ -663,11 +663,42 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: baseline;
   gap: var(--sc2-space-2);
-  padding: 5px 0;
+  /* R3-item6 (2026-08-01): row padding lifted from a bare 5px to a
+     token step. Hairline dividers read less separation on the dark
+     rail background than they do on white; more vertical air makes
+     the stack scannable. Token step (sc2-space-2 = 6-8px clamp) so
+     rail cadence tracks the design system, not a magic literal. */
+  padding: var(--sc2-space-2) 0;
   font-size: var(--sc2-size-caption);
   font-variant-numeric: tabular-nums;
   border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-divider);
 }
+/* R3-item6 (2026-08-01): per-group column header. Sits under
+   .sc-v2-entry-rail-group-name and above the first .sc-v2-entry-rail-line.
+   Grid template mirrors the row template so labels align with cells.
+   Treatment matches the modal's LEDGER_HEAD (dayDetail.css:1206-1215):
+   micro + bold + uppercase + muted, with a hairline bottom rule
+   separating the header from the first row. Fee variant drops the
+   Amount column via the --fee modifier. */
+.sc-v2-entry-rail-line-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-1) 0;
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-muted);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+}
+.sc-v2-entry-rail-line-head--fee {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.sc-v2-entry-rail-lh-name   { text-align: left; }
+.sc-v2-entry-rail-lh-count  { text-align: right; min-width: 30px; }
+.sc-v2-entry-rail-lh-amount { text-align: right; }
 .sc-v2-entry-rail-line--solid {
   color: var(--sc2-rail-text-item);
 }
@@ -730,7 +761,10 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--sc2-space-2);
-  padding: 5px 0;
+  /* R3-item6 (2026-08-01): row padding lifted from 5px to a token
+     step (sc2-space-2) - same reasoning as .sc-v2-entry-rail-line
+     above; fee rail cadence tracks per-meal exactly. */
+  padding: var(--sc2-space-2) 0;
   font-size: var(--sc2-size-caption);
   font-variant-numeric: tabular-nums;
   border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-divider);

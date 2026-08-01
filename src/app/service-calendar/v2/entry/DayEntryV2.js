@@ -1835,6 +1835,17 @@ function BillRail({
           return (
             <div key={group.name} className="sc-v2-entry-rail-group">
               <div className="sc-v2-entry-rail-group-name">{group.name}</div>
+              {/* R3-item6 (2026-08-01): per-group column header. Same
+                  vocabulary + treatment as the modal's ledger head
+                  (LEDGER_HEAD in DayDetail.js): SERVICE / QTY / AMOUNT,
+                  micro + bold + uppercase + muted. Sits under the
+                  group name, above the first line - one header per
+                  group so the labels stay near the rows they name. */}
+              <div className="sc-v2-entry-rail-line-head" aria-hidden="true">
+                <span className="sc-v2-entry-rail-lh-name">Service</span>
+                <span className="sc-v2-entry-rail-lh-count">Qty</span>
+                <span className="sc-v2-entry-rail-lh-amount">Amount</span>
+              </div>
               {lines.map(s => (
                 <BillLine
                   key={s.colIndex}
