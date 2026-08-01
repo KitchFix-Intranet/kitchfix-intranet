@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { pgLiveNow } from "../_freshness.js";
 import { paginateAll } from "./_constants.js";
 
 const VALID_WINDOWS = ["month", "year", "ytd", "date_range"];
@@ -70,9 +71,14 @@ export async function spendTopVendors({
   }
 
   // Fetch every line item in the window (paginated - portfolio YTD is ~15k).
+  // vendor_id is populated by pr-8-1's backfill (exact match on vendors.name +
+  // vendor_aliases fallback). Aggregating by vendor_id folds the alias table
+  // in for free - "Cozzini Bros" / "Cozzini Brothers" / "Freshpoint" /
+  // "Samuels Seafoos" all point at their canonical vendor_id. This is what
+  // makes total_vendors_canonical honest.
   const lineItems = await paginateAll((from, to) => {
     let q = sb.from("ai_line_items")
-      .select("id, invoice_uuid, extended_price, vendor_name, is_historical, account_key");
+      .select("id, invoice_uuid, extended_price, vendor_name, vendor_id, is_historical, account_key");
     if (accountKey) q = q.eq("account_key", accountKey);
     if (category) q = q.ilike("category", `%${category.trim()}%`);
     q = q.gte("invoice_date", bounds.start).lte("invoice_date", bounds.end);
@@ -84,18 +90,41 @@ export async function spendTopVendors({
     return li.invoice_uuid && currentInvoiceIds.has(li.invoice_uuid);
   });
 
-  // Aggregate by vendor_name. Empty vendor_name aggregates as "(unknown)" so
-  // the model can see the miss without crashing.
+  // Load canonical vendor names for every distinct vendor_id we're about to
+  // aggregate on. pr-8-1's SET NOT NULL means vendor_id shouldn't be null in
+  // any surviving row; the defensive `if (!id)` below guards the edge case
+  // where a hand-written or legacy row slipped past.
+  const distinctVendorIds = [...new Set(kept.map((li) => li.vendor_id).filter(Boolean))];
+  let nameById = new Map();
+  if (distinctVendorIds.length > 0) {
+    const { data: vendorRows } = await sb
+      .from("vendors")
+      .select("id, name")
+      .in("id", distinctVendorIds);
+    nameById = new Map((vendorRows || []).map((v) => [v.id, v.name]));
+  }
+
+  // Aggregate by vendor_id (canonical). Rows without vendor_id (should not
+  // exist post pr-8-1) bucket into "(unresolved)" so the model can see the
+  // miss rather than silently dropping revenue.
   const perVendor = new Map();
   let grandTotal = 0;
   for (const li of kept) {
-    const key = li.vendor_name || "(unknown)";
     const price = Number(li.extended_price) || 0;
     grandTotal += price;
-    const prev = perVendor.get(key) || { vendor_name: key, dollar_total: 0, line_count: 0 };
+    const id = li.vendor_id || "(unresolved)";
+    const canonicalName = li.vendor_id
+      ? (nameById.get(li.vendor_id) || li.vendor_id)
+      : "(unresolved)";
+    const prev = perVendor.get(id) || {
+      vendor_id: id,
+      vendor_name: canonicalName,
+      dollar_total: 0,
+      line_count: 0,
+    };
     prev.dollar_total += price;
     prev.line_count += 1;
-    perVendor.set(key, prev);
+    perVendor.set(id, prev);
   }
   const ranked = [...perVendor.values()]
     .map((r) => ({
@@ -105,16 +134,16 @@ export async function spendTopVendors({
     }))
     .sort((a, b) => b.dollar_total - a.dollar_total);
 
-  const total_vendors = ranked.length;
+  const total_vendors_canonical = ranked.length;
   const top = ranked.slice(0, n);
-  const truncated = total_vendors > n;
+  const truncated = total_vendors_canonical > n;
 
   return {
-    source: "ai_line_items + v_invoice_submissions_current",
+    source: "ai_line_items + v_invoice_submissions_current + vendors",
     scope: excludeHistorical
-      ? "app-scanned invoice line items (excluding batch_rebuild historical rows)"
-      : "invoice line items including batch_rebuild historical",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+      ? "app-scanned invoice line items (excluding batch_rebuild historical rows), aggregated by canonical vendor_id"
+      : "invoice line items including batch_rebuild historical, aggregated by canonical vendor_id",
+    loaded: pgLiveNow(),
     parameters: {
       window,
       dateFrom: bounds.start,
@@ -127,12 +156,22 @@ export async function spendTopVendors({
     totals: {
       dollar_total: Math.round(grandTotal * 100) / 100,
       line_count: kept.length,
-      total_vendors,
+      total_vendors_canonical,
     },
     top_vendors: top,
     truncated,
-    note_truncation: truncated ? `showing top ${n} of ${total_vendors} vendors - raise topN (max ${MAX_TOP_N}) to widen` : null,
+    note_truncation: truncated ? `showing top ${n} of ${total_vendors_canonical} vendors - raise topN (max ${MAX_TOP_N}) to widen` : null,
   };
+}
+
+// Shared canonical-vendor count helper. The /sous first-run Spend chip and
+// the spend_top_vendors tool must return the same number - both surfaces
+// call THIS function so a schema change flows to both at once. Cheap when
+// spendTopVendors is the only path; the paginated line-item scan is the
+// same shape either way.
+export async function countYtdCanonicalVendors({ asOf } = {}) {
+  const result = await spendTopVendors({ window: "ytd", topN: 1, asOf });
+  return result?.totals?.total_vendors_canonical ?? null;
 }
 
 function resolveWindow(window, asOf, dateFrom, dateTo) {
@@ -156,7 +195,7 @@ function errorPayload(msg) {
   return {
     source: "ai_line_items",
     scope: "invoice line items",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     error: msg,
   };
 }

@@ -15,6 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { pgLiveNow } from "../_freshness.js";
 
 /**
  * @param {object} args
@@ -57,7 +58,7 @@ export async function scServicePrice({ accountKey, serviceNameOrId, asOf, includ
     return {
       source: "sc_services + sc_service_prices",
       scope: "current-season Service Calendar prices",
-      loaded: `PG live as of ${new Date().toISOString()}`,
+      loaded: pgLiveNow(),
       parameters: { accountKey, serviceNameOrId: query, asOf: asOfDate, includeHistory },
       matches: [],
       note: `no service on file at ${accountKey} matching '${query}'. This is a service-catalog gap, not a claim the service does not exist elsewhere. Try list_accounts to confirm the accountKey and search_documents for the account's contract if unsure what services are in scope.`,
@@ -100,7 +101,7 @@ export async function scServicePrice({ accountKey, serviceNameOrId, asOf, includ
   const result = {
     source: "sc_services + sc_service_prices",
     scope: "current-season Service Calendar prices",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     parameters: { accountKey, serviceNameOrId: query, asOf: asOfDate, includeHistory },
     matches,
     total: matches.length,
@@ -117,7 +118,7 @@ function errorPayload(msg) {
   return {
     source: "sc_services + sc_service_prices",
     scope: "current-season Service Calendar prices",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     error: msg,
   };
 }

@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // One-shot bootstrap → render hero + ask bar + filter chips + 6 shelves +
 // cards or list rows. Card/row click opens the slide-over reader (imported
-// from ./SlideOverReader — same component the admin dashboard uses).
+// from ./SlideOverReader - same component the admin dashboard uses).
 // Shared data maps live in ./_shared. CSS prefix pb-.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -17,11 +17,12 @@ import "../sous/sous.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
 import SlideOverReader from "./SlideOverReader";
 import SousSurface from "../sous/SousSurface";
+import { DOMAIN_CARD_EXAMPLES, PANEL_DOC_STARTERS } from "../sous/examples";
 
 // Operator-facing catalog filters. The previous "Needs Drive link" owner-only
 // chip was removed once /playbook/admin shipped (the dashboard's worklist
 // covers it). The "Critical" chip was also dropped here once the critical
-// visual treatment came off cards — the chip filtered to docs that look
+// visual treatment came off cards - the chip filtered to docs that look
 // identical to non-critical ones, so it had no signal-to-action ratio in
 // the operator view. The `critical` column stays in the data model intact.
 // Status filter values now feed the StatusFilterSelect dropdown (A6 polish);
@@ -29,7 +30,7 @@ import SousSurface from "../sous/SousSurface";
 // options (Ready, In Build, etc.) drawn from whatever statuses exist in the
 // visible documents.
 
-// Operator-readable status labels. Only "Live" → "Ready" right now — the
+// Operator-readable status labels. Only "Live" → "Ready" right now - the
 // floor reads "ready to use" more naturally than the workflow term "Live".
 // All other status values stay canonical (Draft, Pending, Placeholder,
 // In Build, Blocked) so the chip row + cards still reflect the granular
@@ -41,7 +42,7 @@ function operatorStatusLabel(s) {
   return OPERATOR_STATUS_LABEL[s] || s;
 }
 
-// Canonical workflow order — used to render status filter chips in a stable
+// Canonical workflow order - used to render status filter chips in a stable
 // order regardless of which subset actually appears in the data. Mirrors
 // _shared.ALL_STATUSES but defined locally to keep the chip-row import
 // surface tight.
@@ -191,7 +192,7 @@ function slugify(s) {
 }
 
 // Persist which shelves are collapsed across page loads. Default: all expanded.
-// Wider app pattern (TopNav.js stores kf_user_email in localStorage) — casual
+// Wider app pattern (TopNav.js stores kf_user_email in localStorage) - casual
 // browser-level UI state. No server roundtrip; OK to lose on browser-clear.
 function useCollapsedShelves() {
   const [collapsed, setCollapsed] = useState(() => new Set());
@@ -201,7 +202,7 @@ function useCollapsedShelves() {
       if (!raw) return;
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) setCollapsed(new Set(arr));
-    } catch { /* ignore parse / quota errors — fall back to all-expanded */ }
+    } catch { /* ignore parse / quota errors - fall back to all-expanded */ }
   }, []);
   const toggle = useCallback((name) => {
     setCollapsed((prev) => {
@@ -220,7 +221,7 @@ function useCollapsedShelves() {
 // Scroll-spy: which shelf is currently active in the viewport.
 //
 // PR 7.3 Batch A finish (bug 3): swapped from IntersectionObserver to a direct
-// scroll-position scan. IO's "entry/exit" semantics left gaps — during the
+// scroll-position scan. IO's "entry/exit" semantics left gaps - during the
 // transition from one shelf to the next, neither was reported as intersecting,
 // so `active` stuck on the previous value. The scan approach reads each
 // shelf's `rect.top` directly on every scroll (rAF-throttled) and picks the
@@ -234,7 +235,7 @@ function useActiveShelf(shelves) {
   const key = shelves.join("|");
   useEffect(() => {
     let rafId = null;
-    const ACTIVE_LINE = 100; // px from viewport top — under TopNav (56px)
+    const ACTIVE_LINE = 100; // px from viewport top - under TopNav (56px)
 
     const update = () => {
       rafId = null;
@@ -318,7 +319,7 @@ function useStickyHero() {
 }
 
 // Persist card vs list view choice. Same casual-browser-state pattern as
-// rail/shelf collapse — display preference, not server-persisted.
+// rail/shelf collapse - display preference, not server-persisted.
 const VIEW_STORAGE_KEY = "kf_playbook_view";
 function useViewMode() {
   const [view, setView] = useState("cards");
@@ -339,7 +340,7 @@ function useViewMode() {
 // Sticky left rail (PR 7.3 Batch A items 2 + 5 + 6)
 // ════════════════════════════════════════════════════════════════════════════
 function ShelfRail({ shelves, counts, active, onJump, collapsed, onToggleCollapse }) {
-  // Single chevron icon — CSS rotates 180° via .pb-rail--collapsed so the
+  // Single chevron icon - CSS rotates 180° via .pb-rail--collapsed so the
   // open/close animation is one smooth control, not two swapped points.
   return (
     <nav
@@ -425,7 +426,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
   }, [documents]);
 
   // Permanently-empty shelves (zero docs in the UNFILTERED set) are hidden
-  // from the operator view — Finance is currently a dead room in the rail.
+  // from the operator view - Finance is currently a dead room in the rail.
   // Shelves emptied by an active filter still render with the "no matches"
   // inline marker so the user can see the filter actually applied. Admin
   // dashboard keeps all shelves so its Gaps callout can flag the empties.
@@ -482,7 +483,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
     return map;
   }, [filteredDocs, visibleShelves]);
 
-  // Per-shelf visible counts (post-filter, post-search) — rail + header chip read this.
+  // Per-shelf visible counts (post-filter, post-search) - rail + header chip read this.
   const counts = useMemo(() => {
     const c = {};
     for (const s of visibleShelves) c[s] = (docsByShelf[s] || []).length;
@@ -500,7 +501,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
   // currently collapsed (bug 2), then (c) scroll to it AFTER React has flushed
   // the expand to the DOM (otherwise scrollIntoView measures against the
   // still-collapsed layout). We queue (c) via a "pendingJump" state that
-  // triggers a useEffect post-render — by then DOM has the new layout.
+  // triggers a useEffect post-render - by then DOM has the new layout.
   const [pendingJump, setPendingJump] = useState(null);
 
   const jumpToShelf = useCallback(
@@ -619,8 +620,13 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
 // opens the overlay via the per-doc "Ask Sous about this doc" affordance
 // in SlideOverReader.
 // ════════════════════════════════════════════════════════════════════════════
-function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc }) {
+function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = null, onDismissDoc }) {
   const [chips, setChips] = useState(null);
+  // Local prefill state so I1 empty-state chip clicks can seed the composer
+  // without re-mounting SousSurface. initialPrefill hydrates once from the
+  // parent (e.g. slide-over reader's "Ask Sous about this doc" affordance).
+  const [prefill, setPrefill] = useState(initialPrefill);
+  useEffect(() => { setPrefill(initialPrefill); }, [initialPrefill]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -661,8 +667,14 @@ function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc 
         <div className="pb-sous-head">
           <div className="pb-sous-head-row">
             <div className="pb-sous-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 2l2.39 4.84L20 8l-4 3.9.94 5.49L12 14.77 7.06 17.39 8 11.9 4 8l5.61-1.16z" />
+              {/* Panel band mark - 24-basis 1A rendered at 16px, white via
+                  currentColor on the navy-to-flame band. SOUS_MARK_SPEC §8. */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="8.8" y="2.8"  width="6.4" height="6.4" rx="1.9" transform="rotate(45 12 6)"/>
+                <rect x="14.8" y="8.8" width="6.4" height="6.4" rx="1.9" transform="rotate(45 18 12)"/>
+                <rect x="8.8" y="14.8" width="6.4" height="6.4" rx="1.9" transform="rotate(45 12 18)"/>
+                <rect x="2.8" y="8.8"  width="6.4" height="6.4" rx="1.9" transform="rotate(45 6 12)"/>
+                <circle cx="12" cy="12" r="1.25"/>
               </svg>
               <h2>Ask Sous</h2>
             </div>
@@ -700,6 +712,51 @@ function SousAIOverlay({ onClose, prefill = "", docContext = null, onDismissDoc 
           <div className="pb-sous-notlive">
             <p>
               <strong>{docContext.id} is {docContext.status}.</strong> It isn't in the corpus yet, so I can't answer from it. Ask something else, or try one of the recent live questions in the composer below.
+            </p>
+          </div>
+        )}
+
+        {/* I1 - panel empty state. With docContext: three doc-scoped
+            starters. Without: capability line + the four V2 domain example
+            chips. Both modes carry the U6 limits copy compact. Suppressed
+            when the doc is not-live (the notlive block above owns that
+            slot). Chip click seeds the composer via setPrefill. */}
+        {!isNonLive && (
+          <div className="pb-sous-empty">
+            {docContext ? (
+              <div className="pb-sous-empty-chips" role="group" aria-label="Starter questions">
+                {PANEL_DOC_STARTERS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="pb-sous-empty-chip"
+                    onClick={() => setPrefill(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <p className="pb-sous-empty-lead">
+                  Sous reads the Playbook, people, the service calendar, and spend - every answer names its source.
+                </p>
+                <div className="pb-sous-empty-chips" role="group" aria-label="Example questions">
+                  {Object.values(DOMAIN_CARD_EXAMPLES).map((examples, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="pb-sous-empty-chip"
+                      onClick={() => setPrefill(examples[0])}
+                    >
+                      {examples[0]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <p className="pb-sous-empty-limits">
+              <strong>Not yet:</strong> no wages, no reimbursements, no P&amp;L yet - all coming. Current season only.
             </p>
           </div>
         )}
@@ -797,7 +854,7 @@ function Hero({ query, setQuery, isOwner, heroImage, onOpenSous }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Sticky search — slim navy bar that slides in from above when the hero has
+// Sticky search - slim navy bar that slides in from above when the hero has
 // scrolled out of view. Keeps search reachable for a director hitting the
 // playbook 10x/day without leaving the navy hero parked on every scroll.
 // Always rendered; transform: translateY(-100%) hides it until the sentinel
@@ -903,7 +960,7 @@ function TypeFilterSelect({ family, setFamily }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// View-mode toggle — segmented Cards / List control
+// View-mode toggle - segmented Cards / List control
 // ════════════════════════════════════════════════════════════════════════════
 function ViewToggle({ view, setView }) {
   return (
@@ -966,7 +1023,7 @@ function Shelf({ name, docs, onOpen, isSearching, isCollapsed, onToggle, view, s
         <span className="pb-shelf-count" aria-label={`${count} documents`}>{count}</span>
         {empty && (
           <span className="pb-shelf-empty-inline">
-            — {isSearching ? "no matches" : "no documents yet"}
+            - {isSearching ? "no matches" : "no documents yet"}
           </span>
         )}
         <span className="pb-shelf-rule" aria-hidden="true" />
@@ -1033,7 +1090,7 @@ function DocumentCard({ doc, onOpen, idx = 0 }) {
             </span>
           )}
           {doc.print_required && (
-            <span className="pb-poster-mark" title="Wall poster — print and post" aria-label="Wall poster — print and post">
+            <span className="pb-poster-mark" title="Wall poster - print and post" aria-label="Wall poster - print and post">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="6 9 6 2 18 2 18 9" />
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
@@ -1062,7 +1119,7 @@ function DocumentCard({ doc, onOpen, idx = 0 }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// List-view row — denser rendering of the same grouped/filtered docs as
+// List-view row - denser rendering of the same grouped/filtered docs as
 // DocumentCard. Toggled via ViewToggle; clicking a row opens the same
 // slide-over reader. Same data wiring, different presentation.
 // ════════════════════════════════════════════════════════════════════════════
@@ -1091,7 +1148,7 @@ function DocumentListRow({ doc, onOpen, idx = 0 }) {
           </span>
         )}
         {doc.print_required && (
-          <span className="pb-poster-mark" title="Wall poster — print and post" aria-label="Wall poster — print and post">
+          <span className="pb-poster-mark" title="Wall poster - print and post" aria-label="Wall poster - print and post">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="6 9 6 2 18 2 18 9" />
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />

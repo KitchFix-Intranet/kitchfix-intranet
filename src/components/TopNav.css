@@ -110,6 +110,11 @@
   color: var(--kf-blue);
 }
 
+/* Sous nav swap - the mark uses its own accent (Flame) when active, per
+   SOUS_MARK_SPEC.md §8. One scoped override; every other nav link keeps
+   the generic kf-blue active tint. */
+.kf-topnav-link.active .sa-navmark { color: var(--accent-sous); }
+
 /* ── Separator ── */
 .kf-topnav-separator {
   width: 1px;

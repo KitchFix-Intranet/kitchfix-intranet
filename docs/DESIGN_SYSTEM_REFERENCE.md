@@ -245,6 +245,8 @@ When designing admin surfaces, **always check the actual allowlist before assumi
 - 1280×800 minimum / 1440×900 typical / 1920×1080 supported
 - Don't optimize for Safari / Firefox / Edge desktop
 
+**Height fit-floor.** Design target is 1280×800. The **720px height floor** is the lowest viewport at which a landing surface (hero + rail + first-run + composer) must render with zero vertical scroll. Below 720 the landing scrolls gracefully - nothing breaks, but the "everything in view" contract lapses. The sweep battery for any new landing checks 800/768/720 tall at each width in the laptop matrix. Answers scroll naturally at every height.
+
 ### Mobile
 
 - **iOS Safari** (last 2 major versions)
@@ -312,3 +314,4 @@ When a design choice could be reinforced by Slack notification quality, call it 
 
 - **2026-05-05** - Initial reference documented. Tokens, palette, roles, scales captured.
 - **2026-05-05** - Dual-mode density rule added (Density / Comfortable). Inter locked as canonical screen typeface; Mulish demoted to print/PDF only. Type scale, spacing scale, radius, and card padding now live inside per-mode tables. Mobile override (<1024px = comfortable) added as non-negotiable rule. Module assignments and surface-level overrides documented. Reference anchors retuned to mode-specific guidance.
+- **2026-08-01** - Height fit-floor codified. 720px is the lowest viewport at which a landing surface must render without vertical scroll; sweep battery height axis 800/768/720 named. Sous PR A polish pass is the first surface to bind against it. Design target restated as 1280×800.

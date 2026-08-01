@@ -269,13 +269,34 @@ async function handleAsk(gate) {
       // If there was an SDK error, we already wrote the error event; still
       // need to close the stream. Do NOT write a done envelope on error.
       if (!mappedError) {
+        // I2 - hydrate source docIds to {docId, title} using the docs
+        // catalog so the source card renders a real title. Missing rows
+        // (id not in documents, archived, whatever) fall through to title
+        // = null - the UI degrades to id-chip alone.
+        const rawSources = Array.isArray(result.sources) ? result.sources : [];
+        let hydratedSources = rawSources.map((docId) => ({ docId, title: null }));
+        if (rawSources.length > 0) {
+          try {
+            const { data: docRows } = await supabase
+              .from("documents")
+              .select("id, title")
+              .in("id", rawSources);
+            const titleById = new Map((docRows || []).map((r) => [r.id, r.title]));
+            hydratedSources = rawSources.map((docId) => ({
+              docId,
+              title: titleById.get(docId) || null,
+            }));
+          } catch { /* fall through to null-title shape */ }
+        }
         write("done", {
           question_id: questionId,
           status: result.status,
           declined: result.declined,
           decline_reason: result.decline_reason,
-          sources: result.sources,
+          sources: hydratedSources,
           usage: result.usage,
+          truncated: result.truncated ?? false,
+          flags: result.flags ?? [],
         });
       }
       try {

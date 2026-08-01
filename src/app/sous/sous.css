@@ -30,6 +30,16 @@
   font-family: 'Inter', system-ui, sans-serif;
 }
 
+/* Elevation tokens (U2). Both variants get them - values verbatim from the
+   PR A mocks so composer / answer card / panel overlay stay coherent.
+   Scoped low-specificity via :where so the shadow tokens don't pollute
+   other modules that transitively import this file. */
+:where(.sa-page, .pb-sous-panel) {
+  --elev-1: 0 1px 2px rgba(15, 48, 87, 0.05), 0 4px 12px -4px rgba(15, 48, 87, 0.08);
+  --elev-2: 0 2px 4px rgba(15, 48, 87, 0.06), 0 10px 24px -8px rgba(15, 48, 87, 0.14);
+  --elev-3: 0 24px 48px -12px rgba(15, 48, 87, 0.22);
+}
+
 /* ── 1. Shell + rail (page variant) ──────────────────────────────────────── */
 
 .sa-shell {
@@ -52,6 +62,10 @@
   flex: 1;
   min-height: 0;
   padding-bottom: 20px;
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  /* Narrow desktop band: rail trims from 264 to 220 so the pane breathes. */
+  .sa-workspace { grid-template-columns: 220px minmax(0, 1fr); }
 }
 @media (max-width: 1023px) {
   .sa-workspace { grid-template-columns: 1fr; }
@@ -249,6 +263,10 @@
 @media (max-width: 767px) {
   .sa-hero { min-height: 84px; padding: 14px 18px; }
 }
+@media (min-width: 768px) and (max-height: 800px) {
+  /* Height fit-floor: at short laptops the landing must hold zero scroll. */
+  .sa-hero { min-height: 84px; padding: 16px 22px; }
+}
 .sa-hero-bg {
   position: absolute;
   inset: 0;
@@ -376,103 +394,84 @@
   max-width: 640px;
 }
 
-.sa-domain-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.sa-domain-card {
+/* V2 simplified briefing (ratified U1) - one elevated card, four domain
+   rows, limits copy as the card's footer. Replaces the V1 four-card grid. */
+.sa-brief {
   background: white;
   border: 1px solid var(--kf-border, #E4E8EC);
   border-radius: 12px;
-  padding: 16px 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-}
-.sa-domain-card:hover {
-  border-color: currentColor;
-  box-shadow: 0 4px 12px rgba(15, 48, 87, 0.06);
-}
-.sa-domain-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.sa-domain-title {
-  font-size: 14px;
-  font-weight: 800;
-  margin: 0;
-}
-.sa-domain-count {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.04);
-}
-.sa-domain-examples {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.sa-domain-example {
-  background: transparent;
-  border: none;
-  padding: 6px 8px;
-  border-radius: 6px;
-  text-align: left;
-  font-size: 12px;
-  color: #334155;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.12s ease;
-  line-height: 1.35;
-}
-.sa-domain-example:hover { background: #F1F5F9; }
-.sa-domain-example:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
-
-/* Per-domain accent tinting (uses each module's own accent token) */
-.sa-domain-card--pb  { color: var(--accent-playbook); }
-.sa-domain-card--pp  { color: var(--accent-people); }
-.sa-domain-card--sc  { color: var(--accent-sc); }
-.sa-domain-card--ops { color: var(--accent-ops); }
-.sa-domain-card--sous { color: var(--accent-sous-deep); }
-.sa-domain-title-with-icon {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: currentColor;
-}
-.sa-domain-title-with-icon svg { width: 16px; height: 16px; }
-
-/* Limits block - permanent, never dismissible */
-.sa-limits {
-  background: #FEF9E7;
-  border: 1px solid #FDE68A;
-  border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 20px;
 }
-.sa-limits-title {
-  font-size: 13px;
-  font-weight: 800;
-  color: #92400E;
-  margin: 0 0 4px;
-}
-.sa-limits-body {
+.sa-brow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid #F1F5F9;
   font-size: 12.5px;
-  color: #713F12;
-  line-height: 1.5;
-  margin: 0;
 }
+.sa-brow:last-of-type { border-bottom: none; }
+.sa-brow-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
+}
+.sa-brow-title {
+  font-weight: 700;
+  color: var(--kf-navy, #0F3057);
+  width: 128px;
+  flex: none;
+}
+.sa-brow-count {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 9.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sa-brow-example {
+  margin-left: auto;
+  background: #F8FAFC;
+  color: var(--accent-sous-deep);
+  border: 1px solid #EEF2F6;
+  border-radius: 7px;
+  padding: 4px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.sa-brow-example:hover {
+  background: var(--accent-sous-subtle);
+  border-color: var(--accent-sous-line);
+}
+/* Per-row accent - icon takes accent, count chip takes tinted background */
+.sa-brow--pb   { color: var(--accent-playbook, #0F6E56); }
+.sa-brow--pb .sa-brow-count   { background: #ECFDF5; color: var(--accent-playbook, #0F6E56); }
+.sa-brow--pp   { color: var(--accent-people, #7C3AED); }
+.sa-brow--pp .sa-brow-count   { background: #F5F3FF; color: var(--accent-people, #7C3AED); }
+.sa-brow--sc   { color: var(--accent-sc, #0F6E56); }
+.sa-brow--sc .sa-brow-count   { background: #ECFDF5; color: var(--accent-sc, #0F6E56); }
+.sa-brow--ops  { color: var(--accent-ops, #D9892F); }
+.sa-brow--ops .sa-brow-count  { background: #FFF7ED; color: #B45309; }
+/* Limits copy - card footer, warm-tinted, permanent per D9 copy rules */
+.sa-brief-limits {
+  font-size: 10.5px;
+  color: #92400E;
+  margin: 9px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid #F1F5F9;
+  line-height: 1.5;
+}
+.sa-brief-limits strong { color: #92400E; font-weight: 700; }
 
 /* ── 4. Turn treatment - BOTH variants ──────────────────────────────────── */
 
@@ -510,29 +509,33 @@
   background: transparent;
 }
 
-/* Answer card */
+/* Answer card - treatment A (U10). Question stays above the card; the
+   card itself lifts on --elev-2 with a hairline #EEF2F6 border, keeps
+   the status top-rail via border-top on the status modifier. */
 .sa-answer {
   background: white;
-  border: 1px solid var(--kf-border, #E4E8EC);
+  border: 1px solid #EEF2F6;
   border-radius: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--elev-2);
 }
 
-/* Status rail across the top of the answer card - via border color */
+/* Status rail across the top of the answer card - via border color.
+   ERROR family is #DC2626 (Tailwind red-600) matched by the pill below. */
 .sa-answer--grounded { border-top: 3px solid #10B981; }
 .sa-answer--partial  { border-top: 3px solid #F59E0B; }
 .sa-answer--declined { border-top: 3px solid #6B7785; }
-.sa-answer--error    { border-top: 3px solid #EF4444; }
+.sa-answer--error    { border-top: 3px solid #DC2626; }
 .sa-answer--streaming{ border-top: 3px solid var(--accent-sous); }
 
-/* Status pill - matches pb-status-pill (10px / 800 / 6px / transparent border) */
+/* Status pill - matches pb-status-pill (10px / 800 / 6px / transparent border).
+   Left-aligned so the SousMark status companion sits beside the pill. */
 .sa-answer-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   padding: 10px 16px 8px;
   border-bottom: 1px solid #F1F5F9;
 }
@@ -550,8 +553,47 @@
 .sa-status-pill--grounded { border-color: #065F46; color: #065F46; }
 .sa-status-pill--partial  { border-color: #92400E; color: #92400E; }
 .sa-status-pill--declined { border-color: #475569; color: #475569; }
-.sa-status-pill--error    { border-color: #991B1B; color: #991B1B; }
+.sa-status-pill--error    { border-color: #DC2626; color: #DC2626; }
 .sa-status-pill--streaming{ border-color: var(--accent-sous-deep); color: var(--accent-sous-deep); }
+
+/* Reason chip - quietest amber tint below a PARTIAL pill, one line max.
+   Names WHY the answer is partial so users don't have to guess. */
+.sa-reason-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #92400E;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  padding: 3px 8px;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+
+/* Error body - one-line message + Try again. role=alert on the container
+   so screen readers announce; visually distinct from a normal answer. */
+.sa-answer-body--error {
+  padding: 14px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sa-error-msg {
+  margin: 0;
+  color: #7F1D1D;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.sa-action-btn--tryagain {
+  align-self: flex-start;
+  border-color: #DC2626;
+  color: #DC2626;
+  background: white;
+}
+.sa-action-btn--tryagain:hover {
+  background: #FEF2F2;
+  border-color: #B91C1C;
+  color: #B91C1C;
+}
 
 .sa-answer-body {
   padding: 14px 18px 16px;
@@ -564,7 +606,9 @@
 
 /* mdLite output - keep readable */
 .sa-answer-body p { margin: 0 0 10px; }
-.sa-answer-body h2, .sa-answer-body h3 { font-weight: 800; color: var(--kf-navy); margin: 14px 0 6px; }
+.sa-answer-body h3 { font-weight: 800; font-size: 14px; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: -0.01em; }
+.sa-answer-body h4 { font-weight: 700; font-size: 12.5px; color: var(--kf-navy, #0F3057); margin: 12px 0 4px; letter-spacing: 0; text-transform: uppercase; }
+.sa-answer-body hr { border: none; border-top: 1px solid #EEF2F6; margin: 14px 0; }
 .sa-answer-body ul, .sa-answer-body ol { padding-left: 22px; margin: 0 0 12px; }
 .sa-answer-body li { margin: 0 0 3px; }
 .sa-answer-body code {
@@ -592,7 +636,6 @@
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: #64748B;
-  white-space: nowrap;
 }
 .sa-answer-body td {
   padding: 9px 12px;
@@ -600,6 +643,15 @@
   vertical-align: baseline;
   font-variant-numeric: tabular-nums;
 }
+/* Numeric columns: mdLite tags th+td with data-num when every body cell parses
+   as a number. Right-align + tabular-nums so digits align on the decimal. */
+.sa-answer-body th[data-num],
+.sa-answer-body td[data-num] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Zebra rows for scan-ability on multi-row tables. */
+.sa-answer-body tbody tr:nth-child(2n) { background: #FAFBFC; }
 .sa-answer-body tfoot td {
   border-top: 1.5px solid #D3CFC4;
   border-bottom: none;
@@ -877,22 +929,30 @@
 }
 @media (max-width: 767px) { .sa-composer { padding: 12px 14px; } }
 
+/* Composer - 52px tall, text vertically centered, --elev-2 at rest, Flame
+   focus-within ring (elev-2 + 3px flame-line). U3. */
 .sa-ask-form {
   max-width: 900px;
   margin: 0 auto;
   background: white;
   border: 1.5px solid #E5E7EB;
   border-radius: 12px;
-  padding: 12px;
-  transition: border-color 0.18s cubic-bezier(.2,0,0,1);
+  padding: 8px 8px 8px 16px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  box-shadow: var(--elev-2);
+  transition: border-color 0.18s cubic-bezier(.2,0,0,1), box-shadow 0.18s cubic-bezier(.2,0,0,1);
 }
 .sa-ask-form:focus-within {
   border-color: var(--accent-sous);
+  box-shadow: var(--elev-2), 0 0 0 3px var(--accent-sous-line, #A5F3FC);
 }
 .sa-ask-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 12px;
+  width: 100%;
 }
 .sa-ask-input {
   flex: 1 1 auto;
@@ -904,8 +964,7 @@
   min-width: 0;
   background: transparent;
   color: #0A2548;
-  min-height: 22px;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 .sa-ask-input::placeholder { color: #94A3B8; }
 .sa-ask-input:disabled { opacity: 0.6; }
@@ -922,12 +981,208 @@
   justify-content: center;
   cursor: pointer;
   flex: none;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-sous) 25%, transparent);
   transition: background 0.15s ease;
 }
 .sa-ask-send:hover { background: var(--accent-sous-deep); }
-.sa-ask-send[disabled] { opacity: 0.5; cursor: not-allowed; }
+/* Real disabled state - grey-200 bg, grey-400 glyph (U3). Replaces the
+   generic opacity fade so idle vs streaming vs empty all read the same. */
+.sa-ask-send[disabled] {
+  background: #E5E7EB;
+  color: #94A3B8;
+  cursor: not-allowed;
+}
 .sa-ask-send svg { width: 15px; height: 15px; }
+
+/* CODE-02 - focus-visible coverage for the seven previously-bare classes.
+   All use the same 2px accent outline + 2px offset the rail's new-question
+   button uses (sous.css above), so keyboard users see one consistent
+   focus treatment across the surface + panel. */
+.sa-ask-send:focus-visible,
+.sa-action-btn:focus-visible,
+.sa-source-card:focus-visible,
+.sa-rail-item:focus-visible,
+.sa-feedback-tag:focus-visible,
+.sa-feedback-send:focus-visible,
+.sa-feedback-skip:focus-visible {
+  outline: 2px solid var(--accent-sous);
+  outline-offset: 2px;
+}
+
+/* ── Sous mark - the identity system per docs/SOUS_MARK_SPEC.md ───────── */
+
+/* Yellow paths + hollow-navy declined tint live only here - not palette
+   tokens because no other surface consumes them. */
+.sa-mark-wrap { display: inline-flex; flex: none; align-items: center; justify-content: flex-start; }
+.sa-mark {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+.sa-mark-paths { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sa-mark-paths path {
+  fill: none;
+  stroke: #DFA968;
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  transition: stroke 0.24s, opacity 0.24s;
+}
+.sa-mark--small .sa-mark-paths,
+.sa-mark--nav   .sa-mark-paths { display: none; }
+.sa-mark-mound {
+  position: absolute;
+  left: 28.8px; top: 28.8px;
+  width: 6.4px; height: 6.4px;
+  border-radius: 50%;
+  background: var(--accent-sous);
+  transition: background-color 0.24s;
+}
+.sa-mark-b {
+  position: absolute;
+  width: 17px; height: 17px;
+  border-radius: 5px;
+  background: var(--accent-sous);
+  border: 2.2px solid transparent;         /* permanent transparent border */
+  box-sizing: border-box;                  /* so partial/declined don't jump */
+  transform: rotate(45deg);
+  transition: background-color 0.24s, border-color 0.24s;
+}
+.sa-mark-bN { left: 23.5px; top:  7.5px; }
+.sa-mark-bE { left: 39.5px; top: 23.5px; }
+.sa-mark-bS { left: 23.5px; top: 39.5px; }
+.sa-mark-bW { left:  7.5px; top: 23.5px; }
+
+/* White-on-navy tint - hero + panel band */
+.sa-mark--on-navy .sa-mark-b,
+.sa-mark--on-navy .sa-mark-mound { background: rgba(255, 255, 255, 0.92); }
+
+/* State 1 - At rest, near-still drift */
+.sa-mark--st-rest .sa-mark-b { animation: sa-mark-drift 5.2s ease-in-out infinite alternate; }
+.sa-mark--st-rest .sa-mark-bE { animation-delay: 0.7s; }
+.sa-mark--st-rest .sa-mark-bS { animation-delay: 1.4s; }
+.sa-mark--st-rest .sa-mark-bW { animation-delay: 2.1s; }
+@keyframes sa-mark-drift {
+  from { transform: rotate(45deg) translate(0, 0); }
+  to   { transform: rotate(45deg) translate(0.5px, -0.5px); }
+}
+
+/* State 2 - Working (the turn). Bases orbit one base counterclockwise. */
+.sa-mark--st-turn .sa-mark-bS { animation: sa-mark-runS 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+.sa-mark--st-turn .sa-mark-bE { animation: sa-mark-runE 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+.sa-mark--st-turn .sa-mark-bN { animation: sa-mark-runN 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+.sa-mark--st-turn .sa-mark-bW { animation: sa-mark-runW 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes sa-mark-runS {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(16px, -16px) rotate(45deg); }
+  32%, 50% { transform: translate(0, -32px) rotate(45deg); }
+  57%, 75% { transform: translate(-16px, -16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+@keyframes sa-mark-runE {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(-16px, -16px) rotate(45deg); }
+  32%, 50% { transform: translate(-32px, 0) rotate(45deg); }
+  57%, 75% { transform: translate(-16px, 16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+@keyframes sa-mark-runN {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(-16px, 16px) rotate(45deg); }
+  32%, 50% { transform: translate(0, 32px) rotate(45deg); }
+  57%, 75% { transform: translate(16px, 16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+@keyframes sa-mark-runW {
+  0%       { transform: translate(0, 0) rotate(45deg); }
+  7%, 25%  { transform: translate(16px, 16px) rotate(45deg); }
+  32%, 50% { transform: translate(32px, 0) rotate(45deg); }
+  57%, 75% { transform: translate(16px, -16px) rotate(45deg); }
+  82%, 100%{ transform: translate(0, 0) rotate(45deg); }
+}
+
+/* State 3 - Writing. Opacity pulse, base order E N W S. */
+.sa-mark--st-write .sa-mark-b { animation: sa-mark-plate 1.8s ease-in-out infinite; }
+.sa-mark--st-write .sa-mark-bE { animation-delay: 0s; }
+.sa-mark--st-write .sa-mark-bN { animation-delay: 0.24s; }
+.sa-mark--st-write .sa-mark-bW { animation-delay: 0.48s; }
+.sa-mark--st-write .sa-mark-bS { animation-delay: 0.72s; }
+@keyframes sa-mark-plate {
+  0%, 34%, 100% { opacity: 1; }
+  14% { opacity: 0.5; }
+}
+
+/* State 4 - Settled. One-shot glint driven by the .sa-mark--glint class
+   the component attaches for 700ms after handoff. */
+.sa-mark--glint { animation: sa-mark-glint 650ms linear 1; }
+@keyframes sa-mark-glint {
+  0%, 100% { filter: brightness(1); }
+  45%      { filter: brightness(1.12); }
+}
+
+/* State 5 - Held (partial). South base opens on an amber border. */
+.sa-mark--st-part .sa-mark-bS {
+  background: transparent;
+  border-color: #D97706;
+}
+
+/* State 6 - Honest no (declined). All hollow navy, mound solid, paths 40%. */
+.sa-mark--st-off .sa-mark-b {
+  background: transparent;
+  border-color: #123A63;
+}
+.sa-mark--st-off .sa-mark-mound { background: #123A63; }
+.sa-mark--st-off .sa-mark-paths path { stroke: #123A63; opacity: 0.4; }
+
+/* Attend - composer focus brightens the mark 4%. CSS-only via :has() so
+   there's no state plumbing between composer and mark. Works for both the
+   page hero and the panel band header. */
+.sa-shell:has(.sa-ask-form:focus-within) .sa-mark,
+.pb-sous-panel:has(.sa-ask-form:focus-within) .sa-mark {
+  filter: brightness(1.04);
+  transition: filter 0.18s ease;
+}
+
+/* Wake - runs once on mount, 1C surfaces. Paths draw, bases drop in
+   E-N-W-S, mound scales in. Inside PR A's 50-840ms load window. */
+.sa-mark--wake .sa-mark-paths path {
+  stroke-dasharray: 91;
+  stroke-dashoffset: 91;
+  animation: sa-mark-pdraw 260ms cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes sa-mark-pdraw { to { stroke-dashoffset: 0; } }
+.sa-mark--wake .sa-mark-b {
+  opacity: 0;
+  animation: sa-mark-bdrop 200ms cubic-bezier(.4,0,.2,1) forwards;
+}
+.sa-mark--wake .sa-mark-bE { animation-delay: 180ms; }
+.sa-mark--wake .sa-mark-bN { animation-delay: 270ms; }
+.sa-mark--wake .sa-mark-bW { animation-delay: 360ms; }
+.sa-mark--wake .sa-mark-bS { animation-delay: 450ms; }
+@keyframes sa-mark-bdrop {
+  from { opacity: 0; transform: rotate(45deg) translateY(-4px); }
+  to   { opacity: 1; transform: rotate(45deg) translateY(0); }
+}
+.sa-mark--wake .sa-mark-mound {
+  opacity: 0;
+  animation: sa-mark-mpop 140ms cubic-bezier(.4,0,.2,1) 560ms forwards;
+}
+@keyframes sa-mark-mpop {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Reduced motion - all mark animation suppressed, wake renders as its
+   settled frame instantly. Belt-and-suspenders with the reduced-motion
+   block further down that covers the wider surface. */
+@media (prefers-reduced-motion: reduce) {
+  .sa-mark, .sa-mark * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .sa-mark--wake .sa-mark-b,
+  .sa-mark--wake .sa-mark-mound { opacity: 1; transform: rotate(45deg) translateY(0); }
+  .sa-mark--wake .sa-mark-mound { transform: scale(1); }
+  .sa-mark--wake .sa-mark-paths path { stroke-dashoffset: 0; }
+}
 
 /* ── 8. Load sequence keyframes + prefers-reduced-motion suppression ────── */
 
@@ -951,25 +1206,31 @@
 .sa-animate .sa-hero-title          { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 100ms both; }
 .sa-animate .sa-hero-greeting       { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 220ms both; }
 .sa-animate .sa-freshness           { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 340ms both; }
-.sa-animate .sa-domain-card:nth-child(1) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 420ms both; }
-.sa-animate .sa-domain-card:nth-child(2) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 500ms both; }
-.sa-animate .sa-domain-card:nth-child(3) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 580ms both; }
-.sa-animate .sa-domain-card:nth-child(4) { animation: sa-rise 500ms cubic-bezier(.2,0,0,1) 660ms both; }
-.sa-animate .sa-limits              { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 760ms both; }
+.sa-animate .sa-brief               { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 420ms both; }
 .sa-animate .sa-composer            { animation: sa-rise         500ms cubic-bezier(.2,0,0,1) 840ms both; }
 
-/* Suppressed, not reduced. */
+/* Suppressed, not reduced. CODE-07 broadens this block to also drop the
+   transition (not just animation) on every class that carries one.
+   Explicit per-class selectors - deliberately not a wildcard, because a
+   `* { transition: none }` inside .sa- would still bleed into cross-module
+   :host contexts that transitively import this file. */
 @media (prefers-reduced-motion: reduce) {
   .sa-animate .sa-hero-star,
   .sa-animate .sa-hero-sweep,
   .sa-animate .sa-hero-title,
   .sa-animate .sa-hero-greeting,
   .sa-animate .sa-freshness,
-  .sa-animate .sa-domain-card,
-  .sa-animate .sa-limits,
+  .sa-animate .sa-brief,
   .sa-animate .sa-composer,
   .sa-freshness-dot,
-  .sa-provenance--streaming .sa-provenance-dot {
+  .sa-provenance--streaming .sa-provenance-dot,
+  .sa-source-card,
+  .sa-action-btn,
+  .sa-feedback-tag,
+  .sa-ask-form,
+  .sa-rail-item,
+  .sa-rail-newbtn,
+  .sa-brow-example {
     animation: none !important;
     transition: none !important;
     transform: none !important;

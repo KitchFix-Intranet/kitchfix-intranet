@@ -23,39 +23,21 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { notFound } from "next/navigation";
-import { Star } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { canUseSous } from "@/lib/opdAcl";
 import { fetchReportRows } from "@/app/sousai/reports/data";
 import { repeatQuestions, declineGaps, isoDay, daysAgo, serverToday } from "@/app/sousai/reports/aggregate";
 import { getHeroImages, getContacts } from "@/lib/dataStore/directory";
 import { getSupabase } from "@/lib/sousai/tools/_client";
+import { countYtdCanonicalVendors } from "@/lib/sousai/tools/data/spendTopVendors";
 import SousSurface from "./SousSurface";
+import SousMark from "./SousMark";
+import FreshnessChip from "./FreshnessChip";
+import { DOMAIN_CARD_EXAMPLES } from "./examples";
 import "./sous.css";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sous - KitchFix" };
-
-// The four first-run domain cards. Live counts fetched below; hardcoded
-// example questions per D15 (log can drive them later).
-const DOMAIN_CARD_EXAMPLES = {
-  playbook: [
-    "What's our allergen procedure?",
-    "Show me FORM-004",
-  ],
-  people: [
-    "Who's the EC at CIN-OH?",
-    "Which accounts don't have a Sous Chef?",
-  ],
-  sc: [
-    "How's CIN-AZ tracking this month?",
-    "What homestand is STL-MO on?",
-  ],
-  spend: [
-    "How much have we spent with Sysco this year?",
-    "Which vendors did we spend the most with this year?",
-  ],
-};
 
 async function loadChipsInline(now) {
   try {
@@ -129,9 +111,14 @@ async function loadDomainCounts() {
     const { count: accountsCount } = await sb.from("accounts").select("*", { count: "exact", head: true });
     out.sc = accountsCount ?? null;
   } catch { /* leave null */ }
+  // Spend chip: canonical vendors WITH YTD spend, via the same code path
+  // spend_top_vendors uses (total_vendors_canonical). Prevents chip vs tool
+  // drift - one code path, one number. Both surfaces read
+  // ai_line_items.vendor_id (populated by pr-8-1's backfill + FK) so the
+  // alias fold happens at the DB layer for free.
   try {
-    const { count: vendorCount } = await sb.from("vendors").select("*", { count: "exact", head: true }).is("deleted_at", null);
-    out.spend = vendorCount ?? null;
+    const count = await countYtdCanonicalVendors();
+    out.spend = count;
   } catch { /* leave null */ }
   return out;
 }
@@ -150,15 +137,12 @@ function extractFirstName(session) {
   return null;
 }
 
-function nowClockLabel() {
-  const d = new Date();
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-function SousHero({ heroImage, firstName, clockLabel }) {
+function SousHero({ heroImage, firstName }) {
+  // U7 verbatim - "about" not "for"; "the intranet knows" replaces the
+  // enumerated modules. All Sous copy says "people", never "directory".
   const greeting = firstName
-    ? `Hello ${firstName} - ask me for anything in the Playbook, the directory, the service calendar, or spend.`
-    : `Hello - ask me for anything in the Playbook, the directory, the service calendar, or spend.`;
+    ? `Hello ${firstName} - ask me about anything the intranet knows.`
+    : `Hello - ask me about anything the intranet knows.`;
   return (
     <div className="sa-hero">
       <div
@@ -170,7 +154,7 @@ function SousHero({ heroImage, firstName, clockLabel }) {
       <div className="sa-hero-sweep" aria-hidden="true" />
       <div className="sa-hero-inner">
         <span className="sa-hero-star" aria-hidden="true">
-          <Star strokeWidth={2} />
+          <SousMark variant="display" state="rest" size={34} wake onNavy />
         </span>
         <div className="sa-hero-text">
           <h1 className="sa-hero-title">Sous</h1>
@@ -178,10 +162,7 @@ function SousHero({ heroImage, firstName, clockLabel }) {
         </div>
       </div>
       <div className="sa-hero-right">
-        <span className="sa-freshness" title="Live Postgres, current session">
-          <span className="sa-freshness-dot" aria-hidden="true" />
-          PG live · {clockLabel}
-        </span>
+        <FreshnessChip />
       </div>
     </div>
   );
@@ -201,7 +182,6 @@ export default async function SousPage() {
     loadDomainCounts(),
   ]);
   const firstName = extractFirstName(session);
-  const clockLabel = nowClockLabel();
 
   return (
     <div className="sa-page sa-animate">
@@ -210,7 +190,7 @@ export default async function SousPage() {
           variant="page"
           chips={chips}
           autoFocus
-          heroSlot={<SousHero heroImage={heroImage} firstName={firstName} clockLabel={clockLabel} />}
+          heroSlot={<SousHero heroImage={heroImage} firstName={firstName} />}
           domainCounts={counts}
           domainExamples={DOMAIN_CARD_EXAMPLES}
         />

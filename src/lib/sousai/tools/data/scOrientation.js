@@ -34,6 +34,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabase } from "../_client.js";
+import { pgLiveNow } from "../_freshness.js";
 import { KNOWN_TEAM_KEYS, PDC_TEAM_KEYS } from "./_constants.js";
 
 const VALID_SCOPES = ["homestand", "period", "phase", "both", "all"];
@@ -81,7 +82,7 @@ export async function scOrientation({ accountKey, date, scope = "all" } = {}) {
     return {
       source: "v_current_homestand_by_account, v_current_period_by_account, v_current_pdc_phase_by_account",
       scope: "current-season Service Calendar orientation",
-      loaded: `PG live as of ${new Date().toISOString()}`,
+      loaded: pgLiveNow(),
       parameters: { accountKey: trimmedKey, date: date || null, scope },
       note: `no account with team_key='${trimmedKey}' in the current-season list. Known team_keys: ${KNOWN_TEAM_KEYS.join(", ")}. If the account was active in a prior season, the corpus (REC docs) may still describe it.`,
     };
@@ -182,7 +183,7 @@ export async function scOrientation({ accountKey, date, scope = "all" } = {}) {
   return {
     source: "v_current_homestand_by_account, v_current_period_by_account, v_current_pdc_phase_by_account",
     scope: "current-season Service Calendar orientation",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     parameters: { accountKey: trimmedKey, date: date || "today (view resolves on CURRENT_DATE)", scope },
     account_shape: {
       is_pdc: isPDC,
@@ -203,7 +204,7 @@ function errorPayload(msg) {
   return {
     source: "v_current_homestand_by_account, v_current_period_by_account, v_current_pdc_phase_by_account",
     scope: "current-season Service Calendar orientation",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     error: msg,
   };
 }
@@ -222,7 +223,7 @@ async function companyWidePeriod() {
     return {
       source: "v_current_period_by_account",
       scope: "current-season Service Calendar orientation - company-wide period",
-      loaded: `PG live as of ${new Date().toISOString()}`,
+      loaded: pgLiveNow(),
       parameters: { accountKey: null, scope: "period" },
       period: { applicable: true, current: false, reason: "no active period across any account today - the season may be outside its window" },
     };
@@ -234,7 +235,7 @@ async function companyWidePeriod() {
   return {
     source: "v_current_period_by_account",
     scope: "current-season Service Calendar orientation - company-wide period",
-    loaded: `PG live as of ${new Date().toISOString()}`,
+    loaded: pgLiveNow(),
     parameters: { accountKey: null, scope: "period" },
     period: {
       applicable: true,
