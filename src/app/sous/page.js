@@ -29,6 +29,7 @@ import { fetchReportRows } from "@/app/sousai/reports/data";
 import { repeatQuestions, declineGaps, isoDay, daysAgo, serverToday } from "@/app/sousai/reports/aggregate";
 import { getHeroImages, getContacts } from "@/lib/dataStore/directory";
 import { getSupabase } from "@/lib/sousai/tools/_client";
+import { countYtdCanonicalVendors } from "@/lib/sousai/tools/data/spendTopVendors";
 import SousSurface from "./SousSurface";
 import SousMark from "./SousMark";
 import FreshnessChip from "./FreshnessChip";
@@ -130,9 +131,14 @@ async function loadDomainCounts() {
     const { count: accountsCount } = await sb.from("accounts").select("*", { count: "exact", head: true });
     out.sc = accountsCount ?? null;
   } catch { /* leave null */ }
+  // Spend chip: canonical vendors WITH YTD spend, via the same code path
+  // spend_top_vendors uses (total_vendors_canonical). Prevents chip vs tool
+  // drift - one code path, one number. Both surfaces read
+  // ai_line_items.vendor_id (populated by pr-8-1's backfill + FK) so the
+  // alias fold happens at the DB layer for free.
   try {
-    const { count: vendorCount } = await sb.from("vendors").select("*", { count: "exact", head: true }).is("deleted_at", null);
-    out.spend = vendorCount ?? null;
+    const count = await countYtdCanonicalVendors();
+    out.spend = count;
   } catch { /* leave null */ }
   return out;
 }
