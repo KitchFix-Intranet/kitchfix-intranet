@@ -272,9 +272,9 @@ export default function DrillRail({
           shape exactly: horizontal progress, caption below, no
           visible percent digit (percent stays on RailProgress's
           role="progressbar" aria-valuenow for screen readers).
-          RailProgressBlock is also the Handoff flight destination
-          via registerFlightTarget - the block has real height + the
-          caption increments under an arriving pill. */}
+          The block previously registered as the Handoff flight
+          destination; flight retired 2026-08-01, wrapper stays
+          purely for layout grouping. */}
       {ringData && (
         <RailProgressBlock
           pct={ringData.pct}

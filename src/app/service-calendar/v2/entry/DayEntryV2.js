@@ -60,10 +60,11 @@ import BillRailFee from "./BillRailFee";
 import SpringTrainingSection, { SPRING_TRAINING_GROUP_KEY } from "./SpringTrainingSection";
 import ServiceRow from "./ServiceRow";
 import { isFeeNoDollar, unitLabel, verbLabel, verbLabelPast, verbLabelPastUpper } from "../vocab";
-// P3-B (2026-07-28): handoff coordinator - executeConfirm success
-// branch drives the sequence via startHandoff. Pill source ref
-// registered by the confirmed pill JSX below. prefersReducedMotion
-// is already imported below via ../motion.
+// P3-B (2026-07-28; flight retired 2026-08-01): handoff coordinator.
+// executeConfirm success calls startHandoff to commit the session
+// entry and schedule the drill-advance callback on the finalize
+// timer. No pill, no phase machine after the retirement - see
+// SC_STATUS.md.
 import { useHandoffSafe } from "../handoff/coordinator";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -816,11 +817,11 @@ function DayEntryV2({
         onClose?.();
         return;
       }
-      // P3-B (2026-07-28): trigger the Handoff sequence. Coordinator
-      // owns the beat clock (fadeSvc -> pillIn -> pillFly -> ringSweep
-      // -> slideNext -> idle @ ~1850ms) AND owns the finalize callback
-      // that advances the drill (one clock, not two). On RM the
-      // coordinator fires onFinalize immediately.
+      // P3-B (2026-07-28; flight retired 2026-08-01): commit the
+      // session entry + schedule the finalize callback. Coordinator
+      // owns the one-clock timer (FINALIZE_DELAY = 1350ms) that
+      // advances the drill or closes the modal. On RM the coordinator
+      // fires onFinalize immediately.
       const totals = feeNoDollar
         ? { units: feeServedTotals.entered, revenue: 0 }
         : { units: summary.meals, revenue: summary.revenue };
@@ -1128,12 +1129,13 @@ function DayEntryV2({
   const showDayNav = onPrev || onNext;
 
   // P3-B (2026-07-28): the justSaved success screen is RETIRED. The
-  // Handoff sequence (coordinator + HandoffLayer) replaces both the
-  // toast and this screen with a transition. executeConfirm no longer
-  // calls setJustSaved(true); the state remains only for legacy
-  // no-service path fallback (setJustSaved(true) at :438 in
-  // executeMarkNoService). No-service still fires its own confirmation
-  // via the panel inline state per owner Ruling 5.
+  // coordinator's session commit + workspace-level tile flip + the
+  // finalize timer (advance / close) carry the confirmation.
+  // executeConfirm no longer calls setJustSaved(true); the state
+  // remains only for legacy no-service path fallback
+  // (setJustSaved(true) at :438 in executeMarkNoService). No-service
+  // still fires its own confirmation via the panel inline state per
+  // owner Ruling 5.
   if (justSaved) {
     return (
       <div className="sc-v2-entry sc-v2-entry--success" role="status" aria-live="polite">
@@ -1452,16 +1454,6 @@ function DayEntryV2({
           )}
         </aside>
       </div>
-
-      {/* P3-B (2026-07-28): confirmed pill. Renders only during the
-          Handoff sequence (phase >= 2). Absolute positioning inside
-          the actions row so its rect stays reliable for the flight
-          layer's source rect. The pill's <span> ref is registered
-          with the coordinator on mount so HandoffLayer can read
-          `getBoundingClientRect()` for the pillFly beat. Copy: "Confirmed"
-          on all shapes (fee vocab is already captured by the sequence's
-          totals hand-off). */}
-      <HandoffPill />
 
       {/* B3 (2026-07-24): pinned actions row per §8C. Desktop-only
           via CSS media query; mobile keeps its MobileBooksBar stickyAction
@@ -2043,41 +2035,6 @@ function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnt
           <button className="sc-btn sc-btn--primary" onClick={onConfirm}>Mark no service</button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// P3-B (2026-07-28): confirmed pill for the Handoff. Renders
-// exclusively during phase >= 2 (pillIn beat onward). Source ref
-// registered with the coordinator so HandoffLayer's fixed-position
-// clone reads its viewport rect for the pillFly beat. Positioned
-// absolutely relative to .sc-v2-entry so it does not perturb the
-// actions row layout.
-function HandoffPill() {
-  const handoff = useHandoffSafe();
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!ref.current) return undefined;
-    return handoff.registerPillSource(ref.current);
-  }, [handoff]);
-  const active = handoff.phase >= 2;
-  if (!active) return null;
-  const flying = handoff.phase >= 3;
-  return (
-    <div
-      ref={ref}
-      className={`sc-v2-entry-pill sc-ar sc-ar--success${flying ? " sc-v2-entry-pill--flying" : ""}`}
-      role="status"
-      aria-live="polite"
-    >
-      <span className="sc-ar-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      </span>
-      <span className="sc-ar-content">
-        <span className="sc-ar-title">Confirmed</span>
-      </span>
     </div>
   );
 }

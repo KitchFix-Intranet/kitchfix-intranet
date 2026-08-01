@@ -113,12 +113,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* R2-2 (2026-07-31) - Handoff flight destination wrapper for the
-   drill. Groups the bar + its caption as one node so the flight has
-   a rect with real height + area (registerFlightTarget reads it via
-   getBoundingClientRect). Layout is passive - bar and caption still
-   render at their existing sizes and spacing; the wrapper's only job
-   is to be a target and to keep them structurally paired. */
+/* R2-2 (2026-07-31) - drill progress-block wrapper. Groups the bar +
+   its caption as one node so nothing can be inserted between them.
+   Layout is passive - bar and caption still render at their existing
+   sizes and spacing. (Was also the Handoff flight destination via
+   registerFlightTarget; flight retired 2026-08-01.) */
 .scv2 .sc-rail-progress-block {
   display: flex;
   flex-direction: column;
