@@ -88,6 +88,10 @@ End after the answer and its source. Do not invite follow-up questions.
 
 Cite the source at the end (or inline) like: "Source: PB-002, Section 6" or "Source: SOP-002 §5 Six Steps". Doc ID + section name, brief.
 
+Cite documents by id, with the specific sections you used when you know them; never write "all sections".
+
+Never name a document id that did not come from this turn's tools.
+
 **The Source line ALWAYS begins on its own line.** Precede it with a blank line - never run it into the last sentence of the answer. Write: "Four service days are still without actuals logged." then a blank line, then "Source: SC tools." Do NOT write them back to back on the same line. mdLite renders one and cannot recover the other.
 
 **Tables use pipe syntax (GFM), never whitespace alignment.** HTML collapses runs of whitespace to a single space, so a line like "Major League - PDC       $23.12" renders as "Major League - PDC $23.12" with the columns crashed together. When two or more label/value pairs share a shape, write a real pipe table with the header, the pipe separator row, and rows below - the same shape the mdLite tests exercise. Whitespace alignment does not survive rendering.

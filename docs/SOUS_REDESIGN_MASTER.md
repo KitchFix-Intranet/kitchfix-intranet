@@ -205,6 +205,22 @@ Landed in nine logical commits, one per prompt Part:
 
 ---
 
+**Round 3 calibration mini-round 2026-08-01 (`fix/sous-calibration`) - DRAFT.** Follows R3-05 from the live review - two reproduced mis-grading mechanisms that plausibly explained a large slice of the partial-rate. No UI, no tool changes, no memory scope; grader precedence + one prompt line + tool-budget rider + two eval fixtures.
+
+- **R3-05(a) data-path fix (agent.js `hadSuccessfulDataToolCall`).** The signal previously used a shape whitelist (`r.total>0 || r.matches[] || r.accounts[] || r.team[]`); it missed `spend_top_vendors`' `top_vendors[]` return so "how many vendors do we have?" graded PARTIAL despite a successful spend_top_vendors call. Broadened to any successful data-tool call (`!step.tool_error && !r.error`). Grader Rule 1 (Kevin, calibration prompt): if the answer's citations are data-tool references only AND `hadSuccessfulDataToolCall` then `grounded_without_sources` must not fire - now satisfied by construction. Named-open gap (data signal is call-succeeded, not answer-follows-from-rows) is a Phase E content-check requirement, out of scope here.
+
+- **R3-05(b) doc-path stance (grader Rule 2 + Part 4 prompt line).** A cite with no section or a whole-doc phrase ("all sections") validates at the doc-id level - `phantom_citation` fires only when the doc id itself was not retrieved. Rule 2 already holds in the current code (`cited` is doc-ids per `CITATION_RE`, validated against `retrievedIds`; no section-level validation exists to weaken). The prose habit "Source: FORM-XXX, all sections" was itself the model's stylistic tic; Part 4 appends one sanctioned prompt line telling the model to cite specific sections when known and never write "all sections". Rule 3 (genuinely phantom cites still flag) is preserved unchanged.
+
+- **R3-05 rider - tool budget 8 → 14** (Kevin ruling). A real production question ("breakfast per account in Feb") fanned out across 11 accounts and hit `TOOL_BUDGET = 8` after 6 tool calls, leaving 5 accounts unanswered. Blast-radius probe over the last 30 days: 3 of 101 asks (3.0%) saturated the old budget. Bumped to `TOOL_BUDGET = 14`. Stopgap; the real fix is a batch tool (Phase F candidate: `sc_month_summary` as an all-accounts one-call tool).
+
+- **Part 2 eval fixtures** added to `scripts/sousai-agent-test.mjs`: case7_vendor_count (R3-05a) and case9_form004_wholedoc (R3-05b), each verbatim from the live-review reproductions. Both graders check `result.flags` for absence of the offending downgrade. Full harness output pasted in the PR body.
+
+- **Blast-radius survey** (Part 3, read-only): the two R3-05 mechanisms account for **21 of 27 partials (77.8%)** over the last 30 days. Breakdown table in the PR body.
+
+**Fences honored:** No UI. No tool changes. No memory scope. No spec edits (v1.1 rides PR B). Decline logic + money/safety rules untouched. Named-open gap (data-tool answer-follows-from-rows content check) stays open for Phase E.
+
+---
+
 ## Sous mark system
 
 The mark spec is canonical in `docs/SOUS_MARK_SPEC.md` (committed alongside this PR). Reference implementation for motion + composition sits in the polish-pass mock bundle (`sous-mark-final.html`, `sous-pra-update-mocks.html`) - spec wins on any disagreement. Component + CSS lands in `src/app/sous/SousMark.js` and the `.sa-mark-*` block of `src/app/sous/sous.css`. See PR A polish pass delivery log entry above for how each surface landed.

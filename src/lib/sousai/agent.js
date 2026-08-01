@@ -36,7 +36,13 @@ import { getToolDefinitions, getTool } from "./tools/registry.js";
 
 // ── Tunables ─────────────────────────────────────────────────────────────────
 export const SOUSAI_AGENT_MODEL = "claude-sonnet-4-6";
-export const TOOL_BUDGET = 8;
+// R3-05 rider (Kevin ruling): raised from 8 to 14 to comfortably cover a
+// full account fan-out (an 11-account "breakfast per account" ask hit the
+// old 8 budget after 6 tool calls, leaving 5 accounts unanswered). This is
+// a stopgap - the real fix is a batch tool (Phase F candidate: wire
+// `sc_month_summary` as an all-accounts one-call tool). No loop
+// restructure, no parallelism; just the one constant.
+export const TOOL_BUDGET = 14;
 export const MAX_OUTPUT_TOKENS = 1024;
 
 // ── Tool dispatch ────────────────────────────────────────────────────────────
@@ -56,6 +62,13 @@ const REASON_RE = /\[\[REASON:\s*([^\]]+?)\]\]/i;
 // Doc-id citation shape: PB-002, SOP-002, FORM-003, POL-006, STD-004, etc.
 // Word-boundary bracketed to avoid grabbing partial matches inside other tokens.
 const CITATION_RE = /\b([A-Z]{2,6})-([0-9]{3})\b/g;
+// A citation-surface line - "Source: ...", "**Source:** ...", optionally
+// bulleted. R3-05(b) grader refinement (Kevin ruling): phantom_citation
+// evaluates ids on the citation surface ONLY; doc ids inside quoted
+// document content are content, not citations. A FORM template that
+// references POL-XXX in its body no longer triggers phantom_citation just
+// because the model quotes the template verbatim.
+const SOURCE_LINE_RE = /^\s*(?:[-*]\s+)?(?:\*\*)?source(?:s)?(?:\*\*)?\s*:/i;
 
 function parseAnswer(rawText) {
   const statusMatch = rawText.match(STATUS_RE);
@@ -67,9 +80,13 @@ function parseAnswer(rawText) {
     .replace(REASON_RE, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  // Only pull doc ids that appear on a Source line. IDs anywhere else in the
+  // answer body are treated as prose/content, not citations.
   const cited = new Set();
-  for (const m of cleaned.matchAll(CITATION_RE)) {
-    cited.add(`${m[1]}-${m[2]}`);
+  for (const line of cleaned.split("\n")) {
+    if (SOURCE_LINE_RE.test(line)) {
+      for (const m of line.matchAll(CITATION_RE)) cited.add(`${m[1]}-${m[2]}`);
+    }
   }
   return { cleaned, status, decline_reason, cited: [...cited] };
 }
@@ -296,11 +313,20 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
   const validSources = cited.filter((id) => retrievedIds.has(id));
   const phantomCitations = cited.filter((id) => !retrievedIds.has(id));
 
-  // Data-tool grounding path: a data tool that returned non-empty results
-  // grounds the answer even when the model cites the data source in prose
-  // (Source: contacts, loaded 2026-05-27) rather than a doc-id shape. Without
-  // this signal, every data-tool answer downgrades to partial for lack of
-  // doc citations - the trap Phase F PR 1 uncovered during re-cert.
+  // Data-tool grounding path: a successful data-tool call grounds the answer
+  // even when the model cites the data source in prose ("Source: contacts,
+  // loaded 2026-05-27") rather than a doc-id shape. Without this signal,
+  // every data-tool answer downgrades to partial for lack of doc citations -
+  // the trap Phase F PR 1 uncovered during re-cert.
+  //
+  // R3-05(a) live-review fix: this previously used a shape whitelist
+  // (`r.total>0 || r.matches[] || r.accounts[] || r.team[]`) that missed
+  // new tool return shapes as they landed - `spend_top_vendors` returns
+  // `top_vendors[]` + `totals.total_vendors_canonical` and neither matched,
+  // so "how many vendors do we have?" graded PARTIAL despite a successful
+  // spend_top_vendors call. Broadened to any-successful-data-call; the
+  // named-open gap (data signal is call-succeeded, not answer-follows-from-
+  // rows) is a Phase E content-check requirement, out of scope here.
   const hadSuccessfulDataToolCall = trajectory.some((step) => {
     if (!step.tool) return false;
     const t = getTool(step.tool);
@@ -308,11 +334,7 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
     if (step.tool_error) return false;
     const r = step.rawResult;
     if (!r || r.error) return false;
-    if (typeof r.total === "number") return r.total > 0;
-    if (Array.isArray(r?.matches)) return r.matches.length > 0;
-    if (Array.isArray(r?.accounts)) return r.accounts.length > 0;
-    if (Array.isArray(r?.team)) return r.team.length > 0;
-    return false;
+    return true;
   });
 
   // Truncation handling. When the model hits max_tokens the stream ends
