@@ -1,0 +1,128 @@
+// PROBE 1 for R3-2 gate ruling (2026-08-01, read-only).
+//
+// Q: does the claim "on non-fee accounts, gsProjected.meals > 0 implies
+//    gsProjected.revenue > 0" hold across the current sc_daily_revenue?
+//
+// If yes -> the meals-based gate is byte-identical to the revenue-based
+// gate on per-meal accounts. Per-meal behavior unchanged; measured, not
+// assumed.
+//
+// If no -> at least one non-fee (account, day, group) exists whose group
+// summary would flip from "buttons hidden" (revenue = 0) to "buttons
+// shown" (meals > 0) under the new gate. That is a per-meal behavior
+// change to declare, not a "claim broken."
+//
+// Non-fee = accounts.billing_model != 'flat_fee' OR has_homestand_schedule
+// = true (matches the isFeeNoDollarAccount predicate at route.js:237
+// inverted). fee = flat_fee AND !has_homestand_schedule.
+//
+// Season window: matches the current playing season (2026-01-01+). The
+// view holds current + prior periods, but STL - FL only entered v2 in
+// July; the older data is per-meal-shape era and irrelevant to whether
+// today's per-meal gate flips.
+
+import { createClient } from "@supabase/supabase-js";
+
+const supa = createClient(
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+const WINDOW_START = "2026-01-01";
+
+// Which accounts are fee-no-dollar (excluded from the probe)?
+const { data: accts, error: acctErr } = await supa
+  .from("accounts")
+  .select("team_key, billing_model, has_homestand_schedule");
+if (acctErr) { console.error(acctErr.message); process.exit(1); }
+
+const feeSet = new Set(
+  accts
+    .filter((a) => a.billing_model === "flat_fee" && !a.has_homestand_schedule)
+    .map((a) => a.team_key)
+);
+console.log(`fee-no-dollar accounts (excluded): ${[...feeSet].join(", ") || "(none)"}`);
+
+// Fetch all rows with projected_count > 0 on non-fee accounts.
+// Paginate to dodge the 1000-row cap.
+async function fetchAll(query) {
+  const rows = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await query.range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return rows;
+}
+
+// The gate lives in GroupBlock, which only renders for ENTRY_V2_ACCOUNTS
+// (v2 entry modal). MLB fee accounts use v1 close-out and never reach
+// GroupBlock, so gate-flip sites on those accounts are irrelevant to the
+// ruling. Scope to ENTRY_V2 non-fee (STL - FL already excluded as fee).
+const ENTRY_V2 = new Set([
+  "CIN - AZ", "TXR - AZ", "TBR - FL", "TBJ - FL", "CIN - KY", "TBJ - NY", "STL - FL",
+]);
+const nonFeeKeys = accts
+  .filter((a) => !(a.billing_model === "flat_fee" && !a.has_homestand_schedule))
+  .filter((a) => ENTRY_V2.has(a.team_key))
+  .map((a) => a.team_key);
+
+console.log(`non-fee ENTRY_V2 accounts scanned: ${nonFeeKeys.length}`);
+console.log(`  keys: ${nonFeeKeys.join(", ")}`);
+
+let allRows = [];
+for (const key of nonFeeKeys) {
+  const rows = await fetchAll(
+    supa
+      .from("sc_daily_revenue")
+      .select("account_key, service_date, group_name, projected_count, projected_revenue")
+      .eq("account_key", key)
+      .gte("service_date", WINDOW_START)
+      .gt("projected_count", 0)
+  );
+  allRows.push(...rows);
+}
+console.log(`non-fee rows with projected_count > 0 since ${WINDOW_START}: ${allRows.length}`);
+
+// Group by (account_key, service_date, group_name) and sum both columns.
+const buckets = new Map();
+for (const r of allRows) {
+  const k = `${r.account_key}|${r.service_date}|${r.group_name}`;
+  if (!buckets.has(k)) buckets.set(k, { account: r.account_key, date: r.service_date, group: r.group_name, meals: 0, revenue: 0, services: 0 });
+  const b = buckets.get(k);
+  b.meals += Number(r.projected_count) || 0;
+  b.revenue += Number(r.projected_revenue) || 0;
+  b.services += 1;
+}
+
+// A group where meals > 0 AND revenue = 0 is a gate-flip site.
+const flips = [...buckets.values()].filter((b) => b.meals > 0 && b.revenue === 0);
+console.log(`\n=== gate-flip sites (per-meal groups where meals-gate opens but revenue-gate would not) ===`);
+console.log(`count: ${flips.length}`);
+
+if (flips.length === 0) {
+  console.log("\nCLAIM HOLDS: on non-fee accounts, projected meals > 0 implies projected revenue > 0.");
+  console.log("Per-meal behavior byte-identical under the meals-based gate.");
+} else {
+  console.log("\nCLAIM BROKEN: gate-flip sites found on non-fee accounts. Per-meal behavior change.");
+  console.log(`\nfirst 20 sites (out of ${flips.length}):`);
+  for (const f of flips.slice(0, 20)) {
+    console.log(`  ${f.account.padEnd(15)} ${f.date}  ${f.group.padEnd(30)} meals=${f.meals}  services=${f.services}`);
+  }
+  const byAccount = new Map();
+  for (const f of flips) byAccount.set(f.account, (byAccount.get(f.account) || 0) + 1);
+  console.log(`\nby account:`);
+  for (const [k, n] of [...byAccount.entries()].sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${k.padEnd(15)} ${n}`);
+  }
+  const byGroup = new Map();
+  for (const f of flips) byGroup.set(f.group, (byGroup.get(f.group) || 0) + 1);
+  console.log(`\nby group name (top 10):`);
+  for (const [k, n] of [...byGroup.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+    console.log(`  ${k.padEnd(35)} ${n}`);
+  }
+}
