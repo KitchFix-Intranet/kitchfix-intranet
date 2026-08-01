@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
 import { isScAdmin } from "@/lib/admin";
+import { assertDaysUnlockedForWrite } from "@/lib/scPeriodLock";
 import {
   loadAccountConfig,
   loadAllAccountsConfig,
@@ -836,6 +837,14 @@ export async function POST(request) {
           { status: 400 }
         );
       }
+      // sc-25 (2026-08-01): period-lock gate. SLT (SC_ADMIN_EMAILS)
+      // bypasses via the helper. Refusal returns 403 with a
+      // machine-readable code so step-2 UI can surface a specific
+      // message rather than "something went wrong".
+      const lockRefusal = await assertDaysUnlockedForWrite(accountKey, [date], email);
+      if (lockRefusal) {
+        return NextResponse.json({ success: false, ...lockRefusal }, { status: 403 });
+      }
       // entries: [{ colIndex: '<service-uuid>', value: number }]
       // Translate to the orchestrator's shape.
       // P0-1 NOTE: future UI PR should filter to touched-only entries
@@ -952,6 +961,63 @@ export async function POST(request) {
       return NextResponse.json(result);
     }
 
+    // ── sc-reset-day: undo a day's actuals ──
+    // sc-25 (2026-08-01). Deletes that account's actuals for that
+    // date, appends an authored note entry to the ledger recording
+    // the reset. Refuses when the day is locked unless the caller
+    // is SLT (SC_ADMIN_EMAILS via the shared helper).
+    //
+    // Design notes:
+    //   - DELETE fires the BEFORE DELETE audit trigger (sc-25 migration),
+    //     writing a history row per deleted actual with change_type =
+    //     'delete'. That's the receipt.
+    //   - The companion note is not optional. sc_day_note_entries has
+    //     no DELETE grant, so a mark-no-service audit note ("Service
+    //     cancelled - marked no service") survives a reset. Without a
+    //     companion note the ledger reads "marked no service" on a
+    //     day that renders as untouched. With one, it reads honestly:
+    //     cancelled, then reset, by name, in order.
+    //   - sc_day_metadata untouched. The day still lives in its
+    //     period; the reset only clears what the operator entered.
+    //
+    // Note wording: PLACEHOLDER pending owner ruling. Copy is
+    // operator-facing on an audit trail and owner explicitly wants
+    // to sign off before step 2 ships.
+    if (action === "sc-reset-day") {
+      const { accountKey, date } = body;
+      if (!accountKey || !date) {
+        return NextResponse.json(
+          { success: false, error: "accountKey and date required" },
+          { status: 400 }
+        );
+      }
+      const resetLockRefusal = await assertDaysUnlockedForWrite(accountKey, [date], email);
+      if (resetLockRefusal) {
+        return NextResponse.json({ success: false, ...resetLockRefusal }, { status: 403 });
+      }
+      const supa = getServiceClient();
+      // Fire the DELETE. The BEFORE DELETE trigger (sc-25) writes
+      // one sc_daily_actuals_history row per row deleted, with
+      // change_type = 'delete', so the receipt lands per-service.
+      const { error: delErr } = await supa
+        .from("sc_daily_actuals")
+        .delete()
+        .eq("account_key", accountKey)
+        .eq("service_date", date);
+      if (delErr) {
+        return NextResponse.json(
+          { success: false, error: `reset failed: ${delErr.message}` },
+          { status: 500 }
+        );
+      }
+      // Append the companion note. Placeholder wording; owner
+      // rules step-2 copy.
+      const author = session.user?.name || session.user?.email || "";
+      const noteText = "Day reset - all counts cleared";
+      const noteRes = await addDayNoteEntry(accountKey, date, noteText, author);
+      return NextResponse.json({ success: true, ...noteRes });
+    }
+
     // ── sc-bulk-submit: save actuals for multiple days ──
     if (action === "sc-bulk-submit") {
       const { accountKey, entries } = body;
@@ -960,6 +1026,15 @@ export async function POST(request) {
           { success: false, error: "Missing required fields" },
           { status: 400 }
         );
+      }
+      // sc-25 (2026-08-01): period-lock gate. Every date in the
+      // batch is checked; one locked date fails the whole batch to
+      // stay consistent with the existing all-or-nothing contract
+      // enforced at :993-1002 for value coercion.
+      const bulkDates = entries.map((e) => e.date);
+      const bulkLockRefusal = await assertDaysUnlockedForWrite(accountKey, bulkDates, email);
+      if (bulkLockRefusal) {
+        return NextResponse.json({ success: false, ...bulkLockRefusal }, { status: 403 });
       }
       // entries: [{ colIndex: '<service-uuid>', date: 'YYYY-MM-DD', value: number }]
       // P2 (item 2) fence, v1: rideNote is NOT accepted here. A single
@@ -1681,6 +1756,17 @@ export async function POST(request) {
       if (scheduleRes.error) throw new Error(`schedule read: ${scheduleRes.error.message}`);
       const gameDates = scheduleRes.data.map((r) => r.service_date);
       const gameDateSet = new Set(gameDates);
+
+      // sc-25 (2026-08-01): period-lock gate. Closeout writes actuals
+      // for every gameDate (both non-exception with projections and
+      // exception with 0); check them all. SLT bypasses via the
+      // helper. Placed after gameDates is loaded but before
+      // missingProjections + actualsRows assembly so the refusal
+      // returns fast without touching downstream state.
+      const closeoutLockRefusal = await assertDaysUnlockedForWrite(accountKey, gameDates, email);
+      if (closeoutLockRefusal) {
+        return NextResponse.json({ success: false, ...closeoutLockRefusal }, { status: 403 });
+      }
 
       const exceptionSet = new Set(Array.isArray(exceptions) ? exceptions : []);
       const badExceptions = [...exceptionSet].filter((d) => !gameDateSet.has(d));

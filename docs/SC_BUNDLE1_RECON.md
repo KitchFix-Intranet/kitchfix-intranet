@@ -257,6 +257,16 @@ What does NOT re-derive (immutable downstream):
 
 ### B.4 The "closed day" concept
 
+**UPDATE 2026-08-01**: the "Close Day button" that this section was written to scope was REMOVED
+from the backlog. Its scope split into two shipped features:
+- Zeros-writer half: **Mark day as no service** (`sc-submit-day` with `noService: true` writes
+  actuals=0 across in-service services + an audit note); live since #365-#367.
+- Lock half: **Period lock** (sc-25 migration + `assertDaysUnlockedForWrite` helper; server-side
+  refusal on every write path, SLT override via `SC_ADMIN_EMAILS`, unknown days fail safe).
+
+The recon below stands as historical context - it correctly identified that no formal Close Day
+mechanic existed at bundle-1 time. The reason none was needed later is above.
+
 **There is no formal Close Day mechanic in the data or code today.** Grep for "closed" / "Close Day" / "lock" / "closed_at" in src/app/service-calendar and src/lib/dataStore:
 
 - `LOCK_DAYS = 7` constant (`serviceCalendar.js:73`) - drives the `isLocked` boolean returned with each day. Used only for status classification ("overdue" = past + locked, no actuals). **Locked does NOT mean closed/invoiced.** It means "operator entry window has passed."

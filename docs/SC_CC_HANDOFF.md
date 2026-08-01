@@ -498,7 +498,7 @@ The route fetches the homestand map for `flat_fee` accounts only and includes it
 ## 11. What's left (per Kevin's working dashboard)
 
 From `docs/PROJECT_DASHBOARD.md` "next step" list:
-- **Close Day button** - one-tap zeros writer for cancelled service days. Not yet built.
+- ~~**Close Day button**~~ - REMOVED 2026-08-01. The "one-tap zeros writer for cancelled service days" is the shipped **Mark day as no service** (via `sc-submit-day` with `noService: true` + audit note). The lock half is the shipped **period lock** (sc-25 + `assertDaysUnlockedForWrite`). Nothing left in this item.
 - **Full design review of per-meal month/day views** per `docs/DESIGN_REVIEW_PERSONA.md`.
 - **Dev gate expansion to operators** - account by account, CIN-AZ first.
 - **Re-import right before cutover** to catch Sheets entries during testing.
@@ -511,7 +511,7 @@ From `docs/PROJECT_DASHBOARD.md` "next step" list:
 1. **Banner UX polish (one PR).** The banner I added is one horizontal sentence with pipe separators. Kevin's review mentioned breaking it into proper KPI tiles. Doable in a follow-up PR.
 2. **Per-meal future-month opacity decay.** PDC accounts show Aug-Dec as a uniform sea of light green. A `decay` based on distance-from-today would re-introduce hierarchy. Quick CSS calc.
 3. **Month view + day detail design review.** Not yet started. Kevin called this out explicitly as next.
-4. **Close Day button.** UX is small but the data-layer side needs thought - is it a per-day flag on a new table, or just a `sc-submit-day` with all zeros + a note? Read `serviceCalendar.js` doc-comments at lines 765-799 for saveActuals semantics first.
+4. ~~**Close Day button.**~~ REMOVED 2026-08-01. The zeros half shipped as mark-no-service; the lock half shipped as sc-25 period lock. Neither variant of the data-layer question (per-day flag OR sc-submit-day all-zeros) was needed - the split cleaner than either shape suggested.
 5. **Admin command center** - the user keeps calling it "OPD Command rebuild" but I think they want a separate SC admin page too. Confirm scope before scaffolding.
 
 ---
@@ -548,7 +548,7 @@ To pick up where I left off, the smallest next step that adds real value is one 
 - **Future-month opacity decay on PDC** (single-component change)
 - **Month view design review** (read-only, no code)
 
-The bigger arcs (Close Day button, Admin Dashboard, Fee schedule table for KPI dashboard) all need design scoping with Kevin first.
+The bigger arcs (Admin Dashboard, Fee schedule table for KPI dashboard) all need design scoping with Kevin first. Close Day button was removed 2026-08-01 - see :501 for the split into mark-no-service + sc-25 period lock.
 
 ---
 

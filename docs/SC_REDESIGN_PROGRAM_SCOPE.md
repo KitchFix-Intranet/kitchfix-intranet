@@ -347,8 +347,10 @@ Order: W0 -> W1 -> W2 -> W3 -> W4 -> W5 -> W6 -> W7(6 sub-phases) -> W8 -> W9.
 PR count: W0:1 · W1:1-2 · W2:1 · W3:1-2 · W4:1 · W5:1-2 · W6:1-2 · W7:6-7 · W8:2-3 · W9:1-2 =
 roughly 17-22 PRs. Natural pause points after W2 (ribbon shippable alone), W5 (all PDC read
 surfaces), W7 (entry). Recommended roadmap slot: after Stage 5 finance CSVs (short, finance-
-unblocking) and before Admin Dashboard / Fun Money / Close Day - those three should be BUILT on the
-v2 system rather than restyled after. OPD workstream unaffected and parallel.
+unblocking) and before Admin Dashboard / Fun Money - those two should be BUILT on the
+v2 system rather than restyled after. (Close Day was removed from the backlog 2026-08-01 - the
+scope shipped as mark-no-service + sc-25 period lock, no separate feature needed.) OPD workstream
+unaffected and parallel.
 
 ## 16. Decisions for Kevin (the green-light gate)
 
@@ -360,7 +362,7 @@ v2 system rather than restyled after. OPD workstream unaffected and parallel.
 4. Ribbon replaces the hero on SC (admin lock + as-of rehomed) - confirm; and is the ribbon pattern
    SC-only for now (recommended) or a future site convention to note in docs?
 5. Site-lead rollout holds until W9 so new users only ever meet v2 - confirm.
-6. Roadmap slot: after Stage 5, before Admin Dashboard / Fun Money / Close Day - confirm or reorder.
+6. Roadmap slot: after Stage 5, before Admin Dashboard / Fun Money - confirm or reorder. (Close Day removed 2026-08-01 - shipped as mark-no-service + sc-25 period lock.)
 
 ## 17. Decision log (2026-07-17)
 
@@ -400,8 +402,9 @@ supersedes decision-log entry #5 on the timing of the site-lead flip.
    set, which feeds a Render C design pass, which feeds the build sequence for the remaining
    deltas. Structure mirrors the W0 audit shape.
 2. **Engine shakedown + feature tier.** Stress the engine on realistic loads under the admin
-   audience; land the deferred feature tier (Admin Dashboard, Fun Money Tracker, Close Day
-   button; F4 notifications when scoped) and any deltas Render C surfaces.
+   audience; land the deferred feature tier (Admin Dashboard, Fun Money Tracker; F4 notifications
+   when scoped) and any deltas Render C surfaces. (Close Day removed from the tier 2026-08-01 -
+   the scope shipped as mark-no-service + sc-25 period lock.)
 3. **LAUNCH-1: reseed with actuals.** Named milestone, scoped later. Load-bearing treatment when
    scoped: backup-first, transactional, verified against source before the gate opens. Nothing
    else in this list matters if the reseed isn't clean.
