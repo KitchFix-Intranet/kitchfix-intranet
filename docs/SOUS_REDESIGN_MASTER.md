@@ -1,10 +1,10 @@
 # Sous - Redesign Scope & Implementation Master
 
-**Version:** 1.3
-**Date:** 2026-07-31
+**Version:** 1.4
+**Date:** 2026-08-01
 **Owner:** Kevin Fietek
 **Audience for the release:** SLT and Regional Directors
-**Status:** open questions ruled 2026-07-31. PR 1 issued.
+**Status:** PR A polish pass issued (`fix/sous-pra-v1-polish`). U1-U12 and I1-I4 ratified 2026-08-01 and recorded in the delivery log below.
 **Location:** `docs/SOUS_REDESIGN_MASTER.md` - **this document is the running tracker for the redesign and is updated by every PR in the programme.**
 
 ---
@@ -92,6 +92,59 @@ Reference's own known divergences (text glyphs, hardcoded counts, `?v=` switcher
 
 **Carried as debt (not fixed here):**
 - The inline `<svg>` star mark and the `×` close glyph in the panel band header at `PlaybookClient.js:658-660` and `:672` are pre-existing text/glyph patterns this PR moved but did not author. Left in place; converting them to Lucide is a follow-up polish PR.
+
+**PR A polish pass 2026-08-01 (`fix/sous-pra-v1-polish`) - DRAFT, pending Chat's diff review + smoke**
+
+Ratified decisions U1-U12 and panel items I1-I4 recorded here; scope traces to `docs/SOUS_V1_CODE_REVIEW_2026-08-01.md`, the corrected v3 build prompt, `docs/SOUS_MARK_SPEC.md`, and the two reference HTMLs (mocks + mark-final) that shipped alongside.
+
+Landed in nine logical commits, one per prompt Part:
+
+- **Part 1 - fit and scale.** Height fit-floor 720 codified (U4). New md breakpoint 1024-1279 narrows the rail to 220px so the pane breathes (CODE-11 fix). Hero compresses to 84 under 800h. Answer-body tables drop `th nowrap` (CODE-10), mdLite tags numeric columns with `data-num` so th+td right-align + tabular-nums; zebra `:nth-child(2n)` on tbody. `docs/DESIGN_SYSTEM_REFERENCE.md` gains a Height fit-floor paragraph in Browser & device matrix.
+
+- **Part 2 - landing V2 simplified briefing (U1).** Four-card grid replaced by one elevated briefing card carrying four domain rows (book/users/calendar/receipt in module accent, count chip, one example chip right-aligned per row) + limits copy in the card's footer. Greeting is U7 verbatim (`Hello {firstName} - ask me about anything the intranet knows.`). Limits is U6 verbatim (`Not yet: no wages, no reimbursements, no P&L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong.`). Old `.sa-domain-*` CSS + DomainCard component deleted. Section 3.1's original four-card scope is superseded per the note inserted above.
+
+- **Part 3 - elevation, treatment A, composer (U2, U3, U10).** `--elev-1/2/3` tokens land scoped via `:where(.sa-page, .pb-sous-panel)`. Answer card gains `--elev-2` + `#EEF2F6` hairline (U10 - question stays above the card). Composer 52px, text vertically centered, `--elev-2` at rest, Flame focus ring (`elev-2 + 3px accent-sous-line`), send 36px with real disabled state (grey-200 bg, grey-400 glyph). Composer clears on successful submit; preserved on error; double-submit stays guarded (CODE-04 fix).
+
+- **Part 4 - mark system.** New `src/app/sous/SousMark.js` per `docs/SOUS_MARK_SPEC.md`: two colorways (1C display / 1A small) with 24px breakpoint, six states (rest / turn / write / settled / part / off), wake choreography on 1C mount, `animationiteration` handoff so `turn -> settled` finishes the current leg before the glint fires, attend-on-composer-focus via `:has()`, reduced-motion suppresses everything to settled frames. Deployments: hero 34px 1C white-on-navy with wake, panel band 16px 1A on currentColor, status companion 19px 1A inside `.sa-answer-head` (state derives from phase+status: streaming→turn, grounded→settled+glint, partial→part, declined/error→off), top nav 24-basis 1A rendered at 18px on currentColor with a scoped active-color rule (`.kf-topnav-link.active .sa-navmark { color: var(--accent-sous) }`), favicon at `src/app/sous/icon.svg`. Duration formatter `formatMs` (I3): `≥1000ms → "N.Ns"`, `<1000ms → "Nms"`, consumed by both the tool trail and the provenance meta row. `docs/SOUS_MARK_SPEC.md` committed under `docs/`. **Judgment call:** spec §8's 64px first-run mark deployment has no home in the V2 briefing landing; recorded in dispositions below.
+
+- **Part 5 - renderer, envelope, honesty.** mdLite extends: `##`→`<h3>`, `###`→`<h4>`, `---`→`<hr>` (escape-first order preserved). Dead `h2, h3` selector at `sous.css:567` replaced with the actually-emitted tags. `agent.js` now returns `flags`; `route.js` done envelope adds `truncated` + `flags` (CODE-05). Reason chip renders below the PARTIAL pill with U9 mapping (`truncated`→"Answer was cut short", `phantom_citation`→"A citation could not be verified", `grounded_without_sources`→"Sources could not be confirmed", else→"Some sections could not be verified"). ERROR treatment (CODE-03): `role="alert"` on a distinct `.sa-answer-body--error`, `#DC2626` pill + top rail, "Try again" button that resubmits the preserved question. Live region narrowed (CODE-09): `aria-live="polite"` moved from the whole `.sa-turn` article to `.sa-answer-body`; tool trail gets its own `role="status"`. One clock (DR-02 + CODE-06): `FreshnessChip` is a client component reading the browser's local time (title carries the full local timestamp); server-side `nowClockLabel` deleted. `src/lib/sousai/tools/_freshness.js` exports `pgLiveNow()` returning `"PG live as of h:mm AM ZONE"`; all 16 raw-ISO `loaded` emissions across 5 tool files swapped to the helper. Two sanctioned system-prompt lines added verbatim to the answer-style section: `Never echo the loaded or as-of value from tool payloads verbatim; state freshness only as "PG live" plus a human date if needed.` and `End after the answer and its source. Do not invite follow-up questions.`
+
+- **Part 6 - vendor count, one definition (code-only).** Pre-flight probe found all four target aliases (Cozzini Bros/Brothers → COZ-744, Freshpoint → FRE-448, Samuels Seafoos → SAM-902) already exist in `vendor_aliases` and every target row in `ai_line_items` resolves via `vendor_id` (pr-8-1's SET NOT NULL FK). No migration written. `spend_top_vendors` aggregates by `vendor_id` (already alias-resolved at the DB layer), joins `vendors` for the canonical name, emits `totals.total_vendors_canonical`. New export `countYtdCanonicalVendors()` is the shared count path; `page.js` `loadDomainCounts()` calls it for the first-run Spend chip. **[ran]** parity probe: chip 38, tool 38, PASS. Prior 41 chip counted every canonical vendor regardless of YTD activity; 42 tool was raw `vendor_name` distinct inflated by duplicate spellings. **Judgment call:** the original review's DR-04 orphan finding was a false negative - the probe queried `.select("alias")` when the column is `alias_text`; re-verify clause in the polish prompt caught it. Logged for future review discipline.
+
+- **Part 7 - panel parity + I1 + I2.** Most Parts 3-6 apply to the panel transitively via `SousSurface`. Explicit adds: `.pb-sous-panel` box-shadow → `var(--elev-3, <fallback>)` picking up the token from `:where(.sa-page, .pb-sous-panel)`. **I1 (empty state):** new `.pb-sous-empty` block between the band header and `SousSurface` renders in two modes. With docContext: three doc-scoped starters (`Summarize this doc` / `What changed in the latest version?` / `Who does this apply to?`). Without: capability line + four V2 domain chips (same `DOMAIN_CARD_EXAMPLES` the surface's briefing rows read via `src/app/sous/examples.js` - single source). Both modes carry the U6 limits compact. Chip click seeds the composer via a new local `prefill` state that hydrates from the `initialPrefill` prop (chip clicks work without remounting `SousSurface`). Suppressed when the doc is not-live (the notlive block owns that slot). **I2 (source titles):** `route.js` done envelope hydrates `sources: [docId]` to `[{docId, title}]` via a single batched `documents` SELECT scoped to the emitted ids; missing rows fall through to `title: null` (id-chip alone). `SousSurface` normalises both shapes so the legacy bare-string shape still renders; title only shows when present and different from the id.
+
+- **Part 8 - sweep fixes.** CODE-01: five user-facing em-dashes in the Playbook host swept to hyphens (`PlaybookClient.js:1026, 1093 title, 1093 aria-label, 1151 title, 1151 aria-label` + `SlideOverReader.js:577, 584`). The remaining hits in those two files are inline JS/JSX comments, not user-facing per the prompt scope. CODE-02: `:focus-visible` block landing 2px `--accent-sous` outline + 2px offset on the seven previously-bare classes (`.sa-ask-send`, `.sa-action-btn`, `.sa-source-card`, `.sa-rail-item`, `.sa-feedback-tag`, `.sa-feedback-send`, `.sa-feedback-skip`). CODE-07: reduced-motion block broadened to drop transition on the seven transition-bearing classes explicitly (per-class selectors, not a wildcard, so no bleed into cross-module `:host` contexts). Provenance grammar already satisfied by the existing "cite the source at the end" rule + the two sanctioned Part 5 prompt lines + the client-side `FreshnessChip`.
+
+- **Part 9 - docs.** This delivery log entry. `docs/SOUS_V1_CODE_REVIEW_2026-08-01.md` committed under `docs/` per the polish prompt Gate. `docs/DESIGN_SYSTEM_REFERENCE.md` height fit-floor paragraph landed in Part 1 commit. `docs/SOUS_MARK_SPEC.md` landed in Part 4 commit. `docs/PROJECT_DASHBOARD.md` session entry appended.
+
+**CODE finding dispositions (from `SOUS_V1_CODE_REVIEW_2026-08-01`):**
+
+| CODE | Sev | Disposition |
+|---|---|---|
+| CODE-01 | P3 | Fixed in Part 8 |
+| CODE-02 | P1 | Fixed in Part 8 |
+| CODE-03 | P1 | Fixed in Part 5 |
+| CODE-04 | P1 | Fixed in Part 3 |
+| CODE-05 | P1 | Fixed in Part 5 |
+| CODE-06 | P1 | Fixed in Part 5 |
+| CODE-07 | P2 | Fixed in Part 8 |
+| CODE-08 | P2 | Fixed in Part 7 (I2) |
+| CODE-09 | P2 | Fixed in Part 5 |
+| CODE-10 | P2 | Fixed in Part 1 |
+| CODE-11 | P2 | Fixed in Part 1 |
+| CODE-12 | P3 | Fixed in Part 5 (dead selector replaced by real h3/h4/hr styles) |
+| CODE-13 | (informational) | Not a finding - noted so future sweeps don't "fix" the correctly-set `aria-hidden` |
+| CODE-14 | P3 | **Deferred.** Rail timezone label is a follow-up polish; the wall-clock signal today is close enough to accurate not to bite users |
+
+**Deferred:**
+- Spec §8's 64px first-run mark deployment has no surface in V2 briefing landing. The four active deployments (hero 34 / panel band 16 / status companion 19 / top nav 18 + favicon) all landed. Re-introduce if a first-run mark surface is added.
+- Original review's DR-04 "orphan" list was a false negative from a wrong probe column; corrected in Part 6. No further vendor-alias work needed.
+
+---
+
+## Sous mark system
+
+The mark spec is canonical in `docs/SOUS_MARK_SPEC.md` (committed alongside this PR). Reference implementation for motion + composition sits in the polish-pass mock bundle (`sous-mark-final.html`, `sous-pra-update-mocks.html`) - spec wins on any disagreement. Component + CSS lands in `src/app/sous/SousMark.js` and the `.sa-mark-*` block of `src/app/sous/sous.css`. Deployment table in spec §8 lists the five active surfaces (hero, panel band, status companion, top nav, favicon). See PR A polish pass delivery log entry above for how each landed.
 
 Phase 0 + build surfaced that the spec did not anticipate:
 - `getContacts()` returns a length-checkable array (not a count), so the People domain-card count is `contacts.length`. Slower than `count: exact`, but the data-store abstraction doesn't expose an exact-count variant. Fine at 30 rows; worth noting if the directory ever grows large.
@@ -224,10 +277,10 @@ That gives it a job nothing else can do: **show what Sous currently remembers.**
 **First-run state** - the screen that decides whether a Regional trusts this:
 - `What can I look up for you?`
 - One line on what Sous is and that it declines rather than guessing
-- **Four domain cards** - Playbook, People, Service Calendar, Spend - each with a count and two working examples, each card marked with the source module's own accent
-- **Limits block, verbatim:**
+- **[SUPERSEDED 2026-08-01 by U1 - see delivery log entry below]** Original scope: four domain cards - Playbook, People, Service Calendar, Spend - each with a count and two working examples, each card marked with the source module's own accent. **Now:** one simplified briefing card with four domain rows (Playbook/People/Service Calendar/Spend), one example chip right-aligned per row, limits copy as the card's footer. The four-card shape stays documented here as programme history; the built surface follows V2 per U1.
+- **Limits block, verbatim [SUPERSEDED 2026-08-01 by U6]:** original copy retained here as history; the built copy is U6's shorter form.
 
-> **What it won't do yet**
+> **What it won't do yet** *(pre-U6)*
 > No wages or reimbursement information. No P&L - that's coming soon. No prior seasons, that information is coming soon; the tools are current-season only and a 2024 question would return a valid-looking wrong number.
 
 ### 3.2 Playbook panel - the slide-out
