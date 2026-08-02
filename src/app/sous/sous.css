@@ -29,10 +29,17 @@
      every viewport height. --kf-topnav-h lives in TopNav.css :root.
      R3-01: flex column so .sa-shell can flex-fill the page's height at
      large viewports (previously the shell hugged content, leaving a
-     137-439px void below the composer). */
+     137-439px void below the composer).
+     2026-08-02: `height` (not `min-height`) + `overflow: hidden` locks
+     the page frame to the viewport so growing answers scroll INSIDE
+     .sa-pane-scroll instead of the whole page. Composer stays pinned
+     at the pane bottom at every viewport height. Landing behavior
+     unchanged - the briefing still fits and auto-centers in .sa-pane's
+     slack via .sa-firstrun's margin: auto. */
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - var(--kf-topnav-h, 56px));
+  height: calc(100dvh - var(--kf-topnav-h, 56px));
+  overflow: hidden;
   background: #EDEFF2;              /* reference surface-page, warmer than default canvas */
   color: var(--text-default);
   font-family: 'Inter', system-ui, sans-serif;
@@ -280,6 +287,9 @@
   border: 1px solid #E5E7EB;
   border-radius: 12px;
   overflow: hidden;
+  /* 2026-08-02: relative positioning anchors the .sa-fab-scroll-top
+     child (which floats above the composer, targets .sa-pane-scroll). */
+  position: relative;
 }
 
 /* ── 2. Hero (page variant only, mirrors oh-hero) ────────────────────────── */
@@ -1062,6 +1072,49 @@
   font-size: 12px;
   color: #6B7785;
   font-style: italic;
+}
+
+/* ── 6b. Scroll-top FAB (2026-08-02) ─────────────────────────────────────── */
+/* Absolutely positioned inside .sa-main; floats above .sa-composer at the
+   pane's bottom-right. onClick scrolls .sa-pane-scroll to top so long
+   answers can be re-read from the question header down. Visible only when
+   the pane-scroll region is scrolled past a threshold - hidden on
+   landing and on short answers. */
+.sa-fab-scroll-top {
+  position: absolute;
+  right: 20px;
+  bottom: 96px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid #E5E7EB;
+  background: white;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--elev-2, 0 2px 4px rgba(15, 48, 87, 0.06), 0 10px 24px -8px rgba(15, 48, 87, 0.14));
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+.sa-fab-scroll-top--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sa-fab-scroll-top:hover {
+  background: var(--accent-sous);
+  color: white;
+  transform: translateY(-1px);
+}
+.sa-fab-scroll-top:focus-visible {
+  outline: 2px solid var(--accent-sous);
+  outline-offset: 2px;
+}
+@media (max-width: 767px) {
+  .sa-fab-scroll-top { right: 14px; bottom: 82px; }
 }
 
 /* ── 7. Composer - matches reference .comp with focus-within border ─────── */

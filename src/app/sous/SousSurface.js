@@ -155,8 +155,25 @@ const SousSurface = forwardRef(function SousSurface({
   const abortRef = useRef(null);
   const inputRef = useRef(null);
   const startedAtRef = useRef(null);
+  // 2026-08-02: pane-scroll region owns the only scroll container on the
+  // page variant. paneScrollRef targets it for (a) on-submit scroll-to-top
+  // (new turn's question header lands at the top so long answers read
+  // top-down) and (b) the .sa-fab-scroll-top button below.
+  const paneScrollRef = useRef(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => { if (autoFocus && inputRef.current) inputRef.current.focus(); }, [autoFocus]);
+
+  // Toggle the scroll-top FAB when the pane region scrolls past 200px.
+  // Only active on the page variant - the panel has its own scroll shell
+  // (.sa-overlay-body-scroll) and doesn't need a FAB at its size.
+  useEffect(() => {
+    const el = paneScrollRef.current;
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 200);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [variant]);
 
   useEffect(() => {
     if (initialQuestion) {
@@ -190,6 +207,13 @@ const SousSurface = forwardRef(function SousSurface({
     setCopyOk(false);
     setPhase("streaming");
     startedAtRef.current = Date.now();
+    // 2026-08-02: scroll the pane region to the top so the question
+    // header (which renders inside .sa-turn at the top of .sa-pane) is
+    // top-anchored. Long answers then read top-down, and follow-up asks
+    // reset the reading position rather than leaving the user mid-scroll
+    // from the previous turn. No-op on the panel variant (paneScrollRef
+    // stays null there).
+    if (paneScrollRef.current) paneScrollRef.current.scrollTop = 0;
     // Prepend to session rail. turnId is captured here so the done handler
     // can attach the answer back to the correct entry (setSessionTurns runs
     // async; using a ref-like capture keeps the append targeted).
@@ -529,7 +553,7 @@ const SousSurface = forwardRef(function SousSurface({
     <div className="sa-firstrun">
       <SousLockup>
         <p className="sa-firstrun-lead">What can I look up for you?</p>
-        <p className="sa-firstrun-tag">Every answer names its source. Sous declines rather than guessing.</p>
+        <p className="sa-firstrun-tag">Every answer names its source. Sous declines rather than guessing. Sous can make mistakes - always verify against the sources.</p>
       </SousLockup>
       <div className="sa-brief">
         <BriefRow
@@ -565,7 +589,7 @@ const SousSurface = forwardRef(function SousSurface({
           onExampleClick={onExampleClick}
         />
         <p className="sa-brief-limits">
-          No wages, no reimbursements, no P&amp;L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong.
+          No wages, no reimbursements, no HR or Legal sensitive information. P&amp;L + KPIs coming soon. Current 2026 season only. Past data pending.
         </p>
       </div>
     </div>
@@ -776,12 +800,21 @@ const SousSurface = forwardRef(function SousSurface({
       <div className="sa-workspace">
         {railEl}
         <main className="sa-main">
-          <div className="sa-pane-scroll">
+          <div className="sa-pane-scroll" ref={paneScrollRef}>
             <div className="sa-pane">
               {firstRunEl}
               {turnEl}
             </div>
           </div>
+          <button
+            type="button"
+            className={`sa-fab-scroll-top${showScrollTop ? " sa-fab-scroll-top--visible" : ""}`}
+            onClick={() => { if (paneScrollRef.current) paneScrollRef.current.scrollTo({ top: 0, behavior: "smooth" }); }}
+            aria-label="Scroll to top of answer"
+            tabIndex={showScrollTop ? 0 : -1}
+          >
+            <ArrowUp size={16} aria-hidden="true" />
+          </button>
           {composerEl}
         </main>
       </div>

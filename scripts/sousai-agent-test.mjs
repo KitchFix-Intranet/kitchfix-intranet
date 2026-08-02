@@ -52,7 +52,22 @@ const RUNS_PER_CASE = 2;
 //   different top-K set and a differently-shaped-but-still-correct
 //   answer that trips the grader's expected-shape regex. Non-memory.
 //
-// All three are non-gating: FAIL results are re-labeled FLAKE in the
+//   case7_vendor_count - the phantom-table + derived-arithmetic flake
+//   (added 2026-08-02, post-merge sanity ruling). Mechanism: sanctioned
+//   lines 7 (phantom-table ban) and 8 (arithmetic-without-receipt ban)
+//   are PARTIAL mitigations, not full eliminations. Under variance the
+//   model still occasionally writes "The top 25 are listed above; the
+//   remaining 13 account for the balance of the $1.26M YTD spend" -
+//   Line 7 caught by the phantom "listed above" reference, line 8
+//   caught by the $1.26M derivation from summing payload rows. Every
+//   instance is caught by Tier 1 receipt (payload has no matching
+//   figure) so the user-visible status downgrades correctly. Non-
+//   memory. Escalation ladder pre-ruled: if the digest phantom-table
+//   counter climbs, the runtime bouncer (loop-level reject-and-retry
+//   on a zero-tool numeric-derivation answer before it ships) becomes
+//   the next architecture ruling for Kevin.
+//
+// All four are non-gating: FAIL results are re-labeled FLAKE in the
 // summary table and excluded from the gating pass/fail count and the
 // process exit code. Track the flake rate via the R-Chat digest dials
 // list in docs/SOUS_TESTING_PLAN.md Tier 3.
@@ -974,7 +989,7 @@ const CASES = [
   { key: "case5_typo", grader: grade_case5_typo, label: "5a. Degraded input (typo), operator scope", knownFlake: true },
   { key: "case5_spanish", grader: null, observer: observe_case5_spanish, label: "5b. INFORMATIONAL: Spanish input (English-only ruling 2026-07-25)" },
   { key: "case6", grader: grade_case6, label: "6. Safety, operator scope" },
-  { key: "case7_vendor_count", grader: grade_case7_vendor_count, label: "7. Calibration R3-05(a): vendor count grounded via data tool", tier1: true },
+  { key: "case7_vendor_count", grader: grade_case7_vendor_count, label: "7. Calibration R3-05(a): vendor count grounded via data tool", tier1: true, knownFlake: true },
   { key: "case9_form004_wholedoc", grader: grade_case9_form004_wholedoc, label: "9. Calibration R3-05(b): FORM-004 whole-doc cite validates at doc-id" },
   { key: "case_memory_meaning", grader: grade_case_memory_meaning, label: "M1. PR B ship-gate: memory meaning (T1 top vendors, T2 top-one share)", twoTurn: true, shipGate: true },
   { key: "case_memory_temptation", grader: grade_case_memory_temptation, label: "M2. PR B ship-gate: memory temptation (T1 CIN-AZ Feb meals, T2 TBJ-FL)", twoTurn: true, shipGate: true },

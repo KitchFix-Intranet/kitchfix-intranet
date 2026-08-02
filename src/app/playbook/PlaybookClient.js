@@ -747,7 +747,7 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
             ) : (
               <>
                 <p className="pb-sous-empty-lead">
-                  Sous reads the Playbook, people, the service calendar, and spend - every answer names its source.
+                  Sous reads the Playbook, people, the service calendar, and spend - every answer names its source. Sous can make mistakes - check the source.
                 </p>
                 <div className="pb-sous-empty-chips" role="group" aria-label="Example questions">
                   {/* I5: panel starters follow the host. In the Playbook the
@@ -769,7 +769,7 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
               </>
             )}
             <p className="pb-sous-empty-limits">
-              Not yet: wages, reimbursements, P&amp;L - all coming. Current season only.
+              Not yet: wages, reimbursements, HR/Legal-sensitive info. P&amp;L + KPIs coming. Current 2026 season only.
             </p>
           </div>
         )}

@@ -15,11 +15,12 @@
 1. **Decline clustering.** Group declined questions by topic; output = the documentation demand list, ranked by ask count.
 2. **Snapshot-age monitor.** Any data source whose loaded-date exceeds 30 days and appears in answers gets flagged with its age (the directory's May 27 load would have flagged in June).
 3. **Leash and speed dials.** Budget-saturation rate (baseline 3.0%) and p95 answer time, tracked week over week so drift is visible before complaints.
-4. **KNOWN-FLAKE eval dials (added 2026-08-01, PR B acceptance ruling).** Per-run pass rate for the harness's non-gating flake cases, tracked so drift is visible before it becomes a real regression. Baseline dials:
+4. **KNOWN-FLAKE eval dials (added 2026-08-01, PR B acceptance ruling; case 7 added 2026-08-02, post-merge sanity ruling).** Per-run pass rate for the harness's non-gating flake cases, tracked so drift is visible before it becomes a real regression. Baseline dials:
    - `case1_manager` (phantom_citation mechanism): rate of runs where the model names an unretrieved doc id on the Source line. Mitigated by sanctioned line 6 but not eliminated.
    - `case2` (exact-id sensitivity mechanism): rate of runs where exact-id snippet framing shifts the chosen quote/section between runs.
    - `case5_typo` (typo-sensitivity mechanism): rate of runs where garbled input produces a differently-shaped-but-still-correct answer that trips the expected-shape regex.
-   - All three are non-memory, non-shipGate. Ship-gate cases (M1, M2) are explicitly ineligible for the KNOWN-FLAKE carve-out - a shipGate fail is a STOP for architecture ruling, not a dial entry.
+   - `case7_vendor_count` (phantom-table + derived-arithmetic mechanism): rate of runs where the model writes "the top N are listed above" or derives a total the payload doesn't contain. Sanctioned lines 7 + 8 are partial mitigations, not full eliminations; every instance is caught by Tier 1 receipt so the user-visible status downgrades correctly. **Escalation ladder pre-ruled:** if this counter climbs, the next architecture ruling for Kevin is a runtime bouncer - loop-level reject-and-retry on a zero-tool numeric-derivation answer before it ships. Prompt tuning has reached its useful ceiling on this mechanism.
+   - All four are non-memory, non-shipGate. Ship-gate cases (M1, M2) are explicitly ineligible for the KNOWN-FLAKE carve-out - a shipGate fail is a STOP for architecture ruling, not a dial entry.
 
 ## Tier 4 - the grader audit (standing practice, quarterly, ~30 min of Kevin)
 Pull 20 random production answers; Kevin hand-labels true status blind; compare to the grader's labels; investigate every disagreement. The referee gets a referee - the next 77.8%-class bug becomes a scheduled discovery instead of an accident. First run: one quarter after the calibration round merges. Kevin calendars it.
