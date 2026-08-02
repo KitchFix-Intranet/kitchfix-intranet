@@ -1109,7 +1109,7 @@ function DayEntryV2({
     text: `${dayPeriodLabel} closed for billing - notes can still be added.`,
   } : status === "locked-slt" ? {
     tone: "neutral",
-    text: `${dayPeriodLabel} closed for billing. You are overriding the lock; changes will land as if the period were open.`,
+    text: `${dayPeriodLabel} closed for billing - your changes will still save. If you need a change to billing you must reach out directly to AP.`,
   } : (feeNoDollar ? {
     "needs-entry": { tone: "needs",   text: "Confirm served counts. Projections shown for reference." },
     "overdue":     { tone: "overdue", text: "Past due - confirm served counts as soon as possible." },
