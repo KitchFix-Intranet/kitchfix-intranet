@@ -1413,7 +1413,34 @@ function DayEntryV2({
       {/* ─── Coaching banner ─── */}
       {coaching && (
         <div className={`sc-v2-entry-coaching sc-v2-entry-coaching--${coaching.tone}`}>
-          {coaching.text}
+          <span className="sc-v2-entry-coaching-text">{coaching.text}</span>
+          {/* sc-25 step 2, placement v2 (2026-08-02 owner ruling):
+              Reset day lives inside the status banner, at the right
+              end of the sentence, not in the centered stack.
+              Rationale over v1: Reset is error-recovery that DELETES
+              the record; Mark-no-service is a routine operational
+              act that WRITES editable zeros. Stacking them centered
+              at equal weight taught the wrong equivalence. The
+              banner already frames the recorded state ("Actuals
+              recorded. Edit and re-save if needed.") - the control
+              belongs at the end of that sentence, where an operator
+              realizes the mistake.
+              Host states, stated explicitly: `entered` (non-locked
+              recorded day) and `locked-slt` (SLT override on a
+              locked recorded day). The hasActuals + !isLockedForViewer
+              gate implicitly selects that pair; the status check
+              documents it in place so future readers do not have to
+              re-derive the intersection. */}
+          {day.hasActuals && !isLockedForViewer && (status === "entered" || status === "locked-slt") && (
+            <button
+              type="button"
+              className="sc-v2-entry-coaching-reset"
+              onClick={() => setShowResetConfirm(true)}
+              disabled={resetting}
+            >
+              {resetting ? "Resetting..." : "Reset day"}
+            </button>
+          )}
         </div>
       )}
 
@@ -1553,29 +1580,6 @@ function DayEntryV2({
                 onClick={() => setShowNoServiceConfirm(true)}
               >
                 Mark day as no service
-              </button>
-            </div>
-          )}
-
-          {/* sc-25 step 2 (2026-08-01): Reset day. Placement reasoning:
-              paired near Mark-no-service because both are day-unwind
-              operations, but in its own subtle row so their vocabularies
-              stay distinct (MDNS = "no service happened"; Reset = "the
-              data I entered is wrong, start over"). Not next to Confirm
-              & save (destructive next to primary is a click-target
-              hazard). Gated on hasActuals + !isLockedForViewer: nothing
-              to reset on an untouched day; hidden for non-SLT on locked
-              days because the whole write region is hidden. SLT keeps
-              the button on locked days per owner ruling. */}
-          {day.hasActuals && !isLockedForViewer && (
-            <div className="sc-v2-entry-reset">
-              <button
-                type="button"
-                className="sc-v2-entry-reset-btn"
-                onClick={() => setShowResetConfirm(true)}
-                disabled={resetting}
-              >
-                {resetting ? "Resetting..." : "Reset day"}
               </button>
             </div>
           )}
