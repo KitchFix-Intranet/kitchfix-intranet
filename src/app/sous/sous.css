@@ -65,6 +65,15 @@
      parents with explicit height - .sa-page has min-height, not height,
      so the % rule silently no-op'd and the shell hugged content. */
   flex: 1 1 auto;
+  /* 2026-08-02: min-height: 0 is the top link in the scroll chain that
+     lets .sa-pane-scroll's overflow-y:auto actually shrink under a tall
+     answer. Without this, a flex item's default min-height:auto refuses
+     to shrink below content height, the shell grows past the viewport,
+     .sa-page's overflow:hidden clips the composer, and the composer
+     becomes unreachable. Every flex ancestor between .sa-page and
+     .sa-pane-scroll now carries min-height: 0 (.sa-shell, .sa-workspace,
+     .sa-main). */
+  min-height: 0;
   width: 100%;
   max-width: 1520px;
   margin: 0 auto;
