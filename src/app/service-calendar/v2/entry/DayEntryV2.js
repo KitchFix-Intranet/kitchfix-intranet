@@ -136,6 +136,29 @@ function groupActivity(noteEntries, historyEntries) {
     buckets.get(bucketKey).entries.push(h);
   }
   for (const [bucketKey, bucket] of buckets.entries()) {
+    // sc-25 step 2 (2026-08-01): reset bucket. Delete-trigger rows
+    // carry changeType='delete' AND new_count=0 by convention; without
+    // this check they would collapse into the allZero mark-no-service
+    // branch below (same shape by row count + values). change_type is
+    // the distinguisher, not the values - that was the whole reason
+    // the column got added in sc-25.
+    //
+    // A single sc-reset-day call fires the DELETE trigger N times (one
+    // per in-service actual row) inside one implicit transaction, so
+    // every row shares changedAt to millisecond and lands in one
+    // bucket. The reset renders as ONE ledger row via this branch;
+    // per-service expansion is deliberately omitted (nothing to show
+    // but zeros - see the `type: "reset"` render in the ledger).
+    const allDelete = bucket.entries.every(e => e.changeType === "delete");
+    if (allDelete) {
+      rows.push({
+        type: "reset",
+        timestamp: bucket.changedAt,
+        author: bucket.author,
+        key: `reset:${bucketKey}`,
+      });
+      continue;
+    }
     const allZero = bucket.entries.length > 1 && bucket.entries.every(e => Number(e.newValue) === 0);
     if (allZero) {
       rows.push({
@@ -176,6 +199,7 @@ function DayEntryV2({
   overrides,
   onSave,
   onAddNote,
+  onReset,
   saving,
   dayIndex,
   totalDays,
@@ -203,6 +227,12 @@ function DayEntryV2({
   // shared dayEntryProps bundle. DayDetail receives it too for free
   // (same bundle) but does not consume this round - out of scope.
   springDateSet = null,
+  // sc-25 step 2 (2026-08-01): SLT override flag from sc-load payload.
+  // Server-derived via isScAdmin(email); client never re-computes.
+  // Combined with day.isPeriodLocked to produce isLockedForViewer -
+  // "locked and you cannot" vs "locked and you can" are different
+  // screens and this is the signal that picks.
+  viewerCanEditPastPeriods = false,
 }, ref) {
   // Fee-no-dollar shape flag - keyed on the account, not isFeeAccount.
   // MLB (flat_fee + hasHomestandSchedule) reads false here; STL-FL
@@ -231,6 +261,8 @@ function DayEntryV2({
   const [justSaved, setJustSaved] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showNoServiceConfirm, setShowNoServiceConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [standaloneDraft, setStandaloneDraft] = useState("");
   // A3 failure UI (2026-07-24): inline failure state. Set by
   // executeConfirm when onSave returns !success (server rejected the
@@ -302,6 +334,7 @@ function DayEntryV2({
   }, []);
   const keepEditingBtnRef = useRef(null);
   const nsCancelBtnRef = useRef(null);
+  const resetCancelBtnRef = useRef(null);
   const standaloneInputRef = useRef(null);
   const rideNoteRef = useRef(null);
   const bodyRef = useRef(null);
@@ -377,6 +410,7 @@ function DayEntryV2({
     // at +3s and correctly found the screen missing.
     setShowDiscardConfirm(false);
     setShowNoServiceConfirm(false);
+    setShowResetConfirm(false);
     setStandaloneDraft("");
     setMobileBillOpen(false);
     // A3 failure UI (2026-07-24): clear inline save error on day-nav.
@@ -430,6 +464,16 @@ function DayEntryV2({
       return () => cancelAnimationFrame(rafId);
     }
   }, [showNoServiceConfirm]);
+
+  // Focus the safe default (Cancel) when the reset confirm opens.
+  useEffect(() => {
+    if (showResetConfirm) {
+      const rafId = requestAnimationFrame(() => {
+        resetCancelBtnRef.current?.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [showResetConfirm]);
 
   const handleChange = useCallback((colIndex, value) => {
     // A3 failure UI (2026-07-24): clear any prior save error - the
@@ -513,6 +557,23 @@ function DayEntryV2({
       }
     }
   }, [serviceGroups, day, notes, onSave, onClose, handoff]);
+
+  // executeReset - sc-25 step 2 (2026-08-01). Undo a day's actuals by
+  // hitting the parent's onReset (posts to sc-reset-day). Parent
+  // invalidates monthCache + bumps reloadKey so the day refetches
+  // fresh. Modal closes on success; the operator reopens to see the
+  // reset ledger row.
+  const executeReset = useCallback(async () => {
+    if (!onReset || resetting) return;
+    setResetting(true);
+    setShowResetConfirm(false);
+    const result = await onReset(day);
+    if (result?.success) {
+      onClose?.();
+      return;
+    }
+    setResetting(false);
+  }, [onReset, resetting, day, onClose]);
 
   // handleAddNote - matches DayDetail.js:458-479. Standalone Activity
   // composer post via onAddNote (write path unchanged).
@@ -846,7 +907,24 @@ function DayEntryV2({
   // Status + coaching = DayDetail.js:741-835.
   const dayIsPast = isPastDate(day.date);
   const isOverdue = dayIsPast && day.isLocked && !day.hasActuals;
-  const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : dayIsPast ? "needs-entry" : "upcoming";
+  // sc-25 step 2 (2026-08-01): period-lock precedence. day.isPeriodLocked
+  // is server-derived from sc_is_day_locked / sc_is_period_closed (see
+  // sc-25 migration + scPeriodLock.js). viewerCanEditPastPeriods is
+  // isScAdmin(email) via the sc-load payload. Combined: is the day
+  // read-only for the CURRENT viewer? SLT sees a locked day fully
+  // editable with a different banner (override variant); non-SLT sees
+  // it read-only with the standard locked banner + the note composer
+  // still active.
+  //
+  // Locked status takes precedence over overdue / needs-entry / entered
+  // in the coaching map because telling an operator to hurry on a day
+  // they cannot write is worse than saying nothing. Even an SLT viewer
+  // sees the locked banner (in override variant) because they need to
+  // know they are operating outside the normal path.
+  const isPeriodLocked = !!day.isPeriodLocked;
+  const isLockedForViewer = isPeriodLocked && !viewerCanEditPastPeriods;
+  const rawStatus = day.hasActuals ? "entered" : isOverdue ? "overdue" : dayIsPast ? "needs-entry" : "upcoming";
+  const status = isPeriodLocked ? (isLockedForViewer ? "locked" : "locked-slt") : rawStatus;
 
   // Progress counter for the rail meta.
   const { enteredCount, totalToEnter } = useMemo(() => {
@@ -1011,7 +1089,28 @@ function DayEntryV2({
   // dollar variant swaps "enter" -> "confirm" and "meal counts" ->
   // "served counts" (vocab.js). MLB fee never reaches this component
   // so the fee branch here targets STL-FL only.
-  const coaching = feeNoDollar ? {
+  //
+  // sc-25 step 2 (2026-08-01): locked + locked-slt states. Same string
+  // in both fee + per-meal branches - the copy names a STATE rather
+  // than an ACTION, so the enter-vs-confirm split that governs the
+  // other rows does not apply. Period number is d.meta.period (server-
+  // authored, house convention integer 1..13; displayed with a P
+  // prefix). Owner-approved copy for the read-only case; SLT override
+  // wording is proposed and flagged for owner sign-off.
+  //
+  // Locked tone reuses `neutral` - a locked period is not urgent, not
+  // error, not a state change to celebrate. The map's tones are
+  // (needs, overdue, neutral, entered); adding a locked tone here
+  // would fork a token family for one row's colour, and neutral is
+  // what "state, not action" looks like everywhere else in the map.
+  const dayPeriodLabel = day.meta?.period ? `Period ${day.meta.period}` : "This period";
+  const coaching = status === "locked" ? {
+    tone: "neutral",
+    text: `${dayPeriodLabel} closed for billing - notes can still be added.`,
+  } : status === "locked-slt" ? {
+    tone: "neutral",
+    text: `${dayPeriodLabel} closed for billing - your changes will still save. If you need a change to billing you must reach out directly to AP.`,
+  } : (feeNoDollar ? {
     "needs-entry": { tone: "needs",   text: "Confirm served counts. Projections shown for reference." },
     "overdue":     { tone: "overdue", text: "Past due - confirm served counts as soon as possible." },
     "upcoming":    { tone: "neutral", text: "Confirm served counts. Projections shown for reference." },
@@ -1021,7 +1120,7 @@ function DayEntryV2({
     "overdue":     { tone: "overdue", text: "Past due - enter actual counts as soon as possible." },
     "upcoming":    { tone: "neutral", text: "Enter actual meal counts. Projections shown for reference." },
     "entered":     { tone: "entered", text: "Actuals recorded. Edit and re-save if needed." },
-  }[status];
+  }[status]);
 
   // R3-5 (2026-08-01): Spring Training display construct. Membership
   // is a name-suffix match on " - ST", self-fencing per probe A (only
@@ -1253,6 +1352,15 @@ function DayEntryV2({
           />
         );
       })()}
+      {showResetConfirm && (
+        <ResetConfirm
+          onCancel={() => setShowResetConfirm(false)}
+          onConfirm={executeReset}
+          cancelBtnRef={resetCancelBtnRef}
+          dateLabel={formatDate(day.date)}
+          feeNoDollar={feeNoDollar}
+        />
+      )}
 
       {/* ─── Header ─── */}
       <div className="sc-v2-entry-head">
@@ -1305,7 +1413,34 @@ function DayEntryV2({
       {/* ─── Coaching banner ─── */}
       {coaching && (
         <div className={`sc-v2-entry-coaching sc-v2-entry-coaching--${coaching.tone}`}>
-          {coaching.text}
+          <span className="sc-v2-entry-coaching-text">{coaching.text}</span>
+          {/* sc-25 step 2, placement v2 (2026-08-02 owner ruling):
+              Reset day lives inside the status banner, at the right
+              end of the sentence, not in the centered stack.
+              Rationale over v1: Reset is error-recovery that DELETES
+              the record; Mark-no-service is a routine operational
+              act that WRITES editable zeros. Stacking them centered
+              at equal weight taught the wrong equivalence. The
+              banner already frames the recorded state ("Actuals
+              recorded. Edit and re-save if needed.") - the control
+              belongs at the end of that sentence, where an operator
+              realizes the mistake.
+              Host states, stated explicitly: `entered` (non-locked
+              recorded day) and `locked-slt` (SLT override on a
+              locked recorded day). The hasActuals + !isLockedForViewer
+              gate implicitly selects that pair; the status check
+              documents it in place so future readers do not have to
+              re-derive the intersection. */}
+          {day.hasActuals && !isLockedForViewer && (status === "entered" || status === "locked-slt") && (
+            <button
+              type="button"
+              className="sc-v2-entry-coaching-reset"
+              onClick={() => setShowResetConfirm(true)}
+              disabled={resetting}
+            >
+              {resetting ? "Resetting..." : "Reset day"}
+            </button>
+          )}
         </div>
       )}
 
@@ -1357,6 +1492,7 @@ function DayEntryV2({
               hasMatchSnapshot={!!matchSnapshots[SPRING_TRAINING_GROUP_KEY]}
               feeGroupSummary={feeGroupSummary}
               feeProjectedGroupSummary={feeProjectedGroupSummary}
+              readOnly={isLockedForViewer}
             />
           )}
           {activeGroups.map(group => (
@@ -1377,6 +1513,7 @@ function DayEntryV2({
               variant={feeNoDollar ? "fee" : undefined}
               unit="meals"
               expanded={true}
+              readOnly={isLockedForViewer}
             />
           ))}
           {(inactiveGroups.length > 0 || stRenderDrawer) && (
@@ -1398,6 +1535,7 @@ function DayEntryV2({
                   hasMatchSnapshot={!!matchSnapshots[SPRING_TRAINING_GROUP_KEY]}
                   feeGroupSummary={feeGroupSummary}
                   feeProjectedGroupSummary={feeProjectedGroupSummary}
+                  readOnly={isLockedForViewer}
                 />
               )}
               {inactiveGroups.map(group => (
@@ -1418,6 +1556,7 @@ function DayEntryV2({
                   variant={feeNoDollar ? "fee" : undefined}
                   unit="meals"
                   expanded={false}
+                  readOnly={isLockedForViewer}
                 />
               ))}
             </details>
@@ -1433,7 +1572,7 @@ function DayEntryV2({
               needs-entry/upcoming) and never emits "no-service", so
               gating on local would leak the button onto server-no-
               service days (all-zero actuals present). */}
-          {day.status !== "no-service" && (
+          {day.status !== "no-service" && !isLockedForViewer && (
             <div className="sc-v2-entry-nsvc">
               <button
                 type="button"
@@ -1510,6 +1649,7 @@ function DayEntryV2({
           as a sibling of the pane rather than a child, keeps it visible
           at every supported height. Day total shown alongside for
           §8C's "day total + Confirm & save" contract. */}
+      {!isLockedForViewer && (
       <div className="sc-v2-entry-actions">
         <div className="sc-v2-entry-actions-total">
           {feeNoDollar ? (
@@ -1553,6 +1693,7 @@ function DayEntryV2({
           {saving ? "Saving..." : "Confirm & save"}
         </button>
       </div>
+      )}
 
       {/*
         W9 PR 1/2 - the entry's mobile footer is unified into the
@@ -1584,7 +1725,7 @@ function DayEntryV2({
         open={mobileBillOpen}
         onOpenChange={setMobileBillOpen}
         controlsId="sc-v2-entry-rail-mobile"
-        stickyAction={(
+        stickyAction={isLockedForViewer ? null : (
           <button
             type="button"
             className="sc-v2-entry-mobile-confirm"
@@ -1634,6 +1775,7 @@ export function GroupBlock({
   expanded,
   variant,           // undefined | "perMeal" | "bulk" | "fee"
   unit = "meals",
+  readOnly = false,
 }) {
   const wrapperClass = variant === "fee"
     ? "sc-day-ledger sc-day-ledger--fee"
@@ -1681,7 +1823,7 @@ export function GroupBlock({
           className="sc-v2-entry-group-actions"
           data-cleared={hasProjectedMeals && hasMatchSnapshot ? "true" : "false"}
         >
-          {hasProjectedMeals && (
+          {hasProjectedMeals && !readOnly && (
             <>
               <button
                 type="button"
@@ -1716,6 +1858,7 @@ export function GroupBlock({
             onChange={onChange}
             hideAmount={hideAmount}
             hideRate={hideRate}
+            readOnly={readOnly}
           />
         ))}
       </div>
@@ -2028,6 +2171,11 @@ function LedgerBand({ entries, draft, onDraftChange, onPost, isPosting, inputRef
                         <strong>{e.author || "Someone"}</strong>{" "}entered counts
                       </>
                     )}
+                    {e.type === "reset" && (
+                      <>
+                        <strong>{e.author || "Someone"}</strong>{" "}reset this day
+                      </>
+                    )}
                   </span>
                   <span className="sc-v2-entry-ledger-stamp">{formatEntryStamp(e.timestamp)}</span>
                 </div>
@@ -2055,7 +2203,7 @@ function LedgerBand({ entries, draft, onDraftChange, onPost, isPosting, inputRef
 }
 
 // ═════════════════════════════════════════════════════════════════
-// DiscardConfirm / NoServiceConfirm - dialogs, same copy as v1.
+// DiscardConfirm / NoServiceConfirm / ResetConfirm - dialogs.
 // ═════════════════════════════════════════════════════════════════
 function DiscardConfirm({ onKeepEditing, onDiscard, keepEditingBtnRef }) {
   return (
@@ -2100,6 +2248,31 @@ function NoServiceConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, hasEnt
         <div className="sc-v2-entry-modal-actions">
           <button ref={cancelBtnRef} className="sc-btn sc-btn--outline" onClick={onCancel}>Cancel</button>
           <button className="sc-btn sc-btn--primary" onClick={onConfirm}>Mark no service</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// sc-25 step 2 (2026-08-01). Matches the NoServiceConfirm pattern:
+// same modal shell, amber accent rail, Cancel-on-left + primary
+// destructive on right, cancel focused by default. Body copy tells
+// the operator WHAT will happen, not "are you sure" - explicit over
+// ceremonial per owner ruling on destructive-dialog voice.
+function ResetConfirm({ onCancel, onConfirm, cancelBtnRef, dateLabel, feeNoDollar = false }) {
+  const title = dateLabel ? `Reset ${dateLabel}?` : "Reset day?";
+  return (
+    <div className="sc-v2-entry-modal" role="alertdialog" aria-modal="true">
+      <div className="sc-v2-entry-modal-inner sc-ar--top sc-ar--warning">
+        <h4 className="sc-v2-entry-modal-title">{title}</h4>
+        <p className="sc-v2-entry-modal-body">
+          {feeNoDollar
+            ? "The confirmed counts for this day go away. The day returns to its scheduled projections. A reset entry is added to the Ledger."
+            : "The recorded counts for this day go away. The day returns to its projections. A reset entry is added to the Ledger."}
+        </p>
+        <div className="sc-v2-entry-modal-actions">
+          <button ref={cancelBtnRef} className="sc-btn sc-btn--outline" onClick={onCancel}>Cancel</button>
+          <button className="sc-btn sc-btn--primary" onClick={onConfirm}>Reset day</button>
         </div>
       </div>
     </div>

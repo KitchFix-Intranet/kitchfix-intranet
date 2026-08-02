@@ -28,7 +28,7 @@ import {
 } from "../../DayDetail";
 import { fmt$ } from "../../season/format";
 
-export default function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false, hideRate = false }) {
+export default function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false, hideRate = false, readOnly = false }) {
   const projVal = day.projected[svc.colIndex] ?? 0;
   const editVal = editValues[svc.colIndex] ?? "";
   const isTouched = touched.has(svc.colIndex);
@@ -56,6 +56,7 @@ export default function ServiceRow({ svc, day, editValues, touched, flashDelay, 
         className={`sc-day-input ${isTouched && !isEmpty ? "sc-day-input--touched" : "sc-day-input--ghost"}`}
         placeholder={String(projVal)}
         value={editVal}
+        disabled={readOnly}
         onChange={e => onChange(svc.colIndex, e.target.value)}
       />
       {chip ? (

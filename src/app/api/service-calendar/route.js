@@ -315,6 +315,7 @@ function transformDays(orchDays) {
         newValue:    h.newValue,
         author:      h.author,
         changedAt:   h.changedAt,
+        changeType:  h.changeType || null,
       })),
       hasActuals: d.hasAnyActuals,
       isPast:     d.isPast,
@@ -457,7 +458,7 @@ export async function GET(request) {
          not itself a revenue figure, and future reconciliation may
          want it. Counts (projected/actual) stay - those are the
          operator's data. */
-      const days = isFeeNoDollarAccount(billingModel, hasHomestandScheduleFlag)
+      const feeFencedDays = isFeeNoDollarAccount(billingModel, hasHomestandScheduleFlag)
         ? rawDays.map(d => ({
             ...d,
             totals: { projectedRevenue: null, actualRevenue: null },
@@ -465,6 +466,46 @@ export async function GET(request) {
             actualRevenue: null,
           }))
         : rawDays;
+
+      // sc-25 (2026-08-01): server-derived period-lock signal per day.
+      // Server-derived is the whole point of the SQL function being the
+      // single source; if the client re-computes the date + grace math,
+      // the two drift the first time the rule changes. Batched per
+      // unique period so the RPC fires ~1-3 times per month load, not
+      // once per day.
+      //
+      // Unknown-period days (period == "" or null) inherit the same
+      // fail-safe as sc_is_day_locked: TRUE. Symmetric with the SQL.
+      const supaLock = getServiceClient();
+      const uniquePeriods = [...new Set(
+        feeFencedDays.map((d) => d.meta?.period).filter((p) => p != null && p !== "")
+      )];
+      const lockResults = await Promise.all(
+        uniquePeriods.map((p) =>
+          supaLock.rpc("sc_is_period_closed", {
+            p_account_key: accountKey,
+            p_period: p,
+          })
+        )
+      );
+      const periodLockMap = new Map();
+      for (let i = 0; i < uniquePeriods.length; i++) {
+        const { data, error } = lockResults[i];
+        if (error) {
+          console.error(`sc-load: sc_is_period_closed RPC failed for ${accountKey} P${uniquePeriods[i]}: ${error.message}`);
+          // Fail safe: unknown -> locked. Matches the SQL contract.
+          periodLockMap.set(uniquePeriods[i], true);
+        } else {
+          periodLockMap.set(uniquePeriods[i], !!data);
+        }
+      }
+      const days = feeFencedDays.map((d) => {
+        const period = d.meta?.period;
+        const isPeriodLocked = (period == null || period === "")
+          ? true
+          : (periodLockMap.get(period) ?? true);
+        return { ...d, isPeriodLocked };
+      });
 
       // Month-range bounds match the loadMonthData month exactly.
       // Computed here so both the homestand fetch and the sc-17
@@ -514,6 +555,12 @@ export async function GET(request) {
         metaColCount: categoryToMetaColCount(category),
         serviceGroups,
         days,
+        // sc-25 (2026-08-01): does the current viewer override the
+        // period lock? Server truth via isScAdmin(email) - client must
+        // not re-derive from role strings or a hardcoded list. Payload-
+        // level (not per-day) because the viewer's identity is constant
+        // across the response.
+        viewerCanEditPastPeriods: isScAdmin(email),
         // Overrides (sc_day_overrides) not migrated; the calendar
         // tolerates an empty array.
         overrides: [],

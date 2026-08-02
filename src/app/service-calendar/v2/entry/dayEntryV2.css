@@ -108,10 +108,51 @@
 }
 
 /* ─── Coaching band ───────────────────────────────────────── */
+/* sc-25 step 2 v2 (2026-08-02): banner is now a flex row so the
+   Reset day control can dock at the right end of the sentence on
+   the two hostable states (entered + locked-slt). Sentence-first:
+   text is the row's stretch child, control is flex: 0 0 auto so
+   it never wraps beneath the text. The one-line contract at
+   1024/1280/1440 is enforced by the flex + no-wrap on the text
+   span; if the text ever outgrows the row, the text truncates
+   before the control moves. */
 .sc-v2-entry-coaching {
   padding: var(--sc2-space-3) var(--sc2-space-5);
   font-size: var(--sc2-size-caption);
   border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc2-space-3);
+}
+.sc-v2-entry-coaching-text {
+  min-width: 0;
+}
+.sc-v2-entry-coaching-reset {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  opacity: 0.75;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--sc2-wt-medium);
+  text-decoration: none;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.sc-v2-entry-coaching-reset:hover:not(:disabled) {
+  opacity: 1;
+  text-decoration: underline;
+}
+.sc-v2-entry-coaching-reset:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  opacity: 1;
+}
+.sc-v2-entry-coaching-reset:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 .sc-v2-entry-coaching--needs { background: var(--sc2-state-needs-bg); color: var(--sc2-state-needs-fg); }
 .sc-v2-entry-coaching--overdue { background: var(--sc2-state-overdue-bg); color: var(--sc2-state-overdue-fg); }
