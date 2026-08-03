@@ -129,38 +129,56 @@ const SousSurface = forwardRef(function SousSurface({
   // goes out. Panel uses it to hide its starter block per R3-08.
   const firstAskFiredRef = useRef(false);
   const [question, setQuestion] = useState(initialQuestion);
-  const [phase, setPhase] = useState("idle");
-  const [answerText, setAnswerText] = useState("");
-  const [toolTrail, setToolTrail] = useState([]);
-  const [doneEnv, setDoneEnv] = useState(null);
-  const [errorInfo, setErrorInfo] = useState(null);
-  const [askedQuestion, setAskedQuestion] = useState("");
-  // Session rail entries. Client-held only. Session-only per D8 / rail
-  // footer contract. Entry shape:
-  //   { id, at, question, answer?, status? }
-  // answer + status are added when the ask completes (done event).
+  // Turn stack (2026-08-03): each entry now carries the FULL per-turn
+  // state - the surface no longer holds a singleton "current" turn.
+  // Turns are appended (oldest first, newest last) so the stack renders
+  // chronologically. The last entry is the in-flight turn while it
+  // streams; earlier entries render their stored settled state.
+  //
+  // Entry shape:
+  //   {
+  //     id, at, question, phase, status,
+  //     answerText, toolTrail, doneEnv, errorInfo,
+  //     feedbackState, selectedTags, feedbackText, copyOk,
+  //     startedAt, durationMs,
+  //   }
+  //
+  // Rail iterates the same array in reverse for the "newest first"
+  // reading order it always had.
   const [sessionTurns, setSessionTurns] = useState([]);
+  const currentTurn = sessionTurns.length > 0 ? sessionTurns[sessionTurns.length - 1] : null;
+  const phase = currentTurn?.phase ?? "idle";
+  const submitting = phase === "streaming";
+  const hasAnswer = sessionTurns.length > 0;
+  // Update a specific turn by id. Accepts either a patch object or a
+  // (turn -> patch) function - the function form is needed for
+  // token/tool_end events that read previous state.
+  const updateTurn = useCallback((id, patchOrFn) => {
+    setSessionTurns((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      const patch = typeof patchOrFn === "function" ? patchOrFn(t) : patchOrFn;
+      return { ...t, ...patch };
+    }));
+  }, []);
   // PR B memory: last-3 Q&A pairs to send as prior turns on the NEXT ask.
   // Chronological order (oldest first) so the agent prepends cleanly as
   // user/assistant alternation. New Question / ⌘K clears; on done, append
   // and cap at 3. Rail IN CONTEXT marker binds to turns whose id is in
-  // memoryPairs.
+  // memoryPairs. Memory window unchanged by the turn stack - the stack
+  // may show more turns than memory holds.
   const [memoryPairs, setMemoryPairs] = useState([]);
   const memoryIds = useMemo(() => new Set(memoryPairs.map((p) => p._turnId)), [memoryPairs]);
-  // Feedback state - null | 1 | -1 | 'panel' (showing tag picker) | 'sent'
-  const [feedbackState, setFeedbackState] = useState(null);
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [feedbackText, setFeedbackText] = useState("");
-  const [copyOk, setCopyOk] = useState(false);
   const abortRef = useRef(null);
   const inputRef = useRef(null);
-  const startedAtRef = useRef(null);
   // 2026-08-02: pane-scroll region owns the only scroll container on the
-  // page variant. paneScrollRef targets it for (a) on-submit scroll-to-top
-  // (new turn's question header lands at the top so long answers read
-  // top-down) and (b) the .sa-fab-scroll-top button below.
+  // page variant. paneScrollRef targets it for (a) on-submit scroll-to-
+  // the-new-turn's-header and (b) the .sa-fab-scroll-top button below.
   const paneScrollRef = useRef(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  // Pending scroll target - set by submitAsk (new turn) or by rail click
+  // (jump-to-turn). Consumed by an effect that fires after the DOM has
+  // rendered the target card so scrollIntoView actually finds it.
+  const pendingScrollRef = useRef(null);
 
   useEffect(() => { if (autoFocus && inputRef.current) inputRef.current.focus(); }, [autoFocus]);
 
@@ -175,6 +193,55 @@ const SousSurface = forwardRef(function SousSurface({
     return () => el.removeEventListener("scroll", onScroll);
   }, [variant]);
 
+  // Turn-stack (2026-08-04): after sessionTurns commits, honour any
+  // pending scroll target - either a freshly-submitted turn (via
+  // submitAsk) or a rail-click jump (via onRailItemClick). We scroll the
+  // pane region so the target card's question header is top-anchored,
+  // and add a brief highlight class the CSS animates. `prefers-reduced-
+  // motion` disables both the smooth-scroll and the flash (the scroll
+  // still happens, just instantly and without the ring).
+  useEffect(() => {
+    if (!pendingScrollRef.current) return;
+    const targetId = pendingScrollRef.current;
+    pendingScrollRef.current = null;
+    const el = typeof document !== "undefined" ? document.getElementById(`sa-turn-${targetId}`) : null;
+    if (!el) return;
+    const reduce = typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    if (!reduce) {
+      el.classList.add("sa-turn--just-navigated");
+      window.setTimeout(() => { el.classList.remove("sa-turn--just-navigated"); }, 1200);
+    }
+  }, [sessionTurns]);
+
+  // Rail-click navigation (Part 2). Primary click on a rail item scrolls
+  // the region to that turn's card. The pending-scroll effect above
+  // consumes the request on the next render tick - useState no-op forces
+  // a re-render so the effect fires even when sessionTurns is unchanged.
+  const [navTick, setNavTick] = useState(0);
+  const onRailItemClick = useCallback((turnId) => {
+    pendingScrollRef.current = turnId;
+    setNavTick((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    if (navTick === 0) return;
+    if (!pendingScrollRef.current) return;
+    const targetId = pendingScrollRef.current;
+    pendingScrollRef.current = null;
+    const el = typeof document !== "undefined" ? document.getElementById(`sa-turn-${targetId}`) : null;
+    if (!el) return;
+    const reduce = typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    if (!reduce) {
+      el.classList.add("sa-turn--just-navigated");
+      window.setTimeout(() => { el.classList.remove("sa-turn--just-navigated"); }, 1200);
+    }
+  }, [navTick]);
+
   useEffect(() => {
     if (initialQuestion) {
       setQuestion(initialQuestion);
@@ -186,9 +253,6 @@ const SousSurface = forwardRef(function SousSurface({
     }
   }, [initialQuestion]);
 
-  const submitting = phase === "streaming";
-  const hasAnswer = phase === "done" || phase === "error" || phase === "streaming";
-
   const submitAsk = useCallback(async (rawQuestion) => {
     const q = String(rawQuestion || "").trim();
     if (!q || submitting) return;
@@ -196,33 +260,39 @@ const SousSurface = forwardRef(function SousSurface({
       firstAskFiredRef.current = true;
       onFirstAsk();
     }
-    setAskedQuestion(q);
-    setAnswerText("");
-    setToolTrail([]);
-    setDoneEnv(null);
-    setErrorInfo(null);
-    setFeedbackState(null);
-    setSelectedTags([]);
-    setFeedbackText("");
-    setCopyOk(false);
-    setPhase("streaming");
-    startedAtRef.current = Date.now();
-    // 2026-08-02: scroll the pane region to the top so the question
-    // header (which renders inside .sa-turn at the top of .sa-pane) is
-    // top-anchored. Long answers then read top-down, and follow-up asks
-    // reset the reading position rather than leaving the user mid-scroll
-    // from the previous turn. No-op on the panel variant (paneScrollRef
-    // stays null there).
-    if (paneScrollRef.current) paneScrollRef.current.scrollTop = 0;
-    // Prepend to session rail. turnId is captured here so the done handler
-    // can attach the answer back to the correct entry (setSessionTurns runs
-    // async; using a ref-like capture keeps the append targeted).
+    // Turn-stack (2026-08-04): append a brand-new turn object to
+    // sessionTurns. The stack renders chronologically; the new turn
+    // lands at the bottom. Every field starts empty and gets populated
+    // by the stream events below.
     const turnId = `t${Date.now()}`;
-    setSessionTurns((prev) => [{ id: turnId, at: new Date(), question: q }, ...prev]);
+    const startedAt = Date.now();
+    setSessionTurns((prev) => [...prev, {
+      id: turnId,
+      at: new Date(),
+      question: q,
+      phase: "streaming",
+      status: null,
+      answerText: "",
+      toolTrail: [],
+      doneEnv: null,
+      errorInfo: null,
+      feedbackState: null,
+      selectedTags: [],
+      feedbackText: "",
+      copyOk: false,
+      startedAt,
+      durationMs: null,
+    }]);
+    // Ask the scroll effect (below) to bring the new card's question
+    // header to the top of the pane region once React commits the new
+    // <article>. Replaces the pre-turn-stack `scrollTop = 0` reset.
+    pendingScrollRef.current = turnId;
 
     // PR B memory: snapshot of prior turns to send with this ask.
-    // memoryPairs already excludes anything from before the last New Question
-    // / ⌘K clear. Ships Q&A text only; no meta, no trajectories, no sources.
+    // memoryPairs already excludes anything from before the last New
+    // Question / ⌘K clear. Ships Q&A text only; no meta, no trajectories,
+    // no sources. Memory window is still capped at 3 - the visible stack
+    // can hold more.
     const priorTurnsForSend = memoryPairs.map((p) => ({ question: p.question, answer: p.answer }));
     // Local accumulator so the done handler can capture the final answer
     // without relying on React's async answerText state at that moment.
@@ -239,8 +309,11 @@ const SousSurface = forwardRef(function SousSurface({
         signal: controller.signal,
       });
       if (!resp.ok || !resp.body) {
-        setErrorInfo({ kind: "http", message: `Request failed (${resp.status}).` });
-        setPhase("error");
+        updateTurn(turnId, {
+          phase: "error",
+          errorInfo: { kind: "http", message: `Request failed (${resp.status}).` },
+          durationMs: Date.now() - startedAt,
+        });
         // 2026-08-03 (Kevin ruling, #598 depth v2): transport-error paths
         // preserve the typed text AND return focus so the user can retry
         // with the same text without a second click. Success path (below)
@@ -254,36 +327,38 @@ const SousSurface = forwardRef(function SousSurface({
       setQuestion("");
       for await (const { event, data } of parseSse(resp)) {
         if (event === "tool_start") {
-          setToolTrail((prev) => [...prev, { tool: data.tool, summary: data.summary, input: data.input }]);
+          updateTurn(turnId, (t) => ({
+            toolTrail: [...t.toolTrail, { tool: data.tool, summary: data.summary, input: data.input }],
+          }));
         } else if (event === "tool_end") {
-          setToolTrail((prev) => {
-            const next = [...prev];
+          updateTurn(turnId, (t) => {
+            const next = [...t.toolTrail];
             for (let i = next.length - 1; i >= 0; i--) {
               if (next[i].tool === data.tool && next[i].ms == null) {
                 next[i] = { ...next[i], ms: data.ms };
                 break;
               }
             }
-            return next;
+            return { toolTrail: next };
           });
         } else if (event === "token") {
           const t = data?.t || "";
           accumulatedAnswer += t;
-          setAnswerText((prev) => prev + t);
+          updateTurn(turnId, (tt) => ({ answerText: tt.answerText + t }));
         } else if (event === "error") {
-          setErrorInfo({ kind: data?.kind || "unknown", message: data?.message || "Sous failed." });
-          setPhase("error");
+          updateTurn(turnId, {
+            phase: "error",
+            errorInfo: { kind: data?.kind || "unknown", message: data?.message || "Sous failed." },
+            durationMs: Date.now() - startedAt,
+          });
         } else if (event === "done") {
           const env = data || {};
-          setDoneEnv(env);
-          setPhase("done");
-          // Attach answer + status back to the rail entry so the rail can
-          // render the status dot next to the timestamp. accumulatedAnswer
-          // is the final streamed content captured in local scope (avoids
-          // React state async).
-          setSessionTurns((prev) => prev.map((t) => (
-            t.id === turnId ? { ...t, answer: accumulatedAnswer, status: env.status || "grounded" } : t
-          )));
+          updateTurn(turnId, {
+            phase: "done",
+            status: env.status || "grounded",
+            doneEnv: env,
+            durationMs: Date.now() - startedAt,
+          });
           // Append to memoryPairs (chronological order, cap at 3). Only
           // grounded / partial / declined answers count; errors don't
           // become context (the error state stays out of history).
@@ -295,19 +370,30 @@ const SousSurface = forwardRef(function SousSurface({
           }
         }
       }
-      setPhase((p) => (p === "streaming" ? "error" : p));
-      setErrorInfo((e) => e || { kind: "stream_closed", message: "Sous closed the connection unexpectedly." });
+      // Stream ended without a done event - mark this turn as an error
+      // (only if it's still streaming; done/error already terminal).
+      updateTurn(turnId, (t) => {
+        if (t.phase !== "streaming") return {};
+        return {
+          phase: "error",
+          errorInfo: { kind: "stream_closed", message: "Sous closed the connection unexpectedly." },
+          durationMs: Date.now() - startedAt,
+        };
+      });
     } catch (err) {
       if (controller.signal.aborted) return;
-      setErrorInfo({ kind: "network", message: err?.message || "Network error." });
-      setPhase("error");
+      updateTurn(turnId, {
+        phase: "error",
+        errorInfo: { kind: "network", message: err?.message || "Network error." },
+        durationMs: Date.now() - startedAt,
+      });
       // 2026-08-03 (Kevin ruling, #598 depth v2): transport failure -
       // preserve text + return focus so the user can retry-with-same.
       inputRef.current?.focus();
     } finally {
       abortRef.current = null;
     }
-  }, [submitting]);
+  }, [submitting, memoryPairs, onFirstAsk, updateTurn]);
 
   // Imperative API for parents that need to fire an ask from an external
   // control (panel starter chips, R3-02). Fires the same submit path a
@@ -325,20 +411,17 @@ const SousSurface = forwardRef(function SousSurface({
   // sousRef.current?.askQuestion(q) -> submitAsk(q) with no pre-set, and
   // they never showed the bug. Page path now matches panel path exactly.
   const onExampleClick = (q) => { submitAsk(q); };
-  const onRetry = () => { if (question.trim()) submitAsk(question); };
+  // Retry the failed turn's question - fires a fresh ask, which appends a
+  // new turn to the stack (the failed turn stays as history above).
+  const onRetry = (turn) => { if (turn?.question) submitAsk(turn.question); };
   const onNewQuestion = () => {
     setQuestion("");
-    setPhase("idle");
-    setAnswerText("");
-    setDoneEnv(null);
-    setErrorInfo(null);
-    setToolTrail([]);
-    // PR B memory: New Question / ⌘K clears the memory window. Rail entries
-    // stay visible (session history is nice-to-have), but IN CONTEXT
-    // markers all disappear on the next render because memoryPairs is empty.
+    // Turn-stack: New Question / ⌘K wipes the visible session log AND
+    // the memory window. Every card unmounts, the rail is empty, and the
+    // first-run landing renders again. Session is client-only so this is
+    // reversible only by reload.
+    setSessionTurns([]);
     setMemoryPairs([]);
-    setAskedQuestion("");
-    setFeedbackState(null);
     if (inputRef.current) inputRef.current.focus();
   };
 
@@ -369,59 +452,74 @@ const SousSurface = forwardRef(function SousSurface({
     return () => window.removeEventListener("keydown", onKey);
   }, [isOverlay]);
 
-  const onFeedbackClick = useCallback((value) => {
-    if (!doneEnv?.question_id) return;
+  // Per-turn handlers (turn-stack, 2026-08-04). Every user action against
+  // an older card carries THAT turn's ids and text; the surface never
+  // reaches for singleton state. The feedback POST is the load-bearing
+  // one - stack means older turns are still on screen and clickable, so
+  // a payload mixup would credit feedback to the wrong question_id.
+  const onFeedbackClick = useCallback((turn, value) => {
+    if (!turn?.doneEnv?.question_id) return;
     if (value === 1) {
       // Thumbs up: single POST, no panel.
       fetch("/api/sousai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "feedback", question_id: doneEnv.question_id, value: 1 }),
+        body: JSON.stringify({ action: "feedback", question_id: turn.doneEnv.question_id, value: 1 }),
       }).catch(() => { /* silent */ });
-      setFeedbackState("sent-pos");
+      updateTurn(turn.id, { feedbackState: "sent-pos" });
     } else {
-      setFeedbackState("panel");
+      updateTurn(turn.id, { feedbackState: "panel", selectedTags: [], feedbackText: "" });
     }
-  }, [doneEnv]);
+  }, [updateTurn]);
 
-  const onToggleTag = (tagId) => {
-    setSelectedTags((prev) => prev.includes(tagId) ? prev.filter((t) => t !== tagId) : [...prev, tagId]);
-  };
+  const onToggleTag = useCallback((turn, tagId) => {
+    updateTurn(turn.id, (t) => ({
+      selectedTags: t.selectedTags.includes(tagId)
+        ? t.selectedTags.filter((x) => x !== tagId)
+        : [...t.selectedTags, tagId],
+    }));
+  }, [updateTurn]);
 
-  const onSendFeedback = useCallback(async () => {
-    if (!doneEnv?.question_id) return;
+  const onSetFeedbackText = useCallback((turn, text) => {
+    updateTurn(turn.id, { feedbackText: text });
+  }, [updateTurn]);
+
+  const onSendFeedback = useCallback(async (turn) => {
+    if (!turn?.doneEnv?.question_id) return;
     try {
       await fetch("/api/sousai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "feedback",
-          question_id: doneEnv.question_id,
+          question_id: turn.doneEnv.question_id,
           value: -1,
-          tags: selectedTags,
-          comment: feedbackText.trim() || null,
+          tags: turn.selectedTags,
+          comment: turn.feedbackText.trim() || null,
         }),
       });
     } catch { /* silent */ }
-    setFeedbackState("sent-neg");
-  }, [doneEnv, selectedTags, feedbackText]);
+    updateTurn(turn.id, { feedbackState: "sent-neg" });
+  }, [updateTurn]);
 
-  const onSkipFeedback = () => { setFeedbackState("skipped"); };
+  const onSkipFeedback = useCallback((turn) => {
+    updateTurn(turn.id, { feedbackState: "skipped" });
+  }, [updateTurn]);
 
-  const onCopyAnswer = async () => {
+  const onCopyAnswer = useCallback(async (turn) => {
     try {
-      await navigator.clipboard.writeText(answerText);
-      setCopyOk(true);
-      setTimeout(() => setCopyOk(false), 1600);
+      await navigator.clipboard.writeText(turn.answerText);
+      updateTurn(turn.id, { copyOk: true });
+      setTimeout(() => updateTurn(turn.id, { copyOk: false }), 1600);
     } catch { /* silent */ }
-  };
+  }, [updateTurn]);
 
-  // CSV export from any table in the answer body. Extracts the FIRST
-  // rendered table via DOMParser (no dep) - answerText is markdown, mdLite
-  // renders pipe tables to <table>.
-  const onDownloadCsv = () => {
+  // CSV export from any table in that turn's answer body. Extracts the
+  // FIRST rendered table via DOMParser (no dep) - answerText is markdown,
+  // mdLite renders pipe tables to <table>.
+  const onDownloadCsv = useCallback((turn) => {
     if (typeof window === "undefined") return;
-    const html = renderMdLite(answerText);
+    const html = renderMdLite(turn.answerText);
     const parser = new DOMParser();
     const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
     const table = doc.querySelector("table");
@@ -442,26 +540,29 @@ const SousSurface = forwardRef(function SousSurface({
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  };
+  }, []);
 
-  const status = doneEnv?.status || (phase === "error" ? "error" : phase === "streaming" ? "streaming" : "grounded");
-  const statusLabel = STATUS_LABEL[status] || "Answer";
+  // Per-turn derivations moved from singleton into computeTurnDerived below.
   // Status-companion mark removed for r2 hotfix - the 19px mark rendered at
   // .sa-answer-head's top-left overlapped the status rail and got clipped by
   // the card's border-radius. Correct placement (inside the tool-trail well)
   // ships with the design round.
 
-  const provenance = useMemo(() => {
-    if (phase === "streaming") {
-      // Generic stage indicator - the per-tool detail lives in the trail
-      // above, so the companion never repeats "list_contacts_by_role" from
-      // the last tool_start event.
-      return { streaming: true, text: "Working..." };
-    }
-    if (phase === "done") {
-      const total = startedAtRef.current ? Date.now() - startedAtRef.current : null;
-      const nTools = toolTrail.length;
-      const sources = Array.isArray(doneEnv?.sources) ? doneEnv.sources : [];
+  // Given a turn state, derive the render-time bits (status label, provenance
+  // meta row, table flag). Kept inline (not memoised) - the stack is small,
+  // each call is a few field reads and a couple of loops.
+  const computeTurnDerived = (turn) => {
+    const turnStatus = turn.status || (turn.phase === "error" ? "error" : turn.phase === "streaming" ? "streaming" : "grounded");
+    const turnStatusLabel = STATUS_LABEL[turnStatus] || "Answer";
+    let turnProvenance = null;
+    if (turn.phase === "streaming") {
+      turnProvenance = { streaming: true, text: "Working..." };
+    } else if (turn.phase === "done") {
+      // Duration is captured at settle (turn.durationMs); fall back to the
+      // live elapsed if durationMs is missing so the stat never reads "null".
+      const total = turn.durationMs != null ? turn.durationMs : (turn.startedAt ? Date.now() - turn.startedAt : null);
+      const nTools = turn.toolTrail.length;
+      const sources = Array.isArray(turn.doneEnv?.sources) ? turn.doneEnv.sources : [];
       const parts = [];
       if (nTools) parts.push(`${nTools} tool${nTools === 1 ? "" : "s"}`);
       if (total != null) parts.push(formatMs(total));
@@ -469,12 +570,16 @@ const SousSurface = forwardRef(function SousSurface({
       // for the meta row before joining so we never render "[object Object]".
       const ids = sources.map((s) => typeof s === "string" ? s : s?.docId).filter(Boolean);
       if (ids.length) parts.push(`sources: ${ids.join(", ")}`);
-      return { streaming: false, text: parts.join(" · ") };
+      turnProvenance = { streaming: false, text: parts.join(" · ") };
     }
-    return null;
-  }, [phase, toolTrail, doneEnv]);
-
-  const hasTable = /\|.+\|/.test(answerText);   // pipe-table heuristic
+    return {
+      status: turnStatus,
+      statusLabel: turnStatusLabel,
+      provenance: turnProvenance,
+      reasonText: turnStatus === "partial" ? partialReason(turn.doneEnv) : null,
+      hasTable: /\|.+\|/.test(turn.answerText),
+    };
+  };
 
   // ── Rail (page variant only) ─────────────────────────────────────────────
   const railEl = !isOverlay && (
@@ -500,18 +605,30 @@ const SousSurface = forwardRef(function SousSurface({
           // id is in memoryPairs (the actual context window). New Question /
           // ⌘K clears memoryPairs, so all markers disappear until fresh
           // asks land. Status dots per item render on completion.
-          const inContext = sessionTurns.filter((t) => memoryIds.has(t.id));
-          const outsideContext = sessionTurns.filter((t) => !memoryIds.has(t.id));
+          //
+          // 2026-08-04 (turn stack): sessionTurns is chronological (oldest
+          // first, newest last) to match the stack render order. Rail
+          // reads newest-first, so we .slice().reverse() before filtering.
+          const railTurns = sessionTurns.slice().reverse();
+          const inContext = railTurns.filter((t) => memoryIds.has(t.id));
+          const outsideContext = railTurns.filter((t) => !memoryIds.has(t.id));
+          // 2026-08-04 (turn stack Part 2): rail item's primary click now
+          // jumps to that turn's card via onRailItemClick - the <button>
+          // + cursor:pointer restored from #598's rail-honesty scope
+          // (which correctly demoted them when there was no card to jump
+          // to). Ask-again icon button retained exactly as shipped in
+          // #598 - loads composer + focuses, no submit.
           const renderRow = (t, extraClass) => (
-            <li key={t.id}>
-              {/* 2026-08-03 (Kevin rail-honesty ruling, #598): rail item's
-                  primary click does nothing - the item is a session log
-                  entry, not a re-ask shortcut. Ask-again lives on a
-                  dedicated icon button (revealed on hover, always present
-                  for keyboard focus). The turn-stack scroll-to-card
-                  behaviour lands in its own follow-up PR. */}
-              <div
-                className={`sa-rail-item ${extraClass}${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
+            // 2026-08-04 (turn stack): the ask-again <button> is a SIBLING
+            // of the rail-item <button>, not nested inside it - <button>
+            // in <button> is invalid HTML. The <li> becomes the position:
+            // relative anchor so ask-again can float top-right of the row
+            // exactly as shipped in #598.
+            <li key={t.id} className="sa-rail-row">
+              <button
+                type="button"
+                className={`sa-rail-item ${extraClass}`}
+                onClick={() => onRailItemClick(t.id)}
               >
                 <span className="sa-rail-item-meta">
                   {t.status && (
@@ -523,18 +640,18 @@ const SousSurface = forwardRef(function SousSurface({
                   <span className="sa-rail-item-time">{formatTime(t.at)}</span>
                 </span>
                 <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
-                <button
-                  type="button"
-                  className="sa-rail-item-askagain"
-                  aria-label="Ask this again"
-                  onClick={() => {
-                    setQuestion(t.question);
-                    inputRef.current?.focus();
-                  }}
-                >
-                  <RotateCcw size={12} aria-hidden="true" />
-                </button>
-              </div>
+              </button>
+              <button
+                type="button"
+                className="sa-rail-item-askagain"
+                aria-label="Ask this again"
+                onClick={() => {
+                  setQuestion(t.question);
+                  inputRef.current?.focus();
+                }}
+              >
+                <RotateCcw size={12} aria-hidden="true" />
+              </button>
             </li>
           );
           return (
@@ -551,10 +668,6 @@ const SousSurface = forwardRef(function SousSurface({
                           >
                             In context
                           </span>
-                          {/* 2026-08-03 (Kevin rail-honesty ruling, #598):
-                              one-line explanation of what IN CONTEXT means,
-                              rendered in the rail's mono/label scale in
-                              #475569 to sit quietly under the marker. */}
                           <span className="sa-rail-incontext-hint">Sous remembers these three.</span>
                         </li>
                       )}
@@ -637,156 +750,169 @@ const SousSurface = forwardRef(function SousSurface({
   // companion back - 19px mark inside the tool-trail well, beside the
   // trajectory lines (never touching the rail this time). Provenance and
   // sources both live in interior-depth containers (.sa-well, .sa-source-row).
-  const reasonText = status === "partial" ? partialReason(doneEnv) : null;
-  const turnEl = hasAnswer && (
-    <article className="sa-turn">
-      <div className={`sa-answer sa-answer--${status}`}>
-        {askedQuestion && (
+  // Turn-stack (2026-08-04): every entry in sessionTurns renders through
+  // this helper. Shipped composition is identical to the pre-stack
+  // singleton turnEl - question header + status pill, reason row (if
+  // partial), streaming tool trail, body / error, source rows, provenance
+  // well, actions row, feedback panel. Additions for the stack:
+  //   - id={`sa-turn-${turn.id}`} for rail-click scroll targeting.
+  //   - `.sa-turn--outside-context` when turn.id is not in memoryIds -
+  //     muted status border + question header text (Part 3, chosen over
+  //     the "not in context" label per the lighter-touch call).
+  //   - All feedback / copy / csv handlers bind to THIS turn's data.
+  const renderTurn = (turn) => {
+    const d = computeTurnDerived(turn);
+    const inContext = memoryIds.has(turn.id);
+    const showActions = turn.phase === "done" && turn.doneEnv?.question_id && turn.feedbackState !== "panel";
+    return (
+      <article
+        key={turn.id}
+        id={`sa-turn-${turn.id}`}
+        className={`sa-turn${inContext ? "" : " sa-turn--outside-context"}`}
+      >
+        <div className={`sa-answer sa-answer--${d.status}`}>
           <div className="sa-answer-header">
             <span className="sa-question-bar" aria-hidden="true" />
-            <span className="sa-question-text">{askedQuestion}</span>
-            <span className={`sa-status-pill sa-status-pill--${status}`}>{statusLabel}</span>
+            <span className="sa-question-text">{turn.question}</span>
+            <span className={`sa-status-pill sa-status-pill--${d.status}`}>{d.statusLabel}</span>
           </div>
-        )}
-        {reasonText && (
-          <div className="sa-reason-row">
-            <span className="sa-reason-chip">{reasonText}</span>
-          </div>
-        )}
-        {phase === "streaming" && toolTrail.length > 0 && (
-          <div className="sa-well sa-tooltrail-well" role="status" aria-live="polite">
-            <SousMark variant="small" state="turn" size={19} />
-            <div className="sa-tooltrail">
-              {toolTrail.map((t, i) => (
-                <div key={i} className="sa-tooltrail-item">
-                  <span className="sa-tooltrail-tool">{t.tool}</span>
-                  <span className="sa-tooltrail-summary">{typeof t.summary === "string" ? t.summary : ""}</span>
-                  {t.ms != null && <span className="sa-tooltrail-ms">{formatMs(t.ms)}</span>}
-                </div>
-              ))}
+          {d.reasonText && (
+            <div className="sa-reason-row">
+              <span className="sa-reason-chip">{d.reasonText}</span>
             </div>
-          </div>
-        )}
-        {phase === "error" ? (
-          <div className="sa-answer-body sa-answer-body--error" role="alert">
-            <p className="sa-error-msg">{errorInfo?.message || "Sous did not answer."}</p>
-            <button type="button" className="sa-action-btn sa-action-btn--tryagain" onClick={onRetry}>Try again</button>
-          </div>
-        ) : (
-          <div className="sa-answer-body" aria-live="polite" dangerouslySetInnerHTML={{ __html: renderMdLite(answerText) }} />
-        )}
+          )}
+          {turn.phase === "streaming" && turn.toolTrail.length > 0 && (
+            <div className="sa-well sa-tooltrail-well" role="status" aria-live="polite">
+              <SousMark variant="small" state="turn" size={19} />
+              <div className="sa-tooltrail">
+                {turn.toolTrail.map((tt, i) => (
+                  <div key={i} className="sa-tooltrail-item">
+                    <span className="sa-tooltrail-tool">{tt.tool}</span>
+                    <span className="sa-tooltrail-summary">{typeof tt.summary === "string" ? tt.summary : ""}</span>
+                    {tt.ms != null && <span className="sa-tooltrail-ms">{formatMs(tt.ms)}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {turn.phase === "error" ? (
+            <div className="sa-answer-body sa-answer-body--error" role="alert">
+              <p className="sa-error-msg">{turn.errorInfo?.message || "Sous did not answer."}</p>
+              <button type="button" className="sa-action-btn sa-action-btn--tryagain" onClick={() => onRetry(turn)}>Try again</button>
+            </div>
+          ) : (
+            <div className="sa-answer-body" aria-live="polite" dangerouslySetInnerHTML={{ __html: renderMdLite(turn.answerText) }} />
+          )}
 
-        {Array.isArray(doneEnv?.sources) && doneEnv.sources.length > 0 && (
-          <div className="sa-sources">
-            {doneEnv.sources.map((s) => {
-              // I2 - route.js hydrates sources to {docId, title}. Legacy
-              // string shape still renders because we normalise here; when
-              // title is missing or equals the id, render the chip alone.
-              const docId = typeof s === "string" ? s : s?.docId;
-              const rawTitle = typeof s === "string" ? null : s?.title;
-              const showTitle = rawTitle && rawTitle !== docId;
-              return (
-                <a
-                  key={docId}
-                  className="sa-source-row"
-                  href={`/playbook/d/${encodeURIComponent(docId)}`}
-                  target="_blank"
-                  rel="noopener"
-                >
-                  <span className="sa-source-idchip">{docId}</span>
-                  {showTitle && <span className="sa-source-title">{rawTitle}</span>}
-                  <ExternalLink size={13} className="sa-source-go" aria-hidden="true" />
-                </a>
-              );
-            })}
-          </div>
-        )}
+          {Array.isArray(turn.doneEnv?.sources) && turn.doneEnv.sources.length > 0 && (
+            <div className="sa-sources">
+              {turn.doneEnv.sources.map((s) => {
+                const docId = typeof s === "string" ? s : s?.docId;
+                const rawTitle = typeof s === "string" ? null : s?.title;
+                const showTitle = rawTitle && rawTitle !== docId;
+                return (
+                  <a
+                    key={docId}
+                    className="sa-source-row"
+                    href={`/playbook/d/${encodeURIComponent(docId)}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <span className="sa-source-idchip">{docId}</span>
+                    {showTitle && <span className="sa-source-title">{rawTitle}</span>}
+                    <ExternalLink size={13} className="sa-source-go" aria-hidden="true" />
+                  </a>
+                );
+              })}
+            </div>
+          )}
 
-        {provenance && (
-          <div className={`sa-well sa-provenance-well${provenance.streaming ? " sa-provenance-well--streaming" : ""}`}>
-            <p className="sa-provenance">
-              <span className="sa-provenance-dot" aria-hidden="true" />
-              <span>{provenance.text}</span>
-            </p>
-          </div>
-        )}
+          {d.provenance && (
+            <div className={`sa-well sa-provenance-well${d.provenance.streaming ? " sa-provenance-well--streaming" : ""}`}>
+              <p className="sa-provenance">
+                <span className="sa-provenance-dot" aria-hidden="true" />
+                <span>{d.provenance.text}</span>
+              </p>
+            </div>
+          )}
 
-        {phase === "done" && doneEnv?.question_id && feedbackState !== "panel" && (
-          <div className="sa-actions">
-            <button type="button" className="sa-action-btn" onClick={onCopyAnswer} aria-label="Copy answer">
-              <Copy size={13} aria-hidden="true" /> {copyOk ? "Copied" : "Copy"}
-            </button>
-            {hasTable && (
-              <button type="button" className="sa-action-btn" onClick={onDownloadCsv} aria-label="Download table as CSV">
-                <Download size={13} aria-hidden="true" /> CSV
+          {showActions && (
+            <div className="sa-actions">
+              <button type="button" className="sa-action-btn" onClick={() => onCopyAnswer(turn)} aria-label="Copy answer">
+                <Copy size={13} aria-hidden="true" /> {turn.copyOk ? "Copied" : "Copy"}
               </button>
-            )}
-            <button
-              type="button"
-              className={`sa-action-btn${feedbackState === "sent-pos" ? " sa-action-btn--pressed" : ""}`}
-              onClick={() => onFeedbackClick(1)}
-              disabled={feedbackState != null}
-              aria-label="Helpful"
-              aria-pressed={feedbackState === "sent-pos"}
-            >
-              <ThumbsUp size={13} aria-hidden="true" /> Helpful
-            </button>
-            <button
-              type="button"
-              className={`sa-action-btn${feedbackState === "sent-neg" ? " sa-action-btn--pressed" : ""}`}
-              onClick={() => onFeedbackClick(-1)}
-              disabled={feedbackState != null && feedbackState !== -1}
-              aria-label="Not helpful"
-              aria-pressed={feedbackState === "sent-neg"}
-            >
-              <ThumbsDown size={13} aria-hidden="true" /> Not helpful
-            </button>
-            {feedbackState === "sent-pos" && <span className="sa-feedback-note">Thanks - logged.</span>}
-            {feedbackState === "sent-neg" && <span className="sa-feedback-note">Feedback sent.</span>}
-            {feedbackState === "skipped" && <span className="sa-feedback-note">Skipped.</span>}
-          </div>
-        )}
-
-        {feedbackState === "panel" && (
-          <div className="sa-feedback-panel">
-            <p className="sa-feedback-title">What went wrong?</p>
-            <div className="sa-feedback-tags" role="group" aria-label="Failure tags">
-              {FEEDBACK_TAGS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={`sa-feedback-tag${selectedTags.includes(t.id) ? " sa-feedback-tag--on" : ""}`}
-                  aria-pressed={selectedTags.includes(t.id)}
-                  onClick={() => onToggleTag(t.id)}
-                >
-                  {t.label}
+              {d.hasTable && (
+                <button type="button" className="sa-action-btn" onClick={() => onDownloadCsv(turn)} aria-label="Download table as CSV">
+                  <Download size={13} aria-hidden="true" /> CSV
                 </button>
-              ))}
-            </div>
-            <textarea
-              className="sa-feedback-text"
-              placeholder="Any detail that would help - optional"
-              value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)}
-              maxLength={2000}
-            />
-            <p className="sa-feedback-note">Logged with the question + tools + sources.</p>
-            <div className="sa-feedback-actions">
+              )}
               <button
                 type="button"
-                className="sa-feedback-send"
-                onClick={onSendFeedback}
-                disabled={selectedTags.length === 0 && !feedbackText.trim()}
+                className={`sa-action-btn${turn.feedbackState === "sent-pos" ? " sa-action-btn--pressed" : ""}`}
+                onClick={() => onFeedbackClick(turn, 1)}
+                disabled={turn.feedbackState != null}
+                aria-label="Helpful"
+                aria-pressed={turn.feedbackState === "sent-pos"}
               >
-                Send feedback
+                <ThumbsUp size={13} aria-hidden="true" /> Helpful
               </button>
-              <button type="button" className="sa-feedback-skip" onClick={onSkipFeedback}>Skip</button>
+              <button
+                type="button"
+                className={`sa-action-btn${turn.feedbackState === "sent-neg" ? " sa-action-btn--pressed" : ""}`}
+                onClick={() => onFeedbackClick(turn, -1)}
+                disabled={turn.feedbackState != null && turn.feedbackState !== -1}
+                aria-label="Not helpful"
+                aria-pressed={turn.feedbackState === "sent-neg"}
+              >
+                <ThumbsDown size={13} aria-hidden="true" /> Not helpful
+              </button>
+              {turn.feedbackState === "sent-pos" && <span className="sa-feedback-note">Thanks - logged.</span>}
+              {turn.feedbackState === "sent-neg" && <span className="sa-feedback-note">Feedback sent.</span>}
+              {turn.feedbackState === "skipped" && <span className="sa-feedback-note">Skipped.</span>}
             </div>
-          </div>
-        )}
-      </div>
-    </article>
-  );
+          )}
+
+          {turn.feedbackState === "panel" && (
+            <div className="sa-feedback-panel">
+              <p className="sa-feedback-title">What went wrong?</p>
+              <div className="sa-feedback-tags" role="group" aria-label="Failure tags">
+                {FEEDBACK_TAGS.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className={`sa-feedback-tag${turn.selectedTags.includes(tag.id) ? " sa-feedback-tag--on" : ""}`}
+                    aria-pressed={turn.selectedTags.includes(tag.id)}
+                    onClick={() => onToggleTag(turn, tag.id)}
+                  >
+                    {tag.label}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                className="sa-feedback-text"
+                placeholder="Any detail that would help - optional"
+                value={turn.feedbackText}
+                onChange={(e) => onSetFeedbackText(turn, e.target.value)}
+                maxLength={2000}
+              />
+              <p className="sa-feedback-note">Logged with the question + tools + sources.</p>
+              <div className="sa-feedback-actions">
+                <button
+                  type="button"
+                  className="sa-feedback-send"
+                  onClick={() => onSendFeedback(turn)}
+                  disabled={turn.selectedTags.length === 0 && !turn.feedbackText.trim()}
+                >
+                  Send feedback
+                </button>
+                <button type="button" className="sa-feedback-skip" onClick={() => onSkipFeedback(turn)}>Skip</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </article>
+    );
+  };
 
   // ── Composer ─────────────────────────────────────────────────────────────
   const composerEl = (
@@ -821,8 +947,8 @@ const SousSurface = forwardRef(function SousSurface({
   if (isOverlay) {
     return (
       <div className="sa-overlay-wrap">
-        <div className="sa-overlay-body-scroll">
-          {turnEl}
+        <div className="sa-overlay-body-scroll" ref={paneScrollRef}>
+          {sessionTurns.map(renderTurn)}
         </div>
         <div className="sa-overlay-foot">{composerEl}</div>
       </div>
@@ -838,7 +964,7 @@ const SousSurface = forwardRef(function SousSurface({
           <div className="sa-pane-scroll" ref={paneScrollRef}>
             <div className="sa-pane">
               {firstRunEl}
-              {turnEl}
+              {sessionTurns.map(renderTurn)}
             </div>
           </div>
           <button

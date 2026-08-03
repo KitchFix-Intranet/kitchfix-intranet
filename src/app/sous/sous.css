@@ -197,6 +197,14 @@
   gap: 2px;
 }
 
+/* 2026-08-04 (turn stack Part 2): <li> wraps the rail-item <button> AND
+   the ask-again <button> as siblings (nested buttons are invalid HTML).
+   The <li> is the position:relative anchor so ask-again floats top-right
+   over the rail-item exactly as shipped in #598. */
+.sa-rail-row {
+  position: relative;
+  list-style: none;
+}
 .sa-rail-item {
   position: relative;
   display: flex;
@@ -210,11 +218,11 @@
      compose their inset bar + drop shadow without redeclaring the drop. */
   --rail-item-drop: 0 1px 2px rgba(15, 48, 87, 0.05), 0 6px 14px -8px rgba(15, 48, 87, 0.16);
   border-radius: 0 8px 8px 0;
-  /* 2026-08-03 (rail-honesty): item is a log entry, not clickable. Cursor
-     drops from `pointer` to `default`; hover background is retained as a
-     row-affordance so the reader knows which item's ask-again button
-     they're about to reach. */
-  cursor: default;
+  /* 2026-08-04 (turn stack Part 2): cursor restored to `pointer` because
+     primary click now jumps to that turn's card in the stack. Reverses
+     the #598 rail-honesty demotion (which was correct at the time - no
+     card to jump to; now there is). */
+  cursor: pointer;
   border: none;
   background: white;
   color: inherit;
@@ -306,9 +314,15 @@
 }
 
 /* Ask-again icon button (Kevin rail-honesty ruling, #598). The item's
-   primary click does nothing; this button IS the item's action. Hidden
-   at rest, revealed on hover; always present for keyboard focus (opacity
-   toggle, not display:none, so tab order stays intact). */
+   primary click jumps to that turn's card (turn-stack, #601); this
+   button is the secondary action - load composer + focus, no submit.
+   Hidden at rest, revealed on hover of the row OR its own :focus-visible
+   for keyboard reachability (opacity toggle, not display:none, so tab
+   order stays intact).
+   2026-08-04: hover selector switched from `.sa-rail-item:hover` to
+   `.sa-rail-row:hover` so hovering ANYWHERE on the row (including over
+   the ask-again button itself) reveals it. Same visual effect; more
+   forgiving hover target. */
 .sa-rail-item-askagain {
   position: absolute;
   top: 8px;
@@ -327,8 +341,9 @@
   transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
   pointer-events: none;
   padding: 0;
+  z-index: 1;
 }
-.sa-rail-item:hover .sa-rail-item-askagain,
+.sa-rail-row:hover .sa-rail-item-askagain,
 .sa-rail-item-askagain:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -698,6 +713,59 @@
 @media (max-width: 767px) { .sa-pane { padding: 16px 14px; } }
 
 .sa-turn { display: flex; flex-direction: column; gap: 10px; }
+
+/* Turn stack (2026-08-04): sessionTurns renders as multiple .sa-turn
+   articles inside .sa-pane. Space them apart with a comfortable gap so
+   the well shows between cards and the eye reads the stack as
+   discrete exchanges. .sa-pane already flex-column-gap:16px covers the
+   between-turn spacing; the extra bottom margin lifts the final card
+   above the composer tray edge. */
+.sa-turn + .sa-turn { margin-top: 16px; }
+.sa-turn:last-child { margin-bottom: 8px; }
+
+/* Turn-stack Part 3 (2026-08-04) - shown-vs-remembered de-emphasis.
+   Turns outside the 3-turn memory window get a muted status border and a
+   lightened question header text, so at a glance the reader sees "the
+   ones Sous remembers" as the fully-saturated group. No new UI elements
+   (no banner, no divider, no `not in context` chip) - just tone changes
+   the reader assimilates without reading anything. Chose this over the
+   "not in context" label because it adds zero visual noise per card and
+   scales naturally as the stack grows.
+   Muted colour is a warm slate mid-tone that reads as "less active"
+   without disappearing (still legible, still copy-able, still
+   feedback-able - the turn is only muted, not disabled). */
+.sa-turn--outside-context .sa-answer--grounded,
+.sa-turn--outside-context .sa-answer--partial,
+.sa-turn--outside-context .sa-answer--declined,
+.sa-turn--outside-context .sa-answer--error,
+.sa-turn--outside-context .sa-answer--streaming {
+  border-top-color: #C7CDD6;
+}
+.sa-turn--outside-context .sa-question-text {
+  color: #64748B;
+}
+.sa-turn--outside-context .sa-status-pill {
+  border-color: #C7CDD6;
+  color: #64748B;
+}
+
+/* Turn-stack Part 2 (2026-08-04) - just-navigated highlight. Rail-click
+   jumps AND fresh-submit scroll both add this class for ~1200ms so the
+   target card visually pings. The keyframe animates only the shadow
+   (glow) and border-radius stays crisp; underlying elev-2 drop shadow
+   is preserved. prefers-reduced-motion suppresses the flash - see the
+   companion JS (SousSurface.js pending-scroll effect) which also
+   skips adding the class under reduced motion.  */
+@keyframes sa-turn-nav-flash {
+  0%   { box-shadow: 0 0 0 3px var(--accent-sous-line, #A5F3FC), 0 1px 2px rgba(15, 48, 87, 0.06), 0 12px 28px -10px rgba(15, 48, 87, 0.20); }
+  100% { box-shadow: 0 1px 2px rgba(15, 48, 87, 0.06), 0 12px 28px -10px rgba(15, 48, 87, 0.20); }
+}
+.sa-turn--just-navigated .sa-answer {
+  animation: sa-turn-nav-flash 1.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sa-turn--just-navigated .sa-answer { animation: none; }
+}
 
 /* Question line - compact, marked, NOT an h1 */
 .sa-question {
