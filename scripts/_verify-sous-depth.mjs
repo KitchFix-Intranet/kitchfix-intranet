@@ -27,6 +27,14 @@ const LONG_ANSWER = Array.from({ length: 60 }, (_, i) =>
 
 // Real .sa-page shape - rail with three items (one --incontext, two outside),
 // main with the tall answer card. This matches the composition in the study.
+// Rail items updated 2026-08-03 for rail-honesty ruling: <div> not <button>,
+// includes ask-again icon button + IN CONTEXT hint line.
+const RAIL_ITEM = (extraClass, dot, time, q) => `
+  <li><div class="sa-rail-item ${extraClass}">
+    <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--${dot}"></span><span class="sa-rail-item-time">${time}</span></span>
+    <span class="sa-rail-item-q">${q}</span>
+    <button class="sa-rail-item-askagain" aria-label="Ask this again"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+  </div></li>`;
 const PAGE_HTML = (bodyInner) => `<!doctype html>
 <html><head><style>
   html, body { margin: 0; padding: 0; }
@@ -47,22 +55,14 @@ const PAGE_HTML = (bodyInner) => `<!doctype html>
           <div class="sa-rail-scroll">
             <p class="sa-rail-heading">This session</p>
             <span class="sa-rail-incontext-marker">In context</span>
+            <span class="sa-rail-incontext-hint">Sous remembers these three.</span>
             <ul class="sa-rail-list">
-              <li><button class="sa-rail-item sa-rail-item--incontext">
-                <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--grounded"></span><span class="sa-rail-item-time">6:51 AM CDT</span></span>
-                <span class="sa-rail-item-q">What's our allergen procedure?</span>
-              </button></li>
+              ${RAIL_ITEM("sa-rail-item--incontext", "grounded", "6:51 AM CDT", "What's our allergen procedure?")}
             </ul>
             <div class="sa-rail-context-boundary"></div>
             <ul class="sa-rail-list">
-              <li><button class="sa-rail-item sa-rail-item--outside-context">
-                <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--partial"></span><span class="sa-rail-item-time">6:33 AM CDT</span></span>
-                <span class="sa-rail-item-q">break out the top one</span>
-              </button></li>
-              <li><button class="sa-rail-item sa-rail-item--outside-context">
-                <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--declined"></span><span class="sa-rail-item-time">6:32 AM CDT</span></span>
-                <span class="sa-rail-item-q">holiday pay?</span>
-              </button></li>
+              ${RAIL_ITEM("sa-rail-item--outside-context", "partial", "6:33 AM CDT", "break out the top one")}
+              ${RAIL_ITEM("sa-rail-item--outside-context", "declined", "6:32 AM CDT", "holiday pay?")}
             </ul>
           </div>
           <p class="sa-rail-footer">Session only - clears when you reload.</p>
@@ -211,6 +211,19 @@ const browser = await chromium.launch();
   await page.setContent(PANEL_HTML, { waitUntil: "load" });
   await page.screenshot({ path: "/tmp/sous-depth/panel-1440x900.png" });
   console.log("SCREENSHOT: /tmp/sous-depth/panel-1440x900.png");
+
+  // Rail-honesty verification (added 2026-08-03): rail with IN CONTEXT hint
+  // visible, one rail item hovered (ask-again button revealed), and one
+  // rail item's ask-again button focused (keyboard tab-reachable state).
+  await page.setContent(PAGE_HTML(ANSWER_INNER), { waitUntil: "load" });
+  await page.locator('.sa-rail-item--incontext').first().hover();
+  await page.screenshot({ path: "/tmp/sous-depth/rail-hover-1440x900.png", clip: { x: 0, y: 200, width: 320, height: 400 } });
+  console.log("SCREENSHOT: /tmp/sous-depth/rail-hover-1440x900.png (rail clip, hover)");
+
+  await page.setContent(PAGE_HTML(ANSWER_INNER), { waitUntil: "load" });
+  await page.locator('.sa-rail-item-askagain').first().focus();
+  await page.screenshot({ path: "/tmp/sous-depth/rail-askagain-focus-1440x900.png", clip: { x: 0, y: 200, width: 320, height: 400 } });
+  console.log("SCREENSHOT: /tmp/sous-depth/rail-askagain-focus-1440x900.png (rail clip, keyboard focus)");
 
   await ctx.close();
 }

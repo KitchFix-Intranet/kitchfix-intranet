@@ -210,7 +210,11 @@
      compose their inset bar + drop shadow without redeclaring the drop. */
   --rail-item-drop: 0 1px 2px rgba(15, 48, 87, 0.05), 0 6px 14px -8px rgba(15, 48, 87, 0.16);
   border-radius: 0 8px 8px 0;
-  cursor: pointer;
+  /* 2026-08-03 (rail-honesty): item is a log entry, not clickable. Cursor
+     drops from `pointer` to `default`; hover background is retained as a
+     row-affordance so the reader knows which item's ask-again button
+     they're about to reach. */
+  cursor: default;
   border: none;
   background: white;
   color: inherit;
@@ -286,6 +290,59 @@
   margin: 4px 4px 2px 12px;
   border-bottom: 1px solid var(--accent-sous-line);
 }
+/* 2026-08-03 (Kevin rail-honesty ruling, #598): one-line explanation of
+   what the IN CONTEXT marker means. Rail's mono/label scale in #475569,
+   no uppercase - reads as a plain-English hint under the label. */
+.sa-rail-incontext-hint {
+  display: block;
+  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: #475569;
+  line-height: 1.4;
+  margin: 0 4px 6px 12px;
+  padding: 0 4px;
+  letter-spacing: 0.02em;
+}
+
+/* Ask-again icon button (Kevin rail-honesty ruling, #598). The item's
+   primary click does nothing; this button IS the item's action. Hidden
+   at rest, revealed on hover; always present for keyboard focus (opacity
+   toggle, not display:none, so tab order stays intact). */
+.sa-rail-item-askagain {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid #DCE2EA;
+  background: white;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  pointer-events: none;
+  padding: 0;
+}
+.sa-rail-item:hover .sa-rail-item-askagain,
+.sa-rail-item-askagain:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sa-rail-item-askagain:hover {
+  background: var(--accent-sous);
+  color: white;
+  border-color: var(--accent-sous);
+}
+.sa-rail-item-askagain:focus-visible {
+  outline: 2px solid var(--accent-sous);
+  outline-offset: 2px;
+}
+
 .sa-rail-context-boundary {
   height: 1px;
   background: var(--kf-border, #E4E8EC);

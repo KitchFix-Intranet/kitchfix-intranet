@@ -25,7 +25,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   Copy, Download, ThumbsUp, ThumbsDown, Plus, ArrowUp, ExternalLink,
-  BookOpen, Users, Calendar, Receipt,
+  BookOpen, Users, Calendar, Receipt, RotateCcw,
 } from "lucide-react";
 import { renderMdLite } from "./mdLite";
 import SousMark from "./SousMark";
@@ -504,10 +504,14 @@ const SousSurface = forwardRef(function SousSurface({
           const outsideContext = sessionTurns.filter((t) => !memoryIds.has(t.id));
           const renderRow = (t, extraClass) => (
             <li key={t.id}>
-              <button
-                type="button"
+              {/* 2026-08-03 (Kevin rail-honesty ruling, #598): rail item's
+                  primary click does nothing - the item is a session log
+                  entry, not a re-ask shortcut. Ask-again lives on a
+                  dedicated icon button (revealed on hover, always present
+                  for keyboard focus). The turn-stack scroll-to-card
+                  behaviour lands in its own follow-up PR. */}
+              <div
                 className={`sa-rail-item ${extraClass}${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
-                onClick={() => { setQuestion(t.question); }}
               >
                 <span className="sa-rail-item-meta">
                   {t.status && (
@@ -519,7 +523,18 @@ const SousSurface = forwardRef(function SousSurface({
                   <span className="sa-rail-item-time">{formatTime(t.at)}</span>
                 </span>
                 <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
-              </button>
+                <button
+                  type="button"
+                  className="sa-rail-item-askagain"
+                  aria-label="Ask this again"
+                  onClick={() => {
+                    setQuestion(t.question);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <RotateCcw size={12} aria-hidden="true" />
+                </button>
+              </div>
             </li>
           );
           return (
@@ -536,6 +551,11 @@ const SousSurface = forwardRef(function SousSurface({
                           >
                             In context
                           </span>
+                          {/* 2026-08-03 (Kevin rail-honesty ruling, #598):
+                              one-line explanation of what IN CONTEXT means,
+                              rendered in the rail's mono/label scale in
+                              #475569 to sit quietly under the marker. */}
+                          <span className="sa-rail-incontext-hint">Sous remembers these three.</span>
                         </li>
                       )}
                       {renderRow(t, "sa-rail-item--incontext")}
