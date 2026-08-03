@@ -1581,3 +1581,168 @@
   gap: var(--sc2-space-3);
   margin-top: var(--sc2-space-3);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SaveConfirmation - the stamp overlay after a clean save.
+   Owner render option C (2026-08-03). Lives inside the modal;
+   fires only from executeConfirm's clean-save branch.
+
+   Reduced-motion contract: the BASE styles below place every
+   element at its resting state. The @keyframes only add the
+   travel/burst/rotate/fade. Under prefers-reduced-motion:reduce,
+   the animation shorthand collapses to `none`, and the elements
+   render at their resting positions immediately. Same markup,
+   no second code path.
+
+   Timing fits inside FINALIZE_DELAY = 1350ms (the coordinator's
+   modal-close timer) so nothing gets slower.
+   ══════════════════════════════════════════════════════════════ */
+.sc-v2-entry-save-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none; /* never blocks - clicks pass through */
+}
+.sc-v2-entry-save-confirm-visual {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sc-v2-entry-save-confirm-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--sc2-surface-card);
+  opacity: 0.92;
+  animation: sc-v2-entry-save-confirm-scrim-fade 1350ms var(--ease-standard) both;
+}
+.sc-v2-entry-save-confirm-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-6);
+}
+.sc-v2-entry-save-confirm-stamp {
+  width: var(--sc2-space-8);
+  height: var(--sc2-space-8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sc2-accent-green);
+  color: var(--sc2-surface-card);
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(47, 125, 79, 0.35);
+  transform-origin: center;
+  animation: sc-v2-entry-save-confirm-stamp-in 1350ms var(--ease-emphasized) both;
+}
+.sc-v2-entry-save-confirm-check {
+  width: 60%;
+  height: 60%;
+}
+.sc-v2-entry-save-confirm-count {
+  font-size: var(--sc2-size-h1);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink);
+  line-height: 1;
+  animation: sc-v2-entry-save-confirm-text-in 1350ms var(--ease-standard) both;
+}
+.sc-v2-entry-save-confirm-money {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-soft);
+  font-weight: var(--sc2-wt-medium);
+  animation: sc-v2-entry-save-confirm-text-in 1350ms var(--ease-standard) 80ms both;
+}
+/* Burst: 10 dots radiating from behind the stamp. Position via
+   --sc-burst-i (0-9) → rotate around center, translate outward.
+   Base state (no animation) = opacity 0 so RM shows nothing here,
+   matching the ticket: "no travel, no burst, no overshoot." */
+.sc-v2-entry-save-confirm-burst {
+  position: absolute;
+  top: var(--sc2-space-6);
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.sc-v2-entry-save-confirm-burst-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--sc2-space-2);
+  height: var(--sc2-space-2);
+  margin: calc(var(--sc2-space-2) * -0.5) 0 0 calc(var(--sc2-space-2) * -0.5);
+  border-radius: 50%;
+  background: var(--sc2-accent-green-bright);
+  opacity: 0;
+  transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(0);
+  animation:
+    sc-v2-entry-save-confirm-burst 700ms var(--ease-standard)
+    calc(420ms + var(--sc-burst-i) * 18ms) both;
+}
+/* SR-only announcement. Standard visually-hidden pattern. */
+.sc-v2-entry-save-confirm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Stamp: enters from above with scale + rotation overshoot,
+   settles at 420ms, holds, then fades 1050->1350ms. */
+@keyframes sc-v2-entry-save-confirm-stamp-in {
+  0%   { transform: translateY(-48px) scale(0.55) rotate(-8deg); opacity: 0; }
+  22%  { transform: translateY(4px)  scale(1.10) rotate(2deg);  opacity: 1; }
+  31%  { transform: translateY(0)    scale(1.00) rotate(0deg);  opacity: 1; }
+  78%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* Text (count + money): fade in as the stamp settles, hold, fade out
+   with the scrim. */
+@keyframes sc-v2-entry-save-confirm-text-in {
+  0%   { opacity: 0; transform: translateY(6px); }
+  27%  { opacity: 0; transform: translateY(6px); }
+  46%  { opacity: 1; transform: translateY(0);   }
+  78%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* Scrim: appear with stamp, fade out at the end so the modal closing
+   underneath is unobstructed for the last frame. */
+@keyframes sc-v2-entry-save-confirm-scrim-fade {
+  0%   { opacity: 0; }
+  12%  { opacity: 0.92; }
+  78%  { opacity: 0.92; }
+  100% { opacity: 0; }
+}
+/* Burst dot: fade in near the stamp landing, radiate outward, fade
+   out. Each dot gets a 0-9 stagger via --sc-burst-i. */
+@keyframes sc-v2-entry-save-confirm-burst {
+  0%   { opacity: 0; transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(0);        }
+  22%  { opacity: 0.85; transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(-14px); }
+  100% { opacity: 0; transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(-30px);    }
+}
+/* Reduced motion: the base styles above render the stamp + text at
+   rest; burst dots' base state is opacity 0. Killing every animation
+   here gives exactly the ticket's contract - stamp and numbers
+   immediately, no travel, no burst, no overshoot. */
+@media (prefers-reduced-motion: reduce) {
+  .sc-v2-entry-save-confirm-scrim,
+  .sc-v2-entry-save-confirm-stamp,
+  .sc-v2-entry-save-confirm-count,
+  .sc-v2-entry-save-confirm-money,
+  .sc-v2-entry-save-confirm-burst-dot {
+    animation: none;
+  }
+  /* Base stamp CSS has transform-origin center but no static translate
+     - it renders at rest. Same for count/money (no static opacity 0).
+     Burst dot base is opacity 0 so RM shows nothing there, matching
+     the "no burst" ticket line. Scrim base is opacity 0.92 which is
+     the mid state we want under RM (stays until modal unmounts). */
+}
