@@ -33,6 +33,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SOUSAI_SYSTEM_PROMPT } from "./agentPrompt.js";
 import { getToolDefinitions, getTool } from "./tools/registry.js";
+import { checkReceipts, hasSuccessfulDataCall, redactMissingFigures } from "./receiptCheck.js";
 
 // ── Tunables ─────────────────────────────────────────────────────────────────
 export const SOUSAI_AGENT_MODEL = "claude-sonnet-4-6";
@@ -223,6 +224,19 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
   // can still drift, so this is the mechanical backstop.
   let zeroToolRetryDone = false;
   let zeroToolBackstopFired = false;
+  // 2026-08-04 (calibration round 2 architecture ruling - loop-level
+  // numeric receipt backstop). After sanctioned line 8 was strengthened,
+  // M1 still fabricated an 11-row category-breakdown table under variance.
+  // Prompt-only mitigation has reached its ceiling; the harness's Tier 1
+  // check is now promoted to a runtime check. When an answer completes
+  // with at least one successful data-tool call AND numeric figures in
+  // the answer don't trace to that turn's payload, the loop rejects and
+  // retries once with a nudge naming the offending figures. If the retry
+  // still misses, ship partial with reason "Some figures could not be
+  // verified against the data." (see receipt_miss flag below).
+  let numericRetryDone = false;
+  let numericBackstopFired = false;
+  let numericBackstopMisses = null;
 
   // Every turn streams. Text deltas emit as `text-delta` events on the fly;
   // the route layer forwards them as `token` events to the client. Tool-use
@@ -343,6 +357,49 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
       // status downgrade block below).
       if (zeroToolRetryDone && toolsUsed === 0) {
         zeroToolBackstopFired = true;
+      }
+
+      // 2026-08-04 (architecture ruling): loop-level numeric receipt
+      // backstop. Runs after the zero-tool branch so this only fires
+      // for answers that DID call a data tool (declines and clarifier
+      // answers are exempt because they don't carry receipts to check).
+      // Uses the shared checkReceipts() from receiptCheck.js - same
+      // containment logic the harness Tier 1 grades with. On miss,
+      // reject once and retry with a nudge naming the offending figures.
+      const isDecline = /\[\[STATUS:\s*declined\]\]/i.test(finalRawText);
+      if (!isDecline && hasSuccessfulDataCall(trajectory, getTool)) {
+        // Strip the STATUS sentinel before extraction so its digits don't
+        // leak into answer numbers (parseAnswer runs post-loop; do the
+        // strip inline here so the check sees only prose).
+        const cleanedInLoop = finalRawText
+          .replace(STATUS_RE, "")
+          .replace(REASON_RE, "")
+          .trim();
+        const check = checkReceipts(cleanedInLoop, trajectory, { question });
+        if (!check.pass) {
+          if (!numericRetryDone) {
+            numericRetryDone = true;
+            trajectory.push({
+              tool: null,
+              kind: "numeric-receipt-retry",
+              misses: check.missing,
+            });
+            emit({ kind: "zero-tool-retry" });   // client-side accumulator reset - same wire
+            messages.push({ role: "assistant", content: finalRawText });
+            messages.push({
+              role: "user",
+              content: `These figures are not in the tool results: ${check.missing.join(", ")}. Answer using only the values the tools returned, and say what you cannot compute.`,
+            });
+            finalRawText = null;
+            finalStopReason = null;
+            continue;
+          }
+          // Retry ALSO missed - flag the backstop so the downgrade block
+          // ships partial with the receipt_miss reason. The listed misses
+          // land in the flag payload so the digest can count them.
+          numericBackstopFired = true;
+          numericBackstopMisses = check.missing;
+        }
       }
       break;
     }
@@ -475,14 +532,34 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
     flags.push({ zero_tool_no_check: true });
     if (status === "grounded") status = "partial";
   }
+  // 2026-08-04 (architecture ruling): numeric receipt backstop flag.
+  // Fires when the retry ALSO shipped with numbers not in the payload.
+  // Payload carries the list of missing figures so the digest can count
+  // classes of failure (single miss vs table fabrication).
+  if (numericBackstopFired && status !== "declined") {
+    flags.push({ receipt_miss: numericBackstopMisses || [] });
+    if (status === "grounded") status = "partial";
+  }
   if (flags.length) trajectory.push({ tool: null, kind: "downgrade", flags });
+
+  // 2026-08-04 (architecture ruling): token-level redaction. If the numeric
+  // backstop retry ALSO shipped with misses, mechanically replace each
+  // offending numeric token in the shipped answer with `[unverified]`.
+  // Kevin: "ugly, honest, and impossible to copy into a deck as fact."
+  // Status stays partial with the existing receipt_miss reason chip.
+  // Exemptions preserved (dates, ordinals, quoted content are masked out
+  // of the redactor's target range by maskExempt() inside the helper).
+  let shippedAnswer = cleanedWithNote;
+  if (numericBackstopFired && Array.isArray(numericBackstopMisses) && numericBackstopMisses.length > 0) {
+    shippedAnswer = redactMissingFigures(cleanedWithNote, numericBackstopMisses);
+  }
 
   const declined = status === "declined";
 
   emit({ kind: "done", status, sources: validSources, truncated });
 
   return {
-    answer: cleanedWithNote,
+    answer: shippedAnswer,
     status,
     declined,
     decline_reason: declined ? decline_reason : null,

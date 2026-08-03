@@ -16,6 +16,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { runSousAgent } from "../src/lib/sousai/agent.js";
+import {
+  extractAnswerNumbers,
+  extractPayloadNumbers,
+  checkReceipts,
+} from "../src/lib/sousai/receiptCheck.js";
 
 // Rough Sonnet-class pricing (per million tokens). Displayed as "ballpark."
 const PRICE = {
@@ -384,42 +389,13 @@ const EXPECTED = {
 // payload. Catches: hallucinated math, wrong-column reads, and the
 // memory case where a number is remembered from an earlier answer
 // instead of pulled from a fresh tool call.
-
-function normalizeNumeric(raw) {
-  return String(raw).replace(/[$,%]/g, "").trim();
-}
-
-function extractAnswerNumbers(answerText) {
-  // Numbers of interest: standalone integers/decimals ≥ 2 digits or with
-  // a comma or decimal - not "1" or "0" alone which are usually prose
-  // ("one", "zero-based"). Money and percent shapes covered by strip.
-  const found = new Set();
-  const re = /\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$?\d+\.\d+|\$?\d{2,}(?:\.\d+)?%?/g;
-  for (const m of String(answerText || "").matchAll(re)) {
-    found.add(normalizeNumeric(m[0]));
-  }
-  return [...found];
-}
-
-function extractPayloadNumbers(trajectory) {
-  const found = new Set();
-  const walk = (v) => {
-    if (v == null) return;
-    if (typeof v === "number") { found.add(normalizeNumeric(v)); return; }
-    if (typeof v === "string") {
-      for (const m of v.matchAll(/\$?\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$?\d+\.\d+|\$?\d{2,}(?:\.\d+)?%?/g)) {
-        found.add(normalizeNumeric(m[0]));
-      }
-      return;
-    }
-    if (Array.isArray(v)) { for (const x of v) walk(x); return; }
-    if (typeof v === "object") { for (const x of Object.values(v)) walk(x); }
-  };
-  for (const step of trajectory || []) {
-    if (step && step.rawResult) walk(step.rawResult);
-  }
-  return found;
-}
+//
+// 2026-08-04 (calibration round 2 architecture ruling): the core
+// extraction + containment logic was promoted to src/lib/sousai/
+// receiptCheck.js so the agent loop can use the same checker as a
+// runtime backstop. The harness imports it above (extractAnswerNumbers,
+// extractPayloadNumbers, checkReceipts). This wrapper adds the harness's
+// human-readable notes so the summary output stays legible.
 
 // 2026-08-04 (calibration round 2, Part 3): fact-receipt check. Tier 1's
 // numeric extractor never sees names, doc ids, or account keys - the
@@ -485,34 +461,17 @@ function extractPersonNames(answerText) {
   return [...found];
 }
 
-function checkNumericReceipts(result) {
-  const notes = [];
-  const answerNums = extractAnswerNumbers(result.answer);
-  if (answerNums.length === 0) {
+function checkNumericReceipts(result, opts = {}) {
+  const check = checkReceipts(result.answer, result.trajectory, opts);
+  if (check.answerNumbers.length === 0) {
     return { pass: true, notes: ["no numeric figures in answer"] };
   }
-  const payloadNums = extractPayloadNumbers(result.trajectory);
-  const missing = [];
-  const grounded = [];
-  const payloadArr = [...payloadNums];
-  for (const n of answerNums) {
-    // Direct hit; comma-stripped hit; or integer-prefix hit (money rounded
-    // to whole dollars: "244954" matches payload "244954.05"). The integer-
-    // prefix rule handles the money-rounding case per spec's "normalize
-    // formatting" clause; genuine arithmetic ("38-25=13" with no matching
-    // payload number) still fails, which is what Tier 1 exists to catch.
-    const bare = n.replace(/,/g, "");
-    const hit = payloadNums.has(n) || payloadNums.has(bare) ||
-      payloadArr.some((p) => p === bare || p.startsWith(bare + "."));
-    if (hit) grounded.push(n);
-    else missing.push(n);
-  }
-  const pass = missing.length === 0;
-  notes.push(`answer numbers: ${answerNums.length} (${answerNums.slice(0, 5).join(", ")}${answerNums.length > 5 ? " ..." : ""})`);
-  notes.push(`payload numbers seen: ${payloadNums.size}`);
-  if (missing.length) notes.push(`RECEIPT MISS: ${missing.join(", ")}`);
+  const notes = [];
+  notes.push(`answer numbers: ${check.answerNumbers.length} (${check.answerNumbers.slice(0, 5).join(", ")}${check.answerNumbers.length > 5 ? " ..." : ""})`);
+  notes.push(`payload numbers seen: ${check.payloadCount}`);
+  if (check.missing.length) notes.push(`RECEIPT MISS: ${check.missing.join(", ")}`);
   else notes.push(`all numbers traced to payload rows`);
-  return { pass, notes };
+  return { pass: check.pass, notes };
 }
 
 // ── Tier 2: cheap guards (PR B testing constitution) ────────────────────────

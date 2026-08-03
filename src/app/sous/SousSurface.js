@@ -68,8 +68,13 @@ function partialReason(doneEnv) {
   // grounded_without_sources will also fire when tools=0 (they are
   // strict subsets), but "answered without checking a source" tells
   // the user WHY sources are missing.
+  // 2026-08-04 (architecture ruling): receipt_miss for numeric figures
+  // that didn't trace to the payload even after the runtime retry.
+  // Reads before grounded_without_sources because it's the more
+  // specific reason: the sources are fine, the FIGURES are the drift.
   for (const f of flags) {
     if (f?.zero_tool_no_check) return "Answered without checking a source this turn.";
+    if (f?.receipt_miss) return "Some figures could not be verified against the data.";
     if (f?.phantom_citation) return "A citation could not be verified";
     if (f?.grounded_without_sources) return "Sources could not be confirmed";
   }

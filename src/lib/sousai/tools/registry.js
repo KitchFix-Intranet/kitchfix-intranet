@@ -553,10 +553,20 @@ const SC_AND_SPEND_TOOLS = [
     },
     async execute(input) { return spendTopVendors(input || {}); },
     summarize(result) {
+      // 2026-08-04 (architecture ruling): summary was reading a non-
+      // existent field `total_vendors` (missing _canonical suffix) so
+      // human-visible trajectory logs showed `total_vendors: 0` on
+      // every call, even when 38 canonical vendors were returned.
+      // Also surface dollar_total from totals so "what share of total
+      // spend?" answers have the denominator visible in every diagnostic
+      // pane, not just in rawResult that only the model sees. The rawResult
+      // was already carrying both fields correctly; this fixes the
+      // debug-surface drift.
       return {
         kind: "top-vendors",
         top: (result?.top_vendors ?? []).slice(0, 5).map((v) => v.vendor_name),
-        total_vendors: result?.totals?.total_vendors ?? 0,
+        total_vendors: result?.totals?.total_vendors_canonical ?? 0,
+        dollar_total: result?.totals?.dollar_total ?? null,
       };
     },
     kind: "data",
