@@ -12,7 +12,7 @@ import ExportControl from "./season/ExportControl";
 import PeriodHeaderNav, { PeriodTodayChip, OverviewTodayChip } from "./season/PeriodHeaderNav";
 import MonthHeaderNav from "./season/MonthHeaderNav";
 import StickyContext from "./season/StickyContext";
-import { fmt$, fmtDateShort } from "./season/format";
+import { fmt$, fmtDateShort, round2 } from "./season/format";
 import { isActionableDay } from "./season/dayPredicates";
 import { derivePhaseTimeline } from "./season/phaseDerivation";
 // M-4b (2026-07-30): MLB accounts inherit their PDC sibling's
@@ -3960,13 +3960,19 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           if (d) days.push(d);
         }
         days.sort((a, b) => a.date.localeCompare(b.date));
-        // Header totals: server-derived per-day figures pre-rounded,
-        // then summed once. Same shape as pre-rewrite so the number
-        // an operator computes on screen still checks out.
+        // Header totals: sum the server-derived per-day figures at
+        // cent precision. Prior shape had `Math.round(...)` inside the
+        // accumulator - round-then-sum to whole dollars - which lost
+        // pennies against the row-by-row sum an operator computes on
+        // screen (e.g. 12-day TXR - AZ sample: header read $736 vs
+        // rows summing to $737.92). R13 (season/format.js:22-28) is
+        // round-per-line + sum; day.totals.projectedRevenue is already
+        // the per-line total from sc_daily_revenue at 2dp, so straight
+        // summation preserves the invoice-convention footing.
         let totMeals = 0, totRev = 0;
         for (const d of days) {
           for (const v of Object.values(d.projected || {})) totMeals += v || 0;
-          totRev += Math.round(Number(d.totals?.projectedRevenue) || 0);
+          totRev += Number(d.totals?.projectedRevenue) || 0;
         }
         // Overwrite detection: days with existing actuals. Counts +
         // services only, no currency - meals summed from day.actual.
@@ -4096,18 +4102,26 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           return n;
         };
         const perDayRev = (d) => {
+          // R13 round-per-line: each service extended amount at 2dp,
+          // then summed. Matches the invoice convention Stage-5 CSVs
+          // use and the per-day figure displayed alongside on each row.
           let rev = 0;
           for (const e of entries) {
             if (!isInServiceOnDay(e.svc, d.date)) continue;
             const price = d.priceAtDate?.[e.colIndex] ?? 0;
-            rev += (Number(e.value) || 0) * price;
+            rev += round2((Number(e.value) || 0) * price);
           }
           return rev;
         };
 
+        // Header accumulator: sum the per-day figures directly. Prior
+        // shape had `Math.round(perDayRev(d))` in the accumulator,
+        // rounding each day to whole dollars before summing - same
+        // penny-drift class as the match path above. perDayRev now
+        // returns cent-precision per R13; the header sums those.
         let totRev = 0, totMeals = 0;
         for (const d of days) {
-          totRev += Math.round(perDayRev(d));
+          totRev += perDayRev(d);
           totMeals += perDayMeals(d);
         }
 
