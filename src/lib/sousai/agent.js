@@ -33,6 +33,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SOUSAI_SYSTEM_PROMPT } from "./agentPrompt.js";
 import { getToolDefinitions, getTool } from "./tools/registry.js";
+import { checkReceipts, hasSuccessfulDataCall, redactMissingFigures } from "./receiptCheck.js";
 
 // ── Tunables ─────────────────────────────────────────────────────────────────
 export const SOUSAI_AGENT_MODEL = "claude-sonnet-4-6";
@@ -69,6 +70,17 @@ const CITATION_RE = /\b([A-Z]{2,6})-([0-9]{3})\b/g;
 // references POL-XXX in its body no longer triggers phantom_citation just
 // because the model quotes the template verbatim.
 const SOURCE_LINE_RE = /^\s*(?:[-*]\s+)?(?:\*\*)?source(?:s)?(?:\*\*)?\s*:/i;
+
+// 2026-08-04 (calibration round 2): does the raw answer carry ANY Source
+// line? Used by the zero-tool backstop below to distinguish citation-
+// bearing answers (which must be grounded in this turn's tools) from
+// decline / clarifier / conversational replies that carry no citation
+// claim at all. Iterates lines to avoid a global-regex `m`-flag rewrite
+// of SOURCE_LINE_RE, which is also used single-line inside parseAnswer.
+function hasSourceLine(rawText) {
+  if (!rawText) return false;
+  return rawText.split("\n").some((line) => SOURCE_LINE_RE.test(line));
+}
 
 function parseAnswer(rawText) {
   const statusMatch = rawText.match(STATUS_RE);
@@ -201,6 +213,30 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
   let finalRawText = null;
   let finalStopReason = null;
   let firstTokenFired = false;
+  // 2026-08-04 (calibration round 2 - Part 1): zero-tool citation backstop
+  // state. When a turn completes with zero successful tool calls AND the
+  // answer carries a citation-shaped claim (Source line, doc id, named
+  // dataset), the loop rejects the answer once, appends a system-side
+  // nudge, and gives the model one retry. If the retry also completes
+  // with zero tools, ship the answer as partial with the accurate reason
+  // string `Answered without checking a source this turn.` The prompt-
+  // rule change alone (line 10, Part 2) is not enough - model behaviour
+  // can still drift, so this is the mechanical backstop.
+  let zeroToolRetryDone = false;
+  let zeroToolBackstopFired = false;
+  // 2026-08-04 (calibration round 2 architecture ruling - loop-level
+  // numeric receipt backstop). After sanctioned line 8 was strengthened,
+  // M1 still fabricated an 11-row category-breakdown table under variance.
+  // Prompt-only mitigation has reached its ceiling; the harness's Tier 1
+  // check is now promoted to a runtime check. When an answer completes
+  // with at least one successful data-tool call AND numeric figures in
+  // the answer don't trace to that turn's payload, the loop rejects and
+  // retries once with a nudge naming the offending figures. If the retry
+  // still misses, ship partial with reason "Some figures could not be
+  // verified against the data." (see receipt_miss flag below).
+  let numericRetryDone = false;
+  let numericBackstopFired = false;
+  let numericBackstopMisses = null;
 
   // Every turn streams. Text deltas emit as `text-delta` events on the fly;
   // the route layer forwards them as `token` events to the client. Tool-use
@@ -285,6 +321,86 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
         .join("");
       finalStopReason = resp.stop_reason;
       trajectory.push({ tool: null, kind: "final", stop_reason: resp.stop_reason });
+
+      // 2026-08-04 (Part 1): zero-tool citation backstop. If this turn
+      // ends with zero successful tool calls but the model wrote a
+      // Source line, reject once and retry with a system nudge. Skips
+      // declines (no citation to make), skips answers with no Source
+      // line at all (clarifiers / conversational replies). Fires
+      // exactly once per session per Kevin's spec.
+      if (!zeroToolRetryDone && toolsUsed === 0) {
+        const isDecline = /\[\[STATUS:\s*declined\]\]/i.test(finalRawText);
+        if (!isDecline && hasSourceLine(finalRawText)) {
+          zeroToolRetryDone = true;
+          trajectory.push({
+            tool: null,
+            kind: "zero-tool-retry",
+            reason: "answered with citation before calling any tool",
+          });
+          emit({ kind: "zero-tool-retry" });
+          // Preserve the rejected attempt in the message log so the
+          // model sees what it just said, then push the nudge as the
+          // next user turn. The retry re-enters the tool-use loop
+          // above with the model's fresh chance to call a tool.
+          messages.push({ role: "assistant", content: finalRawText });
+          messages.push({
+            role: "user",
+            content: "You answered without calling any tool. Call the tool that has this information and answer from its result.",
+          });
+          finalRawText = null;
+          finalStopReason = null;
+          continue;
+        }
+      }
+      // Retry ALSO answered with zero tools. We ship this answer, but
+      // grade it partial with the accurate reason string (see the
+      // status downgrade block below).
+      if (zeroToolRetryDone && toolsUsed === 0) {
+        zeroToolBackstopFired = true;
+      }
+
+      // 2026-08-04 (architecture ruling): loop-level numeric receipt
+      // backstop. Runs after the zero-tool branch so this only fires
+      // for answers that DID call a data tool (declines and clarifier
+      // answers are exempt because they don't carry receipts to check).
+      // Uses the shared checkReceipts() from receiptCheck.js - same
+      // containment logic the harness Tier 1 grades with. On miss,
+      // reject once and retry with a nudge naming the offending figures.
+      const isDecline = /\[\[STATUS:\s*declined\]\]/i.test(finalRawText);
+      if (!isDecline && hasSuccessfulDataCall(trajectory, getTool)) {
+        // Strip the STATUS sentinel before extraction so its digits don't
+        // leak into answer numbers (parseAnswer runs post-loop; do the
+        // strip inline here so the check sees only prose).
+        const cleanedInLoop = finalRawText
+          .replace(STATUS_RE, "")
+          .replace(REASON_RE, "")
+          .trim();
+        const check = checkReceipts(cleanedInLoop, trajectory, { question });
+        if (!check.pass) {
+          if (!numericRetryDone) {
+            numericRetryDone = true;
+            trajectory.push({
+              tool: null,
+              kind: "numeric-receipt-retry",
+              misses: check.missing,
+            });
+            emit({ kind: "zero-tool-retry" });   // client-side accumulator reset - same wire
+            messages.push({ role: "assistant", content: finalRawText });
+            messages.push({
+              role: "user",
+              content: `These figures are not in the tool results: ${check.missing.join(", ")}. Answer using only the values the tools returned, and say what you cannot compute.`,
+            });
+            finalRawText = null;
+            finalStopReason = null;
+            continue;
+          }
+          // Retry ALSO missed - flag the backstop so the downgrade block
+          // ships partial with the receipt_miss reason. The listed misses
+          // land in the flag payload so the digest can count them.
+          numericBackstopFired = true;
+          numericBackstopMisses = check.missing;
+        }
+      }
       break;
     }
 
@@ -408,14 +524,42 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
     flags.push({ grounded_without_sources: true });
     status = "partial";
   }
+  // 2026-08-04 (Part 1): zero-tool citation backstop flag. Fires when the
+  // retry ALSO shipped without any tool call. Grader-visible so the
+  // digest can count how often the backstop actually catches something
+  // instead of being an unfalsifiable rule.
+  if (zeroToolBackstopFired && status !== "declined") {
+    flags.push({ zero_tool_no_check: true });
+    if (status === "grounded") status = "partial";
+  }
+  // 2026-08-04 (architecture ruling): numeric receipt backstop flag.
+  // Fires when the retry ALSO shipped with numbers not in the payload.
+  // Payload carries the list of missing figures so the digest can count
+  // classes of failure (single miss vs table fabrication).
+  if (numericBackstopFired && status !== "declined") {
+    flags.push({ receipt_miss: numericBackstopMisses || [] });
+    if (status === "grounded") status = "partial";
+  }
   if (flags.length) trajectory.push({ tool: null, kind: "downgrade", flags });
+
+  // 2026-08-04 (architecture ruling): token-level redaction. If the numeric
+  // backstop retry ALSO shipped with misses, mechanically replace each
+  // offending numeric token in the shipped answer with `[unverified]`.
+  // Kevin: "ugly, honest, and impossible to copy into a deck as fact."
+  // Status stays partial with the existing receipt_miss reason chip.
+  // Exemptions preserved (dates, ordinals, quoted content are masked out
+  // of the redactor's target range by maskExempt() inside the helper).
+  let shippedAnswer = cleanedWithNote;
+  if (numericBackstopFired && Array.isArray(numericBackstopMisses) && numericBackstopMisses.length > 0) {
+    shippedAnswer = redactMissingFigures(cleanedWithNote, numericBackstopMisses);
+  }
 
   const declined = status === "declined";
 
   emit({ kind: "done", status, sources: validSources, truncated });
 
   return {
-    answer: cleanedWithNote,
+    answer: shippedAnswer,
     status,
     declined,
     decline_reason: declined ? decline_reason : null,
