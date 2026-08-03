@@ -227,6 +227,17 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **Honest position**: the load-boundary change is probably right eventually, as part of a deliberate price-precision pass where the change-detection compare is fixed at the same time. It is not right as a rider on a bulk-entry PR.
 - **Owner's call** (if reconsidered later): both fixes above have larger blast radius than the bounded $1.50-per-row defect. Fix requires the paired change-detection fix, which is its own scope.
 
+### Day-detail modal remounts during post-save refetch (deferred architectural fix, 2026-08-03)
+
+- **What happens**: on a clean save, `handleSave` invalidates the containing month via `setMonthCache(prev => { delete next[mk]; ... })` + `setReloadKey(k => k + 1)` (`ServiceCalendar.js:1927-1931`). The next render recomputes `periodDays` (`:1189-1206`), which returns `null` because `monthsNeeded.some(mk => !monthCache[mk])` is true. `activeDrillDays` collapses -> `focusDayData` collapses -> the mount gate at `:3826` (`focusDay && focusDayData && ...`) evaluates false -> `DayEntryV2` unmounts. When the refetch lands 400-1000ms later, the gate re-enables and a fresh `DayEntryV2` remounts with empty state.
+- **Owner's live measurement (2026-08-03)**: 400ms gap on TXR - AZ July 13 save; longer on July 14 save. Same failure class as the P3-A ring-unmount-during-refetch defect.
+- **Why not fixed today**: the two candidate architectural fixes are both scope-heavy and one has a bad history.
+  - **Surgical monthCache patch** (write the just-saved day back into the cache instead of dropping the month): explicitly attempted twice and reverted per the comment at `ServiceCalendar.js:1884-1892` ("Fix 2 (optimistic patch) was attempted here twice and reverted after failing the gate both times"). Not tractable without deeper cache/render work.
+  - **Latch `focusDayData`** (keep the last known non-null value in a ref, fall back to it during refetch nulls so the mount gate stays true): tractable and would benefit every dialog on this surface, not just the save-confirm case. But it's a workspace-level cache-render change with broader blast radius than any single-dialog PR should carry. Belongs to Phase-1 refetch/render work per the same comment.
+- **Workaround shipped (SaveConfirmation hoist)**: `SaveConfirmation` state hoisted to `ServiceCalendarInner`; overlay mounted at workspace level with a viewport-scale scrim at `--z-popover`. Structurally independent of the modal's mount cycle. Owner's other dialogs (Discard/NoService/Reset confirm) do not have this defect because their lifecycle sits entirely BEFORE the monthCache invalidation (dialog closes -> save/reset fires -> invalidation queues -> modal unmounts, all sequenced).
+- **When to fix**: whenever the workspace-level cache/render work is scheduled. The latch is the load-bearing piece; every other dialog inherits the fix for free.
+- **Owner**: Kevin (schedule). No CC action until scoped.
+
 ### Authed preview e2e (follow-up from #408's honest limitation)
 
 - **Gap**: the preview-smoke job cannot reach the API surface (Vercel Preview Protection). Would need a `VERCEL_AUTOMATION_BYPASS_SECRET` header in the smoke request.

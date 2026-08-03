@@ -60,9 +60,14 @@ import {
 /* Delay before the onFinalize callback (next-day advance / modal
    close) fires. Was 1350ms in the P3-B "one clock" design - the beat
    at which the ambient effects (tile flip, session strip) had
-   settled and the operator was ready to move on. Kept at the same
-   value so cadence is preserved. */
-const FINALIZE_DELAY = 1350;
+   settled and the operator was ready to move on. Bumped to 1800ms
+   2026-08-03 (sc-save-confirm #598 ruling 3): the SaveConfirmation
+   overlay owns this window as its visible-hold budget, and 1350ms
+   was too fast to register the count + money before the advance
+   fired. 1800 gives ~800ms of full-opacity hold, which is the
+   register-time floor for a static confirmation. Owner is the final
+   word if a live run reads this as too long or still too short. */
+const FINALIZE_DELAY = 1800;
 
 const HandoffContext = createContext(null);
 

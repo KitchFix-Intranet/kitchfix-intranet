@@ -59,7 +59,6 @@ import {
 import BillRailFee from "./BillRailFee";
 import SpringTrainingSection, { SPRING_TRAINING_GROUP_KEY } from "./SpringTrainingSection";
 import ServiceRow from "./ServiceRow";
-import SaveConfirmation from "./SaveConfirmation";
 import { isFeeNoDollar, unitLabel } from "../vocab";
 // P3-B (2026-07-28; flight retired 2026-08-01): handoff coordinator.
 // executeConfirm success calls startHandoff to commit the session
@@ -214,6 +213,8 @@ function DayEntryV2({
   onSave,
   onAddNote,
   onReset,
+  onSaveConfirmed,
+  onSaveConfirmComplete,
   saving,
   dayIndex,
   totalDays,
@@ -278,16 +279,15 @@ function DayEntryV2({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [standaloneDraft, setStandaloneDraft] = useState("");
-  // sc-save-confirm (2026-08-03, owner render option C): shape
-  //   { meals: number, revenue: number | null }  =  show the overlay
-  //   null                                        =  no overlay
-  // Set only from executeConfirm's clean-save branch (not queued,
-  // not noteFailed, not auditNoteFailed, not mark-no-service).
-  // Uses server-echoed savedMeals / savedRevenue from route.js:988,
-  // never client-computed. Reset on day-nav (same effect as the
-  // other transient flags) so a stale stamp cannot bleed across
-  // days.
-  const [saveConfirm, setSaveConfirm] = useState(null);
+  // sc-save-confirm state is HOISTED (2026-08-03 gate-bounce ruling
+  // on #598). Owner measured that the modal itself unmounts during
+  // the post-save refetch (mount gate at ServiceCalendar.js:3826
+  // collapses when periodDays goes null mid-invalidation), so any
+  // saveConfirm state living here gets discarded before the overlay
+  // can render. The state now lives on ServiceCalendarInner and is
+  // driven via the onSaveConfirmed / onSaveConfirmComplete callbacks
+  // supplied by the parent. See CSS block-level comment on
+  // .sc-v2-entry-save-confirm for the full remount analysis.
   // A3 failure UI (2026-07-24): inline failure state. Set by
   // executeConfirm when onSave returns !success (server rejected the
   // write; nothing committed). Rendered as a red-rail banner at the
@@ -435,7 +435,6 @@ function DayEntryV2({
     setShowDiscardConfirm(false);
     setShowNoServiceConfirm(false);
     setShowResetConfirm(false);
-    setSaveConfirm(null);
     setStandaloneDraft("");
     setMobileBillOpen(false);
     // A3 failure UI (2026-07-24): clear inline save error on day-nav.
@@ -943,31 +942,38 @@ function DayEntryV2({
       const totals = feeNoDollar
         ? { units: feeServedTotals.entered, revenue: 0 }
         : { units: summary.meals, revenue: summary.revenue };
-      // sc-save-confirm (2026-08-03, owner render option C): mount
-      // the stamp overlay before firing the finalize timer so the
-      // overlay's 1350ms animation runs alongside the coordinator's
-      // FINALIZE_DELAY. Numbers are the SERVER-echoed savedMeals /
-      // savedRevenue (route.js:988), never client-recomputed - same
-      // rule the SubmissionToast follows at ServiceCalendar.js:1869.
-      // Guard on Number.isFinite: a queued replay may lack these,
-      // and we already return above on `result.queued`. Fee shape
-      // (feeNoDollar) sets revenue=null so the money line does not
-      // render (STL-FL only today; matches the rail rule).
+      // sc-save-confirm (2026-08-03 gate-bounce hoist): fire the
+      // parent's callback to mount the SaveConfirmation overlay at
+      // the workspace level, ABOVE the modal. Numbers are the
+      // SERVER-echoed savedMeals / savedRevenue (route.js:988), never
+      // client-recomputed - same rule the SubmissionToast follows at
+      // ServiceCalendar.js:1869. Guard on Number.isFinite: a queued
+      // replay may lack these, and we already return above on
+      // `result.queued`. Fee shape (feeNoDollar) passes null revenue
+      // so the money line does not render (STL-FL only today).
+      // Overlay clear is paired to the finalize tick below, not to
+      // this component's lifecycle - the modal will unmount during
+      // the post-save refetch and any local state would go with it.
       const echoedMeals = Number(result.savedMeals);
       const echoedRevenue = Number(result.savedRevenue);
-      if (Number.isFinite(echoedMeals)) {
-        setSaveConfirm({
-          meals: echoedMeals,
-          revenue: feeNoDollar
+      if (Number.isFinite(echoedMeals) && onSaveConfirmed) {
+        onSaveConfirmed(
+          echoedMeals,
+          feeNoDollar
             ? null
             : (Number.isFinite(echoedRevenue) ? echoedRevenue : null),
-        });
+        );
       }
       setNotes("");
       handoff.startHandoff({
         dayDate: day.date,
         totals,
         onFinalize: () => {
+          // Clear the hoisted overlay BEFORE advancing so React
+          // batches both updates on the same tick - no transient
+          // frame where a new day's numbers render underneath the
+          // previous confirmation.
+          onSaveConfirmComplete?.();
           if (onNextException) onNextException();
           else onClose?.();
         },
@@ -979,7 +985,7 @@ function DayEntryV2({
         serviceId: result?.serviceId || null,
       });
     }
-  }, [serviceGroups, touched, getVal, day, onSave, onClose, notes, feeNoDollar, feeServedTotals, summary, handoff, onNextException]);
+  }, [serviceGroups, touched, getVal, day, onSave, onClose, notes, feeNoDollar, feeServedTotals, summary, handoff, onNextException, onSaveConfirmed, onSaveConfirmComplete]);
 
   // Status + coaching = DayDetail.js:741-835.
   const dayIsPast = isPastDate(day.date);
@@ -1376,21 +1382,12 @@ function DayEntryV2({
 
   return (
     <div className={`sc-v2-entry${mobileBillOpen ? " sc-v2-entry--mobile-bill-open" : ""}`}>
-      {/* sc-save-confirm (2026-08-03): mounts on a clean save via the
-          setSaveConfirm branch of executeConfirm. Lives entirely
-          inside this modal - no coordinator hook, no cross-surface
-          refs, no phase machine (owner ruling: the failed Handoff
-          flight will not be re-created here). The overlay owns its
-          own 1350ms CSS animation that lines up with the
-          coordinator's FINALIZE_DELAY so the modal closes underneath
-          exactly as the overlay finishes fading. It unmounts with
-          the modal (day-nav reseed nulls saveConfirm too). */}
-      {saveConfirm && (
-        <SaveConfirmation
-          meals={saveConfirm.meals}
-          revenue={saveConfirm.revenue}
-        />
-      )}
+      {/* sc-save-confirm overlay is hoisted to ServiceCalendarInner
+          (2026-08-03 gate-bounce ruling on #598). The modal itself
+          unmounts during the post-save refetch, so state cannot
+          live here. See executeConfirm above for the callbacks
+          (onSaveConfirmed / onSaveConfirmComplete) and the CSS
+          block comment for the remount analysis. */}
       {/* W7 PR 3/3 Phase 5 - drag-handle affordance. Visible at
           ≤767 only via CSS. Not a drag-to-dismiss target - it's a
           visual "this is a sheet" cue. Dismiss stays on the header

@@ -71,6 +71,7 @@ import { deriveOpsHeroTotals } from "./v2/opsRailDerive";
 // fmt$ already imported at line 15 for the bulk-review rows; reused
 // at the W8 mobile-bar sites.
 import DayEntryV2 from "./v2/entry/DayEntryV2";
+import SaveConfirmation from "./v2/entry/SaveConfirmation";
 import "./v2/shell.css";
 import "./v2/overview.css";
 import "./v2/drill.css";
@@ -579,6 +580,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const [focusDay, setFocusDay] = useState(null);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // sc-save-confirm state (hoisted 2026-08-03 per #598 gate-bounce
+  // ruling). Lives here because the modal itself unmounts during the
+  // post-save refetch when periodDays goes null mid-invalidation and
+  // the mount gate at :3826 collapses. State inside DayEntryV2 gets
+  // discarded before the overlay can render. Hoisted state survives
+  // the child's tear-down; the overlay is mounted at the workspace
+  // level (viewport-scale, above the modal backdrop) so its scrim
+  // masks the ~400-1000ms remount blink instead of exposing it.
+  //   shape: { meals: number, revenue: number | null } | null
+  const [saveConfirm, setSaveConfirm] = useState(null);
+  const handleSaveConfirmed = useCallback((meals, revenue) => {
+    setSaveConfirm({ meals, revenue });
+  }, []);
+  const handleSaveConfirmComplete = useCallback(() => {
+    setSaveConfirm(null);
+  }, []);
 
   // F3: save-queue state. syncingKeys is the set of `${account}|${date}`
   // for entries currently pending replay across ALL accounts (the driver
@@ -3897,6 +3914,8 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 onSave: handleSave,
                 onAddNote: handleAddNote,
                 onReset: handleResetDay,
+                onSaveConfirmed: handleSaveConfirmed,
+                onSaveConfirmComplete: handleSaveConfirmComplete,
                 saving,
                 dayIndex: focusIdx,
                 totalDays: dayList.length,
@@ -3936,6 +3955,24 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             })()}
           </div>
         </div>
+      )}
+
+      {/* sc-save-confirm overlay (hoisted 2026-08-03 per #598
+          gate-bounce ruling). Rendered as a workspace-level
+          sibling of the day-detail overlay so it survives the
+          modal's post-save unmount/remount blink. z-index:
+          var(--z-popover) puts it above the modal backdrop
+          (--z-overlay); position: fixed makes the scrim cover the
+          full viewport regardless of what mounts/unmounts beneath.
+          State + callbacks set at :580-597; wired to DayEntryV2
+          via onSaveConfirmed / onSaveConfirmComplete. Coordinator's
+          FINALIZE_DELAY (1800ms) is the sole clock for both the
+          overlay's visible window and the modal's advance. */}
+      {saveConfirm && (
+        <SaveConfirmation
+          meals={saveConfirm.meals}
+          revenue={saveConfirm.revenue}
+        />
       )}
 
       {/* Bulk custom-entry - pos-style panel (Phase 2A 2026-07-24,

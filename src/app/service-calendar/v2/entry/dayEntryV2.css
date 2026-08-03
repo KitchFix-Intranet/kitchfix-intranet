@@ -1584,23 +1584,44 @@
 
 /* ══════════════════════════════════════════════════════════════
    SaveConfirmation - the stamp overlay after a clean save.
-   Owner render option C (2026-08-03). Lives inside the modal;
-   fires only from executeConfirm's clean-save branch.
+   Owner render option C (2026-08-03). Mounted at the workspace
+   level by ServiceCalendarInner, NOT inside the modal (2026-08-03
+   ruling on #598 gate bounce: the modal itself unmounts during
+   the post-save refetch when periodDays goes null mid-invalidation
+   and the mount gate at ServiceCalendar.js:3826 collapses; any
+   state living inside DayEntryV2 gets discarded before it can
+   render, and the ~400-1000ms remount blink is a pre-existing
+   artifact this overlay must MASK, not expose). Fires only from
+   executeConfirm's clean-save branch, via a callback the parent
+   supplies.
+
+   Positioning: fixed viewport with a near-opaque light scrim at
+   z-index --z-popover (1300, above --z-overlay 1200 and the modal
+   backdrop; below --z-toast so error toasts still trump). The
+   scrim fills the viewport rather than sitting inside a card so
+   it covers the workspace during the modal's unmount gap - the
+   whole point of the hoist.
 
    Reduced-motion contract: the BASE styles below place every
    element at its resting state. The @keyframes only add the
    travel/burst/rotate/fade. Under prefers-reduced-motion:reduce,
    the animation shorthand collapses to `none`, and the elements
    render at their resting positions immediately. Same markup,
-   no second code path.
+   no second code path. Scrim base opacity is 0.96 so RM users
+   still see the mask for the full window (paired with the RM
+   fix in coordinator.js that keeps FINALIZE_DELAY on the same
+   timer regardless of motion preference).
 
-   Timing fits inside FINALIZE_DELAY = 1350ms (the coordinator's
-   modal-close timer) so nothing gets slower.
+   Timing fits inside FINALIZE_DELAY = 1800ms (the coordinator's
+   modal-close/advance timer, bumped from 1350 in this same
+   commit per ruling 3). Nothing else gets slower - the extra
+   450ms per save is what buys operator register-time for the
+   count + money before the modal advances.
    ══════════════════════════════════════════════════════════════ */
 .sc-v2-entry-save-confirm {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: var(--z-popover);
   pointer-events: none; /* never blocks - clicks pass through */
 }
 .sc-v2-entry-save-confirm-visual {
@@ -1614,8 +1635,8 @@
   position: absolute;
   inset: 0;
   background: var(--sc2-surface-card);
-  opacity: 0.92;
-  animation: sc-v2-entry-save-confirm-scrim-fade 1350ms var(--ease-standard) both;
+  opacity: 0.96;
+  animation: sc-v2-entry-save-confirm-scrim-fade 1800ms var(--ease-standard) both;
 }
 .sc-v2-entry-save-confirm-body {
   position: relative;
@@ -1636,7 +1657,7 @@
   border-radius: 50%;
   box-shadow: 0 8px 24px rgba(47, 125, 79, 0.35);
   transform-origin: center;
-  animation: sc-v2-entry-save-confirm-stamp-in 1350ms var(--ease-emphasized) both;
+  animation: sc-v2-entry-save-confirm-stamp-in 1800ms var(--ease-emphasized) both;
 }
 .sc-v2-entry-save-confirm-check {
   width: 60%;
@@ -1647,13 +1668,13 @@
   font-weight: var(--sc2-wt-bold);
   color: var(--sc2-ink);
   line-height: 1;
-  animation: sc-v2-entry-save-confirm-text-in 1350ms var(--ease-standard) both;
+  animation: sc-v2-entry-save-confirm-text-in 1800ms var(--ease-standard) both;
 }
 .sc-v2-entry-save-confirm-money {
   font-size: var(--sc2-size-caption);
   color: var(--sc2-ink-soft);
   font-weight: var(--sc2-wt-medium);
-  animation: sc-v2-entry-save-confirm-text-in 1350ms var(--ease-standard) 80ms both;
+  animation: sc-v2-entry-save-confirm-text-in 1800ms var(--ease-standard) 80ms both;
 }
 /* Burst: 10 dots radiating from behind the stamp. Position via
    --sc-burst-i (0-9) → rotate around center, translate outward.
@@ -1696,7 +1717,8 @@
 }
 
 /* Stamp: enters from above with scale + rotation overshoot,
-   settles at 420ms, holds, then fades 1050->1350ms. */
+   settles at 22-31% of the window (~560ms of 1800), holds
+   through 78% (~1404ms), fades out to 100% (1800ms). */
 @keyframes sc-v2-entry-save-confirm-stamp-in {
   0%   { transform: translateY(-48px) scale(0.55) rotate(-8deg); opacity: 0; }
   22%  { transform: translateY(4px)  scale(1.10) rotate(2deg);  opacity: 1; }
@@ -1717,8 +1739,8 @@
    underneath is unobstructed for the last frame. */
 @keyframes sc-v2-entry-save-confirm-scrim-fade {
   0%   { opacity: 0; }
-  12%  { opacity: 0.92; }
-  78%  { opacity: 0.92; }
+  12%  { opacity: 0.96; }
+  78%  { opacity: 0.96; }
   100% { opacity: 0; }
 }
 /* Burst dot: fade in near the stamp landing, radiate outward, fade
@@ -1743,6 +1765,8 @@
   /* Base stamp CSS has transform-origin center but no static translate
      - it renders at rest. Same for count/money (no static opacity 0).
      Burst dot base is opacity 0 so RM shows nothing there, matching
-     the "no burst" ticket line. Scrim base is opacity 0.92 which is
-     the mid state we want under RM (stays until modal unmounts). */
+     the "no burst" ticket line. Scrim base is opacity 0.96 which is
+     the hold state we want under RM - it stays for the full 1800ms
+     window (coordinator no longer short-circuits on RM) so the
+     mask covers the modal remount blink for RM users too. */
 }
