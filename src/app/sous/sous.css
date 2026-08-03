@@ -53,6 +53,14 @@
   --elev-1: 0 1px 2px rgba(15, 48, 87, 0.05), 0 4px 12px -4px rgba(15, 48, 87, 0.08);
   --elev-2: 0 2px 4px rgba(15, 48, 87, 0.06), 0 10px 24px -8px rgba(15, 48, 87, 0.14);
   --elev-3: 0 24px 48px -12px rgba(15, 48, 87, 0.22);
+  /* 2026-08-03: inset well tokens (treatment B from
+     sous-inset-depth-study.html). Containers recede via --well-1/2 as
+     inset shadow; contents rise on pure white with real drop shadows.
+     Well fill #E9EDF2, well border #DCE2EA, composer tray lip #EFF2F6,
+     inner well #EDF0F4 - literal values (matching the file's existing
+     colour convention). */
+  --well-1: inset 0 2px 5px rgba(15, 48, 87, 0.10), inset 0 1px 0 rgba(15, 48, 87, 0.05);
+  --well-2: inset 0 2px 6px rgba(15, 48, 87, 0.11), inset 0 1px 0 rgba(15, 48, 87, 0.05);
 }
 
 /* ── 1. Shell + rail (page variant) ──────────────────────────────────────── */
@@ -106,16 +114,19 @@
   .sa-rail { display: none; }
 }
 
-/* Rail is a CARD - matches reference .rail (bordered, rounded, distinct) */
+/* Rail is a WELL (2026-08-03, treatment B) - the container recedes so its
+   session items rise on white with real drop shadows. Colour + shadow tokens
+   only; radius, flex, and min-height chain from PR B are untouched. */
 .sa-rail {
-  background: white;
-  border: 1px solid #E5E7EB;
+  background: #E9EDF2;
+  border: 1px solid #DCE2EA;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
   padding: 0;
+  box-shadow: var(--well-1);
 }
 .sa-rail-head {
   padding: 16px;
@@ -165,7 +176,12 @@
   font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
   font-size: 9.5px;
   font-weight: 500;
-  color: #94A3B8;
+  /* 2026-08-03: darkened from #94A3B8 (slate-400) to #475569 (slate-600)
+     so THIS SESSION and its siblings clear WCAG AA 4.5:1 against the
+     .sa-rail well fill #E9EDF2 (per treatment B contrast rule). One
+     step to slate-500 was insufficient at 4.22:1; slate-600 clears at
+     6.83:1. Recorded as a judgment call in the PR body. */
+  color: #475569;
   letter-spacing: 0.13em;
   text-transform: uppercase;
   padding: 0 12px 8px;
@@ -187,22 +203,29 @@
   flex-direction: column;
   gap: 2px;
   padding: 8px 10px 8px 12px;
-  border-radius: 8px;
+  /* 2026-08-03 (treatment B): rises from the .sa-rail well on white with
+     the study's right-side radius. Left status bar keeps its inset-shadow
+     pattern; the drop shadow layers alongside via the shared
+     --rail-item-drop custom property so --incontext / --selected can
+     compose their inset bar + drop shadow without redeclaring the drop. */
+  --rail-item-drop: 0 1px 2px rgba(15, 48, 87, 0.05), 0 6px 14px -8px rgba(15, 48, 87, 0.16);
+  border-radius: 0 8px 8px 0;
   cursor: pointer;
   border: none;
-  background: transparent;
+  background: white;
   color: inherit;
   text-align: left;
   font-family: inherit;
   width: 100%;
+  box-shadow: var(--rail-item-drop);
 }
-.sa-rail-item:hover { background: #F1F5F9; }
+.sa-rail-item:hover { background: #F8FAFC; }
 .sa-rail-item--selected {
   background: var(--accent-sous-subtle);
-  box-shadow: inset 2px 0 0 var(--accent-sous);
+  box-shadow: inset 2px 0 0 var(--accent-sous), var(--rail-item-drop);
 }
 .sa-rail-item--incontext {
-  box-shadow: inset 2px 0 0 var(--accent-sous);
+  box-shadow: inset 2px 0 0 var(--accent-sous), var(--rail-item-drop);
 }
 .sa-rail-item--incontext.sa-rail-item--selected {
   background: var(--accent-sous-subtle);
@@ -266,7 +289,9 @@
 .sa-rail-empty {
   padding: 28px 12px;
   text-align: center;
-  color: #94A3B8;
+  /* 2026-08-03: darkened from #94A3B8 to #475569 to clear 4.5:1 against
+     the .sa-rail well fill (see .sa-rail-heading note). */
+  color: #475569;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -283,19 +308,24 @@
   border-top: 1px solid #F0EEE7;
   font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
   font-size: 9.5px;
-  color: #94A3B8;
+  /* 2026-08-03: darkened from #94A3B8 to #475569 to clear 4.5:1 against
+     the .sa-rail well fill (see .sa-rail-heading note). */
+  color: #475569;
   line-height: 1.5;
 }
 
-/* Pane is a CARD - matches reference .pane */
+/* Pane is a WELL (2026-08-03, treatment B) - the container recedes so its
+   answer cards, briefing card, and composer rise on white. Colour + shadow
+   tokens only; the flex + min-height chain from PR B stays load-bearing. */
 .sa-main {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: white;
-  border: 1px solid #E5E7EB;
+  background: #E9EDF2;
+  border: 1px solid #DCE2EA;
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: var(--well-2);
   /* 2026-08-02: relative positioning anchors the .sa-fab-scroll-top
      child (which floats above the composer, targets .sa-pane-scroll). */
   position: relative;
@@ -479,10 +509,14 @@
    rows, limits copy as the card's footer. Replaces the V1 four-card grid. */
 .sa-brief {
   background: white;
-  border: 1px solid var(--kf-border, #E4E8EC);
+  /* 2026-08-03 (treatment B): first-run briefing rises from the .sa-main
+     well like an answer card - same white-on-white border + drop shadow
+     shape so it reads as one raised surface sharing the wells's tray. */
+  border: 1px solid white;
   border-radius: 12px;
   padding: 14px 16px;
   margin-bottom: 20px;
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.06), 0 12px 28px -10px rgba(15, 48, 87, 0.20);
 }
 .sa-brow {
   display: flex;
@@ -614,12 +648,16 @@
    the status top-rail via border-top on the status modifier. */
 .sa-answer {
   background: white;
-  border: 1px solid #EEF2F6;
+  /* 2026-08-03 (treatment B): rises from the .sa-main well on pure white
+     with the two-layer drop from the study; hairline border becomes white
+     so the card reads seamless against its own surface but preserves the
+     status border-top rail applied by the .sa-answer--<status> modifiers. */
+  border: 1px solid white;
   border-radius: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--elev-2);
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.06), 0 12px 28px -10px rgba(15, 48, 87, 0.20);
 }
 
 /* Status rail across the top of the answer card - via border color.
@@ -803,11 +841,16 @@
    contained-row pattern for source cards. Both live INSIDE the answer
    card - elements within, not on top. */
 .sa-well {
-  background: #FAFBFC;
-  border: 1px solid #EEF2F6;
+  /* 2026-08-03 (treatment B): meta / tool-trail wells sit INSIDE white
+     answer cards so they need to read as recessed against white, not
+     flat. Slightly darker fill + thin inset shadow give the same "well"
+     grammar the outer .sa-main uses at a smaller depth. */
+  background: #EDF0F4;
+  border: 1px solid #E1E6ED;
   border-radius: 9px;
   padding: 10px 12px;
   margin: 10px 16px 0;
+  box-shadow: inset 0 1px 3px rgba(15, 48, 87, 0.07);
 }
 .sa-well:last-child { margin-bottom: 12px; }
 /* Tool-trail well - hosts the SousMark status companion beside the
@@ -830,9 +873,13 @@
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  border: 1px solid #EEF2F6;
+  /* 2026-08-03 (treatment B): source rows sit inside white answer cards -
+     go pure white with a hairline border + light shadow so they rise as
+     tappable rows against the card, matching the study. */
+  border: 1px solid #EAEEF3;
   border-radius: 9px;
-  background: #F8FAFC;
+  background: white;
+  box-shadow: 0 1px 2px rgba(15, 48, 87, 0.05);
   text-decoration: none;
   color: inherit;
   font-size: 12px;
@@ -1131,8 +1178,12 @@
 .sa-composer {
   flex: none;
   padding: 16px 20px;
-  border-top: 1px solid #F0EEE7;
-  background: white;
+  /* 2026-08-03: composer footer becomes the tray lip - slightly lighter
+     well tone (#EFF2F6) with the well border on top so it reads as the
+     bottom edge of .sa-main's recessed surface. The composer form inside
+     keeps its --elev-2 as shipped. */
+  border-top: 1px solid #DCE2EA;
+  background: #EFF2F6;
 }
 @media (max-width: 767px) { .sa-composer { padding: 12px 14px; } }
 
@@ -1513,11 +1564,19 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* 2026-08-03 (treatment B): overlay body region becomes the well so the
+     answer card (now white+drop) reads against a recessed surface. Same
+     colour + inset shadow tokens the page's .sa-main uses; no structural
+     change - .sa-overlay-wrap still owns height/overflow from PR B. */
+  background: #E9EDF2;
+  box-shadow: var(--well-2);
 }
 .sa-overlay-foot {
-  border-top: 1px solid var(--kf-border, #E4E8EC);
+  /* 2026-08-03 (treatment B): tray lip parity with the page's .sa-composer -
+     lighter well tone + well border on top. */
+  border-top: 1px solid #DCE2EA;
   padding: 10px 14px 12px;
-  background: white;
+  background: #EFF2F6;
   flex-shrink: 0;
 }
 /* Overlay: source subtitles hidden, KPI strip hidden, action labels shorter */
