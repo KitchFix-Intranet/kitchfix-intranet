@@ -3930,6 +3930,56 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           ? (activeDrillDays?.find(d => d.date === firstDate) || dayMap?.[firstDate])
           : null;
         if (!syntheticDay) return null;
+        // sc-bulk-ui PR 2 item 2 (2026-08-03, refined post-#603 gate):
+        // off-schedule annotation predicate for bulk.
+        //
+        // Two gates, both must be true for the chip to render:
+        //   1. Operator has typed a value for this service in bulk
+        //      (bulkValues[svc.colIndex] is non-empty). The chip
+        //      exists to catch the operator's OWN input on an
+        //      unplanned service, not to describe the catalog.
+        //      Owner ruling on the live TXR - AZ Wed pass: five MLB
+        //      services on TXR - AZ are unscheduled year-round, so
+        //      chipping every off-schedule row unconditionally turns
+        //      the chip into background noise on most days on most
+        //      accounts. Silence has to mean something for the
+        //      signal to. Same reasoning as the single-day gate at
+        //      DayEntryV2.js:getNotScheduled.
+        //   2. Aggregation across the actual selected days (not the
+        //      syntheticDay template - a service could be scheduled
+        //      on the template day but not the other N-1 in the
+        //      batch, or the reverse). Per-day predicate:
+        //      `d.projected?.[svc.colIndex] != null` - explicit-zero
+        //      projection IS a schedule (R3-2 convention); only
+        //      absence is not. Do not drift to `> 0`.
+        //        0 hits  -> "Not scheduled" (never on schedule across the batch)
+        //        partial -> "Not scheduled (N of M)" where N = unscheduled count
+        //        all hit -> null (on schedule for every selected day)
+        //
+        // Bulk-specific note: "has a value" applies across ALL
+        // selected days by construction (the typed value gets
+        // written to each), so the (N of M) count still tells the
+        // operator how many of their selected days the service is
+        // off-plan for - the semantic doesn't shift when we add the
+        // has-value gate.
+        const selectedDayObjs = [];
+        for (const dk of bulkSelected) {
+          const d = activeDrillDays?.find(x => x.date === dk) || dayMap?.[dk];
+          if (d) selectedDayObjs.push(d);
+        }
+        const bulkGetNotScheduled = (svc) => {
+          const v = bulkValues[svc.colIndex];
+          if (v == null || v === "") return null;
+          const total = selectedDayObjs.length;
+          if (total === 0) return null;
+          let notScheduledCount = 0;
+          for (const d of selectedDayObjs) {
+            if (d.projected?.[svc.colIndex] == null) notScheduledCount++;
+          }
+          if (notScheduledCount === 0) return null;
+          if (notScheduledCount === total) return "Not scheduled";
+          return `Not scheduled (${notScheduledCount} of ${total})`;
+        };
         return (
           <BulkEntry
             cardRef={bulkOverlayCardRef}
@@ -3942,6 +3992,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             saving={saving}
             accountSegment={data?.account?.category || ""}
             syntheticDay={syntheticDay}
+            getNotScheduled={bulkGetNotScheduled}
           />
         );
       })()}

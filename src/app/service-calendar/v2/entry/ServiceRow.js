@@ -28,7 +28,21 @@ import {
 } from "../../DayDetail";
 import { fmt$ } from "../../season/format";
 
-export default function ServiceRow({ svc, day, editValues, touched, flashDelay, onChange, hideAmount = false, hideRate = false, readOnly = false }) {
+export default function ServiceRow({
+  svc, day, editValues, touched, flashDelay, onChange,
+  hideAmount = false, hideRate = false, readOnly = false,
+  // sc-bulk-ui PR 2 item 2 (2026-08-03, owner ruling): annotation
+  // text tucked under the service name when this row is off-schedule
+  // for the operator's current context. null / undefined = no chip.
+  // Predicate is `day.projected?.[svc.colIndex] != null` for the
+  // modal (single-day) and an aggregation across selected days for
+  // bulk - both convert to a short human string ("Not scheduled" or
+  // "Not scheduled (N of M)") computed by the caller and passed in.
+  // Explicit-zero projection IS a schedule; only absence is not.
+  // Do not drift to `> 0` (that convention is R3-2's and it has
+  // already been re-derived once).
+  notScheduled = null,
+}) {
   const projVal = day.projected[svc.colIndex] ?? 0;
   const editVal = editValues[svc.colIndex] ?? "";
   const isTouched = touched.has(svc.colIndex);
@@ -82,6 +96,9 @@ export default function ServiceRow({ svc, day, editValues, touched, flashDelay, 
     >
       <div className="sc-day-row-left">
         <span className="sc-day-row-name">{svc.name}</span>
+        {notScheduled && (
+          <span className="sc-day-row-note">{notScheduled}</span>
+        )}
       </div>
       {!hideRate && (
         <span className="sc-day-row-rate">{renderRate(svc, rate, unit)}</span>

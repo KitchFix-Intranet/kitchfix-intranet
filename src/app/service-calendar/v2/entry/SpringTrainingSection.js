@@ -58,6 +58,10 @@ export default function SpringTrainingSection({
   feeGroupSummary,        // shared aggregator (fee-shape returns {meals, revenue:0})
   feeProjectedGroupSummary,
   readOnly = false,
+  // sc-bulk-ui PR 2 item 2 (2026-08-03): forwarded from parent.
+  // ST services follow the same predicate as any other service on
+  // the day.
+  getNotScheduled = null,
 }) {
   // Synthetic group for Match/Clear. Snapshot stores keyed by this
   // name; parent's matchSnapshots[SPRING_TRAINING_GROUP_KEY] flows.
@@ -169,6 +173,7 @@ export default function SpringTrainingSection({
                   hideAmount={true}
                   hideRate={true}
                   readOnly={readOnly}
+                  notScheduled={getNotScheduled ? getNotScheduled(s) : null}
                 />
               ))}
             </div>

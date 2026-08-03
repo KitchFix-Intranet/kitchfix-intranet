@@ -67,34 +67,87 @@
   font-weight: var(--sc2-wt-medium);
 }
 
-/* Per-service expand detail (indented list beneath the row). Mirrors
-   the Ledger's .sc-v2-entry-ledger-detail grammar so the two expand
-   surfaces read the same. */
+/* Per-service expand detail (2026-08-03, PR 2 item 3):
+   grouped ledger-style rows beneath the day header. Groups the
+   flat perDayServices output by service group so the same name in
+   two groups (STL - FL / TXR - AZ / TBJ - FL etc. all have this
+   shape) reads as two sections, not a duplicated flat list.
+   Reuses the modal's .sc-day-ledger.sc-day-ledger--fee primitive
+   (2-col: name + qty) so the two expand surfaces speak the same
+   ledger grammar. */
 .sc-bulk-review-detail {
-  list-style: none;
   margin: 0;
-  padding: 0 var(--sc2-space-4) var(--sc2-space-3) calc(var(--sc2-space-4) + var(--sc2-space-3));
+  padding: var(--sc2-space-2) var(--sc2-space-4) var(--sc2-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
+  background: var(--sc2-surface-sunken);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line-2);
+}
+.sc-bulk-review-detail-group {
   display: flex;
   flex-direction: column;
   gap: var(--sc2-space-1);
+}
+.sc-bulk-review-detail-group-title {
   font-size: var(--sc2-size-micro);
-  color: var(--sc2-ink-soft);
-  border-bottom: var(--sc2-border-thin) solid var(--sc2-line-2);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sc2-ink-muted);
+  padding: 0 var(--sc2-space-2);
 }
-.sc-bulk-review-detail-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--sc2-space-3);
-  align-items: baseline;
+/* Ledger inside a group section. Modal's .sc-day-ledger--fee
+   grid template (name + qty column) carries. The wrapper needs
+   a light card background so the ledger reads as a distinct
+   surface from the sunken detail container, and a subtle border
+   so multiple groups have visual separation without heavy
+   dividers. */
+.sc-bulk-review-detail .sc-day-ledger {
+  background: var(--sc2-surface-card);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  overflow: hidden;
+  max-width: 100%;
 }
-.sc-bulk-review-detail-name {
+.sc-bulk-review-detail .sc-day-ledger-head {
+  padding: var(--sc2-space-1) var(--sc2-space-3);
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
+}
+.sc-bulk-review-detail .sc-day-row--ledger {
+  padding: 6px var(--sc2-space-3);
+  min-height: 32px;
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
+  align-items: center;
+}
+.sc-bulk-review-detail .sc-day-row--ledger:last-child {
+  border-bottom: none;
+}
+.sc-bulk-review-detail .sc-day-row-name {
   color: var(--sc2-ink);
+  font-size: var(--sc2-size-caption);
   font-weight: var(--sc2-wt-medium);
 }
+/* Trailing qty cell. Right-aligned, tabular numerals so 12 and
+   112 line up column-wise across rows. */
 .sc-bulk-review-detail-qty {
+  font-size: var(--sc2-size-caption);
   font-variant-numeric: tabular-nums;
-  font-weight: var(--sc2-wt-bold);
+  font-weight: var(--sc2-wt-semibold);
   color: var(--sc2-ink);
+  text-align: right;
+  padding-right: var(--sc2-space-3);
+}
+.sc-bulk-review-detail-row--skipped .sc-day-row-name,
+.sc-bulk-review-detail-row--skipped .sc-bulk-review-detail-qty {
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-regular);
+  font-style: italic;
 }
 /* Archive-edge guard (2026-07-25) - skip signals. Informational only,
    NOT destructive. Muted treatment, existing tokens, no amber (amber
@@ -120,16 +173,6 @@
 .sc-bulk-review-item--not-offered .sc-bulk-review-date,
 .sc-bulk-review-item--not-offered .sc-bulk-review-meals,
 .sc-bulk-review-item--not-offered .sc-bulk-review-rev {
-  color: var(--sc2-ink-muted);
-}
-.sc-bulk-review-detail-row--skipped .sc-bulk-review-detail-name {
-  color: var(--sc2-ink-muted);
-  font-weight: var(--sc2-wt-regular);
-}
-.sc-bulk-review-detail-skip {
-  font-variant-numeric: normal;
-  font-weight: var(--sc2-wt-regular);
-  font-style: italic;
   color: var(--sc2-ink-muted);
 }
 
