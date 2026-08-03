@@ -188,6 +188,29 @@
   overflow: hidden;
 }
 
+/* ─── Single-pane (BulkEntry) ─────────────────────────────
+   Bulk custom-entry has no rail (no per-day math to preview live
+   across many days at once), so it uses this single-column body
+   instead of the two-pane grid above. Same flex/min-height
+   contract as .sc-v2-entry-pane so the .sc-v2-entry-list inside
+   scrolls under a bounded height rather than pushing the footer
+   off-screen. Prior state: .sc-v2-entry-body existed as a JSX
+   wrapper in BulkEntry with ZERO CSS rules. The list computed an
+   unbounded height, the card's max-height: 90vh clipped the tail,
+   and the Cancel + Review buttons in .sc-day-footer went off-
+   screen on any catalog that exceeded the viewport - TBJ - FL
+   at 21 active services is the worst case.
+   No border-radius here; the header and footer already carry
+   the card's rounded corners, and this fill sits between them. */
+.sc-v2-entry-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--sc2-surface-card);
+  overflow: hidden;
+}
+
 @media (max-width: 1099px) {
   .sc-v2-entry-pane {
     grid-template-columns: minmax(0, 1fr);
