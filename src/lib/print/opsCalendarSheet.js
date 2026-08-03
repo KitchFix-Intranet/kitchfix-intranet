@@ -56,7 +56,7 @@ export async function loadOpsCalendarPrintData(accountKey, year) {
 
   const accountRes = await supa
     .from("accounts")
-    .select("team_key, name, level, billing_model, has_homestand_schedule, has_schedule_overlay")
+    .select("team_key, name, level, city, state, billing_model, has_homestand_schedule, has_schedule_overlay")
     .eq("team_key", accountKey)
     .maybeSingle();
   if (accountRes.error) throw new Error(`loadOpsCal.account: ${accountRes.error.message}`);
@@ -118,7 +118,21 @@ export function renderOpsCalendarSheet(ctx) {
   const isMlb = account.level === "MLB";
 
   const seal = loadSealDataUri();
-  const bandRight = esc(account.name || account.team_key);
+  // Polish wave item 7 (2026-08-04): band header carries account
+  // name AND location. `accounts.city` + `accounts.state` are clean
+  // per-row values (verified: populated on every non-CORP account).
+  // Middle-dot separator matches the DayDetail scoreboard voice
+  // (dayDetail.css `.sc-day-sb-account` uses the same). Fallback
+  // shape: if city/state absent (never happens on the current data
+  // but the guard is one condition), the name renders alone as
+  // before.
+  const location = account.city && account.state
+    ? `${account.city}, ${account.state}`
+    : (account.city || account.state || "");
+  const namePart = account.name || account.team_key;
+  const bandRight = location
+    ? esc(`${namePart} · ${location}`)
+    : esc(namePart);
   const asOf = footerDate();
 
   const monthBlocks = [];
@@ -140,14 +154,21 @@ export function renderOpsCalendarSheet(ctx) {
   const invEntry = hasInventory
     ? `\n        <span><span class="kk-inv"></span>INVENTORY DUE</span>`
     : "";
+  // Polish wave item 8 (2026-08-04): legend rewordings.
+  //   SERVICE DAY -> PROJECTED SERVICE DAY (clarity: the swatch marks
+  //     the projected shape, not a recorded one)
+  //   SPRING      -> SPRING TRAINING       (full phrase; SPRING alone
+  //     read as ambiguous next to the season chip)
+  // One-line-at-sheet-width check is in the verify step of the PR;
+  // see the PR body for the measurement.
   const legend = isMlb
     ? `
         <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>${invEntry}
         <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>`
     : `
-        <span><span class="kk" style="background:#D3E2C8;border:1px solid #B9C9AE"></span>SERVICE DAY</span>
+        <span><span class="kk" style="background:#D3E2C8;border:1px solid #B9C9AE"></span>PROJECTED SERVICE DAY</span>
         <span><span class="kk" style="background:#16305E"></span>PERIOD START</span>
-        <span><span class="kk-spring"></span>SPRING</span>${invEntry}
+        <span><span class="kk-spring"></span>SPRING TRAINING</span>${invEntry}
         <span><span class="km">M</span>INVOICE / CC EOD MONDAY</span>
         <span><span class="km">F</span>ACTUALS EOD FRIDAY</span>`;
   const trailerCopy = `<span class="asof">AS OF ${esc(asOf)}</span>`;

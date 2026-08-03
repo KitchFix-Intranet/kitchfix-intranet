@@ -71,6 +71,7 @@ import { deriveOpsHeroTotals } from "./v2/opsRailDerive";
 // fmt$ already imported at line 15 for the bulk-review rows; reused
 // at the W8 mobile-bar sites.
 import DayEntryV2 from "./v2/entry/DayEntryV2";
+import ResetToast from "./v2/entry/ResetToast";
 import SaveConfirmation from "./v2/entry/SaveConfirmation";
 import "./v2/shell.css";
 import "./v2/overview.css";
@@ -578,6 +579,28 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const [partialError, setPartialError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [focusDay, setFocusDay] = useState(null);
+  // Polish wave item 4 (2026-08-04): reset-day success toast. Uses
+  // the SAME hoisted-overlay pattern as SaveConfirmation (see the
+  // ResetToast.js header for the full write-up). Sibling shape:
+  //   - State on ServiceCalendarInner (parent survives the modal
+  //     unmount that refetch triggers - see SC_STATUS'
+  //     'Day-detail modal remounts during post-save refetch'
+  //     backlog entry for the failure class)
+  //   - Setter fires from handleResetDay's `result.success` branch
+  //   - <ResetToast> renders at workspace level (sibling of the
+  //     day-overlay conditional), position: fixed at --z-toast
+  //   - Auto-clear via this useEffect + setTimeout, cleared on
+  //     unmount so a rapid unmount cannot leak the timer
+  //
+  // Different content per owner ruling: subtle top-centered pill,
+  // small type. Reset is a correction, not an achievement - do NOT
+  // reuse the SaveConfirmation stamp shape.
+  const [resetToast, setResetToast] = useState(null);
+  useEffect(() => {
+    if (!resetToast) return undefined;
+    const id = setTimeout(() => setResetToast(null), 1800);
+    return () => clearTimeout(id);
+  }, [resetToast]);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   // sc-save-confirm state (hoisted 2026-08-03 per #598 gate-bounce
@@ -2115,6 +2138,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         const next = { ...prev }; delete next[mk]; return next;
       });
       setReloadKey(k => k + 1);
+      // Polish wave item 4 (2026-08-04): fire the workspace-level
+      // toast BEFORE the modal unmounts. Setting state here means
+      // the resetToast render (below, sibling of the day overlay)
+      // survives the refetch tear-down of DayEntryV2.
+      setResetToast({ message: "Day reset to projections" });
       return result;
     } catch (err) {
       if (err?.name === "AbortError") return { success: false, error: "aborted" };
@@ -3957,23 +3985,27 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         </div>
       )}
 
-      {/* sc-save-confirm overlay (hoisted 2026-08-03 per #598
-          gate-bounce ruling). Rendered as a workspace-level
-          sibling of the day-detail overlay so it survives the
-          modal's post-save unmount/remount blink. z-index:
-          var(--z-popover) puts it above the modal backdrop
-          (--z-overlay); position: fixed makes the scrim cover the
-          full viewport regardless of what mounts/unmounts beneath.
-          State + callbacks set at :580-597; wired to DayEntryV2
-          via onSaveConfirmed / onSaveConfirmComplete. Coordinator's
-          FINALIZE_DELAY (1800ms) is the sole clock for both the
-          overlay's visible window and the modal's advance. */}
+      {/* Two hoisted overlays, siblings by design. Same pattern
+          (workspace-level state + fixed-position render + auto-
+          clear) with different content per owner ruling: save is
+          a celebration, reset is a correction. Both mount here
+          rather than inside the modal because the modal itself
+          unmounts during the post-write refetch (see SC_STATUS'
+          'Day-detail modal remounts during post-save refetch'
+          entry - same failure class either write hits).
+          SaveConfirmation is a viewport-scale scrim + stamp that
+          masks the modal remount blink; ResetToast is a subtle
+          top-centered pill that fires after sc-reset-day. Not
+          alternatives - both can be present in different
+          sequences (a save from the modal fires SaveConfirmation;
+          a reset from the same modal fires ResetToast). */}
       {saveConfirm && (
         <SaveConfirmation
           meals={saveConfirm.meals}
           revenue={saveConfirm.revenue}
         />
       )}
+      {resetToast && <ResetToast message={resetToast.message} />}
 
       {/* Bulk custom-entry - pos-style panel (Phase 2A 2026-07-24,
           redline #11). Legacy .sc-day inline shell replaced by
