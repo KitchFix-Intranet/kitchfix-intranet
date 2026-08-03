@@ -725,6 +725,38 @@ function DayEntryV2({
     return Number(v);
   }, [editValues]);
 
+  // sc-bulk-ui PR 2 item 2 (2026-08-03, refined post-#603 gate):
+  // off-schedule annotation for the single-day modal.
+  //
+  // Two gates, both must be true for the chip to render:
+  //   1. Operator has interacted with this row (touched.has). The
+  //      chip exists to catch the operator's OWN INPUT - the value
+  //      they typed on a service nobody planned - not to describe
+  //      the catalog. Owner ruling on the live TXR - AZ Wed pass:
+  //      the entire Major League group is unscheduled year-round on
+  //      that account, so labeling every catalog row that is off-
+  //      schedule turns the chip into background noise on most days
+  //      on most accounts and gets tuned out by week two - and then
+  //      the one row that mattered (Lunch with a typed 1) gets
+  //      skipped with the rest. Silence has to mean something for
+  //      the signal to.
+  //   2. The service is not projected on this day. Predicate is
+  //      `day.projected?.[svc.colIndex] == null` - an explicit zero
+  //      projection IS a schedule (R3-2 convention); only absence
+  //      (no sc_daily_revenue row on this (date, service) pair) is
+  //      not. Do not drift to `> 0`.
+  //
+  // `touched` is set by the seed effect for services with existing
+  // actuals (line ~382), so reopening a saved day with an off-
+  // schedule entry still shows the chip. handleChange removes from
+  // touched when the operator deletes their typing AND there is no
+  // server actual (line ~482), so type-then-delete drops the chip
+  // cleanly.
+  const getNotScheduled = useCallback((svc) => {
+    if (!touched.has(svc.colIndex)) return null;
+    return day.projected?.[svc.colIndex] == null ? "Not scheduled" : null;
+  }, [day.projected, touched]);
+
   const groupSummary = useCallback((group) => {
     let meals = 0, rev = 0;
     for (const s of group.services) {
@@ -1493,6 +1525,7 @@ function DayEntryV2({
               feeGroupSummary={feeGroupSummary}
               feeProjectedGroupSummary={feeProjectedGroupSummary}
               readOnly={isLockedForViewer}
+              getNotScheduled={getNotScheduled}
             />
           )}
           {activeGroups.map(group => (
@@ -1514,6 +1547,7 @@ function DayEntryV2({
               unit="meals"
               expanded={true}
               readOnly={isLockedForViewer}
+              getNotScheduled={getNotScheduled}
             />
           ))}
           {(inactiveGroups.length > 0 || stRenderDrawer) && (
@@ -1536,6 +1570,7 @@ function DayEntryV2({
                   feeGroupSummary={feeGroupSummary}
                   feeProjectedGroupSummary={feeProjectedGroupSummary}
                   readOnly={isLockedForViewer}
+                  getNotScheduled={getNotScheduled}
                 />
               )}
               {inactiveGroups.map(group => (
@@ -1557,6 +1592,7 @@ function DayEntryV2({
                   unit="meals"
                   expanded={false}
                   readOnly={isLockedForViewer}
+                  getNotScheduled={getNotScheduled}
                 />
               ))}
             </details>
@@ -1776,6 +1812,11 @@ export function GroupBlock({
   variant,           // undefined | "perMeal" | "bulk" | "fee"
   unit = "meals",
   readOnly = false,
+  // sc-bulk-ui PR 2 item 2 (2026-08-03): optional per-svc annotation
+  // callback. Caller decides the copy - "Not scheduled" for the
+  // modal (single-day predicate), "Not scheduled (N of M)" for
+  // bulk (aggregation across selected days). Absence = no chip.
+  getNotScheduled = null,
 }) {
   const wrapperClass = variant === "fee"
     ? "sc-day-ledger sc-day-ledger--fee"
@@ -1859,6 +1900,7 @@ export function GroupBlock({
             hideAmount={hideAmount}
             hideRate={hideRate}
             readOnly={readOnly}
+            notScheduled={getNotScheduled ? getNotScheduled(s) : null}
           />
         ))}
       </div>
