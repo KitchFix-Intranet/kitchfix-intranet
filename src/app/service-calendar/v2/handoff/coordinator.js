@@ -36,9 +36,17 @@
 // the day to the strip at zero units (owner Ruling 5: no celebration
 // for a cancellation, but the day IS resolved).
 //
-// Reduced motion: startHandoff fires onFinalize immediately instead
-// of waiting FINALIZE_DELAY. Data truth is instant; the delay is a
-// visual settle beat.
+// Reduced motion (2026-08-03, sc-save-confirm #598 ruling 2):
+// startHandoff schedules onFinalize on the same FINALIZE_DELAY clock
+// regardless of the operator's motion preference. Suppress motion is
+// not suppress time. The delay is the save-confirmation overlay's
+// visible window - a modal holding still for a beat while a static
+// confirmation sits on it is not motion, and the preference does not
+// ask us to skip it. Before this change the RM branch short-circuited
+// to fireFinalize() synchronously, which closed the modal in the same
+// tick the overlay mounted - RM users got one paint frame of the
+// confirmation, which is invisible to a whole group of sighted
+// operators who enable RM for vestibular reasons.
 
 import {
   createContext,
@@ -48,7 +56,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { prefersReducedMotion } from "../motion";
 
 /* Delay before the onFinalize callback (next-day advance / modal
    close) fires. Was 1350ms in the P3-B "one clock" design - the beat
@@ -106,11 +113,9 @@ export function HandoffProvider({ children }) {
     finalizeRef.current = typeof onFinalize === "function" ? onFinalize : null;
     commitSession(dayDate, totals);
 
-    if (prefersReducedMotion()) {
-      fireFinalize();
-      return;
-    }
-
+    // One clock for every user (2026-08-03, sc-save-confirm ruling 2).
+    // See top-of-file note - the delay is the confirmation's visible
+    // window, not a motion beat, so RM keeps it too.
     const finalizeId = setTimeout(fireFinalize, FINALIZE_DELAY);
     timeoutIdsRef.current.push(finalizeId);
   }, [clearTimers, commitSession, fireFinalize]);
