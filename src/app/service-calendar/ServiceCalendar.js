@@ -2109,7 +2109,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   }, [data, showToast]);
 
   // ── Bulk save: writes same values to all selected days ──
-  const handleBulkSave = useCallback(async () => {
+  const handleBulkSave = useCallback(async (batchNote = "") => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
     // P0-1: only include services where the chef actually typed a value.
     // An untouched bulk input means "leave this service alone for each day"
@@ -2191,12 +2191,23 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     let queuedCount = 0;
     try {
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-bulk-submit", accountKey: data.account.key, entries: perDayEntries }),
+        body: JSON.stringify({ action: "sc-bulk-submit", accountKey: data.account.key, entries: perDayEntries, batchNote }),
         signal: controller.signal });
       const result = await res.json();
       if (result.success) {
         successCount = days.length;
         for (const day of days) if (!day.hasActuals) newlyEntered++;
+        // sc-26 (2026-08-03): the actuals write succeeded; the batch
+        // note write may have partially failed. noteFailCount names
+        // how many day-notes did NOT land so the operator knows how
+        // many days to revisit. Actuals stay committed regardless -
+        // this is a warning, not an error.
+        if (Number.isFinite(result.noteFailCount) && result.noteFailCount > 0) {
+          showToast(
+            `Saved counts on ${successCount} day${successCount === 1 ? "" : "s"}. Batch note failed on ${result.noteFailCount} day${result.noteFailCount === 1 ? "" : "s"} - re-post from the day if needed.`,
+            "error",
+          );
+        }
       } else {
         // A3 failure-UI (2026-07-24): server returns serviceDate for
         // validation failures on the bulk path (route.js sc-bulk-submit
@@ -2270,7 +2281,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // to per-day enqueue on network failure. Difference from bulkSave:
   // each day carries its OWN projected values, so perDayEntries is
   // built per-day inside the flatten loop.
-  const handleBulkConfirm = useCallback(async () => {
+  const handleBulkConfirm = useCallback(async (batchNote = "") => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
     setSaving(true);
     // Archive-edge guard (2026-07-25). Match-projections was writing
@@ -2314,12 +2325,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     let queuedCount = 0;
     try {
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sc-bulk-submit", accountKey: data.account.key, entries: perDayEntries }),
+        body: JSON.stringify({ action: "sc-bulk-submit", accountKey: data.account.key, entries: perDayEntries, batchNote }),
         signal: controller.signal });
       const result = await res.json();
       if (result.success) {
         successCount = days.length;
         for (const day of days) if (!day.hasActuals) newlyEntered++;
+        // sc-26 (2026-08-03): mirror handleBulkSave's noteFailCount
+        // surface so the confirm-as-projected path is not silent
+        // when a partial note failure occurs. See handleBulkSave's
+        // comment for the actuals-safe / notes-recoverable rationale.
+        if (Number.isFinite(result.noteFailCount) && result.noteFailCount > 0) {
+          showToast(
+            `Saved counts on ${successCount} day${successCount === 1 ? "" : "s"}. Batch note failed on ${result.noteFailCount} day${result.noteFailCount === 1 ? "" : "s"} - re-post from the day if needed.`,
+            "error",
+          );
+        }
       } else {
         // A3 failure-UI (2026-07-24): mirror handleBulkSave's enhanced
         // error message. Confirm-as-projected uses the same bulk
@@ -4108,7 +4129,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             acctName={acctObj?.name}
             saving={saving}
             confirmLabel="Confirm & save"
-            onConfirm={() => { setBulkReviewOpen(false); handleBulkConfirm(); }}
+            onConfirm={(batchNote) => { setBulkReviewOpen(false); handleBulkConfirm(batchNote); }}
             onBack={() => setBulkReviewOpen(false)}
           />
         );
@@ -4257,7 +4278,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             acctName={acctObj?.name}
             saving={saving}
             confirmLabel="Confirm & save"
-            onConfirm={() => { setBulkCustomReviewOpen(false); handleBulkSave(); }}
+            onConfirm={(batchNote) => { setBulkCustomReviewOpen(false); handleBulkSave(batchNote); }}
             onBack={() => setBulkCustomReviewOpen(false)}
           />
         );

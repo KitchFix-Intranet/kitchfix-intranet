@@ -644,9 +644,28 @@
   align-self: center;
 }
 .sc-v2-entry-ledger-pip--note          { background: var(--sc2-accent-green); }
+.sc-v2-entry-ledger-pip--bulk-entered  { background: var(--sc2-accent-green); }
 .sc-v2-entry-ledger-pip--edit-event    { background: var(--sc2-ink-muted); }
 .sc-v2-entry-ledger-pip--edit-noservice { background: var(--sc2-state-needs-fg); }
 .sc-v2-entry-ledger-pip--first-entered { background: var(--sc2-accent-copper, var(--sc2-ink-muted)); }
+/* sc-26 (2026-08-03): system marker chip inline in a ledger row.
+   Same muted-caption visual family as PR #603's .sc-day-row-note
+   chip - operators already learned this shape (small, muted, in-
+   line annotation) from the "Not scheduled" chip under service
+   names. Reuse costs nothing and keeps the two surfaces speaking
+   the same design grammar. Only used by bulk-entered today; a
+   future row type wanting a marker can share this class. */
+.sc-v2-entry-ledger-marker {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: var(--sc2-radius-cell);
+  background: var(--sc2-surface-sunken);
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-medium);
+  letter-spacing: 0.02em;
+  vertical-align: baseline;
+}
 .sc-v2-entry-ledger-summary {
   color: var(--sc2-ink);
   min-width: 0;

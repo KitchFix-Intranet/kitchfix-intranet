@@ -62,12 +62,21 @@ export default function BulkReview({
   acctName,
   saving,
   confirmLabel = "Confirm & save",
-  onConfirm,
+  onConfirm,           // sc-26: signature is now onConfirm(batchNote) so
+                       // the parent's handler forwards the note into the
+                       // sc-bulk-submit POST body.
   onBack,
   cardRef,
   titleId = "sc-bulk-review-title",
 }) {
   const [expanded, setExpanded] = useState(() => new Set());
+  // sc-26 (2026-08-03, PR resolving the P2-item-2 fence): batch note
+  // lives on the REVIEW screen (owner Ruling 5). Both bulk paths -
+  // match-projections and custom-values - converge here, so one
+  // placement covers both. Note is optional; empty means no note rows
+  // are written (server-gated on trim). Cleared on unmount by React
+  // (component instance rebuilt each open).
+  const [batchNote, setBatchNote] = useState("");
   const toggle = (date) => setExpanded(prev => {
     const next = new Set(prev);
     if (next.has(date)) next.delete(date); else next.add(date);
@@ -279,6 +288,29 @@ export default function BulkReview({
               })}
             </ul>
 
+            {/* sc-26 (2026-08-03): batch note composer. Optional.
+                Empty note = no note rows written (server-gated on
+                trim). The note reaches every day in the batch,
+                labelled `Bulk entered` in each day's ledger via
+                sc_day_note_entries.source='bulk' - each row is
+                honest about being a batch statement, not a day-
+                specific comment that leaked. */}
+            <div className="sc-bulk-review-note">
+              <label className="sc-bulk-review-note-label" htmlFor="sc-bulk-review-note-input">
+                Add a note to every day in this batch (optional)
+              </label>
+              <input
+                id="sc-bulk-review-note-input"
+                type="text"
+                className="sc-bulk-review-note-input"
+                placeholder="e.g. Cancelled morning setup for weather"
+                value={batchNote}
+                onChange={(e) => setBatchNote(e.target.value)}
+                disabled={saving}
+                maxLength={500}
+              />
+            </div>
+
             <p className="sc-bulk-review-footer-note">
               Saves as one batch. All {writableDays.toLocaleString()} or none.
             </p>
@@ -290,7 +322,7 @@ export default function BulkReview({
               <button
                 className="sc-btn sc-btn--primary"
                 disabled={saving || writableDays === 0}
-                onClick={onConfirm}
+                onClick={() => onConfirm(batchNote)}
               >
                 {saving ? "Saving..." : confirmLabel}
               </button>
