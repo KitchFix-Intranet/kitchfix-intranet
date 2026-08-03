@@ -50,6 +50,7 @@ import { listAccounts } from "./data/listAccounts.js";
 import { listContactsByRole } from "./data/listContactsByRole.js";
 import { getAccountTeam } from "./data/getAccountTeam.js";
 import { scAccountWindow } from "./data/scAccountWindow.js";
+import { scPortfolioWindow } from "./data/scPortfolioWindow.js";
 import { scHomestandDetail } from "./data/scHomestandDetail.js";
 import { scServicePrice } from "./data/scServicePrice.js";
 import { scOrientation } from "./data/scOrientation.js";
@@ -382,6 +383,37 @@ const SC_AND_SPEND_TOOLS = [
     kind: "data",
     pagination: "safe",
     paginationNote: "sc_daily_revenue filtered by single account_key + single window (month/homestand/period). Probed 2026-07-30: busiest 28-day period at a single account = 454 rows (TBR-FL). Month ceiling ~500. Even 2x growth in services stays under 1000. YTD windows are not supported by this tool - callers who want year-scale ranges use spend_summary window='ytd' which is paginated.",
+    collectIds() { return []; },
+  },
+  {
+    definition: {
+      name: "sc_portfolio_window",
+      description:
+        "PORTFOLIO variant of sc_account_window - one row per account for a single window, in ONE call. THIS is the tool for any question that spans more than one account; sc_account_window remains the single-account tool. Never loop sc_account_window across accounts - call sc_portfolio_window once. Returns account_key + billing_model + level + projected/actual meal counts + revenue (subject to the fee-branch and unpriced-service decline rules from sc_account_window) + days_with_actuals / total_service_days + is_partial per account, plus portfolio_totals (meals always sum; revenue sums only over revenue-available accounts, and unavailable accounts are named). window: 'month' (calendar), 'homestand' (per-account current homestand), 'period' (per-account current period). asOf defaults to today. Optional serviceType filter: 'breakfast' | 'lunch' | 'dinner' | 'snack' - substring-matches the catalog service_name (44 distinct names include 'Breakfast', 'Breakfast - MiLB', 'Continental Breakfast', 'Pre-Game Snack'). Returned service_type_matched lists the catalog variants that fell in the bucket so you can verify. Truthful absence: an account with no scheduled service days in the window has total_service_days=0 - distinct from an account with days but no actuals entered.",
+      input_schema: {
+        type: "object",
+        properties: {
+          window: { type: "string", enum: ["month", "homestand", "period"], description: "defaults to 'month'" },
+          asOf: { type: "string", description: "YYYY-MM-DD; defaults to today" },
+          serviceType: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"], description: "optional service-type filter, substring-matches the catalog service_name" },
+        },
+        required: [],
+      },
+    },
+    async execute(input) { return scPortfolioWindow(input || {}); },
+    summarize(result) {
+      return {
+        kind: "sc-portfolio",
+        window: result?.parameters?.window,
+        asOf: result?.parameters?.asOf,
+        serviceType: result?.parameters?.serviceType,
+        account_count: result?.row_count,
+        service_type_matched: result?.service_type_matched,
+      };
+    },
+    kind: "data",
+    pagination: "paginated",
+    paginationNote: "sc_daily_revenue across all ~12 current-season accounts for a single window. Probed 2026-08-04: busiest month across all accounts = 2,755 rows (May 2026), average recent month ~2,400 rows, whole 2026 season upper bound 24,895 rows. Above Supabase's default 1000-row single-select cap, so the fetch uses paginateAll(). Portfolio scope of one month → typically 3 pages; even a season-scale window would be under 25 pages. Tool budget impact: one call replaces the 11-account fan-out (which exhausted the 14-call budget in the 2026-08-03 breakfast live failure).",
     collectIds() { return []; },
   },
   {
