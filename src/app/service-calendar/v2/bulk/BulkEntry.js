@@ -37,6 +37,11 @@ export default function BulkEntry({
                       // BulkEntry needs to render pos-style rows. First selected
                       // day works (matches the existing "Init bulk values from
                       // first selected day's projections" pattern at :2035).
+  // sc-bulk-ui PR 2 item 2 (2026-08-03): off-schedule annotation
+  // computed by the parent against the ACTUAL selected days, not
+  // the syntheticDay. Passed through to GroupBlock -> ServiceRow.
+  // Absence = no chip.
+  getNotScheduled = null,
 }) {
   // touched Set: whichever colIndexes the operator has typed into.
   // Mirrors DayEntryV2's touched semantics so ServiceRow's ghost /
@@ -136,6 +141,7 @@ export default function BulkEntry({
                   projectedGroupSummary={projectedGroupSummary}
                   expanded={true}
                   variant="bulk"
+                  getNotScheduled={getNotScheduled}
                 />
               ))}
             </div>

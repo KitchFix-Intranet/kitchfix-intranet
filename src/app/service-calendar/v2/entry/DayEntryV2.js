@@ -725,6 +725,17 @@ function DayEntryV2({
     return Number(v);
   }, [editValues]);
 
+  // sc-bulk-ui PR 2 item 2 (2026-08-03): off-schedule annotation
+  // for the single-day modal. Predicate is `day.projected?.[svc.
+  // colIndex] == null` - an explicit zero projection IS a schedule
+  // (R3-2 convention); only absence (no sc_daily_revenue row on
+  // this (date, service) pair) is not. Do not drift to `> 0`.
+  // Returns the copy the ServiceRow chip will render, or null when
+  // the service is on schedule for this day.
+  const getNotScheduled = useCallback((svc) => {
+    return day.projected?.[svc.colIndex] == null ? "Not scheduled" : null;
+  }, [day.projected]);
+
   const groupSummary = useCallback((group) => {
     let meals = 0, rev = 0;
     for (const s of group.services) {
@@ -1493,6 +1504,7 @@ function DayEntryV2({
               feeGroupSummary={feeGroupSummary}
               feeProjectedGroupSummary={feeProjectedGroupSummary}
               readOnly={isLockedForViewer}
+              getNotScheduled={getNotScheduled}
             />
           )}
           {activeGroups.map(group => (
@@ -1514,6 +1526,7 @@ function DayEntryV2({
               unit="meals"
               expanded={true}
               readOnly={isLockedForViewer}
+              getNotScheduled={getNotScheduled}
             />
           ))}
           {(inactiveGroups.length > 0 || stRenderDrawer) && (
@@ -1536,6 +1549,7 @@ function DayEntryV2({
                   feeGroupSummary={feeGroupSummary}
                   feeProjectedGroupSummary={feeProjectedGroupSummary}
                   readOnly={isLockedForViewer}
+                  getNotScheduled={getNotScheduled}
                 />
               )}
               {inactiveGroups.map(group => (
@@ -1557,6 +1571,7 @@ function DayEntryV2({
                   unit="meals"
                   expanded={false}
                   readOnly={isLockedForViewer}
+                  getNotScheduled={getNotScheduled}
                 />
               ))}
             </details>
@@ -1776,6 +1791,11 @@ export function GroupBlock({
   variant,           // undefined | "perMeal" | "bulk" | "fee"
   unit = "meals",
   readOnly = false,
+  // sc-bulk-ui PR 2 item 2 (2026-08-03): optional per-svc annotation
+  // callback. Caller decides the copy - "Not scheduled" for the
+  // modal (single-day predicate), "Not scheduled (N of M)" for
+  // bulk (aggregation across selected days). Absence = no chip.
+  getNotScheduled = null,
 }) {
   const wrapperClass = variant === "fee"
     ? "sc-day-ledger sc-day-ledger--fee"
@@ -1859,6 +1879,7 @@ export function GroupBlock({
             hideAmount={hideAmount}
             hideRate={hideRate}
             readOnly={readOnly}
+            notScheduled={getNotScheduled ? getNotScheduled(s) : null}
           />
         ))}
       </div>

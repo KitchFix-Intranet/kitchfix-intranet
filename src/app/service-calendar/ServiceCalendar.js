@@ -3930,6 +3930,32 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           ? (activeDrillDays?.find(d => d.date === firstDate) || dayMap?.[firstDate])
           : null;
         if (!syntheticDay) return null;
+        // sc-bulk-ui PR 2 item 2 (2026-08-03): off-schedule annotation
+        // predicate for bulk. Aggregate across the ACTUAL selected days
+        // (not the syntheticDay template - a service could be scheduled
+        // on the template day but not the other 11 in the batch, or
+        // the reverse). Predicate per-day: `d.projected?.[svc.colIndex]
+        // != null` (explicit-zero projection IS a schedule; only
+        // absence is not - R3-2 convention, do not drift to `> 0`).
+        //   0 hits  -> "Not scheduled" (never on schedule across the batch)
+        //   partial -> "Not scheduled (N of M)" where N = unscheduled count
+        //   all hit -> null (on schedule for every selected day)
+        const selectedDayObjs = [];
+        for (const dk of bulkSelected) {
+          const d = activeDrillDays?.find(x => x.date === dk) || dayMap?.[dk];
+          if (d) selectedDayObjs.push(d);
+        }
+        const bulkGetNotScheduled = (svc) => {
+          const total = selectedDayObjs.length;
+          if (total === 0) return null;
+          let notScheduledCount = 0;
+          for (const d of selectedDayObjs) {
+            if (d.projected?.[svc.colIndex] == null) notScheduledCount++;
+          }
+          if (notScheduledCount === 0) return null;
+          if (notScheduledCount === total) return "Not scheduled";
+          return `Not scheduled (${notScheduledCount} of ${total})`;
+        };
         return (
           <BulkEntry
             cardRef={bulkOverlayCardRef}
@@ -3942,6 +3968,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             saving={saving}
             accountSegment={data?.account?.category || ""}
             syntheticDay={syntheticDay}
+            getNotScheduled={bulkGetNotScheduled}
           />
         );
       })()}

@@ -1143,6 +1143,28 @@
      caption). Slight reduction per owner's ask. */
   font-size: var(--sc2-size-caption);
 }
+/* sc-bulk-ui PR 2 item 2 (2026-08-03): off-schedule annotation
+   tucked under the service name on rows where the service is not
+   projected for the operator's current context (single-day: this
+   day; bulk: all selected days). Reads as an ANNOTATION on the
+   line, not a new row - small, muted, and only present when a
+   caller passes `notScheduled`. Scheduled rows render zero
+   additional markup and stay at the density the entry polish
+   round won. `.sc-day-row-left` is already `display: flex;
+   flex-direction: column; gap: 2px` (dayDetail.css:247) so the
+   annotation stacks under the name by construction. Subgrid
+   column alignment for rate / input / amount cells is held by
+   `.sc-day-ledger`'s `grid-template-columns` regardless of the
+   left cell's height - a taller left cell grows the row but does
+   not shift the numeric cluster columns. Measured at 1024 and
+   390 in the fixture spec that ships with this PR. */
+.scv2 .sc-v2-entry-list .sc-day-row-note {
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-medium);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
 .scv2 .sc-v2-entry-list .sc-day-row-rate {
   color: var(--sc2-ink-soft);
   font-size: var(--sc2-size-caption);
