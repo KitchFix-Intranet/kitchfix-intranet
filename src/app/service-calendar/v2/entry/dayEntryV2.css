@@ -1611,3 +1611,54 @@
   gap: var(--sc2-space-3);
   margin-top: var(--sc2-space-3);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   ResetToast - workspace-level feedback for sc-reset-day success.
+   Sibling of SaveConfirmation (see SaveConfirmation.js on the
+   feat/sc-save-confirm branch, PR #609). Same hoisted-overlay
+   pattern - state on ServiceCalendarInner, component pure display,
+   auto-clear via a paired setTimeout on the parent - different
+   content per owner ruling: SaveConfirmation is a celebration
+   (a save landed money), ResetToast is a correction (something
+   is un-recorded). Do not merge the two components; the visual
+   difference is intentional. Do KEEP them following the same
+   architecture so 'one hoisted-overlay pattern' reads at review.
+
+   Rendered by ServiceCalendarInner (:~3978) as a sibling of the
+   day-overlay conditional. State lives at the parent because the
+   modal itself unmounts during the post-reset refetch (see
+   SC_STATUS' 'Day-detail modal remounts during post-save refetch'
+   entry - same failure class SaveConfirmation solves the same
+   way).
+
+   Visual: subtle top-centered pill, small caption type, muted.
+   Fade-in + hold + fade-out over the full 1800ms; parent clears
+   the state at 1800ms so the DOM node unmounts cleanly.
+   pointer-events: none so it never blocks input.
+   ══════════════════════════════════════════════════════════════ */
+@keyframes sc-reset-toast-in {
+  0%   { opacity: 0; transform: translate(-50%, -8px); }
+  15%  { opacity: 1; transform: translate(-50%, 0); }
+  75%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+.sc-reset-toast {
+  position: fixed;
+  top: var(--sc2-space-6);
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  padding: var(--sc2-space-2) var(--sc2-space-4);
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  animation: sc-reset-toast-in 1800ms var(--ease-standard) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-reset-toast { animation: none; }
+}
