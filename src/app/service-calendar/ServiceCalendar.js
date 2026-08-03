@@ -4105,10 +4105,27 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           // R13 round-per-line: each service extended amount at 2dp,
           // then summed. Matches the invoice convention Stage-5 CSVs
           // use and the per-day figure displayed alongside on each row.
+          //
+          // Price fallback (2026-08-03 gate): priceAtDate is undefined
+          // for services with no sc_daily_revenue row on the day (which
+          // happens when there is no projection AND no actual). The
+          // prior `?? 0` fallback under-reported by the service's full
+          // catalog price whenever an operator typed into an
+          // unprojected service - the WRITE lands the row (bulk +
+          // single-day paths both filter only by isInServiceOnDay,
+          // which is an archive check, not a projection check), and
+          // sc_daily_revenue computes actual_revenue as actual_count *
+          // sc_service_prices.price (LATERAL join with effective_date
+          // <= service_date; projections are nowhere in that lookup).
+          // So a row saved for an unprojected service on Wed earns
+          // full catalog price while the review header read $0 for it.
+          // Fallback to svc.price matches the house pattern used by
+          // ServiceRow, enteredTotals, and BillRailFee, which is
+          // exactly what the view uses post-save.
           let rev = 0;
           for (const e of entries) {
             if (!isInServiceOnDay(e.svc, d.date)) continue;
-            const price = d.priceAtDate?.[e.colIndex] ?? 0;
+            const price = d.priceAtDate?.[e.colIndex] ?? e.svc?.price ?? 0;
             rev += round2((Number(e.value) || 0) * price);
           }
           return rev;
