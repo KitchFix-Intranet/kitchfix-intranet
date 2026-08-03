@@ -700,11 +700,22 @@ function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, savi
 
   const runningTotal = useMemo(() => {
     if (!bulkMode || !bulkSelected || bulkSelected.size === 0) return null;
+    // Sum per-day figures at cent precision. Prior shape had
+    // Math.round(x) inside the accumulator (whole-dollar round-then-
+    // sum) - same defect fixed on the review header at
+    // ServiceCalendar.js:3966 (bulk-match) and :4098 (bulk-custom).
+    // These three surfaces are the same journey: this running total
+    // is shown while the operator is selecting days, then the review
+    // header shows on confirm; they must agree at the cent or the
+    // selection screen contradicts the review screen seconds later.
+    // day.totals.projectedRevenue is already at 2dp per R13
+    // (season/format.js:22-28); straight sum preserves the invoice-
+    // convention footing.
     let meals = 0, revenue = 0;
     for (const d of periodDays || []) {
       if (!bulkSelected.has(d.date)) continue;
       for (const v of Object.values(d.projected || {})) meals += v || 0;
-      revenue += Math.round(Number(d.totals?.projectedRevenue) || 0);
+      revenue += Number(d.totals?.projectedRevenue) || 0;
     }
     return { meals, revenue };
   }, [bulkMode, bulkSelected, periodDays]);
