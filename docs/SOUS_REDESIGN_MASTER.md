@@ -106,7 +106,8 @@ Ratified decisions U1-U12 and panel items I1-I4 recorded here; scope traces to `
 | U3 | Composer | As mocked: 52px, vertically centered text, elev-2 at rest, Flame focus ring, Flame send with real disabled state. Scroll FAB restyles neutral. |
 | U4 | Height floor | Design target stays 1280x800. **Fit floor 720:** landing renders fully, zero vertical scroll, at any viewport 720 and taller; graceful scroll below, nothing breaks. Hero compresses 84 to 72 under 800. Sweep battery gains height axis 800 / 768 / 720. `DESIGN_SYSTEM_REFERENCE.md` browser matrix gains the height-floor paragraph (cross-module doc touch, flagged). *(Implemented per prompt and height ledgers as 96 to 84 under 800h; the "84 to 72" phrasing in the bundle was a transcription slip - 84 is the ratified compressed height.)* |
 | U5 | Viewport gates | SC matrix adopted verbatim for Sous: 1280x800 target, nothing breaks to 1024 wide, 375 mobile floor, Chrome only, laptop matrix 1024/1152/1280/1366/1536. Landing fits, answers scroll. |
-| U6 | Limits copy | Candidate 2: "No wages, no reimbursements, no P&L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong." |
+| U6 | Limits copy | **v2 ratified 2026-08-02 (supersedes 2026-08-01 original).** Page (verbatim): `No wages, no reimbursements, no HR or Legal sensitive information. P&L + KPIs coming soon. Current 2026 season only. Past data pending.` Panel compact twin (verbatim): `Not yet: wages, reimbursements, HR/Legal-sensitive info. P&L + KPIs coming. Current 2026 season only.` Original candidate 2 (retained for history): "No wages, no reimbursements, no P&L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong." UI copy, not character - spec untouched. |
+| U6b | Landing subhead | **v2 ratified 2026-08-02 (supersedes the U-era text).** Page (verbatim): `Every answer names its source. Sous declines rather than guessing. Sous can make mistakes - always verify against the sources.` Panel capability line gains the short twin appended (verbatim): ` Sous can make mistakes - check the source.` UI copy, not character - spec untouched. |
 | U7 | Naming | Sous copy says "people" throughout; greeting future-proofed to "ask me about anything the intranet knows." Intranet People-vs-Directory IA untouched. |
 | U8 | First-run icons | Module icons in module accents; headings ink; four stars retired. |
 | U9 | Partial reason | Human-readable line beside the pill; fallback "Some sections could not be verified." Calibration ruling waits on CC's distribution. |
@@ -218,6 +219,23 @@ Landed in nine logical commits, one per prompt Part:
 - **Blast-radius survey** (Part 3, read-only): the two R3-05 mechanisms account for **21 of 27 partials (77.8%)** over the last 30 days. Breakdown table in the PR body.
 
 **Fences honored:** No UI. No tool changes. No memory scope. No spec edits (v1.1 rides PR B). Decline logic + money/safety rules untouched. Named-open gap (data-tool answer-follows-from-rows content check) stays open for Phase E.
+
+---
+
+**PR B 2026-08-01 (`feat/sous-pr-b-memory`) - DRAFT.** Largest PR of the programme; the ratified prompt + memory + testing constitution + spec-v1.1 round. One PR because `docs/SOUSAI_CHARACTER_SPEC.md` v1.1's governance lock requires spec + system prompt land together. Delivers:
+
+- **Spec v1.1** with A1-A14 + expansions + governance-lock elevation, per `docs/reviews/CHARACTER_SPEC_REVIEW_2026-08-01.md` (Kevin's KEEP-ALL marks). **Ten-line canonical block** (five carried from prior rounds + line 6 amended to cover tools + line 7 phantom-table ban + line 8 arithmetic-without-receipt ban + line 9 previous-answer-is-never-a-source + line 10 zero-tool-call self-check; lines 9 + 10 landed after acceptance-run-1 M1 fail identified two-turn memory-quote as a distinct failure mode from phantom-tables). Gallery repaired with dated production examples per A14; the June "I don't have live financials" fiction retired; new two-turn section carries M2's real passing transcript and a corrected-M1 as the ship-gate shape.
+- **Prompt rebuild.** `agentPrompt.js` derived from spec v1.1; tool-use section preserved; hard-floor + STATUS footer + decline voice content intact.
+- **Conversational memory** (client-state, no persistence). Last-3 Q&A pairs held in `SousSurface`; route + agent accept `priorTurns` and prepend as alternating user/assistant. Session-only per D8; New Question / ⌘K clears the memory window. Answers cap at 2000 chars with a truncation marker for context; questions never truncate. Panel parity by construction.
+- **Truthful rail.** IN CONTEXT marker binds to actual memory-window ids; per-item status dots; timezone abbrev on timestamps (CODE-14).
+- **Testing constitution.** Tier 1 (receipt check) + Tier 2 (no-plumbing, voice guards, decline shape, no-clock-in-prose, no-unretrieved-doc-ids, numeric run-stability, permission-leak probe) added to the harness. Ship-gate two-turn cases (M1 memory meaning, M2 memory temptation) evaluated in the acceptance battery.
+- **Docs.** `docs/SOUS_TESTING_PLAN.md` committed verbatim; `docs/SOUSAI_AGENT_PLAN.md` bumps to v2.70 with the PR B section; `docs/reviews/CHARACTER_SPEC_REVIEW_2026-08-01.md` committed verbatim.
+
+**Rulings landed mid-build:** Source-line completeness rule (every doc used, including inline references, listed on the Source line); four additional sanctioned lines across two rulings - phantom-table ban + arithmetic-without-receipt ban (Ruling 2 after case 7 pressure), then line 6 amended to cover tools + line 9 previous-answer-is-never-a-source + line 10 zero-tool-call self-check (Ruling 3 after acceptance-run-1 M1 ship-gate fail); cases 1a, 2, 5a KNOWN-FLAKE annotations (1a carried forward; case 2 exact-id sensitivity, case 5a typo sensitivity - both added 2026-08-01 with the ruling, non-gating, tracked in Tier 3 digest dials list).
+
+**Acceptance ratification (three runs).** Run 1 fired ship-gate STOP on M1 (model memory-quoted T1's Sysco figures at $244,954 / 19.5% in T2 with zero tool calls). Mechanical cause ruled out (priorTurns assembled correctly, T1 answer under the 2000-char cap, T2 chose zero tool calls); handed to Chat per Part 5 protocol. Ruling 3 landed lines 6-amended, 9, 10 (governance lock in prompt + spec canonical block, same commit). Runs 2 and 3 (post-ruling): M1 SHIP-GATE PASS 2/2, M2 SHIP-GATE PASS 2/2, PL HARD-FAIL PASS 2/2, 10 gating PASS + 0 FAIL both runs, KNOWN-FLAKE surfaced twice (1a run1=F run2=P, case2 both patterns).
+
+See `docs/SOUSAI_AGENT_PLAN.md` v2.70 delivery entry for the full acceptance battery + ship-gate results.
 
 ---
 

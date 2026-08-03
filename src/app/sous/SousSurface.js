@@ -22,7 +22,7 @@
 // in PR A - memory arrives in PR B; the marker becomes truthful then.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   Copy, Download, ThumbsUp, ThumbsDown, Plus, ArrowUp, ExternalLink,
   BookOpen, Users, Calendar, Receipt,
@@ -97,7 +97,9 @@ async function* parseSse(response) {
 }
 
 function formatTime(d) {
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  // R3-CODE-14: timezone abbrev now shows on the rail so a distant reader
+  // (or a copy-pasted debug transcript) doesn't guess UTC vs local.
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 // Shared duration formatter for the tool trail + provenance meta row.
@@ -133,8 +135,18 @@ const SousSurface = forwardRef(function SousSurface({
   const [doneEnv, setDoneEnv] = useState(null);
   const [errorInfo, setErrorInfo] = useState(null);
   const [askedQuestion, setAskedQuestion] = useState("");
-  // Session rail entries. Client-held only. Presentation only in PR A.
-  const [sessionTurns, setSessionTurns] = useState([]); // { id, at, question }
+  // Session rail entries. Client-held only. Session-only per D8 / rail
+  // footer contract. Entry shape:
+  //   { id, at, question, answer?, status? }
+  // answer + status are added when the ask completes (done event).
+  const [sessionTurns, setSessionTurns] = useState([]);
+  // PR B memory: last-3 Q&A pairs to send as prior turns on the NEXT ask.
+  // Chronological order (oldest first) so the agent prepends cleanly as
+  // user/assistant alternation. New Question / ⌘K clears; on done, append
+  // and cap at 3. Rail IN CONTEXT marker binds to turns whose id is in
+  // memoryPairs.
+  const [memoryPairs, setMemoryPairs] = useState([]);
+  const memoryIds = useMemo(() => new Set(memoryPairs.map((p) => p._turnId)), [memoryPairs]);
   // Feedback state - null | 1 | -1 | 'panel' (showing tag picker) | 'sent'
   const [feedbackState, setFeedbackState] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -143,8 +155,25 @@ const SousSurface = forwardRef(function SousSurface({
   const abortRef = useRef(null);
   const inputRef = useRef(null);
   const startedAtRef = useRef(null);
+  // 2026-08-02: pane-scroll region owns the only scroll container on the
+  // page variant. paneScrollRef targets it for (a) on-submit scroll-to-top
+  // (new turn's question header lands at the top so long answers read
+  // top-down) and (b) the .sa-fab-scroll-top button below.
+  const paneScrollRef = useRef(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => { if (autoFocus && inputRef.current) inputRef.current.focus(); }, [autoFocus]);
+
+  // Toggle the scroll-top FAB when the pane region scrolls past 200px.
+  // Only active on the page variant - the panel has its own scroll shell
+  // (.sa-overlay-body-scroll) and doesn't need a FAB at its size.
+  useEffect(() => {
+    const el = paneScrollRef.current;
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 200);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [variant]);
 
   useEffect(() => {
     if (initialQuestion) {
@@ -178,9 +207,26 @@ const SousSurface = forwardRef(function SousSurface({
     setCopyOk(false);
     setPhase("streaming");
     startedAtRef.current = Date.now();
-    // Prepend to session rail.
+    // 2026-08-02: scroll the pane region to the top so the question
+    // header (which renders inside .sa-turn at the top of .sa-pane) is
+    // top-anchored. Long answers then read top-down, and follow-up asks
+    // reset the reading position rather than leaving the user mid-scroll
+    // from the previous turn. No-op on the panel variant (paneScrollRef
+    // stays null there).
+    if (paneScrollRef.current) paneScrollRef.current.scrollTop = 0;
+    // Prepend to session rail. turnId is captured here so the done handler
+    // can attach the answer back to the correct entry (setSessionTurns runs
+    // async; using a ref-like capture keeps the append targeted).
     const turnId = `t${Date.now()}`;
     setSessionTurns((prev) => [{ id: turnId, at: new Date(), question: q }, ...prev]);
+
+    // PR B memory: snapshot of prior turns to send with this ask.
+    // memoryPairs already excludes anything from before the last New Question
+    // / ⌘K clear. Ships Q&A text only; no meta, no trajectories, no sources.
+    const priorTurnsForSend = memoryPairs.map((p) => ({ question: p.question, answer: p.answer }));
+    // Local accumulator so the done handler can capture the final answer
+    // without relying on React's async answerText state at that moment.
+    let accumulatedAnswer = "";
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -189,7 +235,7 @@ const SousSurface = forwardRef(function SousSurface({
       const resp = await fetch("/api/sousai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ask", question: q }),
+        body: JSON.stringify({ action: "ask", question: q, priorTurns: priorTurnsForSend }),
         signal: controller.signal,
       });
       if (!resp.ok || !resp.body) {
@@ -216,13 +262,32 @@ const SousSurface = forwardRef(function SousSurface({
             return next;
           });
         } else if (event === "token") {
-          setAnswerText((prev) => prev + (data?.t || ""));
+          const t = data?.t || "";
+          accumulatedAnswer += t;
+          setAnswerText((prev) => prev + t);
         } else if (event === "error") {
           setErrorInfo({ kind: data?.kind || "unknown", message: data?.message || "Sous failed." });
           setPhase("error");
         } else if (event === "done") {
-          setDoneEnv(data || {});
+          const env = data || {};
+          setDoneEnv(env);
           setPhase("done");
+          // Attach answer + status back to the rail entry so the rail can
+          // render the status dot next to the timestamp. accumulatedAnswer
+          // is the final streamed content captured in local scope (avoids
+          // React state async).
+          setSessionTurns((prev) => prev.map((t) => (
+            t.id === turnId ? { ...t, answer: accumulatedAnswer, status: env.status || "grounded" } : t
+          )));
+          // Append to memoryPairs (chronological order, cap at 3). Only
+          // grounded / partial / declined answers count; errors don't
+          // become context (the error state stays out of history).
+          if (env.status) {
+            setMemoryPairs((prev) => {
+              const next = [...prev, { _turnId: turnId, question: q, answer: accumulatedAnswer }];
+              return next.slice(-3);
+            });
+          }
         }
       }
       setPhase((p) => (p === "streaming" ? "error" : p));
@@ -253,6 +318,10 @@ const SousSurface = forwardRef(function SousSurface({
     setDoneEnv(null);
     setErrorInfo(null);
     setToolTrail([]);
+    // PR B memory: New Question / ⌘K clears the memory window. Rail entries
+    // stay visible (session history is nice-to-have), but IN CONTEXT
+    // markers all disappear on the next render because memoryPairs is empty.
+    setMemoryPairs([]);
     setAskedQuestion("");
     setFeedbackState(null);
     if (inputRef.current) inputRef.current.focus();
@@ -411,51 +480,65 @@ const SousSurface = forwardRef(function SousSurface({
             <b>Nothing yet</b>
             Questions you ask will collect here.
           </div>
-        ) : (
-          <>
-            <ul className="sa-rail-list">
-              {sessionTurns.slice(0, IN_CONTEXT_WINDOW).map((t, i) => (
-                <li key={t.id}>
-                  {i === 0 && (
+        ) : (() => {
+          // PR B rail truthfulness: IN CONTEXT marker binds to turns whose
+          // id is in memoryPairs (the actual context window). New Question /
+          // ⌘K clears memoryPairs, so all markers disappear until fresh
+          // asks land. Status dots per item render on completion.
+          const inContext = sessionTurns.filter((t) => memoryIds.has(t.id));
+          const outsideContext = sessionTurns.filter((t) => !memoryIds.has(t.id));
+          const renderRow = (t, extraClass) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                className={`sa-rail-item ${extraClass}${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
+                onClick={() => { setQuestion(t.question); }}
+              >
+                <span className="sa-rail-item-meta">
+                  {t.status && (
                     <span
-                      className="sa-rail-incontext-marker"
-                      title="Sous can refer back to these three (presentation only in PR A - true after PR B ships memory)."
-                    >
-                      In context
-                    </span>
+                      className={`sa-rail-status-dot sa-rail-status-dot--${t.status}`}
+                      aria-label={`status ${t.status}`}
+                    />
                   )}
-                  <button
-                    type="button"
-                    className={`sa-rail-item sa-rail-item--incontext${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
-                    onClick={() => { setQuestion(t.question); }}
-                  >
-                    <span className="sa-rail-item-time">{formatTime(t.at)}</span>
-                    <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {sessionTurns.length > IN_CONTEXT_WINDOW && (
-              <>
-                <div className="sa-rail-context-boundary" />
+                  <span className="sa-rail-item-time">{formatTime(t.at)}</span>
+                </span>
+                <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
+              </button>
+            </li>
+          );
+          return (
+            <>
+              {inContext.length > 0 && (
                 <ul className="sa-rail-list">
-                  {sessionTurns.slice(IN_CONTEXT_WINDOW).map((t) => (
-                    <li key={t.id}>
-                      <button
-                        type="button"
-                        className={`sa-rail-item sa-rail-item--outside-context${askedQuestion === t.question ? " sa-rail-item--selected" : ""}`}
-                        onClick={() => { setQuestion(t.question); }}
-                      >
-                        <span className="sa-rail-item-time">{formatTime(t.at)}</span>
-                        <span className="sa-rail-item-q">{truncate(t.question, 40)}</span>
-                      </button>
-                    </li>
+                  {inContext.map((t, i) => (
+                    <React.Fragment key={t.id}>
+                      {i === 0 && (
+                        <li aria-hidden="true">
+                          <span
+                            className="sa-rail-incontext-marker"
+                            title="Sous can refer back to these turns (memory window - clears on New question or ⌘K)."
+                          >
+                            In context
+                          </span>
+                        </li>
+                      )}
+                      {renderRow(t, "sa-rail-item--incontext")}
+                    </React.Fragment>
                   ))}
                 </ul>
-              </>
-            )}
-          </>
-        )}
+              )}
+              {inContext.length > 0 && outsideContext.length > 0 && (
+                <div className="sa-rail-context-boundary" />
+              )}
+              {outsideContext.length > 0 && (
+                <ul className="sa-rail-list">
+                  {outsideContext.map((t) => renderRow(t, "sa-rail-item--outside-context"))}
+                </ul>
+              )}
+            </>
+          );
+        })()}
       </div>
       <p className="sa-rail-footer">Session only - clears when you reload.</p>
     </aside>
@@ -470,7 +553,7 @@ const SousSurface = forwardRef(function SousSurface({
     <div className="sa-firstrun">
       <SousLockup>
         <p className="sa-firstrun-lead">What can I look up for you?</p>
-        <p className="sa-firstrun-tag">Every answer names its source. Sous declines rather than guessing.</p>
+        <p className="sa-firstrun-tag">Every answer names its source. Sous declines rather than guessing. Sous can make mistakes - always verify against the sources.</p>
       </SousLockup>
       <div className="sa-brief">
         <BriefRow
@@ -506,7 +589,7 @@ const SousSurface = forwardRef(function SousSurface({
           onExampleClick={onExampleClick}
         />
         <p className="sa-brief-limits">
-          No wages, no reimbursements, no P&amp;L yet - all coming. Current season only: ask about 2024 and the number will look right and be wrong.
+          No wages, no reimbursements, no HR or Legal sensitive information. P&amp;L + KPIs coming soon. Current 2026 season only. Past data pending.
         </p>
       </div>
     </div>
@@ -717,12 +800,21 @@ const SousSurface = forwardRef(function SousSurface({
       <div className="sa-workspace">
         {railEl}
         <main className="sa-main">
-          <div className="sa-pane-scroll">
+          <div className="sa-pane-scroll" ref={paneScrollRef}>
             <div className="sa-pane">
               {firstRunEl}
               {turnEl}
             </div>
           </div>
+          <button
+            type="button"
+            className={`sa-fab-scroll-top${showScrollTop ? " sa-fab-scroll-top--visible" : ""}`}
+            onClick={() => { if (paneScrollRef.current) paneScrollRef.current.scrollTo({ top: 0, behavior: "smooth" }); }}
+            aria-label="Scroll to top of answer"
+            tabIndex={showScrollTop ? 0 : -1}
+          >
+            <ArrowUp size={16} aria-hidden="true" />
+          </button>
           {composerEl}
         </main>
       </div>

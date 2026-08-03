@@ -221,7 +221,7 @@ async function handleFeedback(gate) {
 // ── Ask handler (SSE stream + fire-and-forget log) ──────────────────────────
 
 async function handleAsk(gate) {
-  const { question, accessLevels, email, tier } = gate;
+  const { question, accessLevels, email, tier, priorTurns } = gate;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -270,7 +270,7 @@ async function handleAsk(gate) {
       let result = null;
       let mappedError = null;
       try {
-        result = await runSousAgent({ question, accessLevels, onEvent });
+        result = await runSousAgent({ question, accessLevels, priorTurns, onEvent });
       } catch (err) {
         mappedError = mapSdkError(err);
         write("error", mappedError);

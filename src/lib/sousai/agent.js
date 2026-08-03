@@ -115,10 +115,29 @@ function collectRetrievedIds(trajectory) {
 
 // ── The agent loop ───────────────────────────────────────────────────────────
 
+// Memory cap: prior-turn answer text truncated for context assembly.
+// Questions never truncate (question text is short and load-bearing for
+// meaning resolution); answers can be long, cap at 2000 chars with a
+// visible marker so the model knows the truncation happened. Spec §8.2
+// memory corollary: history tells you what the question means; tools
+// tell you what the answer is - so cropping the answer for context
+// signals meaning-only intent.
+const MEMORY_ANSWER_CAP = 2000;
+const MEMORY_TRUNCATION_MARKER = "\n\n[... answer truncated for context ...]";
+
+function truncateForContext(text) {
+  if (typeof text !== "string" || text.length <= MEMORY_ANSWER_CAP) return text || "";
+  return text.slice(0, MEMORY_ANSWER_CAP) + MEMORY_TRUNCATION_MARKER;
+}
+
 /**
  * @param {object} opts
  * @param {string} opts.question
  * @param {string[]} opts.accessLevels
+ * @param {Array<{question: string, answer: string}>} [opts.priorTurns] - last
+ *   up-to-3 Q&A pairs from the current session, prepended as alternating
+ *   user/assistant turns before the current question. Q&A text only; no
+ *   trajectories, meta, or sources. Answers are capped at MEMORY_ANSWER_CAP.
  * @param {(event: {kind: string, ...}) => void} [opts.onEvent]
  * @returns {Promise<{
  *   answer: string,
@@ -130,7 +149,7 @@ function collectRetrievedIds(trajectory) {
  *   usage: {input_tokens:number, output_tokens:number, cache_read_input_tokens:number, cache_creation_input_tokens:number}
  * }>}
  */
-export async function runSousAgent({ question, accessLevels, onEvent }) {
+export async function runSousAgent({ question, accessLevels, priorTurns, onEvent }) {
   if (!question || typeof question !== "string") {
     throw new Error("runSousAgent: question is required (non-empty string)");
   }
@@ -145,7 +164,18 @@ export async function runSousAgent({ question, accessLevels, onEvent }) {
 
   const client = new Anthropic({ apiKey });
 
-  const messages = [{ role: "user", content: question }];
+  // PR B memory: prepend prior turns as alternating user/assistant turns.
+  // Client passes chronological order (oldest first). Truncate each answer
+  // at MEMORY_ANSWER_CAP. Questions never truncate.
+  const priorMessages = [];
+  if (Array.isArray(priorTurns)) {
+    for (const t of priorTurns) {
+      if (!t || typeof t.question !== "string" || !t.question.trim()) continue;
+      priorMessages.push({ role: "user", content: t.question });
+      priorMessages.push({ role: "assistant", content: truncateForContext(t.answer) || "(no prior answer)" });
+    }
+  }
+  const messages = [...priorMessages, { role: "user", content: question }];
   const trajectory = [];
   const usage = {
     input_tokens: 0,
