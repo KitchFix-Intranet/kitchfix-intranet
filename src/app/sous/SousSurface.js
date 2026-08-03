@@ -317,7 +317,14 @@ const SousSurface = forwardRef(function SousSurface({
   }), [submitAsk]);
 
   const onFormSubmit = (e) => { e.preventDefault(); submitAsk(question); };
-  const onExampleClick = (q) => { setQuestion(q); submitAsk(q); };
+  // 2026-08-03 (Kevin depth-v2 diagnosis): chip submit MUST NOT pre-populate
+  // the composer. The prior form was `{ setQuestion(q); submitAsk(q); }` -
+  // pre-set + later `setQuestion("")` on success were racing and the reset
+  // failed to stick (live evidence: chip text persisted after settle).
+  // Panel chips have always matched this pattern via
+  // sousRef.current?.askQuestion(q) -> submitAsk(q) with no pre-set, and
+  // they never showed the bug. Page path now matches panel path exactly.
+  const onExampleClick = (q) => { submitAsk(q); };
   const onRetry = () => { if (question.trim()) submitAsk(question); };
   const onNewQuestion = () => {
     setQuestion("");
