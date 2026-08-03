@@ -264,6 +264,15 @@ async function handleAsk(gate) {
             if (firstTokenAt === null) firstTokenAt = Date.now();
             write("token", { t: forward });
           }
+        } else if (ev.kind === "zero-tool-retry") {
+          // 2026-08-04 (calibration round 2): the loop rejected a zero-
+          // tool citation-bearing answer and is about to retry. Reset the
+          // footer sentinel state so the retry's fresh [[STATUS]] parse
+          // works, and tell the client to clear its answer accumulator
+          // for this turn so the retry text isn't concatenated to the
+          // rejected first attempt.
+          footerState = initFooterState();
+          write("retry_reset", {});
         }
       };
 

@@ -72,6 +72,7 @@ import { deriveOpsHeroTotals } from "./v2/opsRailDerive";
 // at the W8 mobile-bar sites.
 import DayEntryV2 from "./v2/entry/DayEntryV2";
 import ResetToast from "./v2/entry/ResetToast";
+import SaveConfirmation from "./v2/entry/SaveConfirmation";
 import "./v2/shell.css";
 import "./v2/overview.css";
 import "./v2/drill.css";
@@ -602,6 +603,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   }, [resetToast]);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // sc-save-confirm state (hoisted 2026-08-03 per #598 gate-bounce
+  // ruling). Lives here because the modal itself unmounts during the
+  // post-save refetch when periodDays goes null mid-invalidation and
+  // the mount gate at :3826 collapses. State inside DayEntryV2 gets
+  // discarded before the overlay can render. Hoisted state survives
+  // the child's tear-down; the overlay is mounted at the workspace
+  // level (viewport-scale, above the modal backdrop) so its scrim
+  // masks the ~400-1000ms remount blink instead of exposing it.
+  //   shape: { meals: number, revenue: number | null } | null
+  const [saveConfirm, setSaveConfirm] = useState(null);
+  const handleSaveConfirmed = useCallback((meals, revenue) => {
+    setSaveConfirm({ meals, revenue });
+  }, []);
+  const handleSaveConfirmComplete = useCallback(() => {
+    setSaveConfirm(null);
+  }, []);
 
   // F3: save-queue state. syncingKeys is the set of `${account}|${date}`
   // for entries currently pending replay across ALL accounts (the driver
@@ -3925,6 +3942,8 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 onSave: handleSave,
                 onAddNote: handleAddNote,
                 onReset: handleResetDay,
+                onSaveConfirmed: handleSaveConfirmed,
+                onSaveConfirmComplete: handleSaveConfirmComplete,
                 saving,
                 dayIndex: focusIdx,
                 totalDays: dayList.length,
@@ -3966,11 +3985,26 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         </div>
       )}
 
-      {/* Polish wave item 4 (2026-08-04): ResetToast mounted at
-          workspace level. Same hoisted-overlay pattern as
-          SaveConfirmation - parent state, sibling of day-overlay
-          conditional, position: fixed. See ResetToast.js header
-          for the full write-up on why the state lives up here. */}
+      {/* Two hoisted overlays, siblings by design. Same pattern
+          (workspace-level state + fixed-position render + auto-
+          clear) with different content per owner ruling: save is
+          a celebration, reset is a correction. Both mount here
+          rather than inside the modal because the modal itself
+          unmounts during the post-write refetch (see SC_STATUS'
+          'Day-detail modal remounts during post-save refetch'
+          entry - same failure class either write hits).
+          SaveConfirmation is a viewport-scale scrim + stamp that
+          masks the modal remount blink; ResetToast is a subtle
+          top-centered pill that fires after sc-reset-day. Not
+          alternatives - both can be present in different
+          sequences (a save from the modal fires SaveConfirmation;
+          a reset from the same modal fires ResetToast). */}
+      {saveConfirm && (
+        <SaveConfirmation
+          meals={saveConfirm.meals}
+          revenue={saveConfirm.revenue}
+        />
+      )}
       {resetToast && <ResetToast message={resetToast.message} />}
 
       {/* Bulk custom-entry - pos-style panel (Phase 2A 2026-07-24,
