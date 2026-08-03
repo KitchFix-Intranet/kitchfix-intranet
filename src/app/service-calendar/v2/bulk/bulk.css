@@ -143,6 +143,14 @@
 }
 .sc-bulk-review-detail .sc-day-row--ledger {
   padding: 6px var(--sc2-space-3);
+  /* Polish wave item 1 second bounce (2026-08-04): match wrapper's
+     column-gap so header + row cells sit on the same subgrid
+     tracks. Base .sc-day-row's `gap: var(--space-3)` shorthand
+     was leaving the row at 12px while wrapper is space-7. Bulk
+     header + row already share horizontal padding (space-3 both)
+     so gap is the only drift axis here - unlike the modal which
+     also needed a padding-scheme change. */
+  column-gap: var(--sc2-space-7);
   min-height: 32px;
   border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
   align-items: center;

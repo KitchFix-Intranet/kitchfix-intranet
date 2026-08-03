@@ -1263,8 +1263,37 @@
     min-height: 36px;
     padding: 4px var(--sc2-space-2);
   }
+  /* Polish wave item 1 SECOND bounce (2026-08-04): owner's live
+     measurement showed 6-14px drift between header and row cells
+     across all four columns. Two root causes, both fixed here:
+       (a) Base .sc-day-row at dayDetail.css:244 has
+           `gap: var(--space-3)` (12px). That shorthand sets
+           column-gap on the row (subgrid child). Header inherits
+           wrapper's column-gap (--sc2-space-7). Different values
+           = drifted subgrid tracks. Set row column-gap explicit
+           to match wrapper.
+       (b) Row had `padding: 6px var(--sc2-space-4)` at this
+           desktop-only rule. Horizontal padding insets the
+           subgrid tracks INSIDE the row, so row cells sat right
+           of header cells (header has padding 0 + per-child
+           padding on first/last only). Match the header pattern:
+           row horizontal padding 0, per-child padding on first
+           and last for outer edges.
+     Scoped to this desktop media query (≥1024) so mobile keeps
+     the base .sc-day-row padding + its 2x2 grid rewrite from
+     dayDetail.css:1275 - no risk to the mobile shape. Owner's
+     rule: "one gap, applied to both. Find every element in that
+     grid family with its own column-gap and bring them into
+     agreement." Applied to both wrapper and row. */
   .scv2 .sc-v2-entry-list .sc-day-row--ledger {
-    padding: 6px var(--sc2-space-4);
+    padding: 6px 0;
+    column-gap: var(--sc2-space-7);
+  }
+  .scv2 .sc-v2-entry-list .sc-day-row--ledger > :first-child {
+    padding-inline-start: var(--sc2-space-4);
+  }
+  .scv2 .sc-v2-entry-list .sc-day-row--ledger > :last-child {
+    padding-inline-end: var(--sc2-space-4);
   }
 }
 .scv2 .sc-v2-entry-list .sc-day-input--ghost {
