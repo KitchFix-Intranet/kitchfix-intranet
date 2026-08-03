@@ -71,6 +71,29 @@
 // schedule. Both surfaces stayed unfixed pending Kevin's ruling;
 // Kevin's ruling was to park the entire ring surface until 2027,
 // so the divergence is now moot for 2026.
+//
+// Polish wave amendment (2026-08-04): the reason for the park is
+// stronger than the 2026-07-13 note captured. Kevin's rule for
+// due-date placement is "the Friday before the next period starts."
+// Applying that rule to the current period boundaries produces
+// dates that land TWO DAYS EARLIER than the Sheets HUB
+// period_data.dueDate values the notification cron actually fires
+// on. Printing the Friday on the wall calendar would put the wall
+// and the Slack reminders on different dates - a scheduling
+// contradiction the operator sees immediately.
+//
+// The reconciliation on ON RE-ENABLE (step 1 above) is not just
+// "check for drift" - it is "pick which source is authoritative."
+// The next person to unpark has to decide whether:
+//   (a) The cron switches to the Friday-before rule (change of
+//       schedule for Slack reminders), or
+//   (b) The calendar prints the Sheets HUB dates (change of
+//       what Kevin said the rule was), or
+//   (c) The two surfaces genuinely serve different audiences and
+//       both dates stay, with the calendar labelling its date
+//       differently than the cron does.
+// None of those are one-line changes. Do not unpark without a
+// Kevin ruling on that choice first.
 
 /**
  * Return the due-date index for a given year. Returns {} until a

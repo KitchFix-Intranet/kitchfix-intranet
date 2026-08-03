@@ -128,27 +128,38 @@
 .sc-v2-entry-coaching-text {
   min-width: 0;
 }
+/* Polish wave item 3 (2026-08-04): Reset day becomes a real button.
+   Was text (background transparent, border 0, no underline) which
+   read as banner text, not an action. Owner ruling: quiet was
+   right, invisible was wrong. Uses the same red family Clear was
+   minted with (accent-red-wash/-mid/-deep) so the two destructive
+   affordances speak one language. Placement in the banner unchanged.
+   One-line-at-1024 contract from the placement ruling still holds -
+   the button is flex: 0 0 auto so it never wraps under the text. */
 .sc-v2-entry-coaching-reset {
   flex: 0 0 auto;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  opacity: 0.75;
+  background: var(--sc2-accent-red-wash);
+  border: var(--sc2-border-thin) solid var(--sc2-accent-red-mid);
+  color: var(--sc2-accent-red-deep);
   cursor: pointer;
-  padding: 0;
+  padding: 4px var(--sc2-space-3);
+  border-radius: var(--sc2-radius-control);
   font: inherit;
-  font-weight: var(--sc2-wt-medium);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-caption);
+  line-height: 1.2;
   text-decoration: none;
-  transition: opacity var(--duration-fast) var(--ease-standard);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 .sc-v2-entry-coaching-reset:hover:not(:disabled) {
-  opacity: 1;
-  text-decoration: underline;
+  background: var(--sc2-accent-red-line);
+  border-color: var(--sc2-accent-red-deep);
 }
 .sc-v2-entry-coaching-reset:focus-visible {
-  outline: 2px solid currentColor;
+  outline: 2px solid var(--sc2-accent-red-deep);
   outline-offset: 2px;
-  opacity: 1;
 }
 .sc-v2-entry-coaching-reset:disabled {
   cursor: default;
@@ -783,10 +794,16 @@
   /* R3-item6 (2026-08-01): row padding lifted from a bare 5px to a
      token step. Hairline dividers read less separation on the dark
      rail background than they do on white; more vertical air makes
-     the stack scannable. Token step (sc2-space-2 = 6-8px clamp) so
-     rail cadence tracks the design system, not a magic literal. */
-  padding: var(--sc2-space-2) 0;
-  font-size: var(--sc2-size-caption);
+     the stack scannable. Token step so rail cadence tracks the
+     design system, not a magic literal.
+     Polish wave item 2 (2026-08-04): loosen further. Padding
+     stepped up (space-2 -> space-3) and type stepped up one step
+     (caption -> body). Measured pre-change rail-line: 10.8px type,
+     7.2px vertical padding, 32px rows - cramped. Columns and
+     alignment unchanged; the shared class carries to BillRailFee
+     which uses the same 3-col template less the amount column. */
+  padding: var(--sc2-space-3) 0;
+  font-size: var(--sc2-size-body);
   font-variant-numeric: tabular-nums;
   border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-divider);
 }
@@ -1113,12 +1130,25 @@
 
 /* P1.1 - v1-atom seam under .scv2 --------------------------------- */
 .scv2 .sc-v2-entry-list .sc-day-ledger {
+  /* Polish wave item 1 (2026-08-04): uncap ledger width. Base rule
+     at dayDetail.css:1182 sets max-width: min(720px, 100%) which
+     is needed by v1 DayDetail (MLB fee accounts still on v1 per
+     ENTRY_V2_ACCOUNTS gate). Override to `none` here scopes the
+     removal to v2 modal only; v1 keeps its 720px cap on the shared
+     surface. Measured live on CIN - AZ per-meal: 829px card holding
+     720px ledger = 109px of unreachable width. */
+  max-width: none;
   /* Owner feedback item 2 (2026-08-01): row horizontal breathing.
-     Was gap: 0 (rows read cramped). Step up to space-3 gives cells
-     visible air without changing the card width - grid columns are
-     minmax(0,1fr) + fixed, so the extra gap eats into the flex
-     column, not the total. */
-  column-gap: var(--sc2-space-3);
+     Was gap: 0 (rows read cramped) then space-3. Polish wave item 1
+     (2026-08-04) bumps to space-5 so the recovered width from the
+     max-width uncap flows into the gaps between the numeric
+     cluster columns. Owner's exact ask: "breathing room between
+     the rate and qty" and "between qty and amount". CSS grid uses
+     ONE column-gap value across all columns, so name-to-rate gets
+     the same bump - side effect the name column benefits from
+     (more air, no width change - name is minmax(0,1fr) so it
+     absorbs whatever is left). */
+  column-gap: var(--sc2-space-5);
 }
 .scv2 .sc-v2-entry-list .sc-day-ledger-head {
   /* Owner feedback item 2 (2026-08-01): header row + border reach
@@ -1580,4 +1610,241 @@
   display: flex;
   gap: var(--sc2-space-3);
   margin-top: var(--sc2-space-3);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ResetToast - workspace-level feedback for sc-reset-day success.
+   Sibling of SaveConfirmation (below). Same hoisted-overlay
+   pattern - state on ServiceCalendarInner, component pure display,
+   auto-clear via a paired setTimeout on the parent - different
+   content per owner ruling: SaveConfirmation is a celebration
+   (a save landed money), ResetToast is a correction (something
+   is un-recorded). Do not merge the two components; the visual
+   difference is intentional. Do KEEP them following the same
+   architecture so 'one hoisted-overlay pattern' reads at review.
+
+   Rendered by ServiceCalendarInner (:~3978) as a sibling of the
+   day-overlay conditional. State lives at the parent because the
+   modal itself unmounts during the post-reset refetch (see
+   SC_STATUS' 'Day-detail modal remounts during post-save refetch'
+   entry - same failure class SaveConfirmation solves the same
+   way).
+
+   Visual: subtle top-centered pill, small caption type, muted.
+   Fade-in + hold + fade-out over the full 1800ms; parent clears
+   the state at 1800ms so the DOM node unmounts cleanly.
+   pointer-events: none so it never blocks input.
+   ══════════════════════════════════════════════════════════════ */
+@keyframes sc-reset-toast-in {
+  0%   { opacity: 0; transform: translate(-50%, -8px); }
+  15%  { opacity: 1; transform: translate(-50%, 0); }
+  75%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+.sc-reset-toast {
+  position: fixed;
+  top: var(--sc2-space-6);
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  padding: var(--sc2-space-2) var(--sc2-space-4);
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink);
+  border: var(--sc2-border-thin) solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-medium);
+  animation: sc-reset-toast-in 1800ms var(--ease-standard) both;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SaveConfirmation - the stamp overlay after a clean save.
+   Owner render option C (2026-08-03). Mounted at the workspace
+   level by ServiceCalendarInner, NOT inside the modal (2026-08-03
+   ruling on #598 gate bounce: the modal itself unmounts during
+   the post-save refetch when periodDays goes null mid-invalidation
+   and the mount gate at ServiceCalendar.js:3826 collapses; any
+   state living inside DayEntryV2 gets discarded before it can
+   render, and the ~400-1000ms remount blink is a pre-existing
+   artifact this overlay must MASK, not expose). Fires only from
+   executeConfirm's clean-save branch, via a callback the parent
+   supplies.
+
+   Positioning: fixed viewport with a near-opaque light scrim at
+   z-index --z-popover (1300, above --z-overlay 1200 and the modal
+   backdrop; below --z-toast so error toasts still trump). The
+   scrim fills the viewport rather than sitting inside a card so
+   it covers the workspace during the modal's unmount gap - the
+   whole point of the hoist.
+
+   Reduced-motion contract: the BASE styles below place every
+   element at its resting state. The @keyframes only add the
+   travel/burst/rotate/fade. Under prefers-reduced-motion:reduce,
+   the animation shorthand collapses to `none`, and the elements
+   render at their resting positions immediately. Same markup,
+   no second code path. Scrim base opacity is 0.96 so RM users
+   still see the mask for the full window (paired with the RM
+   fix in coordinator.js that keeps FINALIZE_DELAY on the same
+   timer regardless of motion preference).
+
+   Timing fits inside FINALIZE_DELAY = 1800ms (the coordinator's
+   modal-close/advance timer, bumped from 1350 in this same
+   commit per ruling 3). Nothing else gets slower - the extra
+   450ms per save is what buys operator register-time for the
+   count + money before the modal advances.
+   ══════════════════════════════════════════════════════════════ */
+.sc-v2-entry-save-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover);
+  pointer-events: none; /* never blocks - clicks pass through */
+}
+.sc-v2-entry-save-confirm-visual {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sc-v2-entry-save-confirm-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--sc2-surface-card);
+  opacity: 0.96;
+  animation: sc-v2-entry-save-confirm-scrim-fade 1800ms var(--ease-standard) both;
+}
+.sc-v2-entry-save-confirm-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  padding: var(--sc2-space-6);
+}
+.sc-v2-entry-save-confirm-stamp {
+  width: var(--sc2-space-8);
+  height: var(--sc2-space-8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sc2-accent-green);
+  color: var(--sc2-surface-card);
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(47, 125, 79, 0.35);
+  transform-origin: center;
+  animation: sc-v2-entry-save-confirm-stamp-in 1800ms var(--ease-emphasized) both;
+}
+.sc-v2-entry-save-confirm-check {
+  width: 60%;
+  height: 60%;
+}
+.sc-v2-entry-save-confirm-count {
+  font-size: var(--sc2-size-h1);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink);
+  line-height: 1;
+  animation: sc-v2-entry-save-confirm-text-in 1800ms var(--ease-standard) both;
+}
+.sc-v2-entry-save-confirm-money {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-soft);
+  font-weight: var(--sc2-wt-medium);
+  animation: sc-v2-entry-save-confirm-text-in 1800ms var(--ease-standard) 80ms both;
+}
+/* Burst: 10 dots radiating from behind the stamp. Position via
+   --sc-burst-i (0-9) → rotate around center, translate outward.
+   Base state (no animation) = opacity 0 so RM shows nothing here,
+   matching the ticket: "no travel, no burst, no overshoot." */
+.sc-v2-entry-save-confirm-burst {
+  position: absolute;
+  top: var(--sc2-space-6);
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.sc-v2-entry-save-confirm-burst-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--sc2-space-2);
+  height: var(--sc2-space-2);
+  margin: calc(var(--sc2-space-2) * -0.5) 0 0 calc(var(--sc2-space-2) * -0.5);
+  border-radius: 50%;
+  background: var(--sc2-accent-green-bright);
+  opacity: 0;
+  transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(0);
+  animation:
+    sc-v2-entry-save-confirm-burst 700ms var(--ease-standard)
+    calc(420ms + var(--sc-burst-i) * 18ms) both;
+}
+/* SR-only announcement. Standard visually-hidden pattern. */
+.sc-v2-entry-save-confirm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Stamp: enters from above with scale + rotation overshoot,
+   settles at 22-31% of the window (~560ms of 1800), holds
+   through 78% (~1404ms), fades out to 100% (1800ms). */
+@keyframes sc-v2-entry-save-confirm-stamp-in {
+  0%   { transform: translateY(-48px) scale(0.55) rotate(-8deg); opacity: 0; }
+  22%  { transform: translateY(4px)  scale(1.10) rotate(2deg);  opacity: 1; }
+  31%  { transform: translateY(0)    scale(1.00) rotate(0deg);  opacity: 1; }
+  78%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* Text (count + money): fade in as the stamp settles, hold, fade out
+   with the scrim. */
+@keyframes sc-v2-entry-save-confirm-text-in {
+  0%   { opacity: 0; transform: translateY(6px); }
+  27%  { opacity: 0; transform: translateY(6px); }
+  46%  { opacity: 1; transform: translateY(0);   }
+  78%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* Scrim: appear with stamp, fade out at the end so the modal closing
+   underneath is unobstructed for the last frame. */
+@keyframes sc-v2-entry-save-confirm-scrim-fade {
+  0%   { opacity: 0; }
+  12%  { opacity: 0.96; }
+  78%  { opacity: 0.96; }
+  100% { opacity: 0; }
+}
+/* Burst dot: fade in near the stamp landing, radiate outward, fade
+   out. Each dot gets a 0-9 stagger via --sc-burst-i. */
+@keyframes sc-v2-entry-save-confirm-burst {
+  0%   { opacity: 0; transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(0);        }
+  22%  { opacity: 0.85; transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(-14px); }
+  100% { opacity: 0; transform: rotate(calc(var(--sc-burst-i) * 36deg)) translateY(-30px);    }
+}
+
+/* Reduced motion: single policy block for BOTH ResetToast and
+   SaveConfirmation (merged during 2026-08-04 polish-wave + save-
+   confirm merge into main - the two features shipped separately
+   but the RM policy reads as one stanza here). All animated
+   elements from both features collapse to `animation: none` under
+   the user preference; their base styles are the resting-state
+   render for both. Scrim base is opacity 0.96 which is the hold
+   state we want under RM - it stays for the full 1800ms window
+   (coordinator no longer short-circuits on RM) so the mask covers
+   the modal remount blink for RM users too. */
+@media (prefers-reduced-motion: reduce) {
+  .sc-reset-toast,
+  .sc-v2-entry-save-confirm-scrim,
+  .sc-v2-entry-save-confirm-stamp,
+  .sc-v2-entry-save-confirm-count,
+  .sc-v2-entry-save-confirm-money,
+  .sc-v2-entry-save-confirm-burst-dot {
+    animation: none;
+  }
 }

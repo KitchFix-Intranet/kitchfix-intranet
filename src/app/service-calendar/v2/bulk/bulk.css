@@ -78,8 +78,19 @@
 .sc-bulk-review-detail {
   margin: 0;
   padding: var(--sc2-space-2) var(--sc2-space-4) var(--sc2-space-3);
-  display: flex;
-  flex-direction: column;
+  /* Polish wave item 5 (2026-08-04): full-row width, groups side-by-
+     side. Prior shape was flex-direction: column which stacked the
+     group sections in a narrow right-hand column, leaving the left
+     half of the row empty. Grid with auto-fit + minmax lets each
+     group take a natural minimum width and the container packs them
+     across the full row; single-group accounts collapse to one
+     column, multi-group accounts (STL - FL, TXR - AZ, TBJ - FL)
+     lay their groups horizontally so the operator scans across
+     rather than down a narrow column. The 220px floor is one
+     ledger-worth of readable width (name column + qty + padding);
+     wider containers get more columns automatically. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--sc2-space-3);
   background: var(--sc2-surface-sunken);
   border-bottom: var(--sc2-border-thin) solid var(--sc2-line-2);
@@ -88,6 +99,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sc2-space-1);
+  min-width: 0;
 }
 .sc-bulk-review-detail-group-title {
   font-size: var(--sc2-size-micro);
