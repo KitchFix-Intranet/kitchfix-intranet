@@ -299,6 +299,12 @@ function transformDays(orchDays) {
         note:      e.note,
         author:    e.author,
         createdAt: e.createdAt,
+        // sc-26 (2026-08-03): pass through the discriminator so the
+        // client's groupActivity can bucket bulk-entered rows into
+        // the new ledger row type. NULL means single-day / mark-no-
+        // service audit note (pre-sc-26 shape); 'bulk' means the
+        // note was appended by sc-bulk-submit.
+        source:    e.source || null,
       })),
       // F1 (M2): actuals-edit history per day, newest first. Same
       // pass-through pattern as noteEntries. Author null on legacy /
@@ -1067,7 +1073,7 @@ export async function POST(request) {
 
     // ── sc-bulk-submit: save actuals for multiple days ──
     if (action === "sc-bulk-submit") {
-      const { accountKey, entries } = body;
+      const { accountKey, entries, batchNote } = body;
       if (!accountKey || !entries?.length) {
         return NextResponse.json(
           { success: false, error: "Missing required fields" },
@@ -1077,19 +1083,37 @@ export async function POST(request) {
       // sc-25 (2026-08-01): period-lock gate. Every date in the
       // batch is checked; one locked date fails the whole batch to
       // stay consistent with the existing all-or-nothing contract
-      // enforced at :993-1002 for value coercion.
+      // enforced at :993-1002 for value coercion. sc-26 (2026-08-03):
+      // this gate covers the batch note too - a locked batch is
+      // refused before actuals OR notes touch the DB by construction.
       const bulkDates = entries.map((e) => e.date);
       const bulkLockRefusal = await assertDaysUnlockedForWrite(accountKey, bulkDates, email);
       if (bulkLockRefusal) {
         return NextResponse.json({ success: false, ...bulkLockRefusal }, { status: 403 });
       }
       // entries: [{ colIndex: '<service-uuid>', date: 'YYYY-MM-DD', value: number }]
-      // P2 (item 2) fence, v1: rideNote is NOT accepted here. A single
-      // note attached to a bulk write would land on all touched days
-      // with the same author + timestamp, blurring which day it was
-      // meant for. Per-day ride notes for bulk are out of scope for
-      // this iteration - operators post standalone notes via the
-      // DayDetail composer per day.
+      //
+      // Batch note (sc-26, 2026-08-03; resolves the P2-item-2 fence).
+      // The original fence refused bulk notes because a single day-
+      // specific note leaking to N days would blur its scope - an
+      // accuracy problem, not a note problem. Owner's shape resolves
+      // it: the note is ABOUT THE BATCH, and each day says so via
+      // sc_day_note_entries.source='bulk' (sc-26 discriminator). A
+      // distinct ledger row type renders the author, a `Bulk entered`
+      // marker chip, and the note text. Nothing claims to be day-
+      // specific because the row itself is labelled as batch-authored.
+      //
+      // Wire: on non-empty batchNote, append one sc_day_note_entries
+      // row per UNIQUE date in the batch via addDayNoteEntry with
+      // source='bulk'. Author is server-derived (session email).
+      // Note appends land AFTER the actuals upsert; if any note
+      // write fails, response carries `noteFailCount` per the
+      // single-day noteFailed precedent (actuals stay committed;
+      // client surfaces a warning with the count so the operator
+      // knows how many days need re-post). Append-only by design -
+      // a re-submit adds N MORE note rows; client-side saving-gate
+      // is the double-click guard.
+      //
       // PR-B Fix 3 (2026-07-22): coerceActualCount replaces `Number(x) || 0`
       // on the bulk path too. A 400 aborts the ENTIRE batch (per Fix 1's
       // all-or-nothing contract) - one malformed entry blocks the whole
@@ -1126,6 +1150,27 @@ export async function POST(request) {
         throw err;
       }
       const result = await saveBulkActuals(accountKey, touched, email);
+      // sc-26: append batch note per unique date, source='bulk'.
+      // Failures are non-fatal (actuals already committed); count
+      // returned so the client can name a specific number of days
+      // that need re-post.
+      const trimmedBatchNote = typeof batchNote === "string" ? batchNote.trim() : "";
+      if (result?.success && trimmedBatchNote.length > 0) {
+        const uniqueDates = [...new Set(bulkDates)];
+        const author = session.user?.name || session.user?.email || "";
+        let noteFailCount = 0;
+        for (const date of uniqueDates) {
+          try {
+            const noteRes = await addDayNoteEntry(accountKey, date, trimmedBatchNote, author, "bulk");
+            if (!noteRes?.success) noteFailCount++;
+          } catch {
+            noteFailCount++;
+          }
+        }
+        if (noteFailCount > 0) {
+          return NextResponse.json({ ...result, noteFailCount });
+        }
+      }
       return NextResponse.json(result);
     }
 

@@ -2101,7 +2101,13 @@ export async function saveActuals(accountKey, serviceDate, entries, email) {
 
 // addDayNoteEntry - one authored entry against sc_day_note_entries.
 // Returns the inserted row so the client can prepend optimistically.
-export async function addDayNoteEntry(accountKey, serviceDate, note, author) {
+//
+// `source` (sc-26, 2026-08-03): provenance discriminator. NULL for
+// the single-day sc-add-note path and mark-no-service audit line
+// (unchanged shape). 'bulk' for bulk-batch notes appended by
+// sc-bulk-submit. CHECK constraint at the table restricts the
+// value set; a typo becomes a 500 rather than silent bad data.
+export async function addDayNoteEntry(accountKey, serviceDate, note, author, source = null) {
   const supa = getServiceClient();
   const trimmed = typeof note === "string" ? note.trim() : "";
   if (!trimmed) {
@@ -2114,8 +2120,9 @@ export async function addDayNoteEntry(accountKey, serviceDate, note, author) {
       service_date: serviceDate,
       note:         trimmed,
       author:       author || null,
+      source:       source || null,
     })
-    .select("id, note, author, created_at")
+    .select("id, note, author, created_at, source")
     .single();
   throwOnError(error, "addDayNoteEntry.insert");
   return {
@@ -2125,6 +2132,7 @@ export async function addDayNoteEntry(accountKey, serviceDate, note, author) {
       note:      data.note,
       author:    data.author,
       createdAt: data.created_at,
+      source:    data.source || null,
     },
   };
 }
@@ -2290,7 +2298,7 @@ export async function readNoteEntriesForRange(accountKey, first, last) {
   const supa = getServiceClient();
   const { data, error } = await supa
     .from(SC_TABLES.noteEntries)
-    .select("service_date, note, author, created_at")
+    .select("service_date, note, author, created_at, source")
     .eq("account_key", accountKey)
     .gte("service_date", first)
     .lte("service_date", last)
@@ -2304,6 +2312,7 @@ export async function readNoteEntriesForRange(accountKey, first, last) {
       note:      r.note,
       author:    r.author,
       createdAt: r.created_at,
+      source:    r.source || null,
     });
   }
   return byDate;

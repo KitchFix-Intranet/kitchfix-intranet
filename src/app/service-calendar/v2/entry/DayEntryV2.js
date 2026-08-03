@@ -91,6 +91,13 @@ import { useHandoffSafe } from "../handoff/coordinator";
 //
 // Row shapes emitted (all carry timestamp for sorting):
 //   note            -> { type: "note",           timestamp, author, key, note }
+//   bulk-entered    -> { type: "bulk-entered",   timestamp, author, key, note }
+//                       (sc-26, 2026-08-03: note authored on
+//                       sc-bulk-submit, distinguished at the storage
+//                       layer by sc_day_note_entries.source='bulk';
+//                       rendered with a `Bulk entered` marker chip
+//                       between author and text so provenance is
+//                       visible without a text-prefix convention)
 //   edit-event      -> { type: "edit-event",     timestamp, author, key,
 //                        entries: [{serviceId, serviceName, oldValue, newValue}] }
 //   edit-noservice  -> { type: "edit-noservice", timestamp, author, key }
@@ -103,8 +110,14 @@ import { useHandoffSafe } from "../handoff/coordinator";
 function groupActivity(noteEntries, historyEntries) {
   const rows = [];
   for (const n of (noteEntries || [])) {
+    // sc-26 (2026-08-03): source='bulk' promotes a note row to the
+    // bulk-entered type. Same fields; the type distinguishes the
+    // render at LedgerBand. Predicate is on n.source directly - a
+    // text-prefix convention was explicitly ruled out (operator-
+    // authored text cannot be trusted to carry provenance).
+    const isBulk = n.source === "bulk";
     rows.push({
-      type: "note",
+      type: isBulk ? "bulk-entered" : "note",
       timestamp: n.createdAt,
       author: n.author,
       key: `n:${n.createdAt}`,
@@ -2196,6 +2209,13 @@ function LedgerBand({ entries, draft, onDraftChange, onPost, isPosting, inputRef
                     {e.type === "note" && (
                       <>
                         <strong>{e.author || "Someone"}</strong>{": "}{e.note}
+                      </>
+                    )}
+                    {e.type === "bulk-entered" && (
+                      <>
+                        <strong>{e.author || "Someone"}</strong>{" "}
+                        <span className="sc-v2-entry-ledger-marker">Bulk entered</span>{" "}
+                        {e.note}
                       </>
                     )}
                     {e.type === "edit-event" && (
