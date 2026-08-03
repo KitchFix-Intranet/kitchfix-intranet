@@ -116,6 +116,39 @@ const ANSWER_INNER = `
     </div>
   </article>`;
 
+// Wide-table case: 8-column vendor spend table with values wide enough that
+// the natural table width exceeds the 840 card cap. Confirms tables keep
+// width:100% and clip within card padding rather than being constrained
+// or the card overflowing.
+const WIDE_TABLE_INNER = `
+  <article class="sa-turn">
+    <div class="sa-answer sa-answer--grounded">
+      <div class="sa-answer-header">
+        <span class="sa-question-bar"></span>
+        <span class="sa-question-text">top vendors this year?</span>
+        <span class="sa-status-pill sa-status-pill--grounded">Grounded</span>
+      </div>
+      <div class="sa-answer-body">
+        <p>38 canonical vendors YTD. Top five below with fees and share; the remaining 33 add another 24% of portfolio spend.</p>
+        <table>
+          <thead>
+            <tr><th>Vendor</th><th>Category</th><th data-num>YTD Spend</th><th data-num>Invoices</th><th data-num>Avg / Invoice</th><th data-num>Share YTD</th><th>First Order</th><th>Last Order</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Sysco Southeast Florida</td><td>Food broadline</td><td data-num>$244,954.05</td><td data-num>47</td><td data-num>$5,211.79</td><td data-num>19.5%</td><td>2026-02-14</td><td>2026-07-30</td></tr>
+            <tr><td>Shamrock Foods</td><td>Food secondary</td><td data-num>$102,183.44</td><td data-num>28</td><td data-num>$3,649.41</td><td data-num>8.1%</td><td>2026-02-16</td><td>2026-07-29</td></tr>
+            <tr><td>Ben E Keith</td><td>Food broadline</td><td data-num>$88,447.13</td><td data-num>21</td><td data-num>$4,211.77</td><td data-num>7.0%</td><td>2026-03-01</td><td>2026-07-28</td></tr>
+            <tr><td>What Chefs Want</td><td>Produce</td><td data-num>$71,220.90</td><td data-num>34</td><td data-num>$2,094.73</td><td data-num>5.7%</td><td>2026-02-14</td><td>2026-07-30</td></tr>
+            <tr><td>Cheney Brothers</td><td>Food secondary</td><td data-num>$54,982.11</td><td data-num>17</td><td data-num>$3,234.24</td><td data-num>4.4%</td><td>2026-03-05</td><td>2026-07-26</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="sa-sources">
+        <a class="sa-source-row" href="#"><span class="sa-source-idchip">spend_top_vendors</span><span class="sa-source-title">PG live</span></a>
+      </div>
+    </div>
+  </article>`;
+
 const PANEL_HTML = `<!doctype html>
 <html><head><style>
   html, body { margin: 0; padding: 0; background: rgba(15,48,87,0.35); }
@@ -170,6 +203,10 @@ const browser = await chromium.launch();
   await page.evaluate(() => { const sc = document.querySelector('.sa-pane-scroll'); sc.scrollTop = Math.round(sc.scrollHeight / 3); });
   await page.screenshot({ path: "/tmp/sous-depth/long-answer-mid-scroll-1440x900.png" });
   console.log("SCREENSHOT: /tmp/sous-depth/long-answer-mid-scroll-1440x900.png");
+
+  await page.setContent(PAGE_HTML(WIDE_TABLE_INNER), { waitUntil: "load" });
+  await page.screenshot({ path: "/tmp/sous-depth/wide-table-1440x900.png" });
+  console.log("SCREENSHOT: /tmp/sous-depth/wide-table-1440x900.png");
 
   await page.setContent(PANEL_HTML, { waitUntil: "load" });
   await page.screenshot({ path: "/tmp/sous-depth/panel-1440x900.png" });
