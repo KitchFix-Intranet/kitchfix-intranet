@@ -241,6 +241,11 @@ const SousSurface = forwardRef(function SousSurface({
       if (!resp.ok || !resp.body) {
         setErrorInfo({ kind: "http", message: `Request failed (${resp.status}).` });
         setPhase("error");
+        // 2026-08-03 (Kevin ruling, #598 depth v2): transport-error paths
+        // preserve the typed text AND return focus so the user can retry
+        // with the same text without a second click. Success path (below)
+        // clears then re-focuses naturally when phase moves to "done".
+        inputRef.current?.focus();
         return;
       }
       // Clear the composer now that the request is en route (CODE-04). On
@@ -296,6 +301,9 @@ const SousSurface = forwardRef(function SousSurface({
       if (controller.signal.aborted) return;
       setErrorInfo({ kind: "network", message: err?.message || "Network error." });
       setPhase("error");
+      // 2026-08-03 (Kevin ruling, #598 depth v2): transport failure -
+      // preserve text + return focus so the user can retry-with-same.
+      inputRef.current?.focus();
     } finally {
       abortRef.current = null;
     }

@@ -273,7 +273,13 @@
   gap: 4px;
   font-size: 10px;
   font-weight: 800;
-  color: var(--accent-sous-deep);
+  /* 2026-08-03 (depth v2 ruling): recoloured to #475569 (matches
+     .sa-rail-heading and siblings) so it clears WCAG AA 4.5:1 against the
+     rail's well fill. The in-context state is carried visually by the
+     items' orange accent bars, so the label no longer needs the accent
+     colour. Was var(--accent-sous-deep) = #EA580C which measured 3.03:1
+     on the well (AA-large only). */
+  color: #475569;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   padding: 2px 4px 0;
@@ -515,8 +521,13 @@
   border: 1px solid white;
   border-radius: 12px;
   padding: 14px 16px;
-  margin-bottom: 20px;
   box-shadow: 0 1px 2px rgba(15, 48, 87, 0.06), 0 12px 28px -10px rgba(15, 48, 87, 0.20);
+  /* 2026-08-03 (depth v2 item 2): same 840 cap + centre as .sa-answer so
+     landing and answered states sit on one horizontal centre line. Keeps
+     the shipped 20px bottom margin. */
+  max-width: 840px;
+  width: 100%;
+  margin: 0 auto 20px;
 }
 .sa-brow {
   display: flex;
@@ -658,6 +669,14 @@
   display: flex;
   flex-direction: column;
   box-shadow: 0 1px 2px rgba(15, 48, 87, 0.06), 0 12px 28px -10px rgba(15, 48, 87, 0.20);
+  /* 2026-08-03 (depth v2 item 2): cap card width so the well reads as a
+     real surface (not a 20px rim). Streaming state uses the same
+     .sa-answer selector via .sa-answer--streaming, so the thinking card
+     inherits the same cap. Tables inside the body are exempt - see
+     .sa-answer-body-related rules below. */
+  max-width: 840px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 /* Status rail across the top of the answer card - via border color.
@@ -778,13 +797,21 @@
 .sa-answer-body :first-child { margin-top: 0; }
 .sa-answer-body :last-child { margin-bottom: 0; }
 
-/* mdLite output - keep readable */
-.sa-answer-body p { margin: 0 0 10px; }
+/* mdLite output - keep readable.
+   2026-08-03 (depth v2 item 2 + 5): prose blocks cap at 68ch (paragraphs)
+   and 66ch (list items - accounts for the 22px list padding) so the
+   measure stays comfortable inside the 840 card; tables are exempt and
+   keep width:100% (see .sa-answer-body table below).
+   Section rhythm tightened per item 5: headings 14px above / 6px below,
+   paragraphs 9px bottom, list items 5px bottom. First heading in the body
+   still lands zero-top via the existing .sa-answer-body :first-child rule
+   above. */
+.sa-answer-body p { margin: 0 0 9px; max-width: 68ch; }
 .sa-answer-body h3 { font-weight: 800; font-size: 14px; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: -0.01em; }
-.sa-answer-body h4 { font-weight: 700; font-size: 12.5px; color: var(--kf-navy, #0F3057); margin: 12px 0 4px; letter-spacing: 0; text-transform: uppercase; }
+.sa-answer-body h4 { font-weight: 700; font-size: 12.5px; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: 0; text-transform: uppercase; }
 .sa-answer-body hr { border: none; border-top: 1px solid #EEF2F6; margin: 14px 0; }
 .sa-answer-body ul, .sa-answer-body ol { padding-left: 22px; margin: 0 0 12px; }
-.sa-answer-body li { margin: 0 0 3px; }
+.sa-answer-body li { margin: 0 0 5px; max-width: 66ch; }
 .sa-answer-body code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 0.92em;
@@ -1144,14 +1171,18 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 1px solid #E5E7EB;
+  /* 2026-08-03 (depth v2 item 4): FAB reads as a raised control against
+     the well - white fill + well-border hairline + two-layer drop shadow
+     from the study, Flame-deep glyph. Position and show/hide behavior
+     unchanged. */
+  border: 1px solid #DCE2EA;
   background: white;
-  color: #475569;
+  color: var(--accent-sous-deep);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: var(--elev-2, 0 2px 4px rgba(15, 48, 87, 0.06), 0 10px 24px -8px rgba(15, 48, 87, 0.14));
+  box-shadow: 0 2px 4px rgba(15, 48, 87, 0.08), 0 8px 18px -8px rgba(15, 48, 87, 0.22);
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
   opacity: 0;
   pointer-events: none;
@@ -1188,9 +1219,12 @@
 @media (max-width: 767px) { .sa-composer { padding: 12px 14px; } }
 
 /* Composer - 52px tall, text vertically centered, --elev-2 at rest, Flame
-   focus-within ring (elev-2 + 3px flame-line). U3. */
+   focus-within ring (elev-2 + 3px flame-line). U3.
+   2026-08-03 (depth v2 item 3): dropped from 900 to 840 so the composer
+   shares one centre line and column width with the answer / briefing
+   cards above it. The full-width lip strip (.sa-composer) is unchanged. */
 .sa-ask-form {
-  max-width: 900px;
+  max-width: 840px;
   margin: 0 auto;
   background: white;
   border: 1.5px solid #E5E7EB;
