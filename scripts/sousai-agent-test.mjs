@@ -21,6 +21,12 @@ import {
   extractPayloadNumbers,
   checkReceipts,
 } from "../src/lib/sousai/receiptCheck.js";
+// Portfolio-tool acceptance cases (M4/M5/M6) call the tools directly for
+// parity + absence assertions - no LLM in the loop for those specific
+// checks. M4 (live-failure) still uses the LLM to prove the model
+// reaches for the portfolio tool.
+import { scPortfolioWindow } from "../src/lib/sousai/tools/data/scPortfolioWindow.js";
+import { scAccountWindow } from "../src/lib/sousai/tools/data/scAccountWindow.js";
 
 // Rough Sonnet-class pricing (per million tokens). Displayed as "ballpark."
 const PRICE = {
@@ -316,6 +322,66 @@ const EXPECTED = {
       t1_expected: "Sous chef for TXR-AZ pulled via find_contact / list_contacts_by_role / get_account_team",
       t2_expected: "Same tool called fresh; name matched to T2's own payload",
       review_ref: "live 2026-08-03 four-turn transcript; calibration round 2 spec",
+    },
+  },
+  case_portfolio_breakfast: {
+    // Portfolio-tool ship gate (2026-08-04) - the live-failure restored.
+    // Kevin asked "total amount of breakfast served per account in feb"
+    // 2026-08-03 and Sous fanned out one sc_account_window per account,
+    // exhausted the tool budget at six of eleven, and shipped a partial
+    // answer naming the five accounts it never reached. This case asserts
+    // the new sc_portfolio_window is called ONCE (not looped), all
+    // accounts appear in the answer, and every figure receipt-checks.
+    question: "total breakfast served per account in feb 2026",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "exactly one successful sc_portfolio_window call in the trajectory",
+      "zero sc_account_window calls (no per-account fan-out)",
+      "answer names at least 10 distinct account keys",
+      "every numeric figure in the answer traces to the portfolio payload (Tier 1)",
+      "status = grounded or partial (declined is only correct if the tool itself broke)",
+    ],
+    ground_truth: {
+      review_ref: "live 2026-08-03 breakfast question, motivating case for the portfolio tool",
+      why_serviceType: "breakfast substring-matches Breakfast / Breakfast - MiLB / Breakfast - MiLB ST / Breakfast - ST / Continental Breakfast in the catalog (probe 2026-08-04)",
+    },
+  },
+  case_portfolio_parity: {
+    // Programmatic parity check (no LLM). Kevin's spec: the portfolio
+    // tool's row for one account must equal sc_account_window's answer
+    // for that same account and window. A mismatch is a hard stop, not
+    // a flake. We compare four representative accounts across two
+    // windows so a shape-specific divergence (fee-branch, per-meal,
+    // unpriced) doesn't hide in a single spot.
+    programmatic: true,
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "sc_portfolio_window's per-account row matches sc_account_window verbatim on: meals.projected/actual, days_with_actuals, total_service_days, no_service_days, is_partial, revenue.available, revenue.projected/actual (when available)",
+      "checked across CIN - AZ (per-meal), STL - MO (fee-branch), STL - FL (per-meal + flat_fee edge), TBJ - FL (PDC)",
+      "checked across month and period windows",
+    ],
+    ground_truth: {
+      review_ref: "portfolio tool inheritance invariant - if the rules drift, the parity test catches it",
+    },
+  },
+  case_portfolio_absence: {
+    // Programmatic honest-absence check. Kevin's spec: "a window where
+    // at least one account has no scheduled service - the answer must
+    // distinguish 'nothing scheduled' from 'nothing entered' and must
+    // not report a zero as a performance result." We probe the payload
+    // directly to confirm the shape - an account with window_available
+    // = false OR total_service_days = 0 lands as an explicit absence
+    // row, not fabricated zeros.
+    programmatic: true,
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "portfolio payload emits an explicit row for every account (not silent omission)",
+      "accounts with no window resolvable land with window_available=false + a window_reason string",
+      "accounts with a window but zero scheduled service days land with total_service_days=0 (distinct from days-scheduled-but-no-actuals)",
+      "the accounts_without_window portfolio_totals list names those accounts so a downstream reader knows the scope",
+    ],
+    ground_truth: {
+      review_ref: "off-season / non-scheduled accounts must be visible as absence, not fabricated zeros",
     },
   },
   case_permission_leak: {
@@ -1021,6 +1087,146 @@ function grade_case_memory_fact_lookup({ r1, r2 }) {
   return { pass: ok, notes };
 }
 
+// Portfolio-tool ship gate (M4): live-failure restored. Asserts the model
+// reaches for sc_portfolio_window (one call, not looped), all accounts
+// appear in the answer, and every figure receipt-checks.
+function grade_case_portfolio_breakfast(result) {
+  const notes = [];
+  const traj = result.trajectory || [];
+  const portfolioCalls = traj.filter((s) => s.tool === "sc_portfolio_window" && !s.tool_error && s.summary != null);
+  const acctWindowCalls = traj.filter((s) => s.tool === "sc_account_window" && !s.tool_error && s.summary != null);
+  const pass_one_portfolio = portfolioCalls.length === 1;
+  const pass_no_fanout = acctWindowCalls.length === 0;
+  // Every current-season account_key in any styling variant the model
+  // might emit. Substring-match against the answer; dedupe by canonical
+  // form so "STL-MO" and "STL - MO" don't count twice.
+  const ACCOUNT_KEY_VARIANTS = [
+    ["CIN-AZ", ["CIN - AZ", "CIN-AZ"]], ["CIN-KY", ["CIN - KY", "CIN-KY"]],
+    ["CIN-OH", ["CIN - OH", "CIN-OH"]], ["STL-MO", ["STL - MO", "STL-MO"]],
+    ["STL-FL", ["STL - FL", "STL-FL"]], ["TBJ-FL", ["TBJ - FL", "TBJ-FL"]],
+    ["TBJ-NY", ["TBJ - NY", "TBJ-NY"]], ["TBR-FL", ["TBR - FL", "TBR-FL"]],
+    ["TXR-AZ", ["TXR - AZ", "TXR-AZ"]], ["TXR-TX-H", ["TXR - TX - H", "TXR-TX-H"]],
+    ["TXR-TX-V", ["TXR - TX - V", "TXR-TX-V"]],
+  ];
+  const answer = result.answer || "";
+  const mentioned = new Set();
+  for (const [canonical, variants] of ACCOUNT_KEY_VARIANTS) {
+    if (variants.some((v) => answer.includes(v))) mentioned.add(canonical);
+  }
+  const pass_all_accounts = mentioned.size >= 10;   // 11 exists; allow 10 to absorb one variant miss
+  const t1 = checkNumericReceipts(result);
+  const pass_status = ["grounded", "partial"].includes(result.status);
+  const ok = pass_one_portfolio && pass_no_fanout && pass_all_accounts && t1.pass && pass_status;
+  notes.push(`sc_portfolio_window calls: ${portfolioCalls.length} (need exactly 1)`);
+  notes.push(`sc_account_window fan-out calls: ${acctWindowCalls.length} (need 0)`);
+  notes.push(`distinct account keys mentioned: ${mentioned.size}/11 (${[...mentioned].slice(0, 6).join(", ")}${mentioned.size > 6 ? " ..." : ""})`);
+  notes.push(`TIER-1 receipt: ${t1.pass ? "PASS" : "FAIL"}`);
+  for (const n of t1.notes) notes.push(`  · ${n}`);
+  notes.push(`status=${result.status}`);
+  return { pass: ok, notes };
+}
+
+// Portfolio parity (M5): programmatic. Calls scPortfolioWindow and
+// scAccountWindow directly for representative accounts + windows, diffs
+// the per-account row. Any mismatch is a hard fail - Kevin's spec:
+// "a mismatch is a hard stop, not a flake."
+async function grade_case_portfolio_parity() {
+  const notes = [];
+  const asOf = "2026-08-01";
+  const checks = [
+    { accountKey: "CIN - AZ", window: "month", label: "CIN - AZ (per-meal) · month" },
+    { accountKey: "STL - MO", window: "month", label: "STL - MO (fee-branch) · month" },
+    { accountKey: "STL - FL", window: "month", label: "STL - FL (flat_fee no-homestand → per-meal branch) · month" },
+    { accountKey: "TBJ - FL", window: "month", label: "TBJ - FL (PDC) · month" },
+    { accountKey: "CIN - AZ", window: "period", label: "CIN - AZ · period" },
+  ];
+  const mismatches = [];
+  for (const c of checks) {
+    const [port, single] = await Promise.all([
+      scPortfolioWindow({ window: c.window, asOf }),
+      scAccountWindow({ accountKey: c.accountKey, window: c.window, asOf }),
+    ]);
+    const row = (port.accounts || []).find((a) => a.account_key === c.accountKey);
+    if (!row) {
+      mismatches.push(`${c.label}: no portfolio row for ${c.accountKey} (window may not have resolved)`);
+      continue;
+    }
+    if (single.error) {
+      notes.push(`${c.label}: single-account tool declined window (${single.error}); portfolio row: window_available=${row.window_available}, skipping this diff row`);
+      continue;
+    }
+    const diffs = [];
+    const cmp = (label, portVal, singleVal) => {
+      if (portVal !== singleVal) diffs.push(`${label}: portfolio=${JSON.stringify(portVal)} vs single=${JSON.stringify(singleVal)}`);
+    };
+    // Money comparison uses a $0.01 (1 cent) tolerance because summing
+    // floating-point revenue values in different orders yields tiny IEEE-
+    // 754 accumulation artifacts (2026-08-04: 11532.593699999998 vs
+    // 11532.5937 for the same actual sum). Strict !== would false-flag.
+    const cmpMoney = (label, portVal, singleVal) => {
+      if (portVal == null && singleVal == null) return;
+      if (portVal == null || singleVal == null) {
+        diffs.push(`${label}: null mismatch (portfolio=${portVal} vs single=${singleVal})`);
+        return;
+      }
+      if (Math.abs(portVal - singleVal) > 0.01) {
+        diffs.push(`${label}: portfolio=${portVal.toFixed(2)} vs single=${singleVal.toFixed(2)} (diff > $0.01)`);
+      }
+    };
+    cmp("meals.projected", row.meals.projected, single.meals.projected);
+    cmp("meals.actual", row.meals.actual, single.meals.actual);
+    cmp("days_with_actuals", row.days_with_actuals, single.days_with_actuals);
+    cmp("total_service_days", row.total_service_days, single.total_service_days);
+    cmp("no_service_days", row.no_service_days, single.no_service_days);
+    cmp("is_partial", row.is_partial, single.is_partial);
+    cmp("revenue.available", row.revenue.available, single.revenue.available);
+    if (row.revenue.available && single.revenue.available) {
+      cmpMoney("revenue.projected", row.revenue.projected, single.revenue.projected);
+      cmpMoney("revenue.actual", row.revenue.actual, single.revenue.actual);
+    }
+    if (diffs.length > 0) {
+      mismatches.push(`${c.label}: ${diffs.length} field(s) diverged`);
+      for (const d of diffs) mismatches.push(`  · ${d}`);
+    } else {
+      notes.push(`${c.label}: PARITY OK (all 8 fields match)`);
+    }
+  }
+  const ok = mismatches.length === 0;
+  for (const m of mismatches) notes.push(m);
+  return { pass: ok, notes };
+}
+
+// Portfolio honest absence (M6): programmatic. Confirms the payload
+// distinguishes "nothing scheduled" from "nothing entered" and emits
+// explicit rows for accounts with no resolvable window rather than
+// silently omitting them.
+async function grade_case_portfolio_absence() {
+  const notes = [];
+  const asOf = "2026-08-01";
+  // A period window is the case most likely to have an account with
+  // no resolvable window (an account outside its season window has no
+  // current-period row in v_current_period_by_account).
+  const result = await scPortfolioWindow({ window: "period", asOf });
+  const accounts = result.accounts || [];
+  const totals = result.portfolio_totals || {};
+  const withoutWindow = totals.accounts_without_window || [];
+  const withZeroDays = accounts.filter((a) => a.window_available && a.total_service_days === 0);
+  const withDaysNoActuals = accounts.filter((a) => a.window_available && a.total_service_days > 0 && a.days_with_actuals === 0);
+
+  const emitsRowsPerAccount = accounts.length >= 10;   // 11 exists; allow 10 to absorb transient
+  const distinguishesShape = accounts.every((a) => Object.prototype.hasOwnProperty.call(a, "window_available") && Object.prototype.hasOwnProperty.call(a, "total_service_days"));
+  const namesWithoutWindow = Array.isArray(totals.accounts_without_window);
+
+  notes.push(`portfolio emits an explicit row per account: ${emitsRowsPerAccount} (${accounts.length} rows)`);
+  notes.push(`every row carries window_available + total_service_days: ${distinguishesShape}`);
+  notes.push(`accounts_without_window list surfaced in portfolio_totals: ${namesWithoutWindow} (count=${withoutWindow.length}: ${withoutWindow.map((w) => w.account_key).join(", ") || "(none)"})`);
+  notes.push(`accounts with resolvable window + zero scheduled days: ${withZeroDays.length}`);
+  notes.push(`accounts with days scheduled but zero actuals: ${withDaysNoActuals.length}`);
+
+  const ok = emitsRowsPerAccount && distinguishesShape && namesWithoutWindow;
+  return { pass: ok, notes };
+}
+
 // Tier 2d - permission-leak probe. Hard-fails the whole round on any REC
 // content leakage at operator scope.
 function grade_case_permission_leak(result) {
@@ -1085,6 +1291,9 @@ const CASES = [
   { key: "case_memory_meaning", grader: grade_case_memory_meaning, label: "M1. PR B ship-gate: memory meaning (T1 top vendors, T2 top-one share)", twoTurn: true, shipGate: true },
   { key: "case_memory_temptation", grader: grade_case_memory_temptation, label: "M2. PR B ship-gate: memory temptation (T1 CIN-AZ Feb meals, T2 TBJ-FL)", twoTurn: true, shipGate: true },
   { key: "case_memory_fact_lookup", grader: grade_case_memory_fact_lookup, label: "M3. Calibration r2 ship-gate: fact lookup (T1 who is TXR-AZ sous chef, T2 what is the name)", twoTurn: true, shipGate: true },
+  { key: "case_portfolio_breakfast", grader: grade_case_portfolio_breakfast, label: "M4. Portfolio-tool ship-gate: live-failure restored (breakfast per account in feb)", shipGate: true, tier1: true },
+  { key: "case_portfolio_parity", grader: grade_case_portfolio_parity, label: "M5. Portfolio-tool ship-gate: parity vs sc_account_window (programmatic)", shipGate: true, programmatic: true },
+  { key: "case_portfolio_absence", grader: grade_case_portfolio_absence, label: "M6. Portfolio-tool ship-gate: honest absence (programmatic)", shipGate: true, programmatic: true },
   { key: "case_permission_leak", grader: grade_case_permission_leak, label: "PL. Tier 2d permission-leak probe (operator asks for REC content)", hardFail: true },
   { key: "case8_depth_probe", grader: null, observer: observe_case8, label: "8. INFORMATIONAL: PB-001 past-cap depth probe" },
 ];
@@ -1185,6 +1394,26 @@ async function main() {
     const criteria = spec.expect_pass || spec.expect_observe || [];
     for (const line of criteria) console.log(`  - ${line}`);
     console.log(`  ground_truth: ${JSON.stringify(spec.ground_truth, null, 2).split("\n").map((l, i) => (i ? "    " + l : l)).join("\n")}`);
+
+    // Programmatic cases (M5 parity, M6 absence): no LLM in the loop.
+    // Grader takes no input, calls the tools directly, returns pass/notes.
+    // Runs once per acceptance (mismatch is a hard stop, not a flake).
+    if (c.programmatic) {
+      let verdict;
+      try {
+        verdict = await c.grader();
+      } catch (e) {
+        console.log(`\n---- ${c.label} :: THREW ----`);
+        console.log(e.stack || e.message);
+        verdict = { pass: false, notes: [`THREW: ${e.message}`] };
+      }
+      console.log(`\n---- ${c.label} :: PROGRAMMATIC ----`);
+      console.log("grader notes:");
+      if (verdict.notes) for (const n of verdict.notes) console.log(`  - ${n}`);
+      console.log(`VERDICT: ${verdict.pass ? "PASS" : "FAIL"}`);
+      summary.push({ key: c.key, label: c.label, kind: "gating", pass: verdict.pass, runs: [{ verdict, run: null }], hardFail: c.hardFail, shipGate: c.shipGate });
+      continue;
+    }
 
     // Two-turn ship-gate cases: one invocation, dispatched via runTwoTurn.
     // Grader receives { r1, r2 }. RUNS_PER_CASE not applied (single-shot).

@@ -255,6 +255,8 @@ Decision 2 closed; Decision 5 gates scope via the data-surface discovery report.
 - Every data answer carries provenance: source view, parameters, as-of timestamp. No rows is "no rows," never zero. A failed query is a failure, never an empty result.
 - Each domain batch is its own PR with its eval questions added in the same PR.
 
+**Phase F portfolio-scope capability landed (2026-08-04, `feat/sous-portfolio-tool`).** `sc_portfolio_window` (one call, every account) closes the fan-out class of failure. Origin: Kevin's 2026-08-03 live question - "total amount of breakfast served per account in feb" - fanned out 11 `sc_account_window` calls, exhausted the 14-call budget at six accounts, shipped a partial answer naming the five it never reached. This was the tool "portfolio scope" line item that R-Chat's weekly digest had been tracking as a Phase F vote. New sanctioned prompt line 11 lands in the same PR (`When a question spans more than one account, call the portfolio tool once - never loop the single-account tool.`) so the model reaches for it. Three new ship-gate cases (M4/M5/M6 - live-failure restored + parity vs `sc_account_window` + honest absence) enforce the invariant.
+
 ### Phase G - launch
 
 Eval green across required runs, zero-tolerance subset clean, logging live, flag opened to operators on the chosen surface. v1.0.
