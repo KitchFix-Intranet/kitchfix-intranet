@@ -128,27 +128,38 @@
 .sc-v2-entry-coaching-text {
   min-width: 0;
 }
+/* Polish wave item 3 (2026-08-04): Reset day becomes a real button.
+   Was text (background transparent, border 0, no underline) which
+   read as banner text, not an action. Owner ruling: quiet was
+   right, invisible was wrong. Uses the same red family Clear was
+   minted with (accent-red-wash/-mid/-deep) so the two destructive
+   affordances speak one language. Placement in the banner unchanged.
+   One-line-at-1024 contract from the placement ruling still holds -
+   the button is flex: 0 0 auto so it never wraps under the text. */
 .sc-v2-entry-coaching-reset {
   flex: 0 0 auto;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  opacity: 0.75;
+  background: var(--sc2-accent-red-wash);
+  border: var(--sc2-border-thin) solid var(--sc2-accent-red-mid);
+  color: var(--sc2-accent-red-deep);
   cursor: pointer;
-  padding: 0;
+  padding: 4px var(--sc2-space-3);
+  border-radius: var(--sc2-radius-control);
   font: inherit;
-  font-weight: var(--sc2-wt-medium);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-caption);
+  line-height: 1.2;
   text-decoration: none;
-  transition: opacity var(--duration-fast) var(--ease-standard);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 .sc-v2-entry-coaching-reset:hover:not(:disabled) {
-  opacity: 1;
-  text-decoration: underline;
+  background: var(--sc2-accent-red-line);
+  border-color: var(--sc2-accent-red-deep);
 }
 .sc-v2-entry-coaching-reset:focus-visible {
-  outline: 2px solid currentColor;
+  outline: 2px solid var(--sc2-accent-red-deep);
   outline-offset: 2px;
-  opacity: 1;
 }
 .sc-v2-entry-coaching-reset:disabled {
   cursor: default;
@@ -783,10 +794,16 @@
   /* R3-item6 (2026-08-01): row padding lifted from a bare 5px to a
      token step. Hairline dividers read less separation on the dark
      rail background than they do on white; more vertical air makes
-     the stack scannable. Token step (sc2-space-2 = 6-8px clamp) so
-     rail cadence tracks the design system, not a magic literal. */
-  padding: var(--sc2-space-2) 0;
-  font-size: var(--sc2-size-caption);
+     the stack scannable. Token step so rail cadence tracks the
+     design system, not a magic literal.
+     Polish wave item 2 (2026-08-04): loosen further. Padding
+     stepped up (space-2 -> space-3) and type stepped up one step
+     (caption -> body). Measured pre-change rail-line: 10.8px type,
+     7.2px vertical padding, 32px rows - cramped. Columns and
+     alignment unchanged; the shared class carries to BillRailFee
+     which uses the same 3-col template less the amount column. */
+  padding: var(--sc2-space-3) 0;
+  font-size: var(--sc2-size-body);
   font-variant-numeric: tabular-nums;
   border-bottom: var(--sc2-border-thin) solid var(--sc2-rail-divider);
 }
@@ -1113,12 +1130,25 @@
 
 /* P1.1 - v1-atom seam under .scv2 --------------------------------- */
 .scv2 .sc-v2-entry-list .sc-day-ledger {
+  /* Polish wave item 1 (2026-08-04): uncap ledger width. Base rule
+     at dayDetail.css:1182 sets max-width: min(720px, 100%) which
+     is needed by v1 DayDetail (MLB fee accounts still on v1 per
+     ENTRY_V2_ACCOUNTS gate). Override to `none` here scopes the
+     removal to v2 modal only; v1 keeps its 720px cap on the shared
+     surface. Measured live on CIN - AZ per-meal: 829px card holding
+     720px ledger = 109px of unreachable width. */
+  max-width: none;
   /* Owner feedback item 2 (2026-08-01): row horizontal breathing.
-     Was gap: 0 (rows read cramped). Step up to space-3 gives cells
-     visible air without changing the card width - grid columns are
-     minmax(0,1fr) + fixed, so the extra gap eats into the flex
-     column, not the total. */
-  column-gap: var(--sc2-space-3);
+     Was gap: 0 (rows read cramped) then space-3. Polish wave item 1
+     (2026-08-04) bumps to space-5 so the recovered width from the
+     max-width uncap flows into the gaps between the numeric
+     cluster columns. Owner's exact ask: "breathing room between
+     the rate and qty" and "between qty and amount". CSS grid uses
+     ONE column-gap value across all columns, so name-to-rate gets
+     the same bump - side effect the name column benefits from
+     (more air, no width change - name is minmax(0,1fr) so it
+     absorbs whatever is left). */
+  column-gap: var(--sc2-space-5);
 }
 .scv2 .sc-v2-entry-list .sc-day-ledger-head {
   /* Owner feedback item 2 (2026-08-01): header row + border reach

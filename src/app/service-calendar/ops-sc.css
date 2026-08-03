@@ -438,3 +438,40 @@
   background: var(--surface-sunken);
   border-color: var(--border-strong);
 }
+
+/* Polish wave item 4 (2026-08-04): reset-day success toast.
+   Fires from ServiceCalendarInner's `resetToast` state after a
+   successful sc-reset-day response, before the modal unmounts on
+   the post-reset refetch. Auto-clears via a 1800ms timer paired
+   with the state (see the useEffect on `resetToast`).
+   Deliberately not the save-stamp shape - a reset is a correction,
+   not an achievement. Subtle pill, centered near the top of the
+   viewport, pointer-events: none so it never blocks. Fade-in and
+   fade-out live in the animation; timer clears state at 1800ms so
+   the DOM node unmounts cleanly. */
+@keyframes sc-reset-toast-in {
+  0%   { opacity: 0; transform: translate(-50%, -8px); }
+  15%  { opacity: 1; transform: translate(-50%, 0); }
+  75%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+.sc-reset-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  padding: 8px 16px;
+  background: var(--surface-card);
+  color: var(--text-default);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-container);
+  box-shadow: var(--elevation-popover);
+  font-size: var(--size-caption);
+  font-weight: var(--wt-medium);
+  animation: sc-reset-toast-in 1800ms var(--ease-standard) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-reset-toast { animation: none; }
+}

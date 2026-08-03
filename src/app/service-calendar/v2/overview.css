@@ -1725,22 +1725,34 @@ body:has(.sc-root.scv2) {
 
 /* B5 - Rail inner-scroll scrollbar (thin, navy-tinted). Replaces
    the OS default inside the navy rail. Firefox scrollbar-color
-   support + WebKit ::-webkit-scrollbar-* to hit both engines. */
-.scv2 .sc-rail-scroll {
+   support + WebKit ::-webkit-scrollbar-* to hit both engines.
+   Polish wave item 6 (2026-08-04): extended to
+   .sc-rail-queue-list[data-expanded="true"] so the "+ N more"
+   overflow scroll on the rail queue matches the rest of the rail's
+   scroll treatment (was OS default; owner: "one scrollbar, not
+   three"). Both sites owner named (overview period + drill-down)
+   route through the same class + attribute, so one selector
+   covers both. */
+.scv2 .sc-rail-scroll,
+.scv2 .sc-rail-queue-list[data-expanded="true"] {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.20) transparent;
 }
-.scv2 .sc-rail-scroll::-webkit-scrollbar {
+.scv2 .sc-rail-scroll::-webkit-scrollbar,
+.scv2 .sc-rail-queue-list[data-expanded="true"]::-webkit-scrollbar {
   width: 6px;
 }
-.scv2 .sc-rail-scroll::-webkit-scrollbar-track {
+.scv2 .sc-rail-scroll::-webkit-scrollbar-track,
+.scv2 .sc-rail-queue-list[data-expanded="true"]::-webkit-scrollbar-track {
   background: transparent;
 }
-.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb {
+.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb,
+.scv2 .sc-rail-queue-list[data-expanded="true"]::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.20);
   border-radius: 3px;
 }
-.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb:hover {
+.scv2 .sc-rail-scroll::-webkit-scrollbar-thumb:hover,
+.scv2 .sc-rail-queue-list[data-expanded="true"]::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.30);
 }
 

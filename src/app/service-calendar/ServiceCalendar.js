@@ -577,6 +577,31 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const [partialError, setPartialError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [focusDay, setFocusDay] = useState(null);
+  // Polish wave item 4 (2026-08-04): reset-day success toast lives at
+  // WORKSPACE level, not inside the modal. handleResetDay invalidates
+  // monthCache + bumps reloadKey - same pattern as handleSave; the
+  // day-detail overlay's mount gate (ServiceCalendar.js:~3826)
+  // collapses during the refetch and DayEntryV2 unmounts. State
+  // inside the modal cannot survive that. State + timer at this
+  // level is a fresh workspace-level pattern (SaveConfirmation
+  // never merged; see SC_STATUS' day-detail-modal-remounts backlog
+  // entry for the same failure class + why a proper latch is a
+  // separate architectural piece).
+  //
+  // Toast semantics per owner:
+  //   - Centered near the top of the workspace
+  //   - Fades in, holds ~1200ms, fades out
+  //   - Subtle - a reset is a correction, not an achievement (do
+  //     NOT reuse the SaveConfirmation stamp shape)
+  //   - No dismiss control, no interaction (pointer-events: none)
+  //   - Fires on confirmed success only (handleResetDay sets it
+  //     ONLY inside the result.success branch)
+  const [resetToast, setResetToast] = useState(null);
+  useEffect(() => {
+    if (!resetToast) return undefined;
+    const id = setTimeout(() => setResetToast(null), 1800);
+    return () => clearTimeout(id);
+  }, [resetToast]);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -2098,6 +2123,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         const next = { ...prev }; delete next[mk]; return next;
       });
       setReloadKey(k => k + 1);
+      // Polish wave item 4 (2026-08-04): fire the workspace-level
+      // toast BEFORE the modal unmounts. Setting state here means
+      // the resetToast render (below, sibling of the day overlay)
+      // survives the refetch tear-down of DayEntryV2.
+      setResetToast({ message: "Day reset to projections" });
       return result;
     } catch (err) {
       if (err?.name === "AbortError") return { success: false, error: "aborted" };
@@ -3935,6 +3965,19 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 : <DayDetail {...dayEntryProps} />;
             })()}
           </div>
+        </div>
+      )}
+
+      {/* Polish wave item 4 (2026-08-04): reset toast hoisted to
+          workspace level so the post-reset refetch tear-down of
+          DayEntryV2 cannot kill the state before it renders. State
+          + auto-clear timer live at ServiceCalendarInner (see :580).
+          Rendered as a fixed overlay, pointer-events: none, no
+          dismiss control. Subtle by design - a reset is a
+          correction, not an achievement. */}
+      {resetToast && (
+        <div className="sc-reset-toast" role="status" aria-live="polite">
+          {resetToast.message}
         </div>
       )}
 
