@@ -209,6 +209,21 @@ Not "sized roadmap" - decisions and follow-ups with clear blockers.
 - **v1 (MLB fee)** toast still fires - byte-identical to pre-P3-B. MLB never mounted the Handoff.
 - **Audit reference**: SC_STATUS commit body of `297f28f`; audit narrative in the PR #588 description.
 
+### Price roundCents-then-extend drift on off-schedule fallback (2026-08-03, sized for a ruling)
+
+- **Where the drift lives**: `serviceCalendar.js:175` defines `roundCents = Math.round(n * 100) / 100`. Comment at :169-177 verbatim:
+  > Money rounding helper. All price-display surfaces compare and render 2-decimal numbers; the DB stores NUMERIC(12,5) so legacy seed rows can carry contract-derived precision (e.g. 18.42147). Applying roundCents at the orchestrator boundary keeps the entire display/ compare layer at the canonical money form without touching storage. Use this on every price coming OUT of the orchestrator.
+- **Where it is actually applied**: `loadAccountConfig` at :475 and :482 (current + upcoming price on `serviceGroups.services[].price`); `loadYearSummary` at :620 and :627 (same fields for the year summary). All four go through `roundCents`. Write paths at :2456, :2468, :2862 use roundCents for change-detection - not display.
+- **Where it is NOT applied**: `loadMonthDataPostgres:853` reads `sc_daily_revenue.price_at_date` as `Number(r.price_at_date) || 0` - **raw NUMERIC(12,5), no roundCents**. `route.js:262` passes it through unchanged. So `d.priceAtDate` on the client is 5dp; `svc.price` on the client is 2dp.
+- **Blast radius**: R13 (round-per-line, not round-per-price-then-extend) drift ONLY fires when `priceAtDate` is undefined AND the fallback goes to `svc.price`. That's the off-schedule fallback path just added in PR fix/sc-bulk. Every other extended-amount surface (`ServiceRow`, `enteredTotals`, `BillRailFee`, per-day totals on scheduled services) uses `priceAtDate` which is raw, so R13 holds there. **The drift is confined to off-schedule entries.**
+- **Largest realistic error (measured against live sc_service_prices, 161 rows, `price_kind='projected'`)**:
+  - Max sub-cent drift per unit: **$0.005** (TBR - FL / Lunch - MiLB ST, raw $21.675 -> rounded $21.68). 96 of 161 rows carry sub-cent precision; only 8 hit the 0.5¢ ceiling.
+  - Highest observed `sc_daily_projections.projected_count`: **300**. p95 = 240. p90 = 155.
+  - **Theoretical ceiling on the fallback path: $0.005 × 300 = $1.50** for a single off-schedule row at max count on the worst-drift service.
+  - Typical off-schedule case (a small correction, say 10 units): $0.005 × 10 = **$0.05** - below single-cent display resolution.
+- **Fix shape if you rule it in**: apply `roundCents` inside the `svc.price` fallback -> `priceAtDate ?? roundCents(svc.price) ?? 0` would NOT fix this (svc.price is already roundCents'd at load). The R13-compliant fix would be to drop `roundCents` from `loadAccountConfig`'s price mapping AND from `loadYearSummary`'s, keeping raw price in `svc.price` too - which would mean `ServiceRow`'s rate display would also show 5dp, so a paired `.toFixed(2)` in the display formatter would need to land. That's a wider change than the fallback path alone, which is why the current PR fixed only the fallback and did not chase this drift.
+- **Owner's call**: whether this ships as a follow-up (fix roundCents at the load boundary, add display-only rounding in the formatter). Cost to fix: touches 4 orchestrator sites + the ServiceRow rate render. Cost to leave: up to $1.50 per off-schedule row at max scale, well under $0.50 in the typical off-schedule case.
+
 ### Authed preview e2e (follow-up from #408's honest limitation)
 
 - **Gap**: the preview-smoke job cannot reach the API surface (Vercel Preview Protection). Would need a `VERCEL_AUTOMATION_BYPASS_SECRET` header in the smoke request.
