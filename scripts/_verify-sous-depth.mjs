@@ -27,6 +27,14 @@ const LONG_ANSWER = Array.from({ length: 60 }, (_, i) =>
 
 // Real .sa-page shape - rail with three items (one --incontext, two outside),
 // main with the tall answer card. This matches the composition in the study.
+// Rail items updated 2026-08-03 for rail-honesty ruling: <div> not <button>,
+// includes ask-again icon button + IN CONTEXT hint line.
+const RAIL_ITEM = (extraClass, dot, time, q) => `
+  <li><div class="sa-rail-item ${extraClass}">
+    <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--${dot}"></span><span class="sa-rail-item-time">${time}</span></span>
+    <span class="sa-rail-item-q">${q}</span>
+    <button class="sa-rail-item-askagain" aria-label="Ask this again"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+  </div></li>`;
 const PAGE_HTML = (bodyInner) => `<!doctype html>
 <html><head><style>
   html, body { margin: 0; padding: 0; }
@@ -47,22 +55,14 @@ const PAGE_HTML = (bodyInner) => `<!doctype html>
           <div class="sa-rail-scroll">
             <p class="sa-rail-heading">This session</p>
             <span class="sa-rail-incontext-marker">In context</span>
+            <span class="sa-rail-incontext-hint">Sous remembers these three.</span>
             <ul class="sa-rail-list">
-              <li><button class="sa-rail-item sa-rail-item--incontext">
-                <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--grounded"></span><span class="sa-rail-item-time">6:51 AM CDT</span></span>
-                <span class="sa-rail-item-q">What's our allergen procedure?</span>
-              </button></li>
+              ${RAIL_ITEM("sa-rail-item--incontext", "grounded", "6:51 AM CDT", "What's our allergen procedure?")}
             </ul>
             <div class="sa-rail-context-boundary"></div>
             <ul class="sa-rail-list">
-              <li><button class="sa-rail-item sa-rail-item--outside-context">
-                <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--partial"></span><span class="sa-rail-item-time">6:33 AM CDT</span></span>
-                <span class="sa-rail-item-q">break out the top one</span>
-              </button></li>
-              <li><button class="sa-rail-item sa-rail-item--outside-context">
-                <span class="sa-rail-item-meta"><span class="sa-rail-status-dot sa-rail-status-dot--declined"></span><span class="sa-rail-item-time">6:32 AM CDT</span></span>
-                <span class="sa-rail-item-q">holiday pay?</span>
-              </button></li>
+              ${RAIL_ITEM("sa-rail-item--outside-context", "partial", "6:33 AM CDT", "break out the top one")}
+              ${RAIL_ITEM("sa-rail-item--outside-context", "declined", "6:32 AM CDT", "holiday pay?")}
             </ul>
           </div>
           <p class="sa-rail-footer">Session only - clears when you reload.</p>
@@ -112,6 +112,39 @@ const ANSWER_INNER = `
       <div class="sa-sources">
         <a class="sa-source-row" href="#"><span class="sa-source-idchip">PB-002</span><span class="sa-source-title">Allergen Playbook</span></a>
         <a class="sa-source-row" href="#"><span class="sa-source-idchip">SOP-002</span><span class="sa-source-title">Incident Reporting SOP</span></a>
+      </div>
+    </div>
+  </article>`;
+
+// Wide-table case: 8-column vendor spend table with values wide enough that
+// the natural table width exceeds the 840 card cap. Confirms tables keep
+// width:100% and clip within card padding rather than being constrained
+// or the card overflowing.
+const WIDE_TABLE_INNER = `
+  <article class="sa-turn">
+    <div class="sa-answer sa-answer--grounded">
+      <div class="sa-answer-header">
+        <span class="sa-question-bar"></span>
+        <span class="sa-question-text">top vendors this year?</span>
+        <span class="sa-status-pill sa-status-pill--grounded">Grounded</span>
+      </div>
+      <div class="sa-answer-body">
+        <p>38 canonical vendors YTD. Top five below with fees and share; the remaining 33 add another 24% of portfolio spend.</p>
+        <table>
+          <thead>
+            <tr><th>Vendor</th><th>Category</th><th data-num>YTD Spend</th><th data-num>Invoices</th><th data-num>Avg / Invoice</th><th data-num>Share YTD</th><th>First Order</th><th>Last Order</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Sysco Southeast Florida</td><td>Food broadline</td><td data-num>$244,954.05</td><td data-num>47</td><td data-num>$5,211.79</td><td data-num>19.5%</td><td>2026-02-14</td><td>2026-07-30</td></tr>
+            <tr><td>Shamrock Foods</td><td>Food secondary</td><td data-num>$102,183.44</td><td data-num>28</td><td data-num>$3,649.41</td><td data-num>8.1%</td><td>2026-02-16</td><td>2026-07-29</td></tr>
+            <tr><td>Ben E Keith</td><td>Food broadline</td><td data-num>$88,447.13</td><td data-num>21</td><td data-num>$4,211.77</td><td data-num>7.0%</td><td>2026-03-01</td><td>2026-07-28</td></tr>
+            <tr><td>What Chefs Want</td><td>Produce</td><td data-num>$71,220.90</td><td data-num>34</td><td data-num>$2,094.73</td><td data-num>5.7%</td><td>2026-02-14</td><td>2026-07-30</td></tr>
+            <tr><td>Cheney Brothers</td><td>Food secondary</td><td data-num>$54,982.11</td><td data-num>17</td><td data-num>$3,234.24</td><td data-num>4.4%</td><td>2026-03-05</td><td>2026-07-26</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="sa-sources">
+        <a class="sa-source-row" href="#"><span class="sa-source-idchip">spend_top_vendors</span><span class="sa-source-title">PG live</span></a>
       </div>
     </div>
   </article>`;
@@ -171,9 +204,26 @@ const browser = await chromium.launch();
   await page.screenshot({ path: "/tmp/sous-depth/long-answer-mid-scroll-1440x900.png" });
   console.log("SCREENSHOT: /tmp/sous-depth/long-answer-mid-scroll-1440x900.png");
 
+  await page.setContent(PAGE_HTML(WIDE_TABLE_INNER), { waitUntil: "load" });
+  await page.screenshot({ path: "/tmp/sous-depth/wide-table-1440x900.png" });
+  console.log("SCREENSHOT: /tmp/sous-depth/wide-table-1440x900.png");
+
   await page.setContent(PANEL_HTML, { waitUntil: "load" });
   await page.screenshot({ path: "/tmp/sous-depth/panel-1440x900.png" });
   console.log("SCREENSHOT: /tmp/sous-depth/panel-1440x900.png");
+
+  // Rail-honesty verification (added 2026-08-03): rail with IN CONTEXT hint
+  // visible, one rail item hovered (ask-again button revealed), and one
+  // rail item's ask-again button focused (keyboard tab-reachable state).
+  await page.setContent(PAGE_HTML(ANSWER_INNER), { waitUntil: "load" });
+  await page.locator('.sa-rail-item--incontext').first().hover();
+  await page.screenshot({ path: "/tmp/sous-depth/rail-hover-1440x900.png", clip: { x: 0, y: 200, width: 320, height: 400 } });
+  console.log("SCREENSHOT: /tmp/sous-depth/rail-hover-1440x900.png (rail clip, hover)");
+
+  await page.setContent(PAGE_HTML(ANSWER_INNER), { waitUntil: "load" });
+  await page.locator('.sa-rail-item-askagain').first().focus();
+  await page.screenshot({ path: "/tmp/sous-depth/rail-askagain-focus-1440x900.png", clip: { x: 0, y: 200, width: 320, height: 400 } });
+  console.log("SCREENSHOT: /tmp/sous-depth/rail-askagain-focus-1440x900.png (rail clip, keyboard focus)");
 
   await ctx.close();
 }
