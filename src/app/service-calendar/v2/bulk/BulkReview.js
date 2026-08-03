@@ -42,8 +42,9 @@
 //   - Ledger's expand pattern: local `expanded` Set, `role="button"`,
 //     `aria-expanded`. One expand interaction across the product.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fmt$, fmtDateShort } from "../../season/format";
+import { LEDGER_HEAD_FEE } from "../../DayDetail";
 
 export default function BulkReview({
   days,
@@ -72,6 +73,25 @@ export default function BulkReview({
     if (next.has(date)) next.delete(date); else next.add(date);
     return next;
   });
+
+  // sc-bulk-ui PR 2 item 3 (2026-08-03): the expanded per-service
+  // detail used to render as a flat <ul> with no styling and no
+  // grouping. On accounts with multiple groups sharing service
+  // names (STL - FL, TXR - AZ, etc.) that produced the "Breakfast
+  // Lunch Dinner Breakfast Lunch Dinner" repetition owner flagged:
+  // correct data that read as a bug. Bucket by group so the same
+  // name in two groups reads as two group sections, not two loose
+  // rows. Order preserved via serviceGroups declaration order so
+  // the review section order matches the modal's group order.
+  // colIndex -> groupName is O(services) once; the per-row lookup
+  // is O(1).
+  const serviceGroupMap = useMemo(() => {
+    const m = new Map();
+    for (const g of serviceGroups || []) {
+      for (const s of g.services || []) m.set(s.colIndex, g.name);
+    }
+    return m;
+  }, [serviceGroups]);
 
   const overwriteCount = overwrites ? overwrites.size : 0;
   // Writable-N = days that will produce at least one row. Excludes
@@ -194,26 +214,66 @@ export default function BulkReview({
                         </span>
                       ) : null}
                     </div>
-                    {isOpen && (
-                      <ul className="sc-bulk-review-detail">
-                        {perDayServices(d).map(en => {
-                          const skipped = daySkips?.has(en.serviceId);
-                          return (
-                            <li
-                              key={en.serviceId}
-                              className={`sc-bulk-review-detail-row${skipped ? " sc-bulk-review-detail-row--skipped" : ""}`}
-                            >
-                              <span className="sc-bulk-review-detail-name">{en.serviceName}</span>
-                              {skipped ? (
-                                <span className="sc-bulk-review-detail-skip">not offered this day</span>
-                              ) : (
-                                <span className="sc-bulk-review-detail-qty">{Number(en.value).toLocaleString()}</span>
+                    {isOpen && (() => {
+                      // Bucket the flat perDayServices output by group.
+                      // Preserve serviceGroups declaration order so the
+                      // review's group order matches the modal's.
+                      const byGroup = new Map();
+                      for (const en of perDayServices(d)) {
+                        const groupName = serviceGroupMap.get(en.serviceId) || "";
+                        if (!byGroup.has(groupName)) byGroup.set(groupName, []);
+                        byGroup.get(groupName).push(en);
+                      }
+                      const orderedGroupNames = (serviceGroups || [])
+                        .map(g => g.name)
+                        .filter(n => byGroup.has(n));
+                      // Trailing unnamed bucket (shouldn't happen with a
+                      // correct serviceGroupMap, but defended so a data
+                      // shape drift renders visibly rather than dropping
+                      // rows silently).
+                      if (byGroup.has("") && !orderedGroupNames.includes("")) {
+                        orderedGroupNames.push("");
+                      }
+                      return (
+                        <div className="sc-bulk-review-detail">
+                          {orderedGroupNames.map(groupName => (
+                            <section key={groupName || "(other)"} className="sc-bulk-review-detail-group">
+                              {groupName && (
+                                <header className="sc-bulk-review-detail-group-title">
+                                  {groupName}
+                                </header>
                               )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                              {/* Reuse the modal's ledger primitive
+                                  (dayDetail.css:1178) at its 2-col fee
+                                  shape - name + qty. Same subgrid the
+                                  modal uses for its off-schedule chip
+                                  measurement pass in PR 2 item 2; the
+                                  two surfaces now speak the same
+                                  ledger grammar. */}
+                              <div className="sc-day-ledger sc-day-ledger--fee">
+                                {LEDGER_HEAD_FEE}
+                                {byGroup.get(groupName).map(en => {
+                                  const skipped = daySkips?.has(en.serviceId);
+                                  return (
+                                    <div
+                                      key={en.serviceId}
+                                      className={`sc-day-row sc-day-row--ledger${skipped ? " sc-bulk-review-detail-row--skipped" : ""}`}
+                                    >
+                                      <div className="sc-day-row-left">
+                                        <span className="sc-day-row-name">{en.serviceName}</span>
+                                      </div>
+                                      <span className="sc-bulk-review-detail-qty">
+                                        {skipped ? "not offered" : Number(en.value).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </section>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </li>
                 );
               })}
