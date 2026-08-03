@@ -70,6 +70,17 @@ const CITATION_RE = /\b([A-Z]{2,6})-([0-9]{3})\b/g;
 // because the model quotes the template verbatim.
 const SOURCE_LINE_RE = /^\s*(?:[-*]\s+)?(?:\*\*)?source(?:s)?(?:\*\*)?\s*:/i;
 
+// 2026-08-04 (calibration round 2): does the raw answer carry ANY Source
+// line? Used by the zero-tool backstop below to distinguish citation-
+// bearing answers (which must be grounded in this turn's tools) from
+// decline / clarifier / conversational replies that carry no citation
+// claim at all. Iterates lines to avoid a global-regex `m`-flag rewrite
+// of SOURCE_LINE_RE, which is also used single-line inside parseAnswer.
+function hasSourceLine(rawText) {
+  if (!rawText) return false;
+  return rawText.split("\n").some((line) => SOURCE_LINE_RE.test(line));
+}
+
 function parseAnswer(rawText) {
   const statusMatch = rawText.match(STATUS_RE);
   const reasonMatch = rawText.match(REASON_RE);
@@ -201,6 +212,17 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
   let finalRawText = null;
   let finalStopReason = null;
   let firstTokenFired = false;
+  // 2026-08-04 (calibration round 2 - Part 1): zero-tool citation backstop
+  // state. When a turn completes with zero successful tool calls AND the
+  // answer carries a citation-shaped claim (Source line, doc id, named
+  // dataset), the loop rejects the answer once, appends a system-side
+  // nudge, and gives the model one retry. If the retry also completes
+  // with zero tools, ship the answer as partial with the accurate reason
+  // string `Answered without checking a source this turn.` The prompt-
+  // rule change alone (line 10, Part 2) is not enough - model behaviour
+  // can still drift, so this is the mechanical backstop.
+  let zeroToolRetryDone = false;
+  let zeroToolBackstopFired = false;
 
   // Every turn streams. Text deltas emit as `text-delta` events on the fly;
   // the route layer forwards them as `token` events to the client. Tool-use
@@ -285,6 +307,43 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
         .join("");
       finalStopReason = resp.stop_reason;
       trajectory.push({ tool: null, kind: "final", stop_reason: resp.stop_reason });
+
+      // 2026-08-04 (Part 1): zero-tool citation backstop. If this turn
+      // ends with zero successful tool calls but the model wrote a
+      // Source line, reject once and retry with a system nudge. Skips
+      // declines (no citation to make), skips answers with no Source
+      // line at all (clarifiers / conversational replies). Fires
+      // exactly once per session per Kevin's spec.
+      if (!zeroToolRetryDone && toolsUsed === 0) {
+        const isDecline = /\[\[STATUS:\s*declined\]\]/i.test(finalRawText);
+        if (!isDecline && hasSourceLine(finalRawText)) {
+          zeroToolRetryDone = true;
+          trajectory.push({
+            tool: null,
+            kind: "zero-tool-retry",
+            reason: "answered with citation before calling any tool",
+          });
+          emit({ kind: "zero-tool-retry" });
+          // Preserve the rejected attempt in the message log so the
+          // model sees what it just said, then push the nudge as the
+          // next user turn. The retry re-enters the tool-use loop
+          // above with the model's fresh chance to call a tool.
+          messages.push({ role: "assistant", content: finalRawText });
+          messages.push({
+            role: "user",
+            content: "You answered without calling any tool. Call the tool that has this information and answer from its result.",
+          });
+          finalRawText = null;
+          finalStopReason = null;
+          continue;
+        }
+      }
+      // Retry ALSO answered with zero tools. We ship this answer, but
+      // grade it partial with the accurate reason string (see the
+      // status downgrade block below).
+      if (zeroToolRetryDone && toolsUsed === 0) {
+        zeroToolBackstopFired = true;
+      }
       break;
     }
 
@@ -407,6 +466,14 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
   if (status === "grounded" && validSources.length === 0 && !hadSuccessfulDataToolCall) {
     flags.push({ grounded_without_sources: true });
     status = "partial";
+  }
+  // 2026-08-04 (Part 1): zero-tool citation backstop flag. Fires when the
+  // retry ALSO shipped without any tool call. Grader-visible so the
+  // digest can count how often the backstop actually catches something
+  // instead of being an unfalsifiable rule.
+  if (zeroToolBackstopFired && status !== "declined") {
+    flags.push({ zero_tool_no_check: true });
+    if (status === "grounded") status = "partial";
   }
   if (flags.length) trajectory.push({ tool: null, kind: "downgrade", flags });
 

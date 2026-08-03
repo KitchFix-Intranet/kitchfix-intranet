@@ -63,7 +63,13 @@ function partialReason(doneEnv) {
   if (!doneEnv) return null;
   if (doneEnv.truncated) return "Answer was cut short";
   const flags = Array.isArray(doneEnv.flags) ? doneEnv.flags : [];
+  // 2026-08-04 (calibration round 2): zero_tool_no_check reads first
+  // because it is the most specific description of what happened -
+  // grounded_without_sources will also fire when tools=0 (they are
+  // strict subsets), but "answered without checking a source" tells
+  // the user WHY sources are missing.
   for (const f of flags) {
+    if (f?.zero_tool_no_check) return "Answered without checking a source this turn.";
     if (f?.phantom_citation) return "A citation could not be verified";
     if (f?.grounded_without_sources) return "Sources could not be confirmed";
   }
@@ -345,6 +351,15 @@ const SousSurface = forwardRef(function SousSurface({
           const t = data?.t || "";
           accumulatedAnswer += t;
           updateTurn(turnId, (tt) => ({ answerText: tt.answerText + t }));
+        } else if (event === "retry_reset") {
+          // 2026-08-04 (calibration round 2): agent-loop rejected a
+          // zero-tool citation-bearing first attempt and is retrying
+          // with a tool-nudge. Wipe what streamed so far - the retry's
+          // text is the shipped answer, not concatenated to the
+          // rejected attempt. Tool trail also resets so the meta row
+          // shows only the retry's calls (typically none-then-one).
+          accumulatedAnswer = "";
+          updateTurn(turnId, { answerText: "", toolTrail: [] });
         } else if (event === "error") {
           updateTurn(turnId, {
             phase: "error",
