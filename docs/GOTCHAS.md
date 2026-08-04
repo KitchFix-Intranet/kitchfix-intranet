@@ -537,14 +537,7 @@ Six PR 8a files were written, tested-in-thought, reported as delivered in the se
 
 **The rule:** any file worth reporting as done is worth committing to a branch immediately. Draft PR, WIP commit, `git stash push -m` - anything that produces a SHA. Commit incrementally: after each file, not at the end. A WIP commit is cheaper than a lost file. "It is in the working tree" survives nothing that touches HEAD.
 
-**Standing branch guard.** A parallel commit on `fix/sc-admin-price-lock` landed one PR-8a commit on the wrong branch during the same session, because the worktree branch flipped between the branch cut and the first commit. `scripts/hooks/pre-commit` is the standing enforcement: it refuses to commit when the current branch does not match either `$EXPECTED_BRANCH` (session-set) or `.git/branch-lock` (persistent-per-worktree, one-line plain text). Enable per worktree with:
-
-```sh
-git config core.hooksPath scripts/hooks
-echo feat/whatever > "$(git rev-parse --git-dir)/branch-lock"
-```
-
-Standing beats ad-hoc: the ad-hoc pattern (`test $(git branch --show-current) = X && git commit ...`) works only when you remember to type it. The hook fires on every commit regardless of who or what invoked it.
+**Branch drift is a real failure mode.** During PR 8a's rebuild a parallel commit on `fix/sc-admin-price-lock` (Kevin working in another worktree) flipped this worktree's branch between the branch cut and the first commit; one PR-8a commit landed on the wrong branch before it was noticed. The ad-hoc guard `test "$(git branch --show-current)" = <expected> && git add ... && git commit ...` catches this when you remember to type it, but only then. A standing pre-commit hook was tried and reverted: any hook file lives in the working tree, so a checkout to a branch without the file (`main`, an unrelated feature branch) silently disables the guard - a hook that vanishes when you switch branches is not a guard. If a standing enforcement is wanted, it needs an install location outside the working tree; that is its own decision, not a piece of PR 8a.
 
 ---
 
