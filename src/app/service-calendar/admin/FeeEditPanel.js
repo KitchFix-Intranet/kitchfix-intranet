@@ -15,7 +15,9 @@
 //    do NOT flow through the Service Calendar's revenue. Save payload sets
 //    allowBackdate: true.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+// Admin wave commit 3 (2026-08-04): inline dialog a11y.
+import { useDialogA11y } from "../useDialogA11y";
 
 const BACKDATE_FLOOR = "2024-01-01";
 
@@ -62,6 +64,8 @@ function fmtDateHuman(iso) {
 }
 
 export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, showToast }) {
+  const cardRef = useRef(null);
+  useDialogA11y({ cardRef, isOpen: true, onClose: onCancel, trapTab: false });
   const currentAmount = roundCents(current?.amount ?? 0);
   const [newAmount, setNewAmount] = useState(currentAmount.toFixed(2));
   const [effMode, setEffMode] = useState("today");   // "today" | "future" | "backdate"
@@ -179,7 +183,7 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
   };
 
   return (
-    <div className="sc-admin-panel">
+    <div className="sc-admin-panel" ref={cardRef} tabIndex={-1}>
       <div className="sc-admin-panel-current">
         Current fee: <strong>{fmtAmount(currentAmount)} annual</strong>
         {current?.effectiveDate && (

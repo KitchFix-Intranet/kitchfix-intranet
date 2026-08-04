@@ -3,11 +3,15 @@
 // active_until back to NULL; no date picker needed (reactivate is
 // immediate). Required reason + optional requested-by.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+// Admin wave commit 3 (2026-08-04): inline dialog a11y.
+import { useDialogA11y } from "../useDialogA11y";
 
 export default function ReactivatePanel({ accountKey, entity, entityType, onCancel, onSaved, showToast }) {
   // entityType: "service" | "group"
   // entity:    { id, serviceName? | groupName?, activeUntil }
+  const cardRef = useRef(null);
+  useDialogA11y({ cardRef, isOpen: true, onClose: onCancel, trapTab: false });
   const [reason, setReason] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,7 +52,7 @@ export default function ReactivatePanel({ accountKey, entity, entityType, onCanc
   };
 
   return (
-    <div className="sc-admin-panel">
+    <div className="sc-admin-panel" ref={cardRef} tabIndex={-1}>
       <div className="sc-admin-panel-current">
         Reactivate <strong>{label}</strong>. Clears the archive marker - the {entityType} becomes active again from today forward. Historical data unchanged.
       </div>

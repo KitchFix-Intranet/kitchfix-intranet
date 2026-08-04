@@ -13,9 +13,13 @@
 // 0 * count = 0, matching how existing fee-account services
 // already read.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+// Admin wave commit 3 (2026-08-04): inline dialog a11y.
+import { useDialogA11y } from "../useDialogA11y";
 
 export default function AddServicePanel({ accountKey, group, onCancel, onSaved, showToast, feeNoDollar = false }) {
+  const cardRef = useRef(null);
+  useDialogA11y({ cardRef, isOpen: true, onClose: onCancel, trapTab: false });
   const [serviceName, setServiceName] = useState("");
   const [initialPrice, setInitialPrice] = useState("0.00");
   const [isFlatFee, setIsFlatFee] = useState(false);
@@ -66,7 +70,7 @@ export default function AddServicePanel({ accountKey, group, onCancel, onSaved, 
   };
 
   return (
-    <div className="sc-admin-panel">
+    <div className="sc-admin-panel" ref={cardRef} tabIndex={-1}>
       <div className="sc-admin-panel-current">
         Add a service to <strong>{group.groupName}</strong>. {feeNoDollar
           ? "This account bills a flat annual fee; the new service is created at price 0 and archive uses the same flow."
