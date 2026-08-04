@@ -541,22 +541,21 @@ function addSummaryTab(wb, categoriesWithRows) {
   ws.views = [{ state: "frozen", ySplit: 1, showGridLines: false }];
 }
 
-// Sort order within a tab:
-//   1. frozen catalog rows (blue highlight)
-//   2. non-frozen catalog rows (alphabetical)
-//   3. frozen Class 3 rows (blue + NEW note)
-//   4. non-frozen Class 3 rows (alphabetical, NEW note)
-// This preserves the "frozen at top" of PR #614 within each visual
-// group (catalog vs NEW) while keeping NEW items visually separated.
-function sortRowsForTab(rows) {
-  const groups = [
-    rows.filter((r) => !r.isNew &&  r.frozen),
-    rows.filter((r) => !r.isNew && !r.frozen),
-    rows.filter((r) =>  r.isNew &&  r.frozen),
-    rows.filter((r) =>  r.isNew && !r.frozen),
-  ];
-  for (const g of groups) g.sort((a, b) => a.name.localeCompare(b.name));
-  return [].concat(...groups);
+// Sort order within a tab (globally-frozen-first per owner ruling
+// 2026-08-04 on PR #621): all frozen items across every class come
+// first so the chef walks the walk-in freezer as one trip, then
+// non-frozen catalog rows (Class 1 + Class 2), then non-frozen NEW
+// rows (Class 3). Alphabetical within each group. The "NEW - not in
+// catalog" note stays on Class 3 rows wherever they sort.
+export function sortRowsForTab(rows) {
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const frozen  = rows.filter((r) =>  r.frozen);
+  const catalog = rows.filter((r) => !r.frozen && !r.isNew);
+  const newRows = rows.filter((r) => !r.frozen &&  r.isNew);
+  frozen.sort(byName);
+  catalog.sort(byName);
+  newRows.sort(byName);
+  return [...frozen, ...catalog, ...newRows];
 }
 
 function addCategoryTab(wb, tabName, rows) {
