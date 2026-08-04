@@ -68,12 +68,53 @@ BEGIN;
 
 -- ─── Pre-flight ─────────────────────────────────────────────────────
 DO $$
+DECLARE
+  te_bad_uq TEXT;
+  ps_bad_uq TEXT;
 BEGIN
   -- Marker: PR 1 spine landed. The kpi-8a tables are structurally
   -- independent of PR 1, but the migration order matters for the
   -- probe/verify surface, so refuse to apply if PR 1 has not run.
   IF to_regclass('public.kpi_lines') IS NULL THEN
     RAISE EXCEPTION 'kpi-8a pre-flight: kpi_lines missing - PR 1 spine must land first';
+  END IF;
+
+  -- Half-applied / earlier-attempt state: if either raw table already
+  -- exists, it must NOT carry a UNIQUE on (rippling_id, content_hash).
+  -- That would be a leftover from an earlier attempt and would break
+  -- revert cycles once the sync starts writing. CREATE TABLE IF NOT
+  -- EXISTS is a no-op on an existing table, so it will not fix a wrong
+  -- pre-existing shape. Fail loudly, name the constraint so the
+  -- operator can drop it explicitly.
+  IF to_regclass('public.rippling_raw_time_entries') IS NOT NULL THEN
+    SELECT c.conname INTO te_bad_uq
+    FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    WHERE t.relname = 'rippling_raw_time_entries'
+      AND c.contype = 'u'
+      AND (SELECT array_agg(attname ORDER BY attnum)
+           FROM pg_attribute
+           WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
+          @> ARRAY['rippling_id', 'content_hash']
+    LIMIT 1;
+    IF te_bad_uq IS NOT NULL THEN
+      RAISE EXCEPTION 'kpi-8a pre-flight: rippling_raw_time_entries has a pre-existing UNIQUE on (rippling_id, content_hash) named %. Leftover from an earlier attempt - drop it first: ALTER TABLE rippling_raw_time_entries DROP CONSTRAINT %I;', te_bad_uq, te_bad_uq;
+    END IF;
+  END IF;
+  IF to_regclass('public.rippling_raw_pay_segments') IS NOT NULL THEN
+    SELECT c.conname INTO ps_bad_uq
+    FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    WHERE t.relname = 'rippling_raw_pay_segments'
+      AND c.contype = 'u'
+      AND (SELECT array_agg(attname ORDER BY attnum)
+           FROM pg_attribute
+           WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
+          @> ARRAY['rippling_id', 'content_hash']
+    LIMIT 1;
+    IF ps_bad_uq IS NOT NULL THEN
+      RAISE EXCEPTION 'kpi-8a pre-flight: rippling_raw_pay_segments has a pre-existing UNIQUE on (rippling_id, content_hash) named %. Leftover from an earlier attempt - drop it first: ALTER TABLE rippling_raw_pay_segments DROP CONSTRAINT %I;', ps_bad_uq, ps_bad_uq;
+    END IF;
   END IF;
 END $$;
 
@@ -119,6 +160,33 @@ CREATE INDEX IF NOT EXISTS rippling_raw_pay_segments_latest_idx
 CREATE INDEX IF NOT EXISTS rippling_raw_pay_segments_fetched_at_idx
   ON rippling_raw_pay_segments (fetched_at DESC);
 
+-- ─── rippling_sync_locks ────────────────────────────────────────────
+-- Serialize concurrent sync runs. GitHub Actions' `concurrency:` block
+-- prevents Action-vs-Action overlap, but does not stop a local
+-- backfill from colliding with a scheduled Action. Without the guard,
+-- two runs sharing the compare-then-insert path both read the same
+-- current hash, both see a difference, both insert - producing an
+-- audit trail entry for a change that never happened.
+--
+-- Pattern: at start, reap expired rows, try to INSERT a row keyed on
+-- 'rippling_sync'; on conflict, another run holds the lock - abort.
+-- On clean exit, DELETE the row. Session-scoped Postgres advisory
+-- locks would be simpler but do not survive PostgREST's connection
+-- pool (each RPC call gets a fresh connection).
+--
+-- TTL of 4 hours is well over the 90-minute workflow timeout and
+-- large enough to accommodate initial backfills. If the sync crashes
+-- without cleanup, the next run's reap-expired-first step recovers
+-- automatically after 4 hours; sooner recovery is a manual
+-- `DELETE FROM rippling_sync_locks WHERE name = 'rippling_sync';` in
+-- Studio.
+CREATE TABLE IF NOT EXISTS rippling_sync_locks (
+  name         TEXT PRIMARY KEY,
+  acquired_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ NOT NULL,
+  holder       TEXT        NOT NULL
+);
+
 -- ─── _latest views ──────────────────────────────────────────────────
 -- Resolve the current record per rippling_id. ORDER BY fetched_at
 -- DESC, id DESC picks the most recent observation; id DESC breaks
@@ -138,12 +206,15 @@ CREATE OR REPLACE VIEW rippling_raw_pay_segments_latest AS
   ORDER BY rippling_id, fetched_at DESC, id DESC;
 
 -- ─── Grants ─────────────────────────────────────────────────────────
-GRANT SELECT, INSERT ON rippling_raw_time_entries  TO service_role;
-GRANT SELECT, INSERT ON rippling_raw_pay_segments  TO service_role;
-GRANT USAGE           ON SEQUENCE rippling_raw_time_entries_id_seq TO service_role;
-GRANT USAGE           ON SEQUENCE rippling_raw_pay_segments_id_seq TO service_role;
-GRANT SELECT          ON rippling_raw_time_entries_latest TO service_role;
-GRANT SELECT          ON rippling_raw_pay_segments_latest TO service_role;
+GRANT SELECT, INSERT         ON rippling_raw_time_entries  TO service_role;
+GRANT SELECT, INSERT         ON rippling_raw_pay_segments  TO service_role;
+GRANT USAGE                  ON SEQUENCE rippling_raw_time_entries_id_seq TO service_role;
+GRANT USAGE                  ON SEQUENCE rippling_raw_pay_segments_id_seq TO service_role;
+GRANT SELECT                 ON rippling_raw_time_entries_latest TO service_role;
+GRANT SELECT                 ON rippling_raw_pay_segments_latest TO service_role;
+-- Lock table needs DELETE (release + reap expired) and INSERT (acquire).
+-- No UPDATE - each acquire is a new row, releases are DELETE.
+GRANT SELECT, INSERT, DELETE ON rippling_sync_locks TO service_role;
 
 -- ─── Post-flight ────────────────────────────────────────────────────
 DO $$
@@ -151,8 +222,9 @@ DECLARE
   te_sel BOOLEAN; te_ins BOOLEAN; te_upd BOOLEAN; te_del BOOLEAN;
   ps_sel BOOLEAN; ps_ins BOOLEAN; ps_upd BOOLEAN; ps_del BOOLEAN;
   te_lat_sel BOOLEAN; ps_lat_sel BOOLEAN;
+  lk_sel BOOLEAN; lk_ins BOOLEAN; lk_del BOOLEAN; lk_upd BOOLEAN;
 BEGIN
-  -- Structure: both tables and both views exist.
+  -- Structure: both tables, both views, lock table exist.
   IF to_regclass('public.rippling_raw_time_entries') IS NULL THEN
     RAISE EXCEPTION 'post-flight: rippling_raw_time_entries missing';
   END IF;
@@ -164,6 +236,9 @@ BEGIN
   END IF;
   IF to_regclass('public.rippling_raw_pay_segments_latest') IS NULL THEN
     RAISE EXCEPTION 'post-flight: rippling_raw_pay_segments_latest view missing';
+  END IF;
+  IF to_regclass('public.rippling_sync_locks') IS NULL THEN
+    RAISE EXCEPTION 'post-flight: rippling_sync_locks missing';
   END IF;
 
   -- Structure: all four indexes exist (compound latest + fetched_at-only
@@ -255,6 +330,17 @@ BEGIN
   IF te_del THEN RAISE EXCEPTION 'post-flight: service_role has DELETE on rippling_raw_time_entries (must be append-only)'; END IF;
   IF ps_upd THEN RAISE EXCEPTION 'post-flight: service_role has UPDATE on rippling_raw_pay_segments (must be append-only)'; END IF;
   IF ps_del THEN RAISE EXCEPTION 'post-flight: service_role has DELETE on rippling_raw_pay_segments (must be append-only)'; END IF;
+
+  -- Lock table grants: SELECT + INSERT + DELETE (release + reap
+  -- expired). UPDATE must NOT be granted - each acquire is a new row.
+  lk_sel := has_table_privilege('service_role', 'rippling_sync_locks', 'SELECT');
+  lk_ins := has_table_privilege('service_role', 'rippling_sync_locks', 'INSERT');
+  lk_del := has_table_privilege('service_role', 'rippling_sync_locks', 'DELETE');
+  lk_upd := has_table_privilege('service_role', 'rippling_sync_locks', 'UPDATE');
+  IF NOT lk_sel THEN RAISE EXCEPTION 'post-flight: service_role missing SELECT on rippling_sync_locks'; END IF;
+  IF NOT lk_ins THEN RAISE EXCEPTION 'post-flight: service_role missing INSERT on rippling_sync_locks'; END IF;
+  IF NOT lk_del THEN RAISE EXCEPTION 'post-flight: service_role missing DELETE on rippling_sync_locks'; END IF;
+  IF lk_upd     THEN RAISE EXCEPTION 'post-flight: service_role has UPDATE on rippling_sync_locks (must not - each acquire is a new row)'; END IF;
 
   RAISE NOTICE 'kpi-8a post-flight PASS - tables/views/indexes/positive grants present, negative-space grants absent';
 END $$;

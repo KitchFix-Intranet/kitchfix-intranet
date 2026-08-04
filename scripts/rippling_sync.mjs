@@ -3,18 +3,23 @@
 // KPI PR 8a: sync raw Rippling time_entries + pay_segments into Postgres.
 //
 // Design:
+//   - Serialized by a table-based lock (rippling_sync_locks). Prevents
+//     a local backfill from colliding with a scheduled Action; each
+//     would otherwise race the compare-then-insert path and produce
+//     audit rows for changes that never happened. GitHub Actions'
+//     `concurrency:` block handles Action-vs-Action; the lock handles
+//     the cross-environment case.
 //   - Two Rippling walks per invocation, sequential (time_entries then
 //     pay_segments). One script run = one exit code. A combined total
 //     would hide one walk silently failing while the other succeeded,
 //     so we report both explicitly.
 //   - Full cursor walk per object every time. Rippling's date/worker
-//     filters are silently ignored (discovery 2026-08-04); the content-
-//     hash unique constraint is what makes re-fetching cheap.
-//   - Per-page bulk upsert with onConflict: 'rippling_id,content_hash',
-//     ignoreDuplicates: true - unchanged records are dropped by
-//     Postgres, only new + changed records write.
-//   - Per-object summary line printed at end: pages, examined, inserted,
-//     skipped-unchanged, duration.
+//     filters are silently ignored (discovery 2026-08-04). Content-
+//     hash compare-then-insert makes re-fetching cheap.
+//   - Per-page: fetch, hash, batch-lookup <table>_latest for current
+//     hashes, INSERT only rows whose hash differs from current. No
+//     DB-side UNIQUE (see kpi-8a-rippling-raw.sql header for why).
+//   - Per-object summary: pages, examined, unchanged, inserted, duration.
 //
 // CLI:
 //   node --env-file=.env.local scripts/rippling_sync.mjs --source=nightly
@@ -26,7 +31,9 @@
 //   0  both walks completed
 //   1  configuration error (missing env, bad --source, etc.)
 //   2  at least one walk failed mid-flight
+//   3  another sync run is in flight (lock held)
 
+import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { fetchPage, extractRows, firstPageUrl, contentHash, BASE } from "../src/lib/rippling.js";
 
@@ -63,6 +70,83 @@ const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
 const startedAt = new Date();
 console.log(`rippling_sync source=${args.source} dryRun=${args.dryRun} started=${startedAt.toISOString()}`);
+
+// ─── Concurrency lock ────────────────────────────────────────────────
+//
+// Serialize concurrent runs across all environments (local backfill +
+// scheduled Action). Row in rippling_sync_locks with a 4-hour TTL;
+// on clean exit we DELETE our row, on crash the next run reaps it
+// after 4 hours. Manual recovery is a Studio DELETE. Dry-run still
+// takes the lock - a walking backfill preview should not overlap
+// with a real nightly write.
+
+const LOCK_NAME = "rippling_sync";
+const LOCK_TTL_MS = 4 * 60 * 60 * 1000;  // 4h; comfortably over 90-min workflow timeout.
+const HOLDER_ID = [
+  args.source,
+  `host=${os.hostname()}`,
+  `pid=${process.pid}`,
+  `started=${startedAt.toISOString()}`,
+  process.env.GITHUB_RUN_ID ? `gh_run=${process.env.GITHUB_RUN_ID}` : null,
+].filter(Boolean).join(" ");
+
+async function acquireLock() {
+  // Reap expired first so a crashed previous run releases automatically.
+  const { error: reapErr } = await supa
+    .from("rippling_sync_locks")
+    .delete()
+    .eq("name", LOCK_NAME)
+    .lt("expires_at", new Date().toISOString());
+  if (reapErr) {
+    console.error(`lock: reap-expired failed: ${reapErr.message}`);
+    process.exit(1);
+  }
+  // Try to acquire.
+  const expiresAt = new Date(Date.now() + LOCK_TTL_MS).toISOString();
+  const { error } = await supa
+    .from("rippling_sync_locks")
+    .insert({ name: LOCK_NAME, expires_at: expiresAt, holder: HOLDER_ID });
+  if (error) {
+    if (error.code === "23505") {
+      // PK conflict - someone holds it. Fetch and report.
+      const { data: current } = await supa
+        .from("rippling_sync_locks")
+        .select("holder, acquired_at, expires_at")
+        .eq("name", LOCK_NAME)
+        .maybeSingle();
+      console.error("rippling_sync: another run is in flight, refusing to start");
+      if (current) {
+        console.error(`  holder:      ${current.holder}`);
+        console.error(`  acquired_at: ${current.acquired_at}`);
+        console.error(`  expires_at:  ${current.expires_at}`);
+        console.error("");
+        console.error("If the holder crashed and never released, wait for TTL expiry or clear manually:");
+        console.error("  DELETE FROM rippling_sync_locks WHERE name = 'rippling_sync';");
+      }
+      process.exit(3);
+    }
+    console.error(`lock: acquire failed: ${error.message}`);
+    process.exit(1);
+  }
+  console.log(`rippling_sync: acquired lock holder="${HOLDER_ID}" expires_at=${expiresAt}`);
+}
+
+async function releaseLock() {
+  // Delete only OUR row - if another process reaped ours and took the
+  // lock, we must not delete theirs.
+  const { error } = await supa
+    .from("rippling_sync_locks")
+    .delete()
+    .eq("name", LOCK_NAME)
+    .eq("holder", HOLDER_ID);
+  if (error) {
+    console.error(`lock: release failed: ${error.message}`);
+  }
+}
+
+await acquireLock();
+process.on("SIGINT",  async () => { await releaseLock(); process.exit(130); });
+process.on("SIGTERM", async () => { await releaseLock(); process.exit(143); });
 
 // ─── Walk one endpoint ──────────────────────────────────────────────
 //
@@ -161,20 +245,28 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
 }
 
 // ─── Run both walks ──────────────────────────────────────────────────
+// Wrapped in try/finally so the lock releases on both success and
+// caught failure paths. SIGINT/SIGTERM handlers registered above
+// cover the killed-by-signal path.
 
-const teResult = await walkAndInsert({
-  endpoint:    "time-entries",
-  table:       "rippling_raw_time_entries",
-  latestView:  "rippling_raw_time_entries_latest",
-  kind:        "time_entries",
-});
+let teResult, psResult;
+try {
+  teResult = await walkAndInsert({
+    endpoint:    "time-entries",
+    table:       "rippling_raw_time_entries",
+    latestView:  "rippling_raw_time_entries_latest",
+    kind:        "time_entries",
+  });
 
-const psResult = await walkAndInsert({
-  endpoint:    "custom-objects/time_entry_computed_pay_segment/records",
-  table:       "rippling_raw_pay_segments",
-  latestView:  "rippling_raw_pay_segments_latest",
-  kind:        "pay_segments",
-});
+  psResult = await walkAndInsert({
+    endpoint:    "custom-objects/time_entry_computed_pay_segment/records",
+    table:       "rippling_raw_pay_segments",
+    latestView:  "rippling_raw_pay_segments_latest",
+    kind:        "pay_segments",
+  });
+} finally {
+  await releaseLock();
+}
 
 const finishedAt = new Date();
 const totalSec = ((finishedAt - startedAt) / 1000).toFixed(1);
