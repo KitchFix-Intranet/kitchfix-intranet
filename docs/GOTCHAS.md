@@ -124,6 +124,18 @@ This means re-running `--apply` never re-calls `archive_document` on an already-
 
 **Current risk: zero** - the diff logic prevents it. **Future risk:** if any future code path bypasses `computeDiff` and calls `archive_document` directly on an already-archived id, test the RPC's behavior first (call it once against a known-archived doc and inspect both the error path and the row state).
 
+### An applied migration is history, not a wish - edits to `CREATE TABLE IF NOT EXISTS` are invisible on re-run
+
+Once a migration has been applied to a database, editing its `CREATE TABLE IF NOT EXISTS` block **silently does nothing on re-run**. The IF NOT EXISTS guard sees the table already exists and skips the whole statement. The file on disk describes a schema that does not exist in the database.
+
+**Realised on 2026-08-04.** `kpi-1-spine.sql` was applied 08-04 with a regex CHECK on `kpi_line_activation.account_key`. A post-apply edit swapped the CHECK for a FK to `accounts(team_key)`. The file and the database disagreed permanently until Kevin caught it. Fix landed as `kpi-1b-activation-fk.sql` - a separate ALTER migration.
+
+**The rule:** once a migration has been applied, **any schema change is a separate ALTER migration** - never an edit to the original `CREATE`. `ALTER` statements are not idempotent by default and CANNOT be safely re-run against a table already in the target shape, so the new migration MUST guard each step (`DROP CONSTRAINT IF EXISTS`, dynamic `pg_constraint` lookup, `IF NOT EXISTS` on the ADD, etc.) so re-apply is a no-op.
+
+**Related trap:** `GRANT` statements have the same problem in reverse. A `GRANT` inside a `CREATE TABLE`-only migration DOES run every re-apply (grants are idempotent), so grants added to an existing migration file DO land. But the reverse (adding grants to an already-applied migration and expecting them to run) does not work if the surrounding CREATE is guarded by IF NOT EXISTS and the whole DO $$ block gets skipped. **When adding grants after apply, put them in the ALTER migration alongside the schema change.**
+
+**Detection:** the probe for a migration must query pg_constraint / pg_class / information_schema and assert the specific constraints and grants it expects, not just table existence. `kpi-1-spine.sql` post-flight only asserted table existence, so the missing FK went undetected until the follow-up probe run.
+
 ---
 
 ## Time & Dates
