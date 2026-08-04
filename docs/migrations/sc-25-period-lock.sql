@@ -89,10 +89,11 @@
 --   override already exists for. Blocking them at the admin surface
 --   would just move contract corrections into SQL, where they leave
 --   no reason field, no author, and no history. So the edits stay
---   allowed and become impossible to do accidentally: the panel
---   shows the closed periods + the revenue delta before the operator
---   confirms, and the changelog reason gets a server-composed prose
---   prefix naming what was touched. See:
+--   allowed and become impossible to do accidentally: the inline
+--   warning under the Backdate radio names the closed periods and
+--   the revenue delta before the operator picks Save, and the
+--   changelog reason gets a server-composed prose prefix naming
+--   what was touched. Facts, then the caveat. See:
 --     src/lib/scBackdateReport.js     - describeBackdateImpact +
 --                                       composeBackdateReason
 --     src/app/api/service-calendar/route.js
@@ -101,9 +102,22 @@
 --                                       sc-config-update + sc-admin-fee-set
 --     src/app/service-calendar/admin/PriceEditPanel.js
 --     src/app/service-calendar/admin/FeeEditPanel.js
---                                     - the two-phase Save (preview +
---                                       confirm) with the closed-period
---                                       modal
+--                                     - reactive inline warning body
+--                                       (preview fires on backdate-date
+--                                       change, not on Save-click)
+--
+--   Warning-copy shape (owner-approved on the bounce 2026-08-04):
+--     "This backdate reaches P4, P5, P6 and P7, which are closed.
+--      Recorded revenue changes by -$1,234.56 across 43 days.
+--      This system has no record of which days have been invoiced -
+--      verify against your billing before saving."
+--
+--   Upgrade path when sc_is_period_closed swaps from date-proxy to
+--   AP-has-pulled (the v2 body of the function): the first line
+--   becomes "P4 has been billed" instead of "P4 is closed", and the
+--   third line disappears because the system will then know. One
+--   copy edit in each panel body; the comment stays here so the next
+--   editor sees the copy is staged for a known upgrade.
 --
 --   The parallel path (backdate reporter) is deliberately separate
 --   from this file's assert-and-refuse helper - conflating them

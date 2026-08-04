@@ -865,61 +865,16 @@
 }
 .sc-admin-eff-warning--strong strong { color: var(--accent-text); }
 
-/* Admin PR 1 (2026-08-04): backdate-reaches-closed-period confirmation
-   modal. Rendered by BackdateClosedConfirm (PriceEditPanel) and
-   FeeBackdateClosedConfirm (FeeEditPanel). Overlay style borrows the
-   sc-admin-panel spacing so the modal reads as an escalation of the
-   existing panel, not a separate app surface. Amber palette matches
-   the eff-warning family so the "backdate is destructive" grammar
-   stays consistent from the inline warning to the confirmation step. */
-.sc-admin-backdate-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(24, 22, 20, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-3);
+/* Admin PR 1 bounce (2026-08-04): closed-period warning now renders
+   inside the existing .sc-admin-eff-warning box using three <p>
+   lines (facts, delta, caveat). Small bottom margin between them
+   keeps the "facts, then caveat" rhythm readable. No modal shipped -
+   the operator sees the periods + delta before Save, not on Save. */
+.sc-admin-eff-warning p {
+  margin: 0 0 var(--space-1) 0;
 }
-.sc-admin-backdate-modal-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  max-width: 520px;
-  width: 100%;
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.sc-admin-backdate-modal-title {
-  margin: 0;
-  font-size: var(--size-body);
-  font-weight: var(--wt-bold);
-  color: var(--accent-text);
-}
-.sc-admin-backdate-modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--size-body);
-  color: var(--text);
-  line-height: 1.5;
-}
-.sc-admin-backdate-modal-body p { margin: 0; }
-.sc-admin-backdate-modal-body code {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
-  font-size: 0.9em;
-  background: var(--surface-1);
-  padding: 0 4px;
-  border-radius: 3px;
-}
-.sc-admin-backdate-modal-note {
-  color: var(--text-muted);
-  font-size: var(--size-caption);
-  font-style: italic;
+.sc-admin-eff-warning p:last-child {
+  margin-bottom: 0;
 }
 
 /* Add link row. Inside a .sc-admin-group-footer (group card footer
