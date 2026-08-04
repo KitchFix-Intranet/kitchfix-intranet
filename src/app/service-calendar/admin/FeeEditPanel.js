@@ -339,7 +339,7 @@ function FeeBackdateWarningBody({ preview, backdateDate }) {
   return (
     <>
       <p><strong>Backdate warning.</strong> This backdate reaches {periodList}, {closedClause}.</p>
-      <p>Fees do not per-day-attribute through Service Calendar revenue, so no dollar delta applies. {affectedDayCount} {dayWord} of contract-revenue history are affected.</p>
+      <p>Revenue delta: <strong>unavailable</strong> - fee changes do not per-day-attribute through Service Calendar revenue. {affectedDayCount} {dayWord} of contract-revenue history will reflect the new fee on the next read.</p>
       <p>This system has no record of which days have been invoiced - verify against your billing before saving.</p>
     </>
   );

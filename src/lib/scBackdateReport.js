@@ -47,9 +47,9 @@ function isoToday() {
  * @param {number} [args.newPrice]          - required for type="price"
  * @returns {Promise<{
  *   closedPeriods: string[],          // ["4", "5"] bare-numeric per sc_day_metadata.period house convention (sc-21)
- *   affectedDayCount: number,         // days in interval with any projection or actual (0 when nothing to affect)
- *   revenueDeltaCents: number | null, // price only; null on fee, timeout, or error
- *   deltaSource: "full-preview" | "periods-only" | "unavailable"
+ *   affectedDayCount: number,         // closed-period days in [effectiveDate, ceiling]. Ceiling = day-before-next-existing-row for the write's target table, or today. Delta below runs on THIS same set of days (#620 bounce fix).
+ *   revenueDeltaCents: number | null, // price: cents summed over affectedDayCount sc_daily_revenue rows using view's own formula (count * newPrice - view.revenue). Fee: null (fees do not per-day-attribute). Also null on preview timeout / error.
+ *   deltaSource: "full-preview" | "periods-only"
  * }>}
  */
 export async function describeBackdateImpact(args) {
@@ -71,17 +71,56 @@ export async function describeBackdateImpact(args) {
     };
   }
 
-  // Phase 1 - closed-period enumeration. Always runs. Cheap: two indexed
-  // queries against sc_day_metadata and sc_is_period_closed.
-  const closedReport = await enumerateClosedPeriods(accountKey, effectiveDate, today);
-  if (closedReport.closedPeriods.length === 0 || type === "fee") {
-    // Fee: sc_daily_revenue does not include fee amounts (fee accounts
-    // carry price=0 services; contract-revenue lives in sc_fee_schedule
-    // and is not per-day-multiplied). No sc_daily_revenue delta to
-    // compute - the warning still names the closed periods and the day
-    // count, which is the honest signal for the fee case. If a future
-    // report needs a per-period fee-attribution figure, that is a
-    // separate design question (proration + payment cadence).
+  // #620 second bounce (2026-08-04): defect 2 was the day count and
+  // the revenue delta describing different sets of days. Fix: compute
+  // the ceiling ONCE, up front, then use [effectiveDate, ceiling] as
+  // the single span for the period list AND the day count AND the
+  // delta. Everything downstream shares one query surface.
+  //
+  // Ceiling = day-before-next-existing-row for the same catalog table
+  // the backdated row will insert into:
+  //   price -> sc_service_prices for (service_id, price_kind='projected')
+  //   fee   -> sc_fee_schedule for (account_key)
+  // Or today, whichever is earlier. On days AT or AFTER the ceiling,
+  // a later existing row already wins - the backdated write does not
+  // affect them, so listing them in the warning would misrepresent
+  // the change.
+  let ceiling;
+  try {
+    ceiling = await computeCeiling(type, accountKey, serviceId, effectiveDate, today);
+  } catch (err) {
+    console.warn(`[scBackdateReport] ceiling lookup failed; falling back to today: ${err?.message || err}`);
+    ceiling = today;
+  }
+  if (ceiling < effectiveDate) {
+    // Backdated date lies AFTER a later existing row - the write is
+    // dominated everywhere and touches nothing.
+    return {
+      closedPeriods: [],
+      affectedDayCount: 0,
+      revenueDeltaCents: 0,
+      deltaSource: "full-preview",
+    };
+  }
+
+  const closedReport = await enumerateClosedPeriods(accountKey, effectiveDate, ceiling);
+  if (closedReport.closedPeriods.length === 0) {
+    return {
+      closedPeriods: [],
+      affectedDayCount: 0,
+      revenueDeltaCents: null,
+      deltaSource: "periods-only",
+    };
+  }
+
+  if (type === "fee") {
+    // Fee: sc_daily_revenue does not attribute contract fees to days,
+    // so there is no per-day dollar delta. The warning explicitly
+    // reports this as unavailable (owner ruling on the #620 bounce -
+    // silence is worse than an explicit "no figure" line). The day
+    // count IS meaningful: it reports how many days of contract-
+    // revenue history the new fee will retroactively cover once
+    // sc_fee_schedule reads land on the next query.
     return {
       closedPeriods: closedReport.closedPeriods,
       affectedDayCount: closedReport.affectedDayCount,
@@ -90,15 +129,15 @@ export async function describeBackdateImpact(args) {
     };
   }
 
-  // Phase 2 - price delta via sc_daily_revenue. Best-effort; falls back
-  // to periods-only on timeout or query error per owner ruling. NEVER
+  // Price delta via sc_daily_revenue. Best-effort; falls back to
+  // periods-only on timeout or query error per owner ruling. NEVER
   // fails closed.
   if (!serviceId || newPrice == null || isNaN(Number(newPrice))) {
     throw new Error("describeBackdateImpact: type=\"price\" requires serviceId and newPrice");
   }
   try {
     const delta = await Promise.race([
-      computePriceDeltaFromView(accountKey, serviceId, effectiveDate, Number(newPrice), today),
+      computePriceDeltaFromView(accountKey, serviceId, effectiveDate, ceiling, Number(newPrice), closedReport.closedPeriodDates),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error("preview timeout")), PREVIEW_TIMEOUT_MS)
       ),
@@ -123,14 +162,63 @@ export async function describeBackdateImpact(args) {
   }
 }
 
-// ─── Phase 1 helper ─────────────────────────────────────────────────
+// ─── Ceiling computation (unified for price + fee) ──────────────────
+//
+// A backdated write inserts one row into the catalog table for its
+// type. That row's price/amount wins for days from its own
+// effective_date UP TO but NOT INCLUDING the next existing row's
+// effective_date for the same key. Ceiling = day-before-next-row, or
+// today if none.
+async function computeCeiling(type, accountKey, serviceId, effectiveDate, today) {
+  const supa = getServiceClient();
+  let query;
+  if (type === "price") {
+    if (!serviceId) throw new Error("computeCeiling: serviceId required for type='price'");
+    query = supa
+      .from("sc_service_prices")
+      .select("effective_date")
+      .eq("service_id", serviceId)
+      .eq("price_kind", "projected")
+      .gt("effective_date", effectiveDate)
+      .order("effective_date", { ascending: true })
+      .limit(1);
+  } else {
+    query = supa
+      .from("sc_fee_schedule")
+      .select("effective_date")
+      .eq("account_key", accountKey)
+      .gt("effective_date", effectiveDate)
+      .order("effective_date", { ascending: true })
+      .limit(1);
+  }
+  const { data: nextRows, error } = await query;
+  if (error) throw new Error(`ceiling lookup failed: ${error.message}`);
+  if (!nextRows || nextRows.length === 0) return today;
+  const next = nextRows[0].effective_date;
+  const nextDate = new Date(next + "T00:00:00Z");
+  nextDate.setUTCDate(nextDate.getUTCDate() - 1);
+  const prevDay = nextDate.toISOString().slice(0, 10);
+  return prevDay < today ? prevDay : today;
+}
+
+// ─── Closed-period enumeration ──────────────────────────────────────
+//
+// startDate + endDate define the span to inspect. Caller passes
+// [effectiveDate, ceiling] so the enumeration matches the delta's
+// domain exactly. Returns:
+//   closedPeriods       - period labels (bare-numeric), sorted
+//   closedPeriodDates   - the actual service_date strings that fall
+//                         in a closed period. Passed downstream so
+//                         computePriceDeltaFromView's aggregation
+//                         runs on the SAME set of days the panel is
+//                         about to display in its count.
+//   affectedDayCount    - closedPeriodDates.length
 async function enumerateClosedPeriods(accountKey, startDate, endDate) {
   const supa = getServiceClient();
 
   // Days in the interval that carry a period tag. Missing-period rows
   // (nulls) do not contribute to closedness - a period must exist to be
-  // closed. Also emits the day count so the panel can name the number
-  // of days that fall inside a closed period specifically.
+  // closed.
   const { data: metaRows, error: metaErr } = await supa
     .from("sc_day_metadata")
     .select("period, service_date")
@@ -142,7 +230,7 @@ async function enumerateClosedPeriods(accountKey, startDate, endDate) {
 
   const uniquePeriods = [...new Set((metaRows || []).map(r => String(r.period)))];
   if (uniquePeriods.length === 0) {
-    return { closedPeriods: [], affectedDayCount: 0 };
+    return { closedPeriods: [], closedPeriodDates: [], affectedDayCount: 0 };
   }
 
   // One RPC per unique period. Same pattern assertDaysUnlockedForWrite
@@ -161,12 +249,11 @@ async function enumerateClosedPeriods(accountKey, startDate, endDate) {
   }
   closedPeriods.sort((a, b) => Number(a) - Number(b));
 
-  // Affected day count = days in the interval whose period is closed.
-  // Filter the metaRows against the closed set.
   const closedSet = new Set(closedPeriods);
-  const affectedDayCount = (metaRows || []).filter(r => closedSet.has(String(r.period))).length;
-
-  return { closedPeriods, affectedDayCount };
+  const closedPeriodDates = (metaRows || [])
+    .filter(r => closedSet.has(String(r.period)))
+    .map(r => r.service_date);
+  return { closedPeriods, closedPeriodDates, affectedDayCount: closedPeriodDates.length };
 }
 
 // ─── Phase 2 helper - price delta from sc_daily_revenue ─────────────
@@ -202,43 +289,22 @@ async function enumerateClosedPeriods(accountKey, startDate, endDate) {
 // approach reads wrong, the follow-up is a `sc_backdate_preview()`
 // function - migration file only, no schema-shape change beyond
 // adding a callable.
-async function computePriceDeltaFromView(accountKey, serviceId, effectiveDate, newPrice, today) {
+async function computePriceDeltaFromView(accountKey, serviceId, effectiveDate, ceiling, newPrice, closedPeriodDates) {
   const supa = getServiceClient();
 
-  // Ceiling: the day BEFORE the next existing sc_service_prices row
-  // with effective_date > effectiveDate for this service, or today,
-  // whichever is earlier. On days at or after the ceiling, some later
-  // price row already wins, so the new (backdated) row does not
-  // affect them.
-  const { data: nextPriceRows, error: nextErr } = await supa
-    .from("sc_service_prices")
-    .select("effective_date")
-    .eq("service_id", serviceId)
-    .eq("price_kind", "projected")
-    .gt("effective_date", effectiveDate)
-    .order("effective_date", { ascending: true })
-    .limit(1);
-  if (nextErr) throw new Error(`sc_service_prices ceiling lookup failed: ${nextErr.message}`);
-  let ceiling = today;
-  if (nextPriceRows && nextPriceRows.length > 0) {
-    // Ceiling = day before the next existing row. The next row wins on
-    // its own effective_date onward; days STRICTLY before it are where
-    // the new backdated row wins.
-    const next = nextPriceRows[0].effective_date;
-    const nextDate = new Date(next + "T00:00:00Z");
-    nextDate.setUTCDate(nextDate.getUTCDate() - 1);
-    const prevDay = nextDate.toISOString().slice(0, 10);
-    if (prevDay < ceiling) ceiling = prevDay;
-  }
-  if (ceiling < effectiveDate) {
-    // Backdated effective date lies AFTER a later row - the backdate is
-    // dominated everywhere. No delta.
-    return 0;
-  }
+  // #620 second bounce: this function no longer computes the ceiling
+  // (see computeCeiling above) and no longer computes its own "affected
+  // days" count. Both are the caller's responsibility, so the day count
+  // in the warning and the sum here run over the SAME set of days.
+  //
+  // Query scope: sc_daily_revenue rows for (accountKey, serviceId) in
+  // [effectiveDate, ceiling], further filtered in-memory to only the
+  // service_dates that fall in a closed period (closedPeriodDates set
+  // from enumerateClosedPeriods above). This makes the delta cover
+  // exactly the days the panel is about to name in its count.
+  const closedDateSet = new Set(closedPeriodDates || []);
+  if (closedDateSet.size === 0) return 0;
 
-  // Pull per-day view rows for the affected interval on this service.
-  // Filter to days with either projected or actual data - days with
-  // neither cannot contribute to the delta.
   const { data: dayRows, error: dayErr } = await supa
     .from("sc_daily_revenue")
     .select(
@@ -252,6 +318,7 @@ async function computePriceDeltaFromView(accountKey, serviceId, effectiveDate, n
 
   let deltaCents = 0;
   for (const row of dayRows || []) {
+    if (!closedDateSet.has(row.service_date)) continue;
     if (row.is_non_revenue) continue;
     const projectedCount = Number(row.projected_count || 0);
     const actualCount = Number(row.actual_count || 0);
