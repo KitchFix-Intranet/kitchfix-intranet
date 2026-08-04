@@ -197,7 +197,14 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
     cache_creation_input_tokens: 0,
   };
 
-  // Cached system prompt + tool defs (Anthropic cache TTL for prompt caching).
+  // Cached system prompt + tool defs (Anthropic ephemeral prompt caching,
+  // ~5 min TTL). Two breakpoints total: one on the system prompt block, one
+  // on the LAST tool definition - this tells the API to cache system prompt
+  // + all tool definitions as a single prefix, reused across turns within
+  // the TTL window and across retries within the same turn (retries re-invoke
+  // messages.stream with identical system + tools, so the second call hits
+  // cache). Round 0d Part B (N11): verified active; usage.cache_read_input_
+  // tokens confirms cache hits on subsequent turns of the same session.
   const systemBlocks = [
     {
       type: "text",
@@ -409,22 +416,37 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
     const assistantContent = resp.content;
     messages.push({ role: "assistant", content: assistantContent });
 
-    const toolResults = [];
-    for (const block of assistantContent) {
-      if (block.type !== "tool_use") continue;
-      if (toolsUsed >= TOOL_BUDGET) {
-        // Refuse further tools for this turn - return an error block to the
-        // model so it can adapt and answer.
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify({ error: "tool budget exhausted" }),
-          is_error: true,
-        });
-        continue;
-      }
+    // Round 0d Part B (N3, 2026-08-04): execute all tool_use blocks in this
+    // turn CONCURRENTLY. When the model returns multiple tool_use blocks in
+    // one message, it has already decided to batch them - dependent chains
+    // arrive across separate turns (the output of one turn's tool is used
+    // in the NEXT turn's tool_use block). Tools within a single turn are
+    // therefore independent and safe to run in parallel.
+    //
+    // Ordering guarantees preserved:
+    //   - tool-start events emit synchronously in BLOCK ORDER before any
+    //     execution begins, so the client's toolTrail list appears in the
+    //     order the model requested.
+    //   - trajectory entries + toolResults append in BLOCK ORDER after all
+    //     promises resolve, so the trail reads coherently downstream.
+    //   - tool-end events emit as each promise resolves (natural async
+    //     ordering); the client-side matcher looks up by tool name, so a
+    //     faster tool finishing first still updates the correct slot.
+    const toolUseBlocks = assistantContent.filter((b) => b.type === "tool_use");
+    const toolStartTimes = toolUseBlocks.map((block) => {
       const t0 = Date.now();
       emit({ kind: "tool-start", tool: block.name, input: sanitizeInputForEmit(block.input) });
+      return t0;
+    });
+    // Reserve budget slots by block position so a later block that runs in
+    // parallel with an earlier one doesn't double-spend the budget.
+    const budgetSlots = toolUseBlocks.map((_, i) => toolsUsed + i);
+    const executions = toolUseBlocks.map(async (block, i) => {
+      const t0 = toolStartTimes[i];
+      if (budgetSlots[i] >= TOOL_BUDGET) {
+        emit({ kind: "tool-end", tool: block.name, ms: 0 });
+        return { block, result: { error: "tool budget exhausted" }, toolError: true, ms: 0, budgetSkip: true };
+      }
       let result;
       let toolError = false;
       try {
@@ -435,20 +457,34 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
       }
       const t1 = Date.now();
       emit({ kind: "tool-end", tool: block.name, ms: t1 - t0 });
+      return { block, result, toolError, ms: t1 - t0, budgetSkip: false };
+    });
+    const results = await Promise.all(executions);
+    const toolResults = [];
+    for (const r of results) {
+      if (r.budgetSkip) {
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: r.block.id,
+          content: JSON.stringify(r.result),
+          is_error: true,
+        });
+        continue;
+      }
       toolsUsed += 1;
       trajectory.push({
-        tool: block.name,
-        input: sanitizeInputForEmit(block.input),
-        summary: summarizeToolResult(block.name, result),
-        rawResult: result,
-        tool_error: toolError,
-        ms: t1 - t0,
+        tool: r.block.name,
+        input: sanitizeInputForEmit(r.block.input),
+        summary: summarizeToolResult(r.block.name, r.result),
+        rawResult: r.result,
+        tool_error: r.toolError,
+        ms: r.ms,
       });
       toolResults.push({
         type: "tool_result",
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
-        is_error: toolError,
+        tool_use_id: r.block.id,
+        content: JSON.stringify(r.result),
+        is_error: r.toolError,
       });
     }
     messages.push({ role: "user", content: toolResults });
