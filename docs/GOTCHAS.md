@@ -136,6 +136,36 @@ Once a migration has been applied to a database, editing its `CREATE TABLE IF NO
 
 **Detection:** the probe for a migration must query pg_constraint / pg_class / information_schema and assert the specific constraints and grants it expects, not just table existence. `kpi-1-spine.sql` post-flight only asserted table existence, so the missing FK went undetected until the follow-up probe run.
 
+### `pg_attribute.attname` is `name`, not `text` - cast before `@>`
+
+Postgres's `pg_attribute.attname` column has type `name` (the internal identifier type), not `text`. `array_agg(attname ORDER BY attnum)` therefore returns `name[]`, and there is no `@>` operator between `name[]` and a `text[]` literal like `ARRAY['a', 'b']`. Applying the SQL fails with a type-resolution error at DDL time, not a subtle wrong result at runtime.
+
+**Realised on 2026-08-04.** `kpi-8a-rippling-raw.sql` had four sites (two pre-flight, two post-flight) doing `array_agg(attname ORDER BY attnum) @> ARRAY['rippling_id', 'content_hash']`. Studio apply raised the type error; fix was `array_agg(attname::text ORDER BY attnum)` at each site. The fixed file is what actually ran; the repo now matches.
+
+**The rule:** when comparing arrays of catalog identifier columns (`attname`, `relname`, `nspname`, `conname`, etc.) against `text[]` literals or another `text[]`, cast to `text` inside the aggregate. Prefer `array_agg(col::text ORDER BY ...)` over relying on implicit conversion; there isn't one for the container types even when the elements would convert.
+
+### `UNIQUE (id, content_hash)` on an append-only audit trail breaks revert cycles
+
+The intent of a content-hashed audit trail is "detect changes vs the current record." A `UNIQUE (id, content_hash)` constraint with `INSERT ... ON CONFLICT DO NOTHING` almost expresses that - but it actually expresses "never seen this exact payload before." The two rules diverge the moment a record cycles back to a prior state.
+
+**Sequence:** record X inserted (hash A). Retro edit changes it to hash B, new row inserts. Revert changes it back to hash A. The third INSERT hits the UNIQUE on `(id, A)` from the first row and is silently dropped by `DO NOTHING`. The audit trail lies: the fetched_at of the reverted-to-A observation is never recorded. Worse, `_latest` ordered by fetched_at DESC returns row-2 (hash B, the mutation that got reverted) forever, because the observation that WOULD have promoted A back was dropped.
+
+Payroll reverts are routine: a mis-keyed punch gets fixed, then the fix gets un-fixed. Any external system with the same "hash-then-store" hygiene has the same trap.
+
+**Fix (PR 8a pattern):** drop the DB-side UNIQUE and dedupe in the app. Before inserting, look up the CURRENT latest hash for that id and compare. Insert only when the new hash differs from the current latest. Two payoffs beyond correctness: (a) the sync script's summary can distinguish genuinely-unchanged from a failed insert (which `ON CONFLICT DO NOTHING` collapses into one silent bucket), and (b) the intent-to-behavior mapping matches what the audit trail actually claims to be.
+
+Post-flight should also assert the UNIQUE is absent (negative-space check), so a well-intentioned future migration re-adding it fails loudly. See `docs/migrations/kpi-8a-rippling-raw.sql` post-flight for the pattern.
+
+### A new table needs an explicit grant - a migration that creates a table nothing can read is a silent no-op
+
+Postgres does not confer any permission on a newly created table beyond the owner. Without `GRANT SELECT` (and INSERT if the table is written from an app), every downstream query fails with `permission denied for table <name>`. A migration that CREATEs a table and forgets the grant looks green on apply (the DDL succeeded) but the table is invisible to `service_role` and every consumer.
+
+**Realised on 2026-08-04.** `kpi-1-spine.sql` created `kpi_lines` and `kpi_line_activation`, applied cleanly. The probe run immediately after reported `permission denied for table kpi_lines`. Fix landed as GRANTs in `kpi-1b-activation-fk.sql` alongside the FK swap.
+
+**The rule:** every `CREATE TABLE` in a migration is paired with `GRANT SELECT[, INSERT[, UPDATE[, DELETE]]] ON <table> TO service_role` in the same migration. Sequences need `GRANT USAGE ON SEQUENCE <table>_id_seq TO service_role`. Views need their own `GRANT SELECT`.
+
+**Negative-space post-flight.** For append-only tables, don't just assert the positive grants - assert the negative. `has_table_privilege('service_role', 'my_table', 'UPDATE')` must return FALSE. A permission you did not grant is exactly the kind of thing a future migration can quietly add; asserting its absence turns "the docs say append-only" into an executable contract. `kpi-8a-rippling-raw.sql` post-flight is the pattern.
+
 ---
 
 ## Time & Dates
@@ -506,6 +536,16 @@ git push --force-with-lease origin wrong-branch
 ```
 
 **First seen:** 2026-05-13, mid-Phase-1 push day. Cost: ~10 min of git gymnastics. The lesson is cheap; the bug is annoying.
+
+### Authored-but-uncommitted is not a state
+
+Six PR 8a files were written, tested-in-thought, reported as delivered in the session summary, and lost to a working-tree reset without ever reaching a branch. When the follow-on session opened, `git log --all` on any path matching the promised files returned zero commits and the only surviving artifact was a 10-line stash of a docs edit. Everything else - the migration, the sync script, the helper lib, the workflow - had to be rebuilt from the design notes.
+
+**Realised on 2026-08-04.** The interim between sessions did an implicit reset (branch switch, worktree flip, or IDE-driven checkout - the reflog only shows the outcome). Untracked files in `docs/migrations/`, `scripts/`, and `.github/workflows/` did not survive.
+
+**The rule:** any file worth reporting as done is worth committing to a branch immediately. Draft PR, WIP commit, `git stash push -m` - anything that produces a SHA. Commit incrementally: after each file, not at the end. A WIP commit is cheaper than a lost file. "It is in the working tree" survives nothing that touches HEAD.
+
+**Branch drift is a real failure mode.** During PR 8a's rebuild a parallel commit on `fix/sc-admin-price-lock` (Kevin working in another worktree) flipped this worktree's branch between the branch cut and the first commit; one PR-8a commit landed on the wrong branch before it was noticed. The ad-hoc guard `test "$(git branch --show-current)" = <expected> && git add ... && git commit ...` catches this when you remember to type it, but only then. A standing pre-commit hook was tried and reverted: any hook file lives in the working tree, so a checkout to a branch without the file (`main`, an unrelated feature branch) silently disables the guard - a hook that vanishes when you switch branches is not a guard. If a standing enforcement is wanted, it needs an install location outside the working tree; that is its own decision, not a piece of PR 8a.
 
 ---
 
