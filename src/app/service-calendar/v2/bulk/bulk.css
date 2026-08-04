@@ -121,6 +121,16 @@
   border-radius: var(--sc2-radius-container);
   overflow: hidden;
   max-width: 100%;
+  /* Polish wave item 1 bounce (2026-08-04): match the modal
+     ledger's column-gap so bulk-detail reads with the same
+     numeric-cluster breathing. Base .sc-day-ledger from
+     dayDetail.css:1181 sets space-3; without this override the
+     bulk-detail would keep space-3 while the modal now has
+     space-7. Owner's watch-for #2: bulk expanded reaches this
+     surface too. Note: bulk-detail's .sc-day-ledger--fee variant
+     is 2-col so only one gap is affected here, not three like the
+     modal. */
+  column-gap: var(--sc2-space-7);
 }
 .sc-bulk-review-detail .sc-day-ledger-head {
   padding: var(--sc2-space-1) var(--sc2-space-3);
@@ -133,6 +143,14 @@
 }
 .sc-bulk-review-detail .sc-day-row--ledger {
   padding: 6px var(--sc2-space-3);
+  /* Polish wave item 1 second bounce (2026-08-04): match wrapper's
+     column-gap so header + row cells sit on the same subgrid
+     tracks. Base .sc-day-row's `gap: var(--space-3)` shorthand
+     was leaving the row at 12px while wrapper is space-7. Bulk
+     header + row already share horizontal padding (space-3 both)
+     so gap is the only drift axis here - unlike the modal which
+     also needed a padding-scheme change. */
+  column-gap: var(--sc2-space-7);
   min-height: 32px;
   border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
   align-items: center;

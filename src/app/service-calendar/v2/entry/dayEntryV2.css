@@ -1139,16 +1139,23 @@
      720px ledger = 109px of unreachable width. */
   max-width: none;
   /* Owner feedback item 2 (2026-08-01): row horizontal breathing.
-     Was gap: 0 (rows read cramped) then space-3. Polish wave item 1
-     (2026-08-04) bumps to space-5 so the recovered width from the
-     max-width uncap flows into the gaps between the numeric
-     cluster columns. Owner's exact ask: "breathing room between
-     the rate and qty" and "between qty and amount". CSS grid uses
-     ONE column-gap value across all columns, so name-to-rate gets
-     the same bump - side effect the name column benefits from
-     (more air, no width change - name is minmax(0,1fr) so it
-     absorbs whatever is left). */
-  column-gap: var(--sc2-space-5);
+     Was gap: 0 (rows read cramped) then space-3.
+     Polish wave item 1 v1 (2026-08-04): bumped to space-5 with
+     the max-width uncap, expecting the recovered ~101px to flow
+     into the numeric-cluster gaps.
+     Polish wave item 1 BOUNCE (2026-08-04, same day): owner
+     measured that space-5 only redistributed ~24 of the recovered
+     101px into gaps (18px declared - 12px prior = +6px × 3 gaps).
+     The other ~77px went to the flexible name column, which was
+     already the widest. Bumped to space-7 (24-32px per viewport)
+     to force more of the recovered width into the gaps. Owner's
+     original amendment: "breathing room between the rate and qty"
+     and "between qty and amount". CSS grid uses ONE column-gap
+     across all columns so name-to-rate widens too; the 1fr name
+     column shrinks by exactly what the three gaps gained. Longest
+     catalog name ("Extra Protein - Chicken/Pork") still fits on
+     one line at 1024 - measured via fixture, numbers in PR body. */
+  column-gap: var(--sc2-space-7);
 }
 .scv2 .sc-v2-entry-list .sc-day-ledger-head {
   /* Owner feedback item 2 (2026-08-01): header row + border reach
@@ -1256,8 +1263,37 @@
     min-height: 36px;
     padding: 4px var(--sc2-space-2);
   }
+  /* Polish wave item 1 SECOND bounce (2026-08-04): owner's live
+     measurement showed 6-14px drift between header and row cells
+     across all four columns. Two root causes, both fixed here:
+       (a) Base .sc-day-row at dayDetail.css:244 has
+           `gap: var(--space-3)` (12px). That shorthand sets
+           column-gap on the row (subgrid child). Header inherits
+           wrapper's column-gap (--sc2-space-7). Different values
+           = drifted subgrid tracks. Set row column-gap explicit
+           to match wrapper.
+       (b) Row had `padding: 6px var(--sc2-space-4)` at this
+           desktop-only rule. Horizontal padding insets the
+           subgrid tracks INSIDE the row, so row cells sat right
+           of header cells (header has padding 0 + per-child
+           padding on first/last only). Match the header pattern:
+           row horizontal padding 0, per-child padding on first
+           and last for outer edges.
+     Scoped to this desktop media query (≥1024) so mobile keeps
+     the base .sc-day-row padding + its 2x2 grid rewrite from
+     dayDetail.css:1275 - no risk to the mobile shape. Owner's
+     rule: "one gap, applied to both. Find every element in that
+     grid family with its own column-gap and bring them into
+     agreement." Applied to both wrapper and row. */
   .scv2 .sc-v2-entry-list .sc-day-row--ledger {
-    padding: 6px var(--sc2-space-4);
+    padding: 6px 0;
+    column-gap: var(--sc2-space-7);
+  }
+  .scv2 .sc-v2-entry-list .sc-day-row--ledger > :first-child {
+    padding-inline-start: var(--sc2-space-4);
+  }
+  .scv2 .sc-v2-entry-list .sc-day-row--ledger > :last-child {
+    padding-inline-end: var(--sc2-space-4);
   }
 }
 .scv2 .sc-v2-entry-list .sc-day-input--ghost {
