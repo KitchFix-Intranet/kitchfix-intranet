@@ -48,6 +48,26 @@ Motivating case: M1's post-line-8-amendment run 2 fabrication - `spend_summary` 
 
 **`normalizeNumeric` round-trip fix (added 2026-08-04, follow-up).** Root cause of the M1 drop: the checker false-flagged correctly-grounded numbers. Answer had `"$1,269,807.30"` which stripped to `"1269807.30"`; payload had the number as a JS `1269807.3` which stringified to `"1269807.3"`. String compare after decorator-strip left them unequal because of the trailing zero. Fix: parse-and-back via `Number()` so both sides normalize to `"1269807.3"`. Retro-applies to the harness Tier 1 grader (shared module) - identical containment behaviour runtime and test-time.
 
+**Phone-format exemption (added 2026-08-04, round 0b Part 2).** A payload phone stored as bare digits (`"7042995170"`) checked against an answer that presents it hyphenated (`"704-299-5170"`) previously flagged three separate fabrications - the vanilla number regex broke the answer into `704`, `299`, `5170` tokens and none matched the payload. Live case: "call Bill at 704-299-5170" tripped the numeric-receipt retry and destroyed the answer with a three-sentence apology about a phone number's formatting. Fix in `receiptCheck.js`: `maskGroundedPhones(text, payloadNums)` scans the answer for phone-shaped clusters (`\d{3}[-.\s]\d{3}[-.\s]\d{4}` and `(\d{3}) \d{3}-\d{4}`), normalizes each to digits-only, and length-preservingly masks the ones that match a payload number. Fabricated phones stay unmasked so their digit-groups still flag - the receipt check IS the point. Runs BEFORE the vanilla `NUMBER_RE` extraction inside `checkReceipts`. Unit test fixture in `receiptCheck.test.js` covers the Bill Hofmann case verbatim plus fabricated-phone still-flags plus each punctuation variant.
+
+## L12 final self-check pass (shipped 2026-08-04, round 0b Part 4)
+
+A mechanical last pass before an answer ships. No additional model call. Lives in `src/lib/sousai/selfCheck.js`, called from `agent.js` after the runtime retries settle and after `redactMissingFigures` runs, before the return.
+
+**Strip families:**
+1. **Agreement openers** (from the retry-integrity spec, Part 1.2): `you're right`, `you are right`, `good catch`, `great question`, `apologies`, `sorry` - case-insensitive, first-sentence only. Prompted by the live 2026-08-04 retry-leakage case where the model was shipping "You're right. The tool returned $31,697.52 for Fresh Point ..." on a question that never mentioned Fresh Point.
+2. **Self-narration openers**: `let me pull`, `let me check`, `let me look`.
+3. **Internal-identifier leaks**: reuses the shared no-plumbing lists in `src/lib/sousai/internalIdentifiers.js` (moved out of the harness so runtime and test-time share one source of truth). Body hits get stripped mechanically. Source-line hits (tool names only - the ALWAYS list is never sanctioned) get REPLACED with the mapped human label (`SC tools` / `spend tools` / `leadership directory`) so the citation surface stays intact rather than losing a token.
+4. **Clock times in prose**: `\d{1,2}:\d{2}(?::\d{2})?(?: am|pm)? UTC?` shape. Freshness is `PG live` plus a date only per sanctioned line 4.
+
+**Multi-part completeness check (L7, Part 5).** Detects multi-part questions via `and <wh>` conjunction OR ≥2 question marks OR two-clause splits with wh-anchors. For each detected sub-question runs term-overlap (content words from the sub-question appear in the answer) plus a `who`-specific augment (role markers `RDO`/`EC`/`chef` etc., contact verbs `call`/`contact`/`reach`, capitalized proper-noun shapes). Any sub-question with no evidence surfaces as `unaddressedParts`; the agent loop adds an `incomplete_multipart: [<parts>]` flag and downgrades grounded → partial. New reason-chip string `Part of your question could not be answered.` in `SousSurface.js` `partialReason()` mapping.
+
+**Fence (Kevin's spec):** the self-check may ONLY remove or flag. Must NEVER rewrite content. Must NEVER strip inside quoted document text - blockquote lines (leading `>`) and inline `"..."` / `'...'` spans are position-masked by `isInsideQuoted()` before any strip touches them.
+
+**Per-family strip counters** bubble into a `self-check-strip` trajectory event so the digest can count firings across production traffic (Tier 3).
+
+**Grader-visible via `incomplete_multipart` flag** on the done envelope. Harness case `case_multipart_completeness` asserts "which accounts are behind on February entry, and who should I contact about each?" either addresses both parts in the body OR surfaces with the flag; failure mode is a grounded answer that silently drops one part.
+
 ## Tier 4 - the grader audit (standing practice, quarterly, ~30 min of Kevin)
 Pull 20 random production answers; Kevin hand-labels true status blind; compare to the grader's labels; investigate every disagreement. The referee gets a referee - the next 77.8%-class bug becomes a scheduled discovery instead of an accident. First run: one quarter after the calibration round merges. Kevin calendars it.
 

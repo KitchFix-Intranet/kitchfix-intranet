@@ -88,6 +88,116 @@ function maskExempt(text) {
   return redactQuoted(redactOrdinals(redactDates(text)));
 }
 
+// ── Phone / contact-shape normalization (round 0b Part 2, 2026-08-04) ──────
+// A payload often carries a phone as a bare digit string ("7042995170"),
+// while the answer presents it hyphenated ("704-299-5170") or dotted
+// ("704.299.5170"). Under the vanilla NUMBER_RE the presented form breaks
+// into three separate tokens (704, 299, 5170) none of which appear in the
+// payload as-is, so the receipt check flags all three as fabrications.
+// Live case: "call Bill at 704-299-5170" flagged three misses, tripped the
+// numeric-receipt retry, destroyed the answer with a three-sentence apology
+// about a phone number's formatting.
+//
+// Fix: before the answer scan runs, find phone-shaped clusters, normalize
+// each to digits-only, and mask ONLY those clusters whose digits-only form
+// matches a payload number. A phone with no payload match stays unmasked -
+// the receipt check IS the whole point; a fabricated phone still flags.
+// Length-preserving so downstream position math (redactMissingFigures) stays
+// aligned.
+const PHONE_RE = /\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b|\(\d{3}\)\s?\d{3}[-.\s]?\d{4}/g;
+
+export function maskGroundedPhones(text, payloadNums) {
+  if (!text) return text;
+  const nums = payloadNums instanceof Set ? payloadNums : new Set(payloadNums || []);
+  return String(text).replace(PHONE_RE, (match) => {
+    const digits = match.replace(/\D/g, "");
+    if (!digits) return match;
+    const norm = normalizeNumeric(digits);
+    if (nums.has(norm) || nums.has(digits)) {
+      return " ".repeat(match.length);
+    }
+    return match;
+  });
+}
+
+// ── Line-8 calculation exception (round 0b Part 3 follow-up, 2026-08-04) ───
+// The amended sanctioned line 8 permits explicitly-asked calculations
+// (share, %, difference, total) provided the answer shows the inputs
+// and labels the result as calculated. Without a corresponding carve-out
+// in the receipt check, the runtime numeric backstop flagged the
+// calculated OUTPUT as unverified and the token-level redactor replaced
+// it with [unverified] - the model followed line 8 exactly and got
+// punished for it.
+//
+// Strategy: find each "calculated" / "computed" / "derived" marker, look
+// in a 500-char window (200 before, 300 after) for a division shape
+// `A [÷/] B` (tolerant of inline parenthetical labels between the
+// number and the operator). If both A and B trace to the payload, mask
+// EVERY percent-numeric token in the window - the model may have
+// written the result inline, on the next line, or after an `=` sign,
+// and the format varies run-to-run. Fabricated inputs never qualify -
+// the mask requires both sides grounded, so a made-up calculation
+// still fails the receipt check.
+const CALC_MARKER_RE = /\b(?:calculated|computed|derived)\b/gi;
+// Division shape tolerant of a parenthetical label between the operand
+// and the operator, e.g. "6,183 (CIN - AZ actual) ÷ 30,477 (portfolio)".
+const CALC_DIV_RE = /(\d[\d,]*(?:\.\d+)?)\s*(?:\([^)]{0,80}\))?\s*[÷/]\s*(?:\([^)]{0,80}\))?\s*(\d[\d,]*(?:\.\d+)?)/g;
+const CALC_PCT_RE = /\d[\d,]*(?:\.\d+)?\s?%/g;
+
+export function maskCalculatedShares(text, payloadNums) {
+  if (!text) return text;
+  const nums = payloadNums instanceof Set ? payloadNums : new Set(payloadNums || []);
+  const groundedNum = (raw) => {
+    const norm = normalizeNumeric(raw);
+    const bare = norm.replace(/,/g, "");
+    if (nums.has(norm) || nums.has(bare)) return true;
+    for (const p of nums) {
+      if (p === bare || p.startsWith(bare + ".")) return true;
+    }
+    return false;
+  };
+  const src = String(text);
+  const spans = [];   // [start, end) - percent-token digit ranges to mask
+  for (const marker of src.matchAll(CALC_MARKER_RE)) {
+    const idx = marker.index;
+    const winStart = Math.max(0, idx - 200);
+    const winEnd = Math.min(src.length, idx + 300);
+    const window = src.slice(winStart, winEnd);
+    // Any division-shape in the window whose two operands are both
+    // payload-grounded qualifies the whole window for output masking.
+    let anyGrounded = false;
+    for (const dm of window.matchAll(CALC_DIV_RE)) {
+      if (groundedNum(dm[1]) && groundedNum(dm[2])) {
+        anyGrounded = true;
+        break;
+      }
+    }
+    if (!anyGrounded) continue;
+    for (const pm of window.matchAll(CALC_PCT_RE)) {
+      const pctFull = pm[0];
+      const numMatch = pctFull.match(/^\d[\d,]*(?:\.\d+)?/);
+      if (!numMatch) continue;
+      const startAbs = winStart + pm.index;
+      const endAbs = startAbs + numMatch[0].length;
+      spans.push([startAbs, endAbs]);
+    }
+  }
+  if (spans.length === 0) return src;
+  // Dedupe + apply reverse so earlier indices stay valid.
+  const uniq = [];
+  const seen = new Set();
+  for (const [s, e] of spans) {
+    const key = `${s}-${e}`;
+    if (!seen.has(key)) { seen.add(key); uniq.push([s, e]); }
+  }
+  uniq.sort((a, b) => b[0] - a[0]);
+  let out = src;
+  for (const [s, e] of uniq) {
+    out = out.slice(0, s) + " ".repeat(e - s) + out.slice(e);
+  }
+  return out;
+}
+
 // Extract answer numbers with exemptions applied.
 export function extractAnswerNumbers(answerText) {
   const scanned = maskExempt(answerText);
@@ -173,11 +283,19 @@ export function extractPayloadNumbers(trajectory) {
 // NOT trace to the payload AND were not supplied by the user in the
 // question. Grounded = numbers that traced (or were user-supplied).
 export function checkReceipts(answerText, trajectory, { question = "" } = {}) {
-  const answerNums = extractAnswerNumbers(answerText);
-  if (answerNums.length === 0) {
-    return { pass: true, missing: [], grounded: [], answerNumbers: [], payloadCount: 0 };
-  }
   const payloadNums = extractPayloadNumbers(trajectory);
+  // Phone-format exemption (round 0b Part 2, 2026-08-04): before extracting
+  // answer numbers, mask any phone-shaped cluster whose digits-only form
+  // matches a payload number. Non-matching phones (fabrications) stay
+  // unmasked so their digit-groups still flag.
+  const answerAfterPhones = maskGroundedPhones(answerText, payloadNums);
+  // Line-8 calculation exemption (round 0b Part 3 follow-up, 2026-08-04):
+  // mask a labeled-calculation OUTPUT when both inputs trace to payload.
+  const answerForScan = maskCalculatedShares(answerAfterPhones, payloadNums);
+  const answerNums = extractAnswerNumbers(answerForScan);
+  if (answerNums.length === 0) {
+    return { pass: true, missing: [], grounded: [], answerNumbers: [], payloadCount: payloadNums.size };
+  }
   const payloadArr = [...payloadNums];
   const questionNums = new Set(extractRawNumbers(question));
   const missing = [];
