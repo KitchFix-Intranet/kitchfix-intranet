@@ -51,6 +51,7 @@ import MobileBooksBar from "./v2/MobileBooksBar";
 import BulkEntry from "./v2/bulk/BulkEntry";
 import BulkReview from "./v2/bulk/BulkReview";
 import "./v2/bulk/bulk.css";
+import { isFeeNoDollar } from "./v2/vocab";
 // Phase 3-B (2026-07-28; flight retired 2026-08-01): Handoff coordinator.
 // Owns sessionMap, month-complete card state, and the finalize timer
 // that closes/advances the modal on save. No flight layer after
@@ -2853,6 +2854,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       data-density="compact"
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
+      /* TEMPORARY PROBE 2026-08-04 (remove after diagnosis).
+         Bulk door on STL - FL disappeared after owner's restart.
+         Surface the runtime account shape so DevTools can compare
+         against what isFeeNoDollar() reads. Marker token unique per
+         session so owner can grep to confirm compilation reached
+         this render. */
+      data-probe-token="BULK-DOOR-PROBE-2026-08-04-K7M2"
+      data-probe-account-billing-model={data?.account?.billingModel ?? "unset"}
+      data-probe-account-hhs={data?.account ? String(!!data.account.hasHomestandSchedule) : "unset"}
+      data-probe-fee-no-dollar-gate={data?.account ? String(isFeeNoDollar(data.account)) : "unset"}
+      data-probe-account-keys={data?.account ? Object.keys(data.account).sort().join(",") : "unset"}
     >
       {/* M-2 (2026-07-29) scope-ternary audit:
           These four sites all had shape `scope === "month" ? X : Y`
@@ -3487,6 +3499,14 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 );
               } : undefined}
               onTargetDay={targetDay}
+              /* Bulk entry on fee accounts (owner Ruling 4, 2026-08-04).
+                 Same bulk mechanism as per-meal via DrillRail - single
+                 setBulkMode wire, single BulkEntry surface downstream.
+                 Scoped to isFeeNoDollar so AAA (OpsRailBase MLB variant)
+                 does not silently inherit bulk it never asked for. */
+              onBulkModeToggle={isFeeNoDollar(data?.account)
+                ? (next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }
+                : undefined}
             />
           ) : (
             <DrillRail
@@ -3714,6 +3734,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 );
               } : undefined}
               onTargetDay={targetDay}
+              /* Bulk entry on fee accounts (owner Ruling 4, 2026-08-04).
+                 Month-drill mirror of the period-drill mount above. */
+              onBulkModeToggle={isFeeNoDollar(data?.account)
+                ? (next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }
+                : undefined}
             />
           ) : (
             <DrillRail
@@ -4083,6 +4108,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             accountSegment={data?.account?.category || ""}
             syntheticDay={syntheticDay}
             getNotScheduled={bulkGetNotScheduled}
+            feeNoDollar={isFeeNoDollar(data?.account)}
           />
         );
       })()}
