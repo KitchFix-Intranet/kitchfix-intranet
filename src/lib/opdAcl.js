@@ -96,11 +96,36 @@ export function canViewSousReports(actualEmail) {
 //
 // Deps injection matches gate.js's pattern so acceptance harnesses can wire
 // stubs without booting the module graph. Default deps use the real helpers.
+//
+// ── Solo-preview lock (Kevin ruling, 2026-08-04, roadmap round 0a) ───────────
+// Sous is restricted to Kevin's account only until the SLT demo. This is a
+// preview gate, NOT a permission-model change - the tier machinery below
+// (viewerTier, isCorporateEmail, allowedAccessLevels, canSeeDoc, SLT_EMAILS,
+// RESTRICTED_EMAILS) stays exactly as it is. Document-level access-tier
+// enforcement inside Sous is unchanged; this only controls who reaches the
+// door.
+//
+// Behavior: when SOUS_PREVIEW_ALLOWLIST is non-empty, it is the ONLY gate
+// consulted by canUseSous - tier and corporate-email checks are bypassed.
+// When it is empty, canUseSous reverts to the pre-lock SLT-or-corporate
+// logic byte-for-byte (see the truth table in opdAcl.test.js).
+//
+// UNLOCK: empty the Set. That is the one-line revert.
+//
+// Emails MUST be lowercased before insertion; the compare below lowercases
+// the input for defence in depth.
+export const SOUS_PREVIEW_ALLOWLIST = new Set([
+  'k.fietek@kitchfix.com',   // Kevin Fietek - Director of Operations (owns PLAYBOOK_OWNER above)
+]);
+
 export async function canUseSous(email, deps = {
   viewerTier: canUseSous_defaultViewerTier,
   isCorporateEmail: canUseSous_defaultIsCorporateEmail,
 }) {
   if (!email) return false;
+  if (SOUS_PREVIEW_ALLOWLIST.size > 0) {
+    return SOUS_PREVIEW_ALLOWLIST.has((email || '').toLowerCase().trim());
+  }
   if (deps.viewerTier(email) === 'slt') return true;
   return await deps.isCorporateEmail(email);
 }
