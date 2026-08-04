@@ -1457,9 +1457,13 @@ function grade_case_contract_consistency(result) {
   const answer = result.answer || "";
   const sources = Array.isArray(result.sources) ? result.sources : [];
   const cites = sources.map((s) => typeof s === "string" ? s : s?.docId).filter(Boolean);
-  const hasRefCite = cites.some((c) => /^REF-1(2[1-9]|3[0-2])$/.test(c));
+  // REF-121..REF-132 are the Contract Reference docs; REF-141 is the
+  // Billing Model Quick Reference the prompt specifically points at for
+  // fee questions. Both are legitimate ownership targets at operator
+  // scope. Accept any operator-visible REF-1xx.
+  const hasRefCite = cites.some((c) => /^REF-1\d{2}$/.test(c));
   const noRecCite = !cites.some((c) => /^REC-/.test(c));
-  const hasRefInBody = /REF-1(2[1-9]|3[0-2])/.test(answer);
+  const hasRefInBody = /REF-1\d{2}/.test(answer);
   const declinedWithOwner = result.status === "declined" && /(RDO|accounting|contract reference|REF-|reach|contact)/i.test(answer);
   const ok = noRecCite && (hasRefCite || hasRefInBody || declinedWithOwner);
   notes.push(`REF-class cite in sources: ${hasRefCite} (cites=${cites.join(", ") || "(none)"})`);
