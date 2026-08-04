@@ -950,15 +950,34 @@
    .sc-admin-flag-label, .sc-admin-confirm-row) gets a 44px
    min-height so the hit target is the whole label region. */
 @media (max-width: 1023.98px) {
+  /* Bounce fix (2026-08-04): two controls the first pass missed.
+     .sc-admin-back is the "All accounts" back-link inside per-account
+     editors - it has interactive semantics (link with hover, focus-
+     visible, keyboard-reachable) but was excluded from the min-height
+     block. Owner measured 33px at 500px viewport.
+     .sc-admin-svc-row is the click-target on each service row -
+     role="button", tabIndex={0}, keyboard-reachable, tap-eligible.
+     Owner measured 43px, one pixel short from padding + inherited
+     line-height alone. Explicit min-height rather than more padding:
+     padding would shift the row rhythm the pre-hardening pass tuned. */
   .sc-admin-svc-edit,
   .sc-admin-add-link,
   .sc-admin-btn,
+  .sc-admin-back,
   .sc-admin-eff-date,
   .sc-admin-text-input,
-  .sc-admin-price-input-wrap {
+  .sc-admin-price-input-wrap,
+  .sc-admin-svc-row {
     min-height: 44px;
     box-sizing: border-box;
   }
+  /* sc-admin-back and sc-admin-svc-row both center their contents
+     vertically when the min-height dominates. sc-admin-back is
+     already display: inline-flex with align-items: center. sc-admin-
+     svc-row uses align-items: baseline for the name/price baseline
+     match at rest; on the min-height floor the baseline anchor still
+     holds at the natural content height, and the extra space
+     distributes below - visually preserves the row rhythm. */
   /* Textarea keeps its multi-line intent but its minimum starts at
      44px (single-row equivalent) so an empty textarea still shows a
      hit target the operator can tap. */
