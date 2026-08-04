@@ -59,6 +59,59 @@
 --   obvious - stated here so it does not get rediscovered as a
 --   surprise.
 --
+-- SCOPE OF THE LOCK - what it protects and what it does NOT:
+--
+-- What sc_is_day_locked + assertDaysUnlockedForWrite protect:
+--   Writes to sc_daily_actuals. Every path that upserts an actual
+--   count into a closed period gets a 403 with code=PERIOD_LOCKED.
+--   Wired at:
+--     sc-submit-day       - route.js single-day save
+--     sc-bulk-submit      - route.js bulk save
+--     sc-submit-closeout  - route.js MLB homestand close-out
+--     sc-reset-day        - route.js delete of a day's actuals
+--
+-- What the lock does NOT protect (2026-08-04, admin PR 1):
+--   Admin catalog writes bypass this lock entirely. sc-config-update
+--   (price) and sc-admin-fee-set (fee) never call
+--   assertDaysUnlockedForWrite. A backdated price or fee change with
+--   allowBackdate=true inserts a new sc_service_prices or
+--   sc_fee_schedule row keyed by (id, effective_date). Because
+--   sc_daily_revenue resolves its per-day price via a LATERAL that
+--   picks the newest row with effective_date <= service_date at
+--   query time, a backdated write silently rewrites what
+--   sc_daily_revenue reports for every day from the new
+--   effective_date forward - closed periods included, on the next
+--   read.
+--
+--   Owner ruling 2026-08-04 (admin PR 1): warn and record, do not
+--   block. The population that can reach admin (SC_ADMIN_EMAILS,
+--   eight callers) is the same population the day-lock's SLT
+--   override already exists for. Blocking them at the admin surface
+--   would just move contract corrections into SQL, where they leave
+--   no reason field, no author, and no history. So the edits stay
+--   allowed and become impossible to do accidentally: the panel
+--   shows the closed periods + the revenue delta before the operator
+--   confirms, and the changelog reason gets a server-composed prose
+--   prefix naming what was touched. See:
+--     src/lib/scBackdateReport.js     - describeBackdateImpact +
+--                                       composeBackdateReason
+--     src/app/api/service-calendar/route.js
+--                                     - sc-admin-backdate-preview
+--                                     - prefix wired inside
+--                                       sc-config-update + sc-admin-fee-set
+--     src/app/service-calendar/admin/PriceEditPanel.js
+--     src/app/service-calendar/admin/FeeEditPanel.js
+--                                     - the two-phase Save (preview +
+--                                       confirm) with the closed-period
+--                                       modal
+--
+--   The parallel path (backdate reporter) is deliberately separate
+--   from this file's assert-and-refuse helper - conflating them
+--   would weaken the day lock. If a future policy wants price /
+--   fee backdates BLOCKED on closed periods (not just recorded),
+--   that is a new ruling; do not silently escalate the reporter
+--   into a refuser.
+--
 -- Re-apply safety: all statements are idempotent.
 --   - ADD COLUMN IF NOT EXISTS
 --   - DO $$ block that inspects pg_constraint before adding the CHECK

@@ -92,8 +92,40 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
   const canSave = !saving && amountChanged && newAmountRounded >= 0 && effReady && reasonReady;
 
+  // Admin PR 1 (2026-08-04, owner ruling): warn on backdate that
+  // reaches a closed period. Same two-phase flow as PriceEditPanel.
+  // Fee has NO revenue-delta number - sc_daily_revenue does not
+  // include fee amounts, and per-period fee attribution requires
+  // proration + payment-cadence design work distinct from this PR.
+  // The warning still names the closed periods and the day count,
+  // which is the honest signal for the fee case.
+  const [backdateImpact, setBackdateImpact] = useState(null);
   const handleSave = async () => {
     if (!canSave) return;
+    if (isBackdate && !backdateImpact) {
+      setSaving(true);
+      try {
+        const previewRes = await fetch("/api/service-calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sc-admin-backdate-preview",
+            type: "fee",
+            accountKey,
+            effectiveDate: effDate,
+          }),
+        });
+        const preview = await previewRes.json();
+        if (preview.success && Array.isArray(preview.closedPeriods) && preview.closedPeriods.length > 0) {
+          setBackdateImpact(preview);
+          setSaving(false);
+          return;
+        }
+      } catch {
+        // Owner ruling: do not fail closed. On preview network error,
+        // proceed to write.
+      }
+    }
     setSaving(true);
     try {
       const payload = {
@@ -116,11 +148,18 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
       } else {
         showToast(result.error || "Save failed", "error");
         setSaving(false);
+        setBackdateImpact(null);
       }
     } catch {
       showToast("Network error", "error");
       setSaving(false);
+      setBackdateImpact(null);
     }
+  };
+
+  const cancelBackdateConfirm = () => {
+    setBackdateImpact(null);
+    setSaving(false);
   };
 
   return (
@@ -250,6 +289,55 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
         <button type="button" className="sc-admin-btn sc-admin-btn--primary" onClick={handleSave} disabled={!canSave}>
           {saving ? "Saving..." : "Save"}
         </button>
+      </div>
+
+      {backdateImpact && (
+        <FeeBackdateClosedConfirm
+          impact={backdateImpact}
+          onCancel={cancelBackdateConfirm}
+          onConfirm={handleSave}
+          saving={saving}
+        />
+      )}
+    </div>
+  );
+}
+
+// Fee variant of the backdate warning modal. Same structure as
+// PriceEditPanel's BackdateClosedConfirm, but no dollar delta line -
+// fees do not per-day-attribute through sc_daily_revenue.
+function FeeBackdateClosedConfirm({ impact, onCancel, onConfirm, saving }) {
+  const { closedPeriods = [], affectedDayCount = 0 } = impact;
+  const periodList = closedPeriods.map(p => `P${p}`).join(", ");
+  const dayWord = affectedDayCount === 1 ? "day" : "days";
+  const periodWord = closedPeriods.length === 1 ? "period" : "periods";
+  return (
+    <div className="sc-admin-backdate-modal" role="dialog" aria-modal="true" aria-labelledby="sc-fee-backdate-title">
+      <div className="sc-admin-backdate-modal-card">
+        <h3 id="sc-fee-backdate-title" className="sc-admin-backdate-modal-title">Backdate reaches a closed {periodWord}</h3>
+        <div className="sc-admin-backdate-modal-body">
+          <p>
+            This fee change touches <strong>closed {periodWord} {periodList}</strong> across{" "}
+            <strong>{affectedDayCount} {dayWord}</strong>.
+          </p>
+          <p>
+            Fees do not flow through <code>sc_daily_revenue</code>, so no per-day dollar delta is
+            computed. The contract-revenue history for those {periodWord} will still reflect the
+            new fee on the next read.
+          </p>
+          <p className="sc-admin-backdate-modal-note">
+            Confirming records the closed {periodWord} and {affectedDayCount} {dayWord} in the
+            changelog alongside your reason.
+          </p>
+        </div>
+        <div className="sc-admin-panel-actions">
+          <button type="button" className="sc-admin-btn sc-admin-btn--ghost" onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" className="sc-admin-btn sc-admin-btn--primary" onClick={onConfirm} disabled={saving}>
+            {saving ? "Saving..." : "Confirm + save"}
+          </button>
+        </div>
       </div>
     </div>
   );

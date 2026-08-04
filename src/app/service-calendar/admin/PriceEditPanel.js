@@ -115,8 +115,52 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
     ? daysBetweenInclusive(backdateDate, today)
     : 0;
 
+  // Admin PR 1 (2026-08-04, owner ruling): warn on backdate that
+  // reaches a closed period. Two-phase save flow when Backdate is
+  // picked:
+  //   Phase A (preview) - POST sc-admin-backdate-preview. Response
+  //   names closed periods, day count, and revenue delta. If no
+  //   closed periods returned, skip phase B and write directly.
+  //   Phase B (confirm) - render the warning modal with the impact.
+  //   Operator confirms -> POST sc-config-update (write).
+  //   Cancel -> return to edit mode, no write.
+  // Today and Future radios NEVER call preview - by construction
+  // they cannot reach a closed period (current period is open;
+  // future periods have not started).
+  const [backdateImpact, setBackdateImpact] = useState(null);
   const handleSave = async () => {
     if (!canSave) return;
+    if (isBackdate && !backdateImpact) {
+      // Phase A - preview only. On error, fall back to write-without-
+      // warning (owner ruling: do not fail closed).
+      setSaving(true);
+      try {
+        const previewRes = await fetch("/api/service-calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sc-admin-backdate-preview",
+            type: "price",
+            accountKey,
+            effectiveDate: effDate,
+            serviceId: service.id,
+            newPrice: newPriceRounded,
+          }),
+        });
+        const preview = await previewRes.json();
+        if (preview.success && Array.isArray(preview.closedPeriods) && preview.closedPeriods.length > 0) {
+          // Show the warning modal.
+          setBackdateImpact(preview);
+          setSaving(false);
+          return;
+        }
+        // Empty closed-period list OR preview unavailable -> proceed to
+        // write immediately. Fall through to the write below.
+      } catch {
+        // Network error on preview: proceed to write anyway. Do not
+        // fail closed.
+      }
+    }
     setSaving(true);
     try {
       const change = {
@@ -145,11 +189,18 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
       } else {
         showToast(result.error || "Save failed", "error");
         setSaving(false);
+        setBackdateImpact(null);
       }
     } catch {
       showToast("Network error", "error");
       setSaving(false);
+      setBackdateImpact(null);
     }
+  };
+
+  const cancelBackdateConfirm = () => {
+    setBackdateImpact(null);
+    setSaving(false);
   };
 
   return (
@@ -279,6 +330,72 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
         <button type="button" className="sc-admin-btn sc-admin-btn--primary" onClick={handleSave} disabled={!canSave}>
           {saving ? "Saving..." : "Save"}
         </button>
+      </div>
+
+      {backdateImpact && (
+        <BackdateClosedConfirm
+          impact={backdateImpact}
+          onCancel={cancelBackdateConfirm}
+          onConfirm={handleSave}
+          saving={saving}
+        />
+      )}
+    </div>
+  );
+}
+
+// Warning modal shown when the backdate preview reports one or more
+// closed periods. Admin PR 1 (2026-08-04, owner ruling).
+//   - Names the closed periods verbatim (owner: not "some periods are closed")
+//   - Shows the revenue delta when the preview succeeded
+//   - Reports periods-only + a "delta unavailable" line on fallback
+//   - Confirm re-triggers handleSave, which now proceeds to write
+//     because backdateImpact is set (phase-A skipped by the guard).
+function BackdateClosedConfirm({ impact, onCancel, onConfirm, saving }) {
+  const { closedPeriods = [], affectedDayCount = 0, revenueDeltaCents, deltaSource } = impact;
+  const periodList = closedPeriods.map(p => `P${p}`).join(", ");
+  const dayWord = affectedDayCount === 1 ? "day" : "days";
+  const periodWord = closedPeriods.length === 1 ? "period" : "periods";
+  const dollars = revenueDeltaCents == null ? null : revenueDeltaCents / 100;
+  const dollarsStr = dollars == null ? null
+    : (dollars >= 0 ? "+" : "-") + "$" + Math.abs(dollars).toLocaleString("en-US", {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+  return (
+    <div className="sc-admin-backdate-modal" role="dialog" aria-modal="true" aria-labelledby="sc-backdate-title">
+      <div className="sc-admin-backdate-modal-card">
+        <h3 id="sc-backdate-title" className="sc-admin-backdate-modal-title">Backdate reaches a closed {periodWord}</h3>
+        <div className="sc-admin-backdate-modal-body">
+          <p>
+            This price change touches <strong>closed {periodWord} {periodList}</strong> across{" "}
+            <strong>{affectedDayCount} {dayWord}</strong>.
+          </p>
+          {dollarsStr != null && (
+            <p>
+              Estimated revenue change: <strong>{dollarsStr}</strong>. This is what{" "}
+              <code>sc_daily_revenue</code> will report for the affected days after the write.
+            </p>
+          )}
+          {dollarsStr == null && deltaSource !== "full-preview" && (
+            <p>
+              Revenue delta is <strong>unavailable</strong> (preview timed out or errored). The write
+              will still record the closed periods in the changelog.
+            </p>
+          )}
+          <p className="sc-admin-backdate-modal-note">
+            Confirming records the closed {periodWord}, {affectedDayCount} {dayWord}, and{" "}
+            {dollarsStr != null ? "the delta" : "an unavailable-delta note"} in the changelog
+            alongside your reason.
+          </p>
+        </div>
+        <div className="sc-admin-panel-actions">
+          <button type="button" className="sc-admin-btn sc-admin-btn--ghost" onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" className="sc-admin-btn sc-admin-btn--primary" onClick={onConfirm} disabled={saving}>
+            {saving ? "Saving..." : "Confirm + save"}
+          </button>
+        </div>
       </div>
     </div>
   );
