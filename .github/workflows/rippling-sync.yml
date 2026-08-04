@@ -1,0 +1,81 @@
+name: rippling raw sync
+
+# Nightly ingest of raw Rippling records into Postgres (PR 8a).
+#
+# Two Rippling walks per run, sequential:
+#   /time-entries                                    -> rippling_raw_time_entries
+#   /custom-objects/time_entry_computed_pay_segment  -> rippling_raw_pay_segments
+#
+# Filter surface on the Rippling side is zero - date, worker_id, and sort
+# filters are silently ignored. Full cursor walk from the first page every
+# time. Content-hash uniqueness (kpi-8a-rippling-raw.sql) makes re-fetching
+# cheap: unchanged records are dropped by ON CONFLICT DO NOTHING.
+#
+# Measured mean latency (2026-08-04 discovery probe):
+#   /time-entries    ~8.08s / page  ~200 pages  ~27 min
+#   /pay_segments    ~1.50s / page  ~80  pages  ~2 min
+# Combined ~30 min; timeout-minutes 90 gives real headroom for in-season
+# volume without being unbounded. Vercel's 300s function cap does not fit,
+# which is why this lives in Actions rather than as an API cron.
+#
+# Failure surface: exit 2 from the sync script means at least one walk
+# failed mid-flight. The workflow then goes red. The other walk's
+# progress still landed via the per-page upsert - re-run picks up
+# unchanged records for near-zero cost.
+
+on:
+  schedule:
+    # 07:00 UTC = 02:00 CST / 03:00 CDT - after nightly Rippling posts
+    # and inside Kevin's quiet hours.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Value written to rippling_raw_*.fetch_source (nightly | backfill | manual). Default nightly.'
+        required: false
+        default: 'nightly'
+      dry_run:
+        description: 'If "true", walk Rippling but skip Postgres writes.'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: rippling-raw-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: walk time_entries + pay_segments
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      RIPPLING_API_KEY: ${{ secrets.RIPPLING_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run rippling sync
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          DRY_RUN="${{ inputs.dry_run || 'false' }}"
+          ARGS="--source=${SOURCE}"
+          if [ "${DRY_RUN}" = "true" ]; then
+            ARGS="${ARGS} --dry-run"
+          fi
+          echo "rippling_sync ${ARGS}"
+          node scripts/rippling_sync.mjs ${ARGS}
