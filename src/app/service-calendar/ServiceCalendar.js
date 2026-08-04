@@ -2854,6 +2854,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       data-density="compact"
       data-billing={isFeeAccount ? "flat_fee" : "per_meal"}
       data-category={data?.account?.category || ""}
+      /* TEMPORARY PROBE 2026-08-04 (remove after diagnosis).
+         Bulk door on STL - FL disappeared after owner's restart.
+         Surface the runtime account shape so DevTools can compare
+         against what isFeeNoDollar() reads. Marker token unique per
+         session so owner can grep to confirm compilation reached
+         this render. */
+      data-probe-token="BULK-DOOR-PROBE-2026-08-04-K7M2"
+      data-probe-account-billing-model={data?.account?.billingModel ?? "unset"}
+      data-probe-account-hhs={data?.account ? String(!!data.account.hasHomestandSchedule) : "unset"}
+      data-probe-fee-no-dollar-gate={data?.account ? String(isFeeNoDollar(data.account)) : "unset"}
+      data-probe-account-keys={data?.account ? Object.keys(data.account).sort().join(",") : "unset"}
     >
       {/* M-2 (2026-07-29) scope-ternary audit:
           These four sites all had shape `scope === "month" ? X : Y`
