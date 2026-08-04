@@ -3028,11 +3028,16 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         />
         );
       })()}
-      {/* Drill P1 PR-A DP1-02: ChromeBar suppresses for ALL scv2
-          non-admin scopes (overview + drill). Admin still uses
-          ChromeBar (its own admin-scope render path). v1 also uses
-          it as before. */}
-      {!(scV2 && !isAdminView) && <ChromeBar
+      {/* Admin wave commit 2 (2026-08-04): ChromeBar suppresses for
+          ALL scv2 scopes, admin included. Prior gate was
+          `!(scV2 && !isAdminView)` - it rendered BOTH bars in scv2
+          admin because the Ribbon already renders unconditionally
+          under scv2. 93px of stacked chrome, "Admin - all accounts"
+          printed twice, empty TODAY/PERIOD slots on the Ribbon.
+          Only v1 keeps ChromeBar now; the Ribbon carries the admin
+          toggle + account dropdown, and hides its meta readout in
+          admin so no empty date slots render (Ribbon.js). */}
+      {!scV2 && <ChromeBar
         accountDropdown={accountDropdown}
         category={!isAdminView ? category : null}
         view={seasonView}

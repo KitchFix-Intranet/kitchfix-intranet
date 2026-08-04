@@ -6,7 +6,9 @@
 // A group archive hides every service in the group via the group JOIN in
 // the view. This panel makes that explicit before the operator confirms.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+// Admin wave commit 3 (2026-08-04): inline dialog a11y.
+import { useDialogA11y } from "../useDialogA11y";
 
 const BACKDATE_FLOOR = "2024-01-01";
 
@@ -36,6 +38,8 @@ function fmtDateHuman(iso) {
 }
 
 export default function ArchiveGroupPanel({ accountKey, group, activeServiceCount, onCancel, onSaved, showToast }) {
+  const cardRef = useRef(null);
+  useDialogA11y({ cardRef, isOpen: true, onClose: onCancel, trapTab: false });
   const [mode, setMode] = useState("today");
   const [futureDate, setFutureDate] = useState("");
   const [backdateDate, setBackdateDate] = useState("");
@@ -98,7 +102,7 @@ export default function ArchiveGroupPanel({ accountKey, group, activeServiceCoun
   };
 
   return (
-    <div className="sc-admin-panel">
+    <div className="sc-admin-panel" ref={cardRef} tabIndex={-1}>
       <div className="sc-admin-eff-warning sc-admin-eff-warning--strong" role="alert">
         <strong>Group archive blast radius.</strong> Archiving <strong>{group.groupName}</strong> will hide <strong>{activeServiceCount}</strong> active service{activeServiceCount === 1 ? "" : "s"} in this group from the calendar for every day after the archive date. The individual services are not archived, but the group filter excludes them as long as the group is archived. Reactivate the group to bring them back.
       </div>

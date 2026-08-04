@@ -104,24 +104,35 @@ export default function Ribbon({
             Today-jump (real button, hover) - the drillNavEnd slot.
             Divider between. HF-7 (2026-07-20): the --boxed treatment
             applies to BOTH overview and drill (was --drill only), so
-            the two scopes read identically. */}
-        <div className="sc-ribbon-today-group sc-ribbon-today-group--boxed">
-          <RibbonMeta
-            todayLabel={todayLabel}
-            periodNum={periodNum}
-            weekNum={weekNum}
-            hasHomestandSchedule={hasHomestandSchedule}
-            isFeeAccount={isFeeAccount}
-            gameDaysEntered={gameDaysEntered}
-            totalGameDays={totalGameDays}
-          />
-          {drillNavEnd && (
-            <>
-              <span className="sc-ribbon-today-group-divider" aria-hidden="true" />
-              <div className="sc-ribbon-today-jump">{drillNavEnd}</div>
-            </>
-          )}
-        </div>
+            the two scopes read identically.
+
+            Admin wave commit 2 (2026-08-04): the meta readout
+            (TODAY / PERIOD / WEEK) is a per-account calendar signal.
+            In admin view there is no account context, so the readout
+            reads "TODAY - PERIOD -" with empty values. Suppress the
+            entire Today-group container in admin so the ribbon does
+            not carry empty date slots. drillNavEnd is already null
+            in admin (ServiceCalendar computes drillNavEndSlot with a
+            !isAdminView gate), so nothing else needs to move. */}
+        {!isAdminView && (
+          <div className="sc-ribbon-today-group sc-ribbon-today-group--boxed">
+            <RibbonMeta
+              todayLabel={todayLabel}
+              periodNum={periodNum}
+              weekNum={weekNum}
+              hasHomestandSchedule={hasHomestandSchedule}
+              isFeeAccount={isFeeAccount}
+              gameDaysEntered={gameDaysEntered}
+              totalGameDays={totalGameDays}
+            />
+            {drillNavEnd && (
+              <>
+                <span className="sc-ribbon-today-group-divider" aria-hidden="true" />
+                <div className="sc-ribbon-today-jump">{drillNavEnd}</div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="sc-ribbon-right">

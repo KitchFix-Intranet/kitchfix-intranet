@@ -2,9 +2,13 @@
 // Inline add-group form rendered at the bottom of the per-account editor.
 // Captures groupName + required reason + optional requested-by.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+// Admin wave commit 3 (2026-08-04): inline dialog a11y.
+import { useDialogA11y } from "../useDialogA11y";
 
 export default function AddGroupPanel({ accountKey, onCancel, onSaved, showToast }) {
+  const cardRef = useRef(null);
+  useDialogA11y({ cardRef, isOpen: true, onClose: onCancel, trapTab: false });
   const [groupName, setGroupName] = useState("");
   const [reason, setReason] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
@@ -43,7 +47,7 @@ export default function AddGroupPanel({ accountKey, onCancel, onSaved, showToast
   };
 
   return (
-    <div className="sc-admin-panel">
+    <div className="sc-admin-panel" ref={cardRef} tabIndex={-1}>
       <div className="sc-admin-panel-current">
         Add a new service group to <strong>{accountKey}</strong>. After creating the group you can add services to it.
       </div>

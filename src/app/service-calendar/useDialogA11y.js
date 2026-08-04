@@ -20,13 +20,24 @@
 //   aria-labelledby={idOfDialogTitle}
 //   tabIndex={-1}
 // so it can accept focus when the card has no focusable children yet.
+//
+// trapTab (admin wave commit 3, 2026-08-04): default true preserves
+// the original overlay contract. Set to false for INLINE panels that
+// live inside the flow of a page, not on top of it (the SC admin
+// panels are the case that motivated this option). Trapping Tab in
+// an inline panel would corner a keyboard user inside a page region
+// with no visual boundary and no explicit "close" affordance beyond
+// the inline Cancel/Close button. Owner ruling: for inline panels
+// apply only Escape + focus-in + focus-restore, and DO NOT add
+// role="dialog" / aria-modal at the call site (they would tell
+// assistive tech the panel is a modal when it is not).
 
 import { useEffect, useRef } from "react";
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function useDialogA11y({ cardRef, isOpen, onClose }) {
+export function useDialogA11y({ cardRef, isOpen, onClose, trapTab = true }) {
   const restoreFocusRef = useRef(null);
   // Keep the latest onClose in a ref so the main effect only re-runs
   // when isOpen actually changes. If onClose was in the dep array we'd
@@ -65,6 +76,11 @@ export function useDialogA11y({ cardRef, isOpen, onClose }) {
         return;
       }
       if (e.key !== "Tab") return;
+      // Inline callers (trapTab=false) let the browser's natural Tab
+      // order carry focus out of the panel into the rest of the page.
+      // See the header note for why trapping in an inline panel
+      // corners a keyboard user.
+      if (!trapTab) return;
 
       // Focus containment: cycle within the card at the boundaries.
       const focusables = card.querySelectorAll(FOCUSABLE_SELECTOR);
@@ -105,5 +121,5 @@ export function useDialogA11y({ cardRef, isOpen, onClose }) {
       }
       restoreFocusRef.current = null;
     };
-  }, [isOpen, cardRef]);
+  }, [isOpen, cardRef, trapTab]);
 }

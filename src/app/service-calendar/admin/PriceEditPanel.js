@@ -17,7 +17,11 @@
 //    recomputes. The Save payload includes allowBackdate: true so the
 //    server's today-or-future floor is skipped only for this path.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+// Admin wave commit 3 (2026-08-04): inline dialog a11y - Escape closes,
+// focus moves in on open, focus returns on close. trapTab=false: this
+// panel renders inline inside a service row, not as an overlay.
+import { useDialogA11y } from "../useDialogA11y";
 
 const BACKDATE_FLOOR = "2024-01-01";
 
@@ -75,6 +79,8 @@ function fmtDateHuman(iso) {
 }
 
 export default function PriceEditPanel({ accountKey, groupName, service, onCancel, onSaved, showToast }) {
+  const cardRef = useRef(null);
+  useDialogA11y({ cardRef, isOpen: true, onClose: onCancel, trapTab: false });
   const currentPrice = roundCents(service.price);
   const [newPrice, setNewPrice] = useState(currentPrice.toFixed(2));
   const [effMode, setEffMode] = useState("today");   // "today" | "future" | "backdate"
@@ -229,7 +235,7 @@ export default function PriceEditPanel({ accountKey, groupName, service, onCance
   };
 
   return (
-    <div className="sc-admin-panel">
+    <div className="sc-admin-panel" ref={cardRef} tabIndex={-1}>
       <div className="sc-admin-panel-current">
         Current price: <strong>{fmtPrice(currentPrice)}</strong>
         {service.priceSinceDate && (
