@@ -136,6 +136,14 @@ Once a migration has been applied to a database, editing its `CREATE TABLE IF NO
 
 **Detection:** the probe for a migration must query pg_constraint / pg_class / information_schema and assert the specific constraints and grants it expects, not just table existence. `kpi-1-spine.sql` post-flight only asserted table existence, so the missing FK went undetected until the follow-up probe run.
 
+### `pg_attribute.attname` is `name`, not `text` - cast before `@>`
+
+Postgres's `pg_attribute.attname` column has type `name` (the internal identifier type), not `text`. `array_agg(attname ORDER BY attnum)` therefore returns `name[]`, and there is no `@>` operator between `name[]` and a `text[]` literal like `ARRAY['a', 'b']`. Applying the SQL fails with a type-resolution error at DDL time, not a subtle wrong result at runtime.
+
+**Realised on 2026-08-04.** `kpi-8a-rippling-raw.sql` had four sites (two pre-flight, two post-flight) doing `array_agg(attname ORDER BY attnum) @> ARRAY['rippling_id', 'content_hash']`. Studio apply raised the type error; fix was `array_agg(attname::text ORDER BY attnum)` at each site. The fixed file is what actually ran; the repo now matches.
+
+**The rule:** when comparing arrays of catalog identifier columns (`attname`, `relname`, `nspname`, `conname`, etc.) against `text[]` literals or another `text[]`, cast to `text` inside the aggregate. Prefer `array_agg(col::text ORDER BY ...)` over relying on implicit conversion; there isn't one for the container types even when the elements would convert.
+
 ### `UNIQUE (id, content_hash)` on an append-only audit trail breaks revert cycles
 
 The intent of a content-hashed audit trail is "detect changes vs the current record." A `UNIQUE (id, content_hash)` constraint with `INSERT ... ON CONFLICT DO NOTHING` almost expresses that - but it actually expresses "never seen this exact payload before." The two rules diverge the moment a record cycles back to a prior state.

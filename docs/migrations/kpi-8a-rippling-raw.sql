@@ -61,8 +61,15 @@
 --   `limit` and `cursor` are honored. Full cursor walk from the first
 --   page is mandatory on every sync.
 --
--- Applied: NOT YET (draft PR). Post-flight assertions run inside the
--- same transaction as the DDL; a failure rolls back the whole migration.
+-- Applied: 2026-08-04 in Supabase Studio. Post-flight assertions run
+-- inside the same transaction as the DDL; a failure rolls back the
+-- whole migration.
+--
+-- Pre-apply fix: the four `array_agg(attname ORDER BY attnum)` calls
+-- (two pre-flight, two post-flight) needed explicit `::text` casts.
+-- `pg_attribute.attname` is `name`, not `text`, and there is no `@>`
+-- operator against a `text[]` right-hand side. See GOTCHAS entry
+-- "pg_attribute.attname is name, not text - cast before @>".
 
 BEGIN;
 
@@ -92,7 +99,7 @@ BEGIN
     JOIN pg_class t ON c.conrelid = t.oid
     WHERE t.relname = 'rippling_raw_time_entries'
       AND c.contype = 'u'
-      AND (SELECT array_agg(attname ORDER BY attnum)
+      AND (SELECT array_agg(attname::text ORDER BY attnum)
            FROM pg_attribute
            WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
           @> ARRAY['rippling_id', 'content_hash']
@@ -107,7 +114,7 @@ BEGIN
     JOIN pg_class t ON c.conrelid = t.oid
     WHERE t.relname = 'rippling_raw_pay_segments'
       AND c.contype = 'u'
-      AND (SELECT array_agg(attname ORDER BY attnum)
+      AND (SELECT array_agg(attname::text ORDER BY attnum)
            FROM pg_attribute
            WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
           @> ARRAY['rippling_id', 'content_hash']
@@ -285,7 +292,7 @@ BEGIN
     JOIN pg_class t ON c.conrelid = t.oid
     WHERE t.relname = 'rippling_raw_time_entries'
       AND c.contype = 'u'
-      AND (SELECT array_agg(attname ORDER BY attnum)
+      AND (SELECT array_agg(attname::text ORDER BY attnum)
            FROM pg_attribute
            WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
           @> ARRAY['rippling_id', 'content_hash']
@@ -297,7 +304,7 @@ BEGIN
     JOIN pg_class t ON c.conrelid = t.oid
     WHERE t.relname = 'rippling_raw_pay_segments'
       AND c.contype = 'u'
-      AND (SELECT array_agg(attname ORDER BY attnum)
+      AND (SELECT array_agg(attname::text ORDER BY attnum)
            FROM pg_attribute
            WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
           @> ARRAY['rippling_id', 'content_hash']
