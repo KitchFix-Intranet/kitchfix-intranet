@@ -49,7 +49,7 @@
   align-items: center;
   gap: 6px;
   font-size: var(--size-caption);
-  font-weight: var(--wt-semibold);
+  font-weight: var(--sc2-wt-semibold);
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
   margin-bottom: 2px;
@@ -70,7 +70,7 @@
 }
 .sc-admin-title {
   font-size: var(--size-h2);
-  font-weight: var(--wt-bold);
+  font-weight: var(--sc2-wt-bold);
   color: var(--text-link);
   margin: 0;
   line-height: var(--lead-snug);
@@ -78,10 +78,10 @@
 
 .sc-admin-corp-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: var(--size-caption); font-weight: var(--wt-bold);
+  font-size: var(--size-caption); font-weight: var(--sc2-wt-bold);
   color: var(--text-link);
   background: var(--surface-sunken);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-pill);
   padding: 3px 9px;
   text-transform: uppercase;
@@ -104,7 +104,7 @@
 }
 
 .sc-admin-scaffold {
-  border-top: var(--border-thin) solid var(--border-default);
+  border-top: var(--sc2-border-thin) solid var(--border-default);
   padding-top: var(--space-3);
   display: flex; flex-direction: column; gap: var(--space-3);
 }
@@ -123,11 +123,11 @@
 .sc-admin-back {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: var(--size-body);
-  font-weight: var(--wt-medium);
+  font-weight: var(--sc2-wt-medium);
   color: var(--text-link);
   text-decoration: none;
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-cell);
   padding: 6px var(--space-3);
   box-shadow: 0 1px 2px rgba(21, 57, 104, 0.06);
@@ -166,7 +166,7 @@
 .sc-admin-error {
   padding: 14px var(--space-4);
   background: var(--status-overdue-subtle);
-  border: var(--border-thin) solid var(--status-overdue-bd);
+  border: var(--sc2-border-thin) solid var(--status-overdue-bd);
   color: var(--status-overdue-fg);
   border-radius: var(--radius-container);
   font-size: var(--size-body);
@@ -190,15 +190,15 @@
   gap: var(--space-2);
   padding: var(--space-2) 14px;
   background: var(--surface-sunken);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
   font-size: var(--size-body);
   color: var(--text-muted);
   margin-bottom: var(--space-1);
 }
-.sc-admin-summary-item { font-weight: var(--wt-medium); }
-.sc-admin-summary-item strong { color: var(--text-heading); font-weight: var(--wt-bold); font-variant-numeric: var(--num-tabular); }
-.sc-admin-summary-sep { color: var(--border-strong); font-weight: var(--wt-regular); }
+.sc-admin-summary-item { font-weight: var(--sc2-wt-medium); }
+.sc-admin-summary-item strong { color: var(--text-heading); font-weight: var(--sc2-wt-bold); font-variant-numeric: var(--num-tabular); }
+.sc-admin-summary-sep { color: var(--border-strong); font-weight: var(--sc2-wt-regular); }
 
 /* Overview sections - contained units matching the editor's group
    cards. Section header band (light fill, hairline rule via ::after on
@@ -208,7 +208,7 @@
   flex-direction: column;
   gap: var(--space-2);
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   padding: var(--space-3) 14px;
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
@@ -218,7 +218,7 @@
    floating tag. Pure CSS (no markup change). Bumped one step (caption ->
    body, muted -> default) for legibility. */
 .sc-admin-section-title {
-  font-size: var(--size-body); font-weight: var(--wt-bold);
+  font-size: var(--size-body); font-weight: var(--sc2-wt-bold);
   color: var(--text-default);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -248,7 +248,7 @@
   gap: var(--space-3);
   padding: 9px 14px;
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
   font-size: var(--size-body);
   text-align: left;
@@ -260,14 +260,14 @@
 .sc-admin-row--clickable:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset); }
 .sc-admin-row--disabled { opacity: 0.7; cursor: default; }
 
-.sc-admin-row-key { font-weight: var(--wt-bold); color: var(--text-link); font-size: var(--size-body); letter-spacing: 0.02em; min-width: 90px; }
-.sc-admin-row-name { color: var(--text-heading); font-weight: var(--wt-medium); }
+.sc-admin-row-key { font-weight: var(--sc2-wt-bold); color: var(--text-link); font-size: var(--size-body); letter-spacing: 0.02em; min-width: 90px; }
+.sc-admin-row-name { color: var(--text-heading); font-weight: var(--sc2-wt-medium); }
 .sc-admin-row-count { font-size: var(--size-caption); color: var(--text-muted); }
 /* Bumped from subtle italic to muted upright - the metadata reads
    clearly without the italic-on-light-grey low-contrast issue. */
 .sc-admin-row-updated { font-size: var(--size-caption); color: var(--text-muted); }
-.sc-admin-row-chev { color: var(--text-subtle); font-size: var(--size-h3); font-weight: var(--wt-regular); line-height: 1; }
-.sc-admin-row-fee-amount { font-size: var(--size-body); color: var(--text-heading); font-variant-numeric: var(--num-tabular); font-weight: var(--wt-semibold); justify-self: end; }
+.sc-admin-row-chev { color: var(--text-subtle); font-size: var(--size-h3); font-weight: var(--sc2-wt-regular); line-height: 1; }
+.sc-admin-row-fee-amount { font-size: var(--size-body); color: var(--text-heading); font-variant-numeric: var(--num-tabular); font-weight: var(--sc2-wt-semibold); justify-self: end; }
 
 /* Per-account editor */
 .sc-admin-editor { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -281,13 +281,13 @@
 }
 .sc-admin-editor-head { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-1); }
 .sc-admin-editor-title-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.sc-admin-editor-title { font-size: var(--size-h2); font-weight: var(--wt-bold); color: var(--text-link); margin: 0; line-height: var(--lead-snug); }
-.sc-admin-editor-name { font-size: var(--size-body); color: var(--text-muted); font-weight: var(--wt-medium); }
+.sc-admin-editor-title { font-size: var(--size-h2); font-weight: var(--sc2-wt-bold); color: var(--text-link); margin: 0; line-height: var(--lead-snug); }
+.sc-admin-editor-name { font-size: var(--size-body); color: var(--text-muted); font-weight: var(--sc2-wt-medium); }
 /* Editor section label - matches sc-admin-section-title bump for
    legibility consistency, plus the same hairline rule via ::after so
    the editor and the overview read with the same section dividers. */
 .sc-admin-editor-section {
-  font-size: var(--size-body); font-weight: var(--wt-bold);
+  font-size: var(--size-body); font-weight: var(--sc2-wt-bold);
   color: var(--text-default);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -312,7 +312,7 @@
   display: flex;
   flex-direction: column;
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(21, 57, 104, 0.05);
@@ -320,13 +320,13 @@
 }
 .sc-admin-group-header-band {
   background: var(--surface-sunken);
-  border-bottom: var(--border-thin) solid var(--border-default);
+  border-bottom: var(--sc2-border-thin) solid var(--border-default);
   border-left: 3px solid var(--text-link);
   padding: var(--space-2) 14px;
 }
 .sc-admin-group-footer {
   background: var(--surface-sunken);
-  border-top: var(--border-thin) solid var(--surface-sunken);
+  border-top: var(--sc2-border-thin) solid var(--surface-sunken);
   padding: var(--space-2) 14px;
 }
 /* Calmer group title weight inside the band (was 16px/700, now body/600
@@ -334,7 +334,7 @@
    a label rather than a heading shout). Navy preserved. */
 .sc-admin-group-title {
   font-size: var(--size-body);
-  font-weight: var(--wt-semibold);
+  font-weight: var(--sc2-wt-semibold);
   color: var(--text-link);
   margin: 0;
   letter-spacing: -0.01em;
@@ -348,7 +348,7 @@
    --focused state uses the --feedback-info-subtle / -border token
    family for the info-blue callout. */
 .sc-admin-svc-item {
-  border-bottom: var(--border-thin) solid var(--border-subtle);
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
   border-left: 3px solid transparent;
   transition: background var(--motion-control), border-left-color var(--motion-control);
 }
@@ -371,7 +371,7 @@
 .sc-admin-svc-name {
   color: var(--text-link);
   font-size: var(--size-body);
-  font-weight: var(--wt-medium);
+  font-weight: var(--sc2-wt-medium);
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-2);
@@ -380,7 +380,7 @@
   min-width: 0;
 }
 .sc-admin-svc-tag {
-  font-size: var(--size-micro); font-weight: var(--wt-bold);
+  font-size: var(--size-micro); font-weight: var(--sc2-wt-bold);
   color: var(--text-default);
   background: var(--surface-sunken);
   border-radius: var(--radius-cell);
@@ -398,7 +398,7 @@
    render under the same group. */
 .sc-admin-svc-price {
   font-variant-numeric: var(--num-tabular);
-  font-weight: var(--wt-medium);
+  font-weight: var(--sc2-wt-medium);
   color: var(--text-link);
   font-size: var(--size-body);
   white-space: nowrap;
@@ -407,10 +407,10 @@
 .sc-admin-svc-edit {
   font-family: inherit;
   font-size: var(--size-caption);
-  font-weight: var(--wt-bold);
+  font-weight: var(--sc2-wt-bold);
   color: var(--accent-sc);
   background: none;
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   padding: var(--space-1) var(--space-3);
   cursor: pointer;
@@ -426,7 +426,7 @@
   margin: var(--space-1) 14px var(--space-3) 28px;
   padding: var(--space-2) var(--space-3);
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   display: flex;
   flex-direction: column;
@@ -441,16 +441,16 @@
 }
 .sc-admin-svc-detail-label {
   color: var(--text-subtle);
-  font-weight: var(--wt-medium);
+  font-weight: var(--sc2-wt-medium);
 }
 .sc-admin-svc-detail-value {
   color: var(--text-link);
-  font-weight: var(--wt-semibold);
+  font-weight: var(--sc2-wt-semibold);
   font-variant-numeric: var(--num-tabular);
 }
 .sc-admin-svc-detail-since {
   color: var(--text-subtle);
-  font-weight: var(--wt-regular);
+  font-weight: var(--sc2-wt-regular);
   margin-left: 2px;
 }
 .sc-admin-svc-detail-actions {
@@ -458,14 +458,14 @@
   gap: var(--space-2);
   flex-wrap: wrap;
   padding-top: var(--space-1);
-  border-top: var(--border-thin) solid var(--border-subtle);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
   margin-top: var(--space-1);
 }
 
 /* Inline edit panel */
 .sc-admin-panel {
   background: var(--surface-sunken);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
   padding: var(--space-3) var(--space-3);
   margin: var(--space-1) 0 var(--space-2);
@@ -476,36 +476,36 @@
 .sc-admin-panel-since { color: var(--text-subtle); font-size: var(--size-caption); }
 
 .sc-admin-field { display: flex; flex-direction: column; gap: var(--space-1); }
-.sc-admin-field-label { font-size: var(--size-caption); font-weight: var(--wt-bold); color: var(--text-default); text-transform: uppercase; letter-spacing: 0.04em; }
-.sc-admin-field-required { color: var(--accent-text); font-weight: var(--wt-semibold); text-transform: none; letter-spacing: 0; font-size: var(--size-caption); }
-.sc-admin-field-optional { color: var(--text-subtle); font-weight: var(--wt-medium); text-transform: none; letter-spacing: 0; font-size: var(--size-caption); }
+.sc-admin-field-label { font-size: var(--size-caption); font-weight: var(--sc2-wt-bold); color: var(--text-default); text-transform: uppercase; letter-spacing: 0.04em; }
+.sc-admin-field-required { color: var(--accent-text); font-weight: var(--sc2-wt-semibold); text-transform: none; letter-spacing: 0; font-size: var(--size-caption); }
+.sc-admin-field-optional { color: var(--text-subtle); font-weight: var(--sc2-wt-medium); text-transform: none; letter-spacing: 0; font-size: var(--size-caption); }
 .sc-admin-field-count { font-size: var(--size-caption); color: var(--text-subtle); align-self: flex-end; }
 
 .sc-admin-price-input-wrap {
   display: inline-flex; align-items: center; gap: var(--space-1);
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   padding: 6px var(--space-2);
   max-width: 140px;
 }
 .sc-admin-price-input-wrap:focus-within { border-color: var(--accent-sc); box-shadow: 0 0 0 2px rgba(15, 110, 86, 0.12); }
-.sc-admin-price-input-dollar { color: var(--text-muted); font-weight: var(--wt-semibold); font-size: var(--size-body); }
+.sc-admin-price-input-dollar { color: var(--text-muted); font-weight: var(--sc2-wt-semibold); font-size: var(--size-body); }
 .sc-admin-price-input {
   flex: 1; min-width: 0;
   border: none; outline: none; background: none;
   font-family: inherit;
   font-size: var(--size-body);
   font-variant-numeric: var(--num-tabular);
-  font-weight: var(--wt-bold);
+  font-weight: var(--sc2-wt-bold);
   color: var(--text-heading);
 }
 
 .sc-admin-eff-options { display: flex; flex-direction: column; gap: var(--space-2); }
 .sc-admin-eff-option { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--size-body); color: var(--text-heading); cursor: pointer; }
 .sc-admin-eff-option input[type="radio"] { margin-top: 3px; accent-color: var(--accent-sc); }
-.sc-admin-eff-option strong { font-weight: var(--wt-semibold); }
-.sc-admin-eff-caption { display: block; color: var(--text-subtle); font-size: var(--size-caption); margin-top: 2px; font-weight: var(--wt-regular); }
+.sc-admin-eff-option strong { font-weight: var(--sc2-wt-semibold); }
+.sc-admin-eff-caption { display: block; color: var(--text-subtle); font-size: var(--size-caption); margin-top: 2px; font-weight: var(--sc2-wt-regular); }
 .sc-admin-eff-caption--inline { display: inline; margin-left: 0; margin-top: 0; }
 .sc-admin-eff-future-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 
@@ -516,19 +516,19 @@
   margin-top: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--accent-backplate);
-  border: var(--border-thin) solid var(--accent);
+  border: var(--sc2-border-thin) solid var(--accent);
   border-radius: var(--radius-container);
   color: var(--accent-text);
   font-size: var(--size-caption);
   line-height: 1.55;
 }
-.sc-admin-eff-warning strong { color: var(--accent-text); font-weight: var(--wt-bold); }
+.sc-admin-eff-warning strong { color: var(--accent-text); font-weight: var(--sc2-wt-bold); }
 
 .sc-admin-eff-date {
   font-family: inherit;
   font-size: var(--size-body);
   padding: var(--space-1) var(--space-2);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   color: var(--text-heading);
   background: var(--surface-card);
@@ -541,7 +541,7 @@
   font-family: inherit;
   font-size: var(--size-body);
   padding: var(--space-2) var(--space-2);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-control);
   color: var(--text-heading);
   background: var(--surface-card);
@@ -559,12 +559,12 @@
 .sc-admin-btn {
   font-family: inherit;
   font-size: var(--size-body);
-  font-weight: var(--wt-bold);
+  font-weight: var(--sc2-wt-bold);
   padding: var(--space-2) 18px;
   border-radius: var(--radius-control);
   cursor: pointer;
   transition: background var(--motion-control), color var(--motion-control), border-color var(--motion-control);
-  border: var(--border-thin) solid transparent;
+  border: var(--sc2-border-thin) solid transparent;
 }
 .sc-admin-btn--primary {
   background: var(--accent-sc);
@@ -591,7 +591,7 @@
   background: var(--action-primary-bg);
   color: var(--action-primary-text);
   font-size: var(--size-body);
-  font-weight: var(--wt-semibold);
+  font-weight: var(--sc2-wt-semibold);
   box-shadow: var(--elevation-popover);
 }
 .sc-admin-toast--error { background: var(--status-overdue-fg); }
@@ -599,20 +599,20 @@
 /* Fee schedule editor (Bundle 1 Stage 2) */
 .sc-admin-fee-current-card {
   background: var(--surface-sunken);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-container);
   padding: var(--space-3) var(--space-3);
 }
 .sc-admin-fee-active { display: flex; flex-direction: column; gap: 6px; }
 .sc-admin-fee-active-label {
-  font-size: var(--size-caption); font-weight: var(--wt-bold);
+  font-size: var(--size-caption); font-weight: var(--sc2-wt-bold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
 }
 .sc-admin-fee-active-amount {
   font-size: var(--size-h1);
-  font-weight: var(--wt-bold);
+  font-weight: var(--sc2-wt-bold);
   color: var(--text-heading);
   font-variant-numeric: var(--num-tabular);
   line-height: var(--lead-tight);
@@ -622,7 +622,7 @@
 
 .sc-admin-fee-bundled { display: flex; flex-direction: column; gap: var(--space-1); }
 .sc-admin-fee-bundled-label {
-  font-size: var(--size-caption); font-weight: var(--wt-bold);
+  font-size: var(--size-caption); font-weight: var(--sc2-wt-bold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -646,18 +646,18 @@
 .sc-admin-labor-table td {
   text-align: left;
   padding: var(--space-2);
-  border-bottom: var(--border-thin) solid var(--border-subtle);
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
 }
 .sc-admin-labor-table th {
   color: var(--text-muted, #666);
-  font-weight: var(--wt-semibold, 600);
+  font-weight: var(--sc2-wt-semibold, 600);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: var(--size-micro, 12px);
 }
 .sc-admin-labor-table td:first-child {
   color: var(--text-strong, #222);
-  font-weight: var(--wt-bold, 700);
+  font-weight: var(--sc2-wt-bold, 700);
 }
 .sc-admin-edit-row {
   display: flex;
@@ -674,7 +674,7 @@
 }
 .sc-admin-edit-row input {
   padding: var(--space-2);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-cell);
   min-width: 100px;
 }
@@ -689,7 +689,7 @@
 .sc-admin-edit-full textarea,
 .sc-admin-edit-full input {
   padding: var(--space-2);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   border-radius: var(--radius-cell);
   font-family: inherit;
   resize: vertical;
@@ -703,7 +703,7 @@
 .sc-admin-edit-actions button {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-cell);
-  border: var(--border-thin) solid var(--border-default);
+  border: var(--sc2-border-thin) solid var(--border-default);
   background: var(--surface-card);
   cursor: pointer;
 }
@@ -726,11 +726,11 @@
   align-items: baseline;
   padding: var(--space-2) var(--space-2);
   background: var(--surface-card);
-  border: var(--border-thin) solid var(--border-subtle);
+  border: var(--sc2-border-thin) solid var(--border-subtle);
   border-radius: var(--radius-control);
   font-size: var(--size-caption);
 }
-.sc-admin-fee-history-amount { font-weight: var(--wt-bold); color: var(--text-heading); font-variant-numeric: var(--num-tabular); }
+.sc-admin-fee-history-amount { font-weight: var(--sc2-wt-bold); color: var(--text-heading); font-variant-numeric: var(--num-tabular); }
 .sc-admin-fee-history-eff { color: var(--text-default); }
 .sc-admin-fee-history-by { color: var(--text-muted); font-style: italic; }
 .sc-admin-fee-history-when { color: var(--text-subtle); justify-self: end; }
@@ -739,7 +739,7 @@
   color: var(--text-muted);
   font-style: italic;
   font-size: var(--size-caption);
-  border-top: var(--border-thin) dashed var(--border-subtle);
+  border-top: var(--sc2-border-thin) dashed var(--border-subtle);
   padding-top: 6px;
 }
 
@@ -818,7 +818,7 @@
   background: var(--surface-sunken);
   color: var(--text-muted);
   font-size: var(--size-micro);
-  font-weight: var(--wt-bold);
+  font-weight: var(--sc2-wt-bold);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -886,15 +886,15 @@
 .sc-admin-add-row--account {
   margin-top: var(--space-3);
   padding: var(--space-3) 0 0;
-  border-top: var(--border-thin) solid var(--border-default);
+  border-top: var(--sc2-border-thin) solid var(--border-default);
 }
 .sc-admin-add-link {
   font-family: inherit;
   font-size: var(--size-body);
-  font-weight: var(--wt-semibold);
+  font-weight: var(--sc2-wt-semibold);
   color: var(--accent-sc);
   background: none;
-  border: var(--border-thin) dashed var(--border-strong);
+  border: var(--sc2-border-thin) dashed var(--border-strong);
   border-radius: var(--radius-control);
   padding: 6px 14px;
   cursor: pointer;
