@@ -242,7 +242,7 @@ function isNumericCell(text) {
   // tabular payloads. Treat them as neutral so a single such cell doesn't
   // flip an otherwise-numeric column non-numeric. The em-dash literal is
   // escaped to keep this source file hyphens-only per the copy rule.
-  if (stripped === "" || stripped === "-" || stripped === "—") return true;
+  if (stripped === "" || stripped === "-" || stripped === "\u2014") return true;
   return Number.isFinite(Number(stripped));
 }
 
@@ -255,7 +255,7 @@ const ORDINAL_HEADER_RE = /\b(?:rank|order|position|#|no\.?|number)\b/i;
 function isOrdinalCell(text) {
   if (text == null) return true;
   const stripped = String(text).replace(/\*\*/g, "").trim();
-  if (stripped === "" || stripped === "-" || stripped === "—") return true;
+  if (stripped === "" || stripped === "-" || stripped === "\u2014") return true;
   return /^\d{1,4}$/.test(stripped);
 }
 
