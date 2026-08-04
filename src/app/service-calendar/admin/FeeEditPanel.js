@@ -92,6 +92,61 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
   const canSave = !saving && amountChanged && newAmountRounded >= 0 && effReady && reasonReady;
 
+  // Admin PR 1 bounce (2026-08-04, owner ruling on #620): reactive
+  // inline warning. Same shape as PriceEditPanel; fee has NO revenue-
+  // delta number because sc_daily_revenue does not include fee
+  // amounts, and per-period fee attribution requires proration +
+  // payment-cadence work distinct from this PR. The warning still
+  // names the closed periods and the day count. Owner note: fee
+  // backdates reach further than price backdates (a fee backdate to
+  // Jan 1 crosses seven closed periods), so this matters more here
+  // than on the price panel, not less.
+  //
+  // Future upgrade signal (owner note): when sc_is_period_closed
+  // means "AP has pulled the period" (v2 swap point in
+  // sc-25-period-lock.sql), the "which is closed" clause becomes
+  // "has been billed" and the final caveat sentence disappears
+  // because the system will then know.
+  const [preview, setPreview] = useState({ state: "idle", result: null });
+  const backdateReady = (
+    isBackdate
+    && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate)
+    && backdateDate >= BACKDATE_FLOOR
+    && backdateDate <= yesterday
+  );
+  useEffect(() => {
+    if (!backdateReady) {
+      // Same guard-fail-no-setState pattern as PriceEditPanel; the
+      // warning DIV is gated on isBackdate + valid-date so a stale
+      // preview cannot render on a surface where the guard failed.
+      return;
+    }
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPreview({ state: "loading", result: null });
+    fetch("/api/service-calendar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "sc-admin-backdate-preview",
+        type: "fee",
+        accountKey,
+        effectiveDate: backdateDate,
+      }),
+      signal: controller.signal,
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setPreview({ state: "ready", result: data && data.success ? data : null });
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setPreview({ state: "ready", result: null });
+      });
+    return () => controller.abort();
+  }, [backdateReady, backdateDate, accountKey]);
+
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
@@ -207,7 +262,7 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
         </div>
         {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
           <div className="sc-admin-eff-warning" role="alert">
-            <strong>Backdate warning.</strong> Backdating changes the contract-revenue history starting {fmtDateHuman(backdateDate)}. This becomes the fee of record for those past dates in the contract-revenue history. The Service Calendar is not affected - fees do not flow through calendar revenue. Verify the date is correct before saving.
+            <FeeBackdateWarningBody preview={preview} backdateDate={backdateDate} />
           </div>
         )}
       </div>
@@ -251,6 +306,49 @@ export default function FeeEditPanel({ accountKey, current, onCancel, onSaved, s
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
+
     </div>
   );
+}
+
+// Inline fee-backdate warning body. Admin PR 1 bounce (2026-08-04):
+// facts (closed periods, day count), then caveat. Fees have no
+// per-day sc_daily_revenue delta, so the middle line names the
+// affected-day count only, with an explicit note that no per-day
+// dollar figure applies to fee accounts. The caveat sentence is
+// preserved verbatim.
+function FeeBackdateWarningBody({ preview, backdateDate }) {
+  const spanCopy = (
+    <>
+      <strong>Backdate warning.</strong> Backdating changes the contract-revenue history starting
+      {" "}{fmtDateHuman(backdateDate)}. The Service Calendar is not affected - fees do not flow
+      through calendar revenue. This system has no record of which days have been invoiced -
+      verify against your billing before saving.
+    </>
+  );
+  if (preview.state === "idle") return spanCopy;
+  if (preview.state === "loading") return spanCopy;
+  const result = preview.result;
+  const closedPeriods = result?.closedPeriods || [];
+  if (closedPeriods.length === 0) return spanCopy;
+
+  const affectedDayCount = result.affectedDayCount || 0;
+  const dayWord = affectedDayCount === 1 ? "day" : "days";
+  const closedClause = closedPeriods.length === 1 ? "which is closed" : "which are closed";
+  const periodList = fmtPeriodListWithAnd(closedPeriods);
+  return (
+    <>
+      <p><strong>Backdate warning.</strong> This backdate reaches {periodList}, {closedClause}.</p>
+      <p>Revenue delta: <strong>unavailable</strong> - fee changes do not per-day-attribute through Service Calendar revenue. {affectedDayCount} {dayWord} of contract-revenue history will reflect the new fee on the next read.</p>
+      <p>This system has no record of which days have been invoiced - verify against your billing before saving.</p>
+    </>
+  );
+}
+
+function fmtPeriodListWithAnd(periods) {
+  const p = periods.map((x) => `P${x}`);
+  if (p.length === 0) return "";
+  if (p.length === 1) return p[0];
+  if (p.length === 2) return `${p[0]} and ${p[1]}`;
+  return p.slice(0, -1).join(", ") + " and " + p[p.length - 1];
 }

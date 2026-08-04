@@ -865,6 +865,18 @@
 }
 .sc-admin-eff-warning--strong strong { color: var(--accent-text); }
 
+/* Admin PR 1 bounce (2026-08-04): closed-period warning now renders
+   inside the existing .sc-admin-eff-warning box using three <p>
+   lines (facts, delta, caveat). Small bottom margin between them
+   keeps the "facts, then caveat" rhythm readable. No modal shipped -
+   the operator sees the periods + delta before Save, not on Save. */
+.sc-admin-eff-warning p {
+  margin: 0 0 var(--space-1) 0;
+}
+.sc-admin-eff-warning p:last-child {
+  margin-bottom: 0;
+}
+
 /* Add link row. Inside a .sc-admin-group-footer (group card footer
    band) this is flush; the --account variant adds standalone spacing
    for the "+ Add group" link at the bottom of the editor. */

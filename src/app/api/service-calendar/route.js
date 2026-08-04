@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
 import { isScAdmin } from "@/lib/admin";
 import { assertDaysUnlockedForWrite } from "@/lib/scPeriodLock";
+// Backdate impact reporter (2026-08-04, admin PR 1). NOT sibling to
+// assertDaysUnlockedForWrite - reports and yields, does not refuse.
+// See scBackdateReport.js header for the ruling that separates the
+// two paths.
+import { describeBackdateImpact, composeBackdateReason } from "@/lib/scBackdateReport";
 import {
   loadAccountConfig,
   loadAllAccountsConfig,
@@ -1174,6 +1179,75 @@ export async function POST(request) {
       return NextResponse.json(result);
     }
 
+    // ── sc-admin-backdate-preview: warning payload for the panel ──
+    // Admin PR 1 (2026-08-04). Called by PriceEditPanel + FeeEditPanel
+    // when the operator picks Backdate. Returns closed periods, day
+    // count, and revenue delta cents (price only). Never writes. Never
+    // refuses. See scBackdateReport.js for the ruling that separates
+    // this from the day lock's refusal path.
+    //
+    // Fallback: if the delta preview errors or times out, the response
+    // reports `deltaSource: "periods-only"` and `revenueDeltaCents:
+    // null`. Panel shows the periods without a dollar number rather
+    // than stalling the edit. Owner ruling: names-without-number is
+    // worth shipping; a wrong number or a hung spinner is not.
+    if (action === "sc-admin-backdate-preview") {
+      if (!isScAdmin(email)) {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
+      const { type, accountKey, effectiveDate, serviceId, newPrice } = body;
+      if (type !== "price" && type !== "fee") {
+        return NextResponse.json(
+          { success: false, error: "type must be 'price' or 'fee'" },
+          { status: 400 }
+        );
+      }
+      if (!accountKey || !effectiveDate || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
+        return NextResponse.json(
+          { success: false, error: "accountKey and effectiveDate (YYYY-MM-DD) required" },
+          { status: 400 }
+        );
+      }
+      if (type === "price" && (!serviceId || newPrice == null || isNaN(Number(newPrice)))) {
+        return NextResponse.json(
+          { success: false, error: "serviceId and newPrice required for type='price'" },
+          { status: 400 }
+        );
+      }
+      try {
+        const report = await describeBackdateImpact({
+          type,
+          accountKey,
+          effectiveDate,
+          serviceId,
+          newPrice: type === "price" ? Number(newPrice) : undefined,
+        });
+        // TEMPORARY build-verification marker (2026-08-04). Owner
+        // reports the dev server is serving pre-bounce code. If this
+        // string does NOT appear in the response body, the server is
+        // not compiling from this commit. Remove after verification.
+        return NextResponse.json({
+          success: true,
+          serverBuildMarker: "PROBE_MARKER_2026-08-04_ISO_WORKTREE_K9M3",
+          ...report,
+        });
+      } catch (err) {
+        // Owner ruling: fall back to C, do not fail closed. If the
+        // enumeration fails, return an empty closed-periods list; the
+        // write will proceed as it does today (no warning). The panel
+        // sees no closed periods and does not gate.
+        console.warn(`[sc-admin-backdate-preview] failed: ${err?.message || err}`);
+        return NextResponse.json({
+          success: true,
+          serverBuildMarker: "PROBE_MARKER_2026-08-04_ISO_WORKTREE_K9M3",
+          closedPeriods: [],
+          affectedDayCount: 0,
+          revenueDeltaCents: null,
+          deltaSource: "unavailable",
+        });
+      }
+    }
+
     // ── sc-config-update: change prices (ADMIN) ──
     // Archive/reactivate live in the sc-admin-archive-* / sc-admin-
     // reactivate-* actions (Bundle 2 Step 3). This handler is the
@@ -1277,7 +1351,7 @@ export async function POST(request) {
       // Pass entityLabel through too so the orchestrator's changelog
       // insert doesn't need a second DB round-trip.
       const config = await loadAccountConfig(accountKey);
-      const translated = changes.map((c) => {
+      const translated = await Promise.all(changes.map(async (c) => {
         const svc = config.services.find(
           (s) => s.groupName === c.groupName && s.serviceName === c.serviceName
         );
@@ -1287,18 +1361,56 @@ export async function POST(request) {
           );
         }
         if (c.type === "price") {
+          // Admin PR 1 (2026-08-04, owner ruling): backdate that reaches
+          // a closed period gets a server-composed prose prefix on the
+          // reason. Prefix names the touched closed periods, the day
+          // count, and the revenue delta (when the preview succeeds).
+          // Fee has its own compose call at the sc-admin-fee-set
+          // handler below. See scBackdateReport.js for the prefix
+          // format and the fallback behavior.
+          //
+          // Scope: only backdates can reach a closed period (today +
+          // future by construction cannot; see scoping shortcut inside
+          // describeBackdateImpact). Running unconditionally is safe -
+          // the helper returns { closedPeriods: [] } when the effective
+          // date is >= today, and composeBackdateReason returns the
+          // operator's reason unchanged when the list is empty.
+          //
+          // Server ALWAYS composes: we do not trust a client-submitted
+          // prefix (defense: composeBackdateReason strips a client-
+          // authored prefix before prepending the server's own).
+          const impact = await describeBackdateImpact({
+            type: "price",
+            accountKey,
+            effectiveDate: c.effectiveDate,
+            serviceId: svc.id,
+            newPrice: Number(c.to),
+          }).catch((err) => {
+            // Owner ruling: do not fail closed. If the impact call errors,
+            // the write proceeds as it did before this PR. The record
+            // loses the closed-period prefix in that edge but the write
+            // is not blocked.
+            console.warn(`[sc-config-update] describeBackdateImpact failed; write proceeds without prefix: ${err?.message || err}`);
+            return { closedPeriods: [], affectedDayCount: 0, revenueDeltaCents: null, deltaSource: "unavailable" };
+          });
+          const composedReason = composeBackdateReason({
+            closedPeriods: impact.closedPeriods,
+            affectedDayCount: impact.affectedDayCount,
+            revenueDeltaCents: impact.revenueDeltaCents,
+            operatorReason: c.reason.trim(),
+          });
           return {
             type:          "price",
             serviceId:     svc.id,
             newPrice:      Number(c.to),
             effectiveDate: c.effectiveDate,
-            notes:         c.reason.trim(),
+            notes:         composedReason,
             requestedBy:   c.requestedBy ? c.requestedBy.trim() : null,
             entityLabel:   `${c.groupName} - ${c.serviceName}`,
           };
         }
         throw new Error(`Unknown change type: ${c.type}`);
-      });
+      }));
 
       const result = await updateServiceConfig(accountKey, translated, email);
       return NextResponse.json({ success: true, updated: result.applied });
@@ -1395,12 +1507,35 @@ export async function POST(request) {
           );
         }
       }
+      // Admin PR 1 (2026-08-04, owner ruling): backdated fee change
+      // that reaches a closed period gets the same prose-prefix on
+      // reason as the price path. Fee does NOT get a revenue-delta
+      // number: sc_daily_revenue does not include fee amounts, and a
+      // per-period fee-attribution figure is a proration + payment-
+      // cadence design question distinct from this PR. The report
+      // still names the closed periods and the day count, which is
+      // the honest signal for the fee case (owner ruling: warnings
+      // without numbers are worth shipping; wrong numbers are not).
+      const feeImpact = await describeBackdateImpact({
+        type: "fee",
+        accountKey,
+        effectiveDate,
+      }).catch((err) => {
+        console.warn(`[sc-admin-fee-set] describeBackdateImpact failed; write proceeds without prefix: ${err?.message || err}`);
+        return { closedPeriods: [], affectedDayCount: 0, revenueDeltaCents: null, deltaSource: "unavailable" };
+      });
+      const composedFeeReason = composeBackdateReason({
+        closedPeriods: feeImpact.closedPeriods,
+        affectedDayCount: feeImpact.affectedDayCount,
+        revenueDeltaCents: feeImpact.revenueDeltaCents,
+        operatorReason: reason.trim(),
+      });
       const result = await updateFeeSchedule(
         accountKey,
         {
           amount:         Number(amount),
           effectiveDate,
-          reason:         reason.trim(),
+          reason:         composedFeeReason,
           requestedBy:    requestedBy ? requestedBy.trim() : null,
           paymentCadence: paymentCadence ?? undefined,
         },
