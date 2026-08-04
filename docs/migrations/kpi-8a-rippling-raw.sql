@@ -23,12 +23,23 @@
 -- Append-only-on-hash-change:
 --   - Each row is one immutable observation of the Rippling record at
 --     one point in time.
---   - `UNIQUE (rippling_id, content_hash)` de-duplicates unchanged
---     re-fetches: the sync script uses INSERT ... ON CONFLICT DO NOTHING
---     via supabase-js upsert with ignoreDuplicates.
---   - When Rippling mutates a record (retro edit to a time entry, pay
---     re-run), the hash changes and a new row is inserted. Old rows
---     stay - they are audit trail.
+--   - Dedup is app-side, NOT database-enforced. For each incoming
+--     record the sync script looks up the latest hash for that
+--     rippling_id and only inserts when the new hash differs.
+--   - There is intentionally NO `UNIQUE (rippling_id, content_hash)`.
+--     That constraint would express "never seen this exact payload,"
+--     which breaks on revert: a record that goes X -> Y -> X (mis-keyed
+--     punch fixed then un-fixed) would drop the third observation
+--     silently under ON CONFLICT DO NOTHING, leaving the audit trail
+--     lying and _latest returning Y forever. What we actually want is
+--     "differs from what we last saw." That is a comparison against
+--     the CURRENT latest, not against any historical row. App-side
+--     compare-then-insert enforces the intent correctly and makes the
+--     sync summary distinguish genuinely-unchanged from a failed
+--     insert (which ON CONFLICT DO NOTHING silently conflates).
+--   - When Rippling mutates a record (retro edit, pay re-run, revert),
+--     the hash differs from the current latest and a new row inserts.
+--     Old rows stay - they are the audit trail.
 --   - The `_latest` view resolves the currently-visible record per
 --     rippling_id via DISTINCT ON ordered by fetched_at DESC, id DESC.
 --     N11: latest wins by TIMESTAMP, never by row order alone. The
@@ -73,14 +84,23 @@ CREATE TABLE IF NOT EXISTS rippling_raw_time_entries (
   content_hash TEXT        NOT NULL,
   payload      JSONB       NOT NULL,
   fetched_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  fetch_source TEXT        NOT NULL CHECK (fetch_source IN ('backfill', 'nightly', 'manual')),
-  UNIQUE (rippling_id, content_hash)
+  fetch_source TEXT        NOT NULL CHECK (fetch_source IN ('backfill', 'nightly', 'manual'))
+  -- NO UNIQUE constraint on (rippling_id, content_hash). See header
+  -- rationale: revert cycles (X -> Y -> X) must land the third
+  -- observation; DB-side uniqueness would silently drop it.
 );
 
 -- Supports the DISTINCT ON in rippling_raw_time_entries_latest and
--- any per-rippling_id history query.
+-- the per-rippling_id current-hash lookup the sync script issues before
+-- deciding whether to insert.
 CREATE INDEX IF NOT EXISTS rippling_raw_time_entries_latest_idx
   ON rippling_raw_time_entries (rippling_id, fetched_at DESC, id DESC);
+
+-- Supports nightly delta queries ("what did we write since t0"). Kept
+-- separate from the compound index above because fetched_at is not the
+-- leading column there and cannot be used alone for a range scan.
+CREATE INDEX IF NOT EXISTS rippling_raw_time_entries_fetched_at_idx
+  ON rippling_raw_time_entries (fetched_at DESC);
 
 -- ─── rippling_raw_pay_segments ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS rippling_raw_pay_segments (
@@ -89,12 +109,15 @@ CREATE TABLE IF NOT EXISTS rippling_raw_pay_segments (
   content_hash TEXT        NOT NULL,
   payload      JSONB       NOT NULL,
   fetched_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  fetch_source TEXT        NOT NULL CHECK (fetch_source IN ('backfill', 'nightly', 'manual')),
-  UNIQUE (rippling_id, content_hash)
+  fetch_source TEXT        NOT NULL CHECK (fetch_source IN ('backfill', 'nightly', 'manual'))
+  -- Same rationale as rippling_raw_time_entries: no UNIQUE.
 );
 
 CREATE INDEX IF NOT EXISTS rippling_raw_pay_segments_latest_idx
   ON rippling_raw_pay_segments (rippling_id, fetched_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS rippling_raw_pay_segments_fetched_at_idx
+  ON rippling_raw_pay_segments (fetched_at DESC);
 
 -- ─── _latest views ──────────────────────────────────────────────────
 -- Resolve the current record per rippling_id. ORDER BY fetched_at
@@ -143,7 +166,8 @@ BEGIN
     RAISE EXCEPTION 'post-flight: rippling_raw_pay_segments_latest view missing';
   END IF;
 
-  -- Structure: indexes exist.
+  -- Structure: all four indexes exist (compound latest + fetched_at-only
+  -- per table).
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
     WHERE schemaname = 'public'
@@ -155,10 +179,55 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
     WHERE schemaname = 'public'
+      AND tablename  = 'rippling_raw_time_entries'
+      AND indexname  = 'rippling_raw_time_entries_fetched_at_idx'
+  ) THEN
+    RAISE EXCEPTION 'post-flight: rippling_raw_time_entries_fetched_at_idx missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
       AND tablename  = 'rippling_raw_pay_segments'
       AND indexname  = 'rippling_raw_pay_segments_latest_idx'
   ) THEN
     RAISE EXCEPTION 'post-flight: rippling_raw_pay_segments_latest_idx missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename  = 'rippling_raw_pay_segments'
+      AND indexname  = 'rippling_raw_pay_segments_fetched_at_idx'
+  ) THEN
+    RAISE EXCEPTION 'post-flight: rippling_raw_pay_segments_fetched_at_idx missing';
+  END IF;
+
+  -- Structure: no UNIQUE constraint on (rippling_id, content_hash) -
+  -- app-side compare-then-insert is authoritative. Assert its absence
+  -- to guard against a well-intentioned future migration adding it back
+  -- and breaking revert cycles silently.
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    WHERE t.relname = 'rippling_raw_time_entries'
+      AND c.contype = 'u'
+      AND (SELECT array_agg(attname ORDER BY attnum)
+           FROM pg_attribute
+           WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
+          @> ARRAY['rippling_id', 'content_hash']
+  ) THEN
+    RAISE EXCEPTION 'post-flight: rippling_raw_time_entries has a UNIQUE on (rippling_id, content_hash) - see header for why this must not exist';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    WHERE t.relname = 'rippling_raw_pay_segments'
+      AND c.contype = 'u'
+      AND (SELECT array_agg(attname ORDER BY attnum)
+           FROM pg_attribute
+           WHERE attrelid = t.oid AND attnum = ANY(c.conkey))
+          @> ARRAY['rippling_id', 'content_hash']
+  ) THEN
+    RAISE EXCEPTION 'post-flight: rippling_raw_pay_segments has a UNIQUE on (rippling_id, content_hash) - see header for why this must not exist';
   END IF;
 
   -- Positive grants: service_role has SELECT + INSERT on both tables.

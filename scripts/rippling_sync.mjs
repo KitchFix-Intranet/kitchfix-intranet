@@ -65,37 +65,85 @@ const startedAt = new Date();
 console.log(`rippling_sync source=${args.source} dryRun=${args.dryRun} started=${startedAt.toISOString()}`);
 
 // ─── Walk one endpoint ──────────────────────────────────────────────
+//
+// Per-page compare-then-insert. For each page:
+//   1. Fetch from Rippling.
+//   2. Compute content_hash for each row.
+//   3. Batch-query <table>_latest for the current hashes of these ids.
+//   4. Filter to rows whose new hash differs from the current latest.
+//   5. Bulk INSERT the differing rows (no ON CONFLICT clause - the
+//      table has no UNIQUE on (rippling_id, content_hash), see the
+//      migration header for why).
+//
+// Every counted disposition is explicit: examined -> unchanged (matched
+// current) + inserted (differed) + failed (walk aborts, never silent).
 
-async function walkAndInsert({ endpoint, table, kind }) {
+async function walkAndInsert({ endpoint, table, latestView, kind }) {
   const t0 = Date.now();
   let url = firstPageUrl(endpoint, PAGE_SIZE);
   let pages = 0;
   let examined = 0;
+  let unchanged = 0;
   let inserted = 0;
-  const rowsToInsert = [];
 
   while (pages < MAX_PAGES_HARD) {
     const res = await fetchPage(url, KEY);
     if (!res.ok) {
       const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
       console.error(`[${kind}] page ${pages + 1} FAILED status=${res.status} error=${res.error} raw=${(res.raw || "").slice(0, 200)}`);
-      return { ok: false, pages, examined, inserted, durationSec, error: res.error };
+      return { ok: false, pages, examined, unchanged, inserted, durationSec, error: res.error };
     }
     const rows = extractRows(res.body);
     pages++;
     examined += rows.length;
+
+    // Build hash-computed rows for this page.
+    const hashedRows = [];
     for (const raw of rows) {
-      const id = raw.id;
-      if (!id) continue;
-      const hash = contentHash(raw, kind);
-      rowsToInsert.push({
-        rippling_id:  String(id),
-        content_hash: hash,
+      if (!raw.id) continue;
+      hashedRows.push({
+        rippling_id:  String(raw.id),
+        content_hash: contentHash(raw, kind),
         payload:      raw,
         fetch_source: args.source,
       });
     }
-    process.stderr.write(`[${kind}] page ${pages}  rows=${rows.length}  cumulative=${examined}  elapsed=${Math.round((Date.now() - t0) / 1000)}s\r`);
+
+    // Batch-fetch current hashes for these ids. On first backfill this
+    // returns nothing; on nightly runs it returns the previous latest
+    // for each id we already have.
+    let currentByID = new Map();
+    if (!args.dryRun && hashedRows.length > 0) {
+      const ids = hashedRows.map(r => r.rippling_id);
+      const { data, error } = await supa.from(latestView).select("rippling_id, content_hash").in("rippling_id", ids);
+      if (error) {
+        const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
+        console.error(`[${kind}] latest-hash lookup page ${pages} FAILED: ${error.message}`);
+        return { ok: false, pages, examined, unchanged, inserted, durationSec, error: error.message };
+      }
+      for (const r of data || []) currentByID.set(r.rippling_id, r.content_hash);
+    }
+
+    // Filter to rows whose hash differs from the current latest. A new
+    // rippling_id (currentByID.get returns undefined) always differs.
+    const toInsert = hashedRows.filter(r => currentByID.get(r.rippling_id) !== r.content_hash);
+    unchanged += hashedRows.length - toInsert.length;
+
+    if (toInsert.length > 0) {
+      if (args.dryRun) {
+        inserted += toInsert.length;   // report what would insert
+      } else {
+        const { data, error } = await supa.from(table).insert(toInsert).select("id");
+        if (error) {
+          const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
+          console.error(`[${kind}] insert page ${pages} FAILED: ${error.message}`);
+          return { ok: false, pages, examined, unchanged, inserted, durationSec, error: error.message };
+        }
+        inserted += (data || []).length;
+      }
+    }
+
+    process.stderr.write(`[${kind}] page ${pages}  rows=${rows.length}  cumulative=${examined}  unchanged=${unchanged}  inserted=${inserted}  elapsed=${Math.round((Date.now() - t0) / 1000)}s\r`);
     if (!rows.length) break;
     const next = res.body?.next_link;
     if (!next) break;
@@ -105,46 +153,27 @@ async function walkAndInsert({ endpoint, table, kind }) {
 
   if (pages >= MAX_PAGES_HARD) {
     console.error(`[${kind}] MAX_PAGES_HARD=${MAX_PAGES_HARD} hit - walk aborted before natural end`);
-    return { ok: false, pages, examined, inserted, durationSec: ((Date.now() - t0) / 1000).toFixed(1), error: "max pages" };
-  }
-
-  // Batch upsert. supabase-js caps payload size; chunk to be safe.
-  if (args.dryRun) {
-    console.error(`[${kind}] dry-run: would write ${rowsToInsert.length} rows to ${table}`);
-    return { ok: true, pages, examined, inserted: 0, durationSec: ((Date.now() - t0) / 1000).toFixed(1) };
-  }
-
-  const CHUNK = 500;
-  for (let i = 0; i < rowsToInsert.length; i += CHUNK) {
-    const chunk = rowsToInsert.slice(i, i + CHUNK);
-    const { data, error } = await supa
-      .from(table)
-      .upsert(chunk, { onConflict: "rippling_id,content_hash", ignoreDuplicates: true })
-      .select("id");
-    if (error) {
-      const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
-      console.error(`[${kind}] upsert chunk ${i / CHUNK + 1} FAILED: ${error.message}`);
-      return { ok: false, pages, examined, inserted, durationSec, error: error.message };
-    }
-    inserted += (data || []).length;
+    return { ok: false, pages, examined, unchanged, inserted, durationSec: ((Date.now() - t0) / 1000).toFixed(1), error: "max pages" };
   }
 
   const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
-  return { ok: true, pages, examined, inserted, durationSec };
+  return { ok: true, pages, examined, unchanged, inserted, durationSec };
 }
 
 // ─── Run both walks ──────────────────────────────────────────────────
 
 const teResult = await walkAndInsert({
-  endpoint: "time-entries",
-  table:    "rippling_raw_time_entries",
-  kind:     "time_entries",
+  endpoint:    "time-entries",
+  table:       "rippling_raw_time_entries",
+  latestView:  "rippling_raw_time_entries_latest",
+  kind:        "time_entries",
 });
 
 const psResult = await walkAndInsert({
-  endpoint: "custom-objects/time_entry_computed_pay_segment/records",
-  table:    "rippling_raw_pay_segments",
-  kind:     "pay_segments",
+  endpoint:    "custom-objects/time_entry_computed_pay_segment/records",
+  table:       "rippling_raw_pay_segments",
+  latestView:  "rippling_raw_pay_segments_latest",
+  kind:        "pay_segments",
 });
 
 const finishedAt = new Date();
@@ -153,9 +182,8 @@ const totalSec = ((finishedAt - startedAt) / 1000).toFixed(1);
 // ─── Summary ─────────────────────────────────────────────────────────
 
 function fmtResult(label, r) {
-  const skipped = r.examined - r.inserted;
   const status = r.ok ? "ok" : `FAIL (${r.error})`;
-  return `${label.padEnd(14)}  ${status.padEnd(28)}  pages=${String(r.pages).padStart(4)}  examined=${String(r.examined).padStart(6)}  inserted=${String(r.inserted).padStart(6)}  skipped=${String(skipped).padStart(6)}  duration=${r.durationSec}s`;
+  return `${label.padEnd(14)}  ${status.padEnd(28)}  pages=${String(r.pages).padStart(4)}  examined=${String(r.examined).padStart(6)}  unchanged=${String(r.unchanged).padStart(6)}  inserted=${String(r.inserted).padStart(6)}  duration=${r.durationSec}s`;
 }
 
 console.log("");

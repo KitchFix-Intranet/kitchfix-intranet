@@ -136,6 +136,18 @@ Once a migration has been applied to a database, editing its `CREATE TABLE IF NO
 
 **Detection:** the probe for a migration must query pg_constraint / pg_class / information_schema and assert the specific constraints and grants it expects, not just table existence. `kpi-1-spine.sql` post-flight only asserted table existence, so the missing FK went undetected until the follow-up probe run.
 
+### `UNIQUE (id, content_hash)` on an append-only audit trail breaks revert cycles
+
+The intent of a content-hashed audit trail is "detect changes vs the current record." A `UNIQUE (id, content_hash)` constraint with `INSERT ... ON CONFLICT DO NOTHING` almost expresses that - but it actually expresses "never seen this exact payload before." The two rules diverge the moment a record cycles back to a prior state.
+
+**Sequence:** record X inserted (hash A). Retro edit changes it to hash B, new row inserts. Revert changes it back to hash A. The third INSERT hits the UNIQUE on `(id, A)` from the first row and is silently dropped by `DO NOTHING`. The audit trail lies: the fetched_at of the reverted-to-A observation is never recorded. Worse, `_latest` ordered by fetched_at DESC returns row-2 (hash B, the mutation that got reverted) forever, because the observation that WOULD have promoted A back was dropped.
+
+Payroll reverts are routine: a mis-keyed punch gets fixed, then the fix gets un-fixed. Any external system with the same "hash-then-store" hygiene has the same trap.
+
+**Fix (PR 8a pattern):** drop the DB-side UNIQUE and dedupe in the app. Before inserting, look up the CURRENT latest hash for that id and compare. Insert only when the new hash differs from the current latest. Two payoffs beyond correctness: (a) the sync script's summary can distinguish genuinely-unchanged from a failed insert (which `ON CONFLICT DO NOTHING` collapses into one silent bucket), and (b) the intent-to-behavior mapping matches what the audit trail actually claims to be.
+
+Post-flight should also assert the UNIQUE is absent (negative-space check), so a well-intentioned future migration re-adding it fails loudly. See `docs/migrations/kpi-8a-rippling-raw.sql` post-flight for the pattern.
+
 ### A new table needs an explicit grant - a migration that creates a table nothing can read is a silent no-op
 
 Postgres does not confer any permission on a newly created table beyond the owner. Without `GRANT SELECT` (and INSERT if the table is written from an app), every downstream query fails with `permission denied for table <name>`. A migration that CREATEs a table and forgets the grant looks green on apply (the DDL succeeded) but the table is invisible to `service_role` and every consumer.
@@ -525,7 +537,14 @@ Six PR 8a files were written, tested-in-thought, reported as delivered in the se
 
 **The rule:** any file worth reporting as done is worth committing to a branch immediately. Draft PR, WIP commit, `git stash push -m` - anything that produces a SHA. Commit incrementally: after each file, not at the end. A WIP commit is cheaper than a lost file. "It is in the working tree" survives nothing that touches HEAD.
 
-**Related defensive pattern.** When a session assembles many files under one branch, chain the checkout guard onto the commit: `test "$(git branch --show-current)" = "feat/whatever" && git add ... && git commit ...`. If the working directory branch has silently switched (parallel terminal, IDE hook, worktree op), the guard refuses to commit onto the wrong branch. Same session as this entry: a parallel commit on `fix/sc-admin-price-lock` landed one PR-8a commit on that branch before the guard was added.
+**Standing branch guard.** A parallel commit on `fix/sc-admin-price-lock` landed one PR-8a commit on the wrong branch during the same session, because the worktree branch flipped between the branch cut and the first commit. `scripts/hooks/pre-commit` is the standing enforcement: it refuses to commit when the current branch does not match either `$EXPECTED_BRANCH` (session-set) or `.git/branch-lock` (persistent-per-worktree, one-line plain text). Enable per worktree with:
+
+```sh
+git config core.hooksPath scripts/hooks
+echo feat/whatever > "$(git rev-parse --git-dir)/branch-lock"
+```
+
+Standing beats ad-hoc: the ad-hoc pattern (`test $(git branch --show-current) = X && git commit ...`) works only when you remember to type it. The hook fires on every commit regardless of who or what invoked it.
 
 ---
 
