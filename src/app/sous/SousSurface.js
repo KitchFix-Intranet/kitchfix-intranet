@@ -125,9 +125,21 @@ function formatMs(ms) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
+// P1 (round 0c Part D): word-boundary truncation with ellipsis. Prior version
+// sliced mid-word, so "which accounts are behind on Feb..." rendered as
+// "which accounts are behind on F…" - the last visible token cut in half.
+// Now: cap at n chars, then walk back to the previous whitespace if the cap
+// landed inside a word. If no word boundary exists in the cap window, fall
+// back to the hard slice so a single very-long token still gets bounded.
 function truncate(s, n) {
   const t = String(s || "").trim();
-  return t.length <= n ? t : t.slice(0, n - 1) + "…";
+  if (t.length <= n) return t;
+  const hard = t.slice(0, n - 1);
+  const lastSpace = hard.lastIndexOf(" ");
+  // Only walk back to a word boundary if we don't lose too much - anything
+  // past 60% of the cap window keeps the meaningful head.
+  if (lastSpace > Math.floor(n * 0.6)) return hard.slice(0, lastSpace) + "…";
+  return hard + "…";
 }
 
 const SousSurface = forwardRef(function SousSurface({
@@ -196,7 +208,22 @@ const SousSurface = forwardRef(function SousSurface({
   // rendered the target card so scrollIntoView actually finds it.
   const pendingScrollRef = useRef(null);
 
-  useEffect(() => { if (autoFocus && inputRef.current) inputRef.current.focus(); }, [autoFocus]);
+  // P12 (round 0c Part D): autofocus the composer on landing ONLY when no
+  // answer is on screen at the moment autoFocus becomes true. Previously
+  // always fired on mount when autoFocus was true, which stole scroll if a
+  // returning user was reading a live answer. Reads sessionTurns via a
+  // ref so this effect doesn't re-fire every time the stack changes; the
+  // ref captures the "no turns yet" condition at the moment autoFocus
+  // becomes truthy and never re-checks (later focuses come from other
+  // paths - ⌘K, ask-again button, etc.).
+  const turnsAtAutoFocusRef = useRef(0);
+  turnsAtAutoFocusRef.current = sessionTurns.length;
+  useEffect(() => {
+    if (!autoFocus || !inputRef.current) return;
+    if (turnsAtAutoFocusRef.current > 0) return;
+    inputRef.current.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFocus]);
 
   // Toggle the scroll-top FAB when the pane region scrolls past 200px.
   // Only active on the page variant - the panel has its own scroll shell
@@ -591,7 +618,22 @@ const SousSurface = forwardRef(function SousSurface({
     const turnStatusLabel = STATUS_LABEL[turnStatus] || "Answer";
     let turnProvenance = null;
     if (turn.phase === "streaming") {
-      turnProvenance = { streaming: true, text: "Working..." };
+      // P3 (round 0c Part D): the streaming label uses the current stage
+      // from the tool trail rather than a static "Working..." that never
+      // changes across a 20-second wait. Priority: most recent tool that
+      // has not yet emitted its `ms` end event (mid-call), then most
+      // recent completed tool ("Reading TBJ-FL prices..."), else the
+      // generic pre-tool "Reading the question..." label. The .sa-streaming-dot
+      // CSS pulses to signal progress even when the stage text is stable.
+      const trail = Array.isArray(turn.toolTrail) ? turn.toolTrail : [];
+      const inFlight = trail.find((t) => t.ms == null);
+      const lastDone = [...trail].reverse().find((t) => t.ms != null);
+      const stage = inFlight
+        ? (inFlight.summary || `Calling ${inFlight.tool}`)
+        : lastDone
+          ? (lastDone.summary || `Finished ${lastDone.tool}`)
+          : "Reading the question";
+      turnProvenance = { streaming: true, text: stage };
     } else if (turn.phase === "done") {
       // Duration is captured at settle (turn.durationMs); fall back to the
       // live elapsed if durationMs is missing so the stat never reads "null".
@@ -803,7 +845,7 @@ const SousSurface = forwardRef(function SousSurface({
       <article
         key={turn.id}
         id={`sa-turn-${turn.id}`}
-        className={`sa-turn${inContext ? "" : " sa-turn--outside-context"}`}
+        className={`sa-turn sa-turn--enter${inContext ? "" : " sa-turn--outside-context"}`}
       >
         <div className={`sa-answer sa-answer--${d.status}`}>
           <div className="sa-answer-header">

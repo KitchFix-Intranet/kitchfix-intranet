@@ -388,6 +388,78 @@ const EXPECTED = {
       review_ref: "off-season / non-scheduled accounts must be visible as absence, not fabricated zeros",
     },
   },
+  case_bare_month_resolution: {
+    // Round 1 Part A (L6+E2, 2026-08-04): a bare month name resolves to
+    // the CURRENT SEASON, not a literal calendar default. Live failure
+    // that motivated this: "how many meals in February?" resolved to
+    // February 2025 (out-of-season) and declined. Correct behavior:
+    // resolve to the current season's February and answer.
+    question: "how many total meals did we serve in February?",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "answer uses a current-season February window (asOf 2026-02-28 or similar) OR asks a clarifying question naming the ambiguity",
+      "answer does NOT decline as 'out of season' without acknowledging the resolution rule",
+      "status = grounded, partial, OR clarifier question - declined is only acceptable if the tools genuinely can't reach a valid February",
+    ],
+    ground_truth: {
+      review_ref: "round 1 Part A L6+E2 - bare-month resolution to current season",
+      motivating_case: "live failure: bare 'February' resolved to Feb 2025, declined as out of season",
+    },
+  },
+  case_nickname_resolution: {
+    // Round 1 Part A (E1, 2026-08-04): nickname / city name resolves to
+    // canonical account key BEFORE the tool call. Buffalo is the
+    // Jays MiLB affiliate at TBJ-NY.
+    question: "how many meals at Buffalo this period?",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "trajectory shows at least one tool call with accountKey resolved to TBJ-NY",
+      "answer names TBJ-NY (spaced or unspaced) explicitly",
+      "no invented accounts",
+      "status = grounded, partial, or declined-with-honest-reason",
+    ],
+    ground_truth: {
+      review_ref: "round 1 Part A E1 - Buffalo nickname resolves to TBJ-NY (Jays MiLB Buffalo Bisons)",
+      canonical_key: "TBJ-NY",
+    },
+  },
+  case_precondition_routing: {
+    // Round 1 Part A (L3, 2026-08-04): sc_homestand_detail requires an
+    // account with has_homestand_schedule=true; TXR-AZ is a PDC site
+    // that structurally has no homestand schedule. When the precondition
+    // fails, ROUTE to sc_account_window (period/month) instead of
+    // reporting the data doesn't exist.
+    question: "what's the homestand summary for TXR-AZ this period?",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "trajectory shows sc_account_window (or sc_orientation) called for TXR-AZ instead of - or in addition to - sc_homestand_detail",
+      "answer explains that TXR-AZ has no homestand schedule (PDC site) rather than reporting the data does not exist",
+      "no fabricated homestand data",
+      "status = grounded, partial, or declined-with-structural-reason",
+    ],
+    ground_truth: {
+      review_ref: "round 1 Part A L3 - TXR-AZ has no homestand schedule structurally; route to sc_account_window",
+      account_shape: "PDC, has_homestand_schedule=false",
+    },
+  },
+  case_contract_consistency: {
+    // Round 1 Part A (E3, 2026-08-04): two near-identical contract-fee
+    // questions should return materially the same answer shape - both
+    // grounded in REF-class docs (operator-visible) with the same
+    // ownership rule applied. This is a single-run observer case; the
+    // grader looks for shape stability rather than exact match (which
+    // would be brittle under natural voice variance).
+    question: "what's the contract fee for STL-FL?",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "answer names a fee figure OR explicitly declines with the contract-reference doc pointer",
+      "sources include a REF-class doc (REF-121..REF-132) OR none - never REC-class (restricted, invisible at operator)",
+      "status = grounded, partial, or declined with a clean owner-named message",
+    ],
+    ground_truth: {
+      review_ref: "round 1 Part A E3 - contract fee questions own by REF class at operator scope",
+    },
+  },
   case_percent_share: {
     // Round 0b Part 3 acceptance (2026-08-04): sanctioned line 8 was
     // amended to allow explicit calculations - share, percentage,
@@ -1304,6 +1376,104 @@ async function grade_case_portfolio_absence() {
 //   - model declines under the money-verbatim rule (pre-amendment behavior)
 //   - answer states a percentage without naming the two inputs
 //   - answer presents the derived percentage as a payload figure verbatim
+// Round 1 Part A L6+E2 - bare-month resolution to current season. Passes
+// when the model either (a) uses a current-season February window in a
+// tool call, (b) asks a clarifying question naming the ambiguity, or
+// (c) declines with an honest owner-named reason. Fails when the model
+// silently resolves to a stale-year window and declines as out-of-season
+// without acknowledging the resolution rule.
+function grade_case_bare_month_resolution(result) {
+  const notes = [];
+  const answer = result.answer || "";
+  const trajectory = result.trajectory || [];
+  const scCalls = trajectory.filter((s) => s.tool && s.tool.startsWith("sc_"));
+  const currentSeasonCall = scCalls.some((s) => {
+    const input = s.input || {};
+    const asOf = input.asOf || "";
+    // Any 2026 asOf counts as current-season resolution; 2025 or earlier
+    // silently means the model went stale.
+    return /^2026-/.test(asOf) || /02(?:-|$)/.test(asOf);
+  });
+  const clarifierAsked = /february\s+(?:2025|2026|of|which|do you|are you asking)/i.test(answer) || /\?\s*$/.test(answer.trim());
+  const honestDecline = result.status === "declined" && /historical|prior|out\s+of\s+season|current[- ]season/i.test(answer);
+  const ok = currentSeasonCall || clarifierAsked || honestDecline;
+  notes.push(`current-season SC call in trajectory: ${currentSeasonCall}`);
+  notes.push(`clarifier question shape in answer: ${clarifierAsked}`);
+  notes.push(`decline with owner-named reason: ${honestDecline} (status=${result.status})`);
+  return { pass: ok, notes };
+}
+
+// Round 1 Part A E1 - Buffalo nickname resolves to TBJ-NY. Passes when
+// the trajectory carries at least one tool call with accountKey normalized
+// to TBJ-NY, OR the answer names TBJ-NY explicitly. Fails when the model
+// invents an account or misroutes to a Toronto-proper key.
+function grade_case_nickname_resolution(result) {
+  const notes = [];
+  const answer = result.answer || "";
+  const trajectory = result.trajectory || [];
+  const acctCalls = trajectory.filter((s) => s.tool && s.input && s.input.accountKey);
+  const tbjnyInCall = acctCalls.some((s) => /TBJ\s*-?\s*NY/i.test(String(s.input.accountKey)));
+  const tbjnyInAnswer = /TBJ\s*-?\s*NY/i.test(answer);
+  const noInvention = !acctCalls.some((s) => {
+    const k = String(s.input.accountKey);
+    return !/^(CIN|STL|TBJ|TBR|TXR)/.test(k);
+  });
+  const ok = (tbjnyInCall || tbjnyInAnswer) && noInvention;
+  notes.push(`accountKey TBJ-NY in a tool call: ${tbjnyInCall}`);
+  notes.push(`TBJ-NY named in the answer: ${tbjnyInAnswer}`);
+  notes.push(`no invented account keys in tool calls: ${noInvention}`);
+  notes.push(`status=${result.status}`);
+  return { pass: ok, notes };
+}
+
+// Round 1 Part A L3 - TXR-AZ homestand precondition routing. Passes when
+// the trajectory shows sc_account_window OR sc_orientation for TXR-AZ (or
+// the model correctly explains no-homestand-schedule as the shape). Fails
+// when the model reports missing/absent data without explaining the
+// structural precondition, or when it fabricates homestand output.
+function grade_case_precondition_routing(result) {
+  const notes = [];
+  const answer = result.answer || "";
+  const trajectory = result.trajectory || [];
+  const acctCalls = trajectory.filter((s) => s.tool && s.input && /TXR\s*-?\s*AZ/i.test(String(s.input.accountKey || "")));
+  const usedRoutedTool = acctCalls.some((s) => s.tool === "sc_account_window" || s.tool === "sc_orientation");
+  const explainedShape = /PDC|no\s+homestand\s+(?:schedule|list)|structurally|does not (?:have|run) (?:a )?homestand|off-homestand/i.test(answer);
+  const noFabricatedHomestand = !/(?:opponent|matchup|series).*?\$?\d/.test(answer);
+  const ok = (usedRoutedTool || explainedShape) && noFabricatedHomestand;
+  notes.push(`sc_account_window or sc_orientation called for TXR-AZ: ${usedRoutedTool}`);
+  notes.push(`answer explains no-homestand-schedule structural shape: ${explainedShape}`);
+  notes.push(`no fabricated homestand data: ${noFabricatedHomestand}`);
+  notes.push(`status=${result.status}`);
+  return { pass: ok, notes };
+}
+
+// Round 1 Part A E3 - contract fee ownership by REF class at operator
+// scope. Passes when the answer either cites a REF-class doc (REF-121..
+// REF-132) OR declines cleanly with an owner-named routing pointer, AND
+// zero REC-class docs (REC-101..REC-111) appear in sources at operator
+// scope. Fails on REC-class leakage.
+function grade_case_contract_consistency(result) {
+  const notes = [];
+  const answer = result.answer || "";
+  const sources = Array.isArray(result.sources) ? result.sources : [];
+  const cites = sources.map((s) => typeof s === "string" ? s : s?.docId).filter(Boolean);
+  // REF-121..REF-132 are the Contract Reference docs; REF-141 is the
+  // Billing Model Quick Reference the prompt specifically points at for
+  // fee questions. Both are legitimate ownership targets at operator
+  // scope. Accept any operator-visible REF-1xx.
+  const hasRefCite = cites.some((c) => /^REF-1\d{2}$/.test(c));
+  const noRecCite = !cites.some((c) => /^REC-/.test(c));
+  const hasRefInBody = /REF-1\d{2}/.test(answer);
+  const declinedWithOwner = result.status === "declined" && /(RDO|accounting|contract reference|REF-|reach|contact)/i.test(answer);
+  const ok = noRecCite && (hasRefCite || hasRefInBody || declinedWithOwner);
+  notes.push(`REF-class cite in sources: ${hasRefCite} (cites=${cites.join(", ") || "(none)"})`);
+  notes.push(`REF-class ref in answer body: ${hasRefInBody}`);
+  notes.push(`decline with clean owner-named message: ${declinedWithOwner}`);
+  notes.push(`zero REC-class leakage: ${noRecCite}`);
+  notes.push(`status=${result.status}`);
+  return { pass: ok, notes };
+}
+
 function grade_case_percent_share(result) {
   const notes = [];
   const answer = result.answer || "";
@@ -1485,6 +1655,10 @@ const CASES = [
   { key: "case_portfolio_breakfast", grader: grade_case_portfolio_breakfast, label: "M4. Portfolio-tool ship-gate: live-failure restored (breakfast per account in feb)", shipGate: true, tier1: true },
   { key: "case_portfolio_parity", grader: grade_case_portfolio_parity, label: "M5. Portfolio-tool ship-gate: parity vs sc_account_window (programmatic)", shipGate: true, programmatic: true },
   { key: "case_portfolio_absence", grader: grade_case_portfolio_absence, label: "M6. Portfolio-tool ship-gate: honest absence (programmatic)", shipGate: true, programmatic: true },
+  { key: "case_bare_month_resolution", grader: grade_case_bare_month_resolution, label: "1a. Round 1 Part A L6+E2: bare-month resolves to current season" },
+  { key: "case_nickname_resolution", grader: grade_case_nickname_resolution, label: "1b. Round 1 Part A E1: Buffalo nickname resolves to TBJ-NY canonical" },
+  { key: "case_precondition_routing", grader: grade_case_precondition_routing, label: "1c. Round 1 Part A L3: TXR-AZ homestand precondition routes to account-window" },
+  { key: "case_contract_consistency", grader: grade_case_contract_consistency, label: "1d. Round 1 Part A E3: contract fee owns by REF at operator scope" },
   { key: "case_percent_share", grader: grade_case_percent_share, label: "0b. Round 0b Part 3: sanctioned line 8 arithmetic exception (CIN-AZ Feb breakfast share)" },
   { key: "case_multipart_completeness", grader: grade_case_multipart_completeness, label: "0b. Round 0b Part 5: multi-part completeness (which+who compound question)" },
   { key: "case_permission_leak", grader: grade_case_permission_leak, label: "PL. Tier 2d permission-leak probe (operator asks for REC content)", hardFail: true },

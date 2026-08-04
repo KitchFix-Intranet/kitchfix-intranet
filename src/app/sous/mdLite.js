@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// mdLite - markdown-lite renderer for Sous answer bodies (Train 3)
+// mdLite - markdown-lite renderer for Sous answer bodies (Train 3 + Round 0c)
 // ════════════════════════════════════════════════════════════════════════════
 //
 // Sous writes markdown natively (plan v2.32: `**$515,712**` in the trace). This
@@ -14,28 +14,18 @@
 //   5. Horizontal rule: `---` on its own line -> <hr>                  (PR A polish)
 //   6. List blocks: consecutive lines starting with "1. " / "- " / "* "
 //      get wrapped in <ol> / <ul>
-//   7. Remaining line breaks become <br>
+//   7. Paragraphs: consecutive prose lines wrap in <p>. Blank lines
+//      separate paragraphs. Single-line-breaks inside one paragraph become
+//      <br>. Source-labeled trailing paragraphs land as
+//      .sa-answer-source. Note:/Important: lead-ins get .sa-callout class.
 //
-// Table support added 2026-07-29 (Phase F PR 2). Sous emits tables when the
-// answer is tabular (per-account price rows, category breakdowns) and the
-// pre-PR renderer left them as literal pipes. A malformed table (bad
-// separator row, mismatched cell count) stays literal rather than producing
-// broken HTML - same degraded-until-complete behavior as unbalanced bold.
-//
-// Headings + hr added 2026-08-01 (PR A polish). The model was emitting
-// `## FORM-004` and `---` in tabular answers and the renderer left them as
-// literal characters. Downshifted one level (`##` -> h3 not h2) so h2 stays
-// reserved for the surface hero. Escape order remains: HTML always first.
-//
-// Applied per delta during streaming: unbalanced markers (an odd count of `**`,
-// a list opener without a following item, or a table split across deltas)
-// render as literal text until the closing token arrives. This is acceptable
-// per the Train 3 prompt - the tiny visual jitter beats streaming a partial
-// DOM tree.
-//
-// ONE HARD RULE: escape before ANY substitution. If a future variant adds a
-// pattern that emits inline HTML from user text, escape that user text first.
-// Otherwise script injection is one prompt away.
+// Round 0c (2026-08-04, part C): step 7 rewritten to emit real <p>
+// paragraphs instead of the prior <br><br> stacks. The prior behavior left
+// vertical rhythm uncontrollable (margins can't bind to text nodes) and
+// broke screen-reader paragraph navigation. Zero <br> for paragraph
+// separation; <br> only for genuine intra-paragraph line breaks. The
+// trailing Source line becomes a real .sa-answer-source element so it can
+// carry the provenance-strip styling (hairline top border, mono date).
 // ════════════════════════════════════════════════════════════════════════════
 
 const HTML_ENTITY_MAP = {
@@ -102,15 +92,62 @@ function applyLists(text) {
   return out.join("\n");
 }
 
-// Turns raw \n outside of list wrappers into <br>. Runs last so it doesn't
-// mangle the <ol>/<ul>/<li> structure - the split happens on \n but list
-// tags are on their own lines, so replacing \n between them is safe (they
-// become <ol><br><li>... which browsers ignore fine, so we strip the \n
-// only between text runs).
-function applyLineBreaks(text) {
-  // Replace \n with <br>, but not adjacent to a block element opening/closing
-  // tag. h3/h4/hr added for the PR A heading + rule pass.
-  return text.replace(/\n(?!<\/?(ol|ul|li|h3|h4|hr)>)|(?<!<\/?(ol|ul|li|h3|h4|hr)>)\n/g, "<br>");
+// A block-HTML line - one whose leading non-whitespace character starts a
+// tag we already emitted from an earlier pass (heading, hr, list wrapper,
+// list item, table part). Such lines are emitted verbatim; they never get
+// wrapped in <p>. New block tags added here must also appear in
+// applyLineBreaks-era's tag list if that helper survives (it does not in 0c).
+const BLOCK_TAG_LINE_RE = /^\s*<\/?(h3|h4|hr|ul|ol|li|table|thead|tbody|tr|th|td)\b/;
+
+function isBlockLine(line) {
+  return BLOCK_TAG_LINE_RE.test(line);
+}
+
+// A paragraph-open marker: does this line's leading text match Source or a
+// callout label after the earlier passes have run? At this point, `**Source:**`
+// has already become `<strong>Source:</strong>`, so both raw and bolded forms
+// need matching.
+const SOURCE_PARAGRAPH_RE = /^\s*(?:<strong>)?[Ss]ources?(?:<\/strong>)?\s*:/;
+const CALLOUT_PREFIX_RE = /^\s*(?:<strong>)?(Note|Important|Warning|Tip|Heads up)(?:<\/strong>)?\s*:/i;
+
+// Wrap prose runs in <p>, emit block-HTML lines verbatim. Consecutive
+// blank lines collapse to a single paragraph boundary. Single-line-breaks
+// inside a paragraph render as <br>. Trailing Source-labeled paragraphs
+// become .sa-answer-source. Callout lead-ins get .sa-callout on the <p>.
+function applyParagraphs(text) {
+  const lines = text.split("\n");
+  const out = [];
+  let buf = [];   // current paragraph's lines
+  const flushBuf = () => {
+    if (buf.length === 0) return;
+    const joined = buf.join("<br>");
+    // Trim whitespace-only paragraphs.
+    if (joined.trim() === "") { buf = []; return; }
+    if (SOURCE_PARAGRAPH_RE.test(joined)) {
+      out.push(`<div class="sa-answer-source">${joined}</div>`);
+    } else if (CALLOUT_PREFIX_RE.test(joined)) {
+      out.push(`<p class="sa-callout">${joined}</p>`);
+    } else {
+      out.push(`<p>${joined}</p>`);
+    }
+    buf = [];
+  };
+  for (const line of lines) {
+    if (line.trim() === "") {
+      // Blank line = paragraph boundary.
+      flushBuf();
+      continue;
+    }
+    if (isBlockLine(line)) {
+      // Any pending prose closes; block-HTML line emits as-is.
+      flushBuf();
+      out.push(line);
+      continue;
+    }
+    buf.push(line);
+  }
+  flushBuf();
+  return out.join("\n");
 }
 
 // GFM-style pipe tables. Matches a header row + separator row + one or more
@@ -209,9 +246,24 @@ function isNumericCell(text) {
   return Number.isFinite(Number(stripped));
 }
 
+// Ordinal-column heuristic. A rank/order column carries small integers
+// (usually 1..N) with no currency, percent, or decimal. Round 0c Part D
+// item: quantities right-align, ordinals left-align. Recognize by content:
+// header cell that reads like a rank label AND every non-empty body cell
+// is a small positive integer.
+const ORDINAL_HEADER_RE = /\b(?:rank|order|position|#|no\.?|number)\b/i;
+function isOrdinalCell(text) {
+  if (text == null) return true;
+  const stripped = String(text).replace(/\*\*/g, "").trim();
+  if (stripped === "" || stripped === "-" || stripped === "\u2014") return true;
+  return /^\d{1,4}$/.test(stripped);
+}
+
 function buildTableHtml(headerCells, bodyRows) {
   // For each column, check if every non-empty body cell parses numeric. If so,
   // tag th+td with data-num so CSS can right-align + tabular-nums.
+  // For ordinal columns, tag with data-ord so CSS can left-align despite the
+  // numeric-shape (Round 0c Part D measured item).
   const numericCols = headerCells.map((_, colIdx) => {
     let sawAny = false;
     for (const row of bodyRows) {
@@ -223,12 +275,29 @@ function buildTableHtml(headerCells, bodyRows) {
     }
     return sawAny;
   });
+  const ordinalCols = headerCells.map((h, colIdx) => {
+    if (!ORDINAL_HEADER_RE.test(h)) return false;
+    let sawAny = false;
+    for (const row of bodyRows) {
+      const cell = row[colIdx];
+      if (cell != null && String(cell).trim() !== "") {
+        sawAny = true;
+        if (!isOrdinalCell(cell)) return false;
+      }
+    }
+    return sawAny;
+  });
+  const attrFor = (i) => {
+    if (ordinalCols[i]) return " data-ord";
+    if (numericCols[i]) return " data-num";
+    return "";
+  };
   const head = "<tr>" + headerCells
-    .map((c, i) => `<th${numericCols[i] ? " data-num" : ""}>${applyBold(c)}</th>`)
+    .map((c, i) => `<th${attrFor(i)}>${applyBold(c)}</th>`)
     .join("") + "</tr>";
   const body = bodyRows
     .map((row) => "<tr>" + row
-      .map((c, i) => `<td${numericCols[i] ? " data-num" : ""}>${applyBold(c)}</td>`)
+      .map((c, i) => `<td${attrFor(i)}>${applyBold(c)}</td>`)
       .join("") + "</tr>")
     .join("");
   return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
@@ -253,11 +322,12 @@ function applyHeadingsAndRule(text) {
 }
 
 // The main entry. Escape first, then bold, then tables, then headings+hr,
-// then lists, then line breaks. Table pass runs AFTER bold so cell content
+// then lists, then paragraphs. Table pass runs AFTER bold so cell content
 // can still carry **strong** spans; runs BEFORE headings because a `|` row
 // is not a heading. Headings run BEFORE lists so `## Foo` doesn't become
-// part of a hyphen-bullet block. Tables/headings/hr/lists never overlap -
-// each pattern owns its own line shape.
+// part of a hyphen-bullet block. The paragraph pass runs LAST, wrapping
+// remaining prose lines in real <p> elements and emitting block-HTML lines
+// (h3, h4, hr, ul, ol, li, table, ...) verbatim.
 export function renderMdLite(input) {
   if (input == null) return "";
   const escaped = escapeHtml(input);
@@ -265,5 +335,5 @@ export function renderMdLite(input) {
   const tabled = applyTables(bolded);
   const headed = applyHeadingsAndRule(tabled);
   const listed = applyLists(headed);
-  return applyLineBreaks(listed);
+  return applyParagraphs(listed);
 }

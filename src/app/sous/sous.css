@@ -299,18 +299,22 @@
   border-bottom: 1px solid var(--accent-sous-line);
 }
 /* 2026-08-03 (Kevin rail-honesty ruling, #598): one-line explanation of
-   what the IN CONTEXT marker means. Rail's mono/label scale in #475569,
-   no uppercase - reads as a plain-English hint under the label. */
+   what the IN CONTEXT marker means. Reads as a plain-English hint under
+   the uppercase mono label.
+   Round 0c Part D measured (2026-08-04): hint was identical to the label
+   (9.5/500/#475569/mono) which read as a second label rather than a hint.
+   Dropped to the sans face, 10.5px, #64748B, non-uppercase per spec. */
 .sa-rail-incontext-hint {
   display: block;
-  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
-  font-size: 9.5px;
-  font-weight: 500;
-  color: #475569;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: #64748B;
   line-height: 1.4;
   margin: 0 4px 6px 12px;
   padding: 0 4px;
-  letter-spacing: 0.02em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* Ask-again icon button (Kevin rail-honesty ruling, #598). The item's
@@ -859,7 +863,10 @@
   font-weight: 800;
   padding: 3px 9px;
   border-radius: 6px;
-  letter-spacing: 0.3px;
+  /* P7 (round 0c Part D): 0.09em (was 0.3px = ~0.03em at 10px). Uppercase
+     pills breathe at 10px only with the wider tracking; letters were
+     touching under the previous value. */
+  letter-spacing: 0.09em;
   background: transparent;
   border: 1.5px solid transparent;
   text-transform: uppercase;
@@ -916,27 +923,59 @@
 .sa-answer-body {
   padding: 14px 18px 16px;
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.5;                      /* Round 0c Part C: body 1.5 (was 1.55). */
   color: var(--text-default, #0F172A);
 }
 .sa-answer-body :first-child { margin-top: 0; }
 .sa-answer-body :last-child { margin-bottom: 0; }
 
 /* mdLite output - keep readable.
+   Round 0c Part C rewrite (2026-08-04): heading scale set at body 14 /
+   h3 15 / h2 17, weight 700 (was 800 - fills counters at these sizes).
+   Line height 1.5 body, 1.35 headings. h2 stays reserved for the surface
+   hero; mdLite emits h3 (##) and h4 (###) only.
    2026-08-03 (depth v2 item 2 + 5): prose blocks cap at 68ch (paragraphs)
    and 66ch (list items - accounts for the 22px list padding) so the
    measure stays comfortable inside the 840 card; tables are exempt and
-   keep width:100% (see .sa-answer-body table below).
-   Section rhythm tightened per item 5: headings 14px above / 6px below,
-   paragraphs 9px bottom, list items 5px bottom. First heading in the body
-   still lands zero-top via the existing .sa-answer-body :first-child rule
-   above. */
+   keep width:100% (see .sa-answer-body table below). */
 .sa-answer-body p { margin: 0 0 9px; max-width: 68ch; }
-.sa-answer-body h3 { font-weight: 800; font-size: 14px; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: -0.01em; }
-.sa-answer-body h4 { font-weight: 700; font-size: 12.5px; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: 0; text-transform: uppercase; }
+.sa-answer-body h2 { font-weight: 700; font-size: 17px; line-height: 1.35; color: var(--kf-navy, #0F3057); margin: 16px 0 6px; letter-spacing: -0.01em; }
+.sa-answer-body h3 { font-weight: 700; font-size: 15px; line-height: 1.35; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: -0.01em; }
+.sa-answer-body h4 { font-weight: 700; font-size: 12.5px; line-height: 1.35; color: var(--kf-navy, #0F3057); margin: 14px 0 6px; letter-spacing: 0; text-transform: uppercase; }
 .sa-answer-body hr { border: none; border-top: 1px solid #EEF2F6; margin: 14px 0; }
 .sa-answer-body ul, .sa-answer-body ol { padding-left: 22px; margin: 0 0 12px; }
 .sa-answer-body li { margin: 0 0 5px; max-width: 66ch; }
+
+/* Round 0c Part C: the trailing Source: line becomes a real element with
+   provenance-strip styling. Hairline top border, generous top margin,
+   12px muted, mono face for the date portion (JS emits the whole line as
+   text; the mono face falls to the whole strip which reads fine at this
+   size and keeps a single rule). Bold Source: label inside stays as
+   <strong> from bold pass. */
+.sa-answer-body .sa-answer-source {
+  margin: 14px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid #E2E8F0;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  color: #64748B;
+  line-height: 1.5;
+  max-width: 68ch;
+}
+.sa-answer-body .sa-answer-source strong { color: #475569; font-weight: 600; }
+
+/* Round 0c Part C: callout paragraph for Note: / Important: / Warning: /
+   Tip: / Heads up: lead-ins. 3px left rule in the module accent, subtle
+   tint, 10px inset. Sous accent (Flame) picked up from tokens.css; falls
+   back to the module hex for older stylesheet loads. */
+.sa-answer-body .sa-callout {
+  border-left: 3px solid var(--accent-sous, #FF7A18);
+  background: #FFF5EC;
+  padding: 8px 12px 8px 10px;
+  margin: 10px 0;
+  border-radius: 0 4px 4px 0;
+}
+.sa-answer-body .sa-callout strong { color: #C2410C; }
 .sa-answer-body code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 0.92em;
@@ -956,30 +995,45 @@
 .sa-answer-body th {
   text-align: left;
   padding: 0 12px 8px;
-  border-bottom: 1.5px solid #D3CFC4;
-  font-size: 10px;
-  font-weight: 700;
+  border-bottom: 1.5px solid #CBD5E1;    /* Round 0c Part D measured: cool border (was #D3CFC4 warm beige). */
+  font-size: 11px;                        /* Round 0c Part D measured: 11px (was 10px). */
+  font-weight: 600;                       /* Round 0c Part D measured: 600 (was 700). */
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #64748B;
+  color: #475569;                         /* Round 0c Part D measured: slate-600 (was slate-500). */
 }
 .sa-answer-body td {
   padding: 9px 12px;
-  border-bottom: 1px solid #F0EEE7;
+  border-bottom: 1px solid #E2E8F0;      /* Round 0c Part D measured: cool border (was #F0EEE7). */
   vertical-align: baseline;
   font-variant-numeric: tabular-nums;
 }
 /* Numeric columns: mdLite tags th+td with data-num when every body cell parses
-   as a number. Right-align + tabular-nums so digits align on the decimal. */
+   as a number. Right-align + tabular-nums so digits align on the decimal.
+   Round 0c Part D measured: tighter horizontal padding on numeric columns
+   so digits sit closer to the aligned edge (10px right vs the 12px text
+   default). */
 .sa-answer-body th[data-num],
 .sa-answer-body td[data-num] {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  padding-right: 10px;
+}
+.sa-answer-body th[data-num] { padding-right: 10px; }
+/* Ordinal columns: rank / order / position labels stay LEFT-aligned even
+   though the cell text is numeric (Round 0c Part D measured item -
+   currently ordinals right-align like money and the reader can't
+   distinguish quantity from position). data-ord is emitted by mdLite when
+   the header matches an ordinal label and every body cell is a small
+   integer. */
+.sa-answer-body th[data-ord],
+.sa-answer-body td[data-ord] {
+  text-align: left;
 }
 /* Zebra rows for scan-ability on multi-row tables. */
 .sa-answer-body tbody tr:nth-child(2n) { background: #FAFBFC; }
 .sa-answer-body tfoot td {
-  border-top: 1.5px solid #D3CFC4;
+  border-top: 1.5px solid #CBD5E1;
   border-bottom: none;
   font-weight: 700;
   color: #0A2548;
@@ -1037,9 +1091,18 @@
   font-size: 12px;
   transition: border-color 0.18s cubic-bezier(.2,0,0,1), background 0.18s cubic-bezier(.2,0,0,1);
 }
-.sa-source-row:hover {
+.sa-source-row:hover,
+.sa-source-row:focus-visible {
+  /* P4 (round 0c Part D): both hover AND keyboard focus land on the same
+     hairline-accent state. The ExternalLink glyph tints Flame at the same
+     time so the open indicator is legible independent of the border. */
   border-color: var(--accent-sous);
   background: white;
+  outline: none;
+}
+.sa-source-row:hover .sa-source-go,
+.sa-source-row:focus-visible .sa-source-go {
+  color: var(--accent-sous-deep);
 }
 .sa-source-idchip {
   font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
@@ -1165,8 +1228,12 @@
 .sa-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 6px;
+  /* Round 0c Part D measured: buttons at 36px desktop / 44px touch.
+     Padding 8px/12px lands ~36px with the 13px icon + line-height 1.
+     Touch breakpoint override at the bottom of the section. */
+  padding: 8px 12px;
+  min-height: 36px;
   border: 1px solid var(--kf-border, #E4E8EC);
   border-radius: 6px;
   background: white;
@@ -1176,6 +1243,9 @@
   color: #475569;
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease;
+}
+@media (hover: none) and (pointer: coarse) {
+  .sa-action-btn { min-height: 44px; padding: 10px 14px; }
 }
 .sa-action-btn:hover {
   border-color: var(--accent-sous);
@@ -1291,7 +1361,10 @@
 .sa-fab-scroll-top {
   position: absolute;
   right: 20px;
-  bottom: 96px;
+  /* P2 (round 0c Part D): bumped from 96px to 116px so the FAB sits with
+     ~20px clear air above the composer at every viewport height (the
+     composer is ~72px tall + padding). Mobile bumped to 100px below. */
+  bottom: 116px;
   z-index: 3;
   width: 36px;
   height: 36px;
@@ -1326,7 +1399,7 @@
   outline-offset: 2px;
 }
 @media (max-width: 767px) {
-  .sa-fab-scroll-top { right: 14px; bottom: 82px; }
+  .sa-fab-scroll-top { right: 14px; bottom: 100px; }
 }
 
 /* ── 7. Composer - matches reference .comp with focus-within border ─────── */
@@ -1742,3 +1815,26 @@
 .sa-overlay-body-scroll .sa-source-section { display: none; }
 .sa-overlay-body-scroll .sa-kpi-strip { display: none; }
 .sa-overlay-body-scroll .sa-source-title { max-width: 180px; }
+
+/* ── Round 0c Part D polish sweep additions ─────────────────────────────── */
+
+/* P5: brand-tinted ::selection so highlighted text carries the Sous accent
+   rather than the browser default blue. Scoped to the surface + panel so
+   it doesn't leak into other modules that transitively import this file. */
+.sa-page ::selection,
+.pb-sous-panel ::selection {
+  background: var(--accent-sous-subtle, #FFF5EC);
+  color: var(--accent-sous-deep, #C2410C);
+}
+
+/* P10: answer cards fade in with a 4px rise. Applied to freshly-added turn
+   articles by attaching .sa-turn--enter briefly on mount. Suppressed under
+   prefers-reduced-motion (no transform, no opacity delta). */
+@keyframes sa-turn-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sa-turn--enter { animation: sa-turn-enter 150ms cubic-bezier(.2,0,0,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .sa-turn--enter { animation: none; }
+}
