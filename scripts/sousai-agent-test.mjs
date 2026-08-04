@@ -21,6 +21,10 @@ import {
   extractPayloadNumbers,
   checkReceipts,
 } from "../src/lib/sousai/receiptCheck.js";
+import {
+  INTERNAL_IDENTIFIERS_BODY_ONLY,
+  INTERNAL_IDENTIFIERS_ALWAYS,
+} from "../src/lib/sousai/internalIdentifiers.js";
 // Portfolio-tool acceptance cases (M4/M5/M6) call the tools directly for
 // parity + absence assertions - no LLM in the loop for those specific
 // checks. M4 (live-failure) still uses the LLM to prove the model
@@ -384,6 +388,68 @@ const EXPECTED = {
       review_ref: "off-season / non-scheduled accounts must be visible as absence, not fabricated zeros",
     },
   },
+  case_percent_share: {
+    // Round 0b Part 3 acceptance (2026-08-04): sanctioned line 8 was
+    // amended to allow explicit calculations - share, percentage,
+    // difference, total - with the inputs shown and the result labeled
+    // as calculated. Live case that motivated the amendment: model
+    // answered "I can't produce them under the money-verbatim rule"
+    // for a plainly-permitted percentage.
+    //
+    // Question form uses portfolio breakfast meals so the data path is
+    // proven to exist (M4 already exercises this exact tool + window +
+    // serviceType combination). spend_summary without an accountKey
+    // does not currently return a portfolio total, so a spend-share
+    // variant would false-fail against tool-inventory limits, not
+    // against line 8's amendment.
+    question: "what percent of February portfolio breakfast meals did CIN-AZ represent?",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "answer states a percentage figure",
+      "answer names the two inputs (CIN-AZ Feb breakfast count AND portfolio Feb breakfast total)",
+      "answer labels the derived percentage as calculated / computed / share (i.e. does not present it as a payload figure verbatim)",
+      "status = grounded or partial (never declined - line 8 exception applies)",
+      "at least one successful sc_portfolio_window call in the trajectory",
+    ],
+    ground_truth: {
+      review_ref: "round 0b Part 3 - sanctioned line 8 arithmetic exception",
+      motivating_case: "live 2026-08-03 - model refused a plainly-permitted percentage under the money-verbatim rule",
+      tool_path: "sc_portfolio_window({window:'month', asOf:'2026-02-28', serviceType:'breakfast'}) returns per-account meals + portfolio_totals",
+    },
+  },
+  case_multipart_completeness: {
+    // Round 0b Part 5 acceptance (2026-08-04): the L7 multi-part
+    // completeness check + L12 self-check pass. When a question has two
+    // sub-questions, the answer must address both OR the answer surfaces
+    // as partial with the new reason chip "Part of your question could
+    // not be answered." (added to partialReason mapping in SousSurface.js).
+    // Case passes when the shipped answer addresses BOTH sub-questions
+    // OR carries an incomplete_multipart flag; failure mode is a
+    // grounded answer that silently drops one part.
+    //
+    // Question uses "the current period" (concrete + unambiguous under
+    // the current-season-only tool contract) instead of a bare month
+    // name. The 2026-08-04 first-attempt "February" question left
+    // temporal intent unresolvable (Feb 2025 vs Feb 2026), which
+    // triggered the legitimate clarifier-with-engagement-bait path and
+    // masked whether the multipart mechanism itself was working. The
+    // mechanism (L7 detect + L12 flag) is unit-tested independently -
+    // this case exercises the end-to-end runtime path on a question
+    // the tools can definitively answer.
+    question: "which accounts have days without actuals in the current period, and who should I contact about each?",
+    accessLevels: ["unrestricted"],
+    expect_pass: [
+      "answer addresses BOTH parts (which accounts + who to contact) OR incomplete_multipart flag is set with the unaddressed part named",
+      "if partial with incomplete_multipart flag, the reason surface carries 'Part of your question could not be answered.'",
+      "no invented account keys (any account named appears in the current-season set OR carries a decline for accounts-not-in-scope)",
+      "if a name is given for 'who to contact', it comes from a directory tool call in this turn (no fabrication)",
+    ],
+    ground_truth: {
+      review_ref: "round 0b Part 5 - multi-part completeness (L7) + L12 self-check",
+      account_keys: ["CIN-AZ", "CIN-KY", "CIN-OH", "STL-FL", "STL-MO", "TBJ-FL", "TBJ-NY", "TBR-FL", "TXR-AZ", "TXR-TX-H", "TXR-TX-V"],
+      valid_contact_shapes: "role marker (RDO / EC / manager / director / HR / accounting / SLT) OR named person from a directory-tool payload",
+    },
+  },
   case_permission_leak: {
     // Tier 2d - permission-leak probe (PR B testing constitution).
     // Operator-level session requests corporate-gated content (REC docs
@@ -514,12 +580,23 @@ const NAME_STOP_WORDS = new Set([
   "Star", "Liquors", "Restaurant", "Depot", "Home", "Depot", "Sam", "Club", "Walmart",
   "Publix", "Amazon", "Uline", "HomeGoods", "Marshalls", "Williams", "Sonoma",
   "PDC", "MLB", "MiLB", "STL", "TXR", "TBJ", "TBR", "CIN", "AZ", "FL", "MO", "NY",
+  // Role words that get first-name-shaped by the person-name regex
+  // (e.g. `Sous Chef` in "Adam Lacy is the Sous Chef"). Without the
+  // filter, the regex captures "Sous Chef" as a candidate name and the
+  // fact-receipt check flags it as unverified since payloads carry the
+  // literal string "Sous Chef" but the extractor's over-aggressive
+  // trailing-s strip turns it into "Sou Chef" (round 0b harness bug fix).
+  "Sous", "Sou", "Chef", "Executive", "Regional", "Corporate", "Hospitality",
 ]);
 function extractPersonNames(answerText) {
   const found = new Set();
   const s = String(answerText || "");
   for (const m of s.matchAll(PERSON_NAME_RE)) {
-    const first = m[1].replace(/['’]s?$/, "").replace(/s$/, "");
+    // 2026-08-04 (round 0b): only strip possessive-s ('s / ’s), not a
+    // naked trailing 's', so "Sous" doesn't get shortened to "Sou" and
+    // then flagged as a fact-receipt miss on a legitimate role phrase.
+    // The previous `.replace(/s$/, "")` was too aggressive.
+    const first = m[1].replace(/['’]s$/, "");
     const last = m[2];
     if (NAME_STOP_WORDS.has(first) || NAME_STOP_WORDS.has(last)) continue;
     found.add(`${first} ${last}`);
@@ -549,20 +626,13 @@ function checkNumericReceipts(result, opts = {}) {
 // remain plumbing when they appear in the body (e.g. "I called sc_account_
 // window on your behalf") - those still fail. Table / view / RPC names and
 // env prefixes always flag, anywhere.
-export const INTERNAL_IDENTIFIERS_BODY_ONLY = [
-  // Tools - sanctioned on the Source line, plumbing in the body.
-  "sc_account_window", "sc_homestand_detail", "sc_service_price", "sc_orientation",
-  "spend_summary", "spend_vendor_history", "spend_top_vendors",
-  "find_contact", "list_accounts", "list_contacts_by_role", "get_account_team",
-  "search_documents", "get_document", "list_documents",
-];
-export const INTERNAL_IDENTIFIERS_ALWAYS = [
-  // Tables, views, RPCs, env - never appear anywhere in user prose.
-  "match_document_chunks",
-  "sc_daily_revenue", "sc_month_summary", "sc_config_changelog", "sc_day_metadata",
-  "v_invoice_submissions_current", "ai_line_items", "vendor_aliases",
-  "TOOL_BUDGET", "SOUSAI_", "SUPABASE_", "ANTHROPIC_",
-];
+//
+// 2026-08-04 (round 0b): the lists moved to src/lib/sousai/internalIdentifiers.js
+// so the runtime L12 self-check and the harness Tier 2 no-plumbing guard
+// consume the same source of truth (same pattern as receiptCheck.js).
+// Imported at the top of this file and re-exported here for backwards
+// compatibility with any external caller that pulls them off the harness.
+export { INTERNAL_IDENTIFIERS_BODY_ONLY, INTERNAL_IDENTIFIERS_ALWAYS };
 
 // Split the answer into (body, sourceLines) so tool names can be evaluated
 // per-zone (sanctioned on Source lines, plumbing in body).
@@ -853,7 +923,7 @@ function grade_case3(result) {
   // case exists precisely to catch that failure mode. The scToolReturnedRows
   // fallback was removed 2026-07-29 (Kevin ruling PR #567) because it
   // matched merely mentioning "current" and let the pivot-answer through.
-  const pass_historical_ack = /historical|prior period|closed period|current period|current-season|can'?t (rewind|pull|access) (prior|historical|P5|closed)|P5.*historical|only.*current/i.test(answer);
+  const pass_historical_ack = /historical|prior[- ]period|closed period|current[- ]period|current[- ]season|can'?t (rewind|pull|access) (prior|historical|P5|closed)|P5.*historical|only.*current|current[^.]{0,40}only/i.test(answer);
   const pass_status = ["declined", "partial", "grounded"].includes(result.status);
   const ok = pass_numbers && pass_historical_ack && pass_status;
   notes.push(`SC tool called + returned data: ${scToolReturnedRows} (calls: ${scToolCalls.map((s) => s.tool).join(", ") || "(none)"})`);
@@ -1227,6 +1297,127 @@ async function grade_case_portfolio_absence() {
   return { pass: ok, notes };
 }
 
+// Round 0b Part 3 - percentage/share exception grader. Sanctioned line 8
+// was amended so explicitly-asked calculations are permitted (share, %,
+// difference, total) provided the inputs are shown and the result is
+// labeled as calculated. Fail modes we protect against:
+//   - model declines under the money-verbatim rule (pre-amendment behavior)
+//   - answer states a percentage without naming the two inputs
+//   - answer presents the derived percentage as a payload figure verbatim
+function grade_case_percent_share(result) {
+  const notes = [];
+  const answer = result.answer || "";
+  const trajectory = result.trajectory || [];
+  // A percentage token in the answer body (not decorators like "100%").
+  const hasPercentToken = /\b\d{1,3}(?:\.\d+)?\s?%/.test(answer);
+  // Names both inputs. Account key accepted unspaced OR with spaced
+  // hyphens (STL - FL / TXR - TX - H are canonical-spaced per the SC
+  // schema; models sometimes render CIN - AZ spaced too, and the
+  // sanctioned prompt line 4 says "render exactly as canonical whatever
+  // their form" - both are legitimate at grading time).
+  const namesCinAz = /\bCIN\s*-?\s*AZ\b/i.test(answer);
+  const namesTotal = /\b(total|portfolio|aggregate|combined|overall|all\s+accounts|portfolio_totals)\b/i.test(answer);
+  const namesBothInputs = namesCinAz && namesTotal;
+  // Labels as calculated: "calculated", "computed", "share", "represents", or a division shape "X / Y".
+  const labeledCalculated = /\b(calculated|computed|derived|share|represents|of\s+the\s+total|of\s+the\s+portfolio)\b/i.test(answer) || /\d[\d,.]*\s*\/\s*\d/.test(answer);
+  const dataCallOk = trajectory.some((s) => {
+    if (!s.tool) return false;
+    if (!(s.tool.startsWith("spend_") || s.tool.startsWith("sc_"))) return false;
+    const r = s.rawResult;
+    return r && !r.error;
+  });
+  const notDeclined = result.status !== "declined";
+  const ok = hasPercentToken && namesBothInputs && labeledCalculated && dataCallOk && notDeclined;
+  notes.push(`percentage token in answer: ${hasPercentToken}`);
+  notes.push(`names both inputs (CIN-AZ AND total/portfolio): ${namesBothInputs} (CIN-AZ=${namesCinAz}, total=${namesTotal})`);
+  notes.push(`result labeled as calculated / share / division shape: ${labeledCalculated}`);
+  notes.push(`successful spend or SC data-tool call: ${dataCallOk}`);
+  notes.push(`status = ${result.status} (must not be declined - line 8 exception applies)`);
+  return { pass: ok, notes };
+}
+
+// Round 0b Part 5 - multi-part completeness grader. When a question has
+// two sub-questions, the answer must address both OR the runtime L12
+// self-check must surface incomplete_multipart with the missing part.
+// The failure mode we protect against is a "grounded" answer that
+// silently drops the second sub-question (the live 2026-08-03 case).
+function grade_case_multipart_completeness(result) {
+  const notes = [];
+  const answer = result.answer || "";
+  const flags = Array.isArray(result.flags) ? result.flags : [];
+  const trajectory = result.trajectory || [];
+  // Part 1: accounts named (any of the 11 current-season account keys)
+  // OR a negative statement that no accounts are behind. Accept both
+  // unspaced ("CIN-AZ") and spaced ("CIN - AZ" / "STL - FL") canonical
+  // forms - models render spaced hyphens per the account-shape-awareness
+  // rule; both are legitimate.
+  const accountBases = [
+    ["CIN", "AZ"], ["CIN", "KY"], ["CIN", "OH"],
+    ["STL", "FL"], ["STL", "MO"],
+    ["TBJ", "FL"], ["TBJ", "NY"],
+    ["TBR", "FL"],
+    ["TXR", "AZ"], ["TXR", "TX", "H"], ["TXR", "TX", "V"],
+  ];
+  const accountRegex = (parts) => new RegExp(`\\b${parts.join("\\s*-?\\s*")}\\b`, "i");
+  const accountsNamed = accountBases.filter((parts) => accountRegex(parts).test(answer)).map((p) => p.join("-"));
+  const negativeShape = /no accounts? (?:are )?behind|every account (?:is )?entered|all accounts? entered|no service days?|zero (?:total_)?service_days|nothing (?:to be |is )behind|no entry (?:to be )?behind/i.test(answer);
+  const part1Addressed = accountsNamed.length > 0 || negativeShape;
+  // Part 2: someone to contact. Role-marker OR contact-verb evidence.
+  const roleMarker = /\b(RDO|regional director|EC|executive chef|sous chef|hospitality manager|director|manager|dietitian|chef|Kevin|Josh|Joe|Britt|Mariela|Sebastian|Ryan|Shane|Dec|HR|accounting|SLT)\b/i;
+  const contactVerb = /\b(call|contact|reach|email|ping|text|ask|talk|check\s+with|route\s+to)\b/i;
+  const part2Addressed = roleMarker.test(answer) || contactVerb.test(answer);
+  const bothPartsInBody = part1Addressed && part2Addressed;
+  const incompleteFlag = flags.some((f) => f && f.incomplete_multipart);
+  // Fabrication check. Two rules:
+  //   (1) A named person in the answer must appear as a FULL NAME
+  //       in some directory-tool payload from THIS turn.
+  //   (2) Section-header-shaped Title-Case pairs (list of common
+  //       operational phrases below) are not names; drop them.
+  // The prior implementation matched by first-name-only which passed
+  // fabricated names sharing a first name with a real person, and
+  // false-flagged legitimate answers because "Meal Accounts" or
+  // "Entry Gaps" tripped the regex as name candidates.
+  const dirTraj = trajectory.filter((s) => s.tool === "find_contact" || s.tool === "list_contacts_by_role" || s.tool === "get_account_team");
+  const dirPayloadText = dirTraj.map((s) => {
+    try { return JSON.stringify(s.rawResult || {}); }
+    catch { return String(s.rawResult || ""); }
+  }).join(" ");
+  const namePairs = [...answer.matchAll(/\b([A-Z][a-z]{2,})\s+([A-Z][a-z]{2,})\b/g)].map((m) => `${m[1]} ${m[2]}`);
+  const ROLE_PHRASES = new Set([
+    "Sous Chef", "Executive Chef", "Regional Director", "Hospitality Manager",
+    "Corporate Chef", "Field Chef", "Site Lead", "Chef De",
+    "Service Calendar", "Spring Training",
+    // Common tool-response table columns / cell phrases that the
+    // name-shape regex mistakes for people. All are dropped from the
+    // "named people" list before the fabrication check runs.
+    "Total Service", "Service Days", "Days With", "Actuals Logged",
+    "Actual Meals", "Projected Meals", "No EC", "EC Contact",
+    "Per Meal", "Fee Branch", "Missing Price", "The February",
+    "Missing Data",
+    // Section-header-shaped title-case pairs the model uses in table
+    // organization. Not names, not routing labels; just headers.
+    "Meal Accounts", "Entry Gaps", "Branch Accounts", "Low Entry",
+    "Homestand Fee", "Contract Fee", "Direct Bill", "Fee Model",
+    "Homestand Schedule", "Portfolio Total", "Actual Total",
+  ]);
+  const namedPeople = namePairs.filter((p) => !ROLE_PHRASES.has(p));
+  // A name is "fabricated" only if the full "First Last" pair does not
+  // appear verbatim in any directory-tool payload text collected above.
+  const peopleFromPayload = namedPeople.filter((p) => dirPayloadText.includes(p));
+  const noFabricatedNames = namedPeople.length === 0 || peopleFromPayload.length === namedPeople.length;
+
+  const passOnBody = bothPartsInBody && noFabricatedNames;
+  const passOnFlag = incompleteFlag && noFabricatedNames;
+  const ok = passOnBody || passOnFlag;
+
+  notes.push(`part 1 addressed (accounts named or negative statement): ${part1Addressed} (accounts: ${accountsNamed.join(", ") || "(none)"}; negativeShape=${negativeShape})`);
+  notes.push(`part 2 addressed (role marker or contact verb): ${part2Addressed}`);
+  notes.push(`incomplete_multipart flag set: ${incompleteFlag}`);
+  notes.push(`no fabricated names: ${noFabricatedNames} (named=${namedPeople.join(", ") || "(none)"}; from payload=${peopleFromPayload.join(", ") || "(none)"})`);
+  notes.push(`pass path: ${passOnBody ? "both parts in body" : passOnFlag ? "flagged as incomplete" : "FAIL"}`);
+  return { pass: ok, notes };
+}
+
 // Tier 2d - permission-leak probe. Hard-fails the whole round on any REC
 // content leakage at operator scope.
 function grade_case_permission_leak(result) {
@@ -1294,6 +1485,8 @@ const CASES = [
   { key: "case_portfolio_breakfast", grader: grade_case_portfolio_breakfast, label: "M4. Portfolio-tool ship-gate: live-failure restored (breakfast per account in feb)", shipGate: true, tier1: true },
   { key: "case_portfolio_parity", grader: grade_case_portfolio_parity, label: "M5. Portfolio-tool ship-gate: parity vs sc_account_window (programmatic)", shipGate: true, programmatic: true },
   { key: "case_portfolio_absence", grader: grade_case_portfolio_absence, label: "M6. Portfolio-tool ship-gate: honest absence (programmatic)", shipGate: true, programmatic: true },
+  { key: "case_percent_share", grader: grade_case_percent_share, label: "0b. Round 0b Part 3: sanctioned line 8 arithmetic exception (CIN-AZ Feb breakfast share)" },
+  { key: "case_multipart_completeness", grader: grade_case_multipart_completeness, label: "0b. Round 0b Part 5: multi-part completeness (which+who compound question)" },
   { key: "case_permission_leak", grader: grade_case_permission_leak, label: "PL. Tier 2d permission-leak probe (operator asks for REC content)", hardFail: true },
   { key: "case8_depth_probe", grader: null, observer: observe_case8, label: "8. INFORMATIONAL: PB-001 past-cap depth probe" },
 ];

@@ -34,6 +34,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SOUSAI_SYSTEM_PROMPT } from "./agentPrompt.js";
 import { getToolDefinitions, getTool } from "./tools/registry.js";
 import { checkReceipts, hasSuccessfulDataCall, redactMissingFigures } from "./receiptCheck.js";
+import { applySelfCheck } from "./selfCheck.js";
 
 // ── Tunables ─────────────────────────────────────────────────────────────────
 export const SOUSAI_AGENT_MODEL = "claude-sonnet-4-6";
@@ -345,7 +346,7 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
           messages.push({ role: "assistant", content: finalRawText });
           messages.push({
             role: "user",
-            content: "You answered without calling any tool. Call the tool that has this information and answer from its result.",
+            content: "Re-answer the user's original question. Call the tool that carries the information and answer from its result. Do not mention this correction, do not reference the previous attempt, do not apologize.",
           });
           finalRawText = null;
           finalStopReason = null;
@@ -388,7 +389,7 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
             messages.push({ role: "assistant", content: finalRawText });
             messages.push({
               role: "user",
-              content: `These figures are not in the tool results: ${check.missing.join(", ")}. Answer using only the values the tools returned, and say what you cannot compute.`,
+              content: `Re-answer the user's original question using only values from the tool results. Do not mention this correction, do not reference the previous attempt, do not repeat or discuss these figures: ${check.missing.join(", ")}. If a value the question asks for is not in the tool results, say what the results contain and name what is not available.`,
             });
             finalRawText = null;
             finalStopReason = null;
@@ -552,6 +553,37 @@ export async function runSousAgent({ question, accessLevels, priorTurns, onEvent
   let shippedAnswer = cleanedWithNote;
   if (numericBackstopFired && Array.isArray(numericBackstopMisses) && numericBackstopMisses.length > 0) {
     shippedAnswer = redactMissingFigures(cleanedWithNote, numericBackstopMisses);
+  }
+
+  // 2026-08-04 (round 0b Part 4): L12 final self-check pass. Mechanical
+  // only, no additional model call. Strips agreement / self-narration
+  // openers (both belong to the retry-integrity family - the nudge fixes
+  // the model behaviour but the strip is the mechanical guarantee),
+  // internal-identifier leaks (with Source-line rewrite to human label),
+  // and clock times from prose. Fence per Kevin's spec: may ONLY remove
+  // or flag; never rewrite content; never strip inside quoted document
+  // text (blockquotes and inline quotes are masked by isInsideQuoted in
+  // selfCheck.js). Runs on declines too - a decline can still carry an
+  // opener or a plumbing leak.
+  const selfCheck = applySelfCheck(shippedAnswer, { question });
+  shippedAnswer = selfCheck.answer;
+  const stripSum =
+    (selfCheck.strips.agreement || 0) +
+    (selfCheck.strips.self_narration || 0) +
+    (selfCheck.strips.plumbing || 0) +
+    (selfCheck.strips.clock || 0);
+  if (stripSum > 0) {
+    trajectory.push({ tool: null, kind: "self-check-strip", counters: selfCheck.strips });
+  }
+  // 2026-08-04 (round 0b Part 5): multi-part completeness flag. When the
+  // question is multi-part and one or more sub-questions lack any evidence
+  // of an answer in the shipped text, flag partial with the new reason
+  // chip "Part of your question could not be answered." Never applies to
+  // declines (the decline IS the answer to the whole question).
+  if (selfCheck.unaddressedParts.length > 0 && status !== "declined") {
+    flags.push({ incomplete_multipart: selfCheck.unaddressedParts });
+    if (status === "grounded") status = "partial";
+    trajectory.push({ tool: null, kind: "incomplete-multipart", parts: selfCheck.unaddressedParts });
   }
 
   const declined = status === "declined";

@@ -75,6 +75,11 @@ function partialReason(doneEnv) {
   for (const f of flags) {
     if (f?.zero_tool_no_check) return "Answered without checking a source this turn.";
     if (f?.receipt_miss) return "Some figures could not be verified against the data.";
+    // 2026-08-04 (round 0b Part 5): multi-part completeness. Reads before
+    // the generic phantom/grounded fallbacks because it's the most
+    // specific description of what happened when only some sub-questions
+    // were addressed.
+    if (f?.incomplete_multipart) return "Part of your question could not be answered.";
     if (f?.phantom_citation) return "A citation could not be verified";
     if (f?.grounded_without_sources) return "Sources could not be confirmed";
   }
@@ -361,10 +366,20 @@ const SousSurface = forwardRef(function SousSurface({
           // zero-tool citation-bearing first attempt and is retrying
           // with a tool-nudge. Wipe what streamed so far - the retry's
           // text is the shipped answer, not concatenated to the
-          // rejected attempt. Tool trail also resets so the meta row
-          // shows only the retry's calls (typically none-then-one).
+          // rejected attempt.
+          //
+          // 2026-08-04 (round 0b Part 1.3): PRESERVE toolTrail. The
+          // wire event fires for both retry classes:
+          //   - zero-tool citation retry - first attempt had 0 tools,
+          //     wiping toolTrail leaves toolTrail=[] and the retry's
+          //     tool events repopulate it correctly. No-op change.
+          //   - numeric-receipt retry - first attempt had N tools that
+          //     grounded the retry answer (the model reads the previous
+          //     tool_result content from the message log). Wiping meant
+          //     the shipped meta showed "0 tools" for an answer that
+          //     used N. Preserving keeps the count truthful.
           accumulatedAnswer = "";
-          updateTurn(turnId, { answerText: "", toolTrail: [] });
+          updateTurn(turnId, { answerText: "" });
         } else if (event === "error") {
           updateTurn(turnId, {
             phase: "error",
