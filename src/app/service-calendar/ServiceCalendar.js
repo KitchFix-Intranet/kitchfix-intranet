@@ -51,6 +51,7 @@ import MobileBooksBar from "./v2/MobileBooksBar";
 import BulkEntry from "./v2/bulk/BulkEntry";
 import BulkReview from "./v2/bulk/BulkReview";
 import "./v2/bulk/bulk.css";
+import { isFeeNoDollar } from "./v2/vocab";
 // Phase 3-B (2026-07-28; flight retired 2026-08-01): Handoff coordinator.
 // Owns sessionMap, month-complete card state, and the finalize timer
 // that closes/advances the modal on save. No flight layer after
@@ -3487,6 +3488,14 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 );
               } : undefined}
               onTargetDay={targetDay}
+              /* Bulk entry on fee accounts (owner Ruling 4, 2026-08-04).
+                 Same bulk mechanism as per-meal via DrillRail - single
+                 setBulkMode wire, single BulkEntry surface downstream.
+                 Scoped to isFeeNoDollar so AAA (OpsRailBase MLB variant)
+                 does not silently inherit bulk it never asked for. */
+              onBulkModeToggle={isFeeNoDollar(data?.account)
+                ? (next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }
+                : undefined}
             />
           ) : (
             <DrillRail
@@ -3714,6 +3723,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                 );
               } : undefined}
               onTargetDay={targetDay}
+              /* Bulk entry on fee accounts (owner Ruling 4, 2026-08-04).
+                 Month-drill mirror of the period-drill mount above. */
+              onBulkModeToggle={isFeeNoDollar(data?.account)
+                ? (next) => { setBulkMode(next); if (!next) setBulkSelected(new Set()); }
+                : undefined}
             />
           ) : (
             <DrillRail
@@ -4083,6 +4097,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             accountSegment={data?.account?.category || ""}
             syntheticDay={syntheticDay}
             getNotScheduled={bulkGetNotScheduled}
+            feeNoDollar={isFeeNoDollar(data?.account)}
           />
         );
       })()}
