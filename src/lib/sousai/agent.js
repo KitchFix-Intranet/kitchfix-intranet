@@ -45,7 +45,17 @@ export const SOUSAI_AGENT_MODEL = "claude-sonnet-4-6";
 // `sc_month_summary` as an all-accounts one-call tool). No loop
 // restructure, no parallelism; just the one constant.
 export const TOOL_BUDGET = 14;
-export const MAX_OUTPUT_TOKENS = 1024;
+// Pre-demo Fix 1 (2026-08-04, P0): raised from 1024 to 2048 after live
+// production found "what is our allergen procedure?" shipping PARTIAL /
+// "Answer was cut short" mid-word ("Pull the suspected item and all
+// utens..."). The model reached the 1024 output ceiling before finishing
+// PB-002's protocol steps + Source line + section refs; total_ms 33.2s.
+// Same question was GROUNDED at 22.7s pre-#622. Ceiling was the binding
+// constraint. 2048 gives comfortable headroom for any long Playbook
+// procedure without paying for tokens the model never emits (typical
+// answer runs 200-600 output tokens). Single knob to raise for future
+// answer classes that grow past this.
+export const MAX_OUTPUT_TOKENS = 2048;
 
 // ── Tool dispatch ────────────────────────────────────────────────────────────
 // Every tool ships through the registry. Adding a data tool is one file plus

@@ -352,6 +352,16 @@ async function handleAsk(gate) {
           usage: result.usage,
           truncated: result.truncated ?? false,
           flags: result.flags ?? [],
+          // Pre-demo Fix 2 (2026-08-04, P1): ship the FINAL answer (post
+          // L12 self-check strips + numeric-receipt token redaction) so the
+          // client can replace its accumulated streamed text with the
+          // version that actually shipped to the log. Without this the
+          // client shows the un-stripped streamed text - "Let me pull that
+          // now." openers were reaching users unchanged, because the L12
+          // strip runs after streaming completes and only affects the
+          // logged answer + envelope, not the live wire deltas. Full text
+          // (not a delta) so the client can drop-in replace answerText.
+          answer: result.answer ?? null,
         });
       }
       try {

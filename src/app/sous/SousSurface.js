@@ -415,12 +415,27 @@ const SousSurface = forwardRef(function SousSurface({
           });
         } else if (event === "done") {
           const env = data || {};
-          updateTurn(turnId, {
+          // Pre-demo Fix 2 (2026-08-04, P1): replace the accumulated
+          // streamed answerText with the SHIPPED answer if the server
+          // sent it. This is the L12-stripped / redaction-applied text
+          // that actually landed in the log; the streamed tokens are
+          // the raw model output. Without this the user sees "Let me
+          // pull that now." openers that the strip is supposed to
+          // remove - the strip runs after streaming and only affected
+          // the logged answer + envelope pre-fix. Full drop-in replace
+          // (small visual pop at the very end of streaming; small
+          // acceptable cost for a truthful render).
+          const patch = {
             phase: "done",
             status: env.status || "grounded",
             doneEnv: env,
             durationMs: Date.now() - startedAt,
-          });
+          };
+          if (typeof env.answer === "string" && env.answer.length > 0) {
+            patch.answerText = env.answer;
+            accumulatedAnswer = env.answer;
+          }
+          updateTurn(turnId, patch);
           // Append to memoryPairs (chronological order, cap at 3). Only
           // grounded / partial / declined answers count; errors don't
           // become context (the error state stays out of history).

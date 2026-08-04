@@ -781,6 +781,21 @@ function checkNoUnretrievedDocIds(result) {
   return { pass: true, note: "all Source-line cites came from this turn's tools" };
 }
 
+// Pre-demo Fix 2 (2026-08-04): assert the shipped answer does not start
+// with a narration or agreement opener. The L12 self-check strips these
+// server-side; this Tier-2 guard proves they don't leak to any user-
+// visible answer under any harness case. Same opener families as
+// selfCheck.js's AGREEMENT_OPENERS + SELF_NARRATION_OPENERS.
+const LEADING_OPENER_RE = /^\s*(?:you['’]re\s+right|you\s+are\s+right|good\s+catch|great\s+question|apologies|sorry|let\s+me\s+(?:pull|check|look))/i;
+function checkNoLeadingOpener(result) {
+  const answer = result.answer || "";
+  if (LEADING_OPENER_RE.test(answer)) {
+    const first = answer.slice(0, 60).replace(/\n/g, " ");
+    return { pass: false, note: `leading opener detected: "${first}..."` };
+  }
+  return { pass: true, note: "no leading opener" };
+}
+
 function runTier2Guards(result) {
   const guards = {
     no_plumbing: checkNoPlumbing(result),
@@ -788,6 +803,7 @@ function runTier2Guards(result) {
     decline_shape: checkDeclineShape(result),
     no_clock_in_prose: checkNoClockInProse(result),
     no_unretrieved_doc_ids: checkNoUnretrievedDocIds(result),
+    no_leading_opener: checkNoLeadingOpener(result),
   };
   const failing = Object.entries(guards).filter(([_k, v]) => !v.pass);
   return {
