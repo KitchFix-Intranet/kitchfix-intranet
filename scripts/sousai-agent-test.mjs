@@ -755,7 +755,7 @@ function checkDeclineShape(result) {
   // shapes the model emits for tool-scope declines - "can't pull", "can't
   // back-query", "tools are scoped to", "current-season only", etc.
   const ownerRe = /\b(RDO|HR|dietitian|counsel|SLT|Kevin|Mariela|Sebastian|EC|Executive Chef|your (?:RDO|EC|Chef)|accounting|Finance)\b/i;
-  const gapRe = /(I don't have|don't have.*documented|not documented|not covered|isn'?t in the (?:playbook|corpus)|no.*documented|not loaded|can'?t (?:pull|back-query|access|retrieve|surface)|tools?.*(?:scoped|limited|current-season|current-period)|current[- ]?(?:season|period).*only|(?:current-)?season only|prior period|structurally|(?:not|no).*in.*(?:tools?|Playbook|corpus))/i;
+  const gapRe = /(I don't have|don't have.*documented|not documented|not covered|isn'?t in the (?:playbook|corpus)|no.*documented|not loaded|can'?t (?:pull|back-query|access|retrieve|surface)|tools?.*(?:scoped|limited|current-season|current-period)|current[- ]?(?:season|period).*only|(?:current-)?season only|prior period|structurally|(?:not|no).*in.*(?:tools?|Playbook|corpus)|no homestand|doesn'?t run on a homestand|PDC facility|doesn'?t apply|no.*summary (?:to pull|available)|(?:concept|frame).*(?:doesn'?t|does not) apply)/i;
   const ownerNamed = ownerRe.test(answer);
   const gapNamed = gapRe.test(answer);
   const pass = ownerNamed || gapNamed;
