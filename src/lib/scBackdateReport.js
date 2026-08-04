@@ -136,7 +136,7 @@ export async function describeBackdateImpact(args) {
     throw new Error("describeBackdateImpact: type=\"price\" requires serviceId and newPrice");
   }
   try {
-    const delta = await Promise.race([
+    const result = await Promise.race([
       computePriceDeltaFromView(accountKey, serviceId, effectiveDate, ceiling, Number(newPrice), closedReport.closedPeriodDates),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error("preview timeout")), PREVIEW_TIMEOUT_MS)
@@ -145,8 +145,17 @@ export async function describeBackdateImpact(args) {
     return {
       closedPeriods: closedReport.closedPeriods,
       affectedDayCount: closedReport.affectedDayCount,
-      revenueDeltaCents: delta,
+      revenueDeltaCents: result.deltaCents,
       deltaSource: "full-preview",
+      // TEMPORARY debug payload (2026-08-04 delta-server bounce).
+      // Owner inspects in DevTools Network response body. Remove
+      // after root cause is found.
+      debug: {
+        ceilingUsed: ceiling,
+        closedPeriodDatesCount: (closedReport.closedPeriodDates || []).length,
+        closedPeriodDatesSample: (closedReport.closedPeriodDates || []).slice(0, 3),
+        ...result.debug,
+      },
     };
   } catch (err) {
     // Owner ruling: fall back to C, do not fail closed. A warning naming
@@ -158,6 +167,7 @@ export async function describeBackdateImpact(args) {
       affectedDayCount: closedReport.affectedDayCount,
       revenueDeltaCents: null,
       deltaSource: "periods-only",
+      debug: { ceilingUsed: ceiling, error: err?.message || String(err) },
     };
   }
 }
@@ -303,7 +313,9 @@ async function computePriceDeltaFromView(accountKey, serviceId, effectiveDate, c
   // from enumerateClosedPeriods above). This makes the delta cover
   // exactly the days the panel is about to name in its count.
   const closedDateSet = new Set(closedPeriodDates || []);
-  if (closedDateSet.size === 0) return 0;
+  if (closedDateSet.size === 0) {
+    return { deltaCents: 0, debug: { reason: "empty-closed-date-set" } };
+  }
 
   const { data: dayRows, error: dayErr } = await supa
     .from("sc_daily_revenue")
@@ -317,9 +329,36 @@ async function computePriceDeltaFromView(accountKey, serviceId, effectiveDate, c
   if (dayErr) throw new Error(`sc_daily_revenue read failed: ${dayErr.message}`);
 
   let deltaCents = 0;
+  // TEMPORARY diagnostic payload (2026-08-04 delta-server bounce).
+  // Owner reports delta = $0 with deltaSource: "full-preview" after
+  // the count fix landed - runtime visibility of intermediates so the
+  // actual bug shows up in DevTools Network. Remove after root cause.
+  const debug = {
+    accountKey,
+    serviceId,
+    effectiveDate,
+    ceiling,
+    newPrice,
+    newPrice_type: typeof newPrice,
+    closedDateSetSize: closedDateSet.size,
+    closedDateSample: [...closedDateSet].slice(0, 3),
+    dayRowsReturned: (dayRows || []).length,
+    dayRowsAfterFilter: 0,
+    dayRowsSkippedNonRevenue: 0,
+    dayRowsSkippedNotInClosedSet: 0,
+    sampleDayRow: (dayRows && dayRows.length > 0) ? dayRows[0] : null,
+    perRowDeltas: [],
+  };
   for (const row of dayRows || []) {
-    if (!closedDateSet.has(row.service_date)) continue;
-    if (row.is_non_revenue) continue;
+    if (!closedDateSet.has(row.service_date)) {
+      debug.dayRowsSkippedNotInClosedSet++;
+      continue;
+    }
+    if (row.is_non_revenue) {
+      debug.dayRowsSkippedNonRevenue++;
+      continue;
+    }
+    debug.dayRowsAfterFilter++;
     const projectedCount = Number(row.projected_count || 0);
     const actualCount = Number(row.actual_count || 0);
     const projectedRevenue = Number(row.projected_revenue || 0);
@@ -327,7 +366,8 @@ async function computePriceDeltaFromView(accountKey, serviceId, effectiveDate, c
 
     // Projected side always shifts (backdated row is price_kind='projected').
     const newProjectedRevenue = projectedCount * newPrice;
-    deltaCents += Math.round((newProjectedRevenue - projectedRevenue) * 100);
+    const projDeltaCents = Math.round((newProjectedRevenue - projectedRevenue) * 100);
+    deltaCents += projDeltaCents;
 
     // Actual side shifts only when the view's actual LATERAL fell back
     // to the projected price (i.e., no separate 'actual' price row for
@@ -335,13 +375,36 @@ async function computePriceDeltaFromView(accountKey, serviceId, effectiveDate, c
     // exposes actual_price_effective_date; NULL means no actual-kind
     // row existed and the COALESCE in sc-8b-actual-prices-and-view.sql
     // line 269 fell through to pr_proj.price.
+    let actDeltaCents = 0;
     if (row.actual_price_effective_date == null) {
       const newActualRevenue = actualCount * newPrice;
-      deltaCents += Math.round((newActualRevenue - actualRevenue) * 100);
+      actDeltaCents = Math.round((newActualRevenue - actualRevenue) * 100);
+      deltaCents += actDeltaCents;
+    }
+
+    if (debug.perRowDeltas.length < 5) {
+      debug.perRowDeltas.push({
+        service_date: row.service_date,
+        service_date_type: typeof row.service_date,
+        projected_count_raw: row.projected_count,
+        projected_count: projectedCount,
+        actual_count_raw: row.actual_count,
+        actual_count: actualCount,
+        projected_revenue_raw: row.projected_revenue,
+        projected_revenue: projectedRevenue,
+        actual_revenue_raw: row.actual_revenue,
+        actual_revenue: actualRevenue,
+        actual_price_effective_date: row.actual_price_effective_date,
+        is_non_revenue: row.is_non_revenue,
+        newPrice_used: newPrice,
+        newProjectedRevenue,
+        projDeltaCents,
+        actDeltaCents,
+      });
     }
   }
 
-  return deltaCents;
+  return { deltaCents, debug };
 }
 
 // ═══════════════════════════════════════════════════════════════════
