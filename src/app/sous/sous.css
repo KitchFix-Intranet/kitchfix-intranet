@@ -299,18 +299,22 @@
   border-bottom: 1px solid var(--accent-sous-line);
 }
 /* 2026-08-03 (Kevin rail-honesty ruling, #598): one-line explanation of
-   what the IN CONTEXT marker means. Rail's mono/label scale in #475569,
-   no uppercase - reads as a plain-English hint under the label. */
+   what the IN CONTEXT marker means. Reads as a plain-English hint under
+   the uppercase mono label.
+   Round 0c Part D measured (2026-08-04): hint was identical to the label
+   (9.5/500/#475569/mono) which read as a second label rather than a hint.
+   Dropped to the sans face, 10.5px, #64748B, non-uppercase per spec. */
 .sa-rail-incontext-hint {
   display: block;
-  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
-  font-size: 9.5px;
-  font-weight: 500;
-  color: #475569;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: #64748B;
   line-height: 1.4;
   margin: 0 4px 6px 12px;
   padding: 0 4px;
-  letter-spacing: 0.02em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* Ask-again icon button (Kevin rail-honesty ruling, #598). The item's
@@ -859,7 +863,10 @@
   font-weight: 800;
   padding: 3px 9px;
   border-radius: 6px;
-  letter-spacing: 0.3px;
+  /* P7 (round 0c Part D): 0.09em (was 0.3px = ~0.03em at 10px). Uppercase
+     pills breathe at 10px only with the wider tracking; letters were
+     touching under the previous value. */
+  letter-spacing: 0.09em;
   background: transparent;
   border: 1.5px solid transparent;
   text-transform: uppercase;
@@ -1084,9 +1091,18 @@
   font-size: 12px;
   transition: border-color 0.18s cubic-bezier(.2,0,0,1), background 0.18s cubic-bezier(.2,0,0,1);
 }
-.sa-source-row:hover {
+.sa-source-row:hover,
+.sa-source-row:focus-visible {
+  /* P4 (round 0c Part D): both hover AND keyboard focus land on the same
+     hairline-accent state. The ExternalLink glyph tints Flame at the same
+     time so the open indicator is legible independent of the border. */
   border-color: var(--accent-sous);
   background: white;
+  outline: none;
+}
+.sa-source-row:hover .sa-source-go,
+.sa-source-row:focus-visible .sa-source-go {
+  color: var(--accent-sous-deep);
 }
 .sa-source-idchip {
   font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
@@ -1212,8 +1228,12 @@
 .sa-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 6px;
+  /* Round 0c Part D measured: buttons at 36px desktop / 44px touch.
+     Padding 8px/12px lands ~36px with the 13px icon + line-height 1.
+     Touch breakpoint override at the bottom of the section. */
+  padding: 8px 12px;
+  min-height: 36px;
   border: 1px solid var(--kf-border, #E4E8EC);
   border-radius: 6px;
   background: white;
@@ -1223,6 +1243,9 @@
   color: #475569;
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease;
+}
+@media (hover: none) and (pointer: coarse) {
+  .sa-action-btn { min-height: 44px; padding: 10px 14px; }
 }
 .sa-action-btn:hover {
   border-color: var(--accent-sous);
@@ -1338,7 +1361,10 @@
 .sa-fab-scroll-top {
   position: absolute;
   right: 20px;
-  bottom: 96px;
+  /* P2 (round 0c Part D): bumped from 96px to 116px so the FAB sits with
+     ~20px clear air above the composer at every viewport height (the
+     composer is ~72px tall + padding). Mobile bumped to 100px below. */
+  bottom: 116px;
   z-index: 3;
   width: 36px;
   height: 36px;
@@ -1373,7 +1399,7 @@
   outline-offset: 2px;
 }
 @media (max-width: 767px) {
-  .sa-fab-scroll-top { right: 14px; bottom: 82px; }
+  .sa-fab-scroll-top { right: 14px; bottom: 100px; }
 }
 
 /* ── 7. Composer - matches reference .comp with focus-within border ─────── */
@@ -1789,3 +1815,26 @@
 .sa-overlay-body-scroll .sa-source-section { display: none; }
 .sa-overlay-body-scroll .sa-kpi-strip { display: none; }
 .sa-overlay-body-scroll .sa-source-title { max-width: 180px; }
+
+/* ── Round 0c Part D polish sweep additions ─────────────────────────────── */
+
+/* P5: brand-tinted ::selection so highlighted text carries the Sous accent
+   rather than the browser default blue. Scoped to the surface + panel so
+   it doesn't leak into other modules that transitively import this file. */
+.sa-page ::selection,
+.pb-sous-panel ::selection {
+  background: var(--accent-sous-subtle, #FFF5EC);
+  color: var(--accent-sous-deep, #C2410C);
+}
+
+/* P10: answer cards fade in with a 4px rise. Applied to freshly-added turn
+   articles by attaching .sa-turn--enter briefly on mount. Suppressed under
+   prefers-reduced-motion (no transform, no opacity delta). */
+@keyframes sa-turn-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sa-turn--enter { animation: sa-turn-enter 150ms cubic-bezier(.2,0,0,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .sa-turn--enter { animation: none; }
+}

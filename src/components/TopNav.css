@@ -98,7 +98,10 @@
 .kf-topnav-link svg {
   flex-shrink: 0;
   opacity: 0.6;
-  transition: opacity 0.15s;
+  /* P8 (Sous round 0c Part D): color transitions too so the Sous mark
+     doesn't snap Flame on route change. 160ms per the polish-sweep spec;
+     ease matches the surrounding link transition. */
+  transition: opacity 0.15s, color 0.16s ease;
 }
 
 .kf-topnav-link:hover {
