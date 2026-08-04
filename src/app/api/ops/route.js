@@ -1003,6 +1003,26 @@ const inventoryLog = inventoryRaw.rows.map((r) => ({
 
       const isAdmin = OPS_LEADERSHIP_EMAILS.includes(email);
 
+      // 0b (KPI PR 1 rider): 3100.2 Salary Kitchen Wages is site-leader-
+      // visibility per playbook §8.2. Portfolio tab is admin-gated in
+      // FinancialTool.js:128,543 (render), so on-screen exposure is
+      // already limited to admins - but the crossAccount JSON payload
+      // returned here carries salaryBudget for every caller regardless
+      // of isAdmin, which a non-admin can inspect via DevTools on
+      // /financial. Strip the key entirely for non-admins - omit, do
+      // NOT send null - so the payload shape matches the on-screen gate.
+      // ExecutiveDashboard consumers (line 22, 82) read `p.salaryBudget
+      // || 0` and `cpPL.salaryBudget > 0 ? ... : ""` (line 239), which
+      // degrade cleanly to 0 / "" when the key is absent.
+      if (!isAdmin) {
+        for (const a of crossAccount) {
+          delete a.salaryBudget;
+          for (const p of (a.periodData || [])) {
+            delete p.salaryBudget;
+          }
+        }
+      }
+
       return NextResponse.json({
         success: true,
         email,
