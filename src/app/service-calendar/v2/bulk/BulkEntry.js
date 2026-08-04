@@ -168,12 +168,19 @@ export default function BulkEntry({
           <div className="sc-v2-entry-body">
             <div className="sc-v2-entry-list">
               {/* Spring Training grouping - bulk fee-no-dollar only.
-                  isSpringDate=true + expanded=true so the subtitle reads
-                  "Shared dining room" (descriptive-of-service), not
-                  "Off schedule" (state-of-day, which does not compose
-                  across a multi-day selection). Match snapshots not
-                  wired in bulk (no Clear); onClearToPreMatch stays
-                  undefined which keeps the button inert. */}
+                  #613 bounce (2026-08-04): passing isSpringDate=true
+                  did NOT produce "Shared dining room" alone - it fell
+                  through to WHY_IN_PHASE_UNPROJECTED because the
+                  syntheticDay has no ST projections, and the two
+                  in-phase branches split on hasProjectedMeals. All
+                  four state-derived subtitles make claims about ONE
+                  date; bulk spans a selection. subtitleOverride is
+                  the day-neutral escape hatch. The chip
+                  ("Not scheduled (N of M)") carries per-day truth -
+                  do not duplicate that axis in this subtitle.
+                  Match snapshots not wired in bulk (no Clear);
+                  onClearToPreMatch stays undefined which keeps
+                  the button inert. */}
               {feeNoDollar && stServices.length > 0 && (
                 <SpringTrainingSection
                   stServices={stServices}
@@ -190,6 +197,7 @@ export default function BulkEntry({
                   feeGroupSummary={groupSummary}
                   feeProjectedGroupSummary={projectedGroupSummary}
                   getNotScheduled={getNotScheduled}
+                  subtitleOverride="Shared dining room"
                 />
               )}
               {nonStGroups.map(group => (
