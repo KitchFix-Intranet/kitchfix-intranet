@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import FeeEditPanel from "./FeeEditPanel";
 import LaborBudgetsPanel from "./LaborBudgetsPanel";
+import AccountCatalogSection from "./AccountCatalogSection";
 // M-1 (2026-08-09): Labor budgets are MLB-only. Same gate the
 // derivation uses.
 const MLB_LABOR_BUDGET_ACCOUNTS = new Set([
@@ -58,6 +59,14 @@ export default function FeeAccountEditor({ accountKey, onBack, showToast }) {
   const [history, setHistory] = useState([]);
   const [editing, setEditing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // Admin wave commit 1 (2026-08-04): fee accounts get the catalog
+  // block too. Same sc-admin-account-config the per-meal AccountEditor
+  // reads; the response shape is identical (groups + services). The
+  // section renders with feeNoDollar=true so no dollar figure shows
+  // in the catalog UI (owner ruling: no price editing on a fee
+  // account; annual fee is the billing).
+  const [catalogData, setCatalogData] = useState(null);
+  const [catalogError, setCatalogError] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,13 +77,25 @@ export default function FeeAccountEditor({ accountKey, onBack, showToast }) {
       fetch("/api/service-calendar?action=sc-admin-fee-list", { signal: controller.signal }).then((r) => r.json()),
       fetch(`/api/service-calendar?action=sc-admin-fee-history&account=${encodeURIComponent(accountKey)}`,
         { signal: controller.signal }).then((r) => r.json()),
-    ]).then(([listRes, histRes]) => {
+      fetch(`/api/service-calendar?action=sc-admin-account-config&account=${encodeURIComponent(accountKey)}`,
+        { signal: controller.signal }).then((r) => r.json()),
+    ]).then(([listRes, histRes, catRes]) => {
       if (!listRes.success) { setError(listRes.error || "Failed to load fee"); return; }
       if (!histRes.success) { setError(histRes.error || "Failed to load fee history"); return; }
       const entry = (listRes.fees || []).find((f) => f.accountKey === accountKey);
       if (!entry) { setError(`Fee account ${accountKey} not found`); return; }
       setFeeData(entry);
       setHistory(histRes.history || []);
+      if (catRes.success) {
+        setCatalogData(catRes);
+        setCatalogError(null);
+      } else {
+        // Catalog failure does not block the fee header. Report inline
+        // so the operator sees the fee schedule + history and knows
+        // the catalog section is unavailable this session.
+        setCatalogData(null);
+        setCatalogError(catRes.error || "Failed to load catalog");
+      }
     }).catch((e) => {
       if (e.name !== "AbortError") setError("Network error");
     }).finally(() => {
@@ -204,6 +225,26 @@ export default function FeeAccountEditor({ accountKey, onBack, showToast }) {
           </ul>
         )}
       </section>
+
+      {/* Admin wave commit 1 (2026-08-04): catalog section below
+          the fee/history. feeNoDollar=true drops every dollar
+          rendering (row price, current-price line, Edit price
+          button, PriceEditPanel). Add / archive / reactivate work
+          identically to the per-meal editor. */}
+      <div className="sc-admin-editor-head">
+        <p className="sc-admin-editor-section">Catalog</p>
+      </div>
+      {catalogError ? (
+        <div className="sc-admin-error">Couldn&apos;t load catalog: {catalogError}</div>
+      ) : (
+        <AccountCatalogSection
+          accountKey={accountKey}
+          data={catalogData}
+          onReload={() => setReloadKey((k) => k + 1)}
+          showToast={showToast}
+          feeNoDollar={true}
+        />
+      )}
     </div>
   );
 }

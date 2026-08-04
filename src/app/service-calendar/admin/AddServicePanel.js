@@ -3,10 +3,19 @@
 // serviceName, initialPrice, the three flag booleans, required reason,
 // optional requested-by. Initial price lands at effective_date=today
 // through the orchestrator.
+//
+// feeNoDollar prop (admin wave commit 1, 2026-08-04): on a flat-fee
+// account, the initial-price field is hidden and the create posts
+// price=0. Owner ruling: no price editing on a fee account; the
+// annual fee is the billing, and any per-service price is
+// irrelevant. Zero is the value the schema records so downstream
+// views (sc_daily_revenue) compute projected/actual revenue as
+// 0 * count = 0, matching how existing fee-account services
+// already read.
 
 import { useState } from "react";
 
-export default function AddServicePanel({ accountKey, group, onCancel, onSaved, showToast }) {
+export default function AddServicePanel({ accountKey, group, onCancel, onSaved, showToast, feeNoDollar = false }) {
   const [serviceName, setServiceName] = useState("");
   const [initialPrice, setInitialPrice] = useState("0.00");
   const [isFlatFee, setIsFlatFee] = useState(false);
@@ -17,8 +26,9 @@ export default function AddServicePanel({ accountKey, group, onCancel, onSaved, 
   const [saving, setSaving] = useState(false);
 
   const nameReady = serviceName.trim().length > 0 && serviceName.length <= 120;
-  const priceNum = Number(initialPrice);
-  const priceReady = !isNaN(priceNum) && priceNum >= 0;
+  // On feeNoDollar we bypass the operator-controlled price and post 0.
+  const effectivePriceNum = feeNoDollar ? 0 : Number(initialPrice);
+  const priceReady = feeNoDollar || (!isNaN(effectivePriceNum) && effectivePriceNum >= 0);
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
   const canSave = !saving && nameReady && priceReady && reasonReady;
 
@@ -34,7 +44,7 @@ export default function AddServicePanel({ accountKey, group, onCancel, onSaved, 
           accountKey,
           groupId: group.id,
           serviceName: serviceName.trim(),
-          initialPrice: priceNum,
+          initialPrice: effectivePriceNum,
           isFlatFee,
           isTaxFree,
           isNonRevenue,
@@ -58,7 +68,9 @@ export default function AddServicePanel({ accountKey, group, onCancel, onSaved, 
   return (
     <div className="sc-admin-panel">
       <div className="sc-admin-panel-current">
-        Add a service to <strong>{group.groupName}</strong>. The initial price applies from today forward; archive uses the same flow as other services.
+        Add a service to <strong>{group.groupName}</strong>. {feeNoDollar
+          ? "This account bills a flat annual fee; the new service is created at price 0 and archive uses the same flow."
+          : "The initial price applies from today forward; archive uses the same flow as other services."}
       </div>
 
       <div className="sc-admin-field">
@@ -76,21 +88,23 @@ export default function AddServicePanel({ accountKey, group, onCancel, onSaved, 
         />
       </div>
 
-      <div className="sc-admin-field">
-        <label className="sc-admin-field-label" htmlFor={`add-svc-price-${group.id}`}>Initial price</label>
-        <div className="sc-admin-price-input-wrap">
-          <span className="sc-admin-price-input-dollar">$</span>
-          <input
-            id={`add-svc-price-${group.id}`}
-            type="text"
-            inputMode="decimal"
-            className="sc-admin-price-input"
-            value={initialPrice}
-            onChange={(e) => setInitialPrice(e.target.value.replace(/[^0-9.]/g, ""))}
-            placeholder="0.00"
-          />
+      {!feeNoDollar && (
+        <div className="sc-admin-field">
+          <label className="sc-admin-field-label" htmlFor={`add-svc-price-${group.id}`}>Initial price</label>
+          <div className="sc-admin-price-input-wrap">
+            <span className="sc-admin-price-input-dollar">$</span>
+            <input
+              id={`add-svc-price-${group.id}`}
+              type="text"
+              inputMode="decimal"
+              className="sc-admin-price-input"
+              value={initialPrice}
+              onChange={(e) => setInitialPrice(e.target.value.replace(/[^0-9.]/g, ""))}
+              placeholder="0.00"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="sc-admin-field">
         <span className="sc-admin-field-label">Flags</span>
