@@ -937,3 +937,63 @@
   margin-top: 2px;
   accent-color: var(--accent-text);
 }
+
+/* Admin hardening commit 2 (2026-08-04): floor-first touch targets.
+   Below 1024px every interactive control reaches a 44px minimum
+   height. Above 1024px the pre-hardening sizing stays; admin is a
+   corp-only surface and mouse-first is the assumed input there.
+   The 1024px break is the same one dayEntryV2 uses for its
+   ledger-vs-single-column split.
+   Radio + checkbox inputs stay at their default 13px because a
+   44px radio button is visually noisy and unnecessary; instead
+   the surrounding label row (.sc-admin-eff-option,
+   .sc-admin-flag-label, .sc-admin-confirm-row) gets a 44px
+   min-height so the hit target is the whole label region. */
+@media (max-width: 1023.98px) {
+  .sc-admin-svc-edit,
+  .sc-admin-add-link,
+  .sc-admin-btn,
+  .sc-admin-eff-date,
+  .sc-admin-text-input,
+  .sc-admin-price-input-wrap {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  /* Textarea keeps its multi-line intent but its minimum starts at
+     44px (single-row equivalent) so an empty textarea still shows a
+     hit target the operator can tap. */
+  .sc-admin-textarea {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  /* Buttons + link + edit trigger: center the label vertically now
+     that min-height dominates over intrinsic content height. */
+  .sc-admin-svc-edit,
+  .sc-admin-add-link,
+  .sc-admin-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Label rows containing radio / checkbox inputs get a 44px hit
+     area on the label itself; the input control stays default sized.
+     Center the input vertically so the visual weight sits on the
+     label baseline. */
+  .sc-admin-eff-option,
+  .sc-admin-flag-label,
+  .sc-admin-confirm-row {
+    min-height: 44px;
+    align-items: center;
+  }
+  /* eff-option carries a multi-line caption below the radio - when
+     the caption wraps the label region grows beyond 44px, so keep
+     align-items: flex-start on that variant to preserve the
+     original top-anchored layout. */
+  .sc-admin-eff-option {
+    align-items: flex-start;
+    padding-top: calc((44px - 1em * 1.4) / 2);
+  }
+  .sc-admin-eff-option input[type="radio"] {
+    margin-top: 0;
+  }
+}
