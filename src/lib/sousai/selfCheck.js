@@ -50,15 +50,24 @@ import {
 function isInsideQuoted(line, index) {
   // Blockquote line - the whole line is quoted content.
   if (/^\s*>/.test(line)) return true;
-  // Inline quotes: walk the line and count quote toggles up to index.
+  // Inline double quotes: walk the line and count toggle points up to
+  // index. Single-quote handling was removed in the pre-demo fixes
+  // pass - apostrophes in ordinary English contractions ("we're",
+  // "doesn't", "there's") were toggling `inSingle` and, once opened,
+  // never closing - so the plumbing / opener strips silently skipped
+  // any line with a contraction in it (which is most of them). Live
+  // regression: an answer with "We're currently in Period 8..." on
+  // the same line as a "sc_account_window" mention got zero strips
+  // because the strip check walked past "We" + "'" and refused to
+  // fire on any later position in the line. Quoted spans in document
+  // text almost always use double quotes anyway; the tradeoff is
+  // strict single-quote content protection for the whole-corpus
+  // ability to strip identifiers in prose.
   let inDouble = false;
-  let inSingle = false;
   for (let i = 0; i < index; i++) {
-    const c = line[i];
-    if (c === '"' && !inSingle) inDouble = !inDouble;
-    else if (c === "'" && !inDouble) inSingle = !inSingle;
+    if (line[i] === '"') inDouble = !inDouble;
   }
-  return inDouble || inSingle;
+  return inDouble;
 }
 
 // ── Strip families ────────────────────────────────────────────────────────

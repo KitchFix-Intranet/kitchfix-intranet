@@ -84,6 +84,17 @@ describe("applySelfCheck - plumbing strip", () => {
     assert.equal(r.strips.plumbing >= 1, true);
     assert.equal(r.answer.includes("ai_line_items"), false);
   });
+  test("apostrophes in contractions do not block later strips on the same line (pre-demo Fix 2 regression)", () => {
+    // Live regression 2026-08-04: isInsideQuoted was treating the
+    // apostrophe in "We're" as a single-quote-open marker and never
+    // closed, so any identifier later in the same line escaped the
+    // strip. The predemo-fix removes single-quote handling entirely -
+    // only double-quotes and blockquotes protect content.
+    const raw = "We're currently in Period 8, and TXR - AZ is in the ACL phase. I can pull the sc_account_window at period scope instead.";
+    const r = applySelfCheck(raw, { question: "test?" });
+    assert.equal(r.strips.plumbing >= 1, true, `strip must fire; got ${JSON.stringify(r.strips)}`);
+    assert.equal(r.answer.includes("sc_account_window"), false, "identifier must be stripped");
+  });
 });
 
 // ── Multi-part detection ───────────────────────────────────────────────────
