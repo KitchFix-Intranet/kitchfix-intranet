@@ -62,6 +62,17 @@ export default function SpringTrainingSection({
   // ST services follow the same predicate as any other service on
   // the day.
   getNotScheduled = null,
+  // Owner ruling 2026-08-04 (#613 bounce): the four state-derived
+  // subtitles (WHY_*) each make a claim about ONE date - projected /
+  // unprojected / promoted-off-phase / drawer. Bulk spans a selection
+  // of days, so none of them have a truthful referent. Callers on a
+  // multi-day surface pass `subtitleOverride` with a day-NEUTRAL
+  // string (descriptive-of-service only). Per-day truth lives in the
+  // `Not scheduled (N of M)` chip; DO NOT synthesize a selection-wide
+  // claim here - two mechanisms speaking to the same axis is the
+  // shape that breaks. Null / absent = single-day caller; use the
+  // internal branch. Modal callers pass nothing and are unaffected.
+  subtitleOverride = null,
 }) {
   // Synthetic group for Match/Clear. Snapshot stores keyed by this
   // name; parent's matchSnapshots[SPRING_TRAINING_GROUP_KEY] flows.
@@ -96,8 +107,12 @@ export default function SpringTrainingSection({
   // off-phase without any ST value, section sits in the inactive-
   // groups drawer and reads "Not scheduled today". Promoted state
   // (expanded=true) then splits by phase + projection presence.
+  //
+  // `subtitleOverride` bypasses the state branch entirely (bulk /
+  // any multi-day surface). See prop-list comment for the constraint.
   let why;
-  if (!expanded)                                why = WHY_OFF_PHASE_DRAWER;
+  if (subtitleOverride != null)                 why = subtitleOverride;
+  else if (!expanded)                           why = WHY_OFF_PHASE_DRAWER;
   else if (isSpringDate && hasProjectedMeals)   why = WHY_IN_PHASE_PROJECTED;
   else if (isSpringDate && !hasProjectedMeals)  why = WHY_IN_PHASE_UNPROJECTED;
   else                                           why = WHY_OFF_PHASE_PROMOTED;

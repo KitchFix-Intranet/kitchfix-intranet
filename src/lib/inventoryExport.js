@@ -1,0 +1,413 @@
+// One-off emergency inventory count-sheet export.
+//
+// Public entry: buildInventoryCountWorkbook({ account })
+//   returns { workbook, filename } - ExcelJS Workbook ready to write
+//   to a stream + the suggested attachment filename.
+//
+// Reads STRAIGHT from Postgres (inventory_items + price_history + vendors).
+// Bypasses the Smart Inventory UI + AI similarity scanner entirely.
+//
+// SCHEMA REALITY (verified against inv-1-smart-inventory-schema.sql
+// and the live 'STL - FL' rows on 2026-08-04):
+//   - Table is `inventory_items` (renamed from `item_catalog`).
+//   - `category` is enum: Food | Packaging | Supplies | Snacks | Beverages
+//     (may be NULL). No sub-buckets. Everything else gets an
+//     "Uncategorized" tab.
+//   - `status` is enum ('active' | 'archived' | 'excluded'). We read
+//     active only; archived items are the outcome of prior merges so
+//     the schema already gives us dedup for real merges.
+//   - `vendor_id` is a FK to vendors(id); we join for display.
+//   - No `lastPrice` column exists on items (D-Delta-2 removed it) -
+//     if price_history is empty for an item, Avg Unit Price is blank.
+//
+// Dedup here is a soft, in-memory pass on top of what the schema
+// already merged: normalize the item name and group by (normKey, unit,
+// category). Chef sees one row per canonical (name, unit, category).
+
+import ExcelJS from "exceljs";
+import { getServiceClient } from "@/lib/supabase";
+
+const AMBER_FILL      = "FFFEF3C7"; // chef's Count column
+const FROZEN_FILL     = "FFDBEAFE"; // frozen row highlight
+const NAVY_FILL       = "FF153968"; // header bar
+const WHITE_FONT      = "FFFFFFFF";
+const SUBTOTAL_FILL   = "FFF1F5F9"; // category total row
+const INSTRUCTIONS_H  = "FF0F172A";
+
+const MONEY_FMT_BLANK = '$#,##0.00;[Red]-$#,##0.00;""';
+const MONEY_FMT       = '"$"#,##0.00';
+const DATE_FMT        = 'mmm d, yyyy';
+
+// Order tabs appear in the workbook (after Instructions + Summary).
+// Uncategorized is appended dynamically only if any items land there.
+const CATEGORY_ORDER = ["Food", "Packaging", "Supplies", "Snacks", "Beverages"];
+
+const FROZEN_RE = /\b(FROZEN|FRZN|FRZ|IQF)\b/i;
+
+// ── normalization + dedup ──────────────────────────────────────────
+
+export function normalize(desc) {
+  let s = String(desc || "").toUpperCase().trim();
+  s = s.replace(/\s*-\s*\d{4,}\s*$/, "");   // strip trailing "-11044" SKU suffix
+  s = s.replace(/\s+\d{6,}\s*$/, "");        // strip trailing standalone long numbers
+  s = s.replace(/\s+/g, " ");
+  s = s.replace(/-{2,}/g, "-");
+  return s.trim();
+}
+
+function pickLongestName(names) {
+  return names.slice().sort((a, b) => b.length - a.length)[0];
+}
+
+function mean(nums) {
+  const clean = nums.filter((n) => typeof n === "number" && Number.isFinite(n));
+  if (!clean.length) return null;
+  return clean.reduce((a, b) => a + b, 0) / clean.length;
+}
+
+function maxDate(dates) {
+  const parsed = dates
+    .filter(Boolean)
+    .map((d) => new Date(d))
+    .filter((d) => !Number.isNaN(d.getTime()));
+  if (!parsed.length) return null;
+  return new Date(Math.max(...parsed.map((d) => d.getTime())));
+}
+
+// ── data assembly ──────────────────────────────────────────────────
+
+async function fetchCatalog(supa, account) {
+  const { data, error } = await supa
+    .from("inventory_items")
+    .select("id, name, unit, category, last_verified, vendor_id, vendors(name)")
+    .eq("account", account)
+    .eq("status", "active");
+  if (error) throw new Error(`inventory_items read failed: ${error.message}`);
+  return (data || []).map((r) => ({
+    id: r.id,
+    name: r.name || "",
+    unit: r.unit || "",
+    category: r.category, // may be null
+    lastVerified: r.last_verified,
+    vendorName: r.vendors?.name || "",
+  }));
+}
+
+// One RPC-free fetch: pull all price_history rows for the account,
+// then bucket per item and take the last 8 by recorded_at.
+async function fetchAveragePricesByItem(supa, account, itemIds) {
+  if (!itemIds.length) return { avgById: new Map(), lastDateById: new Map() };
+  const { data, error } = await supa
+    .from("price_history")
+    .select("item_id, price, recorded_at")
+    .eq("account", account)
+    .in("item_id", itemIds)
+    .order("recorded_at", { ascending: false });
+  if (error) throw new Error(`price_history read failed: ${error.message}`);
+  const buckets = new Map();
+  for (const row of data || []) {
+    const arr = buckets.get(row.item_id) || [];
+    if (arr.length < 8) arr.push(row);
+    buckets.set(row.item_id, arr);
+  }
+  const avgById = new Map();
+  const lastDateById = new Map();
+  for (const [itemId, rows] of buckets) {
+    const avg = mean(rows.map((r) => Number(r.price)));
+    if (avg !== null) avgById.set(itemId, avg);
+    const latest = rows[0]?.recorded_at || null;
+    if (latest) lastDateById.set(itemId, latest);
+  }
+  return { avgById, lastDateById };
+}
+
+// Group items by (normKey, unit, category). Within a group:
+//   - longest name wins
+//   - unit vendors concatenated with " / "
+//   - avg price = mean of per-item avg prices (mean-of-means)
+//   - Last Ordered = MAX(lastVerified, latest price recorded_at)
+// Categories are NEVER merged across.
+function dedup(items, avgById, lastDateById) {
+  const groups = new Map();
+  for (const it of items) {
+    const normKey = normalize(it.name);
+    const category = it.category || "Uncategorized";
+    const unit = it.unit || "";
+    const key = `${category} ${unit} ${normKey}`;
+    const g = groups.get(key) || {
+      category,
+      unit,
+      normKey,
+      names: [],
+      vendors: new Set(),
+      prices: [],
+      dates: [],
+    };
+    g.names.push(it.name);
+    if (it.vendorName) g.vendors.add(it.vendorName);
+    const avg = avgById.get(it.id);
+    if (typeof avg === "number") g.prices.push(avg);
+    g.dates.push(it.lastVerified);
+    g.dates.push(lastDateById.get(it.id));
+    groups.set(key, g);
+  }
+  const out = [];
+  for (const g of groups.values()) {
+    const name = pickLongestName(g.names);
+    out.push({
+      name,
+      unit: g.unit,
+      category: g.category,
+      vendors: Array.from(g.vendors).sort().join(" / "),
+      avgPrice: mean(g.prices), // null when no history for any group member
+      lastOrdered: maxDate(g.dates),
+      frozen: FROZEN_RE.test(name),
+    });
+  }
+  return out;
+}
+
+// ── workbook building ──────────────────────────────────────────────
+
+function styleHeaderRow(row) {
+  row.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: WHITE_FONT }, size: 11 };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY_FILL } };
+    cell.alignment = { vertical: "middle", horizontal: "left" };
+    cell.border = {
+      bottom: { style: "thin", color: { argb: "FF334155" } },
+    };
+  });
+  row.height = 22;
+}
+
+function addInstructionsTab(wb, account, itemTotal, catCounts, generatedAt) {
+  const ws = wb.addWorksheet("Instructions", { views: [{ showGridLines: false }] });
+  ws.getColumn(1).width = 100;
+
+  const sections = [
+    [
+      `${account} Inventory Count Sheet`,
+      "",
+      `Generated: ${generatedAt.toLocaleString()}`,
+      `Total unique items (after dedup): ${itemTotal}`,
+      `Category tabs: ${CATEGORY_ORDER.filter((c) => (catCounts.get(c) || 0) > 0).join(", ")}${(catCounts.get("Uncategorized") || 0) > 0 ? ", Uncategorized" : ""}`,
+      "",
+    ],
+    [
+      "1. How this was built",
+      "This sheet was pulled straight from Postgres (inventory_items + price_history + vendors) because the Smart Inventory UI is timing out on the STL-FL catalog. It bypasses the AI similarity scanner entirely.",
+      "Duplicates were folded in memory: items sharing a normalized name + unit + category are shown as ONE row using the longest name variant, an average of their prices, and vendors combined with ' / '.",
+      "The schema only carries five category buckets (Food, Packaging, Supplies, Snacks, Beverages). Any finer sub-buckets (Protein, Produce, Dry Goods, etc.) DO NOT exist in the database - one tab per bucket is what you get. Sort within a tab yourself if it helps.",
+      "",
+    ],
+    [
+      "2. How to count",
+      "Work one tab at a time. In each tab, fill the amber Count column with what you actually have on hand.",
+      "Extended Total in the next column self-calculates ($/unit x count). Leave Count blank for items you skip - Extended Total shows blank, not $0.",
+      "Every tab has a Category Total row at the bottom. The Summary tab rolls all tabs into one grand total.",
+      "",
+    ],
+    [
+      "3. What might be missing",
+      "Any item that has never been on a KitchFix invoice and was never added manually will not appear.",
+      "Any item that was excluded or archived in the admin will not appear (by design).",
+      "If a critical item is missing, write it in an empty row at the bottom of the right tab, put your count, and leave $ blank - we'll price it later.",
+      "",
+    ],
+    [
+      "4. Frozen items caveat",
+      "Rows flagged FROZEN / FRZN / FRZ / IQF are highlighted light blue and sorted to the top of each tab.",
+      "The detector matches word-boundary FRZ so it CAN false-positive on flavor names like 'GAT GLCR FRZ' (Gatorade Glacier Frost). Spot-check the flagged rows.",
+      "",
+    ],
+    [
+      "5. Units",
+      "The Unit column shows what one unit of Avg Unit Price refers to (case, pound, each, gallon, etc.). Enter Count in that same unit - not in the individual pack pieces.",
+      "",
+    ],
+    [
+      "6. When you finish",
+      "Save the file, take a photo or scan of any handwritten additions, and send them to Kevin.",
+      "Once Smart Inventory's UI is fixed the counts can be typed back in for the historical record.",
+      "",
+    ],
+  ];
+
+  let r = 1;
+  for (const block of sections) {
+    for (const line of block) {
+      const cell = ws.getCell(`A${r}`);
+      cell.value = line;
+      if (r === 1) {
+        cell.font = { bold: true, size: 16, color: { argb: INSTRUCTIONS_H } };
+      } else if (block.length > 1 && line === block[0]) {
+        cell.font = { bold: true, size: 12, color: { argb: INSTRUCTIONS_H } };
+      } else {
+        cell.font = { size: 11, color: { argb: "FF334155" } };
+        cell.alignment = { wrapText: true, vertical: "top" };
+      }
+      r += 1;
+    }
+  }
+  ws.views = [{ state: "frozen", ySplit: 1, showGridLines: false }];
+}
+
+function addSummaryTab(wb, categoriesWithRows) {
+  const ws = wb.addWorksheet("Summary", { views: [{ showGridLines: false }] });
+  ws.columns = [
+    { header: "Category", key: "cat", width: 26 },
+    { header: "Items Counted", key: "cnt", width: 16 },
+    { header: "Extended Total", key: "ext", width: 20 },
+    { header: "% of Total", key: "pct", width: 14 },
+  ];
+  styleHeaderRow(ws.getRow(1));
+
+  const grandRow = 2 + categoriesWithRows.length; // grand total sits below the last category
+  categoriesWithRows.forEach((tabName, idx) => {
+    const r = 2 + idx;
+    const safeTab = `'${tabName.replace(/'/g, "''")}'`;
+    ws.getCell(`A${r}`).value = tabName;
+    ws.getCell(`B${r}`).value = { formula: `COUNTIF(${safeTab}!F:F,">0")` };
+    ws.getCell(`C${r}`).value = { formula: `SUM(${safeTab}!G:G)` };
+    ws.getCell(`C${r}`).numFmt = MONEY_FMT;
+    ws.getCell(`D${r}`).value = { formula: `IFERROR(C${r}/C${grandRow},0)` };
+    ws.getCell(`D${r}`).numFmt = "0.0%";
+  });
+
+  // Grand total row.
+  const first = 2;
+  const last = 1 + categoriesWithRows.length;
+  ws.getCell(`A${grandRow}`).value = "GRAND TOTAL";
+  ws.getCell(`B${grandRow}`).value = { formula: `SUM(B${first}:B${last})` };
+  ws.getCell(`C${grandRow}`).value = { formula: `SUM(C${first}:C${last})` };
+  ws.getCell(`C${grandRow}`).numFmt = MONEY_FMT;
+  ws.getCell(`D${grandRow}`).value = 1;
+  ws.getCell(`D${grandRow}`).numFmt = "0.0%";
+  for (const col of ["A", "B", "C", "D"]) {
+    const c = ws.getCell(`${col}${grandRow}`);
+    c.font = { bold: true };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SUBTOTAL_FILL } };
+    c.border = { top: { style: "medium", color: { argb: "FF334155" } } };
+  }
+
+  ws.views = [{ state: "frozen", ySplit: 1, showGridLines: false }];
+}
+
+function addCategoryTab(wb, tabName, rows) {
+  const ws = wb.addWorksheet(tabName, { views: [{ showGridLines: false }] });
+  ws.columns = [
+    { header: "Item",           key: "item",   width: 46 },
+    { header: "Unit",           key: "unit",   width: 12 },
+    { header: "Avg Unit Price", key: "price",  width: 16 },
+    { header: "Vendor(s)",      key: "vendor", width: 28 },
+    { header: "Last Ordered",   key: "last",   width: 14 },
+    { header: "Count",          key: "count",  width: 12 },
+    { header: "Extended Total", key: "ext",    width: 16 },
+    { header: "Notes",          key: "notes",  width: 30 },
+  ];
+  styleHeaderRow(ws.getRow(1));
+
+  // Frozen rows first, then A-Z within each group.
+  const sorted = rows.slice().sort((a, b) => {
+    if (a.frozen !== b.frozen) return a.frozen ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  sorted.forEach((row, idx) => {
+    const r = 2 + idx;
+    ws.getCell(`A${r}`).value = row.name;
+    ws.getCell(`B${r}`).value = row.unit || "";
+    if (typeof row.avgPrice === "number") {
+      ws.getCell(`C${r}`).value = row.avgPrice;
+      ws.getCell(`C${r}`).numFmt = MONEY_FMT;
+    }
+    ws.getCell(`D${r}`).value = row.vendors || "";
+    if (row.lastOrdered) {
+      ws.getCell(`E${r}`).value = row.lastOrdered;
+      ws.getCell(`E${r}`).numFmt = DATE_FMT;
+    }
+    // Count: amber, empty for chef to fill.
+    const countCell = ws.getCell(`F${r}`);
+    countCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AMBER_FILL } };
+    countCell.alignment = { horizontal: "right" };
+    // Extended Total: blank when Count empty, else count * price.
+    const extCell = ws.getCell(`G${r}`);
+    extCell.value = { formula: `IFERROR(F${r}*C${r},0)` };
+    extCell.numFmt = MONEY_FMT_BLANK;
+    // Notes: empty.
+    if (row.frozen) {
+      for (const col of ["A", "B", "C", "D", "E", "F", "G", "H"]) {
+        const cell = ws.getCell(`${col}${r}`);
+        // Preserve amber on Count column - layer only where fill is white.
+        if (col !== "F") {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: FROZEN_FILL } };
+        }
+      }
+    }
+  });
+
+  // Category total row.
+  const dataStart = 2;
+  const dataEnd = 1 + sorted.length;
+  const totalRow = dataEnd + 1;
+  ws.getCell(`A${totalRow}`).value = `${tabName} Total`;
+  ws.getCell(`G${totalRow}`).value = { formula: `SUM(G${dataStart}:G${dataEnd})` };
+  ws.getCell(`G${totalRow}`).numFmt = MONEY_FMT;
+  for (const col of ["A", "B", "C", "D", "E", "F", "G", "H"]) {
+    const c = ws.getCell(`${col}${totalRow}`);
+    c.font = { bold: true };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SUBTOTAL_FILL } };
+    c.border = { top: { style: "medium", color: { argb: "FF334155" } } };
+  }
+
+  ws.views = [{ state: "frozen", ySplit: 1, xSplit: 1, showGridLines: false }];
+}
+
+// ── public entry ───────────────────────────────────────────────────
+
+export async function buildInventoryCountWorkbook({ account }) {
+  if (!account) throw new Error("[inventoryExport] account required");
+  const supa = getServiceClient();
+
+  const catalog = await fetchCatalog(supa, account);
+  const { avgById, lastDateById } = await fetchAveragePricesByItem(
+    supa,
+    account,
+    catalog.map((c) => c.id),
+  );
+  const rows = dedup(catalog, avgById, lastDateById);
+
+  // Group by tab.
+  const byTab = new Map();
+  for (const cat of CATEGORY_ORDER) byTab.set(cat, []);
+  for (const row of rows) {
+    const tab = CATEGORY_ORDER.includes(row.category) ? row.category : "Uncategorized";
+    if (!byTab.has(tab)) byTab.set(tab, []);
+    byTab.get(tab).push(row);
+  }
+
+  const catCounts = new Map();
+  for (const [k, v] of byTab) catCounts.set(k, v.length);
+
+  // Only include tabs that actually have rows (keeps the Summary honest).
+  const activeTabs = [];
+  for (const cat of CATEGORY_ORDER) {
+    if ((byTab.get(cat) || []).length > 0) activeTabs.push(cat);
+  }
+  if ((byTab.get("Uncategorized") || []).length > 0) activeTabs.push("Uncategorized");
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "KitchFix Ops Hub";
+  wb.created = new Date();
+
+  addInstructionsTab(wb, account, rows.length, catCounts, wb.created);
+  addSummaryTab(wb, activeTabs);
+  for (const tab of activeTabs) {
+    addCategoryTab(wb, tab, byTab.get(tab));
+  }
+
+  const safeAccount = account.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const filename = `${safeAccount}_Inventory_Count_Sheet.xlsx`;
+  return { workbook: wb, filename, stats: { rawCatalog: catalog.length, dedupedRows: rows.length, catCounts } };
+}

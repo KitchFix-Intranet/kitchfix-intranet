@@ -19,9 +19,10 @@
 //   - Primary hands off to a review step (setBulkCustomReviewOpen)
 //     which lands on BulkReview.
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { X } from "../../Icons";
 import { GroupBlock } from "../entry/DayEntryV2";
+import SpringTrainingSection from "../entry/SpringTrainingSection";
 
 export default function BulkEntry({
   daysCount,
@@ -42,6 +43,17 @@ export default function BulkEntry({
   // the syntheticDay. Passed through to GroupBlock -> ServiceRow.
   // Absence = no chip.
   getNotScheduled = null,
+  // Bulk on fee-no-dollar (owner Ruling 1, 2026-08-04). Two behavior
+  // changes when true:
+  //   1. variant flip: GroupBlock renders as "fee" (2-col Service +
+  //      Qty; no Rate cell, no Amount cell). Closes the rate-cell
+  //      "$0.00 / meal" leak on STL-FL where every service is $0.
+  //   2. Spring Training grouping: the four " - ST" services peel
+  //      out of their real MLB / MiLB groups into a synthetic ST
+  //      section at the top (owner Ruling 2). No phase gating in
+  //      bulk - phase is per-day, bulk is per-selection; the "Not
+  //      scheduled (N of M)" chip carries the per-day truth.
+  feeNoDollar = false,
 }) {
   // touched Set: whichever colIndexes the operator has typed into.
   // Mirrors DayEntryV2's touched semantics so ServiceRow's ghost /
@@ -91,12 +103,41 @@ export default function BulkEntry({
   // Match-projections: fill each service in this group with its
   // projected value. Mirrors DayEntryV2's fillGroupWithProjections but
   // without the stagger animation (bulk context, no per-day flash).
+  // Accepts the synthetic ST group as-is because it carries the same
+  // { services: [...] } shape as a real group.
   const onFillProjections = useCallback((group) => {
     for (const s of group.services) {
       const p = syntheticDay?.projected?.[s.colIndex];
       if (p != null) handleChange(s.colIndex, String(p));
     }
   }, [handleChange, syntheticDay]);
+
+  // Bulk on fee-no-dollar (owner Ruling 2, 2026-08-04). Spring Training
+  // is a grouping, not a state - render it always, no phase gating.
+  // stServices flattens the four " - ST" services with tier=g.name
+  // (SpringTrainingSection renders sub-tier headers from that field).
+  // nonStGroups strips ST services from their real MLB / MiLB groups
+  // and drops any group left empty after the strip (STL - FL's MLB
+  // group holds only the two ST services and disappears from bulk).
+  // Data untouched: services keep their real group membership in the
+  // catalog - this is a display-only reshape at the bulk entry surface.
+  const { stServices, nonStGroups } = useMemo(() => {
+    if (!feeNoDollar) return { stServices: [], nonStGroups: serviceGroups };
+    const st = [];
+    const rest = [];
+    for (const g of serviceGroups) {
+      const kept = [];
+      for (const s of g.services) {
+        if (typeof s.name === "string" && s.name.endsWith(" - ST")) {
+          st.push({ ...s, tier: g.name });
+        } else {
+          kept.push(s);
+        }
+      }
+      if (kept.length > 0) rest.push({ ...g, services: kept });
+    }
+    return { stServices: st, nonStGroups: rest };
+  }, [serviceGroups, feeNoDollar]);
 
   return (
     <div className="sc-overlay-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
@@ -126,7 +167,40 @@ export default function BulkEntry({
 
           <div className="sc-v2-entry-body">
             <div className="sc-v2-entry-list">
-              {serviceGroups.map(group => (
+              {/* Spring Training grouping - bulk fee-no-dollar only.
+                  #613 bounce (2026-08-04): passing isSpringDate=true
+                  did NOT produce "Shared dining room" alone - it fell
+                  through to WHY_IN_PHASE_UNPROJECTED because the
+                  syntheticDay has no ST projections, and the two
+                  in-phase branches split on hasProjectedMeals. All
+                  four state-derived subtitles make claims about ONE
+                  date; bulk spans a selection. subtitleOverride is
+                  the day-neutral escape hatch. The chip
+                  ("Not scheduled (N of M)") carries per-day truth -
+                  do not duplicate that axis in this subtitle.
+                  Match snapshots not wired in bulk (no Clear);
+                  onClearToPreMatch stays undefined which keeps
+                  the button inert. */}
+              {feeNoDollar && stServices.length > 0 && (
+                <SpringTrainingSection
+                  stServices={stServices}
+                  day={syntheticDay}
+                  editValues={values}
+                  touched={touched}
+                  flashMap={null}
+                  isSpringDate={true}
+                  hasSTValue={false}
+                  expanded={true}
+                  onChange={handleChange}
+                  onFillProjections={onFillProjections}
+                  hasMatchSnapshot={false}
+                  feeGroupSummary={groupSummary}
+                  feeProjectedGroupSummary={projectedGroupSummary}
+                  getNotScheduled={getNotScheduled}
+                  subtitleOverride="Shared dining room"
+                />
+              )}
+              {nonStGroups.map(group => (
                 <GroupBlock
                   key={group.name}
                   group={group}
@@ -140,7 +214,7 @@ export default function BulkEntry({
                   groupSummary={groupSummary}
                   projectedGroupSummary={projectedGroupSummary}
                   expanded={true}
-                  variant="bulk"
+                  variant={feeNoDollar ? "fee" : "bulk"}
                   getNotScheduled={getNotScheduled}
                 />
               ))}

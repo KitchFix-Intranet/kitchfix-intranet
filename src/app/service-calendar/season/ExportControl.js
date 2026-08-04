@@ -259,6 +259,17 @@ function xlsxItem({ scope, year, periodKey, monthKey, accountKey }) {
 // false + has_schedule_overlay drives the PDCO/PDC split).
 const PDC_DRILL_DISABLED_TITLE = "PDF print for this account is being redesigned - see docs/design/PDC_PRINT_REDESIGN.md";
 
+// Period-close billing export placeholder (2026-08-04). Owner meets AP
+// tomorrow to settle the column list; the format (Excel) and the
+// availability rule (period must be complete: every day entered) are
+// already settled. This item exists so the export has a visible home
+// before it ships. Unconditionally disabled; no href, no route, no
+// filename - the renderer at :190-201 reads only `disabled`,
+// `comingSoon`, `disabledTitle`, `disabledSub`, and `label` on a
+// placeholder, so absent fields cannot leak (button element carries
+// no HTML href attribute; startDownload is gated on !item.disabled).
+const BILLING_PERIOD_DISABLED_TITLE = "Excel period-close billing - not yet built; will become available once every day in the period is entered.";
+
 function pdfMonthItem({ year, monthKey, accountKey, disabled }) {
   const safeAccount = String(accountKey).replace(/\s+/g, "");
   const dateStr = todayDateStr();
@@ -277,6 +288,25 @@ function pdfMonthItem({ year, monthKey, accountKey, disabled }) {
     item.disabledSub = "redesign in progress";
   }
   return item;
+}
+
+// Period-close billing placeholder. No href, no filename - the export
+// does not exist yet. Same disabled/comingSoon shape the PDC drill PDF
+// uses (`pdfMonthItem` / `pdfPeriodItem` when disabled=true), so the
+// renderer's `sc-export-menu-item-disabled` + COMING SOON tag paths
+// carry it byte-identically. Label copy is owner-verbatim; no period
+// number in the label because the menu is already period-scoped and
+// the number sits on adjacent items. Every account (fee + per-meal
+// both bill); no gating on schedule flags.
+function xlsxBillingPeriodItem() {
+  return {
+    key: "xlsx-billing-period",
+    label: "Excel - Period Close Billing",
+    disabled: true,
+    comingSoon: true,
+    disabledTitle: BILLING_PERIOD_DISABLED_TITLE,
+    disabledSub: "available at period close",
+  };
 }
 
 function pdfPeriodItem({ year, periodKey, accountKey, disabled }) {
@@ -342,6 +372,13 @@ function buildMenuItems({
     items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "period" && periodKey) {
     items.push(xlsxItem({ scope, year, periodKey, accountKey }));
+    // Owner placement 2026-08-04: after the period Excel, before the
+    // period PDF - keeps the period-scope items grouped. Two adjacent
+    // greys on PDC / PDCO (both the billing placeholder and the PDF
+    // are disabled there) is intentional signal, not clutter: both
+    // are "not yet" for this account on this period, grouped as one
+    // waiting-family before the Excel year fallback closes the menu.
+    items.push(xlsxBillingPeriodItem());
     items.push(pdfPeriodItem({ year, periodKey, accountKey, disabled: isPdcOrPdco }));
     items.push(xlsxItem({ scope: "year", year, accountKey }));
   } else if (scope === "year") {

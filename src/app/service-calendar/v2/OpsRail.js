@@ -102,6 +102,13 @@ function OpsRailBase({
   onTargetDay,                 // (date) => void - queue rows + notes + HS row + footer target
   onDrillToMonth,              // (monthIndex) => void - month lines (overview season list)
   onDrillToPeriod,             // (periodLabel) => void - period lines (overview season list)
+  // Bulk entry on fee-no-dollar accounts (owner Ruling 4, 2026-08-04).
+  // Same handler shape and same downstream flow as DrillRail's
+  // secondary-tier bulk CTA - single BulkEntry surface. Rendered only
+  // in drill mode (bulk needs day selection, which is a drill-scope
+  // affordance) and only when the parent wires the handler (parent
+  // scopes to isFeeNoDollar; AAA + MLB fee do not receive the prop).
+  onBulkModeToggle,            // (next: bool) => void - flips bulkMode in ServiceCalendar
 }) {
   const [showAllQueue, setShowAllQueue] = useState(false);
   const iso = today || todayISO();
@@ -437,6 +444,49 @@ function OpsRailBase({
           onTargetDay?.(footerAction.target.date);
         }}
       />
+      {/* TEMPORARY PROBE 2026-08-04 (remove after diagnosis).
+          Always-rendered hidden marker on OpsRailBase. Two axes:
+          `data-probe-token` proves this file compiled and this render
+          path executed. `data-probe-*` attrs surface the two gate
+          inputs so DevTools can see why the bulk door did or did not
+          render regardless of whether the wrapper block below fires. */}
+      <span
+        aria-hidden="true"
+        style={{ display: "none" }}
+        data-probe-token="OPSRAIL-BASE-PROBE-2026-08-04-K7M2"
+        data-probe-mode={String(mode)}
+        data-probe-bulk-toggle-wired={String(!!onBulkModeToggle)}
+      />
+      {/* Bulk entry on fee accounts (owner Ruling 4, 2026-08-04).
+          Same door as DrillRail's DP1-08 secondary-tier row - reuses
+          .sc-drill-rail-actions + .sc-drill-rail-action--secondary so
+          both rails present bulk as one visual family. Drill-only:
+          overview has no day-selection surface for bulk to hand off to.
+
+          Probe restructure 2026-08-04: the outer container now renders
+          in `mode === "drill"` regardless of toggle wiring, so DevTools
+          can see the container's `data-probe-*` attributes even when
+          the button itself is absent. */}
+      {mode === "drill" && (
+        <div
+          className="sc-drill-rail-actions"
+          role="group"
+          aria-label="Entry actions"
+          data-probe-container="bulk-actions"
+          data-probe-bulk-toggle-wired={String(!!onBulkModeToggle)}
+        >
+          {onBulkModeToggle && (
+            <button
+              type="button"
+              className="sc-drill-rail-action sc-drill-rail-action--secondary"
+              onClick={() => onBulkModeToggle(true)}
+              data-probe-token="BULK-DOOR-BUTTON-2026-08-04-K7M2"
+            >
+              Bulk entry
+            </button>
+          )}
+        </div>
+      )}
       {exportControl && (
         <div className="sc-drill-rail-export">
           {exportControl}
