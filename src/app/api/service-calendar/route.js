@@ -1785,6 +1785,54 @@ export async function POST(request) {
           { status: 400 }
         );
       }
+
+      // Admin hardening (2026-08-04): duplicate-name gate. A group
+      // cannot carry two services with the same name - position-
+      // never-name is the seed convention, and every column-mapping
+      // trap we caught in the workbooks traced back to name
+      // collisions. Trimmed + case-insensitive match on the trimmed
+      // stored name. Archived rows still occupy the name because
+      // reactivating would otherwise create the collision; the copy
+      // makes that explicit so the operator reactivates instead of
+      // adding a fresh row.
+      //
+      // Query filters: deleted_at IS NULL keeps hard-deleted rows
+      // out (there are none in production today but the schema
+      // allows it). No filter on active_until - archived rows are
+      // still name-occupying by design.
+      {
+        const dupSupa = getServiceClient();
+        const { data: siblings, error: dupErr } = await dupSupa
+          .from("sc_services")
+          .select("service_name, active_until")
+          .eq("account_key", accountKey)
+          .eq("group_id", groupId)
+          .is("deleted_at", null);
+        if (dupErr) {
+          return NextResponse.json(
+            { success: false, error: `Duplicate check failed: ${dupErr.message}` },
+            { status: 500 }
+          );
+        }
+        const wanted = serviceName.trim().toLowerCase();
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const dup = (siblings || []).find(
+          (r) => String(r.service_name || "").trim().toLowerCase() === wanted
+        );
+        if (dup) {
+          const archived = dup.active_until && String(dup.active_until).slice(0, 10) <= todayIso;
+          return NextResponse.json(
+            {
+              success: false,
+              error: archived
+                ? "That name is already used in this group (currently archived - reactivate the existing service instead of creating a new one)"
+                : "That name is already used in this group",
+            },
+            { status: 400 }
+          );
+        }
+      }
+
       const result = await addServiceWithAudit(
         accountKey,
         groupId,
@@ -1830,6 +1878,44 @@ export async function POST(request) {
           { status: 400 }
         );
       }
+
+      // Admin hardening (2026-08-04): duplicate-name gate at the
+      // account scope. Same reasoning as the service-name gate
+      // above - two groups with the same name on one account is a
+      // rename-trap in waiting for the seed mapping. Archived
+      // groups still occupy the name.
+      {
+        const dupSupa = getServiceClient();
+        const { data: siblings, error: dupErr } = await dupSupa
+          .from("sc_service_groups")
+          .select("group_name, active_until")
+          .eq("account_key", accountKey)
+          .is("deleted_at", null);
+        if (dupErr) {
+          return NextResponse.json(
+            { success: false, error: `Duplicate check failed: ${dupErr.message}` },
+            { status: 500 }
+          );
+        }
+        const wanted = groupName.trim().toLowerCase();
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const dup = (siblings || []).find(
+          (r) => String(r.group_name || "").trim().toLowerCase() === wanted
+        );
+        if (dup) {
+          const archived = dup.active_until && String(dup.active_until).slice(0, 10) <= todayIso;
+          return NextResponse.json(
+            {
+              success: false,
+              error: archived
+                ? "That name is already used on this account (currently archived - reactivate the existing group instead of creating a new one)"
+                : "That name is already used on this account",
+            },
+            { status: 400 }
+          );
+        }
+      }
+
       const result = await addServiceGroup(
         accountKey,
         groupName,
