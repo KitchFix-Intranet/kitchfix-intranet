@@ -36,7 +36,15 @@ export async function evaluateGates({ session, flagEnabled, body, deps }) {
   if (!session?.user?.email) return { pass: false, kind: "auth", status: 401 };
 
   const email = session.user.email;
-  const allowed = await canUseSous(email);
+  // Surface-aware gate (v2.0 close-out Part 1b, 2026-08-04): the POST API
+  // serves both the standalone /sous page AND the Playbook Ask Sous panel.
+  // A user with EITHER surface authorization should be able to hit the API.
+  // Panel access delegates to canViewPlaybook via canUseSous(email, "panel");
+  // page access is the existing preview-allowlist path via
+  // canUseSous(email, "page"). If neither, block.
+  const panelAllowed = await canUseSous(email, "panel");
+  const pageAllowed = panelAllowed ? true : await canUseSous(email, "page");
+  const allowed = panelAllowed || pageAllowed;
   if (!allowed) {
     return { pass: false, kind: "tier", status: 403 };
   }

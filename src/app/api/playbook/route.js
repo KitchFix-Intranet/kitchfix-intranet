@@ -36,6 +36,7 @@ import {
 } from "@/lib/dataStore";
 import {
   canViewPlaybook,
+  canUseSous,
   isCorporateEmail,
   visibleStatuses,
   filterDocuments,
@@ -226,12 +227,19 @@ export async function GET(request) {
         : filterDocuments(allDocs, isCorp);
       const tier = viewerTier(actualEmail);
       const visible = statusVisible.filter((d) => canSeeDoc(tier, d.access_level));
+      // v2.0 close-out Part 1b (2026-08-04): canUsePage flag lets the
+      // client conditionally render the "Open in Sous" link inside the
+      // panel - visible only for users who can reach the standalone
+      // /sous page. Panel button itself is unconditional here (any
+      // Playbook viewer can open the panel).
+      const canUsePage = await canUseSous(actualEmail, "page");
       return NextResponse.json({
         email: actualEmail,
         isOwner: true,
         shelves: SHELVES,
         documents: visible,
         heroImage,
+        canUsePage,
       });
     }
 

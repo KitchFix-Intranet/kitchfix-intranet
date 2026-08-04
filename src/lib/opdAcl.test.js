@@ -186,3 +186,59 @@ describe("canUseSous - populated allowlist (solo-preview lock)", () => {
     assert.equal(result, false, "corporate flag must be bypassed while the allowlist is populated");
   });
 });
+
+// ── v2.0 close-out Part 1b: surface-aware canUseSous ───────────────────────
+// Kevin ruling 2026-08-04: the Ask Sous PANEL inside the Playbook is
+// available to anyone who can already access the Playbook (defer to
+// canViewPlaybook). The standalone /sous page stays locked to the preview
+// allowlist. Same Sous underneath; only the door differs.
+//
+// The four required outcomes:
+//   - allowlisted user: page=true, panel=true
+//   - non-allowlisted user WITH Playbook access: page=false, panel=true
+//   - user WITHOUT Playbook access: both=false
+//   - empty allowlist: the original tier truth table passes unchanged
+// (Playbook-access truth-table is already exercised by the empty-allowlist
+// block above; the fourth outcome is proved there by not being touched.)
+
+describe("canUseSous - surface-aware (Part 1b, panel = canViewPlaybook)", () => {
+  beforeEach(() => setAllowlist(["k.fietek@kitchfix.com"]));
+  afterEach(() => restoreAllowlist());
+
+  test("allowlisted user: page=true AND panel=true", async () => {
+    // canViewPlaybook is currently PLAYBOOK_OWNER-only = Kevin's email;
+    // the same email as the allowlist entry, so both surfaces resolve true.
+    const pagePass = await canUseSous("k.fietek@kitchfix.com", "page");
+    const panelPass = await canUseSous("k.fietek@kitchfix.com", "panel");
+    assert.equal(pagePass, true, "allowlisted user must reach the page");
+    assert.equal(panelPass, true, "allowlisted user (Playbook owner) must reach the panel");
+  });
+
+  test("non-allowlisted user WITH Playbook access: page=false, panel=true", async () => {
+    // Simulate a user who has Playbook access but is NOT on the preview
+    // allowlist. Stub canViewPlaybook to return true regardless of email;
+    // stub the page deps so the SLT tier does not match either. The panel
+    // must open; the page must not.
+    const deps = {
+      viewerTier: () => "unrestricted",
+      isCorporateEmail: async () => true,
+      canViewPlaybook: () => true,
+    };
+    const pagePass = await canUseSous("someone@kitchfix.com", "page", deps);
+    const panelPass = await canUseSous("someone@kitchfix.com", "panel", deps);
+    assert.equal(pagePass, false, "non-allowlisted user must not reach the page while the lock is on");
+    assert.equal(panelPass, true, "user with Playbook access must reach the panel");
+  });
+
+  test("user WITHOUT Playbook access: both surfaces denied", async () => {
+    const deps = {
+      viewerTier: () => "unrestricted",
+      isCorporateEmail: async () => true,
+      canViewPlaybook: () => false,
+    };
+    const pagePass = await canUseSous("outsider@example.com", "page", deps);
+    const panelPass = await canUseSous("outsider@example.com", "panel", deps);
+    assert.equal(pagePass, false, "no Playbook access + not allowlisted = no page");
+    assert.equal(panelPass, false, "no Playbook access = no panel (deferred to canViewPlaybook)");
+  });
+});

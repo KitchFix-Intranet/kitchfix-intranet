@@ -74,15 +74,35 @@ export function canViewSousReports(actualEmail) {
 
 // ── Sous access gate ──────────────────────────────────────────────────────────
 //
-// SINGLE SOURCE OF TRUTH for who can use Sous. Three surfaces call this:
+// SINGLE SOURCE OF TRUTH for who can use Sous. Four call sites:
 //   1. src/app/api/sousai/gate.js         (POST /api/sousai gate order step 3)
 //   2. src/app/sous/page.js               (server-component page gate)
 //   3. src/components/TopNav.js           (nav-link visibility, resolved
 //                                          server-side in src/app/layout.js)
-// Widening happens here; there is no fourth surface to keep in sync. A link
+//   4. src/app/api/playbook/route.js      (bootstrap payload, so the Playbook
+//                                          panel button can render only for
+//                                          panel-authorized users - Part 1b
+//                                          of v2.0 close-out, 2026-08-04)
+// Widening happens here; there is no fifth surface to keep in sync. A link
 // that renders for someone who then gets a 404 would be a bug, and two
 // independent gates guarantee that bug eventually - so there is only one
 // gate. This mirrors the canViewSousReports precedent above.
+//
+// ── Surface-aware split (Part 1b, v2.0 close-out, 2026-08-04) ────────────────
+// Kevin's ruling: the Ask Sous PANEL inside the Playbook is available to
+// anyone who can already access the Playbook - no additional Sous gate on
+// that surface. The standalone /sous page remains locked to the preview
+// allowlist. The rationale: the panel is opened from a document, its
+// starters are Playbook questions, and document Q and A is where v2.0 is
+// strongest. The standalone page is an open canvas that invites the
+// cross-account, season-aggregate, and service-group questions v2.0
+// structurally cannot see.
+//
+// Signature: canUseSous(email, surface, deps?) where surface is
+// "page" (default, preserves the pre-1b behavior) or "panel". Missing
+// surface argument is treated as "page" so any pre-1b caller keeps its
+// existing gate. Panel surface delegates entirely to canViewPlaybook -
+// the same predicate the Playbook route uses today.
 //
 // Semantics preserved exactly from the pre-helper world:
 //   - gate.js:36-40 computed `tier === "slt" || isCorp` with an unconditional
@@ -118,11 +138,36 @@ export const SOUS_PREVIEW_ALLOWLIST = new Set([
   'k.fietek@kitchfix.com',   // Kevin Fietek - Director of Operations (owns PLAYBOOK_OWNER above)
 ]);
 
-export async function canUseSous(email, deps = {
-  viewerTier: canUseSous_defaultViewerTier,
-  isCorporateEmail: canUseSous_defaultIsCorporateEmail,
-}) {
+export async function canUseSous(email, surfaceOrDeps, maybeDeps) {
   if (!email) return false;
+  // Backwards-compatible signature parsing. Pre-1b callers pass either
+  // nothing beyond email or a deps object as the second arg; 1b callers
+  // pass surface as the second arg with optional deps as the third:
+  //   canUseSous(email)                        -> surface="page", defaults
+  //   canUseSous(email, {viewerTier, ...})     -> surface="page", supplied deps
+  //   canUseSous(email, "panel")               -> surface="panel", defaults
+  //   canUseSous(email, "panel", {...deps})    -> surface="panel", supplied deps
+  //   canUseSous(email, "page", {...deps})     -> surface="page", supplied deps
+  let surface = "page";
+  let deps;
+  if (typeof surfaceOrDeps === "string") {
+    surface = surfaceOrDeps;
+    deps = maybeDeps;
+  } else {
+    deps = surfaceOrDeps;
+  }
+  deps = deps || {
+    viewerTier: canUseSous_defaultViewerTier,
+    isCorporateEmail: canUseSous_defaultIsCorporateEmail,
+    canViewPlaybook: canUseSous_defaultCanViewPlaybook,
+  };
+  // Panel surface delegates entirely to canViewPlaybook - the exact
+  // predicate the Playbook access check uses today. No second gate.
+  if (surface === "panel") {
+    const check = deps.canViewPlaybook || canUseSous_defaultCanViewPlaybook;
+    return check(email) === true;
+  }
+  // Page surface: preview lock first, then pre-lock tier logic.
   if (SOUS_PREVIEW_ALLOWLIST.size > 0) {
     return SOUS_PREVIEW_ALLOWLIST.has((email || '').toLowerCase().trim());
   }
@@ -133,6 +178,7 @@ export async function canUseSous(email, deps = {
 // file supplying `deps` is not accidentally shadowed by a hoist issue.
 function canUseSous_defaultViewerTier(email) { return viewerTier(email); }
 async function canUseSous_defaultIsCorporateEmail(email) { return await isCorporateEmail(email); }
+function canUseSous_defaultCanViewPlaybook(email) { return canViewPlaybook(email); }
 
 // ── pr-7-11: 3-tier access gate ─────────────────────────────────────────────
 //

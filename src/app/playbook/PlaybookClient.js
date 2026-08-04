@@ -603,6 +603,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
           prefill={sousPrefill}
           docContext={sousDocContext}
           onDismissDoc={() => setSousDocContext(null)}
+          canUsePage={bootstrap.canUsePage === true}
         />
       )}
     </div>
@@ -620,7 +621,7 @@ function Playbook({ bootstrap, query, setQuery, filter, setFilter, family, setFa
 // opens the overlay via the per-doc "Ask Sous about this doc" affordance
 // in SlideOverReader.
 // ════════════════════════════════════════════════════════════════════════════
-function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = null, onDismissDoc }) {
+function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = null, onDismissDoc, canUsePage = false }) {
   const [chips, setChips] = useState(null);
   // Local prefill state so any external "Ask Sous about this doc" seed
   // (from SlideOverReader) still populates the composer without a submit.
@@ -685,10 +686,12 @@ function SousAIOverlay({ onClose, prefill: initialPrefill = "", docContext = nul
               </svg>
               <h2>Ask Sous</h2>
             </div>
-            <a href={openInSousHref} className="pb-sous-openinsous" target="_blank" rel="noopener">
-              <span>Open in Sous</span>
-              <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
-            </a>
+            {canUsePage && (
+              <a href={openInSousHref} className="pb-sous-openinsous" target="_blank" rel="noopener">
+                <span>Open in Sous</span>
+                <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
+              </a>
+            )}
             <button className="pb-sous-close" onClick={onClose} aria-label="Close">×</button>
           </div>
           {docContext && (
