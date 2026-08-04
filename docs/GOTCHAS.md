@@ -136,6 +136,16 @@ Once a migration has been applied to a database, editing its `CREATE TABLE IF NO
 
 **Detection:** the probe for a migration must query pg_constraint / pg_class / information_schema and assert the specific constraints and grants it expects, not just table existence. `kpi-1-spine.sql` post-flight only asserted table existence, so the missing FK went undetected until the follow-up probe run.
 
+### A new table needs an explicit grant - a migration that creates a table nothing can read is a silent no-op
+
+Postgres does not confer any permission on a newly created table beyond the owner. Without `GRANT SELECT` (and INSERT if the table is written from an app), every downstream query fails with `permission denied for table <name>`. A migration that CREATEs a table and forgets the grant looks green on apply (the DDL succeeded) but the table is invisible to `service_role` and every consumer.
+
+**Realised on 2026-08-04.** `kpi-1-spine.sql` created `kpi_lines` and `kpi_line_activation`, applied cleanly. The probe run immediately after reported `permission denied for table kpi_lines`. Fix landed as GRANTs in `kpi-1b-activation-fk.sql` alongside the FK swap.
+
+**The rule:** every `CREATE TABLE` in a migration is paired with `GRANT SELECT[, INSERT[, UPDATE[, DELETE]]] ON <table> TO service_role` in the same migration. Sequences need `GRANT USAGE ON SEQUENCE <table>_id_seq TO service_role`. Views need their own `GRANT SELECT`.
+
+**Negative-space post-flight.** For append-only tables, don't just assert the positive grants - assert the negative. `has_table_privilege('service_role', 'my_table', 'UPDATE')` must return FALSE. A permission you did not grant is exactly the kind of thing a future migration can quietly add; asserting its absence turns "the docs say append-only" into an executable contract. `kpi-8a-rippling-raw.sql` post-flight is the pattern.
+
 ---
 
 ## Time & Dates
@@ -506,6 +516,16 @@ git push --force-with-lease origin wrong-branch
 ```
 
 **First seen:** 2026-05-13, mid-Phase-1 push day. Cost: ~10 min of git gymnastics. The lesson is cheap; the bug is annoying.
+
+### Authored-but-uncommitted is not a state
+
+Six PR 8a files were written, tested-in-thought, reported as delivered in the session summary, and lost to a working-tree reset without ever reaching a branch. When the follow-on session opened, `git log --all` on any path matching the promised files returned zero commits and the only surviving artifact was a 10-line stash of a docs edit. Everything else - the migration, the sync script, the helper lib, the workflow - had to be rebuilt from the design notes.
+
+**Realised on 2026-08-04.** The interim between sessions did an implicit reset (branch switch, worktree flip, or IDE-driven checkout - the reflog only shows the outcome). Untracked files in `docs/migrations/`, `scripts/`, and `.github/workflows/` did not survive.
+
+**The rule:** any file worth reporting as done is worth committing to a branch immediately. Draft PR, WIP commit, `git stash push -m` - anything that produces a SHA. Commit incrementally: after each file, not at the end. A WIP commit is cheaper than a lost file. "It is in the working tree" survives nothing that touches HEAD.
+
+**Related defensive pattern.** When a session assembles many files under one branch, chain the checkout guard onto the commit: `test "$(git branch --show-current)" = "feat/whatever" && git add ... && git commit ...`. If the working directory branch has silently switched (parallel terminal, IDE hook, worktree op), the guard refuses to commit onto the wrong branch. Same session as this entry: a parallel commit on `fix/sc-admin-price-lock` landed one PR-8a commit on that branch before the guard was added.
 
 ---
 
