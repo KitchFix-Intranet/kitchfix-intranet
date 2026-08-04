@@ -1222,15 +1222,7 @@ export async function POST(request) {
           serviceId,
           newPrice: type === "price" ? Number(newPrice) : undefined,
         });
-        // TEMPORARY build-verification marker (2026-08-04). Owner
-        // reports the dev server is serving pre-bounce code. If this
-        // string does NOT appear in the response body, the server is
-        // not compiling from this commit. Remove after verification.
-        return NextResponse.json({
-          success: true,
-          serverBuildMarker: "PROBE_MARKER_2026-08-04_ISO_WORKTREE_K9M3",
-          ...report,
-        });
+        return NextResponse.json({ success: true, ...report });
       } catch (err) {
         // Owner ruling: fall back to C, do not fail closed. If the
         // enumeration fails, return an empty closed-periods list; the
@@ -1239,7 +1231,6 @@ export async function POST(request) {
         console.warn(`[sc-admin-backdate-preview] failed: ${err?.message || err}`);
         return NextResponse.json({
           success: true,
-          serverBuildMarker: "PROBE_MARKER_2026-08-04_ISO_WORKTREE_K9M3",
           closedPeriods: [],
           affectedDayCount: 0,
           revenueDeltaCents: null,
