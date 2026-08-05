@@ -23,6 +23,10 @@ export default function StateLegend({
   hasHomestandSchedule = false,
   isFeeAccount = false,
   isMilb = false,
+  // sc-28 (2026-08-05): copper `Away, meals at home` legend entry.
+  // Only appears when the current account has HOME_DINING_AWAY_OPPONENTS
+  // entries - caller resolves the flag against that map.
+  hasAwayHomeDining = false,
   showDayNight = false,
   // DP2-05 (2026-07-20): compact FIGURES trailer in the drill legend
   // bar. Off by default (v1 + overview call sites don't set it);
@@ -63,7 +67,7 @@ export default function StateLegend({
   // (rubric non-negotiable #1: always visible). The fuller cell-state
   // taxonomy lives in the popup behind the info button. Source:
   // ./legendItems.js (shared with LegendInfoPopup).
-  const items = getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb })
+  const items = getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb, hasAwayHomeDining })
     .filter(it => {
       if (dropMarkers && (it.mod === "game-day-mark" || it.mod === "spring-mark")) return false;
       if (dropExhibition && it.mod === "exhibition") return false;
@@ -158,6 +162,7 @@ export default function StateLegend({
         hasHomestandSchedule={hasHomestandSchedule}
         isFeeAccount={isFeeAccount}
         isMilb={isMilb}
+        hasAwayHomeDining={hasAwayHomeDining}
       />
     </>
   );
@@ -189,6 +194,16 @@ function LegendSwatch({ mod, icon }) {
     return (
       <span className="sc-state-legend-swatch sc-state-legend-swatch--away" aria-hidden="true">
         <PlaneGlyph size={10} />
+      </span>
+    );
+  }
+  // sc-28 (2026-08-05): away-home-dining swatch carries the U+2302
+  // HOUSE glyph the tile chip renders, in the copper family. Same
+  // rhyme as the away swatch above - swatch reads like the tile.
+  if (mod === "away-home-dining") {
+    return (
+      <span className="sc-state-legend-swatch sc-state-legend-swatch--away-home-dining" aria-hidden="true">
+        {"⌂"}
       </span>
     );
   }

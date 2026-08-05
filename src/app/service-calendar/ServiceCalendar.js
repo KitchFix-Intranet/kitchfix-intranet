@@ -30,6 +30,12 @@ import { useScV2, useScEntryV2Effective } from "./v2/flags";
 // a non-pilot account into the new surface. Server payload emit uses
 // the same set (see lib/dataStore/serviceCalendar.js).
 import { MLB_HOMESTAND_SURFACE_ACCOUNTS } from "./v2/pilots";
+// sc-28 (2026-08-05): account-level gate for the copper
+// "Away, meals at home" legend entry. The pill fires on qualifying
+// AWAY rows (loadScheduleOverlay + HOME_DINING_AWAY_OPPONENTS);
+// the legend key is account-scoped so accounts that can never show
+// the chip do not carry an orphan explanation.
+import { accountHasHomeDiningAwayOpponents } from "./v2/homeDiningAwayOpponents";
 // M-3 (2026-08-XX): MLB-wide tile inertness gate. Counts are agreed
 // annually and static (owner ruling 2026-07-29 - Phase 4 never
 // happens). Day tiles on MLB accounts become fully inert: no count
@@ -1541,6 +1547,12 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // period + month rollups above via monthCache.
   const scheduleOverlay = data?.scheduleOverlay || null;
   const isMilb = data?.account?.category === "MiLB";
+  // sc-28 (2026-08-05): does the current account have any
+  // qualifying home-dining away opponents? Feeds StateLegend's
+  // hasAwayHomeDining prop below. STL - FL returns true (JUP + SLU);
+  // every other account returns false, so the copper legend entry
+  // stays out.
+  const hasAwayHomeDining = accountHasHomeDiningAwayOpponents(selectedAccount);
 
   // sc-19 (2026-07-12): client-side derivation of the account's phase
   // timeline + Spring Training date set. phaseCalendar.js is the source
@@ -3595,6 +3607,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                     hasHomestandSchedule={hasHomestandSchedule}
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
+                    hasAwayHomeDining={hasAwayHomeDining}
                     showDayNight={true}
                     /* DP2-05 (2026-07-20): scv2 drill legend bar
                        carries the FIGURES trailer. v1 fallback mount
@@ -3812,6 +3825,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                     hasHomestandSchedule={hasHomestandSchedule}
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
+                    hasAwayHomeDining={hasAwayHomeDining}
                     showDayNight={true}
                     /* DP2-05 (2026-07-20): scv2 drill legend bar
                        carries the FIGURES trailer. v1 fallback mount
@@ -3896,6 +3910,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             hasHomestandSchedule={hasHomestandSchedule}
             isFeeAccount={isFeeAccount}
             isMilb={isMilb}
+            hasAwayHomeDining={hasAwayHomeDining}
             showDayNight={true}
           />
         )}

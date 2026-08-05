@@ -660,12 +660,22 @@ function renderFeeNoDollar(content) {
   // Days without an overlay row have opponent + dayNight null and
   // fall back to the pre-sc-17 served-only render byte-for-byte.
   //
-  // sc-28 (2026-08-05): away-dining rows also flow through this
-  // branch. When `isAwayHomeDining` is true, the chip copy switches
-  // to `at OPP · Meals@Home` (owner-approved wording, verbatim) in
-  // the copper family. Copper variant class fires only on the
-  // qualifying dates. Home GAME dates carry `isAwayHomeDining=false`
-  // and render the pre-sc-28 `vs OPP` chip untouched.
+  // sc-28 (2026-08-05): away-dining rows flow through this branch.
+  // When `isAwayHomeDining` is true, the chip is a short copper pill
+  // carrying the U+2302 HOUSE glyph + `at OPP` (rendered uppercase
+  // by text-transform). The "meals at home" fact moves to the legend
+  // entry (one explanation once, not on every tile). Doubleheader
+  // suffix stays as `· DH`. Home GAME dates carry
+  // `isAwayHomeDining=false` and render the pre-sc-28 `vs OPP` chip
+  // untouched.
+  //
+  // sc-28 restyle (2026-08-05, owner review): prior copy was
+  // `at OPP · Meals@Home` - the chip measured 137px on a 143px tile
+  // (bar, not chip) and the copper never applied because
+  // drill.css:511 beat the variant on bg + color at specificity 6.
+  // The specificity fix moves the drill.css base rule to opt out
+  // of --away-home-dining via :not(); the copy fix moves
+  // "meals at home" to the legend.
   const { served, meals, opponent, dayNight, pillTime, isDoubleheader, isAwayHomeDining } = content;
   const n = served != null ? served : meals;
   if (n == null && !opponent && !dayNight) return null;
@@ -676,7 +686,7 @@ function renderFeeNoDollar(content) {
           className={`sc-daysq-mid-opponent${isAwayHomeDining ? " sc-daysq-mid-opponent--away-home-dining" : ""}`}
         >
           {isAwayHomeDining
-            ? <>at {opponent} · Meals@Home{isDoubleheader ? " · DH" : ""}</>
+            ? <>{"⌂"} at {opponent}{isDoubleheader ? " · DH" : ""}</>
             : <>vs {opponent}{isDoubleheader ? " · DH" : ""}</>
           }
         </span>

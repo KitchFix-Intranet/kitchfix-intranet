@@ -270,6 +270,21 @@ export const MILB_DAY_NIGHT = [
   },
 ];
 
+// sc-28 (2026-08-05): copper "Away, meals at home" legend entry.
+// Only appears on accounts whose HOME_DINING_AWAY_OPPONENTS map has
+// entries (currently STL - FL for JUP + SLU). The tile chip carries
+// only the U+2302 glyph + `at OPP`; this legend entry is where the
+// copper + house glyph get their one explanation. Gated per account
+// so accounts that can never show the chip do not carry an orphan
+// key.
+export const AWAY_HOME_DINING = {
+  mod: "away-home-dining",
+  icon: "⌂",
+  label: "Away, meals at home",
+  labelLong: "Away game with meals at PDC",
+  description: "Team travels for an away game but returns to the PDC to eat (short-bus opponents). Copper pill with the house glyph on the tile.",
+};
+
 // Returns the account-shape array. Same branch order the two
 // consumer components used pre-C1a.
 // OV-3 F9: game-day + spring markers append to the arrays where
@@ -281,9 +296,12 @@ export const MILB_DAY_NIGHT = [
 //     accounts have springDateSet from phaseCalendar).
 // MILB (non-fee, non-homestand, non-AAA) sees neither marker in
 // practice, so its array stays untouched.
-export function getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb }) {
-  if (hasHomestandSchedule) return [...HOMESTAND, GAME_DAY_MARK];
-  if (isFeeAccount)         return [...FEE, GAME_DAY_MARK, SPRING_MARK];
-  if (isMilb)               return MILB;
-  return [...PER_MEAL, GAME_DAY_MARK, SPRING_MARK];
+// sc-28: AWAY_HOME_DINING appended when hasAwayHomeDining flag is
+// truthy - caller resolves it against HOME_DINING_AWAY_OPPONENTS.
+export function getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb, hasAwayHomeDining }) {
+  const tail = hasAwayHomeDining ? [AWAY_HOME_DINING] : [];
+  if (hasHomestandSchedule) return [...HOMESTAND, GAME_DAY_MARK, ...tail];
+  if (isFeeAccount)         return [...FEE, GAME_DAY_MARK, SPRING_MARK, ...tail];
+  if (isMilb)               return [...MILB, ...tail];
+  return [...PER_MEAL, GAME_DAY_MARK, SPRING_MARK, ...tail];
 }

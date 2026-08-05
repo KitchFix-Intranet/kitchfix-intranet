@@ -55,3 +55,13 @@ export function isHomeDiningAwayOpponent(accountKey, opponentTeamId) {
   const set = HOME_DINING_AWAY_OPPONENTS.get(accountKey);
   return set ? set.has(Number(opponentTeamId)) : false;
 }
+
+// Account-level presence check - "can this account ever surface the
+// copper away-home-dining chip?" Used by the legend to gate its
+// copper entry so accounts that never show the chip don't carry an
+// orphan legend key.
+export function accountHasHomeDiningAwayOpponents(accountKey) {
+  if (!accountKey) return false;
+  const set = HOME_DINING_AWAY_OPPONENTS.get(accountKey);
+  return !!set && set.size > 0;
+}

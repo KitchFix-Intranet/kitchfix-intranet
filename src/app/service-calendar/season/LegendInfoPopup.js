@@ -29,6 +29,7 @@ export default function LegendInfoPopup({
   hasHomestandSchedule = false,
   isFeeAccount = false,
   isMilb = false,
+  hasAwayHomeDining = false,
 }) {
   const panelRef = useRef(null);
 
@@ -123,7 +124,7 @@ export default function LegendInfoPopup({
               not a calendar icon - keeping them titled maintains the
               distinction. */}
           <Section title="Service Calendar Icons">
-            {getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb })
+            {getLegendItems({ hasHomestandSchedule, isFeeAccount, isMilb, hasAwayHomeDining })
               .filter(it => it.mod !== "game-day-mark" && it.mod !== "spring-mark")
               .map(it => (
                 <Row
@@ -178,7 +179,11 @@ function Section({ title, children }) {
 function Row({ mod, label, icon = "", children }) {
   // sc-13 (2026-07-10): AWAY swatch renders the plane glyph inside the
   // swatch so the popup + strip + tile all read the same shape.
-  const swatchContent = mod === "away" ? <PlaneGlyph size={12} /> : icon;
+  // sc-28 (2026-08-05): away-home-dining swatch renders the U+2302
+  // HOUSE glyph in the copper family.
+  const swatchContent = mod === "away"
+    ? <PlaneGlyph size={12} />
+    : (mod === "away-home-dining" ? "⌂" : icon);
   return (
     <div className="sc-legend-popup-row">
       <span className={`sc-legend-popup-swatch sc-state-legend-swatch--${mod}`} aria-hidden="true">

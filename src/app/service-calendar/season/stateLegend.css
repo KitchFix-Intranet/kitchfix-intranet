@@ -198,6 +198,21 @@
   justify-content: center;
 }
 
+/* sc-28 (2026-08-05): away-home-dining swatch. Same pattern as
+   --away above - swatch reads like the tile chip. Copper wash fill,
+   copper line border, copper text. The U+2302 HOUSE glyph is
+   inlined by StateLegend.js LegendSwatch. */
+.sc-state-legend-swatch--away-home-dining {
+  background: var(--sc2-accent-copper-wash);
+  border-color: var(--sc2-accent-copper-line);
+  color: var(--sc2-accent-copper);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--sc2-wt-display);
+  line-height: 1;
+}
+
 /* MiLB day / night swatches carry the same sun / moon glyph the tile
    uses (P6). No card fill / border - the glyph is the swatch. */
 .sc-state-legend-swatch--milb-day,

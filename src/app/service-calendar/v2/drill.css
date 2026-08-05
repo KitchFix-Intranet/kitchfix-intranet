@@ -505,10 +505,19 @@
    scv2 drill lg every account type gets the same navy pill so the
    drill grid reads one grammar for "who's on today."
 
-   Guard: this MUST NOT fire on the --exh (green wash) and --away
-   (hollow) variants, which own their own colour semantics. Using
-   :not() keeps the guard explicit and readable. */
-.scv2 .sc-workspace-grid .sc-daysq--lg .sc-daysq-mid-opponent:not(.sc-daysq-mid-opponent--exh):not(.sc-daysq-mid-opponent--away) {
+   Guard: this MUST NOT fire on variants that own their own colour
+   semantics. Every such variant is enumerated in the :not() chain
+   below - --exh (green wash), --away (hollow), --away-home-dining
+   (copper wash). Using :not() keeps the guard explicit and readable.
+
+   Fragility note (2026-08-05, sc-28 owner review): this rule sets
+   pill geometry AND default colours together, so any new colour
+   variant must be added to the :not() chain to opt out. Three
+   variants now; a fourth is the point at which this should split
+   into a geometry-only base rule + separate default-colour rule
+   that variants naturally override. Not doing that split here to
+   keep this display fix minimal. */
+.scv2 .sc-workspace-grid .sc-daysq--lg .sc-daysq-mid-opponent:not(.sc-daysq-mid-opponent--exh):not(.sc-daysq-mid-opponent--away):not(.sc-daysq-mid-opponent--away-home-dining) {
   display: inline-block;
   background: rgba(21, 57, 104, 0.09);
   color: var(--text-link);
