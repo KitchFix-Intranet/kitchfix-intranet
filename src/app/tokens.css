@@ -527,6 +527,15 @@
   /* ---------- Accent families ---------- */
   --sc2-accent-amber:      #a9761f;
   --sc2-accent-copper:     #c15b2e;
+  /* sc-28 (2026-08-05): copper wash + line for the STL - FL
+     away-home-dining chip. Matches the green family shape below so
+     the copper variant has the same background-tint + border pair
+     the design system already publishes. Hex values derived from
+     the sc2-accent-copper base with the same lightness ramp
+     applied to the green family (green base 2f7d4f -> wash f1f9f4
+     is the pattern). */
+  --sc2-accent-copper-wash: #f9efe9;
+  --sc2-accent-copper-line: #e3c4b1;
   --sc2-accent-green:      #2f7d4f;
   --sc2-accent-green-deep: #1f6b41;
   --sc2-accent-green-bright:#37a866;

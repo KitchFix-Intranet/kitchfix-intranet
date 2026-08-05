@@ -1247,6 +1247,14 @@ function buildLargeContent(day, kind, homestandMap, isMilb, accountKey, schedule
     // the served-only render stays intact underneath, no state /
     // color / border change. Days without a row keep rendering
     // exactly as they did pre-sc-17.
+    //
+    // sc-28 (2026-08-05): the overlay map now also carries AWAY rows
+    // where (account, opponent_team_id) sits in the home-dining
+    // opponent map. `isAwayHomeDining` marks those days for the
+    // render layer to switch the pill copy ("at OPP · Meals@Home"
+    // in the copper family) and route the location label to "at"
+    // instead of "VS". Non-qualifying away games do not reach this
+    // branch - loadScheduleOverlay drops them.
     const ov = scheduleOverlay?.[day.date];
     return {
       served: meals || null,
@@ -1254,6 +1262,7 @@ function buildLargeContent(day, kind, homestandMap, isMilb, accountKey, schedule
       dayNight: ov?.dayNight || null,
       pillTime: formatMlbHomeGameTime(ov?.gameTime, accountKey),
       isDoubleheader: !!ov?.isDoubleheader,
+      isAwayHomeDining: !!ov?.isAwayHomeDining,
     };
   }
   // per-meal default

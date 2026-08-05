@@ -659,14 +659,26 @@ function renderFeeNoDollar(content) {
   // color change - this is purely additive presentation.
   // Days without an overlay row have opponent + dayNight null and
   // fall back to the pre-sc-17 served-only render byte-for-byte.
-  const { served, meals, opponent, dayNight, pillTime, isDoubleheader } = content;
+  //
+  // sc-28 (2026-08-05): away-dining rows also flow through this
+  // branch. When `isAwayHomeDining` is true, the chip copy switches
+  // to `at OPP · Meals@Home` (owner-approved wording, verbatim) in
+  // the copper family. Copper variant class fires only on the
+  // qualifying dates. Home GAME dates carry `isAwayHomeDining=false`
+  // and render the pre-sc-28 `vs OPP` chip untouched.
+  const { served, meals, opponent, dayNight, pillTime, isDoubleheader, isAwayHomeDining } = content;
   const n = served != null ? served : meals;
   if (n == null && !opponent && !dayNight) return null;
   return (
     <div className="sc-daysq-mid">
       {opponent && (
-        <span className="sc-daysq-mid-opponent">
-          vs {opponent}{isDoubleheader ? " · DH" : ""}
+        <span
+          className={`sc-daysq-mid-opponent${isAwayHomeDining ? " sc-daysq-mid-opponent--away-home-dining" : ""}`}
+        >
+          {isAwayHomeDining
+            ? <>at {opponent} · Meals@Home{isDoubleheader ? " · DH" : ""}</>
+            : <>vs {opponent}{isDoubleheader ? " · DH" : ""}</>
+          }
         </span>
       )}
       {dayNight && (

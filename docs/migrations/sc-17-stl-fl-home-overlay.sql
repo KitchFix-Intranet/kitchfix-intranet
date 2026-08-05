@@ -43,6 +43,30 @@
 --   one axis for complexity at another. Overlay-only. A future pass
 --   MUST NOT "complete" this migration by adding AWAY rows.
 --
+-- ─── 2026-08-05 ruling append (do not edit body above) ────────────
+--   Owner-confirmed operational fact: Palm Beach shares Roger Dean
+--   Stadium with the Jupiter Hammerheads (JUP) and St. Lucie is a
+--   short bus ride. On away games against either club the team eats
+--   at the PDC. Those are service days.
+--
+--   sc-28 adds 64 STL - FL AWAY rows to sc_homestand_schedule with
+--   `day_type='AWAY'` and a new `opponent_team_id` column, plus a
+--   `HOME_DINING_AWAY_OPPONENTS` code map keyed by (account, team_id).
+--   loadScheduleOverlay widens by one predicate: an AWAY row surfaces
+--   only when the (account, opponent_team_id) pair sits in that map.
+--
+--   The concern this HARD RULE was written to prevent - away tiles
+--   on a daily-service PDC - stays met: the 47 non-JUP-non-SLU away
+--   rows in sc-28 are invisible to loadScheduleOverlay because
+--   `HOME_DINING_AWAY_OPPONENTS.get('STL - FL')` contains only
+--   {479, 507}. The 23 qualifying dates render as `at OPP ·
+--   Meals@Home` in the copper family, which is the pill copy the
+--   operational fact needs.
+--
+--   The 2026-07-11 ruling was correct for what was known then. The
+--   append records the revisit on new information rather than a
+--   silent body edit; the original body reads as it did.
+--
 -- Ordered steps (single BEGIN/COMMIT):
 --   1. ALTER: accounts.has_schedule_overlay BOOLEAN NOT NULL DEFAULT false.
 --   2. UPDATE: set the flag TRUE for STL - FL. No other account
