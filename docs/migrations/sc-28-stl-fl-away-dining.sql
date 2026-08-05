@@ -60,16 +60,57 @@
 -- The sc-17 header carries a dated append naming this revisit;
 -- the original text is unmodified.
 --
--- ─── Doubleheader + postponement shadow ────────────────────────────
--- The 2026 pull includes AWAY dates with the two flags:
---   2026-06-21 vs JUP - doubleheader + postponement shadow
---   2026-07-02 vs LAK - doubleheader + postponement shadow
+-- ─── Dedup: 70 raw API games -> 64 unique service_dates ───────────
+-- The 6 collapses, named:
 --
--- Both are handled by the same ON CONFLICT (account_key,
--- service_date) DO UPDATE clause the home path already uses. The
--- shadow-preferred dedup in the API extract picks the played
--- (non-Postponed) row and rides in with is_doubleheader = true.
--- Same shape sc-17 uses for the STL - FL home DH on 2026-05-13.
+--   A. Doubleheader compression (2 collapses).
+--      Two AWAY doubleheaders in the pull. Each is 2 rows sharing
+--      one officialDate; sc-17's one-row-per-date convention keeps
+--      one row with is_doubleheader=true.
+--        - 2026-06-21 vs JUP  (game 1 + game 2, gameDate 6/21)
+--        - 2026-07-02 vs LAK  (game 1 + game 2, gameDate 7/2)
+--
+--   B. Postponement shadow (2 collapses).
+--      The MLB Stats API leaves the ORIGINAL postponed game in the
+--      pull with its officialDate rewritten to the resumption date,
+--      status='Postponed', and gameDate on the original calendar
+--      day. Because officialDate now matches the DH date, the
+--      postponed row folds into the same service_date as the DH
+--      pair - one row lost per postponement.
+--        - 2026-06-20 vs JUP -> postponed onto 2026-06-21 DH
+--            (API row: officialDate=2026-06-21, gameDate=2026-06-20T20:05Z,
+--             status=Postponed)
+--        - 2026-07-01 vs LAK -> postponed onto 2026-07-02 DH
+--            (API row: officialDate=2026-07-02, gameDate=2026-07-01T22:30Z,
+--             status=Postponed)
+--      Consequence: 2026-06-20 and 2026-07-01 are NOT service days
+--      for STL - FL and correctly do not appear in the INSERTs below.
+--      Their service surfaces on 6/21 and 7/2 respectively, as
+--      is_doubleheader=true AWAY rows.
+--
+--   C. Suspended-game duplicate (2 collapses).
+--      The API returns both the suspension row and the resumption
+--      row for a suspended game, both with the same officialDate.
+--      One row kept per date.
+--        - 2026-06-19 vs JUP  (2 rows, both officialDate 6/19,
+--            status='Completed Early', description 'Suspended from 6/19')
+--        - 2026-07-12 vs DBT  (2 rows, both officialDate 7/12,
+--            status='Suspended'; resumption gameDate lands on 8/11
+--            but that date is already a separate scheduled DBT away
+--            game, so no double-count)
+--
+-- Total: A(2) + B(2) + C(2) = 6 dedup collapses. 70 - 6 = 64.
+--
+-- Mechanism: dedup is done at SQL-build time (each service_date
+-- appears exactly once in the VALUES list below). The ON CONFLICT
+-- (account_key, service_date) DO UPDATE clause is defensive re-run
+-- safety only - it will not fire on a first-run apply because there
+-- is no duplication in the input.
+--
+-- Home DH shape (unchanged): sc-17's STL - FL home schedule already
+-- carries one is_doubleheader=true row on 2026-05-13 vs DBT. sc-28
+-- does not touch it. Post-apply dh_rows for STL - FL = 3:
+--   2026-05-13 home DBT + 2026-06-21 away JUP + 2026-07-02 away LAK.
 --
 -- ─── FSL team ID / abbrev mapping ──────────────────────────────────
 --   279  PMB  Palm Beach Cardinals    (STL parent org)
@@ -216,7 +257,7 @@ VALUES
   ('STL - FL', '2026-08-27', 'Thursday', 'AWAY', 'DUN', 424, '2026-08-27T22:30:00Z', 'night', false, NULL, 820634),
   ('STL - FL', '2026-08-28', 'Friday', 'AWAY', 'DUN', 424, '2026-08-28T22:30:00Z', 'night', false, NULL, 820627),
   ('STL - FL', '2026-08-29', 'Saturday', 'AWAY', 'DUN', 424, '2026-08-29T22:30:00Z', 'night', false, NULL, 820628),
-  ('STL - FL', '2026-08-30', 'Sunday', 'AWAY', 'DUN', 424, '2026-08-30T16:00:00Z', 'day', false, NULL, 820629);
+  ('STL - FL', '2026-08-30', 'Sunday', 'AWAY', 'DUN', 424, '2026-08-30T16:00:00Z', 'day', false, NULL, 820629)
 ON CONFLICT (account_key, service_date) DO UPDATE
   SET day_type         = EXCLUDED.day_type,
       opponent         = EXCLUDED.opponent,

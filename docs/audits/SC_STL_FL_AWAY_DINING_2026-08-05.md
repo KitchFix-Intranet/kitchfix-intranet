@@ -78,25 +78,83 @@ To https://github.com/KitchFix-Intranet/kitchfix-intranet.git
     invariant so a future reader does not confuse home-overlay scope
     with schedule-overlay scope.
 
-### Verification (read-only)
+### 2026-08-05 syntax + count re-verification (owner review)
 
-- **API pull sanity.** Palm Beach Cardinals 2026 FSL schedule =
-  137 games total = 67 home + 70 away. Dedup on service_date =
-  64 unique AWAY dates (6 doubleheader-collapse).
-- **Split by opponent** (from the migration verify query, expected
-  post-apply): SLU 12 AWAY dates, JUP 11 AWAY dates, other 41.
-- **DH rows.** `sc_homestand_schedule` for STL - FL carries 3 rows with
-  `is_doubleheader=true`: 2026-06-21 (JUP home doubleheader) and
-  2026-07-02 (LAK home doubleheader) already present pre-sc-28; sc-28
-  adds one AWAY DH on 2026-04-15 vs FTM (not JUP/SLU, so not visible via
-  the map).
-- **Blast radius.** Only three consumers read the schedule overlay for
-  STL - FL:
-  - `loadScheduleOverlay` (this branch widens it)
-  - `PeriodWorkspace.buildLargeContent` (fee-no-dollar branch)
-  - `DaySquare.renderFeeNoDollar`
-  Other accounts + other kinds do not read the overlay - `.eq("day_type",
-  "GAME")` predicate is preserved for accounts NOT in the map.
+**Syntax fix.** The original sc-28 had `;` after the last `VALUES` tuple
+followed by `ON CONFLICT (...)`. That terminated the INSERT and made
+`ON CONFLICT` parse as a new statement (syntax error). Fix landed:
+final `);` -> `)`, with the `;` now at the end of the
+`WHERE sc_homestand_schedule.day_type IN ('GAME', 'AWAY');` line.
+
+**Dedup reconciliation.** 70 raw AWAY games -> 64 unique service_dates.
+6 collapses across THREE rules (not two doubleheaders alone):
+
+| Rule | Date | Opp | Raw rows | What collapsed | Rows lost |
+|---|---|---|---|---|---|
+| A. Doubleheader compression | 2026-06-21 | JUP | 2 | game 1 + game 2, both gameDate 6/21 | 1 |
+| A. Doubleheader compression | 2026-07-02 | LAK | 2 | game 1 + game 2, both gameDate 7/2 | 1 |
+| B. Postponement shadow | 2026-06-21 | JUP | +1 | 6/20 original game postponed onto 6/21 as officialDate | 1 |
+| B. Postponement shadow | 2026-07-02 | LAK | +1 | 7/1 original game postponed onto 7/2 as officialDate | 1 |
+| C. Suspended-game duplicate | 2026-06-19 | JUP | 2 | suspension + resumption rows both officialDate 6/19 | 1 |
+| C. Suspended-game duplicate | 2026-07-12 | DBT | 2 | suspension + resumption rows both officialDate 7/12 | 1 |
+
+Totals: A(2) + B(2) + C(2) = 6. 70 - 6 = 64. Matches migration row
+count exactly.
+
+**Owner's June 20 / July 1 question, answered explicitly.**
+
+- **2026-06-20** vs JUP: **postponed into the 2026-06-21 doubleheader.**
+  API row: `officialDate=2026-06-21, gameDate=2026-06-20T20:05:00Z,
+  status=Postponed, doubleHeader=N, gameNumber=1`. 6/20 is NOT a
+  service day for STL - FL. Service surfaces on 6/21 as an
+  `is_doubleheader=true` AWAY row.
+- **2026-07-01** vs LAK: **postponed into the 2026-07-02 doubleheader.**
+  API row: `officialDate=2026-07-02, gameDate=2026-07-01T22:30:00Z,
+  status=Postponed, doubleHeader=N, gameNumber=1`. 7/1 is NOT a
+  service day for STL - FL. Service surfaces on 7/2 as an
+  `is_doubleheader=true` AWAY row.
+
+Both correctly absent from the sc-28 INSERT list. Grep confirms:
+`grep '2026-06-20' docs/migrations/sc-28-stl-fl-away-dining.sql`
+returns nothing outside the comment block; same for `2026-07-01`.
+
+**Header count re-verification against the actual VALUES.**
+
+Count run against the migration file (post-fix):
+
+```
+$ grep -cE "'AWAY', 'SLU'" docs/migrations/sc-28-stl-fl-away-dining.sql
+12
+$ grep -cE "'AWAY', 'JUP'" docs/migrations/sc-28-stl-fl-away-dining.sql
+11
+$ grep -cE "'AWAY',.*true" docs/migrations/sc-28-stl-fl-away-dining.sql
+2       # both DH away rows: 2026-06-21 JUP + 2026-07-02 LAK
+$ grep -cE "^  \('STL - FL', '2026-" docs/migrations/sc-28-stl-fl-away-dining.sql
+64
+```
+
+| Header claim | Value | Source |
+|---|---|---|
+| `total 130` | 130 | pre-sc-28 66 home + sc-28 64 away = 130 ✓ |
+| `home 66` | 66 | sc-17 rows unchanged ✓ |
+| `away 64` | 64 | INSERT VALUES tuple count ✓ |
+| `null_team_id 0` | 0 | Step-2 backfill covers all STL - FL + TBJ - FL opponents; Step-3 INSERT populates opponent_team_id inline ✓ |
+| `slu_away 12` | 12 | grep of INSERT VALUES ✓ |
+| `jup_away 11` | 11 | grep of INSERT VALUES ✓ |
+| `dh_rows 3` | 3 | sc-17 home DH 2026-05-13 (1) + sc-28 away DH 2026-06-21 (1) + sc-28 away DH 2026-07-02 (1) ✓ |
+
+The header's `dh_rows 3` breakdown reads correctly: `2026-05-13 home +
+2026-06-21 away + 2026-07-02 away`.
+
+### Blast radius (unchanged from original)
+
+Only three consumers read the schedule overlay for STL - FL:
+- `loadScheduleOverlay` (this branch widens it)
+- `PeriodWorkspace.buildLargeContent` (fee-no-dollar branch)
+- `DaySquare.renderFeeNoDollar`
+
+Other accounts + other kinds do not read the overlay - `.eq("day_type",
+"GAME")` predicate is preserved for accounts NOT in the map.
 
 **Gate before applying sc-28:**
 - [ ] sc-28 pasted + applied in Studio.
