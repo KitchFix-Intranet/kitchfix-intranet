@@ -1061,7 +1061,7 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// loadScheduleOverlay (sc-17)
+// loadScheduleOverlay (sc-17, widened by sc-28)
 // ═══════════════════════════════════════════════════════════════
 //
 // STRICTLY informational schedule fetch for accounts that want the
@@ -1071,42 +1071,82 @@ export async function loadHomestandContext(accountKey, firstDate, lastDate) {
 // investigation doc for why that's wrong for STL - FL's daily-
 // service PDC).
 //
-// Reads ONLY day_type='GAME' rows so no AWAY / EXHIBITION / PREP
-// signal can ever bleed into the overlay. If a future migration
-// accidentally inserts a non-GAME row for an overlay-flagged
-// account, this select's WHERE clause silently drops it.
+// Original sc-17: `day_type='GAME'` only. The header carried a
+// hard rule "NO AWAY rows for STL - FL" - correct for what was
+// known then.
+//
+// sc-28 (2026-08-05): widened by one predicate. Owner-confirmed
+// dining fact: Palm Beach dines at the PDC when the team travels
+// to Jupiter or St. Lucie (stadium share + short bus). Those are
+// service days and the pill should render. The widening is scoped
+// via the application-side `HOME_DINING_AWAY_OPPONENTS` map:
+// an `AWAY` row surfaces only when (account, opponent_team_id)
+// sits in the map. Every non-qualifying away game (Daytona,
+// Bradenton, etc.) stays invisible - the original ruling's
+// operational concern is satisfied without a schema shift.
 //
 // Return shape:
 //   {
-//     "YYYY-MM-DD": { opponent: "SLU", dayNight: "night",
-//                     gameTime: "2026-04-02T22:30:00Z", isDoubleheader: false },
+//     "YYYY-MM-DD": {
+//       opponent: "SLU",
+//       opponentTeamId: 507,
+//       dayNight: "night",
+//       gameTime: "2026-04-02T22:30:00Z",
+//       isDoubleheader: false,
+//       isAwayHomeDining: false   // true only on qualifying AWAY rows
+//     },
 //     ...
 //   }
-// Dates without a GAME row are absent from the map. Callers render
-// the tile identically to today when the key is missing.
+// Dates without a qualifying row are absent from the map. Callers
+// render the tile identically to today when the key is missing.
+// `isAwayHomeDining` drives the copper `at OPP · Meals@Home` pill
+// on the render side; false means the normal home-game chip.
 //
-// Returns an empty object (not null) if the account has zero GAME
-// rows, so callers can `Object.keys(...).length` for a truthy gate.
+// Returns an empty object (not null) if the account has zero rows,
+// so callers can `Object.keys(...).length` for a truthy gate.
+
+import { HOME_DINING_AWAY_OPPONENTS } from "@/app/service-calendar/v2/homeDiningAwayOpponents";
 
 export async function loadScheduleOverlay(accountKey, firstDate, lastDate) {
   const supa = getServiceClient();
-  const { data, error } = await supa
+  // Fetch BOTH day_types in one query, filter server-side to the ones
+  // this account is allowed to surface (GAME always; AWAY only when
+  // opponent_team_id is in the home-dining set for this account).
+  const awaySet = HOME_DINING_AWAY_OPPONENTS.get(accountKey);
+  const awayIds = awaySet ? [...awaySet] : [];
+
+  const query = supa
     .from("sc_homestand_schedule")
-    .select("service_date, opponent, day_night, game_time, is_doubleheader")
+    .select("service_date, day_type, opponent, opponent_team_id, day_night, game_time, is_doubleheader")
     .eq("account_key", accountKey)
-    .eq("day_type", "GAME")
     .gte("service_date", firstDate)
     .lte("service_date", lastDate)
     .order("service_date", { ascending: true });
+
+  // Widen by day_type. If the account has no home-dining opponents,
+  // restrict to GAME (byte-identical to the pre-sc-28 behaviour).
+  // Otherwise include AWAY rows and filter opponent_team_id in memory
+  // below - PostgREST does not compose `.eq('day_type','GAME').or(...)`
+  // cleanly, so the memory filter is the simplest correct read.
+  const { data, error } = awayIds.length > 0
+    ? await query.in("day_type", ["GAME", "AWAY"])
+    : await query.eq("day_type", "GAME");
   throwOnError(error, "loadScheduleOverlay");
 
   const map = {};
   for (const r of data || []) {
+    if (r.day_type === "AWAY") {
+      // Belt-and-braces: even if a stale row lacks opponent_team_id,
+      // check membership; NULL would fail the `.has(NULL)` gate.
+      if (!awaySet || !awaySet.has(Number(r.opponent_team_id))) continue;
+    }
     map[r.service_date] = {
-      opponent:       r.opponent || "",
-      dayNight:       r.day_night || null,
-      gameTime:       r.game_time || null,
-      isDoubleheader: !!r.is_doubleheader,
+      opponent:         r.opponent || "",
+      opponentTeamId:   r.opponent_team_id == null ? null : Number(r.opponent_team_id),
+      dayNight:         r.day_night || null,
+      gameTime:         r.game_time || null,
+      isDoubleheader:   !!r.is_doubleheader,
+      isAwayHomeDining: r.day_type === "AWAY",
     };
   }
   return map;

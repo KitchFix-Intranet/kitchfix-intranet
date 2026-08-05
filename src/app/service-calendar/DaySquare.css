@@ -1113,6 +1113,36 @@
 .scv2 .sc-daysq-mid-noservice--away { color: var(--sc2-ghost); font-style: italic; }
 .scv2 .sc-daysq-away-glyph { color: var(--sc2-accent-green-line); }
 
+/* sc-28 (2026-08-05): away-home-dining chip. STL - FL's away games
+   vs Jupiter and St. Lucie surface with a copper chip carrying the
+   verbatim "at OPP · Meals@Home" text (owner-approved wording). The
+   chip fires ONLY when `isAwayHomeDining` is set on the tile
+   content bag, which loadScheduleOverlay populates from
+   HOME_DINING_AWAY_OPPONENTS. Home GAME chips use `vs OPP` on the
+   default `.sc-daysq-mid-opponent` treatment; the copper variant is
+   what makes the meal fact + location fact readable together in
+   one pill. */
+.scv2 .sc-daysq-mid-opponent--away-home-dining {
+  display: inline-block;
+  background: var(--sc2-accent-copper-wash);
+  color: var(--sc2-accent-copper);
+  border: var(--sc2-border-thin) solid var(--sc2-accent-copper-line);
+  font-weight: var(--sc2-wt-semibold);
+  padding: 1px 6px;
+  border-radius: var(--sc2-radius-pill, 9999px);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* v1 (non-scv2) fallback carries the same copper reading. Kept
+   short because v1 is on its way out; the token cascade still
+   resolves via tokens.css. */
+.sc-daysq-mid-opponent--away-home-dining {
+  display: inline-block;
+  background: var(--sc2-accent-copper-wash);
+  color: var(--sc2-accent-copper);
+  border: var(--sc2-border-thin) solid var(--sc2-accent-copper-line);
+}
+
 /* ── MLB fee chip pill ─────────────────────────────────────────
    Filled navy chip - reads as brand-anchored on the tile. */
 .scv2 .sc-daysq-mid--mlb .sc-daysq-mid-opponent {
