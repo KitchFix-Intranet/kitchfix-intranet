@@ -126,6 +126,17 @@ export default function LaborPage() {
     return [...data.actuals].sort((a, b) => a.week_start.localeCompare(b.week_start) || a.account_key.localeCompare(b.account_key) || a.worker_id.localeCompare(b.worker_id));
   }, [data]);
 
+  // Freshness banner - derived_at age with color-graded staleness.
+  // The nightly workflow re-derives at ~07:00 UTC. "Fresh" is under
+  // 30 hours (one nightly cycle plus buffer). Stale = missed a run.
+  const freshness = useMemo(() => {
+    if (!data?.derived_at) return null;
+    const ageHrs = (Date.now() - new Date(data.derived_at).getTime()) / 3600000;
+    if (ageHrs < 30) return { level: "fresh", bg: "#e6f4ea", fg: "#0a6d20", label: `Fresh - derived ${ageHrs.toFixed(1)}h ago` };
+    if (ageHrs < 54) return { level: "aging", bg: "#fef7e0", fg: "#8a6d00", label: `Aging - derived ${ageHrs.toFixed(1)}h ago (nightly may have skipped)` };
+    return { level: "stale", bg: "#fce8e6", fg: "#a50e0e", label: `STALE - derived ${(ageHrs / 24).toFixed(1)} days ago. Check Actions.` };
+  }, [data?.derived_at]);
+
   return (
     <div style={{ padding: 20, fontFamily: "-apple-system, sans-serif", maxWidth: 1400, margin: "0 auto", color: "#111" }}>
       <h1 style={{ margin: 0, fontSize: 22 }}>/kpi/labor</h1>
@@ -133,8 +144,40 @@ export default function LaborPage() {
         Temporary test surface. Admin-gated. Reads <code>labor_actuals_latest</code> + <code>labor_unattributed</code>. Never calls Rippling.
       </div>
 
+      {/* Freshness banner - prominent so a stale figure is obvious from the
+          page itself without opening the Actions tab. Nightly workflow
+          re-derives at ~07:00 UTC; anything older than one cycle+buffer
+          means the nightly stopped. */}
+      {freshness && (
+        <div style={{
+          marginTop: 16,
+          padding: "12px 16px",
+          background: freshness.bg,
+          color: freshness.fg,
+          borderRadius: 4,
+          fontSize: 14,
+          fontWeight: 600,
+          border: `1px solid ${freshness.fg}33`,
+        }}>
+          {freshness.label}
+          <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 12, opacity: 0.8 }}>
+            derived_at {new Date(data.derived_at).toLocaleString()}
+          </span>
+        </div>
+      )}
+      {data && !data.derived_at && (
+        <div style={{
+          marginTop: 16, padding: "12px 16px",
+          background: "#fce8e6", color: "#a50e0e", borderRadius: 4,
+          fontSize: 14, fontWeight: 600,
+          border: "1px solid #a50e0e33",
+        }}>
+          No derivation on record - has <code>derive_labor_actuals.mjs</code> ever run?
+        </div>
+      )}
+
       {/* Controls */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-end", marginTop: 20, padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-end", marginTop: 16, padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
         <label>
           <div style={{ fontSize: 11, color: "#666" }}>account</div>
           <select value={account} onChange={e => setAccount(e.target.value)} style={{ padding: 6, minWidth: 160 }}>
@@ -149,11 +192,6 @@ export default function LaborPage() {
           <div style={{ fontSize: 11, color: "#666" }}>end</div>
           <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={{ padding: 6 }} />
         </label>
-        {data?.derived_at && (
-          <div style={{ marginLeft: "auto", fontSize: 11, color: "#666" }}>
-            derived_at {new Date(data.derived_at).toLocaleString()}
-          </div>
-        )}
       </div>
 
       {loading && <div style={{ marginTop: 12, color: "#888" }}>loading...</div>}
