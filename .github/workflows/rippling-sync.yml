@@ -1,27 +1,48 @@
-name: rippling raw sync
+name: rippling sync + labor derivation
 
-# Nightly ingest of raw Rippling records into Postgres (PR 8a).
+# Nightly ingest of raw Rippling records + derivation of labor_actuals.
 #
-# Two Rippling walks per run, sequential:
-#   /time-entries                                    -> rippling_raw_time_entries
-#   /custom-objects/time_entry_computed_pay_segment  -> rippling_raw_pay_segments
+# Two steps, chained on success:
 #
-# Filter surface on the Rippling side is zero - date, worker_id, and sort
-# filters are silently ignored. Full cursor walk from the first page every
-# time. Content-hash uniqueness (kpi-8a-rippling-raw.sql) makes re-fetching
-# cheap: unchanged records are dropped by ON CONFLICT DO NOTHING.
+#   1. rippling_sync.mjs walks four Rippling objects sequentially:
+#        /time-entries
+#        /custom-objects/time_entry_computed_pay_segment
+#        /workers                                          (PR 8a-2)
+#        /custom-objects/time_entry_zo                     (PR 8a-2)
+#      All compare-then-insert against the *_latest views; unchanged
+#      records don't write. Concurrency lock in rippling_sync_locks
+#      prevents overlap with a local backfill.
 #
-# Measured mean latency (2026-08-04 discovery probe):
-#   /time-entries    ~8.08s / page  ~200 pages  ~27 min
-#   /pay_segments    ~1.50s / page  ~80  pages  ~2 min
-# Combined ~30 min; timeout-minutes 90 gives real headroom for in-season
-# volume without being unbounded. Vercel's 300s function cap does not fit,
-# which is why this lives in Actions rather than as an API cron.
+#   2. derive_labor_actuals.mjs reads the four _latest views + the
+#      department map + sc_day_metadata, writes labor_actuals +
+#      labor_unattributed under a new source_run. Full re-derive
+#      every night, not incremental - a corrected map, updated
+#      FY2026_END, or fixed OT rule flows through automatically. An
+#      incremental derivation would never revisit old weeks, so
+#      corrections to historical data would silently never appear.
 #
-# Failure surface: exit 2 from the sync script means at least one walk
-# failed mid-flight. The workflow then goes red. The other walk's
-# progress still landed via the per-page upsert - re-run picks up
-# unchanged records for near-zero cost.
+# Chaining: the derivation only runs if the sync succeeded. Actions
+# chains on success by default; the `if: success()` condition is
+# explicit here because a failed sync followed by a successful
+# derivation would produce confidently stale numbers - the exact
+# "confidently wrong" failure this whole project is built to avoid.
+#
+# Exit status: the whole job goes RED if either step fails. Kevin sees
+# nightly-workflow-broken in the Actions tab, not a silent stall.
+#
+# Measured latencies:
+#   /time-entries    ~8.08s / page x ~200 pages   ~27 min
+#   /pay_segments    ~1.50s / page x  ~80 pages    ~2 min
+#   /workers         ~5.00s / page x  ~11 pages    ~1 min
+#   /time_entry_zo   ~0.80s / page x  ~82 pages    ~2 min
+#   derivation       ~3-5 min
+# Combined ~35-40 min. timeout-minutes 120 gives real headroom for
+# in-season volume growth without being unbounded.
+#
+# Dry-run behavior: --dry-run walks Rippling but skips Postgres
+# writes. When set, the derivation step also skips - if the sync
+# didn't write, deriving would still write from the last real backfill
+# and confuse the derived_at surface.
 
 on:
   schedule:
@@ -31,11 +52,11 @@ on:
   workflow_dispatch:
     inputs:
       source:
-        description: 'Value written to rippling_raw_*.fetch_source (nightly | backfill | manual). Default nightly.'
+        description: 'Value written to rippling_raw_*.fetch_source and labor_actuals.source_run prefix (nightly | backfill | manual). Default nightly.'
         required: false
         default: 'nightly'
       dry_run:
-        description: 'If "true", walk Rippling but skip Postgres writes.'
+        description: 'If "true", walk Rippling but skip Postgres writes AND skip the derivation.'
         required: false
         default: 'false'
 
@@ -44,10 +65,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync:
-    name: walk time_entries + pay_segments
+  sync-and-derive:
+    name: sync raw + derive labor_actuals
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     env:
       RIPPLING_API_KEY: ${{ secrets.RIPPLING_API_KEY }}
@@ -69,7 +90,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run rippling sync
+      - name: Sync raw Rippling
+        id: sync
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
           DRY_RUN="${{ inputs.dry_run || 'false' }}"
@@ -79,3 +101,14 @@ jobs:
           fi
           echo "rippling_sync ${ARGS}"
           node scripts/rippling_sync.mjs ${ARGS}
+
+      - name: Derive labor actuals
+        # Runs only if sync succeeded (Actions default; explicit here).
+        # Skipped entirely on dry-run - sync didn't write to raw
+        # tables, so a derivation would just repackage the last real
+        # backfill under a fresh derived_at, hiding staleness.
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          echo "derive_labor_actuals --source=${SOURCE}"
+          node scripts/derive_labor_actuals.mjs --source=${SOURCE}
