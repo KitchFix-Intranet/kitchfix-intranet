@@ -63,6 +63,48 @@ for (const [k, v] of Object.entries(result.stats)) {
 console.log(`  actuals_rows: ${result.actuals.length}`);
 console.log(`  unattributed_rows: ${result.unattributed.length}`);
 console.log(`  derivation duration: ${derivedSec}s`);
+
+// Per-account breakdown - a single account dropping to zero is visible
+// in a per-account line and invisible in a total.
+const perAccount = new Map();
+for (const a of result.actuals) {
+  const acct = a.account_key;
+  if (!perAccount.has(acct)) perAccount.set(acct, { rows: 0, workers: new Set(), weeks: new Set(), amount: 0, hours_reg: 0, hours_ot: 0 });
+  const b = perAccount.get(acct);
+  b.rows++;
+  b.workers.add(a.worker_id);
+  b.weeks.add(a.week_label);
+  b.amount += Number(a.amount || 0);
+  b.hours_reg += Number(a.hours_regular || 0);
+  b.hours_ot += Number(a.hours_overtime || 0);
+}
+console.log("");
+console.log("per-account summary:");
+console.log("  account         rows  workers  weeks  reg_hrs    ot_hrs     dollars");
+for (const [acct, b] of [...perAccount.entries()].sort()) {
+  const w = String(b.workers.size).padStart(3);
+  const wk = String(b.weeks.size).padStart(3);
+  console.log(`  ${acct.padEnd(14)}  ${String(b.rows).padStart(4)}  ${w}      ${wk}    ${b.hours_reg.toFixed(2).padStart(9)}  ${b.hours_ot.toFixed(2).padStart(9)}  $${b.amount.toFixed(2).padStart(12)}`);
+}
+
+// Unattributed breakdown by reason
+if (result.unattributed.length) {
+  const byReason = new Map();
+  for (const u of result.unattributed) {
+    if (!byReason.has(u.reason_code)) byReason.set(u.reason_code, { rows: 0, amount: 0, depts: new Set() });
+    const b = byReason.get(u.reason_code);
+    b.rows++;
+    b.amount += Number(u.amount || 0);
+    if (u.department_id) b.depts.add(u.department_id + " (" + (u.department_name || "?") + ")");
+  }
+  console.log("");
+  console.log("unattributed by reason (playbook N5 - always visible, never silent):");
+  for (const [reason, b] of byReason) {
+    console.log(`  ${reason.padEnd(24)} rows=${b.rows}  dollars=$${b.amount.toFixed(2)}  distinct_depts=${b.depts.size}`);
+    for (const d of [...b.depts].slice(0, 5)) console.log(`    ${d}`);
+  }
+}
+
 console.log("");
 
 if (args.dryRun) {

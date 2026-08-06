@@ -117,6 +117,23 @@
 --     receives entries, so the assignment is effectively arbitrary;
 --     stated explicitly rather than left as a semantic dissonance.
 --
+-- 11. **Growth: append-only + nightly re-derive.** The workflow runs
+--     the derivation every night under a fresh source_run, and
+--     labor_actuals_latest resolves by derived_at DESC. Estimated
+--     annual growth (based on the 741 hourly workers across the 10
+--     accounts with data, roughly 4-7K distinct (worker, week, line)
+--     combos per run, nightly): **1.5 to 2.5 million rows per year.**
+--
+--     No retention rule shipped now. The history is genuinely useful:
+--     it shows that last Tuesday's figure changed after a retro
+--     correction, which is exactly the audit trail the raw layer
+--     exists to provide. Premature pruning would throw that away.
+--
+--     Revisit at ~5M rows or ~2 years, whichever comes first. Options
+--     at that point: (a) keep last N runs per (account, week, line),
+--     (b) TRUNCATE to just the latest source_run keeping older weeks
+--     as historical stamps, (c) partition by year.
+--
 -- Applied: NOT YET (draft PR). Transactional; failure rolls back the
 -- entire migration including the seed.
 
