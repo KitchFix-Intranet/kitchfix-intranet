@@ -1,8 +1,22 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
-import { isScAdmin } from "@/lib/admin";
+import { isScAdmin, isScLockOverride } from "@/lib/admin";
 import { assertDaysUnlockedForWrite } from "@/lib/scPeriodLock";
+// sc-30 (2026-08-06, PR-A): week-finalize lock. Sister to
+// assertDaysUnlockedForWrite. Wired into the same four write paths;
+// override group is SC_LOCK_OVERRIDE (K-10). See scWeekFinalize.js
+// header for the state machine + rationale.
+import {
+  assertWeekOpenForWrite,
+  computeWeekCompleteness,
+  loadLiveFinalizeRow,
+  mondayOfWeek,
+  runFinalizeEffects,
+} from "@/lib/scWeekFinalize";
+// PR-A: per-meal billing account gate for sc-finalize-week /
+// sc-revert-finalize. Fee accounts are structurally excluded.
+import { isPerMealBillingAccount } from "@/app/service-calendar/v2/billing/perMealAccounts";
 // Backdate impact reporter (2026-08-04, admin PR 1). NOT sibling to
 // assertDaysUnlockedForWrite - reports and yields, does not refuse.
 // See scBackdateReport.js header for the ruling that separates the
@@ -895,13 +909,21 @@ export async function POST(request) {
           { status: 400 }
         );
       }
-      // sc-25 (2026-08-01): period-lock gate. SLT (SC_ADMIN_EMAILS)
-      // bypasses via the helper. Refusal returns 403 with a
-      // machine-readable code so step-2 UI can surface a specific
-      // message rather than "something went wrong".
+      // sc-25 (2026-08-01): period-lock gate. Override group
+      // (SC_LOCK_OVERRIDE, K-10) bypasses via the helper. Refusal
+      // returns 403 with a machine-readable code so step-2 UI can
+      // surface a specific message rather than "something went wrong".
       const lockRefusal = await assertDaysUnlockedForWrite(accountKey, [date], email);
       if (lockRefusal) {
         return NextResponse.json({ success: false, ...lockRefusal }, { status: 403 });
+      }
+      // sc-30 (2026-08-06, PR-A): week-finalize gate. Refuses writes
+      // to a day whose Mon-Sun week is finalized / push_failed /
+      // billed unless the caller is in SC_LOCK_OVERRIDE. Same
+      // override as the period lock above; the two locks stack.
+      const weekRefusal = await assertWeekOpenForWrite(accountKey, [date], email);
+      if (weekRefusal) {
+        return NextResponse.json({ success: false, ...weekRefusal }, { status: 403 });
       }
       // entries: [{ colIndex: '<service-uuid>', value: number }]
       // Translate to the orchestrator's shape.
@@ -1053,6 +1075,14 @@ export async function POST(request) {
       if (resetLockRefusal) {
         return NextResponse.json({ success: false, ...resetLockRefusal }, { status: 403 });
       }
+      // sc-30 (2026-08-06, PR-A): week-finalize gate. Reset must
+      // fail on a finalized/billed week the same way a save does -
+      // otherwise a reset could silently unwind a billed week's
+      // counts. Override group bypasses.
+      const resetWeekRefusal = await assertWeekOpenForWrite(accountKey, [date], email);
+      if (resetWeekRefusal) {
+        return NextResponse.json({ success: false, ...resetWeekRefusal }, { status: 403 });
+      }
       const supa = getServiceClient();
       // Fire the DELETE. The BEFORE DELETE trigger (sc-25) writes
       // one sc_daily_actuals_history row per row deleted, with
@@ -1095,6 +1125,13 @@ export async function POST(request) {
       const bulkLockRefusal = await assertDaysUnlockedForWrite(accountKey, bulkDates, email);
       if (bulkLockRefusal) {
         return NextResponse.json({ success: false, ...bulkLockRefusal }, { status: 403 });
+      }
+      // sc-30 (2026-08-06, PR-A): week-finalize gate. Every date's
+      // week is checked; one finalized week fails the whole batch.
+      // Matches the period lock's all-or-nothing contract above.
+      const bulkWeekRefusal = await assertWeekOpenForWrite(accountKey, bulkDates, email);
+      if (bulkWeekRefusal) {
+        return NextResponse.json({ success: false, ...bulkWeekRefusal }, { status: 403 });
       }
       // entries: [{ colIndex: '<service-uuid>', date: 'YYYY-MM-DD', value: number }]
       //
@@ -1177,6 +1214,223 @@ export async function POST(request) {
         }
       }
       return NextResponse.json(result);
+    }
+
+    // ── sc-finalize-week: press Finalize on a completed Mon-Sun week ──
+    // sc-30 (2026-08-06, PR-A of the SC -> QBO billing arc).
+    //
+    // Spec: docs/SC_QBO_SHAPE_SPEC.md §3. Anyone with intranet access
+    // to the account can finalize (spec §3 "Who can finalize" - the
+    // OAuth perimeter is already salaried-managers-only). Per-meal
+    // accounts only; fee accounts return 400.
+    //
+    // Guards, in order:
+    //   1. Session (already checked at :882 by the POST handler).
+    //   2. Per-meal account gate (PER_MEAL_BILLING_ACCOUNTS).
+    //   3. Valid Mon-Sun week (weekStart is a Monday YYYY-MM-DD).
+    //   4. No live row already exists for (account, week).
+    //   5. Completeness rule holds for all 7 days: entered || no-service.
+    //
+    // On success: INSERTs one sc_week_finalize row with status
+    // 'finalized', finalized_by=email, finalized_at=now(); then
+    // runFinalizeEffects(...) - a seam PR-C extends with the QBO push.
+    // In PR-A the effects hook records state only and returns.
+    if (action === "sc-finalize-week") {
+      const { accountKey, weekStart } = body;
+      if (!accountKey || !weekStart) {
+        return NextResponse.json(
+          { success: false, error: "accountKey and weekStart required" },
+          { status: 400 }
+        );
+      }
+      if (!isPerMealBillingAccount(accountKey)) {
+        return NextResponse.json(
+          { success: false, error: "Finalize is only available on per-meal billing accounts" },
+          { status: 400 }
+        );
+      }
+      // weekStart must be a Monday. mondayOfWeek throws on invalid
+      // format; equality with the input catches Tues-Sun anchors.
+      let normalizedMonday;
+      try {
+        normalizedMonday = mondayOfWeek(weekStart);
+      } catch (err) {
+        return NextResponse.json(
+          { success: false, error: `Invalid weekStart: ${err.message}` },
+          { status: 400 }
+        );
+      }
+      if (normalizedMonday !== weekStart) {
+        return NextResponse.json(
+          { success: false, error: `weekStart must be a Monday (ISO YYYY-MM-DD); got ${weekStart}` },
+          { status: 400 }
+        );
+      }
+      // Guard against re-finalize on an already-live week.
+      const existing = await loadLiveFinalizeRow(accountKey, weekStart);
+      if (existing) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Week ${weekStart} is already ${existing.status} for ${accountKey}`,
+            existing: {
+              status: existing.status,
+              finalized_by: existing.finalized_by,
+              finalized_at: existing.finalized_at,
+            },
+          },
+          { status: 409 }
+        );
+      }
+      // Completeness rule per spec §3.
+      const completeness = await computeWeekCompleteness(accountKey, weekStart);
+      if (!completeness.complete) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: completeness.reason,
+            code: "WEEK_INCOMPLETE",
+            missingDates: completeness.missingDates,
+          },
+          { status: 400 }
+        );
+      }
+      const supa = getServiceClient();
+      const { data: inserted, error: insErr } = await supa
+        .from("sc_week_finalize")
+        .insert({
+          account_key: accountKey,
+          week_start: weekStart,
+          status: "finalized",
+          finalized_by: email,
+        })
+        .select("id, account_key, week_start, status, finalized_by, finalized_at")
+        .single();
+      if (insErr) {
+        return NextResponse.json(
+          { success: false, error: `sc_week_finalize insert: ${insErr.message}` },
+          { status: 500 }
+        );
+      }
+      // Effects seam. PR-C extends this to the QBO push + notification.
+      // In PR-A the hook records state only. Failure here does NOT
+      // unwind the finalized row; PR-C's design owns the failure
+      // shape and the transition to 'push_failed'.
+      let effects = null;
+      try {
+        effects = await runFinalizeEffects({
+          accountKey,
+          weekStart,
+          finalizedRow: inserted,
+        });
+      } catch (err) {
+        console.error("[sc-finalize-week] runFinalizeEffects error (row stays finalized):", err);
+        effects = { pushed: false, error: err?.message || String(err) };
+      }
+      return NextResponse.json({
+        success: true,
+        finalizedRow: inserted,
+        effects,
+      });
+    }
+
+    // ── sc-revert-finalize: undo a finalize (override group only) ──
+    // sc-30 (2026-08-06, PR-A). Spec §3.
+    //
+    // Allowed transitions:
+    //   finalized  -> reverted   YES
+    //   push_failed -> reverted  YES
+    //   billed     -> reverted   NEVER (K-3 freeze). If a billed week
+    //                            is wrong, corrections route through
+    //                            Sebastian manually per K-3.
+    //   reverted   -> reverted   n/a (no live row to revert).
+    //
+    // Guards:
+    //   1. Session.
+    //   2. isScLockOverride(email) - K-10, the three-person group.
+    //   3. Per-meal account.
+    //   4. Live row exists for (account, week).
+    //   5. Live row's status is 'finalized' or 'push_failed'.
+    //   6. Non-empty reason string.
+    //
+    // On success: UPDATE status='reverted', reverted_by, reverted_at,
+    // revert_reason on the live row. The row leaves the partial
+    // unique index and a fresh finalize on the same tuple can INSERT
+    // a new live row later.
+    if (action === "sc-revert-finalize") {
+      const { accountKey, weekStart, reason } = body;
+      if (!isScLockOverride(email)) {
+        return NextResponse.json(
+          { success: false, error: "Revert is restricted to the SC_LOCK_OVERRIDE group" },
+          { status: 403 }
+        );
+      }
+      if (!accountKey || !weekStart) {
+        return NextResponse.json(
+          { success: false, error: "accountKey and weekStart required" },
+          { status: 400 }
+        );
+      }
+      if (!isPerMealBillingAccount(accountKey)) {
+        return NextResponse.json(
+          { success: false, error: "Revert is only available on per-meal billing accounts" },
+          { status: 400 }
+        );
+      }
+      if (typeof reason !== "string" || reason.trim().length === 0) {
+        return NextResponse.json(
+          { success: false, error: "reason required (non-empty string)" },
+          { status: 400 }
+        );
+      }
+      if (reason.length > 280) {
+        return NextResponse.json(
+          { success: false, error: "reason must be 280 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      const existing = await loadLiveFinalizeRow(accountKey, weekStart);
+      if (!existing) {
+        return NextResponse.json(
+          { success: false, error: `No live finalize row for ${accountKey} week ${weekStart}` },
+          { status: 404 }
+        );
+      }
+      if (existing.status === "billed") {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Cannot revert a billed week. Corrections route through Sebastian per K-3.",
+            code: "WEEK_BILLED_NO_REVERT",
+          },
+          { status: 403 }
+        );
+      }
+      if (existing.status !== "finalized" && existing.status !== "push_failed") {
+        return NextResponse.json(
+          { success: false, error: `Cannot revert from status ${existing.status}` },
+          { status: 400 }
+        );
+      }
+      const supa = getServiceClient();
+      const { data: updated, error: updErr } = await supa
+        .from("sc_week_finalize")
+        .update({
+          status: "reverted",
+          reverted_by: email,
+          reverted_at: new Date().toISOString(),
+          revert_reason: reason.trim(),
+        })
+        .eq("id", existing.id)
+        .select("id, account_key, week_start, status, finalized_by, finalized_at, reverted_by, reverted_at, revert_reason")
+        .single();
+      if (updErr) {
+        return NextResponse.json(
+          { success: false, error: `sc_week_finalize revert: ${updErr.message}` },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ success: true, revertedRow: updated });
     }
 
     // ── sc-admin-backdate-preview: warning payload for the panel ──
@@ -1984,6 +2238,17 @@ export async function POST(request) {
       const closeoutLockRefusal = await assertDaysUnlockedForWrite(accountKey, gameDates, email);
       if (closeoutLockRefusal) {
         return NextResponse.json({ success: false, ...closeoutLockRefusal }, { status: 403 });
+      }
+      // sc-30 (2026-08-06, PR-A): week-finalize gate. Closeout
+      // writes actuals for gameDates; every date's week is checked.
+      // MLB accounts are NOT in PER_MEAL_BILLING_ACCOUNTS so the
+      // finalize action is never surfaced for them; but the write
+      // path still runs the gate because an override-group revert
+      // on a per-meal account after a bulk sc-submit-closeout is a
+      // theoretical shape. Cheap check, structural safety.
+      const closeoutWeekRefusal = await assertWeekOpenForWrite(accountKey, gameDates, email);
+      if (closeoutWeekRefusal) {
+        return NextResponse.json({ success: false, ...closeoutWeekRefusal }, { status: 403 });
       }
 
       const exceptionSet = new Set(Array.isArray(exceptions) ? exceptions : []);

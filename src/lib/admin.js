@@ -76,3 +76,46 @@ export const SC_ADMIN_EMAILS = Object.freeze(new Set([
  */
 export const isScAdmin = (email) =>
   !!email && SC_ADMIN_EMAILS.has(email.toLowerCase().trim());
+
+/**
+ * SC lock-override group (Kevin K-10 ruling, 2026-08-06).
+ *
+ * The three-person group that can bypass the sc-25 period lock AND
+ * the sc-30 week-finalize lock. Deliberately narrower than
+ * SC_ADMIN_EMAILS above: the eight-member admin set gates money-
+ * moving CONFIG edits (prices, fees, services), which is a different
+ * responsibility from bypassing a completed-billing freeze.
+ *
+ * Two powers, two groups (K-10):
+ *   - SC_ADMIN_EMAILS: edit the catalog / prices / fees.
+ *   - SC_LOCK_OVERRIDE: reach into a locked or finalized week to
+ *     unlock, revert, or write. Kevin (ops), Joe (VP ops with the
+ *     domain context), Sebastian (billing, only he sees the invoice
+ *     side). Britt / Josh / Mariela / Ryan / Shane sit in the
+ *     catalog set but do NOT sit here - a locked week is billing
+ *     territory, not general admin.
+ *
+ * The sc-25 period lock's short-circuit at
+ * `src/lib/scPeriodLock.js:42` swaps from `isScAdmin` to
+ * `isScLockOverride` in this PR (PR-A). The sc-30 week-finalize
+ * predicate (this PR's `src/lib/scWeekFinalize.js`) uses the same
+ * function. If a future ruling opens more override territory, this
+ * comment gets the new phrase and the set gains a member - do NOT
+ * fold new powers into SC_ADMIN_EMAILS.
+ *
+ * Frozen Set, lowercased values, exact-email match. Same discipline
+ * as SC_ADMIN_EMAILS above.
+ */
+export const SC_LOCK_OVERRIDE = Object.freeze(new Set([
+  "k.fietek@kitchfix.com",  // Kevin Fietek - Director of Operations
+  "joe@kitchfix.com",        // Joe Lessard - VP Operations
+  "s.castro@kitchfix.com",   // Sebastian Castro - Finance / billing
+]));
+
+/**
+ * Normalized SC lock-override check. Same shape as isScAdmin.
+ * Use in every server-side gate that would otherwise refuse a write
+ * to a locked period or a finalized week.
+ */
+export const isScLockOverride = (email) =>
+  !!email && SC_LOCK_OVERRIDE.has(email.toLowerCase().trim());
