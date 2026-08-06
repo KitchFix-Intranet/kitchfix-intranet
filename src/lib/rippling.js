@@ -44,37 +44,28 @@ const NESTED_STRIP_KEYS = new Set(["display_value", "has_perm", "image"]);
 const HASH_EXCLUDE_TOP = {
   time_entries: ["updated_at", "worker", "time_card", "time_entry_summary", "__meta"],
   pay_segments: ["updated_at", "__meta"],
-  // workers: measured 2026-08-05 via two pulls 14 min apart. Zero
-  // fields moved on any of 1,126 workers - the interval was uneventful.
-  // Structural argument: `updated_at` is a real-edit marker; every
-  // top-level nested denormalized object (user, manager, legal_entity,
-  // employment_type, compensation, department, teams, job_function,
-  // business_partners) returns null on this endpoint, so excluding
-  // them is defensive but harmless. `__meta` carries oauth-scope
-  // redaction metadata. The first nightly run is the real test - if
-  // `inserted` comes back high, one of the "null-so-harmless" fields
-  // actually populates for some workers and this list needs updating.
-  workers: [
-    "updated_at",
-    "user", "manager", "legal_entity", "employment_type",
-    "compensation", "department", "teams", "job_function", "business_partners",
-    "__meta",
-  ],
-  // time_entry_zo: measured 2026-08-06 via two pulls ~1 hour apart.
-  // Volatile top-level fields on the record: `updated_at`, `mongo_updated_at`,
-  // `system_updated_at` (three timestamps, at least one of which
-  // typically ticks per record refresh). `owner_role` and `pay_period`
-  // carry denormalized display_value/image. `__meta` for oauth-scope
-  // redaction. The universal nested-strip (display_value / has_perm /
-  // image) handles the nested-object drift.
-  time_entry_zo: [
-    "updated_at",
-    "mongo_updated_at",
-    "system_updated_at",
-    "owner_role",
-    "pay_period",
-    "__meta",
-  ],
+  // workers: measured 2026-08-05, two pulls 14 min apart. Zero fields
+  // moved on any of 1,126 workers - interval was uneventful. Only
+  // exclude the technical markers; the universal nested-strip handles
+  // the denormalized image / display_value / has_perm on any nested
+  // objects that populate. Excluding department_id or manager_id at
+  // top level would mask real re-assignments; we don't do that here.
+  workers: ["updated_at", "__meta"],
+  // time_entry_zo: measured 2026-08-06, two pulls ~6 min apart on
+  // 4,100 records. 4,079 hashed identical; 21 differed due to real
+  // duration_hours edits (correctly detected).
+  //
+  // Three timestamp fields (updated_at, mongo_updated_at,
+  // system_updated_at) - Rippling ticks at least one of these on any
+  // record refresh even when no substantive field changed, so exclude.
+  // owner_role and role carry image URLs that rotate every few
+  // minutes (signed URL Expires+Signature); universal image strip
+  // catches those without needing to top-level-exclude the whole
+  // objects - which keeps owner_role.id and role.id in the hash so a
+  // worker-reassignment on a zo record correctly produces a new
+  // observation. pay_period carries display_value which the universal
+  // strip removes; pay_period.id stays.
+  time_entry_zo: ["updated_at", "mongo_updated_at", "system_updated_at", "__meta"],
 };
 
 // ─── Fetch ───────────────────────────────────────────────────────────
