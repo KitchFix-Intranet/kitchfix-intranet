@@ -596,6 +596,52 @@ export async function GET(request) {
       return NextResponse.json(responsePayload);
     }
 
+    // ── sc-finalize-states: per-week finalize rows for (account, range) ──
+    // sc-30 (2026-08-06, PR-A). Powers the WeekFinalizeControl UI at
+    // the drill-in week band. Reads only; refuses fee accounts loudly
+    // (mirrors the finalize/revert action gate). Returns ALL rows in
+    // the range including reverted ones so the client can render
+    // history if needed; the "live" row per week is
+    // `rows.find(r => r.week_start === X && r.status !== "reverted")`.
+    if (action === "sc-finalize-states") {
+      const accountKey = searchParams.get("account");
+      const first = searchParams.get("first");
+      const last = searchParams.get("last");
+      if (!accountKey || !first || !last) {
+        return NextResponse.json(
+          { success: false, error: "account, first, last query params required" },
+          { status: 400 }
+        );
+      }
+      if (!isPerMealBillingAccount(accountKey)) {
+        // Fee accounts never have finalize rows; return empty rather
+        // than 400 so the client can gate rendering on the response
+        // shape without knowing the pilot set locally.
+        return NextResponse.json({ success: true, rows: [] });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !/^\d{4}-\d{2}-\d{2}$/.test(last)) {
+        return NextResponse.json(
+          { success: false, error: "first + last must be YYYY-MM-DD" },
+          { status: 400 }
+        );
+      }
+      const supa = getServiceClient();
+      const { data, error } = await supa
+        .from("sc_week_finalize")
+        .select("id, account_key, week_start, status, finalized_by, finalized_at, reverted_by, reverted_at, revert_reason")
+        .eq("account_key", accountKey)
+        .gte("week_start", first)
+        .lte("week_start", last)
+        .order("week_start", { ascending: true });
+      if (error) {
+        return NextResponse.json(
+          { success: false, error: `sc_week_finalize read: ${error.message}` },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ success: true, rows: data || [] });
+    }
+
     // ── sc-year-summary: 12-month rollup for heatmap ──
     if (action === "sc-year-summary") {
       const accountKey = searchParams.get("account");

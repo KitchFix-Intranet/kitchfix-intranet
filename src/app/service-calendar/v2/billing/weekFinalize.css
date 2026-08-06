@@ -1,0 +1,139 @@
+/* Week finalize control (sc-30, PR-A) - drill-in per-week surface. */
+
+.sc-week-finalize {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-family: inherit;
+  font-size: var(--sc2-size-micro);
+  line-height: 1.2;
+}
+
+/* Finalize button - Open state. Enabled = quiet green (billing-
+   ready). Disabled = neutral tint + wait cursor is intentional
+   (a disabled action is not a target). */
+.sc-week-finalize-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: var(--sc2-border-thin) solid var(--status-entered-bd);
+  border-radius: var(--radius-control);
+  background: var(--status-entered-subtle);
+  color: var(--status-entered-fg);
+  font-weight: var(--sc2-wt-display);
+  font-size: var(--sc2-size-micro);
+  cursor: pointer;
+  transition: background var(--motion-control), border-color var(--motion-control);
+}
+.sc-week-finalize-btn:hover:not(:disabled) {
+  background: var(--status-entered-bg);
+}
+.sc-week-finalize-btn:focus-visible {
+  outline: var(--focus-ring, 2px solid var(--status-today-ring));
+  outline-offset: 2px;
+}
+.sc-week-finalize-btn:disabled,
+.sc-week-finalize-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  background: var(--surface-quiet);
+  color: var(--text-muted);
+  border-color: var(--border-default);
+}
+
+/* Disabled reason - plain-english, quiet. Spec §3: "2 days still
+   need entry or no-service" */
+.sc-week-finalize-reason {
+  color: var(--text-muted);
+  font-size: var(--sc2-size-micro);
+}
+
+/* Error surface - inline, red-instructional. */
+.sc-week-finalize-err {
+  color: var(--text-danger);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-semibold);
+}
+
+/* Banner - the state message replacing the button after finalize.
+   Spec §3 copy verbatim: "Week finalized - sent to billing" and
+   "Week finalized - billing push failed, [name] has been alerted". */
+.sc-week-finalize-banner {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-control);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-micro);
+}
+
+/* Finalized + Billed = same success chrome. Green wash + line. */
+.sc-week-finalize--finalized .sc-week-finalize-banner,
+.sc-week-finalize--billed .sc-week-finalize-banner {
+  background: var(--status-entered-subtle);
+  color: var(--status-entered-fg);
+  border: var(--sc2-border-thin) solid var(--status-entered-bd);
+}
+
+/* Push-failed = amber wash + line. Instructional, not red -
+   red is reserved for hard errors (spec §4 red-only-instructional
+   rule). */
+.sc-week-finalize--push-failed .sc-week-finalize-banner {
+  background: var(--status-needs-subtle);
+  color: var(--status-needs-fg);
+  border: var(--sc2-border-thin) solid var(--status-needs-bd);
+}
+
+/* Override affordances - Revert + Retry. Neutral chrome to keep
+   them from competing with the primary state message. */
+.sc-week-finalize-action {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border: var(--sc2-border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-heading);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-micro);
+  cursor: pointer;
+}
+.sc-week-finalize-action:hover:not(:disabled) {
+  background: var(--surface-quiet);
+}
+.sc-week-finalize-action:focus-visible {
+  outline: var(--focus-ring, 2px solid var(--status-today-ring));
+  outline-offset: 2px;
+}
+.sc-week-finalize-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Revert form - the inline reason input. */
+.sc-week-finalize-revert-form {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.sc-week-finalize-revert-label {
+  color: var(--text-muted);
+  font-size: var(--sc2-size-micro);
+}
+.sc-week-finalize-revert-input {
+  padding: var(--space-1) var(--space-2);
+  border: var(--sc2-border-thin) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-heading);
+  font-family: inherit;
+  font-size: var(--sc2-size-micro);
+  min-width: 12ch;
+}
+.sc-week-finalize-revert-input:focus-visible {
+  outline: var(--focus-ring, 2px solid var(--status-today-ring));
+  outline-offset: 1px;
+  border-color: var(--status-today-ring);
+}
