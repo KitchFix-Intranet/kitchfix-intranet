@@ -600,6 +600,8 @@ Rippling's `merged_earning_type_name` field for regular time changed value betwe
 | D30 | Salary visibility | Full model §8. Nothing above site-leader outside Kevin, Josh, Joe. Corporate absent, not filtered | 08-03 |
 | D31 | Compliance log | Rippling edit history as an append-only audit view. Gated on §8, lands after PR 7 | 08-03 |
 
+**D32 - `- REDS` is CIN - AZ, not CIN - OH.** Department `601d817448f7105e4c3d5f49` is Goodyear, not Cincinnati. All 128 workers on that department are at Goodyear despite the ambiguous name. Never infer an account from `department_name`; `department_id` is the only attribution key (D24).
+
 **D33 - Employer burden is out of `3100.1`.** Employer payroll taxes book to SG&A `5004.9`. Our pipeline reads gross wages and `3100.1` is gross wages, so the two reconcile directly. `5004.9` needs its own feed and **must never be derived as a percentage of our labor figure** - the taxable base nets out pre-tax benefit deductions Rippling does not expose. Measured 2026-08-07 on a worker whose $3,447.60 gross carried a $3,383.97 taxable base.
 
 **D34 - Three earning categories are permanently invisible to the Rippling ingest.** Bonus, PTO, and employer burden appear in none of `time_entries`, `pay_segments`, `time_entry_zo`, or `workers`. Bonus and PTO are gross wages and are therefore real gaps in `3100.1`, both confirmed against paystubs 2026-08-07. These are properties of the integration, not backlog items. Any reconciliation against payroll should expect them.
@@ -649,3 +651,9 @@ Nothing.
 
 ### Deferred
 Postseason recognition mechanics. Weekly flash scope. Bonus-eligible viewer role.
+
+---
+
+## 13. Captain's log
+
+- **2026-08-07 (v0.7):** D32 recovered from handoff docs rather than newly ruled. The `- REDS` = CIN - AZ attribution was measured and named across prior sessions but had not made it into the canonical playbook until now. Kept the D33-D39 numbering (from PR A of kpi-8b) intact; D32 sits between the D31 table row and the D33 freeform block. Also filed §9.11 for the 2026-06-29 earning-type naming shift.

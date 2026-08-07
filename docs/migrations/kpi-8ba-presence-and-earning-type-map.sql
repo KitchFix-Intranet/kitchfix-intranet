@@ -23,7 +23,7 @@
 --    plausibility so a broken API returning zero rows does not empty
 --    the table.
 --
--- 2. earning_type_map.
+-- 2. earning_type_map + earning_type_unmapped.
 --    Rippling's `overtime_multiplier` field is null on every non-OT
 --    earning type including `Holiday Double Rate`, which pays 2x - the
 --    doubling lives in the rate, not the multiplier. Rippling has also
@@ -35,6 +35,19 @@
 --    (`Base Pay` even where the API returns `Regular`). Any regex
 --    classifier is fragile against that. A lookup table with unmapped
 --    types routing to a visible bucket per N5 is the durable fix.
+--
+--    earning_type_unmapped is the visibility surface. D37 requires
+--    unmapped types be visible; a scrolling GitHub Actions log line is
+--    not visible. Two earning types have already surfaced only after
+--    external evidence forced them out - Holiday Double Rate went
+--    unnoticed until a VP questioned a number, PTO Hours until Kevin
+--    pulled paystubs. The derivation upserts every unmapped name it
+--    sees into this table with running counts + magnitude, so a sixth
+--    type surfaces as a DB row a human can query, not a log line no
+--    one reads. Rows are never deleted; when Kevin maps a new type,
+--    `resolved_at` is set and the record of how long the type was
+--    unmapped stays as the answer to "how long were we misfiling
+--    this."
 --
 -- Design decisions committed in playbook v0.7 (D36, D37):
 --
@@ -149,6 +162,30 @@ INSERT INTO earning_type_map (merged_earning_type_name, multiplier, bucket, note
    'overtime_multiplier is null on this type; the doubling lives in the rate itself. Counts toward the weekly 40-hour OT threshold per P6.2. Any classifier keying on overtime_multiplier > 1.0 misfiles this as regular.')
 ON CONFLICT (merged_earning_type_name) DO NOTHING;
 
+-- ─── earning_type_unmapped ─────────────────────────────────────────
+-- Visibility surface for earning types the derivation encounters that
+-- are not in earning_type_map. Upserted on first sight; running totals
+-- updated on every subsequent sighting. When Kevin maps the type in a
+-- follow-up migration, resolved_at is set - the row stays as the record
+-- of how long the type was unmapped.
+--
+-- Why running totals rather than a foreign key to raw rows: magnitude
+-- must be visible without a join. A chef or Kevin querying this table
+-- should see the dollar exposure of an unmapped type immediately, not
+-- have to construct a query against the raw pay-segments table.
+CREATE TABLE IF NOT EXISTS earning_type_unmapped (
+  merged_earning_type_name TEXT PRIMARY KEY,
+  first_seen_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  occurrence_count INTEGER     NOT NULL DEFAULT 0,
+  total_hours      NUMERIC     NOT NULL DEFAULT 0,
+  total_amount     NUMERIC     NOT NULL DEFAULT 0,
+  resolved_at      TIMESTAMPTZ NULL
+);
+
+CREATE INDEX IF NOT EXISTS earning_type_unmapped_unresolved_idx
+  ON earning_type_unmapped (last_seen_at DESC) WHERE resolved_at IS NULL;
+
 -- ─── RPC: commit_walk_success ──────────────────────────────────────
 -- Single atomic operation. Called by scripts/rippling_sync.mjs after
 -- each walk that returns ok=true. Does the plausibility check, swaps
@@ -215,8 +252,11 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Half-of-previous check (only when we have a previous baseline)
-  IF prev_count IS NOT NULL AND new_count < (prev_count / 2) THEN
+  -- Half-of-previous check (only when we have a previous baseline).
+  -- prev_count is INTEGER; cast to NUMERIC so /2 is real division not
+  -- integer truncation. Immaterial in practice on today's row counts
+  -- but the rounded threshold is clearer to state and read.
+  IF prev_count IS NOT NULL AND new_count < (prev_count::NUMERIC / 2) THEN
     UPDATE rippling_walks
     SET status         = 'failed_plausibility',
         completed_at   = NOW(),
@@ -266,6 +306,12 @@ GRANT SELECT, INSERT, DELETE ON rippling_current_presence TO service_role;
 -- (same discipline as the department map).
 GRANT SELECT ON earning_type_map TO service_role;
 
+-- earning_type_unmapped: SELECT + INSERT + UPDATE. Derivation upserts
+-- (insert on first sight, update running totals + last_seen_at after).
+-- No DELETE - resolution sets resolved_at rather than removing the row,
+-- so the history of how long a type was unmapped survives.
+GRANT SELECT, INSERT, UPDATE ON earning_type_unmapped TO service_role;
+
 -- RPC executable by service_role
 GRANT EXECUTE ON FUNCTION commit_walk_success(BIGINT, TEXT, TEXT[], INTEGER, NUMERIC, INTEGER) TO service_role;
 
@@ -283,12 +329,15 @@ BEGIN
     RAISE EXCEPTION 'post-flight: earning_type_map missing double_time bucket row';
   END IF;
 
-  -- Presence + walks empty at apply time
+  -- Presence + walks + unmapped empty at apply time
   IF (SELECT COUNT(*) FROM rippling_walks) <> 0 THEN
     RAISE EXCEPTION 'post-flight: rippling_walks should be empty at apply time';
   END IF;
   IF (SELECT COUNT(*) FROM rippling_current_presence) <> 0 THEN
     RAISE EXCEPTION 'post-flight: rippling_current_presence should be empty at apply time';
+  END IF;
+  IF (SELECT COUNT(*) FROM earning_type_unmapped) <> 0 THEN
+    RAISE EXCEPTION 'post-flight: earning_type_unmapped should be empty at apply time';
   END IF;
 
   -- Grants
@@ -303,6 +352,15 @@ BEGIN
   END IF;
   IF has_table_privilege('service_role', 'earning_type_map', 'INSERT') THEN
     RAISE EXCEPTION 'post-flight: service_role has INSERT on earning_type_map (should be SELECT-only; additions go through follow-up migrations)';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'earning_type_unmapped', 'INSERT') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing INSERT on earning_type_unmapped';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'earning_type_unmapped', 'UPDATE') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing UPDATE on earning_type_unmapped';
+  END IF;
+  IF has_table_privilege('service_role', 'earning_type_unmapped', 'DELETE') THEN
+    RAISE EXCEPTION 'post-flight: service_role has DELETE on earning_type_unmapped (should be SELECT/INSERT/UPDATE only; resolution sets resolved_at rather than removing the row)';
   END IF;
 
   -- RPC exists and is executable
