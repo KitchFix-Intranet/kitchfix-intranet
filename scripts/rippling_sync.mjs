@@ -141,7 +141,9 @@ async function releaseLock() {
     .eq("holder", HOLDER_ID);
   if (error) {
     console.error(`lock: release failed: ${error.message}`);
+    return;
   }
+  console.log(`rippling_sync: released lock holder="${HOLDER_ID}"`);
 }
 
 await acquireLock();
@@ -244,12 +246,13 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
   return { ok: true, pages, examined, unchanged, inserted, durationSec };
 }
 
-// ─── Run both walks ──────────────────────────────────────────────────
-// Wrapped in try/finally so the lock releases on both success and
-// caught failure paths. SIGINT/SIGTERM handlers registered above
-// cover the killed-by-signal path.
+// ─── Run all four walks ─────────────────────────────────────────────
+// Sequential: time_entries, pay_segments (PR 8a), then workers and
+// time_entry_zo (PR 8a-2). Wrapped in try/finally so the lock releases
+// on both success and caught failure paths. SIGINT/SIGTERM handlers
+// registered above cover the killed-by-signal path.
 
-let teResult, psResult;
+let teResult, psResult, wkResult, zoResult;
 try {
   teResult = await walkAndInsert({
     endpoint:    "time-entries",
@@ -263,6 +266,20 @@ try {
     table:       "rippling_raw_pay_segments",
     latestView:  "rippling_raw_pay_segments_latest",
     kind:        "pay_segments",
+  });
+
+  wkResult = await walkAndInsert({
+    endpoint:    "workers",
+    table:       "rippling_raw_workers",
+    latestView:  "rippling_raw_workers_latest",
+    kind:        "workers",
+  });
+
+  zoResult = await walkAndInsert({
+    endpoint:    "custom-objects/time_entry_zo/records",
+    table:       "rippling_raw_time_entry_zo",
+    latestView:  "rippling_raw_time_entry_zo_latest",
+    kind:        "time_entry_zo",
   });
 } finally {
   await releaseLock();
@@ -280,9 +297,11 @@ function fmtResult(label, r) {
 
 console.log("");
 console.log("rippling_sync summary:");
-console.log("  " + fmtResult("time_entries", teResult));
-console.log("  " + fmtResult("pay_segments", psResult));
+console.log("  " + fmtResult("time_entries",  teResult));
+console.log("  " + fmtResult("pay_segments",  psResult));
+console.log("  " + fmtResult("workers",       wkResult));
+console.log("  " + fmtResult("time_entry_zo", zoResult));
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
-if (!teResult.ok || !psResult.ok) process.exit(2);
+if (!teResult.ok || !psResult.ok || !wkResult.ok || !zoResult.ok) process.exit(2);
 process.exit(0);
