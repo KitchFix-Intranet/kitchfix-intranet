@@ -1,10 +1,24 @@
-name: rippling raw sync
+name: rippling raw sync + labor derivation
 
-# Nightly ingest of raw Rippling records into Postgres (PR 8a).
+# Nightly ingest of raw Rippling records into Postgres (PR 8a + 8a-2)
+# followed by the labor_actuals derivation (PR 8b).
 #
-# Two Rippling walks per run, sequential:
+# Four Rippling walks per run, sequential:
 #   /time-entries                                    -> rippling_raw_time_entries
 #   /custom-objects/time_entry_computed_pay_segment  -> rippling_raw_pay_segments
+#   /workers                                         -> rippling_raw_workers
+#   /custom-objects/time_entry_zo                    -> rippling_raw_time_entry_zo
+#
+# On sync success, the derivation step runs. It reads presence
+# (rippling_current_presence), earning_type_map, rippling_department_map,
+# and the four raw _latest views; upserts labor_actuals per account via
+# swap_labor_actuals_for_account; and writes labor_unattributed +
+# earning_type_unmapped. Full re-derive per D38 - no incremental logic.
+#
+# The derivation is gated on sync success (per B6). A partial or failed
+# sync must NOT trigger the derivation - deriving over half-updated
+# presence produces confidently wrong numbers, which is the failure this
+# whole project exists to prevent.
 #
 # Filter surface on the Rippling side is zero - date, worker_id, and sort
 # filters are silently ignored. Full cursor walk from the first page every
@@ -14,14 +28,18 @@ name: rippling raw sync
 # Measured mean latency (2026-08-04 discovery probe):
 #   /time-entries    ~8.08s / page  ~200 pages  ~27 min
 #   /pay_segments    ~1.50s / page  ~80  pages  ~2 min
-# Combined ~30 min; timeout-minutes 90 gives real headroom for in-season
-# volume without being unbounded. Vercel's 300s function cap does not fit,
-# which is why this lives in Actions rather than as an API cron.
+#   /workers         ~1.5s  / page  ~12  pages  ~18 s
+#   /time_entry_zo   ~1s    / page  ~82  pages  ~65 s
+# Combined sync ~30 min; derivation adds ~30-60s. timeout-minutes 120
+# gives real headroom for in-season volume + derive. Vercel's 300s
+# function cap does not fit, which is why this lives in Actions rather
+# than as an API cron.
 #
 # Failure surface: exit 2 from the sync script means at least one walk
-# failed mid-flight. The workflow then goes red. The other walk's
-# progress still landed via the per-page upsert - re-run picks up
-# unchanged records for near-zero cost.
+# failed mid-flight. Exit 3 from derive means derive duration exceeded
+# 10 minutes (D38 trigger to revisit). Either exit code fails the whole
+# workflow. The other walk's progress still landed via the per-page
+# upsert - re-run picks up unchanged records for near-zero cost.
 
 on:
   schedule:
@@ -45,9 +63,9 @@ concurrency:
 
 jobs:
   sync:
-    name: walk time_entries + pay_segments
+    name: walk 4 raw objects + derive labor_actuals
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     env:
       RIPPLING_API_KEY: ${{ secrets.RIPPLING_API_KEY }}
@@ -70,6 +88,7 @@ jobs:
         run: npm ci
 
       - name: Run rippling sync
+        id: sync
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
           DRY_RUN="${{ inputs.dry_run || 'false' }}"
@@ -79,3 +98,15 @@ jobs:
           fi
           echo "rippling_sync ${ARGS}"
           node scripts/rippling_sync.mjs ${ARGS}
+
+      # Derivation runs ONLY on sync success. Explicit `if: success()`
+      # rather than relying on GHA's default step semantics - the
+      # 2026-06-12 silent-gap class is exactly the case where a
+      # fail-open guard produced confidently wrong numbers. Dry-run of
+      # sync skips derive (nothing to derive against a preview).
+      - name: Derive labor actuals
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          echo "derive_labor_actuals --source=${SOURCE}"
+          node scripts/derive_labor_actuals.mjs --source=${SOURCE}

@@ -2,8 +2,8 @@
 
 > **Purpose:** Single source of truth for tokens, palette, roles, scales, and system facts. Used by humans coding solo and by AI assistants doing design review. When this disagrees with the actual repo, the repo wins - but the disagreement should be flagged and reconciled.
 >
-> **Last verified:** 2026-05-05
-> **Verified against:** `globals.css`, `src/app/api/ops/route.js`, `src/app/service-calendar/`, `src/app/api/people/route.js`, `package.json`
+> **Last verified:** 2026-08-07
+> **Verified against:** `tokens.css`, `globals.css`, `src/app/api/ops/route.js`, `src/app/service-calendar/`, `src/app/api/people/route.js`, `package.json`, `docs/MIGRATION_PROJECT_CLOSEOUT.md`
 > **Refresh cadence:** Quarterly, or whenever a token/role changes
 > **Companion docs:** `DESIGN_REVIEW_PERSONA.md`, `DESIGN_PRINCIPLES.md`
 
@@ -13,7 +13,7 @@
 
 - **Framework:** Next.js 16, React 19
 - **Auth:** NextAuth + Google OAuth
-- **Backend:** Google Sheets (five-pillar architecture - see `ARCHITECTURE.md`)
+- **Backend:** Sheets + Postgres dual data layer. Six modules cut over to Postgres with Sheets dual-write as the rollback net (News, Directory, People-submissions, Vendor, Invoice, Playbook/OPD). New features build Postgres-native via `dataStore` orchestrators. See `MIGRATION_PROJECT_CLOSEOUT.md` for the six modules' state and `ARCHITECTURE.md` for the dual-layer shape. The five-pillar Google Sheets architecture remains for Labor, Financial (proxy retired), Legacy Inv Count, Service Calendar, Incidents, and Leadership Dugout. **Design tokens live in `src/app/tokens.css`**, imported by `globals.css` - not in `globals.css` itself.
 - **Drive/Sheets writes:** Service account `kitchfix-sheets@speedy-actor-487922-p4.iam.gserviceaccount.com` - never user OAuth
 - **AI:** Anthropic Claude API (Invoice OCR, Smart Inventory matching)
 - **Hosting:** Vercel Pro
@@ -315,3 +315,4 @@ When a design choice could be reinforced by Slack notification quality, call it 
 - **2026-05-05** - Initial reference documented. Tokens, palette, roles, scales captured.
 - **2026-05-05** - Dual-mode density rule added (Density / Comfortable). Inter locked as canonical screen typeface; Mulish demoted to print/PDF only. Type scale, spacing scale, radius, and card padding now live inside per-mode tables. Mobile override (<1024px = comfortable) added as non-negotiable rule. Module assignments and surface-level overrides documented. Reference anchors retuned to mode-specific guidance.
 - **2026-08-01** - Height fit-floor codified. 720px is the lowest viewport at which a landing surface must render without vertical scroll; sweep battery height axis 800/768/720 named. Sous PR A polish pass is the first surface to bind against it. Design target restated as 1280×800.
+- **2026-08-07** - Backend note corrected: the intranet is on a Sheets + Postgres dual data layer, not Sheets-only. Six modules cut over to Postgres with Sheets dual-write per `MIGRATION_PROJECT_CLOSEOUT.md`. Design-token location corrected: canonical tokens live in `src/app/tokens.css`, not in `globals.css`. Verified-against note bumped and `tokens.css` + `MIGRATION_PROJECT_CLOSEOUT.md` added to the verification sources. Prompted by PR B1 doc-drift review (kpi-8b).

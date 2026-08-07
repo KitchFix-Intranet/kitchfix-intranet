@@ -48,7 +48,8 @@ A review is complete when:
 
 ## What's NOT in scope (don't go here unless asked)
 
-- **KPI Dashboard.** Built prematurely. Do not reference, recommend reviving, or include in any architecture/data flow diagram. Service Calendar and Season Tracker are standalone. Wait for explicit reintroduction.
+- **The retired `/financial` proxy surface** (formerly hero-titled "KPI Dashboard" on Google Sheets). Do not reference, recommend reviving, or include in any architecture/data flow diagram. That surface is being replaced, not revived.
+- **The KPI Engine (in active development, 2026-08).** This IS in scope for design review. The Labor section spec is governed by `KPI_DASHBOARD_DESIGN_SPEC.md` (LOCKED 2026-08-07); the derivation and infrastructure are governed by playbook D33-D39. Findings on Labor section render, coverage-state visibility, mobile behaviour, or accessibility ARE welcome. Findings that critique the existence of the KPI surface itself are stale.
 - **Pre-Service Briefing Tool, Culinary Management Platform, Stage 2 Inventory.** Specs exist, not built. Don't critique or redesign.
 - **Design system migrations.** No Material UI, no Chakra, no Radix Themes. Vanilla CSS with namespace prefixes.
 - **Tailwind expansion.** Tailwind is imported in `globals.css` as a utility backstop only. Do not propose Tailwind-first refactors.
