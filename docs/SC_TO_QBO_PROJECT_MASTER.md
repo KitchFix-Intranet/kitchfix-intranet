@@ -1,7 +1,7 @@
 # SC -> QBO BILLING - PROJECT MASTER
 
 **Target repo path:** `docs/SC_TO_QBO_PROJECT_MASTER.md`
-**Version:** v1.6 · Authored 2026-08-06, updated 2026-08-07 (Chat-Claude / CC)
+**Version:** v1.7 · Authored 2026-08-06, updated 2026-08-07 (Chat-Claude / CC)
 **Owner:** Kevin. This is the billing arc's working doc, updated step by step
 as the arc moves. `PROJECT_SCOPE_MASTER.md` §7 points here; this doc points to
 the evidence docs. When the first live invoice sends, this doc becomes the
@@ -299,8 +299,8 @@ catering billing.**
 | Shape spec | Chat-Claude | **SIGNED v1.0** | 08-06 |
 | Mapping confirm | - | RESOLVED by QBO evidence (anchor + Rehab); Sebastian sees it at retro-shadow review | 08-06 |
 | PR-A (finalize) | CC | **MERGED - PR #637** (Steps 0-3 + partial 4; UI wire deferred) | 08-07 |
-| PR-A1 (UI wire + battery + sc-30b touch) | CC | **DRAFT - PR TBD** | 08-07 |
-| PR-B (builder + retro-shadow harness) | CC | **PROMPT ISSUED** (parallel with PR-A) | 08-06 |
+| PR-A1 (UI wire + battery + sc-30b touch) | CC | **MERGED - PR #639** | 08-07 |
+| PR-B (builder + retro-shadow harness) | CC | **DRAFT - PR TBD** (sc-31 + buildInvoicePayload + 4-fixture parity + 5 negatives + diff harness; period-aligned biweekly per owner amendment) | 08-07 |
 | PR-C (adapter) | CC | Blocked on K-18 + retro-shadow graduation | 08-06 |
 | Track B (admin backdate PR) | CC | RULED, NOT STARTED | 08-06 |
 | Shadow weeks | Sebastian + system | NOT STARTED | 08-06 |
@@ -317,3 +317,4 @@ catering billing.**
 | 2026-08-06 | v1.4 | SPEC SIGNED v1.0. Marks 5+6 resolved by QBO evidence (anchor 2026-05-31; Continental Plus on 3327, rate-guard lines); CIN - AZ two-invoice split discovered and configured; retro-shadow ordered before Track C training. PR-A + PR-B prompts issued (`CC_PROMPT_PR_A_FINALIZE.md`, `CC_PROMPT_PR_B_BUILDER.md`); migration numbering settled sc-30 finalize / sc-31 maps / sc-32 ledger. Phase 3 open |
 | 2026-08-07 | v1.5 | PR-A merged to main (#637): sc-30 migration + SC_LOCK_OVERRIDE + finalize/revert server actions + read endpoint + WeekFinalizeControl component (unwired). PR-A1 scoped for the UI wire + full A2/A3/A4/A5/A7 battery + changed_at fix per Chat-Claude's SQL-review finding. Migration numbering supplemented: sc-30b (touch trigger, PR-A1). |
 | 2026-08-07 | v1.6 | PR-A1 opened DRAFT. sc-30b BEFORE UPDATE trigger authored (SQL for Chat-Claude review before Kevin's Studio step). changed_at bug [ran]-confirmed against prod. Battery: A2 negative + positive [ran] via probe; A3 all 4 write paths [ran] via shared assertWeekOpenForWrite (single/bulk/mixed shapes) + [code-read] wire-in citations; A4 all three revert cases proved ([ran] for finalized->reverted with override, [code-read] for billed refusal and non-override refusal, both with live-state verifications). A5 paint 5 contexts + A7 laptop matrix marked needs-gate (local build blocked by owner-scoped npm token on `@kitchfix-intranet/shared`; Vercel preview blocked by prod-pinned NEXTAUTH_URL). Cleanup SQL in PR body for Kevin's Studio step; all probe rows end reverted or deleted. |
+| 2026-08-07 | v1.7 | PR-A1 crash fix + merged as PR #639. PR-B opened DRAFT. sc-31 migration authored (sc_qbo_account_map + sc_qbo_service_map + 24 changelog rows for 2 accounts and 22 services). buildInvoicePayload pure function + owner amendment (period-aligned biweekly via `sc_day_metadata`; anchor is reference-only; P13 hard-fails). Fixture parity suite: 4 live QBO invoices reproduced to the cent + 5 negative tests + 1 P13 hard-fail test = 9 passing tests. Retro-shadow diff harness `scripts/billing/diff-week.mjs` runs against live sc_daily_revenue + live QBO GET; both pilot accounts output CONFIG UNMAPPED cleanly pending sc-31 apply (SC DATA ABSENT expected post-apply per C-11). QBO_PROXY_BASE / QBO_PROXY_KEY documented in ENV_VARS.md. New pilot mapping: TXR-AZ has 4 UNMAPPED Extra Protein services (no matching QB item; builder throws on use, as designed). F1 defect on K300168897 L4 confirmed (Sebastian typo "Total = 175" on qty=250 line); builder produces the CORRECT "Total = 250" and the test asserts the CORRECT value with the F1 override flagged in the report. |

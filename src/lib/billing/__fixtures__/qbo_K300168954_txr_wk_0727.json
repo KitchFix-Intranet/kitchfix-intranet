@@ -1,0 +1,463 @@
+{
+  "AllowIPNPayment": false,
+  "AllowOnlinePayment": true,
+  "AllowOnlineCreditCardPayment": false,
+  "AllowOnlineACHPayment": true,
+  "AllowOnlinePayPalPayment": false,
+  "AllowOnlineAffirmPayment": false,
+  "EInvoiceStatus": "Viewed",
+  "domain": "QBO",
+  "sparse": false,
+  "Id": "290855",
+  "SyncToken": "0",
+  "MetaData": {
+    "CreateTime": "2026-08-06T06:59:40-07:00",
+    "LastModifiedByRef": {
+      "value": "9130347992551296"
+    },
+    "LastUpdatedTime": "2026-08-06T07:00:42-07:00"
+  },
+  "CustomField": [
+    {
+      "DefinitionId": "1",
+      "Name": "Purchase Order",
+      "Type": "StringType"
+    },
+    {
+      "DefinitionId": "2",
+      "Name": "DC",
+      "Type": "StringType"
+    }
+  ],
+  "DocNumber": "K300168954",
+  "TxnDate": "2026-08-02",
+  "CurrencyRef": {
+    "value": "USD",
+    "name": "United States Dollar"
+  },
+  "LinkedTxn": [],
+  "Line": [
+    {
+      "Id": "1",
+      "LineNum": 1,
+      "Description": "Breakfast - 100 & Lunch - 100. Total = 200.",
+      "Amount": 2858,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-27",
+        "ItemRef": {
+          "value": "3333",
+          "name": "TXR-AZ MiLB - Breakfast/Lunch/Dinner"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 14.29,
+        "Qty": 200,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "2",
+      "LineNum": 2,
+      "Amount": 471.2,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-27",
+        "ItemRef": {
+          "value": "3338",
+          "name": "TXR-AZ - Regular Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 5.89,
+        "Qty": 80,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "3",
+      "LineNum": 3,
+      "Description": "Breakfast - 100 & Lunch - 100. Total = 200.",
+      "Amount": 2858,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-28",
+        "ItemRef": {
+          "value": "3333",
+          "name": "TXR-AZ MiLB - Breakfast/Lunch/Dinner"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 14.29,
+        "Qty": 200,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "4",
+      "LineNum": 4,
+      "Amount": 323.95,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-28",
+        "ItemRef": {
+          "value": "3338",
+          "name": "TXR-AZ - Regular Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 5.89,
+        "Qty": 55,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "5",
+      "LineNum": 5,
+      "Description": "Breakfast - 100 & Lunch - 100. Total = 200.",
+      "Amount": 2858,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-29",
+        "ItemRef": {
+          "value": "3333",
+          "name": "TXR-AZ MiLB - Breakfast/Lunch/Dinner"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 14.29,
+        "Qty": 200,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "6",
+      "LineNum": 6,
+      "Amount": 294.5,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-29",
+        "ItemRef": {
+          "value": "3338",
+          "name": "TXR-AZ - Regular Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 5.89,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "7",
+      "LineNum": 7,
+      "Description": "Breakfast - 100 & Lunch - 100. Total = 200.",
+      "Amount": 2858,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-30",
+        "ItemRef": {
+          "value": "3333",
+          "name": "TXR-AZ MiLB - Breakfast/Lunch/Dinner"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 14.29,
+        "Qty": 200,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "8",
+      "LineNum": 8,
+      "Amount": 382.85,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-30",
+        "ItemRef": {
+          "value": "3338",
+          "name": "TXR-AZ - Regular Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 5.89,
+        "Qty": 65,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "9",
+      "LineNum": 9,
+      "Description": "Breakfast - 100 & Lunch - 100. Total = 200.",
+      "Amount": 2858,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-31",
+        "ItemRef": {
+          "value": "3333",
+          "name": "TXR-AZ MiLB - Breakfast/Lunch/Dinner"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 14.29,
+        "Qty": 200,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "10",
+      "LineNum": 10,
+      "Amount": 323.95,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-31",
+        "ItemRef": {
+          "value": "3338",
+          "name": "TXR-AZ - Regular Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 5.89,
+        "Qty": 55,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "11",
+      "LineNum": 11,
+      "Description": "Breakfast - 100 & Lunch - 100. Total = 200.",
+      "Amount": 2858,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-08-01",
+        "ItemRef": {
+          "value": "3333",
+          "name": "TXR-AZ MiLB - Breakfast/Lunch/Dinner"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 14.29,
+        "Qty": 200,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "12",
+      "LineNum": 12,
+      "Amount": 294.5,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-08-01",
+        "ItemRef": {
+          "value": "3338",
+          "name": "TXR-AZ - Regular Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000411132",
+          "name": "PFS:TXR - AZ"
+        },
+        "UnitPrice": 5.89,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Amount": 19238.95,
+      "DetailType": "SubTotalLineDetail",
+      "SubTotalLineDetail": {}
+    }
+  ],
+  "TxnTaxDetail": {
+    "TxnTaxCodeRef": {
+      "value": "36"
+    },
+    "TotalTax": 1827.7,
+    "TaxLine": [
+      {
+        "Amount": 1212.03,
+        "DetailType": "TaxLineDetail",
+        "TaxLineDetail": {
+          "TaxRateRef": {
+            "value": "55"
+          },
+          "PercentBased": true,
+          "TaxPercent": 6.3,
+          "NetAmountTaxable": 19238.95
+        }
+      },
+      {
+        "Amount": 615.67,
+        "DetailType": "TaxLineDetail",
+        "TaxLineDetail": {
+          "TaxRateRef": {
+            "value": "56"
+          },
+          "PercentBased": true,
+          "TaxPercent": 3.2,
+          "NetAmountTaxable": 19238.95
+        }
+      }
+    ]
+  },
+  "CustomerRef": {
+    "value": "19000",
+    "name": "Texas Rangers - Surprise, AZ"
+  },
+  "FreeFormAddress": true,
+  "ShipFromAddr": {
+    "Id": "254965",
+    "Line1": "1731 W Grand Ave, Chicago, IL, 60622, USA"
+  },
+  "SalesTermRef": {
+    "value": "7",
+    "name": "Net 30"
+  },
+  "DueDate": "2026-09-01",
+  "TotalAmt": 21066.65,
+  "ApplyTaxAfterDiscount": false,
+  "PrintStatus": "NotSet",
+  "Balance": 21066.65,
+  "TaxExemptionRef": {}
+}
