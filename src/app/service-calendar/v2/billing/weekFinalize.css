@@ -1,5 +1,17 @@
 /* Week finalize control (sc-30, PR-A) - drill-in per-week surface. */
 
+/* Wrapper row rendered by PeriodWorkspace between the week band
+   (aria-hidden decorative) and the day-cells grid row. Full-width
+   flex container, right-aligned so the action sits at the end of
+   the week and does not compete with the band's left-aligned title. */
+.sc-workspace-week-finalize-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-1) var(--space-2) 0;
+  gap: var(--space-2);
+}
+
 .sc-week-finalize {
   display: inline-flex;
   align-items: center;
