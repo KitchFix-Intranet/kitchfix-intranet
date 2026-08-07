@@ -3423,6 +3423,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               syncingDates={syncingDates}
               scV2={scV2}
               focusTargetDate={focusTargetDate}
+              viewerEmail={session?.user?.email}
             />
           );
           // W6: drop !isFeeAccount from the drill guard - fee accounts
@@ -3683,6 +3684,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               syncingDates={syncingDates}
               scV2={scV2}
               focusTargetDate={focusTargetDate}
+              viewerEmail={session?.user?.email}
             />
           );
           // P3-A gate 3 fix (2026-07-28): same un-gate as the period-

@@ -25,7 +25,7 @@
 // surgical DayDetail change keeps legacy callers working (default
 // scopeLabel="month").
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DaySquare from "../DaySquare";
 import {
   resolveDayStatus,
@@ -38,6 +38,27 @@ import ProgressBar from "./ProgressBar";
 import { formatMlbHomeGameTime, formatMilbHomeGameTime } from "../gameTimeFormat";
 import { scrollIntoViewRM } from "../v2/motion";
 import "./periodWorkspace.css";
+
+// sc-30 PR-A1 (2026-08-07): shift an ISO YYYY-MM-DD by N days. UTC
+// arithmetic so DST edges do not shift the result. Used by the
+// finalize-state fetch to widen the range by 7 days on each side so
+// weeks straddling period boundaries stay covered.
+function shiftIso(iso, days) {
+  if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// sc-30 (2026-08-06, PR-A) + PR-A1 (2026-08-07): per-week finalize
+// control at the week band for per-meal accounts. Fee/MLB/MiLB-AAA
+// accounts do not render this; the gate is
+// isPerMealBillingAccount(account.key). Override affordances render
+// only for SC_LOCK_OVERRIDE members (K-10).
+import WeekFinalizeControl from "../v2/billing/WeekFinalizeControl";
+import { isPerMealBillingAccount } from "../v2/billing/perMealAccounts";
+import { isScLockOverride } from "@/lib/admin";
+import "../v2/billing/weekFinalize.css";
 
 export default function PeriodWorkspace({
   account,                  // { key, name, category, billingModel }
@@ -105,6 +126,10 @@ export default function PeriodWorkspace({
   // period, the DayGrid adopts it as the initial roving position and
   // scrolls the tile into view. NEVER auto-opens DayDetail (contract).
   focusTargetDate = null,
+  // sc-30 PR-A1 (2026-08-07): viewer email for the finalize control.
+  // Drives the SC_LOCK_OVERRIDE affordances (Revert + Retry). Also
+  // gates the FETCH of finalize states (skip when unknown).
+  viewerEmail = null,
 }) {
   const kind = useMemo(
     () => resolveDayKind({
@@ -153,6 +178,90 @@ export default function PeriodWorkspace({
       : null,
     [isCurrentPeriod, periodDays, today]
   );
+
+  // ─── sc-30 PR-A1 (2026-08-07): finalize state fetch + handlers ───
+  //
+  // Gate: only per-meal billing accounts (fee / MLB / MiLB-AAA don't
+  // render the control at all). Structural exclusion, not a derived
+  // property (perMealAccounts.js explicit Set).
+  const accountKey = account?.key || "";
+  const showFinalize = scV2 && isPerMealBillingAccount(accountKey);
+  const isOverrideUser = isScLockOverride(viewerEmail);
+  // Map<week_start ISO, live-row-object | null>. Populated after the
+  // fetch below; null-row = OPEN week.
+  const [finalizeRowsByWeek, setFinalizeRowsByWeek] = useState(() => new Map());
+  const [finalizeReloadTick, setFinalizeReloadTick] = useState(0);
+  useEffect(() => {
+    if (!showFinalize || !periodRange?.start || !periodRange?.end) return;
+    // Widen the fetch by 7 days on each side so a week straddling
+    // period boundaries is still covered (the row keys on the week
+    // start Monday which can fall in the neighboring period).
+    const first = shiftIso(periodRange.start, -7);
+    const last  = shiftIso(periodRange.end,   +7);
+    const url = `/api/service-calendar?action=sc-finalize-states&account=${encodeURIComponent(accountKey)}&first=${first}&last=${last}`;
+    let cancelled = false;
+    fetch(url, { credentials: "same-origin" })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(body => {
+        if (cancelled) return;
+        const rows = Array.isArray(body?.rows) ? body.rows : [];
+        const map = new Map();
+        for (const r of rows) {
+          if (r.status === "reverted") continue; // live rows only
+          map.set(r.week_start, r);
+        }
+        setFinalizeRowsByWeek(map);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // Non-fatal: the button falls back to open-open-open. Log
+        // for local debug; the operator sees the button as if the
+        // week were OPEN (server rejects on click if actually
+        // finalized). This is honest.
+        // eslint-disable-next-line no-console
+        console.warn("[PeriodWorkspace] sc-finalize-states fetch failed:", err?.message || err);
+      });
+    return () => { cancelled = true; };
+  }, [showFinalize, accountKey, periodRange?.start, periodRange?.end, finalizeReloadTick]);
+
+  const handleFinalize = useCallback(async ({ accountKey: acctK, weekStart }) => {
+    const res = await fetch("/api/service-calendar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ action: "sc-finalize-week", accountKey: acctK, weekStart }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(body?.error || `HTTP ${res.status}`);
+      err.body = body;
+      throw err;
+    }
+    setFinalizeReloadTick((n) => n + 1);
+  }, []);
+
+  const handleRevert = useCallback(async ({ accountKey: acctK, weekStart, reason }) => {
+    const res = await fetch("/api/service-calendar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ action: "sc-revert-finalize", accountKey: acctK, weekStart, reason }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(body?.error || `HTTP ${res.status}`);
+      err.body = body;
+      throw err;
+    }
+    setFinalizeReloadTick((n) => n + 1);
+  }, []);
+
+  // Retry action is a PR-C placeholder per spec §3. In PR-A1 the
+  // handler is a no-op stub that surfaces a "not yet implemented"
+  // error so a click during shadow testing does not silently succeed.
+  const handleRetry = useCallback(async () => {
+    throw new Error("Retry ships in PR-C (QBO adapter). Contact billing for now.");
+  }, []);
 
   // P3-B gate-2 (2026-07-28): tile-flip detection lives HERE, not in
   // DaySquare. Mechanism: DaySquare's `useRef(hasActuals)` inside a
@@ -1020,6 +1129,49 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                   </span>
                 </div>
               )}
+              {/* sc-30 PR-A1 (2026-08-07): per-week finalize control.
+                  Placement: distinct row BELOW the band, ABOVE the
+                  day cells. The band itself stays aria-hidden (it is
+                  decorative); this row is interactive and gets its
+                  own role. Fee/MLB/MiLB-AAA accounts don't render
+                  this at all (showFinalize=false). The row's Monday
+                  is week[0]?.date - buildWorkspaceWeekGrid produces
+                  Mon-Sun-aligned rows so index 0 is always Monday.
+                  weekDayRecords is filtered to the actual day
+                  records (excluding ghosts and empties) so the
+                  client-side completeness rule sees real statuses. */}
+              {showFinalize && (() => {
+                const rowMonday = week[0]?.date || null;
+                if (!rowMonday) return null;
+                const weekDayRecords = week
+                  .filter(c => c && c.day)
+                  .map(c => c.day);
+                // Skip render on out-of-period leading rows where
+                // ALL cells are ghost/empty (no real days). Trailing
+                // ghost rows never reach here since
+                // buildWorkspaceWeekGrid stops before them.
+                if (weekDayRecords.length === 0) return null;
+                const liveRow = finalizeRowsByWeek.get(rowMonday) || null;
+                return (
+                  <div
+                    className="sc-workspace-week-finalize-row"
+                    data-week-start={rowMonday}
+                    role="group"
+                    aria-label={`Finalize actions for week starting ${rowMonday}`}
+                  >
+                    <WeekFinalizeControl
+                      accountKey={accountKey}
+                      weekStart={rowMonday}
+                      weekDays={weekDayRecords}
+                      liveRow={liveRow}
+                      isOverrideUser={isOverrideUser}
+                      onFinalize={handleFinalize}
+                      onRevert={handleRevert}
+                      onRetry={handleRetry}
+                    />
+                  </div>
+                );
+              })()}
               <div role="row" className="sc-workspace-grid-row">
                 {week.map((cell, colIdx) => {
               const flatIdx = weekIdx * 7 + colIdx;
