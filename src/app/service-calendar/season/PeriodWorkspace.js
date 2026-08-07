@@ -394,6 +394,18 @@ export default function PeriodWorkspace({
         scope={scope}
         /* P3-B gate-2: per-date one-shot flip signal. Set<date>. */
         justFlippedDates={justFlippedDates}
+        /* sc-30 PR-A1 (2026-08-07): finalize context. Passed as
+           explicit props because DayGrid is a SIBLING function
+           component in this file, not a nested component - it does
+           NOT close over PeriodWorkspace's state. The PR-A1 first
+           push forgot this and hard-crashed every drill mount with
+           ReferenceError: showFinalize is not defined. */
+        showFinalize={showFinalize}
+        isOverrideUser={isOverrideUser}
+        finalizeRowsByWeek={finalizeRowsByWeek}
+        onFinalizeWeek={handleFinalize}
+        onRevertFinalize={handleRevert}
+        onRetryFinalize={handleRetry}
       />
 
       {/* W5: WeekSubtotals cards do not render under scV2 - their
@@ -893,7 +905,10 @@ function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, savi
 // tried to render. Masked until #382 killed the earlier TDZ crash
 // upstream of any drill mount, then surfaced on the first month
 // click after that landed.
-function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null, scope = "period", justFlippedDates = null }) {
+function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null, scope = "period", justFlippedDates = null,
+  /* sc-30 PR-A1 (2026-08-07): finalize context. Props (not closure)
+     because DayGrid is a sibling of PeriodWorkspace, not nested. */
+  showFinalize = false, isOverrideUser = false, finalizeRowsByWeek = null, onFinalizeWeek = null, onRevertFinalize = null, onRetryFinalize = null }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -1140,7 +1155,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                   weekDayRecords is filtered to the actual day
                   records (excluding ghosts and empties) so the
                   client-side completeness rule sees real statuses. */}
-              {showFinalize && (() => {
+              {showFinalize && finalizeRowsByWeek && (() => {
                 const rowMonday = week[0]?.date || null;
                 if (!rowMonday) return null;
                 const weekDayRecords = week
@@ -1165,9 +1180,9 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                       weekDays={weekDayRecords}
                       liveRow={liveRow}
                       isOverrideUser={isOverrideUser}
-                      onFinalize={handleFinalize}
-                      onRevert={handleRevert}
-                      onRetry={handleRetry}
+                      onFinalize={onFinalizeWeek}
+                      onRevert={onRevertFinalize}
+                      onRetry={onRetryFinalize}
                     />
                   </div>
                 );
