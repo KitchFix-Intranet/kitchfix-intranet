@@ -8,10 +8,20 @@
 // sc-submit-closeout, sc-reset-day). Not wired into sc-add-note -
 // notes stay open on a locked period per owner ruling.
 //
-// SLT override lives here, not in the SQL. Any caller in
-// SC_ADMIN_EMAILS (isScAdmin) short-circuits before the RPC fires.
-// Keeps the SQL function agnostic to session identity + avoids one
-// RPC per write for the 8 admins.
+// Override lives here, not in the SQL. Any caller in
+// SC_LOCK_OVERRIDE (isScLockOverride) short-circuits before the RPC
+// fires. Keeps the SQL function agnostic to session identity + avoids
+// one RPC per write for the small override group.
+//
+// K-10 SWAP (2026-08-06, PR-A of the SC -> QBO billing arc): the
+// override group narrowed from the 8-member SC_ADMIN_EMAILS
+// (`isScAdmin`) to the 3-member SC_LOCK_OVERRIDE (`isScLockOverride`,
+// Kevin + Joe + Sebastian). Rationale in src/lib/admin.js's
+// SC_LOCK_OVERRIDE comment: admins edit catalog, override reaches
+// into locked billing weeks - two different powers, two different
+// groups. This file's short-circuit was the ONLY consumer of
+// `isScAdmin` on the period-lock path; the swap is a one-line
+// import + one-line callsite change.
 //
 // Refusal shape is machine-readable. Step 2 of the feature (UI)
 // will parse `code === 'PERIOD_LOCKED'` to surface a specific
@@ -24,7 +34,7 @@
 //                              the response body with 403 status
 
 import { getServiceClient } from "@/lib/supabase";
-import { isScAdmin } from "@/lib/admin";
+import { isScLockOverride } from "@/lib/admin";
 
 /**
  * @param {string}   accountKey
@@ -38,8 +48,8 @@ export async function assertDaysUnlockedForWrite(accountKey, dates, email) {
   }
   if (!Array.isArray(dates) || dates.length === 0) return null;
 
-  // SLT bypass. isScAdmin normalizes email casing + trims.
-  if (isScAdmin(email)) return null;
+  // Override bypass. isScLockOverride normalizes email casing + trims.
+  if (isScLockOverride(email)) return null;
 
   const supa = getServiceClient();
   const uniqueDates = [...new Set(dates)];
