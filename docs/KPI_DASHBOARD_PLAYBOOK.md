@@ -1,8 +1,8 @@
 # KPI Dashboard Playbook
 
 **Status:** Living document. Chat-Claude maintains; CC commits each revision.
-**Version:** v0.6, 2026-08-04
-**Substrate:** `KPI_FOUNDATION_AUDIT.md`, `TXRV_ALIGNMENT.md`, `KPI_ROUND3_FINDINGS.md`, `RIPPLING_DISCOVERY.md` (all with corrections applied), Chat-Claude's primary-source extraction of the 2026 P&L workbooks, live repo.
+**Version:** v0.7, 2026-08-07
+**Substrate:** `KPI_FOUNDATION_AUDIT.md`, `TXRV_ALIGNMENT.md`, `KPI_ROUND3_FINDINGS.md`, `RIPPLING_DISCOVERY.md` (all with corrections applied), Chat-Claude's primary-source extraction of the 2026 P&L workbooks, live repo. v0.7 additionally draws on four probe rounds and four paystub reconciliations (2026-08-06 through 2026-08-07) that validated the pay-segment dollar path to the cent and surfaced D33-D39.
 
 Companion: `KPI_ENGINE_ARCHITECTURE.md` v1.1 (the how). This document is the what and why.
 
@@ -530,6 +530,16 @@ Rippling retains full edit provenance - we ingest it already for the retro-adjus
 
 **Gated on the §8 role model.** A log of who changed whose hours reveals patterns about individuals. Lands after PR 7.
 
+### 9.11 Earning-type naming shift at the 2026-06-29 pay run
+
+Rippling's `merged_earning_type_name` field for regular time changed value between the pay run ending 2026-06-28 and the pay run starting 2026-06-29. Before the transition: `Base Pay`. After: `Regular`. Both map to the same 1.0x bucket for pay purposes - the change is a rename, not a lifecycle event.
+
+**Measurement (round 3 S2):** zero `time_entry.id` values in the raw table carry both labels. Every time-entry's pay-segments use exactly one of the two names, determined by the pay run at which they were first computed. The name is stable per time-entry after that.
+
+**Reason to record it here:** any month-by-month historical report will show an otherwise-inexplicable split where June has ~93% `Base Pay` + ~7% `Regular`, then July flips to 100% `Regular`. That is a Rippling naming convention change, not a data quality issue. `earning_type_map` collapses them cleanly for derived numbers; the raw column preserves the temporal signal if ever needed.
+
+**A third naming layer exists on the paystub itself.** Paystubs display `Base Pay` uniformly across the four we've reconciled, regardless of the API-side label at time of computation. Any code cross-referencing paystubs to our API data must know that pay-line naming does not equal API `merged_earning_type_name`. Dollars and hours reconcile to the cent; only labels differ.
+
 ---
 
 ## 10. Build sequence
@@ -589,6 +599,20 @@ Rippling retains full edit provenance - we ingest it already for the retro-adjus
 | D29 | Manual refresh | Admin and operator. 60s cooldown, own-account scope. Every refresh stamps its outcome including failure | 08-03 |
 | D30 | Salary visibility | Full model §8. Nothing above site-leader outside Kevin, Josh, Joe. Corporate absent, not filtered | 08-03 |
 | D31 | Compliance log | Rippling edit history as an append-only audit view. Gated on §8, lands after PR 7 | 08-03 |
+
+**D33 - Employer burden is out of `3100.1`.** Employer payroll taxes book to SG&A `5004.9`. Our pipeline reads gross wages and `3100.1` is gross wages, so the two reconcile directly. `5004.9` needs its own feed and **must never be derived as a percentage of our labor figure** - the taxable base nets out pre-tax benefit deductions Rippling does not expose. Measured 2026-08-07 on a worker whose $3,447.60 gross carried a $3,383.97 taxable base.
+
+**D34 - Three earning categories are permanently invisible to the Rippling ingest.** Bonus, PTO, and employer burden appear in none of `time_entries`, `pay_segments`, `time_entry_zo`, or `workers`. Bonus and PTO are gross wages and are therefore real gaps in `3100.1`, both confirmed against paystubs 2026-08-07. These are properties of the integration, not backlog items. Any reconciliation against payroll should expect them.
+
+**D35 - Dollar coverage begins 2026-04-20.** Not a pruning horizon - a pay-run boundary, exactly five bi-weekly periods before 2026-06-29, where earning-type naming also changed. Before it: hours only, explicitly labelled, P&L authoritative at period grain. After it: dollar-accurate, validated to the cent against four paystubs.
+
+**D36 - Presence filters; orphans surface as coverage gaps.** The derivation sums every raw row whose `rippling_id` is currently present. It never falls back to a retired observation and never reconstructs a figure for a labor fact with no present row. Orphan counts are emitted per account nightly; the affected week reads `hours_only`. Rejected alternative: presence as a resolver with a `last_known` fallback. Round 1 B2 measured zero orphans, so the fallback insures against something never observed, and it would have depended on `(time_entry.id, merged_earning_type_name)`, which round 3 P1.1 showed ambiguous on 2.7% of multi-row groups. Reconstructing a number where confidence is lowest inverts N2.
+
+**D37 - Earning types resolve through `earning_type_map`.** Never a name regex, never `overtime_multiplier` - which is null on Holiday Double Rate, the one type paying 2x. Unmapped types route to a visible bucket and are never silently treated as regular. Rippling has been observed changing earning-type names three ways in four months.
+
+**D38 - The derivation is a full nightly re-derive.** Deliberate: any bug fix retroactively corrects all history, which for a solo maintainer outweighs the compute. **Revisit if derive time crosses ten minutes.**
+
+**D39 - The hours-times-rate estimate is closed.** Proposed to fill nine months; the gap is two, holds no dollars in any system, and the P&L covers it. D27 forbids the derivation, N4 forbids the confidence, and no consumer was ever named.
 
 ---
 

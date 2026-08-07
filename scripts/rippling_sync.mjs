@@ -171,13 +171,18 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
   let examined = 0;
   let unchanged = 0;
   let inserted = 0;
+  // Accumulate every rippling_id this walk sees, live for the presence
+  // projection (kpi-8ba). Kept across pages; kept regardless of whether
+  // the row was new or unchanged. On dry-run this is still populated so
+  // the caller can see what a real run would have written.
+  const seenIds = new Set();
 
   while (pages < MAX_PAGES_HARD) {
     const res = await fetchPage(url, KEY);
     if (!res.ok) {
       const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
       console.error(`[${kind}] page ${pages + 1} FAILED status=${res.status} error=${res.error} raw=${(res.raw || "").slice(0, 200)}`);
-      return { ok: false, pages, examined, unchanged, inserted, durationSec, error: res.error };
+      return { ok: false, pages, examined, unchanged, inserted, durationSec, error: res.error, seenIds };
     }
     const rows = extractRows(res.body);
     pages++;
@@ -195,6 +200,9 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
       });
     }
 
+    // Record presence for every seen id this page.
+    for (const r of hashedRows) seenIds.add(r.rippling_id);
+
     // Batch-fetch current hashes for these ids. On first backfill this
     // returns nothing; on nightly runs it returns the previous latest
     // for each id we already have.
@@ -205,7 +213,7 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
       if (error) {
         const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
         console.error(`[${kind}] latest-hash lookup page ${pages} FAILED: ${error.message}`);
-        return { ok: false, pages, examined, unchanged, inserted, durationSec, error: error.message };
+        return { ok: false, pages, examined, unchanged, inserted, durationSec, error: error.message, seenIds };
       }
       for (const r of data || []) currentByID.set(r.rippling_id, r.content_hash);
     }
@@ -223,7 +231,7 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
         if (error) {
           const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
           console.error(`[${kind}] insert page ${pages} FAILED: ${error.message}`);
-          return { ok: false, pages, examined, unchanged, inserted, durationSec, error: error.message };
+          return { ok: false, pages, examined, unchanged, inserted, durationSec, error: error.message, seenIds };
         }
         inserted += (data || []).length;
       }
@@ -239,11 +247,104 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
 
   if (pages >= MAX_PAGES_HARD) {
     console.error(`[${kind}] MAX_PAGES_HARD=${MAX_PAGES_HARD} hit - walk aborted before natural end`);
-    return { ok: false, pages, examined, unchanged, inserted, durationSec: ((Date.now() - t0) / 1000).toFixed(1), error: "max pages" };
+    return { ok: false, pages, examined, unchanged, inserted, durationSec: ((Date.now() - t0) / 1000).toFixed(1), error: "max pages", seenIds };
   }
 
   const durationSec = ((Date.now() - t0) / 1000).toFixed(1);
-  return { ok: true, pages, examined, unchanged, inserted, durationSec };
+  return { ok: true, pages, examined, unchanged, inserted, durationSec, seenIds };
+}
+
+// ─── Presence + walks (kpi-8ba) ─────────────────────────────────────
+//
+// Every walk attempt gets a rippling_walks row (status=in_progress at
+// insert time). On walk success, commit_walk_success() atomically swaps
+// rippling_current_presence for the kind and marks the walk row success
+// - or failed_plausibility if the new count fails the plausibility
+// check (< 50% of the previous successful walk, or below min_examined).
+// On walk failure, mark the walk row failed with the error text; DO NOT
+// touch presence. A skipped nightly leaves the previous walk's presence
+// intact and is visible by absence of a recent walk row.
+//
+// Dry-run mode skips the walk-row insert and the presence swap - a
+// preview should not write.
+
+async function insertWalkRow(kind) {
+  const { data, error } = await supa
+    .from("rippling_walks")
+    .insert({ kind, source: args.source, status: "in_progress" })
+    .select("id")
+    .single();
+  if (error) {
+    console.error(`[${kind}] walk-row insert FAILED: ${error.message}`);
+    return null;
+  }
+  return data.id;
+}
+
+async function markWalkFailed(walkId, errorMessage, seenCount, pages, durationSec) {
+  const { error } = await supa
+    .from("rippling_walks")
+    .update({
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      ids_seen: seenCount,
+      pages,
+      duration_sec: Number(durationSec),
+      error_message: String(errorMessage).slice(0, 500),
+    })
+    .eq("id", walkId);
+  if (error) console.error(`[walk ${walkId}] mark-failed FAILED: ${error.message}`);
+}
+
+// Returns { status: 'success' | 'failed_plausibility' | 'rpc_error', ids_written: N }.
+// Presence swap and walk-status update happen atomically inside the RPC.
+async function commitWalkSuccessRPC(walkId, kind, idsArray, pages, durationSec) {
+  const { data, error } = await supa.rpc("commit_walk_success", {
+    p_walk_id: walkId,
+    p_kind: kind,
+    p_ids: idsArray,
+    p_pages: pages,
+    p_duration_sec: Number(durationSec),
+    p_min_examined: 1,
+  });
+  if (error) {
+    console.error(`[${kind}] commit_walk_success RPC FAILED: ${error.message}`);
+    return { status: "rpc_error", ids_written: 0, error: error.message };
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return { status: row?.result_status || "unknown", ids_written: row?.ids_written || 0 };
+}
+
+// Wrap a single walk with the presence-tracking machinery. Returns the
+// walk result augmented with { walkId, presenceStatus, presenceIdsWritten }.
+async function runWalkWithPresence(walkArgs) {
+  const { kind } = walkArgs;
+  let walkId = null;
+  if (!args.dryRun) {
+    walkId = await insertWalkRow(kind);
+    // If we couldn't even insert the walk row, still do the ingest -
+    // presence just won't get written. The failure surfaces in the
+    // rippling_walks table being missing a row for this run.
+  }
+
+  const result = await walkAndInsert(walkArgs);
+
+  if (args.dryRun) {
+    return { ...result, walkId: null, presenceStatus: "skipped_dry_run", presenceIdsWritten: 0 };
+  }
+  if (walkId === null) {
+    return { ...result, walkId: null, presenceStatus: "walk_row_insert_failed", presenceIdsWritten: 0 };
+  }
+
+  if (result.ok) {
+    const commitOutcome = await commitWalkSuccessRPC(
+      walkId, kind, [...result.seenIds], result.pages, result.durationSec
+    );
+    return { ...result, walkId, presenceStatus: commitOutcome.status, presenceIdsWritten: commitOutcome.ids_written };
+  } else {
+    await markWalkFailed(walkId, result.error, result.seenIds.size, result.pages, result.durationSec);
+    return { ...result, walkId, presenceStatus: "walk_failed", presenceIdsWritten: 0 };
+  }
 }
 
 // ─── Run all four walks ─────────────────────────────────────────────
@@ -254,28 +355,30 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
 
 let teResult, psResult, wkResult, zoResult;
 try {
-  teResult = await walkAndInsert({
+  // One kind failing must not prevent the other three from writing
+  // their presence. Each runWalkWithPresence is independent.
+  teResult = await runWalkWithPresence({
     endpoint:    "time-entries",
     table:       "rippling_raw_time_entries",
     latestView:  "rippling_raw_time_entries_latest",
     kind:        "time_entries",
   });
 
-  psResult = await walkAndInsert({
+  psResult = await runWalkWithPresence({
     endpoint:    "custom-objects/time_entry_computed_pay_segment/records",
     table:       "rippling_raw_pay_segments",
     latestView:  "rippling_raw_pay_segments_latest",
     kind:        "pay_segments",
   });
 
-  wkResult = await walkAndInsert({
+  wkResult = await runWalkWithPresence({
     endpoint:    "workers",
     table:       "rippling_raw_workers",
     latestView:  "rippling_raw_workers_latest",
     kind:        "workers",
   });
 
-  zoResult = await walkAndInsert({
+  zoResult = await runWalkWithPresence({
     endpoint:    "custom-objects/time_entry_zo/records",
     table:       "rippling_raw_time_entry_zo",
     latestView:  "rippling_raw_time_entry_zo_latest",
@@ -292,7 +395,10 @@ const totalSec = ((finishedAt - startedAt) / 1000).toFixed(1);
 
 function fmtResult(label, r) {
   const status = r.ok ? "ok" : `FAIL (${r.error})`;
-  return `${label.padEnd(14)}  ${status.padEnd(28)}  pages=${String(r.pages).padStart(4)}  examined=${String(r.examined).padStart(6)}  unchanged=${String(r.unchanged).padStart(6)}  inserted=${String(r.inserted).padStart(6)}  duration=${r.durationSec}s`;
+  const presence = r.presenceStatus
+    ? `  presence=${r.presenceStatus}${r.presenceIdsWritten ? `(${r.presenceIdsWritten})` : ""}`
+    : "";
+  return `${label.padEnd(14)}  ${status.padEnd(28)}  pages=${String(r.pages).padStart(4)}  examined=${String(r.examined).padStart(6)}  unchanged=${String(r.unchanged).padStart(6)}  inserted=${String(r.inserted).padStart(6)}  duration=${r.durationSec}s${presence}`;
 }
 
 console.log("");
