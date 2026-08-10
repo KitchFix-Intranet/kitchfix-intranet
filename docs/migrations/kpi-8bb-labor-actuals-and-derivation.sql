@@ -37,6 +37,35 @@
 --    identical to fresh. Age-gating turns that silence into a `unknown`
 --    state per D36.
 --
+-- Scope additions acknowledged (surfaced retroactively per no-silent-
+-- scope-additions rule):
+--
+--   1. rippling_department_map (38 seed rows). Not in the PR B1 prompt
+--      as a separate item, but the derivation genuinely cannot attribute
+--      without it (D24). Seed rows are the Round 2 dump verbatim from
+--      feat/kpi-8b-attribution, verified 2026-08-04 against
+--      work-location cross-check. Seed provenance: same source as
+--      R2 Gate 5.5.
+--
+--      R2 Gate 5.5 also found 280 unmapped workers on the workforce
+--      but counted all 1,126 including terminated. Recut 2026-08-10
+--      by (status != 'TERMINATED' AND has time-entries in last 90d):
+--      **ZERO active-unmapped workers with recent activity.** The 38-row
+--      seed is complete for the workforce this derivation attributes.
+--      All 280 unmapped from R2 were terminated + inactive; Rippling
+--      does not strip department_id on termination, which explains the
+--      naive count. If a new active worker lands on an unmapped
+--      department, they will appear in labor_unattributed with
+--      reason_code = 'unknown_department' and be visible per N5.
+--
+--   2. Upsert-on-grain instead of append-with-source_run. Trade-off
+--      named: when a retro correction changes a figure, the PRIOR VALUE
+--      IS GONE FROM labor_actuals. The audit trail for how a figure
+--      changed over time lives in rippling_raw_pay_segments, which is
+--      append-only and preserves every observation (that is what the
+--      raw table exists for). Anyone asking "why did last month's
+--      number change" queries raw, not this table.
+--
 -- Design decisions committed in playbook v0.7 that constrain this:
 --
 --   D24 - department_id is the attribution key, never department_name
@@ -233,16 +262,39 @@ CREATE INDEX IF NOT EXISTS labor_actuals_week_range_idx
 -- labor_actuals_latest: alias view for consumer compatibility. The /kpi/labor
 -- page (kpi-8c on feat/kpi-8c-labor-page) reads `labor_actuals_latest`;
 -- since labor_actuals is now upsert-per-grain, latest == the table itself.
-CREATE OR REPLACE VIEW labor_actuals_latest AS SELECT * FROM labor_actuals;
+--
+-- Columns enumerated explicitly (not SELECT *). Postgres resolves
+-- SELECT * at view creation time and freezes the column list; adding a
+-- column to labor_actuals later would not surface in the view, and
+-- CREATE OR REPLACE VIEW cannot add columns to an existing view.
+CREATE OR REPLACE VIEW labor_actuals_latest AS
+  SELECT
+    account_key, worker_id, week_label, line_code,
+    hours_regular, hours_overtime, hours_double_time, hours_premium_other,
+    dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other,
+    amount, hours_without_dollars,
+    week_start, week_end, fiscal_year, period_no, week_source,
+    segment_count, entry_count, coverage_state,
+    derived_at, source_run
+  FROM labor_actuals;
 
 -- ─── labor_unattributed ─────────────────────────────────────────────
 -- N5: any pay-segment whose worker's department resolves to no account,
 -- a container department, or an unknown worker goes here. Same upsert
 -- pattern as labor_actuals - grain PK, atomically swapped per run.
+--
+-- department_id and worker_id are NOT NULL DEFAULT '' rather than
+-- nullable, so a plain composite PK can enforce the grain directly.
+-- Chosen over the surrogate-key + expression-index alternative because
+-- (1) PostgreSQL does not permit expressions in PRIMARY KEY constraints,
+-- so the pre-fix form with COALESCE(...) in the PK failed parse; and
+-- (2) the '' sentinel is unambiguous - both department_id (Mongo
+-- ObjectId) and worker_id (UUID) are never legitimately empty strings,
+-- so '' can only mean "not provided by the pay-segment payload."
 CREATE TABLE IF NOT EXISTS labor_unattributed (
   reason_code     TEXT           NOT NULL CHECK (reason_code IN ('unknown_department','container_leak','no_worker_department','unknown_worker')),
-  department_id   TEXT,
-  worker_id       TEXT,
+  department_id   TEXT           NOT NULL DEFAULT '',
+  worker_id       TEXT           NOT NULL DEFAULT '',
   amount          NUMERIC(14,2)  NOT NULL DEFAULT 0,
   hours           NUMERIC(10,2)  NOT NULL DEFAULT 0,
   segment_count   INTEGER        NOT NULL DEFAULT 0,
@@ -251,7 +303,7 @@ CREATE TABLE IF NOT EXISTS labor_unattributed (
   derived_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
   source_run      TEXT           NOT NULL,
   notes           TEXT,
-  PRIMARY KEY (reason_code, COALESCE(department_id, ''), COALESCE(worker_id, ''))
+  PRIMARY KEY (reason_code, department_id, worker_id)
 );
 
 CREATE INDEX IF NOT EXISTS labor_unattributed_derived_at_idx
@@ -354,8 +406,8 @@ BEGIN
   )
   SELECT
     (r->>'reason_code')::TEXT,
-    NULLIF(r->>'department_id', ''),
-    NULLIF(r->>'worker_id', ''),
+    COALESCE(r->>'department_id', ''),
+    COALESCE(r->>'worker_id', ''),
     COALESCE((r->>'amount')::NUMERIC, 0),
     COALESCE((r->>'hours')::NUMERIC, 0),
     COALESCE((r->>'segment_count')::INTEGER, 0),
@@ -365,7 +417,7 @@ BEGIN
     p_source_run,
     NULLIF(r->>'notes', '')
   FROM jsonb_array_elements(p_rows) r
-  ON CONFLICT (reason_code, COALESCE(department_id, ''), COALESCE(worker_id, ''))
+  ON CONFLICT (reason_code, department_id, worker_id)
   DO UPDATE SET
     amount = EXCLUDED.amount,
     hours = EXCLUDED.hours,

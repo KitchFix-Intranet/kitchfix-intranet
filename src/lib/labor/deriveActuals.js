@@ -103,9 +103,14 @@ async function fetchAll(supa, tableOrView, columns = "*", filters = []) {
  * @param {SupabaseClient} opts.supa
  * @param {string} opts.sourceRun - 'nightly' | 'manual' | 'backfill'
  * @param {(msg:string)=>void} [opts.log]
- * @param {number|null} [opts.forcePresenceAgeH] - override presence-age computation for testing
- * @param {Array<object>|null} [opts.overrideDeptMap] - inline dept map for pre-apply testing
- *        (rows shaped like the rippling_department_map table)
+ * @param {number|null} [opts.forcePresenceAgeH] - TEST HOOK - override presence-age
+ *        computation. Requires KPI_DERIVE_TEST_HOOKS=1 in env or throws. If set past 54h,
+ *        every emitted row reads coverage_state='unknown' and the dashboard goes blank -
+ *        that is what makes it a test hook rather than a production knob.
+ * @param {Array<object>|null} [opts.overrideDeptMap] - TEST HOOK - inline dept map (rows
+ *        shaped like rippling_department_map). Requires KPI_DERIVE_TEST_HOOKS=1 in env or
+ *        throws. Existed to let acceptance evidence run pre-migration-apply and stays for
+ *        regression testing; production must never pass it.
  * @returns {{
  *   accountResults: Array<{ accountKey, actuals: Row[], stats }>,
  *   unattributed: Row[],
@@ -114,6 +119,18 @@ async function fetchAll(supa, tableOrView, columns = "*", filters = []) {
  * }}
  */
 export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forcePresenceAgeH = null, overrideDeptMap = null }) {
+  // Gate the test hooks. Positive-gate on an env var rather than negative-gate on
+  // NODE_ENV: the workflow does not set NODE_ENV=production, so a NODE_ENV check
+  // would silently allow test hooks in production. KPI_DERIVE_TEST_HOOKS must be
+  // set explicitly - the nightly workflow does not set it, so test hooks cannot
+  // fire from production callers by accident. Fails loud, mentions the flag.
+  if ((forcePresenceAgeH != null || overrideDeptMap != null) && process.env.KPI_DERIVE_TEST_HOOKS !== "1") {
+    throw new Error(
+      "deriveLaborActuals: forcePresenceAgeH and overrideDeptMap are test-only hooks. " +
+      "Set KPI_DERIVE_TEST_HOOKS=1 to enable. Never set this env var in production - " +
+      "forcePresenceAgeH>54 flips every row to coverage_state=unknown and blanks the dashboard."
+    );
+  }
   const runStart = Date.now();
 
   // ── 1. Presence + walks ──────────────────────────────────────
