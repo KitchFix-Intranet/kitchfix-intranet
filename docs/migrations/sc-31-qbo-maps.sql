@@ -46,10 +46,37 @@
 -- Every service_id below was verified against live sc_services by
 -- SELECT on 2026-08-07 (probe /tmp/prb_recon.mjs; never hand-typed).
 -- QB item ids were confirmed by name via a live GET on the QBO
--- proxy same day. The `sc_config_changelog_entity_type_check`
--- constraint definition was VERIFIED LIVE by owner on 2026-08-10
--- during the first-apply rollback (was assumed to be permissive on
--- the first draft; the CHECK is scoped, hence this amendment).
+-- proxy same day.
+--
+-- sc_config_changelog schema VERIFIED LIVE (owner, 2026-08-10) after
+-- two consecutive first-apply rollbacks against assumptions about
+-- this same table:
+--   Round 1: `entity_type` CHECK constraint scoped to 6 values;
+--            our two new types rejected. Fixed by section 6 below.
+--   Round 2: `entity_id` is UUID, not TEXT; the seed INSERTs cast
+--            sm.service_id::text, so uuid = text at the guard.
+-- Per SR-23 the second miss means the approach was wrong, not the
+-- line. This amendment verifies EVERY changelog column reference
+-- against the live column dump. Live shape (2026-08-10):
+--   id             uuid            NOT NULL   (has DEFAULT; unset by us)
+--   account_key    text            NOT NULL   (text literal / column)
+--   entity_type    text            NOT NULL   (text literal; CHECK swap covers)
+--   entity_id      uuid            NULL       (NULL for account_map,
+--                                              service_id uuid for service_map)
+--   entity_label   text            NULL       (text - account_key /
+--                                              service_name)
+--   change_type    text            NOT NULL   ('create' literal)
+--   old_value      jsonb           NULL       (NULL for seeds)
+--   new_value      jsonb           NULL       (jsonb_build_object)
+--   effective_date date            NULL       (CURRENT_DATE)
+--   reason         text            NOT NULL   ('sc-31 seed: ...' literal)
+--   requested_by   text            NULL       (not set; defaults NULL)
+--   changed_by     text            NOT NULL   ('sc-31-seed' literal)
+--   changed_at     timestamptz     NOT NULL   (has DEFAULT; unset by us)
+-- Every reference below now matches this dump exactly. If a third
+-- rollback ever appears against this table, ask what other
+-- structural assumption was carried unchecked - do not fix the
+-- individual line.
 --
 -- ─── UNMAPPED SC services (report only, not seeded) ──────────────
 --   TXR - AZ - Minor League / Extra Protein - Beef/Seafood     (f48beec1-2845-4b4e-a364-ff098ffcb0e9, is_flat_fee)
@@ -274,7 +301,7 @@ INSERT INTO sc_config_changelog
 SELECT
   sm.account_key,
   'qbo_service_map',
-  sm.service_id::text,
+  sm.service_id,                         -- uuid -> uuid (entity_id is uuid, verified live 2026-08-10)
   s.service_name,
   'create',
   NULL,
@@ -294,7 +321,7 @@ WHERE sm.account_key IN ('TXR - AZ', 'CIN - AZ')
   AND NOT EXISTS (
     SELECT 1 FROM sc_config_changelog c
     WHERE c.entity_type = 'qbo_service_map'
-      AND c.entity_id   = sm.service_id::text
+      AND c.entity_id   = sm.service_id  -- uuid = uuid (was ::text; owner verified live 2026-08-10)
       AND c.reason LIKE 'sc-31 seed:%'
   );
 
