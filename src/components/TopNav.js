@@ -74,11 +74,25 @@ people: (
   ),
 };
 
+const kpiIcon = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="20" x2="12" y2="10" />
+    <line x1="18" y1="20" x2="18" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="16" />
+  </svg>
+);
+
 const navLinks = [
   { href: '/',                 label: 'Home',      icon: icons.home      },
   { href: '/people',           label: 'People',    icon: icons.people    },
   { href: '/ops',              label: 'Ops Hub',   icon: icons.ops       },
   { href: '/service-calendar', label: 'Service',   icon: icons.calendar  },
+  // KPI is admin-gated at the server (OPS_LEADERSHIP_EMAILS) but visible
+  // to everyone in the nav per the 2026-08-10 ruling; non-allowlisted
+  // users get a Coming Soon screen. Routes /kpi/labor to the labor
+  // section by default; the Overview tab is a placeholder pending
+  // spec §13.4.
+  { href: '/kpi/labor',        label: 'KPI',       icon: kpiIcon         },
   { href: '/playbook',         label: 'Playbook',  icon: icons.playbook  },
   // Train 3 A1: Chat's assumption - Sous sits between Playbook and Directory.
   // Kevin to strike or approve. Rationale: adjacent to Playbook because both
