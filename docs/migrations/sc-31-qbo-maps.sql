@@ -25,16 +25,31 @@
 --      + cadence + split reference.
 --   2. `sc_qbo_service_map` - SC service_id -> QB item + aggregate
 --      group + invoice slot + tax override.
---   3. Seed rows for the two pilot accounts (TXR - AZ + CIN - AZ),
+--   3. `sc_config_changelog_entity_type_check` swap - adds the two
+--      new entity types ('qbo_account_map', 'qbo_service_map') to
+--      the existing CHECK constraint. First-run of sc-31 rolled
+--      back cleanly because the seed changelog INSERTs failed the
+--      original constraint (owner probed live 2026-08-10):
+--          CHECK ((entity_type = ANY (ARRAY['price'::text,
+--            'service'::text, 'group'::text, 'fee'::text,
+--            'fun_money'::text, 'labor_ratio'::text])))
+--      New CHECK is the union: the same 6 values plus our 2.
+--      Idempotent (DROP IF EXISTS + re-add). Runs BEFORE the
+--      changelog INSERTs in the same transaction so the seed rows
+--      pass the new constraint on first apply.
+--   4. Seed rows for the two pilot accounts (TXR - AZ + CIN - AZ),
 --      each with a paired `sc_config_changelog` row per the C-1
 --      lesson (every seed row that touches billing writes a
 --      changelog entry; no bypass paths).
---   4. GRANTs mirroring sc-22 / sc-30.
+--   5. GRANTs mirroring sc-22 / sc-30.
 --
 -- Every service_id below was verified against live sc_services by
 -- SELECT on 2026-08-07 (probe /tmp/prb_recon.mjs; never hand-typed).
 -- QB item ids were confirmed by name via a live GET on the QBO
--- proxy same day.
+-- proxy same day. The `sc_config_changelog_entity_type_check`
+-- constraint definition was VERIFIED LIVE by owner on 2026-08-10
+-- during the first-apply rollback (was assumed to be permissive on
+-- the first draft; the CHECK is scoped, hence this amendment).
 --
 -- ─── UNMAPPED SC services (report only, not seeded) ──────────────
 --   TXR - AZ - Minor League / Extra Protein - Beef/Seafood     (f48beec1-2845-4b4e-a364-ff098ffcb0e9, is_flat_fee)
@@ -184,7 +199,42 @@ VALUES
   ('c667d4e5-db72-4e37-9da8-06342881e76f', 'CIN - AZ',  '3327', 'REDS Rehab - Meal Service',                   NULL,            'rehab', NULL, 'plain_name')
 ON CONFLICT (service_id) DO NOTHING;
 
--- ─── 6. Changelog rows for every seeded row (C-1 lesson) ───────────
+-- ─── 6. sc_config_changelog_entity_type_check swap ─────────────────
+--
+-- The existing CHECK on `sc_config_changelog.entity_type` scopes
+-- allowed values to a fixed set. First-apply of sc-31 rolled back
+-- cleanly on 2026-08-10 because the seed changelog INSERTs below
+-- carry two NEW entity types ('qbo_account_map', 'qbo_service_map')
+-- that the CHECK rejected. Owner ran the live definition:
+--
+--   CHECK ((entity_type = ANY (ARRAY['price'::text, 'service'::text,
+--     'group'::text, 'fee'::text, 'fun_money'::text,
+--     'labor_ratio'::text])))
+--
+-- Six values. Ours are two new ones. Swap = drop + re-add with the
+-- full 8-value list. IF EXISTS on the drop keeps re-apply safe.
+-- The re-add is unconditional so the constraint name always points
+-- at the same definition after the migration lands.
+--
+-- Runs BEFORE the seed changelog INSERTs (same transaction), so a
+-- fresh apply sees the new CHECK when the INSERTs fire.
+ALTER TABLE sc_config_changelog
+  DROP CONSTRAINT IF EXISTS sc_config_changelog_entity_type_check;
+
+ALTER TABLE sc_config_changelog
+  ADD CONSTRAINT sc_config_changelog_entity_type_check
+  CHECK (entity_type IN (
+    'price',
+    'service',
+    'group',
+    'fee',
+    'fun_money',
+    'labor_ratio',
+    'qbo_account_map',
+    'qbo_service_map'
+  ));
+
+-- ─── 7. Changelog rows for every seeded row (C-1 lesson) ───────────
 --
 -- The C-1 finding: CIN - OH fee escalation was applied to
 -- `sc_fee_schedule` but NOT recorded in `sc_config_changelog`. The
@@ -248,7 +298,7 @@ WHERE sm.account_key IN ('TXR - AZ', 'CIN - AZ')
       AND c.reason LIKE 'sc-31 seed:%'
   );
 
--- ─── 7. GRANTs (sc-22 / sc-30 pattern) ─────────────────────────────
+-- ─── 8. GRANTs (sc-22 / sc-30 pattern) ─────────────────────────────
 GRANT SELECT, INSERT, UPDATE ON sc_qbo_account_map TO service_role;
 GRANT SELECT, INSERT, UPDATE ON sc_qbo_service_map TO service_role;
 GRANT REFERENCES, TRIGGER    ON sc_qbo_account_map TO anon, authenticated;
@@ -314,3 +364,20 @@ COMMIT;
 -- WHERE aggregate_group IS NOT NULL AND active = true
 -- GROUP BY account_key, aggregate_group
 -- ORDER BY account_key, aggregate_group;
+
+
+-- V6. sc_config_changelog_entity_type_check now permits our 2 new
+--     entity types + the pre-existing 6 (union = 8 values). This is
+--     the amendment sc-31 landed after the first-apply rollback on
+--     2026-08-10.
+--     Expected pg_get_constraintdef output (exact whitespace may vary):
+--       CHECK ((entity_type = ANY (ARRAY['price'::text,
+--         'service'::text, 'group'::text, 'fee'::text,
+--         'fun_money'::text, 'labor_ratio'::text,
+--         'qbo_account_map'::text, 'qbo_service_map'::text])))
+--
+-- SELECT pg_get_constraintdef(c.oid) AS definition
+-- FROM pg_constraint c
+-- JOIN pg_class t ON t.oid = c.conrelid
+-- WHERE t.relname = 'sc_config_changelog'
+--   AND c.conname = 'sc_config_changelog_entity_type_check';
