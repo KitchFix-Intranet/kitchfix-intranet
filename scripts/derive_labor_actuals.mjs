@@ -93,6 +93,12 @@ console.log(`presence-age gate: pay_segments walk age=${result.stats.presenceAge
 console.log(`  isStalePresence=${result.stats.isStalePresence} (threshold: >54h -> all rows coverage_state=unknown)`);
 console.log("");
 
+// Orphan metrics - two numbers, distinct meaning (D36)
+console.log(`orphan metrics:`);
+console.log(`  raw_minus_presence:     ${result.stats.rawMinusPresence}  (raw observations not in presence; mostly rename-replaced retirements, NOT lost labor)`);
+console.log(`  orphaned_labor_facts:   ${result.stats.orphanedLaborFacts}  (D36 signal: labor facts with ZERO live members - actual coverage loss)`);
+console.log("");
+
 // Derive duration
 console.log(`derive duration: ${result.stats.durationSec.toFixed(2)}s`);
 if (result.stats.durationSec > MAX_DURATION_SEC) {

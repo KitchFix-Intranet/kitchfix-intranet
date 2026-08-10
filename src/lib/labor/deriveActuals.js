@@ -285,13 +285,7 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   }
 
   // ── 7. Bucket accumulator ────────────────────────────────────
-  const buckets = new Map();           // key -> bucket
-  function bkey(a, w, wk, ln) { return `${a}|${w}|${wk}|${ln}`; }
-  function getBucket(attr, weekInfo) {
-    const k = bkey(attr.account_key, "PLACEHOLDER", weekInfo.week_label, attr.line_code);
-    // NOTE: worker_id filled per-row below
-    return k;
-  }
+  // (helper stubs no longer needed; getFullBucket below is the real accumulator)
 
   const unattributedByKey = new Map();   // (reason|dept|worker) -> aggregated
   function bumpUnattr(reason, deptId, workerId, seg) {
@@ -325,7 +319,13 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   log("processing pay-segments...");
   const bucketRows = new Map();  // full bucket key including worker -> row
   function getFullBucket(accountKey, workerId, weekInfo, lineCode) {
-    const k = `${accountKey}|${workerId}|${weekInfo.week_label}|${lineCode}`;
+    // KEY ON week_start (a real date), NOT week_label. week_label is
+    // period-relative ("Week 4" exists in every period), which merged
+    // 4+ real weeks into one row per worker on the initial run
+    // (2026-08-08 nightly, 644 rows total, one CIN-OH worker at 152.65
+    // hours_regular against a paystub of 27.40). Fixed on both sides:
+    // this JS bucket key + the schema PK in kpi-8bc migration.
+    const k = `${accountKey}|${workerId}|${weekInfo.week_start}|${lineCode}`;
     let b = bucketRows.get(k);
     if (!b) {
       b = {
@@ -472,21 +472,100 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
     perAccount.get(b.account_key).push(row);
   }
 
-  // ── 11. Orphan count (segments with raw observations but no presence)
-  // Already computed above as paySegsRaw.length - paySegs.length. Break
-  // down by account so a nightly log can pinpoint which account is losing
-  // coverage. Orphans that don't attribute to an account (unknown worker,
-  // unmapped dept) also count.
-  const orphansByAccount = new Map();
-  let orphanTotal = 0;
-  for (const s of paySegsRaw) {
-    if (presencePaySegs.has(s.rippling_id)) continue;
-    orphanTotal++;
-    const wid = s.payload?.owner_role?.id;
-    const attr = attribute(wid);
-    const ak = (attr && !attr.reason) ? attr.account_key : "(unattributable)";
-    orphansByAccount.set(ak, (orphansByAccount.get(ak) || 0) + 1);
+  // ── 10b. Sanity asserts (fail loud rather than write bad grain) ──
+  // Cheap invariants that make a grain bug impossible to ship quietly.
+  // The initial derive (2026-08-08 nightly) wrote 152.65 hours_regular
+  // for a worker whose paystub said 27.40 because the bucket key merged
+  // four "Week 4"s across periods.
+  //
+  // Thresholds are set to catch GRAIN COLLAPSE, not rounding. A 2-week
+  // collapse produces at least ~60 regular hours (2 * 40 - a bit for OT
+  // spill); a 4-week collapse produced 152.65 in the shipped defect. A
+  // real single-week edge case can nudge hours_regular to 40.01-42 from
+  // Rippling's threshold-classification rounding when segments sum to
+  // just over 40. Setting the assert at 48 keeps clear signal for grain
+  // bugs and rejects rounding noise.
+  //
+  // Assert 1 - hours_regular > 48: 20% headroom over the 40 legal cap.
+  //   A real week cannot exceed 40 by 8+ hours; a collapsed week
+  //   comfortably will.
+  //
+  // Assert 2 - total hours > 168: a real week has 168 hours. A single
+  //   worker-week row above that is physically impossible.
+  //
+  // Assert 3 - |amount - sum(dollar buckets)| > $0.05: the four dollar
+  //   buckets must partition amount. Tolerance $0.05 accommodates
+  //   double-rounding when segments have half-cent amounts summed then
+  //   rounded twice; anything above that indicates a computation bug,
+  //   not float noise.
+  //
+  // Any breach dumps the offending rows and throws. Nightly workflow
+  // exits non-zero and no writes happen.
+  const violations = [];
+  for (const [ak, rows] of perAccount.entries()) {
+    for (const row of rows) {
+      if (row.hours_regular > 48) {
+        violations.push({ check: "hours_regular_over_48", account: ak, row });
+      }
+      const totalHours = row.hours_regular + row.hours_overtime + row.hours_double_time + row.hours_premium_other + row.hours_without_dollars;
+      if (totalHours > 168) {
+        violations.push({ check: "total_hours_over_168", account: ak, row, totalHours });
+      }
+      const dollarSum = row.dollars_regular + row.dollars_overtime + row.dollars_double_time + row.dollars_premium_other;
+      if (Math.abs(row.amount - dollarSum) > 0.05) {
+        violations.push({ check: "amount_ne_dollar_bucket_sum", account: ak, row, amount: row.amount, sum: dollarSum });
+      }
+    }
   }
+  if (violations.length > 0) {
+    log(`SANITY-ASSERT FAILURES (${violations.length}):`);
+    for (const v of violations.slice(0, 10)) {
+      log(`  ${v.check} ${v.account} worker=${v.row.worker_id} week_start=${v.row.week_start} line=${v.row.line_code} hr_reg=${v.row.hours_regular} total=${v.totalHours ?? "-"} amount=${v.amount ?? "-"} sum=${v.sum ?? "-"}`);
+    }
+    throw new Error(`deriveLaborActuals: ${violations.length} sanity-assert failures. Refusing to write. First 10 above.`);
+  }
+
+  // ── 11. Orphan metrics - TWO numbers, both reported ─────────
+  //
+  //   raw_minus_presence = raw pay-segment rows not in presence.
+  //     Under the observed rename-replaces-money pattern, most of these
+  //     have live replacements under new pay-segment ids - they are
+  //     retired OBSERVATIONS, not lost labor. This number is high by
+  //     design and does not measure loss.
+  //
+  //   orphaned_labor_facts = D36 signal. Group all raw pay-segments by
+  //     (time_entry.id, merged_earning_type_name) - the labor-fact
+  //     identity per R3 B2. Count groups where ZERO members are in
+  //     presence. This measures actual labor facts that used to exist
+  //     and no longer have a live observation. R1 B2 measured this as
+  //     zero under a proxy; this is the first chance to count it for
+  //     real. A non-zero value here IS a finding.
+  //
+  // The nightly log should carry orphaned_labor_facts as "orphans".
+  // raw_minus_presence is a diagnostic side-note, not a headline.
+  const orphansByAccount = new Map();  // by-account, for orphaned_labor_facts
+  const factGroups = new Map();   // key -> { inPresence, notInPresence, aWorkerId }
+  for (const s of paySegsRaw) {
+    const teid = s.payload?.time_entry?.id;
+    const et = s.payload?.merged_earning_type_name || "(null)";
+    const key = `${teid || "(no-teid)"}|${et}`;
+    const cur = factGroups.get(key) || { inPresence: 0, notInPresence: 0, aWorkerId: null };
+    if (presencePaySegs.has(s.rippling_id)) cur.inPresence++;
+    else cur.notInPresence++;
+    if (!cur.aWorkerId) cur.aWorkerId = s.payload?.owner_role?.id;
+    factGroups.set(key, cur);
+  }
+  let orphanedLaborFacts = 0;
+  for (const [, v] of factGroups) {
+    if (v.inPresence === 0 && v.notInPresence > 0) {
+      orphanedLaborFacts++;
+      const attr = attribute(v.aWorkerId);
+      const ak = (attr && !attr.reason) ? attr.account_key : "(unattributable)";
+      orphansByAccount.set(ak, (orphansByAccount.get(ak) || 0) + 1);
+    }
+  }
+  const rawMinusPresence = paySegsRaw.length - paySegs.length;
+  log(`orphan metrics: raw_minus_presence=${rawMinusPresence} (retired observations, mostly rename-replaced) orphaned_labor_facts=${orphanedLaborFacts} (D36 signal - labor facts with zero live members)`);
 
   // ── 12. Build outputs ──────────────────────────────────────
   const accountResults = [];
@@ -526,7 +605,8 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
       isStalePresence,
       paySegRaw: paySegsRaw.length,
       paySegInPresence: paySegs.length,
-      orphanTotal,
+      rawMinusPresence,               // diagnostic, not the D36 signal
+      orphanedLaborFacts,             // the D36 signal (should be near-zero)
       orphansByAccount: Object.fromEntries(orphansByAccount),
       unmappedCount: unmappedRows.length,
       unattributedGroups: unattributed.length,
