@@ -66,6 +66,15 @@ const HASH_EXCLUDE_TOP = {
   // observation. pay_period carries display_value which the universal
   // strip removes; pay_period.id stays.
   time_entry_zo: ["updated_at", "mongo_updated_at", "system_updated_at", "__meta"],
+  // users: parallel to workers on this endpoint. Same shape reasoning
+  // as workers - updated_at is the volatile marker and __meta is the
+  // scope-annotation envelope. Photos are top-level arrays of objects
+  // carrying signed-URL `image` fields; the universal nested-strip
+  // catches those without excluding the whole `photos` array (so a
+  // real photo id change still produces a new observation). Measured
+  // baseline for the first nightly is 1,126 users (parity with the
+  // workers count, per the C5.1 diagnostic).
+  users: ["updated_at", "__meta"],
 };
 
 // ─── Fetch ───────────────────────────────────────────────────────────

@@ -520,10 +520,16 @@ export default function KpiLaborPage() {
                 </div>
               )}
 
-              {/* C3.1 name-availability banner */}
-              {!isSalaried && loadState === "ok" && data?.name_availability && data.name_availability.total > 0 && !data.name_availability.has_names && (
+              {/* C5.5 name-availability banner. Silent when all workers
+                  resolve. States the actual missing count when some do
+                  not - implying-none-do is misleading once /users lands. */}
+              {!isSalaried && loadState === "ok" && data?.name_availability && data.name_availability.total > 0 && data.name_availability.resolved < data.name_availability.total && (
                 <div className="kpi-note-info" role="status">
-                  Names unavailable: the ingested Rippling workers payload does not carry a name field for any of the {data.name_availability.total} workers in scope. Displaying employee numbers and titles only.
+                  {data.name_availability.resolved === 0
+                    ? data.name_availability.reason === "users_table_empty_or_unreachable"
+                      ? <>Names unavailable: the users walk has not populated <code>rippling_raw_users</code> for the {data.name_availability.total} workers in scope. Falling back to numbers and titles. This resolves on the next successful users walk.</>
+                      : <>Names unavailable: none of the {data.name_availability.total} workers in scope have a canonical name field. Falling back to numbers and titles.</>
+                    : <>{data.name_availability.total - data.name_availability.resolved} of {data.name_availability.total} workers do not resolve to a canonical name and render as numbers.</>}
                 </div>
               )}
 

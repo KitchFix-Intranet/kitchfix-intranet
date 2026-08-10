@@ -353,10 +353,13 @@ async function runWalkWithPresence(walkArgs) {
 // on both success and caught failure paths. SIGINT/SIGTERM handlers
 // registered above cover the killed-by-signal path.
 
-let teResult, psResult, wkResult, zoResult;
+let teResult, psResult, wkResult, zoResult, usResult;
 try {
-  // One kind failing must not prevent the other three from writing
-  // their presence. Each runWalkWithPresence is independent.
+  // One kind failing must not prevent the others from writing their
+  // presence. Each runWalkWithPresence is independent - it returns a
+  // result object rather than throwing, so a walk failure surfaces in
+  // the summary and exit code without short-circuiting the remaining
+  // walks. Gate 2 property, preserved by the fifth walk.
   teResult = await runWalkWithPresence({
     endpoint:    "time-entries",
     table:       "rippling_raw_time_entries",
@@ -384,6 +387,18 @@ try {
     latestView:  "rippling_raw_time_entry_zo_latest",
     kind:        "time_entry_zo",
   });
+
+  // C5: fifth walk. /users carries the name fields that /workers
+  // omits by design (C5.1 diagnostic). PII-dense endpoint - the
+  // rippling_raw_users table is service_role-only, and no route
+  // outside OPS_LEADERSHIP_EMAILS reads it. Names are NEVER logged;
+  // this walk reports counts only.
+  usResult = await runWalkWithPresence({
+    endpoint:    "users",
+    table:       "rippling_raw_users",
+    latestView:  "rippling_raw_users_latest",
+    kind:        "users",
+  });
 } finally {
   await releaseLock();
 }
@@ -407,7 +422,8 @@ console.log("  " + fmtResult("time_entries",  teResult));
 console.log("  " + fmtResult("pay_segments",  psResult));
 console.log("  " + fmtResult("workers",       wkResult));
 console.log("  " + fmtResult("time_entry_zo", zoResult));
+console.log("  " + fmtResult("users",         usResult));
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
-if (!teResult.ok || !psResult.ok || !wkResult.ok || !zoResult.ok) process.exit(2);
+if (!teResult.ok || !psResult.ok || !wkResult.ok || !zoResult.ok || !usResult.ok) process.exit(2);
 process.exit(0);
