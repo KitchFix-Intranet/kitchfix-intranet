@@ -59,6 +59,23 @@ export async function GET(request) {
 
   const supa = getServiceClient();
 
+  // Fetch freshness once - global signal, not per-account. Salaried-only
+  // accounts still get the real freshness value so their chip renders
+  // neutral (per C1.3), not the red "no data" fallback.
+  const psWalkGlobal = await supa
+    .from("rippling_walks")
+    .select("completed_at, ids_seen")
+    .eq("kind", "pay_segments")
+    .eq("status", "success")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const freshness = {
+    last_walk_at: psWalkGlobal.data?.completed_at || null,
+    last_walk_ids_seen: psWalkGlobal.data?.ids_seen || null,
+    last_derive_at: null,
+  };
+
   // ── Salaried-only account: return an explanatory state, not empty data ──
   if (D26_SALARIED_ONLY.has(account)) {
     return NextResponse.json({
@@ -69,7 +86,7 @@ export async function GET(request) {
       actuals: [],
       unattributed: [],
       workers: {},
-      derive_freshness: null,
+      derive_freshness: freshness,
       unmapped_names: [],
     });
   }
@@ -117,18 +134,10 @@ export async function GET(request) {
     }
   }
 
-  // ── freshness: last successful pay_segments walk ──
-  const psWalk = await supa
-    .from("rippling_walks")
-    .select("completed_at, ids_seen")
-    .eq("kind", "pay_segments")
-    .eq("status", "success")
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Reuse the earlier freshness fetch; add last_derive_at from the results.
   const derive_freshness = {
-    last_walk_at: psWalk.data?.completed_at || null,
-    last_walk_ids_seen: psWalk.data?.ids_seen || null,
+    last_walk_at: freshness.last_walk_at,
+    last_walk_ids_seen: freshness.last_walk_ids_seen,
     last_derive_at: actuals.data[0]?.derived_at || null,
   };
 

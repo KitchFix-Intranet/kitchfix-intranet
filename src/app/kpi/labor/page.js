@@ -116,14 +116,24 @@ export default function KpiLaborPage() {
   const [errorMsg, setErrorMsg] = useState(null);
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
 
+  // Density gate (C1.8). Sets data-density="compact" on BOTH body and
+  // the kpi-app wrapper so `[data-density="compact"]` in tokens.css:223
+  // takes effect regardless of whether another module has scoped tokens
+  // to a specific selector. Below 1024px the attribute is removed;
+  // Comfortable is the base per spec §4.
+  const [isCompact, setIsCompact] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(min-width: 1024px)");
     const apply = () => {
       const body = document.body;
-      if (!body) return;
-      if (mq.matches) body.setAttribute("data-density", "compact");
-      else body.removeAttribute("data-density");
+      if (mq.matches) {
+        body?.setAttribute("data-density", "compact");
+        setIsCompact(true);
+      } else {
+        body?.removeAttribute("data-density");
+        setIsCompact(false);
+      }
     };
     apply();
     mq.addEventListener("change", apply);
@@ -194,12 +204,30 @@ export default function KpiLaborPage() {
       w.worker_rows.push(r);
       w.coverage_states.add(r.coverage_state);
     }
-    // Worst-of coverage: unknown > partial > hours_only > complete
+    // Week-level coverage precedence (C1.1 P0 fix). The previous "worst-of"
+    // logic collapsed mixed weeks to hours_only, hiding covered workers'
+    // dollars behind §8.2's spanning-cell collapse. Correct rule:
+    //   uniform -> that state (may collapse if unknown or hours_only)
+    //   mixed   -> partial (never collapses; renders the numbers)
+    // A mixed week IS partial by definition. Only uniform weeks collapse.
     for (const w of byWeek.values()) {
-      if (w.coverage_states.has("unknown")) w.coverage_state = "unknown";
-      else if (w.coverage_states.has("partial")) w.coverage_state = "partial";
-      else if (w.coverage_states.has("hours_only")) w.coverage_state = "hours_only";
-      else w.coverage_state = "complete";
+      const states = [...w.coverage_states];
+      if (states.length === 1) {
+        w.coverage_state = states[0];
+      } else {
+        w.coverage_state = "partial";
+      }
+      // Guard: a collapsed row (unknown or hours_only) must have amount = 0
+      // across every worker in it. If it does not, the collapse is wrong -
+      // render normally by demoting to partial and log. Prevents this bug
+      // class from silently shipping again (same shape as the derivation's
+      // hours_regular > 48 sanity assert).
+      if ((w.coverage_state === "unknown" || w.coverage_state === "hours_only") && w.amount > 0.01) {
+        if (typeof console !== "undefined") {
+          console.warn(`kpi-labor: collapsed row ${w.week_start} has amount=$${w.amount.toFixed(2)}; demoting to partial`);
+        }
+        w.coverage_state = "partial";
+      }
     }
     const sortedWeeks = [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
     const groups = [];
@@ -289,8 +317,34 @@ export default function KpiLaborPage() {
     );
   }
 
+  const isSalaried = data?.account_state === "salaried_only";
+
+  // C1.7 grand total (across all periods in view)
+  const grand = useMemo(() => {
+    if (!grouped.length) return null;
+    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0 };
+    for (const period of grouped) {
+      g.hours_regular       += period.subtotal.hours_regular;
+      g.hours_overtime      += period.subtotal.hours_overtime;
+      g.hours_double_time   += period.subtotal.hours_double_time;
+      g.amount              += period.subtotal.amount;
+      g.hours_without_dollars += period.subtotal.hours_without_dollars;
+    }
+    return g;
+  }, [grouped]);
+
+  // C1.6 pre-April coverage explanation - which periods are entirely hours_only?
+  // Add the explanation once per such period header.
+  const periodsIsAllHoursOnly = useMemo(() => {
+    const set = new Set();
+    for (const g of grouped) {
+      if (g.weeks.every(w => w.coverage_state === "hours_only")) set.add(g.key);
+    }
+    return set;
+  }, [grouped]);
+
   return (
-    <div className="kpi-app">
+    <div className="kpi-app" data-density={isCompact ? "compact" : undefined}>
       <div className="kpi-wrap">
         {/* Module command bar */}
         <div className="kpi-cmd" role="banner">
@@ -306,8 +360,10 @@ export default function KpiLaborPage() {
             {ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
           <div className="kpi-cmd-div" aria-hidden="true" />
-          <div className="kpi-cmd-ctx">
-            <span>Range</span><b>{start}</b><span>→</span><b>{end}</b>
+          {/* C1.7: Range display is read-only in this PR (PR C2 makes it a
+              picker). Neutral typography so it does not look interactive. */}
+          <div className="kpi-cmd-ctx" aria-label={`Date range ${start} through ${end}`}>
+            <span>Range</span><span className="kpi-cmd-range">{start}</span><span aria-hidden="true">→</span><span className="kpi-cmd-range">{end}</span>
           </div>
           <div className="kpi-cmd-r">
             <span className="kpi-cmd-chip" title={freshness?.last_walk_at || "no successful walk"}>
@@ -345,21 +401,30 @@ export default function KpiLaborPage() {
             </div>
           ) : tab === "labor" ? (
             <div>
-              {/* Metric cards */}
+              {/* Metric cards.
+                  C1.2: salaried-only accounts render "—", not "0.00"
+                       (zero is a claim; missing is not).
+                  C1.4: former "Regular hours" card was a label-value
+                       contradiction. Now shows hours_toward_ot_threshold
+                       per spec §6, computed as hours_regular +
+                       hours_double_time. Caption states the derivation.
+                  C1.7: FY-to-date lives in the rail (kept there);
+                       freeing this slot for hours_toward_ot_threshold
+                       to make the pair (threshold, OT) actually useful. */}
               <div className="kpi-metrics">
                 <div className="kpi-metric">
-                  <div className="kpi-metric-label">FY-to-date labor</div>
-                  <div className="kpi-metric-value">{fmt$(totals.amount)}</div>
-                  <div className="kpi-metric-sub">across {data?.actuals?.length || 0} worker-weeks</div>
+                  <div className="kpi-metric-label">Worker-weeks</div>
+                  <div className="kpi-metric-value">{isSalaried ? "—" : (data?.actuals?.length || 0)}</div>
+                  <div className="kpi-metric-sub">rows in range</div>
                 </div>
                 <div className="kpi-metric">
-                  <div className="kpi-metric-label">Regular hours</div>
-                  <div className="kpi-metric-value">{fmtHrs(totals.hours_regular)}</div>
-                  <div className="kpi-metric-sub">40-hr threshold: reg + holiday</div>
+                  <div className="kpi-metric-label">Hours toward OT threshold</div>
+                  <div className="kpi-metric-value">{isSalaried ? "—" : fmtHrs(totals.hours_regular + totals.hours_double_time)}</div>
+                  <div className="kpi-metric-sub">reg + holiday (per week: cap 40 before OT triggers)</div>
                 </div>
                 <div className="kpi-metric">
                   <div className="kpi-metric-label">Overtime hours</div>
-                  <div className="kpi-metric-value">{fmtHrs(totals.hours_overtime)}</div>
+                  <div className="kpi-metric-value">{isSalaried ? "—" : fmtHrs(totals.hours_overtime)}</div>
                   <div className="kpi-metric-sub">1.5x rate</div>
                 </div>
                 <div className="kpi-metric kpi-metric-soon">
@@ -390,23 +455,36 @@ export default function KpiLaborPage() {
                 </div>
               ) : (
                 <div className="kpi-table-wrap">
+                  {/* C1.5: explicit role attributes preserve real table semantics
+                      even where mobile CSS uses display:block on table elements
+                      (which strips implicit ARIA table roles). Every level
+                      keeps its role - screen readers announce a real table
+                      regardless of viewport. */}
                   <table className="kpi-table" role="table" aria-label={`Labor for ${account}`}>
-                    <thead>
-                      <tr>
-                        <th scope="col">Week</th>
-                        <th scope="col">Coverage</th>
-                        <th scope="col" className="kpi-num">Regular</th>
-                        <th scope="col" className="kpi-num">OT 1.5x</th>
-                        <th scope="col" className="kpi-num">Holiday 2x</th>
-                        <th scope="col" className="kpi-num kpi-col-nodol">No $</th>
-                        <th scope="col" className="kpi-num">Dollars</th>
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th scope="col" role="columnheader">Week</th>
+                        <th scope="col" role="columnheader">Coverage</th>
+                        <th scope="col" role="columnheader" className="kpi-num">Regular</th>
+                        <th scope="col" role="columnheader" className="kpi-num">OT 1.5x</th>
+                        <th scope="col" role="columnheader" className="kpi-num">Holiday 2x</th>
+                        <th scope="col" role="columnheader" className="kpi-num kpi-col-nodol">No $</th>
+                        <th scope="col" role="columnheader" className="kpi-num">Dollars</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody role="rowgroup">
                       {grouped.map((g) => (
                         <Fragment key={g.key}>
-                          <tr className="kpi-period-header">
-                            <td colSpan={7}>FY{g.fiscal_year || "?"} · Period {g.period_no || "?"}</td>
+                          <tr className="kpi-period-header" role="row">
+                            <td colSpan={7} role="cell">
+                              FY{g.fiscal_year || "?"} · Period {g.period_no || "?"}
+                              {/* C1.6: explain the pre-2026-04-20 amber in the flow, once per period. */}
+                              {periodsIsAllHoursOnly.has(g.key) && (
+                                <span className="kpi-period-note">
+                                  Dollars begin at the 2026-04-20 pay run (D35). Earlier periods are hours-only by design; the P&L upload is authoritative for these dollars.
+                                </span>
+                              )}
+                            </td>
                           </tr>
                           {g.weeks.map((w) => {
                             const isUnknown = w.coverage_state === "unknown";
@@ -420,7 +498,7 @@ export default function KpiLaborPage() {
                             const isExpanded = expandedWeeks.has(w.week_start);
                             return (
                               <Fragment key={`w-${w.week_start}`}>
-                                <tr className={`kpi-row ${rowClass}`}>
+                                <tr className={`kpi-row ${rowClass}`} role="row">
                                   <td data-label="Week">
                                     <button
                                       type="button"
@@ -480,16 +558,27 @@ export default function KpiLaborPage() {
                               </Fragment>
                             );
                           })}
-                          <tr className="kpi-period-subtotal">
-                            <td data-label="Subtotal" colSpan={2}>Period {g.period_no} subtotal</td>
-                            <td data-label="Regular"    className="kpi-num">{fmtHrs(g.subtotal.hours_regular)}</td>
-                            <td data-label="OT 1.5x"    className="kpi-num">{fmtHrs(g.subtotal.hours_overtime)}</td>
-                            <td data-label="Holiday 2x" className="kpi-num">{fmtHrs(g.subtotal.hours_double_time)}</td>
-                            <td data-label="No dollars" className="kpi-num kpi-col-nodol">{g.subtotal.hours_without_dollars > 0 ? fmtHrs(g.subtotal.hours_without_dollars) : "—"}</td>
-                            <td data-label="Dollars"    className="kpi-num">{fmt$(g.subtotal.amount)}</td>
+                          <tr className="kpi-period-subtotal" role="row">
+                            <td data-label="Subtotal" colSpan={2} role="cell">Period {g.period_no} subtotal</td>
+                            <td data-label="Regular"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_regular)}</td>
+                            <td data-label="OT 1.5x"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_overtime)}</td>
+                            <td data-label="Holiday 2x" className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_double_time)}</td>
+                            <td data-label="No dollars" className="kpi-num kpi-col-nodol" role="cell">{g.subtotal.hours_without_dollars > 0 ? fmtHrs(g.subtotal.hours_without_dollars) : "—"}</td>
+                            <td data-label="Dollars"    className="kpi-num" role="cell">{fmt$(g.subtotal.amount)}</td>
                           </tr>
                         </Fragment>
                       ))}
+                      {/* C1.7 grand total: visible rows tie to FY-to-date. */}
+                      {grand && (
+                        <tr className="kpi-grand-total" role="row">
+                          <td data-label="Grand total" colSpan={2} role="cell"><strong>Range total ({grouped.length} periods)</strong></td>
+                          <td data-label="Regular"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_regular)}</strong></td>
+                          <td data-label="OT 1.5x"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_overtime)}</strong></td>
+                          <td data-label="Holiday 2x" className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_double_time)}</strong></td>
+                          <td data-label="No dollars" className="kpi-num kpi-col-nodol" role="cell"><strong>{grand.hours_without_dollars > 0 ? fmtHrs(grand.hours_without_dollars) : "—"}</strong></td>
+                          <td data-label="Dollars"    className="kpi-num" role="cell"><strong>{fmt$(grand.amount)}</strong></td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -553,11 +642,12 @@ export default function KpiLaborPage() {
               </div>
 
               <div className="kpi-rail-card">
-                <div className="kpi-rail-title">Coverage (spec §8.4 merged legend)</div>
+                <div className="kpi-rail-title">Coverage (worker-weeks in range)</div>
                 <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.complete}</span><CoverageBadge state="complete" /><span className="kpi-cov-desc">every entry has dollars</span></div>
                 <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.partial}</span><CoverageBadge state="partial" /><span className="kpi-cov-desc">some entries lack dollars</span></div>
                 <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.hours_only}</span><CoverageBadge state="hours_only" /><span className="kpi-cov-desc">before 2026-04-20 floor (D35)</span></div>
                 <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.unknown}</span><CoverageBadge state="unknown" /><span className="kpi-cov-desc">no successful presence walk</span></div>
+                <div className="kpi-cov-note">Counts are labor_actuals rows (worker-weeks), not aggregated table rows on screen.</div>
               </div>
             </aside>
           )}
