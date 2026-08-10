@@ -4,17 +4,24 @@
 // KPI Dashboard shell + Labor section. Per-account, three navigation
 // layers (top nav in TopNav.js, module command bar here, in-page tabs).
 //
-// Access gate: OPS_LEADERSHIP_EMAILS (six-person leadership list per
-// D30, ruled 2026-08-10). The nav item is visible to everyone;
-// non-allowlisted users see the Coming Soon screen. Route-level
-// enforcement in /api/kpi/labor/route.js is independent - a client
-// gate is decoration, the server call is what matters.
+// Access gate: OPS_LEADERSHIP_EMAILS. Route-level enforcement in
+// /api/kpi/labor/route.js is authoritative; the client gate is decoration.
 //
-// URL convention (follows Service Calendar's ?account=X&month=Y):
-//   /kpi/labor?account=CIN+-+OH&tab=labor&start=2026-06-01&end=2026-08-31
+// URL convention:
+//   /kpi/labor?account=CIN+-+OH&tab=labor&start=YYYY-MM-DD&end=YYYY-MM-DD
 //
-// Only `labor` tab implemented in this PR. Overview + other tabs render
-// a placeholder + `soon` chip per spec §2 / §13.
+// PR C3 additions:
+//   - C3.2 date controls: From/To inputs + presets (this period, last
+//     period, last 4 weeks, last 13 weeks, FYTD). URL-addressable.
+//   - C3.3 worker multi-select: filters table, cards, rail, export
+//     together. "N of M workers" chip when filtered.
+//   - C3.4 report builder: opens the /api/kpi/labor/export route with
+//     current filter shape.
+//   - Redaction toggle: swaps names to numbers-only (session-scoped;
+//     persists via URL flag for shareability).
+//   - C3.1 names: use canonical `display_name` from server (may be null
+//     when Rippling's ingested payload lacks a name field, which is the
+//     current state). Never mangle emails. Fall back to `#N · Title`.
 
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { useSession } from "next-auth/react";
@@ -37,8 +44,8 @@ const TABS = [
   { key: "revenue",  label: "Revenue",  enabled: false },
   { key: "pnl",      label: "P&L",      enabled: false },
 ];
+const FY_START = "2025-12-29";
 
-// ── Formatters ─────────────────────────────────────────────────
 function fmt$(v) {
   if (v == null) return "—";
   return "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -63,11 +70,13 @@ function freshnessTint(hrs) {
   if (hrs < 54) return "kpi-chip-warm";
   return "kpi-chip-stale";
 }
+function addDaysISO(iso, days) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
-// ── Cell renderers respecting §5 empty-marker taxonomy ────────
-// "—" = bucket empty this week (not zero)
-// "0.00" = genuinely zero
-// "?" = unknown (no basis for a figure)
+// Empty-marker cell renderers (§5)
 function CellHours({ v, coverage_state, forceEmpty = false }) {
   if (coverage_state === "unknown") return <span aria-label="unknown">?</span>;
   if (forceEmpty || v == null) return <span aria-label="not applicable">—</span>;
@@ -79,7 +88,6 @@ function CellDollars({ v, coverage_state, forceEmpty = false }) {
   return <span className="kpi-num">{fmt$(v)}</span>;
 }
 
-// ── Coverage badge ─────────────────────────────────────────────
 function CoverageBadge({ state }) {
   const cfg = {
     complete:   { label: "Complete",   cls: "kpi-badge-complete",   symbol: "✓" },
@@ -95,7 +103,18 @@ function CoverageBadge({ state }) {
   );
 }
 
-// ── Main page ──────────────────────────────────────────────────
+// Display label for a worker respecting the redaction toggle.
+// Server hands back display_name=null when Rippling's payload lacks a
+// canonical name; falling back to `#N · Title` is honest.
+function workerLabel(meta, worker_id, redact) {
+  const num = meta?.number != null ? `#${meta.number}` : `#${String(worker_id).slice(0, 6)}`;
+  if (redact || !meta?.display_name) {
+    const title = meta?.title ? ` · ${meta.title}` : "";
+    return `${num}${title}`;
+  }
+  return `${meta.display_name} (${num})`;
+}
+
 export default function KpiLaborPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -104,36 +123,31 @@ export default function KpiLaborPage() {
   const email = session?.user?.email?.toLowerCase().trim() || "";
   const isAllowed = OPS_LEADERSHIP_EMAILS.includes(email);
 
-  // URL state
   const account = searchParams.get("account") || "CIN - OH";
   const tab = searchParams.get("tab") || "labor";
   const today = new Date().toISOString().slice(0, 10);
-  const start = searchParams.get("start") || "2025-12-29";
+  const start = searchParams.get("start") || FY_START;
   const end = searchParams.get("end") || today;
+  const redact = searchParams.get("redact") === "1";
+  const workersParam = (searchParams.get("workers") || "").trim();
+  const selectedWorkers = useMemo(
+    () => (workersParam ? new Set(workersParam.split(",").filter(Boolean)) : null),
+    [workersParam]
+  );
 
   const [data, setData] = useState(null);
   const [loadState, setLoadState] = useState("idle");
   const [errorMsg, setErrorMsg] = useState(null);
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
 
-  // Density gate (C1.8). Sets data-density="compact" on BOTH body and
-  // the kpi-app wrapper so `[data-density="compact"]` in tokens.css:223
-  // takes effect regardless of whether another module has scoped tokens
-  // to a specific selector. Below 1024px the attribute is removed;
-  // Comfortable is the base per spec §4.
   const [isCompact, setIsCompact] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(min-width: 1024px)");
     const apply = () => {
       const body = document.body;
-      if (mq.matches) {
-        body?.setAttribute("data-density", "compact");
-        setIsCompact(true);
-      } else {
-        body?.removeAttribute("data-density");
-        setIsCompact(false);
-      }
+      if (mq.matches) { body?.setAttribute("data-density", "compact"); setIsCompact(true); }
+      else            { body?.removeAttribute("data-density");         setIsCompact(false); }
     };
     apply();
     mq.addEventListener("change", apply);
@@ -154,16 +168,8 @@ export default function KpiLaborPage() {
         }
         return r.json();
       })
-      .then((d) => {
-        if (cancelled) return;
-        setData(d);
-        setLoadState("ok");
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setLoadState("error");
-        setErrorMsg(String(e.message || e).slice(0, 200));
-      });
+      .then((d) => { if (!cancelled) { setData(d); setLoadState("ok"); } })
+      .catch((e) => { if (!cancelled) { setLoadState("error"); setErrorMsg(String(e.message || e).slice(0, 200)); } });
     return () => { cancelled = true; };
   }, [status, isAllowed, account, start, end]);
 
@@ -173,11 +179,27 @@ export default function KpiLaborPage() {
     else p.set(key, value);
     router.push(`/kpi/labor?${p.toString()}`);
   };
+  const setParams = (patch) => {
+    const p = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "") p.delete(k);
+      else p.set(k, v);
+    }
+    router.push(`/kpi/labor?${p.toString()}`);
+  };
+
+  // C3.3 filter: applied to actuals BEFORE grouping so all derivatives
+  // (table, metrics, rail, grand total) tie to the selected worker set.
+  const filteredActuals = useMemo(() => {
+    if (!data?.actuals) return [];
+    if (!selectedWorkers || selectedWorkers.size === 0) return data.actuals;
+    return data.actuals.filter(r => selectedWorkers.has(r.worker_id));
+  }, [data, selectedWorkers]);
 
   const grouped = useMemo(() => {
-    if (!data?.actuals) return [];
+    if (!filteredActuals?.length) return [];
     const byWeek = new Map();
-    for (const r of data.actuals) {
+    for (const r of filteredActuals) {
       const wk = r.week_start;
       if (!byWeek.has(wk)) {
         byWeek.set(wk, {
@@ -204,24 +226,10 @@ export default function KpiLaborPage() {
       w.worker_rows.push(r);
       w.coverage_states.add(r.coverage_state);
     }
-    // Week-level coverage precedence (C1.1 P0 fix). The previous "worst-of"
-    // logic collapsed mixed weeks to hours_only, hiding covered workers'
-    // dollars behind §8.2's spanning-cell collapse. Correct rule:
-    //   uniform -> that state (may collapse if unknown or hours_only)
-    //   mixed   -> partial (never collapses; renders the numbers)
-    // A mixed week IS partial by definition. Only uniform weeks collapse.
     for (const w of byWeek.values()) {
       const states = [...w.coverage_states];
-      if (states.length === 1) {
-        w.coverage_state = states[0];
-      } else {
-        w.coverage_state = "partial";
-      }
-      // Guard: a collapsed row (unknown or hours_only) must have amount = 0
-      // across every worker in it. If it does not, the collapse is wrong -
-      // render normally by demoting to partial and log. Prevents this bug
-      // class from silently shipping again (same shape as the derivation's
-      // hours_regular > 48 sanity assert).
+      if (states.length === 1) w.coverage_state = states[0];
+      else                     w.coverage_state = "partial";
       if ((w.coverage_state === "unknown" || w.coverage_state === "hours_only") && w.amount > 0.01) {
         if (typeof console !== "undefined") {
           console.warn(`kpi-labor: collapsed row ${w.week_start} has amount=$${w.amount.toFixed(2)}; demoting to partial`);
@@ -234,10 +242,7 @@ export default function KpiLaborPage() {
     for (const w of sortedWeeks) {
       const key = `${w.fiscal_year || "?"}|${w.period_no || "?"}`;
       let g = groups.find(x => x.key === key);
-      if (!g) {
-        g = { key, fiscal_year: w.fiscal_year, period_no: w.period_no, weeks: [], subtotal: null };
-        groups.push(g);
-      }
+      if (!g) { g = { key, fiscal_year: w.fiscal_year, period_no: w.period_no, weeks: [], subtotal: null }; groups.push(g); }
       g.weeks.push(w);
     }
     for (const g of groups) {
@@ -253,34 +258,64 @@ export default function KpiLaborPage() {
       g.subtotal = s;
     }
     return groups;
-  }, [data]);
+  }, [filteredActuals]);
 
   const totals = useMemo(() => {
     const t = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0 };
-    if (data?.actuals) {
-      for (const r of data.actuals) {
-        t.hours_regular += Number(r.hours_regular || 0);
-        t.hours_overtime += Number(r.hours_overtime || 0);
-        t.hours_double_time += Number(r.hours_double_time || 0);
-        t.amount += Number(r.amount || 0);
-        t.hours_without_dollars += Number(r.hours_without_dollars || 0);
-      }
+    for (const r of filteredActuals) {
+      t.hours_regular += Number(r.hours_regular || 0);
+      t.hours_overtime += Number(r.hours_overtime || 0);
+      t.hours_double_time += Number(r.hours_double_time || 0);
+      t.amount += Number(r.amount || 0);
+      t.hours_without_dollars += Number(r.hours_without_dollars || 0);
     }
     return t;
-  }, [data]);
+  }, [filteredActuals]);
 
   const coverageCounts = useMemo(() => {
     const c = { complete: 0, partial: 0, hours_only: 0, unknown: 0, no_labor: 0 };
-    if (data?.actuals) {
-      for (const r of data.actuals) c[r.coverage_state] = (c[r.coverage_state] || 0) + 1;
-    }
+    for (const r of filteredActuals) c[r.coverage_state] = (c[r.coverage_state] || 0) + 1;
     return c;
-  }, [data]);
+  }, [filteredActuals]);
 
   const freshness = data?.derive_freshness;
   const freshnessH = hoursSinceISO(freshness?.last_walk_at);
 
-  // ── auth loading / unauthed ────────────────────────────
+  // Worker roster for the multi-select: derived from currently-loaded
+  // actuals so it reflects the account+range in view.
+  const workerRoster = useMemo(() => {
+    if (!data?.actuals) return [];
+    const ids = [...new Set(data.actuals.map(r => r.worker_id))];
+    return ids
+      .map(id => ({
+        id,
+        label: workerLabel(data.workers?.[id], id, redact),
+        meta: data.workers?.[id],
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [data, redact]);
+
+  // Presets: this period / last period / last 4 wk / last 13 wk / FYTD.
+  // Period boundaries come from server (account_periods), so account
+  // switches respect that account's fiscal calendar.
+  function applyPreset(kind) {
+    const t = today;
+    if (kind === "l4")    return setParams({ start: addDaysISO(t, -27), end: t });
+    if (kind === "l13")   return setParams({ start: addDaysISO(t, -90), end: t });
+    if (kind === "fytd")  return setParams({ start: FY_START, end: t });
+    const periods = data?.account_periods || [];
+    if (!periods.length) return;
+    const withStart = periods.filter(p => p.start && p.end);
+    const past = withStart.filter(p => p.start <= t);
+    if (kind === "thisp") {
+      const cur = past[past.length - 1];
+      if (cur) setParams({ start: cur.start, end: cur.end });
+    } else if (kind === "lastp") {
+      const prev = past[past.length - 2];
+      if (prev) setParams({ start: prev.start, end: prev.end });
+    }
+  }
+
   if (status === "loading") {
     return (
       <div className="kpi-app"><div className="kpi-wrap">
@@ -299,7 +334,6 @@ export default function KpiLaborPage() {
     );
   }
 
-  // ── not-allowlisted: Coming Soon (leaks nothing) ─────
   if (!isAllowed) {
     return (
       <div className="kpi-app"><div className="kpi-wrap">
@@ -319,7 +353,6 @@ export default function KpiLaborPage() {
 
   const isSalaried = data?.account_state === "salaried_only";
 
-  // C1.7 grand total (across all periods in view)
   const grand = useMemo(() => {
     if (!grouped.length) return null;
     const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0 };
@@ -333,8 +366,6 @@ export default function KpiLaborPage() {
     return g;
   }, [grouped]);
 
-  // C1.6 pre-April coverage explanation - which periods are entirely hours_only?
-  // Add the explanation once per such period header.
   const periodsIsAllHoursOnly = useMemo(() => {
     const set = new Set();
     for (const g of grouped) {
@@ -343,10 +374,25 @@ export default function KpiLaborPage() {
     return set;
   }, [grouped]);
 
+  const totalWorkersInRange = data?.actuals ? new Set(data.actuals.map(r => r.worker_id)).size : 0;
+  const shownWorkers = selectedWorkers && selectedWorkers.size > 0 ? selectedWorkers.size : totalWorkersInRange;
+
+  // Grand total wording (Kevin's P4 note): explain when the periods
+  // shown are fewer than the periods spanned by the range.
+  const grandLabel = grouped.length > 0
+    ? `Range total (${grouped.length} period${grouped.length === 1 ? "" : "s"} with labor)`
+    : "Range total";
+
+  function exportHref() {
+    const p = new URLSearchParams({ account, start, end });
+    if (selectedWorkers && selectedWorkers.size > 0) p.set("workers", [...selectedWorkers].join(","));
+    if (redact) p.set("redact", "1");
+    return `/api/kpi/labor/export?${p.toString()}`;
+  }
+
   return (
     <div className="kpi-app" data-density={isCompact ? "compact" : undefined}>
       <div className="kpi-wrap">
-        {/* Module command bar */}
         <div className="kpi-cmd" role="banner">
           <div className="kpi-cmd-title">KPI Dashboard</div>
           <div className="kpi-cmd-div" aria-hidden="true" />
@@ -355,15 +401,37 @@ export default function KpiLaborPage() {
             id="kpi-account"
             className="kpi-cmd-select"
             value={account}
-            onChange={(e) => setParam("account", e.target.value)}
+            onChange={(e) => setParams({ account: e.target.value, workers: "" })}
           >
             {ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
           <div className="kpi-cmd-div" aria-hidden="true" />
-          {/* C1.7: Range display is read-only in this PR (PR C2 makes it a
-              picker). Neutral typography so it does not look interactive. */}
-          <div className="kpi-cmd-ctx" aria-label={`Date range ${start} through ${end}`}>
-            <span>Range</span><span className="kpi-cmd-range">{start}</span><span aria-hidden="true">→</span><span className="kpi-cmd-range">{end}</span>
+          {/* C3.2: real date inputs replace the read-only display. */}
+          <label className="sr-only" htmlFor="kpi-start">Start date</label>
+          <input
+            id="kpi-start"
+            type="date"
+            className="kpi-cmd-date"
+            value={start}
+            max={end}
+            onChange={(e) => setParam("start", e.target.value)}
+          />
+          <span aria-hidden="true" className="kpi-cmd-arrow">→</span>
+          <label className="sr-only" htmlFor="kpi-end">End date</label>
+          <input
+            id="kpi-end"
+            type="date"
+            className="kpi-cmd-date"
+            value={end}
+            min={start}
+            onChange={(e) => setParam("end", e.target.value)}
+          />
+          <div className="kpi-cmd-presets">
+            <button type="button" className="kpi-cmd-preset" onClick={() => applyPreset("thisp")} disabled={!data?.account_periods?.length}>This period</button>
+            <button type="button" className="kpi-cmd-preset" onClick={() => applyPreset("lastp")} disabled={!data?.account_periods?.length}>Last period</button>
+            <button type="button" className="kpi-cmd-preset" onClick={() => applyPreset("l4")}>Last 4 wk</button>
+            <button type="button" className="kpi-cmd-preset" onClick={() => applyPreset("l13")}>Last 13 wk</button>
+            <button type="button" className="kpi-cmd-preset" onClick={() => applyPreset("fytd")}>FYTD</button>
           </div>
           <div className="kpi-cmd-r">
             <span className="kpi-cmd-chip" title={freshness?.last_walk_at || "no successful walk"}>
@@ -373,7 +441,6 @@ export default function KpiLaborPage() {
           </div>
         </div>
 
-        {/* Tab strip */}
         <nav className="kpi-tabs" role="tablist" aria-label="KPI sections">
           {TABS.map(t => (
             <button
@@ -390,7 +457,6 @@ export default function KpiLaborPage() {
           ))}
         </nav>
 
-        {/* Content */}
         <div className="kpi-content">
           {tab === "overview" ? (
             <div>
@@ -401,20 +467,70 @@ export default function KpiLaborPage() {
             </div>
           ) : tab === "labor" ? (
             <div>
-              {/* Metric cards.
-                  C1.2: salaried-only accounts render "—", not "0.00"
-                       (zero is a claim; missing is not).
-                  C1.4: former "Regular hours" card was a label-value
-                       contradiction. Now shows hours_toward_ot_threshold
-                       per spec §6, computed as hours_regular +
-                       hours_double_time. Caption states the derivation.
-                  C1.7: FY-to-date lives in the rail (kept there);
-                       freeing this slot for hours_toward_ot_threshold
-                       to make the pair (threshold, OT) actually useful. */}
+              {/* C3.3 + C3.4 filter row */}
+              {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
+                <div className="kpi-filterbar" role="group" aria-label="Filters and export">
+                  <details className="kpi-filter-workers">
+                    <summary>
+                      Workers · {shownWorkers === totalWorkersInRange
+                        ? `all ${totalWorkersInRange}`
+                        : `${shownWorkers} of ${totalWorkersInRange}`}
+                    </summary>
+                    <div className="kpi-filter-workers-body">
+                      <div className="kpi-filter-actions">
+                        <button type="button" className="kpi-cmd-preset" onClick={() => setParam("workers", "")}>All</button>
+                        <button type="button" className="kpi-cmd-preset" onClick={() => setParam("workers", "__none__")}>None</button>
+                      </div>
+                      <div className="kpi-filter-list">
+                        {workerRoster.map(w => {
+                          const checked = !selectedWorkers || selectedWorkers.has(w.id);
+                          return (
+                            <label key={w.id} className="kpi-filter-item">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const cur = new Set(selectedWorkers && selectedWorkers.size > 0 && [...selectedWorkers][0] !== "__none__"
+                                    ? selectedWorkers
+                                    : (e.target.checked ? [] : workerRoster.map(x => x.id)));
+                                  if (e.target.checked) cur.add(w.id);
+                                  else                  cur.delete(w.id);
+                                  const value = cur.size === 0 ? "__none__" : cur.size === workerRoster.length ? "" : [...cur].join(",");
+                                  setParam("workers", value);
+                                }}
+                              />
+                              <span>{w.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </details>
+                  <label className="kpi-toggle">
+                    <input
+                      type="checkbox"
+                      checked={redact}
+                      onChange={(e) => setParam("redact", e.target.checked ? "1" : "")}
+                    />
+                    <span>Hide names</span>
+                  </label>
+                  <a className="kpi-btn-primary" href={exportHref()} download>
+                    Export xlsx
+                  </a>
+                </div>
+              )}
+
+              {/* C3.1 name-availability banner */}
+              {!isSalaried && loadState === "ok" && data?.name_availability && data.name_availability.total > 0 && !data.name_availability.has_names && (
+                <div className="kpi-note-info" role="status">
+                  Names unavailable: the ingested Rippling workers payload does not carry a name field for any of the {data.name_availability.total} workers in scope. Displaying employee numbers and titles only.
+                </div>
+              )}
+
               <div className="kpi-metrics">
                 <div className="kpi-metric">
                   <div className="kpi-metric-label">Worker-weeks</div>
-                  <div className="kpi-metric-value">{isSalaried ? "—" : (data?.actuals?.length || 0)}</div>
+                  <div className="kpi-metric-value">{isSalaried ? "—" : (filteredActuals.length || 0)}</div>
                   <div className="kpi-metric-sub">rows in range</div>
                 </div>
                 <div className="kpi-metric">
@@ -434,7 +550,6 @@ export default function KpiLaborPage() {
                 </div>
               </div>
 
-              {/* Data body */}
               {loadState === "ok" && data.account_state === "salaried_only" ? (
                 <div className="kpi-state">
                   <div className="kpi-state-title">Salaried-only account</div>
@@ -448,18 +563,17 @@ export default function KpiLaborPage() {
                   <div className="kpi-state-desc">Nothing changed. Category: {errorMsg}</div>
                   <button className="kpi-state-cta" onClick={() => setParam("_r", Date.now())}>Retry</button>
                 </div>
-              ) : !data?.actuals?.length ? (
+              ) : !filteredActuals.length ? (
                 <div className="kpi-state">
                   <div className="kpi-state-title">No labor rows in range</div>
-                  <div className="kpi-state-desc">{account} has no labor_actuals rows between {start} and {end}.</div>
+                  <div className="kpi-state-desc">
+                    {selectedWorkers && selectedWorkers.size > 0
+                      ? `Selected workers have no rows in the current range. Try clearing the worker filter or widening the dates.`
+                      : `${account} has no labor_actuals rows between ${start} and ${end}.`}
+                  </div>
                 </div>
               ) : (
                 <div className="kpi-table-wrap">
-                  {/* C1.5: explicit role attributes preserve real table semantics
-                      even where mobile CSS uses display:block on table elements
-                      (which strips implicit ARIA table roles). Every level
-                      keeps its role - screen readers announce a real table
-                      regardless of viewport. */}
                   <table className="kpi-table" role="table" aria-label={`Labor for ${account}`}>
                     <thead role="rowgroup">
                       <tr role="row">
@@ -478,7 +592,6 @@ export default function KpiLaborPage() {
                           <tr className="kpi-period-header" role="row">
                             <td colSpan={7} role="cell">
                               FY{g.fiscal_year || "?"} · Period {g.period_no || "?"}
-                              {/* C1.6: explain the pre-2026-04-20 amber in the flow, once per period. */}
                               {periodsIsAllHoursOnly.has(g.key) && (
                                 <span className="kpi-period-note">
                                   Dollars begin at the 2026-04-20 pay run (D35). Earlier periods are hours-only by design; the P&L upload is authoritative for these dollars.
@@ -539,16 +652,16 @@ export default function KpiLaborPage() {
                                     <td colSpan={7}>
                                       {w.worker_rows.map((wr) => {
                                         const meta = data.workers?.[wr.worker_id];
-                                        const displayId = meta?.number ? `#${meta.number}` : `worker-${String(wr.worker_id).slice(0, 6)}`;
+                                        const label = workerLabel(meta, wr.worker_id, redact);
                                         return (
-                                          <div key={wr.worker_id} style={{ display: "flex", gap: 12, padding: "4px 0", flexWrap: "wrap" }}>
-                                            <span style={{ minWidth: 100, fontWeight: 600 }}>{displayId}</span>
+                                          <div key={wr.worker_id} className="kpi-worker-row">
+                                            <span className="kpi-worker-name">{label}</span>
                                             <span>reg {fmtHrs(wr.hours_regular)}</span>
                                             <span>ot {fmtHrs(wr.hours_overtime)}</span>
                                             <span>hol {fmtHrs(wr.hours_double_time)}</span>
                                             <span>no$ {fmtHrs(wr.hours_without_dollars)}</span>
                                             <span>{fmt$(wr.amount)}</span>
-                                            <span style={{ marginLeft: "auto", opacity: 0.7 }}>{wr.coverage_state}</span>
+                                            <span className="kpi-worker-cov">{wr.coverage_state}</span>
                                           </div>
                                         );
                                       })}
@@ -568,10 +681,9 @@ export default function KpiLaborPage() {
                           </tr>
                         </Fragment>
                       ))}
-                      {/* C1.7 grand total: visible rows tie to FY-to-date. */}
                       {grand && (
                         <tr className="kpi-grand-total" role="row">
-                          <td data-label="Grand total" colSpan={2} role="cell"><strong>Range total ({grouped.length} periods)</strong></td>
+                          <td data-label="Grand total" colSpan={2} role="cell"><strong>{grandLabel}</strong></td>
                           <td data-label="Regular"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_regular)}</strong></td>
                           <td data-label="OT 1.5x"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_overtime)}</strong></td>
                           <td data-label="Holiday 2x" className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_double_time)}</strong></td>
@@ -588,13 +700,17 @@ export default function KpiLaborPage() {
             <div className="kpi-state"><div className="kpi-state-title">Section coming soon</div></div>
           )}
 
-          {/* Right rail */}
           {tab === "labor" && loadState === "ok" && data.account_state !== "salaried_only" && (
             <aside className="kpi-rail" aria-label="Summary rail">
               <div className="kpi-rail-card">
-                <div className="kpi-rail-title">FY-to-date</div>
+                <div className="kpi-rail-title">Range total</div>
                 <div className="kpi-rail-big">{fmt$(totals.amount)}</div>
-                <div className="kpi-rail-sub">{account} · {data.actuals.length} worker-weeks in range</div>
+                <div className="kpi-rail-sub">
+                  {account} · {filteredActuals.length} worker-weeks
+                  {selectedWorkers && selectedWorkers.size > 0 && totalWorkersInRange > 0 && (
+                    <span> · {shownWorkers} of {totalWorkersInRange} workers</span>
+                  )}
+                </div>
               </div>
 
               <div className="kpi-rail-card">
