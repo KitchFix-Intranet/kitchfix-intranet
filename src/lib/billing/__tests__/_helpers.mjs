@@ -62,16 +62,19 @@ export const CIN_AZ_SERVICE_MAP = [
   { service_id: "82fd6db3-35ec-4904-907d-5c52a74f625e", account_key: "CIN - AZ", qbo_item_id: "3300", qbo_item_name: "REDS MiLB - Meal Service", aggregate_group: "cin-milb-bld", invoice_slot: "main",  tax_override: null, line_desc_style: null },
   { service_id: "ed628578-527c-4dc9-9f91-3b94efb72846", account_key: "CIN - AZ", qbo_item_id: "3300", qbo_item_name: "REDS MiLB - Meal Service", aggregate_group: "cin-milb-bld", invoice_slot: "main",  tax_override: null, line_desc_style: null },
   { service_id: "54679d87-820a-4a04-ba9e-76c431fce90e", account_key: "CIN - AZ", qbo_item_id: "3300", qbo_item_name: "REDS MiLB - Meal Service", aggregate_group: "cin-milb-bld", invoice_slot: "main",  tax_override: null, line_desc_style: null },
-  { service_id: "5529584a-ab40-4cb6-81d1-ac30372c9978", account_key: "CIN - AZ", qbo_item_id: "3322", qbo_item_name: "REDS MiLB/MLB - Snack",    aggregate_group: null,           invoice_slot: "main",  tax_override: null, line_desc_style: "plain_name" },
-  { service_id: "3e5ac4cb-7391-46db-ae38-cb71435d4e03", account_key: "CIN - AZ", qbo_item_id: "3371", qbo_item_name: "REDS Coffee Service",      aggregate_group: null,           invoice_slot: "main",  tax_override: "NON", line_desc_style: "plain_name" },
-  { service_id: "d9e368ee-916a-4f03-96f5-1079bb520cc7", account_key: "CIN - AZ", qbo_item_id: "3372", qbo_item_name: "REDS Fountain Beverages",  aggregate_group: null,           invoice_slot: "main",  tax_override: "NON", line_desc_style: "plain_name" },
+  // sc-31a (owner ruling 2026-08-10): plain_name lines use qbo_item_name
+  // as the invoice description, so qbo_item_name here carries
+  // Sebastian's typed convention (not the QB item's registered Name).
+  { service_id: "5529584a-ab40-4cb6-81d1-ac30372c9978", account_key: "CIN - AZ", qbo_item_id: "3322", qbo_item_name: "Pre-Game Snack",            aggregate_group: null,           invoice_slot: "main",  tax_override: null, line_desc_style: "plain_name" },
+  { service_id: "3e5ac4cb-7391-46db-ae38-cb71435d4e03", account_key: "CIN - AZ", qbo_item_id: "3371", qbo_item_name: "Coffee Service",            aggregate_group: null,           invoice_slot: "main",  tax_override: "NON", line_desc_style: "plain_name" },
+  { service_id: "d9e368ee-916a-4f03-96f5-1079bb520cc7", account_key: "CIN - AZ", qbo_item_id: "3372", qbo_item_name: "Fountain Beverages",        aggregate_group: null,           invoice_slot: "main",  tax_override: "NON", line_desc_style: "plain_name" },
   { service_id: "1e5a337d-610b-4b7d-9154-3f8787e8ccf8", account_key: "CIN - AZ", qbo_item_id: "3302", qbo_item_name: "REDS MLB - Meal Service",  aggregate_group: "cin-mlb-bld",  invoice_slot: "main",  tax_override: null, line_desc_style: null },
   { service_id: "b00eaf5a-0849-4e97-90bc-760afc320dd3", account_key: "CIN - AZ", qbo_item_id: "3302", qbo_item_name: "REDS MLB - Meal Service",  aggregate_group: "cin-mlb-bld",  invoice_slot: "main",  tax_override: null, line_desc_style: null },
   { service_id: "6b8919dd-17ce-4e7b-87b9-6787b2220e2e", account_key: "CIN - AZ", qbo_item_id: "3302", qbo_item_name: "REDS MLB - Meal Service",  aggregate_group: "cin-mlb-bld",  invoice_slot: "main",  tax_override: null, line_desc_style: null },
   { service_id: "4f0cc3af-2fef-4f5a-8762-3f87c45de3a3", account_key: "CIN - AZ", qbo_item_id: "3327", qbo_item_name: "REDS Rehab - Meal Service",aggregate_group: "cin-rehab-meal",invoice_slot:"rehab", tax_override: null, line_desc_style: null },
   { service_id: "30efb290-f371-4f1a-8267-488f568ec08a", account_key: "CIN - AZ", qbo_item_id: "3327", qbo_item_name: "REDS Rehab - Meal Service",aggregate_group: "cin-rehab-meal",invoice_slot:"rehab", tax_override: null, line_desc_style: null },
   { service_id: "2b2be535-c41d-49a1-8519-6ac4dc06cdb9", account_key: "CIN - AZ", qbo_item_id: "3327", qbo_item_name: "REDS Rehab - Meal Service",aggregate_group: "cin-rehab-meal",invoice_slot:"rehab", tax_override: null, line_desc_style: null },
-  { service_id: "c667d4e5-db72-4e37-9da8-06342881e76f", account_key: "CIN - AZ", qbo_item_id: "3327", qbo_item_name: "REDS Rehab - Meal Service",aggregate_group: null,            invoice_slot:"rehab", tax_override: null, line_desc_style: "plain_name" },
+  { service_id: "c667d4e5-db72-4e37-9da8-06342881e76f", account_key: "CIN - AZ", qbo_item_id: "3327", qbo_item_name: "Continental Plus",          aggregate_group: null,            invoice_slot:"rehab", tax_override: null, line_desc_style: "plain_name" },
 ];
 
 // Name -> preferred service_id used when reversing an aggregate

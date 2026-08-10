@@ -1,10 +1,17 @@
 // Five negative tests per PR-B acceptance B4:
-//   1. unmapped service throws
+//   1. unmapped service throws (positive qty)
 //   2. rate-guard splits Continental Plus (already covered by parity;
 //      test isolates the branch)
 //   3. FF emits exactly two weekly lines in the combined biweekly payload
 //   4. projections-only week hard-fails (no projected invoice)
 //   5. is_non_revenue rows are excluded
+//
+// PR-B2 (owner ruling 2026-08-10, retro-shadow round 1):
+//   6. unmapped MEAL row with actual_count=0 -> warn + skip (no throw)
+//   7. unmapped FF   row with actual_count=0 -> warn + skip (no throw)
+//   8. unmapped FF   row with actual_count>0 -> THROW
+//   9. plain_name description emits mapping.qbo_item_name (not
+//      SC row's service_name) - the Fountain Bev case.
 //
 // Run via: npm run test:unit
 
@@ -217,6 +224,142 @@ test("negative: is_non_revenue rows are dropped silently", () => {
   // Only the mapped meal line - non-revenue row must not appear.
   assert.equal(inv.Line.length, 1, `expected 1 line, got ${inv.Line.length}`);
   assert.equal(inv.Line[0].SalesItemLineDetail.ItemRef.value, "3333");
+});
+
+// ─── PR-B2 additions (owner ruling 2026-08-10) ────────────────────
+
+// B4-6: unmapped MEAL with actual_count=0 warns and skips (no throw).
+test("negative: unmapped meal with zero actual_count warns and skips", () => {
+  const rows = [
+    // Mapped positive line so the invoice isn't empty.
+    scRow({
+      service_date: "2026-07-27",
+      service_id: "5d626ec9-2505-470f-abe6-d7f3168ddf8f", // TXR MiLB Breakfast
+      service_name: "Breakfast",
+      account_key: "TXR - AZ",
+      actual_count: 100, price: 14.2926,
+      period: "8", week_label: "Week 3",
+    }),
+    // Unmapped, zero qty - must WARN and SKIP, never throw.
+    scRow({
+      service_date: "2026-07-28",
+      service_id: "00000000-0000-0000-0000-abcdefabcdef",
+      service_name: "Extra Protein - Chicken",
+      account_key: "TXR - AZ",
+      actual_count: 0, price: 3.50,
+      period: "8", week_label: "Week 3",
+    }),
+  ];
+  const { invoices, warnings } = buildInvoicePayload({
+    accountKey: "TXR - AZ", weekStart: "2026-07-27",
+    rows, accountMap: TXR_AZ_ACCOUNT_MAP, serviceMap: TXR_AZ_SERVICE_MAP,
+  });
+  assert.equal(invoices.length, 1, "one invoice from the mapped positive row");
+  assert.equal(invoices[0].Line.length, 1, "one line - unmapped zero not billed");
+  assert.equal(warnings.length, 1, "one warning for the unmapped zero row");
+  assert.match(
+    warnings[0],
+    /unmapped service Extra Protein - Chicken .* TXR - AZ 2026-07-28 skipped \(zero actual_count\)\./,
+    "warning names the service, account, and date"
+  );
+});
+
+// B4-7: unmapped FF with actual_count=0 warns and skips (Finding B case).
+test("negative: unmapped FF with zero actual_count warns and skips (Finding B)", () => {
+  const rows = [
+    // Mapped positive meal so invoice isn't empty.
+    scRow({
+      service_date: "2026-07-27",
+      service_id: "5d626ec9-2505-470f-abe6-d7f3168ddf8f",
+      service_name: "Breakfast",
+      account_key: "TXR - AZ",
+      actual_count: 100, price: 14.2926,
+      period: "8", week_label: "Week 3",
+    }),
+    // Unmapped FF, zero actual - must WARN and SKIP. Before the ruling
+    // this would throw on the plain unmapped-FF check.
+    scRow({
+      service_date: "2026-07-28",
+      service_id: "abcdefab-cdef-abcd-efab-cdefabcdefab",
+      service_name: "Extra Protein - Chicken (FF)",
+      account_key: "TXR - AZ",
+      is_flat_fee: true,
+      actual_count: 0, price: 25.0,
+      period: "8", week_label: "Week 3",
+    }),
+  ];
+  const { invoices, warnings } = buildInvoicePayload({
+    accountKey: "TXR - AZ", weekStart: "2026-07-27",
+    rows, accountMap: TXR_AZ_ACCOUNT_MAP, serviceMap: TXR_AZ_SERVICE_MAP,
+  });
+  assert.equal(invoices.length, 1);
+  assert.equal(invoices[0].Line.length, 1, "no FF line emitted for unmapped zero row");
+  assert.equal(warnings.length, 1);
+  assert.match(
+    warnings[0],
+    /unmapped FF service Extra Protein - Chicken \(FF\) .* TXR - AZ 2026-07-28 skipped \(zero actual_count\)\./,
+  );
+});
+
+// B4-8: unmapped FF with actual_count>0 still THROWS (regression guard).
+test("negative: unmapped FF with positive actual_count throws (regression guard)", () => {
+  const rows = [
+    scRow({
+      service_date: "2026-07-27",
+      service_id: "beadedbe-aded-beat-edbe-adedbeadedbe",
+      service_name: "Made-Up FF",
+      account_key: "TXR - AZ",
+      is_flat_fee: true,
+      actual_count: 1, price: 25.0,
+      period: "8", week_label: "Week 3",
+    }),
+  ];
+  assert.throws(
+    () => buildInvoicePayload({
+      accountKey: "TXR - AZ", weekStart: "2026-07-27",
+      rows, accountMap: TXR_AZ_ACCOUNT_MAP, serviceMap: TXR_AZ_SERVICE_MAP,
+    }),
+    /unmapped FF service Made-Up FF .* TXR - AZ 2026-07-27/,
+  );
+});
+
+// B4-9: plain_name emits mapping.qbo_item_name, not SC row's
+// service_name (the Fountain Bev case owner ruled on 2026-08-10).
+test("plain_name description emits mapping.qbo_item_name (Fountain Bev case)", () => {
+  // Force the SC row's service_name to a DIFFERENT string ("Fountain Bev")
+  // than the mapping's qbo_item_name ("Fountain Beverages"). Builder must
+  // emit the mapping value regardless.
+  const rows = [];
+  const dates = [
+    ["2026-07-13", "Week 1"], ["2026-07-14", "Week 1"], ["2026-07-15", "Week 1"],
+    ["2026-07-16", "Week 1"], ["2026-07-17", "Week 1"], ["2026-07-18", "Week 1"],
+    ["2026-07-19", "Week 1"],
+    ["2026-07-20", "Week 2"], ["2026-07-21", "Week 2"], ["2026-07-22", "Week 2"],
+    ["2026-07-23", "Week 2"], ["2026-07-24", "Week 2"], ["2026-07-25", "Week 2"],
+    ["2026-07-26", "Week 2"],
+  ];
+  for (const [d, wk] of dates) {
+    rows.push(scRow({
+      service_date: d,
+      service_id: "d9e368ee-916a-4f03-96f5-1079bb520cc7", // Fountain (FF)
+      service_name: "Fountain Bev",                       // SC name != invoice desc
+      account_key: "CIN - AZ",
+      is_flat_fee: true, is_tax_free: true,
+      actual_count: 1, price: 283.9200,
+      period: "8", week_label: wk,
+    }));
+  }
+  const { invoices } = buildInvoicePayload({
+    accountKey: "CIN - AZ", weekStart: "2026-07-13",
+    rows, accountMap: CIN_AZ_ACCOUNT_MAP, serviceMap: CIN_AZ_SERVICE_MAP,
+  });
+  const main = invoices.find((i) => i._slot === "main");
+  const ffLines = main.Line.filter((l) => l.SalesItemLineDetail.ItemRef.value === "3372");
+  assert.equal(ffLines.length, 2, "one Fountain line per week in the biweekly pair");
+  for (const l of ffLines) {
+    assert.equal(l.Description, "Fountain Beverages",
+      "description emits mapping.qbo_item_name, NOT the SC row's service_name 'Fountain Bev'");
+  }
 });
 
 // Bonus: P13 hard-fails on bi-weekly (owner amendment 2026-08-06).

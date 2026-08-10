@@ -17,9 +17,18 @@
 //      as a MEAL line. `is_flat_fee` services with ANY actual row on
 //      the week emit one weekly line at qty=1 (see rule 6).
 //   2. `is_non_revenue` rows are dropped silently.
-//   3. Unmapped service (no serviceMap row for a live row's
-//      service_id) THROWS with the service named. Never silently
-//      skip - the fail is the whole point of the mapping table.
+//   3. Unmapped service handling (owner ruling 2026-08-10, retro-
+//      shadow round 1 finding B):
+//        actual_count > 0  and  unmapped -> THROW (real data being
+//                                           ignored; add to
+//                                           sc_qbo_service_map).
+//        actual_count == 0 (or null) and unmapped -> WARN + SKIP
+//                                           (zero-count rows produce
+//                                           no line; only warn so
+//                                           unmapped services still
+//                                           surface without blocking
+//                                           finalize on empty rows).
+//      Applies to BOTH meal rows and FF rows.
 //   4. Aggregate-group merge: same aggregate_group AND identical
 //     cent-rounded rate merge into ONE line per day. Differing
 //     rates within the same group SPLIT lines (rate-guard; CIN - AZ
@@ -33,6 +42,15 @@
 //      row on the week. (If a week has zero rows for the FF service,
 //      no line. But observed practice: FF services are always billed
 //      each week.)
+//
+// ─── Line description convention (owner ruling 2026-08-10) ────────
+//   `plain_name` line_desc_style emits `mapping.qbo_item_name` as
+//   the invoice-line description, NOT the SC row's service_name.
+//   The mapping's qbo_item_name field carries Sebastian's typed
+//   convention (e.g. "Fountain Beverages"), NOT the QB item's
+//   registered Name (e.g. "REDS Fountain Beverages"). QBO's ItemRef
+//   resolves by `value` (id) at post time; `name` is a display hint
+//   the API accepts as-is. sc-31a documents the seed convention.
 //
 // ─── Bi-weekly period-aligned rule (owner amendment 2026-08-06) ───
 //   For cadence='biweekly': pairs are P.week1-2 and P.week3-4 of
@@ -225,16 +243,30 @@ export function buildInvoicePayload({
     // no-service day or unentered day; either way not billable).
     if (r.actual_count == null) continue;
 
-    // Unmapped check fires ONLY when the row would produce a line
-    // (non-zero actual OR FF with any presence). A zero actual on a
-    // mapped service just skips.
+    // Unmapped-service policy (owner ruling 2026-08-10):
+    //   actual_count > 0  and unmapped -> THROW (real data lost if
+    //                                     we billed without mapping).
+    //   actual_count == 0 and unmapped -> WARN + SKIP (no line
+    //                                     produced anyway; only
+    //                                     surface so ops can see
+    //                                     the unmapped row).
     const mapping = svcMapById.get(r.service_id);
+    const qty = Number(r.actual_count);
     if (r.is_flat_fee) {
       if (!mapping) {
+        if (qty === 0) {
+          warnings.push(
+            `unmapped FF service ${r.service_name} (${r.service_id}) on ${accountKey} ${r.service_date} skipped (zero actual_count).`
+          );
+          continue;
+        }
         throw new Error(
           `buildInvoicePayload: unmapped FF service ${r.service_name} (${r.service_id}) on ${accountKey} ${r.service_date} - add to sc_qbo_service_map before finalize.`
         );
       }
+      // FF services always bill weekly at qty=1 when any row exists.
+      // A zero-actual FF row still contributes presence (spec §4
+      // rule 6: observed practice bills every week).
       const wIdx = weekIndexFor(String(r.service_date).slice(0, 10));
       const wKey = String(wIdx);
       if (!ffPerWeek.has(wKey)) ffPerWeek.set(wKey, new Map());
@@ -251,7 +283,15 @@ export function buildInvoicePayload({
     }
 
     // Meal rows: skip zero-qty actuals (they contribute nothing).
-    if (Number(r.actual_count) === 0) continue;
+    // If the row is ALSO unmapped, warn so it still surfaces.
+    if (qty === 0) {
+      if (!mapping) {
+        warnings.push(
+          `unmapped service ${r.service_name} (${r.service_id}) on ${accountKey} ${r.service_date} skipped (zero actual_count).`
+        );
+      }
+      continue;
+    }
     if (!mapping) {
       throw new Error(
         `buildInvoicePayload: unmapped service ${r.service_name} (${r.service_id}) on ${accountKey} ${r.service_date} - add to sc_qbo_service_map before finalize.`
@@ -299,14 +339,17 @@ export function buildInvoicePayload({
     // Description composition:
     //   aggregate_group (any bucket size) -> composed (plain name
     //   for single component; "Total = X." shape for multi)
-    //   solo + line_desc_style='plain_name' -> service_name
-    //   solo + no line_desc_style             -> empty
+    //   solo + line_desc_style='plain_name' -> mapping.qbo_item_name
+    //     (owner ruling 2026-08-10: the mapping carries Sebastian's
+    //      typed convention; SC service_name is not authoritative
+    //      for line descriptions)
+    //   solo + no line_desc_style           -> empty
     let description;
     if (first.mapping.aggregate_group) {
       const comps = bucket.map((r) => ({ name: r.service_name, qty: r.qty }));
       description = composeAggregateDescription(comps);
     } else if (first.mapping.line_desc_style === "plain_name") {
-      description = first.service_name;
+      description = first.mapping.qbo_item_name;
     } else {
       description = "";
     }
@@ -340,7 +383,7 @@ export function buildInvoicePayload({
       // for the second half of a biweekly).
       const weekMonday = addDays(weekStart, (wIdx - 1) * 7);
       const ffDescription = ff.mapping.line_desc_style === "plain_name"
-        ? ff.service_name
+        ? ff.mapping.qbo_item_name
         : undefined;
       const line = {
         DetailType: "SalesItemLineDetail",
