@@ -189,10 +189,27 @@
   padding: 8px var(--pad, 18px);
   border-top: 2px solid var(--kpi-accent);
 }
+/* C1.6: pre-April explanation note. Muted, non-uppercase, in flow. */
+.kpi-period-note {
+  display: inline-block; margin-left: 12px;
+  font-size: var(--size-caption, 12px);
+  font-weight: 400;
+  text-transform: none; letter-spacing: 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
 .kpi-period-subtotal td {
   background: var(--surface-sunken);
   font-weight: 600;
   border-top: 1px solid var(--border-default);
+}
+/* C1.7 grand total footer */
+.kpi-grand-total td {
+  background: var(--kpi-accent-tint);
+  color: var(--kpi-accent);
+  font-weight: 700;
+  border-top: 2px solid var(--kpi-accent);
+  border-bottom: 2px solid var(--kpi-accent);
 }
 
 /* Row states + tints (color + label + icon; never color alone) */
@@ -294,6 +311,18 @@
   min-width: 42px; text-align: right; color: var(--text-strong);
 }
 .kpi-cov-desc { font-size: 12px; color: var(--text-muted); }
+.kpi-cov-note {
+  font-size: 11px; color: var(--text-subtle);
+  margin-top: 8px; font-style: italic;
+  padding-top: 8px; border-top: 1px dashed var(--border-subtle);
+}
+/* C1.7: Range display is read-only in this PR. Neutral, not chip-styled. */
+.kpi-cmd-range {
+  font-family: var(--font-mono, monospace);
+  color: var(--sc2-cmd-text, var(--n-0));
+  font-weight: 500;
+  padding: 0 2px;
+}
 
 /* ── mobile card layout (below 1024px, tables become cards) ──── */
 @media (max-width: 1023px) {
