@@ -1,0 +1,926 @@
+{
+  "AllowIPNPayment": false,
+  "AllowOnlinePayment": true,
+  "AllowOnlineCreditCardPayment": false,
+  "AllowOnlineACHPayment": true,
+  "AllowOnlinePayPalPayment": false,
+  "AllowOnlineAffirmPayment": false,
+  "EInvoiceStatus": "Viewed",
+  "domain": "QBO",
+  "sparse": false,
+  "Id": "290417",
+  "SyncToken": "1",
+  "MetaData": {
+    "CreateTime": "2026-07-29T08:44:16-07:00",
+    "LastModifiedByRef": {
+      "value": "9130347992551296"
+    },
+    "LastUpdatedTime": "2026-07-29T08:46:25-07:00"
+  },
+  "CustomField": [
+    {
+      "DefinitionId": "1",
+      "Name": "Purchase Order",
+      "Type": "StringType"
+    },
+    {
+      "DefinitionId": "2",
+      "Name": "DC",
+      "Type": "StringType"
+    }
+  ],
+  "DocNumber": "K300168899",
+  "TxnDate": "2026-07-26",
+  "CurrencyRef": {
+    "value": "USD",
+    "name": "United States Dollar"
+  },
+  "LinkedTxn": [],
+  "Line": [
+    {
+      "Id": "1",
+      "LineNum": 1,
+      "Description": "Lunch - 77 & Dinner - 67. Total = 144.",
+      "Amount": 1857.6,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-13",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 144,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "2",
+      "LineNum": 2,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-13",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "3",
+      "LineNum": 3,
+      "Description": "Coffee Service",
+      "Amount": 511.05,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-13",
+        "ItemRef": {
+          "value": "3371",
+          "name": "REDS Coffee Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 511.05,
+        "Qty": 1,
+        "ItemAccountRef": {
+          "value": "1197",
+          "name": "2400.3 Meal Service:Meal Service (Tax-Free)"
+        },
+        "TaxCodeRef": {
+          "value": "NON"
+        },
+        "TaxClassificationRef": {}
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "4",
+      "LineNum": 4,
+      "Description": "Fountain Beverages",
+      "Amount": 283.92,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-13",
+        "ItemRef": {
+          "value": "3372",
+          "name": "REDS Fountain Beverages"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 283.92,
+        "Qty": 1,
+        "ItemAccountRef": {
+          "value": "1197",
+          "name": "2400.3 Meal Service:Meal Service (Tax-Free)"
+        },
+        "TaxCodeRef": {
+          "value": "NON"
+        },
+        "TaxClassificationRef": {}
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "5",
+      "LineNum": 5,
+      "Description": "Lunch - 77 & Dinner - 67. Total = 144.",
+      "Amount": 1857.6,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-14",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 144,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "6",
+      "LineNum": 6,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-14",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "7",
+      "LineNum": 7,
+      "Description": "Breakfast - 30, Lunch - 103, & Dinner - 67. Total = 200.",
+      "Amount": 2580,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-15",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 200,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "8",
+      "LineNum": 8,
+      "Description": "Breakfast - 30, Lunch - 112, & Dinner - 87. Total = 229.",
+      "Amount": 2954.1,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-16",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 229,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "9",
+      "LineNum": 9,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-16",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "10",
+      "LineNum": 10,
+      "Description": "Lunch - 112 & Dinner - 104. Total = 216.",
+      "Amount": 2786.4,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-17",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 216,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "11",
+      "LineNum": 11,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-17",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "12",
+      "LineNum": 12,
+      "Description": "Breakfast - 112 & Lunch - 112. Total = 224.",
+      "Amount": 2889.6,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-18",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 224,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "13",
+      "LineNum": 13,
+      "Description": "Breakfast - 50 & Lunch - 50. Total = 100.",
+      "Amount": 1290,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-19",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 100,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "14",
+      "LineNum": 14,
+      "Description": "Lunch - 108 & Dinner - 87. Total = 195.",
+      "Amount": 2515.5,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-20",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 195,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "15",
+      "LineNum": 15,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-20",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "16",
+      "LineNum": 16,
+      "Description": "Coffee Service",
+      "Amount": 511.05,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-20",
+        "ItemRef": {
+          "value": "3371",
+          "name": "REDS Coffee Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 511.05,
+        "Qty": 1,
+        "ItemAccountRef": {
+          "value": "1197",
+          "name": "2400.3 Meal Service:Meal Service (Tax-Free)"
+        },
+        "TaxCodeRef": {
+          "value": "NON"
+        },
+        "TaxClassificationRef": {}
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "17",
+      "LineNum": 17,
+      "Description": "Fountain Beverages",
+      "Amount": 283.92,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-20",
+        "ItemRef": {
+          "value": "3372",
+          "name": "REDS Fountain Beverages"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 283.92,
+        "Qty": 1,
+        "ItemAccountRef": {
+          "value": "1197",
+          "name": "2400.3 Meal Service:Meal Service (Tax-Free)"
+        },
+        "TaxCodeRef": {
+          "value": "NON"
+        },
+        "TaxClassificationRef": {}
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "18",
+      "LineNum": 18,
+      "Description": "Lunch - 108 & Dinner - 87. Total = 195.",
+      "Amount": 2515.5,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-21",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 195,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "19",
+      "LineNum": 19,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-21",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "20",
+      "LineNum": 20,
+      "Description": "Lunch - 108 & Dinner - 87. Total = 195.",
+      "Amount": 2515.5,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-22",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 195,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "21",
+      "LineNum": 21,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-22",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "22",
+      "LineNum": 22,
+      "Description": "Breakfast - 95 & Lunch - 95. Total = 190.",
+      "Amount": 2451,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-23",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 190,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "23",
+      "LineNum": 23,
+      "Description": "Breakfast - 95 & Lunch - 95. Total = 190.",
+      "Amount": 2451,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-24",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 190,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "24",
+      "LineNum": 24,
+      "Description": "Breakfast - 30, Lunch - 90, & Dinner - 50. Total = 170.",
+      "Amount": 2193,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-25",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 170,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "25",
+      "LineNum": 25,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-25",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "26",
+      "LineNum": 26,
+      "Description": "Breakfast - 50 & Lunch - 50. Total = 100.",
+      "Amount": 1290,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-26",
+        "ItemRef": {
+          "value": "3300",
+          "name": "REDS MiLB - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 100,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "27",
+      "LineNum": 27,
+      "Description": "Pre-Game Snack",
+      "Amount": 256,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-26",
+        "ItemRef": {
+          "value": "3322",
+          "name": "REDS MiLB/MLB - Snack"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 5.12,
+        "Qty": 50,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Amount": 36040.74,
+      "DetailType": "SubTotalLineDetail",
+      "SubTotalLineDetail": {}
+    }
+  ],
+  "TxnTaxDetail": {
+    "TxnTaxCodeRef": {
+      "value": "37"
+    },
+    "TotalTax": 3548.43,
+    "TaxLine": [
+      {
+        "Amount": 2170.41,
+        "DetailType": "TaxLineDetail",
+        "TaxLineDetail": {
+          "TaxRateRef": {
+            "value": "55"
+          },
+          "PercentBased": true,
+          "TaxPercent": 6.3,
+          "NetAmountTaxable": 34450.8
+        }
+      },
+      {
+        "Amount": 1378.02,
+        "DetailType": "TaxLineDetail",
+        "TaxLineDetail": {
+          "TaxRateRef": {
+            "value": "57"
+          },
+          "PercentBased": true,
+          "TaxPercent": 4,
+          "NetAmountTaxable": 34450.8
+        }
+      }
+    ]
+  },
+  "CustomerRef": {
+    "value": "17752",
+    "name": "Cincinnati Reds (Goodyear, AZ)"
+  },
+  "FreeFormAddress": true,
+  "ShipFromAddr": {
+    "Id": "254899",
+    "Line1": "1731 W Grand Ave, Chicago, IL, 60622, USA"
+  },
+  "SalesTermRef": {
+    "value": "7",
+    "name": "Net 30"
+  },
+  "DueDate": "2026-08-25",
+  "TotalAmt": 39589.17,
+  "ApplyTaxAfterDiscount": false,
+  "PrintStatus": "NotSet",
+  "Balance": 39589.17,
+  "TaxExemptionRef": {}
+}

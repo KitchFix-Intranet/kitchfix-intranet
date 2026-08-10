@@ -1,0 +1,717 @@
+{
+  "AllowIPNPayment": false,
+  "AllowOnlinePayment": true,
+  "AllowOnlineCreditCardPayment": false,
+  "AllowOnlineACHPayment": true,
+  "AllowOnlinePayPalPayment": false,
+  "AllowOnlineAffirmPayment": false,
+  "EInvoiceStatus": "Viewed",
+  "domain": "QBO",
+  "sparse": false,
+  "Id": "290419",
+  "SyncToken": "0",
+  "MetaData": {
+    "CreateTime": "2026-07-29T08:51:28-07:00",
+    "LastModifiedByRef": {
+      "value": "9130347992551296"
+    },
+    "LastUpdatedTime": "2026-07-29T08:52:12-07:00"
+  },
+  "CustomField": [
+    {
+      "DefinitionId": "1",
+      "Name": "Purchase Order",
+      "Type": "StringType"
+    },
+    {
+      "DefinitionId": "2",
+      "Name": "DC",
+      "Type": "StringType"
+    }
+  ],
+  "DocNumber": "K300168900",
+  "TxnDate": "2026-07-26",
+  "CurrencyRef": {
+    "value": "USD",
+    "name": "United States Dollar"
+  },
+  "LinkedTxn": [],
+  "Line": [
+    {
+      "Id": "1",
+      "LineNum": 1,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-13",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "2",
+      "LineNum": 2,
+      "Description": "Continental Plus",
+      "Amount": 267.12,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-13",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 42,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "3",
+      "LineNum": 3,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-14",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "4",
+      "LineNum": 4,
+      "Description": "Continental Plus",
+      "Amount": 267.12,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-14",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 42,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "5",
+      "LineNum": 5,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-15",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "6",
+      "LineNum": 6,
+      "Description": "Continental Plus",
+      "Amount": 267.12,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-15",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 42,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "7",
+      "LineNum": 7,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-16",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "8",
+      "LineNum": 8,
+      "Description": "Continental Plus",
+      "Amount": 267.12,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-16",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 42,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "9",
+      "LineNum": 9,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-17",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "10",
+      "LineNum": 10,
+      "Description": "Continental Plus",
+      "Amount": 477,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-17",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 75,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "11",
+      "LineNum": 11,
+      "Description": "Breakfast - 10 & Lunch - 10. Total = 20.",
+      "Amount": 258,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-18",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 20,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "12",
+      "LineNum": 12,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-20",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "13",
+      "LineNum": 13,
+      "Description": "Continental Plus",
+      "Amount": 267.12,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-20",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 42,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "14",
+      "LineNum": 14,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-21",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "15",
+      "LineNum": 15,
+      "Description": "Continental Plus",
+      "Amount": 267.12,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-21",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 42,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "16",
+      "LineNum": 16,
+      "Description": "Lunch",
+      "Amount": 219.3,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-22",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 17,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "17",
+      "LineNum": 17,
+      "Description": "Continental Plus",
+      "Amount": 267.12,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-22",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 6.36,
+        "Qty": 42,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "18",
+      "LineNum": 18,
+      "Description": "Breakfast - 9 & Lunch - 9. Total = 18.",
+      "Amount": 232.2,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-23",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 18,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "19",
+      "LineNum": 19,
+      "Description": "Breakfast - 9 & Lunch - 9. Total = 18.",
+      "Amount": 232.2,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-24",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 18,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Id": "20",
+      "LineNum": 20,
+      "Description": "Breakfast - 8 & Lunch - 8. Total = 16.",
+      "Amount": 206.4,
+      "DetailType": "SalesItemLineDetail",
+      "SalesItemLineDetail": {
+        "ServiceDate": "2026-07-25",
+        "ItemRef": {
+          "value": "3327",
+          "name": "REDS Rehab - Meal Service"
+        },
+        "ClassRef": {
+          "value": "1200000000000130911",
+          "name": "PFS:CIN - AZ (REDS)"
+        },
+        "UnitPrice": 12.9,
+        "Qty": 16,
+        "ItemAccountRef": {
+          "value": "1077",
+          "name": "2400.1 Meal Service:Meal Service (Home)"
+        },
+        "TaxCodeRef": {
+          "value": "TAX"
+        },
+        "TaxClassificationRef": {
+          "value": "EUC-99990202-V1-00020000"
+        }
+      },
+      "CustomExtensions": []
+    },
+    {
+      "Amount": 5030.04,
+      "DetailType": "SubTotalLineDetail",
+      "SubTotalLineDetail": {}
+    }
+  ],
+  "TxnTaxDetail": {
+    "TxnTaxCodeRef": {
+      "value": "37"
+    },
+    "TotalTax": 518.09,
+    "TaxLine": [
+      {
+        "Amount": 316.93,
+        "DetailType": "TaxLineDetail",
+        "TaxLineDetail": {
+          "TaxRateRef": {
+            "value": "55"
+          },
+          "PercentBased": true,
+          "TaxPercent": 6.3,
+          "NetAmountTaxable": 5030.04
+        }
+      },
+      {
+        "Amount": 201.16,
+        "DetailType": "TaxLineDetail",
+        "TaxLineDetail": {
+          "TaxRateRef": {
+            "value": "57"
+          },
+          "PercentBased": true,
+          "TaxPercent": 4,
+          "NetAmountTaxable": 5030.04
+        }
+      }
+    ]
+  },
+  "CustomerRef": {
+    "value": "17752",
+    "name": "Cincinnati Reds (Goodyear, AZ)"
+  },
+  "FreeFormAddress": true,
+  "ShipFromAddr": {
+    "Id": "254902",
+    "Line1": "1731 W Grand Ave, Chicago, IL, 60622, USA"
+  },
+  "SalesTermRef": {
+    "value": "7",
+    "name": "Net 30"
+  },
+  "DueDate": "2026-08-25",
+  "TotalAmt": 5548.13,
+  "ApplyTaxAfterDiscount": false,
+  "PrintStatus": "NotSet",
+  "Balance": 5548.13,
+  "TaxExemptionRef": {}
+}

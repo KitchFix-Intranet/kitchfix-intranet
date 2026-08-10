@@ -171,6 +171,13 @@ This is a discipline aid, not a CI check. Do not automate it.
 |---|---|---|---|
 | `CRON_SECRET` | Shared secret for Vercel cron auth | Prod, Preview | All crons return 401 |
 
+### QuickBooks Online proxy (sc-31 / PR-B billing arc)
+
+| Variable | Description | Scope | If missing |
+|---|---|---|---|
+| `QBO_PROXY_BASE` | Base URL of Josh's QBO proxy (currently `https://chief.ngrok.app/qbo/v3/company/1219933770`). Callers append `/query?query=...&minorversion=75` for QBQL reads; the proxy holds the Intuit OAuth tokens server-side. Read by `scripts/billing/diff-week.mjs` and (in PR-C) by the QBO adapter. GET only in PR-B. | Local `.env.local` (dev + probe scripts); Prod when PR-C activates | Diff harness + adapter fail before any network call |
+| `QBO_PROXY_KEY` | Static `X-API-Key` header value for the proxy. Chat-burned during the 2026-08-06 recon; rotate + narrow to read-only until PR-C's writer ships (K-18 open). | Local `.env.local`; Prod when PR-C activates | Same as `QBO_PROXY_BASE` - reads fail with a named error |
+
 ### Testing / feature flags
 
 | Variable | Description | Scope | If missing |
