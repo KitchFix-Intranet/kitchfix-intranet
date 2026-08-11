@@ -44,9 +44,9 @@
 //      each week.)
 //
 // ─── Line description convention (owner ruling 2026-08-10) ────────
-//   `plain_name` line_desc_style emits `mapping.qbo_item_name` as
+//   `plain_name` line_desc_style emits `mapping.qbo_line_description` as
 //   the invoice-line description, NOT the SC row's service_name.
-//   The mapping's qbo_item_name field carries Sebastian's typed
+//   The mapping's qbo_line_description field carries Sebastian's typed
 //   convention (e.g. "Fountain Beverages"), NOT the QB item's
 //   registered Name (e.g. "REDS Fountain Beverages"). QBO's ItemRef
 //   resolves by `value` (id) at post time; `name` is a display hint
@@ -339,7 +339,7 @@ export function buildInvoicePayload({
     // Description composition:
     //   aggregate_group (any bucket size) -> composed (plain name
     //   for single component; "Total = X." shape for multi)
-    //   solo + line_desc_style='plain_name' -> mapping.qbo_item_name
+    //   solo + line_desc_style='plain_name' -> mapping.qbo_line_description
     //     (owner ruling 2026-08-10: the mapping carries Sebastian's
     //      typed convention; SC service_name is not authoritative
     //      for line descriptions)
@@ -349,7 +349,7 @@ export function buildInvoicePayload({
       const comps = bucket.map((r) => ({ name: r.service_name, qty: r.qty }));
       description = composeAggregateDescription(comps);
     } else if (first.mapping.line_desc_style === "plain_name") {
-      description = first.mapping.qbo_item_name;
+      description = first.mapping.qbo_line_description;
     } else {
       description = "";
     }
@@ -360,7 +360,7 @@ export function buildInvoicePayload({
       Description: description || undefined,
       SalesItemLineDetail: {
         ServiceDate: first.date,
-        ItemRef: { value: first.mapping.qbo_item_id, name: first.mapping.qbo_item_name },
+        ItemRef: { value: first.mapping.qbo_item_id, name: first.mapping.qbo_line_description },
         UnitPrice: rate,
         Qty: totalQty,
         TaxCodeRef: { value: first.mapping.tax_override || "TAX" },
@@ -383,7 +383,7 @@ export function buildInvoicePayload({
       // for the second half of a biweekly).
       const weekMonday = addDays(weekStart, (wIdx - 1) * 7);
       const ffDescription = ff.mapping.line_desc_style === "plain_name"
-        ? ff.mapping.qbo_item_name
+        ? ff.mapping.qbo_line_description
         : undefined;
       const line = {
         DetailType: "SalesItemLineDetail",
@@ -391,7 +391,7 @@ export function buildInvoicePayload({
         Description: ffDescription,
         SalesItemLineDetail: {
           ServiceDate: weekMonday,
-          ItemRef: { value: ff.mapping.qbo_item_id, name: ff.mapping.qbo_item_name },
+          ItemRef: { value: ff.mapping.qbo_item_id, name: ff.mapping.qbo_line_description },
           UnitPrice: rate,
           Qty: 1,
           TaxCodeRef: { value: ff.mapping.tax_override || "TAX" },
