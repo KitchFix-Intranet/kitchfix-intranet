@@ -216,19 +216,20 @@ COMMIT;
 --   AND table_name   = 'sc_qbo_service_map'
 --   AND column_name IN ('qbo_item_name', 'qbo_line_description');
 
--- V4. Live values after rename. Expected: 13 rows (all sc-31 seeds),
---     with the 4 CIN - AZ solo values matching sc-31a's Sebastian-
---     typed convention: Pre-Game Snack / Coffee Service / Fountain
---     Beverages / Continental Plus. TXR + CIN aggregate rows keep
---     their registered QB item names.
+-- V4. Live values after rename. Expected: 22 rows (all sc-31 seeds:
+--     9 TXR - AZ + 13 CIN - AZ), with the 4 CIN - AZ solo values
+--     matching sc-31a's Sebastian-typed convention: Pre-Game Snack /
+--     Coffee Service / Fountain Beverages / Continental Plus. TXR +
+--     CIN aggregate rows keep their registered QB item names.
 --
 -- SELECT account_key, qbo_item_id, qbo_line_description, line_desc_style
 -- FROM sc_qbo_service_map
 -- WHERE active = true
 -- ORDER BY account_key, qbo_item_id, qbo_line_description;
 
--- V5. Changelog rows for the rename. Expected: 13 new rows tagged
---     'sc-33:%'.
+-- V5. Changelog rows for the rename. Expected: 22 new rows tagged
+--     'sc-33:%' (one per row in sc_qbo_service_map = 9 TXR + 13 CIN).
+--     Prior authoring carried the CIN count only; corrected 2026-08-11.
 --
 -- SELECT count(*) FROM sc_config_changelog WHERE reason LIKE 'sc-33:%';
 

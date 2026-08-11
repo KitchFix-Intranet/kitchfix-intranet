@@ -1,0 +1,137 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- sc-34: strip TRUNCATE from the postgres role's ALTER DEFAULT
+--         PRIVILEGES record for public schema tables.
+-- 2026-08-11
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- Fixes the mechanism sc-33's V2 probe surfaced.
+--
+-- ─── V2 probe result (Kevin's Studio run, 2026-08-11) ─────────────
+--
+-- ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public grants
+-- `Dxtm` (TRUNCATE, REFERENCES, TRIGGER, MAINTAIN) to `anon`,
+-- `authenticated`, and `service_role`, and grants SELECT to
+-- `joe_readonly`. Every new table created by the postgres role in
+-- the public schema inherits that grant set silently.
+--
+-- The `TRUNCATE` grant on `anon` + `authenticated` is what sc-33
+-- surfaced on the four sc- tables it patched. sc-33 revokes on
+-- those four; sc-34 fixes the source so the next new table is
+-- born clean.
+--
+-- ─── The fix (one line, on top of the standard ceremony) ──────────
+--
+-- ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+--   REVOKE TRUNCATE ON TABLES FROM anon, authenticated;
+--
+-- The other two default grants for anon/authenticated (REFERENCES,
+-- TRIGGER) stay as-is. Both are low-risk on their own (see
+-- `docs/audits/GRANT_HYGIENE_2026-07-29.md` §2: REFERENCES is nearly
+-- inert without CREATE TABLE; TRIGGER needs CREATE FUNCTION which
+-- anon does not have), and they match the pattern our explicit
+-- GRANT lines already write. Owner ruling 2026-08-11: leave those
+-- for a separate hygiene pass if we want to tighten further.
+--
+-- The `service_role` MAINTAIN + REFERENCES + TRIGGER + TRUNCATE
+-- default stays. `service_role` is the app-facing writer key; it
+-- already carries SELECT/INSERT/UPDATE explicitly on our tables and
+-- default-holding TRUNCATE is intentional for maintenance work.
+--
+-- ─── NOT retroactive (blast radius = 0 for existing tables) ───────
+--
+-- Postgres's `ALTER DEFAULT PRIVILEGES ... REVOKE` applies ONLY to
+-- objects created AFTER the statement runs. Existing tables (every
+-- Vendor / Invoice / OPD / SC table applied before this migration)
+-- keep whatever grants they already hold. That is why this fix has
+-- no blast radius: no live grant is touched.
+--
+-- If Kevin's July 2026 catalog-driven revoke set the current live
+-- state to "no TRUNCATE for anon/authenticated" on those pre-arc
+-- tables, this migration preserves that state. If any table has
+-- been re-created since (in which case it re-inherited TRUNCATE
+-- until sc-33's per-table REVOKE ran on the SC four), the same July
+-- catalog-driven revoke block can be re-run at Kevin's discretion
+-- to sweep any other affected surface. sc-34 stops the leak; a
+-- separate sweep cleans anything the leak already stained.
+--
+-- ─── Standing flag: joe_readonly SELECT default ───────────────────
+--
+-- The same probe row shows `joe_readonly` inherits SELECT on every
+-- new table in the public schema. That includes `sc_export_ledger`
+-- (billing money) and every future SC / billing / KPI table. This
+-- may be intentional (Joe as a read-only auditor) or may need
+-- scoping (excluding money-adjacent tables). Left as-is here; Kevin
+-- rules in a follow-up. Flag NOT resolved by this migration.
+--
+-- ─── Re-apply safety ──────────────────────────────────────────────
+--
+-- ALTER DEFAULT PRIVILEGES ... REVOKE on a privilege that is not
+-- present in the current default ACL is a no-op. Running this file
+-- a second time in Studio changes zero rows and produces no error.
+
+BEGIN;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE TRUNCATE ON TABLES FROM anon, authenticated;
+
+COMMIT;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════
+--
+--   V E R I F Y   B L O C K   -   N O T   P A R T   O F   T H E
+--                             M I G R A T I O N
+--
+-- ═══════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════
+
+-- V1. Confirm the DEFAULT PRIVILEGES record no longer includes
+--     TRUNCATE for anon or authenticated.
+--
+-- The `defaclacl` column returns a Postgres ACL array. After sc-34
+-- the entries for anon + authenticated should carry only the
+-- REFERENCES/TRIGGER (+ MAINTAIN if it was there) flags - NOT
+-- TRUNCATE ('D').
+--
+-- SELECT d.defaclrole::regrole                  AS grantor,
+--        d.defaclnamespace::regnamespace         AS schema,
+--        d.defaclobjtype                         AS obj_type,
+--        d.defaclacl                             AS default_acl
+-- FROM pg_default_acl d
+-- WHERE d.defaclrole = 'postgres'::regrole
+--   AND d.defaclnamespace = 'public'::regnamespace::oid
+--   AND d.defaclobjtype = 'r'  -- 'r' = tables
+-- ORDER BY d.defaclrole::regrole::text;
+
+-- V2. Prove the fix by creating a throwaway table and reading its
+--     grants. The table gets dropped immediately; no state persists.
+--     Expected: no TRUNCATE grant to anon or authenticated on the
+--     probe table.
+--
+-- BEGIN;
+-- CREATE TABLE public.sc_probe_default_priv_check (id int);
+-- SELECT table_name, grantee, privilege_type
+-- FROM information_schema.role_table_grants
+-- WHERE table_schema = 'public'
+--   AND table_name = 'sc_probe_default_priv_check'
+--   AND grantee IN ('anon', 'authenticated')
+--   AND privilege_type IN ('TRUNCATE', 'REFERENCES', 'TRIGGER');
+-- ROLLBACK;
+-- Expected in the SELECT output: REFERENCES + TRIGGER only, no
+-- TRUNCATE.
+
+-- V3. Standing findings still true (not fixed by this migration):
+--     joe_readonly inherits SELECT on every new public table. Kevin
+--     rules whether to scope this further (e.g., strip SELECT for
+--     sc_export_ledger / sc_qbo_*). Confirm with:
+--
+-- SELECT d.defaclrole::regrole                  AS grantor,
+--        d.defaclnamespace::regnamespace         AS schema,
+--        d.defaclacl                             AS default_acl
+-- FROM pg_default_acl d
+-- WHERE d.defaclnamespace = 'public'::regnamespace::oid
+--   AND EXISTS (
+--     SELECT 1
+--     FROM aclexplode(d.defaclacl) a
+--     WHERE a.grantee = 'joe_readonly'::regrole
+--   );
