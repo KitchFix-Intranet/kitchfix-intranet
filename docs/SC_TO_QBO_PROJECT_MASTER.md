@@ -1,7 +1,7 @@
 # SC -> QBO BILLING - PROJECT MASTER
 
 **Target repo path:** `docs/SC_TO_QBO_PROJECT_MASTER.md`
-**Version:** v1.8 · Authored 2026-08-06, updated 2026-08-10 (Chat-Claude / CC)
+**Version:** v1.9 · Authored 2026-08-06, updated 2026-08-11 (Chat-Claude / CC)
 **Owner:** Kevin. This is the billing arc's working doc, updated step by step
 as the arc moves. `PROJECT_SCOPE_MASTER.md` §7 points here; this doc points to
 the evidence docs. When the first live invoice sends, this doc becomes the
@@ -42,18 +42,20 @@ in §9.
 
 ## Current position
 
-**Phase 3 open - BUILD.** PR-A merged (#637), PR-A1 merged (#639), PR-B
-merged (#641), PR-B1 open (#643, pilot history seed). Retro-shadow round 1
-run 2026-08-10 on both pilots: CIN-AZ near-total match (44/47 lines match
-across the biweekly pair; 3 description diffs with matching amount, 0
-orphans on either side); TXR-AZ blocked on Extra Protein CONFIG UNMAPPED.
-Findings A + B graded 2026-08-10; PR-B2 authored to close both (sc-31a
-mapping fix + owner ruling on unmapped+zero). Open: K-18 (gates PR-C only),
-PR #643, PR-B2, 07-26 REDS meal-slot variance (Sebastian ruling), TXR
-Extra Protein mapping (Sebastian ruling).
+**Phase 3 open - BUILD.** PR-A/A1/B/B1/B2 all merged (#637, #639, #641, #643,
+#645). Retro-shadow round 2 (2026-08-10) verdicts: TXR-AZ 07-27 MATCH 12/12
+(28 zero-count Extra Protein warnings, ruling working as designed); CIN-AZ
+07-13 biweekly pair Rehab 20/20 MATCH, Main 26/27 (only remaining diff is
+Sebastian's 07-26 REDS meal-slot variance, out of scope). **PR-C opened
+DRAFT** (2026-08-11) with sc-32 export ledger + qboAdapter + wired finalize
+seam + N1/N2 dry-run + live-test-post script. Hard-fenced to test customer
+22463; no send path. Live test post gated on Kevin confirming Josh enabled
+write. Open: K-18 (gates PR-C graduation), 07-26 REDS meal-slot variance
+(Sebastian ruling), TXR Extra Protein mapping (Sebastian ruling),
+`qbo_line_description` rename (owner ordered 2026-08-10, separate from PR-C).
 
-*(This marker moves with every update. Last moved: 2026-08-10, retro-shadow
-round 1 in.)*
+*(This marker moves with every update. Last moved: 2026-08-11, PR-C draft
+opened.)*
 
 ---
 
@@ -304,8 +306,8 @@ catering billing.**
 | PR-A1 (UI wire + battery + sc-30b touch) | CC | **MERGED - PR #639** | 08-07 |
 | PR-B (builder + retro-shadow harness) | CC | **MERGED - PR #641** (sc-31 + buildInvoicePayload + 4-fixture parity + 5 negatives + diff harness) | 08-07 |
 | PR-B1 (pilot history seed) | CC | **OPEN - PR #643** (real July data loaded to sc_daily_actuals for TXR + CIN AZ; retro-shadow round 1 findings surfaced) | 08-10 |
-| PR-B2 (desc-convention + unmapped-zero ruling) | CC | **DRAFT - PR TBD** (sc-31a mapping fix for Finding A; owner ruling on unmapped+zero for Finding B; 4 new unit tests) | 08-10 |
-| PR-C (adapter) | CC | Blocked on K-18 + retro-shadow graduation | 08-06 |
+| PR-B2 (desc-convention + unmapped-zero ruling) | CC | **MERGED - PR #645** | 08-10 |
+| PR-C (adapter + ledger + notifications, DRAFT) | CC | **DRAFT - PR TBD** (sc-32 + qboAdapter + wire + N1/N2 dry-run + 23 tests + live-test-post script). Fenced to customer 22463 only until owner + Sebastian graduate. | 08-11 |
 | Track B (admin backdate PR) | CC | RULED, NOT STARTED | 08-06 |
 | Shadow weeks | Sebastian + system | NOT STARTED | 08-06 |
 | First live invoice | Sebastian | NOT STARTED | 08-06 |
@@ -322,4 +324,5 @@ catering billing.**
 | 2026-08-07 | v1.5 | PR-A merged to main (#637): sc-30 migration + SC_LOCK_OVERRIDE + finalize/revert server actions + read endpoint + WeekFinalizeControl component (unwired). PR-A1 scoped for the UI wire + full A2/A3/A4/A5/A7 battery + changed_at fix per Chat-Claude's SQL-review finding. Migration numbering supplemented: sc-30b (touch trigger, PR-A1). |
 | 2026-08-07 | v1.6 | PR-A1 opened DRAFT. sc-30b BEFORE UPDATE trigger authored (SQL for Chat-Claude review before Kevin's Studio step). changed_at bug [ran]-confirmed against prod. Battery: A2 negative + positive [ran] via probe; A3 all 4 write paths [ran] via shared assertWeekOpenForWrite (single/bulk/mixed shapes) + [code-read] wire-in citations; A4 all three revert cases proved ([ran] for finalized->reverted with override, [code-read] for billed refusal and non-override refusal, both with live-state verifications). A5 paint 5 contexts + A7 laptop matrix marked needs-gate (local build blocked by owner-scoped npm token on `@kitchfix-intranet/shared`; Vercel preview blocked by prod-pinned NEXTAUTH_URL). Cleanup SQL in PR body for Kevin's Studio step; all probe rows end reverted or deleted. |
 | 2026-08-07 | v1.7 | PR-A1 crash fix + merged as PR #639. PR-B opened DRAFT. sc-31 migration authored (sc_qbo_account_map + sc_qbo_service_map + 24 changelog rows for 2 accounts and 22 services). buildInvoicePayload pure function + owner amendment (period-aligned biweekly via `sc_day_metadata`; anchor is reference-only; P13 hard-fails). Fixture parity suite: 4 live QBO invoices reproduced to the cent + 5 negative tests + 1 P13 hard-fail test = 9 passing tests. Retro-shadow diff harness `scripts/billing/diff-week.mjs` runs against live sc_daily_revenue + live QBO GET; both pilot accounts output CONFIG UNMAPPED cleanly pending sc-31 apply (SC DATA ABSENT expected post-apply per C-11). QBO_PROXY_BASE / QBO_PROXY_KEY documented in ENV_VARS.md. New pilot mapping: TXR-AZ has 4 UNMAPPED Extra Protein services (no matching QB item; builder throws on use, as designed). F1 defect on K300168897 L4 confirmed (Sebastian typo "Total = 175" on qty=250 line); builder produces the CORRECT "Total = 250" and the test asserts the CORRECT value with the F1 override flagged in the report. |
+| 2026-08-11 | v1.9 | **PR-C opened DRAFT.** sc-32 migration authors `sc_export_ledger` (spec §6) with the load-bearing partial unique index `WHERE status='created' AND is_test=false` for idempotency; peer-table live shapes verified via SELECT + DDL cross-check per SR-23 (no repeat of sc-31's three-round pain against `sc_config_changelog`). `src/lib/billing/qboAdapter.js` implements `postInvoiceDraft(payload, {isTest})` with three fences: (1) hard `ALLOWED_CUSTOMER_IDS = {"22463"}` constant refuses every real customer id at the top of the call before any network hit, writing a `failed` ledger row and throwing `NotAllowlistedError`; (2) draft-only forever, no code path sets `EmailStatus` or calls `SendInvoice` (grep proof pasted in PR body); (3) idempotency check against the ledger returns the prior result on a duplicate (account, week, slot) live-real row. Test-marking (owner ruling 2026-08-10) rewrites the payload copy: `CustomerRef=22463`, `TxnDate` shifts to the same weekday in 2029, `CustomerMemo`/`PrivateNote` carry loud TEST literals, every line `Description` gets a `TEST - ` prefix, ledger row is `status='test'` + `is_test=true`. Retry once on 5xx/network, never on 4xx. `runFinalizeEffects` in `src/lib/scWeekFinalize.js` extends the PR-A seam to the full chain (load maps + revenue -> build -> post per slot -> ledger -> transition to `push_failed` on any failure -> render N2 dry-run -> return failure summary; happy path renders N1 dry-run). Biweekly first-of-pair returns `awaiting_pair_close` without posting. N1 (Sebastian + Kevin + Joe + Josh + salaried managers + submitter) and N2 (Kevin + Sebastian, email + Slack) both live-fence to `dryRunOnly=true`; render-only is the whole PR-C surface, live sends are a follow-up PR after owner + Sebastian sign off. Live-test-post script `scripts/billing/live-test-post.mjs` is Step 5's gated tool: builds the TXR-AZ week 07-27..08-02 payload, applies test-marking, POSTs to customer 22463, prints the read-back GET showing every test marker + line-level parity; runs only after Kevin confirms Josh enabled write. Tests: 3 new suites (qboAdapter 13, qboNotifications 6, runFinalizeEffects 5) + 4 helper tests = 23 new, all passing; PR-B suite 13/13 unchanged; billing surface 36/36. |
 | 2026-08-10 | v1.8 | **Retro-shadow round 1 landed.** PR #641 (sc-31 + builder + harness) merged after two Studio rollbacks against `sc_config_changelog` (SR-23 invoked; full column dump re-verified before third try landed). PR #643 (PR-B1 pilot history seed) OPEN: real July 2026 data loaded from Excel workbooks into `sc_daily_actuals` for TXR-AZ (2 weeks) and CIN-AZ (2 weeks) as `created_by='spreadsheet_seed'` via delete-then-insert, 4 slices x 91 rows = 364, S3 out-of-span verify = 0. Round 1 diff-harness verdicts: CIN-AZ 07-13 pair Rehab K300168900 = 20/20 MATCH; Main K300168899 = 27 built vs 27 QBO, 24 matched + 3 amount-matching description diffs; TXR-AZ 07-27 = CONFIG UNMAPPED (Extra Protein FF). Findings graded 2026-08-10: **Finding A** = builder emits `mapping.qbo_item_name` (not SC service_name) for `plain_name` lines; **Finding B** = unmapped service with zero actual_count warns and skips, non-zero still throws. **PR-B2** (this row) authors sc-31a to shift 4 CIN-AZ qbo_item_name values to Sebastian's typed convention ("Pre-Game Snack", "Coffee Service", "Fountain Beverages", "Continental Plus"; UPDATEs guarded, changelog rows tagged 'sc-31a:%', re-apply is a no-op), updates the builder's plain_name path to read `mapping.qbo_item_name`, adds the warn-and-skip branch on unmapped+zero for BOTH FF and meal rows, adds 4 new unit tests (B4-6..B4-9) and preserves the 9 existing tests. Local: 13/13 passing. Diff harness re-run gated on sc-31a Studio apply. 07-26 REDS meal-slot variance and TXR Extra Protein mapping remain Sebastian rulings, out of scope. |

@@ -176,7 +176,8 @@ This is a discipline aid, not a CI check. Do not automate it.
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
 | `QBO_PROXY_BASE` | Base URL of Josh's QBO proxy (currently `https://chief.ngrok.app/qbo/v3/company/1219933770`). Callers append `/query?query=...&minorversion=75` for QBQL reads; the proxy holds the Intuit OAuth tokens server-side. Read by `scripts/billing/diff-week.mjs` and (in PR-C) by the QBO adapter. GET only in PR-B. | Local `.env.local` (dev + probe scripts); Prod when PR-C activates | Diff harness + adapter fail before any network call |
-| `QBO_PROXY_KEY` | Static `X-API-Key` header value for the proxy. Chat-burned during the 2026-08-06 recon; rotate + narrow to read-only until PR-C's writer ships (K-18 open). | Local `.env.local`; Prod when PR-C activates | Same as `QBO_PROXY_BASE` - reads fail with a named error |
+| `QBO_PROXY_KEY` | Static `X-API-Key` header value for the proxy. Chat-burned during the 2026-08-06 recon; rotate + narrow to read-only until PR-C's writer ships (K-18 open). PR-C reads it for POSTs; a read-only key returns an auth error and the adapter records a `failed` ledger row. | Local `.env.local`; Prod when PR-C activates | Same as `QBO_PROXY_BASE` - reads fail with a named error |
+| `NEXT_PUBLIC_APP_BASE_URL` | Origin used to compose N1 (invoice created) and N2 (push failed) links in `src/lib/billing/qboNotifications.js`. Empty in local dev is fine (links become relative); production sets the full origin. PR-C only. | Local + Prod | Notification links come out relative rather than absolute |
 
 ### Testing / feature flags
 
