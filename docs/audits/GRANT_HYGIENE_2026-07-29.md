@@ -330,3 +330,21 @@ The blind spot is stable and the fix is stable:
 - **When PostgREST refuses `information_schema`** (default behavior; the schema is not projected) the answer is not "fall back and hope." The answer is a Studio query or an SQL-executing RPC. Both cost less than a wrong count.
 
 This lesson also lives in the plan (v2.64 §22) so a future re-derivation from any surface can find it.
+
+---
+
+## 10. Recurrence + fix (2026-08-11, sc-33)
+
+**The revoke re-fills for every new table.** Kevin's V4 verify on sc-32 caught that `sc_week_finalize`, `sc_qbo_service_map`, and `sc_export_ledger` all grant `TRUNCATE` to `anon` + `authenticated` - despite our sc-30 / sc-31 / sc-32 SQL never writing that grant. `grep -n "GRANT" docs/migrations/sc-3[012]*.sql` shows only `GRANT REFERENCES, TRIGGER ... TO anon, authenticated`. No TRUNCATE keyword in the anon/authenticated grant list on any of the three files.
+
+**Mechanism.** The TRUNCATE grant comes from an `ALTER DEFAULT PRIVILEGES` record on the `public` schema (or on a specific grantor role) that pre-dates our migrations and pre-dates the 2026-07-31 catalog-driven revoke. The revoke cleaned live state at that moment but did NOT touch `pg_default_acl`; every table created after that re-inherits `TRUNCATE` for anon/authenticated automatically.
+
+**The 2026-07-31 revoke was necessary but not sufficient.** It fixed then; it does not fix now.
+
+**sc-33's response**:
+
+- Per-table `REVOKE TRUNCATE ... FROM anon, authenticated` on the 4 sc- tables (`sc_week_finalize`, `sc_qbo_account_map`, `sc_qbo_service_map`, `sc_export_ledger`).
+- Verify block V2 probes `pg_default_acl` to reveal the exact grantor role holding the default; once Kevin sees that output, a follow-up can add `ALTER DEFAULT PRIVILEGES FOR ROLE <grantor> IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM anon, authenticated;` to fix the source.
+- `docs/migrations/_GRANT_TEMPLATE.md` documents the required per-table REVOKE line for every future new-table migration until the default privileges are cleaned up.
+
+**Recommendation R3 status (updated).** The regression-guard probe is still open; the sc-33 fix is a per-table patch, not a schema-wide guard. R3 remains the right long-term shape - either a scheduled Studio catalog probe or an SQL-executing RPC that asserts anon / authenticated hold none of TRUNCATE / DELETE / UPDATE.

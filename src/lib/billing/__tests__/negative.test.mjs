@@ -10,7 +10,7 @@
 //   6. unmapped MEAL row with actual_count=0 -> warn + skip (no throw)
 //   7. unmapped FF   row with actual_count=0 -> warn + skip (no throw)
 //   8. unmapped FF   row with actual_count>0 -> THROW
-//   9. plain_name description emits mapping.qbo_item_name (not
+//   9. plain_name description emits mapping.qbo_line_description (not
 //      SC row's service_name) - the Fountain Bev case.
 //
 // Run via: npm run test:unit
@@ -323,11 +323,11 @@ test("negative: unmapped FF with positive actual_count throws (regression guard)
   );
 });
 
-// B4-9: plain_name emits mapping.qbo_item_name, not SC row's
+// B4-9: plain_name emits mapping.qbo_line_description, not SC row's
 // service_name (the Fountain Bev case owner ruled on 2026-08-10).
-test("plain_name description emits mapping.qbo_item_name (Fountain Bev case)", () => {
+test("plain_name description emits mapping.qbo_line_description (Fountain Bev case)", () => {
   // Force the SC row's service_name to a DIFFERENT string ("Fountain Bev")
-  // than the mapping's qbo_item_name ("Fountain Beverages"). Builder must
+  // than the mapping's qbo_line_description ("Fountain Beverages"). Builder must
   // emit the mapping value regardless.
   const rows = [];
   const dates = [
@@ -358,7 +358,7 @@ test("plain_name description emits mapping.qbo_item_name (Fountain Bev case)", (
   assert.equal(ffLines.length, 2, "one Fountain line per week in the biweekly pair");
   for (const l of ffLines) {
     assert.equal(l.Description, "Fountain Beverages",
-      "description emits mapping.qbo_item_name, NOT the SC row's service_name 'Fountain Bev'");
+      "description emits mapping.qbo_line_description, NOT the SC row's service_name 'Fountain Bev'");
   }
 });
 

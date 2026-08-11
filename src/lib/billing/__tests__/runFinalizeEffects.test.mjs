@@ -51,7 +51,7 @@ test("C4 full failure path: real customer -> failed ledger + push_failed + N2 re
     tables: {
       sc_qbo_account_map: [TXR_MAP],
       sc_qbo_service_map: [
-        { service_id: "svc-1", account_key: "TXR - AZ", qbo_item_id: "3338", qbo_item_name: "TXR-AZ - Regular Snack", aggregate_group: null, invoice_slot: "main", tax_override: null, line_desc_style: null, active: true },
+        { service_id: "svc-1", account_key: "TXR - AZ", qbo_item_id: "3338", qbo_line_description: "TXR-AZ - Regular Snack", aggregate_group: null, invoice_slot: "main", tax_override: null, line_desc_style: null, active: true },
       ],
       sc_daily_revenue: [
         { service_date: "2026-07-27", service_id: "svc-1", service_name: "Regular Snack", account_key: "TXR - AZ", is_flat_fee: false, is_tax_free: false, is_non_revenue: false, actual_count: 10, actual_price_at_date: 5.89, price_at_date: 5.89, period: "8", week_label: "Week 3", has_actuals: true, has_projection: false },
