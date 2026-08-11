@@ -14,6 +14,8 @@ import {
   markPayloadAsTest,
   shiftTxnDateToTestYear,
   payloadHash,
+  composeInvoiceUrl,
+  stripInternalMarkers,
   _internals,
 } from "../qboAdapter.js";
 import { makeSupaMock } from "./_supa-mock.mjs";
@@ -298,4 +300,124 @@ test("test post: idempotency guard is SKIPPED for isTest (allows re-runs)", asyn
   assert.equal(rows.length, 2);
   const newest = rows.find((r) => r.qbo_invoice_id === "NEW-TEST");
   assert.equal(newest.attempt, 2);
+});
+
+// ─── C7 corrections (owner 2026-08-11) ───────────────────────────
+
+test("URL is composed from QBO_PROXY_BASE + QBO_REALM_ID (trailing slash safe, realm URI-encoded)", () => {
+  // Canonical shape from Kevin's .env.local.
+  assert.equal(
+    composeInvoiceUrl("https://chief.ngrok.app/qbo", "1219933770"),
+    "https://chief.ngrok.app/qbo/v3/company/1219933770/invoice?minorversion=75",
+  );
+  // Trailing slash on base gets stripped.
+  assert.equal(
+    composeInvoiceUrl("https://chief.ngrok.app/qbo/", "1219933770"),
+    "https://chief.ngrok.app/qbo/v3/company/1219933770/invoice?minorversion=75",
+  );
+  // Multiple trailing slashes collapsed.
+  assert.equal(
+    composeInvoiceUrl("https://chief.ngrok.app/qbo///", "1219933770"),
+    "https://chief.ngrok.app/qbo/v3/company/1219933770/invoice?minorversion=75",
+  );
+  // Realm is URI-encoded (safe if it ever carries a non-ASCII char).
+  assert.equal(
+    composeInvoiceUrl("https://example/qbo", "abc def"),
+    "https://example/qbo/v3/company/abc%20def/invoice?minorversion=75",
+  );
+  // Missing args throw with the field named.
+  assert.throws(() => composeInvoiceUrl("", "1"), /proxyBase required/);
+  assert.throws(() => composeInvoiceUrl("https://x", ""), /realmId required/);
+});
+
+test("no key beginning with underscore survives into a posted payload", async () => {
+  // Capture the exact body the adapter would POST. The adapter's
+  // fetchImpl receives (url, apiKey, payload); we inspect the
+  // payload object for any `_`-prefixed key at any depth.
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let capturedPayload = null;
+  const fetchImpl = async (_url, _key, payload) => {
+    capturedPayload = payload;
+    return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
+  };
+
+  // Payload starts with _slot and _preTaxSubtotal (builder markers).
+  const payload = fakePayload({
+    _slot: "main",
+    _preTaxSubtotal: 12345,
+    CustomerRef: { value: "22463", name: "ZZ TEST" },
+  });
+
+  await postInvoiceDraft(payload, {
+    ...BASE_CTX,
+    isTest: false,
+    deps: { supa, fetchImpl },
+  });
+
+  function hasUnderscoreKey(node) {
+    if (Array.isArray(node)) return node.some(hasUnderscoreKey);
+    if (node && typeof node === "object") {
+      for (const [k, v] of Object.entries(node)) {
+        if (k.startsWith("_")) return `_key:${k}`;
+        const hit = hasUnderscoreKey(v);
+        if (hit) return hit;
+      }
+    }
+    return false;
+  }
+  assert.ok(capturedPayload, "fetchImpl received the payload");
+  const hit = hasUnderscoreKey(capturedPayload);
+  assert.equal(hit, false, `underscore-prefixed key survived into POST: ${hit}`);
+});
+
+test("payload_hash is computed on the stripped (wire-shape) payload", () => {
+  // Two payloads that differ ONLY in the internal markers - they
+  // must produce the SAME hash after stripping.
+  const withMarkers = {
+    _slot: "main",
+    _preTaxSubtotal: 999,
+    CustomerRef: { value: "22463", name: "ZZ TEST" },
+    TxnDate: "2029-01-01",
+    Line: [
+      { DetailType: "SalesItemLineDetail", Amount: 10,
+        SalesItemLineDetail: { ItemRef: { value: "3338" }, UnitPrice: 5, Qty: 2 } },
+    ],
+  };
+  const withoutMarkers = {
+    CustomerRef: { value: "22463", name: "ZZ TEST" },
+    TxnDate: "2029-01-01",
+    Line: [
+      { DetailType: "SalesItemLineDetail", Amount: 10,
+        SalesItemLineDetail: { ItemRef: { value: "3338" }, UnitPrice: 5, Qty: 2 } },
+    ],
+  };
+  const h1 = payloadHash(stripInternalMarkers(withMarkers));
+  const h2 = payloadHash(withoutMarkers);
+  assert.equal(h1, h2, "stripped hash matches marker-less hash");
+});
+
+test("ledger row's payload_hash matches the stripped payload sent to fetchImpl", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let capturedPayload = null;
+  const fetchImpl = async (_url, _key, payload) => {
+    capturedPayload = payload;
+    return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
+  };
+
+  await postInvoiceDraft(fakePayload({
+    _slot: "main",
+    _preTaxSubtotal: 12345,
+    CustomerRef: { value: "22463", name: "ZZ TEST" },
+  }), {
+    ...BASE_CTX,
+    isTest: false,
+    deps: { supa, fetchImpl },
+  });
+
+  const rows = supa._dump("sc_export_ledger");
+  assert.equal(rows.length, 1);
+  const ledgerHash = rows[0].payload_hash;
+  const wireHash = payloadHash(capturedPayload);
+  assert.equal(ledgerHash, wireHash,
+    "ledger's payload_hash is the sha256 of the exact bytes POSTed to QBO");
 });
