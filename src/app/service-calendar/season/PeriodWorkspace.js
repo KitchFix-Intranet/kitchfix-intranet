@@ -59,6 +59,8 @@ import WeekFinalizeControl from "../v2/billing/WeekFinalizeControl";
 import { isPerMealBillingAccount } from "../v2/billing/perMealAccounts";
 import { isScLockOverride } from "@/lib/admin";
 import "../v2/billing/weekFinalize.css";
+import "../v2/billing/finalizeOverlay.css";
+import "../v2/billing/finalizeToast.css";
 
 export default function PeriodWorkspace({
   account,                  // { key, name, category, billingModel }
@@ -1167,6 +1169,22 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                 // buildWorkspaceWeekGrid stops before them.
                 if (weekDayRecords.length === 0) return null;
                 const liveRow = finalizeRowsByWeek.get(rowMonday) || null;
+                // PR-D metrics: overlay reads these to render Days
+                // served / Meals and snacks / Pre-tax total. Derived
+                // from the row's weekMetrics (wm computed above via
+                // rowKey lookup) - the overlay is a display of what
+                // the band already surfaces.
+                const daysServed = typeof wm?.complete === "number"
+                  ? wm.complete
+                  : weekDayRecords.filter(d => d?.status === "entered").length;
+                const totalMeals = typeof wm?.actMeals === "number" ? wm.actMeals : 0;
+                const pretaxTotalDollars = typeof wm?.actRev === "number" ? wm.actRev : 0;
+                const rowSunday = (() => {
+                  if (!rowMonday) return null;
+                  const d = new Date(`${rowMonday}T12:00:00Z`);
+                  d.setUTCDate(d.getUTCDate() + 6);
+                  return d.toISOString().slice(0, 10);
+                })();
                 return (
                   <div
                     className="sc-workspace-week-finalize-row"
@@ -1177,12 +1195,17 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     <WeekFinalizeControl
                       accountKey={accountKey}
                       weekStart={rowMonday}
+                      weekEnd={rowSunday}
                       weekDays={weekDayRecords}
                       liveRow={liveRow}
                       isOverrideUser={isOverrideUser}
                       onFinalize={onFinalizeWeek}
                       onRevert={onRevertFinalize}
                       onRetry={onRetryFinalize}
+                      onOpenDay={onDayClick}
+                      daysServed={daysServed}
+                      totalMeals={totalMeals}
+                      pretaxTotalDollars={pretaxTotalDollars}
                     />
                   </div>
                 );

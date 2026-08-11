@@ -149,3 +149,76 @@
   outline-offset: 1px;
   border-color: var(--status-today-ring);
 }
+
+/* PR-D additions (2026-08-11) - blocked chips, quiet done, failed banner. */
+
+/* Blocked state: aggregate count + one chip per missing day. Each
+   chip is a real button that jumps to the day entry. Reading the
+   problem and starting to fix it are the same click (addendum §A1). */
+.sc-week-finalize-chips-label {
+  color: var(--text-muted);
+  font-size: var(--sc2-size-micro);
+}
+.sc-week-finalize-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border: var(--sc2-border-thin) solid var(--status-needs-bd);
+  border-radius: var(--radius-cell);
+  background: var(--status-needs-subtle);
+  color: var(--status-needs-fg);
+  font-family: inherit;
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-micro);
+  cursor: pointer;
+  transition: border-color var(--motion-control);
+}
+.sc-week-finalize-chip:hover {
+  border-color: var(--status-needs-strong);
+}
+.sc-week-finalize-chip:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Quiet done state: caption-size, single line, no QBO link.
+   Renders on FINALIZED and BILLED (addendum §A1 + §A7 no-QBO rule). */
+.sc-week-finalize-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--sc2-size-caption);
+  color: var(--text-muted);
+}
+.sc-week-finalize-quiet b {
+  color: var(--text-strong);
+  font-weight: var(--sc2-wt-semibold);
+}
+.sc-week-finalize-quiet-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sc2-size-body);
+  height: var(--sc2-size-body);
+  border-radius: var(--radius-pill);
+  background: var(--status-entered-subtle);
+  border: var(--sc2-border-thin) solid var(--status-entered-bd);
+  color: var(--status-entered-fg);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-display);
+  flex: 0 0 var(--sc2-size-body);
+}
+
+/* Failed banner: the one state that keeps colour and weight
+   (addendum §A1). Red instructional wash; Retry + Unlock alongside. */
+.sc-week-finalize-fail-banner {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--status-overdue-subtle);
+  border: var(--sc2-border-thin) solid var(--status-overdue-bd);
+  color: var(--status-overdue-fg);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-micro);
+}

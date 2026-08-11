@@ -1,0 +1,246 @@
+/* FinalizeOverlay - the confirm-before-finalize modal.
+   PR-D of the SC -> QBO billing arc (2026-08-11).
+   Spec: docs/SC_QBO_SHAPE_SPEC_ADDENDUM_A.md §A2 +
+         docs/design/KF_FINALIZE_FLOW_RENDER.html (row order, copy). */
+
+/* Scrim - full viewport, semi-opaque, centers the modal. */
+.sc-finalize-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--n-900) calc(var(--opacity-scrim) * 100%), transparent);
+  animation: sc-finalize-scrim-fade var(--motion-surface);
+}
+@keyframes sc-finalize-scrim-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Modal shell. Width bounded so the money row (display tier) is
+   the visual anchor across all viewports 375px+. */
+.sc-finalize-modal {
+  background: var(--surface-card);
+  border-radius: var(--radius-container-lg);
+  width: min(520px, 100%);
+  max-height: calc(100vh - var(--space-6) * 2);
+  overflow: auto;
+  box-shadow: var(--elevation-popover);
+  animation: sc-finalize-modal-rise var(--duration-slow) var(--ease-standard);
+  outline: none;
+}
+.sc-finalize-modal:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 0;
+}
+@keyframes sc-finalize-modal-rise {
+  from { opacity: 0; transform: translateY(var(--space-3)); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Head - kick eyebrow (with TEST MODE badge), title, subtitle. */
+.sc-finalize-modal-head {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
+}
+.sc-finalize-modal-kick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sc-finalize-testtag {
+  background: var(--status-needs-strong);
+  color: var(--text-inverse);
+  border-radius: var(--radius-cell);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--sc2-size-micro);
+  letter-spacing: 0.04em;
+  font-weight: var(--sc2-wt-bold);
+}
+.sc-finalize-modal-title {
+  font-size: var(--sc2-size-h2);
+  line-height: 1.2;
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: -0.01em;
+  margin-top: var(--space-2);
+  color: var(--text-heading);
+}
+.sc-finalize-modal-sub {
+  font-size: var(--sc2-size-body);
+  color: var(--text-default);
+  margin-top: var(--space-2);
+}
+
+/* Body - rows list + lock warning. */
+.sc-finalize-modal-body {
+  padding: var(--space-1) var(--space-6) 0;
+}
+.sc-finalize-rows {
+  margin: 0;
+  padding: 0;
+}
+.sc-finalize-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
+  font-size: var(--sc2-size-body);
+}
+.sc-finalize-row dt {
+  color: var(--text-muted);
+}
+.sc-finalize-row dd {
+  font-weight: var(--sc2-wt-semibold);
+  text-align: right;
+  color: var(--text-heading);
+}
+.sc-finalize-num {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-variant-numeric: tabular-nums;
+}
+/* Pre-tax total - the visual anchor. Display tier + no bottom rule. */
+.sc-finalize-row--big {
+  border-bottom: none;
+  padding-top: var(--space-4);
+}
+.sc-finalize-row--big dt {
+  color: var(--text-heading);
+  font-weight: var(--sc2-wt-bold);
+  font-size: var(--sc2-size-body);
+}
+.sc-finalize-row--big dd {
+  font-size: var(--sc2-size-h2);
+  font-weight: var(--sc2-wt-display);
+}
+
+/* Lock warning - amber, instructional, not a chrome color choice. */
+.sc-finalize-lock {
+  margin: var(--space-4) 0 var(--space-1);
+  background: var(--status-needs-subtle);
+  border: var(--sc2-border-thin) solid var(--status-needs-bd);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--sc2-size-caption);
+  color: var(--status-needs-fg);
+}
+.sc-finalize-lock b {
+  font-weight: var(--sc2-wt-bold);
+}
+
+/* Foot - Cancel + Finalize buttons. Right-aligned; primary is Go. */
+.sc-finalize-modal-foot {
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  background: var(--surface-sunken);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
+  margin-top: var(--space-4);
+}
+
+/* Modal buttons - share the button shell with the row Finalize but
+   scoped to the modal for size + emphasis independence. */
+.sc-finalize-btn {
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-4);
+  border: var(--sc2-border-thin) solid transparent;
+  cursor: pointer;
+  transition: background var(--motion-control), border-color var(--motion-control);
+}
+.sc-finalize-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-finalize-btn--ghost {
+  background: var(--surface-card);
+  border-color: var(--border-default);
+  color: var(--text-strong);
+}
+.sc-finalize-btn--ghost:hover:not(:disabled) {
+  border-color: var(--text-subtle);
+}
+.sc-finalize-btn--go {
+  background: var(--status-entered-strong);
+  color: var(--text-inverse);
+  border-color: var(--status-entered-strong);
+}
+.sc-finalize-btn--go:hover:not(:disabled) {
+  background: var(--status-entered-fg);
+  border-color: var(--status-entered-fg);
+}
+.sc-finalize-btn:disabled,
+.sc-finalize-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+/* Working state - 4-step progress list. */
+.sc-finalize-modal-body--progress {
+  padding: var(--space-4) var(--space-6);
+}
+.sc-finalize-progress {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sc-finalize-progress-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  font-size: var(--sc2-size-body);
+  color: var(--text-subtle);
+}
+.sc-finalize-progress-dot {
+  width: var(--sc2-size-body);
+  height: var(--sc2-size-body);
+  border-radius: var(--radius-pill);
+  border: var(--border-thick) solid var(--border-default);
+  flex: 0 0 var(--sc2-size-body);
+  box-sizing: border-box;
+}
+.sc-finalize-progress-step--doing {
+  color: var(--text-heading);
+  font-weight: var(--sc2-wt-semibold);
+}
+.sc-finalize-progress-step--doing .sc-finalize-progress-dot {
+  border-color: var(--focus-ring-color);
+  border-right-color: transparent;
+  animation: sc-finalize-progress-spin 0.7s linear infinite;
+}
+@keyframes sc-finalize-progress-spin {
+  to { transform: rotate(360deg); }
+}
+.sc-finalize-progress-step--done {
+  color: var(--text-default);
+}
+.sc-finalize-progress-step--done .sc-finalize-progress-dot {
+  background: var(--status-entered-subtle);
+  border-color: var(--status-entered-bd);
+}
+
+/* Reduced motion - zero the modal + progress + scrim animations at
+   the token layer via the global --duration-* remap; also explicit
+   here so the spin does not run when the user opted out. */
+@media (prefers-reduced-motion: reduce) {
+  .sc-finalize-scrim,
+  .sc-finalize-modal { animation: none; }
+  .sc-finalize-progress-step--doing .sc-finalize-progress-dot { animation: none; }
+}
+
+/* 1024 and below: overlay renders in comfortable spacing tokens
+   automatically (density-aware --space-* already remap). Nothing
+   extra needed here beyond ensuring the modal fits the viewport
+   with its width:min() cap; already handled above. */

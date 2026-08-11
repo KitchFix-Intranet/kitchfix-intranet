@@ -1,35 +1,22 @@
 "use client";
 
 // WeekFinalizeControl - the drill-in per-week Finalize surface.
-// sc-30 (2026-08-06, PR-A of the SC -> QBO billing arc).
+// PR-D (2026-08-11) reworks PR-A's bare button into the confirmed
+// flow: blocked with clickable fixes, confirmation overlay, named
+// progress steps, toast, quiet done state, and the failed banner.
 //
-// Spec authority: docs/SC_QBO_SHAPE_SPEC.md §3.
-//   Copy verbatim per spec:
-//     "Week finalized - sent to billing"
-//         (statuses: finalized, billed)
-//     "Week finalized - billing push failed, [name] has been alerted"
-//         (status: push_failed)
-//   sc-25's period-lock copy stays untouched; the two locks stack.
+// Spec authority: docs/SC_QBO_SHAPE_SPEC_ADDENDUM_A.md §A1 for state
+// treatments; docs/design/KF_FINALIZE_FLOW_RENDER.html for the
+// visual + copy authority.
 //
-// Placement: rendered ONCE per week band in the drill-in period
-// view for per-meal accounts. Fee / MLB / MiLB-AAA accounts do not
-// render this control - the finalize state is per-meal only.
-//
-// Completeness rule (spec §3): the button stays disabled with a
-// plain-english reason until all 7 days in the week resolve to
-// status IN {entered, no-service}. The client mirrors the server-
-// side `computeWeekCompleteness` rule from scWeekFinalize.js
-// exactly - a wrong client-side gate would ship a "button disabled
-// for no reason" defect. Both sides key on the same day.status,
-// which comes from `classifyDayStatus` in dataStore/serviceCalendar.js.
-//
-// Override affordances (SC_LOCK_OVERRIDE = Kevin + Joe + Sebastian,
-// K-10): the Revert control renders only for override members and
-// only when the live row's status is finalized or push_failed. A
-// billed row is a one-way door (K-3); Revert is hidden on billed.
-// Retry is a placeholder in PR-A - the actual retry ships in PR-C.
+// Server behaviour is untouched. The finalize action, the completeness
+// predicate, and runFinalizeEffects behave exactly as PR-C shipped
+// them. This PR changes only what the operator sees and confirms.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import FinalizeOverlay from "./FinalizeOverlay";
+import FinalizeToast from "./FinalizeToast";
+import { getQboMode, getInvoiceDestination } from "@/lib/billing/qboMode";
 
 // Days that satisfy the finalize completeness rule. Mirrors
 // scWeekFinalize.js `computeWeekCompleteness` for per-meal accounts:
@@ -45,56 +32,85 @@ function isDayComplete(day) {
   return day.status === "entered" || day.status === "no-service";
 }
 
-function countMissing(weekDays) {
-  if (!Array.isArray(weekDays)) return 0;
-  let n = 0;
-  for (const d of weekDays) if (!isDayComplete(d)) n++;
-  return n;
+function missingDayList(weekDays) {
+  if (!Array.isArray(weekDays)) return [];
+  return weekDays.filter((d) => !isDayComplete(d));
 }
 
-// Copy per spec §3. Kept as a small pure function so the string
-// tables live in one place - PR-C extends this map with the QBO
-// success / retry variants without editing the render code.
-function bannerCopyFor(status, alertedName) {
-  if (status === "push_failed") {
-    const who = alertedName || "leadership";
-    return `Week finalized - billing push failed, ${who} has been alerted`;
+// Short chip label per missing day: "Fri Jul 31".
+function chipLabelFor(day) {
+  if (!day?.date) return "Day";
+  try {
+    return new Date(`${day.date}T12:00:00Z`).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  } catch (_) {
+    return String(day.date);
   }
-  if (status === "finalized" || status === "billed") {
-    return "Week finalized - sent to billing";
+}
+
+// Quiet done caption. Format: "Finalized {Mon Jul 27} by {name}".
+function fmtCaptionDate(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch (_) {
+    return String(iso).slice(0, 10);
   }
-  return null;
+}
+
+function displayName(email) {
+  if (!email) return "the site leader";
+  const local = String(email).split("@")[0] || email;
+  // "k.fietek" -> "K Fietek". Kept minimal; the notification carries
+  // the authoritative display name.
+  return local
+    .split(".")
+    .map((s) => (s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s))
+    .join(" ");
 }
 
 export default function WeekFinalizeControl({
   accountKey,
-  weekStart,          // ISO YYYY-MM-DD Monday
-  weekDays,           // array of day records: [{ date, status, ... }]
-  liveRow,            // { status, finalized_by, finalized_at } | null
-  isOverrideUser,     // boolean; true when session email is in SC_LOCK_OVERRIDE
-  onFinalize,         // async ({ accountKey, weekStart }) -> Promise
-  onRevert,           // async ({ accountKey, weekStart, reason }) -> Promise
-  onRetry,            // async ({ accountKey, weekStart }) -> Promise   (PR-C placeholder)
+  weekStart,              // ISO YYYY-MM-DD Monday
+  weekEnd,                // ISO YYYY-MM-DD Sunday (optional; derived if missing)
+  weekDays,               // array of day records
+  liveRow,                // { status, finalized_by, finalized_at } | null
+  isOverrideUser,         // boolean
+  onFinalize,             // async ({ accountKey, weekStart }) -> Promise
+  onRevert,               // async ({ accountKey, weekStart, reason }) -> Promise
+  onRetry,                // async ({ accountKey, weekStart }) -> Promise
+  onOpenDay,              // (isoDate) -> void   navigate to that day's entry
+  // metrics used by the overlay
+  daysServed,             // number of days with actual entry (or all 7 for full)
+  totalMeals,             // sum of actual_count across the week
+  pretaxTotalDollars,     // number in dollars
+  liveCustomerName,       // string (used in live mode; test mode ignores)
 }) {
   const [saving, setSaving] = useState(false);
   const [errText, setErrText] = useState(null);
+  // Overlay state machine within the OPEN branch.
+  //   'idle'    : button visible (blocked or ready)
+  //   'confirm' : overlay open in confirm mode
+  //   'working' : overlay open in working mode
+  const [overlayMode, setOverlayMode] = useState("idle");
+  const [workingStepIndex, setWorkingStepIndex] = useState(0);
+  const [toastOpen, setToastOpen] = useState(false);
+  const openButtonRef = useRef(null);
 
-  const missing = useMemo(() => countMissing(weekDays), [weekDays]);
-  const isComplete = missing === 0 && Array.isArray(weekDays) && weekDays.length === 7;
+  const missing = useMemo(() => missingDayList(weekDays), [weekDays]);
+  const isComplete = missing.length === 0 && Array.isArray(weekDays) && weekDays.length === 7;
 
-  // State branches, in the order the spec enumerates them.
-
-  // Push-failed: banner + Retry (override only).
+  // Push-failed banner (loud, red).
   if (liveRow?.status === "push_failed") {
-    const alertedName = "Kevin"; // Placeholder for step 2 UI copy; the
-                                 // K-1 notification names the actor.
     return (
-      <div
-        className="sc-week-finalize sc-week-finalize--push-failed"
-        role="status"
-        aria-label={`Week ${weekStart} billing push failed`}
-      >
-        <span className="sc-week-finalize-banner">{bannerCopyFor("push_failed", alertedName)}</span>
+      <div className="sc-week-finalize sc-week-finalize--push-failed" role="status">
+        <span className="sc-week-finalize-fail-banner">
+          Billing push failed - Kevin has been alerted
+        </span>
         {isOverrideUser && (
           <button
             type="button"
@@ -123,6 +139,7 @@ export default function WeekFinalizeControl({
             saving={saving}
             setSaving={setSaving}
             setErrText={setErrText}
+            revertLabel="Unlock"
           />
         )}
         {errText && <span className="sc-week-finalize-err" role="alert">{errText}</span>}
@@ -130,16 +147,24 @@ export default function WeekFinalizeControl({
     );
   }
 
-  // Finalized or Billed: banner. Revert visible for override users
-  // on FINALIZED only (K-3 freezes BILLED).
+  // Quiet done state. Copy per addendum §A1: no QBO link, operator
+  // terms only. Unlock renders for override users only, on FINALIZED.
   if (liveRow?.status === "finalized" || liveRow?.status === "billed") {
+    const dateText = fmtCaptionDate(liveRow.finalized_at || weekStart);
+    const nameText = displayName(liveRow.finalized_by);
     return (
       <div
         className={`sc-week-finalize sc-week-finalize--${liveRow.status}`}
         role="status"
         aria-label={`Week ${weekStart} ${liveRow.status}`}
       >
-        <span className="sc-week-finalize-banner">{bannerCopyFor(liveRow.status)}</span>
+        <span className="sc-week-finalize-quiet">
+          <span className="sc-week-finalize-quiet-tick" aria-hidden="true">&#10003;</span>
+          <span>
+            Finalized <b>{dateText}</b> by <b>{nameText}</b>
+            {" · Sent to AP for review"}
+          </span>
+        </span>
         {isOverrideUser && liveRow.status === "finalized" && (
           <RevertAction
             accountKey={accountKey}
@@ -148,6 +173,7 @@ export default function WeekFinalizeControl({
             saving={saving}
             setSaving={setSaving}
             setErrText={setErrText}
+            revertLabel="Unlock"
           />
         )}
         {errText && <span className="sc-week-finalize-err" role="alert">{errText}</span>}
@@ -155,43 +181,133 @@ export default function WeekFinalizeControl({
     );
   }
 
-  // OPEN: the Finalize button. Disabled + reason when incomplete;
-  // enabled when complete.
-  const disabledReason = isComplete
-    ? null
-    : `${missing} day${missing === 1 ? "" : "s"} still need entry or no-service`;
+  // OPEN: blocked (with chips) OR ready (with button). The Finalize
+  // action opens the confirmation overlay; the overlay drives the
+  // real submit + progress + toast.
+  const qboMode = getQboMode(accountKey);
+  const invoiceDestination = getInvoiceDestination(accountKey, liveCustomerName);
+  // Derive weekEnd if not supplied (7 days from weekStart).
+  const derivedWeekEnd = weekEnd || (() => {
+    if (!weekStart) return "";
+    const d = new Date(`${weekStart}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 6);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  async function walkWorkingProgress() {
+    // Named steps advance on a single server round trip. We report
+    // this honestly - the real work happens in runFinalizeEffects
+    // and we cannot see intermediate progress from the client. Steps
+    // 1..3 tick at 700ms intervals for perceived progress; step 4
+    // only enters the doing state when the fetch actually returns.
+    setWorkingStepIndex(1);
+    let currentStep = 1;
+    const tickTimer = setInterval(() => {
+      currentStep = Math.min(currentStep + 1, 3);
+      setWorkingStepIndex(currentStep);
+    }, 700);
+
+    try {
+      await onFinalize?.({ accountKey, weekStart });
+      clearInterval(tickTimer);
+      setWorkingStepIndex(4);
+      // Small settle to render the "Telling billing" step before
+      // toast + close.
+      await new Promise((r) => setTimeout(r, 250));
+      setWorkingStepIndex(5);
+      setOverlayMode("idle");
+      setToastOpen(true);
+    } catch (e) {
+      clearInterval(tickTimer);
+      setOverlayMode("idle");
+      setErrText(e?.message || "Finalize failed");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="sc-week-finalize sc-week-finalize--open" aria-label={`Week ${weekStart}`}>
-      <button
-        type="button"
-        className="sc-week-finalize-btn"
-        disabled={!isComplete || saving}
-        aria-disabled={!isComplete || saving}
-        title={disabledReason || undefined}
-        onClick={async () => {
-          setErrText(null);
-          setSaving(true);
-          try {
-            await onFinalize?.({ accountKey, weekStart });
-          } catch (e) {
-            setErrText(e?.message || "Finalize failed");
-          } finally {
-            setSaving(false);
-          }
-        }}
-      >
-        {saving ? "Finalizing..." : "Finalize week"}
-      </button>
-      {!isComplete && (
-        <span className="sc-week-finalize-reason" aria-live="polite">{disabledReason}</span>
+      {isComplete ? (
+        <button
+          ref={openButtonRef}
+          type="button"
+          className="sc-week-finalize-btn"
+          disabled={saving}
+          onClick={() => {
+            setErrText(null);
+            setOverlayMode("confirm");
+          }}
+        >
+          Finalize week
+        </button>
+      ) : (
+        <>
+          <span className="sc-week-finalize-chips-label">
+            {missing.length} day{missing.length === 1 ? "" : "s"} still need entry or no-service
+          </span>
+          {missing.slice(0, 7).map((day) => (
+            <button
+              key={day.date}
+              type="button"
+              className="sc-week-finalize-chip"
+              onClick={() => onOpenDay?.(day.date)}
+            >
+              {chipLabelFor(day)}
+            </button>
+          ))}
+          <button
+            ref={openButtonRef}
+            type="button"
+            className="sc-week-finalize-btn"
+            disabled
+            aria-disabled="true"
+          >
+            Finalize week
+          </button>
+        </>
       )}
       {errText && <span className="sc-week-finalize-err" role="alert">{errText}</span>}
+
+      <FinalizeOverlay
+        open={overlayMode !== "idle"}
+        mode={overlayMode === "working" ? "working" : "confirm"}
+        workingStepIndex={workingStepIndex}
+        onCancel={() => {
+          if (saving) return;
+          setOverlayMode("idle");
+          setWorkingStepIndex(0);
+        }}
+        onConfirm={() => {
+          if (saving) return;
+          setSaving(true);
+          setOverlayMode("working");
+          walkWorkingProgress();
+        }}
+        invokerRef={openButtonRef}
+        accountKey={accountKey}
+        weekStart={weekStart}
+        weekEnd={derivedWeekEnd}
+        daysServed={daysServed}
+        totalDays={7}
+        totalMeals={totalMeals}
+        invoiceDestination={invoiceDestination}
+        pretaxTotalDollars={pretaxTotalDollars}
+        qboMode={qboMode}
+      />
+
+      <FinalizeToast
+        open={toastOpen}
+        onDismiss={() => setToastOpen(false)}
+      />
     </div>
   );
 }
 
-function RevertAction({ accountKey, weekStart, onRevert, saving, setSaving, setErrText }) {
+function RevertAction({
+  accountKey, weekStart, onRevert, saving, setSaving, setErrText,
+  revertLabel = "Revert",
+}) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   if (!open) {
@@ -202,7 +318,7 @@ function RevertAction({ accountKey, weekStart, onRevert, saving, setSaving, setE
         disabled={saving}
         onClick={() => setOpen(true)}
       >
-        Revert
+        {revertLabel}
       </button>
     );
   }
@@ -230,7 +346,7 @@ function RevertAction({ accountKey, weekStart, onRevert, saving, setSaving, setE
       }}
     >
       <label className="sc-week-finalize-revert-label" htmlFor={`sc-revert-reason-${weekStart}`}>
-        Revert reason
+        Unlock reason
       </label>
       <input
         id={`sc-revert-reason-${weekStart}`}
@@ -239,7 +355,7 @@ function RevertAction({ accountKey, weekStart, onRevert, saving, setSaving, setE
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         maxLength={280}
-        placeholder="Why is this being reverted?"
+        placeholder="Why is this being unlocked?"
         autoFocus
       />
       <button
@@ -247,7 +363,7 @@ function RevertAction({ accountKey, weekStart, onRevert, saving, setSaving, setE
         className="sc-week-finalize-action sc-week-finalize-action--revert-confirm"
         disabled={saving || reason.trim().length === 0}
       >
-        Confirm revert
+        Confirm
       </button>
       <button
         type="button"
