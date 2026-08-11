@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix - Finalize week, flow render</title>
+<style>
+  :root{
+    --navy:#153968; --navy-cmd:#1a3050; --amber:#D9892F;
+    --amber-bg:#FDF6EC; --amber-bd:#F0D9B5; --amber-fg:#8A5A16;
+    --green-fg:#2F7D4F; --green-bg:#DCEFE3; --green-bd:#B8DCC4; --green-btn:#1F6B41;
+    --red-fg:#B3261E; --red-bg:#FCEEED; --red-bd:#F0C9C6;
+    --n900:#0F172A; --n800:#334155; --n700:#475569; --n500:#64748B;
+    --n300:#CBD5E1; --n200:#E2E8F0; --n100:#F1F5F9; --n50:#F8FAFC;
+    --page:#EEF1F5; --white:#fff;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+    --r4:4px; --r6:6px; --r10:10px; --r14:14px;
+    --dur1:120ms; --dur2:180ms; --dur3:280ms;
+    --ease:cubic-bezier(.2,0,0,1);
+  }
+  @media (prefers-reduced-motion:reduce){ :root{--dur1:0ms;--dur2:0ms;--dur3:0ms} }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);font-family:var(--ui);color:var(--n900);
+       -webkit-font-smoothing:antialiased;padding:40px 20px 120px}
+  .wrap{max-width:1080px;margin:0 auto}
+  .eyebrow{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500)}
+  h1{font-size:29px;line-height:36px;font-weight:800;letter-spacing:-.01em;margin-top:8px}
+  .sub{font-size:14px;line-height:20px;color:var(--n700);margin-top:8px;max-width:70ch}
+  h2.sec{font-size:20px;line-height:24px;font-weight:700;margin-bottom:4px}
+  .secsub{font-size:13px;line-height:20px;color:var(--n700);margin-bottom:16px;max-width:74ch}
+  .rule{height:1px;background:var(--n200);margin:48px 0 32px}
+
+  /* stepper */
+  .steps{display:flex;flex-wrap:wrap;gap:6px;margin:24px 0}
+  .step{font-size:11px;line-height:16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+        padding:6px 12px;border-radius:999px;background:var(--white);border:1px solid var(--n200);
+        color:var(--n500);cursor:pointer;transition:all var(--dur1) var(--ease)}
+  .step[aria-current="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+  .step:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+
+  /* the calendar slab */
+  .slab{background:var(--white);border-radius:var(--r14);border:1px solid var(--n200);
+        padding:20px;box-shadow:0 1px 2px rgba(15,23,42,.04);position:relative;overflow:hidden}
+  .wkhead{display:grid;grid-template-columns:132px 1fr auto;gap:16px;align-items:center;
+          padding-bottom:12px}
+  .wklabel{font-size:11px;line-height:16px;font-weight:700;letter-spacing:.04em;color:var(--n500)}
+  .wklabel b{color:var(--n900);margin-left:8px}
+  .wkmid{display:flex;justify-content:center}
+  .wkcount{font-size:12px;line-height:16px;color:var(--n700);font-weight:500}
+  .wktotal{font-family:var(--mono);font-size:14px;line-height:20px;font-weight:700;
+           font-variant-numeric:tabular-nums}
+
+  .actionbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;
+             min-height:40px;padding-bottom:12px}
+
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .dow{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+       color:var(--n500);text-align:center;padding-bottom:6px}
+  .cell{background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r10);
+        padding:10px;min-height:88px;display:flex;flex-direction:column;
+        transition:opacity var(--dur2) var(--ease)}
+  .cell .d{font-size:14px;line-height:20px;font-weight:700}
+  .cell .m{margin-top:auto;font-size:15px;line-height:20px;font-weight:700}
+  .cell .m span{font-size:11px;font-weight:500;color:var(--n700);margin-left:3px}
+  .cell .amt{font-size:11px;line-height:16px;color:var(--green-fg);font-weight:600;font-family:var(--mono)}
+  .cell.none{background:var(--n50);border-color:var(--n200)}
+  .cell.none .d{color:var(--n500)}
+  .cell.none .m{font-size:11px;font-weight:500;color:var(--n500)}
+  .cell.need{background:var(--amber-bg);border-color:var(--amber-bd)}
+  .cell.need .m{font-size:11px;font-weight:600;color:var(--amber-fg)}
+  .cell.ghost{opacity:.42}
+  .ghosttag{font-size:9px;line-height:12px;font-weight:700;letter-spacing:.04em;
+            text-transform:uppercase;color:var(--n500)}
+
+  /* buttons */
+  .btn{font-family:inherit;font-size:13px;line-height:20px;font-weight:700;border-radius:var(--r6);
+       padding:9px 16px;border:1px solid transparent;cursor:pointer;
+       transition:background var(--dur1) var(--ease),border-color var(--dur1) var(--ease)}
+  .btn:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+  .btn-go{background:var(--green-btn);color:#fff}
+  .btn-go:hover{background:#175434}
+  .btn-ghost{background:#fff;border-color:var(--n300);color:var(--n800)}
+  .btn-ghost:hover{border-color:var(--n500)}
+  .btn-navy{background:var(--navy);color:#fff}
+  .btn-navy:hover{background:#0f2b50}
+  .btn-red{background:var(--red-fg);color:#fff}
+  .btn[disabled]{background:var(--n100);color:var(--n500);border-color:var(--n200);cursor:not-allowed}
+
+  .fixline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .fixlabel{font-size:12px;line-height:16px;color:var(--n700)}
+  .fixchip{font-family:inherit;font-size:12px;line-height:16px;font-weight:600;
+           background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber-fg);
+           border-radius:var(--r4);padding:4px 10px;cursor:pointer}
+  .fixchip:hover{border-color:var(--amber)}
+
+  /* quiet completed state */
+  .quiet{display:flex;align-items:center;gap:8px;font-size:12px;line-height:16px;color:var(--n500)}
+  .quiet .tick{width:16px;height:16px;border-radius:50%;background:var(--green-bg);
+               border:1px solid var(--green-bd);display:flex;align-items:center;justify-content:center;
+               color:var(--green-fg);font-size:10px;font-weight:800;flex:0 0 16px}
+  .quiet b{color:var(--n800);font-weight:600}
+  .quiet a{color:var(--navy);font-weight:600;text-decoration:none}
+  .quiet a:hover{text-decoration:underline}
+  .quiet .revert{margin-left:4px;background:none;border:none;font-family:inherit;font-size:12px;
+                 color:var(--n500);cursor:pointer;text-decoration:underline;padding:0}
+
+  /* failed banner */
+  .failbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+           background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r6);
+           padding:8px 14px}
+  .failbar .txt{font-size:12px;line-height:16px;font-weight:600;color:var(--red-fg)}
+
+  /* overlay */
+  .scrim{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;
+         align-items:center;justify-content:center;padding:24px;z-index:100}
+  .scrim.on{display:flex;animation:fade var(--dur2) var(--ease)}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{background:#fff;border-radius:var(--r14);width:min(520px,100%);overflow:hidden;
+         box-shadow:0 24px 48px rgba(15,23,42,.24);animation:rise var(--dur3) var(--ease)}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .mhd{padding:20px 24px 16px;border-bottom:1px solid var(--n200)}
+  .mhd .kick{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+             text-transform:uppercase;color:var(--n500);display:flex;gap:8px;align-items:center}
+  .testtag{background:var(--amber);color:#fff;border-radius:var(--r4);padding:2px 6px;
+           font-size:9px;letter-spacing:.04em}
+  .mhd h3{font-size:20px;line-height:24px;font-weight:700;letter-spacing:-.01em;margin-top:8px}
+  .mhd p{font-size:13px;line-height:20px;color:var(--n700);margin-top:6px}
+  .mbody{padding:4px 24px 0}
+  .mrow{display:flex;justify-content:space-between;gap:16px;padding:10px 0;
+        border-bottom:1px solid var(--n100);font-size:13px;line-height:20px}
+  .mrow dt{color:var(--n500)}
+  .mrow dd{font-weight:600;text-align:right}
+  .mrow dd.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .mrow.big{border-bottom:none;padding-top:14px}
+  .mrow.big dt{color:var(--n900);font-weight:700}
+  .mrow.big dd{font-size:20px;line-height:24px;font-weight:800;font-family:var(--mono)}
+  .who{font-size:12px;line-height:18px;color:var(--n700);padding:12px 0 0}
+  .who b{color:var(--n900);font-weight:600}
+  .lock{margin:16px 0 4px;background:var(--amber-bg);border:1px solid var(--amber-bd);
+        border-radius:var(--r6);padding:10px 14px;font-size:12px;line-height:18px;color:var(--amber-fg)}
+  .lock b{font-weight:700}
+  .mft{padding:20px 24px;display:flex;gap:10px;justify-content:flex-end;background:var(--n50);
+       border-top:1px solid var(--n200);margin-top:20px}
+  .prog{padding:0 24px 4px}
+  .pstep{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:13px;line-height:20px;
+         color:var(--n500)}
+  .pstep .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--n300);flex:0 0 16px}
+  .pstep.doing{color:var(--n900);font-weight:600}
+  .pstep.doing .dot{border-color:var(--navy);border-right-color:transparent;
+                    animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .pstep.done{color:var(--n700)}
+  .pstep.done .dot{background:var(--green-bg);border-color:var(--green-bd)}
+
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(80px);
+         background:var(--n900);color:#fff;border-radius:var(--r10);padding:14px 18px;
+         display:flex;align-items:center;gap:14px;box-shadow:0 12px 32px rgba(15,23,42,.32);
+         opacity:0;pointer-events:none;transition:all var(--dur3) var(--ease);z-index:200;
+         max-width:min(520px,calc(100vw - 32px))}
+  .toast.on{opacity:1;transform:translateX(-50%);pointer-events:auto}
+  .toast .tick{width:20px;height:20px;border-radius:50%;background:var(--green-btn);
+               display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;
+               flex:0 0 20px}
+  .toast .t1{font-size:13px;line-height:18px;font-weight:700}
+  .toast .t2{font-size:12px;line-height:16px;color:#B7C3D4;margin-top:1px}
+  .toast a{color:#fff;font-size:12px;font-weight:700;text-decoration:underline;margin-left:auto;
+           white-space:nowrap}
+
+  .callout{background:var(--white);border:1px solid var(--n200);border-left:3px solid var(--navy);
+           border-radius:0 var(--r10) var(--r10) 0;padding:14px 18px;margin-top:16px;
+           font-size:13px;line-height:20px;color:var(--n700)}
+  .callout b{color:var(--n900);font-weight:700}
+  @media(max-width:760px){
+    .grid{grid-template-columns:repeat(2,1fr)} .dow{display:none}
+    .wkhead{grid-template-columns:1fr;gap:6px} .wkmid{justify-content:flex-start}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KitchFix Ops Hub · Service Calendar</div>
+  <h1>Finalize week - the whole flow</h1>
+  <p class="sub">Click the steps to walk it, or press the buttons in the calendar itself - the
+     demo is live. Below the flow: the month-boundary fix and the bi-weekly pair treatment.</p>
+
+  <div class="steps" role="tablist">
+    <button class="step" data-go="blocked" role="tab">1 · Blocked</button>
+    <button class="step" data-go="ready" aria-current="true" role="tab">2 · Ready</button>
+    <button class="step" data-go="confirm" role="tab">3 · Confirm</button>
+    <button class="step" data-go="working" role="tab">4 · Working</button>
+    <button class="step" data-go="done" role="tab">5 · Done</button>
+    <button class="step" data-go="failed" role="tab">6 · Failed</button>
+  </div>
+
+  <!-- ===================== the live demo slab ===================== -->
+  <div class="slab" id="slab">
+    <div class="wkhead">
+      <div class="wklabel">P8 <b>WEEK 2</b></div>
+      <div class="wkmid"><span class="wkcount" id="count">6 of 6 entered</span></div>
+      <div class="wktotal">$19,238.95</div>
+    </div>
+
+    <div class="actionbar" id="bar"><!-- swapped by state --></div>
+
+    <div class="grid" aria-hidden="true">
+      <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div>
+      <div class="dow">Thu</div><div class="dow">Fri</div><div class="dow">Sat</div><div class="dow">Sun</div>
+    </div>
+    <div class="grid" id="cells">
+      <div class="cell"><div class="d">27</div><div class="m">280<span>meals</span></div><div class="amt">$3.3K</div></div>
+      <div class="cell"><div class="d">28</div><div class="m">255<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell"><div class="d">29</div><div class="m">250<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell"><div class="d">30</div><div class="m">265<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell" id="c31"><div class="d">31</div><div class="m">255<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell" id="c1"><div class="d">1</div><div class="m">250<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell none"><div class="d">2</div><div class="m">No service</div></div>
+    </div>
+  </div>
+
+  <div class="callout" id="note">
+    <b>Ready.</b> Every day is entered or marked no-service, so the button is live. The week
+    total sits at the right of the header where it already lives - the button does not repeat it.
+  </div>
+
+  <!-- ===================== month boundary ===================== -->
+  <div class="rule"></div>
+  <h2 class="sec">The month-boundary fix</h2>
+  <p class="secsub">Option A, as ruled. A week is always the whole Mon-Sun week, even when the
+     month cuts through it. The days that belong to the other month render ghosted but are
+     counted, and the same week appears in both months carrying the same total. One week, one
+     button, one truth - the month is a viewing frame, not a billing boundary.</p>
+
+  <div class="slab">
+    <div class="wkhead">
+      <div class="wklabel">P8 <b>WEEK 1</b> <span class="ghosttag" style="margin-left:8px">3 days in July</span></div>
+      <div class="wkmid"><span class="wkcount">6 of 6 entered</span></div>
+      <div class="wktotal">$18,402.10</div>
+    </div>
+    <div class="actionbar">
+      <button class="btn btn-go">Finalize week</button>
+    </div>
+    <div class="grid" aria-hidden="true">
+      <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div>
+      <div class="dow">Thu</div><div class="dow">Fri</div><div class="dow">Sat</div><div class="dow">Sun</div>
+    </div>
+    <div class="grid">
+      <div class="cell ghost"><div class="d">29</div><div class="m">270<span>meals</span></div><div class="amt">$3.3K</div></div>
+      <div class="cell ghost"><div class="d">30</div><div class="m">268<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell ghost"><div class="d">31</div><div class="m">255<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell"><div class="d">1</div><div class="m">270<span>meals</span></div><div class="amt">$3.3K</div></div>
+      <div class="cell"><div class="d">2</div><div class="m">262<span>meals</span></div><div class="amt">$3.2K</div></div>
+      <div class="cell"><div class="d">3</div><div class="m">245<span>meals</span></div><div class="amt">$3.1K</div></div>
+      <div class="cell none"><div class="d">4</div><div class="m">No service</div></div>
+    </div>
+  </div>
+  <div class="callout"><b>Why ghosted rather than hidden.</b> A site leader looking at August
+    needs to see that this week's total includes three July days, or the number will look wrong.
+    Hiding them would make the button lie about what it is finalizing.</div>
+
+  <!-- ===================== bi-weekly ===================== -->
+  <div class="rule"></div>
+  <h2 class="sec">CIN - AZ, the bi-weekly pair</h2>
+  <p class="secsub">Sebastian bills the Reds every two weeks on one combined invoice, so only the
+     closing week carries a button. The first week of a pair earns a quiet state that says what
+     happens next rather than an action that would promise something the system will not do.</p>
+
+  <div class="slab">
+    <div class="wkhead">
+      <div class="wklabel">P8 <b>WEEK 3</b></div>
+      <div class="wkmid"><span class="wkcount">7 of 7 entered</span></div>
+      <div class="wktotal">$20,926.73</div>
+    </div>
+    <div class="actionbar">
+      <div class="quiet"><span class="tick">&#10003;</span>
+        Week complete - finalizes with Week 4 on Jul 26</div>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(7,1fr)">
+      <div class="cell"><div class="d">13</div><div class="m">255<span>meals</span></div><div class="amt">$3.3K</div></div>
+      <div class="cell"><div class="d">14</div><div class="m">253<span>meals</span></div><div class="amt">$3.3K</div></div>
+      <div class="cell"><div class="d">15</div><div class="m">259<span>meals</span></div><div class="amt">$3.3K</div></div>
+      <div class="cell"><div class="d">16</div><div class="m">338<span>meals</span></div><div class="amt">$4.4K</div></div>
+      <div class="cell"><div class="d">17</div><div class="m">358<span>meals</span></div><div class="amt">$4.6K</div></div>
+      <div class="cell"><div class="d">18</div><div class="m">244<span>meals</span></div><div class="amt">$3.1K</div></div>
+      <div class="cell"><div class="d">19</div><div class="m">100<span>meals</span></div><div class="amt">$1.3K</div></div>
+    </div>
+
+    <div class="wkhead" style="margin-top:24px">
+      <div class="wklabel">P8 <b>WEEK 4</b></div>
+      <div class="wkmid"><span class="wkcount">7 of 7 entered · pair total $41,056.27</span></div>
+      <div class="wktotal">$20,129.54</div>
+    </div>
+    <div class="actionbar">
+      <button class="btn btn-go">Finalize 2-week period</button>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(7,1fr)">
+      <div class="cell"><div class="d">20</div><div class="m">306<span>meals</span></div><div class="amt">$3.9K</div></div>
+      <div class="cell"><div class="d">21</div><div class="m">304<span>meals</span></div><div class="amt">$3.5K</div></div>
+      <div class="cell"><div class="d">22</div><div class="m">304<span>meals</span></div><div class="amt">$3.5K</div></div>
+      <div class="cell"><div class="d">23</div><div class="m">208<span>meals</span></div><div class="amt">$2.7K</div></div>
+      <div class="cell"><div class="d">24</div><div class="m">208<span>meals</span></div><div class="amt">$2.7K</div></div>
+      <div class="cell"><div class="d">25</div><div class="m">236<span>meals</span></div><div class="amt">$3.0K</div></div>
+      <div class="cell"><div class="d">26</div><div class="m">150<span>meals</span></div><div class="amt">$1.9K</div></div>
+    </div>
+  </div>
+  <div class="callout"><b>If Week 3 is still open when Week 4 is ready,</b> the button on Week 4
+    disables and reads "Week 3 still needs 2 days" with the same clickable chips - the pair
+    cannot half-close.</div>
+
+</div>
+
+<!-- ===================== overlay ===================== -->
+<div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+  <div class="modal">
+    <div class="mhd">
+      <div class="kick">Finalize week <span class="testtag" id="testtag">Test mode</span></div>
+      <h3 id="mtitle">Finalize the week of Jul 27?</h3>
+      <p id="msub">Send finals to QuickBooks for AP review and billing to client.</p>
+    </div>
+
+    <div id="mconfirm">
+      <div class="mbody">
+        <div class="mrow"><dt>Account</dt><dd>TXR - AZ</dd></div>
+        <div class="mrow"><dt>Service week</dt><dd>Mon Jul 27 - Sun Aug 2</dd></div>
+        <div class="mrow"><dt>Days served</dt><dd class="num">6 of 7</dd></div>
+        <div class="mrow"><dt>Meals and snacks</dt><dd class="num">1,555</dd></div>
+        <div class="mrow"><dt>Invoice goes to</dt><dd id="dest">ZZ TEST - KitchFix Intranet</dd></div>
+        <div class="mrow big"><dt>Pre-tax total</dt><dd class="num">$19,238.95</dd></div>
+        <div class="lock"><b>This locks the week.</b> After this you cannot change these numbers.
+          Kevin, Joe, or Sebastian can unlock it.</div>
+      </div>
+      <div class="mft">
+        <button class="btn btn-ghost" id="cancel">Cancel</button>
+        <button class="btn btn-go" id="go">Finalize and send to billing</button>
+      </div>
+    </div>
+
+    <div id="mworking" style="display:none">
+      <div class="prog">
+        <div class="pstep" id="p1"><span class="dot"></span>Locking the week</div>
+        <div class="pstep" id="p2"><span class="dot"></span>Building the invoice</div>
+        <div class="pstep" id="p3"><span class="dot"></span>Creating the draft in QuickBooks</div>
+        <div class="pstep" id="p4"><span class="dot"></span>Telling billing</div>
+      </div>
+      <div class="mft"><button class="btn btn-ghost" disabled>Working...</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <span class="tick">&#10003;</span>
+  <div><div class="t1">Week finalized</div>
+       <div class="t2">AP has the invoice for review.</div></div>
+</div>
+
+<script>
+(function(){
+  var mtitle=document.getElementById('mtitle'), msub=document.getElementById('msub'),
+      TITLE_CONFIRM='Finalize the week of Jul 27?',
+      SUB_CONFIRM='Send finals to QuickBooks for AP review and billing to client.',
+      TITLE_WORKING='Finalizing the week of Jul 27',
+      SUB_WORKING='Creating the invoice in QuickBooks. AP will review and send to client.';
+  var bar=document.getElementById('bar'), note=document.getElementById('note'),
+      count=document.getElementById('count'), c31=document.getElementById('c31'),
+      c1=document.getElementById('c1'), scrim=document.getElementById('scrim'),
+      toast=document.getElementById('toast'), steps=document.querySelectorAll('.step');
+
+  var NOTES={
+    blocked:'<b>Blocked, with the fix attached.</b> The reason is not prose - each missing day is a button that jumps straight to that day\'s entry. Reading the problem and starting to fix it are the same click.',
+    ready:'<b>Ready.</b> Every day is entered or marked no-service, so the button is live. The week total sits at the right of the header where it already lives - the button does not repeat it.',
+    confirm:'<b>Confirm before anything moves.</b> The overlay names the money and the destination, and the lock warning is written for the site leader, who cannot undo this. The recipient list was cut - everyone on it gets the email anyway.',
+    working:'<b>Four steps, named in the reader\'s language.</b> Not "POST to QBO" - "Creating the draft in QuickBooks". If step three fails, the first two stay done and the failure is specific.',
+    done:'<b>Quiet when it is right.</b> One line at caption size, and it confirms the outcome in the operator\'s terms - sent to AP - rather than linking to QuickBooks, which operators cannot open.',
+    failed:'<b>Loud only when it is wrong.</b> This is the one state that earns colour and weight in the row, because it is the only one that needs a human.'
+  };
+
+  function setStep(s){
+    steps.forEach(function(b){ b.setAttribute('aria-current', b.dataset.go===s ? 'true':'false'); });
+    note.innerHTML = NOTES[s];
+  }
+  function clearGhost(){ c31.classList.remove('cell'); c31.className='cell'; c1.className='cell'; }
+
+  function render(state){
+    setStep(state); scrim.classList.remove('on'); toast.classList.remove('on');
+    document.getElementById('mconfirm').style.display='';
+    document.getElementById('mworking').style.display='none';
+    mtitle.textContent=TITLE_CONFIRM; msub.textContent=SUB_CONFIRM;
+    c31.className='cell'; c1.className='cell';
+    c31.innerHTML='<div class="d">31</div><div class="m">255<span>meals</span></div><div class="amt">$3.2K</div>';
+    c1.innerHTML='<div class="d">1</div><div class="m">250<span>meals</span></div><div class="amt">$3.2K</div>';
+    count.textContent='6 of 6 entered';
+
+    if(state==='blocked'){
+      count.textContent='4 of 6 entered';
+      c31.className='cell need'; c1.className='cell need';
+      c31.innerHTML='<div class="d">31</div><div class="m">Needs entry</div>';
+      c1.innerHTML='<div class="d">1</div><div class="m">Needs entry</div>';
+      bar.innerHTML='<div class="fixline"><span class="fixlabel">2 days still need entry or no-service</span>'+
+        '<button class="fixchip">Fri Jul 31</button><button class="fixchip">Sat Aug 1</button></div>'+
+        '<button class="btn" disabled style="margin-left:12px">Finalize week</button>';
+    }
+    else if(state==='ready'){
+      bar.innerHTML='<button class="btn btn-go" id="openbtn">Finalize week</button>';
+      document.getElementById('openbtn').onclick=function(){ render('confirm'); };
+    }
+    else if(state==='confirm'){
+      bar.innerHTML='<button class="btn btn-go">Finalize week</button>';
+      scrim.classList.add('on');
+    }
+    else if(state==='working'){
+      bar.innerHTML='<button class="btn btn-go" disabled>Finalizing...</button>';
+      scrim.classList.add('on');
+      document.getElementById('mconfirm').style.display='none';
+      document.getElementById('mworking').style.display='';
+      mtitle.textContent=TITLE_WORKING; msub.textContent=SUB_WORKING;
+      var ids=['p1','p2','p3','p4'];
+      ids.forEach(function(id){ document.getElementById(id).className='pstep'; });
+      var i=0;
+      (function tick(){
+        if(i>0) document.getElementById(ids[i-1]).className='pstep done';
+        if(i<ids.length){ document.getElementById(ids[i]).className='pstep doing'; i++; setTimeout(tick,700); }
+        else { render('done'); toast.classList.add('on'); setTimeout(function(){toast.classList.remove('on');},5200); }
+      })();
+    }
+    else if(state==='done'){
+      bar.innerHTML='<div class="quiet"><span class="tick">&#10003;</span>'+
+        'Finalized <b>Aug 3</b> by <b>Jordan Rogers</b> · Sent to AP for review'+
+        '<button class="revert">Unlock</button></div>';
+    }
+    else if(state==='failed'){
+      bar.innerHTML='<div class="failbar"><span class="txt">Billing push failed - Kevin has been alerted</span>'+
+        '<button class="btn btn-ghost" style="padding:5px 12px">Retry</button>'+
+        '<button class="btn btn-ghost" style="padding:5px 12px">Unlock</button></div>';
+    }
+  }
+
+  steps.forEach(function(b){ b.onclick=function(){ render(b.dataset.go); }; });
+  document.getElementById('cancel').onclick=function(){ render('ready'); };
+  document.getElementById('go').onclick=function(){ render('working'); };
+  scrim.onclick=function(e){ if(e.target===scrim) render('ready'); };
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&scrim.classList.contains('on')) render('ready'); });
+  render('ready');
+})();
+</script>
+</body>
+</html>

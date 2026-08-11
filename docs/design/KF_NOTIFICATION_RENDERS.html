@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix - Billing notification renders</title>
+<style>
+  :root{
+    --navy:#153968; --navy-cmd:#1a3050; --navy-700:#1e4a86;
+    --amber:#D9892F; --amber-bg:#FDF6EC; --amber-bd:#F0D9B5;
+    --green-fg:#2F7D4F; --green-bg:#E8F5EC; --green-bd:#B8DCC4;
+    --red-fg:#B3261E; --red-bg:#FCEEED; --red-bd:#F0C9C6;
+    --n900:#0F172A; --n800:#334155; --n700:#475569; --n500:#64748B;
+    --n300:#CBD5E1; --n200:#E2E8F0; --n100:#F1F5F9; --n50:#F8FAFC;
+    --page:#EEF1F5; --white:#fff;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+    --r4:4px; --r6:6px; --r10:10px; --r14:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);font-family:var(--ui);color:var(--n900);
+       -webkit-font-smoothing:antialiased;padding:40px 20px 80px}
+  .wrap{max-width:960px;margin:0 auto}
+
+  /* ---------- page chrome ---------- */
+  .pagehead{margin-bottom:32px}
+  .eyebrow{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500)}
+  .pagehead h1{font-size:29px;line-height:36px;font-weight:800;letter-spacing:-.01em;margin-top:8px}
+  .pagehead p{font-size:14px;line-height:20px;color:var(--n700);margin-top:8px;max-width:64ch}
+
+  .nav{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 32px;
+       border-top:1px solid var(--n200);border-bottom:1px solid var(--n200);padding:12px 0}
+  .nav a{font-size:12px;line-height:16px;font-weight:600;color:var(--n700);text-decoration:none;
+         padding:6px 12px;border-radius:999px;background:var(--white);border:1px solid var(--n200)}
+  .nav a:hover{border-color:var(--navy);color:var(--navy)}
+
+  /* ---------- notification card ---------- */
+  .note{background:var(--white);border:1px solid var(--n200);border-radius:var(--r14);
+        overflow:hidden;margin-bottom:40px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .note-hd{padding:16px 20px;border-bottom:1px solid var(--n200);background:var(--n50);
+           display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+  .note-id{font-size:20px;line-height:24px;font-weight:700}
+  .note-id span{font-family:var(--mono);font-size:12px;color:var(--navy);
+                background:#E8EEF7;padding:2px 8px;border-radius:var(--r4);margin-right:8px;
+                position:relative;top:-2px}
+  .trigger{font-size:12px;line-height:16px;color:var(--n700)}
+  .trigger b{color:var(--n900);font-weight:600}
+
+  .meta{padding:12px 20px;border-bottom:1px solid var(--n200);display:grid;
+        grid-template-columns:80px 1fr;gap:4px 12px;font-size:12px;line-height:16px}
+  .meta dt{color:var(--n500);font-weight:600}
+  .meta dd{color:var(--n800)}
+  .meta .subj{font-weight:600;color:var(--n900)}
+
+  .stage{padding:12px 20px;background:var(--white);border-bottom:1px solid var(--n200);
+         display:flex;gap:20px;font-size:12px;line-height:16px;color:var(--n700);flex-wrap:wrap}
+  .stage b{color:var(--n900)}
+
+  .frame{padding:24px;background:var(--n100)}
+
+  /* ---------- the email itself ---------- */
+  .mail{max-width:600px;margin:0 auto;background:var(--white);border-radius:var(--r10);
+        overflow:hidden;border:1px solid var(--n200)}
+  .bar{background:var(--navy);padding:14px 24px;display:flex;align-items:center;gap:10px}
+  .bar .logo{font-size:14px;line-height:20px;font-weight:800;color:#fff;letter-spacing:-.01em}
+  .bar .logo em{font-style:normal;color:var(--amber)}
+  .bar .from{margin-left:auto;font-size:10px;line-height:12px;font-weight:600;letter-spacing:.06em;
+             text-transform:uppercase;color:#9FB4D1}
+  .body{padding:24px}
+  .kick{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+        text-transform:uppercase;margin-bottom:8px}
+  .kick.ok{color:var(--green-fg)} .kick.warn{color:var(--amber)} .kick.bad{color:var(--red-fg)}
+  .body h2{font-size:20px;line-height:24px;font-weight:700;letter-spacing:-.01em}
+  .lead{font-size:14px;line-height:20px;color:var(--n700);margin-top:8px}
+  .lead b{color:var(--n900);font-weight:600}
+
+  .panel{margin-top:20px;border:1px solid var(--n200);border-radius:var(--r10);overflow:hidden}
+  .panel.warn{border-color:var(--amber-bd);background:var(--amber-bg)}
+  .panel.bad{border-color:var(--red-bd);background:var(--red-bg)}
+  .row{display:flex;justify-content:space-between;gap:16px;padding:10px 16px;
+       border-bottom:1px solid var(--n200);font-size:13px;line-height:20px}
+  .panel.warn .row{border-color:var(--amber-bd)} .panel.bad .row{border-color:var(--red-bd)}
+  .row:last-child{border-bottom:none}
+  .row dt{color:var(--n500);font-weight:500}
+  .row dd{font-weight:600;text-align:right}
+  .row dd.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .row.total{background:var(--n50);border-top:1px solid var(--n200)}
+  .row.total dt{color:var(--n900);font-weight:700}
+  .row.total dd{font-size:17px;line-height:24px;font-weight:800;font-family:var(--mono)}
+
+  table.lines{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px;line-height:16px}
+  table.lines th{text-align:left;font-size:10px;line-height:12px;letter-spacing:.06em;
+                 text-transform:uppercase;color:var(--n500);font-weight:700;
+                 padding:0 8px 8px;border-bottom:1px solid var(--n200)}
+  table.lines th.r,table.lines td.r{text-align:right}
+  table.lines td{padding:8px;border-bottom:1px solid var(--n100);color:var(--n800)}
+  table.lines td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  table.lines tr:last-child td{border-bottom:none}
+
+  .cta{display:block;margin-top:24px;background:var(--navy);color:#fff;text-decoration:none;
+       text-align:center;padding:12px 20px;border-radius:var(--r6);
+       font-size:14px;line-height:20px;font-weight:700}
+  .cta.bad{background:var(--red-fg)}
+  .cta.amber{background:var(--amber)}
+  .sub{display:block;text-align:center;margin-top:12px;font-size:12px;line-height:16px;
+       color:var(--navy);font-weight:600;text-decoration:none}
+  .foot{margin-top:24px;padding-top:16px;border-top:1px solid var(--n200);
+        font-size:11px;line-height:16px;color:var(--n500)}
+  .foot b{color:var(--n700);font-weight:600}
+
+  .steps{margin-top:16px;padding-left:0;list-style:none}
+  .steps li{position:relative;padding:0 0 10px 26px;font-size:13px;line-height:20px;color:var(--n800)}
+  .steps li:before{content:"";position:absolute;left:8px;top:8px;width:6px;height:6px;
+                   border-radius:50%;background:var(--n300)}
+  .steps li b{font-weight:600;color:var(--n900)}
+
+  .daychips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .daychip{font-size:12px;line-height:16px;font-weight:600;padding:4px 10px;border-radius:var(--r4);
+           background:var(--amber-bg);border:1px solid var(--amber-bd);color:#8A5A16}
+
+  /* ---------- slack ---------- */
+  .slack{max-width:600px;margin:20px auto 0;background:var(--white);border-radius:var(--r10);
+         border:1px solid var(--n200);padding:16px 20px}
+  .slack-hd{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+            text-transform:uppercase;color:var(--n500);margin-bottom:12px}
+  .slack-msg{display:flex;gap:12px}
+  .slack-av{width:36px;height:36px;border-radius:var(--r6);background:var(--navy);flex:0 0 36px;
+            display:flex;align-items:center;justify-content:center;color:#fff;
+            font-size:12px;font-weight:800}
+  .slack-av em{font-style:normal;color:var(--amber)}
+  .slack-name{font-size:13px;line-height:20px;font-weight:700}
+  .slack-name span{font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--n500);
+                   background:var(--n100);padding:1px 5px;border-radius:3px;margin-left:6px}
+  .slack-body{font-size:13px;line-height:20px;color:var(--n800);margin-top:2px}
+  .slack-body b{font-weight:700;color:var(--n900)}
+  .slack-attach{margin-top:8px;border-left:3px solid var(--red-fg);background:var(--n50);
+                padding:8px 12px;border-radius:0 var(--r4) var(--r4) 0;
+                font-size:12px;line-height:18px;color:var(--n700)}
+  .slack-attach.warn{border-left-color:var(--amber)}
+  .slack-btn{display:inline-block;margin-top:10px;background:#fff;border:1px solid var(--n300);
+             border-radius:var(--r4);padding:5px 12px;font-size:12px;line-height:16px;
+             font-weight:700;color:var(--n800)}
+
+  .note-foot{padding:14px 20px;background:var(--n50);border-top:1px solid var(--n200);
+             font-size:12px;line-height:18px;color:var(--n700)}
+  .note-foot b{color:var(--n900);font-weight:600}
+
+  .rule{height:1px;background:var(--n200);margin:48px 0 40px}
+  h3.sec{font-size:12px;line-height:16px;font-weight:700;letter-spacing:.06em;
+         text-transform:uppercase;color:var(--n500);margin-bottom:16px}
+  @media(max-width:620px){
+    body{padding:24px 12px 60px} .frame{padding:12px}
+    .row{flex-direction:column;gap:2px} .row dd{text-align:left}
+    .meta{grid-template-columns:1fr;gap:2px 0} .meta dt{margin-top:6px}
+    table.lines th:nth-child(2),table.lines td:nth-child(2){display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="pagehead">
+    <div class="eyebrow">KitchFix Ops Hub · Service Calendar · Billing</div>
+    <h1>Notification renders</h1>
+    <p>Every message the billing arc sends, as it will arrive. Content and recipients follow
+       the signed spec §9. Nothing here is built to send yet - N1 and N2 compose but are fenced;
+       N3 and N4 are not built. Review the words as carefully as the layout: these land in
+       AP's inbox on a Tuesday morning and in a site leader's phone on a Friday.</p>
+    <p class="sub" style="margin-top:12px"><b>Note for the build:</b> these are design previews.
+       Production email needs table-based, inline-styled markup to survive Outlook and Gmail;
+       the content, hierarchy, and copy carry over exactly, the CSS does not.</p>
+  </div>
+
+  <div class="nav">
+    <a href="#n1">N1 · Invoice ready</a>
+    <a href="#n2">N2 · Push failed</a>
+    <a href="#n3">N3 · Chase, 3 stages</a>
+    <a href="#n4">N4 · Credit needed</a>
+  </div>
+
+  <!-- ============================ N1 ============================ -->
+  <div class="note" id="n1">
+    <div class="note-hd">
+      <div class="note-id"><span>N1</span>Invoice draft ready</div>
+      <div class="trigger">Fires when <b>a week is finalized and the QuickBooks draft is created</b></div>
+    </div>
+    <dl class="meta">
+      <dt>To</dt><dd>Sebastian Castro, Kevin Fietek, Joe Lessard, Josh Katt, the account's salaried managers, whoever finalized</dd>
+      <dt>Subject</dt><dd class="subj">Invoice ready: TXR - AZ, week of Jul 27</dd>
+      <dt>Preview</dt><dd>6 days, 1,555 meals, $19,238.95 pre-tax. Ready for AP review.</dd>
+      <dt>Channel</dt><dd>Email only</dd>
+    </dl>
+    <div class="frame">
+      <div class="mail">
+        <div class="bar">
+          <div class="logo">Kitch<em>Fix</em> Ops Hub</div>
+          <div class="from">ops-hub@kitchfix.com</div>
+        </div>
+        <div class="body">
+          <div class="kick ok">Ready for review</div>
+          <h2>Invoice draft ready for review</h2>
+          <p class="lead"><b>Jordan Rogers</b> finalized the week of <b>Jul 27 - Aug 2</b> for
+             TXR - AZ. The intranet built the invoice from the Service Calendar and placed it in
+             QuickBooks as a draft. <b>AP reviews it and sends it to the client.</b></p>
+
+          <div class="panel">
+            <div class="row"><dt>Account</dt><dd>TXR - AZ · Texas Rangers, Surprise</dd></div>
+            <div class="row"><dt>Service week</dt><dd>Mon Jul 27 - Sun Aug 2, 2026</dd></div>
+            <div class="row"><dt>Days served</dt><dd class="num">6 of 7</dd></div>
+            <div class="row"><dt>Meals and snacks</dt><dd class="num">1,555</dd></div>
+            <div class="row total"><dt>Pre-tax total</dt><dd class="num">$19,238.95</dd></div>
+          </div>
+
+          <table class="lines">
+            <thead><tr>
+              <th>Item</th><th class="r">Days</th><th class="r">Qty</th><th class="r">Amount</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>TXR-AZ MiLB - Breakfast/Lunch/Dinner</td><td class="num r">6</td><td class="num r">1,200</td><td class="num r">$17,148.00</td></tr>
+              <tr><td>TXR-AZ - Regular Snack</td><td class="num r">6</td><td class="num r">355</td><td class="num r">$2,090.95</td></tr>
+            </tbody>
+          </table>
+
+          <a class="cta" href="#">Open the week in the Service Calendar</a>
+          <a class="sub" href="#">AP and leadership: review the draft in QuickBooks</a>
+
+          <div class="foot">
+            Finalized by <b>Jordan Rogers</b> on Aug 3, 2026 at 8:12 AM MST.
+            Sales tax is calculated by QuickBooks at send. QuickBooks access is AP and
+            leadership only. This week is now locked - Kevin, Joe, or Sebastian can unlock it.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note-foot">
+      <b>Design note.</b> One number leads. The line table is a summary, not a copy of the
+      invoice. The primary button goes to the Service Calendar because half the recipients -
+      site managers and whoever finalized - have no QuickBooks access; the QuickBooks link is
+      secondary and labelled for the people who can use it. <b>Open question:</b> this one
+      email serves two audiences with different jobs. If it reads wrong to either, splitting it
+      into an AP version and a site version is the fix.
+    </div>
+  </div>
+
+  <!-- ============================ N2 ============================ -->
+  <div class="note" id="n2">
+    <div class="note-hd">
+      <div class="note-id"><span>N2</span>Push failed</div>
+      <div class="trigger">Fires when <b>the week finalized but QuickBooks refused the invoice</b></div>
+    </div>
+    <dl class="meta">
+      <dt>To</dt><dd>Kevin Fietek, Sebastian Castro</dd>
+      <dt>Subject</dt><dd class="subj">Push failed: TXR - AZ, week of Jul 27</dd>
+      <dt>Preview</dt><dd>The week is locked and nothing reached the client. The push can be run again.</dd>
+      <dt>Channel</dt><dd>Email and Slack</dd>
+    </dl>
+    <div class="frame">
+      <div class="mail">
+        <div class="bar">
+          <div class="logo">Kitch<em>Fix</em> Ops Hub</div>
+          <div class="from">ops-hub@kitchfix.com</div>
+        </div>
+        <div class="body">
+          <div class="kick bad">Needs attention</div>
+          <h2>QuickBooks did not accept the invoice</h2>
+          <p class="lead">The week of <b>Jul 27 - Aug 2</b> for TXR - AZ is finalized and locked,
+             but no invoice was created. <b>Nothing reached the client.</b> The numbers are safe
+             and the push can be run again.</p>
+
+          <div class="panel bad">
+            <div class="row"><dt>Account</dt><dd>TXR - AZ</dd></div>
+            <div class="row"><dt>Service week</dt><dd>Mon Jul 27 - Sun Aug 2, 2026</dd></div>
+            <div class="row"><dt>Attempt</dt><dd class="num">2 of 2</dd></div>
+            <div class="row"><dt>What QuickBooks said</dt>
+              <dd style="font-family:var(--mono);font-size:12px;font-weight:500;max-width:56%">
+                Required parameter Line is missing (code 2020)</dd></div>
+          </div>
+
+          <ul class="steps">
+            <li><b>Retry first.</b> Most failures are the connection, not the numbers.</li>
+            <li><b>If it fails again,</b> the week stays locked and AP can bill it by hand for this
+                cycle. Nothing is lost.</li>
+            <li><b>Kevin is looking at it.</b> This message went to Kevin and Sebastian only.</li>
+          </ul>
+
+          <a class="cta bad" href="#">Retry the push</a>
+          <a class="sub" href="#">Open the week in the Service Calendar</a>
+
+          <div class="foot">
+            Finalized by <b>Jordan Rogers</b> on Aug 3, 2026 at 8:12 AM MST.
+            Failed at 8:12 AM MST. Ledger row <b>3d744d57</b>.
+          </div>
+        </div>
+      </div>
+
+      <div class="slack">
+        <div class="slack-hd">Slack · #service-calendar-invoices</div>
+        <div class="slack-msg">
+          <div class="slack-av">K<em>F</em></div>
+          <div>
+            <div class="slack-name">KitchFix Ops Hub <span>APP</span></div>
+            <div class="slack-body">
+              Invoice push failed for <b>TXR - AZ</b>, week of Jul 27. The week is finalized and
+              locked; nothing reached the client.
+            </div>
+            <div class="slack-attach">
+              QuickBooks: Required parameter Line is missing (code 2020) · attempt 2 of 2<br>
+              AP can bill this week by hand if the retry does not clear it.
+            </div>
+            <span class="slack-btn">Retry the push</span>
+            <span class="slack-btn">Open the week</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note-foot">
+      <b>Design note.</b> The error does not apologize and it is never vague. The second sentence
+      answers the only question that matters at 8am - did a client see anything - before it
+      explains anything else. Red is used here and nowhere else in this set.
+    </div>
+  </div>
+
+  <div class="rule"></div>
+  <h3 class="sec">N3 · The chase ladder - three messages, one week</h3>
+
+  <!-- ============================ N3-1 ============================ -->
+  <div class="note" id="n3">
+    <div class="note-hd">
+      <div class="note-id"><span>N3.1</span>Friday reminder</div>
+      <div class="trigger"><b>Friday 12:00 local</b> · suppressed if the week is already finalized</div>
+    </div>
+    <dl class="meta">
+      <dt>To</dt><dd>The account's salaried managers · cc Kevin, Sebastian</dd>
+      <dt>Subject</dt><dd class="subj">Reminder: TXR - AZ, week of Jul 27</dd>
+      <dt>Channel</dt><dd>Email</dd>
+    </dl>
+    <div class="frame">
+      <div class="mail">
+        <div class="bar"><div class="logo">Kitch<em>Fix</em> Ops Hub</div><div class="from">ops-hub@kitchfix.com</div></div>
+        <div class="body">
+          <div class="kick">Weekly reminder</div>
+          <h2>This week closes Sunday</h2>
+          <p class="lead">Enter the rest of the week's counts and finalize by
+             <b>Monday at noon</b> so AP can bill on Tuesday.</p>
+          <div class="panel">
+            <div class="row"><dt>Account</dt><dd>TXR - AZ</dd></div>
+            <div class="row"><dt>Service week</dt><dd>Mon Jul 27 - Sun Aug 2</dd></div>
+            <div class="row"><dt>Entered so far</dt><dd class="num">4 of 6 days</dd></div>
+          </div>
+          <div class="daychips">
+            <span class="daychip">Sat Aug 1 needs entry</span>
+            <span class="daychip">Sun Aug 2 needs entry</span>
+          </div>
+          <a class="cta" href="#">Open the week</a>
+          <div class="foot">A day with no service still needs marking - use
+            <b>Mark day as no service</b> so the week can close.</div>
+        </div>
+      </div>
+    </div>
+    <div class="note-foot"><b>Design note.</b> Quiet register, no alarm colour. It names the two
+      specific days rather than saying "some days," and it pre-empts the most common confusion:
+      that a zero day still has to be marked.</div>
+  </div>
+
+  <!-- ============================ N3-2 ============================ -->
+  <div class="note">
+    <div class="note-hd">
+      <div class="note-id"><span>N3.2</span>Monday, urgent</div>
+      <div class="trigger"><b>Monday 12:00 local</b> · only if last week is still open</div>
+    </div>
+    <dl class="meta">
+      <dt>To</dt><dd>The account's salaried managers · cc Kevin, Sebastian</dd>
+      <dt>Subject</dt><dd class="subj">Action needed: TXR - AZ, week of Jul 27</dd>
+      <dt>Channel</dt><dd>Email</dd>
+    </dl>
+    <div class="frame">
+      <div class="mail">
+        <div class="bar"><div class="logo">Kitch<em>Fix</em> Ops Hub</div><div class="from">ops-hub@kitchfix.com</div></div>
+        <div class="body">
+          <div class="kick warn">Action needed today</div>
+          <h2>Last week is not finalized yet</h2>
+          <p class="lead">Billing runs <b>tomorrow morning</b>. Two days still need entry for the
+             week of Jul 27 - Aug 2.</p>
+          <div class="panel warn">
+            <div class="row"><dt>Account</dt><dd>TXR - AZ</dd></div>
+            <div class="row"><dt>Service week</dt><dd>Mon Jul 27 - Sun Aug 2</dd></div>
+            <div class="row"><dt>Entered</dt><dd class="num">4 of 6 days</dd></div>
+            <div class="row"><dt>Bills</dt><dd>Tomorrow, Tue Aug 4</dd></div>
+          </div>
+          <div class="daychips">
+            <span class="daychip">Sat Aug 1 needs entry</span>
+            <span class="daychip">Sun Aug 2 needs entry</span>
+          </div>
+          <a class="cta amber" href="#">Finish the week</a>
+          <div class="foot">Kevin and Sebastian are copied on this message.</div>
+        </div>
+      </div>
+    </div>
+    <div class="note-foot"><b>Design note.</b> Same skeleton as Friday, amber instead of neutral,
+      and one new row: the date it bills. The cc line is stated plainly rather than hidden in
+      the headers - the reader should know the room got bigger.</div>
+  </div>
+
+  <!-- ============================ N3-3 ============================ -->
+  <div class="note">
+    <div class="note-hd">
+      <div class="note-id"><span>N3.3</span>Tuesday, past due</div>
+      <div class="trigger"><b>Tuesday 09:00 local</b> · email plus the only Slack post in the ladder</div>
+    </div>
+    <dl class="meta">
+      <dt>To</dt><dd>The account's salaried managers · cc Kevin, Sebastian · Slack channel</dd>
+      <dt>Subject</dt><dd class="subj">Past due: TXR - AZ, week of Jul 27</dd>
+      <dt>Channel</dt><dd>Email and Slack</dd>
+    </dl>
+    <div class="frame">
+      <div class="mail">
+        <div class="bar"><div class="logo">Kitch<em>Fix</em> Ops Hub</div><div class="from">ops-hub@kitchfix.com</div></div>
+        <div class="body">
+          <div class="kick bad">Past due</div>
+          <h2>AP cannot bill this week</h2>
+          <p class="lead">The week of <b>Jul 27 - Aug 2</b> for TXR - AZ should have been finalized
+             by yesterday at noon. Billing runs this morning and this account will be skipped.</p>
+          <div class="panel bad">
+            <div class="row"><dt>Account</dt><dd>TXR - AZ</dd></div>
+            <div class="row"><dt>Service week</dt><dd>Mon Jul 27 - Sun Aug 2</dd></div>
+            <div class="row"><dt>Entered</dt><dd class="num">4 of 6 days</dd></div>
+            <div class="row"><dt>Days past due</dt><dd class="num">1</dd></div>
+          </div>
+          <div class="daychips">
+            <span class="daychip">Sat Aug 1 needs entry</span>
+            <span class="daychip">Sun Aug 2 needs entry</span>
+          </div>
+          <a class="cta bad" href="#">Finish the week now</a>
+          <div class="foot">Posted to <b>#service-calendar-invoices</b> as well.
+            If the week genuinely had no service on those days, mark them as no service and
+            finalize - the week will bill correctly.</div>
+        </div>
+      </div>
+
+      <div class="slack">
+        <div class="slack-hd">Slack · #service-calendar-invoices</div>
+        <div class="slack-msg">
+          <div class="slack-av">K<em>F</em></div>
+          <div>
+            <div class="slack-name">KitchFix Ops Hub <span>APP</span></div>
+            <div class="slack-body">
+              <b>TXR - AZ</b> has not finalized the week of Jul 27. Billing runs this morning and
+              this account will be skipped.
+            </div>
+            <div class="slack-attach warn">
+              4 of 6 days entered · Sat Aug 1 and Sun Aug 2 still need entry<br>
+              Site leads: Josh Forkner, Jordan Rogers
+            </div>
+            <span class="slack-btn">Open the week</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note-foot"><b>Design note.</b> This is the only message in the ladder that goes
+      to a room instead of an inbox, and it earns that by being about a missed commitment rather
+      than a reminder. It names the consequence in the headline - what Sebastian cannot do - not
+      the rule that was broken.</div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- ============================ N4 ============================ -->
+  <div class="note" id="n4">
+    <div class="note-hd">
+      <div class="note-id"><span>N4</span>Credit needed</div>
+      <div class="trigger">Fires when <b>a price is changed with a backdated effective date</b></div>
+    </div>
+    <dl class="meta">
+      <dt>To</dt><dd>Whoever made the change, Joe Lessard, Josh Katt, Sebastian Castro</dd>
+      <dt>Subject</dt><dd class="subj">Credit needed: TBR - FL road sandwiches</dd>
+      <dt>Channel</dt><dd>Email · sets the "Credit needed" flag in the admin panel</dd>
+    </dl>
+    <div class="frame">
+      <div class="mail">
+        <div class="bar"><div class="logo">Kitch<em>Fix</em> Ops Hub</div><div class="from">ops-hub@kitchfix.com</div></div>
+        <div class="body">
+          <div class="kick warn">Credit needed</div>
+          <h2>A backdated price change affects invoices already sent</h2>
+          <p class="lead"><b>Kevin Fietek</b> lowered the price of TBR - FL road sandwiches and
+             backdated it to the start of the year. Weeks that were already billed at the old
+             price are now overcharged by the amount below.</p>
+
+          <div class="panel warn">
+            <div class="row"><dt>Account</dt><dd>TBR - FL</dd></div>
+            <div class="row"><dt>Service</dt><dd>MiLB Road Sandwiches</dd></div>
+            <div class="row"><dt>Old price</dt><dd class="num">$15.00</dd></div>
+            <div class="row"><dt>New price</dt><dd class="num">$11.00</dd></div>
+            <div class="row"><dt>Effective from</dt><dd>Jan 1, 2026 - backdated</dd></div>
+            <div class="row"><dt>Weeks already billed</dt><dd class="num">18</dd></div>
+            <div class="row total"><dt>Credit owed to client</dt><dd class="num">$3,892.00</dd></div>
+          </div>
+
+          <ul class="steps">
+            <li><b>AP issues a credit memo</b> in QuickBooks for the amount above.</li>
+            <li><b>The Service Calendar already reflects the new price.</b> Future weeks bill
+                correctly with no further action.</li>
+            <li><b>A "Credit needed" flag is now showing</b> on TBR - FL in the admin panel and
+                stays until it is cleared.</li>
+          </ul>
+
+          <a class="cta amber" href="#">Open TBR - FL in the admin panel</a>
+
+          <div class="foot">
+            Changed by <b>Kevin Fietek</b> on Aug 11, 2026 at 2:04 PM CDT.
+            Recorded in the config changelog. Expect a note from Kevin or Joe as well.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note-foot"><b>Design note.</b> The dollar figure is the point of the message, so
+      it sits in the total row where the eye already goes. The three steps split the work by
+      owner - Sebastian acts, the system already acted, the admin panel is holding a flag -
+      so nobody has to work out whose move it is.</div>
+  </div>
+
+</div>
+</body>
+</html>
