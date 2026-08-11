@@ -105,36 +105,71 @@ CREATE OR REPLACE VIEW rippling_raw_users_latest AS
 -- ─── Extend CHECK constraints on kind columns ───────────────────────
 -- Both rippling_walks and rippling_current_presence gate `kind` to the
 -- known-good set. Add 'users' to both. Named-constraint drop-and-add
--- keeps this idempotent-safe on re-apply. Constraint names in the
--- CHECK-in-CREATE-TABLE form get auto-generated (rippling_walks_kind_check),
--- so drop by the auto name and re-add with an explicit name we own.
+-- keeps this idempotent-safe on re-apply.
+--
+-- Match by COLUMN via conkey, not by pg_get_constraintdef text. First
+-- attempt matched on `LIKE '%kind%IN%'`, but Postgres normalizes
+-- `CHECK (col IN (...))` to `CHECK ((col = ANY (ARRAY[...])))` at
+-- storage time - the string 'IN' never appears in the rendered defn,
+-- so the lookup returned NULL and the guard raised. The pre-flight
+-- UNIQUE guard above already uses the conkey pattern correctly;
+-- applying the same pattern here.
+--
+-- rippling_walks has CHECK constraints on kind, source, and status.
+-- Filtering conkey to the `kind` attribute keeps the match unambiguous.
+-- If more than one CHECK on `kind` ever exists, raise rather than
+-- dropping an arbitrary one.
 DO $$
 DECLARE
   walks_cn TEXT;
+  walks_cnt INTEGER;
   pres_cn  TEXT;
+  pres_cnt INTEGER;
 BEGIN
-  SELECT conname INTO walks_cn
+  SELECT count(*), max(c.conname)
+    INTO walks_cnt, walks_cn
   FROM pg_constraint c
-  JOIN pg_class t ON c.conrelid = t.oid
-  WHERE t.relname = 'rippling_walks'
+  JOIN pg_class     t ON c.conrelid    = t.oid
+  JOIN pg_namespace n ON t.relnamespace = n.oid
+  WHERE n.nspname = 'public'
+    AND t.relname = 'rippling_walks'
     AND c.contype = 'c'
-    AND pg_get_constraintdef(c.oid) LIKE '%kind%IN%';
-  IF walks_cn IS NULL THEN
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute a
+      WHERE a.attrelid = t.oid
+        AND a.attname  = 'kind'
+        AND a.attnum   = ANY (c.conkey)
+    );
+  IF walks_cnt = 0 THEN
     RAISE EXCEPTION 'kpi-c5: could not find kind CHECK constraint on rippling_walks';
+  END IF;
+  IF walks_cnt > 1 THEN
+    RAISE EXCEPTION 'kpi-c5: found % kind CHECK constraints on rippling_walks; refusing to drop arbitrarily', walks_cnt;
   END IF;
   EXECUTE format('ALTER TABLE rippling_walks DROP CONSTRAINT %I', walks_cn);
   ALTER TABLE rippling_walks
     ADD CONSTRAINT rippling_walks_kind_check
     CHECK (kind IN ('time_entries','pay_segments','workers','time_entry_zo','users'));
 
-  SELECT conname INTO pres_cn
+  SELECT count(*), max(c.conname)
+    INTO pres_cnt, pres_cn
   FROM pg_constraint c
-  JOIN pg_class t ON c.conrelid = t.oid
-  WHERE t.relname = 'rippling_current_presence'
+  JOIN pg_class     t ON c.conrelid    = t.oid
+  JOIN pg_namespace n ON t.relnamespace = n.oid
+  WHERE n.nspname = 'public'
+    AND t.relname = 'rippling_current_presence'
     AND c.contype = 'c'
-    AND pg_get_constraintdef(c.oid) LIKE '%kind%IN%';
-  IF pres_cn IS NULL THEN
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute a
+      WHERE a.attrelid = t.oid
+        AND a.attname  = 'kind'
+        AND a.attnum   = ANY (c.conkey)
+    );
+  IF pres_cnt = 0 THEN
     RAISE EXCEPTION 'kpi-c5: could not find kind CHECK constraint on rippling_current_presence';
+  END IF;
+  IF pres_cnt > 1 THEN
+    RAISE EXCEPTION 'kpi-c5: found % kind CHECK constraints on rippling_current_presence; refusing to drop arbitrarily', pres_cnt;
   END IF;
   EXECUTE format('ALTER TABLE rippling_current_presence DROP CONSTRAINT %I', pres_cn);
   ALTER TABLE rippling_current_presence
