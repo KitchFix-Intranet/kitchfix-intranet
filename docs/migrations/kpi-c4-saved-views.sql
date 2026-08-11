@@ -123,6 +123,78 @@ COMMENT ON COLUMN public.kpi_saved_views.worker_ids IS 'NULL means all workers (
 COMMENT ON COLUMN public.kpi_saved_views.date_mode  IS 'preset = rolling (resolves at query time); absolute = fixed window (audit-style).';
 COMMENT ON COLUMN public.kpi_saved_views.is_shared  IS 'When true, the view is readable by any OPS_LEADERSHIP_EMAILS user. Edits still gated to the owner.';
 
+-- ─── Grants ─────────────────────────────────────────────────────────
+-- Empirically confirmed against a fresh Postgres 16.14 mimicking
+-- Supabase's role setup: without explicit grants, service_role has
+-- zero table privileges (0/4) and zero sequence privileges (0/2) on
+-- newly-created public tables. Consistent with kpi-8a2's post-flight
+-- assertion that service_role has NO UPDATE/DELETE on the raw tables
+-- passing on production - defaults do not grant them here.
+--
+-- DELETE is REQUIRED on this table (unlike the raw tables): the
+-- /api/kpi/labor/views/[id] route lets users delete their own views.
+-- UPDATE is required for PATCH (rename, share-toggle, dirty-save).
+-- Sequence USAGE is required for BIGSERIAL id assignment on INSERT.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.kpi_saved_views TO service_role;
+GRANT USAGE ON SEQUENCE public.kpi_saved_views_id_seq TO service_role;
+
+-- ─── Post-flight sanity ─────────────────────────────────────────────
+-- Same pattern as kpi-8bb: assert every required privilege positively
+-- so a permissions drift (revoke, restore-from-backup differences,
+-- role rebuild) surfaces as a clean apply-time failure instead of a
+-- silent 500 on the first PATCH or DELETE from the routes.
+DO $$
+BEGIN
+  IF to_regclass('public.kpi_saved_views') IS NULL THEN
+    RAISE EXCEPTION 'post-flight: kpi_saved_views missing';
+  END IF;
+
+  -- Structure: unique index, plain indexes, trigger
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE schemaname='public' AND tablename='kpi_saved_views'
+      AND indexname='kpi_saved_views_owner_name_uk'
+  ) THEN
+    RAISE EXCEPTION 'post-flight: kpi_saved_views_owner_name_uk missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE schemaname='public' AND tablename='kpi_saved_views'
+      AND indexname='kpi_saved_views_owner_email_ix'
+  ) THEN
+    RAISE EXCEPTION 'post-flight: kpi_saved_views_owner_email_ix missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.kpi_saved_views'::regclass
+      AND tgname = 'kpi_saved_views_touch_updated_at'
+  ) THEN
+    RAISE EXCEPTION 'post-flight: kpi_saved_views_touch_updated_at trigger missing';
+  END IF;
+
+  -- Empty at apply time (guards half-applied re-runs where a prior
+  -- attempt inserted rows before failing)
+  IF (SELECT COUNT(*) FROM public.kpi_saved_views) <> 0 THEN
+    RAISE NOTICE 'post-flight: kpi_saved_views has % existing rows (idempotent re-apply on a populated table)', (SELECT COUNT(*) FROM public.kpi_saved_views);
+  END IF;
+
+  -- Grants: all four DML privileges + sequence USAGE
+  IF NOT has_table_privilege('service_role', 'public.kpi_saved_views', 'SELECT') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing SELECT on kpi_saved_views';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.kpi_saved_views', 'INSERT') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing INSERT on kpi_saved_views';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.kpi_saved_views', 'UPDATE') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing UPDATE on kpi_saved_views (needed for PATCH route)';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.kpi_saved_views', 'DELETE') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing DELETE on kpi_saved_views (needed for DELETE route)';
+  END IF;
+  IF NOT has_sequence_privilege('service_role', 'public.kpi_saved_views_id_seq', 'USAGE') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing USAGE on kpi_saved_views_id_seq (INSERT fails without nextval)';
+  END IF;
+
+  RAISE NOTICE 'kpi-c4 post-flight PASS - kpi_saved_views + indexes + trigger + grants (SELECT/INSERT/UPDATE/DELETE + sequence USAGE)';
+END $$;
+
 COMMIT;
 
 -- ─── Rollback (paste in Studio if needed) ───────────────────────────
