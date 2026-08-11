@@ -29,6 +29,9 @@
 
 import { getServiceClient } from "@/lib/supabase";
 import { isScLockOverride } from "@/lib/admin";
+import { buildInvoicePayload } from "@/lib/billing/buildInvoicePayload";
+import { postInvoiceDraft, NotAllowlistedError, QboPostError } from "@/lib/billing/qboAdapter";
+import { renderN1, renderN2 } from "@/lib/billing/qboNotifications";
 
 // ─────────────────────────────────────────────────────────────────
 // Mon-Sun week derivation (banned from `week_label` per C-3).
@@ -276,42 +279,257 @@ export async function assertWeekOpenForWrite(accountKey, dates, email) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// runFinalizeEffects - the seam PR-C will extend.
+// runFinalizeEffects - build -> post -> ledger -> notify (PR-C).
 // ─────────────────────────────────────────────────────────────────
 //
-// PR-A (this file): records state only. No side effects. Returns a
-// summary object the caller passes back to the client.
+// PR-A: state-only stub.
+// PR-C (this): full effects chain. Order matters, and is preserved
+// verbatim below:
+//   1. Load account_map + service_map.
+//   2. Determine cadence span (weekly = 7d, biweekly = wait-for-pair
+//      OR 14d ending on the current weekStart).
+//   3. Load sc_daily_revenue for the span.
+//   4. Build payload via buildInvoicePayload.
+//   5. For each invoice slot: postInvoiceDraft(isTest=false). The
+//      adapter enforces the customer allow-list; real customers get
+//      REFUSED here and land in the ledger as `failed` rows. That
+//      failure is the expected path from finalize in PR-C.
+//   6. Any post failure -> UPDATE sc_week_finalize.status =
+//      'push_failed', render N2 (dry-run), return failure summary.
+//      The finalize row is NEVER unwound; the week stays frozen with
+//      the override group's Retry as the only unlock path.
+//   7. All posts succeed (only reachable in test paths this PR):
+//      render N1 (dry-run), return the invoice records.
 //
-// PR-C (next arc PR): this hook grows to POST the invoice payload to
-// QBO's proxy + send the K-1 notification email. The seam exists
-// today so PR-C is a fill-in-the-hook change, not a rewrite of the
-// finalize action.
+// PR-C is fenced. Every payload's CustomerRef gets checked against
+// qboAdapter's ALLOWED_CUSTOMER_IDS; only 22463 (ZZ TEST) passes.
+// A real production finalize will fail at that fence, cleanly, with
+// a NotAllowlistedError -> ledger + N2 + push_failed.
 //
-// Contract (PR-A):
+// Contract:
 //   Input:  { accountKey, weekStart, finalizedRow }
-//   Output: { pushed: false, reason: "PR-A: state-only" }
+//   Output on success:
+//     { pushed: true, invoiceRecords: [...], n1: {...} }
+//   Output on failure:
+//     { pushed: false, failure: { code, message, ... } }
+//   Output on waiting-for-biweekly-pair:
+//     { pushed: false, reason: 'awaiting_pair_close' }
+//   Output on no-billable-actuals:
+//     { pushed: false, reason: 'no_billable_actuals' }
 //
-// Contract (PR-C future - DOCUMENTED HERE, NOT IMPLEMENTED):
-//   Input:  same
-//   Output: {
-//     pushed: true,
-//     qboInvoiceId: string,
-//     qboDocNumber: string,
-//     pretaxTotal: number,      // cents
-//     ledgerRowId: uuid,
-//     notification: { sent: bool, to: string[] },
-//   } or on failure
-//   Output: {
-//     pushed: false,
-//     failure: { code: "QBO_ERROR" | "MAPPING_ERROR" | ...,
-//                message: string, attempt: number },
-//   }
-//
-// Do NOT stub fake QBO push code in PR-A. The seam is inert until
-// PR-C's build; a stub would drift and mislead.
-export async function runFinalizeEffects(_ctx) {
-  return {
-    pushed: false,
-    reason: "PR-A: state-only, no QBO push implemented yet",
-  };
+// deps is an injection seam for tests. Every external call is
+// swappable so unit tests never touch the DB or the network.
+
+const REVENUE_COLS =
+  "service_date, service_id, service_name, account_key, is_flat_fee, is_tax_free, is_non_revenue, actual_count, actual_price_at_date, price_at_date, projected_count, period, week_label, has_actuals, has_projection";
+
+function addDaysIso(iso, n) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
+
+function parseWeekIndex(label) {
+  if (typeof label !== "string") return null;
+  const m = label.match(/^Week\s+(\d+)$/i);
+  return m ? Number(m[1]) : null;
+}
+
+function sumCentsFromLines(lines) {
+  let cents = 0;
+  for (const l of (lines || [])) {
+    if (l.DetailType !== "SalesItemLineDetail") continue;
+    cents += Math.round(Number(l.Amount) * 100);
+  }
+  return cents;
+}
+
+function buildRetryLink(accountKey, weekStart) {
+  const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "";
+  const q = new URLSearchParams({ account: accountKey, week: weekStart, action: "retry-push" });
+  return `${base}/admin/service-calendar/finalize?${q.toString()}`;
+}
+
+function buildScWeekLink(accountKey, weekStart) {
+  const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "";
+  const q = new URLSearchParams({ account: accountKey, week: weekStart });
+  return `${base}/service-calendar/season?${q.toString()}`;
+}
+
+function buildQboInvoiceLink(qboInvoiceId) {
+  if (!qboInvoiceId) return "";
+  return `https://app.qbo.intuit.com/app/invoice?txnId=${encodeURIComponent(qboInvoiceId)}`;
+}
+
+async function transitionFinalizeRowToPushFailed(supa, finalizeRowId) {
+  const { error } = await supa
+    .from("sc_week_finalize")
+    .update({ status: "push_failed" })
+    .eq("id", finalizeRowId);
+  if (error) {
+    throw new Error(`transitionFinalizeRowToPushFailed: ${error.message}`);
+  }
+}
+
+export async function runFinalizeEffects(ctx, deps = {}) {
+  const supa   = deps.supa || getServiceClient();
+  const build  = deps.buildInvoicePayload || buildInvoicePayload;
+  const post   = deps.postInvoiceDraft   || postInvoiceDraft;
+  const doN1   = deps.renderN1 || renderN1;
+  const doN2   = deps.renderN2 || renderN2;
+  const log    = deps.logger || console;
+
+  if (!ctx?.accountKey || !ctx?.weekStart || !ctx?.finalizedRow) {
+    throw new Error("runFinalizeEffects: accountKey, weekStart, finalizedRow required");
+  }
+  const { accountKey, weekStart, finalizedRow } = ctx;
+  const finalizeRowId = finalizedRow.id;
+  const submitterEmail = finalizedRow.finalized_by;
+
+  // 1. Load account map.
+  const { data: accountMap, error: amErr } = await supa
+    .from("sc_qbo_account_map")
+    .select("*")
+    .eq("account_key", accountKey)
+    .maybeSingle();
+  if (amErr) {
+    throw new Error(`load sc_qbo_account_map: ${amErr.message}`);
+  }
+  if (!accountMap) {
+    await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
+    const errText = `No sc_qbo_account_map row for ${accountKey}. Configure the account map before finalize can post.`;
+    const n2 = doN2({
+      accountKey, weekStart, weekEnd: addDaysIso(weekStart, 6),
+      errorText: errText, retryLink: buildRetryLink(accountKey, weekStart),
+    });
+    log.info("[N2 dry-run]", { subject: n2.email.subject, to: n2.email.to, slack: n2.slack.text.slice(0, 120) });
+    return { pushed: false, failure: { code: "CONFIG_MISSING", message: errText, n2 } };
+  }
+
+  // 2. Cadence span (biweekly requires pair-close alignment).
+  const isBiweekly = accountMap.cadence === "biweekly";
+  let pairStart = weekStart;
+  if (isBiweekly) {
+    const { data: meta } = await supa
+      .from("sc_day_metadata")
+      .select("period, week_label")
+      .eq("service_date", weekStart)
+      .maybeSingle();
+    const weekIdx = parseWeekIndex(meta?.week_label);
+    if (weekIdx === 1 || weekIdx === 3) {
+      return { pushed: false, reason: "awaiting_pair_close", weekIndex: weekIdx };
+    }
+    if (weekIdx === 2 || weekIdx === 4) {
+      pairStart = addDaysIso(weekStart, -7);
+    }
+  }
+  const pairEnd = addDaysIso(pairStart, isBiweekly ? 13 : 6);
+
+  // 3. Service map + revenue rows.
+  const { data: serviceMap, error: smErr } = await supa
+    .from("sc_qbo_service_map")
+    .select("*")
+    .eq("account_key", accountKey)
+    .eq("active", true);
+  if (smErr) throw new Error(`load sc_qbo_service_map: ${smErr.message}`);
+
+  const { data: rows, error: rvErr } = await supa
+    .from("sc_daily_revenue")
+    .select(REVENUE_COLS)
+    .eq("account_key", accountKey)
+    .gte("service_date", pairStart)
+    .lte("service_date", pairEnd);
+  if (rvErr) throw new Error(`load sc_daily_revenue: ${rvErr.message}`);
+
+  // 4. Build payload.
+  let payload;
+  try {
+    payload = build({ accountKey, weekStart: pairStart, rows, accountMap, serviceMap });
+  } catch (err) {
+    await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
+    const n2 = doN2({
+      accountKey, weekStart: pairStart, weekEnd: pairEnd,
+      errorText: err.message, retryLink: buildRetryLink(accountKey, weekStart),
+    });
+    log.info("[N2 dry-run]", { subject: n2.email.subject, to: n2.email.to });
+    return {
+      pushed: false,
+      failure: { code: "BUILD_ERROR", message: err.message, n2 },
+    };
+  }
+  if (payload.invoices.length === 0) {
+    return { pushed: false, reason: "no_billable_actuals" };
+  }
+
+  // 5. Post each invoice slot. isTest=false: adapter's fence will
+  // refuse any real customer id, which is the expected path in this
+  // fenced PR. The refusal writes the ledger row for us; here we
+  // only aggregate the errors.
+  const invoiceRecords = [];
+  const errors = [];
+  for (const invoice of payload.invoices) {
+    try {
+      const result = await post(invoice, {
+        isTest:      false,
+        accountKey,
+        weekStart:   pairStart,
+        weekEnd:     pairEnd,
+        cadenceUnit: accountMap.cadence,
+        createdBy:   submitterEmail || "sc-finalize",
+        deps:        { supa },
+      });
+      invoiceRecords.push({
+        invoiceSlot:      invoice._slot,
+        qboInvoiceId:     result.qboInvoiceId,
+        qboDocNumber:     result.qboDocNumber,
+        pretaxTotalCents: sumCentsFromLines(invoice.Line),
+        lineCount:        invoice.Line.length,
+        isTest:           false,
+        qboLink:          buildQboInvoiceLink(result.qboInvoiceId),
+        ledgerRowId:      result.ledgerRowId,
+      });
+    } catch (err) {
+      const code = err instanceof NotAllowlistedError
+        ? "NOT_ALLOWLISTED"
+        : err instanceof QboPostError
+          ? "QBO_POST_ERROR"
+          : "UNKNOWN_ERROR";
+      errors.push({ slot: invoice._slot, code, message: err.message, ledgerRowId: err.ledgerRowId });
+    }
+  }
+
+  // 6. Any failure -> push_failed + N2.
+  if (errors.length > 0) {
+    await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
+    const errText = errors.map((e) => `${e.slot} [${e.code}]: ${e.message}`).join("\n");
+    const n2 = doN2({
+      accountKey, weekStart: pairStart, weekEnd: pairEnd,
+      errorText: errText, retryLink: buildRetryLink(accountKey, weekStart),
+    });
+    log.info("[N2 dry-run]", { subject: n2.email.subject, to: n2.email.to, errorCount: errors.length });
+    return {
+      pushed: false,
+      failure: { code: errors[0].code, message: errText, errors, n2 },
+    };
+  }
+
+  // 7. All succeeded -> N1.
+  const n1 = doN1({
+    accountKey,
+    weekStart: pairStart,
+    weekEnd:   pairEnd,
+    submitterEmail,
+    invoiceRecords,
+    scWeekLink: buildScWeekLink(accountKey, weekStart),
+  });
+  log.info("[N1 dry-run]", { subject: n1.subject, to: n1.to, invoices: invoiceRecords.length });
+
+  return { pushed: true, invoiceRecords, n1 };
+}
+
+// Exposed for tests only.
+export const _internals = {
+  addDaysIso, parseWeekIndex, sumCentsFromLines,
+  buildRetryLink, buildScWeekLink, buildQboInvoiceLink,
+  transitionFinalizeRowToPushFailed,
+};
