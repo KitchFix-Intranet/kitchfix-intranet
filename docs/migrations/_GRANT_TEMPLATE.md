@@ -1,39 +1,58 @@
 # Grant hygiene template for new public-schema migrations
 
-Every new SQL migration that creates a table in `public` MUST include the
-explicit REVOKE line shown below, in addition to the standard GRANT block.
-This is a load-bearing safety line, not a stylistic preference.
+Post-sc-34 (2026-08-11) the DEFAULT PRIVILEGES record for the postgres role
+no longer grants TRUNCATE to anon or authenticated on new tables. That
+removes the "silent TRUNCATE inheritance" problem. **The old workaround
+(per-table `REVOKE TRUNCATE` line in every new migration) is no longer
+required for tables created after sc-34 lands.** Keep the pattern below
+only as a defensive belt-and-suspenders on money-adjacent tables; for
+everything else the DEFAULT PRIVILEGES fix does the job.
+
+The explicit `GRANT REFERENCES, TRIGGER TO anon, authenticated` line we
+have been writing on every new sc- table is ALSO redundant. sc-33's V2
+probe surfaced that the postgres role's DEFAULT PRIVILEGES record already
+grants REFERENCES + TRIGGER to anon + authenticated on every new table.
+Writing them again is harmless but noisy. Drop the line on new migrations
+unless you specifically need to override the default (in which case say
+so in a comment).
 
 ## Background
 
-The Supabase project holds an `ALTER DEFAULT PRIVILEGES` record somewhere
-that grants `TRUNCATE` on newly-created tables in `public` to `anon` and
-`authenticated`. Our migrations do NOT write that grant - we only ever
-grant `REFERENCES, TRIGGER` to those roles - and yet every new table
-inherits `TRUNCATE`. This was surfaced by sc-33's investigation
-(2026-08-11) after Kevin's V4 verify caught it on sc_week_finalize,
-sc_qbo_service_map, and sc_export_ledger. `docs/audits/GRANT_HYGIENE_2026-07-29.md`
-records the prior sweep that cleared this state once already; the
-inheritance re-fills it every time a new table is created.
+The Supabase project's DEFAULT PRIVILEGES record for the postgres role
+grants `Dxtm` (TRUNCATE, REFERENCES, TRIGGER, MAINTAIN) to anon,
+authenticated, and service_role, plus SELECT to `joe_readonly`, on every
+new table in `public`. sc-34 stripped TRUNCATE for anon + authenticated
+from that default; the rest stays.
 
-Until a follow-up PR lands the `ALTER DEFAULT PRIVILEGES ... REVOKE TRUNCATE`
-against the correct grantor role (sc-33's verify block V2 exposes which
-role that is), the only reliable defense is per-table explicit REVOKE.
+sc-33 recorded the discovery + the per-table fix for the four SC billing
+tables born under the leaky default (sc_week_finalize, sc_qbo_account_map,
+sc_qbo_service_map, sc_export_ledger). sc-34 fixed the source.
+`docs/audits/GRANT_HYGIENE_2026-07-29.md` §10 has the full recurrence
+record.
 
-## Canonical grant block
+**Standing flag (not fixed by sc-34):** `joe_readonly` still inherits
+SELECT on every new public table, including `sc_export_ledger`. Kevin
+rules whether that stays or gets scoped to non-money tables in a follow-up.
+
+## Canonical grant block (current shape)
 
 ```sql
 -- ─── GRANTs ────────────────────────────────────────────────────────
--- service_role holds the app-facing write privileges. anon and
--- authenticated get REFERENCES + TRIGGER only.
+-- service_role holds the app-facing write privileges. anon +
+-- authenticated get REFERENCES + TRIGGER by default from the postgres
+-- role's DEFAULT PRIVILEGES (see sc-34 + docs/audits/GRANT_HYGIENE_
+-- 2026-07-29.md §10); do not re-grant them here unless you have a
+-- specific reason to override.
 GRANT SELECT, INSERT, UPDATE ON <new_table> TO service_role;
-GRANT REFERENCES, TRIGGER    ON <new_table> TO anon, authenticated;
+```
 
--- REVOKE the TRUNCATE that the project's DEFAULT PRIVILEGES silently
--- grants to anon + authenticated on new public tables. Idempotent
--- (no-op when the privilege is not held). See
--- docs/migrations/_GRANT_TEMPLATE.md for the mechanism and
--- docs/audits/GRANT_HYGIENE_2026-07-29.md for the audit backstory.
+For money-adjacent tables (billing, invoicing, payment state) prefer
+belt-and-suspenders with an explicit REVOKE:
+
+```sql
+-- Extra defense for money-adjacent tables. Idempotent (no-op when the
+-- privilege is not held). The DEFAULT PRIVILEGES record no longer
+-- grants TRUNCATE here, but the REVOKE stays cheap and documents intent.
 REVOKE TRUNCATE ON <new_table> FROM anon, authenticated;
 ```
 
@@ -62,6 +81,10 @@ WHERE table_schema = 'public'
 ## Related
 
 - `docs/audits/GRANT_HYGIENE_2026-07-29.md` - the July 2026 sweep + Kevin's
-  catalog-driven revoke that established the baseline.
-- `docs/migrations/sc-33-grant-fence-and-desc-rename.sql` - the concrete
-  fix + verify-block pattern this template distills.
+  catalog-driven revoke that established the baseline, plus §10 recurrence
+  record.
+- `docs/migrations/sc-33-grant-fence-and-desc-rename.sql` - per-table
+  REVOKE + rename bundled fix for the four billing tables born under
+  the leaky default.
+- `docs/migrations/sc-34-alter-default-privileges.sql` - the one-line
+  source fix. Runs after sc-33.
