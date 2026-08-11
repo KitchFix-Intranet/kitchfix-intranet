@@ -26,24 +26,10 @@ import ExcelJS from "exceljs";
 import { auth } from "@/lib/auth";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
+import { resolveWorkerName } from "@/lib/kpi/resolveName";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
-
-function resolveWorkerName(payload) {
-  const p = payload || {};
-  const candidates = [
-    p.full_name, p.name, p.legal_name, p.preferred_name, p.display_name,
-    p.user?.name, p.user?.full_name,
-    p.person?.full_name, p.person?.name,
-    (p.first_name && p.last_name) ? `${p.first_name} ${p.last_name}` : null,
-    (p.user?.first_name && p.user?.last_name) ? `${p.user.first_name} ${p.user.last_name}` : null,
-  ];
-  for (const c of candidates) {
-    if (c && String(c).trim().length > 0) return String(c).trim();
-  }
-  return null;
-}
 
 function safeError(scope, err) {
   console.error(`[kpi/labor/export] ${scope}:`, err?.message || err);
@@ -106,13 +92,27 @@ export async function GET(request) {
       .select("payload")
       .in("rippling_id", workerIds);
     if (!w.error) {
+      // Join user_id -> users. Same shape as the read route.
+      const userIds = [...new Set((w.data || []).map(r => r.payload?.user_id).filter(Boolean))];
+      const userByRipplingId = new Map();
+      if (userIds.length > 0) {
+        const u = await supa
+          .from("rippling_raw_users_latest")
+          .select("rippling_id, payload")
+          .in("rippling_id", userIds);
+        if (!u.error) {
+          for (const r of u.data || []) userByRipplingId.set(r.rippling_id, r.payload || {});
+        }
+      }
       for (const r of w.data || []) {
         const p = r.payload || {};
-        const name = resolveWorkerName(p);
+        const userPayload = p.user_id ? userByRipplingId.get(p.user_id) : null;
+        const name = resolveWorkerName(p, userPayload);
         workerMeta.set(p.id, {
           number: p.number ?? null,
           name,
-          title: p.title || null,
+          // Trim - Rippling returns some titles with trailing spaces.
+          title: p.title ? String(p.title).trim() : null,
         });
       }
     }

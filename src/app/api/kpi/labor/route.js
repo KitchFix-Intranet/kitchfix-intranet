@@ -1,22 +1,19 @@
 // /api/kpi/labor
 //
-// Read-only. Admin-gated via OPS_LEADERSHIP_EMAILS (six-person leadership
-// list per D30, ruled 2026-08-10). Serves the /kpi/labor surface. Never
-// calls Rippling; reads labor_actuals_latest + labor_unattributed +
-// rippling_raw_workers_latest + rippling_walks + earning_type_unmapped +
-// sc_day_metadata (for account_periods).
+// Read-only. Admin-gated via OPS_LEADERSHIP_EMAILS. Never calls
+// Rippling; reads labor_actuals_latest + labor_unattributed +
+// rippling_raw_workers_latest + rippling_raw_users_latest +
+// rippling_walks + earning_type_unmapped + sc_day_metadata.
 //
-// PR C3 additions:
-//   - Worker name resolver returns null when no canonical name field
-//     exists on the ingested payload (the current state; Rippling's
-//     /workers endpoint does not carry user.name). No email mangling.
-//     Consumers render `#N` when name is null.
+// PR C5: names via /users. Worker payload carries user_id but the
+// endpoint's response schema does not include name fields. This route
+// joins worker.user_id -> rippling_raw_users_latest.rippling_id and
+// resolves names via the canonical Rippling field. Never parses email.
+//
+// PR C3 additions (still relevant):
 //   - `title` (job title) included in worker meta for display context.
-//   - `account_periods` in response: fiscal-year period boundaries from
-//     sc_day_metadata for the requested account. Powers client-side
-//     "this period" / "last period" presets.
-//
-// Error paths return sanitized messages, never raw PostgREST error text.
+//   - `account_periods` in response: fiscal-year period boundaries
+//     for client-side "this period" / "last period" presets.
 //
 // Query params:
 //   account   accounts.team_key (required)
@@ -27,40 +24,17 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
+import { resolveWorkerName } from "@/lib/kpi/resolveName";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
 
 function safeError(scope, err) {
+  // Never echo a raw PostgREST error to the client (leaks column
+  // names). Never echo a name (PII discipline - the users table
+  // touches this route).
   console.error(`[kpi/labor] ${scope}:`, err?.message || err);
   return { error: "server_error", scope };
-}
-
-// Canonical name resolver. Rippling's /workers endpoint does NOT carry a
-// name field today (user is null; there is no full_name, first_name, etc.
-// on the payload). Return null if no canonical field is populated so the
-// UI renders `#N` honestly - a mangled email-derived guess is worse than
-// a number (produced "Treestonebuisness", "Drewchrostowski1", etc. in a
-// prior attempt).
-function resolveWorkerName(payload) {
-  const p = payload || {};
-  const candidates = [
-    p.full_name,
-    p.name,
-    p.legal_name,
-    p.preferred_name,
-    p.display_name,
-    p.user?.name,
-    p.user?.full_name,
-    p.person?.full_name,
-    p.person?.name,
-    (p.first_name && p.last_name) ? `${p.first_name} ${p.last_name}` : null,
-    (p.user?.first_name && p.user?.last_name) ? `${p.user.first_name} ${p.user.last_name}` : null,
-  ];
-  for (const c of candidates) {
-    if (c && String(c).trim().length > 0) return String(c).trim();
-  }
-  return null;
 }
 
 export async function GET(request) {
@@ -135,21 +109,46 @@ export async function GET(request) {
   const workerIds = [...new Set(actuals.data.map(r => r.worker_id))];
   const workerMeta = {};
   let resolvedNames = 0;
+  let usersReachable = false;
   if (workerIds.length > 0) {
     const w = await supa
       .from("rippling_raw_workers_latest")
       .select("payload")
       .in("rippling_id", workerIds);
     if (!w.error) {
+      // Collect user_ids from worker payloads, then batch-fetch users.
+      // Users table may be empty if the C5 walk has not run yet; the
+      // resolver returns null and the surface falls back to #N + title.
+      const userIds = [...new Set((w.data || []).map(r => r.payload?.user_id).filter(Boolean))];
+      const userByRipplingId = new Map();
+      if (userIds.length > 0) {
+        const u = await supa
+          .from("rippling_raw_users_latest")
+          .select("rippling_id, payload")
+          .in("rippling_id", userIds);
+        // A missing users table (migration not yet applied) surfaces
+        // as an error here. Do not fail the whole route; just skip the
+        // join and let the resolver return null. Kevin sees the
+        // fraction-resolved signal in the response.
+        if (!u.error) {
+          usersReachable = true;
+          for (const r of u.data || []) userByRipplingId.set(r.rippling_id, r.payload || {});
+        }
+      }
       for (const r of w.data || []) {
         const p = r.payload || {};
-        const name = resolveWorkerName(p);
+        const uid = p.user_id;
+        const userPayload = uid ? userByRipplingId.get(uid) : null;
+        // Trim title on ingest (Rippling returns some titles with
+        // trailing spaces - "Cook " was showing up in the C4 export).
+        const title = p.title ? String(p.title).trim() : null;
+        const name = resolveWorkerName(p, userPayload);
         if (name) resolvedNames++;
         workerMeta[p.id] = {
           worker_id: p.id,
           number: p.number ?? null,
           display_name: name,                        // null when unresolvable
-          title: p.title || null,
+          title,
           status: p.status || null,
         };
       }
@@ -211,9 +210,11 @@ export async function GET(request) {
       has_names: resolvedNames > 0,
       resolved: resolvedNames,
       total: workerIds.length,
-      reason: resolvedNames === 0
-        ? "no_canonical_name_field_in_workers_payload"
-        : "canonical_field_present",
+      reason: resolvedNames === workerIds.length && workerIds.length > 0
+        ? "all_resolved_from_users_endpoint"
+        : !usersReachable
+          ? "users_table_empty_or_unreachable"
+          : "some_workers_lack_user_id_or_canonical_name",
     },
   });
 }
