@@ -62,6 +62,19 @@ function hoursSinceISO(iso) {
   if (!iso) return null;
   return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60);
 }
+// D1 · B8: timestamps render viewer-local with a zone label so a user in
+// Toronto sees 8:11 AM EDT while a user in Denver sees 6:11 AM MDT. UTC
+// only in exports, logs, URLs (per spec §10).
+function fmtTimestamp(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit",
+    timeZoneName: "short",
+  }).format(d);
+}
 function freshnessTint(hrs) {
   if (hrs == null) return "kpi-chip-stale";
   if (hrs < 30) return "kpi-chip-fresh";
@@ -83,7 +96,7 @@ function CoverageBadge({ state }) {
   const cfg = {
     complete:   { label: "Complete",   cls: "kpi-badge-complete",   symbol: "✓" },
     partial:    { label: "Partial",    cls: "kpi-badge-partial",    symbol: "!" },
-    hours_only: { label: "Hours only", cls: "kpi-badge-hours-only", symbol: "◷" },
+    hours_only: { label: "Unpriced", cls: "kpi-badge-hours-only", symbol: "◷" },
     unknown:    { label: "Unknown",    cls: "kpi-badge-unknown",    symbol: "?" },
     no_labor:   { label: "No labor",   cls: "kpi-badge-no-labor",   symbol: "—" },
   }[state] || { label: state, cls: "kpi-badge-no-labor", symbol: "?" };
@@ -588,7 +601,7 @@ export default function KpiLaborPage() {
             {ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
           <div className="kpi-cmd-r">
-            <span className="kpi-cmd-chip" title={freshness?.last_walk_at || "no successful walk"}>
+            <span className="kpi-cmd-chip" title={fmtTimestamp(freshness?.last_walk_at) || "no successful walk"}>
               <span className={`kpi-cmd-chip-dot ${freshnessTint(freshnessH)}`} aria-hidden="true" />
               {freshnessH != null ? `${freshnessH.toFixed(1)}h ago` : "no data"}
             </span>
@@ -869,7 +882,7 @@ export default function KpiLaborPage() {
                         <th scope="col" role="columnheader" className="kpi-num">Regular</th>
                         <th scope="col" role="columnheader" className="kpi-num">OT 1.5x</th>
                         <th scope="col" role="columnheader" className="kpi-num">Holiday 2x</th>
-                        <th scope="col" role="columnheader" className="kpi-num kpi-col-nodol">No $</th>
+                        <th scope="col" role="columnheader" className="kpi-num kpi-col-nodol">Unpriced</th>
                         <th scope="col" role="columnheader" className="kpi-num">Dollars</th>
                       </tr>
                     </thead>
@@ -931,7 +944,7 @@ export default function KpiLaborPage() {
                                       <td data-label="Regular" className="kpi-num"><CellHours v={w.hours_regular} coverage_state={w.coverage_state} /></td>
                                       <td data-label="OT 1.5x" className="kpi-num"><CellHours v={w.hours_overtime} coverage_state={w.coverage_state} /></td>
                                       <td data-label="Holiday 2x" className="kpi-num"><CellHours v={w.hours_double_time} coverage_state={w.coverage_state} /></td>
-                                      <td data-label="No dollars" className="kpi-num kpi-col-nodol"><CellHours v={w.hours_without_dollars > 0 ? w.hours_without_dollars : null} coverage_state={w.coverage_state} /></td>
+                                      <td data-label="Unpriced" className="kpi-num kpi-col-nodol"><CellHours v={w.hours_without_dollars > 0 ? w.hours_without_dollars : null} coverage_state={w.coverage_state} /></td>
                                       <td data-label="Dollars" className="kpi-num"><CellDollars v={w.amount} coverage_state={w.coverage_state} /></td>
                                     </>
                                   )}
@@ -965,7 +978,7 @@ export default function KpiLaborPage() {
                             <td data-label="Regular"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_regular)}</td>
                             <td data-label="OT 1.5x"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_overtime)}</td>
                             <td data-label="Holiday 2x" className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_double_time)}</td>
-                            <td data-label="No dollars" className="kpi-num kpi-col-nodol" role="cell">{g.subtotal.hours_without_dollars > 0 ? fmtHrs(g.subtotal.hours_without_dollars) : "—"}</td>
+                            <td data-label="Unpriced" className="kpi-num kpi-col-nodol" role="cell">{g.subtotal.hours_without_dollars > 0 ? fmtHrs(g.subtotal.hours_without_dollars) : "—"}</td>
                             <td data-label="Dollars"    className="kpi-num" role="cell">{fmt$(g.subtotal.amount)}</td>
                           </tr>
                         </Fragment>
@@ -976,7 +989,7 @@ export default function KpiLaborPage() {
                           <td data-label="Regular"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_regular)}</strong></td>
                           <td data-label="OT 1.5x"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_overtime)}</strong></td>
                           <td data-label="Holiday 2x" className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_double_time)}</strong></td>
-                          <td data-label="No dollars" className="kpi-num kpi-col-nodol" role="cell"><strong>{grand.hours_without_dollars > 0 ? fmtHrs(grand.hours_without_dollars) : "—"}</strong></td>
+                          <td data-label="Unpriced" className="kpi-num kpi-col-nodol" role="cell"><strong>{grand.hours_without_dollars > 0 ? fmtHrs(grand.hours_without_dollars) : "—"}</strong></td>
                           <td data-label="Dollars"    className="kpi-num" role="cell"><strong>{fmt$(grand.amount)}</strong></td>
                         </tr>
                       )}
@@ -1018,7 +1031,7 @@ export default function KpiLaborPage() {
                 )}
                 {totals.hours_without_dollars > 0 && (
                   <div className="kpi-alarm kpi-alarm-warning">
-                    <div className="kpi-alarm-title">Hours without dollars</div>
+                    <div className="kpi-alarm-title">Unpriced hours</div>
                     <div className="kpi-alarm-desc">{fmtHrs(totals.hours_without_dollars)} hrs known but no pay-segment coverage</div>
                   </div>
                 )}
