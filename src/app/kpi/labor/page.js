@@ -27,6 +27,10 @@ import { Shell } from "./components/Shell";
 import { FolioRail } from "./components/FolioRail";
 import { ScopeBand, buildVdefLine } from "./components/ScopeBand";
 import { QuickPanel } from "./components/QuickPanel";
+import { Hero } from "./components/Hero";
+import { MetricGrid } from "./components/MetricGrid";
+import { TrendChart } from "./components/TrendChart";
+import { WeekTable } from "./components/WeekTable";
 import "../kpi.css";
 
 function CellHours({ v, coverage_state, forceEmpty = false }) {
@@ -108,6 +112,7 @@ export default function KpiLaborPage() {
   const [loadState, setLoadState] = useState("idle");
   const [errorMsg, setErrorMsg] = useState(null);
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
+  const [expandedPeriods, setExpandedPeriods] = useState(new Set());
   const [views, setViews] = useState([]);
   const [viewsLoaded, setViewsLoaded] = useState(false);
   const [savingView, setSavingView] = useState(false);
@@ -352,6 +357,40 @@ export default function KpiLaborPage() {
 
   const isSalaried = data?.account_state === "salaried_only";
 
+  // Auto-open current + previous period on first grouped load (v5 default:
+  // §3.7). Only fires when nothing is open yet, so navigating back doesn't
+  // stomp user's manual collapses.
+  useEffect(() => {
+    if (!grouped.length || expandedPeriods.size > 0) return;
+    const periods = grouped.map(g => g.period_no).filter(p => p != null);
+    const next = new Set();
+    if (periods[0] != null) next.add(periods[0]);
+    if (periods[1] != null) next.add(periods[1]);
+    if (next.size > 0) setExpandedPeriods(next);
+  }, [grouped, expandedPeriods.size]);
+
+  // F16 - per-worker range totals for the rate-on-hover title. Cheap;
+  // derived from filteredActuals which is already memo'd.
+  const workerRangeTotals = useMemo(() => {
+    const m = {};
+    for (const r of filteredActuals) {
+      const id = r.worker_id;
+      if (!m[id]) m[id] = { hoursWorked: 0, dollarsTotal: 0 };
+      m[id].hoursWorked += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
+      m[id].dollarsTotal += Number(r.amount || 0);
+    }
+    return m;
+  }, [filteredActuals]);
+
+  // Current period for hero preset labels (P5).
+  const currentPeriodNo = useMemo(() => {
+    if (!data?.account_periods?.length) return null;
+    const past = data.account_periods
+      .filter(p => p.start && p.end && p.start <= today)
+      .sort((a, b) => a.start.localeCompare(b.start));
+    return past.length > 0 ? past[past.length - 1].period_no : null;
+  }, [data, today]);
+
   function applyPreset(kind) {
     const t = today;
     setLastPreset(kind);
@@ -578,28 +617,53 @@ export default function KpiLaborPage() {
         </div>
       )}
 
-      <div className="kpi-metrics">
-        <div className="kpi-metric">
-          <div className="kpi-metric-label">Worker-weeks</div>
-          <div className="kpi-metric-value">{isSalaried ? "—" : (filteredActuals.length || 0)}</div>
-          <div className="kpi-metric-sub">rows in range</div>
-        </div>
-        <div className="kpi-metric">
-          <div className="kpi-metric-label">Hours toward OT threshold</div>
-          <div className="kpi-metric-value">{isSalaried ? "—" : fmtHrs(totals.hours_regular + totals.hours_double_time)}</div>
-          <div className="kpi-metric-sub">reg + holiday (per week: cap 40 before OT triggers)</div>
-        </div>
-        <div className="kpi-metric">
-          <div className="kpi-metric-label">Overtime hours</div>
-          <div className="kpi-metric-value">{isSalaried ? "—" : fmtHrs(totals.hours_overtime)}</div>
-          <div className="kpi-metric-sub">1.5x rate</div>
-        </div>
-        <div className="kpi-metric kpi-metric-soon">
-          <div className="kpi-metric-label">Budget / variance</div>
-          <div className="kpi-metric-value">—</div>
-          <div className="kpi-metric-sub">reserved (spec §8.5 · Push 2 landing)</div>
-        </div>
-      </div>
+      {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
+        <>
+          <Hero
+            account={account}
+            totals={totals}
+            weekCount={grouped.length}
+            workerWeekCount={filteredActuals.length}
+            lastPreset={lastPreset}
+            start={start}
+            end={end}
+            today={today}
+            currentPeriodNo={currentPeriodNo}
+          />
+          <MetricGrid
+            account={account}
+            totals={totals}
+            weekCount={grouped.length}
+            lastPreset={lastPreset}
+            start={start}
+            end={end}
+            today={today}
+            currentPeriodNo={currentPeriodNo}
+          />
+          <TrendChart
+            account={account}
+            weeks={filteredActuals}
+            openWeeks={expandedWeeks}
+            onBarClick={(wk) => {
+              // M7 jump: open week + its period
+              const g = grouped.find(gg => gg.weeks.some(w => w.week_start === wk));
+              if (g && g.period_no != null) setExpandedPeriods(prev => new Set([...prev, g.period_no]));
+              setExpandedWeeks(prev => new Set([...prev, wk]));
+              setTimeout(() => {
+                const el = document.querySelector(`[data-wk="${wk}"]`);
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  const tr = el.closest("tr");
+                  if (tr) {
+                    tr.classList.add("kpi-landed");
+                    setTimeout(() => tr.classList.remove("kpi-landed"), 400);
+                  }
+                }
+              }, 80);
+            }}
+          />
+        </>
+      )}
 
       {loadState === "ok" && data.account_state === "salaried_only" ? (
         <div className="kpi-state">
@@ -624,125 +688,47 @@ export default function KpiLaborPage() {
           </div>
         </div>
       ) : (
-        <div className="kpi-table-wrap">
-          <table className="kpi-table" role="table" aria-label={`Labor for ${account}`}>
-            <thead role="rowgroup">
-              <tr role="row">
-                <th scope="col" role="columnheader">Week</th>
-                <th scope="col" role="columnheader">Coverage</th>
-                <th scope="col" role="columnheader" className="kpi-num">Regular</th>
-                <th scope="col" role="columnheader" className="kpi-num">OT 1.5x</th>
-                <th scope="col" role="columnheader" className="kpi-num">Holiday 2x</th>
-                <th scope="col" role="columnheader" className="kpi-num kpi-col-nodol">Unpriced</th>
-                <th scope="col" role="columnheader" className="kpi-num">Dollars</th>
-              </tr>
-            </thead>
-            <tbody role="rowgroup">
-              {grouped.map((g) => (
-                <Fragment key={g.key}>
-                  <tr className="kpi-period-header" role="row">
-                    <td colSpan={7} role="cell">
-                      FY{g.fiscal_year || "?"} · Period {g.period_no || "?"}
-                      {periodsIsAllHoursOnly.has(g.key) && g.weeks.every(w => w.week_start < DOLLAR_COVERAGE_FLOOR) && (
-                        <span className="kpi-period-note">
-                          Dollars begin at the 2026-04-20 pay run (D35). Earlier periods are hours-only by design; the P&L upload is authoritative for these dollars.
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                  {g.weeks.map((w) => {
-                    const isUnknown = w.coverage_state === "unknown";
-                    const isHoursOnly = w.coverage_state === "hours_only";
-                    const rowClass =
-                      w.coverage_state === "complete"   ? "kpi-row-complete" :
-                      w.coverage_state === "partial"    ? "kpi-row-partial"  :
-                      w.coverage_state === "hours_only" ? "kpi-row-hours-only" :
-                      w.coverage_state === "unknown"    ? "kpi-row-unknown" :
-                                                          "kpi-row-no-labor";
-                    const isExpanded = expandedWeeks.has(w.week_start);
-                    return (
-                      <Fragment key={`w-${w.week_start}`}>
-                        <tr className={`kpi-row ${rowClass}`} role="row">
-                          <td data-label="Week">
-                            <button
-                              type="button"
-                              className="kpi-row-btn"
-                              aria-expanded={isExpanded}
-                              aria-controls={`detail-${w.week_start}`}
-                              onClick={() => {
-                                const next = new Set(expandedWeeks);
-                                if (isExpanded) next.delete(w.week_start); else next.add(w.week_start);
-                                setExpandedWeeks(next);
-                              }}
-                            >
-                              <span className="kpi-row-caret" aria-hidden="true">›</span>
-                              {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
-                            </button>
-                          </td>
-                          <td data-label="Coverage"><CoverageBadge state={w.coverage_state} /></td>
-                          {isUnknown ? (
-                            <td colSpan={5} className="kpi-row-spanning" data-label="Status">No presence walk covers this week.</td>
-                          ) : isHoursOnly ? (
-                            <td colSpan={5} className="kpi-row-spanning" data-label="Status">
-                              Hours known, dollars not available. {fmtHrs(w.hours_without_dollars)} hrs unpriced.
-                            </td>
-                          ) : (
-                            <>
-                              <td data-label="Regular" className="kpi-num"><CellHours v={w.hours_regular} coverage_state={w.coverage_state} /></td>
-                              <td data-label="OT 1.5x" className="kpi-num"><CellHours v={w.hours_overtime} coverage_state={w.coverage_state} /></td>
-                              <td data-label="Holiday 2x" className="kpi-num"><CellHours v={w.hours_double_time} coverage_state={w.coverage_state} /></td>
-                              <td data-label="Unpriced" className="kpi-num kpi-col-nodol"><CellHours v={w.hours_without_dollars > 0 ? w.hours_without_dollars : null} coverage_state={w.coverage_state} /></td>
-                              <td data-label="Dollars" className="kpi-num"><CellDollars v={w.amount} coverage_state={w.coverage_state} /></td>
-                            </>
-                          )}
-                        </tr>
-                        {isExpanded && (
-                          <tr id={`detail-${w.week_start}`} className="kpi-detail-row">
-                            <td colSpan={7}>
-                              {w.worker_rows.map((wr) => {
-                                const meta = data.workers?.[wr.worker_id];
-                                const label = workerLabel(meta, wr.worker_id, redact);
-                                return (
-                                  <div key={wr.worker_id} className="kpi-worker-row">
-                                    <span className="kpi-worker-name">{label}</span>
-                                    <span>reg {fmtHrs(wr.hours_regular)}</span>
-                                    <span>ot {fmtHrs(wr.hours_overtime)}</span>
-                                    <span>hol {fmtHrs(wr.hours_double_time)}</span>
-                                    <span>no$ {fmtHrs(wr.hours_without_dollars)}</span>
-                                    <span>{fmt$(wr.amount)}</span>
-                                    <span className="kpi-worker-cov">{wr.coverage_state}</span>
-                                  </div>
-                                );
-                              })}
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                  <tr className="kpi-period-subtotal" role="row">
-                    <td data-label="Subtotal" colSpan={2} role="cell">Period {g.period_no} subtotal</td>
-                    <td data-label="Regular"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_regular)}</td>
-                    <td data-label="OT 1.5x"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_overtime)}</td>
-                    <td data-label="Holiday 2x" className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_double_time)}</td>
-                    <td data-label="Unpriced" className="kpi-num kpi-col-nodol" role="cell">{g.subtotal.hours_without_dollars > 0 ? fmtHrs(g.subtotal.hours_without_dollars) : "—"}</td>
-                    <td data-label="Dollars"    className="kpi-num" role="cell">{fmt$(g.subtotal.amount)}</td>
-                  </tr>
-                </Fragment>
-              ))}
-              {grand && (
-                <tr className="kpi-grand-total" role="row">
-                  <td data-label="Grand total" colSpan={2} role="cell"><strong>{grandLabel}</strong></td>
-                  <td data-label="Regular"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_regular)}</strong></td>
-                  <td data-label="OT 1.5x"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_overtime)}</strong></td>
-                  <td data-label="Holiday 2x" className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_double_time)}</strong></td>
-                  <td data-label="Unpriced" className="kpi-num kpi-col-nodol" role="cell"><strong>{grand.hours_without_dollars > 0 ? fmtHrs(grand.hours_without_dollars) : "—"}</strong></td>
-                  <td data-label="Dollars"    className="kpi-num" role="cell"><strong>{fmt$(grand.amount)}</strong></td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <WeekTable
+          account={account}
+          grouped={grouped}
+          grandTotal={grand}
+          workers={data.workers}
+          redact={redact}
+          expandedPeriods={expandedPeriods}
+          onTogglePeriod={(p) => {
+            setExpandedPeriods(prev => {
+              const next = new Set(prev);
+              if (next.has(p)) next.delete(p); else next.add(p);
+              return next;
+            });
+          }}
+          expandedWeeks={expandedWeeks}
+          onToggleWeek={(w) => {
+            setExpandedWeeks(prev => {
+              const next = new Set(prev);
+              if (next.has(w)) next.delete(w); else next.add(w);
+              return next;
+            });
+          }}
+          onExpandAll={() => {
+            const all = new Set(grouped.map(g => g.period_no).filter(p => p != null));
+            setExpandedPeriods(all);
+          }}
+          onCollapseAll={() => {
+            setExpandedPeriods(new Set());
+            setExpandedWeeks(new Set());
+          }}
+          onJumpPeriod={(p) => {
+            setExpandedPeriods(prev => new Set([...prev, p]));
+            setTimeout(() => {
+              const el = document.getElementById(`kpi-per${p}`);
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 60);
+          }}
+          onEscape={() => setExpandedWeeks(new Set())}
+          todayISO={today}
+          workerRangeTotals={workerRangeTotals}
+        />
       )}
     </>
   );
