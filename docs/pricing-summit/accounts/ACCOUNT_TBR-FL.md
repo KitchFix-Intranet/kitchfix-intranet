@@ -1,4 +1,7 @@
 # ACCOUNT: TBR-FL
+
+> **[2026-08-11 WITHDRAWAL NOTE]** All "75% of CPI" / SEFV01 / November-reset escalation claims in this record (§2 Billing "Escalation" bullet, §3 Rulings table "Escalation" row, §6 History "2024 base rates" bullet, Completeness footer) are WITHDRAWN as UNVERIFIED per REF-129 §B.4 withdrawal. Do NOT quote to the client, print in any deck, or use in internal projections. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Strike-through markers applied inline below.
+
 > Canonical record. Current-state above the fold; history preserved below (§6). Primary key is the intranet account name. Reasoning/decisions journaled in `../LEDGER.md`; verbatim contract terms in `../CONTRACT_DIGEST_TBR-FL.md`.
 >
 > ⚠️ **TWO SERVICE LEVELS + A SECOND CLIENT.** TBR-FL spans MLB (per-meal, NO SF) and MiLB (per-meal, 25% buy-down via a recurring SF), billed to SEPARATE client cost centers. It is the only account that runs a **commissary model serving a PDC**, which is why it carries **BGC (Boys & Girls Club) as an in-scope second client** on the same operation.
@@ -39,7 +42,7 @@
 - **MiLB**: per-meal with the SF-funded 25% discount. Contract: "The Rates will be reduced by 25% for all billings for the Minor League Baseball Teams within the Term." `[digest §B.3]`
 - **MiLB SF = ANNUALLY RECURRING, structured $200K static + variable second installment.** 2026 = **$457,768** = **$200,000** (installment 1, static — always $200K) + **$257,768** (installment 2, variable). Cadence: installment 1 on the signing date + installment 2 by Feb 1, every year. The contract text quotes the ORIGINAL year's amounts ($200K + $120,569.84) but the STRUCTURE (static $200K + variable) is fixed; the variable amount is set per year. `[digest §B.3, §W; Kevin 2026-07-16]`
 - **The SF is NOT in PG.** `billing_model = actuals_drive_invoice`: PG holds only the per-meal catalog; the SF is out-of-band (finance §W). `[fee-model probe, §Z]`
-- **Escalation**: **75% of CPI** (CPI-U Food Away from Home — Full Service Meals & Snacks, **sub-index SEFV01**, **November** reset). Applies to per-meal rates only, NOT the SF. ⚠️ Distinct from TBJ-FL's 100% CPI — a real per-account divergence. `[digest §B.4]`
+- ~~**Escalation**: **75% of CPI** (CPI-U Food Away from Home — Full Service Meals & Snacks, **sub-index SEFV01**, **November** reset). Applies to per-meal rates only, NOT the SF. ⚠️ Distinct from TBJ-FL's 100% CPI — a real per-account divergence. `[digest §B.4]`~~ **[WITHDRAWN 2026-08-11 - DO NOT USE]** The 75%-of-CPI / SEFV01 / November-reset mechanic was a misreading of prior documentation and is not a verified contract term. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Do NOT compare to TBJ-FL escalation until TBR's basis is verified at source. See REF-129 §B.4 withdrawal note.
 - **Billed totals by period** (both levels + SF) are in the finance "PFS Service Fees 2026" sheet. `[§W; Kevin 2026-07-16]`
 
 ### 2b. Rate table (effective-dated; the retrievable price list)
@@ -102,7 +105,7 @@
 | BGC | IN-SCOPE second client. $6.50/meal flat (any type), tax-exempt, school-year term (ends May 21, 2026). Contract-digest complete. | CLOSED (in-scope) | 2026-07-16 | §T, DIGEST_BGC |
 | Commissary | TBR-FL = only commissary serving a PDC (CIN-KY also commissary but serves MiLB). Enables the BGC second-client stream. | CLOSED | 2026-07-16 | Kevin |
 | Add-ons | Road Sandwiches $15, Labor Fee $280, Extra Protein C/P $111.84. Mixed per-line taxability. | CLOSED | 2026-07-16 | K300168871 |
-| Escalation | 75% CPI (SEFV01, Nov). Per-meal only, not SF. Differs from TBJ-FL (100%). | CLOSED | 2026-07-16 | digest |
+| Escalation | ~~75% CPI (SEFV01, Nov). Per-meal only, not SF. Differs from TBJ-FL (100%).~~ **[WITHDRAWN 2026-08-11 - UNVERIFIED per REF-129 §B.4]** | ~~CLOSED~~ **REOPENED 2026-08-11** | 2026-08-11 | see §2 withdrawal note |
 
 ## 5. OPEN ITEMS (what's not settled — owner + status)
 | Item | Status | Owner | Blocking cert? | Note |
@@ -116,7 +119,7 @@
 | Memo typo | OPEN (cosmetic) | Sebastian | No | Both TBR invoices read "2025" in the memo despite being 2026 (D-2, ignore/fix at rollover). |
 
 ## 6. HISTORY (superseded facts — MARKED, never deleted)
-- **2024 base rates**: MLB Breakfast $32.98 / Lunch-Dinner $36.54; MiLB Base Breakfast $21.11 / Lunch-Dinner $25.86; MiLB Post-SF Breakfast $15.84 / Lunch-Dinner $19.40. 2026 rates are 75%-CPI-escalated from these. `[digest §B.2]`
+- **2024 base rates**: MLB Breakfast $32.98 / Lunch-Dinner $36.54; MiLB Base Breakfast $21.11 / Lunch-Dinner $25.86; MiLB Post-SF Breakfast $15.84 / Lunch-Dinner $19.40. ~~2026 rates are 75%-CPI-escalated from these.~~ **[WITHDRAWN 2026-08-11 - DO NOT USE]** The "75%-CPI-escalated" derivation was based on the unverified 75%-of-CPI mechanic (see REF-129 §B.4 withdrawal). Base-rate figures themselves are as extracted; the escalation-from-base narrative is UNVERIFIED. `[digest §B.2]`
 - **2024 SF = $382,448** ($200K signing + $182,448 by Feb 1, 2024). 2021 = $200K + $120,569.84 = $320,569.84. Pattern: static $200K + variable. `[digest §B.3]`
 - **"one-time 2024" reading (REVERSED)**: an earlier ledger reading called the SF one-time; corrected — it's annually recurring ($200K + variable), SOW-gated. `[§M, §T]`
 - **"$20.96 vs $21.68 conflict" (DISSOLVED)**: was a MONEY_MODEL digest flattening Lunch ($21.675) + Dinner ($20.96) into one row; never a real conflict. `[§O, PRICE_AUDIT]`
@@ -133,4 +136,4 @@
 - **Last reviewed**: 2026-07-16 by Kevin + Chat-Claude (TBR-FL build).
 
 ---
-*Completeness: FULLY-CAPTURED (models + rates + fees). Two levels: MLB per-meal no-SF ($35.63/$39.48) + MiLB per-meal with 25% buy-down (three distinct rates $17.83/$21.68/$20.96), billed to separate cost centers (Erik Hart MLB / Sunny Jones MiLB). MiLB SF recurring $200K-static + variable = $457,768 for 2026, out-of-band (not PG). Commissary model serving a PDC (unique among the 11; CIN-KY is commissary-but-serves-MiLB) enables BGC as an IN-SCOPE second client ($6.50/meal flat, tax-exempt, after-school supper; school-year term ending May 21, 2026, so spring-only for calendar 2026 absent a fall renewal; P&L 2200 ~$79,950 = the 2025-26 school-year total). Add-ons (Road Sandwiches $15, Labor Fee $280, Extra Protein $111.84) with mixed per-line taxability. 75% CPI escalation (differs from TBJ-FL's 100%). Pending: SF+BGC golden seeds (Phase E), BGC 2026-27 renewal (paperwork), Joe #3 variable-derivation (non-blocking).*
+*Completeness: FULLY-CAPTURED (models + rates + fees). Two levels: MLB per-meal no-SF ($35.63/$39.48) + MiLB per-meal with 25% buy-down (three distinct rates $17.83/$21.68/$20.96), billed to separate cost centers (Erik Hart MLB / Sunny Jones MiLB). MiLB SF recurring $200K-static + variable = $457,768 for 2026, out-of-band (not PG). Commissary model serving a PDC (unique among the 11; CIN-KY is commissary-but-serves-MiLB) enables BGC as an IN-SCOPE second client ($6.50/meal flat, tax-exempt, after-school supper; school-year term ending May 21, 2026, so spring-only for calendar 2026 absent a fall renewal; P&L 2200 ~$79,950 = the 2025-26 school-year total). Add-ons (Road Sandwiches $15, Labor Fee $280, Extra Protein $111.84) with mixed per-line taxability. ~~75% CPI escalation (differs from TBJ-FL's 100%).~~ **[Escalation WITHDRAWN 2026-08-11: 75%-of-CPI is UNVERIFIED per REF-129 §B.4 - see top-of-file withdrawal note.]** Pending: SF+BGC golden seeds (Phase E), BGC 2026-27 renewal (paperwork), Joe #3 variable-derivation (non-blocking), TBR-FL escalation direct-read at source (owners: Joe Lessard / Josh Katt).*

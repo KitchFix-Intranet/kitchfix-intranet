@@ -1,5 +1,7 @@
 # TBR - FL - Contract Source-of-Record
 
+> **[2026-08-11 WITHDRAWAL NOTE]** The "75% of CPI (Food Away from Home)" / SEFV01 / November-reset escalation mechanic derived in §B.4 and cross-check §D of this digest is UNVERIFIED and MUST NOT be used. The verbatim block-quotes are preserved as source-of-record text but the derived-mechanic annotation and the §D cross-check flag are struck. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). This is the pre-catalog working digest; the catalog-side version at `content/documents/REF-129.mdx` carries the same withdrawal.
+
 **Account:** TBR - FL (Tampa Bay Rays - Charlotte Sports Park spring training + MiLB affiliates)
 **Folder:** `/Users/kevinfietek/Documents/Claude /Contracts/TBR FL/`
 
@@ -178,4 +180,4 @@ Only 2024 SOWs are physically in the folder. Rates for 2025 / 2026 derive from C
 - **PAPERWORK GAP - no 2025 or 2026 TBR SOWs in the folder.** Only 2024 MLB SOW and 2024 MiLB SOW are physically present. Base Agreement Retention Period runs through October 1, 2026 (MLB) / December 31, 2026 (MiLB) with rates auto-escalating per CPI, but there is no mechanic in either SOW that auto-generates a new Service Fee for 2025/2026 (unlike the CPI-indexed per-meal rates in § 6(a) v-vi). Whether the $382,448 MiLB Service Fee recurs annually is silent in the produced documents.
 - **MLB SOW has NO Service Fee.** All MLB compensation is per-meal. Kevin's $200K pattern is a MiLB-side artifact only.
 - **MiLB Post-service-fee rates ($15.84 / $19.40) are lower than Base rates ($21.11 / $25.86).** This means the Service Fee is a "buy-down" of per-meal rates - Rates "reduced by 25% for all billings for the Minor League Baseball Teams within the Term" per § 6(c). Verify MONEY_MODEL treatment of MiLB per-meal rate (is the model using Base or Post-service-fee?).
-- **Escalation is 75% of CPI (Food Away From Home - Full Service Meals and Snacks), not 100%** - materially different from TBJ FL which uses 100% of CPI (Food Away From Home). If Price Review v3 assumes uniform 100% CPI, TBR is a mis-model.
+- ~~**Escalation is 75% of CPI (Food Away From Home - Full Service Meals and Snacks), not 100%** - materially different from TBJ FL which uses 100% of CPI (Food Away From Home). If Price Review v3 assumes uniform 100% CPI, TBR is a mis-model.~~ **[WITHDRAWN 2026-08-11 - DO NOT USE]** The 75%-of-CPI mechanic was a misreading of prior documentation and is not a verified contract term. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Do NOT compare to TBJ-FL escalation until TBR's basis is verified at source.
