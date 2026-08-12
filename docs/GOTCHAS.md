@@ -410,6 +410,26 @@ When a shared helper is called positionally from many sites, signature drift (ca
 
 **Lesson generalized 2026-05-29** during the `docs/folder-audit` cleanup; specific PR #59 incident captured in `BUSINESS_NOTES.md`.
 
+### Dual-context modules cannot use `@/` aliases; `next build` green does not prove a CLI runs
+
+Any module imported by BOTH the Next.js app AND a plain Node CLI (a `scripts/*.mjs` entrypoint) is a **dual-context module**. Next's webpack resolves `@/` via `jsconfig.json`; native Node ESM does not - it treats `@/lib/foo` as a nonexistent npm package and fails at import time with `ERR_MODULE_NOT_FOUND`.
+
+**Symptom**: `npx next build` passes, then the nightly cron dies immediately with `Cannot find package '@/lib' imported from src/lib/.../<module>.js`. The build proves the webpack context only.
+
+**Fix**: In any file reachable from `scripts/*.mjs`, use relative imports with explicit `.js` extensions:
+
+```javascript
+// Wrong - dies in Node CLI:
+import { DOLLAR_COVERAGE_FLOOR } from "@/lib/kpi/floors";
+
+// Right - works in both contexts:
+import { DOLLAR_COVERAGE_FLOOR } from "../kpi/floors.js";
+```
+
+**Discipline**: any PR touching a module reachable from `scripts/` must smoke-run the affected CLI (`node --env-file=.env.local scripts/<cli>.mjs --dry-run`), not just `next build`. To sweep the graph, `grep -rn "from ['\"]@/" src/lib/` then cross-check against every `scripts/*.mjs` import chain - reachability is transitive.
+
+**Incident 2026-08-12** (kpi C6.1 → C6.2 hotfix): `src/lib/labor/deriveActuals.js` gained `import { DOLLAR_COVERAGE_FLOOR } from "@/lib/kpi/floors"`. `next build` green, A5 scratch replay green, C6.1 merged. Post-merge attended derive died with `ERR_MODULE_NOT_FOUND` - the CLI import path was never exercised by any pre-merge check. Tonight's 07:00 UTC nightly would have failed silently until someone read the workflow logs. Sweep of the whole graph also surfaced pre-existing broken CLIs (`_audit_sc_api_shape.mjs`, `_probe_p3_*_verify.mjs`, invoice probes) whose dataStore/serviceCalendar.js, dataStore/inventory.js, and invoiceActions.js import chains hit `@/` - documented but not fixed here because those files live in danger zones.
+
 ---
 
 ## Auth & Permissions
