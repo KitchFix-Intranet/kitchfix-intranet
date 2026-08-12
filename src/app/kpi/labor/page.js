@@ -24,6 +24,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { PRESET_LABELS, resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
+import { DOLLAR_COVERAGE_FLOOR } from "@/lib/kpi/floors";
 import "../kpi.css";
 
 const ACCOUNTS = [
@@ -878,7 +879,11 @@ export default function KpiLaborPage() {
                           <tr className="kpi-period-header" role="row">
                             <td colSpan={7} role="cell">
                               FY{g.fiscal_year || "?"} · Period {g.period_no || "?"}
-                              {periodsIsAllHoursOnly.has(g.key) && (
+                              {/* Only show the pre-floor explanation when the period actually
+                                  contains unpriced pre-floor weeks. C6.1 loader backfills pre-floor
+                                  dollars, so a period whose weeks are all >= FLOOR should never
+                                  render this - the sentence would be false. */}
+                              {periodsIsAllHoursOnly.has(g.key) && g.weeks.every(w => w.week_start < DOLLAR_COVERAGE_FLOOR) && (
                                 <span className="kpi-period-note">
                                   Dollars begin at the 2026-04-20 pay run (D35). Earlier periods are hours-only by design; the P&L upload is authoritative for these dollars.
                                 </span>

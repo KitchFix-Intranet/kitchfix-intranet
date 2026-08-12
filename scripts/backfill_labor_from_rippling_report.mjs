@@ -25,6 +25,7 @@
 
 import ExcelJS from "exceljs";
 import { createClient } from "@supabase/supabase-js";
+import { DOLLAR_COVERAGE_FLOOR } from "../src/lib/kpi/floors.js";
 
 // ─── CLI ────────────────────────────────────────────────────────────
 const args = { file: null, dryRun: null };
@@ -43,7 +44,10 @@ if (!SB_URL || !SB_KEY) { console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_
 const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
 // ─── Constants (from prompt B1) ─────────────────────────────────────
-const FLOOR = "2026-04-20";          // D35 - API owns weeks on/after this
+// FLOOR sourced from src/lib/kpi/floors.js so derivation + loader can
+// never drift on the partition boundary (C6.1). A local re-alias keeps
+// the read-site short.
+const FLOOR = DOLLAR_COVERAGE_FLOOR;
 const LINE_CODE = "3100.1";          // Hourly Kitchen; only line for labor
 const LOC_TO_ACCT = {
   "Cincinnati, OH (CIN-OH)":                     "CIN - OH",
@@ -276,6 +280,78 @@ for (const [acct, s] of [...perAcct.entries()].sort()) {
 console.log(`  ${"TOTAL".padEnd(15)}                                                                         $${TotalDol.toFixed(2)}`);
 console.log("");
 
+// ─── A2 - pre-floor api claim ───────────────────────────────────────
+// C6.1: to avoid PK-collision with existing pre-floor api rows,
+// the loader claims the pre-floor partition for accounts it loads
+// by deleting api rows with week_start < FLOOR for those accounts.
+// The derivation (post-C6.1) no longer emits pre-floor rows, so the
+// nightly cannot re-create the collision.
+const loadedAccounts = [...perAcct.keys()];
+async function fetchPreFloorApi(accts) {
+  const all = []; const PAGE = 1000; let from = 0;
+  while (true) {
+    const { data, error } = await supa
+      .from("labor_actuals")
+      .select("account_key, worker_id, week_start, hours_regular, hours_overtime, hours_double_time, hours_without_dollars, amount")
+      .eq("source", "api")
+      .lt("week_start", FLOOR)
+      .in("account_key", accts)
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`pre-floor api fetch: ${error.message}`);
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+const preFloorApi = await fetchPreFloorApi(loadedAccounts);
+// Per-account rollup of what the api-delete would remove
+const apiDeletePerAcct = new Map();
+for (const r of preFloorApi) {
+  const cur = apiDeletePerAcct.get(r.account_key) || { rows: 0, hrsClass: 0, hrsWo: 0, amt: 0 };
+  cur.rows++;
+  cur.hrsClass += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
+  cur.hrsWo    += Number(r.hours_without_dollars || 0);
+  cur.amt      += Number(r.amount || 0);
+  apiDeletePerAcct.set(r.account_key, cur);
+}
+// A3 - "beyond PK-collisions": api rows whose (worker_id, week_start)
+// does NOT exist in the incoming backfill for the same account. Those
+// are dropped-only-because-they-are-pre-floor. Everything else would
+// have been replaced by an incoming backfill row.
+const backfillKeys = new Set(matched.map(r => `${r.acct}|${r.worker_id}|${r.week_start}`));
+const beyondCollisions = preFloorApi.filter(r =>
+  !backfillKeys.has(`${r.account_key}|${r.worker_id}|${r.week_start}`)
+);
+const beyondPerAcct = new Map();
+for (const r of beyondCollisions) {
+  const cur = beyondPerAcct.get(r.account_key) || { rows: 0, hrsClass: 0, hrsWo: 0 };
+  cur.rows++;
+  cur.hrsClass += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
+  cur.hrsWo    += Number(r.hours_without_dollars || 0);
+  beyondPerAcct.set(r.account_key, cur);
+}
+console.log("A2 - pre-floor api rows the loader will DELETE (source='api', week_start < FLOOR, loaded accounts):");
+console.log("  account         rows    class-hrs   wo-hrs    api-amt      collides-w-backfill   beyond-collisions (rows / wo-hrs)");
+let totalApiDelete = 0, totalBeyondRows = 0, totalBeyondHrs = 0;
+for (const acct of loadedAccounts.sort()) {
+  const a = apiDeletePerAcct.get(acct) || { rows: 0, hrsClass: 0, hrsWo: 0, amt: 0 };
+  const b = beyondPerAcct.get(acct) || { rows: 0, hrsClass: 0, hrsWo: 0 };
+  const collides = a.rows - b.rows;
+  totalApiDelete += a.rows;
+  totalBeyondRows += b.rows;
+  totalBeyondHrs += b.hrsWo + b.hrsClass;
+  console.log(`  ${acct.padEnd(15)}  ${String(a.rows).padStart(4)}   ${a.hrsClass.toFixed(2).padStart(8)}   ${a.hrsWo.toFixed(2).padStart(7)}   $${a.amt.toFixed(2).padStart(9)}   ${String(collides).padStart(6)}                ${String(b.rows).padStart(4)} / ${(b.hrsWo + b.hrsClass).toFixed(2).padStart(7)}`);
+}
+console.log(`  ${"TOTAL".padEnd(15)}  ${String(totalApiDelete).padStart(4)}                                              ${String(totalApiDelete - totalBeyondRows).padStart(6)}                ${String(totalBeyondRows).padStart(4)} / ${totalBeyondHrs.toFixed(2).padStart(7)}`);
+console.log("");
+console.log(`  Interpretation:`);
+console.log(`    - collides-with-backfill rows will be REPLACED by an equivalent backfill row.`);
+console.log(`    - beyond-collisions rows have no backfill counterpart (worker had clock time`);
+console.log(`      but zero payroll dollars per Rippling report). Their hours vanish from`);
+console.log(`      labor_actuals unless Kevin decides otherwise.`);
+console.log("");
+
 if (args.dryRun) {
   console.log("DRY RUN - nothing written. Rerun with --write to load.");
   process.exit(0);
@@ -286,11 +362,24 @@ console.log("=".repeat(72));
 console.log("WRITE PATH");
 console.log("=".repeat(72));
 
-// Idempotency: delete all existing report_backfill rows first.
+// Idempotency #1: delete all existing report_backfill rows first.
 console.log("Deleting existing report_backfill rows (idempotent step)...");
 const del = await supa.from("labor_actuals").delete().eq("source", "report_backfill").select("account_key");
 if (del.error) { console.error(`  delete FAILED: ${del.error.message}`); process.exit(4); }
 console.log(`  deleted ${del.data?.length ?? 0} existing report_backfill rows`);
+
+// A2 - claim the pre-floor partition. DELETE api rows with
+// week_start < FLOOR for loaded accounts. C6.1 stopped the derivation
+// from emitting these; without that partner change this delete would
+// be re-created by tonight's nightly.
+console.log(`Claiming pre-floor api partition (source='api', week_start < ${FLOOR}, ${loadedAccounts.length} loaded accounts)...`);
+const apiDel = await supa.from("labor_actuals").delete()
+  .eq("source", "api")
+  .lt("week_start", FLOOR)
+  .in("account_key", loadedAccounts)
+  .select("account_key");
+if (apiDel.error) { console.error(`  api-partition delete FAILED: ${apiDel.error.message}`); process.exit(4); }
+console.log(`  deleted ${apiDel.data?.length ?? 0} pre-floor api rows`);
 
 // Build insert rows. line_code='3100.1', source='report_backfill',
 // week_source='rippling_report', coverage_state='complete',
