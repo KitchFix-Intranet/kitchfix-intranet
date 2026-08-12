@@ -23,6 +23,7 @@ export function Shell({
   scopeBand,      // node - the F3 scope band (ScopeBand)
   main,           // node - middle content (hero, mets, trend, table)
   rail,           // node - right aside content (QuickPanel + alarms + coverage + otwatch + pipeline)
+  printScopeText, // string - B12 print-time scope line ("CIN - OH · 06/29/26 - 07/26/26 · all 138 workers · names shown")
 }) {
   const freshH = hoursSinceISO(freshness?.last_walk_at);
   const freshTint = freshnessTint(freshH);
@@ -33,7 +34,13 @@ export function Shell({
       {/* Live region (B10) + skip link + print header hook */}
       <a className="kpi-sr" href="#kpi-main">Skip to KPI content</a>
       <div className="kpi-sr" id="kpi-live" role="status" aria-live="polite" />
-      <div className="kpi-printhdr" id="kpi-printhdr" />
+      {/* B12 print-only header: replaces the hidden chrome so the printed
+          sheet identifies its scope. Only visible under @media print. */}
+      <div className="kpi-printhdr" id="kpi-printhdr">
+        <div><strong>KPI Labor · {account}</strong></div>
+        {printScopeText && <div>{printScopeText}</div>}
+        <div>Generated {new Date().toLocaleString()}</div>
+      </div>
 
       {/* Command bar (F1: plain title, no styled account pseudo-select) */}
       <div className="kpi-cmd" role="banner">

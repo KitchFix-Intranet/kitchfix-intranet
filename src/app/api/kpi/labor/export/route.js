@@ -126,7 +126,11 @@ export async function GET(request) {
       for (const r of w.data || []) {
         const p = r.payload || {};
         const userPayload = p.user_id ? userByRipplingId.get(p.user_id) : null;
-        const name = resolveWorkerName(p, userPayload);
+        // B3 hard guard: when redact=1 we drop the resolved name at
+        // ingest time so no downstream code path (existing or added
+        // later) can inadvertently write it into a cell. Number + title
+        // are the only worker fields the redacted export ever sees.
+        const name = redact ? null : resolveWorkerName(p, userPayload);
         workerMeta.set(p.id, {
           number: p.number ?? null,
           name,
@@ -345,7 +349,7 @@ export async function GET(request) {
   meta.addRow({ f: "Contains hours_only",   v: hasHoursOnly ? "YES - dollars unavailable for those weeks; see Detail sheet notes" : "no" });
   meta.addRow({ f: "Contains unknown",      v: hasUnknown  ? "YES - no successful presence walk covers those weeks" : "no" });
   meta.addRow({ f: "Dollar-coverage floor", v: "2026-04-20 pay run (D35). Before this date, pay-segment dollars are not available; the P&L upload is authoritative for those periods." });
-  meta.addRow({ f: "Name resolution",       v: workerMeta.size > 0 ? (redact ? "REDACTED (numbers only)" : "canonical Rippling name field; falls back to #N when unavailable") : "no workers in scope" });
+  meta.addRow({ f: "Name resolution",       v: workerMeta.size > 0 ? (redact ? "REDACTED at export time - names dropped server-side; every worker appears as #<number> plus title only" : "canonical Rippling name field; falls back to #N when unavailable") : "no workers in scope" });
   meta.addRow({ f: "Last pay-seg walk",     v: psWalkGlobal.data?.completed_at || "no successful walk on record" });
   meta.addRow({ f: "Last derive_at",        v: rows[0]?.derived_at || "no rows" });
   meta.addRow({ f: "Source",                v: "labor_actuals_latest joined to rippling_raw_workers_latest joined to rippling_raw_users_latest" });

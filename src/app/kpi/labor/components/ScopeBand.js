@@ -17,12 +17,14 @@
 import { PRESET_LABELS } from "@/lib/kpi/dateResolve";
 import { fmtDate } from "../lib/formatting";
 import { PRESET_KEYS } from "../lib/accounts";
+import { CalendarPopover } from "./CalendarPopover";
 
 export function ScopeBand({
   start,
   end,
   lastPreset,
   onDateChange,      // (which, iso) => void   which='start'|'end'
+  onRangeChange,     // (nextStartISO, nextEndISO) => void   both at once
   onPresetClick,     // (kind) => void
   hasPeriods,        // boolean - are account_periods loaded?
   workerRoster,      // [{ id, label }]
@@ -40,28 +42,21 @@ export function ScopeBand({
   return (
     <div className="kpi-scope">
       <div className="kpi-scope-row">
-        {/* Range picker - Push 3 upgrades to a proper dual-month calendar
-            popover; for now uses two native date inputs (functional). */}
+        {/* F2 range trigger - dual-month custom-range popover. Presets
+            live to the right; the popover opens on demand only. */}
         <div className="kpi-pctl">
-          <span className="kpi-range-inputs">
-            <input
-              type="date"
-              className="kpi-param-date"
-              value={start}
-              max={end}
-              onChange={(e) => onDateChange?.("start", e.target.value)}
-              aria-label="Range start"
-            />
-            <span className="kpi-param-arrow" aria-hidden="true">→</span>
-            <input
-              type="date"
-              className="kpi-param-date"
-              value={end}
-              min={start}
-              onChange={(e) => onDateChange?.("end", e.target.value)}
-              aria-label="Range end"
-            />
-          </span>
+          <CalendarPopover
+            startISO={start}
+            endISO={end}
+            onCommit={(nextStart, nextEnd) => {
+              if (onRangeChange) {
+                onRangeChange(nextStart, nextEnd);
+              } else {
+                if (nextStart !== start) onDateChange?.("start", nextStart);
+                if (nextEnd   !== end)   onDateChange?.("end",   nextEnd);
+              }
+            }}
+          />
         </div>
 
         {/* Presets - F2: preset chips top-level, calendar popover is

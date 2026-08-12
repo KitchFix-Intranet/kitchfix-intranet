@@ -101,6 +101,21 @@ export async function PATCH(request, { params }) {
   if ("redact"      in body) update.redact      = !!body.redact;
   if ("is_shared"   in body) update.is_shared   = !!body.is_shared;
 
+  // B7 optimistic concurrency: if the client passed the timestamp it
+  // opened with, refuse when the row has moved on since. Race-safe
+  // because we compare against the guard.row we just fetched under
+  // the same session context. If not passed, the check is skipped
+  // (backwards-compatible with clients that don't yet send it).
+  if ("expected_updated_at" in body && body.expected_updated_at) {
+    const server = guard.row?.updated_at;
+    if (server && String(server) !== String(body.expected_updated_at)) {
+      return NextResponse.json({
+        error: "This view changed since you opened it - reload to see the current version, or save yours as new.",
+        code: "stale_write",
+      }, { status: 409 });
+    }
+  }
+
   const { data, error } = await supa
     .from("kpi_saved_views")
     .update(update)

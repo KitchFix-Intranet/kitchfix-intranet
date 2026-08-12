@@ -15,14 +15,13 @@
 // ?redact, ?view), saved views CRUD, dirty detection, three modal
 // dialogs (Save / Edit / Delete-confirm).
 
-import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
-import { PRESET_LABELS, resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
-import { DOLLAR_COVERAGE_FLOOR } from "@/lib/kpi/floors";
-import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, freshnessTint } from "./lib/formatting";
-import { ACCOUNTS, TABS, PRESET_KEYS, FY_START, SALARIED_ONLY } from "./lib/accounts";
+import { resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
+import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp } from "./lib/formatting";
+import { ACCOUNTS, FY_START } from "./lib/accounts";
 import { Shell } from "./components/Shell";
 import { FolioRail } from "./components/FolioRail";
 import { ScopeBand, buildVdefLine } from "./components/ScopeBand";
@@ -31,32 +30,18 @@ import { Hero } from "./components/Hero";
 import { MetricGrid } from "./components/MetricGrid";
 import { TrendChart } from "./components/TrendChart";
 import { WeekTable } from "./components/WeekTable";
+import { ContextRail } from "./components/ContextRail";
+import {
+  StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateError,
+  StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired,
+  errorCode,
+} from "./components/StateBoxes";
+import { ToastHost } from "./components/Toast";
 import "../kpi.css";
 
-function CellHours({ v, coverage_state, forceEmpty = false }) {
-  if (coverage_state === "unknown") return <span aria-label="unknown">?</span>;
-  if (forceEmpty || v == null) return <span aria-label="not applicable">—</span>;
-  return <span className="kpi-num">{fmtHrs(v)}</span>;
-}
-function CellDollars({ v, coverage_state, forceEmpty = false }) {
-  if (coverage_state === "unknown") return <span aria-label="unknown">?</span>;
-  if (forceEmpty || v == null) return <span aria-label="not applicable">—</span>;
-  return <span className="kpi-num">{fmt$(v)}</span>;
-}
-function CoverageBadge({ state }) {
-  const cfg = {
-    complete:   { label: "Complete",   cls: "kpi-badge-complete",   symbol: "✓" },
-    partial:    { label: "Partial",    cls: "kpi-badge-partial",    symbol: "!" },
-    hours_only: { label: "Unpriced", cls: "kpi-badge-hours-only", symbol: "◷" },
-    unknown:    { label: "Unknown",    cls: "kpi-badge-unknown",    symbol: "?" },
-    no_labor:   { label: "No labor",   cls: "kpi-badge-no-labor",   symbol: "—" },
-  }[state] || { label: state, cls: "kpi-badge-no-labor", symbol: "?" };
-  return (
-    <span className={`kpi-badge ${cfg.cls}`} aria-label={`Coverage: ${cfg.label}`}>
-      <span aria-hidden="true">{cfg.symbol}</span> {cfg.label}
-    </span>
-  );
-}
+// B15 last-viewed account key (localStorage). Read once on client mount
+// only; server render always uses the URL/default. Never leaks data.
+const LAST_ACCOUNT_KEY = "kpi:labor:lastAccount";
 
 function workerLabel(meta, worker_id, redact) {
   const num = meta?.number != null ? `#${meta.number}` : `#${String(worker_id).slice(0, 6)}`;
@@ -88,8 +73,28 @@ export default function KpiLaborPage() {
   const email = session?.user?.email?.toLowerCase().trim() || "";
   const isAllowed = OPS_LEADERSHIP_EMAILS.includes(email);
 
-  const account = searchParams.get("account") || "CIN - OH";
+  // B15: default account resolution. URL wins. Otherwise on first client
+  // mount we adopt the last-viewed account from localStorage; if none,
+  // fall back to "CIN - OH" (the sentinel account).
+  const urlAccount = searchParams.get("account");
+  const account = urlAccount || "CIN - OH";
   const tab = searchParams.get("tab") || "labor";
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (urlAccount) {
+      // Remember whatever the user is actually on.
+      try { localStorage.setItem(LAST_ACCOUNT_KEY, urlAccount); } catch {}
+      return;
+    }
+    let saved = null;
+    try { saved = localStorage.getItem(LAST_ACCOUNT_KEY); } catch {}
+    if (saved && saved !== "CIN - OH" && ACCOUNTS.includes(saved)) {
+      const p = new URLSearchParams(searchParams.toString());
+      p.set("account", saved);
+      router.replace(`/kpi/labor?${p.toString()}`);
+    }
+  }, [urlAccount, router, searchParams]);
+
   const today = new Date().toISOString().slice(0, 10);
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
@@ -111,6 +116,23 @@ export default function KpiLaborPage() {
   const [data, setData] = useState(null);
   const [loadState, setLoadState] = useState("idle");
   const [errorMsg, setErrorMsg] = useState(null);
+  const [errCode, setErrCode] = useState(null);
+  const [authError, setAuthError] = useState(null); // "expired" (401) | "forbidden" (403) | null
+
+  // P10 / P11 toast + B10 live region. One toast at a time.
+  const [toast, setToast] = useState(null);
+  // B10 live region text - kept separate so we can announce without a
+  // visible toast (e.g., account switch, filter change).
+  const [liveMsg, setLiveMsg] = useState("");
+  // B1 undo state: remember the last deleted view for 6s. If undo fires
+  // we POST it back; otherwise it silently drops.
+  const [pendingUndo, setPendingUndo] = useState(null);
+  // B10: focus-to-hero handle after account switch or filter clear.
+  const heroRef = useRef(null);
+  const focusHero = useCallback(() => {
+    const el = heroRef.current;
+    if (el && typeof el.focus === "function") el.focus();
+  }, []);
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
   const [expandedPeriods, setExpandedPeriods] = useState(new Set());
   const [views, setViews] = useState([]);
@@ -137,22 +159,48 @@ export default function KpiLaborPage() {
   }, []);
 
   // ── Fetch labor data ──────────────────────────────────
+  // B14 timing marks: performance.mark bracketing the fetch to make
+  // p95 measurable in devtools. See spec §5 initial ≤1.5s budget.
   useEffect(() => {
     if (status !== "authenticated" || !isAllowed) return;
     let cancelled = false;
     setLoadState("loading");
     setErrorMsg(null);
+    setErrCode(null);
+    setAuthError(null);
     const params = new URLSearchParams({ account, start, end });
+    const markBase = `kpi-labor-fetch-${account}`;
+    try { performance.mark(`${markBase}-start`); } catch {}
     fetch(`/api/kpi/labor?${params}`)
       .then(async (r) => {
+        // B4: auth states off the real fetch. 401 -> session-expired,
+        // 403 -> not-authorized. Both render StateBoxes; zero data leak.
+        if (r.status === 401) { setAuthError("expired"); throw new Error("session_expired"); }
+        if (r.status === 403) { setAuthError("forbidden"); throw new Error("forbidden"); }
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
           throw new Error(body.error || `HTTP ${r.status}`);
         }
         return r.json();
       })
-      .then((d) => { if (!cancelled) { setData(d); setLoadState("ok"); } })
-      .catch((e) => { if (!cancelled) { setLoadState("error"); setErrorMsg(String(e.message || e).slice(0, 200)); } });
+      .then((d) => {
+        if (cancelled) return;
+        setData(d); setLoadState("ok");
+        try {
+          performance.mark(`${markBase}-end`);
+          performance.measure(markBase, `${markBase}-start`, `${markBase}-end`);
+        } catch {}
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if (String(e.message) === "session_expired" || String(e.message) === "forbidden") {
+          setLoadState("auth");
+          return;
+        }
+        setLoadState("error");
+        setErrorMsg(String(e.message || e).slice(0, 200));
+        setErrCode(errorCode("labor", e));
+      });
     return () => { cancelled = true; };
   }, [status, isAllowed, account, start, end]);
 
@@ -476,6 +524,9 @@ export default function KpiLaborPage() {
       const p = new URLSearchParams(searchParams.toString());
       p.set("view", String(j.view.id));
       router.push(`/kpi/labor?${p.toString()}`);
+      // M2: save success toast (spec §7 "auto-hide 6s").
+      setToast({ message: `Saved view "${name}".`, tone: "info", durationMs: 6000 });
+      setLiveMsg(`Saved view ${name}.`);
     } catch (e) {
       setViewError(String(e.message || e).slice(0, 200));
     }
@@ -489,6 +540,9 @@ export default function KpiLaborPage() {
     // name stays the same on Update
     delete body.account_key; // account cannot be changed on a view
     delete body.tab;
+    // B7 optimistic concurrency: pass the timestamp we opened with so
+    // the server can 409 if someone else edited between.
+    if (activeView.updated_at) body.expected_updated_at = activeView.updated_at;
     try {
       const r = await fetch(`/api/kpi/labor/views/${activeView.id}`, {
         method: "PATCH",
@@ -496,16 +550,39 @@ export default function KpiLaborPage() {
         body: JSON.stringify(body),
       });
       const j = await r.json().catch(() => ({}));
+      if (r.status === 409) {
+        setViewError(j.error || "This view changed since you opened it - reload to see the current version, or save yours as new.");
+        setSavingView(false);
+        return;
+      }
       if (!r.ok) throw new Error(j.detail?.join?.(", ") || j.error || `HTTP ${r.status}`);
       await refetchViews();
+      setToast({ message: `Saved ${activeView.name}.`, tone: "info", durationMs: 4000 });
+      setLiveMsg(`Saved view ${activeView.name}.`);
     } catch (e) {
       setViewError(String(e.message || e).slice(0, 200));
     }
     setSavingView(false);
   }
 
+  // B1: delete a saved view with 6s undo. The DELETE is idempotent - if
+  // undo fires we POST the same shape back. During the undo window the
+  // view is removed from the local list so it disappears immediately.
   async function deleteView(view) {
     setSavingView(true); setViewError(null);
+    // Snapshot for undo
+    const snapshot = {
+      name: view.name,
+      account_key: view.account_key,
+      tab: view.tab,
+      date_mode: view.date_mode,
+      date_preset: view.date_preset,
+      date_from: view.date_from,
+      date_to: view.date_to,
+      worker_ids: view.worker_ids,
+      redact: view.redact,
+      is_shared: view.is_shared,
+    };
     try {
       const r = await fetch(`/api/kpi/labor/views/${view.id}`, { method: "DELETE" });
       if (!r.ok) {
@@ -520,6 +597,30 @@ export default function KpiLaborPage() {
       }
       await refetchViews();
       setConfirmDelete(null);
+      // B1 undo window
+      setPendingUndo(snapshot);
+      setToast({
+        message: `Deleted "${view.name}".`,
+        tone: "info",
+        durationMs: 6000,
+        actions: [{
+          label: "Undo",
+          emphasis: "primary",
+          onClick: async () => {
+            try {
+              await fetch("/api/kpi/labor/views", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(snapshot),
+              });
+              await refetchViews();
+              setLiveMsg(`Restored view ${view.name}.`);
+            } catch {}
+            setPendingUndo(null);
+          },
+        }],
+      });
+      setLiveMsg(`Deleted view ${view.name}. Undo available for 6 seconds.`);
     } catch (e) {
       setViewError(String(e.message || e).slice(0, 200));
     }
@@ -546,34 +647,28 @@ export default function KpiLaborPage() {
     setSavingView(false);
   }
 
-  // ── Auth screens ────────────────────────────────────
+  // ── Auth screens (P9 · nine states 1-3) ─────────────
   if (status === "loading") {
-    return (<div className="kpi-app"><div className="kpi-wrap"><div className="kpi-state"><div className="kpi-state-title">Loading...</div></div></div></div>);
+    return (<div className="kpi-app"><div className="kpi-wrap"><StateLoading /></div></div>);
   }
   if (status === "unauthenticated") {
-    return (<div className="kpi-app"><div className="kpi-wrap"><div className="kpi-state"><div className="kpi-state-title">Sign in required</div><div className="kpi-state-desc">The KPI Dashboard requires an active session.</div></div></div></div>);
+    return (<div className="kpi-app"><div className="kpi-wrap"><StateSessionExpired /></div></div>);
   }
   if (!isAllowed) {
-    return (
-      <div className="kpi-app"><div className="kpi-wrap">
-        <div className="kpi-coming">
-          <div className="kpi-coming-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h6M9 13h6M9 17h4" />
-            </svg>
-          </div>
-          <h1 className="kpi-coming-title">KPI Dashboard</h1>
-          <p className="kpi-coming-desc">A per-account financial dashboard is in development. Check back soon.</p>
-        </div>
-      </div></div>
-    );
+    return (<div className="kpi-app"><div className="kpi-wrap"><StateNotAuthorized /></div></div>);
   }
 
   const hasData = !isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0;
 
   // Extract account list from data for the folio (D3 will replace with
   // server aggregate). For D2 the roster is the ACCOUNTS constant.
-  const onPickAccount = (a) => setParams({ account: a, workers: "", view: "" });
+  // B10: announce switch + focus-to-hero for keyboard users.
+  const onPickAccount = (a) => {
+    setParams({ account: a, workers: "", view: "" });
+    setLiveMsg(`Switched to ${a}.`);
+    // Let the render complete before we grab focus.
+    setTimeout(focusHero, 60);
+  };
 
   const workersOnChangeSet = (nextSet) => {
     if (nextSet == null) return setParam("workers", "");
@@ -600,10 +695,7 @@ export default function KpiLaborPage() {
       })()
     : { today: today.slice(5).replace("-", "/"), period: null, week: null };
 
-  // ── Middle content (metrics + table + state screens) ──
-  // Push 2 replaces this whole block with Hero + 8-card grid + Trend +
-  // rebuilt table with inline drill. Keeping the C1-C6 render for now
-  // so Push 1 ships a working checkpoint.
+  // ── Middle content (Hero · MetricGrid · Trend · Table + 9 states) ──
   const mainContent = (
     <>
       {/* C5.5 name-availability banner. */}
@@ -619,17 +711,19 @@ export default function KpiLaborPage() {
 
       {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
         <>
-          <Hero
-            account={account}
-            totals={totals}
-            weekCount={grouped.length}
-            workerWeekCount={filteredActuals.length}
-            lastPreset={lastPreset}
-            start={start}
-            end={end}
-            today={today}
-            currentPeriodNo={currentPeriodNo}
-          />
+          <div ref={heroRef} tabIndex={-1} style={{ outline: "none" }}>
+            <Hero
+              account={account}
+              totals={totals}
+              weekCount={grouped.length}
+              workerWeekCount={filteredActuals.length}
+              lastPreset={lastPreset}
+              start={start}
+              end={end}
+              today={today}
+              currentPeriodNo={currentPeriodNo}
+            />
+          </div>
           <MetricGrid
             account={account}
             totals={totals}
@@ -665,29 +759,30 @@ export default function KpiLaborPage() {
         </>
       )}
 
-      {loadState === "ok" && data.account_state === "salaried_only" ? (
-        <div className="kpi-state">
-          <div className="kpi-state-title">Salaried-only account</div>
-          <div className="kpi-state-desc">{data.account_state_message}</div>
-        </div>
+      {loadState === "auth" && authError === "expired" ? (
+        <StateSessionExpired />
+      ) : loadState === "auth" && authError === "forbidden" ? (
+        <StateNotAuthorized />
+      ) : loadState === "ok" && data.account_state === "salaried_only" ? (
+        <StateSalaried account={account} message={data.account_state_message} />
       ) : loadState === "loading" ? (
-        <div className="kpi-state"><div className="kpi-state-title">Loading labor data...</div></div>
+        <StateLoading />
       ) : loadState === "error" ? (
-        <div className="kpi-state">
-          <div className="kpi-state-title">Could not load labor data</div>
-          <div className="kpi-state-desc">Nothing changed. Category: {errorMsg}</div>
-          <button className="kpi-state-cta" onClick={() => setParam("_r", Date.now())}>Retry</button>
-        </div>
-      ) : !filteredActuals.length ? (
-        <div className="kpi-state">
-          <div className="kpi-state-title">No labor rows in range</div>
-          <div className="kpi-state-desc">
-            {selectedWorkers && selectedWorkers.size > 0
-              ? `Selected workers have no rows in the current range. Try clearing the worker filter or widening the dates.`
-              : `${account} has no labor_actuals rows between ${start} and ${end}.`}
-          </div>
-        </div>
-      ) : (
+        <StateError
+          code={errCode}
+          category={errorMsg}
+          onRetry={() => setParam("_r", Date.now())}
+        />
+      ) : loadState === "ok" && !filteredActuals.length ? (
+        selectedWorkers && selectedWorkers.size > 0 ? (
+          <StateEmptyFiltered
+            workerCount={selectedWorkers.size}
+            onClear={() => { setParam("workers", ""); setLiveMsg("Worker filter cleared."); setTimeout(focusHero, 60); }}
+          />
+        ) : (
+          <StateEmptyFirstRun />
+        )
+      ) : loadState === "ok" && filteredActuals.length ? (
         <WeekTable
           account={account}
           grouped={grouped}
@@ -729,77 +824,25 @@ export default function KpiLaborPage() {
           todayISO={today}
           workerRangeTotals={workerRangeTotals}
         />
-      )}
+      ) : null}
     </>
   );
 
   // ── Right rail content (below QuickPanel) ──
-  // Existing alarms / coverage / pipeline. Push 3 refines and adds OT
-  // watch. QuickPanel sits at the top of the rail (rendered inline via
-  // Shell's rail prop).
-  const railBelowQuickPanel = tab === "labor" && loadState === "ok" && data.account_state !== "salaried_only" ? (
-    <>
-      <div className="kpi-rail-card">
-        <div className="kpi-rail-title">Range total</div>
-        <div className="kpi-rail-big">{fmt$(totals.amount)}</div>
-        <div className="kpi-rail-sub">
-          {account} · {filteredActuals.length} worker-weeks
-          {selectedWorkers && selectedWorkers.size > 0 && totalWorkersInRange > 0 && (
-            <span> · {shownWorkers} of {totalWorkersInRange} workers</span>
-          )}
-        </div>
-      </div>
-      <div className="kpi-rail-card">
-        <div className="kpi-rail-title">Alarms</div>
-        <div className={`kpi-alarm ${freshnessH != null && freshnessH < 30 ? "kpi-alarm-ok" : freshnessH != null && freshnessH < 54 ? "kpi-alarm-warning" : "kpi-alarm-danger"}`}>
-          <div className="kpi-alarm-title">Data freshness</div>
-          <div className="kpi-alarm-desc">
-            {freshnessH != null ? `${freshnessH.toFixed(1)}h since last successful pay-segments walk` : "no successful walk on record"}
-          </div>
-        </div>
-        {coverageCounts.unknown > 0 && (
-          <div className="kpi-alarm kpi-alarm-danger">
-            <div className="kpi-alarm-title">Unknown weeks</div>
-            <div className="kpi-alarm-desc">{coverageCounts.unknown} rows in the unknown state (presence stale)</div>
-          </div>
-        )}
-        {totals.hours_without_dollars > 0 && (
-          <div className="kpi-alarm kpi-alarm-warning">
-            <div className="kpi-alarm-title">Unpriced hours</div>
-            <div className="kpi-alarm-desc">{fmtHrs(totals.hours_without_dollars)} hrs known but no pay-segment coverage</div>
-          </div>
-        )}
-      </div>
-      <div className="kpi-rail-card">
-        <div className="kpi-rail-title">Pipeline health</div>
-        {data.unmapped_names?.length > 0 && (
-          <div className="kpi-alarm kpi-alarm-warning">
-            <div className="kpi-alarm-title">Unmapped earning types: {data.unmapped_names.length}</div>
-            <div className="kpi-alarm-desc">D37 signal - inspect earning_type_unmapped.</div>
-          </div>
-        )}
-        {(data.unattributed?.length || 0) > 0 && (
-          <div className="kpi-alarm kpi-alarm-warning">
-            <div className="kpi-alarm-title">Unattributed groups: {data.unattributed.length}</div>
-            <div className="kpi-alarm-desc">Portfolio-wide segments with no account attribution (N5).</div>
-          </div>
-        )}
-        {!data.unmapped_names?.length && !data.unattributed?.length && (
-          <div className="kpi-alarm kpi-alarm-ok">
-            <div className="kpi-alarm-title">All clear</div>
-            <div className="kpi-alarm-desc">Zero unmapped earning types, zero unattributed groups.</div>
-          </div>
-        )}
-      </div>
-      <div className="kpi-rail-card">
-        <div className="kpi-rail-title">Coverage (worker-weeks in range)</div>
-        <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.complete}</span><CoverageBadge state="complete" /><span className="kpi-cov-desc">every entry has dollars</span></div>
-        <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.partial}</span><CoverageBadge state="partial" /><span className="kpi-cov-desc">some entries lack dollars</span></div>
-        <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.hours_only}</span><CoverageBadge state="hours_only" /><span className="kpi-cov-desc">before 2026-04-20 floor (D35)</span></div>
-        <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.unknown}</span><CoverageBadge state="unknown" /><span className="kpi-cov-desc">no successful presence walk</span></div>
-        <div className="kpi-cov-note">Counts are labor_actuals rows (worker-weeks), not aggregated table rows on screen.</div>
-      </div>
-    </>
+  // ContextRail (v5): alarms (empty when healthy) · coverage (merged
+  // legend + worker-weeks unit note) · OT watch · Pipeline ▸ disclosure.
+  const railBelowQuickPanel = tab === "labor" && loadState === "ok" && data?.account_state !== "salaried_only" ? (
+    <ContextRail
+      filteredActuals={filteredActuals}
+      totals={totals}
+      coverageCounts={coverageCounts}
+      freshness={freshness}
+      freshnessHours={freshnessH}
+      data={data}
+      workers={data?.workers}
+      workerRangeTotals={workerRangeTotals}
+      redact={redact}
+    />
   ) : null;
 
   return (
@@ -811,6 +854,7 @@ export default function KpiLaborPage() {
           freshness={freshness}
           activeTab={tab}
           onTabClick={(k) => setParam("tab", k)}
+          printScopeText={vdefLine}
           folioRail={<FolioRail activeAccount={account} onPickAccount={onPickAccount} />}
           scopeBand={
             !isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 ? (
@@ -819,6 +863,7 @@ export default function KpiLaborPage() {
                 end={end}
                 lastPreset={lastPreset}
                 onDateChange={(which, iso) => { setLastPreset(null); setParam(which, iso); }}
+                onRangeChange={(s, e) => { setLastPreset(null); setParams({ start: s, end: e }); }}
                 onPresetClick={applyPreset}
                 hasPeriods={!!data?.account_periods?.length}
                 workerRoster={workerRoster}
@@ -849,8 +894,24 @@ export default function KpiLaborPage() {
                   weekCount={grouped.length}
                   workerWeekCount={filteredActuals.length}
                   redact={redact}
-                  onToggleRedact={(next) => setParam("redact", next ? "1" : "")}
+                  onToggleRedact={(next) => {
+                    setParam("redact", next ? "1" : "");
+                    setLiveMsg(next ? "Names hidden on screen and in export." : "Names shown.");
+                  }}
                   exportHref={exportHref()}
+                  onCopyLink={() => setLiveMsg("Copied link to this exact view to clipboard.")}
+                  onExport={(href) => {
+                    // M4: file downloads via anchor; we raise a toast for
+                    // acknowledgement and, if a real request took >400ms,
+                    // hint at it. For an anchor download we can't measure
+                    // the transfer, so we show a fixed toast.
+                    setToast({
+                      message: redact ? "Export ready · names redacted." : "Export ready.",
+                      tone: "info",
+                      durationMs: 4000,
+                    });
+                    setLiveMsg(redact ? "Export downloading with names redacted." : "Export downloading.");
+                  }}
                 />
               )}
               {railBelowQuickPanel}
@@ -904,10 +965,12 @@ export default function KpiLaborPage() {
         />
       )}
       {/* ── Confirm delete ───────────────────────────────── */}
+      {/* B1: the confirm shows anyway but the actual delete flow raises
+          an undo toast for 6s. */}
       {confirmDelete && (
         <ConfirmDialog
           title="Delete saved view?"
-          message={<>Delete <strong>{confirmDelete.name}</strong>? This cannot be undone.</>}
+          message={<>Delete <strong>{confirmDelete.name}</strong>? You can undo for 6 seconds.</>}
           confirmLabel="Delete"
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => deleteView(confirmDelete)}
@@ -915,6 +978,12 @@ export default function KpiLaborPage() {
           disabled={savingView}
         />
       )}
+
+      {/* ── B10 live region · always mounted, silent when empty ── */}
+      <div aria-live="polite" aria-atomic="true" className="kpi-sr-live">{liveMsg}</div>
+
+      {/* ── P10/P11 toast host (M2 save, M4 export, B1 undo) ─── */}
+      <ToastHost toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

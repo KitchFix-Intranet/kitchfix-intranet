@@ -21,6 +21,7 @@ export function QuickPanel({
   onToggleRedact,
   exportHref,
   onCopyLink,
+  onExport,           // (href) => void - lets page raise M4 toast + timing
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -30,11 +31,17 @@ export function QuickPanel({
       await navigator.clipboard.writeText(url);
       setCopied(true);
       onCopyLink?.();
+      // M3: revert after 1.2s (spec §7).
       setTimeout(() => setCopied(false), 1200);
     } catch {
       // If clipboard denied, silently no-op. M3 morph doesn't fire.
     }
   }, [onCopyLink]);
+
+  const handleExport = useCallback((e) => {
+    // Let the anchor download fire; also signal the page for M4.
+    onExport?.(exportHref);
+  }, [onExport, exportHref]);
 
   return (
     <div className="kpi-rl-card" id="kpi-quickpanel">
@@ -67,7 +74,7 @@ export function QuickPanel({
             </>
           )}
         </button>
-        <a className="kpi-btn kpi-btn-sm" href={exportHref} download>
+        <a className="kpi-btn kpi-btn-sm" href={exportHref} download onClick={handleExport}>
           <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
