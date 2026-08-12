@@ -217,6 +217,17 @@
   --opd-teal: var(--kf-playbook-teal);           /* #0F6E56 - primary tool accent */
   --opd-teal-dark: var(--kf-playbook-teal-dark); /* #0a5a45 - hover / pressed */
   --opd-teal-light: var(--kf-playbook-teal-light); /* #d4ebe2 - subtle wash */
+
+  /* ---------- KPI module accents (D1, spec §4) ----------
+     Graphite (K1/K4): fills-only, aliased to the neutral ramp.
+     tint = --navy-50 (no new value). Note the alias: equality to body-
+     text neutrals is coincidental - re-verify on any neutral-ramp
+     change. Defined here; kpi.css currently overrides at :root with
+     the interim navy value and consumes its own local. D2 removes the
+     kpi.css override to shift consumption to these definitions. */
+  --kpi-accent:        var(--n-700);
+  --kpi-accent-strong: var(--n-800);
+  --kpi-accent-tint:   var(--navy-50);
 }
 
 /* Density mode - remaps SEMANTIC tokens only (primitives stay fixed). Compact branch. */
