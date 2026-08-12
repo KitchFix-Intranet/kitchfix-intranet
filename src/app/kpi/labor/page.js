@@ -3,109 +3,45 @@
 //
 // KPI Dashboard - Labor section.
 //
-// PR C4 additions:
-//   - Saved views (pill row above the parameter strip). URL-addressable
-//     via ?view=<id>. Personal-by-default; is_shared makes a view
-//     readable by other OPS_LEADERSHIP_EMAILS users. Only the owner
-//     may edit / rename / delete.
-//   - Consolidated parameter strip: dates, presets, workers, redaction,
-//     row count, and export button in ONE row directly under the
-//     command bar. Account stays in the command bar (scopes the page).
-//   - Workers dropdown flows INLINE (no absolute overlay) so it never
-//     covers the metric cards.
-//   - Redaction is an icon toggle.
-//   - Export becomes secondary, right-aligned beside the row count.
-//   - Active-view line shows the resolved range so a named pill never
-//     hides its own definition. Editing marks the view "dirty" and
-//     surfaces Update / Save as new instead of silently overwriting.
+// D2 (Push 1): three-zone shell landed. Chrome, folio rail (account
+// navigation), scope band (dates + presets + workers + views), quick
+// panel (counts + copy + export + hide-names) extracted into components
+// under ./components. Formatters + account roster in ./lib. Middle
+// content (metrics, table) and the rest of the right rail remain
+// inline here - Push 2 replaces the middle (hero + 8-card grid + trend
+// + inline drill), Push 3 replaces states + rail lower + motion + B*.
+//
+// Persistent shape from C4: URL state (?account, ?start, ?end, ?workers,
+// ?redact, ?view), saved views CRUD, dirty detection, three modal
+// dialogs (Save / Edit / Delete-confirm).
 
-import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
-import { PRESET_LABELS, resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
-import { DOLLAR_COVERAGE_FLOOR } from "@/lib/kpi/floors";
+import { resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
+import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp } from "./lib/formatting";
+import { ACCOUNTS, FY_START } from "./lib/accounts";
+import { Shell } from "./components/Shell";
+import { FolioRail } from "./components/FolioRail";
+import { ScopeBand, buildVdefLine } from "./components/ScopeBand";
+import { QuickPanel } from "./components/QuickPanel";
+import { Hero } from "./components/Hero";
+import { MetricGrid } from "./components/MetricGrid";
+import { TrendChart } from "./components/TrendChart";
+import { WeekTable } from "./components/WeekTable";
+import { ContextRail } from "./components/ContextRail";
+import {
+  StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateError,
+  StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired,
+  errorCode,
+} from "./components/StateBoxes";
+import { ToastHost } from "./components/Toast";
 import "../kpi.css";
 
-const ACCOUNTS = [
-  "CIN - AZ", "CIN - OH", "CIN - KY",
-  "STL - FL", "STL - MO",
-  "TBJ - FL", "TBJ - NY",
-  "TBR - FL",
-  "TXR - AZ", "TXR - TX - H", "TXR - TX - V",
-];
-const TABS = [
-  { key: "overview", label: "Overview", enabled: true },
-  { key: "labor",    label: "Labor",    enabled: true },
-  { key: "food",     label: "Food",     enabled: false },
-  { key: "other",    label: "Other COGS", enabled: false },
-  { key: "revenue",  label: "Revenue",  enabled: false },
-  { key: "pnl",      label: "P&L",      enabled: false },
-];
-const FY_START = "2025-12-29";
-const PRESET_KEYS = ["this_period", "last_period", "last_4wk", "last_13wk", "fytd"];
-
-function fmt$(v) {
-  if (v == null) return "—";
-  return "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtHrs(v) {
-  if (v == null) return "—";
-  return Number(v).toFixed(2);
-}
-function fmtDate(iso) {
-  if (!iso) return "—";
-  const [y, m, d] = iso.slice(0, 10).split("-");
-  return `${m}/${d}/${y.slice(2)}`;
-}
-function hoursSinceISO(iso) {
-  if (!iso) return null;
-  return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60);
-}
-// D1 · B8: timestamps render viewer-local with a zone label so a user in
-// Toronto sees 8:11 AM EDT while a user in Denver sees 6:11 AM MDT. UTC
-// only in exports, logs, URLs (per spec §10).
-function fmtTimestamp(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric", month: "short", day: "numeric",
-    hour: "numeric", minute: "2-digit",
-    timeZoneName: "short",
-  }).format(d);
-}
-function freshnessTint(hrs) {
-  if (hrs == null) return "kpi-chip-stale";
-  if (hrs < 30) return "kpi-chip-fresh";
-  if (hrs < 54) return "kpi-chip-warm";
-  return "kpi-chip-stale";
-}
-
-function CellHours({ v, coverage_state, forceEmpty = false }) {
-  if (coverage_state === "unknown") return <span aria-label="unknown">?</span>;
-  if (forceEmpty || v == null) return <span aria-label="not applicable">—</span>;
-  return <span className="kpi-num">{fmtHrs(v)}</span>;
-}
-function CellDollars({ v, coverage_state, forceEmpty = false }) {
-  if (coverage_state === "unknown") return <span aria-label="unknown">?</span>;
-  if (forceEmpty || v == null) return <span aria-label="not applicable">—</span>;
-  return <span className="kpi-num">{fmt$(v)}</span>;
-}
-function CoverageBadge({ state }) {
-  const cfg = {
-    complete:   { label: "Complete",   cls: "kpi-badge-complete",   symbol: "✓" },
-    partial:    { label: "Partial",    cls: "kpi-badge-partial",    symbol: "!" },
-    hours_only: { label: "Unpriced", cls: "kpi-badge-hours-only", symbol: "◷" },
-    unknown:    { label: "Unknown",    cls: "kpi-badge-unknown",    symbol: "?" },
-    no_labor:   { label: "No labor",   cls: "kpi-badge-no-labor",   symbol: "—" },
-  }[state] || { label: state, cls: "kpi-badge-no-labor", symbol: "?" };
-  return (
-    <span className={`kpi-badge ${cfg.cls}`} aria-label={`Coverage: ${cfg.label}`}>
-      <span aria-hidden="true">{cfg.symbol}</span> {cfg.label}
-    </span>
-  );
-}
+// B15 last-viewed account key (localStorage). Read once on client mount
+// only; server render always uses the URL/default. Never leaks data.
+const LAST_ACCOUNT_KEY = "kpi:labor:lastAccount";
 
 function workerLabel(meta, worker_id, redact) {
   const num = meta?.number != null ? `#${meta.number}` : `#${String(worker_id).slice(0, 6)}`;
@@ -137,8 +73,28 @@ export default function KpiLaborPage() {
   const email = session?.user?.email?.toLowerCase().trim() || "";
   const isAllowed = OPS_LEADERSHIP_EMAILS.includes(email);
 
-  const account = searchParams.get("account") || "CIN - OH";
+  // B15: default account resolution. URL wins. Otherwise on first client
+  // mount we adopt the last-viewed account from localStorage; if none,
+  // fall back to "CIN - OH" (the sentinel account).
+  const urlAccount = searchParams.get("account");
+  const account = urlAccount || "CIN - OH";
   const tab = searchParams.get("tab") || "labor";
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (urlAccount) {
+      // Remember whatever the user is actually on.
+      try { localStorage.setItem(LAST_ACCOUNT_KEY, urlAccount); } catch {}
+      return;
+    }
+    let saved = null;
+    try { saved = localStorage.getItem(LAST_ACCOUNT_KEY); } catch {}
+    if (saved && saved !== "CIN - OH" && ACCOUNTS.includes(saved)) {
+      const p = new URLSearchParams(searchParams.toString());
+      p.set("account", saved);
+      router.replace(`/kpi/labor?${p.toString()}`);
+    }
+  }, [urlAccount, router, searchParams]);
+
   const today = new Date().toISOString().slice(0, 10);
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
@@ -160,7 +116,25 @@ export default function KpiLaborPage() {
   const [data, setData] = useState(null);
   const [loadState, setLoadState] = useState("idle");
   const [errorMsg, setErrorMsg] = useState(null);
+  const [errCode, setErrCode] = useState(null);
+  const [authError, setAuthError] = useState(null); // "expired" (401) | "forbidden" (403) | null
+
+  // P10 / P11 toast + B10 live region. One toast at a time.
+  const [toast, setToast] = useState(null);
+  // B10 live region text - kept separate so we can announce without a
+  // visible toast (e.g., account switch, filter change).
+  const [liveMsg, setLiveMsg] = useState("");
+  // B1 undo state: remember the last deleted view for 6s. If undo fires
+  // we POST it back; otherwise it silently drops.
+  const [pendingUndo, setPendingUndo] = useState(null);
+  // B10: focus-to-hero handle after account switch or filter clear.
+  const heroRef = useRef(null);
+  const focusHero = useCallback(() => {
+    const el = heroRef.current;
+    if (el && typeof el.focus === "function") el.focus();
+  }, []);
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
+  const [expandedPeriods, setExpandedPeriods] = useState(new Set());
   const [views, setViews] = useState([]);
   const [viewsLoaded, setViewsLoaded] = useState(false);
   const [savingView, setSavingView] = useState(false);
@@ -185,22 +159,48 @@ export default function KpiLaborPage() {
   }, []);
 
   // ── Fetch labor data ──────────────────────────────────
+  // B14 timing marks: performance.mark bracketing the fetch to make
+  // p95 measurable in devtools. See spec §5 initial ≤1.5s budget.
   useEffect(() => {
     if (status !== "authenticated" || !isAllowed) return;
     let cancelled = false;
     setLoadState("loading");
     setErrorMsg(null);
+    setErrCode(null);
+    setAuthError(null);
     const params = new URLSearchParams({ account, start, end });
+    const markBase = `kpi-labor-fetch-${account}`;
+    try { performance.mark(`${markBase}-start`); } catch {}
     fetch(`/api/kpi/labor?${params}`)
       .then(async (r) => {
+        // B4: auth states off the real fetch. 401 -> session-expired,
+        // 403 -> not-authorized. Both render StateBoxes; zero data leak.
+        if (r.status === 401) { setAuthError("expired"); throw new Error("session_expired"); }
+        if (r.status === 403) { setAuthError("forbidden"); throw new Error("forbidden"); }
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
           throw new Error(body.error || `HTTP ${r.status}`);
         }
         return r.json();
       })
-      .then((d) => { if (!cancelled) { setData(d); setLoadState("ok"); } })
-      .catch((e) => { if (!cancelled) { setLoadState("error"); setErrorMsg(String(e.message || e).slice(0, 200)); } });
+      .then((d) => {
+        if (cancelled) return;
+        setData(d); setLoadState("ok");
+        try {
+          performance.mark(`${markBase}-end`);
+          performance.measure(markBase, `${markBase}-start`, `${markBase}-end`);
+        } catch {}
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if (String(e.message) === "session_expired" || String(e.message) === "forbidden") {
+          setLoadState("auth");
+          return;
+        }
+        setLoadState("error");
+        setErrorMsg(String(e.message || e).slice(0, 200));
+        setErrCode(errorCode("labor", e));
+      });
     return () => { cancelled = true; };
   }, [status, isAllowed, account, start, end]);
 
@@ -405,6 +405,40 @@ export default function KpiLaborPage() {
 
   const isSalaried = data?.account_state === "salaried_only";
 
+  // Auto-open current + previous period on first grouped load (v5 default:
+  // §3.7). Only fires when nothing is open yet, so navigating back doesn't
+  // stomp user's manual collapses.
+  useEffect(() => {
+    if (!grouped.length || expandedPeriods.size > 0) return;
+    const periods = grouped.map(g => g.period_no).filter(p => p != null);
+    const next = new Set();
+    if (periods[0] != null) next.add(periods[0]);
+    if (periods[1] != null) next.add(periods[1]);
+    if (next.size > 0) setExpandedPeriods(next);
+  }, [grouped, expandedPeriods.size]);
+
+  // F16 - per-worker range totals for the rate-on-hover title. Cheap;
+  // derived from filteredActuals which is already memo'd.
+  const workerRangeTotals = useMemo(() => {
+    const m = {};
+    for (const r of filteredActuals) {
+      const id = r.worker_id;
+      if (!m[id]) m[id] = { hoursWorked: 0, dollarsTotal: 0 };
+      m[id].hoursWorked += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
+      m[id].dollarsTotal += Number(r.amount || 0);
+    }
+    return m;
+  }, [filteredActuals]);
+
+  // Current period for hero preset labels (P5).
+  const currentPeriodNo = useMemo(() => {
+    if (!data?.account_periods?.length) return null;
+    const past = data.account_periods
+      .filter(p => p.start && p.end && p.start <= today)
+      .sort((a, b) => a.start.localeCompare(b.start));
+    return past.length > 0 ? past[past.length - 1].period_no : null;
+  }, [data, today]);
+
   function applyPreset(kind) {
     const t = today;
     setLastPreset(kind);
@@ -490,6 +524,9 @@ export default function KpiLaborPage() {
       const p = new URLSearchParams(searchParams.toString());
       p.set("view", String(j.view.id));
       router.push(`/kpi/labor?${p.toString()}`);
+      // M2: save success toast (spec §7 "auto-hide 6s").
+      setToast({ message: `Saved view "${name}".`, tone: "info", durationMs: 6000 });
+      setLiveMsg(`Saved view ${name}.`);
     } catch (e) {
       setViewError(String(e.message || e).slice(0, 200));
     }
@@ -503,6 +540,9 @@ export default function KpiLaborPage() {
     // name stays the same on Update
     delete body.account_key; // account cannot be changed on a view
     delete body.tab;
+    // B7 optimistic concurrency: pass the timestamp we opened with so
+    // the server can 409 if someone else edited between.
+    if (activeView.updated_at) body.expected_updated_at = activeView.updated_at;
     try {
       const r = await fetch(`/api/kpi/labor/views/${activeView.id}`, {
         method: "PATCH",
@@ -510,16 +550,39 @@ export default function KpiLaborPage() {
         body: JSON.stringify(body),
       });
       const j = await r.json().catch(() => ({}));
+      if (r.status === 409) {
+        setViewError(j.error || "This view changed since you opened it - reload to see the current version, or save yours as new.");
+        setSavingView(false);
+        return;
+      }
       if (!r.ok) throw new Error(j.detail?.join?.(", ") || j.error || `HTTP ${r.status}`);
       await refetchViews();
+      setToast({ message: `Saved ${activeView.name}.`, tone: "info", durationMs: 4000 });
+      setLiveMsg(`Saved view ${activeView.name}.`);
     } catch (e) {
       setViewError(String(e.message || e).slice(0, 200));
     }
     setSavingView(false);
   }
 
+  // B1: delete a saved view with 6s undo. The DELETE is idempotent - if
+  // undo fires we POST the same shape back. During the undo window the
+  // view is removed from the local list so it disappears immediately.
   async function deleteView(view) {
     setSavingView(true); setViewError(null);
+    // Snapshot for undo
+    const snapshot = {
+      name: view.name,
+      account_key: view.account_key,
+      tab: view.tab,
+      date_mode: view.date_mode,
+      date_preset: view.date_preset,
+      date_from: view.date_from,
+      date_to: view.date_to,
+      worker_ids: view.worker_ids,
+      redact: view.redact,
+      is_shared: view.is_shared,
+    };
     try {
       const r = await fetch(`/api/kpi/labor/views/${view.id}`, { method: "DELETE" });
       if (!r.ok) {
@@ -534,6 +597,30 @@ export default function KpiLaborPage() {
       }
       await refetchViews();
       setConfirmDelete(null);
+      // B1 undo window
+      setPendingUndo(snapshot);
+      setToast({
+        message: `Deleted "${view.name}".`,
+        tone: "info",
+        durationMs: 6000,
+        actions: [{
+          label: "Undo",
+          emphasis: "primary",
+          onClick: async () => {
+            try {
+              await fetch("/api/kpi/labor/views", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(snapshot),
+              });
+              await refetchViews();
+              setLiveMsg(`Restored view ${view.name}.`);
+            } catch {}
+            setPendingUndo(null);
+          },
+        }],
+      });
+      setLiveMsg(`Deleted view ${view.name}. Undo available for 6 seconds.`);
     } catch (e) {
       setViewError(String(e.message || e).slice(0, 200));
     }
@@ -560,516 +647,296 @@ export default function KpiLaborPage() {
     setSavingView(false);
   }
 
-  // ── Auth screens ────────────────────────────────────
+  // ── Auth screens (P9 · nine states 1-3) ─────────────
   if (status === "loading") {
-    return (<div className="kpi-app"><div className="kpi-wrap"><div className="kpi-state"><div className="kpi-state-title">Loading...</div></div></div></div>);
+    return (<div className="kpi-app"><div className="kpi-wrap"><StateLoading /></div></div>);
   }
   if (status === "unauthenticated") {
-    return (<div className="kpi-app"><div className="kpi-wrap"><div className="kpi-state"><div className="kpi-state-title">Sign in required</div><div className="kpi-state-desc">The KPI Dashboard requires an active session.</div></div></div></div>);
+    return (<div className="kpi-app"><div className="kpi-wrap"><StateSessionExpired /></div></div>);
   }
   if (!isAllowed) {
-    return (
-      <div className="kpi-app"><div className="kpi-wrap">
-        <div className="kpi-coming">
-          <div className="kpi-coming-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h6M9 13h6M9 17h4" />
-            </svg>
-          </div>
-          <h1 className="kpi-coming-title">KPI Dashboard</h1>
-          <p className="kpi-coming-desc">A per-account financial dashboard is in development. Check back soon.</p>
-        </div>
-      </div></div>
-    );
+    return (<div className="kpi-app"><div className="kpi-wrap"><StateNotAuthorized /></div></div>);
   }
 
   const hasData = !isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0;
 
+  // Extract account list from data for the folio (D3 will replace with
+  // server aggregate). For D2 the roster is the ACCOUNTS constant.
+  // B10: announce switch + focus-to-hero for keyboard users.
+  const onPickAccount = (a) => {
+    setParams({ account: a, workers: "", view: "" });
+    setLiveMsg(`Switched to ${a}.`);
+    // Let the render complete before we grab focus.
+    setTimeout(focusHero, 60);
+  };
+
+  const workersOnChangeSet = (nextSet) => {
+    if (nextSet == null) return setParam("workers", "");
+    if (nextSet.size === 0) return setParam("workers", "__none__");
+    if (nextSet.size === workerRoster.length) return setParam("workers", "");
+    setParam("workers", [...nextSet].join(","));
+  };
+
+  const vdefLine = buildVdefLine({
+    start, end,
+    resolvedActiveRange, activeView,
+    workerRoster, selectedWorkers, redact,
+  });
+
+  // Today's fiscal context - lightweight from data.
+  const fiscalCtx = data?.account_periods?.length
+    ? (() => {
+        const past = data.account_periods
+          .filter(p => p.start && p.end)
+          .sort((a, b) => a.start.localeCompare(b.start))
+          .filter(p => p.start <= today);
+        const cur = past[past.length - 1];
+        return { today: today.slice(5).replace("-", "/"), period: cur?.period_no, week: null };
+      })()
+    : { today: today.slice(5).replace("-", "/"), period: null, week: null };
+
+  // ── Middle content (Hero · MetricGrid · Trend · Table + 9 states) ──
+  const mainContent = (
+    <>
+      {/* C5.5 name-availability banner. */}
+      {!isSalaried && loadState === "ok" && data?.name_availability && data.name_availability.total > 0 && data.name_availability.resolved < data.name_availability.total && (
+        <div className="kpi-note-info" role="status">
+          {data.name_availability.resolved === 0
+            ? data.name_availability.reason === "users_table_empty_or_unreachable"
+              ? <>Names unavailable: the users walk has not populated <code>rippling_raw_users</code> for the {data.name_availability.total} workers in scope. Falling back to numbers and titles. This resolves on the next successful users walk.</>
+              : <>Names unavailable: none of the {data.name_availability.total} workers in scope have a canonical name field. Falling back to numbers and titles.</>
+            : <>{data.name_availability.total - data.name_availability.resolved} of {data.name_availability.total} workers do not resolve to a canonical name and render as numbers.</>}
+        </div>
+      )}
+
+      {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
+        <>
+          <div ref={heroRef} tabIndex={-1} style={{ outline: "none" }}>
+            <Hero
+              account={account}
+              totals={totals}
+              weekCount={grouped.length}
+              workerWeekCount={filteredActuals.length}
+              lastPreset={lastPreset}
+              start={start}
+              end={end}
+              today={today}
+              currentPeriodNo={currentPeriodNo}
+            />
+          </div>
+          <MetricGrid
+            account={account}
+            totals={totals}
+            weekCount={grouped.length}
+            lastPreset={lastPreset}
+            start={start}
+            end={end}
+            today={today}
+            currentPeriodNo={currentPeriodNo}
+          />
+          <TrendChart
+            account={account}
+            weeks={filteredActuals}
+            openWeeks={expandedWeeks}
+            onBarClick={(wk) => {
+              // M7 jump: open week + its period
+              const g = grouped.find(gg => gg.weeks.some(w => w.week_start === wk));
+              if (g && g.period_no != null) setExpandedPeriods(prev => new Set([...prev, g.period_no]));
+              setExpandedWeeks(prev => new Set([...prev, wk]));
+              setTimeout(() => {
+                const el = document.querySelector(`[data-wk="${wk}"]`);
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  const tr = el.closest("tr");
+                  if (tr) {
+                    tr.classList.add("kpi-landed");
+                    setTimeout(() => tr.classList.remove("kpi-landed"), 400);
+                  }
+                }
+              }, 80);
+            }}
+          />
+        </>
+      )}
+
+      {loadState === "auth" && authError === "expired" ? (
+        <StateSessionExpired />
+      ) : loadState === "auth" && authError === "forbidden" ? (
+        <StateNotAuthorized />
+      ) : loadState === "ok" && data.account_state === "salaried_only" ? (
+        <StateSalaried account={account} message={data.account_state_message} />
+      ) : loadState === "loading" ? (
+        <StateLoading />
+      ) : loadState === "error" ? (
+        <StateError
+          code={errCode}
+          category={errorMsg}
+          onRetry={() => setParam("_r", Date.now())}
+        />
+      ) : loadState === "ok" && !filteredActuals.length ? (
+        selectedWorkers && selectedWorkers.size > 0 ? (
+          <StateEmptyFiltered
+            workerCount={selectedWorkers.size}
+            onClear={() => { setParam("workers", ""); setLiveMsg("Worker filter cleared."); setTimeout(focusHero, 60); }}
+          />
+        ) : (
+          <StateEmptyFirstRun />
+        )
+      ) : loadState === "ok" && filteredActuals.length ? (
+        <WeekTable
+          account={account}
+          grouped={grouped}
+          grandTotal={grand}
+          workers={data.workers}
+          redact={redact}
+          expandedPeriods={expandedPeriods}
+          onTogglePeriod={(p) => {
+            setExpandedPeriods(prev => {
+              const next = new Set(prev);
+              if (next.has(p)) next.delete(p); else next.add(p);
+              return next;
+            });
+          }}
+          expandedWeeks={expandedWeeks}
+          onToggleWeek={(w) => {
+            setExpandedWeeks(prev => {
+              const next = new Set(prev);
+              if (next.has(w)) next.delete(w); else next.add(w);
+              return next;
+            });
+          }}
+          onExpandAll={() => {
+            const all = new Set(grouped.map(g => g.period_no).filter(p => p != null));
+            setExpandedPeriods(all);
+          }}
+          onCollapseAll={() => {
+            setExpandedPeriods(new Set());
+            setExpandedWeeks(new Set());
+          }}
+          onJumpPeriod={(p) => {
+            setExpandedPeriods(prev => new Set([...prev, p]));
+            setTimeout(() => {
+              const el = document.getElementById(`kpi-per${p}`);
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 60);
+          }}
+          onEscape={() => setExpandedWeeks(new Set())}
+          todayISO={today}
+          workerRangeTotals={workerRangeTotals}
+        />
+      ) : null}
+    </>
+  );
+
+  // ── Right rail content (below QuickPanel) ──
+  // ContextRail (v5): alarms (empty when healthy) · coverage (merged
+  // legend + worker-weeks unit note) · OT watch · Pipeline ▸ disclosure.
+  const railBelowQuickPanel = tab === "labor" && loadState === "ok" && data?.account_state !== "salaried_only" ? (
+    <ContextRail
+      filteredActuals={filteredActuals}
+      totals={totals}
+      coverageCounts={coverageCounts}
+      freshness={freshness}
+      freshnessHours={freshnessH}
+      data={data}
+      workers={data?.workers}
+      workerRangeTotals={workerRangeTotals}
+      redact={redact}
+    />
+  ) : null;
+
   return (
     <div className="kpi-app" data-density={isCompact ? "compact" : undefined}>
       <div className="kpi-wrap">
-        <div className="kpi-cmd" role="banner">
-          <div className="kpi-cmd-title">KPI Dashboard</div>
-          <div className="kpi-cmd-div" aria-hidden="true" />
-          <label className="sr-only" htmlFor="kpi-account">Account</label>
-          <select
-            id="kpi-account"
-            className="kpi-cmd-select"
-            value={account}
-            onChange={(e) => setParams({ account: e.target.value, workers: "", view: "" })}
-          >
-            {ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <div className="kpi-cmd-r">
-            <span className="kpi-cmd-chip" title={fmtTimestamp(freshness?.last_walk_at) || "no successful walk"}>
-              <span className={`kpi-cmd-chip-dot ${freshnessTint(freshnessH)}`} aria-hidden="true" />
-              {freshnessH != null ? `${freshnessH.toFixed(1)}h ago` : "no data"}
-            </span>
-          </div>
-        </div>
-
-        <nav className="kpi-tabs" role="tablist" aria-label="KPI sections">
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              role="tab"
-              aria-selected={t.key === tab}
-              className={`kpi-tab ${t.key === tab ? "kpi-tab-active" : ""} ${!t.enabled ? "kpi-tab-soon" : ""}`}
-              disabled={!t.enabled}
-              onClick={() => t.enabled && setParam("tab", t.key)}
-            >
-              {t.label}
-              {!t.enabled && <span className="kpi-tab-soon-chip">soon</span>}
-            </button>
-          ))}
-        </nav>
-
-        <div className="kpi-content">
-          {tab === "overview" ? (
-            <div>
+        <Shell
+          account={account}
+          fiscal={fiscalCtx}
+          freshness={freshness}
+          activeTab={tab}
+          onTabClick={(k) => setParam("tab", k)}
+          printScopeText={vdefLine}
+          folioRail={<FolioRail activeAccount={account} onPickAccount={onPickAccount} />}
+          scopeBand={
+            !isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 ? (
+              <ScopeBand
+                start={start}
+                end={end}
+                lastPreset={lastPreset}
+                onDateChange={(which, iso) => { setLastPreset(null); setParam(which, iso); }}
+                onRangeChange={(s, e) => { setLastPreset(null); setParams({ start: s, end: e }); }}
+                onPresetClick={applyPreset}
+                hasPeriods={!!data?.account_periods?.length}
+                workerRoster={workerRoster}
+                selectedWorkers={selectedWorkers}
+                onWorkersChange={workersOnChangeSet}
+                views={views}
+                activeView={activeView}
+                onPickView={(id) => setParams({ view: id ? String(id) : "", start: "", end: "", workers: "", redact: "" })}
+                onSaveView={() => setSaveDialog({ mode: "new", initialName: "" })}
+                vdefLine={vdefLine}
+              />
+            ) : null
+          }
+          main={
+            tab === "overview" ? (
               <div className="kpi-state">
                 <div className="kpi-state-title">Overview</div>
                 <div className="kpi-state-desc">Overview design is an open ruling (spec §13.4). Placeholder for now.</div>
               </div>
-            </div>
-          ) : tab === "labor" ? (
-            <div>
-              {/* ── C4.3 saved-view pill row ──────────────── */}
-              {!isSalaried && viewsLoaded && (
-                <div className="kpi-view-pills" role="toolbar" aria-label="Saved views">
-                  {views.length === 0 && (
-                    <span className="kpi-view-empty">No saved views for {account} yet.</span>
-                  )}
-                  {views.map(v => {
-                    const isActive = v.id === activeViewId;
-                    return (
-                      <button
-                        key={v.id}
-                        type="button"
-                        className={`kpi-view-pill ${isActive ? "kpi-view-pill-active" : ""} ${isActive && isDirty ? "kpi-view-pill-dirty" : ""}`}
-                        onClick={() => setParams({ view: String(v.id), start: "", end: "", workers: "", redact: "" })}
-                        title={v.is_shared ? `Shared by ${v.owner_email}` : "Personal view"}
-                      >
-                        {v.name}
-                        {isActive && isDirty && <span className="kpi-view-pill-dirty-dot" aria-label="unsaved changes">•</span>}
-                        {v.is_shared && !v.is_owner && <span className="kpi-view-pill-shared" aria-label="shared">↝</span>}
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    className="kpi-view-pill kpi-view-pill-save"
-                    onClick={() => setSaveDialog({ mode: "new", initialName: "" })}
-                    disabled={!hasData}
-                  >
-                    + Save
-                  </button>
-                  {viewError && <span className="kpi-view-error">{viewError}</span>}
-                </div>
+            ) : tab === "labor" ? mainContent : (
+              <div className="kpi-state"><div className="kpi-state-title">Section coming soon</div></div>
+            )
+          }
+          rail={
+            <>
+              {tab === "labor" && loadState === "ok" && data.account_state !== "salaried_only" && (
+                <QuickPanel
+                  weekCount={grouped.length}
+                  workerWeekCount={filteredActuals.length}
+                  redact={redact}
+                  onToggleRedact={(next) => {
+                    setParam("redact", next ? "1" : "");
+                    setLiveMsg(next ? "Names hidden on screen and in export." : "Names shown.");
+                  }}
+                  exportHref={exportHref()}
+                  onCopyLink={() => setLiveMsg("Copied link to this exact view to clipboard.")}
+                  onExport={(href) => {
+                    // M4: file downloads via anchor; we raise a toast for
+                    // acknowledgement and, if a real request took >400ms,
+                    // hint at it. For an anchor download we can't measure
+                    // the transfer, so we show a fixed toast.
+                    setToast({
+                      message: redact ? "Export ready · names redacted." : "Export ready.",
+                      tone: "info",
+                      durationMs: 4000,
+                    });
+                    setLiveMsg(redact ? "Export downloading with names redacted." : "Export downloading.");
+                  }}
+                />
               )}
-
-              {/* Active view line: resolved range + edit + dirty actions */}
-              {activeView && resolvedActiveRange && (
+              {railBelowQuickPanel}
+              {activeView && isDirty && (
                 <div className="kpi-view-active">
                   <span className="kpi-view-active-name">{activeView.name}</span>
-                  <span className="kpi-view-active-sep">·</span>
-                  <span className="kpi-view-active-mode">
-                    {activeView.date_mode === "preset"
-                      ? `${PRESET_LABELS[activeView.date_preset] || activeView.date_preset} (${fmtDate(resolvedActiveRange.start)} – ${fmtDate(resolvedActiveRange.end)})`
-                      : `Fixed (${fmtDate(activeView.date_from)} – ${fmtDate(activeView.date_to)})`}
+                  <span className="kpi-view-dirty-actions">
+                    <span className="kpi-view-dirty-tag">unsaved</span>
+                    {activeView.is_owner && (
+                      <button type="button" className="kpi-btn-secondary" onClick={updateActiveView} disabled={savingView}>Update</button>
+                    )}
+                    <button type="button" className="kpi-btn-secondary" onClick={() => setSaveDialog({ mode: "new", initialName: `${activeView.name} (copy)` })} disabled={savingView}>Save as new</button>
                   </span>
-                  <span className="kpi-view-active-sep">·</span>
-                  <span>{activeView.worker_ids ? `${activeView.worker_ids.length} workers` : "all workers"}</span>
-                  <span className="kpi-view-active-sep">·</span>
-                  <span>{activeView.redact ? "names off" : "names on"}</span>
-                  {activeView.is_shared && <><span className="kpi-view-active-sep">·</span><span>shared</span></>}
                   {activeView.is_owner && (
-                    <button type="button" className="kpi-view-linkbtn" onClick={() => setEditDialog(activeView)}>
-                      Edit
-                    </button>
-                  )}
-                  {activeView.is_owner && (
-                    <button type="button" className="kpi-view-linkbtn kpi-view-linkbtn-danger" onClick={() => setConfirmDelete(activeView)}>
-                      Delete
-                    </button>
-                  )}
-                  {isDirty && (
-                    <span className="kpi-view-dirty-actions">
-                      <span className="kpi-view-dirty-tag">unsaved changes</span>
-                      {activeView.is_owner && (
-                        <button type="button" className="kpi-btn-secondary" onClick={updateActiveView} disabled={savingView}>
-                          Update
-                        </button>
-                      )}
-                      <button type="button" className="kpi-btn-secondary" onClick={() => setSaveDialog({ mode: "new", initialName: `${activeView.name} (copy)` })} disabled={savingView}>
-                        Save as new
-                      </button>
-                    </span>
+                    <>
+                      <button type="button" className="kpi-view-linkbtn" onClick={() => setEditDialog(activeView)}>Edit</button>
+                      <button type="button" className="kpi-view-linkbtn kpi-view-linkbtn-danger" onClick={() => setConfirmDelete(activeView)}>Delete</button>
+                    </>
                   )}
                 </div>
               )}
+            </>
+          }
+        />
 
-              {/* ── C4.1 consolidated parameter strip ──────── */}
-              {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
-                <div className="kpi-param-strip" role="group" aria-label="Report parameters">
-                  <div className="kpi-param-dates">
-                    <label className="sr-only" htmlFor="kpi-start">Start</label>
-                    <input
-                      id="kpi-start" type="date" className="kpi-param-date"
-                      value={start} max={end}
-                      onChange={(e) => { setLastPreset(null); setParam("start", e.target.value); }}
-                    />
-                    <span aria-hidden="true" className="kpi-param-arrow">→</span>
-                    <label className="sr-only" htmlFor="kpi-end">End</label>
-                    <input
-                      id="kpi-end" type="date" className="kpi-param-date"
-                      value={end} min={start}
-                      onChange={(e) => { setLastPreset(null); setParam("end", e.target.value); }}
-                    />
-                  </div>
-                  <div className="kpi-param-presets">
-                    {PRESET_KEYS.map(k => (
-                      <button
-                        key={k} type="button"
-                        className={`kpi-preset ${lastPreset === k ? "kpi-preset-active" : ""}`}
-                        onClick={() => applyPreset(k)}
-                        disabled={(k === "this_period" || k === "last_period") && !data?.account_periods?.length}
-                      >
-                        {PRESET_LABELS[k]}
-                      </button>
-                    ))}
-                  </div>
-                  <details className="kpi-param-workers">
-                    <summary>
-                      Workers · {shownWorkers === totalWorkersInRange
-                        ? `all ${totalWorkersInRange}`
-                        : `${shownWorkers} of ${totalWorkersInRange}`}
-                    </summary>
-                    <div className="kpi-param-workers-body">
-                      <div className="kpi-param-workers-actions">
-                        <button type="button" className="kpi-preset" onClick={() => setParam("workers", "")}>All</button>
-                        <button type="button" className="kpi-preset" onClick={() => setParam("workers", "__none__")}>None</button>
-                      </div>
-                      <div className="kpi-param-workers-list">
-                        {workerRoster.map(w => {
-                          const checked = !selectedWorkers || (selectedWorkers.size === 0) || selectedWorkers.has(w.id);
-                          const currentSet = () => {
-                            if (!selectedWorkers) return new Set(workerRoster.map(x => x.id));
-                            if (selectedWorkers.size === 0 || [...selectedWorkers][0] === "__none__") return new Set();
-                            return new Set(selectedWorkers);
-                          };
-                          return (
-                            <label key={w.id} className="kpi-param-workers-item">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  const cur = currentSet();
-                                  if (e.target.checked) cur.add(w.id);
-                                  else                  cur.delete(w.id);
-                                  const value = cur.size === 0 ? "__none__"
-                                              : cur.size === workerRoster.length ? ""
-                                              : [...cur].join(",");
-                                  setParam("workers", value);
-                                }}
-                              />
-                              <span>{w.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </details>
-                  <button
-                    type="button"
-                    className={`kpi-redact-toggle ${redact ? "kpi-redact-on" : ""}`}
-                    aria-pressed={redact}
-                    onClick={() => setParam("redact", redact ? "" : "1")}
-                    title={redact ? "Names hidden - click to show" : "Names shown - click to hide"}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      {redact ? (
-                        <>
-                          <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a19.66 19.66 0 0 1 5.11-5.94"/>
-                          <path d="M9.9 4.24A10.83 10.83 0 0 1 12 4c7 0 11 8 11 8a19.5 19.5 0 0 1-2.16 3.19"/>
-                          <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
-                          <line x1="1" y1="1" x2="23" y2="23"/>
-                        </>
-                      ) : (
-                        <>
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/>
-                          <circle cx="12" cy="12" r="3"/>
-                        </>
-                      )}
-                    </svg>
-                    <span>{redact ? "Names hidden" : "Names shown"}</span>
-                  </button>
-                  <div className="kpi-param-spacer" />
-                  <span className="kpi-param-rowcount" aria-live="polite">
-                    {filteredActuals.length} row{filteredActuals.length === 1 ? "" : "s"}
-                  </span>
-                  <a className="kpi-btn-secondary" href={exportHref()} download>
-                    Export
-                  </a>
-                </div>
-              )}
-
-              {/* C5.5 name-availability banner. Silent when all workers
-                  resolve. States the actual missing count when some do
-                  not - implying-none-do is misleading once /users lands. */}
-              {!isSalaried && loadState === "ok" && data?.name_availability && data.name_availability.total > 0 && data.name_availability.resolved < data.name_availability.total && (
-                <div className="kpi-note-info" role="status">
-                  {data.name_availability.resolved === 0
-                    ? data.name_availability.reason === "users_table_empty_or_unreachable"
-                      ? <>Names unavailable: the users walk has not populated <code>rippling_raw_users</code> for the {data.name_availability.total} workers in scope. Falling back to numbers and titles. This resolves on the next successful users walk.</>
-                      : <>Names unavailable: none of the {data.name_availability.total} workers in scope have a canonical name field. Falling back to numbers and titles.</>
-                    : <>{data.name_availability.total - data.name_availability.resolved} of {data.name_availability.total} workers do not resolve to a canonical name and render as numbers.</>}
-                </div>
-              )}
-
-              <div className="kpi-metrics">
-                <div className="kpi-metric">
-                  <div className="kpi-metric-label">Worker-weeks</div>
-                  <div className="kpi-metric-value">{isSalaried ? "—" : (filteredActuals.length || 0)}</div>
-                  <div className="kpi-metric-sub">rows in range</div>
-                </div>
-                <div className="kpi-metric">
-                  <div className="kpi-metric-label">Hours toward OT threshold</div>
-                  <div className="kpi-metric-value">{isSalaried ? "—" : fmtHrs(totals.hours_regular + totals.hours_double_time)}</div>
-                  <div className="kpi-metric-sub">reg + holiday (per week: cap 40 before OT triggers)</div>
-                </div>
-                <div className="kpi-metric">
-                  <div className="kpi-metric-label">Overtime hours</div>
-                  <div className="kpi-metric-value">{isSalaried ? "—" : fmtHrs(totals.hours_overtime)}</div>
-                  <div className="kpi-metric-sub">1.5x rate</div>
-                </div>
-                <div className="kpi-metric kpi-metric-soon">
-                  <div className="kpi-metric-label">Budget / variance</div>
-                  <div className="kpi-metric-value">—</div>
-                  <div className="kpi-metric-sub">reserved (spec §8.5)</div>
-                </div>
-              </div>
-
-              {loadState === "ok" && data.account_state === "salaried_only" ? (
-                <div className="kpi-state">
-                  <div className="kpi-state-title">Salaried-only account</div>
-                  <div className="kpi-state-desc">{data.account_state_message}</div>
-                </div>
-              ) : loadState === "loading" ? (
-                <div className="kpi-state"><div className="kpi-state-title">Loading labor data...</div></div>
-              ) : loadState === "error" ? (
-                <div className="kpi-state">
-                  <div className="kpi-state-title">Could not load labor data</div>
-                  <div className="kpi-state-desc">Nothing changed. Category: {errorMsg}</div>
-                  <button className="kpi-state-cta" onClick={() => setParam("_r", Date.now())}>Retry</button>
-                </div>
-              ) : !filteredActuals.length ? (
-                <div className="kpi-state">
-                  <div className="kpi-state-title">No labor rows in range</div>
-                  <div className="kpi-state-desc">
-                    {selectedWorkers && selectedWorkers.size > 0
-                      ? `Selected workers have no rows in the current range. Try clearing the worker filter or widening the dates.`
-                      : `${account} has no labor_actuals rows between ${start} and ${end}.`}
-                  </div>
-                </div>
-              ) : (
-                <div className="kpi-table-wrap">
-                  <table className="kpi-table" role="table" aria-label={`Labor for ${account}`}>
-                    <thead role="rowgroup">
-                      <tr role="row">
-                        <th scope="col" role="columnheader">Week</th>
-                        <th scope="col" role="columnheader">Coverage</th>
-                        <th scope="col" role="columnheader" className="kpi-num">Regular</th>
-                        <th scope="col" role="columnheader" className="kpi-num">OT 1.5x</th>
-                        <th scope="col" role="columnheader" className="kpi-num">Holiday 2x</th>
-                        <th scope="col" role="columnheader" className="kpi-num kpi-col-nodol">Unpriced</th>
-                        <th scope="col" role="columnheader" className="kpi-num">Dollars</th>
-                      </tr>
-                    </thead>
-                    <tbody role="rowgroup">
-                      {grouped.map((g) => (
-                        <Fragment key={g.key}>
-                          <tr className="kpi-period-header" role="row">
-                            <td colSpan={7} role="cell">
-                              FY{g.fiscal_year || "?"} · Period {g.period_no || "?"}
-                              {/* Only show the pre-floor explanation when the period actually
-                                  contains unpriced pre-floor weeks. C6.1 loader backfills pre-floor
-                                  dollars, so a period whose weeks are all >= FLOOR should never
-                                  render this - the sentence would be false. */}
-                              {periodsIsAllHoursOnly.has(g.key) && g.weeks.every(w => w.week_start < DOLLAR_COVERAGE_FLOOR) && (
-                                <span className="kpi-period-note">
-                                  Dollars begin at the 2026-04-20 pay run (D35). Earlier periods are hours-only by design; the P&L upload is authoritative for these dollars.
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                          {g.weeks.map((w) => {
-                            const isUnknown = w.coverage_state === "unknown";
-                            const isHoursOnly = w.coverage_state === "hours_only";
-                            const rowClass =
-                              w.coverage_state === "complete"   ? "kpi-row-complete" :
-                              w.coverage_state === "partial"    ? "kpi-row-partial"  :
-                              w.coverage_state === "hours_only" ? "kpi-row-hours-only" :
-                              w.coverage_state === "unknown"    ? "kpi-row-unknown" :
-                                                                  "kpi-row-no-labor";
-                            const isExpanded = expandedWeeks.has(w.week_start);
-                            return (
-                              <Fragment key={`w-${w.week_start}`}>
-                                <tr className={`kpi-row ${rowClass}`} role="row">
-                                  <td data-label="Week">
-                                    <button
-                                      type="button"
-                                      className="kpi-row-btn"
-                                      aria-expanded={isExpanded}
-                                      aria-controls={`detail-${w.week_start}`}
-                                      onClick={() => {
-                                        const next = new Set(expandedWeeks);
-                                        if (isExpanded) next.delete(w.week_start); else next.add(w.week_start);
-                                        setExpandedWeeks(next);
-                                      }}
-                                    >
-                                      <span className="kpi-row-caret" aria-hidden="true">›</span>
-                                      {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
-                                    </button>
-                                  </td>
-                                  <td data-label="Coverage"><CoverageBadge state={w.coverage_state} /></td>
-                                  {isUnknown ? (
-                                    <td colSpan={5} className="kpi-row-spanning" data-label="Status">No presence walk covers this week.</td>
-                                  ) : isHoursOnly ? (
-                                    <td colSpan={5} className="kpi-row-spanning" data-label="Status">
-                                      Hours known, dollars not available. {fmtHrs(w.hours_without_dollars)} hrs unpriced.
-                                    </td>
-                                  ) : (
-                                    <>
-                                      <td data-label="Regular" className="kpi-num"><CellHours v={w.hours_regular} coverage_state={w.coverage_state} /></td>
-                                      <td data-label="OT 1.5x" className="kpi-num"><CellHours v={w.hours_overtime} coverage_state={w.coverage_state} /></td>
-                                      <td data-label="Holiday 2x" className="kpi-num"><CellHours v={w.hours_double_time} coverage_state={w.coverage_state} /></td>
-                                      <td data-label="Unpriced" className="kpi-num kpi-col-nodol"><CellHours v={w.hours_without_dollars > 0 ? w.hours_without_dollars : null} coverage_state={w.coverage_state} /></td>
-                                      <td data-label="Dollars" className="kpi-num"><CellDollars v={w.amount} coverage_state={w.coverage_state} /></td>
-                                    </>
-                                  )}
-                                </tr>
-                                {isExpanded && (
-                                  <tr id={`detail-${w.week_start}`} className="kpi-detail-row">
-                                    <td colSpan={7}>
-                                      {w.worker_rows.map((wr) => {
-                                        const meta = data.workers?.[wr.worker_id];
-                                        const label = workerLabel(meta, wr.worker_id, redact);
-                                        return (
-                                          <div key={wr.worker_id} className="kpi-worker-row">
-                                            <span className="kpi-worker-name">{label}</span>
-                                            <span>reg {fmtHrs(wr.hours_regular)}</span>
-                                            <span>ot {fmtHrs(wr.hours_overtime)}</span>
-                                            <span>hol {fmtHrs(wr.hours_double_time)}</span>
-                                            <span>no$ {fmtHrs(wr.hours_without_dollars)}</span>
-                                            <span>{fmt$(wr.amount)}</span>
-                                            <span className="kpi-worker-cov">{wr.coverage_state}</span>
-                                          </div>
-                                        );
-                                      })}
-                                    </td>
-                                  </tr>
-                                )}
-                              </Fragment>
-                            );
-                          })}
-                          <tr className="kpi-period-subtotal" role="row">
-                            <td data-label="Subtotal" colSpan={2} role="cell">Period {g.period_no} subtotal</td>
-                            <td data-label="Regular"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_regular)}</td>
-                            <td data-label="OT 1.5x"    className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_overtime)}</td>
-                            <td data-label="Holiday 2x" className="kpi-num" role="cell">{fmtHrs(g.subtotal.hours_double_time)}</td>
-                            <td data-label="Unpriced" className="kpi-num kpi-col-nodol" role="cell">{g.subtotal.hours_without_dollars > 0 ? fmtHrs(g.subtotal.hours_without_dollars) : "—"}</td>
-                            <td data-label="Dollars"    className="kpi-num" role="cell">{fmt$(g.subtotal.amount)}</td>
-                          </tr>
-                        </Fragment>
-                      ))}
-                      {grand && (
-                        <tr className="kpi-grand-total" role="row">
-                          <td data-label="Grand total" colSpan={2} role="cell"><strong>{grandLabel}</strong></td>
-                          <td data-label="Regular"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_regular)}</strong></td>
-                          <td data-label="OT 1.5x"    className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_overtime)}</strong></td>
-                          <td data-label="Holiday 2x" className="kpi-num" role="cell"><strong>{fmtHrs(grand.hours_double_time)}</strong></td>
-                          <td data-label="Unpriced" className="kpi-num kpi-col-nodol" role="cell"><strong>{grand.hours_without_dollars > 0 ? fmtHrs(grand.hours_without_dollars) : "—"}</strong></td>
-                          <td data-label="Dollars"    className="kpi-num" role="cell"><strong>{fmt$(grand.amount)}</strong></td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="kpi-state"><div className="kpi-state-title">Section coming soon</div></div>
-          )}
-
-          {tab === "labor" && loadState === "ok" && data.account_state !== "salaried_only" && (
-            <aside className="kpi-rail" aria-label="Summary rail">
-              <div className="kpi-rail-card">
-                <div className="kpi-rail-title">Range total</div>
-                <div className="kpi-rail-big">{fmt$(totals.amount)}</div>
-                <div className="kpi-rail-sub">
-                  {account} · {filteredActuals.length} worker-weeks
-                  {selectedWorkers && selectedWorkers.size > 0 && totalWorkersInRange > 0 && (
-                    <span> · {shownWorkers} of {totalWorkersInRange} workers</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="kpi-rail-card">
-                <div className="kpi-rail-title">Alarms</div>
-                <div className={`kpi-alarm ${freshnessH != null && freshnessH < 30 ? "kpi-alarm-ok" : freshnessH != null && freshnessH < 54 ? "kpi-alarm-warning" : "kpi-alarm-danger"}`}>
-                  <div className="kpi-alarm-title">Data freshness</div>
-                  <div className="kpi-alarm-desc">
-                    {freshnessH != null ? `${freshnessH.toFixed(1)}h since last successful pay-segments walk` : "no successful walk on record"}
-                  </div>
-                </div>
-                {coverageCounts.unknown > 0 && (
-                  <div className="kpi-alarm kpi-alarm-danger">
-                    <div className="kpi-alarm-title">Unknown weeks</div>
-                    <div className="kpi-alarm-desc">{coverageCounts.unknown} rows in the unknown state (presence stale)</div>
-                  </div>
-                )}
-                {totals.hours_without_dollars > 0 && (
-                  <div className="kpi-alarm kpi-alarm-warning">
-                    <div className="kpi-alarm-title">Unpriced hours</div>
-                    <div className="kpi-alarm-desc">{fmtHrs(totals.hours_without_dollars)} hrs known but no pay-segment coverage</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="kpi-rail-card">
-                <div className="kpi-rail-title">Pipeline health</div>
-                {data.unmapped_names?.length > 0 && (
-                  <div className="kpi-alarm kpi-alarm-warning">
-                    <div className="kpi-alarm-title">Unmapped earning types: {data.unmapped_names.length}</div>
-                    <div className="kpi-alarm-desc">D37 signal - inspect earning_type_unmapped.</div>
-                  </div>
-                )}
-                {(data.unattributed?.length || 0) > 0 && (
-                  <div className="kpi-alarm kpi-alarm-warning">
-                    <div className="kpi-alarm-title">Unattributed groups: {data.unattributed.length}</div>
-                    <div className="kpi-alarm-desc">Portfolio-wide segments with no account attribution (N5).</div>
-                  </div>
-                )}
-                {!data.unmapped_names?.length && !data.unattributed?.length && (
-                  <div className="kpi-alarm kpi-alarm-ok">
-                    <div className="kpi-alarm-title">All clear</div>
-                    <div className="kpi-alarm-desc">Zero unmapped earning types, zero unattributed groups.</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="kpi-rail-card">
-                <div className="kpi-rail-title">Coverage (worker-weeks in range)</div>
-                <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.complete}</span><CoverageBadge state="complete" /><span className="kpi-cov-desc">every entry has dollars</span></div>
-                <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.partial}</span><CoverageBadge state="partial" /><span className="kpi-cov-desc">some entries lack dollars</span></div>
-                <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.hours_only}</span><CoverageBadge state="hours_only" /><span className="kpi-cov-desc">before 2026-04-20 floor (D35)</span></div>
-                <div className="kpi-cov-row"><span className="kpi-cov-count">{coverageCounts.unknown}</span><CoverageBadge state="unknown" /><span className="kpi-cov-desc">no successful presence walk</span></div>
-                <div className="kpi-cov-note">Counts are labor_actuals rows (worker-weeks), not aggregated table rows on screen.</div>
-              </div>
-            </aside>
-          )}
-        </div>
       </div>
 
       {/* ── Save view dialog ─────────────────────────────── */}
@@ -1098,10 +965,12 @@ export default function KpiLaborPage() {
         />
       )}
       {/* ── Confirm delete ───────────────────────────────── */}
+      {/* B1: the confirm shows anyway but the actual delete flow raises
+          an undo toast for 6s. */}
       {confirmDelete && (
         <ConfirmDialog
           title="Delete saved view?"
-          message={<>Delete <strong>{confirmDelete.name}</strong>? This cannot be undone.</>}
+          message={<>Delete <strong>{confirmDelete.name}</strong>? You can undo for 6 seconds.</>}
           confirmLabel="Delete"
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => deleteView(confirmDelete)}
@@ -1109,6 +978,12 @@ export default function KpiLaborPage() {
           disabled={savingView}
         />
       )}
+
+      {/* ── B10 live region · always mounted, silent when empty ── */}
+      <div aria-live="polite" aria-atomic="true" className="kpi-sr-live">{liveMsg}</div>
+
+      {/* ── P10/P11 toast host (M2 save, M4 export, B1 undo) ─── */}
+      <ToastHost toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

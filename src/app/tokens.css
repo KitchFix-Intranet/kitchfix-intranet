@@ -228,6 +228,11 @@
   --kpi-accent:        var(--n-700);
   --kpi-accent-strong: var(--n-800);
   --kpi-accent-tint:   var(--navy-50);
+
+  /* Chart series color - HOLIDAY (D2, spec §3.5 F14). Violet reserved
+     for the chart series; NEVER a state. If a module later claims
+     purple as its accent, no collision - they never share a surface. */
+  --chart-hol: #7B5CD6;
 }
 
 /* Density mode - remaps SEMANTIC tokens only (primitives stay fixed). Compact branch. */
