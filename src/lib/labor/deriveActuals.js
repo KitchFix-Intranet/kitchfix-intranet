@@ -4,6 +4,15 @@
 // the raw Rippling tables, presence, earning_type_map, and the department
 // map. Never calls the Rippling API; Postgres only.
 //
+// C6.1 partition: this derivation emits ZERO rows with
+// week_start < DOLLAR_COVERAGE_FLOOR. Pre-floor weeks are owned by the
+// report backfill loader (scripts/backfill_labor_from_rippling_report.mjs)
+// and would PK-collide with backfill rows on
+// (account_key, worker_id, week_start, line_code). The nightly derive
+// used to emit hours_only pre-floor rows here; C6.1 stops that.
+
+import { DOLLAR_COVERAGE_FLOOR } from "@/lib/kpi/floors";
+//
 // Design decisions this file encodes (playbook v0.7):
 //
 //   D36 - presence FILTERS. Sum every raw pay-segment row whose
@@ -425,7 +434,16 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
 
   // ── 10. Coverage state + emit rows ─────────────────────────
   const perAccount = new Map();
+  let skippedPreFloor = 0;
   for (const b of bucketRows.values()) {
+    // C6.1: pre-floor weeks are owned by the report backfill. Emit
+    // nothing here so a nightly re-derive cannot PK-collide with an
+    // existing report_backfill row on
+    // (account_key, worker_id, week_start, line_code).
+    if (b.week_start && b.week_start < DOLLAR_COVERAGE_FLOOR) {
+      skippedPreFloor++;
+      continue;
+    }
     let coverage_state;
     if (isStalePresence) {
       coverage_state = "unknown";
@@ -566,6 +584,7 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   }
   const rawMinusPresence = paySegsRaw.length - paySegs.length;
   log(`orphan metrics: raw_minus_presence=${rawMinusPresence} (retired observations, mostly rename-replaced) orphaned_labor_facts=${orphanedLaborFacts} (D36 signal - labor facts with zero live members)`);
+  log(`C6.1 floor: skipped ${skippedPreFloor} pre-floor bucket(s) (week_start < ${DOLLAR_COVERAGE_FLOOR}, owned by report_backfill loader)`);
 
   // ── 12. Build outputs ──────────────────────────────────────
   const accountResults = [];
