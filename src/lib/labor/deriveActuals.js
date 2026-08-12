@@ -11,7 +11,7 @@
 // (account_key, worker_id, week_start, line_code). The nightly derive
 // used to emit hours_only pre-floor rows here; C6.1 stops that.
 
-import { DOLLAR_COVERAGE_FLOOR } from "@/lib/kpi/floors";
+import { DOLLAR_COVERAGE_FLOOR } from "../kpi/floors.js";
 //
 // Design decisions this file encodes (playbook v0.7):
 //
