@@ -1,5 +1,7 @@
 # Service Calendar - Contract Billing Summary
 
+> **[2026-08-11 WITHDRAWAL NOTE]** All TBR-FL "75% of CPI" / "Nov-to-Nov" / "75% CPI escalation" claims in this doc (TBR-FL rows in the escalation summary tables, the escalation-clause bullet, the sample derivation table using "75% of ~3.5%/yr CPI", and the "75% of CPI floor/cap" list-entry) are WITHDRAWN as UNVERIFIED per REF-129 §B.4 withdrawal. Do NOT quote to the client, print in any deck, or use in internal projections. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Strike-through markers applied inline below.
+
 > **CANONICAL NOTICE (2026-07-16):** This doc is the narrative cross-account contract summary. Per-account page-cited truth (contract clause + page number + resolved figures) now lives in `docs/pricing-summit/CONTRACT_DIGEST_<KEY>.md` (11 accounts, complete). Where this summary and a digest disagree, **the digest wins.**
 >
 > **Money-model authority note (2026-07-09):** the settled money model lives in
@@ -98,7 +100,7 @@ service-fee amount. Accepted.
 |---|---|---|---|
 | **CIN - AZ** | $402,016 (2023 base, = 30% of budget estimate) | CPI-U Food Away from Home, Oct base, floor 2% / cap 5% | **The 30% service fee is why per-meal is billed at the post-SF invoice rate (70% of sticker).** $29.01 MLB x 0.70 = $20.31; $18.42 MiLB x 0.70 = $12.90. The "$29.01 vs $20.31 gap" is NOT a missing amendment - it is this mechanic. (Confirm no separate amendment exists; conversion-to-flat-fee conversation ongoing per ABR 2025, not executed.) Note (Q5 rename 2026-07-09): older text called $20.31 the "cost basis"; that's misleading - it's the per-meal invoice line, not COGS. Use "post-SF invoice rate" per SC_MONEY_MODEL.md. |
 | **TBJ - FL** | $452,812/yr | CPI Food Away from Home, one increase per year, Provider notice by Jan 31 | Service fee does NOT discount per-meal - both revenue streams run at full rate in parallel. **MFN/favored-pricing clause** (see open items). |
-| **TBR - FL (MiLB)** | $382,448 (2024 one-time front-load: $200K on signing + $182,448 by Feb 1 2024) | 75% of CPI Food Away from Home, Nov-to-Nov | MiLB per-meal rates carry a 25% discount "during the Term" to amortize the fee. **Renewal status for 2026 unconfirmed** (see open items). |
+| **TBR - FL (MiLB)** | $382,448 (2024 one-time front-load: $200K on signing + $182,448 by Feb 1 2024) | ~~75% of CPI Food Away from Home, Nov-to-Nov~~ **[WITHDRAWN 2026-08-11 - UNVERIFIED per REF-129 §B.4]** | MiLB per-meal rates carry a 25% discount "during the Term" to amortize the fee. **Renewal status for 2026 unconfirmed** (see open items). |
 
 ## Postseason - deferred to a later stage
 
@@ -430,9 +432,9 @@ The ~14% projection-vs-contract gap is internally consistent across all per-meal
 
 **Deposit / prepayment:** The MiLB $200K upfront is a deposit-like construct (paid on SOW signing). MiLB Catering Fees reduced by 25% during the Term to amortize the Service Fee. Section 6(c).
 
-**Per-meal rates (2024 base; subject to 75% of CPI annual adjustment):**
+**Per-meal rates (2024 base; ~~subject to 75% of CPI annual adjustment~~ **[WITHDRAWN 2026-08-11: 75%-of-CPI mechanic is UNVERIFIED - see REF-129 §B.4 withdrawal]**):**
 
-| Service | 2024 base | 2026 calculated (assuming 75% of ~3.5%/yr CPI for 2 yrs ≈ ~5.3% total) | Spreadsheet projection | Match? |
+| Service | 2024 base | ~~2026 calculated (assuming 75% of ~3.5%/yr CPI for 2 yrs ≈ ~5.3% total)~~ **[WITHDRAWN 2026-08-11 - basis UNVERIFIED per REF-129 §B.4]** | Spreadsheet projection | Match? |
 |---|---|---|---|---|
 | ML Breakfast | $32.98 | ~$34.73 | $35.63 | CLOSE (~2.6% above estimate; consistent with actual CPI rates) |
 | ML Lunch | $36.54 | ~$38.47 | $39.48 | CLOSE (~2.6%) |
@@ -450,7 +452,7 @@ The ~14% projection-vs-contract gap is internally consistent across all per-meal
 - MLB Extra MTO Sm/Med/Lrg ($5/$10/$15) - same pattern.
 - Extended Day Labor ($280 flat in actuals) - similar.
 
-**Escalation:** 75% of CPI-U Food Away from Home - Full Service Meals and Snacks (Nov-to-Nov). Section 6(c) ML SOW / Section 6(a)(v-vi) MiLB SOW. Adjusts both Base and Post service-fee rates.
+~~**Escalation:** 75% of CPI-U Food Away from Home - Full Service Meals and Snacks (Nov-to-Nov). Section 6(c) ML SOW / Section 6(a)(v-vi) MiLB SOW. Adjusts both Base and Post service-fee rates.~~ **[WITHDRAWN 2026-08-11 - DO NOT USE]** The 75%-of-CPI / Nov-to-Nov mechanic was a misreading of prior documentation and is not a verified contract term. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). See REF-129 §B.4 withdrawal note.
 
 **Term and scope:**
 - Initial Term: Jan 1, 2024 - Oct 1, 2026. ML and MiLB agreements have separate but parallel terms. Section 3 ML.
@@ -632,7 +634,7 @@ Spreadsheet rates pulled from `archive/SC_PRICE_COMPARISON.md` (Projection colum
 | TBJ - NY | Buffalo Bisons | Umpire | (no contract found) | $27.34 | NO CONTRACT |
 | TBJ - NY | Buffalo Bisons | Snack | (no contract found) | $0.00 | NO CONTRACT + placeholder price |
 | TBJ - NY | Buffalo Bisons | Shake | (no contract found) | $0.00 | NO CONTRACT + placeholder price |
-| TBR - FL | Major League | Breakfast | $32.98 (2024 base) | $35.63 | NO - 8% gap; consistent w/ 75% CPI escalation 2024-2026 |
+| TBR - FL | Major League | Breakfast | $32.98 (2024 base) | $35.63 | NO - 8% gap; ~~consistent w/ 75% CPI escalation 2024-2026~~ **[2026-08-11: 75%-CPI attribution WITHDRAWN as UNVERIFIED per REF-129 §B.4]** |
 | TBR - FL | Major League | Lunch | $36.54 (2024) | $39.48 | NO - 8% |
 | TBR - FL | Major League | Dinner | $36.54 (2024) | $39.48 | NO - 8% |
 | TBR - FL | Major League | Umpire Meal | $36.54 (2024) | $39.48 | NO - 8% |
@@ -679,7 +681,7 @@ item: what the contract says + what the schema lacks + suggested fix.
 
 2. **Deposit + discount triggered by deposit (TXR - AZ).** Contract specifies 20% deposit on Total Annual Services Fee that triggers a 20% per-meal discount. Schema has no deposit-tracking table or discount-applied-once-deposited semantic. Suggested fix: `sc_account_deposits` table with `account_key, year, deposit_amount, due_date_1, due_date_2, due_date_3, paid_date, triggers_discount_pct`.
 
-3. **Annual escalation clauses with CPI floor/cap.** CIN - AZ (2%/5%), CIN - OH (1%/4%), STL - MO (CPI no floor/cap), TBR - FL (75% of CPI), TBJ - FL (CPI, max 1/yr), TXR - AZ (built-in 2.5%/yr 2026 + 2027). Schema has no `sc_price_escalation_rules` table to record the per-account escalation method. Suggested fix: `sc_price_escalation_rules` with `account_key, escalation_type ('cpi'|'fixed_pct'|'cpi_capped'), base_year, cpi_series, floor_pct, cap_pct, fixed_pct, reference_month`.
+3. **Annual escalation clauses with CPI floor/cap.** CIN - AZ (2%/5%), CIN - OH (1%/4%), STL - MO (CPI no floor/cap), TBR - FL (~~75% of CPI~~ **[WITHDRAWN 2026-08-11 - UNVERIFIED per REF-129 §B.4]**), TBJ - FL (CPI, max 1/yr), TXR - AZ (built-in 2.5%/yr 2026 + 2027). Schema has no `sc_price_escalation_rules` table to record the per-account escalation method. Suggested fix: `sc_price_escalation_rules` with `account_key, escalation_type ('cpi'|'fixed_pct'|'cpi_capped'), base_year, cpi_series, floor_pct, cap_pct, fixed_pct, reference_month`.
 
 4. **Payment schedule separate from invoicing frequency.** Several contracts decouple the **invoicing** cadence (weekly/bi-monthly/monthly for cost reimbursement) from the **fixed-fee payment** cadence (quarterly Jupiter, 6-monthly TXR/STL-MO/CIN-OH, 7-installment 2025 CIN-OH including the Jan-2027 backloaded payment). Schema currently combines them. Suggested fix: split `sc_account_billing` into `sc_account_invoicing_cadence` (per-meal/cost reimbursement schedule) and `sc_account_fixed_fee_schedule` (installment table with `due_date, amount, type`).
 

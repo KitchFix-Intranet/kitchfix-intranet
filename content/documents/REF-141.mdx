@@ -34,6 +34,9 @@ relationships:
 
 # KITCHFIX PRICE BOOK - GENERATED DOCUMENT, DO NOT HAND-EDIT
 
+> **[2026-08-11 WITHDRAWAL NOTE]** The TBR-FL "Escalation" line ("75% x CPI-U Food Away - Full Service Meals & Snacks / SEFV01 / November reset") was WITHDRAWN 2026-08-11 as an unverified claim. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement. Both this MDX and the generator (`scripts/generate-price-book.mjs`) have been updated. See TBR-FL section below and REF-129 §B.4 withdrawal note.
+
+
 **Generated:** 2026-07-22 16:04:48Z by `scripts/generate-price-book.mjs`  
 **PG snapshot:** 2026-07-22T16:04:06.162Z  
 **Certified as of:** 2026-07-17 (see `STAGE3_CERTIFICATION_AUDIT.md`, this folder)  
@@ -266,7 +269,7 @@ Source: [`accounts/ACCOUNT_TBJ-NY.md` §2](accounts/ACCOUNT_TBJ-NY.md)
 
 **Money shape:** actuals_drive_invoice on both MLB and MiLB sides (separate cost centers). Boys & Girls Club runs as a second-client stream on the same commissary.  
 **2026 Service Fee / deposit:** Recurring MiLB Service Fee **$457,768** (2026 = $200,000 static installment 1 + $257,768 variable installment 2). MLB has no SF. 25% MiLB rate credit reduces MiLB per-meal to 75% of base.  
-**Escalation:** 75% x CPI-U Food Away - Full Service Meals & Snacks (CUUR0000SEFV01, sub-index), November reset. Per-meal rates auto-escalate; SF is SOW-gated (variable second installment set per year).  
+~~**Escalation:** 75% x CPI-U Food Away - Full Service Meals & Snacks (CUUR0000SEFV01, sub-index), November reset. Per-meal rates auto-escalate; SF is SOW-gated (variable second installment set per year).~~ **[WITHDRAWN 2026-08-11 - DO NOT USE]** The 75%-of-CPI / SEFV01 / November-reset mechanic was a misreading of prior documentation and is not a verified contract term. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Until that read happens, no escalation mechanic may be stated to the client, printed in any deck or proposal, or used in any internal comparison or projection. See REF-129 §B.4 withdrawal note.  
 **Notes:** BGC (Boys & Girls Club of Charlotte County) B&G Lunch = tax-exempt after-school supper program; contract runs Aug 2025 - May 2026 school year. See ACCOUNT_TBR-FL.md §2d.
 
 Source: [`accounts/ACCOUNT_TBR-FL.md` §2](accounts/ACCOUNT_TBR-FL.md)
