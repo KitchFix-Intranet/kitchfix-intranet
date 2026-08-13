@@ -292,7 +292,7 @@
 .kpi-btn-primary-v5 {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: var(--control-height); padding: 0 16px;
-  background: var(--action-primary-bg); color: var(--action-primary-fg);
+  background: var(--action-primary-bg); color: var(--action-primary-text);
   border: 0; border-radius: var(--rad-6);
   font: inherit; font-size: 13px; font-weight: 600;
   cursor: pointer;
@@ -416,6 +416,10 @@
   color: var(--kpi-accent); font: inherit; font-size: 12px; font-weight: 500;
   cursor: pointer;
 }
+.kpi-cal-foot-actions {
+  display: inline-flex; align-items: center; gap: var(--space-3);
+}
+.kpi-cal-foot-actions .kpi-btn-primary-v5:disabled { opacity: 0.45; cursor: not-allowed; }
 @media (max-width: 767px) {
   .kpi-cal-pop { min-width: 280px; padding: 10px 12px; }
   .kpi-cal-months { grid-template-columns: 1fr; gap: 12px; }
@@ -1272,6 +1276,9 @@
     flex: 0 0 auto;
   }
   .kpi-acct.on { border-color: var(--kpi-accent); }
+  /* v5 line ~475 mobile hero override - preserves display-tier weight
+     without crowding the smaller viewport. */
+  .kpi-hero-n { font-size: 32px; }
 }
 
 /* ── D2 · Push 2 - hero + 8-card grid + trend + table v5 grammar ──── */
@@ -1292,7 +1299,7 @@
   margin-bottom: 4px;
 }
 .kpi-hero-n {
-  font-size: var(--size-hero);
+  font-size: var(--size-display);
   font-weight: 800;
   color: var(--text-heading);
   letter-spacing: var(--track-tight);

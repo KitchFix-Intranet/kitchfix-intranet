@@ -33,7 +33,7 @@ import { TrendChart } from "./components/TrendChart";
 import { WeekTable } from "./components/WeekTable";
 import { ContextRail } from "./components/ContextRail";
 import {
-  StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateError,
+  StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
   StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired,
   errorCode,
 } from "./components/StateBoxes";
@@ -839,13 +839,30 @@ export default function KpiLaborPage() {
           onRetry={() => setParam("_r", Date.now())}
         />
       ) : loadState === "ok" && !filteredActuals.length ? (
+        // Fix 4 (D2.1) - three-way branch per spec 3.9 + v5 line ~1052:
+        //   worker filter active   -> StateEmptyFiltered
+        //   pipeline never derived -> StateEmptyFirstRun (keyed off
+        //                             derive_freshness.last_derive_at,
+        //                             not row count - the range being
+        //                             empty is a filter, not a pipeline
+        //                             failure)
+        //   otherwise              -> StateEmptyRange (the date range
+        //                             is a filter; one-tap Use FYTD)
         selectedWorkers && selectedWorkers.size > 0 ? (
           <StateEmptyFiltered
             workerCount={selectedWorkers.size}
             onClear={() => { setParam("workers", ""); setLiveMsg("Worker filter cleared."); setTimeout(focusHero, 60); }}
           />
-        ) : (
+        ) : !data?.derive_freshness?.last_derive_at ? (
           <StateEmptyFirstRun />
+        ) : (
+          <StateEmptyRange
+            onUseFYTD={() => {
+              applyPreset("fytd");
+              setLiveMsg("Range set to fiscal year to date.");
+              setTimeout(focusHero, 60);
+            }}
+          />
         )
       ) : loadState === "ok" && filteredActuals.length ? (
         <WeekTable
@@ -924,7 +941,10 @@ export default function KpiLaborPage() {
           printScopeText={vdefLine}
           folioRail={<FolioRail activeAccount={account} onPickAccount={onPickAccount} />}
           scopeBand={
-            !isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 ? (
+            // Fix 4 (D2.1) - band persists through empty and error
+            // states so the user can widen dates / clear filters / pick
+            // a view without dead-ending. Salaried gate unchanged.
+            !isSalaried && loadState === "ok" ? (
               <ScopeBand
                 start={start}
                 end={end}

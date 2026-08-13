@@ -32,6 +32,13 @@
   --font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;
   --size-micro:10px; --size-caption:12px; --size-body:14px; --size-subhead:17px; --size-h3:20px;
   --size-h2:24px; --size-h1:29px; --size-display:35px;
+  /* Leading (per-step line-height) - v5 lines 66-67. KPI consumers:
+     --lb-hero (Hero.n), --lb-h2 (MetricGrid.v), --lb-h3 (Shell cmd-t),
+     --lb-caption (Hero sub). Root-scoped so KPI resolves cleanly (H6). */
+  --lb-caption: calc(16/12);
+  --lb-h3: calc(24/20);
+  --lb-h2: calc(32/24);
+  --lb-hero: calc(40/35);
   --wt-regular:400; --wt-medium:500; --wt-semibold:600; --wt-bold:700; --wt-display:800;
   --lead-tight:1.1; --lead-snug:1.25; --lead-normal:1.5; --track-tight:-0.01em; --track-caps:0.06em;
   --num-tabular:tabular-nums;

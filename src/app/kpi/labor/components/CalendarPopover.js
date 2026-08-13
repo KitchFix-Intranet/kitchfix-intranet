@@ -83,7 +83,13 @@ function MonthPanel({ monthAnchor, startD, endD, onPick }) {
 
 export function CalendarPopover({ startISO, endISO, onCommit, disabled }) {
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(null);  // Date | null - first click while awaiting second
+  // Fix 5 (D2.1) - two staging slots, one commit path.
+  // pending: single endpoint clicked, awaiting the second
+  // staged:  both endpoints picked, awaiting Apply
+  // Nothing commits until Apply fires; Cancel/Escape/outside-click
+  // discards both. Matches v5 #calapply (lines 552 + 1748).
+  const [pending, setPending] = useState(null);
+  const [staged, setStaged] = useState(null);      // {start: Date, end: Date} | null
   const [anchor, setAnchor] = useState(() => startOfMonth(parseISO(startISO) || new Date()));
   const rootRef = useRef(null);
 
@@ -103,19 +109,31 @@ export function CalendarPopover({ startISO, endISO, onCommit, disabled }) {
   function close(commit, next) {
     setOpen(false);
     setPending(null);
+    setStaged(null);
     if (commit && next) {
       onCommit(isoOf(next.start), isoOf(next.end));
     }
   }
 
   function onPick(d) {
+    // A third click after a completed stage starts a fresh selection.
+    if (staged) {
+      setStaged(null);
+      setPending(d);
+      return;
+    }
     if (!pending) {
       setPending(d);
       return;
     }
     let s = pending, e = d;
     if (s > e) { const t = s; s = e; e = t; }
-    close(true, { start: s, end: e });
+    setStaged({ start: s, end: e });
+    setPending(null);
+  }
+
+  function apply() {
+    if (staged) close(true, staged);
   }
 
   const startD = parseISO(startISO);
@@ -123,6 +141,17 @@ export function CalendarPopover({ startISO, endISO, onCommit, disabled }) {
   const rangeLabel = startD && endD
     ? `${fmtDate(startISO)} - ${fmtDate(endISO)}`
     : "Pick date range";
+
+  // Visualization precedence: staged > pending > committed. Keeps
+  // both endpoints highlighted while the user reviews the Apply target.
+  const visStart = staged ? staged.start : (pending || startD);
+  const visEnd   = staged ? staged.end   : (pending ? null   : endD);
+  const canApply = !!staged;
+  const hintText = staged
+    ? "Review and Apply, or pick a new start date."
+    : pending
+      ? "Pick the end date."
+      : "Pick the start date.";
 
   return (
     <div className="kpi-cal-root" ref={rootRef}>
@@ -149,12 +178,22 @@ export function CalendarPopover({ startISO, endISO, onCommit, disabled }) {
             <button type="button" className="kpi-cal-navbtn kpi-cal-navbtn-right" onClick={() => setAnchor(a => addMonths(a, 1))} aria-label="Next month">›</button>
           </div>
           <div className="kpi-cal-months">
-            <MonthPanel monthAnchor={anchor} startD={pending || startD} endD={pending ? null : endD} onPick={onPick} />
-            <MonthPanel monthAnchor={addMonths(anchor, 1)} startD={pending || startD} endD={pending ? null : endD} onPick={onPick} />
+            <MonthPanel monthAnchor={anchor} startD={visStart} endD={visEnd} onPick={onPick} />
+            <MonthPanel monthAnchor={addMonths(anchor, 1)} startD={visStart} endD={visEnd} onPick={onPick} />
           </div>
           <div className="kpi-cal-foot">
-            <span className="kpi-cal-hint">{pending ? "Pick the end date." : "Pick the start date."}</span>
-            <button type="button" className="kpi-cal-cancel" onClick={() => close(false)}>Cancel</button>
+            <span className="kpi-cal-hint">{hintText}</span>
+            <span className="kpi-cal-foot-actions">
+              <button type="button" className="kpi-cal-cancel" onClick={() => close(false)}>Cancel</button>
+              <button
+                type="button"
+                className="kpi-btn kpi-btn-primary-v5"
+                onClick={apply}
+                disabled={!canApply}
+              >
+                Apply range
+              </button>
+            </span>
           </div>
         </div>
       )}
