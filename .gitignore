@@ -60,8 +60,16 @@ scripts/content/.dryrun-samples/
 # python3 scripts/_extract_sc_xlsx.py)
 scripts/_sc_extract.json
 
-# SC print artifacts — regenerated per PR via scripts/sc-print/gen-all-pdfs.mjs.
+# SC print artifacts - regenerated per PR via scripts/sc-print/gen-all-pdfs.mjs.
 # Never commit; attach to PR body instead. Post-#421 cleanup. Widened
 # 2026-07-14 to cover PNGs + nested subdirs + the -proto sibling.
 scripts/sc-print/artifacts/
 scripts/sc-print/artifacts-proto/
+
+# kpi-2 real-budgets loader inputs. The seed JSON and the 11 P&L
+# workbooks are Kevin's LOCAL client-financial files - never in the
+# public repo, never in a commit, never in a PR. Belt-and-suspenders
+# in case one is ever copied into the tree.
+fy2026_pnl_budget_seed.json
+*P_L*Clean.xlsx
+*P&L*Clean.xlsx
