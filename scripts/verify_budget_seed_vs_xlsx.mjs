@@ -81,37 +81,48 @@ const PNL_TAB = {
 const r2 = (v) => Math.round(Number(v || 0) * 100) / 100;
 // Fix C - filename tolerance. Downloaded copies commonly mangle
 // spaces/ampersands to underscores. Accept both spellings.
+// Fix F - skip Excel lock files (~$<name>.xlsx). Openpyxl / ExcelJS
+// crash on lock files with BadZipFile, and .find() below is
+// readdir-order dependent - a lock file that wins the race silently
+// misroutes an account. Filtering here removes the landmine.
+// Fix G - each file also carries a normalized name (letters/digits
+// only, others collapsed to single spaces). Per-account signatures
+// match against `norm` so an underscore-mangled folder still
+// resolves cleanly.
 const files = readdirSync(xlsxDir)
-  .filter(f => f.endsWith(".xlsx") && /2026[ _]P[&_]L/.test(f))
-  .map(f => ({ name: f, full: join(xlsxDir, f) }));
+  .filter(f => f.endsWith(".xlsx") && /2026[ _]P[&_]L/.test(f) && !f.startsWith("~$"))
+  .map(f => ({
+    name: f,
+    full: join(xlsxDir, f),
+    norm: f.replace(/[^A-Za-z0-9]+/g, " "),
+  }));
 
 if (files.length === 0) {
   console.error(`ERROR: no "*2026 P&L*.xlsx" files found in ${xlsxDir}`);
   process.exit(2);
 }
 
-// Match filename to account_key. Filenames encode the city + state; the
-// PNL_TAB values are stable stubs to search for.
+// Match filename to account_key. Signatures are plain space-separated
+// words matched against the normalized filename, so both current names
+// and underscore-mangled copies resolve to the right workbook.
 function fileForAccount(acct) {
   const stub = PNL_TAB[acct];
   if (!stub) return null;
-  // Filenames look like "CIN - Cincinnati, OH - 2026 P&L - Clean.xlsx".
-  // Match on a per-account signature that distinguishes each site.
   const sig = {
     "CIN - AZ":     "Goodyear",
     "CIN - KY":     "Louisville",
     "CIN - OH":     "Cincinnati",
     "STL - FL":     "Jupiter",
-    "STL - MO":     "St. Louis",   // full city name; 'Louis' alone collides with Louisville (CIN - KY)
+    "STL - MO":     "St Louis",     // 'Louis' alone collides with Louisville (CIN - KY)
     "TBJ - NY":     "Buffalo",
     "TBJ - FL":     "Dunedin",
     "TBR - FL":     "Port Charlotte",
     "TXR - AZ":     "Surprise",
-    "TXR - TX - H": "TXR - H",
-    "TXR - TX - V": "TXR - V",
+    "TXR - TX - H": "TXR H",
+    "TXR - TX - V": "TXR V",
   }[acct];
   if (!sig) return null;
-  const hit = files.find(f => f.name.includes(sig));
+  const hit = files.find(f => f.norm.includes(sig));
   return hit ? hit.full : null;
 }
 
