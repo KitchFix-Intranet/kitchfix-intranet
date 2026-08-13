@@ -103,13 +103,20 @@ export default function FinalizeOverlay({
     // Save active element as fallback (invoker may unmount before us).
     const prevActive = document.activeElement;
     const moveFocus = () => {
+      // PR-D1 (2026-08-13): focus the [data-autofocus] element when
+      // present (the primary CTA in confirm mode). Falls back to the
+      // first focusable. Keeps the trap intact - Tab still cycles the
+      // full set - but avoids putting the "primary treatment" focus
+      // ring on Cancel where it competes with the Finalize CTA.
       const focusables = focusableWithin(modalRef.current);
-      if (focusables.length > 0) {
-        firstFocusableRef.current = focusables[0];
-        focusables[0].focus();
-      } else {
+      if (focusables.length === 0) {
         modalRef.current?.focus();
+        return;
       }
+      firstFocusableRef.current = focusables[0];
+      const preferred = modalRef.current?.querySelector("[data-autofocus]");
+      const target = (preferred && focusables.includes(preferred)) ? preferred : focusables[0];
+      target.focus();
     };
     const raf = requestAnimationFrame(moveFocus);
 
@@ -185,13 +192,16 @@ export default function FinalizeOverlay({
         tabIndex={-1}
       >
         <div className="sc-finalize-modal-head">
-          <div className="sc-finalize-modal-kick">
-            <span>{headerKick}</span>
+          {/* PR-D1 (2026-08-13): "FINALIZE WEEK" eyebrow dropped -
+              the title says it. TEST MODE badge kept, moved beside
+              the title, saturation stepped down so it does not
+              compete with the primary CTA. */}
+          <div className="sc-finalize-modal-title-row">
+            <h3 id={titleId} className="sc-finalize-modal-title">{title}</h3>
             {isTest && (
               <span className="sc-finalize-testtag" aria-label="Test mode">Test mode</span>
             )}
           </div>
-          <h3 id={titleId} className="sc-finalize-modal-title">{title}</h3>
           <p className="sc-finalize-modal-sub">{sub}</p>
         </div>
 
@@ -207,15 +217,19 @@ export default function FinalizeOverlay({
                   <dt>Service week</dt>
                   <dd>{fmtWeekRange(weekStart, weekEnd)}</dd>
                 </div>
+                {/* PR-D1: mono reserved for money + aligned columns.
+                    Days-served + meals-and-snacks return to sans -
+                    they read looser in mono than the sans labels
+                    beside them. Only Pre-tax total keeps mono. */}
                 <div className="sc-finalize-row">
                   <dt>Days served</dt>
-                  <dd className="sc-finalize-num">
+                  <dd>
                     {typeof daysServed === "number" ? daysServed : "-"} of {totalDays || 7}
                   </dd>
                 </div>
                 <div className="sc-finalize-row">
                   <dt>Meals and snacks</dt>
-                  <dd className="sc-finalize-num">
+                  <dd>
                     {typeof totalMeals === "number" ? totalMeals.toLocaleString("en-US") : "-"}
                   </dd>
                 </div>
@@ -229,8 +243,10 @@ export default function FinalizeOverlay({
                 </div>
               </dl>
               <div className="sc-finalize-lock" role="note">
-                <b>This locks the week.</b> After this you cannot change these numbers.
-                Kevin, Joe, or Sebastian can unlock it.
+                <b className="sc-finalize-lock-lead">This locks the week.</b>
+                <span className="sc-finalize-lock-body">
+                  After this you cannot change these numbers. Kevin, Joe, or Sebastian can unlock it.
+                </span>
               </div>
             </div>
             <div className="sc-finalize-modal-foot">
@@ -245,6 +261,7 @@ export default function FinalizeOverlay({
                 type="button"
                 className="sc-finalize-btn sc-finalize-btn--go"
                 onClick={onConfirm}
+                data-autofocus="true"
               >
                 Finalize and send to billing
               </button>

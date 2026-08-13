@@ -150,35 +150,35 @@
   border-color: var(--status-today-ring);
 }
 
-/* PR-D additions (2026-08-11) - blocked chips, quiet done, failed banner. */
+/* PR-D additions (2026-08-11), PR-D1 polish (2026-08-13). */
 
-/* Blocked state: aggregate count + one chip per missing day. Each
-   chip is a real button that jumps to the day entry. Reading the
-   problem and starting to fix it are the same click (addendum §A1). */
-.sc-week-finalize-chips-label {
-  color: var(--text-muted);
-  font-size: var(--sc2-size-micro);
-}
-.sc-week-finalize-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-1) var(--space-3);
-  border: var(--sc2-border-thin) solid var(--status-needs-bd);
-  border-radius: var(--radius-cell);
-  background: var(--status-needs-subtle);
-  color: var(--status-needs-fg);
+/* Blocked state (PR-D1): single clickable count line replaces the
+   per-day chips. The chips were removed as triple-reporting - the
+   day tiles + rail already carry the missing-day identity and the
+   chips outweighed the button they gated. The count is now the
+   single clickable affordance and jumps to the first missing day. */
+.sc-week-finalize-jump {
   font-family: inherit;
-  font-weight: var(--sc2-wt-semibold);
   font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-medium);
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: var(--space-1) 0;
   cursor: pointer;
-  transition: border-color var(--motion-control);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border-default);
+  transition: color var(--motion-control), text-decoration-color var(--motion-control);
 }
-.sc-week-finalize-chip:hover {
-  border-color: var(--status-needs-strong);
+.sc-week-finalize-jump:hover {
+  color: var(--text-strong);
+  text-decoration-color: var(--text-subtle);
 }
-.sc-week-finalize-chip:focus-visible {
+.sc-week-finalize-jump:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-cell);
 }
 
 /* Quiet done state: caption-size, single line, no QBO link.
@@ -209,8 +209,58 @@
   flex: 0 0 var(--sc2-size-body);
 }
 
-/* Failed banner: the one state that keeps colour and weight
-   (addendum §A1). Red instructional wash; Retry + Unlock alongside. */
+/* Failed bar (PR-D1): one bordered container so the message, Retry,
+   and Unlock read as a single element aligned to the same right edge
+   the Finalize button uses. Prevents jitter when a row toggles
+   between ready and failed states. Red instructional per addendum
+   §A1's "the one state that keeps colour and weight". */
+.sc-week-finalize--push-failed .sc-week-finalize {
+  /* if ever nested; no-op today, kept for defensive scoping */
+}
+.sc-week-finalize-failbar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--status-overdue-subtle);
+  border: var(--sc2-border-thin) solid var(--status-overdue-bd);
+  color: var(--status-overdue-fg);
+}
+.sc-week-finalize-failbar-msg {
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-micro);
+  color: var(--status-overdue-fg);
+}
+.sc-week-finalize-failbar-action {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border: var(--sc2-border-thin) solid var(--status-overdue-bd);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--status-overdue-fg);
+  font-family: inherit;
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-micro);
+  cursor: pointer;
+  transition: border-color var(--motion-control), background var(--motion-control);
+}
+.sc-week-finalize-failbar-action:hover:not(:disabled) {
+  border-color: var(--status-overdue-strong);
+  background: var(--surface-sunken);
+}
+.sc-week-finalize-failbar-action:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.sc-week-finalize-failbar-action:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+/* Kept for backwards compat if any consumer still references it.
+   The new markup uses .sc-week-finalize-failbar-msg inside the
+   bar; leave the standalone banner class intact but unused. */
 .sc-week-finalize-fail-banner {
   display: inline-flex;
   align-items: center;

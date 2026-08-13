@@ -41,37 +41,42 @@
   to   { opacity: 1; transform: none; }
 }
 
-/* Head - kick eyebrow (with TEST MODE badge), title, subtitle. */
+/* Head - title (with TEST badge inline) + subtitle. PR-D1 (2026-08-13)
+   dropped the FINALIZE WEEK eyebrow (the title says it) and moved
+   the TEST MODE badge inline with the title with reduced saturation
+   so it does not compete with the primary CTA. */
 .sc-finalize-modal-head {
   padding: var(--space-5) var(--space-6) var(--space-4);
   border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
 }
-.sc-finalize-modal-kick {
-  display: inline-flex;
+.sc-finalize-modal-title-row {
+  display: flex;
   align-items: center;
-  gap: var(--space-2);
-  font-size: var(--sc2-size-micro);
-  font-weight: var(--sc2-wt-bold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
+/* TEST tag - stepped down from --status-needs-strong (solid amber)
+   to the amber wash + border + amber fg. Still clearly amber, still
+   readable at a glance, no longer visually louder than the primary
+   Finalize CTA. */
 .sc-finalize-testtag {
-  background: var(--status-needs-strong);
-  color: var(--text-inverse);
+  background: var(--status-needs-subtle);
+  color: var(--status-needs-fg);
+  border: var(--sc2-border-thin) solid var(--status-needs-bd);
   border-radius: var(--radius-cell);
   padding: var(--space-1) var(--space-2);
   font-size: var(--sc2-size-micro);
   letter-spacing: 0.04em;
   font-weight: var(--sc2-wt-bold);
+  text-transform: uppercase;
 }
 .sc-finalize-modal-title {
   font-size: var(--sc2-size-h2);
   line-height: 1.2;
   font-weight: var(--sc2-wt-bold);
   letter-spacing: -0.01em;
-  margin-top: var(--space-2);
   color: var(--text-heading);
+  margin: 0;
 }
 .sc-finalize-modal-sub {
   font-size: var(--sc2-size-body);
@@ -122,18 +127,27 @@
   font-weight: var(--sc2-wt-display);
 }
 
-/* Lock warning - amber, instructional, not a chrome color choice. */
+/* Lock warning - amber, instructional. PR-D1 (2026-08-13) gave the
+   bold lead sentence its own line above the body so it does not run
+   into the "After this you cannot change these numbers" body. */
 .sc-finalize-lock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   margin: var(--space-4) 0 var(--space-1);
   background: var(--status-needs-subtle);
   border: var(--sc2-border-thin) solid var(--status-needs-bd);
   border-radius: var(--radius-control);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
   font-size: var(--sc2-size-caption);
   color: var(--status-needs-fg);
+  line-height: 1.4;
 }
-.sc-finalize-lock b {
+.sc-finalize-lock-lead {
   font-weight: var(--sc2-wt-bold);
+}
+.sc-finalize-lock-body {
+  color: var(--status-needs-fg);
 }
 
 /* Foot - Cancel + Finalize buttons. Right-aligned; primary is Go. */
