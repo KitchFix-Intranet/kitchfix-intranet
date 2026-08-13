@@ -16,7 +16,10 @@ import { TABS } from "../lib/accounts";
 export function Shell({
   account,        // e.g. "CIN - OH"
   fiscal,         // { today, period, week } - strings/numbers
-  freshness,     // { last_walk_at }
+  freshness,     // { last_walk_at } - present iff data loaded
+  dataLoading,    // boolean - true while /api/kpi/labor is in flight; chip
+                  // fallback text depends on this so it never claims "no
+                  // successful walk" during the initial fetch window.
   activeTab = "labor",
   onTabClick,
   folioRail,      // node - left aside content (FolioRail)
@@ -26,8 +29,13 @@ export function Shell({
   printScopeText, // string - B12 print-time scope line ("CIN - OH · 06/29/26 - 07/26/26 · all 138 workers · names shown")
 }) {
   const freshH = hoursSinceISO(freshness?.last_walk_at);
-  const freshTint = freshnessTint(freshH);
-  const freshText = fmtTimestamp(freshness?.last_walk_at) || "no successful walk";
+  const freshTint = dataLoading
+    // Loading: neutral warm dot, never the red "stale" state - freshness
+    // is legitimately unknown until the fetch resolves.
+    ? "kpi-chip-warm"
+    : freshnessTint(freshH);
+  const freshText = fmtTimestamp(freshness?.last_walk_at)
+    || (dataLoading ? "Loading data" : "no successful walk");
 
   return (
     <>
@@ -58,7 +66,11 @@ export function Shell({
           >
             <span className="kpi-chip-dot" aria-hidden="true" />
             <span>
-              {freshH != null ? `Data current as of ${fmtTimestamp(freshness.last_walk_at)}` : "no successful walk"}
+              {freshH != null
+                ? `Data current as of ${fmtTimestamp(freshness.last_walk_at)}`
+                : dataLoading
+                  ? "Loading data..."
+                  : "no successful walk"}
             </span>
           </span>
         </div>

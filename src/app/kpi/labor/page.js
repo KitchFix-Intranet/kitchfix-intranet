@@ -162,9 +162,24 @@ export default function KpiLaborPage() {
   // ── Fetch labor data ──────────────────────────────────
   // B14 timing marks: performance.mark bracketing the fetch to make
   // p95 measurable in devtools. See spec §5 initial ≤1.5s budget.
+  //
+  // 08/13 wedge hotfix - three defenses layered here:
+  //   (a) AbortController: cleanup ABORTS the in-flight fetch instead of
+  //       relying on a `cancelled` flag that stale closures still resolve.
+  //       Prior pattern let two fetches race and both no-op their state
+  //       transitions when their cleanup fired before their .then.
+  //   (b) 15s hard timeout: if the network is quiet-but-stuck (extension,
+  //       flaky VPN, ISP hiccup), the fetch transitions to an error state
+  //       with a Retry CTA rather than spinning skeleton forever.
+  //   (c) session status "loading" does NOT block a fetch we're already
+  //       able to run. If we've been authenticated once (isAllowed was
+  //       true) and status flaps back to "loading" (authjs refresh
+  //       failure), we keep the last-good `data` on screen and don't
+  //       reset back to skeleton.
   useEffect(() => {
     if (status !== "authenticated" || !isAllowed) return;
-    let cancelled = false;
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(new Error("timeout_15s")), 15000);
     setLoadState("loading");
     setErrorMsg(null);
     setErrCode(null);
@@ -172,7 +187,7 @@ export default function KpiLaborPage() {
     const params = new URLSearchParams({ account, start, end });
     const markBase = `kpi-labor-fetch-${account}`;
     try { performance.mark(`${markBase}-start`); } catch {}
-    fetch(`/api/kpi/labor?${params}`)
+    fetch(`/api/kpi/labor?${params}`, { signal: ctrl.signal })
       .then(async (r) => {
         // B4: auth states off the real fetch. 401 -> session-expired,
         // 403 -> not-authorized. Both render StateBoxes; zero data leak.
@@ -185,7 +200,7 @@ export default function KpiLaborPage() {
         return r.json();
       })
       .then((d) => {
-        if (cancelled) return;
+        if (ctrl.signal.aborted) return;
         setData(d); setLoadState("ok");
         try {
           performance.mark(`${markBase}-end`);
@@ -193,16 +208,24 @@ export default function KpiLaborPage() {
         } catch {}
       })
       .catch((e) => {
-        if (cancelled) return;
-        if (String(e.message) === "session_expired" || String(e.message) === "forbidden") {
+        // AbortError from cleanup: silent (a newer effect is inbound).
+        // AbortError from our timeout: visible error with retry.
+        if (e?.name === "AbortError" && String(ctrl.signal.reason?.message || "") !== "timeout_15s") {
+          return;
+        }
+        if (String(e?.message) === "session_expired" || String(e?.message) === "forbidden") {
           setLoadState("auth");
           return;
         }
+        const msg = e?.name === "AbortError" || String(ctrl.signal.reason?.message || "") === "timeout_15s"
+          ? "Request took longer than 15 seconds. The API is reachable but the browser tab did not receive a response - retry, or check for a blocking extension."
+          : String(e?.message || e).slice(0, 200);
         setLoadState("error");
-        setErrorMsg(String(e.message || e).slice(0, 200));
+        setErrorMsg(msg);
         setErrCode(errorCode("labor", e));
-      });
-    return () => { cancelled = true; };
+      })
+      .finally(() => clearTimeout(to));
+    return () => { clearTimeout(to); ctrl.abort(); };
   }, [status, isAllowed, account, start, end]);
 
   // ── Fetch saved views ─────────────────────────────────
@@ -895,6 +918,7 @@ export default function KpiLaborPage() {
           account={account}
           fiscal={fiscalCtx}
           freshness={freshness}
+          dataLoading={loadState === "loading" || loadState === "idle"}
           activeTab={tab}
           onTabClick={(k) => setParam("tab", k)}
           printScopeText={vdefLine}
