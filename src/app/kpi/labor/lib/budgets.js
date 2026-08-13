@@ -12,15 +12,15 @@
 // stripping the "illustrative" tag first.
 
 const BUDGET_WK = {
-  "CIN - AZ":     4700,
-  "CIN - OH":     1200,
-  "STL - FL":     6500,
-  "STL - MO":     1500,
-  "TBJ - FL":    13000,
-  "TBR - FL":    13500,
-  "TXR - AZ":     7500,
-  "TXR - TX - H":  700,
-  "TXR - TX - V":  600,
+  "CIN - OH":     3900,
+  "STL - FL":     8200,
+  "CIN - AZ":     3550,
+  "STL - MO":     3200,
+  "TBJ - FL":     5100,
+  "TBR - FL":     5400,
+  "TXR - AZ":     3300,
+  "TXR - TX - H": 2650,
+  "TXR - TX - V": 1950,
 };
 
 // budgetForRange - dollar budget for the given account across the given
