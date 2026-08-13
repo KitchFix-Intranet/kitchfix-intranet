@@ -104,44 +104,51 @@ export default function WeekFinalizeControl({
   const missing = useMemo(() => missingDayList(weekDays), [weekDays]);
   const isComplete = missing.length === 0 && Array.isArray(weekDays) && weekDays.length === 7;
 
-  // Push-failed banner (loud, red).
+  // Push-failed bar - one bordered container so the message, Retry,
+  // and Unlock read as a single element aligned to the same right
+  // edge the Finalize button uses. Prevents jitter when a row
+  // toggles between ready and failed states (addendum §A1 + PR-D1
+  // 2026-08-13 polish).
   if (liveRow?.status === "push_failed") {
     return (
       <div className="sc-week-finalize sc-week-finalize--push-failed" role="status">
-        <span className="sc-week-finalize-fail-banner">
-          Billing push failed - Kevin has been alerted
-        </span>
-        {isOverrideUser && (
-          <button
-            type="button"
-            className="sc-week-finalize-action sc-week-finalize-action--retry"
-            disabled={saving}
-            onClick={async () => {
-              setErrText(null);
-              setSaving(true);
-              try {
-                await onRetry?.({ accountKey, weekStart });
-              } catch (e) {
-                setErrText(e?.message || "Retry failed");
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            Retry
-          </button>
-        )}
-        {isOverrideUser && (
-          <RevertAction
-            accountKey={accountKey}
-            weekStart={weekStart}
-            onRevert={onRevert}
-            saving={saving}
-            setSaving={setSaving}
-            setErrText={setErrText}
-            revertLabel="Unlock"
-          />
-        )}
+        <div className="sc-week-finalize-failbar">
+          <span className="sc-week-finalize-failbar-msg">
+            Billing push failed - Kevin has been alerted
+          </span>
+          {isOverrideUser && (
+            <>
+              <button
+                type="button"
+                className="sc-week-finalize-failbar-action"
+                disabled={saving}
+                onClick={async () => {
+                  setErrText(null);
+                  setSaving(true);
+                  try {
+                    await onRetry?.({ accountKey, weekStart });
+                  } catch (e) {
+                    setErrText(e?.message || "Retry failed");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                Retry
+              </button>
+              <RevertAction
+                accountKey={accountKey}
+                weekStart={weekStart}
+                onRevert={onRevert}
+                saving={saving}
+                setSaving={setSaving}
+                setErrText={setErrText}
+                revertLabel="Unlock"
+                variant="failbar"
+              />
+            </>
+          )}
+        </div>
         {errText && <span className="sc-week-finalize-err" role="alert">{errText}</span>}
       </div>
     );
@@ -243,19 +250,23 @@ export default function WeekFinalizeControl({
         </button>
       ) : (
         <>
-          <span className="sc-week-finalize-chips-label">
+          {/* PR-D1 (2026-08-13): the per-day chips were removed as
+              triple-reporting - the day tiles + rail already carry
+              the missing-day identity and the chips outweighed the
+              button they gated. The count line is now the single
+              clickable affordance and jumps to the first missing
+              day. Finalize stays disabled + aria-disabled beside it. */}
+          <button
+            type="button"
+            className="sc-week-finalize-jump"
+            onClick={() => {
+              const first = missing[0];
+              if (first?.date) onOpenDay?.(first.date);
+            }}
+            aria-label={`Jump to first day needing entry (${missing[0]?.date ? chipLabelFor(missing[0]) : ""})`}
+          >
             {missing.length} day{missing.length === 1 ? "" : "s"} still need entry or no-service
-          </span>
-          {missing.slice(0, 7).map((day) => (
-            <button
-              key={day.date}
-              type="button"
-              className="sc-week-finalize-chip"
-              onClick={() => onOpenDay?.(day.date)}
-            >
-              {chipLabelFor(day)}
-            </button>
-          ))}
+          </button>
           <button
             ref={openButtonRef}
             type="button"
@@ -307,14 +318,18 @@ export default function WeekFinalizeControl({
 function RevertAction({
   accountKey, weekStart, onRevert, saving, setSaving, setErrText,
   revertLabel = "Revert",
+  variant, // 'failbar' when embedded in the failed-state bar
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   if (!open) {
+    const cls = variant === "failbar"
+      ? "sc-week-finalize-failbar-action"
+      : "sc-week-finalize-action sc-week-finalize-action--revert";
     return (
       <button
         type="button"
-        className="sc-week-finalize-action sc-week-finalize-action--revert"
+        className={cls}
         disabled={saving}
         onClick={() => setOpen(true)}
       >

@@ -171,6 +171,12 @@ This is a discipline aid, not a CI check. Do not automate it.
 |---|---|---|---|
 | `CRON_SECRET` | Shared secret for Vercel cron auth | Prod, Preview | All crons return 401 |
 
+### Build / private-registry auth
+
+| Variable | Description | Scope | If missing |
+|---|---|---|---|
+| `GITHUB_TOKEN` | Personal-access token consumed by `.npmrc` (`//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}`) so `npm install` can pull `@kitchfix-intranet/shared` from GitHub Packages. Local + CI + Vercel all need it. **Silent-gap history:** PR-A1 (2026-08-07) rewrote `.npmrc` from a literal token to the `${GITHUB_TOKEN}` form and the report claimed "CI unchanged (always injected its own token)" - that was an assumption. Vercel had no `GITHUB_TOKEN` variable, but every deploy kept passing on the install cache from before the rewrite. First cacheless rebuild on 2026-08-13 failed at `npm install`. Kevin added the variable, cold redeploy is green. **Cacheless build is the only way to verify private-registry auth** - any future `.npmrc` / `package.json` / registry-auth change needs a cacheless build to confirm, or the CI/build claim ships as `needs-gate`. | Local `.env` (dev), GitHub Actions secrets (CI), Vercel Production + Preview + Development env vars | `npm install` fails at the `@kitchfix-intranet/shared` fetch with 401; every deploy that misses the install cache breaks; existing cache-hit deploys keep passing until the next cache reset |
+
 ### QuickBooks Online proxy (sc-31 / PR-B billing arc)
 
 | Variable | Description | Scope | If missing |
