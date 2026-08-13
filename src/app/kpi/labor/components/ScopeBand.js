@@ -150,8 +150,9 @@ export function ScopeBand({
         )}
       </div>
 
-      {/* vdef - resolved-range line beneath, spec §3.3 */}
-      {vdefLine && (
+      {/* vdef - resolved-range line beneath. Spec §3.3: only surfaces
+          when a saved view is active. Not a general status line. */}
+      {activeView && vdefLine && (
         <div className="kpi-vdef">
           <span className="kpi-mono">{vdefLine}</span>
         </div>

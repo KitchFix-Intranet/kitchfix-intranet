@@ -22,6 +22,7 @@ import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp } from "./lib/formatting";
 import { ACCOUNTS, FY_START } from "./lib/accounts";
+import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate } from "./lib/periods";
 import { Shell } from "./components/Shell";
 import { FolioRail } from "./components/FolioRail";
 import { ScopeBand, buildVdefLine } from "./components/ScopeBand";
@@ -288,7 +289,13 @@ export default function KpiLaborPage() {
     return data.actuals.filter(r => selectedWorkers.has(r.worker_id));
   }, [data, selectedWorkers]);
 
-  const grouped = useMemo(() => {
+  // ── weeksInRange: unique week_start values, sorted desc ──────
+  // H3 fix - this is the ONE canonical week count. Hero, MetricGrid,
+  // QuickPanel, budget-for-range, pace calc, coverage caption all read
+  // this. Never read grouped.length as "week count" (that's period
+  // count). Never read filteredActuals.length as "week count" (that's
+  // worker-week rows).
+  const weekAggregates = useMemo(() => {
     if (!filteredActuals?.length) return [];
     const byWeek = new Map();
     for (const r of filteredActuals) {
@@ -296,7 +303,11 @@ export default function KpiLaborPage() {
       if (!byWeek.has(wk)) {
         byWeek.set(wk, {
           week_start: r.week_start, week_end: r.week_end,
-          week_label: r.week_label, fiscal_year: r.fiscal_year, period_no: r.period_no,
+          week_label: r.week_label,
+          // H1: derive period client-side. Payload period_no is null on
+          // backfill rows; we NEVER trust it.
+          fiscal_year: fiscalYearOf(r.week_start) ?? r.fiscal_year ?? 2026,
+          period_no: periodOf(r.week_start),
           hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
           dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
           amount: 0, hours_without_dollars: 0,
@@ -325,12 +336,24 @@ export default function KpiLaborPage() {
         w.coverage_state = "partial";
       }
     }
-    const sortedWeeks = [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
+    // Sort desc so the newest week (P9 today) appears first.
+    return [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
+  }, [filteredActuals]);
+
+  const weeksInRange = weekAggregates.length; // canonical week count
+
+  const grouped = useMemo(() => {
+    if (!weekAggregates.length) return [];
     const groups = [];
-    for (const w of sortedWeeks) {
-      const key = `${w.fiscal_year || "?"}|${w.period_no || "?"}`;
+    for (const w of weekAggregates) {
+      // Every week must land in a real (fiscal_year, period_no) group.
+      // periodOf returns null only for out-of-FY weeks; we cluster those
+      // under a synthesized "prior FY" bucket rather than a null period.
+      const fy = w.fiscal_year ?? 2026;
+      const p  = w.period_no ?? 0;  // 0 = prior/next FY sentinel
+      const key = `${fy}|${p}`;
       let g = groups.find(x => x.key === key);
-      if (!g) { g = { key, fiscal_year: w.fiscal_year, period_no: w.period_no, weeks: [], subtotal: null }; groups.push(g); }
+      if (!g) { g = { key, fiscal_year: fy, period_no: p, weeks: [], subtotal: null }; groups.push(g); }
       g.weeks.push(w);
     }
     for (const g of groups) {
@@ -346,7 +369,7 @@ export default function KpiLaborPage() {
       g.subtotal = s;
     }
     return groups;
-  }, [filteredActuals]);
+  }, [weekAggregates]);
 
   const totals = useMemo(() => {
     const t = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0 };
@@ -410,10 +433,11 @@ export default function KpiLaborPage() {
   // stomp user's manual collapses.
   useEffect(() => {
     if (!grouped.length || expandedPeriods.size > 0) return;
-    const periods = grouped.map(g => g.period_no).filter(p => p != null);
+    // grouped is sorted newest-first by construction; open first two.
+    // period_no is always an integer after H1 (client-derived).
     const next = new Set();
-    if (periods[0] != null) next.add(periods[0]);
-    if (periods[1] != null) next.add(periods[1]);
+    if (grouped[0]?.period_no) next.add(grouped[0].period_no);
+    if (grouped[1]?.period_no) next.add(grouped[1].period_no);
     if (next.size > 0) setExpandedPeriods(next);
   }, [grouped, expandedPeriods.size]);
 
@@ -430,14 +454,32 @@ export default function KpiLaborPage() {
     return m;
   }, [filteredActuals]);
 
-  // Current period for hero preset labels (P5).
-  const currentPeriodNo = useMemo(() => {
-    if (!data?.account_periods?.length) return null;
-    const past = data.account_periods
-      .filter(p => p.start && p.end && p.start <= today)
-      .sort((a, b) => a.start.localeCompare(b.start));
-    return past.length > 0 ? past[past.length - 1].period_no : null;
-  }, [data, today]);
+  // Current period for hero preset labels (P5). Derived client-side so
+  // it holds even before /api/kpi/labor account_periods lands.
+  const currentPeriodNo = useMemo(() => periodOfDate(today), [today]);
+
+  // H3 - infer preset from (start, end, today) so hero suffix and
+  // preset chip highlight even on a fresh page load (URL has no
+  // preset param; user landed with FY defaults). If no preset matches
+  // the resolved range, resolvedPreset is null and hero falls back to
+  // "· MM/DD/YY – MM/DD/YY".
+  const resolvedPreset = useMemo(() => {
+    if (lastPreset) return lastPreset; // user clicked one this session
+    if (start === FY_START && end === today) return "fytd";
+    if (start === addDaysISO(today, -27)  && end === today) return "last_4wk";
+    if (start === addDaysISO(today, -90)  && end === today) return "last_13wk";
+    // this_period / last_period rely on account_periods bounds
+    const periods = data?.account_periods || [];
+    if (periods.length) {
+      const past = periods.filter(p => p.start && p.end && p.start <= today)
+        .sort((a, b) => a.start.localeCompare(b.start));
+      const cur = past[past.length - 1];
+      const prev = past[past.length - 2];
+      if (cur && start === cur.start && end === cur.end) return "this_period";
+      if (prev && start === prev.start && end === prev.end) return "last_period";
+    }
+    return null;
+  }, [lastPreset, start, end, today, data]);
 
   function applyPreset(kind) {
     const t = today;
@@ -715,9 +757,9 @@ export default function KpiLaborPage() {
             <Hero
               account={account}
               totals={totals}
-              weekCount={grouped.length}
+              weekCount={weeksInRange}
               workerWeekCount={filteredActuals.length}
-              lastPreset={lastPreset}
+              lastPreset={resolvedPreset}
               start={start}
               end={end}
               today={today}
@@ -727,8 +769,8 @@ export default function KpiLaborPage() {
           <MetricGrid
             account={account}
             totals={totals}
-            weekCount={grouped.length}
-            lastPreset={lastPreset}
+            weekCount={weeksInRange}
+            lastPreset={resolvedPreset}
             start={start}
             end={end}
             today={today}
@@ -736,7 +778,7 @@ export default function KpiLaborPage() {
           />
           <TrendChart
             account={account}
-            weeks={filteredActuals}
+            weeks={weekAggregates}
             openWeeks={expandedWeeks}
             onBarClick={(wk) => {
               // M7 jump: open week + its period
@@ -806,7 +848,8 @@ export default function KpiLaborPage() {
             });
           }}
           onExpandAll={() => {
-            const all = new Set(grouped.map(g => g.period_no).filter(p => p != null));
+            // period_no always an integer after H1 (0 = prior FY sentinel).
+            const all = new Set(grouped.map(g => g.period_no));
             setExpandedPeriods(all);
           }}
           onCollapseAll={() => {
@@ -891,7 +934,7 @@ export default function KpiLaborPage() {
             <>
               {tab === "labor" && loadState === "ok" && data.account_state !== "salaried_only" && (
                 <QuickPanel
-                  weekCount={grouped.length}
+                  weekCount={weeksInRange}
                   workerWeekCount={filteredActuals.length}
                   redact={redact}
                   onToggleRedact={(next) => {
