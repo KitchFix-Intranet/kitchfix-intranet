@@ -99,15 +99,24 @@ safety valve.
 Kevin's address and nothing else when the account is in test mode. There is no
 code path in which a test finalize can email a site leader or a client.
 
+**Slack posts in test mode, marked (amended by Kevin 2026-08-13).**
+`#service-calendar-invoices` has one member today, so test-mode Slack is
+enabled rather than suppressed - the copy is worth seeing in place. Because
+channel membership is a fact about today and not a property of the system,
+every test-mode post is hardened: the message opens with a `[TEST]` prefix and
+closes with a one-line footer stating it is a test with no client impact. A
+member who joins later cannot mistake one for real. Email recipients in test
+mode remain Kevin and only Kevin.
+
 ## A6 · Notification matrix, amended
 
 | # | Event | To | cc | Channel |
 |---|---|---|---|---|
 | N1 | Invoice ready | Sebastian, Kevin, Joe, Josh, the account's salaried managers, the submitter | - | Email |
-| N2 | Push failed | Kevin, Sebastian | - | Email + Slack |
+| N2 | Push failed | Kevin, Sebastian | - | Email + Slack (`#service-calendar-invoices`) |
 | N3.1 | Friday 12:00 local reminder | the account's salaried managers | Kevin, Sebastian | Email |
 | N3.2 | Monday 12:00 local, urgent | the account's salaried managers | Kevin, Sebastian | Email |
-| N3.3 | Tuesday 09:00 local, past due | the account's salaried managers | Kevin, Sebastian, **the account's RDO** | Email + Slack |
+| N3.3 | Tuesday 09:00 local, past due | the account's salaried managers | Kevin, Sebastian, **the account's RDO** | Email + Slack (`#service-calendar-invoices`) |
 | N4 | Credit needed | the adjuster, Joe, Josh, Sebastian, **the account's RDO** | - | Email + admin flag |
 
 **RDO cc ruled 2026-08-11:** RDOs join N3.3 and N4 only. N1 was considered and
@@ -122,6 +131,15 @@ The right answer to regional visibility, and one email instead of four.
 jobs. Its primary CTA now points at the Service Calendar (everyone has it) with
 the QuickBooks link secondary and labelled for AP and leadership. If it reads
 wrong to either group, split it into an AP version and a site version.
+
+## A6b · Slack channel
+
+All billing Slack posts go to **`#service-calendar-invoices`** via
+`SLACK_SC_BILLING_WEBHOOK_URL` (incoming webhook on the existing KitchFix app,
+created 2026-08-11). Distinct from `SLACK_SC_WEBHOOK_URL`, which stays with the
+Service Calendar's operational alerts (schedule drift, price-change smoke).
+Missing variable = Slack silently skipped, matching every other webhook in the
+codebase; email delivery is never blocked by a missing webhook.
 
 ## A7 · Copy and access rules
 
