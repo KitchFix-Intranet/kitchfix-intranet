@@ -29,8 +29,17 @@ const LIMIT = (() => {
   const arg = args.find((a) => a.startsWith("--limit="));
   return arg ? parseInt(arg.split("=", 2)[1], 10) : Infinity;
 })();
+const TARGETS_ARG = (() => {
+  const i = args.indexOf("--targets");
+  if (i >= 0 && args[i + 1]) return args[i + 1];
+  const eqArg = args.find((a) => a.startsWith("--targets="));
+  if (eqArg) return eqArg.split("=", 2)[1];
+  return null;
+})();
 
-const TARGETS_PATH = "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/task2-targets.json";
+const TARGETS_PATH = TARGETS_ARG
+  ? (TARGETS_ARG.startsWith("/") ? TARGETS_ARG : `${process.cwd()}/${TARGETS_ARG}`)
+  : "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/task2-targets.json";
 const LOG_PATH = "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/task2-rescan-log.jsonl";
 
 console.log(`[task2] ==============================================`);
@@ -53,11 +62,11 @@ const supa = createClient(
 // Load targets
 const targetsFile = JSON.parse(readFileSync(TARGETS_PATH, "utf8"));
 const targets = [
-  ...targetsFile.zeroLineTargets,
-  ...targetsFile.pgFailedTargets,
-  ...targetsFile.completeZeroTargets,
+  ...(targetsFile.zeroLineTargets || []),
+  ...(targetsFile.pgFailedTargets || []),
+  ...(targetsFile.completeZeroTargets || []),
 ];
-console.log(`[task2] loaded ${targets.length} targets from task2-targets.json`);
+console.log(`[task2] loaded ${targets.length} targets from ${TARGETS_PATH}`);
 
 // Group by account for reporting
 const acctCounts = {};
