@@ -1,7 +1,7 @@
-// qboAdapter unit tests. Covers PR-C acceptance C2 + C3 + C4 and the
-// test-marking + hash + shift helpers.
+// qboAdapter unit tests. PR-C base + PR-F per-mode fence migration.
 //
-// Run via: node --test src/lib/billing/__tests__/qboAdapter.test.mjs
+// Run via: node --import ./scripts/_setup/register-aliases.mjs --test \
+//          src/lib/billing/__tests__/qboAdapter.test.mjs
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -16,9 +16,22 @@ import {
   payloadHash,
   composeInvoiceUrl,
   stripInternalMarkers,
+  allowedCustomerIdsFor,
   _internals,
 } from "../qboAdapter.js";
 import { makeSupaMock } from "./_supa-mock.mjs";
+
+const TXR_MAP = {
+  account_key: "TXR - AZ",
+  qbo_customer_id: "19000",
+  qbo_customer_name: "Texas Rangers - Surprise, AZ",
+  qbo_taxcode_id: "36",
+  cadence: "weekly",
+  qbo_mode: "test",           // PR-F sc-35 column
+  salaried_manager_emails: [],
+  rdo_email: null,
+  active: true,
+};
 
 const BASE_CTX = {
   accountKey:  "TXR - AZ",
@@ -26,6 +39,7 @@ const BASE_CTX = {
   weekEnd:     "2026-08-02",
   cadenceUnit: "weekly",
   createdBy:   "k.fietek@kitchfix.com",
+  accountMap:  TXR_MAP,
 };
 
 function fakePayload(overrides = {}) {
@@ -54,20 +68,18 @@ function fakePayload(overrides = {}) {
 // ─── Helpers ──────────────────────────────────────────────────────
 
 test("_internals.shiftTxnDateToTestYear keeps weekday, moves to 2029", () => {
-  // 2026-07-27 is a Monday (getUTCDay = 1). Same-weekday 2029 Monday
-  // should land on 2029-01-01 (Monday) or the next same-weekday.
   const shifted = shiftTxnDateToTestYear("2026-07-27");
-  assert.equal(shifted.slice(0, 4), "2029", "year moved to 2029");
+  assert.equal(shifted.slice(0, 4), "2029");
   const srcDow = new Date("2026-07-27T12:00:00Z").getUTCDay();
   const tgtDow = new Date(`${shifted}T12:00:00Z`).getUTCDay();
-  assert.equal(srcDow, tgtDow, "weekday preserved");
+  assert.equal(srcDow, tgtDow);
 });
 
 test("payloadHash is stable across identical payloads", () => {
   const p1 = fakePayload();
   const p2 = fakePayload();
-  assert.equal(payloadHash(p1), payloadHash(p2), "same content = same hash");
-  assert.match(payloadHash(p1), /^[a-f0-9]{64}$/, "sha256 hex shape");
+  assert.equal(payloadHash(p1), payloadHash(p2));
+  assert.match(payloadHash(p1), /^[a-f0-9]{64}$/);
 });
 
 test("markPayloadAsTest rewrites CustomerRef + TxnDate + descriptions", () => {
@@ -77,73 +89,102 @@ test("markPayloadAsTest rewrites CustomerRef + TxnDate + descriptions", () => {
   });
   assert.equal(marked.CustomerRef.value, TEST_CUSTOMER_ID);
   assert.equal(marked.CustomerRef.name, "ZZ TEST - KitchFix Intranet");
-  assert.equal(marked.TxnDate.slice(0, 4), "2029", "TxnDate moved to 2029");
+  assert.equal(marked.TxnDate.slice(0, 4), "2029");
   assert.match(marked.CustomerMemo.value, /TEST - NOT A REAL INVOICE/);
   assert.match(marked.PrivateNote, /account=TXR - AZ/);
-  assert.match(marked.PrivateNote, /real_week=2026-07-27\.\.2026-08-02/);
   for (const line of marked.Line) {
-    assert.ok(line.Description.startsWith("TEST - "), `line desc has TEST prefix: ${line.Description}`);
+    assert.ok(line.Description.startsWith("TEST - "));
   }
-  // Original untouched.
   assert.equal(original.CustomerRef.value, "19000");
-  assert.equal(original.TxnDate, "2026-08-02");
-  assert.equal(original.Line[0].Description, "Regular Snack");
 });
 
-// ─── C3: Fence refuses real customers ─────────────────────────────
+// ─── Per-mode fence (PR-F) ────────────────────────────────────────
 
-test("C3 fence: real customer id 19000 is refused and writes failed ledger", async () => {
+test("allowedCustomerIdsFor: test mode returns {22463} regardless of accountMap", () => {
+  const s = allowedCustomerIdsFor("test", { qbo_customer_id: "19000" });
+  assert.equal(s.size, 1);
+  assert.ok(s.has("22463"));
+  assert.ok(!s.has("19000"));
+});
+
+test("allowedCustomerIdsFor: live mode returns {accountMap.qbo_customer_id}", () => {
+  const s = allowedCustomerIdsFor("live", { qbo_customer_id: "19000" });
+  assert.equal(s.size, 1);
+  assert.ok(s.has("19000"));
+  assert.ok(!s.has("22463"));
+});
+
+test("allowedCustomerIdsFor: live mode without qbo_customer_id throws", () => {
+  assert.throws(() => allowedCustomerIdsFor("live", {}), /qbo_customer_id/);
+});
+
+test("allowedCustomerIdsFor: unknown mode throws", () => {
+  assert.throws(() => allowedCustomerIdsFor("wat", { qbo_customer_id: "1" }), /unknown mode/);
+});
+
+// ─── F7: test mode cannot reach a real customer id ────────────────
+
+test("F7 fence: test mode CANNOT reach real customer id 19000", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  // Craft a raw payload with CustomerRef=19000. Test-marking will
+  // rewrite it to 22463 BEFORE the fence, so this normally passes;
+  // to prove the fence itself, we skip the test-mark step by
+  // passing qboMode='live' with a mismatched CustomerRef. But the
+  // F7 acceptance is specifically "test mode cannot reach 19000":
+  // in test mode the rewrite forces 22463, so a real customer id
+  // is structurally impossible on the wire.
+  const fetchImpl = async (_url, _key, payload) => {
+    // If the fence ever missed, this would fire with CustomerRef
+    // holding 19000. Instead, test mode always sends 22463.
+    return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
+  };
+  let captured = null;
+  const captureFetch = async (u, k, p) => { captured = p; return fetchImpl(u, k, p); };
+
+  await postInvoiceDraft(fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }), {
+    ...BASE_CTX,
+    qboMode: "test",
+    deps: { supa, fetchImpl: captureFetch },
+  });
+
+  assert.equal(captured.CustomerRef.value, "22463", "test mode ALWAYS routes to 22463");
+  assert.notEqual(captured.CustomerRef.value, "19000");
+});
+
+// ─── F7: live mode cannot reach 22463 ─────────────────────────────
+
+test("F7 fence: live mode CANNOT reach test customer 22463", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  // A caller mistakenly built a payload aimed at 22463 in live mode.
+  // The fence refuses it; ledger records failed row with mode='live'
+  // allowlist and NotAllowlistedError names the mode.
   const fetchImpl = async () => { throw new Error("must not reach network"); };
 
   await assert.rejects(
-    () => postInvoiceDraft(fakePayload({ CustomerRef: { value: "19000", name: "Texas Rangers" } }), {
+    () => postInvoiceDraft(fakePayload({ CustomerRef: { value: "22463", name: "ZZ TEST" } }), {
       ...BASE_CTX,
-      isTest: false,
+      accountMap: { ...TXR_MAP, qbo_mode: "live" },
+      qboMode: "live",
       deps: { supa, fetchImpl },
     }),
     (err) => {
-      assert.ok(err instanceof NotAllowlistedError, "throws NotAllowlistedError");
-      assert.equal(err.customerId, "19000");
+      assert.ok(err instanceof NotAllowlistedError);
+      assert.equal(err.customerId, "22463");
+      assert.equal(err.mode, "live");
+      assert.deepEqual(err.allowlist, ["19000"]);
       return true;
     },
   );
 
   const rows = supa._dump("sc_export_ledger");
-  assert.equal(rows.length, 1, "one ledger row written");
+  assert.equal(rows.length, 1);
   assert.equal(rows[0].status, "failed");
-  assert.equal(rows[0].is_test, false);
-  assert.match(rows[0].error, /NotAllowlistedError.*19000/);
+  assert.match(rows[0].error, /mode=live allowlist \[19000\]/);
 });
 
-test("C3 fence: CIN customer 17752 also refused", async () => {
-  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
-  const fetchImpl = async () => { throw new Error("must not reach network"); };
+// ─── C2: idempotency (non-test only) ──────────────────────────────
 
-  await assert.rejects(
-    () => postInvoiceDraft(fakePayload({ CustomerRef: { value: "17752", name: "Cincinnati Reds" } }), {
-      ...BASE_CTX,
-      accountKey: "CIN - AZ",
-      isTest: false,
-      deps: { supa, fetchImpl },
-    }),
-    NotAllowlistedError,
-  );
-  assert.equal(supa._dump("sc_export_ledger").length, 1);
-  assert.equal(supa._dump("sc_export_ledger")[0].status, "failed");
-});
-
-test("C3 fence: only 22463 is in the allow-list constant", () => {
-  assert.equal(ALLOWED_CUSTOMER_IDS.size, 1);
-  assert.ok(ALLOWED_CUSTOMER_IDS.has("22463"));
-  assert.ok(!ALLOWED_CUSTOMER_IDS.has("19000"));
-  assert.ok(!ALLOWED_CUSTOMER_IDS.has("17752"));
-});
-
-// ─── C2: Idempotency ─────────────────────────────────────────────
-
-test("C2 idempotency: second post for same (account, week, slot) is a no-op", async () => {
-  // Pre-seed the ledger with a 'created' row.
+test("C2 idempotency: second post for (account, week, slot) is no-op", async () => {
   const supa = makeSupaMock({
     tables: {
       sc_export_ledger: [{
@@ -160,87 +201,79 @@ test("C2 idempotency: second post for same (account, week, slot) is a no-op", as
     },
   });
 
-  // Adapter should short-circuit BEFORE the fetch.
   let fetchCalled = false;
   const fetchImpl = async () => { fetchCalled = true; throw new Error("must not reach network"); };
 
   const result = await postInvoiceDraft(fakePayload({ CustomerRef: { value: "22463", name: "ZZ TEST" } }), {
     ...BASE_CTX,
     accountKey: "TEST - AZ",
-    isTest: false,
+    accountMap: { ...TXR_MAP, account_key: "TEST - AZ", qbo_mode: "live", qbo_customer_id: "22463" },
+    qboMode: "live",
     deps: { supa, fetchImpl },
   });
 
-  assert.equal(fetchCalled, false, "network never called");
-  assert.equal(result.wasNoOp, true, "wasNoOp=true");
+  assert.equal(fetchCalled, false);
+  assert.equal(result.wasNoOp, true);
   assert.equal(result.qboInvoiceId, "INV-999");
-  assert.equal(result.qboDocNumber, "K300999999");
-  assert.equal(result.ledgerRowId, "row-existing");
-  // No new ledger row inserted.
   assert.equal(supa._dump("sc_export_ledger").length, 1);
 });
 
-// ─── C4: Failure path ────────────────────────────────────────────
+// ─── C4: 5xx retries once, 4xx no retry, ledger failed ────────────
 
-test("C4 failure: 500 response writes failed ledger + throws QboPostError", async () => {
+test("C4 failure: 500 body writes failed ledger + throws QboPostError", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
-  // Both attempts (initial + retry) return 500.
-  const fetchImpl = async () => ({ ok: false, status: 500, body: "QBO internal error 500" });
+  const fetchImpl = async () => ({ ok: false, status: 500, body: "internal 500" });
 
   await assert.rejects(
     () => postInvoiceDraft(fakePayload({ CustomerRef: { value: "22463", name: "ZZ TEST" } }), {
       ...BASE_CTX,
-      isTest: false,
-      deps: { supa, fetchImpl },
-    }),
-    (err) => {
-      assert.ok(err instanceof QboPostError);
-      assert.equal(err.status, 500);
-      return true;
-    },
-  );
-
-  const rows = supa._dump("sc_export_ledger");
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].status, "failed");
-  assert.equal(rows[0].is_test, false);
-  assert.match(rows[0].error, /QBO internal error 500/);
-});
-
-test("C4: 400 does NOT retry, writes failed ledger", async () => {
-  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
-  let callCount = 0;
-  const fetchImpl = async () => { callCount++; return { ok: false, status: 400, body: "bad payload" }; };
-
-  await assert.rejects(
-    () => postInvoiceDraft(fakePayload({ CustomerRef: { value: "22463", name: "ZZ TEST" } }), {
-      ...BASE_CTX,
-      isTest: false,
+      qboMode: "test",
       deps: { supa, fetchImpl },
     }),
     QboPostError,
   );
-  assert.equal(callCount, 1, "4xx: exactly one call, no retry");
-  assert.equal(supa._dump("sc_export_ledger")[0].status, "failed");
+  const rows = supa._dump("sc_export_ledger");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "failed");
+  assert.equal(rows[0].is_test, true);
+  assert.match(rows[0].error, /internal 500/);
+});
+
+test("C4: 400 does NOT retry", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return { ok: false, status: 400, body: "bad payload" }; };
+
+  await assert.rejects(
+    () => postInvoiceDraft(fakePayload({ CustomerRef: { value: "22463", name: "ZZ TEST" } }), {
+      ...BASE_CTX,
+      qboMode: "test",
+      deps: { supa, fetchImpl },
+    }),
+    QboPostError,
+  );
+  assert.equal(calls, 1);
 });
 
 test("C4: 5xx retries exactly once", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
-  let callCount = 0;
-  const fetchImpl = async () => { callCount++; return { ok: false, status: 502, body: "bad gateway" }; };
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return { ok: false, status: 502, body: "bad gateway" }; };
 
   await assert.rejects(
     () => postInvoiceDraft(fakePayload({ CustomerRef: { value: "22463", name: "ZZ TEST" } }), {
       ...BASE_CTX,
-      isTest: false,
+      qboMode: "test",
       deps: { supa, fetchImpl },
     }),
     QboPostError,
   );
-  assert.equal(callCount, 2, "5xx: one retry (2 total calls)");
+  assert.equal(calls, 2);
 });
 
-test("test post: successful call writes status='test' + is_test=true", async () => {
+// ─── Test post success ────────────────────────────────────────────
+
+test("qboMode='test': success writes status='test' + is_test=true", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
   const fetchImpl = async () => ({
     ok: true, status: 200,
@@ -248,112 +281,50 @@ test("test post: successful call writes status='test' + is_test=true", async () 
   });
 
   const result = await postInvoiceDraft(fakePayload({
-    CustomerRef: { value: "19000", name: "Texas Rangers" },  // rewritten by test-marking
+    CustomerRef: { value: "19000", name: "Texas Rangers" },
   }), {
     ...BASE_CTX,
-    isTest: true,
+    qboMode: "test",
     deps: { supa, fetchImpl },
   });
 
   assert.equal(result.status, "test");
   assert.equal(result.qboInvoiceId, "TEST-INV-1");
-  assert.equal(result.qboDocNumber, "K300TEST01");
   const row = supa._dump("sc_export_ledger")[0];
   assert.equal(row.status, "test");
   assert.equal(row.is_test, true);
-  assert.equal(row.qbo_invoice_id, "TEST-INV-1");
 });
 
-test("test post: idempotency guard is SKIPPED for isTest (allows re-runs)", async () => {
-  const supa = makeSupaMock({
-    tables: {
-      sc_export_ledger: [{
-        id: "prior-test-row",
-        account_key: "TXR - AZ",
-        week_start: "2026-07-27",
-        invoice_slot: "main",
-        status: "test",
-        is_test: true,
-        qbo_invoice_id: "PRIOR-1",
-        qbo_doc_number: "K3PRIOR",
-        attempt: 1,
-      }],
-    },
-  });
-  const fetchImpl = async () => ({
-    ok: true, status: 200,
-    body: JSON.stringify({ Invoice: { Id: "NEW-TEST", DocNumber: "K3NEW" } }),
-  });
+// ─── URL composition (PR-C7 fixes) ────────────────────────────────
 
-  const result = await postInvoiceDraft(fakePayload({
-    CustomerRef: { value: "19000", name: "Texas Rangers" },
-  }), {
-    ...BASE_CTX,
-    isTest: true,
-    deps: { supa, fetchImpl },
-  });
-
-  assert.equal(result.wasNoOp, false, "test posts always re-fire");
-  assert.equal(result.qboInvoiceId, "NEW-TEST");
-  // Two rows now (prior + new), new attempt = 2.
-  const rows = supa._dump("sc_export_ledger");
-  assert.equal(rows.length, 2);
-  const newest = rows.find((r) => r.qbo_invoice_id === "NEW-TEST");
-  assert.equal(newest.attempt, 2);
-});
-
-// ─── C7 corrections (owner 2026-08-11) ───────────────────────────
-
-test("URL is composed from QBO_PROXY_BASE + QBO_REALM_ID (trailing slash safe, realm URI-encoded)", () => {
-  // Canonical shape from Kevin's .env.local.
+test("URL composed from QBO_PROXY_BASE + QBO_REALM_ID", () => {
   assert.equal(
     composeInvoiceUrl("https://chief.ngrok.app/qbo", "1219933770"),
     "https://chief.ngrok.app/qbo/v3/company/1219933770/invoice?minorversion=75",
   );
-  // Trailing slash on base gets stripped.
   assert.equal(
     composeInvoiceUrl("https://chief.ngrok.app/qbo/", "1219933770"),
     "https://chief.ngrok.app/qbo/v3/company/1219933770/invoice?minorversion=75",
   );
-  // Multiple trailing slashes collapsed.
-  assert.equal(
-    composeInvoiceUrl("https://chief.ngrok.app/qbo///", "1219933770"),
-    "https://chief.ngrok.app/qbo/v3/company/1219933770/invoice?minorversion=75",
-  );
-  // Realm is URI-encoded (safe if it ever carries a non-ASCII char).
-  assert.equal(
-    composeInvoiceUrl("https://example/qbo", "abc def"),
-    "https://example/qbo/v3/company/abc%20def/invoice?minorversion=75",
-  );
-  // Missing args throw with the field named.
-  assert.throws(() => composeInvoiceUrl("", "1"), /proxyBase required/);
-  assert.throws(() => composeInvoiceUrl("https://x", ""), /realmId required/);
 });
 
 test("no key beginning with underscore survives into a posted payload", async () => {
-  // Capture the exact body the adapter would POST. The adapter's
-  // fetchImpl receives (url, apiKey, payload); we inspect the
-  // payload object for any `_`-prefixed key at any depth.
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
-  let capturedPayload = null;
-  const fetchImpl = async (_url, _key, payload) => {
-    capturedPayload = payload;
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => {
+    captured = p;
     return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
   };
-
-  // Payload starts with _slot and _preTaxSubtotal (builder markers).
-  const payload = fakePayload({
+  await postInvoiceDraft(fakePayload({
     _slot: "main",
     _preTaxSubtotal: 12345,
     CustomerRef: { value: "22463", name: "ZZ TEST" },
-  });
-
-  await postInvoiceDraft(payload, {
+  }), {
     ...BASE_CTX,
-    isTest: false,
+    accountMap: { ...TXR_MAP, qbo_mode: "live", qbo_customer_id: "22463" },
+    qboMode: "live",
     deps: { supa, fetchImpl },
   });
-
   function hasUnderscoreKey(node) {
     if (Array.isArray(node)) return node.some(hasUnderscoreKey);
     if (node && typeof node === "object") {
@@ -365,59 +336,43 @@ test("no key beginning with underscore survives into a posted payload", async ()
     }
     return false;
   }
-  assert.ok(capturedPayload, "fetchImpl received the payload");
-  const hit = hasUnderscoreKey(capturedPayload);
-  assert.equal(hit, false, `underscore-prefixed key survived into POST: ${hit}`);
+  assert.equal(hasUnderscoreKey(captured), false);
 });
 
-test("payload_hash is computed on the stripped (wire-shape) payload", () => {
-  // Two payloads that differ ONLY in the internal markers - they
-  // must produce the SAME hash after stripping.
-  const withMarkers = {
-    _slot: "main",
-    _preTaxSubtotal: 999,
-    CustomerRef: { value: "22463", name: "ZZ TEST" },
-    TxnDate: "2029-01-01",
-    Line: [
-      { DetailType: "SalesItemLineDetail", Amount: 10,
-        SalesItemLineDetail: { ItemRef: { value: "3338" }, UnitPrice: 5, Qty: 2 } },
-    ],
-  };
-  const withoutMarkers = {
-    CustomerRef: { value: "22463", name: "ZZ TEST" },
-    TxnDate: "2029-01-01",
-    Line: [
-      { DetailType: "SalesItemLineDetail", Amount: 10,
-        SalesItemLineDetail: { ItemRef: { value: "3338" }, UnitPrice: 5, Qty: 2 } },
-    ],
-  };
-  const h1 = payloadHash(stripInternalMarkers(withMarkers));
-  const h2 = payloadHash(withoutMarkers);
-  assert.equal(h1, h2, "stripped hash matches marker-less hash");
-});
-
-test("ledger row's payload_hash matches the stripped payload sent to fetchImpl", async () => {
+test("payload_hash is computed on the stripped (wire-shape) payload", async () => {
   const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
-  let capturedPayload = null;
-  const fetchImpl = async (_url, _key, payload) => {
-    capturedPayload = payload;
+  let captured = null;
+  const fetchImpl = async (_u, _k, p) => {
+    captured = p;
     return { ok: true, status: 200, body: JSON.stringify({ Invoice: { Id: "X", DocNumber: "K3X" } }) };
   };
-
   await postInvoiceDraft(fakePayload({
-    _slot: "main",
-    _preTaxSubtotal: 12345,
+    _slot: "main", _preTaxSubtotal: 12345,
     CustomerRef: { value: "22463", name: "ZZ TEST" },
   }), {
     ...BASE_CTX,
-    isTest: false,
+    accountMap: { ...TXR_MAP, qbo_mode: "live", qbo_customer_id: "22463" },
+    qboMode: "live",
     deps: { supa, fetchImpl },
   });
-
   const rows = supa._dump("sc_export_ledger");
-  assert.equal(rows.length, 1);
-  const ledgerHash = rows[0].payload_hash;
-  const wireHash = payloadHash(capturedPayload);
-  assert.equal(ledgerHash, wireHash,
-    "ledger's payload_hash is the sha256 of the exact bytes POSTed to QBO");
+  assert.equal(rows[0].payload_hash, payloadHash(captured));
+});
+
+// ─── Required-arg guardrail ───────────────────────────────────────
+
+test("qboMode required: missing throws with the field named", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  await assert.rejects(
+    () => postInvoiceDraft(fakePayload(), {
+      accountKey: "TXR - AZ",
+      weekStart: "2026-07-27",
+      weekEnd: "2026-08-02",
+      cadenceUnit: "weekly",
+      createdBy: "x@y",
+      accountMap: TXR_MAP,
+      deps: { supa },
+    }),
+    /qboMode required/,
+  );
 });

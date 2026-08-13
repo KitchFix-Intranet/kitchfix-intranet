@@ -31,7 +31,7 @@ import { getServiceClient } from "@/lib/supabase";
 import { isScLockOverride } from "@/lib/admin";
 import { buildInvoicePayload } from "@/lib/billing/buildInvoicePayload";
 import { postInvoiceDraft, NotAllowlistedError, QboPostError } from "@/lib/billing/qboAdapter";
-import { renderN1, renderN2 } from "@/lib/billing/qboNotifications";
+import { fireN1, fireN2 } from "@/lib/billing/qboNotifications";
 
 // ─────────────────────────────────────────────────────────────────
 // Mon-Sun week derivation (banned from `week_label` per C-3).
@@ -375,8 +375,12 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   const supa   = deps.supa || getServiceClient();
   const build  = deps.buildInvoicePayload || buildInvoicePayload;
   const post   = deps.postInvoiceDraft   || postInvoiceDraft;
-  const doN1   = deps.renderN1 || renderN1;
-  const doN2   = deps.renderN2 || renderN2;
+  // PR-F: fireN1 / fireN2 replace the render-only stubs. Both are
+  // async and (in test mode) dispatch email to Kevin + Slack to
+  // #service-calendar-invoices with [TEST] markers. Dep-injectable
+  // for unit tests that swap in a fake sender.
+  const doN1   = deps.fireN1 || fireN1;
+  const doN2   = deps.fireN2 || fireN2;
   const log    = deps.logger || console;
 
   if (!ctx?.accountKey || !ctx?.weekStart || !ctx?.finalizedRow) {
@@ -398,13 +402,30 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   if (!accountMap) {
     await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
     const errText = `No sc_qbo_account_map row for ${accountKey}. Configure the account map before finalize can post.`;
-    const n2 = doN2({
+    // Config-missing implies we cannot read qbo_mode - default to
+    // 'test' so the missing-config N2 stays inside the test fence
+    // regardless of the account's intended mode.
+    const n2 = await doN2({
+      qboMode: "test",
       accountKey, weekStart, weekEnd: addDaysIso(weekStart, 6),
       errorText: errText, retryLink: buildRetryLink(accountKey, weekStart),
+      scWeekLink: buildScWeekLink(accountKey, weekStart),
+      attempt: 1,
     });
-    log.info("[N2 dry-run]", { subject: n2.email.subject, to: n2.email.to, slack: n2.slack.text.slice(0, 120) });
+    log.info("[N2 fired]", { subject: n2.subject, to: n2.recipients?.to, slackSent: n2.slack?.result?.sent });
     return { pushed: false, failure: { code: "CONFIG_MISSING", message: errText, n2 } };
   }
+
+  // PR-F: qbo_mode is authoritative from sc_qbo_account_map (sc-35).
+  // Missing column falls back to 'test' so a partially-applied
+  // migration cannot silently flip to live-mode behaviour.
+  const qboMode = accountMap.qbo_mode === "live" ? "live" : "test";
+  // Map DB snake_case columns to camelCase for the resolver contract.
+  const resolverAccountMap = {
+    salariedManagerEmails: Array.isArray(accountMap.salaried_manager_emails)
+      ? accountMap.salaried_manager_emails : [],
+    rdoEmail: accountMap.rdo_email || null,
+  };
 
   // 2. Cadence span (biweekly requires pair-close alignment).
   const isBiweekly = accountMap.cadence === "biweekly";
@@ -447,11 +468,15 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     payload = build({ accountKey, weekStart: pairStart, rows, accountMap, serviceMap });
   } catch (err) {
     await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
-    const n2 = doN2({
+    const n2 = await doN2({
+      qboMode,
       accountKey, weekStart: pairStart, weekEnd: pairEnd,
       errorText: err.message, retryLink: buildRetryLink(accountKey, weekStart),
+      scWeekLink: buildScWeekLink(accountKey, weekStart),
+      attempt: 1,
+      accountMap: resolverAccountMap,
     });
-    log.info("[N2 dry-run]", { subject: n2.email.subject, to: n2.email.to });
+    log.info("[N2 fired]", { subject: n2.subject, to: n2.recipients?.to, slackSent: n2.slack?.result?.sent });
     return {
       pushed: false,
       failure: { code: "BUILD_ERROR", message: err.message, n2 },
@@ -461,17 +486,19 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     return { pushed: false, reason: "no_billable_actuals" };
   }
 
-  // 5. Post each invoice slot. isTest=false: adapter's fence will
-  // refuse any real customer id, which is the expected path in this
-  // fenced PR. The refusal writes the ledger row for us; here we
-  // only aggregate the errors.
+  // 5. Post each invoice slot. PR-F: qboMode read from
+  // accountMap.qbo_mode drives the per-mode fence. Test mode routes
+  // to 22463 with markers; live mode routes to the account's mapped
+  // customer id. Neither mode can silently reach the wrong customer.
   const invoiceRecords = [];
   const errors = [];
+  const isTest = qboMode === "test";
   for (const invoice of payload.invoices) {
     try {
       const result = await post(invoice, {
-        isTest:      false,
+        qboMode,
         accountKey,
+        accountMap,
         weekStart:   pairStart,
         weekEnd:     pairEnd,
         cadenceUnit: accountMap.cadence,
@@ -484,7 +511,7 @@ export async function runFinalizeEffects(ctx, deps = {}) {
         qboDocNumber:     result.qboDocNumber,
         pretaxTotalCents: sumCentsFromLines(invoice.Line),
         lineCount:        invoice.Line.length,
-        isTest:           false,
+        isTest,
         qboLink:          buildQboInvoiceLink(result.qboInvoiceId),
         ledgerRowId:      result.ledgerRowId,
       });
@@ -498,31 +525,45 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     }
   }
 
-  // 6. Any failure -> push_failed + N2.
+  // 6. Any failure -> push_failed + N2 (live send).
   if (errors.length > 0) {
     await transitionFinalizeRowToPushFailed(supa, finalizeRowId);
     const errText = errors.map((e) => `${e.slot} [${e.code}]: ${e.message}`).join("\n");
-    const n2 = doN2({
+    const n2 = await doN2({
+      qboMode,
       accountKey, weekStart: pairStart, weekEnd: pairEnd,
       errorText: errText, retryLink: buildRetryLink(accountKey, weekStart),
+      scWeekLink: buildScWeekLink(accountKey, weekStart),
+      attempt: 1,
+      accountMap: resolverAccountMap,
     });
-    log.info("[N2 dry-run]", { subject: n2.email.subject, to: n2.email.to, errorCount: errors.length });
+    log.info("[N2 fired]", {
+      subject: n2.subject, to: n2.recipients?.to,
+      slackSent: n2.slack?.result?.sent,
+      errorCount: errors.length,
+    });
     return {
       pushed: false,
       failure: { code: errors[0].code, message: errText, errors, n2 },
     };
   }
 
-  // 7. All succeeded -> N1.
-  const n1 = doN1({
+  // 7. All succeeded -> N1 (live send).
+  const n1 = await doN1({
+    qboMode,
     accountKey,
     weekStart: pairStart,
     weekEnd:   pairEnd,
     submitterEmail,
     invoiceRecords,
     scWeekLink: buildScWeekLink(accountKey, weekStart),
+    accountMap: resolverAccountMap,
   });
-  log.info("[N1 dry-run]", { subject: n1.subject, to: n1.to, invoices: invoiceRecords.length });
+  log.info("[N1 fired]", {
+    subject: n1.subject, to: n1.recipients?.to,
+    invoices: invoiceRecords.length,
+    emailResult: n1.emailResult,
+  });
 
   return { pushed: true, invoiceRecords, n1 };
 }
