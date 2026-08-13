@@ -23,7 +23,7 @@
 //
 // Esc collapses all open weeks (§3.7).
 
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting";
 
 function workerLabel(meta, worker_id, redact) {
@@ -128,8 +128,10 @@ export function WeekTable({
     return () => window.removeEventListener("keydown", onKey);
   }, [expandedWeeks, onEscape]);
 
-  // Period jump chips + Expand/Collapse all
-  const periods = grouped.map(g => g.period_no).filter(p => p != null);
+  // Period jump chips + Expand/Collapse all. H8: chips cover every
+  // group present, not just those with a non-null period_no. After H1
+  // period_no is always an integer (>=1); 0 is the "prior FY" sentinel.
+  const periods = grouped.map(g => g.period_no);
   const showChips = periods.length >= 2;
 
   return (
@@ -142,7 +144,7 @@ export function WeekTable({
               type="button"
               className={`kpi-pjump ${expandedPeriods?.has(p) ? "open" : ""}`}
               onClick={() => onJumpPeriod?.(p)}
-            >P{p}</button>
+            >{p ? `P${p}` : "prior"}</button>
           ))}
           <span className="kpi-ttools">
             <button type="button" className="kpi-pjump" onClick={onExpandAll}>Expand all</button>
@@ -192,7 +194,7 @@ export function WeekTable({
                   : <span className="kpi-dash">—</span>;
 
               return (
-                <Fragment2 key={g.key}>
+                <Fragment key={g.key}>
                   <tr className={`kpi-perh ${isOpen ? "open" : ""}`} id={`kpi-per${p}`}>
                     <td colSpan={2} className="l">
                       <button
@@ -204,7 +206,7 @@ export function WeekTable({
                         <svg className="kpi-i kpi-chev" viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        FY{g.fiscal_year || "?"} · PERIOD {p ?? "?"}{isOpen ? "" : ` · ${rows.length} wk`}
+                        FY{g.fiscal_year || "?"} · PERIOD {p || "prior"}{isOpen ? "" : ` · ${rows.length} wk`}
                       </button>
                     </td>
                     {isOpen ? (
@@ -235,7 +237,7 @@ export function WeekTable({
                     const wOpen = expandedWeeks?.has(w.week_start) ?? false;
                     const rowCls = `kpi-wk kpi-st-${w.coverage_state}${wOpen ? " open" : ""}`;
                     return (
-                      <Fragment2 key={w.week_start}>
+                      <Fragment key={w.week_start}>
                         <tr className={rowCls}>
                           <td className="l">
                             <button
@@ -292,7 +294,7 @@ export function WeekTable({
                             </td>
                           </tr>
                         )}
-                      </Fragment2>
+                      </Fragment>
                     );
                   })}
                   {isOpen && rows.length > 1 && (
@@ -305,7 +307,7 @@ export function WeekTable({
                       <td>{sub.amount > 0.004 ? <span className="kpi-mono">{fmt$(sub.amount)}</span> : sub.hours_without_dollars > 0.004 ? <span className="kpi-upw" style={{ fontSize: "var(--size-caption)" }}>unpriced</span> : <span className="kpi-dash">—</span>}</td>
                     </tr>
                   )}
-                </Fragment2>
+                </Fragment>
               );
             })}
             {grandTotal && (
@@ -325,5 +327,3 @@ export function WeekTable({
   );
 }
 
-// tiny Fragment alias to keep JSX legible above
-function Fragment2({ children }) { return <>{children}</>; }

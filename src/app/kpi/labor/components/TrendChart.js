@@ -79,7 +79,45 @@ export function TrendChart({
     persist("kpi.trendMode", m);
   };
 
-  const asc = useMemo(() => (weeks || []).slice().sort((a, b) => a.week_start.localeCompare(b.week_start)), [weeks]);
+  // H4 - aggregate to one entry per week_start, always. The caller may
+  // pass raw labor_actuals rows (one per worker-week) or already-aggregated
+  // week rows; this component owns the invariant "one bar per week".
+  const asc = useMemo(() => {
+    const src = weeks || [];
+    if (!src.length) return [];
+    const byWeek = new Map();
+    for (const r of src) {
+      const k = r.week_start;
+      if (!k) continue;
+      if (!byWeek.has(k)) {
+        byWeek.set(k, {
+          week_start: r.week_start, week_end: r.week_end,
+          hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
+          dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
+          amount: 0, hours_without_dollars: 0,
+          coverage_states: new Set(),
+        });
+      }
+      const w = byWeek.get(k);
+      w.hours_regular       += Number(r.hours_regular       || 0);
+      w.hours_overtime      += Number(r.hours_overtime      || 0);
+      w.hours_double_time   += Number(r.hours_double_time   || 0);
+      w.hours_premium_other += Number(r.hours_premium_other || 0);
+      w.dollars_regular       += Number(r.dollars_regular       || 0);
+      w.dollars_overtime      += Number(r.dollars_overtime      || 0);
+      w.dollars_double_time   += Number(r.dollars_double_time   || 0);
+      w.dollars_premium_other += Number(r.dollars_premium_other || 0);
+      w.amount                += Number(r.amount                || 0);
+      w.hours_without_dollars += Number(r.hours_without_dollars || 0);
+      if (r.coverage_state) w.coverage_states.add(r.coverage_state);
+    }
+    // Collapse coverage_states set to single label.
+    for (const w of byWeek.values()) {
+      const cs = [...w.coverage_states];
+      w.coverage_state = cs.length === 1 ? cs[0] : "partial";
+    }
+    return [...byWeek.values()].sort((a, b) => a.week_start.localeCompare(b.week_start));
+  }, [weeks]);
   const hrsMode = mode === "hrs";
   const budWeekly = _budgetWeekly(account);
 

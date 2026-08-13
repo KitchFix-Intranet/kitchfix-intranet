@@ -39,22 +39,40 @@
   color: var(--text-default);
   font-family: var(--font-ui);
 }
+
+/* H6 - KPI-local topnav opacity boost. The global .kf-topnav is
+   position: sticky w/ rgba(255,255,255,0.85) + backdrop-blur; on
+   most pages that reads as frosted white. On the KPI page the navy
+   .kpi-cmd chrome underneath makes the translucent nav show a strong
+   navy bleed as content scrolls under it. kpi.css is route-scoped
+   (imported only from /kpi/labor/page.js), so this rule affects the
+   nav ONLY on KPI routes and never leaks to other product surfaces. */
+.kf-topnav { background: #ffffff; }
 .kpi-wrap {
   max-width: var(--sc2-shell-max);
   margin: 0 auto;
   padding: var(--space-5) var(--space-6) var(--space-7);
 }
 
-/* ── module command bar ───────────────────────────────────────── */
+/* ── module command bar ─────────────────────────────────────────
+   H6 hotfix: --sc2-cmd-* tokens are scoped to .scv2 in tokens.css;
+   the KPI page has no .scv2 ancestor so those refs resolved to
+   invalid values and the navy band vanished. Using --n-900 (root)
+   for background and #ffffff for text keeps the intended navy chrome
+   without leaning on any product-scoped variable. */
 .kpi-cmd {
-  background: var(--sc2-cmd-bg);
-  color: var(--sc2-cmd-text);
+  background: var(--n-900);
+  color: #ffffff;
   border-radius: var(--rad-14) var(--rad-14) 0 0;
   padding: var(--space-3) var(--space-card-pad);
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+  /* Sit above the translucent global TopNav in stack order so the KPI
+     chrome reads as a solid navy band, not a mystery bleed. */
+  position: relative;
+  z-index: 1;
 }
 .kpi-cmd-title { font-size: var(--size-h3); font-weight: 600; letter-spacing: -0.01em; }
 .kpi-cmd-div   { width: 1px; height: 24px; background: rgba(255, 255, 255, 0.22); }
@@ -62,7 +80,7 @@
   min-height: 34px;
   background: rgba(255, 255, 255, 0.10);
   border: 1px solid rgba(255, 255, 255, 0.20);
-  color: var(--sc2-cmd-text);
+  color: #ffffff;
   border-radius: var(--rad-6);
   padding: 0 10px;
   font: inherit; font-size: 13px; font-weight: 500;
@@ -70,10 +88,10 @@
 .kpi-cmd-select option { color: var(--text-strong); }
 .kpi-cmd-ctx {
   display: flex; align-items: center; gap: var(--space-3);
-  font-size: 12px; color: var(--sc2-cmd-meta);
+  font-size: 12px; color: #c8d4e2;
   letter-spacing: 0.04em; text-transform: uppercase;
 }
-.kpi-cmd-ctx b { color: var(--sc2-cmd-text); font-weight: 600; }
+.kpi-cmd-ctx b { color: #ffffff; font-weight: 600; }
 .kpi-cmd-r { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
 .kpi-cmd-chip {
   display: inline-flex; align-items: center; gap: 7px;
@@ -82,7 +100,7 @@
   border-radius: var(--rad-pill);
   padding: 5px 12px;
   font-size: 12px;
-  color: var(--sc2-cmd-text);
+  color: #ffffff;
   font-family: var(--font-ui);
   font-variant-numeric: var(--num-tabular);
 }
@@ -1395,7 +1413,10 @@
   color: var(--text-subtle);
   font-style: normal;
 }
-.kpi-trend svg {
+/* H5 - the chart svg is the direct child of .kpi-trend; scoping to `>`
+   keeps this rule off the header-button chevron (which was being
+   stretched to 100% × 120px by the descendant selector). */
+.kpi-trend > svg {
   display: block;
   width: 100%; height: 120px;
 }
@@ -1404,7 +1425,7 @@
   color: var(--text-subtle);
   margin-top: 4px;
 }
-.kpi-trend-collapsed svg,
+.kpi-trend-collapsed > svg,
 .kpi-trend-collapsed .kpi-trend-note { display: none; }
 
 /* Trend bar/segment classes */
