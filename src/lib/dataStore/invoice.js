@@ -76,6 +76,71 @@ const INVOICE_REJECTIONS_TAB  = "invoice_rejections";   // PG-only; embedded in 
 const AI_LINE_ITEMS_TAB       = "ai_line_items";        // PG-only; per-account tabs in AI_LINE_ITEMS spreadsheet
 const GL_CODES_TAB            = "gl_codes";             // PG-only; per-account tabs in GL_CODES spreadsheet
 
+// ───────────────────────────────────────────────────────────────
+// Task 3 Fix 1 (Phase 2c, 2026-08-13): OCR extraction validation
+// ───────────────────────────────────────────────────────────────
+//
+// Two failure modes were observed in Phase 2b that Phase 3 must exclude
+// or it will produce misleading spend deltas:
+//   1. Per-row: extended_price disagrees with quantity * unit_price
+//      beyond rounding tolerance. Model mis-read one of the three cells.
+//   2. Per-invoice: SUM(extended_price) across all lines exceeds
+//      the header total by >15%. Model duplicated or hallucinated lines.
+//
+// Fix 1 (this file): tag rows with needs_review = true + review_reason
+// on insert. Do NOT block insert; the rows still land so downstream can
+// see raw OCR output. Phase 3 reconciliation filters
+// WHERE needs_review = false.
+//
+// Backfill (scripts/_task3_backfill_needs_review.mjs): apply the same
+// rule to existing rows, tagging the ~417 known over-extracted rows
+// identified in Phase 2b.
+//
+// Thresholds hoisted for future tuning. Fix 2 (prompt tightening) is
+// deferred pending 4 weeks of measurement.
+export const EP_ABS_TOLERANCE = 5;           // dollars; permissive floor for small lines
+export const EP_REL_TOLERANCE = 0.02;        // 2%; catches material mis-reads
+export const INVOICE_OVEREXTRACTION_THRESHOLD = 1.15;  // sum(ep) / header_total > 1.15 tags whole invoice
+
+/**
+ * Per-row validation: does extended_price agree with quantity * unit_price?
+ * Returns { needsReview: boolean, reason: string|null }.
+ * Reason "ep_qty_up_mismatch" fires when |ep - qty*up| exceeds
+ * max(EP_ABS_TOLERANCE, EP_REL_TOLERANCE * |qty*up|). Rows with any
+ * missing input (null qty / null up / null ep) pass through unmarked -
+ * we only tag rows where all three are present and disagree.
+ */
+export function evaluateLineArithmetic(item) {
+  const qty = item.quantity;
+  const up = item.unitPrice;
+  const ep = item.extendedPrice;
+  if (qty == null || up == null || ep == null) {
+    return { needsReview: false, reason: null };
+  }
+  const expected = Number(qty) * Number(up);
+  const diff = Math.abs(Number(ep) - expected);
+  const tolerance = Math.max(EP_ABS_TOLERANCE, EP_REL_TOLERANCE * Math.abs(expected));
+  if (diff > tolerance) {
+    return { needsReview: true, reason: "ep_qty_up_mismatch" };
+  }
+  return { needsReview: false, reason: null };
+}
+
+/**
+ * Per-invoice validation: does SUM(extended_price) exceed header total by
+ * more than INVOICE_OVEREXTRACTION_THRESHOLD (1.15 = 15%)? Returns true
+ * if the invoice as a whole should be tagged. headerTotal null / 0 =>
+ * no ratio, no tag (defer to per-row checks only).
+ */
+export function evaluateInvoiceOverextraction(lineItems, headerTotal) {
+  if (headerTotal == null || Number(headerTotal) <= 0) return false;
+  const sum = (lineItems || []).reduce((acc, li) => {
+    const ep = li.extendedPrice;
+    return acc + (ep == null ? 0 : Number(ep));
+  }, 0);
+  return (sum / Number(headerTotal)) > INVOICE_OVEREXTRACTION_THRESHOLD;
+}
+
 // PR 6.4 hotfix two-constant pattern:
 // The Sheets tab `invoice_submissions_26` carries a legacy version
 // suffix that the Sheets API requires for safeRead / appendRowSA to
@@ -1103,7 +1168,7 @@ async function insertAILineItemsPostgres(invoiceUuid, lineItems) {
   const supabase = getServiceClient();
   const { data: sub, error: subErr } = await supabase
     .from("invoice_submissions")
-    .select("id, account_key, vendor_name, invoice_number, invoice_date")
+    .select("id, account_key, vendor_name, invoice_number, invoice_date, total_amount")
     .eq("client_uuid", invoiceUuid)
     .maybeSingle();
   if (subErr) throw new Error(`[dataStore.invoice.pg] insertAILineItems submission lookup: ${subErr.message}`);
@@ -1163,6 +1228,12 @@ async function insertAILineItemsPostgres(invoiceUuid, lineItems) {
     return aliasNormToVendorId.get(norm) || null;
   }
 
+  // Task 3 Fix 1 (Phase 2c): compute invoice-level over-extraction ONCE
+  // up front so all rows for this invoice share the same tag. Per-row
+  // check runs inside the map. Invoice-level tag OVERRIDES per-row
+  // reasons so downstream sees the coarser signal first.
+  const invoiceOverextracted = evaluateInvoiceOverextraction(lineItems, sub.total_amount);
+
   const rows = lineItems.map((item) => {
     const vendorName = item.vendorName || sub.vendor_name;
     const vendorId = resolveVendorId(vendorName);
@@ -1173,6 +1244,20 @@ async function insertAILineItemsPostgres(invoiceUuid, lineItems) {
         `or a vendor_aliases entry mapping it to the canonical vendor, then re-submit invoice ${invoiceUuid}.`
       );
     }
+
+    // Task 3 Fix 1 (Phase 2c): per-row arithmetic validation.
+    // Invoice-level tag wins over per-row tag (coarser signal first).
+    const rowCheck = evaluateLineArithmetic(item);
+    let needsReview = false;
+    let reviewReason = null;
+    if (invoiceOverextracted) {
+      needsReview = true;
+      reviewReason = "invoice_over_extracted";
+    } else if (rowCheck.needsReview) {
+      needsReview = true;
+      reviewReason = rowCheck.reason;
+    }
+
     return {
       invoice_uuid:   sub.id,
       account_key:    sub.account_key,
@@ -1200,6 +1285,11 @@ async function insertAILineItemsPostgres(invoiceUuid, lineItems) {
       weight_line_value:    item.weightLineValue != null ? item.weightLineValue : null,
       catch_weight_marker:  item.catchWeightMarker || null,
       raw_columns:          item.rawColumns || null,
+
+      // Task 3 Fix 1 (pr-10-3 migration). Both nullable-safe; PG default
+      // fires for existing paths that don't route through this file yet.
+      needs_review:   needsReview,
+      review_reason:  reviewReason,
 
       // is_historical + data_provenance default FALSE + 'app_scan'
     };
