@@ -46,6 +46,7 @@ export function StateBox({ variant, title, children, cta, errCode }) {
       ) : (
         <>
           {variant === "empty-first" && <Icon><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></Icon>}
+          {variant === "empty-range" && <Icon><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></Icon>}
           {variant === "empty-filtered" && <Icon><path d="M22 3H2l8 9.46V19l4 2v-8.54z" /></Icon>}
           {variant === "error" && <Icon><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></Icon>}
           {variant === "stale" && <Icon><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></Icon>}
@@ -88,6 +89,22 @@ export function StateEmptyFiltered({ workerCount, onClear }) {
       cta={<button type="button" className="kpi-btn kpi-btn-primary-v5" onClick={onClear}>Clear worker filter</button>}
     >
       The worker filter ({workerCount} selected) matches nothing in this range.
+    </StateBox>
+  );
+}
+// Fix 4 (D2.1) - the date range IS a filter per spec 3.9. Was
+// misrouted to StateEmptyFirstRun before, which claimed pipeline
+// failure on a healthy pipeline. v5 line ~1052 defines this
+// state; the CTA drops back to FYTD through the canonical preset
+// path so URL and preset-suffix resolution stay consistent.
+export function StateEmptyRange({ onUseFYTD }) {
+  return (
+    <StateBox
+      variant="empty-range"
+      title="No weeks in this range"
+      cta={<button type="button" className="kpi-btn kpi-btn-primary-v5" onClick={onUseFYTD}>Use FYTD</button>}
+    >
+      Nothing was derived between these dates. Widen the range or use FYTD.
     </StateBox>
   );
 }

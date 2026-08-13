@@ -416,6 +416,10 @@
   color: var(--kpi-accent); font: inherit; font-size: 12px; font-weight: 500;
   cursor: pointer;
 }
+.kpi-cal-foot-actions {
+  display: inline-flex; align-items: center; gap: var(--space-3);
+}
+.kpi-cal-foot-actions .kpi-btn-primary-v5:disabled { opacity: 0.45; cursor: not-allowed; }
 @media (max-width: 767px) {
   .kpi-cal-pop { min-width: 280px; padding: 10px 12px; }
   .kpi-cal-months { grid-template-columns: 1fr; gap: 12px; }
