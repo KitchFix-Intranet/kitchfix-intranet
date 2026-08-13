@@ -130,10 +130,14 @@ for (let i = 0; i < seed.lines.length; i += BATCH) {
 process.stdout.write("\n");
 
 // ── Post-load DB verification ────────────────────────────────────
-const total = await supa.from("kpi_budgets").select("*", { count: "exact", head: true });
+// Fix D - scope the count query to fiscal_year so the day FY2027 loads,
+// a FY2026 re-run does not fail on total-rows drift.
+const total = await supa.from("kpi_budgets")
+  .select("*", { count: "exact", head: true })
+  .eq("fiscal_year", FISCAL_YEAR);
 if (total.error) { console.error(`ERROR post-load count: ${total.error.message}`); process.exit(1); }
 const rowMatch = total.count === seed.row_count;
-console.log(`\nDB row count: ${total.count} vs seed.row_count ${seed.row_count} - ${rowMatch ? "PASS" : "FAIL"}`);
+console.log(`\nDB FY${FISCAL_YEAR} row count: ${total.count} vs seed.row_count ${seed.row_count} - ${rowMatch ? "PASS" : "FAIL"}`);
 
 // Per-account 3100.1 year sums vs manifest.
 const accounts = Object.keys(seed.manifest_3100_1_year_totals);

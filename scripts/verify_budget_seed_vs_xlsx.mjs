@@ -79,8 +79,10 @@ const PNL_TAB = {
 };
 
 const r2 = (v) => Math.round(Number(v || 0) * 100) / 100;
+// Fix C - filename tolerance. Downloaded copies commonly mangle
+// spaces/ampersands to underscores. Accept both spellings.
 const files = readdirSync(xlsxDir)
-  .filter(f => f.endsWith(".xlsx") && f.includes("2026 P&L"))
+  .filter(f => f.endsWith(".xlsx") && /2026[ _]P[&_]L/.test(f))
   .map(f => ({ name: f, full: join(xlsxDir, f) }));
 
 if (files.length === 0) {
@@ -100,7 +102,7 @@ function fileForAccount(acct) {
     "CIN - KY":     "Louisville",
     "CIN - OH":     "Cincinnati",
     "STL - FL":     "Jupiter",
-    "STL - MO":     "St.",
+    "STL - MO":     "St. Louis",   // full city name; 'Louis' alone collides with Louisville (CIN - KY)
     "TBJ - NY":     "Buffalo",
     "TBJ - FL":     "Dunedin",
     "TBR - FL":     "Port Charlotte",
@@ -130,26 +132,42 @@ async function readAccount(acct) {
     }
   }
 
-  // Walk each row. Leaf lines have a label with 4-space indent + code +
-  // description. Group headers have no leading whitespace on the code;
-  // "Total <group>" rows begin with two-space indent + "Total ".
+  // Fix A - leaf discriminator by row shape, not by indent + dot.
+  // Reason: the workbooks carry no-dot revenue leafs (`2200 Catering
+  // Revenue`, `2300 Service Charges`, `2600 Consulting`) at zero-indent
+  // group-header level. Requiring both an indent and a dotted code
+  // dropped them, so the workbook side of the grand checksum missed
+  // that revenue.
+  //
+  // A row is a LEAF when:
+  //   1. trimmed label starts with a code (`\d+` optionally followed
+  //      by `.\d+`, then whitespace)
+  //   2. trimmed label does not start with `Total `
+  //   3. at least one of its 13 period cells (cols B..N) is non-null
+  //      (Ruling 1: a $0 budget is a budget fact; numeric 0 keeps a
+  //      row as a leaf. Group headers have ALL 13 cells blank in
+  //      these workbooks - that is the true discriminator).
+  //
+  // The title row (`2026 - P&L Budget vs Actual`) fails the code
+  // regex and stays excluded. The line_code is the leading token.
   const lines = new Map(); // line_code -> [amount * 13]
   for (let r = 5; r <= ws.rowCount; r += 1) {
     const label = String(ws.getRow(r).getCell(1).value || "");
     if (!label) continue;
-    // Exclude group headers (no leading spaces) and "Total ..." rows.
-    if (!label.startsWith("    ")) continue;   // require 4-space indent
-    if (label.trim().startsWith("Total ")) continue;
-    // Extract the line_code (first token after trim).
     const trimmed = label.trim();
-    const codeMatch = trimmed.match(/^(\d+\.\d+)\b/);
+    if (trimmed.startsWith("Total ")) continue;
+    const codeMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s/);
     if (!codeMatch) continue;
     const line_code = codeMatch[1];
+    // Row shape: any non-null period cell qualifies as a leaf.
+    let hasCell = false;
     const periods = [];
     for (let c = 2; c <= 14; c += 1) {
       const v = ws.getRow(r).getCell(c).value;
+      if (v !== null && v !== undefined && v !== "") hasCell = true;
       periods.push(r2(v));
     }
+    if (!hasCell) continue;  // group header - all 13 cells blank
     lines.set(line_code, periods);
   }
   return { lines };

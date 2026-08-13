@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS kpi_budgets (
 -- Helpful non-unique index for the labor-route resolver:
 -- (account_key, line_code) is the loop-inner scope when pulling
 -- periods 1..13 for a single line on one account. Cheap given the
--- table is small (roughly 3400 rows at full load).
+-- table is small (roughly 4,500 rows at full load).
 CREATE INDEX IF NOT EXISTS kpi_budgets_account_line_idx
   ON kpi_budgets (account_key, line_code, fiscal_year);
 

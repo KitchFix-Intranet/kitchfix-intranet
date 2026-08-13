@@ -118,10 +118,16 @@ const pnlQ = await supa.from("kpi_budgets")
   .eq("fiscal_year", FY)
   .eq("period_no", 5)
   .maybeSingle();
+// Fix B - sc_labor_budgets has no period_no column. Per sc-20 + the
+// sc-21 bare-numeric convention correction, the column is `period`
+// TEXT, storing '5' not 5. Also filter to the LIVE row via
+// superseded_at IS NULL so the day a supersede history row lands,
+// this .maybeSingle() does not blow up on multiple matches.
 const scQ = await supa.from("sc_labor_budgets")
   .select("hourly_budget")
   .eq("account_key", acct)
-  .eq("period_no", "5")
+  .eq("period", "5")
+  .is("superseded_at", null)
   .maybeSingle();
 const havePnl = !pnlQ.error && pnlQ.data && pnlQ.data.amount != null;
 const haveSc  = !scQ.error && scQ.data && scQ.data.hourly_budget != null;
