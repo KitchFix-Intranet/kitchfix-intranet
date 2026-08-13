@@ -58,11 +58,29 @@ if (total.error) { console.error(total.error); process.exit(1); }
 assert(`row count == seed.row_count (${seed.row_count})`, total.count === seed.row_count, `db ${total.count}`);
 
 // ── 2. grand checksum ───────────────────────────────────────────
-// Stream in chunks to avoid a 25k-row SELECT. Small enough here that
-// one shot is fine - kpi_budgets caps around 3-4k rows.
-const all = await supa.from("kpi_budgets").select("amount");
-if (all.error) { console.error(all.error); process.exit(1); }
-const dbGrand = r2((all.data || []).reduce((s, r) => s + Number(r.amount), 0));
+// Supabase PostgREST caps every response at 1,000 rows by default.
+// kpi_budgets carries ~4,500 rows at full load, so a one-shot
+// .select("amount") silently returns only the first page and any
+// downstream sum is wrong. Paginate explicitly with .range() until
+// a page returns fewer than PAGE rows. Deterministic ordering makes
+// the walk stable under concurrent writes (none expected, but free).
+const PAGE = 1000;
+let dbGrandSum = 0;
+let from = 0;
+while (true) {
+  const q = await supa.from("kpi_budgets")
+    .select("amount")
+    .order("account_key")
+    .order("line_code")
+    .order("period_no")
+    .range(from, from + PAGE - 1);
+  if (q.error) { console.error(q.error); process.exit(1); }
+  const rows = q.data || [];
+  for (const r of rows) dbGrandSum += Number(r.amount);
+  if (rows.length < PAGE) break;
+  from += PAGE;
+}
+const dbGrand = r2(dbGrandSum);
 const seedGrand = r2(seed.grand_total_all_lines);
 assert("grand checksum tie", Math.abs(dbGrand - seedGrand) < 0.01);
 
