@@ -787,6 +787,8 @@ export default function KpiLaborPage() {
               end={end}
               today={today}
               currentPeriodNo={currentPeriodNo}
+              budgetPeriods={data.budget_periods || []}
+              budgetMode={data.budget_mode || "static"}
             />
           </div>
           <MetricGrid
@@ -798,11 +800,15 @@ export default function KpiLaborPage() {
             end={end}
             today={today}
             currentPeriodNo={currentPeriodNo}
+            budgetPeriods={data.budget_periods || []}
+            budgetMode={data.budget_mode || "static"}
           />
           <TrendChart
             account={account}
             weeks={weekAggregates}
             openWeeks={expandedWeeks}
+            budgetPeriods={data.budget_periods || []}
+            budgetMode={data.budget_mode || "static"}
             onBarClick={(wk) => {
               // M7 jump: open week + its period
               const g = grouped.find(gg => gg.weeks.some(w => w.week_start === wk));

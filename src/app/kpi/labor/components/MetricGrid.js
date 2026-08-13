@@ -5,12 +5,21 @@
 // resolved: existing 8-card grid retained with consistency pass -
 // equal-height cards, two-line reserved captions.
 //
-// Estimate discipline (+c doctrine): estimates render with `~` prefix
-// and distinct weight, rate in caption, never in a Dollars column,
-// never summed into totals (D27).
+// kpi-2 · Budget / Over-under / Pace cards now consume the range
+// budget derived from budget_periods (Playbook 4.5 supersede-over-P&L).
+// Envelope mode (TXR - TX - V per 4.6) dashes those three cards with
+// "envelope-based" so nothing implies a static budget exists.
+// Static + no-budget-loaded (missing periods entirely) dashes with
+// "no budget loaded" - the existing budget > 0 gate hides the varpill.
+// The K9 "illustrative" copy has been retired from every card caption
+// and hover title on this surface.
 
 import { fmt$, fmtHrs } from "../lib/formatting";
-import { budgetForRange, elapsedPct, presetSuffix } from "../lib/budgets";
+import {
+  budgetForRange,
+  elapsedPct,
+  presetSuffix,
+} from "../lib/budgets";
 
 export function MetricGrid({
   account,
@@ -21,6 +30,8 @@ export function MetricGrid({
   end,
   today,
   currentPeriodNo,
+  budgetPeriods,   // from labor route
+  budgetMode,      // 'static' | 'envelope'
 }) {
   const r = Number(totals?.hours_regular || 0);
   const o = Number(totals?.hours_overtime || 0);
@@ -30,7 +41,8 @@ export function MetricGrid({
 
   const worked = r + o + h;
   const avg = worked > 0 ? dollars / worked : 0;
-  const budget = budgetForRange(account, weekCount);
+  const isEnvelope = budgetMode === "envelope";
+  const budget = isEnvelope ? 0 : budgetForRange(budgetPeriods, start, end);
   const over = dollars - budget;
   const pace = budget > 0 ? (dollars / budget) * 100 : 0;
   const elapsed = elapsedPct(start, end, today);
@@ -44,30 +56,45 @@ export function MetricGrid({
 
   const dash = <span className="kpi-dash">—</span>;
 
+  // Budget-card copy varies by mode:
+  //   envelope       -> "envelope-based"
+  //   static, budget -> "FY2026 budget"
+  //   static, none   -> "no budget loaded"
+  const budgetCaption = isEnvelope
+    ? "envelope-based"
+    : budget > 0
+      ? "FY2026 budget"
+      : "no budget loaded";
+
+  const overCaption = isEnvelope ? "envelope-based" : "priced dollars vs budget";
+  const paceCaption = isEnvelope
+    ? "envelope-based"
+    : budget > 0
+      ? `of budget · ${elapsed.toFixed(0)}% elapsed`
+      : "no budget";
+
   return (
     <>
       <div className="kpi-metgrp">Budget</div>
       <div className="kpi-mets">
         <div className="kpi-met">
           <div className="kpi-met-l">Budget{suffix}</div>
-          <div className="kpi-met-v kpi-mono">{budget > 0 ? fmt$(budget) : dash}</div>
-          <div className="kpi-met-m">illustrative until real budgets load</div>
+          <div className="kpi-met-v kpi-mono">{isEnvelope || budget <= 0 ? dash : fmt$(budget)}</div>
+          <div className="kpi-met-m">{budgetCaption}</div>
         </div>
         <div className="kpi-met">
           <div className="kpi-met-l">Over / under</div>
-          <div className="kpi-met-v kpi-mono" style={{ color: over > 0.004 ? "var(--red-600)" : "var(--green-800)" }}>
-            {budget > 0 ? (over > 0.004 ? "+" : "-") : ""}{budget > 0 ? fmt$(Math.abs(over)) : "—"}
+          <div className="kpi-met-v kpi-mono" style={{ color: !isEnvelope && budget > 0 ? (over > 0.004 ? "var(--red-600)" : "var(--green-800)") : undefined }}>
+            {isEnvelope || budget <= 0 ? dash : `${over > 0.004 ? "+" : "-"}${fmt$(Math.abs(over))}`}
           </div>
-          <div className="kpi-met-m">priced dollars vs budget · illustrative</div>
+          <div className="kpi-met-m">{overCaption}</div>
         </div>
         <div className="kpi-met">
           <div className="kpi-met-l">Pace</div>
           <div className={`kpi-met-v kpi-mono ${paceBad ? "warn" : ""}`}>
-            {budget > 0 ? `${pace.toFixed(0)}%` : "—"}
+            {isEnvelope || budget <= 0 ? dash : `${pace.toFixed(0)}%`}
           </div>
-          <div className="kpi-met-m">
-            {budget > 0 ? `of budget · ${elapsed.toFixed(0)}% elapsed` : "no budget · illustrative"}
-          </div>
+          <div className="kpi-met-m">{paceCaption}</div>
         </div>
         <div className="kpi-met">
           <div className="kpi-met-l">Est. unpriced total</div>
@@ -90,7 +117,7 @@ export function MetricGrid({
         <div className="kpi-met">
           <div className="kpi-met-l">Budget in hours</div>
           <div className="kpi-met-v kpi-mono">{budHrs > 0 ? fmtHrs(Math.round(budHrs * 100) / 100) : dash}</div>
-          <div className="kpi-met-m">@ {fmt$(avg)}/hr avg rate</div>
+          <div className="kpi-met-m">{budHrs > 0 ? `@ ${fmt$(avg)}/hr avg rate` : (isEnvelope ? "envelope-based" : "no budget")}</div>
         </div>
         <div className="kpi-met">
           <div className="kpi-met-l">Overtime</div>

@@ -1,34 +1,92 @@
 // src/app/kpi/labor/lib/budgets.js
 //
-// K9 · illustrative labor budgets, one module. Every occurrence carries
-// the "illustrative" label until real budgets replace these values in
-// one place.
+// kpi-2 · real budgets. The hardcoded illustrative per-week map is
+// gone; hero + cards + trend read from the labor route's
+// budget_periods (Playbook 4.5 resolution: supersede wins, else P&L,
+// else omitted). This module owns pure calculators (budget-for-range,
+// elapsed %, supersede summaries) and the preset-suffix formatter.
+
+import { periodOf, weekStartsInRange } from "./periods";
+
+// Sum the per-period budget across every CALENDAR fiscal week that
+// intersects [startISO, endISO]. Each week contributes its period's
+// amount / 4 (4 weeks per fiscal period, always). Weeks whose period
+// has no budget_periods row contribute 0 - that is a real budgeted-
+// zero-week signal, not a bug; a partial map still sums what it has.
 //
-// Values are per-week dollar budgets per hourly account (D26 salaried
-// accounts have no line here - CIN-KY / TBJ-NY excluded). Numbers are
-// placeholders sized to match roughly the accounts' current spend
-// pattern from labor_actuals; they will be replaced when a real
-// budget source lands. Do NOT lift these into a decision without
-// stripping the "illustrative" tag first.
+// F10 semantic (kpi-2 deliberate): budget spans ALL calendar weeks in
+// range, not weeks-with-data. A budgeted week with no logged labor is
+// underspend information, not a gap in the divisor. Pre-opening
+// periods carry $0 amounts in the seed, so they cannot inflate.
+//
+// Envelope mode: the labor route omits budget_periods entirely for
+// TXR - TX - V. Callers must gate on budget_mode before calling this.
+export function budgetForRange(budgetPeriods, startISO, endISO) {
+  if (!Array.isArray(budgetPeriods) || budgetPeriods.length === 0) return 0;
+  const byPeriod = new Map();
+  for (const bp of budgetPeriods) {
+    if (bp && Number.isFinite(Number(bp.amount))) {
+      byPeriod.set(Number(bp.period_no), Number(bp.amount));
+    }
+  }
+  const weeks = weekStartsInRange(startISO, endISO);
+  let sum = 0;
+  for (const ws of weeks) {
+    const p = periodOf(ws);
+    if (p == null) continue;
+    const amt = byPeriod.get(p);
+    if (amt == null) continue;
+    sum += amt / 4;
+  }
+  return Math.round(sum * 100) / 100;
+}
 
-const BUDGET_WK = {
-  "CIN - OH":     3900,
-  "STL - FL":     8200,
-  "CIN - AZ":     3550,
-  "STL - MO":     3200,
-  "TBJ - FL":     5100,
-  "TBR - FL":     5400,
-  "TXR - AZ":     3300,
-  "TXR - TX - H": 2650,
-  "TXR - TX - V": 1950,
-};
+// True iff any period intersecting [startISO, endISO] was superseded
+// (playbook 4.5 - the dashboard marks the line and drills to the
+// reason + P&L figure). Callers use this to decide whether to render
+// the "superseded" marker on the budget sub-line.
+export function hasSupersededInRange(budgetPeriods, startISO, endISO) {
+  if (!Array.isArray(budgetPeriods) || budgetPeriods.length === 0) return false;
+  const superByPeriod = new Map();
+  for (const bp of budgetPeriods) {
+    if (bp) superByPeriod.set(Number(bp.period_no), bp);
+  }
+  const seenPeriods = new Set();
+  for (const ws of weekStartsInRange(startISO, endISO)) {
+    const p = periodOf(ws);
+    if (p != null) seenPeriods.add(p);
+  }
+  for (const p of seenPeriods) {
+    const bp = superByPeriod.get(p);
+    if (bp && bp.superseded) return true;
+  }
+  return false;
+}
 
-// budgetForRange - dollar budget for the given account across the given
-// number of weeks. Returns 0 if account is not in the roster (salaried,
-// unknown).
-export function budgetForRange(accountKey, weekCount) {
-  const perWeek = BUDGET_WK[accountKey] || 0;
-  return perWeek * (weekCount || 0);
+// Collect superseded entries whose period intersects [startISO,
+// endISO]. Returns [{ period_no, amount, pnl_amount, reason }].
+// Callers render this into the hover-title on the supersede marker.
+export function supersededSummary(budgetPeriods, startISO, endISO) {
+  if (!Array.isArray(budgetPeriods) || budgetPeriods.length === 0) return [];
+  const byPeriod = new Map(budgetPeriods.map(bp => [Number(bp.period_no), bp]));
+  const seen = new Set();
+  for (const ws of weekStartsInRange(startISO, endISO)) {
+    const p = periodOf(ws);
+    if (p != null) seen.add(p);
+  }
+  const out = [];
+  for (const p of seen) {
+    const bp = byPeriod.get(p);
+    if (bp && bp.superseded) {
+      out.push({
+        period_no: p,
+        amount: bp.amount,
+        pnl_amount: bp.pnl_amount,
+        reason: bp.reason || null,
+      });
+    }
+  }
+  return out.sort((a, b) => a.period_no - b.period_no);
 }
 
 // elapsedPct - what % of the range window has already passed. Anchor

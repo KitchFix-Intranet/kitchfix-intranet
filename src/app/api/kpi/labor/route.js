@@ -196,6 +196,83 @@ export async function GET(request) {
     .is("resolved_at", null)
     .order("total_amount", { ascending: false });
 
+  // ── kpi-2 · budget_periods + budget_mode ────────────────────────
+  // Playbook 4.5 resolution order per period:
+  //   1. live sc_labor_budgets row (superseded_at IS NULL) wins as
+  //      the SUPERSEDE source; carry its reason. If a kpi_budgets
+  //      3100.1 row exists and differs, set superseded: true and
+  //      include the P&L figure as pnl_amount for the drill.
+  //   2. kpi_budgets 3100.1 amount for that (account, period) is the
+  //      P&L source.
+  //   3. no row for that period - omit it entirely.
+  //
+  // Playbook 4.6 - TXR - TX - V is envelope mode. This route ships
+  // NO budget_periods for envelope accounts; variance is against
+  // the ADJUSTED envelope (Service Calendar), never the original
+  // budget.
+  //
+  // Playbook 8.2 hard rule: this route selects line_code = '3100.1'
+  // ONLY. Never 3100.2. Never any 3100-group total. The salary
+  // subtraction-attack surface must not open here.
+  const budget_mode = account === "TXR - TX - V" ? "envelope" : "static";
+  let budget_periods = [];
+  if (budget_mode === "static") {
+    // Pull all 13 periods for this account from the two sources in
+    // parallel. Both queries are small (<= 13 rows each) - no
+    // pagination concern.
+    const [pnlQ, scQ] = await Promise.all([
+      supa
+        .from("kpi_budgets")
+        .select("period_no, amount")
+        .eq("account_key", account)
+        .eq("line_code", "3100.1")
+        .eq("fiscal_year", 2026),
+      supa
+        .from("sc_labor_budgets")
+        .select("period, hourly_budget, reason")
+        .eq("account_key", account)
+        .is("superseded_at", null),
+    ]);
+    if (pnlQ.error) return NextResponse.json(safeError("kpi_budgets_3100_1", pnlQ.error), { status: 500 });
+    if (scQ.error)  return NextResponse.json(safeError("sc_labor_budgets", scQ.error),   { status: 500 });
+
+    const pnlByPeriod = new Map(
+      (pnlQ.data || []).map(r => [Number(r.period_no), Number(r.amount)])
+    );
+    // sc_labor_budgets.period is TEXT bare-numeric ('5' not 5) per
+    // sc-20 + sc-21 convention.
+    const scByPeriod = new Map(
+      (scQ.data || []).map(r => [parseInt(String(r.period), 10), {
+        amount: Number(r.hourly_budget),
+        reason: r.reason || null,
+      }])
+    );
+
+    for (let p = 1; p <= 13; p += 1) {
+      const sc = scByPeriod.get(p);
+      const pnl = pnlByPeriod.get(p);
+      if (sc != null && Number.isFinite(sc.amount)) {
+        const pnlDiffers = pnl != null && Math.abs(pnl - sc.amount) > 0.01;
+        budget_periods.push({
+          period_no: p,
+          amount: Math.round(sc.amount * 100) / 100,
+          source: "supersede",
+          superseded: pnlDiffers,
+          ...(sc.reason ? { reason: sc.reason } : {}),
+          ...(pnlDiffers ? { pnl_amount: Math.round(pnl * 100) / 100 } : {}),
+        });
+      } else if (pnl != null && Number.isFinite(pnl)) {
+        budget_periods.push({
+          period_no: p,
+          amount: Math.round(pnl * 100) / 100,
+          source: "pnl",
+          superseded: false,
+        });
+      }
+      // else: no row - omit.
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     filters: { account, start, end },
@@ -206,6 +283,8 @@ export async function GET(request) {
     derive_freshness,
     unmapped_names: unmapped.data || [],
     account_periods,
+    budget_periods,
+    budget_mode,
     name_availability: {
       has_names: resolvedNames > 0,
       resolved: resolvedNames,

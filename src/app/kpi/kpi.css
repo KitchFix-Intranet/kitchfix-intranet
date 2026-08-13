@@ -1311,6 +1311,15 @@
   margin-top: var(--space-1);
   line-height: var(--lb-caption);
 }
+/* kpi-2 · supersede marker on the hero budget sub-line. Muted-italic
+   so it reads as a signpost, not a warning; the hover title carries
+   the reason and the P&L figure per playbook 4.5. */
+.kpi-super-mark {
+  font-style: italic;
+  color: var(--text-muted);
+  cursor: help;
+  border-bottom: 1px dotted var(--border-default);
+}
 .kpi-varpill {
   display: inline-flex; align-items: center;
   gap: var(--space-2);
