@@ -614,10 +614,7 @@ export async function GET(request) {
         );
       }
       if (!isPerMealBillingAccount(accountKey)) {
-        // Fee accounts never have finalize rows; return empty rather
-        // than 400 so the client can gate rendering on the response
-        // shape without knowing the pilot set locally.
-        return NextResponse.json({ success: true, rows: [] });
+        return NextResponse.json({ success: true, rows: [], weeks: {}, cadence: null, qboMode: null });
       }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !/^\d{4}-\d{2}-\d{2}$/.test(last)) {
         return NextResponse.json(
@@ -626,20 +623,117 @@ export async function GET(request) {
         );
       }
       const supa = getServiceClient();
-      const { data, error } = await supa
-        .from("sc_week_finalize")
-        .select("id, account_key, week_start, status, finalized_by, finalized_at, reverted_by, reverted_at, revert_reason")
-        .eq("account_key", accountKey)
-        .gte("week_start", first)
-        .lte("week_start", last)
-        .order("week_start", { ascending: true });
-      if (error) {
+
+      // PR-E (2026-08-14): the response now carries authoritative
+      // per-week completeness + cadence/mode + pair role so the
+      // client cannot mis-compute at the boundary. Any Monday in the
+      // requested range gets a server-computed { complete, missing,
+      // period, weekIndex, pairRole } record. See addendum §A3/§A4.
+      const [finalizeRes, accountMapRes] = await Promise.all([
+        supa
+          .from("sc_week_finalize")
+          .select("id, account_key, week_start, status, finalized_by, finalized_at, reverted_by, reverted_at, revert_reason")
+          .eq("account_key", accountKey)
+          .gte("week_start", first)
+          .lte("week_start", last)
+          .order("week_start", { ascending: true }),
+        supa
+          .from("sc_qbo_account_map")
+          .select("qbo_mode, cadence, qbo_customer_id, qbo_customer_name")
+          .eq("account_key", accountKey)
+          .maybeSingle(),
+      ]);
+      if (finalizeRes.error) {
         return NextResponse.json(
-          { success: false, error: `sc_week_finalize read: ${error.message}` },
+          { success: false, error: `sc_week_finalize read: ${finalizeRes.error.message}` },
           { status: 500 }
         );
       }
-      return NextResponse.json({ success: true, rows: data || [] });
+
+      const cadence = accountMapRes.data?.cadence || "weekly";
+      const qboMode = accountMapRes.data?.qbo_mode === "live" ? "live" : "test";
+
+      // Enumerate every ISO Monday in [first .. last], plus one
+      // Monday BEFORE (so a boundary week whose Monday is in the
+      // previous month is still returned when the client renders it
+      // in the current month).
+      const mondays = [];
+      {
+        const firstDate = new Date(`${first}T12:00:00Z`);
+        // Snap back to the Monday of the week containing `first`.
+        const isoIdx = (firstDate.getUTCDay() + 6) % 7;
+        firstDate.setUTCDate(firstDate.getUTCDate() - isoIdx);
+        const lastDate = new Date(`${last}T12:00:00Z`);
+        for (let d = new Date(firstDate); d <= lastDate; d.setUTCDate(d.getUTCDate() + 7)) {
+          mondays.push(d.toISOString().slice(0, 10));
+        }
+      }
+
+      // Fetch sc_day_metadata for each Monday to derive period +
+      // week_label. Rows are per-(account, date); constrain by
+      // account so we get exactly one row per Monday.
+      const metaRes = await supa
+        .from("sc_day_metadata")
+        .select("service_date, period, week_label")
+        .eq("account_key", accountKey)
+        .in("service_date", mondays);
+      const metaByDate = new Map();
+      if (metaRes.data) for (const r of metaRes.data) metaByDate.set(String(r.service_date).slice(0, 10), r);
+
+      function parseWeekIdx(label) {
+        if (typeof label !== "string") return null;
+        const m = label.match(/^Week\s+(\d+)$/i);
+        return m ? Number(m[1]) : null;
+      }
+
+      // Compute per-Monday completeness + pair role. Serial to keep
+      // it simple; the per-account weekday count in the pilot range
+      // is small (5 rows at most for a monthly view).
+      const weeks = {};
+      for (const monday of mondays) {
+        let comp;
+        try {
+          comp = await computeWeekCompleteness(accountKey, monday);
+        } catch (e) {
+          comp = { complete: false, missingDates: [], reason: e?.message || "completeness failed" };
+        }
+        const meta = metaByDate.get(monday) || null;
+        const weekIdx = parseWeekIdx(meta?.week_label);
+        let pairRole = "solo";
+        let pairPartnerMonday = null;
+        if (cadence === "biweekly") {
+          if (weekIdx === 1 || weekIdx === 3) {
+            pairRole = "first";
+            const d = new Date(`${monday}T12:00:00Z`);
+            d.setUTCDate(d.getUTCDate() + 7);
+            pairPartnerMonday = d.toISOString().slice(0, 10);
+          } else if (weekIdx === 2 || weekIdx === 4) {
+            pairRole = "close";
+            const d = new Date(`${monday}T12:00:00Z`);
+            d.setUTCDate(d.getUTCDate() - 7);
+            pairPartnerMonday = d.toISOString().slice(0, 10);
+          }
+        }
+        weeks[monday] = {
+          weekStart:         monday,
+          weekEnd:           comp.weekEnd || null,
+          complete:          !!comp.complete,
+          missingDates:      Array.isArray(comp.missingDates) ? comp.missingDates : [],
+          period:            meta?.period ?? null,
+          weekLabel:         meta?.week_label ?? null,
+          weekIndex:         weekIdx,
+          pairRole,           // "solo" | "first" | "close"
+          pairPartnerMonday,
+        };
+      }
+
+      return NextResponse.json({
+        success: true,
+        rows:    finalizeRes.data || [],
+        cadence,
+        qboMode,
+        weeks,
+      });
     }
 
     // ── sc-year-summary: 12-month rollup for heatmap ──

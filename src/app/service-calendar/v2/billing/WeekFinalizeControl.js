@@ -77,7 +77,8 @@ export default function WeekFinalizeControl({
   accountKey,
   weekStart,              // ISO YYYY-MM-DD Monday
   weekEnd,                // ISO YYYY-MM-DD Sunday (optional; derived if missing)
-  weekDays,               // array of day records
+  weekDays,               // legacy: array of day records (client-computed).
+                          //   PR-E prefers serverWeekInfo.
   liveRow,                // { status, finalized_by, finalized_at } | null
   isOverrideUser,         // boolean
   onFinalize,             // async ({ accountKey, weekStart }) -> Promise
@@ -89,6 +90,19 @@ export default function WeekFinalizeControl({
   totalMeals,             // sum of actual_count across the week
   pretaxTotalDollars,     // number in dollars
   liveCustomerName,       // string (used in live mode; test mode ignores)
+  // ─── PR-E (2026-08-14) additions ───────────────────────────────
+  // Server-authoritative completeness + pair role for this week.
+  // Shape: { complete, missingDates:[isoDate], weekStart, weekEnd,
+  //          weekIndex, pairRole:'solo'|'first'|'close',
+  //          pairPartnerMonday, period, weekLabel }
+  serverWeekInfo = null,
+  // Same shape for the partner week in a bi-weekly pair. null when
+  // pairRole==='solo'. Used to gate the pair-close button when the
+  // first week of the pair is incomplete.
+  pairPartnerInfo = null,
+  // 'weekly' | 'biweekly'. Read from sc_qbo_account_map.cadence via
+  // sc-finalize-states. Drives §A4 rendering.
+  accountCadence = null,
 }) {
   const [saving, setSaving] = useState(false);
   const [errText, setErrText] = useState(null);
@@ -101,8 +115,28 @@ export default function WeekFinalizeControl({
   const [toastOpen, setToastOpen] = useState(false);
   const openButtonRef = useRef(null);
 
-  const missing = useMemo(() => missingDayList(weekDays), [weekDays]);
-  const isComplete = missing.length === 0 && Array.isArray(weekDays) && weekDays.length === 7;
+  // PR-E: prefer server-authoritative completeness. Falls back to
+  // legacy client-side count when the server hasn't returned a row
+  // for this week (fetch not yet resolved, or account not in the
+  // finalize surface). Legacy path also requires the 7-day guard so
+  // a partial visible week never presents as complete.
+  const useServer = serverWeekInfo != null;
+  const legacyMissing = useMemo(() => missingDayList(weekDays), [weekDays]);
+  const missing = useServer
+    ? (serverWeekInfo.missingDates || []).map((d) => ({ date: d, status: null }))
+    : legacyMissing;
+  const isComplete = useServer
+    ? !!serverWeekInfo.complete
+    : (legacyMissing.length === 0 && Array.isArray(weekDays) && weekDays.length === 7);
+
+  // Bi-weekly pair semantics (§A4).
+  const pairRole = accountCadence === "biweekly" ? (serverWeekInfo?.pairRole || "solo") : "solo";
+  const partnerComplete = pairPartnerInfo ? !!pairPartnerInfo.complete : true;
+  const partnerMissing = pairPartnerInfo?.missingDates || [];
+  const pairCloseSunday = (() => {
+    if (pairRole !== "close" || !serverWeekInfo?.weekEnd) return null;
+    return serverWeekInfo.weekEnd;
+  })();
 
   // Push-failed bar - one bordered container so the message, Retry,
   // and Unlock read as a single element aligned to the same right
@@ -233,9 +267,43 @@ export default function WeekFinalizeControl({
     }
   }
 
+  // PR-E: pair-first quiet state (§A4). When a bi-weekly pair's
+  // first week is complete AND the partner (closing) week has not
+  // yet been finalized, render a quiet caption instead of a button.
+  // The pair finalizes on the closing week.
+  if (pairRole === "first" && isComplete) {
+    const partnerLabel = serverWeekInfo?.weekIndex
+      ? `Week ${serverWeekInfo.weekIndex + 1}`
+      : "the closing week";
+    const partnerSunday = pairPartnerInfo?.weekEnd || null;
+    const dateFmt = partnerSunday
+      ? new Date(`${partnerSunday}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+      : null;
+    return (
+      <div className="sc-week-finalize sc-week-finalize--pair-first" aria-label={`Week ${weekStart} awaits pair close`}>
+        <span className="sc-week-finalize-quiet">
+          <span className="sc-week-finalize-quiet-tick" aria-hidden="true">&#10003;</span>
+          <span>
+            Week complete - finalizes with <b>{partnerLabel}</b>
+            {dateFmt ? <> on <b>{dateFmt}</b></> : null}
+          </span>
+        </span>
+      </div>
+    );
+  }
+
+  // Buttonless when incomplete AND pairRole=first (chip line only,
+  // no misleading Finalize button).
+  const suppressButton = pairRole === "first";
+
+  // Pair-close button + pair-partner gate. If the partner week is
+  // incomplete, the button disables and names the shortfall.
+  const pairPartnerGate = pairRole === "close" && !partnerComplete;
+  const buttonLabel = pairRole === "close" ? "Finalize 2-week period" : "Finalize week";
+
   return (
     <div className="sc-week-finalize sc-week-finalize--open" aria-label={`Week ${weekStart}`}>
-      {isComplete ? (
+      {isComplete && !pairPartnerGate ? (
         <button
           ref={openButtonRef}
           type="button"
@@ -246,36 +314,50 @@ export default function WeekFinalizeControl({
             setOverlayMode("confirm");
           }}
         >
-          Finalize week
+          {buttonLabel}
         </button>
       ) : (
         <>
-          {/* PR-D1 (2026-08-13): the per-day chips were removed as
-              triple-reporting - the day tiles + rail already carry
-              the missing-day identity and the chips outweighed the
-              button they gated. The count line is now the single
-              clickable affordance and jumps to the first missing
-              day. Finalize stays disabled + aria-disabled beside it. */}
-          <button
-            type="button"
-            className="sc-week-finalize-jump"
-            onClick={() => {
-              const first = missing[0];
-              if (first?.date) onOpenDay?.(first.date);
-            }}
-            aria-label={`Jump to first day needing entry (${missing[0]?.date ? chipLabelFor(missing[0]) : ""})`}
-          >
-            {missing.length} day{missing.length === 1 ? "" : "s"} still need entry or no-service
-          </button>
-          <button
-            ref={openButtonRef}
-            type="button"
-            className="sc-week-finalize-btn"
-            disabled
-            aria-disabled="true"
-          >
-            Finalize week
-          </button>
+          {/* PR-D1 (2026-08-13): single clickable count line replaces
+              per-day chips.
+              PR-E (2026-08-14): pair-partner gate uses the partner's
+              missing-count instead of this week's. */}
+          {pairPartnerGate ? (
+            <button
+              type="button"
+              className="sc-week-finalize-jump"
+              onClick={() => {
+                const first = partnerMissing[0];
+                if (first) onOpenDay?.(first);
+              }}
+              aria-label={`Jump to first day of Week ${(serverWeekInfo?.weekIndex || 2) - 1} needing entry`}
+            >
+              Week {(serverWeekInfo?.weekIndex || 2) - 1} still needs {partnerMissing.length} day{partnerMissing.length === 1 ? "" : "s"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="sc-week-finalize-jump"
+              onClick={() => {
+                const first = missing[0];
+                if (first?.date) onOpenDay?.(first.date);
+              }}
+              aria-label={`Jump to first day needing entry (${missing[0]?.date ? chipLabelFor(missing[0]) : ""})`}
+            >
+              {missing.length} day{missing.length === 1 ? "" : "s"} still need entry or no-service
+            </button>
+          )}
+          {!suppressButton && (
+            <button
+              ref={openButtonRef}
+              type="button"
+              className="sc-week-finalize-btn"
+              disabled
+              aria-disabled="true"
+            >
+              {buttonLabel}
+            </button>
+          )}
         </>
       )}
       {errText && <span className="sc-week-finalize-err" role="alert">{errText}</span>}

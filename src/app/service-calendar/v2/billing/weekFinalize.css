@@ -272,3 +272,34 @@
   font-weight: var(--sc2-wt-semibold);
   font-size: var(--sc2-size-micro);
 }
+
+/* PR-E (2026-08-14): month-boundary overlap tag. Sits at the LEFT
+   of the finalize row - a tiny caption naming the number of days
+   the week borrows from the adjacent month. Renders only in month
+   view when the boundary is real; period view never emits one. */
+.sc-week-finalize-overlap {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin-right: auto;
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-sunken);
+  border: var(--sc2-border-thin) solid var(--border-subtle);
+  border-radius: var(--radius-cell);
+}
+
+/* PR-E: pair-first quiet state (bi-weekly, §A4). Reuses the same
+   .sc-week-finalize-quiet caption look as the finalized-done state
+   so the calendar row jitter-free between states. */
+.sc-week-finalize--pair-first .sc-week-finalize-quiet {
+  color: var(--text-muted);
+}
+
+/* PR-E: day cell borrowed from the adjacent month (§A3). Reuses
+   the ghost styling but reduces opacity further - the cell is
+   NOT interactive here, only visible to keep the total honest. */
+.sc-daysq--other-month {
+  opacity: 0.42;
+}
