@@ -1,0 +1,105 @@
+{
+  "model": "claude-sonnet-4-5-20250929",
+  "invoices_probed": 4,
+  "total_cost_usd": 0.055689,
+  "results": [
+    {
+      "invoice_uuid": "24113785-f899-4018-b805-a860f23fa3f2",
+      "invoice_number": "9037244667",
+      "account": "TBJ - FL",
+      "lines_probed": 3,
+      "cost": 0.015897,
+      "parsed": {
+        "invoice_has_weight_column": true,
+        "invoice_has_case_line_with_weight": false,
+        "per_line": [
+          {
+            "line_index": 1,
+            "pack_verbatim": "1x100 CO",
+            "weight_visible_lb": null,
+            "weight_source": "not_visible",
+            "notes": "Pack Size column shows '1x100 CO'. Group Summary table shows Weight column but it is blank for the PR (Produce) group row. No individual line weight visible."
+          },
+          {
+            "line_index": 2,
+            "pack_verbatim": "15x200 CO",
+            "weight_visible_lb": null,
+            "weight_source": "not_visible",
+            "notes": "Pack Size column shows '15x200 CO'. Group Summary table shows Weight column but it is blank for the DS (Disposables) group row. No individual line weight visible."
+          },
+          {
+            "line_index": 3,
+            "pack_verbatim": "100x1 CO",
+            "weight_visible_lb": null,
+            "weight_source": "not_visible",
+            "notes": "Pack Size column shows '100x1 CO'. Group Summary table shows Weight column but it is blank for the GR (Grocery) group row. No individual line weight visible."
+          }
+        ]
+      },
+      "raw": "```json\n{\n  \"invoice_has_weight_column\": true,\n  \"invoice_has_case_line_with_weight\": false,\n  \"per_line\": [\n    {\n      \"line_index\": 1,\n      \"pack_verbatim\": \"1x100 CO\",\n      \"weight_visible_lb\": null,\n      \"weight_source\": \"not_visible\",\n      \"notes\": \"Pack Size column shows '1x100 CO'. Group Summary table shows Weight column but it is blank for the PR (Produce) group row. No individual line weight visible.\"\n    },\n    {\n      \"line_index\": 2,\n      \"pack_verbatim\": \"15x200 CO\",\n      \"weight_visible_lb\": null,\n      \"weight_source\": \"not_visible\",\n      \"notes\": \"Pack Size column shows '15x200 CO'. Group Summary table shows Weight column but it is blank for the DS (Disposables) group row. No individual line weight visible.\"\n    },\n    {\n      \"line_index\": 3,\n      \"pack_verbatim\": \"100x1 CO\",\n      \"weight_visible_lb\": null,\n      \"weight_source\": \"not_visible\",\n      \"notes\": \"Pack Size column shows '100x1 CO'. Group Summary table shows Weight column but it is blank for the GR (Grocery) group row. No individual line weight visible.\"\n    }\n  ]\n}\n```"
+    },
+    {
+      "invoice_uuid": "67565c98-8bb2-41d0-9a9c-4caf34526613",
+      "invoice_number": "9036999150",
+      "account": "TBJ - FL",
+      "lines_probed": 1,
+      "cost": 0.013263,
+      "parsed": {
+        "invoice_has_weight_column": false,
+        "invoice_has_case_line_with_weight": false,
+        "per_line": [
+          {
+            "line_index": 1,
+            "pack_verbatim": "60x1 CO",
+            "weight_visible_lb": null,
+            "weight_source": "not_visible",
+            "notes": "Item code 575570, description 'CHIP POT BBQ BKD', pack size shown as '60x1 CO', qty 1 CS. No separate CASE line with weight. No weight columns visible on invoice. Group Summary table shows Weight column but it is blank for all groups including GR (Grocery) where this item belongs."
+          }
+        ]
+      },
+      "raw": "```json\n{\n  \"invoice_has_weight_column\": false,\n  \"invoice_has_case_line_with_weight\": false,\n  \"per_line\": [\n    {\n      \"line_index\": 1,\n      \"pack_verbatim\": \"60x1 CO\",\n      \"weight_visible_lb\": null,\n      \"weight_source\": \"not_visible\",\n      \"notes\": \"Item code 575570, description 'CHIP POT BBQ BKD', pack size shown as '60x1 CO', qty 1 CS. No separate CASE line with weight. No weight columns visible on invoice. Group Summary table shows Weight column but it is blank for all groups including GR (Grocery) where this item belongs.\"\n    }\n  ]\n}\n```"
+    },
+    {
+      "invoice_uuid": "67c4708b-0dbd-4c2a-b4b2-5f13a0ec86f6",
+      "invoice_number": "9037709097",
+      "account": "TBJ - FL",
+      "lines_probed": 1,
+      "cost": 0.013281000000000001,
+      "parsed": {
+        "invoice_has_weight_column": false,
+        "invoice_has_case_line_with_weight": false,
+        "per_line": [
+          {
+            "line_index": 1,
+            "pack_verbatim": "8x4 CO",
+            "weight_visible_lb": null,
+            "weight_source": "not_visible",
+            "notes": "The Pack Size column shows '8x4 CO'. There is a 'Weight' column in the Group Summary section at the bottom of page 1, but it is empty (no values are printed). No separate CASE line, TOT WT, SHIPPED WT, NET WT, or TOTAL WEIGHT information is visible for this line item."
+          }
+        ]
+      },
+      "raw": "```json\n{\n  \"invoice_has_weight_column\": false,\n  \"invoice_has_case_line_with_weight\": false,\n  \"per_line\": [\n    {\n      \"line_index\": 1,\n      \"pack_verbatim\": \"8x4 CO\",\n      \"weight_visible_lb\": null,\n      \"weight_source\": \"not_visible\",\n      \"notes\": \"The Pack Size column shows '8x4 CO'. There is a 'Weight' column in the Group Summary section at the bottom of page 1, but it is empty (no values are printed). No separate CASE line, TOT WT, SHIPPED WT, NET WT, or TOTAL WEIGHT information is visible for this line item.\"\n    }\n  ]\n}\n```"
+    },
+    {
+      "invoice_uuid": "fd87ccdf-17f5-4cfe-9e35-a4552b5f77c9",
+      "invoice_number": "9036671939",
+      "account": "TBJ - FL",
+      "lines_probed": 1,
+      "cost": 0.013248,
+      "parsed": {
+        "invoice_has_weight_column": false,
+        "invoice_has_case_line_with_weight": false,
+        "per_line": [
+          {
+            "line_index": 1,
+            "pack_verbatim": "60x1 CO",
+            "weight_visible_lb": null,
+            "weight_source": "not_visible",
+            "notes": "Item code 575670, description CHIP POT BBQ BKD, pack size shows 60x1 CO. No separate CASE line, TOT WT line, or weight column visible for this SKU. The Group Summary table shows a Weight column but it is blank for all groups (Meat, Grocery, Beverage)."
+          }
+        ]
+      },
+      "raw": "```json\n{\n  \"invoice_has_weight_column\": false,\n  \"invoice_has_case_line_with_weight\": false,\n  \"per_line\": [\n    {\n      \"line_index\": 1,\n      \"pack_verbatim\": \"60x1 CO\",\n      \"weight_visible_lb\": null,\n      \"weight_source\": \"not_visible\",\n      \"notes\": \"Item code 575670, description CHIP POT BBQ BKD, pack size shows 60x1 CO. No separate CASE line, TOT WT line, or weight column visible for this SKU. The Group Summary table shows a Weight column but it is blank for all groups (Meat, Grocery, Beverage).\"\n    }\n  ]\n}\n```"
+    }
+  ]
+}
