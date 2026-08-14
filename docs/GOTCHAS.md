@@ -136,6 +136,8 @@ Once a migration has been applied to a database, editing its `CREATE TABLE IF NO
 
 **Detection:** the probe for a migration must query pg_constraint / pg_class / information_schema and assert the specific constraints and grants it expects, not just table existence. `kpi-1-spine.sql` post-flight only asserted table existence, so the missing FK went undetected until the follow-up probe run.
 
+**Related dangling reference (do NOT fix by editing the applied migration):** `docs/migrations/kpi-1-spine.sql` header cites `docs/KPI_ENGINE_ARCHITECTURE.md` in its "Governing docs" line. That file was never created; the governing content lives in `docs/KPI_DASHBOARD_PLAYBOOK.md`. Because kpi-1 is applied history, do not edit it - the dangle stays as a legible marker of where the reference should have pointed. Any new KPI migration must cite the playbook directly.
+
 ### `pg_attribute.attname` is `name`, not `text` - cast before `@>`
 
 Postgres's `pg_attribute.attname` column has type `name` (the internal identifier type), not `text`. `array_agg(attname ORDER BY attnum)` therefore returns `name[]`, and there is no `@>` operator between `name[]` and a `text[]` literal like `ARRAY['a', 'b']`. Applying the SQL fails with a type-resolution error at DDL time, not a subtle wrong result at runtime.
@@ -191,6 +193,12 @@ This bug shows up as "the period boundary cron sometimes catches things and some
 ### Date helpers are duplicated across 10+ files
 
 `formatDate`, `fmt`, `parseDate` are redefined in many files. See `CONVENTIONS.md` for the centralization rule (new code adds to `opsUtils.js`; existing duplicates migrate opportunistically).
+
+### KPI fiscal weeks are MONDAY-anchored from FY_START, not Sunday
+
+`FY_START = 2025-12-29` is a Monday. `labor_actuals.week_start` values are Mondays; the sentinel week reads `2026-06-29 (Mon) .. 2026-07-05 (Sun)`. Every KPI week arithmetic - `weekStartsInRange` in `src/app/kpi/labor/lib/periods.js`, the server actuals overlap filter (`week_start <= end AND week_end >= start`), the trend chart, the budget span - steps in 7-day increments from FY_START, so all week_starts land on Mondays by construction.
+
+A prior handoff doc called this "Sunday-anchored" and a stale comment in `periods.js` still says so. Verified 2026-08-14 against the live table (probe: `.eq("account_key","CIN - OH").order("week_start").limit(5)` returned five Mon..Sun weeks) and against `date(2025,12,29).weekday()` = Mon (0). **Rule:** when writing anything about KPI weekdays, verify against a `week_start` sample from `labor_actuals_latest`, not memory.
 
 ---
 
@@ -628,6 +636,28 @@ Two failure modes that together produce "print preview looks like raw unstyled d
 ### Tailwind is imported but is NOT the system
 
 `globals.css` imports Tailwind v4 as a utility backstop. The primary styling system is vanilla CSS with prefix-isolated classes. Don't write Tailwind-first components - they break the prefix-isolation guarantee and create a mixed system.
+
+### An undefined CSS token NAME fails silently, exactly like a `var(..., fallback)`
+
+D1 stripped every `var(--x, fallback)` literal so phantom tokens could not hide. An undefined token NAME leaks through the same crack: `.kpi-hero-n { font-size: var(--size-hero) }` when `--size-hero` is not declared resolves to inherited (the body font size) with no console warning. On the KPI hero this rendered as a 16px "money leads" hero next to 24px metric cards - a visible inversion but only if you eyeball the DOM.
+
+**Six phantoms found by mechanical scan in #665** (`--size-hero` -> should be `--size-display`; `--action-primary-fg` -> should be `--action-primary-text`; the entire `--lb-*` family - `--lb-hero`, `--lb-h2`, `--lb-h3`, `--lb-caption` - was consumed by `kpi.css` but never declared in `tokens.css`).
+
+**The guard:** every `var(--x)` used in `src/app/kpi/kpi.css` must have a matching `--x:` definition in `tokens.css`, `kpi.css`, or `globals.css`. Run on every KPI push:
+
+```bash
+python3 - <<'EOF'
+import re
+used = set(re.findall(r'var\(\s*(--[a-zA-Z0-9-]+)', open('src/app/kpi/kpi.css').read()))
+defs = set()
+for f in ['src/app/tokens.css','src/app/kpi/kpi.css','src/app/globals.css']:
+    try: defs |= set(re.findall(r'(--[a-zA-Z0-9-]+)\s*:', open(f).read()))
+    except FileNotFoundError: pass
+print(sorted(used - defs) or "CLEAN")
+EOF
+```
+
+Must print `CLEAN`. Related SC scope trap in the same defect class: `.scv2`-scoped tokens (`--sc2-*`) resolve to nothing outside `.scv2`; the H6 hotfix on `kpi-cmd` was that same crack in a different shape.
 
 ---
 

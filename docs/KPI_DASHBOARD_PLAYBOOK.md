@@ -657,3 +657,22 @@ Postseason recognition mechanics. Weekly flash scope. Bonus-eligible viewer role
 ## 13. Captain's log
 
 - **2026-08-07 (v0.7):** D32 recovered from handoff docs rather than newly ruled. The `- REDS` = CIN - AZ attribution was measured and named across prior sessions but had not made it into the canonical playbook until now. Kept the D33-D39 numbering (from PR A of kpi-8b) intact; D32 sits between the D31 table row and the D33 freeform block. Also filed §9.11 for the 2026-06-29 earning-type naming shift.
+
+---
+
+## Addendum 2026-08-14 - budget values layer shipped
+
+The budget VALUES layer that §4.5 assumes is now live. Confirmed via `gh pr view` on merged PRs; every claim below cross-references the merge commit.
+
+- **`kpi_budgets` table exists**, schema in `docs/migrations/kpi-2-budget-values.sql`, applied by owner in Studio. Ships EMPTY - the public repo carries no dollar values. Values load out-of-band via `scripts/load_kpi_budgets_2026.mjs` reading a local seed JSON kept outside the tree; loader is service-role, idempotent, batched at 500. The three probes (`verify_budget_seed_vs_xlsx.mjs`, `load_kpi_budgets_2026.mjs` self-verify, `_probe_kpi_budgets.mjs`) all print counts + PASS/FAIL only, never dollars. Loader pattern shipped in PR #667 (merged 2026-08-14, commit `e9fd274`).
+- **Grants paper trail** in `docs/migrations/kpi-2b-grants.sql`. The out-of-band `GRANT SELECT, INSERT, UPDATE ON kpi_budgets TO service_role` Kevin applied before the load is captured verbatim; kpi-1 relied on ownership defaults and did not ship explicit grants, and on this project's current default state that pattern falls short for a new writer table.
+- **§4.5 resolution implemented in the labor route** (`src/app/api/kpi/labor/route.js`): parallel pull from `kpi_budgets` (line_code = `3100.1` only) and `sc_labor_budgets` (live rows via `superseded_at IS NULL`); per period, a live supersede row wins with `source: 'supersede'` and its `reason`; when a `kpi_budgets` 3100.1 row exists and differs, `superseded: true` with `pnl_amount` for the drill; else `source: 'pnl'`; else the period is omitted. TXR - TX - H P4-P10 supersede DIFFERS: yes verified post-load.
+- **§8.2 honored** - route selects `line_code = '3100.1'` only. Never 3100.2. Never any 3100-group total. Salary subtraction attack surface not opened on this route.
+- **§4.6 TXR - TX - V renders envelope-based.** Route ships `budget_mode: 'envelope'` and empty `budget_periods` for that account; Hero + MetricGrid render "envelope-based" and hide static-budget affordances. Service-Calendar-driven adjusted-envelope integration remains open.
+- **F10 semantic** - the range budget in `budgetForRange(budgetPeriods, startISO, endISO)` sums each calendar fiscal week's period-amount / 4 across the range, using the SAME `weekStartsInRange` enumerator (in `src/app/kpi/labor/lib/periods.js`) that the actuals server-side filter's overlap semantics encode. Budget spans all calendar weeks in range (a budgeted week with no logged labor is underspend information), not weeks-with-data.
+- **Ruling C - the hero budget sub-line names the fiscal span**, not a week count. Format: `budget $X · P<a>[-P<b>][ to date][ · superseded]`. Span derived from the same enumerator the dollars use, so the label and the money's week universe cannot diverge. Zero-budget periods appear in the span (the label names the DATE RANGE, not the nonzero-budget subset). Shipped in PR #671 (merged 2026-08-14, commit `c56eb38`).
+- **K9 retired on labor surfaces.** Budget figures are real; every user-facing "illustrative" string is gone (varpill copy, hover titles, card captions, trend legend). Permanent grep gates enforce this: `grep -rn 'BUDGET_WK\|_budgetWeekly' src/app/kpi` = 0 and `grep -rn 'illustrative' src/app/kpi` non-comment hits = 0.
+- **Deferred (not shipped in this arc):**
+  - TXR - TX - V envelope integration (§4.6) - client renders the envelope-mode caption but the adjusted-envelope calculation still lives in the Service Calendar.
+  - Section-13B consolidation of the `.kpi-btn-primary` vs `.kpi-btn-primary-v5` primitive fork (compound-selector fix in #671 stopped the cascade regression but did not merge the two families).
+  - D3 portfolio + regions - aggregate endpoint + rail enrichment.
