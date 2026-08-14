@@ -120,7 +120,8 @@
   cursor: pointer;
   text-decoration: none;
 }
-.kpi-cmd-act:hover { background: rgba(255, 255, 255, 0.18); }
+.kpi-cmd-act:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
+.kpi-cmd-act:disabled { opacity: 0.4; cursor: not-allowed; }
 .kpi-cmd-act .kpi-i { width: 14px; height: 14px; }
 
 /* ── tab strip (Overview | Labor | ...) ───────────────────────── */

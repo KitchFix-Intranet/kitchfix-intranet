@@ -31,6 +31,10 @@ export function Shell({
   exportHref,     // string - the /api/kpi/labor/export URL for current view
   onExport,       // (href) => void - fires alongside the anchor download
   exportRedact,   // boolean - governs "names redacted" toast + export param
+  exportDisabledReason, // string - when set, Export renders disabled with
+                        // this string as its title; used for aggregate
+                        // pseudo-key views (interim gate until PR-3 lands
+                        // the full per-account export column).
 }) {
   const freshH = hoursSinceISO(freshness?.last_walk_at);
   const freshTint = dataLoading
@@ -86,7 +90,7 @@ export function Shell({
               <span>Copy link</span>
             </button>
           )}
-          {exportHref && (
+          {exportHref && !exportDisabledReason && (
             <a
               className="kpi-cmd-act"
               title="Download this view as a spreadsheet"
@@ -100,6 +104,21 @@ export function Shell({
               </svg>
               <span>Export</span>
             </a>
+          )}
+          {exportDisabledReason && (
+            <button
+              type="button"
+              className="kpi-cmd-act"
+              title={exportDisabledReason}
+              aria-label={`Export disabled: ${exportDisabledReason}`}
+              disabled
+            >
+              <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Export</span>
+            </button>
           )}
           <span
             className={`kpi-chip-fresh ${freshTint === "kpi-chip-fresh" ? "" : freshTint === "kpi-chip-stale" ? "stale" : "warm"}`}
