@@ -85,6 +85,103 @@ export function currentPeriodNo(todayISO) {
   return periodOf(todayISO);
 }
 
+// V6-1 - week-of-period (1..4) for the given ISO date within its
+// containing fiscal period. Used in the command bar fiscal context.
+// Returns null when the date falls outside FY2026.
+export function weekOfPeriod(dateISO) {
+  const d = parseISO(dateISO);
+  const fy = parseISO(FY_START_ISO);
+  if (!d || !fy) return null;
+  const days = Math.floor((d.getTime() - fy.getTime()) / MS_PER_DAY);
+  if (days < 0) return null;
+  const withinPeriod = days % DAYS_PER_PERIOD;
+  const w = Math.floor(withinPeriod / 7) + 1;
+  return w >= 1 && w <= 4 ? w : null;
+}
+
+// V6-3 - fiscal months (calendar month indexes, 0..11) that contain
+// at least one fiscal week whose MONDAY falls inside the month.
+// FY2026 spans 2025-12-29 (P1W1D1, Mon) through 2026-12-27 (P13W4D7).
+// December weeks may straddle the FY boundary; a week belongs to a
+// month iff its Monday is in that month. Returns array of
+// { monthIndex: 0..11, year: 2025|2026, weekCount, firstMonday: ISO,
+//   lastMonday: ISO }.
+export function fiscalMonthsWithWeeks() {
+  const fy = parseISO(FY_START_ISO);
+  if (!fy) return [];
+  // Enumerate every Monday from FY_START forward until we've walked
+  // 52 weeks (FY2026 has 52 fiscal weeks; 13 periods x 4 weeks).
+  const buckets = new Map();
+  for (let i = 0; i < 52; i += 1) {
+    const wStart = new Date(fy.getTime() + i * 7 * MS_PER_DAY);
+    const key = `${wStart.getUTCFullYear()}-${wStart.getUTCMonth()}`;
+    const cur = buckets.get(key) || {
+      year: wStart.getUTCFullYear(),
+      monthIndex: wStart.getUTCMonth(),
+      weekCount: 0,
+      firstMonday: null,
+      lastMonday: null,
+    };
+    cur.weekCount += 1;
+    const iso = wStart.toISOString().slice(0, 10);
+    if (!cur.firstMonday) cur.firstMonday = iso;
+    cur.lastMonday = iso;
+    buckets.set(key, cur);
+  }
+  return [...buckets.values()].sort((a, b) =>
+    a.year - b.year || a.monthIndex - b.monthIndex
+  );
+}
+
+// V6-4 - resolve a month selection (year + monthIndex) into a
+// concrete { startISO, endISO } range that spans exactly the fiscal
+// weeks whose Monday falls in that month. startISO = first such
+// Monday; endISO = last such Monday + 6 days (Sunday).
+export function rangeForFiscalMonth(year, monthIndex) {
+  const months = fiscalMonthsWithWeeks();
+  const m = months.find(mm => mm.year === year && mm.monthIndex === monthIndex);
+  if (!m) return null;
+  const lastMon = parseISO(m.lastMonday);
+  if (!lastMon) return null;
+  const endMs = lastMon.getTime() + 6 * MS_PER_DAY;
+  const endISO = new Date(endMs).toISOString().slice(0, 10);
+  return { startISO: m.firstMonday, endISO, weekCount: m.weekCount };
+}
+
+// V6-3 - resolve a period selection into a { startISO, endISO } range.
+export function rangeForPeriod(period_no) {
+  const s = periodStartISO(period_no);
+  const e = periodEndISO(period_no);
+  if (!s || !e) return null;
+  return { startISO: s, endISO: e };
+}
+
+// V6-7 - inverse label inference. Given a committed start/end, return
+// a { kind, value, label } tuple naming the selection so the range
+// button and hero echo can read canonical vocabulary. Order matches
+// the spec: exact period -> "PERIOD n"; exact month week-span ->
+// "<MONTH> <year>"; else caller falls back to preset inference or
+// "CUSTOM RANGE".
+export function inferRangeSelection(startISO, endISO) {
+  if (!startISO || !endISO) return null;
+  // Period?
+  for (let p = 1; p <= 13; p += 1) {
+    const r = rangeForPeriod(p);
+    if (r && r.startISO === startISO && r.endISO === endISO) {
+      return { kind: "period", value: p, label: `PERIOD ${p}` };
+    }
+  }
+  // Month?
+  const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  for (const m of fiscalMonthsWithWeeks()) {
+    const r = rangeForFiscalMonth(m.year, m.monthIndex);
+    if (r && r.startISO === startISO && r.endISO === endISO) {
+      return { kind: "month", value: { year: m.year, monthIndex: m.monthIndex }, label: `${MONTHS[m.monthIndex]} ${m.year}` };
+    }
+  }
+  return null;
+}
+
 // D2.3 - human-readable span the RANGE touches, sourced from the
 // shared week enumerator so the label and the budget-dollars universe
 // can never diverge. Names the DATE RANGE, not the nonzero-budget

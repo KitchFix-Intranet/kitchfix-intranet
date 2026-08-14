@@ -108,6 +108,20 @@
 .kpi-cmd-chip-dot.kpi-chip-fresh  { background: var(--green-500); }
 .kpi-cmd-chip-dot.kpi-chip-warm   { background: var(--amber-500); }
 .kpi-cmd-chip-dot.kpi-chip-stale  { background: var(--red-500); }
+/* V6-2 - Copy link / Export buttons in the command bar right. */
+.kpi-cmd-act {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-radius: var(--rad-6);
+  padding: 6px 12px;
+  font: inherit; font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+.kpi-cmd-act:hover { background: rgba(255, 255, 255, 0.18); }
+.kpi-cmd-act .kpi-i { width: 14px; height: 14px; }
 
 /* ── tab strip (Overview | Labor | ...) ───────────────────────── */
 .kpi-tabs {
@@ -959,10 +973,150 @@
   display: flex; align-items: center; gap: var(--space-2);
   flex-wrap: wrap;
 }
+.kpi-scope-spacer { flex: 1 1 auto; }
 .kpi-pdiv {
   width: 1px; height: 22px;
   background: var(--border-default);
   margin: 0 4px;
+}
+
+/* ── V6-3..V6-8 · RangeMenu ─────────────────────────────────────
+   Trigger + three-column popover (PRESETS · FISCAL PERIODS · MONTHS)
+   + inline Custom expansion reusing the CalendarPopover MonthPanel. */
+.kpi-rmenu { position: relative; display: inline-block; }
+.kpi-rmenu-trigger {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 12px 0 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--rad-6);
+  color: var(--text-strong);
+  font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.05);
+}
+.kpi-rmenu-trigger:hover { background: var(--surface-sunken); }
+.kpi-rmenu-trigger.on { border-color: var(--kpi-accent); }
+.kpi-rmenu-caret { color: var(--text-muted); font-size: 11px; }
+.kpi-rmenu-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--rad-10);
+  box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
+  padding: 14px;
+  min-width: 640px;
+  display: grid;
+  grid-template-columns: 150px 1fr 1fr;
+  gap: 14px;
+}
+.kpi-rmenu-h {
+  margin: 0 0 6px;
+  font-size: 10px; letter-spacing: 0.09em;
+  color: var(--text-subtle);
+  text-transform: uppercase; font-weight: 700;
+}
+.kpi-rmenu-list { display: flex; flex-direction: column; }
+.kpi-rmenu-item {
+  text-align: left; width: 100%;
+  padding: 6px 9px;
+  background: none; border: 0; border-radius: var(--rad-4);
+  font: inherit; font-size: 13px;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+.kpi-rmenu-item:hover:not(:disabled) { background: var(--surface-sunken); }
+.kpi-rmenu-item.on {
+  background: var(--kpi-accent);
+  color: var(--n-0); font-weight: 600;
+}
+.kpi-rmenu-item:disabled { opacity: 0.4; cursor: not-allowed; }
+.kpi-rmenu-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;
+}
+.kpi-rmenu-gp {
+  border: 1px solid var(--border-default);
+  background: var(--surface-sunken);
+  border-radius: var(--rad-4);
+  padding: 7px 0;
+  font: inherit; font-size: 11.5px; font-weight: 700;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+.kpi-rmenu-gp:hover { border-color: var(--kpi-accent); color: var(--kpi-accent-strong); }
+.kpi-rmenu-gp.on {
+  background: var(--kpi-accent);
+  border-color: var(--kpi-accent);
+  color: var(--n-0);
+}
+.kpi-rmenu-foot {
+  grid-column: 1 / -1;
+  border-top: 1px dashed var(--border-default);
+  padding-top: 10px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--text-muted);
+}
+.kpi-rmenu-custom-btn {
+  background: none; border: 0;
+  color: var(--text-strong); font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.kpi-rmenu-foot-hint { color: var(--text-subtle); font-size: 11px; }
+.kpi-rmenu-custom {
+  grid-column: 1 / -1;
+  border-top: 1px dashed var(--border-default);
+  padding-top: 12px;
+}
+.kpi-rmenu-custom-nav {
+  display: flex; justify-content: space-between; margin-bottom: 8px;
+}
+@media (max-width: 767px) {
+  /* V6-24 - Range menu becomes a full-width sheet under 1024px, and
+     the pop grid drops to a single column. */
+  .kpi-rmenu-pop {
+    position: fixed;
+    top: 60px; left: 8px; right: 8px;
+    min-width: 0; width: auto;
+    grid-template-columns: 1fr;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+}
+
+/* ── V6-22/V6-23 · table bar layout ─────────────────────────────
+   Two-cell bar (jump-chip cluster left, employee-display right)
+   using the existing jump-chip family. */
+.kpi-tbar {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.kpi-tbar-spacer { flex: 1 1 auto; }
+.kpi-jumplab {
+  font-size: var(--size-micro);
+  color: var(--text-subtle);
+  font-weight: 700; letter-spacing: 0.05em;
+  margin-right: 2px;
+}
+.kpi-empdisp { display: inline-flex; align-items: center; gap: 8px; }
+.kpi-empdisp-lab { font-size: 12px; color: var(--text-muted); }
+.kpi-seg {
+  display: inline-flex;
+  border: 1px solid var(--border-default);
+  border-radius: var(--rad-pill);
+  overflow: hidden;
+  background: var(--surface-card);
+}
+.kpi-seg button {
+  border: 0; background: none;
+  padding: 5px 12px;
+  font: inherit; font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.kpi-seg button.on {
+  background: var(--n-900);
+  color: var(--n-0); font-weight: 600;
 }
 .kpi-vdef {
   display: flex; align-items: center; gap: var(--space-3);
@@ -1206,6 +1360,21 @@
   color: var(--text-muted);
   font-weight: 600;
 }
+/* V6-18 - PORTFOLIO / EAST · RDO ... / WEST · RDO ... eyebrows above
+   each folio group. Same typographic tier as .kpi-folio-h but slightly
+   more pronounced tracking to read as a group divider, not a title. */
+.kpi-folio-eyebrow {
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  font-size: var(--size-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.kpi-folio-eyebrow:first-child { padding-top: 0; }
+/* Pseudo-key rows (All accounts / EAST / WEST) render slightly heavier
+   than the member rows to signal "aggregate" without a hard rule. */
+.kpi-acct-roll .kpi-acct-nm { font-weight: 700; }
 .kpi-acct {
   display: flex; align-items: center; gap: var(--space-2);
   width: 100%;

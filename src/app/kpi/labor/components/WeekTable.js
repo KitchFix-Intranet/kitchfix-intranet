@@ -94,6 +94,7 @@ export function WeekTable({
   grandTotal,            // { hours_regular, hours_overtime, hours_double_time, hours_without_dollars, amount }
   workers,               // { [worker_id]: { display_name, number, title } }
   redact,
+  onToggleRedact,        // V6-13/V6-23 - Employee-display segmented control lives on the table bar right
   expandedPeriods,       // Set<period_no>
   onTogglePeriod,        // (period_no) => void
   expandedWeeks,         // Set<week_start>
@@ -136,22 +137,47 @@ export function WeekTable({
 
   return (
     <>
-      {showChips && (
-        <div className="kpi-jump-chips" aria-label="Jump to period">
-          {periods.map(p => (
-            <button
-              key={p}
-              type="button"
-              className={`kpi-pjump ${expandedPeriods?.has(p) ? "open" : ""}`}
-              onClick={() => onJumpPeriod?.(p)}
-            >{p ? `P${p}` : "prior"}</button>
-          ))}
-          <span className="kpi-ttools">
-            <button type="button" className="kpi-pjump" onClick={onExpandAll}>Expand all</button>
-            <button type="button" className="kpi-pjump" onClick={onCollapseAll}>Collapse all</button>
-          </span>
-        </div>
-      )}
+      {/* V6-22 - JUMP TO chips conditional on 2+ groups; V6-23 -
+          Employee display segmented control on the table bar right. */}
+      <div className="kpi-tbar">
+        {showChips && (
+          <div className="kpi-jump-chips" aria-label="Jump to period">
+            <span className="kpi-jumplab">JUMP TO</span>
+            {periods.map(p => (
+              <button
+                key={p}
+                type="button"
+                className={`kpi-pjump ${expandedPeriods?.has(p) ? "open" : ""}`}
+                onClick={() => onJumpPeriod?.(p)}
+              >{p ? `P${p}` : "prior"}</button>
+            ))}
+            <span className="kpi-ttools">
+              <button type="button" className="kpi-pjump" onClick={onExpandAll}>Expand all</button>
+              <button type="button" className="kpi-pjump" onClick={onCollapseAll}>Collapse all</button>
+            </span>
+          </div>
+        )}
+        <span className="kpi-tbar-spacer" aria-hidden="true" />
+        {onToggleRedact && (
+          <div className="kpi-empdisp">
+            <span className="kpi-empdisp-lab">Employee display:</span>
+            <span className="kpi-seg" role="group" aria-label="Employee display">
+              <button
+                type="button"
+                className={!redact ? "on" : ""}
+                onClick={() => redact && onToggleRedact(false)}
+                aria-pressed={!redact}
+              >Names</button>
+              <button
+                type="button"
+                className={redact ? "on" : ""}
+                onClick={() => !redact && onToggleRedact(true)}
+                aria-pressed={redact}
+              >Numbers only</button>
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="kpi-tw" ref={wrapRef}>
         <table className="kpi-tbl" aria-label={`Labor for ${account}`}>

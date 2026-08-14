@@ -2,7 +2,7 @@
 //
 // Shared formatters for the KPI Labor surface. Extracted from page.js
 // as part of D2 (§CONVENTIONS component split). Consumed by page.js,
-// Shell, FolioRail, ScopeBand, QuickPanel.
+// Shell, FolioRail, ScopeBand, ContextRail.
 
 export function fmt$(v) {
   if (v == null) return "—";

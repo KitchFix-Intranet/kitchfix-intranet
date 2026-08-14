@@ -1,7 +1,7 @@
 "use client";
 // src/app/kpi/labor/components/ContextRail.js
 //
-// D2 P8 - right rail below QuickPanel.
+// D2 P8 - right rail card stack.
 //
 // Order per v5 + spec §3.10:
 //   Alarms - EMPTY container when healthy (RL-01). Header only shows
