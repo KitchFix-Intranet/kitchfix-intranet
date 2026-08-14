@@ -85,6 +85,29 @@ export function currentPeriodNo(todayISO) {
   return periodOf(todayISO);
 }
 
+// D2.3 - human-readable span the RANGE touches, sourced from the
+// shared week enumerator so the label and the budget-dollars universe
+// can never diverge. Names the DATE RANGE, not the nonzero-budget
+// periods; CIN - OH FYTD reads "P1-P9 to date" even when P1-P3 carry
+// $0 budget (Ruling C - intentional and honest).
+//
+// Returns null when the range enumerates zero fiscal weeks (out of
+// FY, inverted range) so the caller can decide whether to render
+// anything. Otherwise:
+//   single period                 -> "P9"
+//   multi-period                  -> "P1-P9"
+//   range end === today (any preset or custom) -> " to date" appended
+export function spanLabelForRange(rangeStartISO, rangeEndISO, todayISO) {
+  const weeks = weekStartsInRange(rangeStartISO, rangeEndISO);
+  if (weeks.length === 0) return null;
+  const pFirst = periodOf(weeks[0]);
+  const pLast  = periodOf(weeks[weeks.length - 1]);
+  if (pFirst == null || pLast == null) return null;
+  const base = pFirst === pLast ? `P${pFirst}` : `P${pFirst}-P${pLast}`;
+  const toDate = todayISO && rangeEndISO && rangeEndISO === todayISO ? " to date" : "";
+  return `${base}${toDate}`;
+}
+
 // kpi-2 - the ONE week-in-range enumerator. Same overlap semantics
 // as the server-side actuals filter (`week_start <= end AND week_end
 // >= start`, i.e., the fiscal week [week_start, week_start+6d]

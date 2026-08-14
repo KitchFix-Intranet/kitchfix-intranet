@@ -289,7 +289,12 @@
 @media (prefers-reduced-motion: reduce) {
   .kpi-skel { animation: none; background: var(--n-100); }
 }
-.kpi-btn-primary-v5 {
+/* D2.3 - compound selector .kpi-btn.kpi-btn-primary-v5 wins the cascade
+   over the secondary base .kpi-btn (declared below at ~636) at equal
+   specificity. Every consumer renders the pair, so the tighter selector
+   is legal here. Fork of .kpi-btn-primary (section-13B primitive) is
+   noted for future consolidation. */
+.kpi-btn.kpi-btn-primary-v5 {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: var(--control-height); padding: 0 16px;
   background: var(--action-primary-bg); color: var(--action-primary-text);
@@ -297,8 +302,8 @@
   font: inherit; font-size: 13px; font-weight: 600;
   cursor: pointer;
 }
-.kpi-btn-primary-v5:hover:not(:disabled) { background: var(--action-primary-bg-hover); }
-.kpi-btn-primary-v5:active:not(:disabled) { background: var(--navy-800); }
+.kpi-btn.kpi-btn-primary-v5:hover:not(:disabled) { background: var(--action-primary-bg-hover); }
+.kpi-btn.kpi-btn-primary-v5:active:not(:disabled) { background: var(--navy-800); }
 
 /* ── toast host (Push 3, P10 M2/M4 + P11 B1) ──────────────────── */
 .kpi-toast-host {
@@ -419,7 +424,7 @@
 .kpi-cal-foot-actions {
   display: inline-flex; align-items: center; gap: var(--space-3);
 }
-.kpi-cal-foot-actions .kpi-btn-primary-v5:disabled { opacity: 0.45; cursor: not-allowed; }
+.kpi-cal-foot-actions .kpi-btn.kpi-btn-primary-v5:disabled { opacity: 0.45; cursor: not-allowed; }
 @media (max-width: 767px) {
   .kpi-cal-pop { min-width: 280px; padding: 10px 12px; }
   .kpi-cal-months { grid-template-columns: 1fr; gap: 12px; }
