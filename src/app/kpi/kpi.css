@@ -1408,9 +1408,10 @@
 /* Right rail v5 */
 .kpi-rl-card {
   background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--n-300);
   border-radius: var(--rad-10);
   padding: var(--space-3);
+  box-shadow: var(--card-shadow);
 }
 .kpi-qp-row {
   display: flex; align-items: center;
@@ -1485,6 +1486,16 @@
   margin-top: var(--space-1);
   line-height: var(--lb-caption);
 }
+/* V6-9 - resolved date range echo beside the hero label. Same tier
+   as the caption family; visually subordinated to the label. */
+.kpi-hero-lab-row {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.kpi-hero-dates {
+  font-size: 12px; color: var(--text-subtle);
+  font-variant-numeric: var(--num-tabular);
+}
 /* kpi-2 · supersede marker on the hero budget sub-line. Muted-italic
    so it reads as a signpost, not a warning; the hover title carries
    the reason and the P&L figure per playbook 4.5. */
@@ -1522,6 +1533,66 @@
   font-weight: 600;
   margin: 0 0 var(--space-1);
 }
+/* V6-11 - section eyebrow row: tinted BUDGET / HOURS chip on the
+   left, hairline rule to the right (fills remaining width), the
+   V6-12 View: Numbers | Visual segmented control on the BUDGET row. */
+.kpi-metgrp-row {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.kpi-metgrp-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase;
+  border-radius: var(--rad-4);
+  padding: 3px 8px;
+  border: 1px solid transparent;
+}
+.kpi-metgrp-tag-budget { background: #EAF0FA; color: var(--navy-700); border-color: #CBD9F0; }
+.kpi-metgrp-tag-hours  { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
+.kpi-metgrp-rule { flex: 1 1 auto; border-top: 1px solid var(--n-200); }
+.kpi-cardsview { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+
+/* V6-12 - viz primitives (inline SVG/CSS, color+shape+label). */
+.kpi-mviz { margin-top: 10px; }
+.kpi-mvb {
+  height: 10px; background: var(--n-200); border-radius: 5px;
+  position: relative; overflow: visible;
+}
+.kpi-mvb-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--navy-700); border-radius: 5px;
+}
+.kpi-mvb-h .kpi-mvb-fill { background: var(--amber-600); }
+.kpi-mvb-tick {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--n-800);
+}
+.kpi-mvd {
+  height: 10px; background: var(--n-200); border-radius: 5px;
+  position: relative;
+}
+.kpi-mvd-zero {
+  position: absolute; left: 50%; top: -3px; bottom: -3px;
+  width: 2px; background: var(--n-500);
+}
+.kpi-mvd-bar {
+  position: absolute; top: 0; bottom: 0; border-radius: 5px;
+}
+.kpi-mvring { width: 56px; height: 56px; margin-top: 4px; }
+.kpi-mvstack {
+  display: flex; height: 10px; border-radius: 5px;
+  overflow: hidden; background: var(--n-200);
+}
+.kpi-mvstack span { display: block; height: 100%; }
+.kpi-mvleg {
+  display: flex; justify-content: space-between;
+  font-size: 10.5px; color: var(--n-500); margin-top: 5px;
+}
+/* V6-5 - grouping note beneath the table. */
+.kpi-table-note {
+  font-size: 11px; color: var(--text-subtle);
+  margin-top: 8px; font-style: italic;
+}
 .kpi-mets {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1532,14 +1603,32 @@
 .kpi-mets:last-of-type { margin-bottom: var(--space-stack); }
 .kpi-met {
   background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--n-300);
   border-radius: var(--rad-10);
   padding: var(--space-card-pad);
-  box-shadow: 0 1px 2px rgba(13, 27, 58, 0.05), 0 2px 6px rgba(13, 27, 58, 0.04);
+  box-shadow: var(--card-shadow);
   display: flex; flex-direction: column;
   justify-content: flex-start;
   min-height: 0;
+  position: relative; overflow: hidden;
+  transition: box-shadow 0.15s ease-out, transform 0.15s ease-out;
 }
+.kpi-met:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-met { transition: none; }
+  .kpi-met:hover { transform: none; }
+}
+/* V6-11 - 3px top accent per row. BUDGET navy gradient; HOURS
+   amber gradient. Kept via ::before so no layout shift. */
+.kpi-met::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0;
+  height: 3px; background: var(--n-200);
+}
+.kpi-met-b::before { background: linear-gradient(90deg, var(--navy-700), #3D6CB0); }
+.kpi-met-h::before { background: linear-gradient(90deg, var(--amber-600), #F0B354); }
 .kpi-met-l {
   font-size: var(--size-caption);
   color: var(--text-muted);
@@ -1698,11 +1787,15 @@
   display: inline-flex; gap: var(--space-1);
 }
 
-/* Table v5 - clip, not hidden (B2 sticky trap) */
+/* Table v5 - clip, not hidden (B2 sticky trap). V6-11 - the table
+   container shares the border+shadow grammar with cards + rail
+   cards. */
 .kpi-tw {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--n-300);
   border-radius: var(--rad-10);
   overflow: clip;   /* B2: hidden hijacks position:sticky */
+  box-shadow: var(--card-shadow);
+  background: var(--surface-card);
 }
 .kpi-tbl {
   width: 100%;

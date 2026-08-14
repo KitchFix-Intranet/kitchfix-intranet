@@ -12,7 +12,7 @@
 // Playbook 4.6) hides the varpill entirely and points to the Service
 // Calendar for the adjusted envelope.
 
-import { fmt$ } from "../lib/formatting";
+import { fmt$, fmtDate } from "../lib/formatting";
 import {
   budgetForRange,
   elapsedPct,
@@ -55,7 +55,14 @@ export function Hero({
   return (
     <div className="kpi-hero">
       <div className="kpi-hero-l">
-        <div className="kpi-hero-lab">Total labor{suffix}</div>
+        {/* V6-9 - the resolved date range echoes beside the hero
+            label for EVERY selection (preset, PERIOD n, MONTH year,
+            CUSTOM RANGE). Reads the same start/end that drives the
+            money, so the two grains cannot diverge. */}
+        <div className="kpi-hero-lab-row">
+          <span className="kpi-hero-lab">Total labor{suffix}</span>
+          <span className="kpi-hero-dates">{fmtDate(start)} – {fmtDate(end)}</span>
+        </div>
         <div className="kpi-hero-n kpi-mono">{fmt$(totalLabor)}</div>
         <div className="kpi-hero-sub">
           {account} · <span className="kpi-mono">{workerWeekCount}</span> worker-weeks

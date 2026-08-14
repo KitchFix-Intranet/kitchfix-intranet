@@ -50,6 +50,10 @@
   --border-thin:1px; --border-thick:2px;
   /* Elevation */
   --sh-sm:0 1px 2px rgba(15,23,42,0.05); --sh-md:0 4px 12px rgba(15,23,42,0.08); --sh-lg:0 16px 32px rgba(15,23,42,0.12);
+  /* V6-10 - KPI definition system: cards + rail cards + table container
+     share this border+shadow grammar. Additive; no --sc2-* touched. */
+  --card-shadow:       0 1px 2px rgba(10,37,72,0.06), 0 4px 12px rgba(10,37,72,0.07);
+  --card-shadow-hover: 0 2px 4px rgba(10,37,72,0.08), 0 8px 20px rgba(10,37,72,0.10);
   /* Motion */
   --duration-fast:120ms; --duration-base:180ms; --duration-slow:280ms;
   --ease-standard:cubic-bezier(.2,0,0,1); --ease-emphasized:cubic-bezier(.3,0,0,1); --ease-exit:cubic-bezier(.4,0,1,1);

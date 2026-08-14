@@ -129,11 +129,17 @@ export function WeekTable({
     return () => window.removeEventListener("keydown", onKey);
   }, [expandedWeeks, onEscape]);
 
-  // Period jump chips + Expand/Collapse all. H8: chips cover every
-  // group present, not just those with a non-null period_no. After H1
-  // period_no is always an integer (>=1); 0 is the "prior FY" sentinel.
-  const periods = grouped.map(g => g.period_no);
-  const showChips = periods.length >= 2;
+  // V6-22 - jump chips render when 2+ groups exist. Month mode uses
+  // 3-letter month labels; period mode uses `P<n>`. Chip's data
+  // signal is the group key so onJumpPeriod can scroll by group.
+  const chips = grouped.map(g => {
+    if (g.groupHint?.kind === "month") {
+      const MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+      return { key: g.key, jumpKey: g.groupHint.monthIndex, label: MONTH_ABBR[g.groupHint.monthIndex] };
+    }
+    return { key: g.key, jumpKey: g.period_no, label: g.period_no ? `P${g.period_no}` : "prior" };
+  });
+  const showChips = chips.length >= 2;
 
   return (
     <>
@@ -141,15 +147,15 @@ export function WeekTable({
           Employee display segmented control on the table bar right. */}
       <div className="kpi-tbar">
         {showChips && (
-          <div className="kpi-jump-chips" aria-label="Jump to period">
+          <div className="kpi-jump-chips" aria-label="Jump to group">
             <span className="kpi-jumplab">JUMP TO</span>
-            {periods.map(p => (
+            {chips.map(c => (
               <button
-                key={p}
+                key={c.key}
                 type="button"
-                className={`kpi-pjump ${expandedPeriods?.has(p) ? "open" : ""}`}
-                onClick={() => onJumpPeriod?.(p)}
-              >{p ? `P${p}` : "prior"}</button>
+                className={`kpi-pjump ${expandedPeriods?.has(c.jumpKey) ? "open" : ""}`}
+                onClick={() => onJumpPeriod?.(c.jumpKey)}
+              >{c.label}</button>
             ))}
             <span className="kpi-ttools">
               <button type="button" className="kpi-pjump" onClick={onExpandAll}>Expand all</button>
@@ -196,7 +202,12 @@ export function WeekTable({
           <tbody>
             {grouped.map(g => {
               const p = g.period_no;
-              const isOpen = expandedPeriods?.has(p) ?? false;
+              // V6-5 - openness keyed by group hint: period_no in
+              // period mode, month-index in month mode. Same set
+              // (expandedPeriods) - values just carry different
+              // meaning depending on grouping mode.
+              const openKey = g.groupHint?.kind === "month" ? g.groupHint.monthIndex : p;
+              const isOpen = expandedPeriods?.has(openKey) ?? false;
               const rows = g.weeks;
               const sub = g.subtotal;
 
@@ -219,20 +230,30 @@ export function WeekTable({
                   ? <span className="kpi-upw" style={{ fontSize: "var(--size-caption)" }}>unpriced</span>
                   : <span className="kpi-dash">—</span>;
 
+              // V6-5 - month-mode groups carry `groupLabel` (e.g.
+              // "AUGUST 2026 · 4 fiscal wks"); period-mode groups
+              // fall back to the FY/PERIOD template. The toggle key
+              // is the group's period_no OR month-index (chip key
+              // matches).
+              const headText = g.groupLabel
+                ? `${g.groupLabel}${isOpen ? "" : ""}`
+                : `FY${g.fiscal_year || "?"} · PERIOD ${p || "prior"}${isOpen ? "" : ` · ${rows.length} wk`}`;
+              const toggleKey = g.groupHint?.kind === "month" ? g.groupHint.monthIndex : p;
+              const anchorId = g.groupHint?.kind === "month" ? `kpi-permo${g.groupHint.monthIndex}` : `kpi-per${p}`;
               return (
                 <Fragment key={g.key}>
-                  <tr className={`kpi-perh ${isOpen ? "open" : ""}`} id={`kpi-per${p}`}>
+                  <tr className={`kpi-perh ${isOpen ? "open" : ""}`} id={anchorId}>
                     <td colSpan={2} className="l">
                       <button
                         type="button"
                         className="kpi-perbtn"
-                        onClick={() => onTogglePeriod?.(p)}
+                        onClick={() => onTogglePeriod?.(toggleKey)}
                         aria-expanded={isOpen}
                       >
                         <svg className="kpi-i kpi-chev" viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        FY{g.fiscal_year || "?"} · PERIOD {p || "prior"}{isOpen ? "" : ` · ${rows.length} wk`}
+                        {headText}
                       </button>
                     </td>
                     {isOpen ? (
@@ -325,7 +346,7 @@ export function WeekTable({
                   })}
                   {isOpen && rows.length > 1 && (
                     <tr className="kpi-sub">
-                      <td className="l" colSpan={2}>Period {p} subtotal</td>
+                      <td className="l" colSpan={2}>{g.groupHint?.kind === "month" ? `${g.groupLabel?.split(" · ")[0] || "Month"} subtotal` : `Period ${p} subtotal`}</td>
                       <td><HourCell v={sub.hours_regular} coverage_state="complete" /></td>
                       <td><HourCell v={sub.hours_overtime} coverage_state="complete" /></td>
                       <td><HourCell v={sub.hours_double_time} coverage_state="complete" /></td>
