@@ -58,6 +58,21 @@ function shiftIso(iso, days) {
 import WeekFinalizeControl from "../v2/billing/WeekFinalizeControl";
 import { isPerMealBillingAccount } from "../v2/billing/perMealAccounts";
 import { isScLockOverride } from "@/lib/admin";
+
+// PR-E (2026-08-14): local Monday-derivation. Byte-identical to
+// src/lib/scWeekFinalize.js `mondayOfWeek` - inlined here because
+// that module transitively pulls googleapis via qboNotifications ->
+// gmail.js, which cannot land in the client bundle. See webpack
+// "child_process / fs Module not found" chain for the manifestation.
+function mondayOfWeek(isoDate) {
+  if (typeof isoDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+    throw new Error(`mondayOfWeek: expected YYYY-MM-DD, got ${JSON.stringify(isoDate)}`);
+  }
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  const isoIdx = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - isoIdx);
+  return d.toISOString().slice(0, 10);
+}
 import "../v2/billing/weekFinalize.css";
 import "../v2/billing/finalizeOverlay.css";
 import "../v2/billing/finalizeToast.css";
@@ -192,6 +207,12 @@ export default function PeriodWorkspace({
   // Map<week_start ISO, live-row-object | null>. Populated after the
   // fetch below; null-row = OPEN week.
   const [finalizeRowsByWeek, setFinalizeRowsByWeek] = useState(() => new Map());
+  // PR-E (2026-08-14): server-authoritative per-week completeness +
+  // pair-role meta + account cadence, all from sc-finalize-states.
+  // Client no longer computes weekDayRecords from visible cells - the
+  // server sees every day regardless of which month renders it.
+  const [weeksMeta, setWeeksMeta] = useState(() => ({}));
+  const [accountCadence, setAccountCadence] = useState(null);
   const [finalizeReloadTick, setFinalizeReloadTick] = useState(0);
   useEffect(() => {
     if (!showFinalize || !periodRange?.start || !periodRange?.end) return;
@@ -213,6 +234,11 @@ export default function PeriodWorkspace({
           map.set(r.week_start, r);
         }
         setFinalizeRowsByWeek(map);
+        // PR-E: store the server-authoritative per-week completeness
+        // and per-account cadence. Both are strictly additive - old
+        // consumers ignore them.
+        setWeeksMeta(body?.weeks && typeof body.weeks === "object" ? body.weeks : {});
+        setAccountCadence(typeof body?.cadence === "string" ? body.cadence : null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -405,6 +431,8 @@ export default function PeriodWorkspace({
         showFinalize={showFinalize}
         isOverrideUser={isOverrideUser}
         finalizeRowsByWeek={finalizeRowsByWeek}
+        weeksMeta={weeksMeta}
+        accountCadence={accountCadence}
         onFinalizeWeek={handleFinalize}
         onRevertFinalize={handleRevert}
         onRetryFinalize={handleRetry}
@@ -909,8 +937,11 @@ function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, savi
 // click after that landed.
 function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null, scope = "period", justFlippedDates = null,
   /* sc-30 PR-A1 (2026-08-07): finalize context. Props (not closure)
-     because DayGrid is a sibling of PeriodWorkspace, not nested. */
-  showFinalize = false, isOverrideUser = false, finalizeRowsByWeek = null, onFinalizeWeek = null, onRevertFinalize = null, onRetryFinalize = null }) {
+     because DayGrid is a sibling of PeriodWorkspace, not nested.
+     PR-E (2026-08-14) adds weeksMeta + accountCadence. */
+  showFinalize = false, isOverrideUser = false, finalizeRowsByWeek = null,
+  weeksMeta = {}, accountCadence = null,
+  onFinalizeWeek = null, onRevertFinalize = null, onRetryFinalize = null }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -1146,45 +1177,70 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                   </span>
                 </div>
               )}
-              {/* sc-30 PR-A1 (2026-08-07): per-week finalize control.
-                  Placement: distinct row BELOW the band, ABOVE the
-                  day cells. The band itself stays aria-hidden (it is
-                  decorative); this row is interactive and gets its
-                  own role. Fee/MLB/MiLB-AAA accounts don't render
-                  this at all (showFinalize=false). The row's Monday
-                  is week[0]?.date - buildWorkspaceWeekGrid produces
-                  Mon-Sun-aligned rows so index 0 is always Monday.
-                  weekDayRecords is filtered to the actual day
-                  records (excluding ghosts and empties) so the
-                  client-side completeness rule sees real statuses. */}
+              {/* PR-E (2026-08-14): the row's Monday is derived, not
+                  inherited from layout. Prior code read week[0]?.date;
+                  for a boundary week in month view that CAN be the
+                  Monday but the derivation is defensive.
+                  Completeness reads from weeksMeta[monday] - server-
+                  authoritative, sees every day regardless of which
+                  month renders it. Cadence + pairRole from the same
+                  API. Fee/MLB/MiLB-AAA accounts don't render this
+                  at all (showFinalize=false). */}
               {showFinalize && finalizeRowsByWeek && (() => {
-                const rowMonday = week[0]?.date || null;
-                if (!rowMonday) return null;
-                const weekDayRecords = week
-                  .filter(c => c && c.day)
-                  .map(c => c.day);
-                // Skip render on out-of-period leading rows where
-                // ALL cells are ghost/empty (no real days). Trailing
-                // ghost rows never reach here since
-                // buildWorkspaceWeekGrid stops before them.
-                if (weekDayRecords.length === 0) return null;
+                // Find any cell in the row that carries a date - real,
+                // ghost, or out-of-period placeholder all have one.
+                // Compute the ISO Monday from that date rather than
+                // trusting week[0].
+                const anyDate = week.find(c => c && c.date)?.date || null;
+                if (!anyDate) return null;
+                let rowMonday;
+                try { rowMonday = mondayOfWeek(anyDate); }
+                catch (_) { return null; }
+
+                // Overlap tag for month view: count days in the row
+                // that belong to the OTHER month.
+                let overlapTag = null;
+                if (scope === "month" && rowMonday) {
+                  const thisMonth = anyDate.slice(0, 7);
+                  const otherMonthDates = week
+                    .filter(c => c && c.date && c.date.slice(0, 7) !== thisMonth);
+                  if (otherMonthDates.length > 0) {
+                    const other = new Date(`${otherMonthDates[0].date}T12:00:00Z`)
+                      .toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+                    overlapTag = `${otherMonthDates.length} day${otherMonthDates.length === 1 ? "" : "s"} in ${other}`;
+                  }
+                }
+
+                // Trim rows to only actual in-view content - skip
+                // rows where every cell is a leading out-of-period
+                // gap AND the row is empty of real dates. (Historical
+                // behavior: pre-boundary rows in period view.)
+                const anyRealCell = week.some(c => c && (c.day || c.ghost));
+                if (!anyRealCell) return null;
+
                 const liveRow = finalizeRowsByWeek.get(rowMonday) || null;
-                // PR-D metrics: overlay reads these to render Days
-                // served / Meals and snacks / Pre-tax total. Derived
-                // from the row's weekMetrics (wm computed above via
-                // rowKey lookup) - the overlay is a display of what
-                // the band already surfaces.
-                const daysServed = typeof wm?.complete === "number"
-                  ? wm.complete
-                  : weekDayRecords.filter(d => d?.status === "entered").length;
+                const serverWeekInfo = weeksMeta?.[rowMonday] || null;
+                const pairPartnerInfo = serverWeekInfo?.pairPartnerMonday
+                  ? weeksMeta?.[serverWeekInfo.pairPartnerMonday] || null
+                  : null;
+
+                // Metrics for the overlay's total row. weekMetrics
+                // may not carry the boundary week's totals in month
+                // view - fall back to 0 rather than crash.
+                const daysServed = typeof wm?.complete === "number" ? wm.complete : 0;
                 const totalMeals = typeof wm?.actMeals === "number" ? wm.actMeals : 0;
                 const pretaxTotalDollars = typeof wm?.actRev === "number" ? wm.actRev : 0;
+
+                // Pair total for bi-weekly close-week header display.
+                // Needs both weeks' actRev; weekMetrics is keyed on
+                // fiscal-week label in period scope, so use it when
+                // available; fall back to null in month scope.
                 const rowSunday = (() => {
-                  if (!rowMonday) return null;
                   const d = new Date(`${rowMonday}T12:00:00Z`);
                   d.setUTCDate(d.getUTCDate() + 6);
                   return d.toISOString().slice(0, 10);
                 })();
+
                 return (
                   <div
                     className="sc-workspace-week-finalize-row"
@@ -1192,11 +1248,21 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                     role="group"
                     aria-label={`Finalize actions for week starting ${rowMonday}`}
                   >
+                    {overlapTag && (
+                      <span className="sc-week-finalize-overlap" aria-hidden="false">
+                        {overlapTag}
+                      </span>
+                    )}
                     <WeekFinalizeControl
                       accountKey={accountKey}
                       weekStart={rowMonday}
                       weekEnd={rowSunday}
-                      weekDays={weekDayRecords}
+                      /* PR-E: server info authoritative for complete/
+                         missing/pairRole. WeekFinalizeControl no
+                         longer computes from visible cells. */
+                      serverWeekInfo={serverWeekInfo}
+                      pairPartnerInfo={pairPartnerInfo}
+                      accountCadence={accountCadence}
                       liveRow={liveRow}
                       isOverrideUser={isOverrideUser}
                       onFinalize={onFinalizeWeek}
@@ -1234,6 +1300,30 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                 );
               }
               if (!cell.day) {
+                // PR-E (2026-08-14) per addendum §A3: out-of-period
+                // cells in a boundary week (e.g. Jul 27-31 rendered
+                // in the August month view) render as ghost tiles
+                // showing the day number - dimmed, non-interactive,
+                // aria-hidden, but VISIBLE. Server-side completeness
+                // counts them; the visual makes the "3 days in July"
+                // overlap tangible so the total does not look wrong.
+                if (cell.date) {
+                  const dayNumber = Number(cell.date.slice(8, 10));
+                  return (
+                    <span
+                      key={flatIdx}
+                      className="sc-workspace-grid-cell"
+                      aria-hidden="true"
+                      data-out-of-period="true"
+                    >
+                      <span className="sc-daysq sc-daysq--lg sc-daysq--ghost sc-daysq--other-month">
+                        <span className="sc-daysq-top">
+                          <span className="sc-daysq-date">{dayNumber}</span>
+                        </span>
+                      </span>
+                    </span>
+                  );
+                }
                 return <span key={flatIdx} className="sc-workspace-grid-cell sc-workspace-grid-cell-empty" aria-hidden="true" />;
               }
               const d = cell.day;
