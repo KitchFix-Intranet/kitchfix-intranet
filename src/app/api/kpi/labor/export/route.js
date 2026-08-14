@@ -38,6 +38,14 @@ import { resolveWorkerName } from "@/lib/kpi/resolveName";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
+// V6 PR-2 fixup - the labor route accepts these pseudo-keys as
+// aggregate views (ALL / EAST / WEST) but the export route still
+// filters .eq("account_key", account) which matches zero rows and
+// would silently produce an EMPTY spreadsheet. Reject them here
+// with 400 as a belt-and-suspenders alongside the client-side
+// disabled Export button. Full per-account aggregate export ships
+// in PR-3 alongside the resolver unification.
+const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 
 // C4.5: round to 2 decimals, storing the rounded value (not just
 // formatting). Prevents 81.28999999999999 in cells whose format is
@@ -76,6 +84,9 @@ export async function GET(request) {
   }
   if (D17_OUT_OF_SCOPE.has(account)) {
     return NextResponse.json({ error: "account_out_of_scope", account }, { status: 400 });
+  }
+  if (V6_PSEUDO_KEYS.has(account)) {
+    return NextResponse.json({ error: "aggregate_export_pending", account }, { status: 400 });
   }
   if (D26_SALARIED_ONLY.has(account)) {
     return NextResponse.json({

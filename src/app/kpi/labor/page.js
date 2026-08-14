@@ -22,11 +22,10 @@ import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp } from "./lib/formatting";
 import { ACCOUNTS, FY_START } from "./lib/accounts";
-import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate } from "./lib/periods";
+import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
 import { Shell } from "./components/Shell";
-import { FolioRail } from "./components/FolioRail";
+import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
 import { ScopeBand, buildVdefLine } from "./components/ScopeBand";
-import { QuickPanel } from "./components/QuickPanel";
 import { Hero } from "./components/Hero";
 import { MetricGrid } from "./components/MetricGrid";
 import { TrendChart } from "./components/TrendChart";
@@ -43,6 +42,10 @@ import "../kpi.css";
 // B15 last-viewed account key (localStorage). Read once on client mount
 // only; server render always uses the URL/default. Never leaks data.
 const LAST_ACCOUNT_KEY = "kpi:labor:lastAccount";
+// V6-8 - last committed range persistence (kpi.range). Stores just
+// { startISO, endISO } - the selection type is inferable from those
+// via inferRangeSelection so we do not duplicate state.
+const LAST_RANGE_KEY = "kpi:labor:lastRange";
 
 function workerLabel(meta, worker_id, redact) {
   const num = meta?.number != null ? `#${meta.number}` : `#${String(worker_id).slice(0, 6)}`;
@@ -89,7 +92,9 @@ export default function KpiLaborPage() {
     }
     let saved = null;
     try { saved = localStorage.getItem(LAST_ACCOUNT_KEY); } catch {}
-    if (saved && saved !== "CIN - OH" && ACCOUNTS.includes(saved)) {
+    // V6 - accept pseudo-keys ALL / EAST / WEST alongside real
+    // account team_keys in the last-account persistence.
+    if (saved && saved !== "CIN - OH" && (ACCOUNTS.includes(saved) || PSEUDO_KEYS.has(saved))) {
       const p = new URLSearchParams(searchParams.toString());
       p.set("account", saved);
       router.replace(`/kpi/labor?${p.toString()}`);
@@ -107,6 +112,11 @@ export default function KpiLaborPage() {
     () => (workersParam ? new Set(workersParam.split(",").filter(Boolean)) : null),
     [workersParam]
   );
+  // V6-5/V6-7 - inference computed EARLY so the grouped memo can key
+  // its grouping mode on it (month vs period). Downstream aliases
+  // (selectedPeriodNo, selectedMonth, rangeSelection) are declared
+  // near the RangeMenu wiring for readability.
+  const rangeSelectionEarly = useMemo(() => inferRangeSelection(start, end), [start, end]);
   const viewIdParam = searchParams.get("view");
   const activeViewId = viewIdParam ? parseInt(viewIdParam, 10) : null;
   // Track how the current dates were arrived at (last preset click).
@@ -314,7 +324,7 @@ export default function KpiLaborPage() {
 
   // ── weeksInRange: unique week_start values, sorted desc ──────
   // H3 fix - this is the ONE canonical week count. Hero, MetricGrid,
-  // QuickPanel, budget-for-range, pace calc, coverage caption all read
+  // Hero, MetricGrid, budget-for-range, pace calc, coverage caption all read
   // this. Never read grouped.length as "week count" (that's period
   // count). Never read filteredActuals.length as "week count" (that's
   // worker-week rows).
@@ -367,17 +377,51 @@ export default function KpiLaborPage() {
 
   const grouped = useMemo(() => {
     if (!weekAggregates.length) return [];
+    // V6-5 - grouping mode implied by selection. Month selection
+    // groups by calendar month (weeks belong to the month their
+    // MONDAY falls in - the same rule fiscalMonthsWithWeeks uses,
+    // so a week never straddles). Every other selection groups by
+    // fiscal period. No standalone group-by control.
+    const groupByMonth = rangeSelectionEarly?.kind === "month";
+    const MONTH_NAMES = ["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
     const groups = [];
     for (const w of weekAggregates) {
-      // Every week must land in a real (fiscal_year, period_no) group.
-      // periodOf returns null only for out-of-FY weeks; we cluster those
-      // under a synthesized "prior FY" bucket rather than a null period.
       const fy = w.fiscal_year ?? 2026;
-      const p  = w.period_no ?? 0;  // 0 = prior/next FY sentinel
-      const key = `${fy}|${p}`;
+      let key, sortKey, groupLabel, groupHint;
+      if (groupByMonth) {
+        // Parse week_start UTC-safe (Mondays).
+        const [yy, mm] = w.week_start.split("-").map(Number);
+        const year = yy;
+        const monthIndex = mm - 1;
+        key = `M-${year}-${monthIndex}`;
+        sortKey = year * 100 + monthIndex;
+        groupLabel = `${MONTH_NAMES[monthIndex]} ${year}`;
+        groupHint = { kind: "month", year, monthIndex };
+      } else {
+        const p = w.period_no ?? 0;
+        key = `P-${fy}|${p}`;
+        sortKey = -(fy * 100 + p);  // period desc (existing convention)
+        groupHint = { kind: "period", period_no: p, fiscal_year: fy };
+      }
       let g = groups.find(x => x.key === key);
-      if (!g) { g = { key, fiscal_year: fy, period_no: p, weeks: [], subtotal: null }; groups.push(g); }
+      if (!g) {
+        g = { key, fiscal_year: fy, period_no: w.period_no ?? 0, weeks: [], subtotal: null, groupLabel, groupHint, sortKey };
+        groups.push(g);
+      }
       g.weeks.push(w);
+    }
+    // Month mode - sort ascending (Jan first). Period mode retains
+    // the descending-by-period convention D2 shipped.
+    if (groupByMonth) {
+      groups.sort((a, b) => a.sortKey - b.sortKey);
+    } else {
+      groups.sort((a, b) => a.sortKey - b.sortKey);
+    }
+    // Month group headers append "· N fiscal wks" per V6-5.
+    if (groupByMonth) {
+      for (const g of groups) {
+        g.groupLabel = `${g.groupLabel} · ${g.weeks.length} fiscal wk${g.weeks.length === 1 ? "" : "s"}`;
+      }
     }
     for (const g of groups) {
       const s = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0, amount: 0, hours_without_dollars: 0 };
@@ -392,7 +436,7 @@ export default function KpiLaborPage() {
       g.subtotal = s;
     }
     return groups;
-  }, [weekAggregates]);
+  }, [weekAggregates, rangeSelectionEarly]);
 
   const totals = useMemo(() => {
     const t = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0 };
@@ -456,11 +500,14 @@ export default function KpiLaborPage() {
   // stomp user's manual collapses.
   useEffect(() => {
     if (!grouped.length || expandedPeriods.size > 0) return;
-    // grouped is sorted newest-first by construction; open first two.
-    // period_no is always an integer after H1 (client-derived).
+    // Open first two groups by default. V6-5 - key varies by grouping
+    // mode (period_no in period mode, month-index in month mode).
+    const openKey = (g) => g?.groupHint?.kind === "month" ? g.groupHint.monthIndex : g?.period_no;
     const next = new Set();
-    if (grouped[0]?.period_no) next.add(grouped[0].period_no);
-    if (grouped[1]?.period_no) next.add(grouped[1].period_no);
+    const k0 = openKey(grouped[0]);
+    const k1 = openKey(grouped[1]);
+    if (k0 != null) next.add(k0);
+    if (k1 != null) next.add(k1);
     if (next.size > 0) setExpandedPeriods(next);
   }, [grouped, expandedPeriods.size]);
 
@@ -522,6 +569,38 @@ export default function KpiLaborPage() {
       if (prev) setParams({ start: prev.start, end: prev.end });
     }
   }
+
+  // V6-3/V6-8 - RangeMenu commit path. selection: { kind, value? }
+  //   preset -> setLastPreset(value); rely on inferred label
+  //   period -> setLastPreset(null); the URL start/end resolves to
+  //             "PERIOD n" via inferRangeSelection
+  //   month  -> setLastPreset(null); resolves to "<MONTH> <year>"
+  //   custom -> setLastPreset(null); no inference match -> "custom"
+  // Also writes { startISO, endISO } to localStorage (kpi.range).
+  function onRangeCommit(startISO, endISO, selection) {
+    if (selection?.kind === "preset" && selection.value) {
+      setLastPreset(selection.value);
+    } else {
+      setLastPreset(null);
+    }
+    setParams({ start: startISO, end: endISO });
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LAST_RANGE_KEY, JSON.stringify({ startISO, endISO }));
+      }
+    } catch {}
+    setLiveMsg("Range updated.");
+  }
+
+  // V6-7 - inferred selection consumed by the RangeMenu label + folio/
+  // hero echo + V6-5 month grouping. Returns { kind: 'period'|'month',
+  // value } when start/end matches; else null. Preset key is separately
+  // tracked via resolvedPreset. Also used above in the grouped memo.
+  // (See earlier declaration of rangeSelectionEarly for the grouped
+  // dependency; this line is intentionally a re-export for readers.)
+  const selectedPeriodNo = rangeSelectionEarly?.kind === "period" ? rangeSelectionEarly.value : null;
+  const selectedMonth    = rangeSelectionEarly?.kind === "month"  ? rangeSelectionEarly.value : null;
+  const rangeSelection = rangeSelectionEarly;
 
   function exportHref() {
     const p = new URLSearchParams({ account, start, end });
@@ -748,17 +827,21 @@ export default function KpiLaborPage() {
     workerRoster, selectedWorkers, redact,
   });
 
-  // Today's fiscal context - lightweight from data.
-  const fiscalCtx = data?.account_periods?.length
-    ? (() => {
-        const past = data.account_periods
-          .filter(p => p.start && p.end)
-          .sort((a, b) => a.start.localeCompare(b.start))
-          .filter(p => p.start <= today);
-        const cur = past[past.length - 1];
-        return { today: today.slice(5).replace("-", "/"), period: cur?.period_no, week: null };
-      })()
-    : { today: today.slice(5).replace("-", "/"), period: null, week: null };
+  // V6-1 fiscal context - TODAY (MM/DD), PERIOD n (from account_periods
+  // when present, else client-derived via periodOf), WEEK w where w is
+  // week-of-period (1..4) via periods.js weekOfPeriod().
+  const fiscalCtx = (() => {
+    const past = (data?.account_periods || [])
+      .filter(p => p.start && p.end)
+      .sort((a, b) => a.start.localeCompare(b.start))
+      .filter(p => p.start <= today);
+    const cur = past[past.length - 1];
+    return {
+      today: today.slice(5).replace("-", "/"),
+      period: cur?.period_no ?? periodOfDate(today),
+      week: weekOfPeriod(today),
+    };
+  })();
 
   // ── Middle content (Hero · MetricGrid · Trend · Table + 9 states) ──
   const mainContent = (
@@ -789,6 +872,7 @@ export default function KpiLaborPage() {
               currentPeriodNo={currentPeriodNo}
               budgetPeriods={data.budget_periods || []}
               budgetMode={data.budget_mode || "static"}
+              budgetNotes={data.budget_notes || {}}
             />
           </div>
           <MetricGrid
@@ -877,6 +961,10 @@ export default function KpiLaborPage() {
           grandTotal={grand}
           workers={data.workers}
           redact={redact}
+          onToggleRedact={(next) => {
+            setParam("redact", next ? "1" : "");
+            setLiveMsg(next ? "Names hidden on screen and in export." : "Names shown.");
+          }}
           expandedPeriods={expandedPeriods}
           onTogglePeriod={(p) => {
             setExpandedPeriods(prev => {
@@ -894,8 +982,11 @@ export default function KpiLaborPage() {
             });
           }}
           onExpandAll={() => {
-            // period_no always an integer after H1 (0 = prior FY sentinel).
-            const all = new Set(grouped.map(g => g.period_no));
+            // V6-5 - key varies by grouping mode: period_no in period
+            // mode, month-index in month mode. Both live in the same
+            // expandedPeriods Set; grouping-mode alignment is enforced
+            // upstream by the group's openKey computation.
+            const all = new Set(grouped.map(g => g.groupHint?.kind === "month" ? g.groupHint.monthIndex : g.period_no));
             setExpandedPeriods(all);
           }}
           onCollapseAll={() => {
@@ -905,22 +996,33 @@ export default function KpiLaborPage() {
           onJumpPeriod={(p) => {
             setExpandedPeriods(prev => new Set([...prev, p]));
             setTimeout(() => {
-              const el = document.getElementById(`kpi-per${p}`);
+              // Try period anchor first, then month anchor.
+              const el = document.getElementById(`kpi-per${p}`) || document.getElementById(`kpi-permo${p}`);
               if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
             }, 60);
           }}
           onEscape={() => setExpandedWeeks(new Set())}
           todayISO={today}
           workerRangeTotals={workerRangeTotals}
+          aggregateMode={PSEUDO_KEYS.has(account)}
         />
       ) : null}
+      {/* V6-5 - one-line grouping note beneath the table, states
+          active grouping and that it follows the selection. */}
+      {loadState === "ok" && filteredActuals.length > 0 && (
+        <div className="kpi-table-note">
+          {rangeSelectionEarly?.kind === "month"
+            ? "Grouping: calendar months (implied by the selection)."
+            : "Grouping: fiscal periods. Select a month in the Range menu to group by calendar month."}
+        </div>
+      )}
     </>
   );
 
-  // ── Right rail content (below QuickPanel) ──
-  // ContextRail (v5): alarms (empty when healthy) · coverage (merged
+  // ── Right rail content ──
+  // ContextRail: alarms (empty when healthy) · coverage (merged
   // legend + worker-weeks unit note) · OT watch · Pipeline ▸ disclosure.
-  const railBelowQuickPanel = tab === "labor" && loadState === "ok" && data?.account_state !== "salaried_only" ? (
+  const railStack = tab === "labor" && loadState === "ok" && data?.account_state !== "salaried_only" ? (
     <ContextRail
       filteredActuals={filteredActuals}
       totals={totals}
@@ -931,6 +1033,7 @@ export default function KpiLaborPage() {
       workers={data?.workers}
       workerRangeTotals={workerRangeTotals}
       redact={redact}
+      weeksInRange={weeksInRange}
     />
   ) : null;
 
@@ -945,7 +1048,26 @@ export default function KpiLaborPage() {
           activeTab={tab}
           onTabClick={(k) => setParam("tab", k)}
           printScopeText={vdefLine}
-          folioRail={<FolioRail activeAccount={account} onPickAccount={onPickAccount} />}
+          onCopyLink={() => setLiveMsg("Copied link to this exact view to clipboard.")}
+          exportHref={loadState === "ok" && data?.account_state !== "salaried_only" ? exportHref() : null}
+          onExport={() => {
+            setToast({
+              message: redact ? "Export ready · names redacted." : "Export ready.",
+              tone: "info",
+              durationMs: 4000,
+            });
+            setLiveMsg(redact ? "Export downloading with names redacted." : "Export downloading.");
+          }}
+          exportRedact={redact}
+          exportDisabledReason={PSEUDO_KEYS.has(account) ? "Per-account export for portfolio views ships next update." : null}
+          folioRail={
+            <FolioRail
+              activeAccount={account}
+              onPickAccount={onPickAccount}
+              accountsDirectory={data?.accounts_directory}
+              regionalDirectorsDisplay={data?.regional_directors_display}
+            />
+          }
           scopeBand={
             // Fix 4 (D2.1) - band persists through empty and error
             // states so the user can widen dates / clear filters / pick
@@ -954,11 +1076,13 @@ export default function KpiLaborPage() {
               <ScopeBand
                 start={start}
                 end={end}
-                lastPreset={lastPreset}
-                onDateChange={(which, iso) => { setLastPreset(null); setParam(which, iso); }}
-                onRangeChange={(s, e) => { setLastPreset(null); setParams({ start: s, end: e }); }}
-                onPresetClick={applyPreset}
+                today={today}
+                resolvedPreset={resolvedPreset}
+                selectedPeriodNo={selectedPeriodNo}
+                selectedMonth={selectedMonth}
                 hasPeriods={!!data?.account_periods?.length}
+                accountPeriods={data?.account_periods || []}
+                onRangeCommit={onRangeCommit}
                 workerRoster={workerRoster}
                 selectedWorkers={selectedWorkers}
                 onWorkersChange={workersOnChangeSet}
@@ -982,32 +1106,11 @@ export default function KpiLaborPage() {
           }
           rail={
             <>
-              {tab === "labor" && loadState === "ok" && data.account_state !== "salaried_only" && (
-                <QuickPanel
-                  weekCount={weeksInRange}
-                  workerWeekCount={filteredActuals.length}
-                  redact={redact}
-                  onToggleRedact={(next) => {
-                    setParam("redact", next ? "1" : "");
-                    setLiveMsg(next ? "Names hidden on screen and in export." : "Names shown.");
-                  }}
-                  exportHref={exportHref()}
-                  onCopyLink={() => setLiveMsg("Copied link to this exact view to clipboard.")}
-                  onExport={(href) => {
-                    // M4: file downloads via anchor; we raise a toast for
-                    // acknowledgement and, if a real request took >400ms,
-                    // hint at it. For an anchor download we can't measure
-                    // the transfer, so we show a fixed toast.
-                    setToast({
-                      message: redact ? "Export ready · names redacted." : "Export ready.",
-                      tone: "info",
-                      durationMs: 4000,
-                    });
-                    setLiveMsg(redact ? "Export downloading with names redacted." : "Export downloading.");
-                  }}
-                />
-              )}
-              {railBelowQuickPanel}
+              {/* V6-13 - rail-top panel retired. Copy/Export moved to
+                  the command bar (Shell); the In-view counts row
+                  lives inside ContextRail's PAYROLL DATA CHECK card
+                  (C3). */}
+              {railStack}
               {activeView && isDirty && (
                 <div className="kpi-view-active">
                   <span className="kpi-view-active-name">{activeView.name}</span>

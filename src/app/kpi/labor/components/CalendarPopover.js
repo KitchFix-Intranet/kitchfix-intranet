@@ -13,19 +13,20 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { fmtDate } from "../lib/formatting";
 
-function isoOf(d) {
+export function isoOf(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-function parseISO(s) {
+export function parseISOLocal(s) {
   if (!s) return null;
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
-function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
+const parseISO = parseISOLocal;
+export function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+export function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
 
 function monthGrid(monthAnchor) {
   // Returns 42-cell grid (6 weeks) starting Sunday of the week containing
@@ -42,7 +43,7 @@ function monthGrid(monthAnchor) {
   return cells;
 }
 
-function MonthPanel({ monthAnchor, startD, endD, onPick }) {
+export function MonthPanel({ monthAnchor, startD, endD, onPick }) {
   const cells = useMemo(() => monthGrid(monthAnchor), [monthAnchor]);
   const label = monthAnchor.toLocaleString("en-US", { month: "long", year: "numeric" });
   const inRange = (d) => startD && endD && d >= startD && d <= endD;

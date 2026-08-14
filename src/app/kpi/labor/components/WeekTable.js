@@ -94,6 +94,7 @@ export function WeekTable({
   grandTotal,            // { hours_regular, hours_overtime, hours_double_time, hours_without_dollars, amount }
   workers,               // { [worker_id]: { display_name, number, title } }
   redact,
+  onToggleRedact,        // V6-13/V6-23 - Employee-display segmented control lives on the table bar right
   expandedPeriods,       // Set<period_no>
   onTogglePeriod,        // (period_no) => void
   expandedWeeks,         // Set<week_start>
@@ -104,6 +105,7 @@ export function WeekTable({
   onEscape,              // () => void
   todayISO,
   workerRangeTotals,     // { [worker_id]: { hoursWorked, dollarsTotal } } - for F16 rate-on-hover
+  aggregateMode,         // V6-20 - true on ALL/EAST/WEST pseudo-key views; inline drill switches to per-account rows
 }) {
   const wrapRef = useRef(null);
 
@@ -128,30 +130,61 @@ export function WeekTable({
     return () => window.removeEventListener("keydown", onKey);
   }, [expandedWeeks, onEscape]);
 
-  // Period jump chips + Expand/Collapse all. H8: chips cover every
-  // group present, not just those with a non-null period_no. After H1
-  // period_no is always an integer (>=1); 0 is the "prior FY" sentinel.
-  const periods = grouped.map(g => g.period_no);
-  const showChips = periods.length >= 2;
+  // V6-22 - jump chips render when 2+ groups exist. Month mode uses
+  // 3-letter month labels; period mode uses `P<n>`. Chip's data
+  // signal is the group key so onJumpPeriod can scroll by group.
+  const chips = grouped.map(g => {
+    if (g.groupHint?.kind === "month") {
+      const MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+      return { key: g.key, jumpKey: g.groupHint.monthIndex, label: MONTH_ABBR[g.groupHint.monthIndex] };
+    }
+    return { key: g.key, jumpKey: g.period_no, label: g.period_no ? `P${g.period_no}` : "prior" };
+  });
+  const showChips = chips.length >= 2;
 
   return (
     <>
-      {showChips && (
-        <div className="kpi-jump-chips" aria-label="Jump to period">
-          {periods.map(p => (
-            <button
-              key={p}
-              type="button"
-              className={`kpi-pjump ${expandedPeriods?.has(p) ? "open" : ""}`}
-              onClick={() => onJumpPeriod?.(p)}
-            >{p ? `P${p}` : "prior"}</button>
-          ))}
-          <span className="kpi-ttools">
-            <button type="button" className="kpi-pjump" onClick={onExpandAll}>Expand all</button>
-            <button type="button" className="kpi-pjump" onClick={onCollapseAll}>Collapse all</button>
-          </span>
-        </div>
-      )}
+      {/* V6-22 - JUMP TO chips conditional on 2+ groups; V6-23 -
+          Employee display segmented control on the table bar right. */}
+      <div className="kpi-tbar">
+        {showChips && (
+          <div className="kpi-jump-chips" aria-label="Jump to group">
+            <span className="kpi-jumplab">JUMP TO</span>
+            {chips.map(c => (
+              <button
+                key={c.key}
+                type="button"
+                className={`kpi-pjump ${expandedPeriods?.has(c.jumpKey) ? "open" : ""}`}
+                onClick={() => onJumpPeriod?.(c.jumpKey)}
+              >{c.label}</button>
+            ))}
+            <span className="kpi-ttools">
+              <button type="button" className="kpi-pjump" onClick={onExpandAll}>Expand all</button>
+              <button type="button" className="kpi-pjump" onClick={onCollapseAll}>Collapse all</button>
+            </span>
+          </div>
+        )}
+        <span className="kpi-tbar-spacer" aria-hidden="true" />
+        {onToggleRedact && (
+          <div className="kpi-empdisp">
+            <span className="kpi-empdisp-lab">Employee display:</span>
+            <span className="kpi-seg" role="group" aria-label="Employee display">
+              <button
+                type="button"
+                className={!redact ? "on" : ""}
+                onClick={() => redact && onToggleRedact(false)}
+                aria-pressed={!redact}
+              >Names</button>
+              <button
+                type="button"
+                className={redact ? "on" : ""}
+                onClick={() => !redact && onToggleRedact(true)}
+                aria-pressed={redact}
+              >Numbers only</button>
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="kpi-tw" ref={wrapRef}>
         <table className="kpi-tbl" aria-label={`Labor for ${account}`}>
@@ -170,7 +203,12 @@ export function WeekTable({
           <tbody>
             {grouped.map(g => {
               const p = g.period_no;
-              const isOpen = expandedPeriods?.has(p) ?? false;
+              // V6-5 - openness keyed by group hint: period_no in
+              // period mode, month-index in month mode. Same set
+              // (expandedPeriods) - values just carry different
+              // meaning depending on grouping mode.
+              const openKey = g.groupHint?.kind === "month" ? g.groupHint.monthIndex : p;
+              const isOpen = expandedPeriods?.has(openKey) ?? false;
               const rows = g.weeks;
               const sub = g.subtotal;
 
@@ -193,20 +231,30 @@ export function WeekTable({
                   ? <span className="kpi-upw" style={{ fontSize: "var(--size-caption)" }}>unpriced</span>
                   : <span className="kpi-dash">—</span>;
 
+              // V6-5 - month-mode groups carry `groupLabel` (e.g.
+              // "AUGUST 2026 · 4 fiscal wks"); period-mode groups
+              // fall back to the FY/PERIOD template. The toggle key
+              // is the group's period_no OR month-index (chip key
+              // matches).
+              const headText = g.groupLabel
+                ? `${g.groupLabel}${isOpen ? "" : ""}`
+                : `FY${g.fiscal_year || "?"} · PERIOD ${p || "prior"}${isOpen ? "" : ` · ${rows.length} wk`}`;
+              const toggleKey = g.groupHint?.kind === "month" ? g.groupHint.monthIndex : p;
+              const anchorId = g.groupHint?.kind === "month" ? `kpi-permo${g.groupHint.monthIndex}` : `kpi-per${p}`;
               return (
                 <Fragment key={g.key}>
-                  <tr className={`kpi-perh ${isOpen ? "open" : ""}`} id={`kpi-per${p}`}>
+                  <tr className={`kpi-perh ${isOpen ? "open" : ""}`} id={anchorId}>
                     <td colSpan={2} className="l">
                       <button
                         type="button"
                         className="kpi-perbtn"
-                        onClick={() => onTogglePeriod?.(p)}
+                        onClick={() => onTogglePeriod?.(toggleKey)}
                         aria-expanded={isOpen}
                       >
                         <svg className="kpi-i kpi-chev" viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        FY{g.fiscal_year || "?"} · PERIOD {p || "prior"}{isOpen ? "" : ` · ${rows.length} wk`}
+                        {headText}
                       </button>
                     </td>
                     {isOpen ? (
@@ -260,33 +308,89 @@ export function WeekTable({
                           <td><HourCell v={w.hours_without_dollars} coverage_state={w.coverage_state} warn /></td>
                           <td><DollarCell w={w} /></td>
                         </tr>
-                        {wOpen && w.worker_rows && w.worker_rows.length > 0 && (
-                          <>
-                            {w.worker_rows.map(wr => {
-                              const meta = workers?.[wr.worker_id];
-                              const label = workerLabel(meta, wr.worker_id, redact);
-                              const title = workerTitle(label, workerRangeTotals?.[wr.worker_id]);
-                              return (
-                                <tr key={wr.worker_id} className="kpi-kid">
-                                  <td className="l">
-                                    <span className="kpi-kidname" title={title}>{label}</span>
+                        {wOpen && w.worker_rows && w.worker_rows.length > 0 && (() => {
+                          // V6-20 - aggregate mode drills by ACCOUNT
+                          // instead of by worker (member rollups only;
+                          // never lists individual worker rows across
+                          // accounts). Per-account rows collapse each
+                          // account's worker rows in this week into a
+                          // single line: account_key · hours by bucket
+                          // · dollars.
+                          if (aggregateMode) {
+                            const byAcct = new Map();
+                            for (const wr of w.worker_rows) {
+                              const k = wr.account_key || "—";
+                              const cur = byAcct.get(k) || {
+                                account_key: k,
+                                hours_regular: 0, hours_overtime: 0,
+                                hours_double_time: 0, hours_without_dollars: 0,
+                                amount: 0,
+                                coverage_states: new Set(),
+                              };
+                              cur.hours_regular += Number(wr.hours_regular || 0);
+                              cur.hours_overtime += Number(wr.hours_overtime || 0);
+                              cur.hours_double_time += Number(wr.hours_double_time || 0);
+                              cur.hours_without_dollars += Number(wr.hours_without_dollars || 0);
+                              cur.amount += Number(wr.amount || 0);
+                              cur.coverage_states.add(wr.coverage_state);
+                              byAcct.set(k, cur);
+                            }
+                            const rowsList = [...byAcct.values()].sort((a, b) => a.account_key.localeCompare(b.account_key));
+                            return (
+                              <>
+                                {rowsList.map(ar => {
+                                  const cs = [...ar.coverage_states];
+                                  const rowCov = cs.length === 1 ? cs[0] : "partial";
+                                  return (
+                                    <tr key={ar.account_key} className="kpi-kid">
+                                      <td className="l">
+                                        <span className="kpi-kidname">{ar.account_key}</span>
+                                      </td>
+                                      <td className="l"><Badge state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_regular} coverage_state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_overtime} coverage_state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_double_time} coverage_state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_without_dollars} coverage_state={rowCov} warn /></td>
+                                      <td>{ar.amount > 0.004 ? <span className="kpi-mono">{fmt$(ar.amount)}</span> : <span className="kpi-dash">—</span>}</td>
+                                    </tr>
+                                  );
+                                })}
+                                <tr className="kpi-kid kpi-kid-note">
+                                  <td className="l" colSpan={7}>
+                                    Aggregate view · per-account rollup for this week. Drill into a single account for per-worker detail.
                                   </td>
-                                  <td className="l"><Badge state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_regular} coverage_state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_overtime} coverage_state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_double_time} coverage_state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_without_dollars} coverage_state={wr.coverage_state} warn /></td>
-                                  <td>{wr.amount > 0.004 ? <span className="kpi-mono">{fmt$(wr.amount)}</span> : <span className="kpi-dash">—</span>}</td>
                                 </tr>
-                              );
-                            })}
-                            <tr className="kpi-kid kpi-kid-note">
-                              <td className="l" colSpan={7}>
-                                Rippling pay-segment amounts, validated against paystubs. Dollars are never hours × rate (D27).
-                              </td>
-                            </tr>
-                          </>
-                        )}
+                              </>
+                            );
+                          }
+                          return (
+                            <>
+                              {w.worker_rows.map(wr => {
+                                const meta = workers?.[wr.worker_id];
+                                const label = workerLabel(meta, wr.worker_id, redact);
+                                const title = workerTitle(label, workerRangeTotals?.[wr.worker_id]);
+                                return (
+                                  <tr key={wr.worker_id} className="kpi-kid">
+                                    <td className="l">
+                                      <span className="kpi-kidname" title={title}>{label}</span>
+                                    </td>
+                                    <td className="l"><Badge state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_regular} coverage_state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_overtime} coverage_state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_double_time} coverage_state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_without_dollars} coverage_state={wr.coverage_state} warn /></td>
+                                    <td>{wr.amount > 0.004 ? <span className="kpi-mono">{fmt$(wr.amount)}</span> : <span className="kpi-dash">—</span>}</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="kpi-kid kpi-kid-note">
+                                <td className="l" colSpan={7}>
+                                  Rippling pay-segment amounts, validated against paystubs. Dollars are never hours × rate (D27).
+                                </td>
+                              </tr>
+                            </>
+                          );
+                        })()}
                         {wOpen && (!w.worker_rows || w.worker_rows.length === 0) && (
                           <tr className="kpi-kid">
                             <td className="l" colSpan={7}>
@@ -299,7 +403,7 @@ export function WeekTable({
                   })}
                   {isOpen && rows.length > 1 && (
                     <tr className="kpi-sub">
-                      <td className="l" colSpan={2}>Period {p} subtotal</td>
+                      <td className="l" colSpan={2}>{g.groupHint?.kind === "month" ? `${g.groupLabel?.split(" · ")[0] || "Month"} subtotal` : `Period ${p} subtotal`}</td>
                       <td><HourCell v={sub.hours_regular} coverage_state="complete" /></td>
                       <td><HourCell v={sub.hours_overtime} coverage_state="complete" /></td>
                       <td><HourCell v={sub.hours_double_time} coverage_state="complete" /></td>

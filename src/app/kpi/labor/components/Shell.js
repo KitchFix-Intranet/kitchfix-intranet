@@ -15,18 +15,26 @@ import { TABS } from "../lib/accounts";
 
 export function Shell({
   account,        // e.g. "CIN - OH"
-  fiscal,         // { today, period, week } - strings/numbers
+  fiscal,         // { today, period, week } - week is week-of-period (V6-1)
   freshness,     // { last_walk_at } - present iff data loaded
-  dataLoading,    // boolean - true while /api/kpi/labor is in flight; chip
-                  // fallback text depends on this so it never claims "no
-                  // successful walk" during the initial fetch window.
+  dataLoading,    // boolean - true while /api/kpi/labor is in flight
   activeTab = "labor",
   onTabClick,
   folioRail,      // node - left aside content (FolioRail)
   scopeBand,      // node - the F3 scope band (ScopeBand)
   main,           // node - middle content (hero, mets, trend, table)
-  rail,           // node - right aside content (QuickPanel + alarms + coverage + otwatch + pipeline)
-  printScopeText, // string - B12 print-time scope line ("CIN - OH · 06/29/26 - 07/26/26 · all 138 workers · names shown")
+  rail,           // node - right aside content (ContextRail)
+  printScopeText, // string - B12 print-time scope line
+  // V6-2 - Copy link + Export live in the command bar right, before
+  // the freshness chip. Old rail-top home retired.
+  onCopyLink,     // () => void - fires after the URL is copied
+  exportHref,     // string - the /api/kpi/labor/export URL for current view
+  onExport,       // (href) => void - fires alongside the anchor download
+  exportRedact,   // boolean - governs "names redacted" toast + export param
+  exportDisabledReason, // string - when set, Export renders disabled with
+                        // this string as its title; used for aggregate
+                        // pseudo-key views (interim gate until PR-3 lands
+                        // the full per-account export column).
 }) {
   const freshH = hoursSinceISO(freshness?.last_walk_at);
   const freshTint = dataLoading
@@ -50,7 +58,9 @@ export function Shell({
         <div>Generated {new Date().toLocaleString()}</div>
       </div>
 
-      {/* Command bar (F1: plain title, no styled account pseudo-select) */}
+      {/* Command bar - V6-1 fiscal context (TODAY | PERIOD | WEEK where
+          WEEK is week-of-period 1..4). V6-2 Copy link + Export live
+          here as labeled buttons, freshness chip right of them. */}
       <div className="kpi-cmd" role="banner">
         <span className="kpi-cmd-t">KPI Dashboard · {account}</span>
         <span className="kpi-cmd-div" aria-hidden="true" />
@@ -60,6 +70,56 @@ export function Shell({
           {fiscal?.week != null && (<>Week <b>{fiscal.week}</b></>)}
         </span>
         <div className="kpi-cmd-r">
+          {onCopyLink && (
+            <button
+              type="button"
+              className="kpi-cmd-act"
+              title="Copy a link to this exact view"
+              onClick={async () => {
+                try {
+                  const url = typeof window !== "undefined" ? window.location.href : "";
+                  await navigator.clipboard.writeText(url);
+                  onCopyLink?.();
+                } catch { /* clipboard denied - silent no-op */ }
+              }}
+            >
+              <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Copy link</span>
+            </button>
+          )}
+          {exportHref && !exportDisabledReason && (
+            <a
+              className="kpi-cmd-act"
+              title="Download this view as a spreadsheet"
+              href={exportHref}
+              download
+              onClick={() => onExport?.(exportHref)}
+            >
+              <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Export</span>
+            </a>
+          )}
+          {exportDisabledReason && (
+            <button
+              type="button"
+              className="kpi-cmd-act"
+              title={exportDisabledReason}
+              aria-label={`Export disabled: ${exportDisabledReason}`}
+              disabled
+            >
+              <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Export</span>
+            </button>
+          )}
           <span
             className={`kpi-chip-fresh ${freshTint === "kpi-chip-fresh" ? "" : freshTint === "kpi-chip-stale" ? "stale" : "warm"}`}
             title={freshText}

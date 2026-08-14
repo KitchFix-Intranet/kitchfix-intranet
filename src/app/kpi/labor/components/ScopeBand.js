@@ -1,40 +1,35 @@
 "use client";
 // src/app/kpi/labor/components/ScopeBand.js
 //
-// D2 P3 - one scope band replacing the two-band C4 arrangement per F3.
-// Contains: range trigger (custom-only calendar - implementation defers
-// to Push 3; button opens the existing input pair as a fallback for
-// now), preset chips (This/Last period, Last 4/13 wk, FYTD),
-// worker multi-select trigger (existing details popover pattern), and
-// saved-view pills with the vdef definition line beneath.
+// V6-6 - Band 2 shape: one RangeMenu button on the left (owns time),
+// Workers pill + Views + primary "+ Save view" on the right. All
+// preset-chip / calendar-trigger surface area moved into RangeMenu.
 //
-// F15: clicking the active view deselects it. Order = range + presets
-// + workers first, saved views after the divider.
-//
-// Redaction, Copy link, Export moved OUT of this band into QuickPanel
-// at the rail top (F3).
+// vdef line beneath (spec §3.3) still surfaces only when a saved view
+// is active.
 
-import { PRESET_LABELS } from "@/lib/kpi/dateResolve";
 import { fmtDate } from "../lib/formatting";
-import { PRESET_KEYS } from "../lib/accounts";
-import { CalendarPopover } from "./CalendarPopover";
+import { RangeMenu } from "./RangeMenu";
 
 export function ScopeBand({
   start,
   end,
-  lastPreset,
-  onDateChange,      // (which, iso) => void   which='start'|'end'
-  onRangeChange,     // (nextStartISO, nextEndISO) => void   both at once
-  onPresetClick,     // (kind) => void
-  hasPeriods,        // boolean - are account_periods loaded?
-  workerRoster,      // [{ id, label }]
-  selectedWorkers,   // Set<string> or null (all)
-  onWorkersChange,   // (nextSet | null) => void
+  today,
+  resolvedPreset,     // V6-7 - preset inferred by page.js; may be null
+  selectedPeriodNo,   // integer if range matches a period, else null
+  selectedMonth,      // { year, monthIndex } if range matches a month, else null
+  hasPeriods,         // boolean
+  accountPeriods,     // for this-period/last-period resolution
+  onRangeCommit,      // (startISO, endISO, selection) => void
+                      // selection: { kind, value? }
+  workerRoster,       // [{ id, label }]
+  selectedWorkers,    // Set<string> or null (all)
+  onWorkersChange,    // (nextSet | null) => void
   views,
   activeView,
-  onPickView,        // (viewId) => void
-  onSaveView,        // () => void  opens save dialog (kept in page)
-  vdefLine,          // string like "Range: 06/29/26 – 07/26/26 · 138 workers · names shown"
+  onPickView,         // (viewId) => void
+  onSaveView,         // () => void
+  vdefLine,           // string, shown iff activeView present
 }) {
   const totalWorkers = workerRoster?.length ?? 0;
   const shownWorkers = selectedWorkers && selectedWorkers.size > 0 ? selectedWorkers.size : totalWorkers;
@@ -42,41 +37,24 @@ export function ScopeBand({
   return (
     <div className="kpi-scope">
       <div className="kpi-scope-row">
-        {/* F2 range trigger - dual-month custom-range popover. Presets
-            live to the right; the popover opens on demand only. */}
+        {/* V6-3 - single Range menu owns all of time */}
         <div className="kpi-pctl">
-          <CalendarPopover
+          <RangeMenu
             startISO={start}
             endISO={end}
-            onCommit={(nextStart, nextEnd) => {
-              if (onRangeChange) {
-                onRangeChange(nextStart, nextEnd);
-              } else {
-                if (nextStart !== start) onDateChange?.("start", nextStart);
-                if (nextEnd   !== end)   onDateChange?.("end",   nextEnd);
-              }
-            }}
+            todayISO={today}
+            hasPeriods={hasPeriods}
+            accountPeriods={accountPeriods}
+            resolvedPreset={resolvedPreset}
+            selectedPeriodNo={selectedPeriodNo}
+            selectedMonth={selectedMonth}
+            onCommit={onRangeCommit}
           />
         </div>
 
-        {/* Presets - F2: preset chips top-level, calendar popover is
-            custom-only (custom popover deferred to Push 3). */}
-        <div className="kpi-pchips">
-          {PRESET_KEYS.map(k => (
-            <button
-              key={k}
-              type="button"
-              className={`kpi-pchip ${lastPreset === k ? "on" : ""}`}
-              onClick={() => onPresetClick?.(k)}
-              disabled={(k === "this_period" || k === "last_period") && !hasPeriods}
-            >
-              {PRESET_LABELS[k]}
-            </button>
-          ))}
-        </div>
+        <span className="kpi-scope-spacer" aria-hidden="true" />
 
-        {/* Workers - inline details/summary flow so it never overlays
-            metric cards below (C4.1 constraint). */}
+        {/* Workers popover - inline details/summary flow (C4.1). */}
         <details className="kpi-pctl kpi-workers-details">
           <summary className="kpi-trig">
             <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
@@ -150,8 +128,7 @@ export function ScopeBand({
         )}
       </div>
 
-      {/* vdef - resolved-range line beneath. Spec §3.3: only surfaces
-          when a saved view is active. Not a general status line. */}
+      {/* vdef line - only when a saved view is active (spec §3.3) */}
       {activeView && vdefLine && (
         <div className="kpi-vdef">
           <span className="kpi-mono">{vdefLine}</span>

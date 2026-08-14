@@ -12,7 +12,7 @@
 // Playbook 4.6) hides the varpill entirely and points to the Service
 // Calendar for the adjusted envelope.
 
-import { fmt$ } from "../lib/formatting";
+import { fmt$, fmtDate } from "../lib/formatting";
 import {
   budgetForRange,
   elapsedPct,
@@ -34,6 +34,7 @@ export function Hero({
   currentPeriodNo,
   budgetPeriods,      // from labor route, per Playbook 4.5. Empty on envelope mode.
   budgetMode,         // 'static' | 'envelope'
+  budgetNotes,        // { envelope_excluded?: [...] } on aggregate requests when V is in scope
 }) {
   const totalLabor = Number(totals?.amount || 0);
   const isEnvelope = budgetMode === "envelope";
@@ -46,16 +47,38 @@ export function Hero({
 
   const superseded = !isEnvelope && hasSupersededInRange(budgetPeriods, start, end);
   const superLines = superseded ? supersededSummary(budgetPeriods, start, end) : [];
-  const superTitle = superLines.map(s =>
-    `P${s.period_no}: live ${fmt$(s.amount)}` +
-    (s.pnl_amount != null ? ` (P&L ${fmt$(s.pnl_amount)})` : "") +
-    (s.reason ? ` - ${s.reason}` : "")
-  ).join(" · ");
+  // V6-20 - aggregate paths include member_detail per period; the
+  // marker title lists which member accounts drove the supersede
+  // (account_keys only - never worker names).
+  const memberDetailByPeriod = new Map();
+  if (Array.isArray(budgetPeriods)) {
+    for (const bp of budgetPeriods) {
+      if (bp?.superseded && Array.isArray(bp.member_detail)) {
+        memberDetailByPeriod.set(Number(bp.period_no), bp.member_detail.filter(m => m.superseded));
+      }
+    }
+  }
+  const superTitle = superLines.map(s => {
+    const members = memberDetailByPeriod.get(s.period_no);
+    if (members && members.length > 0) {
+      return `P${s.period_no}: ${members.map(m => `${m.account_key}${m.reason ? ` (${m.reason})` : ""}`).join(", ")}`;
+    }
+    return `P${s.period_no}: live ${fmt$(s.amount)}` +
+      (s.pnl_amount != null ? ` (P&L ${fmt$(s.pnl_amount)})` : "") +
+      (s.reason ? ` - ${s.reason}` : "");
+  }).join(" · ");
 
   return (
     <div className="kpi-hero">
       <div className="kpi-hero-l">
-        <div className="kpi-hero-lab">Total labor{suffix}</div>
+        {/* V6-9 - the resolved date range echoes beside the hero
+            label for EVERY selection (preset, PERIOD n, MONTH year,
+            CUSTOM RANGE). Reads the same start/end that drives the
+            money, so the two grains cannot diverge. */}
+        <div className="kpi-hero-lab-row">
+          <span className="kpi-hero-lab">Total labor{suffix}</span>
+          <span className="kpi-hero-dates">{fmtDate(start)} – {fmtDate(end)}</span>
+        </div>
         <div className="kpi-hero-n kpi-mono">{fmt$(totalLabor)}</div>
         <div className="kpi-hero-sub">
           {account} · <span className="kpi-mono">{workerWeekCount}</span> worker-weeks
@@ -85,6 +108,15 @@ export function Hero({
               const span = spanLabelForRange(start, end, today);
               return span ? <> · {span}</> : null;
             })()}
+            {/* V6-20 - aggregate envelope-exclusion marker. Renders
+                only when the labor route ships budget_notes.envelope_
+                excluded (aggregate mode with V in the member set). */}
+            {Array.isArray(budgetNotes?.envelope_excluded) && budgetNotes.envelope_excluded.length > 0 && (
+              <span
+                className="kpi-super-mark"
+                title={`Excluded from aggregate budget: ${budgetNotes.envelope_excluded.join(", ")} (playbook 4.6 envelope)`}
+              > · excludes {budgetNotes.envelope_excluded.join(", ")} (envelope)</span>
+            )}
             {superseded && (
               <span
                 className="kpi-super-mark"

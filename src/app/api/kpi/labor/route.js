@@ -25,6 +25,7 @@ import { auth } from "@/lib/auth";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerName } from "@/lib/kpi/resolveName";
+import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -44,6 +45,39 @@ function safeError(scope, err) {
   // touches this route).
   console.error(`[kpi/labor] ${scope}:`, err?.message || err);
   return { error: "server_error", scope };
+}
+
+// V6-18 - build the "S. Lynch" / "R. Moore" display name from the
+// REGIONAL_DIRECTORS email. Format: `<first-initial>. <Lastname>`
+// with the last name capitalized. CSS handles the uppercase eyebrow.
+function rdoDisplayName(email) {
+  if (!email) return null;
+  const local = String(email).split("@")[0] || "";
+  const parts = local.split(".");
+  if (parts.length < 2) return null;
+  const first = parts[0];
+  const last = parts.slice(1).join(" ");
+  if (!first || !last) return null;
+  return `${first.charAt(0).toUpperCase()}. ${last.charAt(0).toUpperCase() + last.slice(1)}`;
+}
+
+// V6-18/19 - directory shape the folio consumes on every render.
+// Reads accounts.region live (per PR-1 Step 0). CORP excluded per
+// D17. Salaried flag drives the italic tag. Called once per request.
+async function fetchAccountsDirectory(supa) {
+  const q = await supa.from("accounts")
+    .select("team_key, region")
+    .neq("team_key", "CORP")
+    .order("team_key");
+  if (q.error) return { error: q.error };
+  const salaried = new Set(["CIN - KY", "TBJ - NY"]);   // D26 mirror
+  return {
+    data: (q.data || []).map(r => ({
+      team_key: r.team_key,
+      region: r.region,
+      salaried: salaried.has(r.team_key),
+    })),
+  };
 }
 
 // Paginate through a labor_actuals_latest filter, .range() loop,
@@ -170,6 +204,19 @@ export async function GET(request) {
     last_walk_at: psWalkGlobal.data?.completed_at || null,
     last_walk_ids_seen: psWalkGlobal.data?.ids_seen || null,
     last_derive_at: null,
+  };
+
+  // V6-18/19 - fetch the accounts directory + regional-director
+  // display names once per request; every response path (single,
+  // aggregate, salaried-only, out-of-scope) carries them so the
+  // folio can render regions and RDO eyebrows without a second
+  // network call.
+  const dirQ = await fetchAccountsDirectory(supa);
+  if (dirQ.error) return NextResponse.json(safeError("accounts_directory", dirQ.error), { status: 500 });
+  const accounts_directory = dirQ.data;
+  const regional_directors_display = {
+    East: rdoDisplayName(REGIONAL_DIRECTORS.East),
+    West: rdoDisplayName(REGIONAL_DIRECTORS.West),
   };
 
   // ── v6 PR-1 · aggregate pseudo-keys (ALL / EAST / WEST) ──────────
@@ -339,6 +386,8 @@ export async function GET(request) {
       budget_mode: "static",
       budget_notes,
       members,
+      accounts_directory,
+      regional_directors_display,
       name_availability: {
         has_names: resolvedNames > 0,
         resolved: resolvedNames,
@@ -364,6 +413,8 @@ export async function GET(request) {
       derive_freshness: freshness,
       unmapped_names: [],
       account_periods: [],
+      accounts_directory,
+      regional_directors_display,
       name_availability: { has_names: false, resolved: 0, total: 0, reason: "salaried_only" },
     });
   }
@@ -563,6 +614,8 @@ export async function GET(request) {
     account_periods,
     budget_periods,
     budget_mode,
+    accounts_directory,
+    regional_directors_display,
     name_availability: {
       has_names: resolvedNames > 0,
       resolved: resolvedNames,
