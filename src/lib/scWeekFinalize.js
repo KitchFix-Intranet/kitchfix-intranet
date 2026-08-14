@@ -514,6 +514,9 @@ export async function runFinalizeEffects(ctx, deps = {}) {
         isTest,
         qboLink:          buildQboInvoiceLink(result.qboInvoiceId),
         ledgerRowId:      result.ledgerRowId,
+        // PR-F1: raw Line[] passed through so N1's per-item summary
+        // table can aggregate Days / Qty / Amount per ItemRef.
+        rawLines:         invoice.Line,
       });
     } catch (err) {
       const code = err instanceof NotAllowlistedError
@@ -549,15 +552,38 @@ export async function runFinalizeEffects(ctx, deps = {}) {
   }
 
   // 7. All succeeded -> N1 (live send).
+  // PR-F1: compute the two metrics N1 body + Slack want directly.
+  // daysServed = distinct ServiceDate across all payload lines.
+  // totalMeals = sum of Qty across all payload lines (FF services
+  //   at qty=1 add a negligible +1 each; both pilots that matter
+  //   are TXR-AZ [zero FF] + CIN-AZ [2 FF]; the sanity-check
+  //   recipient reads within a few units of the true meal count).
+  const dateSet = new Set();
+  let totalMeals = 0;
+  for (const inv of payload.invoices) {
+    for (const line of (inv.Line || [])) {
+      if (line.DetailType !== "SalesItemLineDetail") continue;
+      const d = String(line.SalesItemLineDetail?.ServiceDate || "").slice(0, 10);
+      if (d) dateSet.add(d);
+      totalMeals += Number(line.SalesItemLineDetail?.Qty || 0);
+    }
+  }
+  const daysServed = dateSet.size;
+
   const n1 = await doN1({
     qboMode,
     accountKey,
     weekStart: pairStart,
     weekEnd:   pairEnd,
     submitterEmail,
+    submitterAt: finalizedRow?.finalized_at || null,
     invoiceRecords,
     scWeekLink: buildScWeekLink(accountKey, weekStart),
     accountMap: resolverAccountMap,
+    daysServed,
+    totalDays: isBiweekly ? 14 : 7,
+    totalMeals,
+    deps: { supa },
   });
   log.info("[N1 fired]", {
     subject: n1.subject, to: n1.recipients?.to,

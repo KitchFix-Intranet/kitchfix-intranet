@@ -39,6 +39,7 @@
 // and unit-tested but no account exercises it in the wild.
 
 import { resolveRecipients, NOTIFICATION_TYPES, KEVIN_EMAIL } from "./recipients.js";
+import { resolveDisplayNames, titlecaseLocalPart } from "./displayName.js";
 import { sendEmailSA } from "@/lib/gmail";
 
 // ─── Copy constants ───────────────────────────────────────────────
@@ -119,55 +120,156 @@ function emailShell({ preheader, body }) {
 </html>`;
 }
 
-// N1 body table.
-function n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords, scWeekLink, isTest }) {
+// Aggregate invoice line records into per-item rows for the N1
+// summary table. Groups by ItemRef.name (fallback: ItemRef.value),
+// summing qty + amount and counting distinct ServiceDates as
+// "days". Small helper so the render stays declarative.
+function aggregateN1Lines(invoiceRecords) {
+  const byItem = new Map();
+  for (const inv of (invoiceRecords || [])) {
+    for (const line of (inv.rawLines || [])) {
+      if (line.DetailType !== "SalesItemLineDetail") continue;
+      const sil  = line.SalesItemLineDetail;
+      const name = sil?.ItemRef?.name || sil?.ItemRef?.value || "(unknown item)";
+      const key  = String(sil?.ItemRef?.value || name);
+      const date = String(sil?.ServiceDate || "").slice(0, 10);
+      const bucket = byItem.get(key) || { name, qty: 0, amount: 0, dates: new Set() };
+      bucket.qty    += Number(sil?.Qty || 0);
+      bucket.amount += Number(line.Amount || 0);
+      if (date) bucket.dates.add(date);
+      byItem.set(key, bucket);
+    }
+  }
+  return [...byItem.values()].map((b) => ({
+    name: b.name, days: b.dates.size, qty: b.qty, amount: b.amount,
+  }));
+}
+
+// N1 body table (PR-F1 2026-08-14): rebuilt per docs/design/
+// KF_NOTIFICATION_RENDERS.html N1 section. Rows: Account · Service
+// week · Days served · Meals and snacks. Emphasized total row for
+// Pre-tax total (larger + bolder + own visual band). Line-summary
+// table Item / Days / Qty / Amount. Drop "Finalized by" row (the
+// lead sentence carries it). Drop "Invoices" unless count > 1.
+// Footer broken into three distinct lines with visible spacing.
+function n1Body({
+  accountKey, weekStart, weekEnd,
+  submitterName, submitterAt,
+  invoiceRecords, scWeekLink, isTest,
+  daysServed, totalDays = 7, totalMeals,
+}) {
   const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
-  const totalMeals = invoiceRecords.reduce((s, r) => s + (r.lineCount || 0), 0);
+  const invoiceCount = invoiceRecords.length;
   const kickText = isTest ? "TEST - READY FOR REVIEW" : "READY FOR REVIEW";
   const kickBg   = isTest ? "#FDF6EC" : "#E8F5EC";
   const kickFg   = isTest ? "#8A5A16" : "#2F7D4F";
   const qboLink  = invoiceRecords.find((r) => r.qboLink)?.qboLink || "";
+  const submitterLead = escapeHtml(submitterName || "The site leader");
+
+  const rowsData = [
+    ["Account",         escapeHtml(accountKey)],
+    ["Service week",    escapeHtml(fmtWeekRange(weekStart, weekEnd))],
+    ["Days served",     `${typeof daysServed === "number" ? daysServed : "-"} of ${totalDays}`],
+    ["Meals and snacks", typeof totalMeals === "number" ? totalMeals.toLocaleString("en-US") : "-"],
+  ];
+  if (invoiceCount > 1) {
+    rowsData.push(["Invoices", `${invoiceCount} (main + rehab)`]);
+  }
+  const rows = rowsData.map(([k, v]) => `<tr>
+    <td style="padding:10px 14px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#64748B">${k}</td>
+    <td style="padding:10px 14px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#0F172A;text-align:right;font-weight:600">${v}</td>
+  </tr>`).join("");
+
+  // Emphasized total row (own band, larger + bolder). Visual anchor.
+  const totalRow = `<tr>
+    <td style="padding:14px 14px;background:#F8FAFC;font-size:14px;color:#0F172A;font-weight:700;border-top:1px solid #E2E8F0">Pre-tax total</td>
+    <td style="padding:14px 14px;background:#F8FAFC;font-size:20px;line-height:24px;color:#0F172A;text-align:right;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;border-top:1px solid #E2E8F0">${escapeHtml(formatCents(totalCents))}</td>
+  </tr>`;
+
+  // Per-item summary. Skipped when there are no aggregatable lines
+  // (invoiceRecords carried only bare totals + no rawLines).
+  const items = aggregateN1Lines(invoiceRecords);
+  const linesTable = items.length === 0 ? "" : `
+  <tr><td style="padding-top:20px">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="text-align:left;padding:0 8px 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#64748B;font-weight:700;border-bottom:1px solid #E2E8F0">Item</th>
+        <th style="text-align:right;padding:0 8px 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#64748B;font-weight:700;border-bottom:1px solid #E2E8F0">Days</th>
+        <th style="text-align:right;padding:0 8px 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#64748B;font-weight:700;border-bottom:1px solid #E2E8F0">Qty</th>
+        <th style="text-align:right;padding:0 8px 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#64748B;font-weight:700;border-bottom:1px solid #E2E8F0">Amount</th>
+      </tr></thead>
+      <tbody>${items.map((i) => `<tr>
+        <td style="padding:8px;border-bottom:1px solid #F1F5F9;color:#334155">${escapeHtml(i.name)}</td>
+        <td style="padding:8px;border-bottom:1px solid #F1F5F9;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;color:#334155">${i.days}</td>
+        <td style="padding:8px;border-bottom:1px solid #F1F5F9;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;color:#334155">${i.qty.toLocaleString("en-US")}</td>
+        <td style="padding:8px;border-bottom:1px solid #F1F5F9;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;color:#334155">${escapeHtml(formatCents(Math.round(i.amount * 100)))}</td>
+      </tr>`).join("")}</tbody>
+    </table>
+  </td></tr>`;
+
   const testLine = isTest
     ? `<tr><td style="padding-top:16px;font-size:12px;color:#8A5A16;font-weight:bold">*** TEST - not a real invoice; no client will be billed ***</td></tr>`
     : "";
 
-  const rows = [
-    ["Account",         escapeHtml(accountKey)],
-    ["Service week",    escapeHtml(fmtWeekRange(weekStart, weekEnd))],
-    ["Invoices",        String(invoiceRecords.length)],
-    ["Pre-tax total",   `<b>${escapeHtml(formatCents(totalCents))}</b>`],
-    ["Finalized by",    escapeHtml(submitterEmail || "(unknown)")],
-  ].map(([k, v]) => `<tr>
-    <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#64748B">${k}</td>
-    <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;font-size:13px;color:#0F172A;text-align:right;font-weight:600">${v}</td>
-  </tr>`).join("");
-
   return `
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-  <tr><td style="padding-bottom:8px;font-size:10px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:${kickFg};background:${kickBg};padding:6px 10px;border-radius:4px;display:inline-block">${kickText}</td></tr>
+  <tr><td style="padding-bottom:8px"><span style="display:inline-block;font-size:10px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:${kickFg};background:${kickBg};padding:6px 10px;border-radius:4px">${kickText}</span></td></tr>
   <tr><td style="padding-top:12px;font-size:20px;line-height:1.2;font-weight:bold;color:#0F172A">Invoice draft ready for review</td></tr>
   <tr><td style="padding-top:8px;font-size:14px;line-height:1.5;color:#475569">
-    <b>${escapeHtml(submitterEmail || "The site leader")}</b> finalized the week of <b>${escapeHtml(fmtWeekRange(weekStart, weekEnd))}</b> for
+    <b>${submitterLead}</b> finalized the week of <b>${escapeHtml(fmtWeekRange(weekStart, weekEnd))}</b> for
     ${escapeHtml(accountKey)}. The intranet built the invoice from the Service Calendar and placed it in QuickBooks as a draft.
     <b>AP reviews it and sends it to the client.</b>
   </td></tr>
   <tr><td style="padding-top:16px">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #E2E8F0;border-radius:10px;overflow:hidden">
       ${rows}
+      ${totalRow}
     </table>
   </td></tr>
+  ${linesTable}
   <tr><td style="padding-top:20px">
     <a href="${escapeHtml(scWeekLink || "#")}" style="display:inline-block;padding:10px 18px;background:#153968;color:#ffffff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold">Open the week in the Service Calendar</a>
   </td></tr>
   ${qboLink ? `<tr><td style="padding-top:8px;font-size:12px;color:#64748B">
-    <a href="${escapeHtml(qboLink)}" style="color:#153968">AP and leadership: open the draft in QuickBooks</a>
+    <a href="${escapeHtml(qboLink)}" style="color:#153968;text-decoration:none">AP and leadership: open the draft in QuickBooks</a>
   </td></tr>` : ""}
   ${testLine}
-  <tr><td style="padding-top:16px;font-size:11px;color:#64748B;line-height:1.5;border-top:1px solid #E2E8F0;padding-top:12px;margin-top:12px">
-    Sales tax is calculated by QuickBooks at send. QuickBooks access is AP and leadership only.
-    This week is now locked - Kevin, Joe, or Sebastian can unlock it.
+  <tr><td style="padding-top:24px;border-top:1px solid #E2E8F0">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr><td style="padding:14px 0 6px;font-size:11px;color:#64748B;line-height:1.5">
+        <b>Finalized by ${submitterLead}${submitterAt ? ` on ${escapeHtml(submitterAt)}` : ""}.</b>
+      </td></tr>
+      <tr><td style="padding:6px 0;font-size:11px;color:#64748B;line-height:1.5">
+        Sales tax is calculated by QuickBooks at send.
+      </td></tr>
+      <tr><td style="padding:6px 0;font-size:11px;color:#64748B;line-height:1.5">
+        QuickBooks access is AP and leadership only. This week is now locked - Kevin, Joe, or Sebastian can unlock it.
+      </td></tr>
+    </table>
   </td></tr>
 </table>`;
+}
+
+// Slack payload for N1. Test-mode ALWAYS opens with [TEST] prefix
+// AND closes with TEST_SLACK_FOOTER (addendum §A5 amended
+// 2026-08-14 to include N1).
+function n1SlackText({ accountKey, weekStart, weekEnd, invoiceRecords, submitterName, daysServed, totalDays, totalMeals, isTest }) {
+  const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
+  const invoiceCount = invoiceRecords.length;
+  const head = isTest
+    ? `[TEST] *Invoice draft ready* for \`${accountKey}\`, week of ${fmtWeekTitle(weekStart)}.`
+    : `*Invoice draft ready* for \`${accountKey}\`, week of ${fmtWeekTitle(weekStart)}.`;
+  const summary = [
+    `• Week: ${fmtWeekRange(weekStart, weekEnd)}`,
+    `• Days served: ${typeof daysServed === "number" ? daysServed : "-"} of ${totalDays || 7}`,
+    (typeof totalMeals === "number") ? `• Meals and snacks: ${totalMeals.toLocaleString("en-US")}` : null,
+    `• Pre-tax total: *${formatCents(totalCents)}*`,
+    invoiceCount > 1 ? `• Invoices: ${invoiceCount} (main + rehab)` : null,
+    `• Finalized by ${submitterName || "the site leader"}`,
+  ].filter(Boolean).join("\n");
+  const closing = `The draft is in QuickBooks for AP review.`;
+  const foot = isTest ? `\n${TEST_SLACK_FOOTER}` : "";
+  return `${head}\n${summary}\n${closing}${foot}`;
 }
 
 // N2 body table.
@@ -267,7 +369,10 @@ async function sendSlack({ webhookUrl, text }) {
 export async function fireN1(args) {
   const {
     qboMode, accountKey, weekStart, weekEnd, submitterEmail,
-    invoiceRecords, scWeekLink, accountMap, send = true, deps,
+    invoiceRecords, scWeekLink, accountMap,
+    daysServed, totalDays = 7, totalMeals,
+    submitterAt,
+    send = true, deps,
   } = args;
   const isTest = qboMode === "test";
   const recipients = resolveRecipients({
@@ -275,28 +380,65 @@ export async function fireN1(args) {
     accountKey, mode: qboMode,
     submitterEmail, accountMap,
   });
+  // Display name resolution: submitter first (used in the lead
+  // sentence + footer + Slack). Falls back to titlecase(local-part)
+  // then to a generic "the site leader" when the address is empty.
+  const nameMap = await resolveDisplayNames(
+    submitterEmail ? [submitterEmail] : [],
+    { supa: deps?.supa }
+  );
+  const submitterName = submitterEmail
+    ? (nameMap.get(String(submitterEmail).trim().toLowerCase()) || titlecaseLocalPart(submitterEmail) || null)
+    : null;
+
   const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
-  const totalMeals = invoiceRecords.reduce((s, r) => s + (r.lineCount || 0), 0);
   const testPrefix = isTest ? "[TEST] " : "";
   const subject = `${testPrefix}Invoice ready: ${accountKey}, week of ${fmtWeekTitle(weekStart)}`;
-  const preheader = `${invoiceRecords.length} invoice(s), ${formatCents(totalCents)} pre-tax. Ready for AP review.`;
+  const invoiceCount = invoiceRecords.length;
+  const daysServedStr = typeof daysServed === "number" ? `${daysServed} of ${totalDays}` : "";
+  const mealsStr = typeof totalMeals === "number" ? `${totalMeals.toLocaleString("en-US")} meals` : "";
+  const invoicesStr = invoiceCount > 1 ? `${invoiceCount} invoices` : "";
+  const preheader = [daysServedStr, mealsStr, `${formatCents(totalCents)} pre-tax`, invoicesStr]
+    .filter(Boolean).join(", ") + ". Ready for AP review.";
   const html = emailShell({
     preheader,
-    body: n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords, scWeekLink, isTest }),
+    body: n1Body({
+      accountKey, weekStart, weekEnd,
+      submitterName, submitterAt,
+      invoiceRecords, scWeekLink, isTest,
+      daysServed, totalDays, totalMeals,
+    }),
+  });
+  const slackText = n1SlackText({
+    accountKey, weekStart, weekEnd,
+    invoiceRecords, submitterName,
+    daysServed, totalDays, totalMeals, isTest,
   });
 
   let emailResult = "not_sent";
-  if (send && recipients.to.length > 0) {
-    const sender = deps?.emailSender || sendEmailSA;
-    emailResult = await sender({
-      sender: EMAIL_SENDER,
-      displayName: EMAIL_DISPLAY_NAME,
-      to: recipients.to,
-      subject,
-      html,
+  let slackResult = { sent: false, skipped: "not sent (send=false)" };
+  if (send) {
+    if (recipients.to.length > 0) {
+      const sender = deps?.emailSender || sendEmailSA;
+      emailResult = await sender({
+        sender: EMAIL_SENDER,
+        displayName: EMAIL_DISPLAY_NAME,
+        to: recipients.to,
+        subject,
+        html,
+      });
+    }
+    const slackWebhook = deps?.slackWebhookUrl || process.env.SLACK_SC_BILLING_WEBHOOK_URL;
+    slackResult = await (deps?.sendSlack || sendSlack)({
+      webhookUrl: slackWebhook,
+      text: slackText,
     });
   }
-  return { recipients, subject, preheader, html, emailResult };
+  return {
+    recipients, subject, preheader, html, emailResult,
+    slack: { text: slackText, result: slackResult },
+    submitterName,
+  };
 }
 
 // ─── N2: push failed ──────────────────────────────────────────────
@@ -361,15 +503,20 @@ export function renderN1({ accountKey, weekStart, weekEnd, submitterEmail, invoi
   if (dryRunOnly === false) {
     throw new Error("renderN1 is render-only. Use fireN1 for live send.");
   }
-  // Legacy contract: test-mode inference from invoiceRecords[].isTest.
   const inferredMode = invoiceRecords?.some((r) => r.isTest) ? "test" : "live";
   const isTest = inferredMode === "test";
   const testPrefix = isTest ? "TEST - " : "";
   const subject = `${testPrefix}Invoice draft ready: ${accountKey} ${weekStart}..${weekEnd}`;
   const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
+  const submitterName = submitterEmail ? titlecaseLocalPart(submitterEmail) : null;
   const html = emailShell({
     preheader: `${invoiceRecords.length} invoice(s), ${formatCents(totalCents)} pre-tax.`,
-    body: n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords, scWeekLink, isTest }),
+    body: n1Body({
+      accountKey, weekStart, weekEnd,
+      submitterName, submitterAt: null,
+      invoiceRecords, scWeekLink, isTest,
+      daysServed: undefined, totalDays: 7, totalMeals: undefined,
+    }),
   });
   const to = isTest ? [KEVIN_EMAIL] : n1LegacyRecipients({ accountKey, submitterEmail });
   return { mode: "dryrun", to, subject, html };
@@ -407,6 +554,7 @@ function n1LegacyRecipients({ accountKey, submitterEmail }) {
 }
 
 export const _internals = {
-  emailShell, n1Body, n2Body, n2SlackText, sendSlack, formatCents,
+  emailShell, n1Body, n2Body, n1SlackText, n2SlackText,
+  aggregateN1Lines, sendSlack, formatCents,
   fmtWeekTitle, fmtWeekRange, escapeHtml,
 };

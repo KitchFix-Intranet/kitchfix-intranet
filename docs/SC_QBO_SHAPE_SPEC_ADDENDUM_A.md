@@ -108,11 +108,20 @@ closes with a one-line footer stating it is a test with no client impact. A
 member who joins later cannot mistake one for real. Email recipients in test
 mode remain Kevin and only Kevin.
 
+**N1 posts to Slack (amended by Kevin 2026-08-14).** The same
+`#service-calendar-invoices` webhook carries N1 posts alongside N2. Same
+`[TEST]` prefix + test-footer rules apply in test mode. Slack content stays
+tight - account, week, days served, meals, pre-tax total, one line stating
+the draft is in QuickBooks for AP review; the email carries the fuller
+line-summary and CTAs. The Slack channel is where a team member sees the
+signal ("a week finalized") without needing to be on the email list; the
+email carries the full readable record.
+
 ## A6 · Notification matrix, amended
 
 | # | Event | To | cc | Channel |
 |---|---|---|---|---|
-| N1 | Invoice ready | Sebastian, Kevin, Joe, Josh, the account's salaried managers, the submitter | - | Email |
+| N1 | Invoice ready | Sebastian, Kevin, Joe, Josh, the account's salaried managers, the submitter | - | Email + Slack (`#service-calendar-invoices`) |
 | N2 | Push failed | Kevin, Sebastian | - | Email + Slack (`#service-calendar-invoices`) |
 | N3.1 | Friday 12:00 local reminder | the account's salaried managers | Kevin, Sebastian | Email |
 | N3.2 | Monday 12:00 local, urgent | the account's salaried managers | Kevin, Sebastian | Email |
