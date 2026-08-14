@@ -20,6 +20,7 @@ import {
   hasSupersededInRange,
   supersededSummary,
 } from "../lib/budgets";
+import { spanLabelForRange } from "../lib/periods";
 
 export function Hero({
   account,
@@ -73,7 +74,17 @@ export function Hero({
             {pace.toFixed(0)}% of budget · {elapsed.toFixed(0)}% elapsed
           </div>
           <div className="kpi-hero-sub">
-            budget {fmt$(budget)} over {weekCount} weeks
+            {/* D2.3 Ruling C - name the fiscal span the RANGE touches
+                rather than a week count. The label reads from the same
+                week enumerator the dollars use, so the two grains
+                cannot diverge. Zero-budget periods (pre-opening) still
+                appear in the span - it names the date range, not the
+                nonzero-budget subset. */}
+            budget {fmt$(budget)}
+            {(() => {
+              const span = spanLabelForRange(start, end, today);
+              return span ? <> · {span}</> : null;
+            })()}
             {superseded && (
               <span
                 className="kpi-super-mark"
