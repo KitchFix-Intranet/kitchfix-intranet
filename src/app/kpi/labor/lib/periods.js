@@ -84,3 +84,38 @@ export function periodEndISO(period_no) {
 export function currentPeriodNo(todayISO) {
   return periodOf(todayISO);
 }
+
+// kpi-2 - the ONE week-in-range enumerator. Same overlap semantics
+// as the server-side actuals filter (`week_start <= end AND week_end
+// >= start`, i.e., the fiscal week [week_start, week_start+6d]
+// overlaps [rangeStart, rangeEnd]). Both consumers on the client
+// (budget-per-range sum, and any future actuals-vs-budget week-set
+// check) must call this so the two grains never drift.
+//
+// FY2026 starts 2025-12-29 (Sunday). Fiscal weeks step exactly 7
+// days from FY_START, so every fiscal week_start is Sunday-aligned.
+// Returns ISO strings (YYYY-MM-DD), UTC-anchored.
+export function weekStartsInRange(rangeStartISO, rangeEndISO) {
+  const rs = parseISO(rangeStartISO);
+  const re = parseISO(rangeEndISO);
+  const fy = parseISO(FY_START_ISO);
+  if (!rs || !re || !fy || rs > re) return [];
+  // Snap forward to the first FY-week start >= rangeStart - 6d,
+  // stepping in 7-day chunks from FY_START. A week [w, w+6d]
+  // overlaps [rs, re] iff w <= re AND w + 6d >= rs.
+  const rsMs = rs.getTime();
+  const reMs = re.getTime();
+  const fyMs = fy.getTime();
+  // Index of the first candidate week: floor((rangeStart - 6d - FY_START)/7d).
+  const idxStart = Math.max(0, Math.floor((rsMs - 6 * MS_PER_DAY - fyMs) / (7 * MS_PER_DAY)));
+  const out = [];
+  for (let i = idxStart; ; i += 1) {
+    const wStartMs = fyMs + i * 7 * MS_PER_DAY;
+    if (wStartMs > reMs) break;
+    const wEndMs = wStartMs + 6 * MS_PER_DAY;
+    if (wEndMs >= rsMs) {
+      out.push(new Date(wStartMs).toISOString().slice(0, 10));
+    }
+  }
+  return out;
+}

@@ -3,15 +3,17 @@
 //
 // D2 P6 - weekly labor trend chart.
 //
-//   - $ lens (default): navy bars scaled by dollars. **Production
-//     stacks the $ lens too** from real per-bucket dollars, per spec
-//     §3.5 - the render's stacked-hrs-only limitation was data-shape
-//     only and must not ship.
+//   - $ lens (default): navy bars scaled by dollars. Production stacks
+//     the $ lens too, from real per-bucket dollars per spec §3.5.
 //   - hrs lens: stacked composition - regular navy-300, OT navy-600,
 //     holiday --chart-hol (F14 violet), unpriced fill-needs cap.
 //   - unpriced weeks in $ lens: short amber stubs (never fake height).
 //   - unknown weeks: red-outline stub.
-//   - Weekly dashed budget line, labelled illustrative (K9).
+//   - Weekly dashed budget line - STEPPED by fiscal period, sourced
+//     from the labor route's budget_periods (Playbook 4.5). Each week
+//     draws at its period's amount / 4. Named better-than-v5 deviation:
+//     v5 rendered a single flat line at a placeholder rate; the real
+//     per-period data makes each period-jump visible on the chart.
 //   - Collapsible, state remembered per user (localStorage `kpi.trendOpen`).
 //   - Lens toggle remembered (localStorage `kpi.trendMode`).
 //   - Bar click (account mode) jumps + opens the week with M7 landing
@@ -19,25 +21,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting";
-
-// Weekly budget map for the dashed line. Kept inline here to avoid a
-// second module round-trip; budgets.js owns the range totals. Values
-// stay in sync with budgets.js's BUDGET_WK object - if that map changes,
-// mirror it here (small enough to eyeball; noted in budgets.js header).
-function _budgetWeekly(account) {
-  const map = {
-    "CIN - OH":     3900,
-    "STL - FL":     8200,
-    "CIN - AZ":     3550,
-    "STL - MO":     3200,
-    "TBJ - FL":     5100,
-    "TBR - FL":     5400,
-    "TXR - AZ":     3300,
-    "TXR - TX - H": 2650,
-    "TXR - TX - V": 1950,
-  };
-  return map[account] || 0;
-}
+import { periodOf } from "../lib/periods";
 
 const H = 120;
 const PAD = 14;
@@ -49,6 +33,8 @@ export function TrendChart({
   weeks,         // [{ week_start, week_end, hours_regular, hours_overtime, hours_double_time, hours_without_dollars, amount, coverage_state }]
   openWeeks,     // Set<string> - which week_starts are open in the table
   onBarClick,    // (week_start) => void
+  budgetPeriods, // from labor route, per Playbook 4.5. Empty on envelope mode (no budget line).
+  budgetMode,    // 'static' | 'envelope' - envelope hides the budget line.
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mode, setMode] = useState("$");
@@ -119,7 +105,25 @@ export function TrendChart({
     return [...byWeek.values()].sort((a, b) => a.week_start.localeCompare(b.week_start));
   }, [weeks]);
   const hrsMode = mode === "hrs";
-  const budWeekly = _budgetWeekly(account);
+  // Real per-period budget map from the labor route. Undefined until
+  // data lands; envelope mode ships no budget line at all.
+  const isEnvelope = budgetMode === "envelope";
+  const budByPeriod = useMemo(() => {
+    const m = new Map();
+    if (!isEnvelope && Array.isArray(budgetPeriods)) {
+      for (const bp of budgetPeriods) {
+        if (bp && Number.isFinite(Number(bp.amount))) m.set(Number(bp.period_no), Number(bp.amount));
+      }
+    }
+    return m;
+  }, [budgetPeriods, isEnvelope]);
+  const weekBudget = (weekStartISO) => {
+    if (isEnvelope) return 0;
+    const p = periodOf(weekStartISO);
+    if (p == null) return 0;
+    const amt = budByPeriod.get(p);
+    return amt == null ? 0 : amt / 4;
+  };
 
   const value = (w) => {
     if (hrsMode) {
@@ -128,7 +132,10 @@ export function TrendChart({
     // $ lens: full amount plus stacks of per-bucket dollars are computed inline
     return Number(w.amount || 0);
   };
-  const max = Math.max(...asc.map(value), 1);
+  // Include the max weekly budget in the y-axis max so the dashed
+  // budget line always sits inside the chart, not above the top edge.
+  const budMax = asc.reduce((m, w) => Math.max(m, weekBudget(w.week_start)), 0);
+  const max = Math.max(...asc.map(value), budMax, 1);
   const W = Math.max(120, asc.length * BAR_STRIDE);
 
   const bars = asc.map((w, i) => {
@@ -216,14 +223,29 @@ export function TrendChart({
     return null;
   });
 
-  // Budget line - dashed, illustrative label
-  const budLine = !hrsMode && budWeekly > 0 && budWeekly <= max ? (() => {
-    const by = H - PAD - ((budWeekly / max) * (H - PAD - 6));
-    return <line className="kpi-trend-bud" x1="0" x2={W} y1={by.toFixed(1)} y2={by.toFixed(1)}>
-      <title>weekly budget {fmt$(budWeekly)} · illustrative</title>
-    </line>;
-  })() : null;
+  // Budget line - STEPPED (kpi-2). Each week is drawn at
+  // period_amount / 4; the line steps at fiscal-period boundaries
+  // (P4 -> P5 -> P6 etc). Hidden in hrs mode and envelope mode. When
+  // budgetPeriods is empty for the range (missing budget), nothing
+  // renders - callers see the dashed line simply absent.
+  const budLineSegments = (!hrsMode && !isEnvelope && budMax > 0) ? asc.map((w, i) => {
+    const wk = weekBudget(w.week_start);
+    if (wk <= 0) return null;
+    const x1 = i * BAR_STRIDE;
+    const x2 = x1 + BAR_STRIDE;
+    const y  = H - PAD - ((wk / max) * (H - PAD - 6));
+    return (
+      <line
+        key={w.week_start}
+        className="kpi-trend-bud"
+        x1={x1} x2={x2} y1={y.toFixed(1)} y2={y.toFixed(1)}
+      >
+        <title>{fmtDate(w.week_start)} · weekly budget {fmt$(wk)} (period amount / 4)</title>
+      </line>
+    );
+  }) : null;
 
+  // Legend copy - K9 "(illustrative)" retired.
   const legend = hrsMode ? (
     <span className="kpi-legend">
       <span><i className="kpi-legend-r" />reg</span>
@@ -232,7 +254,7 @@ export function TrendChart({
       <span><i className="kpi-legend-u" />unpriced</span>
     </span>
   ) : (
-    <em>peak {hrsMode ? `${fmtHrs(max)} hrs` : fmt$(max)}{budWeekly > 0 ? " · dashed = weekly budget (illustrative)" : ""}</em>
+    <em>peak {hrsMode ? `${fmtHrs(max)} hrs` : fmt$(max)}{!isEnvelope && budMax > 0 ? " · dashed = weekly budget" : ""}</em>
   );
 
   return (
@@ -253,7 +275,7 @@ export function TrendChart({
       {!collapsed && (
         <>
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Weekly labor">
-            {budLine}
+            {budLineSegments}
             {bars}
           </svg>
           {!hrsMode && (
