@@ -105,6 +105,7 @@ export function WeekTable({
   onEscape,              // () => void
   todayISO,
   workerRangeTotals,     // { [worker_id]: { hoursWorked, dollarsTotal } } - for F16 rate-on-hover
+  aggregateMode,         // V6-20 - true on ALL/EAST/WEST pseudo-key views; inline drill switches to per-account rows
 }) {
   const wrapRef = useRef(null);
 
@@ -307,33 +308,89 @@ export function WeekTable({
                           <td><HourCell v={w.hours_without_dollars} coverage_state={w.coverage_state} warn /></td>
                           <td><DollarCell w={w} /></td>
                         </tr>
-                        {wOpen && w.worker_rows && w.worker_rows.length > 0 && (
-                          <>
-                            {w.worker_rows.map(wr => {
-                              const meta = workers?.[wr.worker_id];
-                              const label = workerLabel(meta, wr.worker_id, redact);
-                              const title = workerTitle(label, workerRangeTotals?.[wr.worker_id]);
-                              return (
-                                <tr key={wr.worker_id} className="kpi-kid">
-                                  <td className="l">
-                                    <span className="kpi-kidname" title={title}>{label}</span>
+                        {wOpen && w.worker_rows && w.worker_rows.length > 0 && (() => {
+                          // V6-20 - aggregate mode drills by ACCOUNT
+                          // instead of by worker (member rollups only;
+                          // never lists individual worker rows across
+                          // accounts). Per-account rows collapse each
+                          // account's worker rows in this week into a
+                          // single line: account_key · hours by bucket
+                          // · dollars.
+                          if (aggregateMode) {
+                            const byAcct = new Map();
+                            for (const wr of w.worker_rows) {
+                              const k = wr.account_key || "—";
+                              const cur = byAcct.get(k) || {
+                                account_key: k,
+                                hours_regular: 0, hours_overtime: 0,
+                                hours_double_time: 0, hours_without_dollars: 0,
+                                amount: 0,
+                                coverage_states: new Set(),
+                              };
+                              cur.hours_regular += Number(wr.hours_regular || 0);
+                              cur.hours_overtime += Number(wr.hours_overtime || 0);
+                              cur.hours_double_time += Number(wr.hours_double_time || 0);
+                              cur.hours_without_dollars += Number(wr.hours_without_dollars || 0);
+                              cur.amount += Number(wr.amount || 0);
+                              cur.coverage_states.add(wr.coverage_state);
+                              byAcct.set(k, cur);
+                            }
+                            const rowsList = [...byAcct.values()].sort((a, b) => a.account_key.localeCompare(b.account_key));
+                            return (
+                              <>
+                                {rowsList.map(ar => {
+                                  const cs = [...ar.coverage_states];
+                                  const rowCov = cs.length === 1 ? cs[0] : "partial";
+                                  return (
+                                    <tr key={ar.account_key} className="kpi-kid">
+                                      <td className="l">
+                                        <span className="kpi-kidname">{ar.account_key}</span>
+                                      </td>
+                                      <td className="l"><Badge state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_regular} coverage_state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_overtime} coverage_state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_double_time} coverage_state={rowCov} /></td>
+                                      <td><HourCell v={ar.hours_without_dollars} coverage_state={rowCov} warn /></td>
+                                      <td>{ar.amount > 0.004 ? <span className="kpi-mono">{fmt$(ar.amount)}</span> : <span className="kpi-dash">—</span>}</td>
+                                    </tr>
+                                  );
+                                })}
+                                <tr className="kpi-kid kpi-kid-note">
+                                  <td className="l" colSpan={7}>
+                                    Aggregate view · per-account rollup for this week. Drill into a single account for per-worker detail.
                                   </td>
-                                  <td className="l"><Badge state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_regular} coverage_state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_overtime} coverage_state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_double_time} coverage_state={wr.coverage_state} /></td>
-                                  <td><HourCell v={wr.hours_without_dollars} coverage_state={wr.coverage_state} warn /></td>
-                                  <td>{wr.amount > 0.004 ? <span className="kpi-mono">{fmt$(wr.amount)}</span> : <span className="kpi-dash">—</span>}</td>
                                 </tr>
-                              );
-                            })}
-                            <tr className="kpi-kid kpi-kid-note">
-                              <td className="l" colSpan={7}>
-                                Rippling pay-segment amounts, validated against paystubs. Dollars are never hours × rate (D27).
-                              </td>
-                            </tr>
-                          </>
-                        )}
+                              </>
+                            );
+                          }
+                          return (
+                            <>
+                              {w.worker_rows.map(wr => {
+                                const meta = workers?.[wr.worker_id];
+                                const label = workerLabel(meta, wr.worker_id, redact);
+                                const title = workerTitle(label, workerRangeTotals?.[wr.worker_id]);
+                                return (
+                                  <tr key={wr.worker_id} className="kpi-kid">
+                                    <td className="l">
+                                      <span className="kpi-kidname" title={title}>{label}</span>
+                                    </td>
+                                    <td className="l"><Badge state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_regular} coverage_state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_overtime} coverage_state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_double_time} coverage_state={wr.coverage_state} /></td>
+                                    <td><HourCell v={wr.hours_without_dollars} coverage_state={wr.coverage_state} warn /></td>
+                                    <td>{wr.amount > 0.004 ? <span className="kpi-mono">{fmt$(wr.amount)}</span> : <span className="kpi-dash">—</span>}</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="kpi-kid kpi-kid-note">
+                                <td className="l" colSpan={7}>
+                                  Rippling pay-segment amounts, validated against paystubs. Dollars are never hours × rate (D27).
+                                </td>
+                              </tr>
+                            </>
+                          );
+                        })()}
                         {wOpen && (!w.worker_rows || w.worker_rows.length === 0) && (
                           <tr className="kpi-kid">
                             <td className="l" colSpan={7}>

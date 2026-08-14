@@ -872,6 +872,7 @@ export default function KpiLaborPage() {
               currentPeriodNo={currentPeriodNo}
               budgetPeriods={data.budget_periods || []}
               budgetMode={data.budget_mode || "static"}
+              budgetNotes={data.budget_notes || {}}
             />
           </div>
           <MetricGrid
@@ -1003,6 +1004,7 @@ export default function KpiLaborPage() {
           onEscape={() => setExpandedWeeks(new Set())}
           todayISO={today}
           workerRangeTotals={workerRangeTotals}
+          aggregateMode={PSEUDO_KEYS.has(account)}
         />
       ) : null}
       {/* V6-5 - one-line grouping note beneath the table, states
@@ -1031,6 +1033,7 @@ export default function KpiLaborPage() {
       workers={data?.workers}
       workerRangeTotals={workerRangeTotals}
       redact={redact}
+      weeksInRange={weeksInRange}
     />
   ) : null;
 

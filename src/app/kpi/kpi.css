@@ -1343,6 +1343,23 @@
   padding: var(--space-card-pad);
   min-width: 0;
 }
+/* V6-17 - rail clipping fix. Root cause: the .kpi-rail column had no
+   scoped padding, so .kpi-rl-card filled the exact 300px grid track
+   and its right edge sat flush against the wrap's border-radius; the
+   corner rounding on .kpi-page clipped the card corner + shadow at
+   every viewport (worst-visible at 1800-2560px where the wrap is
+   centered and the visual weight of the shadow is unmasked).
+   Fix: pad the rail track + guarantee rl-cards respect their container
+   with box-sizing + min-width:0. */
+.kpi-rail {
+  padding: var(--space-4) var(--space-3);
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+  display: flex; flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.kpi-rl-card { box-sizing: border-box; max-width: 100%; }
 
 /* Folio rail (left) - account navigation only for D2 */
 .kpi-folio {
@@ -1412,6 +1429,32 @@
   border-radius: var(--rad-10);
   padding: var(--space-3);
   box-shadow: var(--card-shadow);
+}
+/* V6-14 - PAYROLL DATA CHECK card: bigok number + status badge +
+   plain-language sentence. Copy is spec-normative. */
+.kpi-rl-bigok {
+  display: flex; align-items: baseline; gap: var(--space-3);
+}
+.kpi-rl-bigok b {
+  font-size: 26px; color: var(--text-heading);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: var(--num-tabular);
+}
+.kpi-rl-badge {
+  font-size: 11px; font-weight: 700;
+  border-radius: var(--rad-pill);
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  letter-spacing: 0.02em;
+}
+.kpi-rl-badge-ok    { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
+.kpi-rl-badge-warn  { background: var(--amber-100); color: var(--amber-700); border-color: #F3D9AE; }
+.kpi-rl-badge-bad   { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
+.kpi-rl-badge-muted { background: var(--fill-off);  color: var(--text-muted); border-color: var(--border-default); }
+.kpi-rl-plain {
+  font-size: 12px; color: var(--text-muted);
+  margin-top: var(--space-2);
+  line-height: var(--lb-caption);
 }
 .kpi-qp-row {
   display: flex; align-items: center;

@@ -1,17 +1,20 @@
 "use client";
 // src/app/kpi/labor/components/ContextRail.js
 //
-// D2 P8 - right rail card stack.
+// D2 P8 - right rail card stack. V6 makes three renames + a copy
+// rewrite; the underlying data flow is unchanged.
 //
-// Order per v5 + spec §3.10:
-//   Alarms - EMPTY container when healthy (RL-01). Header only shows
-//            when there is a problem to name. Freshness/stale alarms +
-//            unknown-week alarm.
-//   Coverage - counts by state, merged legend, worker-weeks unit note.
-//   OT watch - top-5 workers by OT hours in range, F16 rate titles.
-//   Pipeline ▸ - disclosure button with one-word summary (F4). Body
-//                shows orphan facts / unmapped types / presence age /
-//                derive time / nightly walk. Empty by default.
+// V6-14 - Coverage card renamed PAYROLL DATA CHECK; content shape
+//   becomes `<complete> of <total>` big-ok + status badge + one
+//   plain-language sentence per dominant state + the In-view kv row
+//   moved here from the retired rail-top panel. Copy is normative and
+//   ships verbatim (spec §G).
+// V6-15 - OT card `OVERTIME WATCH · RANGE`.
+// V6-16 - Pipeline card `Nightly data feed` + status badge; the
+//   existing disclosure detail is intact (no functional change).
+//
+// K3 vocabulary stands - Unpriced / Coverage remain the INTERNAL
+// terms; only the operator-facing card TITLE was renamed.
 
 import { useState } from "react";
 import { fmtHrs, fmtTimestamp } from "../lib/formatting";
@@ -47,6 +50,24 @@ function rateTitle(baseLabel, rangeTotals, workerId) {
   return `${baseLabel} · ~$${rate.toFixed(2)}/hr avg in range`;
 }
 
+// V6-14 - severity ladder for the dominant-state sentence. Higher
+// number = more severe. Mixed ranges lead with the most severe
+// present. Copy is normative; do not rephrase.
+const DATA_CHECK_COPY = {
+  complete:   { rank: 0, badge: "COMPLETE", tone: "ok",   line: "Every shift in this range has priced hours. Nothing is missing from payroll." },
+  hours_only: { rank: 1, badge: "HOURS IN", tone: "warn", line: "Hours are in, pay data has not landed yet." },
+  partial:    { rank: 2, badge: "PARTIAL",  tone: "warn", line: "Some shifts are missing pay data - dollars for those weeks are incomplete." },
+  no_labor:   { rank: 3, badge: "NO LABOR", tone: "muted",line: "No labor recorded in this range." },
+  unknown:    { rank: 4, badge: "UNKNOWN",  tone: "bad",  line: "The data feed has not covered part of this range." },
+};
+
+function dominantState(coverageCounts) {
+  const present = Object.keys(DATA_CHECK_COPY).filter(k => (coverageCounts?.[k] || 0) > 0);
+  if (present.length === 0) return "complete";
+  present.sort((a, b) => DATA_CHECK_COPY[b].rank - DATA_CHECK_COPY[a].rank);
+  return present[0];
+}
+
 export function ContextRail({
   filteredActuals,
   totals,               // { hours_regular, hours_overtime, hours_double_time, hours_without_dollars, amount }
@@ -57,6 +78,7 @@ export function ContextRail({
   workers,              // { [worker_id]: { display_name, number, title } }
   workerRangeTotals,    // { [id]: { hoursWorked, dollarsTotal } }
   redact,
+  weeksInRange,         // V6-13/V6-14 - canonical calendar week count, echoed in `In view` row
 }) {
   const [pipeOpen, setPipeOpen] = useState(false);
 
@@ -89,36 +111,19 @@ export function ContextRail({
       desc: `No presence walk covers ${unkWeeks > 1 ? "them" : "it"}.`,
     });
   }
-  const nd = Number(totals?.hours_without_dollars || 0);
 
   const ot = computeOTWatch(filteredActuals, 5);
 
-  const CoverageBadge = ({ state, label }) => (
-    <span className={`kpi-bdg kpi-bdg-${state === "hours_only" ? "unpriced" : state === "no_labor" ? "zero" : state}`}>
-      <span aria-hidden="true">{state === "complete" ? "✓" : state === "partial" ? "!" : state === "hours_only" ? "◷" : state === "unknown" ? "?" : "—"}</span>
-      {label}
-    </span>
-  );
-
-  const covDesc = {
-    complete:   "every entry has dollars",
-    partial:    "some entries lack dollars",
-    hours_only: "before the 04-20 floor or payroll in progress",
-    unknown:    "no successful presence walk",
-    no_labor:   "no derived rows in range",
-  };
-  const covLabel = {
-    complete:   "Complete",
-    partial:    "Partial",
-    hours_only: "Unpriced",
-    unknown:    "Unknown",
-    no_labor:   "No labor",
-  };
+  // V6-14 - PAYROLL DATA CHECK card.
+  const total = Object.values(coverageCounts || {}).reduce((s, n) => s + Number(n || 0), 0);
+  const complete = Number(coverageCounts?.complete || 0);
+  const dominant = dominantState(coverageCounts);
+  const copy = DATA_CHECK_COPY[dominant];
+  const workerWeekCount = filteredActuals.length;
 
   return (
     <>
-      {/* Alarms - empty container when healthy (RL-01). Never renders an
-          "All clear" pill; the empty column IS the healthy state. */}
+      {/* Alarms - empty container when healthy (RL-01). */}
       {alarms.length > 0 && (
         <div className="kpi-alarms">
           {alarms.map((a, i) => (
@@ -134,28 +139,28 @@ export function ContextRail({
         </div>
       )}
 
-      {/* Coverage card */}
+      {/* V6-14 - PAYROLL DATA CHECK */}
       <div>
-        <div className="kpi-rl-h">Coverage · worker-weeks in range</div>
+        <div className="kpi-rl-h">PAYROLL DATA CHECK</div>
         <div className="kpi-rl-card">
-          {Object.keys(covLabel).filter(s => (coverageCounts?.[s] || 0) > 0).map(s => (
-            <div key={s} className="kpi-cov-row-v5">
-              <b>{coverageCounts[s]}</b>
-              <CoverageBadge state={s} label={covLabel[s]} />
-              <span className="kpi-cov-desc-v5">{covDesc[s]}</span>
+          <div className="kpi-rl-bigok">
+            <b className="kpi-mono">{complete} of {total}</b>
+            <span className={`kpi-rl-badge kpi-rl-badge-${copy.tone}`}>{dominant === "complete" ? "✓ " : ""}{copy.badge}</span>
+          </div>
+          <div className="kpi-rl-plain">{copy.line}</div>
+          {weeksInRange != null && (
+            <div className="kpi-pipe-row" style={{ marginTop: 10, borderTopStyle: "dashed" }}>
+              <span>In view</span>
+              <b className="kpi-mono">{weeksInRange} weeks · {workerWeekCount} worker-weeks</b>
             </div>
-          ))}
-          {nd > 0.004 && (
-            <div className="kpi-rl-note">{fmtHrs(nd)} unpriced hrs in range · mostly the pre-04/20 floor</div>
           )}
-          <div className="kpi-rl-note">Counts are worker-weeks, not table rows.</div>
         </div>
       </div>
 
-      {/* OT watch - top 5 real */}
+      {/* V6-15 - OVERTIME WATCH · RANGE */}
       {ot.length > 0 && (
         <div>
-          <div className="kpi-rl-h">OT watch · range</div>
+          <div className="kpi-rl-h">OVERTIME WATCH · RANGE</div>
           <div className="kpi-rl-card">
             {ot.map(x => {
               const label = workerLabel(workers?.[x.id], x.id, redact);
@@ -172,7 +177,7 @@ export function ContextRail({
         </div>
       )}
 
-      {/* Pipeline health disclosure - closed by default, one-word summary */}
+      {/* V6-16 - Nightly data feed disclosure */}
       <div>
         <button
           type="button"
@@ -183,8 +188,10 @@ export function ContextRail({
           <svg className="kpi-i kpi-chev" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Pipeline health
-          <span className="kpi-pipesum">{alarms.some(a => a.kind === "danger") ? "stale" : (data?.unmapped_names?.length || data?.unattributed?.length ? "attention" : "healthy")}</span>
+          Nightly data feed
+          <span className={`kpi-rl-badge kpi-rl-badge-${alarms.some(a => a.kind === "danger") ? "bad" : (data?.unmapped_names?.length || data?.unattributed?.length ? "warn" : "ok")}`}>
+            {alarms.some(a => a.kind === "danger") ? "STALE" : (data?.unmapped_names?.length || data?.unattributed?.length ? "ATTENTION" : "HEALTHY")}
+          </span>
         </button>
         {pipeOpen && (
           <div className="kpi-rl-card">
