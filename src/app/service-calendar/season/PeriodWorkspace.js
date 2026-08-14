@@ -433,6 +433,7 @@ export default function PeriodWorkspace({
         finalizeRowsByWeek={finalizeRowsByWeek}
         weeksMeta={weeksMeta}
         accountCadence={accountCadence}
+        periodRange={periodRange}
         onFinalizeWeek={handleFinalize}
         onRevertFinalize={handleRevert}
         onRetryFinalize={handleRetry}
@@ -938,9 +939,12 @@ function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, savi
 function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMilb, homestandMap, scheduleOverlay, springDateSet, accountKey, bulkMode, bulkSelected, loadState = "loaded", onDayClick, onBulkTileClick, syncingDates, scV2 = false, weekMetrics = null, focusTargetDate = null, scope = "period", justFlippedDates = null,
   /* sc-30 PR-A1 (2026-08-07): finalize context. Props (not closure)
      because DayGrid is a sibling of PeriodWorkspace, not nested.
-     PR-E (2026-08-14) adds weeksMeta + accountCadence. */
+     PR-E (2026-08-14) adds weeksMeta + accountCadence + periodRange
+     (periodRange is the month bounds in month scope; needed so the
+     overlap tag reports days in the OTHER month relative to the
+     view month, not the leading cell's month). */
   showFinalize = false, isOverrideUser = false, finalizeRowsByWeek = null,
-  weeksMeta = {}, accountCadence = null,
+  weeksMeta = {}, accountCadence = null, periodRange = null,
   onFinalizeWeek = null, onRevertFinalize = null, onRetryFinalize = null }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
@@ -1198,12 +1202,16 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                 catch (_) { return null; }
 
                 // Overlap tag for month view: count days in the row
-                // that belong to the OTHER month.
+                // that belong to the OTHER month. "This month" is the
+                // VIEW month (periodRange.start), not the leading
+                // cell's month - a boundary row Jul 27-Aug 2 rendered
+                // in Aug view must report "5 days in July", not
+                // "2 days in August".
                 let overlapTag = null;
-                if (scope === "month" && rowMonday) {
-                  const thisMonth = anyDate.slice(0, 7);
+                if (scope === "month" && rowMonday && periodRange?.start) {
+                  const viewMonth = periodRange.start.slice(0, 7);
                   const otherMonthDates = week
-                    .filter(c => c && c.date && c.date.slice(0, 7) !== thisMonth);
+                    .filter(c => c && c.date && c.date.slice(0, 7) !== viewMonth);
                   if (otherMonthDates.length > 0) {
                     const other = new Date(`${otherMonthDates[0].date}T12:00:00Z`)
                       .toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
