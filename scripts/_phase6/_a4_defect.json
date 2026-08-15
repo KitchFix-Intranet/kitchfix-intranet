@@ -1,0 +1,84 @@
+{
+  "built_at": "2026-08-15T01:47:55.196Z",
+  "file": "/Users/kevinfietek/Downloads/Tampa Bay Rays Service Calendar - 2026 (4).xlsx",
+  "sheet": "TBR-2026 - Actuals",
+  "window": {
+    "start": "2026-05-01",
+    "end": "2026-07-31"
+  },
+  "reproduction_verdict": "REPRODUCED",
+  "formula_referenced_cols": [
+    6,
+    8,
+    10,
+    22,
+    24,
+    26,
+    28,
+    30
+  ],
+  "positional_read_cols": [
+    22,
+    24,
+    26,
+    28,
+    30
+  ],
+  "totals": {
+    "total_meals_col_window_sum": 18680,
+    "formula_reproduced_window_sum": 18280,
+    "positional_milb_count_only_sum": 18280,
+    "delta_formula_vs_positional": 400
+  },
+  "monthly": {
+    "2026-05": {
+      "total_meals": 6000,
+      "positional": 6000,
+      "formula_reproduce": 6000,
+      "days": 31
+    },
+    "2026-06": {
+      "total_meals": 6240,
+      "positional": 6240,
+      "formula_reproduce": 6240,
+      "days": 30
+    },
+    "2026-07": {
+      "total_meals": 6440,
+      "positional": 6040,
+      "formula_reproduce": 6040,
+      "days": 31
+    }
+  },
+  "defect_days": [
+    {
+      "iso": "2026-07-28",
+      "breakfast_leak": true,
+      "breakfast_price_col_value": 80,
+      "breakfast_count_col_value": null,
+      "lunch_leak": true,
+      "lunch_price_col_value": 80,
+      "lunch_count_col_value": null
+    },
+    {
+      "iso": "2026-07-29",
+      "breakfast_leak": false,
+      "breakfast_price_col_value": 80,
+      "breakfast_count_col_value": 80,
+      "lunch_leak": true,
+      "lunch_price_col_value": 80,
+      "lunch_count_col_value": null
+    },
+    {
+      "iso": "2026-07-30",
+      "breakfast_leak": true,
+      "breakfast_price_col_value": 80,
+      "breakfast_count_col_value": null,
+      "lunch_leak": true,
+      "lunch_price_col_value": 80,
+      "lunch_count_col_value": null
+    }
+  ],
+  "total_leaked_meals_into_price_cols": 400,
+  "note": "Formula sum(F,H,J,V,X,Z,AB,AD) DOES NOT reference the price cols. On the flagged target dates, meal counts (80) sit in the ODD-numbered price columns (23,25) while the paired EVEN-numbered count columns (22,24) are null. A positional/naive reader that walks even-numbered count cols only would miss these 400 meals."
+}

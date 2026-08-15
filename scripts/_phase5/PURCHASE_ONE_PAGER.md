@@ -148,5 +148,11 @@ Kevin: STL uses 2027 service-calendar projections. **May 7,540 + June 6,190 + Ju
 
 ### Still open (need Kevin; NOT guessed)
 
-- **Q18** vendor order guides for Sysco/Cheney/GFS/FreshPoint/Samuels - highest-value outstanding question. Would eliminate half the pack-size question class permanently.
-- **Q20** delivery-fee / minimum-order schedule per vendor per account - without it, true delivered cost unanswerable.
+- **Q18** vendor order guides for Sysco/Cheney/GFS/FreshPoint/Samuels - CLOSED 2026-08-14. Kevin: order guides exist but would have to be requested from the site leader. Not pulled for this report. Noted as a data-quality improvement for a future window; this analysis was not run against vendor catalog data.
+- **Q20** delivery-fee / minimum-order schedule per vendor per account - CLOSED 2026-08-14. Kevin: no fee schedule exists that he holds. Delivery and minimum-order fees are not tracked separately anywhere available to us.
+
+### Known limitations of this analysis
+
+**Vendor catalog data was not used.** Sysco, Cheney Brothers, Gordon Food Service, Fresh Point and Samuels all publish order guides, but they were not pulled for this window. Pack sizes were resolved from the invoice line itself - printed pack strings, catch-weight arithmetic, and per-vendor conventions - with a documented recovery layer where that failed. Running a future window against vendor catalogs would remove most remaining pack-size ambiguity and materially improve pound-level precision. It would not change any dollar figure in this report.
+
+**Delivery and minimum-order fees are not tracked.** All costs here are invoice totals. If vendors charge per-drop delivery fees or below-minimum surcharges, those costs are inside the numbers but cannot be isolated or attributed to ordering behavior. This matters most for TBR-FL, which takes 14.84 deliveries per week at a $664 average order against STL-FL's 15.83 at $1,313 - close to the same delivery frequency on roughly half the order size. Whether that pattern carries a cost penalty is unquantified.

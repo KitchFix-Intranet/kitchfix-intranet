@@ -13,14 +13,14 @@
   "gate_result": {
     "TBR-FL": {
       "core_food_protein_lbs": 3398.4,
-      "denom": 19472,
+      "denom": 20300,
       "ratio": 0.17,
       "breach": false
     },
     "TBJ-FL": {
       "core_food_protein_lbs": 8196.4,
-      "denom": 27532,
-      "ratio": 0.3,
+      "denom": 29541,
+      "ratio": 0.28,
       "breach": false
     },
     "STL-FL": {

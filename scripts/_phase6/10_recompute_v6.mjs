@@ -24,6 +24,9 @@
 import fs from "node:fs";
 import { P } from "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase4/_common4.mjs";
 import { P5, ACCOUNTS, MONTHS, assignProteinType, round1, round2, pct1, quantile, median, CATEGORY_LB_BOUNDS, resolveFusedSlash } from "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase5/_common5.mjs";
+// Canonical denominators (Addendum A1) - REPLACE v5 per_meal.window_meals_used
+// and disable the sparse-month substitution path for this window.
+import { CANON, BG_DISCLOSURE, TBR_FL as TBR_CANON, TBJ_FL as TBJ_CANON, STL_FL as STL_CANON } from "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/kitchfix-intranet/scripts/_phase6/_denominators.mjs";
 
 const BASELINE = process.argv.includes("--baseline");
 const MODE = BASELINE ? "baseline" : "v6";
@@ -438,35 +441,74 @@ for (const acct of ACCOUNTS) {
 A6.weight = weight;
 
 // -----------------------------------------------------------------------
-// Per-meal (mirror Phase 5 rebuild)
+// Per-meal (Addendum A1: canonical denominators)
+// Sparse-month projection-substitution is DISABLED for this window.
+// TBR/TBJ/STL now use the calendar-derived canon in _denominators.mjs.
 // -----------------------------------------------------------------------
-const STL_PROJ_TOTAL = 18860;
-if (!A6.per_meal["STL-FL"]) A6.per_meal["STL-FL"] = { account: "STL-FL", monthly: {} };
-const smSTL = A6.per_meal["STL-FL"];
-smSTL.window_meals_used = STL_PROJ_TOTAL;
-smSTL.window_meals_source = "projected_2027_service_calendar";
-smSTL.window_meals_note = "Kevin: STL uses 2027 service-calendar projections (7,540 / 6,190 / 5,130 May/Jun/Jul)";
-const stlFoodSpend = A4.spend?.["STL-FL"]?.dollar_food_spend;
-const stlCoreFoodSpend = A6.weight["STL-FL"].core_food_spend_dollar_set;
-if (stlFoodSpend && STL_PROJ_TOTAL) smSTL.window_dollars_per_meal = round2(stlFoodSpend / STL_PROJ_TOTAL);
-if (stlCoreFoodSpend && STL_PROJ_TOTAL) smSTL.window_dollars_per_meal_core = round2(stlCoreFoodSpend / STL_PROJ_TOTAL);
-smSTL.window_food_lbs = A6.weight["STL-FL"].food_lbs;
-smSTL.window_core_food_lbs = A6.weight["STL-FL"].core_food_lbs;
-smSTL.window_lbs_per_meal = round2(A6.weight["STL-FL"].food_lbs / STL_PROJ_TOTAL);
-smSTL.window_lbs_per_meal_core = round2(A6.weight["STL-FL"].core_food_lbs / STL_PROJ_TOTAL);
-smSTL.window_lbs_coverage_pct = A6.weight["STL-FL"].coverage_food_spend_pct;
-smSTL.window_lbs_coverage_core_pct = A6.weight["STL-FL"].coverage_core_food_spend_pct;
+const STL_PROJ_TOTAL = STL_CANON.total; // 18,860 - unchanged from Q6
+const TBR_TOTAL = TBR_CANON.total;      // 20,300 (MiLB 18,680 + B&G 1,620)
+const TBJ_TOTAL = TBJ_CANON.total;      // 29,541
 
-for (const acct of ["TBR-FL", "TBJ-FL"]) {
+const perAcctCanon = {
+  "TBR-FL": { total: TBR_TOTAL, monthly: TBR_CANON.monthly, source: TBR_CANON.source, components: TBR_CANON.components },
+  "TBJ-FL": { total: TBJ_TOTAL, monthly: TBJ_CANON.monthly, source: TBJ_CANON.source },
+  "STL-FL": { total: STL_PROJ_TOTAL, monthly: STL_CANON.monthly, source: STL_CANON.source, components: STL_CANON.components },
+};
+
+// Capture pre-canon (sparse-substituted) values for the change record
+const preCanon = {};
+for (const acct of ACCOUNTS) {
   const pm = A6.per_meal[acct];
-  if (!pm || !pm.window_meals_used) continue;
+  if (!pm) continue;
+  preCanon[acct] = {
+    window_meals_used: pm.window_meals_used,
+    window_dollars_per_meal: pm.window_dollars_per_meal,
+    window_dollars_per_meal_core: pm.window_dollars_per_meal_core,
+    window_lbs_per_meal: pm.window_lbs_per_meal,
+    window_lbs_per_meal_core: pm.window_lbs_per_meal_core,
+  };
+}
+
+// Rewrite per_meal for each account against canon.
+for (const acct of ACCOUNTS) {
+  const canon = perAcctCanon[acct];
+  if (!canon) continue;
+  if (!A6.per_meal[acct]) A6.per_meal[acct] = { account: acct, monthly: {} };
+  const pm = A6.per_meal[acct];
   const w = A6.weight[acct];
-  pm.window_food_lbs = w.food_lbs;
-  pm.window_core_food_lbs = w.core_food_lbs;
-  pm.window_lbs_per_meal = round2(w.food_lbs / pm.window_meals_used);
-  pm.window_lbs_per_meal_core = round2(w.core_food_lbs / pm.window_meals_used);
-  pm.window_lbs_coverage_pct = w.coverage_food_spend_pct;
-  pm.window_lbs_coverage_core_pct = w.coverage_core_food_spend_pct;
+  const meals = canon.total;
+
+  // window totals
+  pm.window_meals_used = meals;
+  pm.window_meals_source = "calendar_canonical";
+  pm.window_meals_source_note = "Addendum A1: calendar-derived canon replacing sparse-substituted actuals.";
+  pm.window_meals_note = canon.source;
+  pm.window_meals_monthly_canon = canon.monthly;
+  if (canon.components) pm.window_meals_components = canon.components;
+
+  // dollar spend fields exist in A4/A6 spend structure; pick the food+core
+  const spendA = A6.spend?.[acct] || A4.spend?.[acct] || {};
+  const foodSpend = pm.window_food_spend ?? spendA.dollar_food_spend ?? null;
+  const coreFoodSpend = w?.core_food_spend_dollar_set ?? spendA.dollar_core_food_spend ?? null;
+
+  if (foodSpend && meals) pm.window_dollars_per_meal = round2(foodSpend / meals);
+  if (coreFoodSpend && meals) pm.window_dollars_per_meal_core = round2(coreFoodSpend / meals);
+
+  if (w) {
+    pm.window_food_lbs = w.food_lbs;
+    pm.window_core_food_lbs = w.core_food_lbs;
+    pm.window_lbs_per_meal = meals ? round2(w.food_lbs / meals) : null;
+    pm.window_lbs_per_meal_core = meals ? round2(w.core_food_lbs / meals) : null;
+    pm.window_lbs_coverage_pct = w.coverage_food_spend_pct;
+    pm.window_lbs_coverage_core_pct = w.coverage_core_food_spend_pct;
+  }
+
+  // A3: B&G disclosure on all TBR per-cover figures
+  if (acct === "TBR-FL") {
+    pm._bg_disclosure = BG_DISCLOSURE;
+    pm._bg_component_meals = TBR_CANON.components?.bg ?? 1620;
+    pm._milb_component_meals = TBR_CANON.components?.milb ?? 18680;
+  }
 }
 
 // -----------------------------------------------------------------------
@@ -545,7 +587,8 @@ if (!BASELINE) {
   }
 }
 
-// R4 TBR swing check
+// R4 TBR swing check (dimensionless lbs and lbs/cover against canon)
+let r4Result = null;
 if (!BASELINE) {
   const tbrProteinBaseline = (() => {
     // Need baseline TBR core-food protein lbs. Recompute quickly.
@@ -566,7 +609,20 @@ if (!BASELINE) {
   })();
   const tbrProteinV6 = coreFoodProteinLbs("TBR-FL");
   const swingPct = tbrProteinBaseline ? Math.round(((tbrProteinV6 - tbrProteinBaseline) / tbrProteinBaseline) * 1000) / 10 : null;
+  const denomTBR = TBR_TOTAL;
+  const lbsPerMealBaseline = denomTBR ? round2(tbrProteinBaseline / denomTBR) : null;
+  const lbsPerMealV6 = denomTBR ? round2(tbrProteinV6 / denomTBR) : null;
+  r4Result = {
+    tbr_protein_baseline_lbs: tbrProteinBaseline,
+    tbr_protein_v6_lbs: tbrProteinV6,
+    swing_pct: swingPct,
+    denom_canon: denomTBR,
+    lbs_per_meal_baseline: lbsPerMealBaseline,
+    lbs_per_meal_v6: lbsPerMealV6,
+    breach_5pct: swingPct != null && Math.abs(swingPct) > 5,
+  };
   console.log(`\n[R4] TBR core-food protein lbs: baseline ${tbrProteinBaseline} -> v6 ${tbrProteinV6}  swing ${swingPct}%`);
+  console.log(`[R4] TBR lbs/cover against canon ${denomTBR}: baseline ${lbsPerMealBaseline} -> v6 ${lbsPerMealV6}`);
   if (swingPct != null && Math.abs(swingPct) > 5) {
     console.error(`\n[R4] STOP: TBR protein lbs swung more than 5% (${swingPct}%). Investigate before proceeding.`);
     // Do not process.exit here - continue to write outputs so operator can inspect.
@@ -610,6 +666,22 @@ A6._phase6 = {
   p5_fused_beverage_dropped: p5FusedBeverageDropped.size,
   catch_implied_layer_size: catchImpliedById.size,
   dollar_invariance: dollarCheck,
+  addendum_a1: {
+    canon_denominators: {
+      "TBR-FL": TBR_TOTAL,
+      "TBJ-FL": TBJ_TOTAL,
+      "STL-FL": STL_PROJ_TOTAL,
+    },
+    pre_canon_per_meal: preCanon,
+    sparse_month_substitution: "disabled_for_window",
+    source: "Kevin's 2026 TBR + TBJ Service Calendars + STL 2027 projections; Chat-Claude ruling",
+  },
+  addendum_a3: {
+    bg_disclosure: BG_DISCLOSURE,
+    tbr_component_meals: TBR_CANON.components,
+    contract_specs_source: "kitchfix-intranet/content/documents/REF-121.mdx (BGC Contract Digest)",
+  },
+  r4_result: r4Result,
 };
 fs.writeFileSync(outPath, JSON.stringify(A6, null, 2));
 fs.writeFileSync(logPath, JSON.stringify({
@@ -638,7 +710,10 @@ console.log(`wrote ${logPath}`);
 console.log(`\n===== ${MODE} HEADLINE =====`);
 for (const acct of ACCOUNTS) {
   const w = A6.weight[acct];
+  const pm = A6.per_meal[acct];
   console.log(`  ${acct}: food_lbs ${w.food_lbs} core_food_lbs ${w.core_food_lbs} coverage_food ${w.coverage_food_spend_pct}% core ${w.coverage_core_food_spend_pct}%`);
+  console.log(`         denom(canon)=${pm.window_meals_used}  $/meal=${pm.window_dollars_per_meal} $/meal core=${pm.window_dollars_per_meal_core}  lb/meal=${pm.window_lbs_per_meal} lb/meal core=${pm.window_lbs_per_meal_core}`);
+  if (acct === "TBR-FL") console.log(`         [BG disclosure attached]`);
 }
 console.log(`\n===== ${MODE} PROTEIN MIX =====`);
 for (const acct of ACCOUNTS) {

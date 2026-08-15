@@ -9592,18 +9592,32 @@
       "window_food_spend": 110620.56,
       "window_core_food_spend": 109020.61,
       "window_beverage_spend": 1599.95,
-      "window_meals_used": 19472,
-      "window_meals_source_note": "Sparse-actual months substituted with projections (labeled per-month).",
-      "window_dollars_per_meal": 5.68,
-      "window_dollars_per_meal_core": 5.6,
+      "window_meals_used": 20300,
+      "window_meals_source_note": "Addendum A1: calendar-derived canon replacing sparse-substituted actuals.",
+      "window_dollars_per_meal": 5.45,
+      "window_dollars_per_meal_core": 5.37,
       "window_food_lbs": 17702.4,
       "window_core_food_lbs": 16947.2,
-      "window_lbs_per_meal": 0.91,
-      "window_lbs_per_meal_core": 0.87,
+      "window_lbs_per_meal": 0.87,
+      "window_lbs_per_meal_core": 0.83,
       "window_lbs_coverage_pct": 23.6,
       "window_lbs_coverage_core_pct": 23.7,
       "_phase4_before_lbs_per_meal": 0.99,
-      "_phase4_before_lbs_per_meal_core": 0.95
+      "_phase4_before_lbs_per_meal_core": 0.95,
+      "window_meals_source": "calendar_canonical",
+      "window_meals_note": "Kevin's 2026 TBR Service Calendar; Chat-Claude ruling (addendum A1)",
+      "window_meals_monthly_canon": {
+        "2026-05": 7620,
+        "2026-06": 6240,
+        "2026-07": 6440
+      },
+      "window_meals_components": {
+        "milb": 18680,
+        "bg": 1620
+      },
+      "_bg_disclosure": "TBR covers include 1,620 Boys and Girls Club lunches (8.0% of window covers, all in May), a separate client billed at $6.50 per lunch against MiLB blended $20.05. Invoice product is not split between clients. Per-cover figures are therefore a floor for MiLB-only intensity.",
+      "_bg_component_meals": 1620,
+      "_milb_component_meals": 18680
     },
     "TBJ-FL": {
       "account": "TBJ-FL",
@@ -9645,18 +9659,25 @@
       "window_food_spend": 154695.92,
       "window_core_food_spend": 132317.45,
       "window_beverage_spend": 22378.47,
-      "window_meals_used": 27532,
-      "window_meals_source_note": "Sparse-actual months substituted with projections (labeled per-month).",
-      "window_dollars_per_meal": 5.62,
-      "window_dollars_per_meal_core": 4.81,
+      "window_meals_used": 29541,
+      "window_meals_source_note": "Addendum A1: calendar-derived canon replacing sparse-substituted actuals.",
+      "window_dollars_per_meal": 5.24,
+      "window_dollars_per_meal_core": 4.48,
       "window_food_lbs": 39510.3,
       "window_core_food_lbs": 29927.9,
-      "window_lbs_per_meal": 1.44,
-      "window_lbs_per_meal_core": 1.09,
+      "window_lbs_per_meal": 1.34,
+      "window_lbs_per_meal_core": 1.01,
       "window_lbs_coverage_pct": 38.3,
       "window_lbs_coverage_core_pct": 37.4,
       "_phase4_before_lbs_per_meal": 1.12,
-      "_phase4_before_lbs_per_meal_core": 0.98
+      "_phase4_before_lbs_per_meal_core": 0.98,
+      "window_meals_source": "calendar_canonical",
+      "window_meals_note": "Kevin's 2026 TBJ Service Calendar; Chat-Claude ruling (addendum A1)",
+      "window_meals_monthly_canon": {
+        "2026-05": 9433,
+        "2026-06": 9307,
+        "2026-07": 10801
+      }
     },
     "STL-FL": {
       "account": "STL-FL",
@@ -9705,7 +9726,7 @@
       "window_core_food_spend": 200947.87,
       "window_beverage_spend": 51755.34,
       "window_meals_used": 18860,
-      "window_meals_source_note": "Sparse-actual months substituted with projections (labeled per-month).",
+      "window_meals_source_note": "Addendum A1: calendar-derived canon replacing sparse-substituted actuals.",
       "window_dollars_per_meal": 13.4,
       "window_dollars_per_meal_core": 10.65,
       "window_food_lbs": 60857.1,
@@ -9718,8 +9739,17 @@
       "_original_window_dollars_per_meal_core": 12.45,
       "_original_window_lbs_per_meal": 3.37,
       "_original_window_lbs_per_meal_core": 2.86,
-      "window_meals_source": "projected_2027_service_calendar",
-      "window_meals_note": "Kevin: STL uses 2027 service-calendar projections (7,540 / 6,190 / 5,130 May/Jun/Jul)"
+      "window_meals_source": "calendar_canonical",
+      "window_meals_note": "Kevin's 2027 STL Service Calendar projections; Q6 ruling (unchanged)",
+      "window_meals_monthly_canon": {
+        "2026-05": 7540,
+        "2026-06": 6190,
+        "2026-07": 5130
+      },
+      "window_meals_components": {
+        "fcl": 11060,
+        "pbc": 7800
+      }
     }
   },
   "reconciliation": {
@@ -102981,14 +103011,14 @@
     "gate_result": {
       "TBR-FL": {
         "core_food_protein_lbs": 3398.4,
-        "denom": 19472,
+        "denom": 20300,
         "ratio": 0.17,
         "breach": false
       },
       "TBJ-FL": {
         "core_food_protein_lbs": 8196.4,
-        "denom": 27532,
-        "ratio": 0.3,
+        "denom": 29541,
+        "ratio": 0.28,
         "breach": false
       },
       "STL-FL": {
@@ -103006,6 +103036,59 @@
     "dollar_invariance": {
       "pass": true,
       "issues": []
+    },
+    "addendum_a1": {
+      "canon_denominators": {
+        "TBR-FL": 20300,
+        "TBJ-FL": 29541,
+        "STL-FL": 18860
+      },
+      "pre_canon_per_meal": {
+        "TBR-FL": {
+          "window_meals_used": 19472,
+          "window_dollars_per_meal": 5.68,
+          "window_dollars_per_meal_core": 5.6,
+          "window_lbs_per_meal": 1,
+          "window_lbs_per_meal_core": 0.96
+        },
+        "TBJ-FL": {
+          "window_meals_used": 27532,
+          "window_dollars_per_meal": 5.62,
+          "window_dollars_per_meal_core": 4.81,
+          "window_lbs_per_meal": 1.26,
+          "window_lbs_per_meal_core": 1.12
+        },
+        "STL-FL": {
+          "window_meals_used": 16141,
+          "window_dollars_per_meal": "meals data insufficient",
+          "window_dollars_per_meal_core": "meals data insufficient",
+          "window_lbs_per_meal": "meals data insufficient",
+          "window_lbs_per_meal_core": "meals data insufficient"
+        }
+      },
+      "sparse_month_substitution": "disabled_for_window",
+      "source": "Kevin's 2026 TBR + TBJ Service Calendars + STL 2027 projections; Chat-Claude ruling"
+    },
+    "addendum_a3": {
+      "bg_disclosure": "TBR covers include 1,620 Boys and Girls Club lunches (8.0% of window covers, all in May), a separate client billed at $6.50 per lunch against MiLB blended $20.05. Invoice product is not split between clients. Per-cover figures are therefore a floor for MiLB-only intensity.",
+      "tbr_component_meals": {
+        "milb": 18680,
+        "bg": 1620
+      },
+      "contract_specs_source": "kitchfix-intranet/content/documents/REF-121.mdx (BGC Contract Digest)"
+    },
+    "r4_result": {
+      "tbr_protein_baseline_lbs": 7717.2,
+      "tbr_protein_v6_lbs": 3398.4,
+      "swing_pct": -56,
+      "denom_canon": 20300,
+      "lbs_per_meal_baseline": 0.38,
+      "lbs_per_meal_v6": 0.17,
+      "breach_5pct": true
     }
-  }
+  },
+  "limitations": [
+    "Vendor catalog data was not used. Sysco, Cheney Brothers, Gordon Food Service, Fresh Point and Samuels all publish order guides, but they were not pulled for this window. Pack sizes were resolved from the invoice line itself - printed pack strings, catch-weight arithmetic, and per-vendor conventions - with a documented recovery layer where that failed. Running a future window against vendor catalogs would remove most remaining pack-size ambiguity and materially improve pound-level precision. It would not change any dollar figure in this report.",
+    "Delivery and minimum-order fees are not tracked. All costs here are invoice totals. If vendors charge per-drop delivery fees or below-minimum surcharges, those costs are inside the numbers but cannot be isolated or attributed to ordering behavior. This matters most for TBR-FL, which takes 14.84 deliveries per week at a $664 average order against STL-FL's 15.83 at $1,313 - close to the same delivery frequency on roughly half the order size. Whether that pattern carries a cost penalty is unquantified."
+  ]
 }
