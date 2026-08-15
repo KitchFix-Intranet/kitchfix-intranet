@@ -8,20 +8,26 @@
     "TBR-FL": {
       "core_food_protein_lbs": 7717.2,
       "denom": 20300,
-      "ratio": 0.38,
+      "lbs_per_cover": 0.38,
+      "lbs_per_cover_warn": false,
+      "dpp_breaches": [],
       "breach": false
     },
     "TBJ-FL": {
-      "core_food_protein_lbs": 10121.1,
+      "core_food_protein_lbs": 9398,
       "denom": 29541,
-      "ratio": 0.34,
+      "lbs_per_cover": 0.32,
+      "lbs_per_cover_warn": false,
+      "dpp_breaches": [],
       "breach": false
     },
     "STL-FL": {
       "core_food_protein_lbs": 25690.1,
       "denom": 18860,
-      "ratio": 1.36,
-      "breach": true
+      "lbs_per_cover": 1.36,
+      "lbs_per_cover_warn": true,
+      "dpp_breaches": [],
+      "breach": false
     }
   },
   "band_gated_out": [],
@@ -30,9 +36,112 @@
   "catch_gated_out": [],
   "p5_fused_beverage_dropped_count": 0,
   "p5_fused_beverage_dropped_ids": [],
+  "invoice_lb_arithmetic_layer_size": 0,
+  "invoice_lb_arithmetic_ids": [],
   "entries": [],
   "dollar_invariance": {
-    "pass": true,
-    "issues": []
+    "pass": false,
+    "issues": [
+      {
+        "path": "spend.TBR-FL.dollar_nonfood_spend",
+        "before": 16624.69,
+        "v6": 14622.56
+      },
+      {
+        "path": "spend.TBR-FL.dollar_unknown_spend",
+        "before": 2262.18,
+        "v6": 4264.31
+      },
+      {
+        "path": "spend.TBR-FL.dollar_nonfood_pct",
+        "before": 12.8,
+        "v6": 11.3
+      },
+      {
+        "path": "spend.TBR-FL.dollar_unknown_pct",
+        "before": 1.7,
+        "v6": 3.3
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_all_rows",
+        "before": 2219,
+        "v6": 2202
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_total_spend",
+        "before": 171222.23,
+        "v6": 183851.55
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_food_spend",
+        "before": 154695.92,
+        "v6": 167991.77
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_core_food_spend",
+        "before": 132317.45,
+        "v6": 144812.45
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_beverage_spend",
+        "before": 22378.47,
+        "v6": 23179.32
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_nonfood_spend",
+        "before": 14729.31,
+        "v6": 13459.8
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_unknown_spend",
+        "before": 1797,
+        "v6": 2399.98
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_food_pct",
+        "before": 90.3,
+        "v6": 91.4
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_core_food_pct",
+        "before": 77.3,
+        "v6": 78.8
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_beverage_pct",
+        "before": 13.1,
+        "v6": 12.6
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_nonfood_pct",
+        "before": 8.6,
+        "v6": 7.3
+      },
+      {
+        "path": "spend.TBJ-FL.dollar_unknown_pct",
+        "before": 1,
+        "v6": 1.3
+      },
+      {
+        "path": "spend.STL-FL.dollar_nonfood_spend",
+        "before": 19605.63,
+        "v6": 17881.66
+      },
+      {
+        "path": "spend.STL-FL.dollar_unknown_spend",
+        "before": 1878.29,
+        "v6": 3602.26
+      },
+      {
+        "path": "spend.STL-FL.dollar_nonfood_pct",
+        "before": 7.2,
+        "v6": 6.5
+      },
+      {
+        "path": "spend.STL-FL.dollar_unknown_pct",
+        "before": 0.7,
+        "v6": 1.3
+      }
+    ]
   }
 }

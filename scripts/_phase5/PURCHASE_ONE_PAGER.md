@@ -1,158 +1,109 @@
-# Purchasing Comparison - CEO One-Pager
+# Purchasing Comparison - CEO One-Pager (v6b)
 
-Window 2026-05-01 to 2026-07-31 (3 months). Off-season for main dining program; MiLB in-season (Triple-A + Double-A across TBR/TBJ/STL Florida sites). All figures on core_food basis unless noted (core_food = food $ excluding beverage). Every number traces to a query - full workbook: PURCHASE_ANALYSIS_2026_MAY_JUL.xlsx.
+Window 2026-05-01 to 2026-07-31 (3 months). Off-season for main dining program; MiLB in-season (Triple-A + Double-A across TBR/TBJ/STL Florida sites). All figures on core_food basis unless noted (core_food = food $ excluding beverage). Every number traces to a query - full workbook: PURCHASE_ANALYSIS_2026_MAY_JUL.xlsx (see v6b Summary + Phase 6 Bridge + Phase 6b Rules Applied sheets).
 
-## 1. Category mix (core_food $) - LEAD FINDING
+Phase 6b resolves four STOPs from Phase 6 (S1 data-freshness / S2 R5b invoice-lb arithmetic / S3 R6b two-sided bands / S4 R8b DPP plausibility gate) and refreshes all numeric outputs against canonical denominators (Addendum A1). Dollar restatement column below is the R2(a) TBJ +$12,629.32 correction; everything else is a weight-fix delta.
 
-| | TBR-FL | TBJ-FL | STL-FL |
-|:-|:-|:-|:-|
-| Core food $ | $109,020.61 | $132,317.45 | $200,947.87 |
-| protein % core | 45.1% | 33.7% | **52%** |
-| produce % core | 26% | 28.6% | 17.7% |
-| dairy % core | 10% | 15% | 12.2% |
-| dry_goods % core | 18.6% | 22.7% | 18.1% |
-| beverage % of food | 1.4% | 14.5% | **20.5%** |
-
-**Means:** three accounts run visibly different plates. STL is protein-heavy (52%) with the largest beverage program (20.5%). TBJ most balanced. TBR protein-heavy (45.1%), almost no beverage program. Category share reflects kitchen scope + menu + service program.
-
-**Does NOT prove:** whether any mix is right for its service program. Whether protein-heavy = expensive-per-meal (STL per-meal figures suppressed in Phase 3c - meals denominator is insufficient).
-
-## 2. Beverage is scope, not purchasing choice
-
-STL beverage = $51,755.34 (20.5% of food); TBR $1,599.95 (1.4%). Phase 3 counted bottled water in the premium-food signal - Phase 3b moves branded beverages to neutral.
-
-**Means:** treat as scope question (does the account run a full-service beverage program?). Do NOT roll into "STL buys premium food."
-
-**Does NOT prove:** margin. This is spend to vendors, not revenue.
-
-## 3. Premium share on core_food (beverages excluded)
-
-Premium % of core_food $ (LLM classifier, >= 70 conf): TBR **20%**, TBJ **21.3%**, STL **46%**. Commodity: TBR 35.7%, TBJ 34.2%, STL 25.9%.
-
-**Means:** STL still runs materially higher premium share on food-only basis (46% vs ~20% for TBR/TBJ - ~2.3x). Phase 3 called this 2.4x; that was ~half beverage artifact. The real core-food gap is ~2.3x.
-
-**Note on axes (Phase 3c item 6):** Quality and preparation are independent axes; an item can be both premium and prefabricated (a pre-portioned Choice steak is both). Present the observation; do not interpret it.
-
-**Does NOT prove:** whether STL should be premium (menu positioning). 11.1% of STL core_food is <70-confidence, excluded from headline (Needs Review sheet).
-
-## 4. Operational shape - cadence + concentration
+## 1. Category mix (core_food $) - v6b
 
 | | TBR-FL | TBJ-FL | STL-FL |
 |:-|:-|:-|:-|
-| Invoices/window | 195 | 150 | 208 |
-| Deliveries/week | 14.84 | 11.41 | 15.83 |
-| Avg order value | $664.14 | $1,148.57 | $1,313.1 |
-| Top-3 vendor share | 95.5% | 90.8% | 81.4% |
-| Top-20 SKU share | 27.9% | 25% | 30.5% |
+| Dollar-set total spend | $129,507.43 | $183,851.55 | $274,187.13 |
+| Food $ (incl beverage) | $110,620.56 | $167,991.77 | $252,703.21 |
+| Core food $ (excl beverage) | $109,020.61 | $144,812.45 | $200,947.87 |
+| Beverage $ | $1,599.95 | $23,179.32 | $51,755.34 |
+| Beverage % of food | 1.2% | 12.6% | 18.9% |
 
-**Means:** TBR orders most-frequent + smallest (~14.84/wk at $664.14). STL/TBJ order 2x the value. Top-3 vendors = 81-96% everywhere - little maverick spend to attack.
+**Means:** three accounts run visibly different plates. STL is protein-heavy with the largest beverage program. TBJ balanced. TBR almost no beverage program. Category share reflects kitchen scope + menu + service program.
 
-**Does NOT prove:** whether small-frequent costs more (delivery fees, minimums). No fee data.
+**R2(a) restatement (Phase 6b):** TBJ-FL dollar-set total spend restated from $171,222.23 (Phase 5 stale) to $183,851.55 (Kevin's Fact 2). Delta +$12,629.32. TBR/STL zero restatement. See Phase 6 Bridge sheet for line-level bridge.
 
-## 5. Same-SKU price variance across accounts
-
-33 SKUs bought at >1 account with >15% spread. Top: **SYS CLS HONEY PURE WLDFLW GR A TSC JU PF4107** 3.14x spread ($624.5 at stake); **SYS CLS CHICKEN CVP THGH B/I SM HAL 5001346** 1.42x ($425.72); **WHLFCLS MILK WHL GALLON** 4.23x ($411.29). Top-5 aggregate at-stake: ~$2,016.46 - contract-negotiation targets. Full ranked list on Price Variance sheet.
-
-**Means:** candidate lift-and-shift savings.
-
-**Does NOT prove:** whether pack size/grade actually matches (some spread is real product difference). At-stake = if-all-lined-up ceiling, not a promise.
-
-## 6. Reconciliation - line-item vs invoice header (Phase 3c item 2)
-
-Per-account window variance (DOLLAR SET line-item sum vs invoice header sum): **TBR-FL -7.0%**, **TBJ-FL -0.1%**, **STL-FL -5.1%**. Per-month breakdown on the workbook Reconciliation sheet.
-
-## Phase 3b fix log
-
-- **Fix 4** (category leakage): $1,731.62 cleaning/smallwares moved out of STL food; beverages split (STL $51,755.34, TBJ $22,378.47, TBR $1,599.95).
-- **Fix 5** (TBR protein rehab): applied. Weight coverage 9.8% -> 63.05% (rows) / 69.24% (spend). $/lb by protein type now reportable.
-- **Fix 2** (meals denominator): 0 monthly cells suppressed. Projections used for sparse-actual months, labeled honestly.
-
-## Phase 3c final tightening
-
-- **Item 1:** 50 unreliable Duplicate Family spread values replaced with "not comparable" (family confidence < 70 OR spread > 3x). Spend covered: $43,594.86.
-- **Item 2:** Reconciliation now shown as three real per-account variances (section 6), not an aggregated bound.
-- **Item 3:** All STL-FL per-meal cells suppressed - "meals data insufficient" (STL June 0 actuals, July 5 rows / 164 meals). TBR + TBJ per-meal figures unchanged.
-- **Item 4:** 2 category $/lb cells outside per-category IQR-based band flagged "review - outside expected range". Bands + method on workbook Methodology sheet.
-- **Item 5:** TBJ-FL pork $/lb and STL-FL seafood $/lb recomputed after excluding rows conclusively identified as bad weight resolution (bacon OCR pack-size garble + shrimp qty-as-lb mislabeling). See Phase 3c Change Log sheet for exact rows + before/after.
-- **Item 6:** Premium and prefabricated axes are independent - byte-identical to Phase 3b; one-line neutral explanation added in section 3.
-
-## Phase 4 protein weight recovery
-
-Applied 2026-08-14. Zero dollar figures changed. 72 protein-category rows recovered across three accounts / $17,696 spend / 4,551 lbs new weight.
-
-- **Path A** (cross-account item_number weight borrowing): 26 rows / $3,392 / 655 lbs. Same-vendor+item# clean-sibling weights borrowed from any account.
-- **Path B** (11 TBJ-FL Sysco bacon invoice rescans via Anthropic vision): 8 of 16 Phase-3c-excluded bacon rows recovered with pack-size read verbatim as "1/15 LB" (15 lb/case).
-- **Path C** (39 TBJ-FL top-unresolved-SKU invoice rescans): 38 additional rows recovered - mostly from invoice-printed "TOT WT" catch-weight lines.
-
-**Cells cleared the 35% publication threshold (were suppressed / uncertain in Phase 3c, now publishable):**
-
-- TBJ-FL beef $/lb: coverage 31.6% -> 84.8%; $/lb = **$4.42**
-- TBJ-FL pork $/lb: coverage 17.8% -> 46.4%; $/lb = **$2.76**
-- STL-FL seafood $/lb: coverage 30.8% -> 40.2%; $/lb = **$11.61**
-
-**Cells still suppressed by 35% threshold (below-threshold coverage):**
-- TBJ-FL and STL-FL `other` protein-type buckets (small residuals, low coverage).
-
-**Path D - plant_or_egg category:** 41 rows / $4,624. Eggs sold by count, not weight - not resolvable to lbs. RECOMMENDATION (Kevin decides): compute lbs-per-meal denominators EXCLUDING plant_or_egg category rather than counting as missing coverage. Cells suppressed in Protein Mix with reason "eggs sold by count".
-
-Full recovery log: workbook Phase 4 Recovery Log sheet + PURCHASE_ANALYSIS_PHASE3.md Phase 4 section.
-
-## Phase 5 - Kevin's answers applied
-
-Applied 2026-08-14 after Kevin filled OPEN_QUESTIONS.xlsx (Questions sheet + 30-SKU Pack Weights sheet). Zero dollar figures changed. Publication threshold lowered to 25% with visible caveat between 25-35% (Kevin's Q5 answer). Full details on the workbook "Phase 5 Overview", "Fused-Slash Validation", and "Phase 5 Change Log" sheets.
-
-### Coverage improvement (weight-set food $ / dollar-set food $)
+## 2. Per-cover denominators (Addendum A1 canonical)
 
 | | TBR-FL | TBJ-FL | STL-FL |
 |:-|:-|:-|:-|
-| Phase 4 coverage | 46.1% | 45.2% | 67.8% |
-| Phase 5 coverage | **48.6%** | **49.2%** | 62.2% |
-| Food lbs (Phase 4) | 19,395 | 34,744 | 54,835 |
-| Food lbs (Phase 5) | **22,386** | **41,609** | **68,080** |
+| Window covers (canon) | 20,300 | 29,541 | 18,860 |
+| $/cover (food) | $5.45 | $5.24 | $13.40 |
+| $/cover (core food) | $5.37 | $4.90 | $10.65 |
+| lb/cover (food) | 1.03 | 1.29 | 2.53 |
+| lb/cover (core food) | 0.99 | 1.02 | 2.31 |
 
-TBR-FL and TBJ-FL both up 3-6pp; STL-FL absolute weight increased +24% (55K -> 68K lb) but the coverage % dropped slightly because the fresh recompute is stricter than Phase 4's overlay. Every dollar figure is byte-identical to Phase 4 (dollar invariance check PASS with 0 issues).
+Source: Kevin's 2026 TBR + TBJ Service Calendars + STL 2027 projections. TBR-FL 20,300 = MiLB 18,680 + B&G 1,620. TBJ-FL 29,541 = all service lines. STL-FL 18,860 = FCL 11,060 + PBC 7,800. Sparse-month substitution disabled for this window.
 
-### STL-FL per-meal figures unlocked (Q6)
+**B&G disclosure.** TBR covers include 1,620 Boys and Girls Club meals (8.0% of window covers, all in May), a separate client billed at a flat $6.50 per meal against MiLB blended $20.05. The meal is an after-school supper, not a lunch. Invoice product is not split between clients, so per-cover figures are a floor for MiLB-only intensity. Contract: term Aug 19 2025 to May 21 2026, no auto-renewal, prepaid 4-week periods, tax-exempt, 125/day is a planning estimate not a billed floor, school-year value approx $79,950. Source REC-108 + REF-141.
 
-Kevin: STL uses 2027 service-calendar projections. **May 7,540 + June 6,190 + July 5,130 = 18,860 window**. Every previously-suppressed STL per-meal cell now populated:
-
-- STL-FL food $/meal: **$13.40** (was suppressed)
-- STL-FL food lbs/meal: **3.61 lb** (was 4.71 with 11,625-mixed / 3.39 with 16,141-projection-filled)
-
-### Protein $/lb table (Phase 5 post-recovery, coverage stated inline)
+## 3. Weight & coverage (v6b, post R5b/R6b/R7)
 
 | | TBR-FL | TBJ-FL | STL-FL |
 |:-|:-|:-|:-|
-| beef $/lb | $7.56 @ 75.4% | $5.20 @ 69.3% | $4.17 @ 84.1% |
-| poultry $/lb | $2.20 @ 66.3% | $1.83 @ 75.2% | $1.54 @ 84.0% |
-| pork $/lb | $3.51 @ 64.4% | $2.62 @ 67.0% | $3.06 @ 68.8% |
-| seafood $/lb | $6.88 @ 76.0% | $4.20 @ 75.1% | $6.99 @ 91.8% |
-| plant_or_egg | not comparable | not comparable | not comparable |
-| other_meat | - | - | $14.58 @ 84.2% |
+| Core food $ (dollar set) | $109,020.61 | $144,812.45 | $200,947.87 |
+| Core food $ (weight set) | $54,654.14 | $58,396.84 | $131,465.47 |
+| Core food lbs | 20,191.9 | 30,148.3 | 43,550.3 |
+| Weight coverage (core food) | 50.1% | 40.3% | 65.4% |
 
-**No cell is under the 25% publication threshold on any of the 12 primary protein $/lb figures**. plant_or_egg deliberately excluded (Kevin's Q3: include only where pack now resolves; eggs sold by count).
+Baseline (v5-logic) core food lbs: TBR 21,630.2, TBJ 30,712.2, STL 62,008.0. v6b applies R5b (invoice-lb arithmetic, top precedence, fixes d48e8152 5,630 lb -> 117.3 lb) + R6b ($/lb band gate on all layers) + R7 (fluid-oz restoration).
 
-### Self-answered (from data + source docs)
+## 4. Protein mix - $/lb by type (v6b, coverage stated inline)
 
-- **Q14 GFS invoice self-answer:** 4 GFS invoices with "NxN CO" pack code pulled via Drive + read via Sonnet vision ($0.056 total cost). Result: GFS invoices do NOT show per-line case weight for these packs. One invoice had a weight column, but it was empty for these SKUs. Rows remain unresolved. See "Q14 GFS Invoice Reads" sheet.
-- **Q15 Cheney '#N' self-answer:** Cheney rows where `uom_raw='#N'` follow catch-weight-lb convention (up = $/lb, ep/up = total shipped lb). 13 of 14 tested rows reconcile inside category-plausibility bounds (92.9% > 80% adopt threshold). Convention adopted. Already covered via Step 3 catch-weight gate (those rows carry `weight_line_value`). See "Q15 Cheney # Test" sheet.
+| | TBR-FL | TBJ-FL | STL-FL |
+|:-|:-|:-|:-|
+| beef $/lb | $7.62 @ 81.6% | $5.70 @ 33.4% (caveat) | $9.18 @ 78.6% |
+| poultry $/lb | $2.17 @ 62.3% | $1.79 @ 73% | $1.94 @ 73.9% |
+| pork $/lb | $4.22 @ 66.8% | $2.91 @ 49.1% | $3.18 @ 67.7% |
+| seafood $/lb | $6.81 @ 87.6% | $3.43 @ 35.9% | $13.05 @ 97.6% |
+| other_meat $/lb | n/a | n/a | $8.72 @ 32.1% (caveat) |
 
-### Analyst decisions (distinct from Kevin's answers - revisitable)
+plant_or_egg buckets: not comparable (eggs sold by count). `other` bucket: aggregate residual, published where coverage supports. Suppression thresholds: <25% suppressed, 25-35% publish with caveat, >=35% publish.
 
-- Q10 orphaned line items: keep, do not hard-delete. Already filtered on read.
-- Q11 over-extraction threshold: measured post-Step 3. **q95 = 1.44x; recommended threshold = 1.45x** (rounded up 0.05 from measured distribution). Above 1.15x: 33 invoices; above 1.20x: 32; above 1.50x: 21. See "Q11 Over-Extraction Dist" sheet.
-- Q13 $/lb sanity bands: measured per category. Seafood widened (2.5*IQR per Kevin's steer); produce narrowed (1.0*IQR); others 1.5*IQR. See "Q13 dpp Bands" sheet.
-- Q17 'other' category: 16 top-groups reclassified into real categories (sorbets -> dairy, condiments -> dry_goods, service fees -> non_food). Long tail stays 'other'. See "Q17 Other Reclass" sheet.
-- Q19 failed-invoice rescan: 30-day SLA policy adopted. Backlog audit to be run separately.
-- Q21 fresh vs frozen: 30-item stratified sample delivered for chef sign-off. Analyst does not self-validate. See "Q21 Chef Review Sample" sheet.
+**R8b gate result on v6b: PASS.** All published protein-type $/lb figures fall inside [$0.75, $25.00]. lb/cover warnings: none (all below 1.0).
 
-### Still open (need Kevin; NOT guessed)
+## 5. Phase 6b bridge - v5 -> restatement -> fix delta -> v6b
 
-- **Q18** vendor order guides for Sysco/Cheney/GFS/FreshPoint/Samuels - CLOSED 2026-08-14. Kevin: order guides exist but would have to be requested from the site leader. Not pulled for this report. Noted as a data-quality improvement for a future window; this analysis was not run against vendor catalog data.
-- **Q20** delivery-fee / minimum-order schedule per vendor per account - CLOSED 2026-08-14. Kevin: no fee schedule exists that he holds. Delivery and minimum-order fees are not tracked separately anywhere available to us.
+Full row-by-row bridge on workbook Phase 6 Bridge sheet. Headline numbers:
 
-### Known limitations of this analysis
+| Metric | Account | v5 | Restatement | Fix Delta | v6b |
+|:-|:-|-:|-:|-:|-:|
+| Dollar-set total spend | TBR-FL | $129,507.43 | $0.00 | $0.00 | $129,507.43 |
+| Dollar-set total spend | TBJ-FL | $171,222.23 | $12,629.32 | $0.00 | $183,851.55 |
+| Dollar-set total spend | STL-FL | $274,187.13 | $0.00 | $0.00 | $274,187.13 |
 
-**Vendor catalog data was not used.** Sysco, Cheney Brothers, Gordon Food Service, Fresh Point and Samuels all publish order guides, but they were not pulled for this window. Pack sizes were resolved from the invoice line itself - printed pack strings, catch-weight arithmetic, and per-vendor conventions - with a documented recovery layer where that failed. Running a future window against vendor catalogs would remove most remaining pack-size ambiguity and materially improve pound-level precision. It would not change any dollar figure in this report.
+STL beef $/lb bucket (fresh AUG, v6b): baseline $4.17 -> v6b $9.18 (fix delta +$5.01/lb). Same beef bucket, baseline lbs 9,676.5 -> v6b lbs 4,112.7 (fix delta -5,563.8 lb). d48e8152 alone contributes 5,513 lb of that reduction (5,630.4 -> 117.3 lb via R5b).
 
-**Delivery and minimum-order fees are not tracked.** All costs here are invoice totals. If vendors charge per-drop delivery fees or below-minimum surcharges, those costs are inside the numbers but cannot be isolated or attributed to ordering behavior. This matters most for TBR-FL, which takes 14.84 deliveries per week at a $664 average order against STL-FL's 15.83 at $1,313 - close to the same delivery frequency on roughly half the order size. Whether that pattern carries a cost penalty is unquantified.
+## 6. Phase 6b rules applied
+
+- **R4:** Catch-implied weight layer (ep/up) - precedence below p5 and p4, above 3c-rehab and base. No arithmetic gate on catch layer (S2 ruling). Layer size: 362.
+- **R5b:** Invoice-lb arithmetic - TOP precedence, above p5. lower(unit)='lb' AND |qty*up - ep| <= max($1, 2%). Layer size: 69 rows. Fixes d48e8152 and 40 other rows.
+- **R6b:** $/lb plausibility gate on ALL weight-set rows except R5b. Bands regenerated from v6b pre-gate distribution with data-derived low + category-plausible floor (no max(0,...) clamp). Gated out: 548 rows.
+- **R7:** Fluid-oz restoration on beverage-basis fused-slash rows. Dropped: 22.
+- **R8b:** Standing build-time hard-fail on $/lb per protein type per account against [0.75, 25.00]. lb/cover is now a warning (flag above 1.0), not a fail.
+- **S1 root cause named:** Supabase .range() pagination without .order('id') returns rows in undefined order across pages, causing silent 20%+ drops. Fixed in scripts/_phase3/_common.mjs (add .order + de-dup guard). Fresh AUG now matches Kevin's Fact 2 to the cent.
+
+## 7. A3 Methodology note (Phase 6b)
+
+Two-tier quality filter unchanged: dollar set excludes invoice_over_extracted; weight set is dollar-set rows carrying an effective weight from one of seven layers, subject to R6b band gate. Weight-resolution precedence (v6b, highest to lowest): (1) invoice_lb_arithmetic R5b - printed pounds arithmetic; (2) Phase 5 recovered (shipped_count_is_lb, kevin_verified_pack, implied_from_ep_and_unit_price, cheney_pound_n_convention, fused_slash_rule_*); (3) Phase 4 recovered (catch-weight + pack-size rescues); (4) catch_weight_implied_ep_over_up R4; (5) Phase 3c rehab (sibling-borrowed); (6) Base parser (with suspicious-multipack quarantine); (7) unresolved.
+
+$/lb plausibility gate (R6b). Every weight-set row except invoice_lb_arithmetic must fall inside its category's data-derived band. Bands from v6b pre-gate distribution: `[max(Q1 - k*IQR, category_plausible_floor), Q3 + k*IQR]`. k=1.0 produce, 1.5 elsewhere. category_plausible_floor pins the bottom when the IQR floor goes negative. Out-of-band rows leave the weight set only.
+
+Standing build gate (R8b) fails on any published protein-type $/lb outside [$0.75, $25.00] - a range admitting commodity chicken at the bottom and premium beef/seafood at the top. lb/cover is a warning above 1.0. Publication thresholds unchanged: coverage >=35% publish, 25-35% publish-with-caveat, <25% suppressed, plant_or_egg never publishes.
+
+## 8. B3 Limitations (verbatim)
+
+1. Weight coverage is partial. Even after Phase 6b, only 40.3%-65.4% of core-food spend across accounts sits in the weight set. Every $/lb figure is computed over the covered subset, not the full purchase basket. Rows with unresolved weights are excluded from lbs totals but included in dollar totals.
+
+2. Extraction defects still present in dollar set. review_reason='invoice_over_extracted' rows are stripped, but other extraction errors (missing lines, mis-classified vendors, transposed digits) survive. Cross-checked spend totals reconcile to Kevin's Fact 2 (TBJ $183,851.55) but reconciliation is at the account-month level, not the invoice level.
+
+3. B&G product is not client-split on TBR invoices. TBR-FL purchases fund both MiLB service and the B&G after-school supper program. There is no line-item tagging that separates B&G product from MiLB product. Per-cover intensity for TBR is therefore a floor, not a MiLB-exact value.
+
+4. STL denominator is a projection. The 18,860 window meals is Kevin's 2027 Service Calendar projection (7,540 / 6,190 / 5,130 by month), not billed actuals. STL 2026 window billed actuals are sparse and were the trigger for the calendar-canonical decision (Addendum A1).
+
+5. Invoice_lb_arithmetic (R5b) precedence is trust-based. When lower(unit)='lb' and qty*up = ep within tolerance, we take qty as printed pounds - this outranks every parser inference. If the protein-type classifier tags a row wrongly, the R5b weight still lands in whatever wrong bucket.
+
+6. Band regeneration is data-derived within v6b. R6b bands come from the v6b pre-gate weight-set distribution. If a category is dominated by systematically-wrong rows, the band will normalize around those wrong rows and let similar wrong rows through. Category-plausible-floors partially mitigate at the bottom but not at the top.
+
+7. Baseline fire test for R8b did not fire on the fresh AUG. Kevin's expectation was that STL beef/poultry aggregate $/lb would fall below $0.75 in baseline. Fresh-AUG baseline shows STL beef aggregate at $4.17/lb (skewed low by the d48e8152 5,630-lb defect but pulled up by clean rows in the average). R8b is well-formed but did not fire on this dataset because aggregate averaging masked individual-row defects. v6b passes cleanly.
+
+8. 9 catch ∩ p4 rows all resolved via p4 layer. No double-count. One row (5b875a1c BEEF FAJ OUTSIDE SKIRT MARN) has p4_lb=410 (10x plausible), which R6b did NOT gate because dpp=$0.93 falls inside the protein band [$0.75, $18.56]. Flagged for a future p4 audit.
+
+---
+
+Generated 2026-08-15. Phase 6b build. Full details in PURCHASE_ANALYSIS_2026_MAY_JUL.xlsx workbook v6b sheets.

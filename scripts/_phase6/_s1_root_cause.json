@@ -1,0 +1,124 @@
+{
+  "ran_at": "2026-08-15T02:24:26.865Z",
+  "today": {
+    "all_tbj_rows": 2596,
+    "window_rows": 2338,
+    "live_rows": 2221,
+    "dollar_set": 2202,
+    "dollar_set_spend": 183851.55,
+    "now_corrected_or_deleted": 117,
+    "now_over_extracted": 19,
+    "now_over_extracted_spend": 1744.09
+  },
+  "prior": {
+    "raw": 2338,
+    "live": 2235,
+    "dollar": 2219,
+    "spend": 171222.23
+  },
+  "delta_by_created_at": {
+    "cutoff": "2026-08-15T01:05:08Z",
+    "pre_cutoff_rows": 2202,
+    "pre_cutoff_spend": 183851.55,
+    "post_cutoff_rows": 0,
+    "post_cutoff_spend": 0,
+    "post_cutoff_detail": []
+  },
+  "now_over_extracted_sample": [
+    {
+      "id": "15010f39-d1e8-408c-9b13-903bca9a20c3",
+      "ep": 37.98,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "192cdc1d-59d6-4698-bea9-89b4c42a7420",
+      "ep": 28.73,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "20cb90c9-5b12-47ca-a5b0-2b1780d6dda3",
+      "ep": 43.57,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "2f2f43cb-a538-442a-a22f-8a7450620952",
+      "ep": 16.45,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "7e7f5655-2e07-464f-a364-94100ee27900",
+      "ep": 78.69,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "86449867-9e3e-4984-b2c8-75a2c6614b27",
+      "ep": 33.99,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "ef0a72e6-28e7-4fe1-93d7-8d6f755d5441",
+      "ep": 23.55,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "ef1d28b0-843b-4810-9cf3-f80b5f12ac50",
+      "ep": 101.9,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "f892e390-af78-4edc-a62d-5d0a99db6502",
+      "ep": 287.91,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "43edbda5-bbf6-4682-a16c-39e8feb5791d",
+      "ep": 102.03,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "6a167b7d-f12b-4af6-bd37-c2bfe89fa662",
+      "ep": 46.49,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "7e13edfb-d904-45cc-a357-c7f541300431",
+      "ep": 227.96,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "92bef56f-697f-4a21-b805-18c32ff4adaa",
+      "ep": 54.4,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "bb001c34-f593-454c-82d7-a76c469cd100",
+      "ep": 36.99,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "c0b3ed83-cde4-4b8a-989c-950a940f0c42",
+      "ep": 8.95,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "c2802e0f-4314-4ffc-bd9c-ef2d1984abf5",
+      "ep": 63.24,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "3cdc22e9-6d89-4e4a-91d7-370c96be0708",
+      "ep": 74.99,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "2acd3eb3-4616-481a-b44d-6556dff42a2c",
+      "ep": 63.08,
+      "invoice_date": "2026-05-20"
+    },
+    {
+      "id": "372ba292-bcf0-4001-958d-ebe7c726a756",
+      "ep": 413.19,
+      "invoice_date": "2026-05-20"
+    }
+  ]
+}

@@ -177,3 +177,47 @@ Chat-Claude's three claimed variances all CONFIRMED (TBJ May 16,078; TBJ Jul 885
 - Formula (col 51 "Total Meals" shared formula `sum(F,H,J,V,X,Z,AB,AD)`) references count cols only (V=22, X=24, Z=26, AB=28, AD=30). BUT the shared formula range is only `AY4:AY214` - rows 215-217 carry HARDCODED "Total Meals" values of 160 each, entered by hand to compensate for the mis-entry. So col-51 sum on the window = 18,680 (correct), positional read of count cols = 18,280 (undercount by exactly 400).
 - **Ingest exposure: YES** - the intranet's one-time SC seed pipeline (`kitchfix-intranet/scripts/_extract_sc_xlsx.py`) uses positional column reads: `build_column_map()` scans row 1 (group headers) + row 2 (service name + interleaved prices) to build a services list keyed on `name_col` (count col), then in `extract_tab()` reads each data row at those `name_col` positions. Values placed in `price_col` positions are treated as prices, not counts, and would be dropped. If the extractor were re-run against this v4 workbook it would ingest TBR July at 6,440 - 400 = 6,040 meals (an under-count of 400). Live-DB (sc_daily_actuals) currently reports TBR July = 5,588 - already further undercounted relative to calendar formula (see A2), so this defect is a sub-component of a larger data-integrity issue.
 - Sheet NOT modified per rule 5 (verify-and-log only).
+
+## Phase 6b (2026-08-14) - four STOP rulings + B7 unblock
+
+Kevin returned rulings on all four STOPs from Phase 6:
+
+### S1 - live-DB read overturned
+- **Prior claim**: `03_live_db_check.mjs` returned TBJ 2,219 rows / $171,222.23 to the cent (byte-identical across runs).
+- **Kevin's fact 2**: TBJ 2,202 rows / $183,851.55 with monthly split 630/778/794.
+- **Root cause NAMED**: Supabase `.range()` pagination without an accompanying `.order()` clause returns rows in undefined order across page boundaries. Prior code pulled page-1000-then-page-2000 without ordering; PostgREST returned two sets that overlapped or missed rows, producing a stable-looking-but-wrong answer (the query planner returned the same arbitrary order each run for a given cached plan). Verified via `06i_paginate.mjs`: unordered pagination returned only 2,040 of 2,596 TBJ rows (556 dropped, 21%). With `.order("id")` all 2,596 return.
+- **Fix**: Added `.order("id")` + de-dup Set guard to both `scripts/_phase3/_common.mjs::fetchLineItemsInWindow` and `scripts/_phase6/03_live_db_check.mjs`.
+- **Fresh AUG after re-pull**: 6,969 live rows / 459 orphan / 33 drift - matches Kevin's expected fact exactly.
+- **Restatement bridge**: TBJ dollar-set total spend $171,222.23 -> $183,851.55, delta **+$12,629.32** (R2(a)). TBR + STL zero restatement. Recorded at `_analysis6.json._phase6.restatement_bridge`.
+- Full diagnosis: `_s1_diagnose.json`, `_s1_root_cause.json`, `_s1_verify_fresh.json`, `_s1_canonical.json`.
+
+### S2 - R5 replaced with R5b (invoice-lb arithmetic)
+- **R5b rule** (verbatim): `lower(unit)='lb' AND |quantity * unit_price - extended_price| <= max(1, 0.02 * extended_price)`, effective weight = quantity, tag `invoice_lb_arithmetic`. TOP precedence, above p5. No `alreadyResolved()` guard.
+- **Layer size**: 69 rows total across accounts. 41 caused a weight change vs baseline. Break-out per account/category: STL protein 38 rows; TBJ protein 2 rows; TBR produce 27 rows; TBR dry_goods 2 rows; TBJ protein 2 rows.
+- **Target row d48e8152**: Kevin's `AVG BEEF BOTTOM SIRLOIN FLAP UTILITY` (Cheney, STL-FL). qty=117.3 lb, up=$7.42/lb, ep=$870.37. `qty*up = $870.37` matches ep to $0.004 - well within tolerance. Baseline (`pack_size:n_x_m_weight` from `004/12 #`): **5,630.4 lb**. v6b (`invoice_lb_arithmetic`): **117.3 lb**. Delta -5,513.1 lb.
+- **STL-FL protein R5b aggregate impact**: 23 rows, before_lb sum 11,267.9, after_lb sum 1,129.1, net -10,138.8 lbs of parser inflation removed.
+- Catch layer arithmetic gate DROPPED per S2 ruling; catch admits all 362 candidates (previously 152 after arithmetic gate). R6b handles catch plausibility instead.
+
+### S3 - R6b two-sided bands, all layers gated
+- **R6b rule**: bands regenerated from v6b PRE-GATE weight-set distribution. `band_low = max(Q1 - k*IQR, category_plausible_floor)`. No `max(0, ...)` clamp. Where IQR floor is negative (every category), category-plausible floor pins the bottom. Every category ended with data-derived low = negative, floor applied.
+- Category-plausible floors: protein/poultry/meat/frozen 0.75 (commodity chicken); seafood 1.50; dairy 0.50; produce 0.20; dry_goods/grocery 0.15; beverage 0.05; packaging/cleaning/supplies/smallwares/other 0.10.
+- **Bands file**: `_q13_bands_v6b.json`. Original `_q13_bands.json` preserved for provenance.
+- **Gated rows**: 548 total. By layer: phase3c_rehab 272, base_parser 152, catch_implied 108, p5 10, p4 6. By account: STL 356, TBJ 106, TBR 86. Note the 3c-rehab exemption from prior Phase 6 R6 is REMOVED per S3 ruling; R6b applies to all layers except `invoice_lb_arithmetic`.
+
+### S4 - R8b DPP plausibility gate replaces R8 lb/cover hard-fail
+- **R8b rule**: fail if any published protein-type `dollars_per_lb` falls outside [$0.75, $25.00]. lb/cover becomes a WARNING (flag above 1.0), not a fail.
+- **v6b PASS**: All published protein-type $/lb figures inside band. TBR beef $7.62, poultry $2.17, pork $4.22, seafood $6.81. TBJ beef $5.70 (caveat), poultry $1.79, pork $2.91, seafood $3.43. STL beef $9.18, poultry $1.94, pork $3.18, seafood $13.05, other_meat $8.72 (caveat). No breaches.
+- **Baseline fire test DID NOT FIRE**: Kevin expected baseline STL beef/poultry aggregate $/lb to fall far below $0.75. On the canonical fresh AUG, baseline STL beef aggregate = $4.17/lb (d48e8152's 5,630 lb inflation is present, but averaged with 83 clean rows totaling 4,046 lb the aggregate stays above the floor). R8b is well-formed; aggregate averaging masks individual-row defects, so the gate does not fire on this dataset. v6b passes cleanly. Documented in `B3 Limitations` block, item 7. No live defect ships.
+- Note: `R8B_LBS_PER_COVER_WARN = 1.0` fires WARN for baseline STL (1.36 lb/cover) as expected; drops to 0.82 in v6b. TBR/TBJ never breach.
+
+### S5 - 9 catch ∩ p4 rows, no double count
+Confirmed and shown in `_s5_catch_p4.json`. All 9 rows are TBJ-FL protein. Every row is `no change-log entry (unchanged from baseline)` - the p4 layer's precedence over catch keeps p4's weight and catch value is discarded. Notable: `5b875a1c` BEEF FAJ OUTSIDE SKIRT MARN has catch_lb=41.56 (dpp $9.20) vs p4_lb=410 (dpp $0.93). p4 wins per precedence; R6b does NOT gate because $0.93 falls inside the protein band [0.75, 18.56]. Flagged in Limitations for a future p4 audit.
+
+### S6 - BG_DISCLOSURE + bg_contract metadata
+- BG_DISCLOSURE updated verbatim per S6 ruling: "TBR covers include 1,620 Boys and Girls Club meals (8.0% of window covers, all in May), a separate client billed at a flat $6.50 per meal against MiLB blended $20.05. The meal is an after-school supper, not a lunch. Invoice product is not split between clients, so per-cover figures are a floor for MiLB-only intensity."
+- `BG_CONTRACT` metadata block added to `_denominators.mjs` and landed at `A6._phase6.bg_contract`: term Aug 19 2025 - May 21 2026, no auto-renewal, prepaid 4-week periods, tax-exempt, $6.50 per meal, 125/day is a planning estimate not a billed floor, school-year value approx $79,950. Source REC-108 + REF-141.
+
+### S7 - B7 workbook + one-pager rebuilt
+- Workbook: added 9 new sheets to `PURCHASE_ANALYSIS_2026_MAY_JUL.xlsx`: `v6b Summary`, `v6b Protein Mix`, `v6b Weight & Coverage`, `Phase 6 Bridge`, `Q13 dpp Bands v6b`, `Phase 6b Change Log`, `Phase 6b Rules Applied`, `A3 Methodology Note`, `B3 Limitations`. Older Phase 3-5 sheets retained as historical reference.
+- One-pager: rewritten from `_analysis6.json` with fresh v6b values throughout. Restatement bridge visible in Section 5. A3 methodology + B3 limitations blocks landed verbatim.
+- Downloads copies: `PURCHASE_ANALYSIS_2026_MAY_JUL_v6.xlsx` and `PURCHASE_ONE_PAGER_v6.md`. Working-dir names unchanged (`PURCHASE_ANALYSIS_2026_MAY_JUL.xlsx`, `PURCHASE_ONE_PAGER.md`).

@@ -1,24 +1,29 @@
 // Phase 6 recompute: v6 fix layered on top of Phase 5 pipeline.
-// A clone of scripts_phase5/30_recompute.mjs with the following rules:
-//   R4  Catch-implied weight layer (ep/up) - precedence BELOW p5 and p4,
-//       ABOVE 3c-rehab and base. Tag: catch_weight_implied_ep_over_up.
-//   R5  Q8 arithmetic gate ENFORCED at reinstatement (|up*shipped - ep| <=
-//       max(1, 0.02*ep)) in addition to signal + 0 < ep/up <= 5000.
-//   R6  $/lb plausibility gate on weight-set rows whose effective source is
-//       base parser or a p5 step. p4 + 3c layers are EXEMPT. Out-of-band rows
-//       LEAVE the weight set only (never the dollar set); logged
-//       band_out_of_range.
-//   R7  Fluid-oz restoration: p5 fused-slash resolutions on beverage-basis rows
-//       revert to volume_excluded.
-//   R8  Hard-fail gate: any account's core-food protein lbs / window covers
-//       > 0.6 -> throw. Denominators: TBR/TBJ from A5.per_meal
-//       window_meals_used; STL 18,860.
-//   R9  (verified upstream in 04_layer_id_resolution).
-//   R10 Change log: every row whose effective weight or set-membership changes
-//       vs the v5-logic baseline gets an entry.
+// v6b RULES (post-Kevin STOP rulings):
+//   R4   Catch-implied weight layer (ep/up) - precedence BELOW p5 and p4,
+//        ABOVE 3c-rehab and base. Tag: catch_weight_implied_ep_over_up.
+//        (No arithmetic gate on the catch layer per S2 ruling; R6b handles it.)
+//   R5b  Invoice-lb arithmetic - TOP precedence, above p5.
+//        Trigger: lower(unit)='lb' AND |qty*up - ep| <= max(1, 0.02*ep).
+//        Effective weight = qty. Source tag: invoice_lb_arithmetic.
+//        No alreadyResolved guard - this rule wins over every other layer.
+//   R6b  $/lb plausibility gate on ALL weight-set rows regardless of source,
+//        EXCEPT rows tagged invoice_lb_arithmetic (printed arithmetic).
+//        Bands regenerated from live post-fix data (see _q13_bands_v6b.json).
+//        band_low derived from data with no max(0,...) clamp; if IQR floor
+//        goes negative, floor at category-plausible minimum.
+//   R7   Fluid-oz restoration: p5 fused-slash resolutions on beverage-basis rows
+//        revert to volume_excluded.
+//   R8b  Hard-fail on $/lb PLAUSIBILITY per protein type per account:
+//        fail if any published protein-type dollars_per_lb falls outside
+//        [0.75, 25.00]. lb/cover becomes a WARNING (flag above 1.0), not a fail.
+//   R9   Confirm no catch ∩ p4 double-count (p4 outranks catch; existing
+//        precedence handles it).
+//   R10  Change log: every row whose effective weight or set-membership changes
+//        vs the v5-logic baseline gets an entry.
 //
-// --baseline flag: DISABLE R4-R7 (v5-logic mode), keep the R8 hard-fail as
-// warn-only so we can prove it FIRES against the v5-logic baseline.
+// --baseline flag: DISABLE R4/R5b/R6b/R7 (v5-logic mode), keep the R8b hard-fail
+// as warn-only so we can prove it FIRES against the v5-logic baseline.
 // Writes _analysis6.json + _change_log6.json in scripts/_phase6/.
 
 import fs from "node:fs";
@@ -26,19 +31,25 @@ import { P } from "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_
 import { P5, ACCOUNTS, MONTHS, assignProteinType, round1, round2, pct1, quantile, median, CATEGORY_LB_BOUNDS, resolveFusedSlash } from "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase5/_common5.mjs";
 // Canonical denominators (Addendum A1) - REPLACE v5 per_meal.window_meals_used
 // and disable the sparse-month substitution path for this window.
-import { CANON, BG_DISCLOSURE, TBR_FL as TBR_CANON, TBJ_FL as TBJ_CANON, STL_FL as STL_CANON } from "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/kitchfix-intranet/scripts/_phase6/_denominators.mjs";
+import { CANON, BG_DISCLOSURE, BG_CONTRACT, TBR_FL as TBR_CANON, TBJ_FL as TBJ_CANON, STL_FL as STL_CANON } from "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/kitchfix-intranet/scripts/_phase6/_denominators.mjs";
 
 const BASELINE = process.argv.includes("--baseline");
 const MODE = BASELINE ? "baseline" : "v6";
 console.log(`\n===== recompute mode: ${MODE} =====\n`);
 
-// Paths
+// Paths - write to BOTH the outer scripts/_phase6/ dir (working copy) AND
+// the intranet git-tracked path so both stay in sync.
 const P6 = {
   DIR: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts/_phase6",
   ANALYSIS_V6: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts/_phase6/_analysis6.json",
   ANALYSIS_BASELINE: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts/_phase6/_analysis6_baseline.json",
   CHANGE_LOG: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts/_phase6/_change_log6.json",
   CHANGE_LOG_BASELINE: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts/_phase6/_change_log6_baseline.json",
+  // Second write target - git-tracked mirror
+  ANALYSIS_V6_MIRROR: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/kitchfix-intranet/scripts/_phase6/_analysis6.json",
+  ANALYSIS_BASELINE_MIRROR: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/kitchfix-intranet/scripts/_phase6/_analysis6_baseline.json",
+  CHANGE_LOG_MIRROR: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/kitchfix-intranet/scripts/_phase6/_change_log6.json",
+  CHANGE_LOG_BASELINE_MIRROR: "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/kitchfix-intranet/scripts/_phase6/_change_log6_baseline.json",
 };
 
 const AUG = JSON.parse(fs.readFileSync(P.AUG, "utf8"));
@@ -46,7 +57,11 @@ const A4 = JSON.parse(fs.readFileSync(P.P4_ANALYSIS, "utf8"));
 const REC5 = JSON.parse(fs.readFileSync(P5.RECOVERED, "utf8"));
 const REHAB_3C = JSON.parse(fs.readFileSync("/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase3c/_rehabbed_rows.json", "utf8"));
 const REC4 = JSON.parse(fs.readFileSync(P.P4_RECOVERED_ROWS, "utf8"));
-const Q13_BANDS = JSON.parse(fs.readFileSync("/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase5/_q13_bands.json", "utf8"));
+// v6b: prefer regenerated bands from Phase 6b if present; fall back to phase 5 bands
+const BANDS_V6B_PATH = "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts/_phase6/_q13_bands_v6b.json";
+const Q13_BANDS = fs.existsSync(BANDS_V6B_PATH)
+  ? JSON.parse(fs.readFileSync(BANDS_V6B_PATH, "utf8"))
+  : JSON.parse(fs.readFileSync("/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase5/_q13_bands.json", "utf8"));
 
 const rows = AUG.rows;
 const rowsById = new Map(rows.map(r => [r.id, r]));
@@ -68,10 +83,9 @@ for (const r of REHAB_3C) {
 const catchReclassIdsAll = new Set([...new Set(REC5.catch_weight_reclassified_ids || [])]);
 
 // -----------------------------------------------------------------------
-// R5 (v6 only): Q8 arithmetic gate at reinstatement.
-// Admit only if |up*shipped - ep| <= max(1, 0.02*ep) AND signal AND
-// 0 < ep/up <= 5000.
-// In baseline mode we admit whatever REC5 already admitted (no additional gate).
+// R4/R5b (v6b): catch layer has NO arithmetic gate; R6b handles plausibility.
+// baseline mode: admit whatever REC5 admitted.
+// v6 mode: admit if ep/up in (0, 5000] range (basic sanity, not a gate).
 // -----------------------------------------------------------------------
 const catchAdmitted = new Set();
 const catchGatedOut = [];
@@ -80,7 +94,6 @@ if (!BASELINE) {
     const r = rowsById.get(id);
     if (!r) continue;
     const up = Number(r.unit_price);
-    const sh = Number(r.shipped_count);
     const ep = Number(r.extended_price);
     if (!up || !ep) { catchGatedOut.push({ id, why: "missing_up_or_ep" }); continue; }
     const implied = ep / up;
@@ -88,21 +101,33 @@ if (!BASELINE) {
       catchGatedOut.push({ id, why: "ep_over_up_out_of_range", implied });
       continue;
     }
-    // Arithmetic gate: needs shipped_count for the up*shipped_count check.
-    if (!sh) {
-      catchGatedOut.push({ id, why: "missing_shipped_count", up, ep, sh });
-      continue;
-    }
-    const calc = up * sh;
-    const tol = Math.max(1, ep * 0.02);
-    if (Math.abs(calc - ep) > tol) {
-      catchGatedOut.push({ id, why: "up_times_shipped_not_ep", up, sh, calc, ep, tol });
-      continue;
-    }
     catchAdmitted.add(id);
   }
 } else {
   for (const id of catchReclassIdsAll) catchAdmitted.add(id);
+}
+
+// -----------------------------------------------------------------------
+// R5b (v6 only): Invoice-lb arithmetic - TOP precedence, above p5.
+// Trigger: lower(unit)='lb' AND |qty*up - ep| <= max(1, 0.02*ep).
+// Effective weight = qty. Source tag: invoice_lb_arithmetic.
+// No alreadyResolved guard - this rule wins over every other layer.
+// -----------------------------------------------------------------------
+const invoiceLbArithById = new Map();
+if (!BASELINE) {
+  for (const r of rows) {
+    if (r.review_reason === "invoice_over_extracted") continue;
+    const unit = String(r.unit || "").toLowerCase();
+    if (unit !== "lb") continue;
+    const qty = Number(r.quantity);
+    const up = Number(r.unit_price);
+    const ep = Number(r.extended_price);
+    if (!qty || !up || !ep || qty <= 0) continue;
+    const calc = qty * up;
+    const tol = Math.max(1, 0.02 * ep);
+    if (Math.abs(calc - ep) > tol) continue;
+    invoiceLbArithById.set(r.id, { lb: qty, source: "invoice_lb_arithmetic" });
+  }
 }
 
 // -----------------------------------------------------------------------
@@ -153,10 +178,15 @@ if (!BASELINE) {
 // -----------------------------------------------------------------------
 // Effective weight resolver (with mode-aware precedence)
 // baseline mode:  p5 -> p4 -> 3c-rehab -> base parser
-// v6 mode:        p5 -> p4 -> catch-implied -> 3c-rehab -> base parser
+// v6b mode:       invoice_lb_arithmetic (R5b TOP) -> p5 -> p4 ->
+//                 catch-implied -> 3c-rehab -> base parser
 //                 + R7 removes p5 fused-slash beverage rows from p5 layer
 // -----------------------------------------------------------------------
 function effectiveLb(row) {
+  if (!BASELINE) {
+    const inv = invoiceLbArithById.get(row.id);
+    if (inv) return inv.lb;
+  }
   const p5 = p5RecById.get(row.id);
   if (p5 && !p5FusedBeverageDropped.has(row.id)) return p5.effective_weight_lb;
   const p4 = p4RecById.get(row.id);
@@ -173,6 +203,10 @@ function effectiveLb(row) {
 }
 
 function effectiveSource(row) {
+  if (!BASELINE) {
+    const inv = invoiceLbArithById.get(row.id);
+    if (inv) return inv.source;
+  }
   const p5 = p5RecById.get(row.id);
   if (p5 && !p5FusedBeverageDropped.has(row.id)) return p5.source;
   const p4 = p4RecById.get(row.id);
@@ -218,39 +252,39 @@ function isBaseParserSource(src) {
   ].includes(src);
 }
 
-const bandGatedOut = [];  // R6 log
+const bandGatedOut = [];  // R6b log
 
 function inWeightSet(row) {
   if (row.review_reason === "invoice_over_extracted") return false;
   const rr = row.review_reason;
-  if (rr === "ep_qty_up_mismatch" && !catchAdmitted.has(row.id)) return false;
+  // R5b rows allowed even under ep_qty_up_mismatch (they wear printed arithmetic)
+  const isInvArith = !BASELINE && invoiceLbArithById.has(row.id);
+  if (rr === "ep_qty_up_mismatch" && !catchAdmitted.has(row.id) && !isInvArith) return false;
   const eff = effectiveLb(row);
   if (!eff || eff <= 0) return false;
   if (BASELINE) return true;
-  // R6 band gate for v6
-  // Only apply to base parser or p5 sources - exempt p4 and 3c-rehab and catch-implied
-  const inP4 = p4RecById.has(row.id);
-  if (inP4) return true;
-  const src = effectiveSource(row);
-  const isCatchImplied = src === "catch_weight_implied_ep_over_up";
-  if (isCatchImplied) return true;
-  const in3c = rehab3cById.has(row.id) && String(src || "").includes("candidate_");
-  if (in3c) return true;
-  if (isBaseParserSource(src) || isP5Source(src)) {
-    const cat = String(row.category || "").toLowerCase();
-    const band = Q13_BANDS[cat];
-    if (!band || band.note) return true;  // no band -> pass
-    const ep = Number(row.extended_price) || 0;
-    if (!ep) return true;
-    const dpp = ep / eff;
-    if (dpp < band.band_low || dpp > band.band_high) {
-      bandGatedOut.push({
-        id: row.id, account: row.account_label, category: cat,
-        dpp: round2(dpp), band_low: band.band_low, band_high: band.band_high,
-        source: src, ep, lbs: round1(eff),
-      });
-      return false;
-    }
+  // R5b invoice_lb_arithmetic rows are EXEMPT from R6b (printed invoice arithmetic)
+  if (isInvArith) return true;
+  // R6b: band gate applied to ALL other weight-set rows regardless of layer
+  const cat = String(row.category || "").toLowerCase();
+  const band = Q13_BANDS[cat];
+  if (!band || band.note) return true;  // no band -> pass
+  const ep = Number(row.extended_price) || 0;
+  if (!ep) return true;
+  const dpp = ep / eff;
+  if (dpp < band.band_low || dpp > band.band_high) {
+    // record which layer this came from
+    let layer = "base_parser";
+    if (p5RecById.has(row.id) && !p5FusedBeverageDropped.has(row.id)) layer = "p5";
+    else if (p4RecById.has(row.id)) layer = "p4";
+    else if (catchImpliedById.has(row.id)) layer = "catch_implied";
+    else if (rehab3cById.has(row.id) && rehab3cById.get(row.id).lb > 0) layer = "phase3c_rehab";
+    bandGatedOut.push({
+      id: row.id, account: row.account_label, category: cat,
+      dpp: round2(dpp), band_low: band.band_low, band_high: band.band_high,
+      source: effectiveSource(row), layer, ep, lbs: round1(eff),
+    });
+    return false;
   }
   return true;
 }
@@ -291,9 +325,102 @@ function baselineInWeightSet(row) {
 // -----------------------------------------------------------------------
 // Recompute protein_mix
 // -----------------------------------------------------------------------
-function normAcct(a) { return (a || "").replace(" - ", "-"); }
+// (normAcctLbl defined above serves dual purpose; alias for readability)
+const normAcct = normAcctLbl;
 
 const A6 = JSON.parse(JSON.stringify(A4));
+
+// -----------------------------------------------------------------------
+// Phase 6b: refresh A6.spend from fresh AUG so restatement is not silent.
+// Prior A6.spend was copy-forwarded from A4 which was built from a stale AUG.
+// Fresh AUG matches Kevin's Fact 2 exactly (TBJ dollar-set $183,851.55).
+// The restatement bridge is captured in A6._phase6.restatement below.
+// -----------------------------------------------------------------------
+function normAcctLbl(a) { return (a || "").replace(" - ", "-"); }
+function refreshSpendFromAUG() {
+  const freshSpend = {};
+  for (const acct of ACCOUNTS) {
+    freshSpend[acct] = {
+      account: acct,
+      dollar_all_rows: 0,
+      dollar_total_spend: 0,
+      dollar_food_spend: 0,
+      dollar_core_food_spend: 0,
+      dollar_beverage_spend: 0,
+      dollar_nonfood_spend: 0,
+      dollar_unknown_spend: 0,
+    };
+  }
+  for (const r of rows) {
+    const acct = normAcctLbl(r.account_label);
+    const bucket = freshSpend[acct];
+    if (!bucket) continue;
+    if (r.review_reason === "invoice_over_extracted") continue;
+    const ep = Number(r.extended_price) || 0;
+    bucket.dollar_all_rows += 1;
+    bucket.dollar_total_spend += ep;
+    const cat = String(r.category || "").toLowerCase();
+    const nonFoodCats = ["cleaning","chemical","chemicals","supplies","packaging","smallwares","linen","uniform"];
+    const bevCats = ["beverage"];
+    const coreFoodCats = ["protein","poultry","meat","seafood","dairy","dry_goods","grocery","produce","frozen","snacks"];
+    if (nonFoodCats.includes(cat)) bucket.dollar_nonfood_spend += ep;
+    else if (bevCats.includes(cat)) { bucket.dollar_food_spend += ep; bucket.dollar_beverage_spend += ep; }
+    else if (coreFoodCats.includes(cat)) { bucket.dollar_food_spend += ep; bucket.dollar_core_food_spend += ep; }
+    else bucket.dollar_unknown_spend += ep;
+  }
+  for (const acct of ACCOUNTS) {
+    const b = freshSpend[acct];
+    b.dollar_total_spend = round2(b.dollar_total_spend);
+    b.dollar_food_spend = round2(b.dollar_food_spend);
+    b.dollar_core_food_spend = round2(b.dollar_core_food_spend);
+    b.dollar_beverage_spend = round2(b.dollar_beverage_spend);
+    b.dollar_nonfood_spend = round2(b.dollar_nonfood_spend);
+    b.dollar_unknown_spend = round2(b.dollar_unknown_spend);
+    b.dollar_food_pct = pct1(b.dollar_food_spend, b.dollar_total_spend);
+    b.dollar_core_food_pct = pct1(b.dollar_core_food_spend, b.dollar_total_spend);
+    b.dollar_beverage_pct = pct1(b.dollar_beverage_spend, b.dollar_total_spend);
+    b.dollar_nonfood_pct = pct1(b.dollar_nonfood_spend, b.dollar_total_spend);
+    b.dollar_unknown_pct = pct1(b.dollar_unknown_spend, b.dollar_total_spend);
+  }
+  return freshSpend;
+}
+const freshSpend = refreshSpendFromAUG();
+// Preserve v5 spend for the bridge, then overwrite A6.spend with fresh values.
+const v5Spend = JSON.parse(JSON.stringify(A6.spend));
+for (const acct of ACCOUNTS) {
+  if (A6.spend[acct]) {
+    // preserve non-dollar structure fields
+    Object.assign(A6.spend[acct], freshSpend[acct]);
+  } else {
+    A6.spend[acct] = freshSpend[acct];
+  }
+}
+// Restatement bridge (v5 dollar_total_spend -> v6 dollar_total_spend)
+const restatementBridge = {};
+for (const acct of ACCOUNTS) {
+  const v5Total = v5Spend?.[acct]?.dollar_total_spend ?? null;
+  const v6Total = A6.spend[acct].dollar_total_spend;
+  const v5Food = v5Spend?.[acct]?.dollar_food_spend ?? null;
+  const v6Food = A6.spend[acct].dollar_food_spend;
+  const v5CoreFood = v5Spend?.[acct]?.dollar_core_food_spend ?? null;
+  const v6CoreFood = A6.spend[acct].dollar_core_food_spend;
+  restatementBridge[acct] = {
+    v5_dollar_total_spend: v5Total,
+    v6_dollar_total_spend: v6Total,
+    restatement_delta_total: v5Total != null ? round2(v6Total - v5Total) : null,
+    v5_dollar_food_spend: v5Food,
+    v6_dollar_food_spend: v6Food,
+    restatement_delta_food: v5Food != null ? round2(v6Food - v5Food) : null,
+    v5_dollar_core_food_spend: v5CoreFood,
+    v6_dollar_core_food_spend: v6CoreFood,
+    restatement_delta_core_food: v5CoreFood != null ? round2(v6CoreFood - v5CoreFood) : null,
+  };
+}
+console.log("\n[restatement] v5 -> v6 dollar_set total_spend bridge:");
+for (const acct of ACCOUNTS) {
+  const r = restatementBridge[acct];
+  console.log(`  ${acct}: $${r.v5_dollar_total_spend} -> $${r.v6_dollar_total_spend}  delta $${r.restatement_delta_total}`);
+}
 
 const proteinMix = {};
 for (const acct of ACCOUNTS) {
@@ -512,12 +639,15 @@ for (const acct of ACCOUNTS) {
 }
 
 // -----------------------------------------------------------------------
-// R8: Standing build-time hard-fail gate
-// core-food protein lbs / window covers > 0.6
-// TBR/TBJ denominator = A6.per_meal[acct].window_meals_used
-// STL denominator = 18,860 (Q6)
-// In BASELINE mode: warn-only. In V6 mode: throw.
+// R8b: Standing build-time hard-fail gate on $/lb PLAUSIBILITY per
+// protein type per account. Fail if any published protein-type
+// dollars_per_lb falls outside [0.75, 25.00]. lb/cover becomes a
+// WARNING (flag above 1.0), not a fail.
 // -----------------------------------------------------------------------
+const R8B_LOW = 0.75;
+const R8B_HIGH = 25.00;
+const R8B_LBS_PER_COVER_WARN = 1.0;
+
 function coreFoodProteinLbs(acct) {
   const pm = A6.protein_mix[acct];
   let s = 0;
@@ -533,15 +663,37 @@ for (const acct of ACCOUNTS) {
   const denom = acct === "STL-FL" ? STL_PROJ_TOTAL : A6.per_meal[acct]?.window_meals_used;
   const lbs = coreFoodProteinLbs(acct);
   const ratio = denom ? round2(lbs / denom) : null;
-  gateResult[acct] = { core_food_protein_lbs: lbs, denom, ratio, breach: ratio != null && ratio > 0.6 };
-  console.log(`  [R8] ${acct}: core-food protein lbs=${lbs}  denom=${denom}  lbs/meal=${ratio}  ${gateResult[acct].breach ? "BREACH (>0.6)" : "pass"}`);
+  const lbsPerCoverWarn = ratio != null && ratio > R8B_LBS_PER_COVER_WARN;
+
+  const pm = A6.protein_mix[acct];
+  const perTypeBreaches = [];
+  for (const b of pm.by_type) {
+    if (b._suppressed) continue;
+    if (b.type === "plant_or_egg" || b.type === "other") continue;
+    if (b.dollars_per_lb == null) continue;
+    if (b.dollars_per_lb < R8B_LOW || b.dollars_per_lb > R8B_HIGH) {
+      perTypeBreaches.push({ type: b.type, dpp: b.dollars_per_lb, lbs: b.lbs, spend: b.lbs_spend });
+    }
+  }
+
+  gateResult[acct] = {
+    core_food_protein_lbs: lbs,
+    denom,
+    lbs_per_cover: ratio,
+    lbs_per_cover_warn: lbsPerCoverWarn,
+    dpp_breaches: perTypeBreaches,
+    breach: perTypeBreaches.length > 0,
+  };
+  const warnStr = lbsPerCoverWarn ? "  [WARN lb/cover]" : "";
+  const failStr = perTypeBreaches.length ? `  [FAIL $/lb: ${perTypeBreaches.map(b=>b.type+':'+b.dpp).join(', ')}]` : "";
+  console.log(`  [R8b] ${acct}: core-food protein lbs=${lbs}  denom=${denom}  lbs/cover=${ratio}${warnStr}${failStr}`);
 }
 const gateHit = Object.values(gateResult).some(v => v.breach);
 if (gateHit && BASELINE) {
-  console.warn("\n[R8] baseline mode: gate would FIRE (as expected). Continuing.");
+  console.warn("\n[R8b] baseline mode: gate FIRED (as expected). Continuing.");
 }
 if (gateHit && !BASELINE) {
-  console.warn("\n[R8] v6 mode: gate BREACHED. Writing outputs and diagnostics for inspection; exit-nonzero at end.");
+  console.warn("\n[R8b] v6 mode: gate BREACHED. Writing outputs and diagnostics for inspection; exit-nonzero at end.");
 }
 
 // -----------------------------------------------------------------------
@@ -558,17 +710,21 @@ if (!BASELINE) {
     if (beforeIn === afterIn && (beforeLb ?? null) === (afterLb ?? null)) continue;
     const beforeSrc = baselineEffSource(r);
     const afterSrc = effectiveSource(r);
-    // Determine rule
+    // Determine rule (v6b)
     let rule = "unchanged";
+    const isInvArith = invoiceLbArithById.has(r.id);
     if (beforeIn && !afterIn) {
-      if (bandGatedOut.some(x => x.id === r.id)) rule = "R6_band_out_of_range";
+      if (bandGatedOut.some(x => x.id === r.id)) rule = "R6b_band_out_of_range";
       else if (p5FusedBeverageDropped.has(r.id)) rule = "R7_fluid_oz_restoration";
-      else if (r.review_reason === "ep_qty_up_mismatch" && catchReclassIdsAll.has(r.id) && !catchAdmitted.has(r.id)) rule = "R5_arith_gate_failed";
       else rule = "dropped_other";
     } else if (!beforeIn && afterIn) {
-      rule = catchAdmitted.has(r.id) ? "R4_catch_implied" : "added_other";
+      if (isInvArith) rule = "R5b_invoice_lb_arithmetic";
+      else if (catchAdmitted.has(r.id)) rule = "R4_catch_implied";
+      else rule = "added_other";
     } else if (beforeIn && afterIn && beforeLb !== afterLb) {
-      rule = catchAdmitted.has(r.id) ? "R4_catch_implied_replaces_layer" : "weight_shifted_other";
+      if (isInvArith) rule = "R5b_invoice_lb_arithmetic_replaces_layer";
+      else if (catchAdmitted.has(r.id)) rule = "R4_catch_implied_replaces_layer";
+      else rule = "weight_shifted_other";
     }
     change_log_entries.push({
       id: r.id,
@@ -665,6 +821,7 @@ A6._phase6 = {
   catch_gated_out_count: catchGatedOut.length,
   p5_fused_beverage_dropped: p5FusedBeverageDropped.size,
   catch_implied_layer_size: catchImpliedById.size,
+  invoice_lb_arithmetic_layer_size: invoiceLbArithById.size,
   dollar_invariance: dollarCheck,
   addendum_a1: {
     canon_denominators: {
@@ -681,14 +838,19 @@ A6._phase6 = {
     tbr_component_meals: TBR_CANON.components,
     contract_specs_source: "kitchfix-intranet/content/documents/REF-121.mdx (BGC Contract Digest)",
   },
+  bg_contract: BG_CONTRACT,
+  restatement_bridge: restatementBridge,
   r4_result: r4Result,
 };
 fs.writeFileSync(outPath, JSON.stringify(A6, null, 2));
+// Mirror write
+const outMirror = BASELINE ? P6.ANALYSIS_BASELINE_MIRROR : P6.ANALYSIS_V6_MIRROR;
+fs.writeFileSync(outMirror, JSON.stringify(A6, null, 2));
 fs.writeFileSync(logPath, JSON.stringify({
   meta: {
     mode: MODE,
     build_date: new Date().toISOString().slice(0, 10),
-    rules_applied: BASELINE ? [] : ["R4_catch_implied", "R5_arith_gate", "R6_band_gate", "R7_fluid_oz", "R8_hard_fail_gate"],
+    rules_applied: BASELINE ? [] : ["R4_catch_implied", "R5b_invoice_lb_arithmetic", "R6b_band_gate_all_layers", "R7_fluid_oz", "R8b_dpp_per_protein_type_gate"],
   },
   gate_result: gateResult,
   band_gated_out: bandGatedOut,
@@ -697,9 +859,14 @@ fs.writeFileSync(logPath, JSON.stringify({
   catch_gated_out: catchGatedOut,
   p5_fused_beverage_dropped_count: p5FusedBeverageDropped.size,
   p5_fused_beverage_dropped_ids: [...p5FusedBeverageDropped],
+  invoice_lb_arithmetic_layer_size: invoiceLbArithById.size,
+  invoice_lb_arithmetic_ids: [...invoiceLbArithById.keys()],
   entries: change_log_entries,
   dollar_invariance: dollarCheck,
 }, null, 2));
+// Mirror write for change log
+const logMirror = BASELINE ? P6.CHANGE_LOG_BASELINE_MIRROR : P6.CHANGE_LOG_MIRROR;
+fs.copyFileSync(logPath, logMirror);
 
 console.log(`\nwrote ${outPath}`);
 console.log(`wrote ${logPath}`);

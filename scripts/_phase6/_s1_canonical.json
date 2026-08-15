@@ -1,0 +1,68 @@
+{
+  "ran_at": "2026-08-15T02:28:59.739Z",
+  "results": {
+    "TBR - FL": {
+      "total_rows_for_account": 2695,
+      "window_rows": 2302,
+      "live_rows": 2217,
+      "dollar_rows": 2077,
+      "dollar_spend": 129507.43,
+      "by_month": {
+        "2026-05": {
+          "rows": 512,
+          "spend": 31403.14
+        },
+        "2026-06": {
+          "rows": 744,
+          "spend": 45662.4
+        },
+        "2026-07": {
+          "rows": 821,
+          "spend": 52441.89
+        }
+      }
+    },
+    "TBJ - FL": {
+      "total_rows_for_account": 2596,
+      "window_rows": 2268,
+      "live_rows": 2165,
+      "dollar_rows": 2130,
+      "dollar_spend": 172942.89,
+      "by_month": {
+        "2026-05": {
+          "rows": 1081,
+          "spend": 95865.56
+        },
+        "2026-06": {
+          "rows": 715,
+          "spend": 54653.71
+        },
+        "2026-07": {
+          "rows": 334,
+          "spend": 22423.62
+        }
+      }
+    },
+    "STL - FL": {
+      "total_rows_for_account": 3087,
+      "window_rows": 2788,
+      "live_rows": 2531,
+      "dollar_rows": 2499,
+      "dollar_spend": 274187.13,
+      "by_month": {
+        "2026-07": {
+          "rows": 1133,
+          "spend": 127994.93
+        },
+        "2026-06": {
+          "rows": 1061,
+          "spend": 105735.53
+        },
+        "2026-05": {
+          "rows": 305,
+          "spend": 40456.67
+        }
+      }
+    }
+  }
+}

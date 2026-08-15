@@ -16,13 +16,13 @@
       "dollar_food_spend": 110620.56,
       "dollar_core_food_spend": 109020.61,
       "dollar_beverage_spend": 1599.95,
-      "dollar_nonfood_spend": 16624.69,
-      "dollar_unknown_spend": 2262.18,
+      "dollar_nonfood_spend": 14622.56,
+      "dollar_unknown_spend": 4264.31,
       "dollar_food_pct": 85.4,
       "dollar_core_food_pct": 84.2,
       "dollar_beverage_pct": 1.2,
-      "dollar_nonfood_pct": 12.8,
-      "dollar_unknown_pct": 1.7,
+      "dollar_nonfood_pct": 11.3,
+      "dollar_unknown_pct": 3.3,
       "by_month": {
         "2026-05": {
           "total_rows": 512,
@@ -2749,18 +2749,18 @@
     },
     "TBJ-FL": {
       "account": "TBJ-FL",
-      "dollar_all_rows": 2219,
-      "dollar_total_spend": 171222.23,
-      "dollar_food_spend": 154695.92,
-      "dollar_core_food_spend": 132317.45,
-      "dollar_beverage_spend": 22378.47,
-      "dollar_nonfood_spend": 14729.31,
-      "dollar_unknown_spend": 1797,
-      "dollar_food_pct": 90.3,
-      "dollar_core_food_pct": 77.3,
-      "dollar_beverage_pct": 13.1,
-      "dollar_nonfood_pct": 8.6,
-      "dollar_unknown_pct": 1,
+      "dollar_all_rows": 2202,
+      "dollar_total_spend": 183851.55,
+      "dollar_food_spend": 167991.77,
+      "dollar_core_food_spend": 144812.45,
+      "dollar_beverage_spend": 23179.32,
+      "dollar_nonfood_spend": 13459.8,
+      "dollar_unknown_spend": 2399.98,
+      "dollar_food_pct": 91.4,
+      "dollar_core_food_pct": 78.8,
+      "dollar_beverage_pct": 12.6,
+      "dollar_nonfood_pct": 7.3,
+      "dollar_unknown_pct": 1.3,
       "by_month": {
         "2026-05": {
           "total_rows": 930,
@@ -5536,13 +5536,13 @@
       "dollar_food_spend": 252703.21,
       "dollar_core_food_spend": 200947.87,
       "dollar_beverage_spend": 51755.34,
-      "dollar_nonfood_spend": 19605.63,
-      "dollar_unknown_spend": 1878.29,
+      "dollar_nonfood_spend": 17881.66,
+      "dollar_unknown_spend": 3602.26,
       "dollar_food_pct": 92.2,
       "dollar_core_food_pct": 73.3,
       "dollar_beverage_pct": 18.9,
-      "dollar_nonfood_pct": 7.2,
-      "dollar_unknown_pct": 0.7,
+      "dollar_nonfood_pct": 6.5,
+      "dollar_unknown_pct": 1.3,
       "by_month": {
         "2026-05": {
           "total_rows": 305,
@@ -8258,78 +8258,78 @@
     },
     "TBJ-FL": {
       "account": "TBJ-FL",
-      "food_spend_dollar_set": 154695.92,
-      "core_food_spend_dollar_set": 132317.45,
-      "food_spend_weight_set": 76130.9,
-      "core_food_spend_weight_set": 66303.51,
-      "food_lbs": 41609,
-      "core_food_lbs": 32026.6,
-      "food_rows_dollar_set": 1873,
-      "food_rows_weight_set": 744,
+      "food_spend_dollar_set": 167991.77,
+      "core_food_spend_dollar_set": 144812.45,
+      "food_spend_weight_set": 73211.12,
+      "core_food_spend_weight_set": 62080.1,
+      "food_lbs": 40517.8,
+      "core_food_lbs": 30712.2,
+      "food_rows_dollar_set": 1837,
+      "food_rows_weight_set": 724,
       "by_category": [
         {
           "category": "protein",
-          "food_rows_dollar_set": 233,
-          "food_spend_dollar_set": 44596.6,
-          "food_rows_weight_set": 141,
-          "food_spend_weight_set": 29818.56,
-          "weight_lbs": 10431.2,
-          "coverage_spend_pct": 66.9,
-          "coverage_rows_pct": 60.5,
-          "dollars_per_lb": 2.86,
+          "food_rows_dollar_set": 297,
+          "food_spend_dollar_set": 62761.38,
+          "food_rows_weight_set": 134,
+          "food_spend_weight_set": 27109.72,
+          "weight_lbs": 9708.2,
+          "coverage_spend_pct": 43.2,
+          "coverage_rows_pct": 45.1,
+          "dollars_per_lb": 2.79,
           "_publication": "publish"
         },
         {
           "category": "produce",
-          "food_rows_dollar_set": 733,
-          "food_spend_dollar_set": 37894.91,
-          "food_rows_weight_set": 251,
-          "food_spend_weight_set": 11909.24,
-          "weight_lbs": 12164.8,
-          "coverage_spend_pct": 31.4,
-          "coverage_rows_pct": 34.2,
-          "dollars_per_lb": 0.98,
-          "_publication": "publish with caveat (31.4% coverage)"
+          "food_rows_dollar_set": 676,
+          "food_spend_dollar_set": 34104.96,
+          "food_rows_weight_set": 243,
+          "food_spend_weight_set": 11119.31,
+          "weight_lbs": 11547,
+          "coverage_spend_pct": 32.6,
+          "coverage_rows_pct": 35.9,
+          "dollars_per_lb": 0.96,
+          "_publication": "publish with caveat (32.6% coverage)"
         },
         {
           "category": "dry_goods",
-          "food_rows_dollar_set": 540,
-          "food_spend_dollar_set": 29996.72,
+          "food_rows_dollar_set": 507,
+          "food_spend_dollar_set": 29272.01,
           "food_rows_weight_set": 188,
-          "food_spend_weight_set": 14024.24,
-          "weight_lbs": 5005.4,
-          "coverage_spend_pct": 46.8,
-          "coverage_rows_pct": 34.8,
-          "dollars_per_lb": 2.8,
+          "food_spend_weight_set": 14352.06,
+          "weight_lbs": 5227.6,
+          "coverage_spend_pct": 49,
+          "coverage_rows_pct": 37.1,
+          "dollars_per_lb": 2.75,
           "_publication": "publish"
         },
         {
           "category": "beverage",
-          "food_rows_dollar_set": 117,
-          "food_spend_dollar_set": 22378.47,
-          "food_rows_weight_set": 29,
-          "food_spend_weight_set": 9827.39,
-          "weight_lbs": 9582.5,
-          "coverage_spend_pct": 43.9,
-          "coverage_rows_pct": 24.8,
-          "dollars_per_lb": 1.03,
+          "food_rows_dollar_set": 110,
+          "food_spend_dollar_set": 23179.32,
+          "food_rows_weight_set": 30,
+          "food_spend_weight_set": 11131.02,
+          "weight_lbs": 9805.6,
+          "coverage_spend_pct": 48,
+          "coverage_rows_pct": 27.3,
+          "dollars_per_lb": 1.14,
           "_publication": "publish"
         },
         {
           "category": "dairy",
-          "food_rows_dollar_set": 250,
-          "food_spend_dollar_set": 19829.22,
-          "food_rows_weight_set": 135,
-          "food_spend_weight_set": 10551.47,
-          "weight_lbs": 4425.1,
-          "coverage_spend_pct": 53.2,
-          "coverage_rows_pct": 54,
-          "dollars_per_lb": 2.38,
+          "food_rows_dollar_set": 247,
+          "food_spend_dollar_set": 18674.1,
+          "food_rows_weight_set": 129,
+          "food_spend_weight_set": 9499.01,
+          "weight_lbs": 4229.4,
+          "coverage_spend_pct": 50.9,
+          "coverage_rows_pct": 52.2,
+          "dollars_per_lb": 2.25,
           "_publication": "publish"
         }
       ],
-      "coverage_food_spend_pct": 49.2,
-      "coverage_core_food_spend_pct": 50.1
+      "coverage_food_spend_pct": 43.6,
+      "coverage_core_food_spend_pct": 42.9
     },
     "STL-FL": {
       "account": "STL-FL",
@@ -9615,7 +9615,7 @@
         "milb": 18680,
         "bg": 1620
       },
-      "_bg_disclosure": "TBR covers include 1,620 Boys and Girls Club lunches (8.0% of window covers, all in May), a separate client billed at $6.50 per lunch against MiLB blended $20.05. Invoice product is not split between clients. Per-cover figures are therefore a floor for MiLB-only intensity.",
+      "_bg_disclosure": "TBR covers include 1,620 Boys and Girls Club meals (8.0% of window covers, all in May), a separate client billed at a flat $6.50 per meal against MiLB blended $20.05. The meal is an after-school supper, not a lunch. Invoice product is not split between clients, so per-cover figures are a floor for MiLB-only intensity.",
       "_bg_component_meals": 1620,
       "_milb_component_meals": 18680
     },
@@ -9662,13 +9662,13 @@
       "window_meals_used": 29541,
       "window_meals_source_note": "Addendum A1: calendar-derived canon replacing sparse-substituted actuals.",
       "window_dollars_per_meal": 5.24,
-      "window_dollars_per_meal_core": 4.48,
-      "window_food_lbs": 41609,
-      "window_core_food_lbs": 32026.6,
-      "window_lbs_per_meal": 1.41,
-      "window_lbs_per_meal_core": 1.08,
-      "window_lbs_coverage_pct": 49.2,
-      "window_lbs_coverage_core_pct": 50.1,
+      "window_dollars_per_meal_core": 4.9,
+      "window_food_lbs": 40517.8,
+      "window_core_food_lbs": 30712.2,
+      "window_lbs_per_meal": 1.37,
+      "window_lbs_per_meal_core": 1.04,
+      "window_lbs_coverage_pct": 43.6,
+      "window_lbs_coverage_core_pct": 42.9,
       "_phase4_before_lbs_per_meal": 1.12,
       "_phase4_before_lbs_per_meal_core": 0.98,
       "window_meals_source": "calendar_canonical",
@@ -79737,74 +79737,75 @@
     },
     "TBJ-FL": {
       "account": "TBJ-FL",
-      "total_protein_spend": 44596.6,
-      "total_protein_lbs": 10431.2,
+      "total_protein_spend": 62761.38,
+      "total_protein_lbs": 9708.2,
       "by_type": [
         {
           "type": "beef",
-          "rows": 46,
-          "spend": 16315.53,
-          "lbs_rows": 29,
-          "lbs": 2176.1,
-          "lbs_spend": 11306.17,
-          "coverage_spend_pct": 69.3,
-          "dollars_per_lb": 5.2,
-          "_publication": "publish",
-          "pct_of_protein_spend": 36.6,
-          "pct_of_protein_lbs": 20.9
+          "rows": 77,
+          "spend": 28025.46,
+          "lbs_rows": 25,
+          "lbs": 1774.5,
+          "lbs_spend": 9671.91,
+          "coverage_spend_pct": 34.5,
+          "dollars_per_lb": 5.45,
+          "_publication": "publish with caveat (34.5% coverage, between 25% and 35%)",
+          "_caveat": true,
+          "pct_of_protein_spend": 44.7,
+          "pct_of_protein_lbs": 18.3
         },
         {
           "type": "poultry",
           "rows": 83,
-          "spend": 13086.9,
-          "lbs_rows": 56,
-          "lbs": 5383.9,
-          "lbs_spend": 9846.8,
-          "coverage_spend_pct": 75.2,
-          "dollars_per_lb": 1.83,
+          "spend": 12381.06,
+          "lbs_rows": 53,
+          "lbs": 4992.6,
+          "lbs_spend": 8953.96,
+          "coverage_spend_pct": 72.3,
+          "dollars_per_lb": 1.79,
           "_publication": "publish",
-          "pct_of_protein_spend": 29.3,
-          "pct_of_protein_lbs": 51.6
+          "pct_of_protein_spend": 19.7,
+          "pct_of_protein_lbs": 51.4
         },
         {
           "type": "pork",
-          "rows": 45,
-          "spend": 5913.6,
+          "rows": 64,
+          "spend": 7446.67,
           "lbs_rows": 31,
-          "lbs": 1513.2,
-          "lbs_spend": 3962.1,
-          "coverage_spend_pct": 67,
-          "dollars_per_lb": 2.62,
+          "lbs": 1423.1,
+          "lbs_spend": 3660.19,
+          "coverage_spend_pct": 49.2,
+          "dollars_per_lb": 2.57,
           "_publication": "publish",
-          "pct_of_protein_spend": 13.3,
-          "pct_of_protein_lbs": 14.5
+          "pct_of_protein_spend": 11.9,
+          "pct_of_protein_lbs": 14.7
         },
         {
           "type": "seafood",
-          "rows": 33,
-          "spend": 5863.3,
+          "rows": 52,
+          "spend": 12246,
           "lbs_rows": 23,
-          "lbs": 1047.9,
-          "lbs_spend": 4400.74,
-          "coverage_spend_pct": 75.1,
-          "dollars_per_lb": 4.2,
+          "lbs": 1207.8,
+          "lbs_spend": 4520.91,
+          "coverage_spend_pct": 36.9,
+          "dollars_per_lb": 3.74,
           "_publication": "publish",
-          "pct_of_protein_spend": 13.1,
-          "pct_of_protein_lbs": 10
+          "pct_of_protein_spend": 19.5,
+          "pct_of_protein_lbs": 12.4
         },
         {
           "type": "plant_or_egg",
-          "rows": 25,
-          "spend": 3213.91,
+          "rows": 20,
+          "spend": 2458.83,
           "lbs_rows": 2,
           "lbs": 310.2,
           "lbs_spend": 302.75,
-          "coverage_spend_pct": 9.4,
+          "coverage_spend_pct": 12.3,
           "dollars_per_lb": 0.98,
           "_publication": "not comparable (plant_or_egg mixed count/weight)",
           "_suppressed": true,
-          "pct_of_protein_spend": 7.2,
-          "pct_of_protein_lbs": 3
+          "pct_of_protein_spend": 3.9,
+          "pct_of_protein_lbs": 3.2
         },
         {
           "type": "other",
@@ -79817,11 +79818,11 @@
           "dollars_per_lb": null,
           "_publication": "suppressed (0% below 25% threshold)",
           "_suppressed": true,
-          "pct_of_protein_spend": 0.5,
+          "pct_of_protein_spend": 0.3,
           "pct_of_protein_lbs": 0
         }
       ],
-      "lbs_coverage_spend_pct": 66.9
+      "lbs_coverage_spend_pct": 43.2
     },
     "STL-FL": {
       "account": "STL-FL",
@@ -103005,20 +103006,26 @@
       "TBR-FL": {
         "core_food_protein_lbs": 7717.2,
         "denom": 20300,
-        "ratio": 0.38,
+        "lbs_per_cover": 0.38,
+        "lbs_per_cover_warn": false,
+        "dpp_breaches": [],
         "breach": false
       },
       "TBJ-FL": {
-        "core_food_protein_lbs": 10121.1,
+        "core_food_protein_lbs": 9398,
         "denom": 29541,
-        "ratio": 0.34,
+        "lbs_per_cover": 0.32,
+        "lbs_per_cover_warn": false,
+        "dpp_breaches": [],
         "breach": false
       },
       "STL-FL": {
         "core_food_protein_lbs": 25690.1,
         "denom": 18860,
-        "ratio": 1.36,
-        "breach": true
+        "lbs_per_cover": 1.36,
+        "lbs_per_cover_warn": true,
+        "dpp_breaches": [],
+        "breach": false
       }
     },
     "band_gated_out_count": 0,
@@ -103026,9 +103033,111 @@
     "catch_gated_out_count": 0,
     "p5_fused_beverage_dropped": 0,
     "catch_implied_layer_size": 0,
+    "invoice_lb_arithmetic_layer_size": 0,
     "dollar_invariance": {
-      "pass": true,
-      "issues": []
+      "pass": false,
+      "issues": [
+        {
+          "path": "spend.TBR-FL.dollar_nonfood_spend",
+          "before": 16624.69,
+          "v6": 14622.56
+        },
+        {
+          "path": "spend.TBR-FL.dollar_unknown_spend",
+          "before": 2262.18,
+          "v6": 4264.31
+        },
+        {
+          "path": "spend.TBR-FL.dollar_nonfood_pct",
+          "before": 12.8,
+          "v6": 11.3
+        },
+        {
+          "path": "spend.TBR-FL.dollar_unknown_pct",
+          "before": 1.7,
+          "v6": 3.3
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_all_rows",
+          "before": 2219,
+          "v6": 2202
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_total_spend",
+          "before": 171222.23,
+          "v6": 183851.55
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_food_spend",
+          "before": 154695.92,
+          "v6": 167991.77
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_core_food_spend",
+          "before": 132317.45,
+          "v6": 144812.45
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_beverage_spend",
+          "before": 22378.47,
+          "v6": 23179.32
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_nonfood_spend",
+          "before": 14729.31,
+          "v6": 13459.8
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_unknown_spend",
+          "before": 1797,
+          "v6": 2399.98
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_food_pct",
+          "before": 90.3,
+          "v6": 91.4
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_core_food_pct",
+          "before": 77.3,
+          "v6": 78.8
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_beverage_pct",
+          "before": 13.1,
+          "v6": 12.6
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_nonfood_pct",
+          "before": 8.6,
+          "v6": 7.3
+        },
+        {
+          "path": "spend.TBJ-FL.dollar_unknown_pct",
+          "before": 1,
+          "v6": 1.3
+        },
+        {
+          "path": "spend.STL-FL.dollar_nonfood_spend",
+          "before": 19605.63,
+          "v6": 17881.66
+        },
+        {
+          "path": "spend.STL-FL.dollar_unknown_spend",
+          "before": 1878.29,
+          "v6": 3602.26
+        },
+        {
+          "path": "spend.STL-FL.dollar_nonfood_pct",
+          "before": 7.2,
+          "v6": 6.5
+        },
+        {
+          "path": "spend.STL-FL.dollar_unknown_pct",
+          "before": 0.7,
+          "v6": 1.3
+        }
+      ]
     },
     "addendum_a1": {
       "canon_denominators": {
@@ -103063,12 +103172,59 @@
       "source": "Kevin's 2026 TBR + TBJ Service Calendars + STL 2027 projections; Chat-Claude ruling"
     },
     "addendum_a3": {
-      "bg_disclosure": "TBR covers include 1,620 Boys and Girls Club lunches (8.0% of window covers, all in May), a separate client billed at $6.50 per lunch against MiLB blended $20.05. Invoice product is not split between clients. Per-cover figures are therefore a floor for MiLB-only intensity.",
+      "bg_disclosure": "TBR covers include 1,620 Boys and Girls Club meals (8.0% of window covers, all in May), a separate client billed at a flat $6.50 per meal against MiLB blended $20.05. The meal is an after-school supper, not a lunch. Invoice product is not split between clients, so per-cover figures are a floor for MiLB-only intensity.",
       "tbr_component_meals": {
         "milb": 18680,
         "bg": 1620
       },
       "contract_specs_source": "kitchfix-intranet/content/documents/REF-121.mdx (BGC Contract Digest)"
+    },
+    "bg_contract": {
+      "term_start": "2025-08-19",
+      "term_end": "2026-05-21",
+      "auto_renewal": false,
+      "billing_cadence": "prepaid_4_week_periods",
+      "tax_status": "tax_exempt",
+      "billed_price_per_meal": 6.5,
+      "planning_estimate_per_day": 125,
+      "planning_estimate_note": "125/day is a planning estimate, not a billed floor",
+      "school_year_value_approx": 79950,
+      "source": "REC-108 (Account Record TBR-FL) + REF-141 (Price Book)"
+    },
+    "restatement_bridge": {
+      "TBR-FL": {
+        "v5_dollar_total_spend": 129507.43,
+        "v6_dollar_total_spend": 129507.43,
+        "restatement_delta_total": 0,
+        "v5_dollar_food_spend": 110620.56,
+        "v6_dollar_food_spend": 110620.56,
+        "restatement_delta_food": 0,
+        "v5_dollar_core_food_spend": 109020.61,
+        "v6_dollar_core_food_spend": 109020.61,
+        "restatement_delta_core_food": 0
+      },
+      "TBJ-FL": {
+        "v5_dollar_total_spend": 171222.23,
+        "v6_dollar_total_spend": 183851.55,
+        "restatement_delta_total": 12629.32,
+        "v5_dollar_food_spend": 154695.92,
+        "v6_dollar_food_spend": 167991.77,
+        "restatement_delta_food": 13295.85,
+        "v5_dollar_core_food_spend": 132317.45,
+        "v6_dollar_core_food_spend": 144812.45,
+        "restatement_delta_core_food": 12495
+      },
+      "STL-FL": {
+        "v5_dollar_total_spend": 274187.13,
+        "v6_dollar_total_spend": 274187.13,
+        "restatement_delta_total": 0,
+        "v5_dollar_food_spend": 252703.21,
+        "v6_dollar_food_spend": 252703.21,
+        "restatement_delta_food": 0,
+        "v5_dollar_core_food_spend": 200947.87,
+        "v6_dollar_core_food_spend": 200947.87,
+        "restatement_delta_core_food": 0
+      }
     },
     "r4_result": null
   }

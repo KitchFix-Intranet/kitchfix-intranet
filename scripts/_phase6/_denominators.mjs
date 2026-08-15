@@ -76,12 +76,29 @@ export const CANON = {
 
 // B&G disclosure boilerplate. Every TBR per-cover figure in _analysis6.json,
 // the workbook, and the one-pager must carry this note.
+// Phase 6b: Kevin's S6 ruling - "lunches" was wrong; the meal is an after-school
+// supper. String updated per verbatim Kevin ruling.
 export const BG_DISCLOSURE =
-  "TBR covers include 1,620 Boys and Girls Club lunches " +
-  "(8.0% of window covers, all in May), a separate client billed at " +
-  "$6.50 per lunch against MiLB blended $20.05. Invoice product is not " +
-  "split between clients. Per-cover figures are therefore a floor for " +
-  "MiLB-only intensity.";
+  "TBR covers include 1,620 Boys and Girls Club meals " +
+  "(8.0% of window covers, all in May), a separate client billed at a flat " +
+  "$6.50 per meal against MiLB blended $20.05. The meal is an after-school " +
+  "supper, not a lunch. Invoice product is not split between clients, so " +
+  "per-cover figures are a floor for MiLB-only intensity.";
+
+// Phase 6b: bg_contract metadata block. Landed in A6._phase6.bg_contract.
+// Sources: REC-108 (Account Record for TBR-FL) + REF-141 (Price Book).
+export const BG_CONTRACT = {
+  term_start: "2025-08-19",
+  term_end: "2026-05-21",
+  auto_renewal: false,
+  billing_cadence: "prepaid_4_week_periods",
+  tax_status: "tax_exempt",
+  billed_price_per_meal: 6.50,
+  planning_estimate_per_day: 125,
+  planning_estimate_note: "125/day is a planning estimate, not a billed floor",
+  school_year_value_approx: 79950,
+  source: "REC-108 (Account Record TBR-FL) + REF-141 (Price Book)",
+};
 
 // Helper to fetch canonical denominator for an account key.
 export function windowMeals(acct) {

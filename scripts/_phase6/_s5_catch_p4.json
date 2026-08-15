@@ -1,0 +1,113 @@
+{
+  "count": 9,
+  "details": [
+    {
+      "id": "de6dc594",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "BEEF FLANK STK BNLS 1.8#AVG",
+      "ep": 339.03,
+      "up": 9.56,
+      "catch_candidate_lb": 35.46,
+      "p4_lb": 35.5,
+      "dpp_at_catch": 9.56,
+      "dpp_at_p4": 9.55
+    },
+    {
+      "id": "2aa53367",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "#AVGCABEHNF BEEF SIRLOIN TRI TIP PLD 28-",
+      "ep": 901.91,
+      "up": 11.554,
+      "catch_candidate_lb": 78.06,
+      "p4_lb": 66,
+      "dpp_at_catch": 11.55,
+      "dpp_at_p4": 13.67
+    },
+    {
+      "id": "5b875a1c",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "#AVGSOULES BEEF FAJ OUTSIDE SKIRT MARN S",
+      "ep": 382.31,
+      "up": 9.199,
+      "catch_candidate_lb": 41.56,
+      "p4_lb": 410,
+      "dpp_at_catch": 9.2,
+      "dpp_at_p4": 0.93
+    },
+    {
+      "id": "c0768ca8",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "BEEF SHORT RIB BNL",
+      "ep": 740.32,
+      "up": 11.2,
+      "catch_candidate_lb": 66.1,
+      "p4_lb": 66.1,
+      "dpp_at_catch": 11.2,
+      "dpp_at_p4": 11.2
+    },
+    {
+      "id": "7f3a9268",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "PORK COLLAR BNLS V",
+      "ep": 242.69,
+      "up": 2.03,
+      "catch_candidate_lb": 119.55,
+      "p4_lb": 117.6,
+      "dpp_at_catch": 2.03,
+      "dpp_at_p4": 2.06
+    },
+    {
+      "id": "1ac2dab2",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "SHRIMP 41/50 RAW P",
+      "ep": 127.6,
+      "up": 6.38,
+      "catch_candidate_lb": 20,
+      "p4_lb": 20,
+      "dpp_at_catch": 6.38,
+      "dpp_at_p4": 6.38
+    },
+    {
+      "id": "03cf19d2",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "BEEF FLANK STK BNLS 1.8#AVG",
+      "ep": 341.76,
+      "up": 9.6,
+      "catch_candidate_lb": 35.6,
+      "p4_lb": 35.6,
+      "dpp_at_catch": 9.6,
+      "dpp_at_p4": 9.6
+    },
+    {
+      "id": "40f1b0ee",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "SALMON CHILE FLT 3",
+      "ep": 163.2,
+      "up": 8.16,
+      "catch_candidate_lb": 20,
+      "p4_lb": 20,
+      "dpp_at_catch": 8.16,
+      "dpp_at_p4": 8.16
+    },
+    {
+      "id": "03d31f82",
+      "account": "TBJ-FL",
+      "category": "protein",
+      "description": "AVGBCH BLK LAMB LEG BNLS RLD NET HALAL F",
+      "ep": 873.49,
+      "up": 7.799,
+      "catch_candidate_lb": 112,
+      "p4_lb": 112,
+      "dpp_at_catch": 7.8,
+      "dpp_at_p4": 7.8
+    }
+  ]
+}

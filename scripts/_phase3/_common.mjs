@@ -65,8 +65,15 @@ export async function fetchLineItemsInWindow({
   let driftRecovered = 0;
 
   // (a) In-window rows via normal range filter.
+  // Phase 6b fix: paginate WITH .order("id") and a de-dup guard. Prior code
+  // used .range() without an ORDER BY, causing PostgREST to return rows in
+  // undefined page-boundary order and silently dropping/duplicating rows
+  // (~21% drops observed on a 2,596-row TBJ pull). Root cause of the
+  // "reproducible but wrong" TBJ dollar-set total ($171,222.23 vs the
+  // canonical $183,851.55) documented in scripts/_phase6/_s1_diagnose.json.
   for (const acct of accounts) {
     const pageSize = 1000;
+    const seenIds = new Set();
     let from = 0;
     while (true) {
       const { data, error } = await supa
@@ -75,14 +82,17 @@ export async function fetchLineItemsInWindow({
         .eq("account_key", acct)
         .gte("invoice_date", windowStart)
         .lte("invoice_date", windowEnd)
+        .order("id")
         .range(from, from + pageSize - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
       for (const r of data) {
+        if (seenIds.has(r.id)) continue;
+        seenIds.add(r.id);
         r._invoice_date_norm = normalizeInvoiceDate(r.invoice_date);
         r._drift_recovered = false;
+        out.push(r);
       }
-      out.push(...data);
       if (data.length < pageSize) break;
       from += pageSize;
     }

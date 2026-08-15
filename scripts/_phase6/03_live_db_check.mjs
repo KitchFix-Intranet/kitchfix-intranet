@@ -34,6 +34,7 @@ function normDate(raw) {
 async function fetchAll(acct) {
   const rows = [];
   const pageSize = 1000;
+  const seenIds = new Set();
   // In-window
   let from = 0;
   while (true) {
@@ -43,10 +44,11 @@ async function fetchAll(acct) {
       .eq("account_key", acct)
       .gte("invoice_date", WINDOW_START)
       .lte("invoice_date", WINDOW_END)
+      .order("id")
       .range(from, from + pageSize - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-    rows.push(...data);
+    for (const r of data) { if (seenIds.has(r.id)) continue; seenIds.add(r.id); rows.push(r); }
     if (data.length < pageSize) break;
     from += pageSize;
   }
