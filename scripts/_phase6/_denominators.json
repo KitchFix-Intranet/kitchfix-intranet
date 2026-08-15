@@ -1,0 +1,165 @@
+{
+  "built_at": "2026-08-15T01:14:01.172Z",
+  "table_probes": {
+    "sc_daily_actuals": {
+      "table": "sc_daily_actuals",
+      "sample_keys": [
+        "id",
+        "account_key",
+        "service_id",
+        "service_date",
+        "actual_count",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ]
+    },
+    "sc_daily_projections": {
+      "table": "sc_daily_projections",
+      "sample_keys": [
+        "id",
+        "account_key",
+        "service_id",
+        "service_date",
+        "projected_count",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ]
+    },
+    "sc_service_groups": {
+      "table": "sc_service_groups",
+      "sample_keys": [
+        "id",
+        "account_key",
+        "group_name",
+        "sort_order",
+        "active",
+        "created_by",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "active_until"
+      ]
+    },
+    "service_calendar_accounts": {
+      "table": "service_calendar_accounts",
+      "error": "Could not find the table 'public.service_calendar_accounts' in the schema cache"
+    }
+  },
+  "d1": {
+    "columns_used": {
+      "dateCol": "service_date",
+      "acctCol": "account_key",
+      "mealsCol": "actual_count"
+    },
+    "per_account": {
+      "TBR-FL": {
+        "monthly": {
+          "2026-05": {
+            "rows": 105,
+            "meals": 7632
+          },
+          "2026-06": {
+            "rows": 69,
+            "meals": 6252
+          },
+          "2026-07": {
+            "rows": 113,
+            "meals": 5588
+          }
+        },
+        "rows": 287
+      },
+      "TBJ-FL": {
+        "monthly": {
+          "2026-05": {
+            "rows": 120,
+            "meals": 16078
+          },
+          "2026-06": {
+            "rows": 217,
+            "meals": 8499
+          },
+          "2026-07": {
+            "rows": 12,
+            "meals": 885
+          }
+        },
+        "rows": 349
+      },
+      "STL-FL": {
+        "monthly": {
+          "2026-05": {
+            "rows": 78,
+            "meals": 6021
+          },
+          "2026-07": {
+            "rows": 5,
+            "meals": 164
+          }
+        },
+        "rows": 83
+      }
+    }
+  },
+  "d2": {
+    "columns_available": [
+      "id",
+      "account_key",
+      "group_name",
+      "sort_order",
+      "active",
+      "created_by",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+      "active_until"
+    ],
+    "matches": [
+      {
+        "id": "ae275d84-3dc9-415a-8f61-1d3127c3c72f",
+        "account_key": "TBR - FL",
+        "group_name": "Boys & Girls Club",
+        "sort_order": 2,
+        "active": true,
+        "created_by": "import-script",
+        "created_at": "2026-06-15T21:28:36.438326+00:00",
+        "updated_at": "2026-06-15T21:28:36.438326+00:00",
+        "deleted_at": null,
+        "active_until": null
+      }
+    ],
+    "matches_monthly_actuals": [
+      {
+        "service_id": "ae275d84-3dc9-415a-8f61-1d3127c3c72f",
+        "account_key": "TBR - FL",
+        "name": "Boys & Girls Club",
+        "monthly": {}
+      }
+    ]
+  },
+  "d3": {
+    "columns_used": {
+      "dateCol": "service_date",
+      "acctCol": "account_key",
+      "mealsCol": "projected_count"
+    },
+    "stl_monthly": {
+      "2026-05": {
+        "rows": 271,
+        "meals": 6340
+      },
+      "2026-06": {
+        "rows": 246,
+        "meals": 5440
+      },
+      "2026-07": {
+        "rows": 235,
+        "meals": 4680
+      }
+    }
+  }
+}

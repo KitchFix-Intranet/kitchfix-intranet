@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "mode": "baseline",
+    "build_date": "2026-08-15",
+    "rules_applied": []
+  },
+  "gate_result": {
+    "TBR-FL": {
+      "core_food_protein_lbs": 7717.2,
+      "denom": 19472,
+      "ratio": 0.4,
+      "breach": false
+    },
+    "TBJ-FL": {
+      "core_food_protein_lbs": 10121.1,
+      "denom": 27532,
+      "ratio": 0.37,
+      "breach": false
+    },
+    "STL-FL": {
+      "core_food_protein_lbs": 25690.1,
+      "denom": 18860,
+      "ratio": 1.36,
+      "breach": true
+    }
+  },
+  "band_gated_out": [],
+  "catch_admitted_count": 362,
+  "catch_gated_out_count": 0,
+  "catch_gated_out": [],
+  "p5_fused_beverage_dropped_count": 0,
+  "p5_fused_beverage_dropped_ids": [],
+  "entries": [],
+  "dollar_invariance": {
+    "pass": true,
+    "issues": []
+  }
+}

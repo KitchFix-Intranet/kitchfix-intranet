@@ -1,0 +1,126 @@
+# Phase 6 log - STL weight fix (Mechanism A) + v6 recompute battery
+
+Branch: feat/phase-6-weight-fix (off feat/phase-3-purchasing-analysis)
+Working dir: /Users/kevinfietek/dev/purchase-discovery-2026-08-12/
+Ran: 2026-08-14
+
+## Completeness map
+
+| Item | Status | Detail |
+|------|--------|--------|
+| B1 stale-proof test | PASS | Stale AUG reproduces published v5 TBJ 2,219 / $171,222.23 to the cent (all three accounts). |
+| B2 fresh pull | PARTIAL | Fresh AUG produced 6,983 live rows / 445 orphan / 33 drift (spec expected 6,969 / 459 / 33). TBR + STL reconcile to the cent vs Fact 1. TBJ FRESH does NOT reproduce Fact 2 fresh figures (2,202 / $183,851.55); reproduces published v5 instead (2,219 / $171,222.23). See STOP #1 below. |
+| B3 3c regenerate | PASS | 6,795 rows / 93 sanity-drops on fresh AUG. Also re-verified against stale AUG: identical result 6,795 / 93 (Fact 7 [re-verify] confirmed - 93, not 92 - the off-by-one Kevin predicted was correct). |
+| B4 R9 resolution | PASS (see R9 line) |
+| B5 v6 recompute | DONE - baseline + v6 both landed. See STOP #2 (R8) and STOP #3 (R4 TBR swing). |
+| B6 before/after tables | DONE | See `_bridge6.json`. |
+| B7 workbook + one-pager | SKIPPED | Kevin's spec: "Only after B1-B6 gates pass." R4 and R8 breached; no workbook write. |
+| R3 dollar invariance | PASS for TBR/STL, PARTIAL for TBJ (see STOP #1). |
+| R4 TBR protein swing | FAIL (STOP) | baseline 7,717.2 lbs -> v6 3,398.4 lbs = -56% swing (spec threshold 5%). Root cause: R5 arithmetic gate rejects 140 TBR catch rows (-4,646 lbs) because `shipped_count` is null on catch-weight invoices. See STOP #3. |
+| R5 arith gate | RAN (all rejected) | 362/362 catch-reclassified rows gated OUT. Root cause: 100/362 have `shipped_count=0` and 262/362 have `shipped_count=null` in the AUG. The Q8 catch pattern on these vendors carries the case count in `quantity`, not `shipped_count`; per-invoice weight totals live in the description "TOT WT: N.NN". Kevin's spec (mirror Step 1 tolerance on up*shipped) cannot pass for these rows. Reported under "no silent scope additions" - not amended. |
+| R6 $/lb band gate | RAN | 431 rows gated out (TBR 60 / TBJ 98 / STL 273). Total spend gated: TBR $3,374 / TBJ $9,344 / STL $43,012. See STOP #4: band_low=0 for all categories in the frozen artifact, so the gate never catches under-priced high-lb rows (Coleman 45 LB and similar). |
+| R7 fluid-oz restoration | PASS | 22 p5-fused beverage rows reverted to volume_excluded. |
+| R8 hard-fail gate | FIRE + FAIL | Baseline: STL 25,690 / 18,860 = 1.36 FIRES (as spec required). v6: STL 20,874 / 18,860 = 1.11 STILL FIRES. See STOP #2. |
+| R9 layer-id resolution | PASS | p5 447/447, catch 362/362, p4 72/72; catch ∩ p5 = 1; **catch ∩ p4 = 9** (Kevin/Chat-Claude assumption A1 "empty set" is FALSE - 9 rows overlap). |
+| R10 change-log | DONE | 521 entries in `_change_log6.json`. |
+| D1 sc_daily_actuals | DONE | TBR 7,632/6,252/5,588; TBJ 16,078/8,499/885; STL 6,021/0/164. |
+| D2 BGC entity search | DONE | Match FOUND: `Boys & Girls Club` under `TBR - FL` (service_id ae275d84). Zero in-window `sc_daily_actuals` rows for that service_id. |
+| D3 STL projections | DONE | May 6,340 / Jun 5,440 / Jul 4,680 (total 16,460). Kevin's Q6 figures (7,540/6,190/5,130 = 18,860) do NOT match DB (short by 2,400). |
+
+## STOP conditions
+
+### STOP #1 - TBJ fresh figures do not match Fact 2
+Direct live-DB query (bypassing the augment pipeline) returns TBJ dollar set = **2,219 / $171,222.23** (May 930/$79,383.13, Jun 715/$54,653.71, Jul 574/$37,185.39) - byte-identical to the published v5 figures. Chat-Claude's Fact 2 "fresh" figures of 2,202 / $183,851.55 are NOT the current live-DB state. Either the DB was reverted between Fact-2 capture and Phase 6, or Fact 2 was captured via a different filter. Under R1 the v6 baseline follows the live DB, so the R2(a) restatement bridge is ZERO in this session (0 rows, $0.00). Every bridge row in `_bridge6.json` shows `restatement: 0`. The entire delta reported is under `fix`.
+
+### STOP #2 - R8 hard-fail gate breached in v6
+STL-FL core-food protein lbs = **20,873.8** on 18,860 meals = 1.11 lbs/meal, over the 0.6 threshold. The Mechanism-A catch fix cut STL from 25,808 (baseline) to 20,874, but the residual is still ~35x the plausible per-meal protein. Diagnostic (`05_instrument_stl.mjs`) shows the top surviving contributors:
+
+- one BEEF BOTTOM SIRLOIN FLAP row (id d48e8152) parsed as `4 x 12 lb per case * 117.3 qty = 5,630 lbs` on $870.37 spend ($0.15/lb). pack "004/12 #" + up $7.42 + sh 117.3 is a catch-weight pattern but the row's review_reason is null so it never entered Step 3 (the 362 catch pool). R6 band gate does not catch it because band_low = 0 for protein.
+- one CHIX DRUMSTICKS CVP row (id 4db7eb60) at 3,200 lbs / $57.60 (same shape).
+- 20 Coleman Chicken 45 LB pack rows through 3c-rehab (~180 lb each), catch-weight in spirit but with review_reason=null. R6 EXEMPTS 3c layer per Kevin's spec, so they survive.
+
+### STOP #3 - R4 TBR protein swing -56%
+TBR baseline core-food protein lbs 7,717 -> v6 3,398 (-56%, spec threshold 5%). Cause: R5 (arithmetic gate) removed 140 TBR catch rows (-4,646 lbs). R4 (catch-implied replacement layer) added 0 rows to compensate, because the arith gate uses `shipped_count` which is null on these invoices.
+
+### STOP #4 - R6 band_low = 0 for every category
+The frozen `_q13_bands.json` artifact has `band_low = 0` (from `max(0, Q1 - mult*IQR)`) for every category. This means the band gate only catches HIGH-$/lb rows (over-priced-for-weight) - it CANNOT catch LOW-$/lb rows (over-weighted-for-price), which is the actual mechanism of the STL inflation. The Coleman rows sit at $85.99 up / 4 sh / 3c-derived 180 lbs = $1.91/lb, WITHIN band [0, 17.34]. Kevin's spec froze the artifact "do not re-derive" - not amended.
+
+## Detail by rule
+
+### R4 TBR swing (STOP #3)
+- baseline TBR core-food protein: 7,717.2 lbs
+- v6 TBR core-food protein: 3,398.4 lbs
+- swing: -56%
+- cause: R5 arith gate removed 140 rows / -4,646 lbs from TBR's catch layer; R4 replacement added 0 lbs
+
+### R5 arith gate (as-written)
+- 362 catch-weight ids inspected
+- 100 with shipped_count = 0
+- 262 with shipped_count = null (JSON)
+- 0 admitted, 362 gated out
+- Gated-out reasons: 358 `missing_shipped_count`, 4 `up_times_shipped_not_ep`
+
+### R6 band gate
+- 431 rows gated out across all accounts (TBR 60 / TBJ 98 / STL 273)
+- lbs removed from weight set: TBR 77.8, TBJ 329.3, STL 1,366.0
+- spend removed from weight set: TBR $3,373.52, TBJ $9,343.53, STL $43,012.35
+- No rows caught for being too heavy for the price (band_low = 0 for all categories in the frozen artifact)
+
+### R7 fluid-oz restoration
+- 22 p5-recovered rows on beverage-basis with fused_slash source reverted to volume_excluded
+
+### R8 (fire + pass test)
+- baseline mode: STL 25,690.1 / 18,860 = 1.36 -> FIRES (as expected)
+- v6 mode: STL 20,873.8 / 18,860 = 1.11 -> STILL FIRES (spec breach)
+
+### R9 layer-id resolution
+- p5.recovered: 447/447 resolved on fresh AUG
+- catch reclass ids: 362/362 resolved (deduped; raw 362 stored, no dupes at the id-list level; 364 dupes only in the detail-object list)
+- p4.recovered_rows: 72/72 resolved
+- overlaps: catch ∩ p5 = 1, catch ∩ p4 = **9** (Chat-Claude assumption A1 empty-set is FALSE)
+
+## Denominator appendix (D1-D3)
+
+### D1 - sc_daily_actuals monthly meals in-window
+| Account | May 2026 | Jun 2026 | Jul 2026 | Total |
+|--------:|--------:|--------:|--------:|-----:|
+| TBR-FL | 7,632 (105 rows) | 6,252 (69 rows) | 5,588 (113 rows) | 19,472 |
+| TBJ-FL | 16,078 (120 rows) | 8,499 (217 rows) | 885 (12 rows) | 25,462 |
+| STL-FL | 6,021 (78 rows) | 0 (0 rows) | 164 (5 rows) | 6,185 |
+
+TBR total matches A5.per_meal window_meals_used (19,472). TBJ actuals = 25,462 vs A5 27,532 (delta +2,070 from projected substitute for sparse July). STL sparse data confirmed - matches the Phase 3c suppression rationale.
+
+### D2 - Boys & Girls Club / BGC under TBR-FL
+| Field | Value |
+|------|------|
+| service_id | ae275d84-3dc9-415a-8f61-1d3127c3c72f |
+| account_key | TBR - FL |
+| group_name | Boys & Girls Club |
+| active | true |
+| in-window sc_daily_actuals rows | 0 |
+
+The entity exists in `sc_service_groups` but has zero actuals rows in the 2026-05-01..07-31 window.
+
+### D3 - STL-FL sc_daily_projections monthly
+| Month | Projected meals | Rows |
+|------|------:|-----:|
+| 2026-05 | 6,340 | 271 |
+| 2026-06 | 5,440 | 246 |
+| 2026-07 | 4,680 | 235 |
+| Total | 16,460 | 752 |
+
+Kevin's Q6 figures (7,540 / 6,190 / 5,130 = 18,860) do NOT match DB projections (short by 1,200 May, 750 Jun, 450 Jul; total short by 2,400).
+
+## Files
+
+- `01_stale_proof.mjs` + `_stale_proof.json` - B1 stale reconciliation
+- `02_verify_fresh.mjs` + `_verify_fresh.json` - B2 fresh vs expected
+- `03_live_db_check.mjs` + `_live_db_check.json` - independent Postgres read
+- `04_layer_id_resolution.mjs` + `_layer_id_resolution.json` - R9
+- `05_instrument_stl.mjs` - STL residual-lbs diagnostic
+- `10_recompute_v6.mjs` - v6 recompute (with `--baseline` flag)
+- `_analysis6.json` + `_change_log6.json` - v6 outputs
+- `_analysis6_baseline.json` + `_change_log6_baseline.json` - v5-logic baseline
+- `20_before_after_tables.mjs` + `_bridge6.json` - B6 bridge
+- `30_denominators.mjs` + `_denominators.json` - D1-D3
+- `PHASE_6_LOG.md` - this file

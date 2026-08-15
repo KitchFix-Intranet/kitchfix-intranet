@@ -1,0 +1,126 @@
+{
+  "ran_at": "2026-08-15T01:03:35.379Z",
+  "stale_file": "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase3/_augmented_v5stale.json",
+  "stale_file_mtime": "2026-08-15T01:02:58.070Z",
+  "fresh_file": "/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase3/_augmented.json",
+  "stale_by_account": {
+    "TBR-FL": {
+      "rows": 2077,
+      "spend": 129507.43,
+      "monthly": {
+        "2026-05": {
+          "rows": 512,
+          "spend": 31403.14
+        },
+        "2026-06": {
+          "rows": 744,
+          "spend": 45662.4
+        },
+        "2026-07": {
+          "rows": 821,
+          "spend": 52441.89
+        }
+      }
+    },
+    "TBJ-FL": {
+      "rows": 2219,
+      "spend": 171222.23,
+      "monthly": {
+        "2026-05": {
+          "rows": 930,
+          "spend": 79383.13
+        },
+        "2026-06": {
+          "rows": 715,
+          "spend": 54653.71
+        },
+        "2026-07": {
+          "rows": 574,
+          "spend": 37185.39
+        }
+      }
+    },
+    "STL-FL": {
+      "rows": 2499,
+      "spend": 274187.13,
+      "monthly": {
+        "2026-07": {
+          "rows": 1133,
+          "spend": 127994.93
+        },
+        "2026-06": {
+          "rows": 1061,
+          "spend": 105735.53
+        },
+        "2026-05": {
+          "rows": 305,
+          "spend": 40456.67
+        }
+      }
+    }
+  },
+  "stale_issues": [],
+  "fresh_issues": [],
+  "published": {
+    "TBR-FL": {
+      "total": {
+        "rows": 2077,
+        "spend": 129507.43
+      },
+      "monthly": {
+        "2026-05": {
+          "rows": 512,
+          "spend": 31403.14
+        },
+        "2026-06": {
+          "rows": 744,
+          "spend": 45662.4
+        },
+        "2026-07": {
+          "rows": 821,
+          "spend": 52441.89
+        }
+      }
+    },
+    "TBJ-FL": {
+      "total": {
+        "rows": 2219,
+        "spend": 171222.23
+      },
+      "monthly": {
+        "2026-05": {
+          "rows": 930,
+          "spend": 79383.13
+        },
+        "2026-06": {
+          "rows": 715,
+          "spend": 54653.71
+        },
+        "2026-07": {
+          "rows": 574,
+          "spend": 37185.39
+        }
+      }
+    },
+    "STL-FL": {
+      "total": {
+        "rows": 2499,
+        "spend": 274187.13
+      },
+      "monthly": {
+        "2026-05": {
+          "rows": 305,
+          "spend": 40456.67
+        },
+        "2026-06": {
+          "rows": 1061,
+          "spend": 105735.53
+        },
+        "2026-07": {
+          "rows": 1133,
+          "spend": 127994.93
+        }
+      }
+    }
+  }
+}
