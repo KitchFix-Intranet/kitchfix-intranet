@@ -1,0 +1,332 @@
+{
+  "built_at": "2026-08-15T01:51:02.275Z",
+  "window": {
+    "start": "2026-05-01",
+    "end": "2026-07-31"
+  },
+  "canon": {
+    "TBR-FL": {
+      "total": 20300,
+      "monthly": {
+        "2026-05": 7620,
+        "2026-06": 6240,
+        "2026-07": 6440
+      },
+      "components": {
+        "milb": 18680,
+        "bg": 1620
+      },
+      "source": "Kevin's 2026 TBR Service Calendar; Chat-Claude ruling (addendum A1)"
+    },
+    "TBJ-FL": {
+      "total": 29541,
+      "monthly": {
+        "2026-05": 9433,
+        "2026-06": 9307,
+        "2026-07": 10801
+      },
+      "source": "Kevin's 2026 TBJ Service Calendar; Chat-Claude ruling (addendum A1)"
+    },
+    "STL-FL": {
+      "total": 18860,
+      "monthly": {
+        "2026-05": 7540,
+        "2026-06": 6190,
+        "2026-07": 5130
+      },
+      "components": {
+        "fcl": 11060,
+        "pbc": 7800
+      },
+      "source": "Kevin's 2027 STL Service Calendar projections; Q6 ruling (unchanged)"
+    }
+  },
+  "accounts": {
+    "TBR-FL": {
+      "db_account_key": "TBR - FL",
+      "row_count": 287,
+      "monthly": [
+        {
+          "month": "2026-05",
+          "canon": 7620,
+          "db_actuals": 7632,
+          "variance": 12,
+          "pct": 0.2
+        },
+        {
+          "month": "2026-06",
+          "canon": 6240,
+          "db_actuals": 6252,
+          "variance": 12,
+          "pct": 0.2
+        },
+        {
+          "month": "2026-07",
+          "canon": 6440,
+          "db_actuals": 5588,
+          "variance": -852,
+          "pct": -13.2
+        }
+      ],
+      "total": {
+        "month": "TOTAL",
+        "canon": 20300,
+        "db_actuals": 19472,
+        "variance": -828,
+        "pct": -4.1
+      },
+      "per_group": {
+        "Minor League": {
+          "by_month": {
+            "2026-05": 6012,
+            "2026-06": 6252,
+            "2026-07": 5587
+          },
+          "total": 17851
+        },
+        "Boys & Girls Club": {
+          "by_month": {
+            "2026-05": 1620,
+            "2026-06": 0,
+            "2026-07": 0
+          },
+          "total": 1620
+        },
+        "Major League": {
+          "by_month": {
+            "2026-05": 0,
+            "2026-06": 0,
+            "2026-07": 1
+          },
+          "total": 1
+        }
+      },
+      "service_groups_present": [
+        {
+          "id": "f34f8a3f-a10f-4531-9a0c-9f9fd5175b06",
+          "name": "Major League",
+          "active": true
+        },
+        {
+          "id": "3feea659-3ff6-4a83-94d8-539ba50849c7",
+          "name": "Minor League",
+          "active": true
+        },
+        {
+          "id": "ae275d84-3dc9-415a-8f61-1d3127c3c72f",
+          "name": "Boys & Girls Club",
+          "active": true
+        }
+      ]
+    },
+    "TBJ-FL": {
+      "db_account_key": "TBJ - FL",
+      "row_count": 349,
+      "monthly": [
+        {
+          "month": "2026-05",
+          "canon": 9433,
+          "db_actuals": 16078,
+          "variance": 6645,
+          "pct": 70.4
+        },
+        {
+          "month": "2026-06",
+          "canon": 9307,
+          "db_actuals": 8499,
+          "variance": -808,
+          "pct": -8.7
+        },
+        {
+          "month": "2026-07",
+          "canon": 10801,
+          "db_actuals": 885,
+          "variance": -9916,
+          "pct": -91.8
+        }
+      ],
+      "total": {
+        "month": "TOTAL",
+        "canon": 29541,
+        "db_actuals": 25462,
+        "variance": -4079,
+        "pct": -13.8
+      },
+      "per_group": {
+        "Minor League - PDC": {
+          "by_month": {
+            "2026-05": 7803,
+            "2026-06": 7397,
+            "2026-07": 835
+          },
+          "total": 16035
+        },
+        "Single A Jays": {
+          "by_month": {
+            "2026-05": 1050,
+            "2026-06": 400,
+            "2026-07": 50
+          },
+          "total": 1500
+        },
+        "SSM": {
+          "by_month": {
+            "2026-05": 220,
+            "2026-06": 162,
+            "2026-07": 0
+          },
+          "total": 382
+        },
+        "Other": {
+          "by_month": {
+            "2026-05": 7005,
+            "2026-06": 540,
+            "2026-07": 0
+          },
+          "total": 7545
+        },
+        "Major League - PDC": {
+          "by_month": {
+            "2026-05": 0,
+            "2026-06": 0,
+            "2026-07": 0
+          },
+          "total": 0
+        }
+      },
+      "service_groups_present": [
+        {
+          "id": "e19543ba-943c-48c8-b5be-5257f0e7fdc5",
+          "name": "Major League - PDC",
+          "active": true
+        },
+        {
+          "id": "efe32c5a-ebb6-4b26-8fc8-185830964640",
+          "name": "Minor League - PDC",
+          "active": true
+        },
+        {
+          "id": "304f8c8c-0f23-4a11-90f7-1b35c3b62943",
+          "name": "Single A Jays",
+          "active": true
+        },
+        {
+          "id": "70e930e3-fbb8-4a30-becf-dc70474598bd",
+          "name": "SSM",
+          "active": true
+        },
+        {
+          "id": "28021bfa-153e-4458-8ed6-eaa4437698ba",
+          "name": "Other",
+          "active": true
+        }
+      ]
+    },
+    "STL-FL": {
+      "db_account_key": "STL - FL",
+      "row_count": 83,
+      "monthly": [
+        {
+          "month": "2026-05",
+          "canon": 7540,
+          "db_actuals": 6021,
+          "variance": -1519,
+          "pct": -20.1
+        },
+        {
+          "month": "2026-06",
+          "canon": 6190,
+          "db_actuals": 0,
+          "variance": -6190,
+          "pct": -100
+        },
+        {
+          "month": "2026-07",
+          "canon": 5130,
+          "db_actuals": 164,
+          "variance": -4966,
+          "pct": -96.8
+        }
+      ],
+      "total": {
+        "month": "TOTAL",
+        "canon": 18860,
+        "db_actuals": 6185,
+        "variance": -12675,
+        "pct": -67.2
+      },
+      "per_group": {
+        "MiLB": {
+          "by_month": {
+            "2026-05": 5157,
+            "2026-06": 0,
+            "2026-07": 164
+          },
+          "total": 5321
+        },
+        "Palm Beach Cardinals": {
+          "by_month": {
+            "2026-05": 864,
+            "2026-06": 0,
+            "2026-07": 0
+          },
+          "total": 864
+        }
+      },
+      "service_groups_present": [
+        {
+          "id": "5831eb69-1ba7-48ad-b584-46255cec0518",
+          "name": "MLB",
+          "active": true
+        },
+        {
+          "id": "36116d0d-9a23-43fd-8711-876f2c22b746",
+          "name": "MiLB",
+          "active": true
+        },
+        {
+          "id": "62fb0c55-bcd1-42af-adf4-bfcab3bd852e",
+          "name": "Palm Beach Cardinals",
+          "active": true
+        },
+        {
+          "id": "34f1043f-f93a-4a65-bd4d-15380f9d1cd9",
+          "name": "Fun Money",
+          "active": true
+        }
+      ]
+    }
+  },
+  "claim_verification": [
+    {
+      "account": "TBJ-FL",
+      "month": "2026-05",
+      "canon": 9433,
+      "db": 16078,
+      "note": "Chat-Claude: TBJ May 16,078 vs calendar 9,433",
+      "observed_canon": 9433,
+      "observed_db": 16078,
+      "confirmed": true
+    },
+    {
+      "account": "TBJ-FL",
+      "month": "2026-07",
+      "canon": 10801,
+      "db": 885,
+      "note": "Chat-Claude: TBJ Jul 885 vs calendar 10,801",
+      "observed_canon": 10801,
+      "observed_db": 885,
+      "confirmed": true
+    },
+    {
+      "account": "STL-FL",
+      "month": "2026-06",
+      "canon": 6190,
+      "db": 0,
+      "note": "Chat-Claude: STL Jun 0 vs projected 5,440",
+      "observed_canon": 6190,
+      "observed_db": 0,
+      "confirmed": true
+    }
+  ]
+}

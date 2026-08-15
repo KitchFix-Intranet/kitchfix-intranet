@@ -1,0 +1,35 @@
+{
+  "fresh_row_count": 6983,
+  "p5_recovered": {
+    "total": 447,
+    "resolved": 447,
+    "missing": {
+      "rows": 0
+    },
+    "missing_ids": []
+  },
+  "catch_weight_reclassified": {
+    "raw_count": 362,
+    "deduped_count": 362,
+    "resolved": 362,
+    "missing": {
+      "rows": 0
+    },
+    "missing_ids": []
+  },
+  "p4_recovered": {
+    "raw_count": 72,
+    "deduped_count": 72,
+    "resolved": 72,
+    "missing_ids_count": 0,
+    "missing_impact": {
+      "rows": 0,
+      "spend": 0,
+      "lbs": 0
+    }
+  },
+  "overlaps": {
+    "catch ∩ p4": 9,
+    "catch ∩ p5": 1
+  }
+}

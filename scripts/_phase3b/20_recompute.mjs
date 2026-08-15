@@ -1125,26 +1125,24 @@ for (const acct of ACCOUNTS) {
 }
 
 // (f) Order cadence: deliveries per week + avg order value per account
+// Phase 6c: invoice counting excludes null invoice_uuid (Kevin's convention).
+// Null uuid rows are misc/fee lines (e.g. Cozzini charges) that don't
+// represent a distinct delivery. Avg order value uses total_spend (all
+// dollar-set rows including null-uuid rows) divided by delivery count.
 const orderCadence = {};
 for (const acct of ACCOUNTS) {
   const dollar = AUG.rows.filter((r) => r.account_label === acct).filter(inDollar);
-  const invUuids = new Set(dollar.map((r) => r.invoice_uuid));
+  const invUuids = new Set(dollar.map((r) => r.invoice_uuid).filter((u) => u));
   const totalSpend = sumBy(dollar, (r) => r.extended_price);
   // Window = 3 months = ~13 weeks
   const windowWeeks = 92 / 7;
-  const invSums = {};
-  for (const r of dollar) {
-    if (!r.invoice_uuid) continue;
-    if (!invSums[r.invoice_uuid]) invSums[r.invoice_uuid] = 0;
-    invSums[r.invoice_uuid] += Number(r.extended_price) || 0;
-  }
-  const invValues = Object.values(invSums);
-  const avgOrderValue = invValues.length ? invValues.reduce((s, x) => s + x, 0) / invValues.length : 0;
+  const deliveryCount = invUuids.size;
+  const avgOrderValue = deliveryCount ? totalSpend / deliveryCount : 0;
   orderCadence[acct] = {
     account: acct,
-    invoices_in_window: invUuids.size,
+    invoices_in_window: deliveryCount,
     total_spend: round2(totalSpend),
-    deliveries_per_week: round2(invUuids.size / windowWeeks),
+    deliveries_per_week: round2(deliveryCount / windowWeeks),
     avg_order_value: round2(avgOrderValue),
   };
 }

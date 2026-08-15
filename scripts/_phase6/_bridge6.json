@@ -1,0 +1,913 @@
+{
+  "built_at": "2026-08-15T01:12:47.619Z",
+  "protein_rows": [
+    {
+      "account": "TBR-FL",
+      "type": "beef",
+      "published_v5": {
+        "rows": 61,
+        "spend": 21273.09,
+        "lbs_rows": 45,
+        "lbs": 2120.3,
+        "lbs_spend": 16038.45,
+        "dollars_per_lb": 7.56,
+        "coverage_spend_pct": 75.4,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 61,
+        "spend": 21273.09,
+        "lbs_rows": 45,
+        "lbs": 2120.3,
+        "lbs_spend": 16038.45,
+        "dollars_per_lb": 7.56,
+        "coverage_spend_pct": 75.4,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 61,
+        "spend": 21273.09,
+        "lbs_rows": 2,
+        "lbs": 39.5,
+        "lbs_spend": 478.17,
+        "dollars_per_lb": 12.09,
+        "coverage_spend_pct": 2.2,
+        "publication": "suppressed (2.2% below 25% threshold)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -2080.8,
+          "delta_spend": -15560.28
+        }
+      }
+    },
+    {
+      "account": "TBR-FL",
+      "type": "poultry",
+      "published_v5": {
+        "rows": 79,
+        "spend": 8671.43,
+        "lbs_rows": 57,
+        "lbs": 2617.6,
+        "lbs_spend": 5748.64,
+        "dollars_per_lb": 2.2,
+        "coverage_spend_pct": 66.3,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 79,
+        "spend": 8671.43,
+        "lbs_rows": 57,
+        "lbs": 2617.6,
+        "lbs_spend": 5748.64,
+        "dollars_per_lb": 2.2,
+        "coverage_spend_pct": 66.3,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 79,
+        "spend": 8671.43,
+        "lbs_rows": 40,
+        "lbs": 2128.6,
+        "lbs_spend": 3976.74,
+        "dollars_per_lb": 1.87,
+        "coverage_spend_pct": 45.9,
+        "publication": "publish"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -489,
+          "delta_spend": -1771.9
+        }
+      }
+    },
+    {
+      "account": "TBR-FL",
+      "type": "pork",
+      "published_v5": {
+        "rows": 114,
+        "spend": 13016.99,
+        "lbs_rows": 70,
+        "lbs": 2386.9,
+        "lbs_spend": 8376.74,
+        "dollars_per_lb": 3.51,
+        "coverage_spend_pct": 64.4,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 114,
+        "spend": 13016.99,
+        "lbs_rows": 70,
+        "lbs": 2386.9,
+        "lbs_spend": 8376.74,
+        "dollars_per_lb": 3.51,
+        "coverage_spend_pct": 64.4,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 114,
+        "spend": 13016.99,
+        "lbs_rows": 25,
+        "lbs": 1106.1,
+        "lbs_spend": 3762.44,
+        "dollars_per_lb": 3.4,
+        "coverage_spend_pct": 28.9,
+        "publication": "publish with caveat (28.9% coverage, between 25% and 35%)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -1280.8,
+          "delta_spend": -4614.3
+        }
+      }
+    },
+    {
+      "account": "TBR-FL",
+      "type": "seafood",
+      "published_v5": {
+        "rows": 29,
+        "spend": 5362.82,
+        "lbs_rows": 22,
+        "lbs": 592.4,
+        "lbs_spend": 4073.98,
+        "dollars_per_lb": 6.88,
+        "coverage_spend_pct": 76,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 29,
+        "spend": 5362.82,
+        "lbs_rows": 22,
+        "lbs": 592.4,
+        "lbs_spend": 4073.98,
+        "dollars_per_lb": 6.88,
+        "coverage_spend_pct": 76,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 29,
+        "spend": 5362.82,
+        "lbs_rows": 3,
+        "lbs": 124.2,
+        "lbs_spend": 467.2,
+        "dollars_per_lb": 3.76,
+        "coverage_spend_pct": 8.7,
+        "publication": "suppressed (8.7% below 25% threshold)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -468.2,
+          "delta_spend": -3606.78
+        }
+      }
+    },
+    {
+      "account": "TBR-FL",
+      "type": "plant_or_egg",
+      "published_v5": {
+        "rows": 12,
+        "spend": 849.99,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "v5_logic_baseline": {
+        "rows": 12,
+        "spend": 849.99,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "v6": {
+        "rows": 12,
+        "spend": 849.99,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        }
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "beef",
+      "published_v5": {
+        "rows": 46,
+        "spend": 16315.53,
+        "lbs_rows": 29,
+        "lbs": 2176.1,
+        "lbs_spend": 11306.17,
+        "dollars_per_lb": 5.2,
+        "coverage_spend_pct": 69.3,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 46,
+        "spend": 16315.53,
+        "lbs_rows": 29,
+        "lbs": 2176.1,
+        "lbs_spend": 11306.17,
+        "dollars_per_lb": 5.2,
+        "coverage_spend_pct": 69.3,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 46,
+        "spend": 16315.53,
+        "lbs_rows": 12,
+        "lbs": 923.8,
+        "lbs_spend": 2570.47,
+        "dollars_per_lb": 2.78,
+        "coverage_spend_pct": 15.8,
+        "publication": "suppressed (15.8% below 25% threshold)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -1252.3,
+          "delta_spend": -8735.7
+        }
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "poultry",
+      "published_v5": {
+        "rows": 83,
+        "spend": 13086.9,
+        "lbs_rows": 56,
+        "lbs": 5383.9,
+        "lbs_spend": 9846.8,
+        "dollars_per_lb": 1.83,
+        "coverage_spend_pct": 75.2,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 83,
+        "spend": 13086.9,
+        "lbs_rows": 56,
+        "lbs": 5383.9,
+        "lbs_spend": 9846.8,
+        "dollars_per_lb": 1.83,
+        "coverage_spend_pct": 75.2,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 83,
+        "spend": 13086.9,
+        "lbs_rows": 55,
+        "lbs": 5271.9,
+        "lbs_spend": 8973.31,
+        "dollars_per_lb": 1.7,
+        "coverage_spend_pct": 68.6,
+        "publication": "publish"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -112,
+          "delta_spend": -873.49
+        }
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "pork",
+      "published_v5": {
+        "rows": 45,
+        "spend": 5913.6,
+        "lbs_rows": 31,
+        "lbs": 1513.2,
+        "lbs_spend": 3962.1,
+        "dollars_per_lb": 2.62,
+        "coverage_spend_pct": 67,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 45,
+        "spend": 5913.6,
+        "lbs_rows": 31,
+        "lbs": 1513.2,
+        "lbs_spend": 3962.1,
+        "dollars_per_lb": 2.62,
+        "coverage_spend_pct": 67,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 45,
+        "spend": 5913.6,
+        "lbs_rows": 26,
+        "lbs": 1153.1,
+        "lbs_spend": 3223.3,
+        "dollars_per_lb": 2.8,
+        "coverage_spend_pct": 54.5,
+        "publication": "publish"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -360.1,
+          "delta_spend": -738.8
+        }
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "seafood",
+      "published_v5": {
+        "rows": 33,
+        "spend": 5863.3,
+        "lbs_rows": 23,
+        "lbs": 1047.9,
+        "lbs_spend": 4400.74,
+        "dollars_per_lb": 4.2,
+        "coverage_spend_pct": 75.1,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 33,
+        "spend": 5863.3,
+        "lbs_rows": 23,
+        "lbs": 1047.9,
+        "lbs_spend": 4400.74,
+        "dollars_per_lb": 4.2,
+        "coverage_spend_pct": 75.1,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 33,
+        "spend": 5863.3,
+        "lbs_rows": 13,
+        "lbs": 847.6,
+        "lbs_spend": 2115.24,
+        "dollars_per_lb": 2.5,
+        "coverage_spend_pct": 36.1,
+        "publication": "publish"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -200.3,
+          "delta_spend": -2285.5
+        }
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "plant_or_egg",
+      "published_v5": {
+        "rows": 25,
+        "spend": 3213.91,
+        "lbs_rows": 2,
+        "lbs": 310.2,
+        "lbs_spend": 302.75,
+        "dollars_per_lb": 0.98,
+        "coverage_spend_pct": 9.4,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "v5_logic_baseline": {
+        "rows": 25,
+        "spend": 3213.91,
+        "lbs_rows": 2,
+        "lbs": 310.2,
+        "lbs_spend": 302.75,
+        "dollars_per_lb": 0.98,
+        "coverage_spend_pct": 9.4,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "v6": {
+        "rows": 25,
+        "spend": 3213.91,
+        "lbs_rows": 2,
+        "lbs": 310.2,
+        "lbs_spend": 302.75,
+        "dollars_per_lb": 0.98,
+        "coverage_spend_pct": 9.4,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        }
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "type": "other",
+      "published_v5": {
+        "rows": 1,
+        "spend": 203.36,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "suppressed (0% below 25% threshold)"
+      },
+      "v5_logic_baseline": {
+        "rows": 1,
+        "spend": 203.36,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "suppressed (0% below 25% threshold)"
+      },
+      "v6": {
+        "rows": 1,
+        "spend": 203.36,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "suppressed (0% below 25% threshold)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        }
+      }
+    },
+    {
+      "account": "STL-FL",
+      "type": "beef",
+      "published_v5": {
+        "rows": 107,
+        "spend": 48033.72,
+        "lbs_rows": 84,
+        "lbs": 9676.5,
+        "lbs_spend": 40388.15,
+        "dollars_per_lb": 4.17,
+        "coverage_spend_pct": 84.1,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 107,
+        "spend": 48033.72,
+        "lbs_rows": 84,
+        "lbs": 9676.5,
+        "lbs_spend": 40388.15,
+        "dollars_per_lb": 4.17,
+        "coverage_spend_pct": 84.1,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 107,
+        "spend": 48033.72,
+        "lbs_rows": 19,
+        "lbs": 6934.8,
+        "lbs_spend": 5416.95,
+        "dollars_per_lb": 0.78,
+        "coverage_spend_pct": 11.3,
+        "publication": "suppressed (11.3% below 25% threshold)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -2741.7,
+          "delta_spend": -34971.2
+        }
+      }
+    },
+    {
+      "account": "STL-FL",
+      "type": "poultry",
+      "published_v5": {
+        "rows": 101,
+        "spend": 20224.97,
+        "lbs_rows": 85,
+        "lbs": 11021.2,
+        "lbs_spend": 16981.5,
+        "dollars_per_lb": 1.54,
+        "coverage_spend_pct": 84,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 101,
+        "spend": 20224.97,
+        "lbs_rows": 85,
+        "lbs": 11021.2,
+        "lbs_spend": 16981.5,
+        "dollars_per_lb": 1.54,
+        "coverage_spend_pct": 84,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 101,
+        "spend": 20224.97,
+        "lbs_rows": 64,
+        "lbs": 10127.6,
+        "lbs_spend": 13474.09,
+        "dollars_per_lb": 1.33,
+        "coverage_spend_pct": 66.6,
+        "publication": "publish"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -893.6,
+          "delta_spend": -3507.41
+        }
+      }
+    },
+    {
+      "account": "STL-FL",
+      "type": "pork",
+      "published_v5": {
+        "rows": 87,
+        "spend": 9382.66,
+        "lbs_rows": 67,
+        "lbs": 2111.5,
+        "lbs_spend": 6459.41,
+        "dollars_per_lb": 3.06,
+        "coverage_spend_pct": 68.8,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 87,
+        "spend": 9382.66,
+        "lbs_rows": 67,
+        "lbs": 2111.5,
+        "lbs_spend": 6459.41,
+        "dollars_per_lb": 3.06,
+        "coverage_spend_pct": 68.8,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 87,
+        "spend": 9382.66,
+        "lbs_rows": 39,
+        "lbs": 1260,
+        "lbs_spend": 3715.11,
+        "dollars_per_lb": 2.95,
+        "coverage_spend_pct": 39.6,
+        "publication": "publish"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -851.5,
+          "delta_spend": -2744.3
+        }
+      }
+    },
+    {
+      "account": "STL-FL",
+      "type": "seafood",
+      "published_v5": {
+        "rows": 38,
+        "spend": 20040.03,
+        "lbs_rows": 33,
+        "lbs": 2629.8,
+        "lbs_spend": 18392.19,
+        "dollars_per_lb": 6.99,
+        "coverage_spend_pct": 91.8,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 38,
+        "spend": 20040.03,
+        "lbs_rows": 33,
+        "lbs": 2629.8,
+        "lbs_spend": 18392.19,
+        "dollars_per_lb": 6.99,
+        "coverage_spend_pct": 91.8,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 38,
+        "spend": 20040.03,
+        "lbs_rows": 23,
+        "lbs": 2461.4,
+        "lbs_spend": 10843.09,
+        "dollars_per_lb": 4.41,
+        "coverage_spend_pct": 54.1,
+        "publication": "publish"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -168.4,
+          "delta_spend": -7549.1
+        }
+      }
+    },
+    {
+      "account": "STL-FL",
+      "type": "plant_or_egg",
+      "published_v5": {
+        "rows": 4,
+        "spend": 559.67,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "v5_logic_baseline": {
+        "rows": 4,
+        "spend": 559.67,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "v6": {
+        "rows": 4,
+        "spend": 559.67,
+        "lbs_rows": 0,
+        "lbs": 0,
+        "lbs_spend": 0,
+        "dollars_per_lb": null,
+        "coverage_spend_pct": 0,
+        "publication": "not comparable (plant_or_egg mixed count/weight)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        }
+      }
+    },
+    {
+      "account": "STL-FL",
+      "type": "other_meat",
+      "published_v5": {
+        "rows": 8,
+        "spend": 4349.85,
+        "lbs_rows": 6,
+        "lbs": 251.1,
+        "lbs_spend": 3660.4,
+        "dollars_per_lb": 14.58,
+        "coverage_spend_pct": 84.2,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 8,
+        "spend": 4349.85,
+        "lbs_rows": 6,
+        "lbs": 251.1,
+        "lbs_spend": 3660.4,
+        "dollars_per_lb": 14.58,
+        "coverage_spend_pct": 84.2,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 8,
+        "spend": 4349.85,
+        "lbs_rows": 2,
+        "lbs": 90,
+        "lbs_spend": 620.7,
+        "dollars_per_lb": 6.9,
+        "coverage_spend_pct": 14.3,
+        "publication": "suppressed (14.3% below 25% threshold)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -161.1,
+          "delta_spend": -3039.7
+        }
+      }
+    },
+    {
+      "account": "STL-FL",
+      "type": "other",
+      "published_v5": {
+        "rows": 7,
+        "spend": 1821,
+        "lbs_rows": 3,
+        "lbs": 117.9,
+        "lbs_spend": 1448.9,
+        "dollars_per_lb": 12.29,
+        "coverage_spend_pct": 79.6,
+        "publication": "publish"
+      },
+      "v5_logic_baseline": {
+        "rows": 7,
+        "spend": 1821,
+        "lbs_rows": 3,
+        "lbs": 117.9,
+        "lbs_spend": 1448.9,
+        "dollars_per_lb": 12.29,
+        "coverage_spend_pct": 79.6,
+        "publication": "publish"
+      },
+      "v6": {
+        "rows": 7,
+        "spend": 1821,
+        "lbs_rows": 2,
+        "lbs": 110,
+        "lbs_spend": 96.71,
+        "dollars_per_lb": 0.88,
+        "coverage_spend_pct": 5.3,
+        "publication": "suppressed (5.3% below 25% threshold)"
+      },
+      "bridge": {
+        "restatement": {
+          "delta_lbs": 0,
+          "delta_spend": 0
+        },
+        "fix": {
+          "delta_lbs": -7.9,
+          "delta_spend": -1352.19
+        }
+      }
+    }
+  ],
+  "per_account": [
+    {
+      "account": "TBR-FL",
+      "published_v5": {
+        "food_lbs": 22385.5,
+        "coverage_food_spend_pct": 48.6,
+        "core_food_lbs": 21630.2,
+        "coverage_core_food_spend_pct": 49,
+        "window_meals_used": 19472,
+        "window_lbs_per_meal": 1.15,
+        "window_lbs_per_meal_core": 1.11
+      },
+      "v5_logic_baseline": {
+        "food_lbs": 22385.5,
+        "coverage_food_spend_pct": 48.6,
+        "core_food_lbs": 21630.2,
+        "coverage_core_food_spend_pct": 49,
+        "window_meals_used": 19472,
+        "window_lbs_per_meal": 1.15,
+        "window_lbs_per_meal_core": 1.11
+      },
+      "v6": {
+        "food_lbs": 17702.4,
+        "coverage_food_spend_pct": 23.6,
+        "core_food_lbs": 16947.2,
+        "coverage_core_food_spend_pct": 23.7,
+        "window_meals_used": 19472,
+        "window_lbs_per_meal": 0.91,
+        "window_lbs_per_meal_core": 0.87
+      },
+      "bridge_food_lbs": {
+        "restatement": 0,
+        "fix": -4683.1
+      },
+      "bridge_core_food_lbs": {
+        "restatement": 0,
+        "fix": -4683
+      }
+    },
+    {
+      "account": "TBJ-FL",
+      "published_v5": {
+        "food_lbs": 41609,
+        "coverage_food_spend_pct": 49.2,
+        "core_food_lbs": 32026.6,
+        "coverage_core_food_spend_pct": 50.1,
+        "window_meals_used": 27532,
+        "window_lbs_per_meal": 1.51,
+        "window_lbs_per_meal_core": 1.16
+      },
+      "v5_logic_baseline": {
+        "food_lbs": 41609,
+        "coverage_food_spend_pct": 49.2,
+        "core_food_lbs": 32026.6,
+        "coverage_core_food_spend_pct": 50.1,
+        "window_meals_used": 27532,
+        "window_lbs_per_meal": 1.51,
+        "window_lbs_per_meal_core": 1.16
+      },
+      "v6": {
+        "food_lbs": 39510.3,
+        "coverage_food_spend_pct": 38.3,
+        "core_food_lbs": 29927.9,
+        "coverage_core_food_spend_pct": 37.4,
+        "window_meals_used": 27532,
+        "window_lbs_per_meal": 1.44,
+        "window_lbs_per_meal_core": 1.09
+      },
+      "bridge_food_lbs": {
+        "restatement": 0,
+        "fix": -2098.7
+      },
+      "bridge_core_food_lbs": {
+        "restatement": 0,
+        "fix": -2098.7
+      }
+    },
+    {
+      "account": "STL-FL",
+      "published_v5": {
+        "food_lbs": 68080,
+        "coverage_food_spend_pct": 62.2,
+        "core_food_lbs": 62008,
+        "coverage_core_food_spend_pct": 71.9,
+        "window_meals_used": 18860,
+        "window_lbs_per_meal": 3.61,
+        "window_lbs_per_meal_core": 3.29
+      },
+      "v5_logic_baseline": {
+        "food_lbs": 68080,
+        "coverage_food_spend_pct": 62.2,
+        "core_food_lbs": 62008,
+        "coverage_core_food_spend_pct": 71.9,
+        "window_meals_used": 18860,
+        "window_lbs_per_meal": 3.61,
+        "window_lbs_per_meal_core": 3.29
+      },
+      "v6": {
+        "food_lbs": 60857.1,
+        "coverage_food_spend_pct": 37.7,
+        "core_food_lbs": 54952.2,
+        "coverage_core_food_spend_pct": 41.2,
+        "window_meals_used": 18860,
+        "window_lbs_per_meal": 3.23,
+        "window_lbs_per_meal_core": 2.91
+      },
+      "bridge_food_lbs": {
+        "restatement": 0,
+        "fix": -7222.9
+      },
+      "bridge_core_food_lbs": {
+        "restatement": 0,
+        "fix": -7055.8
+      }
+    }
+  ]
+}

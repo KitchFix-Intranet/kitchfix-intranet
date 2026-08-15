@@ -1,0 +1,64 @@
+{
+  "ran_at": "2026-08-15T02:30:11.746Z",
+  "acct_results": {
+    "TBR-FL": {
+      "dollar_rows": 2077,
+      "dollar_spend": 129507.43,
+      "by_month": {
+        "2026-05": {
+          "rows": 512,
+          "spend": 31403.14
+        },
+        "2026-07": {
+          "rows": 821,
+          "spend": 52441.89
+        },
+        "2026-06": {
+          "rows": 744,
+          "spend": 45662.4
+        }
+      }
+    },
+    "TBJ-FL": {
+      "dollar_rows": 2202,
+      "dollar_spend": 183851.55,
+      "by_month": {
+        "2026-07": {
+          "rows": 794,
+          "spend": 60571.34
+        },
+        "2026-06": {
+          "rows": 778,
+          "spend": 64691.26
+        },
+        "2026-05": {
+          "rows": 630,
+          "spend": 58588.95
+        }
+      }
+    },
+    "STL-FL": {
+      "dollar_rows": 2499,
+      "dollar_spend": 274187.13,
+      "by_month": {
+        "2026-07": {
+          "rows": 1133,
+          "spend": 127994.93
+        },
+        "2026-06": {
+          "rows": 1061,
+          "spend": 105735.53
+        },
+        "2026-05": {
+          "rows": 305,
+          "spend": 40456.67
+        }
+      }
+    }
+  },
+  "aug_meta": {
+    "row_count": 6969,
+    "drift_recovered": 33,
+    "orphan_excluded": 459
+  }
+}

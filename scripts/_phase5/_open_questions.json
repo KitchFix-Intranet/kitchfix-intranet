@@ -118,7 +118,7 @@
       "dollars": 59231,
       "unlocks": "Simplifies ad-hoc queries. Not blocking any current figure.",
       "answer": "",
-      "notes": ""
+      "notes": "confirmed still open 2026-08-14 - Kevin has not directed a cleanup"
     },
     {
       "num": 11,
@@ -129,8 +129,8 @@
       "rows": 247,
       "dollars": 41000,
       "unlocks": "Fewer false positives on invoices with legitimate structural variance.",
-      "answer": "",
-      "notes": ""
+      "answer": "Analyst decision (Phase 5): threshold set to 1.45x, derived from the measured post-Step-3 distribution across 478 scored invoices (q25=0.99, q50=1.00, q75=1.00, q90=1.00, q95=1.44, q99=1.99). Method: q95 rounded up to nearest 0.05. Above 1.15x: 33 invoices; above 1.20x: 32; above 1.30x: 27; above 1.50x: 21. Provenance: scripts_phase5/_q11_over_extraction_dist.json (recommended_threshold=1.45).",
+      "notes": "resolved in Phase 5 by analyst decision - backfilled 2026-08-14"
     },
     {
       "num": 12,
@@ -165,8 +165,8 @@
       "rows": 32,
       "dollars": 5261,
       "unlocks": "Adds GFS produce/dry_goods lbs to WEIGHT SET for TBJ-FL.",
-      "answer": null,
-      "notes": ""
+      "answer": "Self-answered by direct PDF read. 4 GFS invoices with NxN CO pack rows were pulled from Drive and read by Sonnet vision ($0.056 total cost). Result: 3 of 4 invoices had NO weight column and the fourth invoice had a weight column but the value was blank for the NxN CO SKUs in question. GFS does not show per-line case weight for these packs on the invoice PDF. Rows remain unresolved via invoice; recovery requires vendor catalog (Q18). Provenance: scripts_phase5/_q14_gfs_invoice_reads.json.",
+      "notes": "resolved in Phase 5 by analyst decision - backfilled 2026-08-14"
     },
     {
       "num": 15,
@@ -177,8 +177,8 @@
       "rows": 110,
       "dollars": 4132,
       "unlocks": "Cheney weight recovery on TBJ-FL and STL-FL protein rows without item_number.",
-      "answer": "",
-      "notes": ""
+      "answer": "Self-answered by direct test. Adopt the catch-weight-lb convention: on Cheney rows with uom_raw='#N', up = $/lb and ep/up = total shipped lb. 14 of 19 rows had sufficient data to test; 13 reconciled inside category-plausibility bounds (92.9% reconcile rate, above the 80% adopt threshold). One reject was a low-priced dressing where the implied weight fell outside category bounds. Convention adopted; rows carry tag 'cheney_pound_n_convention' and are processed via the Step-3 catch-weight arithmetic gate. Provenance: scripts_phase5/_q15_cheney_test.json (reconcile_rate_pct=92.86, adopt_convention=true) + scripts_phase5/_phase5_recovered.json meta.q15_adopt_pound_n=true.",
+      "notes": "resolved in Phase 5 by analyst decision - backfilled 2026-08-14"
     },
     {
       "num": 16,
@@ -189,8 +189,8 @@
       "rows": 245,
       "dollars": 1245,
       "unlocks": "Confirms fees are correctly excluded from food $ and food-per-meal figures.",
-      "answer": "",
-      "notes": ""
+      "answer": "Verified as non-food; no change. Phase 5 diagnostic re-measured the fee-lines bucket at 191 rows / $821 across the window and confirmed the classifier already forces every one to non_food; a per-account verify (TBR/TBJ/STL) shows 100% classifier_non_food classification. Delivery charges, fuel surcharges, customer-incentive credits, machine-service charges all correctly land outside food $ and food-per-meal denominators. Provenance: scripts_phase5/_diagnostic5.json (fee_lines: 191 rows / $821.46) + scripts_phase5/_q12_q16_verify.json (verdict: 'confirmed non-food; no change').",
+      "notes": "resolved in Phase 5 by analyst decision - backfilled 2026-08-14"
     },
     {
       "num": 17,
@@ -201,8 +201,8 @@
       "rows": 475,
       "dollars": 33128,
       "unlocks": "Slight coverage bump on core_food $ if 'other' collapses to specific categories.",
-      "answer": "",
-      "notes": ""
+      "answer": "Analyst decision (Phase 5): reclassify top spend-driving items into real categories via explicit rules; long tail stays 'other'. 5 pattern rules applied: (1) sorbet/gelato/ice cream/frozen yogurt -> dairy, (2) condiments (hot sauce, ketchup, mustard, mayo, vinegar, dressings, salsa) -> dry_goods, (3) seasonings/spices/oils/broth -> dry_goods, (4) fees/surcharges/credits/material charges -> non_food, (5) supplies/packaging -> non_food. 16 top-spend groups reclassified; largest single reclass is 105 Sysco fuel-surcharge rows / $1,056 to non_food. Long tail (below top 16) stays 'other'. Provenance: scripts_phase5/_q17_other_reclass.json (5 rules, 16 reclassified_groups).",
+      "notes": "resolved in Phase 5 by analyst decision - backfilled 2026-08-14"
     },
     {
       "num": 18,
@@ -213,8 +213,8 @@
       "rows": 0,
       "dollars": 0,
       "unlocks": "Permanent fix for pack-size question class. Would eliminate ~half the questions on this form on the next window.",
-      "answer": "",
-      "notes": ""
+      "answer": "Order guides exist but would have to be requested from the site leader. Not pulled for this report. Note as a data-quality improvement for a future window; this analysis was not run against vendor catalog data.",
+      "notes": "closed 2026-08-14 - Kevin"
     },
     {
       "num": 19,
@@ -237,8 +237,8 @@
       "rows": 0,
       "dollars": 0,
       "unlocks": "True $/meal comparison could add per-order overhead. Future work.",
-      "answer": "",
-      "notes": ""
+      "answer": "No fee schedule exists that Kevin holds. Delivery and minimum-order fees are not tracked separately anywhere available to us.",
+      "notes": "closed 2026-08-14 - Kevin"
     },
     {
       "num": 21,
@@ -249,8 +249,8 @@
       "rows": 0,
       "dollars": 0,
       "unlocks": "Storage-axis figures would earn a real confidence level; today they are directionally-only.",
-      "answer": "",
-      "notes": ""
+      "answer": "Analyst delivered a 30-item stratified sample for chef spot-check (not a self-validation). Method: 10 SKUs per account (TBR/TBJ/STL), top-4-by-spend + 3 mid-spend + 3 tail, stratified across food categories (protein, poultry, meat, seafood, dairy, produce, frozen). Each row carries the classifier's storage_axis verdict + confidence + reason for chef review. Confidence scores span 65-95; the sample includes both high-confidence unambiguous cases (fresh produce, IQF frozen items) and lower-confidence edge cases (bacon, sausages, cheese with no explicit fresh/frozen marker) so a chef can validate the boundary calls. This delivers the sample; final storage-axis certification still requires chef sign-off. Provenance: scripts_phase5/_q21_fresh_frozen_sample.json (30 rows).",
+      "notes": "resolved in Phase 5 by analyst decision - backfilled 2026-08-14 (sample delivered; chef sign-off still outstanding)"
     }
   ],
   "pack_weights": [

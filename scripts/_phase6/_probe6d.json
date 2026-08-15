@@ -1,0 +1,311 @@
+{
+  "d1": {
+    "catalog_size": 1038,
+    "unresolved_core": 2361,
+    "hits_total": 274,
+    "by_account": {
+      "TBR-FL": {
+        "rows": 98,
+        "spend": 5653.94
+      },
+      "TBJ-FL": {
+        "rows": 123,
+        "spend": 8422.33
+      },
+      "STL-FL": {
+        "rows": 53,
+        "spend": 4305
+      }
+    },
+    "kevin_target": {
+      "rows": 576,
+      "spend": 52577
+    }
+  },
+  "d2_pattern_candidates": {
+    "3d_lb_leading_1_split_1plus2": {
+      "total": 435,
+      "unresolved_core": 76,
+      "top_shapes": [
+        [
+          "150 LB",
+          69
+        ],
+        [
+          "410 LB",
+          68
+        ],
+        [
+          "125 LB",
+          31
+        ],
+        [
+          "115 LB",
+          29
+        ],
+        [
+          "110LB",
+          29
+        ],
+        [
+          "110 LB",
+          22
+        ],
+        [
+          "140LB",
+          20
+        ],
+        [
+          "125LB",
+          17
+        ],
+        [
+          "210 LB",
+          16
+        ],
+        [
+          "115LB",
+          16
+        ]
+      ]
+    },
+    "3d_ct_leading_1_split_1plus2": {
+      "total": 106,
+      "unresolved_core": 90,
+      "top_shapes": [
+        [
+          "412CT",
+          15
+        ],
+        [
+          "160 CT",
+          12
+        ],
+        [
+          "136 CT",
+          11
+        ],
+        [
+          "148 CT",
+          7
+        ],
+        [
+          "130 CT",
+          6
+        ],
+        [
+          "148CT",
+          5
+        ],
+        [
+          "112CT",
+          4
+        ],
+        [
+          "124 CT",
+          4
+        ],
+        [
+          "165CT",
+          3
+        ],
+        [
+          "670CT",
+          3
+        ]
+      ]
+    },
+    "padded_slash_num": {
+      "total": 543,
+      "unresolved_core": 258,
+      "top_shapes": [
+        [
+          "001/100",
+          49
+        ],
+        [
+          "001/10",
+          32
+        ],
+        [
+          "002/20",
+          27
+        ],
+        [
+          "005/2",
+          25
+        ],
+        [
+          "001/15",
+          23
+        ],
+        [
+          "12/2",
+          19
+        ],
+        [
+          "001/50",
+          17
+        ],
+        [
+          "006/2",
+          17
+        ],
+        [
+          "006/1",
+          15
+        ],
+        [
+          "004/5",
+          14
+        ]
+      ]
+    }
+  },
+  "d3_estimate_hits": {
+    "propack_banana": {
+      "rows": 15,
+      "spend": 472.44,
+      "sample": {
+        "id": "04ef5cb5-8cc7-4b0f-afa1-14574765ac82",
+        "desc": "PROPACK BANANA FRESH GREEN TIP",
+        "vendor": "Sysco",
+        "ep": 28.73,
+        "up": 28.73,
+        "qty": 1,
+        "cat": "produce"
+      }
+    },
+    "sysco_pineapple": {
+      "rows": 41,
+      "spend": 1558.85,
+      "sample": {
+        "id": "07c5c9f3-3047-4c98-90cb-8c5a529a2dd8",
+        "desc": "PINEAPPLE CASE",
+        "vendor": "Sunfresh Produce-Englewood",
+        "ep": 29.59,
+        "up": 29.59,
+        "qty": 1,
+        "cat": "produce"
+      }
+    },
+    "propack_avocado_160": {
+      "rows": 0,
+      "spend": 0,
+      "sample": null
+    },
+    "avocado_hass_40_48": {
+      "rows": 0,
+      "spend": 0,
+      "sample": null
+    },
+    "grapes_red_sunfresh": {
+      "rows": 23,
+      "spend": 1124.91,
+      "sample": {
+        "id": "07aafeb8-f6dc-45dc-bcd1-a5b4a07c9d98",
+        "desc": "GRAPES RED",
+        "vendor": "Sunfresh Produce-Englewood",
+        "ep": 46.97,
+        "up": 46.97,
+        "qty": 1,
+        "cat": "produce"
+      }
+    },
+    "strawberries_flat_8x1": {
+      "rows": 2,
+      "spend": 84.87,
+      "sample": {
+        "id": "48ccd689-e9e8-431a-bdb6-5c64690411b3",
+        "desc": "STRAWBERRIES FLAT 8X1",
+        "vendor": "Sunfresh Produce-Englewood",
+        "ep": 28.29,
+        "up": 28.29,
+        "qty": 1,
+        "cat": "produce"
+      }
+    },
+    "lettuce_romaine_hearts_12_3": {
+      "rows": 30,
+      "spend": 1962.41,
+      "sample": {
+        "id": "0cecc904-9b78-40f1-a7dd-6bb517392be9",
+        "desc": "SYFPNAT LETTUCE ROMAINE HEART",
+        "vendor": "Sysco",
+        "ep": 89.95,
+        "up": 89.95,
+        "qty": 1,
+        "cat": "produce"
+      }
+    },
+    "blueberries_flat_sunfresh": {
+      "rows": 39,
+      "spend": 1941.99,
+      "sample": {
+        "id": "0014c1f8-a7d0-438b-9deb-6539c8c08c9f",
+        "desc": "BLUEBERRIES FLAT",
+        "vendor": "Sunfresh Produce-Englewood",
+        "ep": 39.75,
+        "up": 39.75,
+        "qty": 1,
+        "cat": "produce"
+      }
+    },
+    "blueberries_fresh_cheney": {
+      "rows": 13,
+      "spend": 1828.98,
+      "sample": {
+        "id": "caf8eabe-57c4-42d3-b2a0-ff7acd2f9b3a",
+        "desc": "BLUEBERRIES FRESH",
+        "vendor": "Cheney Brothers",
+        "ep": 57.78,
+        "up": 28.89,
+        "qty": 2,
+        "cat": "produce"
+      }
+    }
+  },
+  "d4_egg_spend_by_account": {
+    "TBR-FL": {
+      "total": 4908.61,
+      "protein": 711.63,
+      "dairy": 4113.66,
+      "dry_goods": 83.32,
+      "other": 0
+    },
+    "TBJ-FL": {
+      "total": 5841.68,
+      "protein": 2419.28,
+      "dairy": 3343.2,
+      "dry_goods": 79.2,
+      "other": 0
+    },
+    "STL-FL": {
+      "total": 6071.08,
+      "protein": 221.09,
+      "dairy": 5580.1,
+      "dry_goods": 269.89,
+      "other": 0
+    }
+  },
+  "d4_false_positive_audit": {
+    "EGGPLANT": {
+      "count": 8,
+      "sample": [
+        "EGGPLANT",
+        "PROPACK EGGPLANT FRESH",
+        "EGGPLANT CHOICE LA"
+      ]
+    },
+    "EGG ROLL": {
+      "count": 5,
+      "sample": [
+        "EGG ROLL VEGETABLE"
+      ]
+    },
+    "EGG NOODLE": {
+      "count": 0,
+      "sample": []
+    }
+  }
+}
