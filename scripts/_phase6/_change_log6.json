@@ -20,15 +20,15 @@
       "breach": false
     },
     "TBJ-FL": {
-      "core_food_protein_lbs": 9222.3,
+      "core_food_protein_lbs": 9384.3,
       "denom": 29541,
-      "lbs_per_cover": 0.31,
+      "lbs_per_cover": 0.32,
       "lbs_per_cover_warn": false,
       "dpp_breaches": [],
       "breach": false
     },
     "STL-FL": {
-      "core_food_protein_lbs": 15457.5,
+      "core_food_protein_lbs": 15444.8,
       "denom": 18860,
       "lbs_per_cover": 0.82,
       "lbs_per_cover_warn": false,
@@ -1269,7 +1269,7 @@
       "band_low": 0.2,
       "band_high": 6.3,
       "source": "pack_size:single_weight",
-      "layer": "base_parser",
+      "layer": "phase3c_rehab",
       "ep": 13.45,
       "lbs": 1
     },
@@ -1293,7 +1293,7 @@
       "band_low": 0.15,
       "band_high": 24.16,
       "source": "pack_size:single_weight",
-      "layer": "base_parser",
+      "layer": "phase3c_rehab",
       "ep": 18.85,
       "lbs": 0.4
     },
@@ -1617,7 +1617,7 @@
       "band_low": 0.05,
       "band_high": 49.66,
       "source": "description:single_weight",
-      "layer": "base_parser",
+      "layer": "phase3c_rehab",
       "ep": 39.95,
       "lbs": 0.3
     },
@@ -4257,7 +4257,7 @@
       "band_low": 0.2,
       "band_high": 6.3,
       "source": "pack_size:single_weight",
-      "layer": "base_parser",
+      "layer": "phase3c_rehab",
       "ep": 13.45,
       "lbs": 1
     },
@@ -4281,7 +4281,7 @@
       "band_low": 0.15,
       "band_high": 24.16,
       "source": "pack_size:single_weight",
-      "layer": "base_parser",
+      "layer": "phase3c_rehab",
       "ep": 18.85,
       "lbs": 0.4
     },
@@ -4617,7 +4617,7 @@
       "band_low": 0.05,
       "band_high": 49.66,
       "source": "description:single_weight",
-      "layer": "base_parser",
+      "layer": "phase3c_rehab",
       "ep": 39.95,
       "lbs": 0.3
     },
@@ -13810,63 +13810,23 @@
         "v6": 3.3
       },
       {
-        "path": "spend.TBJ-FL.dollar_all_rows",
-        "before": 2219,
-        "v6": 2202
-      },
-      {
-        "path": "spend.TBJ-FL.dollar_total_spend",
-        "before": 171222.23,
-        "v6": 183851.55
-      },
-      {
-        "path": "spend.TBJ-FL.dollar_food_spend",
-        "before": 154695.92,
-        "v6": 167991.77
-      },
-      {
-        "path": "spend.TBJ-FL.dollar_core_food_spend",
-        "before": 132317.45,
-        "v6": 144812.45
-      },
-      {
-        "path": "spend.TBJ-FL.dollar_beverage_spend",
-        "before": 22378.47,
-        "v6": 23179.32
-      },
-      {
         "path": "spend.TBJ-FL.dollar_nonfood_spend",
-        "before": 14729.31,
+        "before": 14191.94,
         "v6": 13459.8
       },
       {
         "path": "spend.TBJ-FL.dollar_unknown_spend",
-        "before": 1797,
+        "before": 1667.84,
         "v6": 2399.98
       },
       {
-        "path": "spend.TBJ-FL.dollar_food_pct",
-        "before": 90.3,
-        "v6": 91.4
-      },
-      {
-        "path": "spend.TBJ-FL.dollar_core_food_pct",
-        "before": 77.3,
-        "v6": 78.8
-      },
-      {
-        "path": "spend.TBJ-FL.dollar_beverage_pct",
-        "before": 13.1,
-        "v6": 12.6
-      },
-      {
         "path": "spend.TBJ-FL.dollar_nonfood_pct",
-        "before": 8.6,
+        "before": 7.7,
         "v6": 7.3
       },
       {
         "path": "spend.TBJ-FL.dollar_unknown_pct",
-        "before": 1,
+        "before": 0.9,
         "v6": 1.3
       },
       {

@@ -475,6 +475,18 @@ for (const acct of ACCOUNTS) {
     } else {
       bucket._publication = "publish";
     }
+    // Phase 6c: apply the R8b plausibility band as a per-bucket suppression,
+    // not just as a build-time gate. If a bucket would publish but its $/lb
+    // is outside [0.75, 25.00], suppress with the ruling reason string.
+    // Small-sample buckets that drift outside the band are not comparable
+    // to on-band buckets. Covers the STL `other` case Kevin caught
+    // (2 rows, $29.37/lb).
+    if (!bucket._suppressed && dpp != null && (dpp < 0.75 || dpp > 25.00)) {
+      bucket._publication = `outside plausibility band - ${b.lbs_rows} rows, not comparable`;
+      bucket._suppressed = true;
+      bucket._caveat = false;
+      bucket._band_suppressed = true;
+    }
     pm.by_type.push(bucket);
     pm.total_protein_spend += b.spend;
     pm.total_protein_lbs += b.lbs;
@@ -667,9 +679,15 @@ for (const acct of ACCOUNTS) {
 
   const pm = A6.protein_mix[acct];
   const perTypeBreaches = [];
+  // Phase 6c: gate now covers `other` (previously skipped along with
+  // `plant_or_egg`). `other` is a real protein bucket; when it drifts
+  // outside the band (STL `other` $29.37/lb, 2 rows) the bucket is
+  // suppressed at recompute time above, so the breach-list stays clean
+  // by skipping already-suppressed rows. `plant_or_egg` remains excluded
+  // (mixed count/weight is not a plausibility question).
   for (const b of pm.by_type) {
     if (b._suppressed) continue;
-    if (b.type === "plant_or_egg" || b.type === "other") continue;
+    if (b.type === "plant_or_egg") continue;
     if (b.dollars_per_lb == null) continue;
     if (b.dollars_per_lb < R8B_LOW || b.dollars_per_lb > R8B_HIGH) {
       perTypeBreaches.push({ type: b.type, dpp: b.dollars_per_lb, lbs: b.lbs, spend: b.lbs_spend });
