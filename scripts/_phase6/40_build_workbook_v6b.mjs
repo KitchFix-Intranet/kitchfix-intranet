@@ -90,6 +90,25 @@ const ACCOUNTS = ["TBR-FL", "TBJ-FL", "STL-FL"];
   styleHeader(s.getRow(1));
   s.views = [{ state: "frozen", ySplit: 1 }];
 
+  // Phase 6c: non-food spend + row count per account (Kevin's ruling -
+  // categories supplies, packaging, chemical, linen, uniform, smallwares).
+  // Computed from _analysis3c.json.spend[acct].by_category_all so the numbers
+  // ride the fresh dollar-set universe, not the pre-restatement one.
+  const A3C = JSON.parse(fs.readFileSync("/Users/kevinfietek/dev/purchase-discovery-2026-08-12/scripts_phase3c/_analysis3c.json", "utf8"));
+  const NON_FOOD_CATS = new Set(["supplies", "packaging", "chemical", "chemicals", "linen", "uniform", "smallwares"]);
+  const nonFood = {};
+  for (const acct of ACCOUNTS) {
+    const cats = A3C.spend?.[acct]?.by_category_all || [];
+    let rows = 0, spend = 0;
+    for (const c of cats) {
+      if (NON_FOOD_CATS.has(String(c.category || "").toLowerCase())) {
+        rows += c.rows;
+        spend += c.spend;
+      }
+    }
+    nonFood[acct] = { rows, spend: Math.round(spend * 100) / 100 };
+  }
+
   const rows = [
     ["Dollar spend (dollar set, total)", ...ACCOUNTS.map(a => A6.spend[a].dollar_food_spend ?? A4.spend[a].dollar_food_spend), null],
     ["Core-food spend (dollar set)", ...ACCOUNTS.map(a => A6.weight[a].core_food_spend_dollar_set), null],
@@ -101,9 +120,12 @@ const ACCOUNTS = ["TBR-FL", "TBJ-FL", "STL-FL"];
     ["$/cover (core food, v6)", ...ACCOUNTS.map(a => A6.per_meal[a].window_dollars_per_meal_core), null],
     ["lb/cover (core food, v6)", ...ACCOUNTS.map(a => A6.per_meal[a].window_lbs_per_meal_core), null],
     ["lb/cover (core food, baseline)", ...ACCOUNTS.map(a => A6B.per_meal[a].window_lbs_per_meal_core), null],
+    ["Non-food spend (dollar set)", ...ACCOUNTS.map(a => nonFood[a].spend), null],
+    ["Non-food rows (dollar set)", ...ACCOUNTS.map(a => nonFood[a].rows), null],
   ];
   for (const r of rows) s.addRow(r);
-  // Formatting: rows 2-4 = money, row 5 = pct, rows 6-7 = num, row 8 = num0, rows 9-11 = money+num
+  // Formatting: rows 2-4 = money, row 5 = pct, rows 6-7 = num, row 8 = num0,
+  // rows 9-11 = money+num, row 12 = money (non-food $), row 13 = num0 (rows).
   const applyRowFmt = (rowIdx, fmt) => {
     for (let c = 2; c <= 4; c++) s.getCell(rowIdx, c).numFmt = fmt;
   };
@@ -113,11 +135,12 @@ const ACCOUNTS = ["TBR-FL", "TBJ-FL", "STL-FL"];
   applyRowFmt(8, num0);
   applyRowFmt(9, money);
   applyRowFmt(10, num); applyRowFmt(11, num);
+  applyRowFmt(12, money); applyRowFmt(13, num0);
   s.addRow([]);
-  const noteRow = s.addRow(["Denominator source: Kevin's 2026 Service Calendars + STL 2027 projections (Addendum A1). B&G disclosure attached to TBR $/cover."]);
+  const noteRow = s.addRow(["Denominator source: Kevin's 2026 Service Calendars + STL 2027 projections (Addendum A1). B&G disclosure attached to TBR $/cover. Non-food = supplies + packaging + chemical + linen + uniform + smallwares (Phase 6c addition per Kevin's C1 ruling)."]);
   noteRow.getCell(1).font = { italic: true };
   noteRow.getCell(1).alignment = { wrapText: true };
-  noteRow.height = 30;
+  noteRow.height = 45;
   s.mergeCells(noteRow.number, 1, noteRow.number, 5);
 }
 
