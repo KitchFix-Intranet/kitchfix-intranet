@@ -29,6 +29,61 @@ import {
 const MS_PER_DAY = 86400000;
 const WEEKS_PER_PERIOD = 4;
 
+// V9-4 - per-week budget resolution for the table's `vs budget` cell.
+// Each fiscal week in the enumerated range gets the resolved period
+// budget / weeks-in-period; weeks whose period has no budget yield a
+// null amount (the table renders a muted dash, never 0).
+//
+// Single-account: pass this account's budget_periods.
+// Aggregate: pass the summed budget_periods (server already sums
+// member budgets per period) - the resulting per-week amount is the
+// aggregate weekly budget.
+export function buildWeekBudgets({ start, end, budget_periods }) {
+  const weekStarts = weekStartsInRange(start, end);
+  const byPeriod = new Map((budget_periods || []).map(b => [b.period_no, Number(b.amount)]));
+  return weekStarts.map(week_start => {
+    const p = periodOf(week_start);
+    const periodAmount = p != null ? byPeriod.get(p) : null;
+    const amount = periodAmount != null ? Math.round((periodAmount / WEEKS_PER_PERIOD) * 100) / 100 : null;
+    return { week_start, period_no: p, amount };
+  });
+}
+
+// V9-4 aggregate variant - per-week amount is the SUM of member
+// per-week budgets. Members with no budget for a period contribute 0
+// (not the whole aggregate week amount). Envelope + salaried members
+// contribute nothing. `member_budgets` is a Map<accountKey,
+// budget_periods[]> already resolved per playbook 4.5.
+export function buildAggregateWeekBudgets({ start, end, member_budgets }) {
+  const weekStarts = weekStartsInRange(start, end);
+  const memberByPeriod = new Map();
+  for (const [m, list] of member_budgets) {
+    const byPeriod = new Map((list || []).map(b => [b.period_no, Number(b.amount)]));
+    memberByPeriod.set(m, byPeriod);
+  }
+  return weekStarts.map(week_start => {
+    const p = periodOf(week_start);
+    const per_member = {};
+    let total = 0;
+    let anyHasBudget = false;
+    for (const [m, byPeriod] of memberByPeriod) {
+      const periodAmount = p != null ? byPeriod.get(p) : null;
+      if (periodAmount != null) {
+        const w = Math.round((periodAmount / WEEKS_PER_PERIOD) * 100) / 100;
+        per_member[m] = w;
+        total += w;
+        anyHasBudget = true;
+      }
+    }
+    return {
+      week_start,
+      period_no: p,
+      amount: anyHasBudget ? Math.round(total * 100) / 100 : null,
+      per_member,
+    };
+  });
+}
+
 // Verdict bands (V8-7 canonical). One source of truth for every
 // colored element on the page.
 export function verdictBand(pacePctPoints) {
