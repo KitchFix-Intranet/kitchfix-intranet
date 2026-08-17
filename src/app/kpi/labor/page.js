@@ -419,11 +419,21 @@ export default function KpiLaborPage() {
 
   const isSalaried = data?.account_state === "salaried_only";
 
-  // Auto-open current + previous period on first grouped load (v5 default:
-  // §3.7). Only fires when nothing is open yet, so navigating back doesn't
-  // stomp user's manual collapses.
+  // V25-4 - auto-open runs ONCE per account. The prior version keyed
+  // on `expandedPeriods.size === 0`, so Collapse all triggered a
+  // re-fire that immediately re-opened the first two groups. Keying
+  // on a ref keeps the auto-open a one-shot initialisation:
+  //   first mount / account switch  -> ref differs from account, open first two, update ref
+  //   toggle a group                -> effect re-fires, ref matches, early return (state persists)
+  //   collapse all                  -> state empties, effect re-fires, ref matches, early return
+  //   range change (same account)   -> grouped changes, effect re-fires, ref matches, early return
+  // Net result: auto-open exactly once per account switch, user's
+  // expansion state survives every subsequent range change.
+  const autoOpenAccountRef = useRef(null);
   useEffect(() => {
-    if (!grouped.length || expandedPeriods.size > 0) return;
+    if (!grouped.length) return;
+    if (autoOpenAccountRef.current === account) return;
+    autoOpenAccountRef.current = account;
     // Open first two groups by default. V6-5 - key varies by grouping
     // mode (period_no in period mode, month-index in month mode).
     const openKey = (g) => g?.groupHint?.kind === "month" ? g.groupHint.monthIndex : g?.period_no;
@@ -432,8 +442,8 @@ export default function KpiLaborPage() {
     const k1 = openKey(grouped[1]);
     if (k0 != null) next.add(k0);
     if (k1 != null) next.add(k1);
-    if (next.size > 0) setExpandedPeriods(next);
-  }, [grouped, expandedPeriods.size]);
+    setExpandedPeriods(next);
+  }, [grouped, account]);
 
   // F16 - per-worker range totals for the rate-on-hover title. Cheap;
   // derived from filteredActuals which is already memo'd.
