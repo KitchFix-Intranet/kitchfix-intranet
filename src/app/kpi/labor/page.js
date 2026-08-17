@@ -744,17 +744,13 @@ export default function KpiLaborPage() {
           todayISO={today}
           workerRangeTotals={workerRangeTotals}
           aggregateMode={PSEUDO_KEYS.has(account)}
+          budgetPeriods={data?.budget_periods || []}
+          weekBudgets={data?.week_budgets || []}
+          onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "" }) : null}
+          rangeSelection={rangeSelectionEarly}
+          resolvedPreset={resolvedPreset}
         />
       ) : null}
-      {/* V6-5 - one-line grouping note beneath the table, states
-          active grouping and that it follows the selection. */}
-      {loadState === "ok" && filteredActuals.length > 0 && (
-        <div className="kpi-table-note">
-          {rangeSelectionEarly?.kind === "month"
-            ? "Grouping: calendar months (implied by the selection)."
-            : "Grouping: fiscal periods. Select a month in the Range menu to group by calendar month."}
-        </div>
-      )}
     </>
   );
 
