@@ -24,6 +24,8 @@ import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
 import { Sentence } from "./components/Sentence";
 import { StoryBlock } from "./components/StoryBlock";
+import { SignalCards } from "./components/SignalCards";
+import { DetailsStrip } from "./components/DetailsStrip";
 import { WeekTable } from "./components/WeekTable";
 import {
   StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
@@ -639,7 +641,11 @@ export default function KpiLaborPage() {
         <div ref={boardRef} tabIndex={-1} className="kpi-board" style={{ outline: "none" }}>
           <Sentence board={data.board} account={account} rangeLabel={rangeLabelForSentence} />
           {data.board?.applies !== false && (
-            <StoryBlock board={data.board} account={account} rangeLabel={rangeLabelForSentence} />
+            <>
+              <StoryBlock board={data.board} account={account} rangeLabel={rangeLabelForSentence} />
+              <SignalCards board={data.board} freshness={freshness} />
+              <DetailsStrip board={data.board} />
+            </>
           )}
         </div>
       )}
