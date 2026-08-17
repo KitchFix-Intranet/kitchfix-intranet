@@ -103,3 +103,41 @@ Commit-safe: no client dollars.
          No raw px for type, spacing, control or panel sizing.
 - V21-16 Gates persist and add: zero references to the retired sentence card, the budget track,
          the stat rail, the lens toggle, and the `Rolling target` label.
+
+## G. Signal cards - simplification (V21-17..V21-24) - approved 2026-08-17
+
+Reference render: kitchfix-kpi-v22-signal-cards.html, treatment **B (viz-led)**, Kevin's LOCAL
+file. Same warning as above: layout intent only, values below win.
+
+- V21-17 DELETE the action link from every signal card (`See budget by week ›`, `See OT by
+         worker ›`, `See hours by week ›`, `Pipeline details ›`) and the hairline rule above
+         them. The card is a readout, not a navigation surface. Anything those links pointed
+         to remains reachable from the table and the freshness-chip popover.
+- V21-18 DELETE the prose sentence line from every card. No card contains a sentence. What
+         survives is: eyebrow + state pill, one composed figure, and at most one short
+         sub-line that is a label, not a clause.
+- V21-19 Card anatomy, identical across all four: header lane (eyebrow left, state pill right,
+         fixed height) then a centred content region that fills the remaining height. All four
+         cards are equal height at every viewport - verify by computed style.
+- V21-20 OVER / UNDER BUDGET: value = signed variance (28-30px/800, green under, red over);
+         sub-line `of a $<budget> budget`; visual = diverging bar around a centred zero. The
+         `$X remains vs pace.` line is deleted.
+- V21-21 OVERTIME: the arc becomes the card's centrepiece - larger, horizontally centred, with
+         the PERCENTAGE SET INSIDE the arc. Sub-line `<n> OT hrs of <n> worked`. The
+         `8% watch` and `12% alarm` labels are deleted BUT the amber threshold band on the arc
+         REMAINS, unlabeled (owner ruling): it is silent while the account is clear and becomes
+         self-explanatory the moment the green arc reaches it. The band's start and end still
+         come from the OT watch and alarm configuration, never hardcoded.
+- V21-22 HOURS VS BUDGET: reads as a fraction - used over budgeted - `<used> of <budgeted>`
+         with the numerator at value size and the denominator smaller, sub-line
+         `budgeted hours used`, then the average rate as a pill beneath (`avg rate $X/hr`),
+         then a bullet track with the elapsed marker. This replaces the previous value + unit +
+         sentence stack.
+- V21-23 PAYROLL DATA: value `<priced> of <total>`, sub-line `worker-weeks priced`, and a row
+         of tick marks - one per week in range - beneath. CAP (owner ruling): the tick row
+         renders only when the range holds 13 weeks or fewer. Above that it is omitted entirely
+         and the card carries the value and sub-line alone; ticks past a dozen read as texture
+         rather than a count. The `0.00 unpriced hrs` and `last feed` chips are deleted - both
+         live in the SYSTEM strip and the freshness popover.
+- V21-24 Colour discipline (V8-15) is unchanged and now matters more: with the prose gone, the
+         state pill and the lead card's accent are the only colour a healthy board carries.
