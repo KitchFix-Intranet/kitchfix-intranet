@@ -1791,11 +1791,6 @@
   .kpi-det-cell:nth-child(n+3) { border-top: 1px solid var(--n-100); }
 }
 
-/* V6-5 - grouping note beneath the table. */
-.kpi-table-note {
-  font-size: 11px; color: var(--text-subtle);
-  margin-top: 8px; font-style: italic;
-}
 
 /* Period jump chips + Expand/Collapse */
 .kpi-jump-chips {
@@ -1828,192 +1823,231 @@
 /* Table v5 - clip, not hidden (B2 sticky trap). V6-11 - the table
    container shares the border+shadow grammar with cards + rail
    cards. */
-.kpi-tw {
+/* ── V9 WEEK TABLE (V9-1..V9-23) ────────────────────────────────
+   Period bands are data rows (V9-8); subtotal rows retire (V9-9);
+   Coverage column deleted (V9-1); every row has vs-budget (V9-4). */
+.kpi-tbl-wrap {
   border: 1px solid var(--n-300);
-  border-radius: var(--rad-10);
-  overflow: clip;   /* B2: hidden hijacks position:sticky */
+  border-radius: 12px;
   box-shadow: var(--card-shadow);
+  overflow: hidden;
   background: var(--surface-card);
+}
+.kpi-tbl-scroll {
+  max-height: 720px;
+  overflow: auto;
+  position: relative;
 }
 .kpi-tbl {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0;   /* B2: collapse breaks sticky thead in WebKit */
+  border-spacing: 0;
+  --row: 40px;
+  --hdr: 34px;
 }
+.kpi-tbl-dense .kpi-tbl { --row: 30px; }
+.kpi-tbl-dense .kpi-tbl td { font-size: 12.5px; }
 .kpi-tbl thead th {
-  text-align: right;
-  padding: 10px var(--space-3);
-  font-size: var(--size-caption);
-  font-weight: 600;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border-default);
+  position: sticky; top: 0; z-index: 20;
+  height: var(--hdr);
+  background: var(--n-50);
+  font-size: 10px; letter-spacing: 0.07em;
+  color: var(--n-600); font-weight: 800;
+  text-transform: uppercase; text-align: right;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--n-300);
   white-space: nowrap;
-  background: var(--surface-sunken);
-  position: sticky;
-  top: 64px;
-  z-index: 5;
 }
-.kpi-tbl thead th.l { text-align: left; }
+.kpi-tbl thead th:first-child { text-align: left; }
+.kpi-tbl-lcol { width: 30%; }
+.kpi-tbl-vbcol { width: 19%; }
 .kpi-tbl tbody td {
-  padding: 0 var(--space-3);
-  height: var(--row-height);
+  padding: 0 16px;
+  height: var(--row);
+  font-size: 13px;
+  color: var(--n-800);
   text-align: right;
-  font-size: var(--size-body);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--n-100);
   white-space: nowrap;
   font-variant-numeric: var(--num-tabular);
 }
-.kpi-tbl tbody td.l { text-align: left; }
+.kpi-tbl tbody td:first-child { text-align: left; color: var(--n-900); }
+.kpi-tbl-nil { color: var(--n-300); }
+.kpi-tbl-ot { color: var(--amber-600); font-weight: 700; }
 
-/* Period header row */
-.kpi-tbl .kpi-perh td {
-  background: var(--kpi-accent-tint);
-  height: 44px;
-  border-bottom: 1px solid var(--border-default);
+/* Period band (V9-8) - data row, sticky under header (V9-11). */
+.kpi-tbl-band > td {
+  background: var(--navy-100);
+  border-top: 1px solid #CBD9F0;
+  border-bottom: 1px solid #CBD9F0;
+  font-weight: 800; font-size: 12px;
+  color: var(--navy-700);
+  position: sticky; top: var(--hdr); z-index: 10;
 }
-.kpi-perbtn {
-  display: flex; align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-height);
-  width: 100%;
-  background: transparent; border: 0; cursor: pointer;
-  font-size: var(--size-caption);
-  font-weight: 600;
-  color: var(--text-strong);
-  letter-spacing: 0.03em;
+.kpi-tbl-bandbtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 0;
+  color: inherit; font: inherit; font-weight: 800;
+  cursor: pointer; padding: 0;
 }
-.kpi-perbtn .kpi-chev {
-  transition: transform var(--duration-fast) var(--ease-standard);
-  color: var(--text-subtle);
-}
-.kpi-tbl .kpi-perh.open .kpi-chev { transform: rotate(90deg); }
-
-/* Period note row */
-.kpi-tbl .kpi-pnoterow td {
-  background: var(--kpi-accent-tint);
-  border-bottom: 1px solid var(--border-default);
-  height: auto;
-  padding: 0 var(--space-3) var(--space-2);
-}
-.kpi-pnote {
-  font-weight: 400;
-  font-size: var(--size-caption);
-  color: var(--text-muted);
-  font-style: italic;
+.kpi-tbl-bandsub {
+  font-weight: 500; font-size: 10.5px;
+  color: var(--n-600); margin-left: 10px;
   letter-spacing: 0;
 }
 
-/* Week row */
-.kpi-tbl .kpi-wk:hover td { background: var(--kpi-accent-tint); }
-.kpi-tbl .kpi-wk .kpi-wkbtn {
-  display: flex; align-items: center;
-  gap: var(--space-2);
-  min-height: var(--row-height);
-  width: 100%;
-  background: transparent; border: 0; cursor: pointer;
-  color: inherit;
-  font-family: inherit;
-  font-size: inherit;
-}
-.kpi-tbl .kpi-wk .kpi-chev {
-  color: var(--text-subtle);
-  transition: transform var(--duration-fast) var(--ease-standard);
-}
-.kpi-tbl .kpi-wk.open .kpi-chev { transform: rotate(90deg); }
-
-/* Row state tints (color + label + icon; never color alone) */
-.kpi-tbl .kpi-st-partial   td { background: var(--amber-50); }
-.kpi-tbl .kpi-st-partial:hover td { background: var(--amber-100); }
-.kpi-tbl .kpi-st-hours_only  td { background: var(--amber-50); }
-.kpi-tbl .kpi-st-hours_only:hover td { background: var(--amber-100); }
-.kpi-tbl .kpi-st-no_labor td { background: var(--fill-off); }
-.kpi-tbl .kpi-st-unknown  td { background: var(--red-50); }
-.kpi-tbl .kpi-st-unknown:hover td { background: var(--red-100); }
-
-/* Sub + grand rows */
-.kpi-tbl .kpi-sub td {
-  background: var(--surface-sunken);
+/* Week row (V9-10) */
+.kpi-tbl-week > td {
+  background: var(--surface-card);
   font-weight: 600;
-  color: var(--text-strong);
-  height: 42px;
-  border-bottom: 1px solid var(--border-default);
 }
-.kpi-tbl .kpi-grand td {
-  background: var(--kpi-accent-tint);
-  font-weight: 700;
-  color: var(--text-heading);
-  height: 48px;
-  border-top: 2px solid var(--border-strong);
+.kpi-tbl-week:hover > td { background: var(--n-50); }
+.kpi-tbl-weekbtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 0; color: inherit;
+  font: inherit; font-weight: 600; cursor: pointer;
+  width: 100%; text-align: left;
+}
+.kpi-tbl-chev {
+  display: inline-block; width: 15px;
+  color: var(--n-500); font-size: 11px;
 }
 
-/* Kid rows (K14 inline drill) */
-.kpi-tbl .kpi-kid td {
-  background: var(--surface-sunken);
-  height: 38px;
-  font-size: var(--size-caption);
-  color: var(--text-default);
-  border-bottom: 1px solid var(--border-subtle);
+/* V9-2 exception rendering - warm bg + amber left edge + chip. */
+.kpi-tbl-attn > td { background: #FFFCF6; }
+.kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--amber-600); }
+
+/* V9-2 flag chip beside row label. */
+.kpi-tbl-flag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9.5px; font-weight: 800;
+  border-radius: var(--rad-pill);
+  padding: 1px 8px;
+  border: 1px solid;
+  margin-left: 9px;
+  vertical-align: 1px;
+  letter-spacing: 0.03em;
 }
-.kpi-tbl .kpi-kid td.l {
-  padding-left: calc(var(--space-3) + 22px);
-}
-.kpi-kidname {
-  color: var(--text-strong);
+.kpi-flag-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
+.kpi-flag-bad  { background: var(--red-100); color: var(--red-700); border-color: #F5C6C6; }
+.kpi-flag-mute { background: var(--n-100); color: var(--n-500); border-color: var(--n-200); }
+
+/* V9-16 OT tag on a row containing OT. */
+.kpi-tbl-otflag {
   display: inline-block;
-  max-width: 210px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  vertical-align: bottom;
-}
-.kpi-tbl .kpi-kid.kpi-kid-note td {
-  font-size: var(--size-caption);
-  color: var(--text-subtle);
-  font-style: italic;
-  height: 34px;
-  padding-left: calc(var(--space-3) + 22px);
+  font-size: 9px; font-weight: 800;
+  color: #92580A; background: var(--amber-100);
+  border: 1px solid #F3D9AE;
+  border-radius: 3px;
+  padding: 0 5px;
+  margin-left: 8px;
+  vertical-align: 1px;
+  letter-spacing: 0.04em;
 }
 
-/* Number cells */
-.kpi-tbl .kpi-zr  { color: var(--text-subtle); }
-.kpi-tbl .kpi-qm  { color: var(--red-600); font-weight: 600; }
-.kpi-tbl .kpi-upw {
-  color: var(--amber-700);
-  font-weight: 600;
+/* Child rows (worker / account) (V9-10) */
+.kpi-tbl-child > td {
+  background: var(--n-50);
+  font-size: 12.5px;
+  color: var(--n-700);
+  font-weight: 500;
+}
+.kpi-tbl-child > td:first-child {
+  padding-left: 46px;
+  position: relative;
+}
+.kpi-tbl-child > td:first-child::before {
+  content: "";
+  position: absolute; left: 28px; top: 50%;
+  width: 10px; height: 1px;
+  background: var(--n-300);
+}
+.kpi-tbl-child:hover > td { background: var(--n-100); }
+.kpi-tbl-child.kpi-tbl-attn > td { background: #FFFCF6; }
+.kpi-tbl-child.kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--amber-600); }
+.kpi-tbl-accountbtn {
+  background: transparent; border: 0; cursor: pointer;
+  color: inherit; font: inherit; padding: 0;
+  text-align: left;
+}
+.kpi-tbl-accountbtn:hover .kpi-tbl-cchild-key { text-decoration: underline; }
+.kpi-tbl-cchild-key { font-weight: 700; color: var(--n-800); }
+.kpi-tbl-cchild-label { color: var(--n-700); font-weight: 500; }
+
+/* V9-14 share bar lives inside dollars cell, not in vs budget. */
+.kpi-tbl-money { position: relative; }
+.kpi-tbl-share {
+  position: absolute; left: 12px; right: 12px; bottom: 7px;
+  height: 3px; border-radius: 2px;
+  background: var(--n-200);
+  overflow: hidden;
+}
+.kpi-tbl-share i {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  border-radius: 2px;
+  background: var(--n-400);
+}
+.kpi-tbl-child:hover .kpi-tbl-share i { background: #4A6076; }
+
+/* V9-10 total row - navy-900 sticky bottom. */
+.kpi-tbl-total > td {
+  background: var(--n-900);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 13px;
+  height: 46px;
+  border: 0;
+  position: sticky; bottom: 0; z-index: 15;
+}
+.kpi-tbl-total > td:first-child {
+  color: #ffffff;
+  letter-spacing: 0.04em;
+  font-size: 11.5px;
+}
+.kpi-tbl-total .kpi-vb-d-good { color: #7BD389; }
+.kpi-tbl-total .kpi-vb-d-bad  { color: #FCA5A5; }
+.kpi-tbl-total .kpi-vb-d-mute { color: #B9C6DA; }
+.kpi-tbl-total .kpi-vb-d-neut { color: #B9C6DA; }
+.kpi-tbl-total .kpi-tbl-nil   { color: #7C90AE; }
+
+/* V9-5 vs budget lockup: 58px bar + 72px right-aligned delta */
+.kpi-vb {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.kpi-vb-bar {
+  width: 58px; height: 6px;
+  border-radius: 3px;
+  background: var(--n-200);
+  position: relative;
+  flex: none;
+  overflow: visible;
+}
+.kpi-vb-bar > i {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 3px;
+  background: var(--green-500);
+}
+.kpi-vb-bar > i.kpi-vb-fill-over { background: var(--green-500); }
+.kpi-vb-bar > .kpi-vb-over {
+  position: absolute; top: 0; bottom: 0;
+  border-radius: 0 3px 3px 0;
+  background: var(--red-700);
+}
+.kpi-vb-bar > .kpi-vb-tick {
+  position: absolute; top: -4px; bottom: -4px;
+  width: 1.5px;
+  background: var(--n-600);
+  left: 80%;
+}
+.kpi-vb-d {
+  font-weight: 700; font-size: 12px;
+  width: 72px; text-align: right;
   font-variant-numeric: var(--num-tabular);
 }
+.kpi-vb-d-good { color: var(--green-700); }
+.kpi-vb-d-bad  { color: var(--red-700); }
+.kpi-vb-d-neut { color: var(--n-600); }
+.kpi-vb-d-mute { color: var(--n-300); font-weight: 500; }
 
-/* Badges (v5) */
-.kpi-bdg {
-  display: inline-flex; align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--rad-pill);
-  font-size: var(--size-caption);
-  font-weight: 600;
-  border: 1px solid;
-  white-space: nowrap;
-}
-.kpi-bdg-complete { background: var(--green-100); border-color: var(--green-400); color: var(--green-800); }
-.kpi-bdg-partial  { background: var(--surface-card); border-color: var(--fill-needs-bd); color: var(--amber-700); }
-.kpi-bdg-unpriced { background: var(--fill-needs); border-color: var(--fill-needs-bd); color: var(--amber-700); }
-.kpi-bdg-zero     { background: var(--fill-off); border-color: var(--fill-off-bd); color: var(--text-default); }
-.kpi-bdg-unknown  { background: var(--surface-card); border-color: var(--red-300); color: var(--red-700); }
-
-/* M5 - table row stagger */
-@keyframes kpi-rowin {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: none; }
-}
-.kpi-tbl-anim {
-  animation: kpi-rowin var(--duration-base) var(--ease-standard) both;
-}
-
-/* M7 - jump landing tint */
-@keyframes kpi-land {
-  0%   { background: var(--navy-100); }
-  100% { background: transparent; }
-}
-.kpi-landed td { animation: kpi-land var(--duration-slow) var(--ease-standard) both; }
-
-@media (prefers-reduced-motion: reduce) {
-  .kpi-tbl-anim, .kpi-landed td { animation: none; }
-}
+/* V9-19 help popover - reuses .kpi-help-pop from the board */
+.kpi-help-pop-table { width: 350px; }
