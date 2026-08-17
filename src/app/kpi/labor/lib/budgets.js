@@ -1,10 +1,9 @@
 // src/app/kpi/labor/lib/budgets.js
 //
-// Real per-period budgets. Hero + cards + trend read from the labor
-// route's budget_periods (Playbook 4.5 resolution: supersede wins,
-// else P&L, else omitted). This module owns pure calculators
-// (budget-for-range, elapsed %, supersede summaries) and the
-// preset-suffix formatter.
+// Real per-period budgets. The board reads the labor route's
+// budget_periods (Playbook 4.5 resolution: supersede wins, else P&L,
+// else omitted). This module owns pure calculators (budget-for-range,
+// elapsed %, supersede summaries) and the preset-suffix formatter.
 
 import { periodOf, weekStartsInRange } from "./periods";
 
