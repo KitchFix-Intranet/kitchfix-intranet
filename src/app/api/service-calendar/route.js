@@ -719,6 +719,13 @@ export async function GET(request) {
           weekEnd:           comp.weekEnd || null,
           complete:          !!comp.complete,
           missingDates:      Array.isArray(comp.missingDates) ? comp.missingDates : [],
+          // PR-G1 (2026-08-17): serviceDays + serviceDaysEntered are
+          // now server-authoritative so chase templates + any future
+          // "N of M" surface (finalize control's overlay row was next)
+          // pull from one source. Value shape unchanged when the
+          // fields are absent (older clients ignore the extra keys).
+          serviceDays:        typeof comp.serviceDays === "number" ? comp.serviceDays : null,
+          serviceDaysEntered: typeof comp.serviceDaysEntered === "number" ? comp.serviceDaysEntered : null,
           period:            meta?.period ?? null,
           weekLabel:         meta?.week_label ?? null,
           weekIndex:         weekIdx,

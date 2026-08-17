@@ -55,10 +55,19 @@ function dayChipText(iso) {
   return `${d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })} ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} needs entry`;
 }
 
-function daychipsHtml(missingDates) {
+// PR-G1 (2026-08-17): daychips carry a per-stage tone token so the
+// urgent + past-due stages read as actionable amber rather than
+// disabled grey. N3.1 keeps the quiet register per the render.
+const CHIP_TONE = {
+  quiet: { bg: "#F1F5F9", border: "#E2E8F0", fg: "#334155" }, // slate
+  amber: { bg: "#FDF1E4", border: "#D9892F", fg: "#8A5A16" }, // amber on cream
+};
+
+function daychipsHtml(missingDates, tone = "quiet") {
   if (!Array.isArray(missingDates) || missingDates.length === 0) return "";
+  const t = CHIP_TONE[tone] || CHIP_TONE.quiet;
   const chips = missingDates.map(iso =>
-    `<span style="display:inline-block;padding:6px 10px;margin:4px 6px 0 0;font-size:12px;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:14px;color:#334155">${escapeHtml(dayChipText(iso))}</span>`
+    `<span style="display:inline-block;padding:6px 10px;margin:4px 6px 0 0;font-size:12px;background:${t.bg};border:1px solid ${t.border};border-radius:14px;color:${t.fg};font-weight:600">${escapeHtml(dayChipText(iso))}</span>`
   ).join("");
   return `<tr><td style="padding-top:12px">${chips}</td></tr>`;
 }
@@ -123,7 +132,7 @@ function n31Body({ accountKey, weekStart, weekEnd, complete, total, missingDates
       ${rows}
     </table>
   </td></tr>
-  ${daychipsHtml(missingDates)}
+  ${daychipsHtml(missingDates, "quiet")}
   <tr><td style="padding-top:20px">
     <a href="${escapeHtml(scWeekLink || "#")}" style="display:inline-block;padding:10px 18px;background:#153968;color:#ffffff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold">Open the week</a>
   </td></tr>
@@ -140,6 +149,14 @@ function n32Body({ accountKey, weekStart, weekEnd, complete, total, missingDates
   const kickBg = "#FDF6EC";
   const kickFg = "#8A5A16";
   const borderAmber = "#F0D8AF";
+  // PR-G1 (2026-08-17): button token was the ad-hoc dark amber-brown
+  // #8A5A16 (Kevin flag "not in the token set"). Render intent is
+  // amber (#D9892F). Measured WCAG contrast on the cream panel bg
+  // (#FDF6EC): amber = 2.51:1 (FAILS AA even for large-bold text);
+  // navy = 9.90:1 (passes AAA). Per Kevin's fallback rule ("navy if
+  // contrast fails AA"), N3.2 button is navy. Ratio calculated with
+  // WCAG 2.1 relative-luminance formula against the sRGB values.
+  const btnBg = "#153968";
   const testLine = isTest
     ? `<tr><td style="padding-top:16px;font-size:12px;color:#8A5A16;font-weight:bold">*** TEST - urgent chase was routed to Kevin only; no site leader was contacted ***</td></tr>`
     : "";
@@ -163,9 +180,9 @@ function n32Body({ accountKey, weekStart, weekEnd, complete, total, missingDates
       ${rows}
     </table>
   </td></tr>
-  ${daychipsHtml(missingDates)}
+  ${daychipsHtml(missingDates, "amber")}
   <tr><td style="padding-top:20px">
-    <a href="${escapeHtml(scWeekLink || "#")}" style="display:inline-block;padding:10px 18px;background:${kickFg};color:#ffffff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold">Finish the week</a>
+    <a href="${escapeHtml(scWeekLink || "#")}" style="display:inline-block;padding:10px 18px;background:${btnBg};color:#ffffff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold">Finish the week</a>
   </td></tr>
   <tr><td style="padding-top:16px;font-size:11px;color:#64748B;line-height:1.5;border-top:1px solid #E2E8F0;padding-top:12px">
     Kevin and Sebastian are copied on this message.
@@ -203,7 +220,7 @@ function n33Body({ accountKey, weekStart, weekEnd, complete, total, missingDates
       ${rows}
     </table>
   </td></tr>
-  ${daychipsHtml(missingDates)}
+  ${daychipsHtml(missingDates, "amber")}
   <tr><td style="padding-top:20px">
     <a href="${escapeHtml(scWeekLink || "#")}" style="display:inline-block;padding:10px 18px;background:${kickFg};color:#ffffff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold">Finish the week now</a>
   </td></tr>

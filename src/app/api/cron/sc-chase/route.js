@@ -214,8 +214,13 @@ function scWeekLinkFor(accountKey, weekStart) {
 // acceptance battery needs without touching the ledger or dispatching
 // any email.
 
-async function acceptanceMatrix(_request) {
+async function acceptanceMatrix(request) {
   const supa = getServiceClient();
+  const url  = new URL(request.url);
+  // ?target_week=YYYY-MM-DD (a Monday) lets a caller pin the acceptance
+  // matrix to a specific historical week. Used to prove the 6- vs
+  // 7-service-day denominator on live pilot data.
+  const forcedTargetWeek = url.searchParams.get("target_week");
   const PILOTS = ["TXR - AZ", "CIN - AZ"];
   const STAGES = [NOTIFICATION_TYPES.N3_1, NOTIFICATION_TYPES.N3_2, NOTIFICATION_TYPES.N3_3];
 
@@ -236,14 +241,15 @@ async function acceptanceMatrix(_request) {
   }
 
   async function targetOf(accountKey) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = forcedTargetWeek || new Date().toISOString().slice(0, 10);
     const monday = mondayOfWeek(today);
     const dates = weekDates(monday);
     const comp = await computeWeekCompleteness(accountKey, monday);
     return {
-      weekStart: monday, weekEnd: dates[6], total: 7,
-      missing: comp.missingDates || [],
-      complete: 7 - (comp.missingDates?.length || 0),
+      weekStart: monday, weekEnd: dates[6],
+      total:    comp.serviceDays,          // service days only (PR-G1)
+      complete: comp.serviceDaysEntered,
+      missing:  comp.missingDates || [],
     };
   }
 
@@ -269,6 +275,9 @@ async function acceptanceMatrix(_request) {
         recipients: res.recipients,
         htmlLength: res.html.length,
         htmlHead: res.html.slice(0, 200),
+        // PR-G1 (2026-08-17): full HTML available on ?full_html=1 so
+        // template polish assertions can grep for token values.
+        html: url.searchParams.get("full_html") === "1" ? res.html : undefined,
         slack: res.slack ? { text: res.slack.text } : null,
         noSiteRecipient: res.noSiteRecipient,
       });
@@ -403,7 +412,12 @@ export async function GET(request) {
       }
     }
 
-    // Completeness for the target week (drives daychips + "N of 7 days").
+    // Completeness for the target week. serviceDays + serviceDaysEntered
+    // are server-authoritative from computeWeekCompleteness (extended
+    // PR-G1) - the denominator MUST match what the finalize control
+    // will show, otherwise the chase overstates the shortfall (see
+    // the 2026-08-17 report: "1 of 7" was wrong for TXR - AZ because
+    // Sunday is planned-off; correct is "1 of 6").
     let comp;
     try {
       comp = await computeWeekCompleteness(accountKey, weekStart);
@@ -411,9 +425,9 @@ export async function GET(request) {
       log.push(`${accountKey}: ${stage} skip - completeness failed: ${e.message || e}`);
       continue;
     }
-    const total    = dates.length;                     // always 7
     const missing  = comp.missingDates || [];
-    const complete = total - missing.length;
+    const total    = comp.serviceDays;              // service days only
+    const complete = comp.serviceDaysEntered;       // service days with actuals
 
     // RDO auto-derive with override. accountMap.rdo_email wins when
     // non-null; else region -> REGIONAL_DIRECTORS (null for CORP or
