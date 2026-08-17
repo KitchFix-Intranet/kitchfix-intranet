@@ -1,0 +1,145 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- li-1: drop duplicate CHECK on invoice_submissions.status
+-- 2026-08-17
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- ─── WHY THE DUPLICATE EXISTS ─────────────────────────────────────
+--
+-- `invoice_submissions` currently carries TWO CHECK constraints that
+-- enumerate the allowed values of the `status` column, and they
+-- disagree:
+--
+--   * `chk_status_enum` -
+--       CHECK (is_historical = TRUE OR status IN
+--              ('sent', 'returned', 'corrected', 'deleted'))
+--     Does NOT include 'archived'. Blocks the archive write.
+--
+--   * `invoice_submissions_status_check` -
+--       CHECK (status IN ('sent', 'returned', 'corrected',
+--                         'deleted', 'archived'))
+--     Includes 'archived'. Written to be the sole authority on the
+--     column after the archive feature landed.
+--
+-- The intent when the archive feature shipped was to DROP the older
+-- `chk_status_enum` and leave `invoice_submissions_status_check` as
+-- the sole authority. The instruction is recorded inline in
+-- `src/lib/invoiceActions.js:1229-1234`, but the DROP names the wrong
+-- constraint:
+--
+--     ALTER TABLE invoice_submissions
+--       DROP CONSTRAINT IF EXISTS invoice_submissions_status_check;
+--
+-- That statement drops the newly-added permissive constraint, not
+-- the older restrictive one. Because it uses `IF EXISTS`, running
+-- it a second time silently no-ops. The SQL appeared to succeed;
+-- `chk_status_enum` survived; the archive path remained blocked at
+-- the PG boundary.
+--
+-- ─── LIVE CONSEQUENCE ─────────────────────────────────────────────
+--
+-- On any archive attempt today:
+--   1. The Sheets adapter succeeds (Sheets has no CHECK), flipping
+--      `status` to 'archived' in the Sheets copy of
+--      `invoice_submissions`.
+--   2. The PG adapter throws 23514 on the `chk_status_enum` CHECK.
+--   3. `invoice-archive` catches the throw and returns
+--      "Failed to archive" to the operator.
+--   4. The two stores diverge: Sheets shows 'archived', PG still
+--      shows the prior status. The `is_historical=TRUE` escape hatch
+--      in `chk_status_enum` does not help - archived rows are not
+--      historical, they are live rows the operator is retiring from
+--      the active view.
+--
+-- Same class as the 2026-06-12 silent-gap incident (deploy-then-
+-- migrate reversed) but on a per-write basis: the read path recovers
+-- because Sheets is the fallback, but every archive write leaves
+-- Sheets and PG disagreeing.
+--
+-- ─── SAFETY (every existing row is inside the surviving CHECK) ────
+--
+-- Live counts on 2026-08-17 via SUPABASE_SERVICE_ROLE_KEY:
+--
+--   * `invoice_submissions` total rows: 1844
+--   * rows with status = 'archived': 0
+--   * rows with status NOT IN
+--       ('sent','returned','corrected','deleted','archived'): 0
+--
+-- Every one of the 1844 existing rows sits inside the
+-- `invoice_submissions_status_check` constraint that survives this
+-- migration. Dropping `chk_status_enum` cannot violate the surviving
+-- constraint for any row that exists today; the drop is safe. The
+-- surviving constraint remains as the sole authority; future INSERT
+-- and UPDATE statements are still gated to the five allowed values.
+--
+-- The `is_historical = TRUE OR ...` escape hatch in the dropped
+-- constraint is not needed. The 5,771 historical rows (per the
+-- 2026-06-01 backfill) all carry status values inside the surviving
+-- five-value set.
+--
+-- ─── SEE ALSO ─────────────────────────────────────────────────────
+--
+-- * `src/lib/invoiceActions.js:1226-1236` - the invoice-archive
+--   handler's inline migration note. Corrected in the same PR that
+--   authors this file.
+-- * `docs/migrations/_GRANT_TEMPLATE.md` - no new-table grant
+--   ceremony required for this migration (no CREATE TABLE, only
+--   DROP CONSTRAINT).
+-- * `docs/MIGRATION_STATUS.md` - dual-write architecture that makes
+--   the divergence bug possible in the first place.
+
+BEGIN;
+
+ALTER TABLE invoice_submissions
+  DROP CONSTRAINT IF EXISTS chk_status_enum;
+
+COMMIT;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════
+--
+--   V E R I F Y   B L O C K   -   N O T   P A R T   O F   T H E
+--                             M I G R A T I O N
+--
+-- ═══════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════
+
+-- V1. Confirm `chk_status_enum` is gone and
+--     `invoice_submissions_status_check` survives as the sole
+--     status-column CHECK.
+--
+-- SELECT conname, pg_get_constraintdef(oid)
+-- FROM pg_constraint
+-- WHERE conrelid = 'public.invoice_submissions'::regclass
+--   AND contype = 'c'
+-- ORDER BY conname;
+--
+-- Expected: `chk_status_enum` is absent from the result set.
+-- `invoice_submissions_status_check` is present with definition
+-- `CHECK (status = ANY (ARRAY['sent'::text, 'returned'::text,
+--   'corrected'::text, 'deleted'::text, 'archived'::text]))`.
+
+-- V2. Confirm the surviving constraint still rejects an unknown
+--     status value. Run inside a transaction and roll back so no
+--     row lands.
+--
+-- BEGIN;
+-- UPDATE invoice_submissions
+-- SET status = 'not_a_real_status'
+-- WHERE client_uuid = (
+--   SELECT client_uuid FROM invoice_submissions ORDER BY submitted_at LIMIT 1
+-- );
+-- -- Expected: ERROR 23514 check violation on
+-- --           invoice_submissions_status_check.
+-- ROLLBACK;
+
+-- V3. Confirm the archive path now succeeds end-to-end. On a
+--     dev/staging deploy or via a rollback-wrapped UPDATE in
+--     Studio, flip a row's status to 'archived' and confirm no
+--     23514:
+--
+-- BEGIN;
+-- UPDATE invoice_submissions
+-- SET status = 'archived', status_updated_at = now()
+-- WHERE client_uuid = '<pick any live client_uuid>';
+-- -- Expected: 1 row updated, no error.
+-- ROLLBACK;
