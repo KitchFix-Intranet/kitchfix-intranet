@@ -1457,10 +1457,13 @@
    Sentence + story block replace the v6 main-column stack. Signal
    cards + details strip land in C3. */
 
+/* S-13 board section gap tightens 16 -> 12 (base) via --kpi-space-3
+   so the sentence + story + signals + details clear the fold at
+   1280x650. Card interior padding stays on the 0.9 scale. */
 .kpi-board {
   display: flex; flex-direction: column;
-  gap: var(--kpi-space-4);
-  margin-bottom: var(--kpi-space-4);
+  gap: var(--kpi-space-3);
+  margin-bottom: var(--kpi-space-3);
 }
 
 /* Sentence row (V8-6/V8-7) */
@@ -1583,13 +1586,18 @@
   border-left: 1px solid var(--n-200);
   display: flex; align-items: baseline; justify-content: center;
   gap: 6px; min-width: 0;
+  flex-wrap: wrap;
 }
 .kpi-story-s:first-child { border-left: 0; }
 .kpi-story-v { font-size: var(--kpi-size-stat); font-weight: 800; color: var(--n-900); white-space: nowrap; }
+/* Defect fix: previously white-space:nowrap clipped "AVG RATE" at
+   narrow left-panel widths (below ~1400px). Removing nowrap + adding
+   flex-wrap on the parent lets the label wrap between words (Avg /
+   rate) rather than clip. Values keep nowrap so numbers never wrap. */
 .kpi-story-k {
   font-size: var(--kpi-size-micro); letter-spacing: 0.06em;
   color: var(--n-600); text-transform: uppercase;
-  font-weight: 700; white-space: nowrap;
+  font-weight: 700;
 }
 
 /* Budget track (V8-10). V8-23: no longer floor-pinned - the left
