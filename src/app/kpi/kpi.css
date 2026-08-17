@@ -1408,7 +1408,9 @@
   font-size: 11px; color: var(--n-800);
 }
 
-/* Story block - two panels, bottom-aligned (V8-8) */
+/* Story block - two panels (V8-8). V8-23: left panel sizes to its own
+   content; the two panels no longer bottom-align. A tall right panel
+   must never open a void in the left one. */
 .kpi-story {
   display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.58fr);
@@ -1422,10 +1424,14 @@
   padding: 20px 22px;
   border-right: 1px solid var(--n-200);
   display: flex; flex-direction: column;
+  gap: 16px;
+  align-self: start;
 }
 .kpi-story-right {
   padding: 20px 22px;
   display: flex; flex-direction: column;
+  min-width: 0;
+  gap: 4px;
 }
 
 /* Left panel: eyebrow + headline + 3-stat rail + track (V8-9) */
@@ -1439,7 +1445,7 @@
 }
 .kpi-story-headline {
   display: flex; align-items: baseline; gap: 10px;
-  margin-top: 8px; white-space: nowrap;
+  white-space: nowrap;
 }
 .kpi-story-hn {
   font-size: 38px; font-weight: 800; letter-spacing: -0.015em;
@@ -1451,7 +1457,6 @@
 }
 .kpi-story-rail3 {
   display: grid; grid-template-columns: repeat(3, 1fr);
-  margin-top: 16px;
   border: 1px solid var(--n-200); border-radius: 8px;
   background: var(--n-50); overflow: hidden;
 }
@@ -1469,8 +1474,10 @@
   font-weight: 700; white-space: nowrap;
 }
 
-/* Budget track (V8-10) - pinned to panel floor via margin-top:auto */
-.kpi-track { margin-top: auto; padding-top: 24px; }
+/* Budget track (V8-10). V8-23: no longer floor-pinned - the left
+   panel sizes to its own content so the track sits directly under
+   the rail with a fixed rhythm gap from .kpi-story-left. */
+.kpi-track { padding-top: 4px; }
 .kpi-track-rail {
   height: 14px; background: var(--n-200);
   border-radius: 7px; position: relative;
@@ -1540,10 +1547,10 @@
 }
 .kpi-lpill b { font-weight: 800; }
 
-/* Week columns (V8-12) - bottom-align via margin-top:auto */
+/* Tier A week columns (V8-12). V8-23: no longer bottom-aligned. */
 .kpi-wbars {
   display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 14px; margin-top: auto; padding-top: 22px;
+  gap: 14px; padding-top: 12px;
 }
 .kpi-wb {
   display: flex; flex-direction: column; min-width: 0;
@@ -1557,7 +1564,9 @@
   width: 100%; border-radius: 4px 4px 0 0;
 }
 .kpi-wb-bar-under { background: var(--green-500); }
-.kpi-wb-bar-over  { background: var(--red-700); }
+/* V8-25 lighter red so a run of over bars reads as information, not
+   an alarm wall. Same tone used across Tier A / B / C. */
+.kpi-wb-bar-over  { background: #DC5A5A; }
 .kpi-wb-bar-prog {
   background: repeating-linear-gradient(45deg, var(--navy-700) 0 6px, #3D6CB0 6px 12px);
 }
@@ -1595,6 +1604,110 @@
   background: var(--amber-100); border: 1px solid #F3D9AE;
   border-radius: var(--rad-pill); padding: 1px 7px;
   white-space: nowrap;
+}
+
+/* ── V8-21 Tier B (7-13 weeks): single row of compact bars, shared
+   vertical scale, stepped budget line, alternating axis labels. ── */
+.kpi-stripB {
+  padding-top: 12px;
+  position: relative;
+}
+.kpi-plotB {
+  height: 140px;
+  display: flex; align-items: flex-end; gap: 5px;
+  position: relative;
+  border-bottom: 1px solid var(--n-300);
+}
+.kpi-bB {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+  background: var(--green-500);
+  border: 0;
+  padding: 0;
+}
+.kpi-bB-under { background: var(--green-500); }
+.kpi-bB-over  { background: #DC5A5A; }
+.kpi-bB-prog  {
+  background: repeating-linear-gradient(45deg, var(--navy-700) 0 5px, #3D6CB0 5px 10px);
+}
+.kpi-bB:hover, .kpi-bB:focus-visible { filter: brightness(1.08); outline: 0; }
+.kpi-stripB-line {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  pointer-events: none;
+  width: 100%; height: 100%;
+}
+.kpi-axisB {
+  display: flex; gap: 5px; margin-top: 6px;
+}
+.kpi-axisB > span {
+  flex: 1; text-align: center;
+  font-size: 9px; color: var(--n-500);
+  white-space: nowrap; overflow: hidden;
+}
+.kpi-stripB-tip {
+  position: absolute; z-index: 20;
+  transform: translate(-50%, -100%);
+  background: var(--n-900); color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px; line-height: 1.4;
+  pointer-events: none;
+  white-space: nowrap;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.kpi-stripB-tip > b { font-size: 12.5px; }
+.kpi-stripB-tip .kpi-wb-d-good { color: #7BD389; }
+.kpi-stripB-tip .kpi-wb-d-bad  { color: #FCA5A5; }
+.kpi-stripB-tip .kpi-wb-d-mute { color: #B9C6DA; }
+
+/* ── V8-21 Tier C (> 13 weeks): one bar per fiscal period. ── */
+.kpi-stripC {
+  padding-top: 12px;
+}
+.kpi-plotC {
+  height: 150px;
+  display: flex; align-items: flex-end; gap: 10px;
+  border-bottom: 1px solid var(--n-300);
+}
+.kpi-pcol {
+  flex: 1;
+  display: flex; flex-direction: column;
+  justify-content: flex-end;
+  position: relative;
+  min-width: 0;
+}
+.kpi-pcol-bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+}
+.kpi-pcol-bar-under { background: var(--green-500); }
+.kpi-pcol-bar-over  { background: #DC5A5A; }
+.kpi-pcol-bar-prog {
+  background: repeating-linear-gradient(45deg, var(--navy-700) 0 6px, #3D6CB0 6px 12px);
+}
+.kpi-pcol-bud {
+  position: absolute; left: -4px; right: -4px;
+  border-top: 2px dashed var(--amber-600);
+}
+.kpi-axisC {
+  display: flex; gap: 10px; margin-top: 8px;
+}
+.kpi-axisC-cell {
+  flex: 1; text-align: center; min-width: 0;
+}
+.kpi-axisC-p {
+  font-size: 11px; font-weight: 800; color: var(--n-800);
+}
+.kpi-axisC-v {
+  font-size: 10.5px; color: var(--n-600);
+  font-variant-numeric: var(--num-tabular);
+}
+.kpi-axisC-d {
+  font-size: 10px; font-weight: 700; margin-top: 1px;
 }
 
 /* Signal cards (V8-13..V8-16) - four cards, one grammar, fixed lane

@@ -111,3 +111,43 @@ dollars below.
         or dashed with a stated reason - never a placeholder figure.
 - V8-20 Gates persist and add: zero `Numbers|Visual` toggle references, zero retired metric-card
         component references, zero hardcoded threshold literals in card copy.
+
+## H. Addendum - range-adaptive week strip (V8-21..V8-25, approved 2026-08-17)
+
+V8-12's last clause under-specified multi-period ranges. FYTD produced 33+ week columns, the
+strip wrapped to a multi-row grid, every row got its own baseline, and the story panel grew
+past 1,500px. This addendum makes the strip range-adaptive; single-period behavior is
+unchanged.
+
+- V8-21 THREE TIERS chosen by week count in the visible range:
+        - TIER A (<= 6 weeks · a single period or a short custom range): unchanged from
+          V8-12. Per-week columns with captions, verdicts, rolling targets, in-progress
+          treatment.
+        - TIER B (7 to 13 weeks): ONE row of compact bars, no captions. Shared vertical scale
+          across every bar. A stepped dashed budget line drawn over the bars (steps at period
+          boundaries where the weekly budget changes). Week labels on alternating columns
+          only. Per-bar detail on hover/focus: week dates, actual, budget, delta. Same color
+          rules (green under, red over, hatched navy in progress).
+        - TIER C (> 13 weeks): the strip CHANGES GRAIN to one bar per FISCAL PERIOD. Each bar
+          carries its period budget as a dashed line and beneath each: period label, actual,
+          and the delta with its arrow. Title changes to `THE RANGE · PERIOD BY PERIOD`.
+          Week-level detail is not lost; it lives in the table below, where a period band
+          expands to its weeks.
+- V8-22 Scale + layout: ONE shared vertical scale per strip (max of actual, budget across the
+        visible set, plus ~10% headroom). Never scale a bar against its own cell. The strip
+        NEVER wraps to a second row. If the item count would not fit legibly, move up a tier
+        (weeks -> periods). Tier B and C are single-row flex; bars shrink, they do not wrap.
+        Strip has a bounded height (~150px plot + axis); story block stays under about 320px
+        total at any range.
+- V8-23 The left panel must not stretch. Remove the bottom-align coupling between the two
+        panels. Left panel sizes to its own content (align-self: start) with a fixed internal
+        rhythm - eyebrow, headline, stat rail, track. A tall right panel must never open a
+        void in the left one.
+- V8-24 Range-dependent elements switch off honestly. Rolling target, projected period end,
+        and the in-progress week treatment apply to Tier A only. In Tiers B and C they are
+        omitted, not zeroed, not dashed inside the strip. Legend pills follow: Tier A shows
+        original + rolling; Tier B shows the weekly budget line; Tier C shows the period
+        budget line.
+- V8-25 Color weight. Over-budget bars use the lighter red (#DC5A5A family), not the darkest
+        red. At Tier C a run of over periods reads as information, not as an alarm wall.
+        Green, red and hatched-navy remain the only three bar states.
