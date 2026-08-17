@@ -419,23 +419,29 @@ export default function KpiLaborPage() {
 
   const isSalaried = data?.account_state === "salaried_only";
 
-  // V25-4 - auto-open runs ONCE per account. The prior version keyed
-  // on `expandedPeriods.size === 0`, so Collapse all triggered a
-  // re-fire that immediately re-opened the first two groups. Keying
-  // on a ref keeps the auto-open a one-shot initialisation:
-  //   first mount / account switch  -> ref differs from account, open first two, update ref
-  //   toggle a group                -> effect re-fires, ref matches, early return (state persists)
-  //   collapse all                  -> state empties, effect re-fires, ref matches, early return
-  //   range change (same account)   -> grouped changes, effect re-fires, ref matches, early return
-  // Net result: auto-open exactly once per account switch, user's
-  // expansion state survives every subsequent range change.
+  // V25-4 + V25-18 - auto-open runs ONCE per account. Two rules:
+  //   V25-4 - keying on `expandedPeriods.size === 0` re-fired every
+  //           time the user emptied state (Collapse all), so Collapse
+  //           never won. Keying on a ref keeps this a one-shot init:
+  //             first mount / account switch  -> ref differs, open, update ref
+  //             toggle / collapse-all / range -> ref matches, early return
+  //   V25-18 - multi-period ranges open COLLAPSED. The collapsed period
+  //            view is the most useful read in the table; only single-
+  //            period ranges auto-open (their weeks visible on landing).
   const autoOpenAccountRef = useRef(null);
   useEffect(() => {
     if (!grouped.length) return;
     if (autoOpenAccountRef.current === account) return;
     autoOpenAccountRef.current = account;
-    // Open first two groups by default. V6-5 - key varies by grouping
-    // mode (period_no in period mode, month-index in month mode).
+    // V25-18 - only single-period ranges auto-open; multi-period
+    // ranges (FYTD, month, custom, last_4wk, last_13wk) land collapsed.
+    if (rangeSelectionEarly?.kind !== "period") {
+      setExpandedPeriods(new Set());
+      return;
+    }
+    // Open first two groups by default (single-period lands with its
+    // weeks visible). V6-5 - key varies by grouping mode (period_no in
+    // period mode, month-index in month mode).
     const openKey = (g) => g?.groupHint?.kind === "month" ? g.groupHint.monthIndex : g?.period_no;
     const next = new Set();
     const k0 = openKey(grouped[0]);
@@ -443,7 +449,7 @@ export default function KpiLaborPage() {
     if (k0 != null) next.add(k0);
     if (k1 != null) next.add(k1);
     setExpandedPeriods(next);
-  }, [grouped, account]);
+  }, [grouped, account, rangeSelectionEarly]);
 
   // F16 - per-worker range totals for the rate-on-hover title. Cheap;
   // derived from filteredActuals which is already memo'd.
