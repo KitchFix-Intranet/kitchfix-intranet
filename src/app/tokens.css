@@ -435,6 +435,13 @@
   --sc2-rail-accent-success:#8fd6ab;   /* AAA (8.92) - ln .a .ok, queue chevron */
   --sc2-rail-accent-warn:   #f2d49a;   /* AAA (10.57) - ln.att attention line */
   --sc2-rail-accent-active: #9dc7e8;   /* AAA (8.4) - in-progress left border */
+  /* PR-H (2026-08-17): rail-flag bg + focus-halo. Muted amber panel
+     for the digit-drop advisory row; soft green halo for the lit-ring
+     focus dot on EntryLedgerRail. Alpha kept low so the row remains
+     legible against sc2-rail-bg without pulling attention away from
+     the entered value. */
+  --sc2-rail-flag-bg:       rgba(242,212,154,0.14);
+  --sc2-rail-focus-halo:    rgba(143,214,171,0.24);
 
   /* Rail card surface (M-4b 2026-07-30). One step lighter than
      --sc2-rail-bg so a nested card reads as raised without leaving
