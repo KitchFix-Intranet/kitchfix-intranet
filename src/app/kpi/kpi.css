@@ -155,7 +155,7 @@
   position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
   background: #ffffff;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--rad-12);
+  border-radius: var(--rad-10);
   box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
   padding: 6px;
   min-width: 190px;
@@ -163,7 +163,7 @@
 .kpi-cmd-pop-item {
   display: flex; width: 100%; justify-content: space-between; align-items: center;
   text-align: left;
-  border-radius: var(--rad-8);
+  border-radius: var(--rad-6);
   padding: 8px 10px;
   font: inherit; font-size: 13px;
   color: var(--text-strong);
