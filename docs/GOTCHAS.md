@@ -659,6 +659,39 @@ EOF
 
 Must print `CLEAN`. Related SC scope trap in the same defect class: `.scv2`-scoped tokens (`--sc2-*`) resolve to nothing outside `.scv2`; the H6 hotfix on `kpi-cmd` was that same crack in a different shape.
 
+### CSS custom-property calc() resolves at DECLARATION site, not at USE site
+
+Declaring a scaled token like `--kpi-cmd-h: calc(60px * var(--kf-scale))` at `:root` bakes `calc(60 * 1) = 60` into the value the browser inherits down the tree. Setting `--kf-scale: 0.9` on a descendant does NOT re-resolve the ancestor `--kpi-cmd-h` value; the descendant just sees the same 60 it inherited. The `--kf-scale` variable only reaches the calc when the calc itself is INSIDE the descendant's declaration scope.
+
+The trap: a scale layer at `:root` that "should" reach every subtree via a `.foo { --kf-scale: 0.9 }` rule silently does nothing. Verified via computed styles: `getComputedStyle(wrap).getPropertyValue("--kpi-cmd-h")` returns `calc(60px * 1)` on the wrap even after wrap sets `--kf-scale: 0.9` on itself.
+
+**The fix - SC's `.scv2` pattern.** Publish the scale variable at `:root` as a documented default, but REDECLARE every scaled token INSIDE the scope selector where the scale flips:
+
+```css
+:root { --kf-scale: 1; }                      /* house default; documented */
+.kpi-app {
+  --kf-scale: 0.9;
+  --kpi-cmd-h: calc(60px * var(--kf-scale));  /* re-resolves against 0.9 */
+  --kpi-ctl-h: calc(34px * var(--kf-scale));
+  /* ... every scaled token repeated at this scope ... */
+}
+```
+
+Now the calcs resolve against the `.kpi-app` scope's `--kf-scale`, and every descendant reads the scaled value.
+
+**Verification pattern.** A quick headless probe (works against any page that loads the module CSS - even an auth-gated one where the CSS is loaded but the shell doesn't hydrate) confirms the wiring:
+
+```js
+// inject an inline calc against --kf-scale at the target scope -
+// getComputedStyle resolves it against THAT scope's --kf-scale
+const el = document.createElement("div");
+el.style.cssText = "height: calc(60px * var(--kf-scale))";
+target.appendChild(el);
+getComputedStyle(el).height  // 54px inside .kpi-app; 60px at :root
+```
+
+**First seen:** 2026-08-17 KPI scale layer PR (#686). Cost: caught by the C1 parity harness before merge; would have shipped as "the 0.9 flip does nothing" defect otherwise.
+
 ---
 
 ## Service Calendar

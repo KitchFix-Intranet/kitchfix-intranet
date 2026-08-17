@@ -8,7 +8,9 @@
 import { useEffect, useState } from "react";
 import { fmt$, fmtHrs } from "../lib/formatting.js";
 
-const OPEN_KEY = "kpi:board:details";
+// S-12: default COLLAPSED, state persisted per user. Key name switched
+// from `kpi:board:details` to `kpi.details.open` per spec S-12.
+const OPEN_KEY = "kpi.details.open";
 
 function Cell({ label, value, caption, muted }) {
   return (
@@ -21,7 +23,7 @@ function Cell({ label, value, caption, muted }) {
 }
 
 export function DetailsStrip({ board }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     try { const v = localStorage.getItem(OPEN_KEY); if (v === "0" || v === "1") setOpen(v === "1"); } catch {}

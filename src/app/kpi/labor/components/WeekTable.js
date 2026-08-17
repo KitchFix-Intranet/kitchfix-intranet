@@ -423,11 +423,17 @@ export function WeekTable({
     return { g, totals: t, states, periodBudget, weeksInBand };
   }), [grouped, budgetByPeriod, weekBudgetsByWeekStart]);
 
-  // In-progress period detection: period whose end date >= today.
+  // In-progress period detection: today falls within the period's
+  // range. The old check inspected `g.weeks[last index]`, but grouped
+  // weeks are sorted week_start DESC (newest first), so the last-index
+  // week is the OLDEST - returning false on any period with a closed
+  // week even when today is still inside. That was the V9-7 defect
+  // (band + total rendered `▼ $X` delta instead of `<n>% used` on
+  // in-progress periods). Fix: check if ANY week in the group has
+  // week_start <= today <= week_end - the in-progress boundary.
   function isPeriodInProgress(g, today) {
     if (g.groupHint?.kind !== "period") return false;
-    const lastWeek = g.weeks[g.weeks.length - 1];
-    return lastWeek && lastWeek.week_end >= today;
+    return g.weeks.some(w => w.week_start <= today && w.week_end >= today);
   }
 
   // Grand row description

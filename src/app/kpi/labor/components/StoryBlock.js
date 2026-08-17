@@ -471,7 +471,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
         <div className="kpi-story-rail3">
           <div className="kpi-story-s"><span className="kpi-story-v num">{workers}</span><span className="kpi-story-k">Workers</span></div>
           <div className="kpi-story-s"><span className="kpi-story-v num">{fmtHrs(hours)}</span><span className="kpi-story-k">Hours</span></div>
-          <div className="kpi-story-s"><span className="kpi-story-v num">{avgRate != null ? `$${avgRate.toFixed(2)}` : "—"}</span><span className="kpi-story-k">Avg&nbsp;rate</span></div>
+          <div className="kpi-story-s"><span className="kpi-story-v num">{avgRate != null ? `$${avgRate.toFixed(2)}` : "—"}</span><span className="kpi-story-k">Avg rate</span></div>
         </div>
         {budget > 0 && <BudgetTrack board={board} />}
       </div>

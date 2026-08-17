@@ -135,9 +135,17 @@ export function Shell({
         <div>Generated {new Date().toLocaleString()}</div>
       </div>
 
-      {/* V7-7 - single command bar. */}
+      {/* V7-7 - single command bar. Responsive give order (S-10):
+          (1) Range date-tail ellipses first, (2) title account tail
+          next, (3) fiscal meta collapses to a compact `P<n> · W<w>`
+          under the .kpi-meta-narrow media rule. Section, Export, and
+          the freshness chip never shrink. */}
       <div className="kpi-cmd" role="banner">
-        <span className="kpi-cmd-title">KPI Dashboard <span className="kpi-cmd-dot" aria-hidden="true">·</span> {account}</span>
+        <span className="kpi-cmd-title">
+          <span className="kpi-cmd-title-brand">KPI Dashboard</span>
+          <span className="kpi-cmd-dot" aria-hidden="true">·</span>
+          <span className="kpi-cmd-title-acct">{account}</span>
+        </span>
 
         <SectionMenu activeKey={activeSection} />
 
@@ -156,11 +164,16 @@ export function Shell({
         )}
 
         <div className="kpi-meta">
-          {fiscal?.today && (<span>Today<b>{fiscal.today}</b></span>)}
-          {fiscal?.today && fiscal?.period != null && <span className="kpi-meta-sep" aria-hidden="true" />}
-          {fiscal?.period != null && (<span>Period<b>{fiscal.period}</b></span>)}
-          {fiscal?.period != null && fiscal?.week != null && <span className="kpi-meta-sep" aria-hidden="true" />}
-          {fiscal?.week != null && (<span>Week<b>{fiscal.week}</b></span>)}
+          {fiscal?.today && (<span className="kpi-meta-today">Today<b>{fiscal.today}</b></span>)}
+          {fiscal?.today && fiscal?.period != null && <span className="kpi-meta-sep kpi-meta-sep-today" aria-hidden="true" />}
+          {fiscal?.period != null && (<span className="kpi-meta-period">Period<b>{fiscal.period}</b></span>)}
+          {fiscal?.period != null && fiscal?.week != null && <span className="kpi-meta-sep kpi-meta-sep-week" aria-hidden="true" />}
+          {fiscal?.week != null && (<span className="kpi-meta-week">Week<b>{fiscal.week}</b></span>)}
+          {/* Compact fallback: shown only when meta collapses via
+              @media (max-width). Renders as `P<n> · W<w>`. */}
+          {fiscal?.period != null && fiscal?.week != null && (
+            <span className="kpi-meta-compact" aria-hidden="true">P<b>{fiscal.period}</b> · W<b>{fiscal.week}</b></span>
+          )}
         </div>
 
         <span className="kpi-cmd-spacer" aria-hidden="true" />
