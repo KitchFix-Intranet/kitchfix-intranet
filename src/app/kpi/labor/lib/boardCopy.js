@@ -70,9 +70,18 @@ export function buildSentence({ board, account, rangeLabel }) {
     };
   }
   if (board.kind === "multi_period") {
-    const span = board.period_span
-      ? (board.period_span.first === board.period_span.last ? `Period ${board.period_span.first}` : `P${board.period_span.first}-P${board.period_span.last}`)
-      : (rangeLabel || "this range");
+    // Prefer the semantic range label ("May 2026", "the last 4 weeks",
+    // "fiscal year to date") when the client resolved one; otherwise
+    // fall back to the period span. Never emit an ISO-range fallback
+    // as the sentence body - use the span instead.
+    const isSemantic = rangeLabel && !/^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}$/.test(rangeLabel);
+    const span = isSemantic
+      ? rangeLabel
+      : (board.period_span
+        ? (board.period_span.first === board.period_span.last
+          ? `Period ${board.period_span.first}`
+          : `P${board.period_span.first}-P${board.period_span.last}`)
+        : "this range");
     return {
       pre: `${account} is `,
       verdictBold,

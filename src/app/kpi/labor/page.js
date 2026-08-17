@@ -642,7 +642,13 @@ export default function KpiLaborPage() {
           <Sentence board={data.board} account={account} rangeLabel={rangeLabelForSentence} />
           {data.board?.applies !== false && (
             <>
-              <StoryBlock board={data.board} account={account} rangeLabel={rangeLabelForSentence} />
+              <StoryBlock
+                board={data.board}
+                account={account}
+                rangeLabel={rangeLabelForSentence}
+                budgetPeriods={data?.budget_periods || []}
+                todayISO={today}
+              />
               <SignalCards board={data.board} freshness={freshness} />
               <DetailsStrip board={data.board} />
             </>

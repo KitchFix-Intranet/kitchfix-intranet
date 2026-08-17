@@ -288,6 +288,7 @@ export function buildBoard({
     return {
       week_start: w.week_start,
       week_end: w.week_end,
+      period_no: wPeriod,
       state,
       spent: w.amount,
       hours: w.hours,
