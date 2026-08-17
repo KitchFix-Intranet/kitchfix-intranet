@@ -608,8 +608,8 @@ export default function KpiLaborPage() {
     };
   })();
 
-  // Human range label for the sentence's multi-period template.
-  const rangeLabelForSentence = (() => {
+  // Human range label for the board's multi-period display.
+  const rangeLabelForBoard = (() => {
     if (rangeSelectionEarly?.kind === "period") return `Period ${rangeSelectionEarly.value}`;
     if (rangeSelectionEarly?.kind === "month") {
       const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -643,7 +643,7 @@ export default function KpiLaborPage() {
               <StoryBlock
                 board={data.board}
                 account={account}
-                rangeLabel={rangeLabelForSentence}
+                rangeLabel={rangeLabelForBoard}
                 budgetPeriods={data?.budget_periods || []}
                 todayISO={today}
               />

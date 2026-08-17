@@ -57,13 +57,11 @@
   --kpi-size-ctl:     calc(12.5px * var(--kf-scale));
   --kpi-size-body:    calc(13px   * var(--kf-scale));
   --kpi-size-flow:    calc(14px   * var(--kf-scale));
-  --kpi-size-callout: calc(15.5px * var(--kf-scale));
   --kpi-size-stat:    calc(16px   * var(--kf-scale));
   --kpi-size-lead:    calc(17px   * var(--kf-scale));
   --kpi-size-title:   calc(18px   * var(--kf-scale));
-  --kpi-size-value:   calc(22px   * var(--kf-scale));
   --kpi-size-big:     calc(25px   * var(--kf-scale));
-  --kpi-size-hero:    calc(38px   * var(--kf-scale));
+  --kpi-size-splitv:  calc(28px   * var(--kf-scale)); /* V21-6 split-block value */
 
   /* Space (S-2). The canonical 4-based scale 1..6 (4/8/12/16/20/24)
      matches the site-wide --space-* semantic ramp; the -6px / -10px
@@ -1525,9 +1523,10 @@
   .kpi-sys-h { display: none; }
 }
 
-/* ── V8 BOARD (V8-1..V8-20) ─────────────────────────────────────
-   Sentence + story block replace the v6 main-column stack. Signal
-   cards + details strip land in C3. */
+/* ── V8 BOARD (V8-1..V8-20 + V21-1..V21-16) ─────────────────────
+   Spend card + week strip + signal cards + details strip (ALL THE
+   NUMBERS). V21 retired the sentence card, budget track, three-stat
+   rail, strip legend pills, lens toggle, and help control. */
 
 /* S-13 board section gap tightens 16 -> 12 (base) via --kpi-space-3
    so the sentence + story + signals + details clear the fold at
@@ -1613,14 +1612,117 @@
   gap: var(--kpi-space-1);
 }
 
-/* Left panel: eyebrow row survives; V21-5 spend card lands after it. */
-.kpi-story-eye { display: flex; align-items: baseline; gap: var(--kpi-space-9px); }
-.kpi-story-eye-1 {
+/* Left panel: spend card (V21-5..V21-9). Header row / equal-height
+   split block / bottom-anchored budget footer. Halves are ONE grid
+   container so both figures are always the same height (verify by
+   computed style, not by eye). */
+.kpi-spend {
+  display: flex; flex-direction: column;
+  gap: var(--kpi-space-3);
+  flex: 1 1 auto;
+}
+.kpi-spend-h {
+  display: flex; align-items: center; gap: var(--kpi-space-3);
+}
+.kpi-spend-h-left {
+  display: flex; align-items: baseline; gap: var(--kpi-space-9px);
+  min-width: 0; flex: 1 1 auto;
+}
+.kpi-spend-h-title {
   font-size: var(--kpi-size-caption); font-weight: 800; letter-spacing: 0.08em;
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
 }
-.kpi-story-eye-2 {
+.kpi-spend-h-dates {
   font-size: var(--kpi-size-caption); color: var(--n-500); white-space: nowrap;
+}
+
+.kpi-split {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-10);
+  overflow: hidden;
+}
+.kpi-split-half {
+  position: relative;
+  padding: var(--kpi-space-14px);
+  /* Accent height + gap so it never overlaps the label - the render
+     defect V21-6 calls out. Value is a hairline; kept literal. */
+  padding-top: calc(var(--kpi-space-14px) + 3px + var(--kpi-space-2));
+  display: flex; flex-direction: column;
+  gap: var(--kpi-space-1);
+  min-width: 0;
+  background: var(--surface-card);
+}
+.kpi-split-half + .kpi-split-half {
+  border-left: 1px solid var(--n-200);
+}
+.kpi-split-accent {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--n-300);
+}
+.kpi-split-lab {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.1em;
+  color: var(--n-600); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kpi-split-val {
+  font-size: var(--kpi-size-splitv); font-weight: 800; letter-spacing: -0.012em;
+  color: var(--n-900); font-variant-numeric: var(--num-tabular);
+  line-height: 1.05;
+  white-space: nowrap;
+}
+.kpi-split-sub {
+  font-size: var(--kpi-size-micro); color: var(--n-600);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Right-half state variants: accent + background + text move together. */
+.kpi-split-half-nav {
+  background: linear-gradient(180deg, #F2F6FC, var(--navy-100));
+}
+.kpi-split-half-nav .kpi-split-accent {
+  background: linear-gradient(90deg, var(--navy-700), #2C5187);
+}
+.kpi-split-half-nav .kpi-split-lab,
+.kpi-split-half-nav .kpi-split-val,
+.kpi-split-half-nav .kpi-split-sub { color: var(--navy-700); }
+
+.kpi-split-half-under { background: var(--green-100); }
+.kpi-split-half-under .kpi-split-accent { background: var(--green-700); }
+.kpi-split-half-under .kpi-split-lab,
+.kpi-split-half-under .kpi-split-val,
+.kpi-split-half-under .kpi-split-sub { color: var(--green-700); }
+
+.kpi-split-half-over { background: var(--red-100); }
+.kpi-split-half-over .kpi-split-accent { background: var(--red-700); }
+.kpi-split-half-over .kpi-split-lab,
+.kpi-split-half-over .kpi-split-val,
+.kpi-split-half-over .kpi-split-sub { color: var(--red-700); }
+
+.kpi-split-half-mute .kpi-split-val { color: var(--n-400); }
+.kpi-split-half-mute .kpi-split-lab { color: var(--n-500); }
+
+.kpi-spend-foot {
+  display: flex; align-items: baseline; gap: var(--kpi-space-14px);
+  padding-top: var(--kpi-space-3);
+  border-top: 1px solid var(--n-200);
+  margin-top: auto;
+}
+.kpi-spend-foot-lab {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.1em;
+  color: var(--n-600); text-transform: uppercase;
+  /* Explicit gap to value - the missing-gap defect V21-7 calls out. */
+  margin-right: var(--kpi-space-2);
+}
+.kpi-spend-foot-val {
+  font-size: var(--kpi-size-lead); font-weight: 800;
+  color: var(--n-900); font-variant-numeric: var(--num-tabular);
+  white-space: nowrap;
+}
+.kpi-spend-foot-ctx {
+  font-size: var(--kpi-size-micro); color: var(--n-500);
+  margin-left: auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* Week strip header (V8-11) */
@@ -1630,11 +1732,32 @@
   color: var(--n-600); font-weight: 700; white-space: nowrap;
 }
 .kpi-wh-sp { flex: 1 1 auto; }
+/* V21-10 - one target-line label sits at the right of the strip header
+   for Tier A only. Text pattern: `╌ weekly target $X`. */
+.kpi-wh-tgt {
+  display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
+  font-size: var(--kpi-size-meta); font-weight: 700;
+  color: var(--amber-700, #92580A);
+  white-space: nowrap;
+}
+.kpi-wh-tgt-dash {
+  width: var(--kpi-space-3); border-top: 2px dashed currentColor;
+  display: inline-block;
+}
+.kpi-wh-tgt b { font-weight: 800; color: var(--n-900); font-variant-numeric: var(--num-tabular); }
 
-/* Tier A week columns (V8-12). V8-23: no longer bottom-aligned. */
+/* Tier A week columns (V8-12). V21-10: grid template comes from the
+   week count inline (never hardcoded); position:relative anchors the
+   continuous target line drawn across the plot band. */
 .kpi-wbars {
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  position: relative;
+  display: grid;
   gap: var(--kpi-space-14px); padding-top: var(--kpi-space-3);
+}
+.kpi-tierA-tgt {
+  position: absolute; left: 0; right: 0;
+  height: 0; border-top: 2px dashed var(--amber-600);
+  pointer-events: none; z-index: 1;
 }
 .kpi-wb {
   display: flex; flex-direction: column; min-width: 0;
@@ -1651,8 +1774,10 @@
 /* V8-25 lighter red so a run of over bars reads as information, not
    an alarm wall. Same tone used across Tier A / B / C. */
 .kpi-wb-bar-over  { background: #DC5A5A; }
+/* V21-10 - Tier A in-progress bar is AMBER hatched (running-week
+   treatment). Tier B/C prog styles remain navy and are untouched. */
 .kpi-wb-bar-prog {
-  background: repeating-linear-gradient(45deg, var(--navy-700) 0 6px, #3D6CB0 6px 12px);
+  background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
 }
 .kpi-wb-basel {
   width: 100%; height: var(--kpi-space-6px); border-radius: 3px;
@@ -1956,18 +2081,35 @@
 .kpi-det-h-hint {
   margin-left: auto; font-size: var(--kpi-size-caption); color: var(--n-500);
 }
+/* V21-13 - two labeled groups (BUDGET / CREW), four cells each,
+   side-by-side. Group labels 9.5/800 tracking .09em uppercase n-500. */
 .kpi-det-table {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
+}
+.kpi-det-grp {
+  padding: var(--kpi-space-3) var(--kpi-space-4);
+  border-right: 1px solid var(--n-200);
+  min-width: 0;
+}
+.kpi-det-grp:last-child { border-right: 0; }
+.kpi-det-grp-h {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.09em;
+  color: var(--n-500); text-transform: uppercase;
+  margin-bottom: var(--kpi-space-2);
+}
+.kpi-det-grp-cells {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .kpi-det-cell {
-  padding: var(--kpi-space-3) var(--kpi-space-4);
+  padding-right: var(--kpi-space-3);
   border-right: 1px solid var(--n-100);
+  min-width: 0;
 }
-.kpi-det-cell:last-child { border-right: 0; }
+.kpi-det-grp-cells .kpi-det-cell:last-child { border-right: 0; }
 .kpi-det-k {
   font-size: var(--kpi-size-caption); color: var(--n-600); font-weight: 600;
-  white-space: nowrap;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .kpi-det-v {
   font-size: var(--kpi-size-lead); font-weight: 700;
@@ -1977,25 +2119,25 @@
 .kpi-det-v-mute { color: var(--n-400); }
 .kpi-det-c {
   font-size: var(--kpi-size-tick); color: var(--n-500);
-  white-space: nowrap;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Board responsive: signals collapse to 2 wide then 1 wide; details
-   strip collapses cell columns similarly. */
+/* Board responsive: signals collapse; details strip stacks the two
+   groups on top of each other under 1280 (4 cells still fit per row). */
 @media (max-width: 1279px) {
   .kpi-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-det-table { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .kpi-det-cell:nth-child(3n) { border-right: 0; }
-  .kpi-det-cell:nth-child(n+4) { border-top: 1px solid var(--n-100); }
+  .kpi-det-table { grid-template-columns: 1fr; }
+  .kpi-det-grp { border-right: 0; border-bottom: 1px solid var(--n-200); }
+  .kpi-det-grp:last-child { border-bottom: 0; }
 }
 @media (max-width: 767px) {
   .kpi-story { grid-template-columns: 1fr; }
   .kpi-story-left { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-wbars { grid-template-columns: repeat(2, 1fr); }
   .kpi-sigs { grid-template-columns: 1fr; }
-  .kpi-det-table { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-det-cell:nth-child(2n) { border-right: 0; }
-  .kpi-det-cell:nth-child(n+3) { border-top: 1px solid var(--n-100); }
+  .kpi-det-grp-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-det-grp-cells .kpi-det-cell:nth-child(2n) { border-right: 0; }
+  .kpi-det-grp-cells .kpi-det-cell:nth-child(n+3) { border-top: 1px solid var(--n-100); }
 }
 
 

@@ -1,43 +1,139 @@
 "use client";
 // src/app/kpi/labor/components/StoryBlock.js
 //
-// V21 board simplification. Left panel is the spend card (rebuilt in
-// C3). Right panel is the week strip; tier renderers untouched. Legend
-// pills, $/hrs lens toggle, ? help control retired per V21-4. Dollars
-// only from here.
-//
-// The strip is range-adaptive (V8-21):
-//   Tier A (<= 6 weeks)  - per-week columns with captions, one shared
-//                          scale, one continuous target line (rebuilt
-//                          in C3).
-//   Tier B (7-13 weeks)  - single-row compact bars with a shared
-//                          scale, a stepped dashed weekly budget line,
-//                          alternating axis labels, hover tooltip.
-//   Tier C (> 13 weeks)  - grain changes to one bar per fiscal period.
-//                          Header title switches to
-//                          `THE RANGE · PERIOD BY PERIOD`.
+// V21 board simplification (V21-5..V21-10, V21-13). Left panel is the
+// spend card: header (period + dates + verdict pill) / equal-height
+// split block (spent | left-to-spend | under | over | muted dash) /
+// budget footer. Right panel is the week strip; Tier A carries a
+// single continuous target line and amber running / navy allowance
+// treatment. Tier B and Tier C are untouched.
 
 import { useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 
-// ── TIER A: per-week columns with captions ────────────────────────
-function daysElapsed(weekStartISO) {
-  const [y, m, d] = weekStartISO.split("-").map(Number);
-  const start = Date.UTC(y, m - 1, d);
-  const now = Date.now();
-  const days = Math.floor((now - start) / 86400000) + 1;
-  return Math.max(1, Math.min(7, days));
+// V8-7 verdict label + variant. One source of truth for the pill in
+// the spend card header (was in the retired sentence card's helper).
+function verdictDisplay(verdict) {
+  if (verdict === "on_track") return { label: "ON TRACK", cls: "good" };
+  if (verdict === "watch")    return { label: "WATCH",    cls: "warn" };
+  if (verdict === "over")     return { label: "OVER BUDGET", cls: "bad" };
+  return null;
 }
 
-function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
+// ── Spend card (V21-5..V21-9) ─────────────────────────────────────
+function SpendCard({ board, eyebrowLabel, dateRange }) {
+  const budget = board?.period_budget || board?.range_budget || null;
+  const spent = board?.spent_to_date ?? 0;
+  const variance = board?.variance ?? null;
+  const kind = board?.kind;
+  const noBudget = !budget || kind === "no_budget";
+
+  // V21-5 verdict pill text: `<BAND> · $X UNDER` / `... $X OVER`.
+  const vd = verdictDisplay(board?.verdict);
+  const pillText = (() => {
+    if (!vd) return null;
+    if (variance == null) return vd.label;
+    const sign = variance < 0 ? "UNDER" : variance > 0 ? "OVER" : "";
+    const money = Math.abs(variance) < 0.5 ? null : fmt$(Math.abs(variance));
+    if (!money) return vd.label;
+    return `${vd.label} · ${money} ${sign}`;
+  })();
+
+  const spentPct = budget > 0 ? Math.round((spent / budget) * 100) : null;
+
+  // Right-half state (V21-6/V21-9).
+  const right = (() => {
+    if (noBudget) {
+      const reason = kind === "no_budget"
+        ? "no budget"
+        : board?.reason === "envelope" ? "envelope-based" : "no budget";
+      return { variantCls: "kpi-split-half-mute", label: reason, value: "—", sub: "" };
+    }
+    if (kind === "single_period_in_progress") {
+      const left = Math.max(0, (budget || 0) - spent);
+      const denom = (board?.in_progress_week_start ? 1 : 0) + (board?.not_started_weeks_count || 0);
+      return {
+        variantCls: "kpi-split-half-nav",
+        label: "Left to spend",
+        value: fmt$(left),
+        sub: `${denom} week${denom === 1 ? "" : "s"} remaining`,
+      };
+    }
+    // Closed period or multi-period range with a resolved budget.
+    if (variance != null && variance > 0.5) {
+      return {
+        variantCls: "kpi-split-half-over",
+        label: "Over budget",
+        value: fmt$(Math.abs(variance)),
+        sub: "vs budget",
+      };
+    }
+    return {
+      variantCls: "kpi-split-half-under",
+      label: "Under budget",
+      value: variance != null ? fmt$(Math.abs(variance)) : "—",
+      sub: "vs budget",
+    };
+  })();
+
+  // Footer context (V21-7).
+  const footerCtx = (() => {
+    if (noBudget) return "";
+    if (kind === "single_period_in_progress") {
+      const p = board?.elapsed_pct;
+      return p != null ? `${Math.round(p)}% of period gone` : "";
+    }
+    return "period closed";
+  })();
+
+  return (
+    <div className="kpi-spend">
+      {/* V21-5 header row */}
+      <div className="kpi-spend-h">
+        <div className="kpi-spend-h-left">
+          <span className="kpi-spend-h-title">{eyebrowLabel}</span>
+          {dateRange && <span className="kpi-spend-h-dates">{dateRange}</span>}
+        </div>
+        {vd && pillText && (
+          <span className={`kpi-vpill kpi-vpill-${vd.cls}`}>
+            <span className="kpi-vpill-dot" aria-hidden="true" />
+            {pillText}
+          </span>
+        )}
+      </div>
+
+      {/* V21-6 split block */}
+      <div className="kpi-split">
+        <div className="kpi-split-half">
+          <span className="kpi-split-accent" aria-hidden="true" />
+          <div className="kpi-split-lab">Spent so far</div>
+          <div className="kpi-split-val num">{fmt$(spent)}</div>
+          <div className="kpi-split-sub">{spentPct != null ? `${spentPct}% of budget` : ""}</div>
+        </div>
+        <div className={`kpi-split-half ${right.variantCls}`}>
+          <span className="kpi-split-accent" aria-hidden="true" />
+          <div className="kpi-split-lab">{right.label}</div>
+          <div className="kpi-split-val num">{right.value}</div>
+          <div className="kpi-split-sub">{right.sub}</div>
+        </div>
+      </div>
+
+      {/* V21-7 footer */}
+      <div className="kpi-spend-foot">
+        <span className="kpi-spend-foot-lab">Budget</span>
+        <b className="kpi-spend-foot-val num">{noBudget ? "—" : fmt$(budget)}</b>
+        <span className="kpi-spend-foot-ctx">{footerCtx}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── TIER A: per-week columns with captions ────────────────────────
+function TierAWeekBar({ w, weeklyAllowance, scale }) {
   const value = w.state === "not_started"
     ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
     : (w.spent || 0);
-  const target = w.state === "not_started"
-    ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
-    : (w.original_target ?? weeklyOriginal ?? 0);
   const barPct = w.state === "not_started" ? 0 : Math.max(0, Math.min(100, (value / scale) * 90));
-  const targetPct = target != null ? Math.max(0, Math.min(100, (target / scale) * 90)) : null;
   const isNotStarted = w.state === "not_started";
   const isInProgress = w.state === "in_progress";
   const isClosed = w.state === "closed";
@@ -46,7 +142,6 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
     : isClosed
       ? `kpi-wb-bar ${w.delta_sign === "over" ? "kpi-wb-bar-over" : "kpi-wb-bar-under"}`
       : "";
-  const dashCls = isNotStarted ? "kpi-wb-target kpi-wb-target-roll" : "kpi-wb-target";
   const captionValue = isInProgress && w.unapproved_flag ? `≥ ${fmt$(value)}` : fmt$(value);
   let statusLine;
   if (isClosed && w.delta_vs_original != null) {
@@ -54,11 +149,14 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
     const cls = w.delta_sign === "under" ? "kpi-wb-d-good" : w.delta_sign === "over" ? "kpi-wb-d-bad" : "kpi-wb-d-mute";
     statusLine = <span className={`kpi-wb-d ${cls}`}>{arrow} {fmt$(Math.abs(w.delta_vs_original))} {w.delta_sign}</span>;
   } else if (isInProgress) {
+    // V21-10 - running week status line uses the allowance ("$X allowance").
+    const allow = w.weekly_allowance ?? weeklyAllowance;
     if (w.unapproved_flag && w.unapproved_hours > 0) {
       statusLine = <span className="kpi-wb-warn">⚠ {fmtHrs(w.unapproved_hours)} hrs awaiting approval</span>;
+    } else if (allow != null) {
+      statusLine = <span className="kpi-wb-d kpi-wb-d-mute">running · <b>{fmt$(allow)}</b> allowance</span>;
     } else {
-      const days = daysElapsed(w.week_start);
-      statusLine = <span className="kpi-wb-d kpi-wb-d-mute">{days} of 7 days</span>;
+      statusLine = <span className="kpi-wb-d kpi-wb-d-mute">running</span>;
     }
   } else if (isNotStarted) {
     statusLine = <span className="kpi-wb-d kpi-wb-d-mute">to stay on budget</span>;
@@ -67,7 +165,6 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
   return (
     <div className="kpi-wb">
       <div className="kpi-wb-plot">
-        {targetPct != null && <span className={dashCls} style={{ bottom: `${targetPct}%` }} />}
         {isNotStarted ? (
           <div className="kpi-wb-basel" />
         ) : (
@@ -87,30 +184,48 @@ function TierAStrip({ board }) {
   const weeks = board?.weeks || [];
   const weeklyOriginal = board?.weekly_original_target;
   const weeklyAllowance = board?.weekly_allowance;
+  // V21-10 shared scale: max of visible actuals + target + allowance,
+  // plus ~10% headroom. One denominator across the strip so the target
+  // line and every bar share a plot reference.
   const scale = (() => {
     let max = 1;
     for (const w of weeks) {
-      const value = w.state === "not_started"
+      const v = w.state === "not_started"
         ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
         : (w.spent || 0);
-      const target = w.state === "not_started"
+      const t = w.state === "not_started"
         ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
         : (w.original_target ?? weeklyOriginal ?? 0);
-      const local = Math.max(value, target || 0);
+      const local = Math.max(v, t || 0);
       if (local > max) max = local;
     }
+    if (weeklyOriginal) max = Math.max(max, weeklyOriginal);
     return max * 1.10;
   })();
+
+  // V21-10 continuous target line at ORIGINAL weekly budget, one line
+  // across the whole plot band. Rendered ONLY when a scalar original
+  // exists (single-period ranges). Y placed at:
+  //   top = padding-top + (1 - bar-fraction) * plot-a
+  // matching the bar formula (bar height = value/scale * 90%).
+  const tgtFrac = weeklyOriginal ? Math.min(0.9, (weeklyOriginal / scale) * 0.9) : null;
+
   return (
     <div
       className="kpi-wbars"
       style={{ gridTemplateColumns: `repeat(${Math.max(1, weeks.length)}, minmax(0, 1fr))` }}
     >
+      {tgtFrac != null && (
+        <span
+          className="kpi-tierA-tgt"
+          style={{ top: `calc(var(--kpi-space-3) + ${1 - tgtFrac} * var(--kpi-plot-a))` }}
+          aria-hidden="true"
+        />
+      )}
       {weeks.map(w => (
         <TierAWeekBar
           key={w.week_start}
           w={w}
-          weeklyOriginal={weeklyOriginal}
           weeklyAllowance={weeklyAllowance}
           scale={scale}
         />
@@ -119,7 +234,7 @@ function TierAStrip({ board }) {
   );
 }
 
-// ── TIER B: 7-13 weeks, one row of compact bars ────────────────────
+// ── TIER B: 7-13 weeks, one row of compact bars (untouched V21-10) ─
 function TierBStrip({ board }) {
   const weeks = board?.weeks || [];
   const [tip, setTip] = useState(null);
@@ -227,7 +342,7 @@ function TierBTip({ tip }) {
   );
 }
 
-// ── TIER C: > 13 weeks, one bar per fiscal period ──────────────────
+// ── TIER C: > 13 weeks, one bar per fiscal period (untouched V21-10) ─
 function TierCStrip({ board, budgetPeriods }) {
   const weeks = board?.weeks || [];
   const budgetByPeriod = new Map((budgetPeriods || []).map(b => [b.period_no, Number(b.amount)]));
@@ -324,22 +439,26 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
   const weekCount = (board?.weeks || []).length;
   const tier = classifyTier(weekCount);
   const stripTitle = tier === "C" ? "THE RANGE · PERIOD BY PERIOD" : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK");
+  // V21-10 - weekly target label only for Tier A when a scalar original
+  // weekly budget exists (single-period ranges).
+  const showTargetLabel = tier === "A" && board?.weekly_original_target != null;
 
   return (
     <div className="kpi-story">
       <div className="kpi-story-left">
-        <div className="kpi-story-eye">
-          <span className="kpi-story-eye-1">{eyebrowLabel}</span>
-          {dateRange && <span className="kpi-story-eye-2">{dateRange}</span>}
-        </div>
-        {/* C3 lands the split block + budget footer here (V21-5..V21-9). */}
+        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} />
       </div>
 
       <div className="kpi-story-right">
         <div className="kpi-wh">
           <span className="kpi-wh-t">{stripTitle}</span>
           <span className="kpi-wh-sp" aria-hidden="true" />
-          {/* C3 lands the weekly target label here (V21-10). */}
+          {showTargetLabel && (
+            <span className="kpi-wh-tgt">
+              <span className="kpi-wh-tgt-dash" aria-hidden="true" />
+              weekly target <b>{fmt$(board.weekly_original_target)}</b>
+            </span>
+          )}
         </div>
 
         {tier === "A" && <TierAStrip board={board} />}
