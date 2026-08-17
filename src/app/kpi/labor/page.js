@@ -3,29 +3,25 @@
 //
 // KPI Dashboard - Labor section.
 //
-// D2 (Push 1): three-zone shell landed. Chrome, folio rail (account
-// navigation), scope band (dates + presets + workers + views), quick
-// panel (counts + copy + export + hide-names) extracted into components
-// under ./components. Formatters + account roster in ./lib. Middle
-// content (metrics, table) and the rest of the right rail remain
-// inline here - Push 2 replaces the middle (hero + 8-card grid + trend
-// + inline drill), Push 3 replaces states + rail lower + motion + B*.
+// V7 shell (PR feat/kpi-v7-shell): chrome collapses to one command bar
+// (V7-1..9), portfolio becomes carded selectable groups (V7-10..16), the
+// right rail retires in favor of a folio-foot SYSTEM status strip
+// (V7-17..20). Views API + table are unchanged server-side; no client
+// surface references them after this PR (V7-2).
 //
-// Persistent shape from C4: URL state (?account, ?start, ?end, ?workers,
-// ?redact, ?view), saved views CRUD, dirty detection, three modal
-// dialogs (Save / Edit / Delete-confirm).
+// URL state (surviving after v7): ?account, ?start, ?end, ?workers,
+// ?redact. `?view=` is silently ignored - views UI retired.
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
-import { resolveViewDates, addDaysISO } from "@/lib/kpi/dateResolve";
-import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp } from "./lib/formatting";
+import { addDaysISO } from "@/lib/kpi/dateResolve";
+import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp, buildPrintScopeLine } from "./lib/formatting";
 import { ACCOUNTS, FY_START } from "./lib/accounts";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
-import { ScopeBand, buildVdefLine } from "./components/ScopeBand";
 import { Hero } from "./components/Hero";
 import { MetricGrid } from "./components/MetricGrid";
 import { TrendChart } from "./components/TrendChart";
@@ -56,19 +52,6 @@ function workerLabel(meta, worker_id, redact) {
   return `${meta.display_name} (${num})`;
 }
 
-// Compare two arrays as sets. Empty/null/missing equivalence:
-//   both null/undefined OR both empty -> equal
-//   otherwise, set equality of contents
-function sameWorkerSet(a, b) {
-  const A = Array.isArray(a) && a.length ? new Set(a) : null;
-  const B = Array.isArray(b) && b.length ? new Set(b) : null;
-  if (A === null && B === null) return true;
-  if (A === null || B === null) return false;
-  if (A.size !== B.size) return false;
-  for (const x of A) if (!B.has(x)) return false;
-  return true;
-}
-
 export default function KpiLaborPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -82,7 +65,6 @@ export default function KpiLaborPage() {
   // fall back to "CIN - OH" (the sentinel account).
   const urlAccount = searchParams.get("account");
   const account = urlAccount || "CIN - OH";
-  const tab = searchParams.get("tab") || "labor";
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (urlAccount) {
@@ -117,11 +99,8 @@ export default function KpiLaborPage() {
   // (selectedPeriodNo, selectedMonth, rangeSelection) are declared
   // near the RangeMenu wiring for readability.
   const rangeSelectionEarly = useMemo(() => inferRangeSelection(start, end), [start, end]);
-  const viewIdParam = searchParams.get("view");
-  const activeViewId = viewIdParam ? parseInt(viewIdParam, 10) : null;
   // Track how the current dates were arrived at (last preset click).
-  // Used when serializing "save as new / update" to preserve preset
-  // intent instead of freezing a resolved range.
+  // Used by the hero suffix inference.
   const [lastPreset, setLastPreset] = useState(null);
 
   const [data, setData] = useState(null);
@@ -135,9 +114,6 @@ export default function KpiLaborPage() {
   // B10 live region text - kept separate so we can announce without a
   // visible toast (e.g., account switch, filter change).
   const [liveMsg, setLiveMsg] = useState("");
-  // B1 undo state: remember the last deleted view for 6s. If undo fires
-  // we POST it back; otherwise it silently drops.
-  const [pendingUndo, setPendingUndo] = useState(null);
   // B10: focus-to-hero handle after account switch or filter clear.
   const heroRef = useRef(null);
   const focusHero = useCallback(() => {
@@ -146,14 +122,6 @@ export default function KpiLaborPage() {
   }, []);
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
   const [expandedPeriods, setExpandedPeriods] = useState(new Set());
-  const [views, setViews] = useState([]);
-  const [viewsLoaded, setViewsLoaded] = useState(false);
-  const [savingView, setSavingView] = useState(false);
-  const [viewError, setViewError] = useState(null);
-  // Modal / dialog state for saved views UX
-  const [saveDialog, setSaveDialog] = useState(null);   // { mode: "new" | "update", initialName }
-  const [editDialog, setEditDialog] = useState(null);   // view object being edited
-  const [confirmDelete, setConfirmDelete] = useState(null);   // view object being deleted
 
   const [isCompact, setIsCompact] = useState(false);
   useEffect(() => {
@@ -237,67 +205,6 @@ export default function KpiLaborPage() {
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
   }, [status, isAllowed, account, start, end]);
-
-  // ── Fetch saved views ─────────────────────────────────
-  const refetchViews = useCallback(async () => {
-    if (status !== "authenticated" || !isAllowed) return;
-    setViewError(null);
-    try {
-      const r = await fetch(`/api/kpi/labor/views?account=${encodeURIComponent(account)}`);
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-      setViews(body.views || []);
-    } catch (e) {
-      setViewError(String(e.message || e).slice(0, 160));
-      setViews([]);
-    }
-    setViewsLoaded(true);
-  }, [status, isAllowed, account]);
-
-  useEffect(() => { refetchViews(); }, [refetchViews]);
-
-  const activeView = useMemo(
-    () => (activeViewId ? views.find(v => v.id === activeViewId) : null) || null,
-    [activeViewId, views]
-  );
-
-  // Resolve active view's dates against today + account_periods
-  const resolvedActiveRange = useMemo(() => {
-    if (!activeView) return null;
-    return resolveViewDates(activeView, { today, accountPeriods: data?.account_periods || [] });
-  }, [activeView, data, today]);
-
-  // ── Auto-apply active view to URL on load ───────────
-  // When view is present in URL but URL has no other params, resolve
-  // and push. Runs when the view finishes loading OR when the account
-  // periods arrive (last_period/this_period needs periods).
-  useEffect(() => {
-    if (!activeView) return;
-    const resolved = resolvedActiveRange;
-    if (!resolved) return;
-    // Only push if URL params are absent (freshly-loaded view link).
-    if (urlStart == null && urlEnd == null && !workersParam) {
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("start", resolved.start);
-      p.set("end",   resolved.end);
-      if (activeView.worker_ids && activeView.worker_ids.length > 0) {
-        p.set("workers", activeView.worker_ids.join(","));
-      }
-      if (activeView.redact) p.set("redact", "1");
-      router.replace(`/kpi/labor?${p.toString()}`);
-    }
-  }, [activeView, resolvedActiveRange, urlStart, urlEnd, workersParam, router, searchParams]);
-
-  // ── Dirty detection ──────────────────────────────────
-  const isDirty = useMemo(() => {
-    if (!activeView) return false;
-    if (!resolvedActiveRange) return false;
-    if (resolvedActiveRange.start !== start) return true;
-    if (resolvedActiveRange.end   !== end) return true;
-    if (!sameWorkerSet(activeView.worker_ids, workersParam ? workersParam.split(",") : null)) return true;
-    if ((!!activeView.redact) !== redact) return true;
-    return false;
-  }, [activeView, resolvedActiveRange, start, end, workersParam, redact]);
 
   // ── URL setters ──────────────────────────────────────
   const setParam = (key, value) => {
@@ -606,189 +513,7 @@ export default function KpiLaborPage() {
     const p = new URLSearchParams({ account, start, end });
     if (selectedWorkers && selectedWorkers.size > 0) p.set("workers", [...selectedWorkers].join(","));
     if (redact) p.set("redact", "1");
-    if (activeView && !isDirty) {
-      p.set("view_name", activeView.name);
-      p.set("view_date_mode", activeView.date_mode);
-    }
     return `/api/kpi/labor/export?${p.toString()}`;
-  }
-
-  // ── Saved-view actions ───────────────────────────────
-  const serializeCurrent = () => {
-    // Build the "intent" payload for save-as-new / update. If the user
-    // arrived at the current dates via a preset AND the resolved range
-    // still matches, save as preset; otherwise save as absolute.
-    const periods = data?.account_periods || [];
-    let mode = "absolute";
-    let preset = null;
-    if (lastPreset) {
-      const resolved = (function () {
-        // Duplicate of resolvePreset logic here to avoid circular
-        // dependency; kept small enough to be obvious.
-        if (lastPreset === "last_4wk")  return { start: addDaysISO(today, -27), end: today };
-        if (lastPreset === "last_13wk") return { start: addDaysISO(today, -90), end: today };
-        if (lastPreset === "fytd")      return { start: FY_START,               end: today };
-        const past = periods.filter(p => p.start && p.end).sort((a, b) => a.start.localeCompare(b.start))
-          .filter(p => p.start <= today);
-        if (!past.length) return null;
-        return lastPreset === "this_period" ? past[past.length - 1]
-             : lastPreset === "last_period" ? past[past.length - 2] || null
-             : null;
-      })();
-      if (resolved && resolved.start === start && resolved.end === end) {
-        mode = "preset"; preset = lastPreset;
-      }
-    }
-    return {
-      account_key: account,
-      tab: "labor",
-      date_mode: mode,
-      date_preset: mode === "preset" ? preset : null,
-      date_from:   mode === "absolute" ? start : null,
-      date_to:     mode === "absolute" ? end   : null,
-      worker_ids:  selectedWorkers && selectedWorkers.size > 0 ? [...selectedWorkers] : null,
-      redact,
-      is_shared: false,
-    };
-  };
-
-  async function createView(name, is_shared) {
-    setSavingView(true); setViewError(null);
-    const body = { ...serializeCurrent(), name, is_shared: !!is_shared };
-    try {
-      const r = await fetch("/api/kpi/labor/views", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.detail?.join?.(", ") || j.error || `HTTP ${r.status}`);
-      await refetchViews();
-      // Navigate to the new view
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("view", String(j.view.id));
-      router.push(`/kpi/labor?${p.toString()}`);
-      // M2: save success toast (spec §7 "auto-hide 6s").
-      setToast({ message: `Saved view "${name}".`, tone: "info", durationMs: 6000 });
-      setLiveMsg(`Saved view ${name}.`);
-    } catch (e) {
-      setViewError(String(e.message || e).slice(0, 200));
-    }
-    setSavingView(false);
-  }
-
-  async function updateActiveView() {
-    if (!activeView || !activeView.is_owner) return;
-    setSavingView(true); setViewError(null);
-    const body = { ...serializeCurrent() };
-    // name stays the same on Update
-    delete body.account_key; // account cannot be changed on a view
-    delete body.tab;
-    // B7 optimistic concurrency: pass the timestamp we opened with so
-    // the server can 409 if someone else edited between.
-    if (activeView.updated_at) body.expected_updated_at = activeView.updated_at;
-    try {
-      const r = await fetch(`/api/kpi/labor/views/${activeView.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (r.status === 409) {
-        setViewError(j.error || "This view changed since you opened it - reload to see the current version, or save yours as new.");
-        setSavingView(false);
-        return;
-      }
-      if (!r.ok) throw new Error(j.detail?.join?.(", ") || j.error || `HTTP ${r.status}`);
-      await refetchViews();
-      setToast({ message: `Saved ${activeView.name}.`, tone: "info", durationMs: 4000 });
-      setLiveMsg(`Saved view ${activeView.name}.`);
-    } catch (e) {
-      setViewError(String(e.message || e).slice(0, 200));
-    }
-    setSavingView(false);
-  }
-
-  // B1: delete a saved view with 6s undo. The DELETE is idempotent - if
-  // undo fires we POST the same shape back. During the undo window the
-  // view is removed from the local list so it disappears immediately.
-  async function deleteView(view) {
-    setSavingView(true); setViewError(null);
-    // Snapshot for undo
-    const snapshot = {
-      name: view.name,
-      account_key: view.account_key,
-      tab: view.tab,
-      date_mode: view.date_mode,
-      date_preset: view.date_preset,
-      date_from: view.date_from,
-      date_to: view.date_to,
-      worker_ids: view.worker_ids,
-      redact: view.redact,
-      is_shared: view.is_shared,
-    };
-    try {
-      const r = await fetch(`/api/kpi/labor/views/${view.id}`, { method: "DELETE" });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${r.status}`);
-      }
-      // If it was the active view, drop it from the URL
-      if (activeView?.id === view.id) {
-        const p = new URLSearchParams(searchParams.toString());
-        p.delete("view");
-        router.push(`/kpi/labor?${p.toString()}`);
-      }
-      await refetchViews();
-      setConfirmDelete(null);
-      // B1 undo window
-      setPendingUndo(snapshot);
-      setToast({
-        message: `Deleted "${view.name}".`,
-        tone: "info",
-        durationMs: 6000,
-        actions: [{
-          label: "Undo",
-          emphasis: "primary",
-          onClick: async () => {
-            try {
-              await fetch("/api/kpi/labor/views", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify(snapshot),
-              });
-              await refetchViews();
-              setLiveMsg(`Restored view ${view.name}.`);
-            } catch {}
-            setPendingUndo(null);
-          },
-        }],
-      });
-      setLiveMsg(`Deleted view ${view.name}. Undo available for 6 seconds.`);
-    } catch (e) {
-      setViewError(String(e.message || e).slice(0, 200));
-    }
-    setSavingView(false);
-  }
-
-  async function renameView(view, newName, newShared) {
-    setSavingView(true); setViewError(null);
-    try {
-      const r = await fetch(`/api/kpi/labor/views/${view.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: newName, is_shared: newShared }),
-      });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${r.status}`);
-      }
-      await refetchViews();
-      setEditDialog(null);
-    } catch (e) {
-      setViewError(String(e.message || e).slice(0, 200));
-    }
-    setSavingView(false);
   }
 
   // ── Auth screens (P9 · nine states 1-3) ─────────────
@@ -821,11 +546,22 @@ export default function KpiLaborPage() {
     setParam("workers", [...nextSet].join(","));
   };
 
-  const vdefLine = buildVdefLine({
-    start, end,
-    resolvedActiveRange, activeView,
-    workerRoster, selectedWorkers, redact,
+  // Print-time scope line - kept for @media print sheet identification.
+  const printScopeText = buildPrintScopeLine({
+    start, end, workerRoster, selectedWorkers, redact,
   });
+
+  // Freshness popover content (V7-9). C1 puts the former Nightly-data-
+  // feed disclosure content here. C3 layers coverage sentence + In view
+  // counts on top when the rail retires.
+  const freshnessPop = loadState === "ok" && data ? (
+    <div className="kpi-fresh-pop-body">
+      <div className="kpi-fresh-pop-row"><span>Orphan facts</span><b>{data?.unattributed?.length ?? 0}</b></div>
+      <div className="kpi-fresh-pop-row"><span>Unmapped earning types</span><b>{data?.unmapped_names?.length ?? 0}</b></div>
+      <div className="kpi-fresh-pop-row"><span>Last derive</span><b>{data?.derive_freshness?.last_derive_at ? fmtTimestamp(data.derive_freshness.last_derive_at) : "—"}</b></div>
+      <div className="kpi-fresh-pop-row"><span>Last pay-seg walk</span><b>{data?.derive_freshness?.last_walk_at ? fmtTimestamp(data.derive_freshness.last_walk_at) : "—"}</b></div>
+    </div>
+  ) : null;
 
   // V6-1 fiscal context - TODAY (MM/DD), PERIOD n (from account_periods
   // when present, else client-derived via periodOf), WEEK w where w is
@@ -965,6 +701,9 @@ export default function KpiLaborPage() {
             setParam("redact", next ? "1" : "");
             setLiveMsg(next ? "Names hidden on screen and in export." : "Names shown.");
           }}
+          workerRoster={workerRoster}
+          selectedWorkers={selectedWorkers}
+          onWorkersChange={workersOnChangeSet}
           expandedPeriods={expandedPeriods}
           onTogglePeriod={(p) => {
             setExpandedPeriods(prev => {
@@ -1019,10 +758,8 @@ export default function KpiLaborPage() {
     </>
   );
 
-  // ── Right rail content ──
-  // ContextRail: alarms (empty when healthy) · coverage (merged
-  // legend + worker-weeks unit note) · OT watch · Pipeline ▸ disclosure.
-  const railStack = tab === "labor" && loadState === "ok" && data?.account_state !== "salaried_only" ? (
+  // ── Right rail content (C1 keeps ContextRail rendering; C3 retires) ──
+  const railStack = loadState === "ok" && data?.account_state !== "salaried_only" ? (
     <ContextRail
       filteredActuals={filteredActuals}
       totals={totals}
@@ -1045,10 +782,19 @@ export default function KpiLaborPage() {
           fiscal={fiscalCtx}
           freshness={freshness}
           dataLoading={loadState === "loading" || loadState === "idle"}
-          activeTab={tab}
-          onTabClick={(k) => setParam("tab", k)}
-          printScopeText={vdefLine}
-          onCopyLink={() => setLiveMsg("Copied link to this exact view to clipboard.")}
+          activeSection="labor"
+          printScopeText={printScopeText}
+          rangeProps={!isSalaried && loadState === "ok" ? {
+            startISO: start,
+            endISO: end,
+            todayISO: today,
+            hasPeriods: !!data?.account_periods?.length,
+            accountPeriods: data?.account_periods || [],
+            resolvedPreset,
+            selectedPeriodNo,
+            selectedMonth,
+            onCommit: onRangeCommit,
+          } : null}
           exportHref={loadState === "ok" && data?.account_state !== "salaried_only" ? exportHref() : null}
           onExport={() => {
             setToast({
@@ -1060,6 +806,7 @@ export default function KpiLaborPage() {
           }}
           exportRedact={redact}
           exportDisabledReason={PSEUDO_KEYS.has(account) ? "Per-account export for portfolio views ships next update." : null}
+          freshnessPop={freshnessPop}
           folioRail={
             <FolioRail
               activeAccount={account}
@@ -1068,209 +815,16 @@ export default function KpiLaborPage() {
               regionalDirectorsDisplay={data?.regional_directors_display}
             />
           }
-          scopeBand={
-            // Fix 4 (D2.1) - band persists through empty and error
-            // states so the user can widen dates / clear filters / pick
-            // a view without dead-ending. Salaried gate unchanged.
-            !isSalaried && loadState === "ok" ? (
-              <ScopeBand
-                start={start}
-                end={end}
-                today={today}
-                resolvedPreset={resolvedPreset}
-                selectedPeriodNo={selectedPeriodNo}
-                selectedMonth={selectedMonth}
-                hasPeriods={!!data?.account_periods?.length}
-                accountPeriods={data?.account_periods || []}
-                onRangeCommit={onRangeCommit}
-                workerRoster={workerRoster}
-                selectedWorkers={selectedWorkers}
-                onWorkersChange={workersOnChangeSet}
-                views={views}
-                activeView={activeView}
-                onPickView={(id) => setParams({ view: id ? String(id) : "", start: "", end: "", workers: "", redact: "" })}
-                onSaveView={() => setSaveDialog({ mode: "new", initialName: "" })}
-                vdefLine={vdefLine}
-              />
-            ) : null
-          }
-          main={
-            tab === "overview" ? (
-              <div className="kpi-state">
-                <div className="kpi-state-title">Overview</div>
-                <div className="kpi-state-desc">Overview design is an open ruling (spec §13.4). Placeholder for now.</div>
-              </div>
-            ) : tab === "labor" ? mainContent : (
-              <div className="kpi-state"><div className="kpi-state-title">Section coming soon</div></div>
-            )
-          }
-          rail={
-            <>
-              {/* V6-13 - rail-top panel retired. Copy/Export moved to
-                  the command bar (Shell); the In-view counts row
-                  lives inside ContextRail's PAYROLL DATA CHECK card
-                  (C3). */}
-              {railStack}
-              {activeView && isDirty && (
-                <div className="kpi-view-active">
-                  <span className="kpi-view-active-name">{activeView.name}</span>
-                  <span className="kpi-view-dirty-actions">
-                    <span className="kpi-view-dirty-tag">unsaved</span>
-                    {activeView.is_owner && (
-                      <button type="button" className="kpi-btn-secondary" onClick={updateActiveView} disabled={savingView}>Update</button>
-                    )}
-                    <button type="button" className="kpi-btn-secondary" onClick={() => setSaveDialog({ mode: "new", initialName: `${activeView.name} (copy)` })} disabled={savingView}>Save as new</button>
-                  </span>
-                  {activeView.is_owner && (
-                    <>
-                      <button type="button" className="kpi-view-linkbtn" onClick={() => setEditDialog(activeView)}>Edit</button>
-                      <button type="button" className="kpi-view-linkbtn kpi-view-linkbtn-danger" onClick={() => setConfirmDelete(activeView)}>Delete</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </>
-          }
+          main={mainContent}
+          rail={railStack}
         />
-
       </div>
-
-      {/* ── Save view dialog ─────────────────────────────── */}
-      {saveDialog && (
-        <SaveViewDialog
-          initialName={saveDialog.initialName}
-          existingNames={new Set(views.filter(v => v.is_owner).map(v => v.name))}
-          onCancel={() => setSaveDialog(null)}
-          saving={savingView}
-          onSave={async (name, shared) => {
-            await createView(name, shared);
-            setSaveDialog(null);
-          }}
-        />
-      )}
-      {/* ── Edit view dialog (rename + share toggle) ────── */}
-      {editDialog && (
-        <EditViewDialog
-          view={editDialog}
-          existingNames={new Set(views.filter(v => v.is_owner && v.id !== editDialog.id).map(v => v.name))}
-          onCancel={() => setEditDialog(null)}
-          saving={savingView}
-          onSave={async (name, shared) => {
-            await renameView(editDialog, name, shared);
-          }}
-        />
-      )}
-      {/* ── Confirm delete ───────────────────────────────── */}
-      {/* B1: the confirm shows anyway but the actual delete flow raises
-          an undo toast for 6s. */}
-      {confirmDelete && (
-        <ConfirmDialog
-          title="Delete saved view?"
-          message={<>Delete <strong>{confirmDelete.name}</strong>? You can undo for 6 seconds.</>}
-          confirmLabel="Delete"
-          onCancel={() => setConfirmDelete(null)}
-          onConfirm={() => deleteView(confirmDelete)}
-          danger
-          disabled={savingView}
-        />
-      )}
 
       {/* ── B10 live region · always mounted, silent when empty ── */}
       <div aria-live="polite" aria-atomic="true" className="kpi-sr-live">{liveMsg}</div>
 
-      {/* ── P10/P11 toast host (M2 save, M4 export, B1 undo) ─── */}
+      {/* ── P10/P11 toast host (M4 export) ─── */}
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
-    </div>
-  );
-}
-
-// ── Dialog components (kept in-file - one-off UI, no reuse elsewhere) ──
-
-function SaveViewDialog({ initialName, existingNames, onSave, onCancel, saving }) {
-  const [name, setName] = useState(initialName || "");
-  const [shared, setShared] = useState(false);
-  const err = name.trim().length < 1 ? "Name required"
-            : name.trim().length > 80 ? "Name too long (80 chars max)"
-            : existingNames.has(name.trim()) ? "You already have a view with that name"
-            : null;
-  return (
-    <div className="kpi-modal-scrim" onClick={onCancel}>
-      <div className="kpi-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="kpi-save-title">
-        <h2 id="kpi-save-title" className="kpi-modal-title">Save view</h2>
-        <label className="kpi-modal-label">
-          Name
-          <input
-            type="text" className="kpi-modal-input"
-            value={name} onChange={(e) => setName(e.target.value)}
-            autoFocus maxLength={80}
-            placeholder="e.g. Joe's monthly"
-          />
-        </label>
-        <label className="kpi-modal-check">
-          <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
-          <span>Share with the leadership team (read-only for others)</span>
-        </label>
-        {err && <div className="kpi-modal-err">{err}</div>}
-        <div className="kpi-modal-actions">
-          <button type="button" className="kpi-btn-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
-          <button type="button" className="kpi-btn-primary" disabled={!!err || saving} onClick={() => onSave(name.trim(), shared)}>
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EditViewDialog({ view, existingNames, onSave, onCancel, saving }) {
-  const [name, setName] = useState(view.name);
-  const [shared, setShared] = useState(!!view.is_shared);
-  const err = name.trim().length < 1 ? "Name required"
-            : name.trim().length > 80 ? "Name too long (80 chars max)"
-            : existingNames.has(name.trim()) ? "Another view has that name"
-            : null;
-  return (
-    <div className="kpi-modal-scrim" onClick={onCancel}>
-      <div className="kpi-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="kpi-edit-title">
-        <h2 id="kpi-edit-title" className="kpi-modal-title">Edit view</h2>
-        <label className="kpi-modal-label">
-          Name
-          <input type="text" className="kpi-modal-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
-        </label>
-        <label className="kpi-modal-check">
-          <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
-          <span>Share with the leadership team</span>
-        </label>
-        {err && <div className="kpi-modal-err">{err}</div>}
-        <div className="kpi-modal-actions">
-          <button type="button" className="kpi-btn-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
-          <button type="button" className="kpi-btn-primary" disabled={!!err || saving} onClick={() => onSave(name.trim(), shared)}>
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCancel, danger, disabled }) {
-  return (
-    <div className="kpi-modal-scrim" onClick={onCancel}>
-      <div className="kpi-modal" onClick={(e) => e.stopPropagation()} role="alertdialog">
-        <h2 className="kpi-modal-title">{title}</h2>
-        <div className="kpi-modal-msg">{message}</div>
-        <div className="kpi-modal-actions">
-          <button type="button" className="kpi-btn-secondary" onClick={onCancel} disabled={disabled}>Cancel</button>
-          <button
-            type="button"
-            className={danger ? "kpi-btn-danger" : "kpi-btn-primary"}
-            onClick={onConfirm}
-            disabled={disabled}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

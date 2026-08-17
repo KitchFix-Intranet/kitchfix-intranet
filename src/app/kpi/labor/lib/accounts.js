@@ -18,13 +18,15 @@ export const ACCOUNTS = [
 // with a "salaried" italic tag and no sparkline (per spec §3.1).
 export const SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 
-export const TABS = [
-  { key: "overview", label: "Overview", enabled: false },
-  { key: "labor",    label: "Labor",    enabled: true  },
-  { key: "food",     label: "Food",     enabled: false },
+// V7-3 - Sections are the command-bar dropdown that replaces the v6
+// tabs row. K5 preserved: non-Labor items ghosted with a SOON tag.
+export const SECTIONS = [
+  { key: "overview", label: "Overview",   enabled: false },
+  { key: "labor",    label: "Labor",      enabled: true  },
+  { key: "food",     label: "Food",       enabled: false },
   { key: "other",    label: "Other COGS", enabled: false },
-  { key: "revenue",  label: "Revenue",  enabled: false },
-  { key: "pnl",      label: "P&L",      enabled: false },
+  { key: "revenue",  label: "Revenue",    enabled: false },
+  { key: "pnl",      label: "P&L",        enabled: false },
 ];
 
 // Preset date keys (client-resolvable). Same values the loader's

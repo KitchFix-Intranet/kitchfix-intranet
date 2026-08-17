@@ -245,7 +245,6 @@ export function TrendChart({
     );
   }) : null;
 
-  // Legend copy - K9 "(illustrative)" retired.
   const legend = hrsMode ? (
     <span className="kpi-legend">
       <span><i className="kpi-legend-r" />reg</span>
