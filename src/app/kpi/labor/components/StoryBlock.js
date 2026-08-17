@@ -109,15 +109,18 @@ function daysElapsed(weekStartISO) {
   return Math.max(1, Math.min(7, days));
 }
 
-function TierAWeekBar({ w, lens, weeklyOriginal, rollingTarget }) {
+function TierAWeekBar({ w, lens, weeklyOriginal, rollingTarget, scale }) {
   const value = lens === "$"
     ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.spent || 0))
     : (w.hours || 0);
   const target = lens === "$"
     ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.original_target ?? weeklyOriginal ?? 0))
     : null;
-  const stackMax = Math.max(value, target || 0);
-  const scale = stackMax > 0 ? stackMax : 1;
+  // Per V8-22 the SCALE is shared across every visible week in the
+  // strip (max of actual + target with ~10% headroom). Computed once
+  // in TierAStrip and passed down - not per-column. A per-column max
+  // normalises each column against itself and pins the tallest bar
+  // in every column to the ceiling (the live-review defect).
   const barPct = w.state === "not_started" ? 0 : Math.max(0, Math.min(100, (value / scale) * 90));
   const targetPct = target != null ? Math.max(0, Math.min(100, (target / scale) * 90)) : null;
   const isNotStarted = w.state === "not_started";
@@ -171,15 +174,41 @@ function TierAWeekBar({ w, lens, weeklyOriginal, rollingTarget }) {
 }
 
 function TierAStrip({ board, lens }) {
+  const weeks = board?.weeks || [];
+  const weeklyOriginal = board?.weekly_original_target;
+  const rollingTarget = board?.rolling_weekly_target;
+  // Shared scale across the visible tier (V8-22). One max, ~10%
+  // headroom. Kept above the WeekBar so every column normalises
+  // against the same denominator.
+  const scale = (() => {
+    let max = 1;
+    for (const w of weeks) {
+      const value = lens === "$"
+        ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.spent || 0))
+        : (w.hours || 0);
+      const target = lens === "$"
+        ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.original_target ?? weeklyOriginal ?? 0))
+        : 0;
+      const local = Math.max(value, target || 0);
+      if (local > max) max = local;
+    }
+    return max * 1.10;
+  })();
+  // V8-22: strip NEVER wraps. Grid column count comes from the WEEK
+  // COUNT, not a hardcoded constant. Range: 1..6 weeks (Tier A limit).
   return (
-    <div className="kpi-wbars">
-      {(board?.weeks || []).map(w => (
+    <div
+      className="kpi-wbars"
+      style={{ gridTemplateColumns: `repeat(${Math.max(1, weeks.length)}, minmax(0, 1fr))` }}
+    >
+      {weeks.map(w => (
         <TierAWeekBar
           key={w.week_start}
           w={w}
           lens={lens}
-          weeklyOriginal={board.weekly_original_target}
-          rollingTarget={board.rolling_weekly_target}
+          weeklyOriginal={weeklyOriginal}
+          rollingTarget={rollingTarget}
+          scale={scale}
         />
       ))}
     </div>

@@ -1867,9 +1867,17 @@
 }
 .kpi-plotC {
   height: var(--kpi-plot-c);
-  display: flex; align-items: flex-end; gap: var(--kpi-space-10px);
+  display: flex; align-items: stretch; gap: var(--kpi-space-10px);
   border-bottom: 1px solid var(--n-300);
 }
+/* P0 defect fix: .kpi-plotC used `align-items: flex-end` so each
+   `.kpi-pcol` sized to its content, and the bar's percentage height
+   inside resolved against a 0-height parent - every bar collapsed to
+   0 while only the absolutely-positioned budget line still rendered.
+   Fix: switch container to `align-items: stretch` and rely on the
+   column's `justify-content: flex-end` to seat the bar at the bottom.
+   The column now gets a resolved height from the flex layout, so the
+   bar's percentage has something to resolve against. */
 .kpi-pcol {
   flex: 1;
   display: flex; flex-direction: column;
