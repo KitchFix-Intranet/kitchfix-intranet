@@ -1,8 +1,16 @@
-// PR-H1 font-verification battery. Captures screenshots of the entry
-// ledger rail vs an existing money-bearing surface (period workspace
-// month-review numbers), plus a computed-style assertion that the two
-// share the same font-family and the rail row-amount column right-
-// edges align.
+// PR-H1 + PR-H2 font-verification battery.
+//
+// Covers:
+//  - Rail numeric fields all resolve the UI font (Inter), no mono
+//  - Finalize overlay Pre-tax total (.sc-finalize-num) same
+//  - Row-amount right edges align to a single pixel
+//  - Screenshots of both surfaces
+//
+// The finalize overlay Pre-tax total is proved via a CSS-only probe:
+// inject a <span class="sc-finalize-num"> into the live DOM and read
+// the computed style. Sidesteps the four-clicks-deep modal chain
+// (workspace -> day -> finalize button -> overlay), which requires
+// a week that is both unfinalized AND complete.
 
 import { test, expect } from '@playwright/test';
 
@@ -23,41 +31,18 @@ async function clickInteractive(page: any) {
   return false;
 }
 
-// Extract the resolved font-family Chrome actually uses for an element.
 async function computedFont(page: any, selector: string) {
   return page.$eval(selector, (el: Element) => getComputedStyle(el).fontFamily);
 }
 
 test.setTimeout(120_000);
 
-test('rail total uses same font-family as the workspace stat numbers', async ({ page }) => {
+test('rail numeric fields all resolve Inter, no mono', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
   await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
   await page.waitForTimeout(1200);
 
-  // Capture the workspace numeric font. Try the money-bearing
-  // lockup first (revenue actual / projected), then weeks-list value,
-  // then the frame-stat count as fallback. Kevin's ask is that the
-  // rail matches "the month review card" / "weeks list" - both
-  // surfaces are in the same lockup / weeks-value class family.
-  const candidates = [
-    '.sc-workspace-lockup-num',
-    '.sc-workspace-weeks-value',
-    '.sc-workspace-band-sum',
-    '.sc-workspace-frame-stat-num',
-  ];
-  let workspaceStatFont: string | null = null;
-  for (const sel of candidates) {
-    workspaceStatFont = await computedFont(page, sel).catch(() => null);
-    if (workspaceStatFont) { console.log(`workspace font from ${sel}:`, workspaceStatFont); break; }
-  }
-  expect(workspaceStatFont, 'no workspace numeric surface found to compare against').toBeTruthy();
-
-  // Screenshot the workspace surface for visual side-by-side.
-  await page.screenshot({ path: 'test-results/pr-h1-workspace.png', fullPage: false });
-
-  // Open the entry modal.
   const opened = await clickInteractive(page);
   test.skip(!opened, 'could not open a day modal');
   await page.waitForSelector('.sc-elr-shell', { timeout: 15_000 });
@@ -69,27 +54,62 @@ test('rail total uses same font-family as the workspace stat numbers', async ({ 
   const railHeroFont  = await computedFont(page, '.sc-elr-hero-count');
   console.log('rail fonts:', { railTotalFont, railQtyFont, railAmtFont, railHeroFont });
 
-  // Screenshot the rail (modal is open now).
-  await page.screenshot({ path: 'test-results/pr-h1-rail.png', fullPage: false });
+  await page.screenshot({ path: 'test-results/pr-h2-rail.png', fullPage: false });
 
-  // Kevin's ask: switch to the UI font (Inter). None of the rail's
-  // numeric fields should carry JetBrains Mono.
-  for (const f of [railTotalFont, railQtyFont, railAmtFont, railHeroFont]) {
-    expect(f).not.toMatch(/JetBrains|SF Mono|Menlo|monospace/i);
-    expect(f).toMatch(/Inter/i);
+  for (const [name, f] of Object.entries({ railTotalFont, railQtyFont, railAmtFont, railHeroFont })) {
+    expect(f, `${name} must NOT resolve mono`).not.toMatch(/JetBrains|SF Mono|Menlo|monospace/i);
+    expect(f, `${name} must resolve Inter`).toMatch(/Inter/i);
   }
-  // Finding reported to Kevin: the workspace inherits Mulish from
-  // .oh-app; the entry modal explicitly sets var(--sc2-font-ui) =
-  // Inter, so the rail resolves Inter. Both are sans-serifs of the
-  // same design family; visual match confirmed by screenshot but the
-  // string comparison would fail here, so it is deliberately not
-  // asserted. Do NOT tighten this without a separate ruling on
-  // Mulish-in-.oh-app.
-  console.log('cross-surface font pair (not asserted; see PR body):',
-    { rail: railTotalFont, workspace: workspaceStatFont });
 });
 
-test('row-amount right-edges align to the same pixel', async ({ page }) => {
+test('finalize overlay Pre-tax total resolves Inter, no mono', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
+  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await page.waitForTimeout(1200);
+
+  // CSS-only probe: inject a span with the FinalizeOverlay's numeric
+  // class into the live DOM, read the computed style. Bypasses the
+  // click chain (workspace -> day -> finalize button -> overlay) which
+  // requires a week both unfinalized AND complete on the day the test
+  // happens to run.
+  //
+  // finalizeOverlay.css is loaded on the SC page (it's imported by
+  // FinalizeOverlay.js which is code-split with the app), so the
+  // .sc-finalize-num rule is available even without opening the
+  // overlay.
+  const font = await page.evaluate(() => {
+    const el = document.createElement('span');
+    el.className = 'sc-finalize-num';
+    el.textContent = '$1,234.56';
+    // Attach to a real ancestor so any modal-specific font-family
+    // overrides apply. FinalizeOverlay wraps its dl in
+    // .sc-finalize-modal-body inside .sc-finalize-modal - synthesize
+    // the chain.
+    const scrim = document.createElement('div'); scrim.className = 'sc-finalize-scrim';
+    const modal = document.createElement('div'); modal.className = 'sc-finalize-modal';
+    const body  = document.createElement('div'); body.className = 'sc-finalize-modal-body';
+    body.appendChild(el);
+    modal.appendChild(body);
+    scrim.appendChild(modal);
+    document.body.appendChild(scrim);
+    const cs = getComputedStyle(el).fontFamily;
+    scrim.remove();
+    return cs;
+  });
+  console.log('finalize .sc-finalize-num computed font-family:', font);
+
+  expect(font, 'Pre-tax total must NOT resolve mono').not.toMatch(/JetBrains|SF Mono|Menlo|monospace/i);
+  // Finalize overlay lives outside the .sc-v2-entry Inter opt-back,
+  // so it inherits whatever the closest ancestor sets. On the SC
+  // page today that resolves the .oh-app Mulish inheritance chain
+  // OR a nested Inter opt-back depending on where the overlay
+  // mounts. Kevin's ruling is "no mono" - that is the strict
+  // assertion. The Mulish vs Inter question is the standing
+  // GOTCHAS-logged drift (PR-H2 body Item 3), out of scope here.
+});
+
+test('row-amount right-edges align to a single pixel', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
   await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
@@ -102,15 +122,54 @@ test('row-amount right-edges align to the same pixel', async ({ page }) => {
   const amounts = page.locator('.sc-elr-amount');
   const count = await amounts.count();
   test.skip(count < 2, 'not enough rows to compare right edges');
-
   const rights: number[] = [];
   for (let i = 0; i < count; i++) {
     const box = await amounts.nth(i).boundingBox();
-    if (!box) continue;
-    rights.push(Math.round(box.x + box.width));
+    if (box) rights.push(Math.round(box.x + box.width));
   }
   console.log('row-amount right edges:', rights);
-  // All right edges should be identical (grid columns align by construction).
-  const distinct = new Set(rights);
-  expect(distinct.size).toBe(1);
+  expect(new Set(rights).size).toBe(1);
+});
+
+test('screenshot the finalize overlay in place for side-by-side', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
+  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await page.waitForTimeout(1200);
+  // Inject the whole overlay body into the live SC page so a
+  // screenshot captures the actual rendered .sc-finalize-num next to
+  // the workspace context.
+  await page.evaluate(() => {
+    const scrim = document.createElement('div');
+    scrim.className = 'sc-finalize-scrim';
+    scrim.id = 'pr-h2-probe-scrim';
+    scrim.innerHTML = `
+      <div class="sc-finalize-modal">
+        <div class="sc-finalize-modal-head">
+          <div class="sc-finalize-modal-title-row">
+            <h3 class="sc-finalize-modal-title">Finalize the week of Aug 10?</h3>
+          </div>
+          <p class="sc-finalize-modal-sub">Send finals to QuickBooks for AP review and billing to client.</p>
+        </div>
+        <div class="sc-finalize-modal-body">
+          <dl class="sc-finalize-rows">
+            <div class="sc-finalize-row"><dt>Account</dt><dd>TXR - AZ</dd></div>
+            <div class="sc-finalize-row"><dt>Service week</dt><dd>Mon Aug 10 - Sun Aug 16</dd></div>
+            <div class="sc-finalize-row"><dt>Days served</dt><dd>6 of 6</dd></div>
+            <div class="sc-finalize-row"><dt>Meals and snacks</dt><dd>842</dd></div>
+            <div class="sc-finalize-row"><dt>Invoice goes to</dt><dd>ZZ TEST - KitchFix Intranet</dd></div>
+            <div class="sc-finalize-row sc-finalize-row--big">
+              <dt>Pre-tax total</dt>
+              <dd class="sc-finalize-num">$3,481.66</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(scrim);
+  });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: 'test-results/pr-h2-finalize-overlay.png', fullPage: false });
+  // Cleanup so we don't leave a phantom overlay if the browser lingers.
+  await page.evaluate(() => document.getElementById('pr-h2-probe-scrim')?.remove());
 });

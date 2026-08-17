@@ -38,7 +38,6 @@
   align-items: baseline;
   gap: var(--sc2-space-2);
   font-variant-numeric: var(--num-tabular);
-  font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.05;
 }
@@ -160,8 +159,6 @@
 }
 .sc-elr-qty {
   font-variant-numeric: var(--num-tabular);
-  font-family: var(--sc2-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
-  font-variant-numeric: tabular-nums;
   text-align: right;
   font-size: var(--sc2-size-body);
   font-weight: var(--sc2-wt-bold);
@@ -169,8 +166,6 @@
 }
 .sc-elr-amount {
   font-variant-numeric: var(--num-tabular);
-  font-family: var(--sc2-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
-  font-variant-numeric: tabular-nums;
   text-align: right;
   font-size: var(--sc2-size-caption);
   color: var(--sc2-rail-text-ghost);
@@ -330,8 +325,6 @@
 }
 .sc-elr-total-value {
   font-variant-numeric: var(--num-tabular);
-  font-family: var(--sc2-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
-  font-variant-numeric: tabular-nums;
   font-size: var(--sc2-size-rail-total);
   font-weight: var(--sc2-wt-display);
   color: var(--sc2-rail-text-strong);
