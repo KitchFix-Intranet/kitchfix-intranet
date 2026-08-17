@@ -22,7 +22,6 @@ import { ACCOUNTS, FY_START } from "./lib/accounts";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
-import { Sentence } from "./components/Sentence";
 import { StoryBlock } from "./components/StoryBlock";
 import { SignalCards } from "./components/SignalCards";
 import { DetailsStrip } from "./components/DetailsStrip";
@@ -609,8 +608,8 @@ export default function KpiLaborPage() {
     };
   })();
 
-  // Human range label for the sentence's multi-period template.
-  const rangeLabelForSentence = (() => {
+  // Human range label for the board's multi-period display.
+  const rangeLabelForBoard = (() => {
     if (rangeSelectionEarly?.kind === "period") return `Period ${rangeSelectionEarly.value}`;
     if (rangeSelectionEarly?.kind === "month") {
       const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -639,17 +638,16 @@ export default function KpiLaborPage() {
 
       {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
         <div ref={boardRef} tabIndex={-1} className="kpi-board" style={{ outline: "none" }}>
-          <Sentence board={data.board} account={account} rangeLabel={rangeLabelForSentence} />
           {data.board?.applies !== false && (
             <>
               <StoryBlock
                 board={data.board}
                 account={account}
-                rangeLabel={rangeLabelForSentence}
+                rangeLabel={rangeLabelForBoard}
                 budgetPeriods={data?.budget_periods || []}
                 todayISO={today}
               />
-              <SignalCards board={data.board} freshness={freshness} />
+              <SignalCards board={data.board} />
               <DetailsStrip board={data.board} />
             </>
           )}

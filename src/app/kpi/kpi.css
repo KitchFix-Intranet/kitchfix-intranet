@@ -57,13 +57,10 @@
   --kpi-size-ctl:     calc(12.5px * var(--kf-scale));
   --kpi-size-body:    calc(13px   * var(--kf-scale));
   --kpi-size-flow:    calc(14px   * var(--kf-scale));
-  --kpi-size-callout: calc(15.5px * var(--kf-scale));
   --kpi-size-stat:    calc(16px   * var(--kf-scale));
   --kpi-size-lead:    calc(17px   * var(--kf-scale));
   --kpi-size-title:   calc(18px   * var(--kf-scale));
-  --kpi-size-value:   calc(22px   * var(--kf-scale));
-  --kpi-size-big:     calc(25px   * var(--kf-scale));
-  --kpi-size-hero:    calc(38px   * var(--kf-scale));
+  --kpi-size-splitv:  calc(28px   * var(--kf-scale)); /* V21-6 split-block value + V21-20/V21-22 signal-card value */
 
   /* Space (S-2). The canonical 4-based scale 1..6 (4/8/12/16/20/24)
      matches the site-wide --space-* semantic ramp; the -6px / -10px
@@ -105,15 +102,14 @@
   --kpi-folio-w:      calc(260px  * var(--kf-scale));
   --kpi-vb-bar:       calc(58px   * var(--kf-scale));
   --kpi-vb-delta:     calc(72px   * var(--kf-scale));
-  --kpi-viz-h:        calc(64px   * var(--kf-scale));
   --kpi-plot-a:       calc(104px  * var(--kf-scale));
   --kpi-plot-b:       calc(140px  * var(--kf-scale));
   --kpi-plot-c:       calc(150px  * var(--kf-scale));
 
-  /* Gauge SVG box (S-5) - scale via rendered box only; viewBox +
-     angle math in SignalCards.js stay baked to 96x60. */
-  --kpi-gauge-w:      calc(96px   * var(--kf-scale));
-  --kpi-gauge-h:      calc(60px   * var(--kf-scale));
+  /* V21-21 OT arc - scale via rendered box only; viewBox + angle math
+     in SignalCards.js stay baked to 150x94. */
+  --kpi-gauge2-w:     calc(150px  * var(--kf-scale));
+  --kpi-gauge2-h:     calc(94px   * var(--kf-scale));
 
   background: var(--surface-page);
   min-height: 100vh;
@@ -1525,9 +1521,10 @@
   .kpi-sys-h { display: none; }
 }
 
-/* ── V8 BOARD (V8-1..V8-20) ─────────────────────────────────────
-   Sentence + story block replace the v6 main-column stack. Signal
-   cards + details strip land in C3. */
+/* ── V8 BOARD (V8-1..V8-20 + V21-1..V21-16) ─────────────────────
+   Spend card + week strip + signal cards + details strip (ALL THE
+   NUMBERS). V21 retired the sentence card, budget track, three-stat
+   rail, strip legend pills, lens toggle, and help control. */
 
 /* S-13 board section gap tightens 16 -> 12 (base) via --kpi-space-3
    so the sentence + story + signals + details clear the fold at
@@ -1538,23 +1535,9 @@
   margin-bottom: var(--kpi-space-3);
 }
 
-/* Sentence row (V8-6/V8-7) */
-.kpi-sentence {
-  display: flex; align-items: center; gap: var(--kpi-space-14px);
-  background: var(--n-50);
-  border: 1px solid var(--n-200);
-  border-radius: 12px;
-  padding: var(--kpi-space-3) var(--kpi-space-4);
-}
-.kpi-sentence-body {
-  font-size: var(--kpi-size-callout); color: var(--n-800); line-height: 1.4;
-}
-.kpi-sentence-body b {
-  font-weight: 800; color: var(--n-900);
-}
-.kpi-sentence-spacer { flex: 1 1 auto; }
-
-/* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad} */
+/* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad}.
+   V21-5: the pill relocates to the spend card header (was the retired
+   sentence row). */
 .kpi-vpill {
   display: inline-flex; align-items: center; gap: var(--kpi-space-2);
   height: calc(32px * var(--kf-scale)); padding: 0 var(--kpi-space-14px);
@@ -1627,101 +1610,117 @@
   gap: var(--kpi-space-1);
 }
 
-/* Left panel: eyebrow + headline + 3-stat rail + track (V8-9) */
-.kpi-story-eye { display: flex; align-items: baseline; gap: var(--kpi-space-9px); }
-.kpi-story-eye-1 {
+/* Left panel: spend card (V21-5..V21-9). Header row / equal-height
+   split block / bottom-anchored budget footer. Halves are ONE grid
+   container so both figures are always the same height (verify by
+   computed style, not by eye). */
+.kpi-spend {
+  display: flex; flex-direction: column;
+  gap: var(--kpi-space-3);
+  flex: 1 1 auto;
+}
+.kpi-spend-h {
+  display: flex; align-items: center; gap: var(--kpi-space-3);
+}
+.kpi-spend-h-left {
+  display: flex; align-items: baseline; gap: var(--kpi-space-9px);
+  min-width: 0; flex: 1 1 auto;
+}
+.kpi-spend-h-title {
   font-size: var(--kpi-size-caption); font-weight: 800; letter-spacing: 0.08em;
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
 }
-.kpi-story-eye-2 {
+.kpi-spend-h-dates {
   font-size: var(--kpi-size-caption); color: var(--n-500); white-space: nowrap;
 }
-.kpi-story-headline {
-  display: flex; align-items: baseline; gap: var(--kpi-space-10px);
+
+.kpi-split {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-10);
+  overflow: hidden;
+}
+.kpi-split-half {
+  position: relative;
+  padding: var(--kpi-space-14px);
+  /* Accent height + gap so it never overlaps the label - the render
+     defect V21-6 calls out. Value is a hairline; kept literal. */
+  padding-top: calc(var(--kpi-space-14px) + 3px + var(--kpi-space-2));
+  display: flex; flex-direction: column;
+  gap: var(--kpi-space-1);
+  min-width: 0;
+  background: var(--surface-card);
+}
+.kpi-split-half + .kpi-split-half {
+  border-left: 1px solid var(--n-200);
+}
+.kpi-split-accent {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--n-300);
+}
+.kpi-split-lab {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.1em;
+  color: var(--n-600); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kpi-split-val {
+  font-size: var(--kpi-size-splitv); font-weight: 800; letter-spacing: -0.012em;
+  color: var(--n-900); font-variant-numeric: var(--num-tabular);
+  line-height: 1.05;
   white-space: nowrap;
 }
-.kpi-story-hn {
-  font-size: var(--kpi-size-hero); font-weight: 800; letter-spacing: -0.015em;
-  line-height: 1; color: var(--n-900);
+.kpi-split-sub {
+  font-size: var(--kpi-size-micro); color: var(--n-600);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.kpi-story-hlab {
-  font-size: var(--kpi-size-tick); font-weight: 800; letter-spacing: 0.07em;
-  color: var(--n-600); text-transform: uppercase; white-space: nowrap;
+/* Right-half state variants: accent + background + text move together. */
+.kpi-split-half-nav {
+  background: linear-gradient(180deg, #F2F6FC, var(--navy-100));
 }
-.kpi-story-rail3 {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  border: 1px solid var(--n-200); border-radius: 8px;
-  background: var(--n-50); overflow: hidden;
+.kpi-split-half-nav .kpi-split-accent {
+  background: linear-gradient(90deg, var(--navy-700), #2C5187);
 }
-.kpi-story-s {
-  padding: var(--kpi-space-10px) var(--kpi-space-6px);
-  border-left: 1px solid var(--n-200);
-  display: flex; align-items: baseline; justify-content: center;
-  gap: var(--kpi-space-6px); min-width: 0;
-  flex-wrap: wrap;
-}
-.kpi-story-s:first-child { border-left: 0; }
-.kpi-story-v { font-size: var(--kpi-size-stat); font-weight: 800; color: var(--n-900); white-space: nowrap; }
-/* Defect fix: previously white-space:nowrap clipped "AVG RATE" at
-   narrow left-panel widths (below ~1400px). Removing nowrap + adding
-   flex-wrap on the parent lets the label wrap between words (Avg /
-   rate) rather than clip. Values keep nowrap so numbers never wrap. */
-.kpi-story-k {
-  font-size: var(--kpi-size-micro); letter-spacing: 0.06em;
-  color: var(--n-600); text-transform: uppercase;
-  font-weight: 700;
-}
+.kpi-split-half-nav .kpi-split-lab,
+.kpi-split-half-nav .kpi-split-val,
+.kpi-split-half-nav .kpi-split-sub { color: var(--navy-700); }
 
-/* Budget track (V8-10). V8-23: no longer floor-pinned - the left
-   panel sizes to its own content so the track sits directly under
-   the rail with a fixed rhythm gap from .kpi-story-left. */
-.kpi-track { padding-top: var(--kpi-space-1); }
-.kpi-track-rail {
-  height: var(--kpi-space-14px); background: var(--n-200);
-  border-radius: 7px; position: relative;
+.kpi-split-half-under { background: var(--green-100); }
+.kpi-split-half-under .kpi-split-accent { background: var(--green-700); }
+.kpi-split-half-under .kpi-split-lab,
+.kpi-split-half-under .kpi-split-val,
+.kpi-split-half-under .kpi-split-sub { color: var(--green-700); }
+
+.kpi-split-half-over { background: var(--red-100); }
+.kpi-split-half-over .kpi-split-accent { background: var(--red-700); }
+.kpi-split-half-over .kpi-split-lab,
+.kpi-split-half-over .kpi-split-val,
+.kpi-split-half-over .kpi-split-sub { color: var(--red-700); }
+
+.kpi-split-half-mute .kpi-split-val { color: var(--n-400); }
+.kpi-split-half-mute .kpi-split-lab { color: var(--n-500); }
+
+.kpi-spend-foot {
+  display: flex; align-items: baseline; gap: var(--kpi-space-14px);
+  padding-top: var(--kpi-space-3);
+  border-top: 1px solid var(--n-200);
+  margin-top: auto;
 }
-.kpi-track-spent {
-  position: absolute; left: 0; top: 0; bottom: 0;
-  border-radius: 7px 0 0 7px;
-  background: var(--navy-700);
+.kpi-spend-foot-lab {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.1em;
+  color: var(--n-600); text-transform: uppercase;
+  /* Explicit gap to value - the missing-gap defect V21-7 calls out. */
+  margin-right: var(--kpi-space-2);
 }
-.kpi-track-proj {
-  position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(21, 57, 104, 0.35) 4px 8px);
+.kpi-spend-foot-val {
+  font-size: var(--kpi-size-lead); font-weight: 800;
+  color: var(--n-900); font-variant-numeric: var(--num-tabular);
+  white-space: nowrap;
 }
-.kpi-track-today {
-  position: absolute; top: calc(-8px * var(--kf-scale)); bottom: calc(-8px * var(--kf-scale));
-  width: 2px; background: var(--n-900);
-}
-.kpi-track-today-lab {
-  position: absolute; bottom: 100%; left: 50%;
-  transform: translateX(-50%); margin-bottom: var(--kpi-space-1);
-  font-size: var(--kpi-size-tag); font-weight: 800; color: var(--n-700);
-  letter-spacing: 0.08em; white-space: nowrap;
-}
-.kpi-track-projend {
-  position: absolute; top: 100%; margin-top: var(--kpi-space-6px);
-  transform: translateX(-50%);
-  font-size: var(--kpi-size-tag); font-weight: 800; letter-spacing: 0.06em;
-  color: var(--navy-700); white-space: nowrap;
-}
-.kpi-track-keys {
-  display: flex; justify-content: space-between; gap: var(--kpi-space-10px);
-  margin-top: 26px;
-  font-size: var(--kpi-size-tick); color: var(--n-500);
-}
-.kpi-track-keys div {
-  display: flex; align-items: center; gap: var(--kpi-space-5px); white-space: nowrap;
-}
-.kpi-track-keys b { color: var(--n-900); font-weight: 700; }
-.kpi-track-keys i {
-  display: inline-block; width: 9px; height: 9px;
-  border-radius: 2px; flex: none;
-}
-.kpi-key-spent { background: var(--navy-700); }
-.kpi-key-proj {
-  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(21, 57, 104, 0.35) 3px 6px);
-  border: 1px solid var(--n-300);
+.kpi-spend-foot-ctx {
+  font-size: var(--kpi-size-micro); color: var(--n-500);
+  margin-left: auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* Week strip header (V8-11) */
@@ -1731,24 +1730,32 @@
   color: var(--n-600); font-weight: 700; white-space: nowrap;
 }
 .kpi-wh-sp { flex: 1 1 auto; }
-.kpi-lpill {
+/* V21-10 - one target-line label sits at the right of the strip header
+   for Tier A only. Text pattern: `╌ weekly target $X`. */
+.kpi-wh-tgt {
   display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
-  height: var(--kpi-lpill-h); padding: 0 var(--kpi-space-10px);
-  border-radius: var(--rad-pill);
-  font-size: var(--kpi-size-meta); font-weight: 700; white-space: nowrap;
-  border: 1px solid;
+  font-size: var(--kpi-size-meta); font-weight: 700;
+  color: var(--amber-700, #92580A);
+  white-space: nowrap;
 }
-.kpi-lpill-a { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
-.kpi-lpill-n { background: #EAF0FA; color: var(--navy-700); border-color: #CBD9F0; }
-.kpi-lpill-dash {
-  width: var(--kpi-space-3); border-top: 2px dashed currentColor; display: inline-block;
+.kpi-wh-tgt-dash {
+  width: var(--kpi-space-3); border-top: 2px dashed currentColor;
+  display: inline-block;
 }
-.kpi-lpill b { font-weight: 800; }
+.kpi-wh-tgt b { font-weight: 800; color: var(--n-900); font-variant-numeric: var(--num-tabular); }
 
-/* Tier A week columns (V8-12). V8-23: no longer bottom-aligned. */
+/* Tier A week columns (V8-12). V21-10: grid template comes from the
+   week count inline (never hardcoded); position:relative anchors the
+   continuous target line drawn across the plot band. */
 .kpi-wbars {
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  position: relative;
+  display: grid;
   gap: var(--kpi-space-14px); padding-top: var(--kpi-space-3);
+}
+.kpi-tierA-tgt {
+  position: absolute; left: 0; right: 0;
+  height: 0; border-top: 2px dashed var(--amber-600);
+  pointer-events: none; z-index: 1;
 }
 .kpi-wb {
   display: flex; flex-direction: column; min-width: 0;
@@ -1765,8 +1772,10 @@
 /* V8-25 lighter red so a run of over bars reads as information, not
    an alarm wall. Same tone used across Tier A / B / C. */
 .kpi-wb-bar-over  { background: #DC5A5A; }
+/* V21-10 - Tier A in-progress bar is AMBER hatched (running-week
+   treatment). Tier B/C prog styles remain navy and are untouched. */
 .kpi-wb-bar-prog {
-  background: repeating-linear-gradient(45deg, var(--navy-700) 0 6px, #3D6CB0 6px 12px);
+  background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
 }
 .kpi-wb-basel {
   width: 100%; height: var(--kpi-space-6px); border-radius: 3px;
@@ -1916,24 +1925,29 @@
   font-size: var(--kpi-size-meta); font-weight: 700; margin-top: 1px;
 }
 
-/* Signal cards (V8-13..V8-16) - four cards, one grammar, fixed lane
-   heights so they bottom-align. V8-15 color discipline: state pills
-   grey by default; color only on the lead card and on WATCH+ states. */
+/* Signal cards (V8-13..V8-16 + V21-17..V21-24) - four cards, viz-led.
+   Each card: header lane (fixed height) + centred content region.
+   V21-17 strips the action link + hairline; V21-18 strips the prose
+   sentence; V21-19 requires equal card heights (grid stretches, plus
+   the body flex-fills). V8-15 colour discipline preserved: state pills
+   grey by default; colour only on the lead card + WATCH+ states. */
 .kpi-sigs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--kpi-space-4);
+  align-items: stretch;
 }
 .kpi-sig {
   background: var(--surface-card);
   border: 1px solid var(--n-300);
-  border-radius: 12px;
+  border-radius: var(--rad-10);
   box-shadow: var(--card-shadow);
-  padding: 16px 18px;
+  padding: var(--kpi-space-4) var(--kpi-space-4);
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: calc(200px * var(--kf-scale));
 }
 .kpi-sig::before {
   content: "";
@@ -1943,13 +1957,16 @@
 }
 .kpi-sig-lead-good::before { background: var(--green-500); }
 .kpi-sig-attn::before { background: var(--amber-600); }
-.kpi-sig-st {
+
+/* V21-19 header lane (fixed) */
+.kpi-sig-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--kpi-space-6px);
+  height: var(--kpi-space-5);
   font-size: var(--kpi-size-tick); letter-spacing: 0.08em;
   color: var(--n-600); font-weight: 800;
-  display: flex; justify-content: space-between; align-items: center;
-  gap: var(--kpi-space-6px); height: var(--kpi-space-5);
 }
-.kpi-sig-st span:first-child {
+.kpi-sig-eyebrow {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .kpi-sig-state {
@@ -1963,43 +1980,34 @@
 .kpi-sig-state-good { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
 .kpi-sig-state-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
 .kpi-sig-state-bad  { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
+
+/* V21-19 body region - flex-fill, centred content */
+.kpi-sig-body {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: var(--kpi-space-2);
+  padding-top: var(--kpi-space-3);
+  min-width: 0;
+}
 .kpi-sig-v {
-  font-size: var(--kpi-size-big); font-weight: 800;
-  color: var(--n-900); margin-top: var(--kpi-space-2); line-height: 1.1;
-  white-space: nowrap;
+  font-size: var(--kpi-size-splitv); font-weight: 800;
+  color: var(--n-900); line-height: 1.05;
+  white-space: nowrap; font-variant-numeric: var(--num-tabular);
+  letter-spacing: -0.012em;
 }
 .kpi-sig-v-good { color: var(--green-700); }
 .kpi-sig-v-bad  { color: var(--red-700); }
-.kpi-sig-u {
-  font-size: var(--kpi-size-caption); font-weight: 600;
-  color: var(--n-500); margin-left: 2px;
+.kpi-sig-sub {
+  font-size: var(--kpi-size-caption); color: var(--n-600); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  text-align: center;
 }
-.kpi-sig-sc {
-  font-size: var(--kpi-size-label); color: var(--n-700);
-  margin-top: var(--kpi-space-10px); line-height: 1.45;
-  min-height: calc(36px * var(--kf-scale));
-}
-.kpi-sig-sc b { color: var(--n-900); }
-.kpi-sig-vz {
-  margin-top: var(--kpi-space-3); height: var(--kpi-viz-h);
-  display: flex; align-items: center; gap: var(--kpi-space-14px);
-}
-.kpi-sig-act {
-  margin-top: var(--kpi-space-3); padding-top: var(--kpi-space-3);
-  border-top: 1px solid var(--n-100);
-  font-size: var(--kpi-size-note); font-weight: 700;
-  color: var(--navy-700); white-space: nowrap;
-  background: transparent; border-left: 0; border-right: 0; border-bottom: 0;
-  cursor: pointer;
-}
-.kpi-sig-act:hover { text-decoration: underline; }
-/* Viz primitives - all fixed-height, none stretch (V8-15) */
-.kpi-sig-vstack {
-  display: flex; flex-direction: column; gap: var(--kpi-space-7px); width: 100%;
-}
+
+/* V21-20 diverging bar (centred zero) */
 .kpi-sig-dvg {
   height: var(--kpi-space-10px); background: var(--n-200); border-radius: 5px;
-  position: relative; width: 100%;
+  position: relative; width: 100%; margin-top: var(--kpi-space-2);
 }
 .kpi-sig-dvg-zero {
   position: absolute; left: 50%; top: calc(-5px * var(--kf-scale)); bottom: calc(-5px * var(--kf-scale));
@@ -2011,13 +2019,54 @@
 }
 .kpi-sig-dvg-bar-over { background: var(--red-700); }
 .kpi-sig-vlab {
-  display: flex; justify-content: space-between;
+  display: flex; justify-content: space-between; width: 100%;
   font-size: var(--kpi-size-meta); color: var(--n-500); font-weight: 600;
+  margin-top: var(--kpi-space-1);
 }
 .kpi-sig-vlab .mid { color: var(--n-600); }
+
+/* V21-21 OT arc - larger, centred, percentage INSIDE the arc */
+.kpi-sig-gauge2 {
+  width: var(--kpi-gauge2-w); height: var(--kpi-gauge2-h);
+  flex: none; display: block;
+}
+.kpi-sig-gauge2 text {
+  font-family: var(--font-ui);
+  font-variant-numeric: var(--num-tabular);
+}
+
+/* V21-22 fraction display for hours-vs-budget */
+.kpi-sig-frac {
+  display: inline-flex; align-items: baseline;
+  gap: var(--kpi-space-2);
+  color: var(--n-900);
+  font-variant-numeric: var(--num-tabular);
+  white-space: nowrap;
+  letter-spacing: -0.012em;
+}
+.kpi-sig-frac-n {
+  font-size: var(--kpi-size-splitv); font-weight: 800; line-height: 1.05;
+}
+.kpi-sig-frac-of {
+  font-size: var(--kpi-size-caption); color: var(--n-500); font-weight: 600;
+  letter-spacing: 0;
+}
+.kpi-sig-frac-d {
+  font-size: var(--kpi-size-stat); font-weight: 700; color: var(--n-700);
+}
+.kpi-sig-pill {
+  display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
+  background: var(--n-50); border: 1px solid var(--n-200);
+  border-radius: var(--rad-pill);
+  padding: var(--kpi-space-1) var(--kpi-space-10px);
+  font-size: var(--kpi-size-tick); color: var(--n-700);
+  white-space: nowrap;
+}
+.kpi-sig-pill b { color: var(--n-900); font-weight: 800; font-variant-numeric: var(--num-tabular); }
+
 .kpi-sig-bullet {
   height: var(--kpi-space-10px); background: var(--n-200); border-radius: 5px;
-  position: relative; width: 100%;
+  position: relative; width: 100%; margin-top: var(--kpi-space-2);
 }
 .kpi-sig-bullet-f {
   position: absolute; left: 0; top: 0; bottom: 0;
@@ -2027,23 +2076,20 @@
   position: absolute; top: calc(-5px * var(--kf-scale)); bottom: calc(-5px * var(--kf-scale));
   width: 2px; background: var(--n-900);
 }
-/* S-5: scale via the rendered box, never the viewBox. angleToPoint()
-   in SignalCards.js keeps working against 96x60 coords. */
-.kpi-sig-gauge { width: var(--kpi-gauge-w); height: var(--kpi-gauge-h); flex: none; }
-.kpi-sig-gcol {
-  display: flex; flex-direction: column; gap: var(--kpi-space-5px);
-  font-size: var(--kpi-size-tick); color: var(--n-500);
+
+/* V21-23 payroll tick row - one mark per week in range. Only when
+   the range is <=13 weeks. Priced weeks filled dark; unpriced light. */
+.kpi-sig-ticks {
+  display: grid;
+  gap: var(--kpi-space-1);
+  width: 100%; margin-top: var(--kpi-space-2);
 }
-.kpi-sig-gcol b { color: var(--n-800); font-weight: 800; }
-.kpi-sig-chip {
-  display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
-  background: var(--n-50); border: 1px solid var(--n-200);
-  border-radius: var(--rad-pill);
-  padding: var(--kpi-space-1) var(--kpi-space-10px);
-  font-size: var(--kpi-size-tick); color: var(--n-600);
-  white-space: nowrap;
+.kpi-sig-tick {
+  height: var(--kpi-space-3);
+  border-radius: 2px;
+  background: var(--n-200);
 }
-.kpi-sig-chip b { color: var(--n-900); font-weight: 800; }
+.kpi-sig-tick-on { background: var(--navy-700); }
 
 /* Details strip (V8-17) - one bordered strip, six divided cells. */
 .kpi-det {
@@ -2070,18 +2116,35 @@
 .kpi-det-h-hint {
   margin-left: auto; font-size: var(--kpi-size-caption); color: var(--n-500);
 }
+/* V21-13 - two labeled groups (BUDGET / CREW), four cells each,
+   side-by-side. Group labels 9.5/800 tracking .09em uppercase n-500. */
 .kpi-det-table {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
+}
+.kpi-det-grp {
+  padding: var(--kpi-space-3) var(--kpi-space-4);
+  border-right: 1px solid var(--n-200);
+  min-width: 0;
+}
+.kpi-det-grp:last-child { border-right: 0; }
+.kpi-det-grp-h {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.09em;
+  color: var(--n-500); text-transform: uppercase;
+  margin-bottom: var(--kpi-space-2);
+}
+.kpi-det-grp-cells {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .kpi-det-cell {
-  padding: var(--kpi-space-3) var(--kpi-space-4);
+  padding-right: var(--kpi-space-3);
   border-right: 1px solid var(--n-100);
+  min-width: 0;
 }
-.kpi-det-cell:last-child { border-right: 0; }
+.kpi-det-grp-cells .kpi-det-cell:last-child { border-right: 0; }
 .kpi-det-k {
   font-size: var(--kpi-size-caption); color: var(--n-600); font-weight: 600;
-  white-space: nowrap;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .kpi-det-v {
   font-size: var(--kpi-size-lead); font-weight: 700;
@@ -2091,25 +2154,25 @@
 .kpi-det-v-mute { color: var(--n-400); }
 .kpi-det-c {
   font-size: var(--kpi-size-tick); color: var(--n-500);
-  white-space: nowrap;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Board responsive: signals collapse to 2 wide then 1 wide; details
-   strip collapses cell columns similarly. */
+/* Board responsive: signals collapse; details strip stacks the two
+   groups on top of each other under 1280 (4 cells still fit per row). */
 @media (max-width: 1279px) {
   .kpi-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-det-table { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .kpi-det-cell:nth-child(3n) { border-right: 0; }
-  .kpi-det-cell:nth-child(n+4) { border-top: 1px solid var(--n-100); }
+  .kpi-det-table { grid-template-columns: 1fr; }
+  .kpi-det-grp { border-right: 0; border-bottom: 1px solid var(--n-200); }
+  .kpi-det-grp:last-child { border-bottom: 0; }
 }
 @media (max-width: 767px) {
   .kpi-story { grid-template-columns: 1fr; }
   .kpi-story-left { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-wbars { grid-template-columns: repeat(2, 1fr); }
   .kpi-sigs { grid-template-columns: 1fr; }
-  .kpi-det-table { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-det-cell:nth-child(2n) { border-right: 0; }
-  .kpi-det-cell:nth-child(n+3) { border-top: 1px solid var(--n-100); }
+  .kpi-det-grp-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-det-grp-cells .kpi-det-cell:nth-child(2n) { border-right: 0; }
+  .kpi-det-grp-cells .kpi-det-cell:nth-child(n+3) { border-top: 1px solid var(--n-100); }
 }
 
 

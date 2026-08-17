@@ -9,14 +9,14 @@
 //
 // Range interpretations:
 //   single_period_in_progress - full board including V8-2 projection,
-//                               V8-3 rolling, V8-4 unapproved per week.
+//                               V21-11 weekly_allowance, V8-4 unapproved per week.
 //   single_period_closed      - variance + weeks (all closed strict-sign);
-//                               projection + rolling omitted per V8-2/V8-3.
+//                               projection + allowance omitted.
 //   multi_period              - variance across periods; per-week strip
 //                               uses closed-week rules only; projection +
-//                               rolling omitted.
+//                               allowance omitted.
 //   no_budget                 - null; the client renders the omission
-//                               sentence.
+//                               state.
 
 import {
   periodStartISO,
@@ -307,7 +307,7 @@ export function buildBoard({
 
   // Single-period fields.
   let projected_period_end = null;
-  let rolling_weekly_target = null;
+  let weekly_allowance = null;
   let budget_exhausted = false;
   let closed_weeks_count = 0;
   let in_progress_week_start = null;
@@ -329,19 +329,27 @@ export function buildBoard({
     if (elapsed_weeks > 0) {
       projected_period_end = r2((spent_to_date / elapsed_weeks) * WEEKS_PER_PERIOD);
     }
-    if (not_started_weeks_count > 0) {
-      const available = budget - spent_closed - spent_in_progress;
-      if (available < 0) {
-        rolling_weekly_target = 0;
+    // V21-11: denominator is weeks-NOT-FINISHED = 1 (if in-progress) +
+    // count(not_started). The prior denominator (not_started only) treats
+    // the running week as if it will cost nothing, overstating allowance.
+    // Identity that MUST hold when !budget_exhausted:
+    //   spent_to_date + denominator * weekly_allowance == period_budget
+    const denominator = (in_progress_week_start ? 1 : 0) + not_started_weeks_count;
+    if (denominator > 0) {
+      const remaining = budget - spent_to_date;
+      if (remaining < 0) {
+        weekly_allowance = 0;
         budget_exhausted = true;
       } else {
-        rolling_weekly_target = r2(available / not_started_weeks_count);
+        weekly_allowance = r2(remaining / denominator);
       }
     }
-    // Fill per-not-started-week rolling_target on weeksOut.
+    // Fill per-not-started-week weekly_allowance on weeksOut. V21-10:
+    // in-progress week's status line also reads the allowance; we set
+    // it on that week too so consumers do not divide again.
     for (const w of weeksOut) {
-      if (w.state === "not_started" && rolling_weekly_target != null) {
-        w.rolling_target = rolling_weekly_target;
+      if (weekly_allowance != null && (w.state === "not_started" || w.state === "in_progress")) {
+        w.weekly_allowance = weekly_allowance;
       }
     }
   }
@@ -413,7 +421,7 @@ export function buildBoard({
     spent_closed,
     spent_in_progress,
     projected_period_end,
-    rolling_weekly_target,
+    weekly_allowance,
     budget_exhausted,
     weekly_original_target,
     // Signals
