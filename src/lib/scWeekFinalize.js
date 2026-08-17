@@ -135,9 +135,18 @@ export async function computeWeekCompleteness(accountKey, weekStartMonday) {
     throw new Error(`computeWeekCompleteness projections: ${projectionsRes.error.message}`);
   }
 
-  const actualsByDate = new Map();  // date -> true if any row exists
+  // PR-G1 (2026-08-17): actualsByDate now tracks anyNonZero too so the
+  // per-day service classification agrees with dataStore/serviceCalendar.js
+  // classifyDayStatus:326 ("if s.hasAct && !s.anyNonZeroAct return no-service").
+  // Needed so the chase resolver reports "1 of 6" instead of "1 of 7" on
+  // TXR - AZ, which has zero-projection Sundays.
+  const actualsByDate = new Map();  // date -> { hasRow, anyNonZero }
   for (const r of actualsRes.data || []) {
-    actualsByDate.set(String(r.service_date).slice(0, 10), true);
+    const d = String(r.service_date).slice(0, 10);
+    const cur = actualsByDate.get(d) || { hasRow: false, anyNonZero: false };
+    cur.hasRow = true;
+    if (Number(r.actual_count) > 0) cur.anyNonZero = true;
+    actualsByDate.set(d, cur);
   }
 
   // Per date: does a projection row exist? Are all projections zero?
@@ -151,17 +160,36 @@ export async function computeWeekCompleteness(accountKey, weekStartMonday) {
   }
 
   const missingDates = [];
+  let serviceDays = 0;
+  let serviceDaysEntered = 0;
   for (const d of dates) {
-    const hasActualsRow = actualsByDate.get(d) === true;
-    const proj = projByDate.get(d) || { hasRow: false, anyNonZero: false };
-    const plannedOffDay = proj.hasRow && !proj.anyNonZero;
-    const isComplete = hasActualsRow || plannedOffDay;
+    const act  = actualsByDate.get(d) || { hasRow: false, anyNonZero: false };
+    const proj = projByDate.get(d)    || { hasRow: false, anyNonZero: false };
+    const plannedOffDay     = proj.hasRow && !proj.anyNonZero;
+    const manualNoServiceDay = act.hasRow && !act.anyNonZero;
+    const isServiceDay      = !plannedOffDay && !manualNoServiceDay;
+    // A service day is "entered" when actuals carry any non-zero count.
+    // (A manual-no-service day is already excluded from isServiceDay.)
+    const isServiceDayEntered = isServiceDay && act.anyNonZero;
+    if (isServiceDay)         serviceDays++;
+    if (isServiceDayEntered)  serviceDaysEntered++;
+    // Completeness / missing predicate is unchanged from PR-A: a day
+    // is complete when it has actuals OR is a planned-off day. Missing
+    // = neither. Downstream consumers relying on the boolean or the
+    // missingDates array are byte-identical.
+    const isComplete = act.hasRow || plannedOffDay;
     if (!isComplete) missingDates.push(d);
   }
 
   return {
     complete: missingDates.length === 0,
     missingDates,
+    // PR-G1 (2026-08-17): service-day denominator + numerator. Mirrors
+    // ServiceCalendar.js aggregateFromDays :248-253 so chase templates,
+    // sc-finalize-states weeks map, and the finalize control's future
+    // "N of M" surfaces converge on one server-authoritative number.
+    serviceDays,
+    serviceDaysEntered,
     weekStart: dates[0],
     weekEnd: dates[6],
     reason: missingDates.length === 0
