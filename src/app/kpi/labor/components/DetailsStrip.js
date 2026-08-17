@@ -35,7 +35,7 @@ export function DetailsStrip({ board }) {
   };
   if (!board || board.applies === false) return null;
   const budget = board.period_budget || board.range_budget;
-  const rolling = board.rolling_weekly_target;
+  const allowance = board.weekly_allowance;
   const pace = board.pace_pct;
   const elapsed = board.elapsed_pct;
   const projected = board.projected_period_end;
@@ -65,12 +65,12 @@ export function DetailsStrip({ board }) {
               : "range total"}
           />
           <Cell
-            label="Rolling target"
-            value={rolling != null ? fmt$(rolling) : "—"}
-            caption={rolling != null
-              ? `per week · ${board.not_started_weeks_count} left${board.budget_exhausted ? " · budget exhausted" : ""}`
+            label="Weekly allowance"
+            value={allowance != null ? fmt$(allowance) : "—"}
+            caption={allowance != null
+              ? `per week · ${(board.in_progress_week_start ? 1 : 0) + (board.not_started_weeks_count || 0)} left${board.budget_exhausted ? " · budget exhausted" : ""}`
               : "does not apply"}
-            muted={rolling == null}
+            muted={allowance == null}
           />
           <Cell
             label="Pace"

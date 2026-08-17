@@ -1,15 +1,15 @@
 "use client";
 // src/app/kpi/labor/components/StoryBlock.js
 //
-// V8-8..V8-12 + V8-21..V8-25 (range-adaptive addendum). One card, two
-// panels: left = the money, right = the strip. V8-23: the two panels
-// no longer bottom-align; the left panel sizes to its own content.
+// V21 board simplification. Left panel is the spend card (rebuilt in
+// C3). Right panel is the week strip; tier renderers untouched. Legend
+// pills, $/hrs lens toggle, ? help control retired per V21-4. Dollars
+// only from here.
 //
 // The strip is range-adaptive (V8-21):
-//   Tier A (<= 6 weeks)  - per-week columns with captions + verdicts
-//                          + rolling target + in-progress treatment
-//                          (rolling / projection / in-progress apply
-//                          to Tier A only per V8-24).
+//   Tier A (<= 6 weeks)  - per-week columns with captions, one shared
+//                          scale, one continuous target line (rebuilt
+//                          in C3).
 //   Tier B (7-13 weeks)  - single-row compact bars with a shared
 //                          scale, a stepped dashed weekly budget line,
 //                          alternating axis labels, hover tooltip.
@@ -17,90 +17,10 @@
 //                          Header title switches to
 //                          `THE RANGE · PERIOD BY PERIOD`.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 
-const LENS_KEY = "kpi:board:lens";
-
-function useLens() {
-  const [lens, setLens] = useState("$");
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try { const v = localStorage.getItem(LENS_KEY); if (v === "$" || v === "hrs") setLens(v); } catch {}
-  }, []);
-  const commit = (v) => {
-    setLens(v);
-    try { localStorage.setItem(LENS_KEY, v); } catch {}
-  };
-  return [lens, commit];
-}
-
-function Help({ children }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return (
-    <span className="kpi-help-anchor" ref={rootRef}>
-      <button
-        type="button"
-        className="kpi-help"
-        aria-haspopup="dialog"
-        aria-expanded={open ? "true" : "false"}
-        aria-label="Show explanation"
-        onClick={() => setOpen(o => !o)}
-      >?</button>
-      {open && <div className="kpi-help-pop" role="dialog">{children}</div>}
-    </span>
-  );
-}
-
-function BudgetTrack({ board }) {
-  const budget = board.period_budget || board.range_budget;
-  if (!budget || budget <= 0) return null;
-  const spentPct = Math.max(0, Math.min(100, (board.spent_to_date / budget) * 100));
-  const elapsedPct = board.elapsed_pct != null ? Math.max(0, Math.min(100, board.elapsed_pct)) : null;
-  const projectedPct = board.projected_period_end != null
-    ? Math.max(0, Math.min(100, (board.projected_period_end / budget) * 100))
-    : null;
-  const projExtra = projectedPct != null ? Math.max(0, projectedPct - spentPct) : 0;
-  return (
-    <div className="kpi-track">
-      <div className="kpi-track-rail" role="img" aria-label={`Spent ${board.spent_to_date != null ? fmt$(board.spent_to_date) : "—"} of ${fmt$(budget)}`}>
-        <span className="kpi-track-spent" style={{ width: `${spentPct}%` }} />
-        {projectedPct != null && (
-          <span className="kpi-track-proj" style={{ left: `${spentPct}%`, width: `${projExtra}%` }} />
-        )}
-        {elapsedPct != null && (
-          <span className="kpi-track-today" style={{ left: `${elapsedPct}%` }}>
-            <span className="kpi-track-today-lab">TODAY</span>
-          </span>
-        )}
-        {projectedPct != null && (
-          <span className="kpi-track-projend" style={{ left: `${projectedPct}%` }}>PROJECTED PERIOD END</span>
-        )}
-      </div>
-      <div className="kpi-track-keys">
-        <div><i className="kpi-key-spent" />spent <b>{fmt$(board.spent_to_date || 0)}</b></div>
-        {projectedPct != null && (
-          <div><i className="kpi-key-proj" />projected <b>{fmt$(board.projected_period_end || 0)}</b></div>
-        )}
-        <div>budget <b>{fmt$(budget)}</b></div>
-      </div>
-    </div>
-  );
-}
-
-// ── TIER A: per-week columns with captions (unchanged from v8.7) ──
+// ── TIER A: per-week columns with captions ────────────────────────
 function daysElapsed(weekStartISO) {
   const [y, m, d] = weekStartISO.split("-").map(Number);
   const start = Date.UTC(y, m - 1, d);
@@ -109,18 +29,13 @@ function daysElapsed(weekStartISO) {
   return Math.max(1, Math.min(7, days));
 }
 
-function TierAWeekBar({ w, lens, weeklyOriginal, rollingTarget, scale }) {
-  const value = lens === "$"
-    ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.spent || 0))
-    : (w.hours || 0);
-  const target = lens === "$"
-    ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.original_target ?? weeklyOriginal ?? 0))
-    : null;
-  // Per V8-22 the SCALE is shared across every visible week in the
-  // strip (max of actual + target with ~10% headroom). Computed once
-  // in TierAStrip and passed down - not per-column. A per-column max
-  // normalises each column against itself and pins the tallest bar
-  // in every column to the ceiling (the live-review defect).
+function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
+  const value = w.state === "not_started"
+    ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
+    : (w.spent || 0);
+  const target = w.state === "not_started"
+    ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
+    : (w.original_target ?? weeklyOriginal ?? 0);
   const barPct = w.state === "not_started" ? 0 : Math.max(0, Math.min(100, (value / scale) * 90));
   const targetPct = target != null ? Math.max(0, Math.min(100, (target / scale) * 90)) : null;
   const isNotStarted = w.state === "not_started";
@@ -132,12 +47,7 @@ function TierAWeekBar({ w, lens, weeklyOriginal, rollingTarget, scale }) {
       ? `kpi-wb-bar ${w.delta_sign === "over" ? "kpi-wb-bar-over" : "kpi-wb-bar-under"}`
       : "";
   const dashCls = isNotStarted ? "kpi-wb-target kpi-wb-target-roll" : "kpi-wb-target";
-  let captionValue;
-  if (lens === "$") {
-    captionValue = isInProgress && w.unapproved_flag ? `≥ ${fmt$(value)}` : fmt$(value);
-  } else {
-    captionValue = fmtHrs(value);
-  }
+  const captionValue = isInProgress && w.unapproved_flag ? `≥ ${fmt$(value)}` : fmt$(value);
   let statusLine;
   if (isClosed && w.delta_vs_original != null) {
     const arrow = w.delta_sign === "under" ? "▼" : w.delta_sign === "over" ? "▲" : "•";
@@ -173,29 +83,24 @@ function TierAWeekBar({ w, lens, weeklyOriginal, rollingTarget, scale }) {
   );
 }
 
-function TierAStrip({ board, lens }) {
+function TierAStrip({ board }) {
   const weeks = board?.weeks || [];
   const weeklyOriginal = board?.weekly_original_target;
-  const rollingTarget = board?.rolling_weekly_target;
-  // Shared scale across the visible tier (V8-22). One max, ~10%
-  // headroom. Kept above the WeekBar so every column normalises
-  // against the same denominator.
+  const weeklyAllowance = board?.weekly_allowance;
   const scale = (() => {
     let max = 1;
     for (const w of weeks) {
-      const value = lens === "$"
-        ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.spent || 0))
-        : (w.hours || 0);
-      const target = lens === "$"
-        ? (w.state === "not_started" ? (w.rolling_target ?? rollingTarget ?? 0) : (w.original_target ?? weeklyOriginal ?? 0))
-        : 0;
+      const value = w.state === "not_started"
+        ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
+        : (w.spent || 0);
+      const target = w.state === "not_started"
+        ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
+        : (w.original_target ?? weeklyOriginal ?? 0);
       const local = Math.max(value, target || 0);
       if (local > max) max = local;
     }
     return max * 1.10;
   })();
-  // V8-22: strip NEVER wraps. Grid column count comes from the WEEK
-  // COUNT, not a hardcoded constant. Range: 1..6 weeks (Tier A limit).
   return (
     <div
       className="kpi-wbars"
@@ -205,9 +110,8 @@ function TierAStrip({ board, lens }) {
         <TierAWeekBar
           key={w.week_start}
           w={w}
-          lens={lens}
           weeklyOriginal={weeklyOriginal}
-          rollingTarget={rollingTarget}
+          weeklyAllowance={weeklyAllowance}
           scale={scale}
         />
       ))}
@@ -216,29 +120,19 @@ function TierAStrip({ board, lens }) {
 }
 
 // ── TIER B: 7-13 weeks, one row of compact bars ────────────────────
-// Shared vertical scale; stepped dashed weekly budget line; alternating
-// axis labels; hover tooltip carrying week dates + actual + budget +
-// delta. Per V8-24 rolling/projection/in-progress treatment is off; a
-// week ending today or later renders as hatched-progress, closed weeks
-// as strict-sign green/red.
-function TierBStrip({ board, lens }) {
+function TierBStrip({ board }) {
   const weeks = board?.weeks || [];
   const [tip, setTip] = useState(null);
   const rootRef = useRef(null);
 
   const values = weeks.map(w => {
-    const actual = lens === "$" ? (w.spent || 0) : (w.hours || 0);
-    const budget = lens === "$" ? (w.original_target ?? 0) : null;
+    const actual = w.spent || 0;
+    const budget = w.original_target ?? 0;
     return { w, actual, budget };
   });
   const maxScale = Math.max(...values.map(v => Math.max(v.actual, v.budget || 0)), 1) * 1.12;
 
-  // Stepped budget path across the entire strip. SVG spans 100x100
-  // (preserveAspectRatio=none), so x = index * (100/n), y = 100 - (bud
-  // /maxScale)*100. Path stays flat within a period and steps at
-  // period boundaries.
   const stepPath = (() => {
-    if (lens !== "$") return null;
     if (!values.some(v => v.budget)) return null;
     const n = values.length;
     const stepW = 100 / n;
@@ -255,7 +149,7 @@ function TierBStrip({ board, lens }) {
   return (
     <div className="kpi-stripB" ref={rootRef}>
       <div className="kpi-plotB">
-        {values.map((v, i) => {
+        {values.map((v) => {
           const isProg = v.w.state === "in_progress";
           const isClosed = v.w.state === "closed";
           const over = isClosed && v.budget > 0 && v.actual > v.budget;
@@ -281,7 +175,6 @@ function TierBStrip({ board, lens }) {
                   actual: v.actual,
                   budget: v.budget,
                   week: v.w,
-                  lens,
                 });
               }}
               onMouseLeave={() => setTip(null)}
@@ -289,10 +182,10 @@ function TierBStrip({ board, lens }) {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const parent = rootRef.current?.getBoundingClientRect();
                 if (!parent) return;
-                setTip({ left: rect.left - parent.left + rect.width / 2, top: rect.top - parent.top - 8, actual: v.actual, budget: v.budget, week: v.w, lens });
+                setTip({ left: rect.left - parent.left + rect.width / 2, top: rect.top - parent.top - 8, actual: v.actual, budget: v.budget, week: v.w });
               }}
               onBlur={() => setTip(null)}
-              aria-label={`Week of ${fmtDate(v.w.week_start)}: ${lens === "$" ? fmt$(v.actual) : fmtHrs(v.actual)}`}
+              aria-label={`Week of ${fmtDate(v.w.week_start)}: ${fmt$(v.actual)}`}
             />
           );
         })}
@@ -313,7 +206,7 @@ function TierBStrip({ board, lens }) {
 }
 
 function TierBTip({ tip }) {
-  const { actual, budget, week, lens } = tip;
+  const { actual, budget, week } = tip;
   const isClosed = week.state === "closed";
   const isProg = week.state === "in_progress";
   const delta = budget ? actual - budget : null;
@@ -321,13 +214,13 @@ function TierBTip({ tip }) {
   const cls = delta == null ? "" : delta < 0 ? "kpi-wb-d-good" : "kpi-wb-d-bad";
   return (
     <div className="kpi-stripB-tip" style={{ left: `${tip.left}px`, top: `${tip.top}px` }}>
-      <b>{lens === "$" ? fmt$(actual) : fmtHrs(actual)}</b>
+      <b>{fmt$(actual)}</b>
       <span>week of {fmtDate(week.week_start)}</span>
-      {budget != null && budget > 0 && lens === "$" && (
+      {budget != null && budget > 0 && (
         <span>budget {fmt$(budget)}</span>
       )}
       {isProg && <span className="kpi-wb-d-mute">in progress</span>}
-      {isClosed && delta != null && lens === "$" && (
+      {isClosed && delta != null && (
         <span className={cls}>{arrow} {fmt$(Math.abs(delta))} {delta < 0 ? "under" : "over"}</span>
       )}
     </div>
@@ -335,12 +228,7 @@ function TierBTip({ tip }) {
 }
 
 // ── TIER C: > 13 weeks, one bar per fiscal period ──────────────────
-// Grain switches; the week detail lives in the table below. Groups
-// board.weeks by period_no, sums spent/hours per period, reads period
-// budget from budgetPeriods. Marks the last-touching-today period as
-// in-progress (hatched) so a partial period does not read as a red
-// wall against a full-period budget.
-function TierCStrip({ board, lens, budgetPeriods, todayISO }) {
+function TierCStrip({ board, budgetPeriods }) {
   const weeks = board?.weeks || [];
   const budgetByPeriod = new Map((budgetPeriods || []).map(b => [b.period_no, Number(b.amount)]));
 
@@ -362,7 +250,7 @@ function TierCStrip({ board, lens, budgetPeriods, todayISO }) {
   }
 
   const maxScale = Math.max(
-    ...periods.map(p => Math.max(lens === "$" ? p.spent : p.hours, p.budget || 0)),
+    ...periods.map(p => Math.max(p.spent, p.budget || 0)),
     1,
   ) * 1.1;
 
@@ -370,7 +258,7 @@ function TierCStrip({ board, lens, budgetPeriods, todayISO }) {
     <div className="kpi-stripC">
       <div className="kpi-plotC">
         {periods.map(p => {
-          const value = lens === "$" ? p.spent : p.hours;
+          const value = p.spent;
           const h = Math.max(0.5, (value / maxScale) * 100);
           const over = !p.in_progress && p.budget != null && value > p.budget;
           const cls = p.in_progress
@@ -378,7 +266,7 @@ function TierCStrip({ board, lens, budgetPeriods, todayISO }) {
             : over
               ? "kpi-pcol-bar kpi-pcol-bar-over"
               : "kpi-pcol-bar kpi-pcol-bar-under";
-          const budPct = p.budget != null && lens === "$" ? Math.min(100, (p.budget / maxScale) * 100) : null;
+          const budPct = p.budget != null ? Math.min(100, (p.budget / maxScale) * 100) : null;
           return (
             <div key={p.period_no} className="kpi-pcol">
               <div className={cls} style={{ height: `${h}%` }} />
@@ -395,7 +283,7 @@ function TierCStrip({ board, lens, budgetPeriods, todayISO }) {
           return (
             <div key={p.period_no} className="kpi-axisC-cell">
               <div className="kpi-axisC-p">P{p.period_no}</div>
-              <div className="kpi-axisC-v">{lens === "$" ? fmtCompact(p.spent) : fmtHrs(p.hours)}</div>
+              <div className="kpi-axisC-v">{fmtCompact(p.spent)}</div>
               {p.in_progress ? (
                 <div className="kpi-axisC-d kpi-wb-d-mute">in progress</div>
               ) : delta != null ? (
@@ -426,65 +314,16 @@ function classifyTier(weekCount) {
 }
 
 export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO }) {
-  const [lens, setLens] = useLens();
-  const budget = board?.period_budget || board?.range_budget;
   const eyebrowLabel = board?.kind === "single_period_in_progress" || board?.kind === "single_period_closed"
     ? `PERIOD ${board.period_no}`
     : (rangeLabel || "").toUpperCase();
   const dateRange = board?.period_start && board?.period_end
     ? `${fmtDate(board.period_start)} – ${fmtDate(board.period_end)}`
     : "";
-  const workers = board?.distinct_workers ?? 0;
-  const hours = board?.hours ?? 0;
-  const avgRate = board?.avg_rate;
 
   const weekCount = (board?.weeks || []).length;
   const tier = classifyTier(weekCount);
   const stripTitle = tier === "C" ? "THE RANGE · PERIOD BY PERIOD" : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK");
-
-  // Legend + help pill layout per V8-24. Tier A carries rolling +
-  // original; Tier B a weekly budget marker; Tier C a period budget
-  // marker.
-  const legend = (() => {
-    if (tier === "A") {
-      return (
-        <>
-          {board?.weekly_original_target != null && (
-            <span className="kpi-lpill kpi-lpill-a">
-              <span className="kpi-lpill-dash" aria-hidden="true" />
-              original <b>{fmt$(board.weekly_original_target)}</b>
-            </span>
-          )}
-          {board?.rolling_weekly_target != null && !board.budget_exhausted && (
-            <span className="kpi-lpill kpi-lpill-n">
-              <span className="kpi-lpill-dash" aria-hidden="true" />
-              rolling <b>{fmt$(board.rolling_weekly_target)}</b>
-            </span>
-          )}
-          {board?.budget_exhausted && (
-            <span className="kpi-lpill kpi-lpill-n">
-              <span className="kpi-lpill-dash" aria-hidden="true" />
-              rolling <b>{fmt$(0)}</b> · budget exhausted
-            </span>
-          )}
-        </>
-      );
-    }
-    if (tier === "B") {
-      return (
-        <span className="kpi-lpill kpi-lpill-a">
-          <span className="kpi-lpill-dash" aria-hidden="true" />
-          weekly budget
-        </span>
-      );
-    }
-    return (
-      <span className="kpi-lpill kpi-lpill-a">
-        <span className="kpi-lpill-dash" aria-hidden="true" />
-        period budget
-      </span>
-    );
-  })();
 
   return (
     <div className="kpi-story">
@@ -493,56 +332,19 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
           <span className="kpi-story-eye-1">{eyebrowLabel}</span>
           {dateRange && <span className="kpi-story-eye-2">{dateRange}</span>}
         </div>
-        <div className="kpi-story-headline">
-          <span className="kpi-story-hn num">{fmt$(board?.spent_to_date || 0)}</span>
-          <span className="kpi-story-hlab">Total labor spent</span>
-        </div>
-        <div className="kpi-story-rail3">
-          <div className="kpi-story-s"><span className="kpi-story-v num">{workers}</span><span className="kpi-story-k">Workers</span></div>
-          <div className="kpi-story-s"><span className="kpi-story-v num">{fmtHrs(hours)}</span><span className="kpi-story-k">Hours</span></div>
-          <div className="kpi-story-s"><span className="kpi-story-v num">{avgRate != null ? `$${avgRate.toFixed(2)}` : "—"}</span><span className="kpi-story-k">Avg rate</span></div>
-        </div>
-        {budget > 0 && <BudgetTrack board={board} />}
+        {/* C3 lands the split block + budget footer here (V21-5..V21-9). */}
       </div>
 
       <div className="kpi-story-right">
         <div className="kpi-wh">
           <span className="kpi-wh-t">{stripTitle}</span>
           <span className="kpi-wh-sp" aria-hidden="true" />
-          {legend}
-          <span className="kpi-seg" role="group" aria-label="Lens">
-            <button type="button" className={lens === "$" ? "on" : ""} onClick={() => setLens("$")} aria-pressed={lens === "$"}>$</button>
-            <button type="button" className={lens === "hrs" ? "on" : ""} onClick={() => setLens("hrs")} aria-pressed={lens === "hrs"}>hrs</button>
-          </span>
-          <Help>
-            <h5>HOW THIS STRIP WORKS</h5>
-            {tier === "A" && (
-              <>
-                <b>Original</b> is the flat weekly budget - the period budget divided by four. Closed weeks keep it, because that is what they were judged against.
-                {board?.rolling_weekly_target != null && (
-                  <div className="kpi-help-calc">
-                    Rolling = (budget − closed spend − in-progress spend) ÷ weeks left = <b>{fmt$(board.rolling_weekly_target)}</b>
-                  </div>
-                )}
-                <b>Rolling</b> replaces it on upcoming weeks: what each remaining week can spend and still land on budget.
-              </>
-            )}
-            {tier === "B" && (
-              <>
-                One bar per week, shared vertical scale. Hover a bar for its actual, its weekly budget, and the delta. The dashed line steps at period boundaries where the weekly budget changes.
-              </>
-            )}
-            {tier === "C" && (
-              <>
-                Above 13 weeks the strip aggregates to one bar per fiscal period. Each bar carries its own period budget as a dashed line. Week-level detail lives in the table below.
-              </>
-            )}
-          </Help>
+          {/* C3 lands the weekly target label here (V21-10). */}
         </div>
 
-        {tier === "A" && <TierAStrip board={board} lens={lens} />}
-        {tier === "B" && <TierBStrip board={board} lens={lens} />}
-        {tier === "C" && <TierCStrip board={board} lens={lens} budgetPeriods={budgetPeriods} todayISO={todayISO} />}
+        {tier === "A" && <TierAStrip board={board} />}
+        {tier === "B" && <TierBStrip board={board} />}
+        {tier === "C" && <TierCStrip board={board} budgetPeriods={budgetPeriods} todayISO={todayISO} />}
       </div>
     </div>
   );

@@ -1538,23 +1538,9 @@
   margin-bottom: var(--kpi-space-3);
 }
 
-/* Sentence row (V8-6/V8-7) */
-.kpi-sentence {
-  display: flex; align-items: center; gap: var(--kpi-space-14px);
-  background: var(--n-50);
-  border: 1px solid var(--n-200);
-  border-radius: 12px;
-  padding: var(--kpi-space-3) var(--kpi-space-4);
-}
-.kpi-sentence-body {
-  font-size: var(--kpi-size-callout); color: var(--n-800); line-height: 1.4;
-}
-.kpi-sentence-body b {
-  font-weight: 800; color: var(--n-900);
-}
-.kpi-sentence-spacer { flex: 1 1 auto; }
-
-/* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad} */
+/* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad}.
+   V21-5: the pill relocates to the spend card header (was the retired
+   sentence row). */
 .kpi-vpill {
   display: inline-flex; align-items: center; gap: var(--kpi-space-2);
   height: calc(32px * var(--kf-scale)); padding: 0 var(--kpi-space-14px);
@@ -1627,7 +1613,7 @@
   gap: var(--kpi-space-1);
 }
 
-/* Left panel: eyebrow + headline + 3-stat rail + track (V8-9) */
+/* Left panel: eyebrow row survives; V21-5 spend card lands after it. */
 .kpi-story-eye { display: flex; align-items: baseline; gap: var(--kpi-space-9px); }
 .kpi-story-eye-1 {
   font-size: var(--kpi-size-caption); font-weight: 800; letter-spacing: 0.08em;
@@ -1635,93 +1621,6 @@
 }
 .kpi-story-eye-2 {
   font-size: var(--kpi-size-caption); color: var(--n-500); white-space: nowrap;
-}
-.kpi-story-headline {
-  display: flex; align-items: baseline; gap: var(--kpi-space-10px);
-  white-space: nowrap;
-}
-.kpi-story-hn {
-  font-size: var(--kpi-size-hero); font-weight: 800; letter-spacing: -0.015em;
-  line-height: 1; color: var(--n-900);
-}
-.kpi-story-hlab {
-  font-size: var(--kpi-size-tick); font-weight: 800; letter-spacing: 0.07em;
-  color: var(--n-600); text-transform: uppercase; white-space: nowrap;
-}
-.kpi-story-rail3 {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  border: 1px solid var(--n-200); border-radius: 8px;
-  background: var(--n-50); overflow: hidden;
-}
-.kpi-story-s {
-  padding: var(--kpi-space-10px) var(--kpi-space-6px);
-  border-left: 1px solid var(--n-200);
-  display: flex; align-items: baseline; justify-content: center;
-  gap: var(--kpi-space-6px); min-width: 0;
-  flex-wrap: wrap;
-}
-.kpi-story-s:first-child { border-left: 0; }
-.kpi-story-v { font-size: var(--kpi-size-stat); font-weight: 800; color: var(--n-900); white-space: nowrap; }
-/* Defect fix: previously white-space:nowrap clipped "AVG RATE" at
-   narrow left-panel widths (below ~1400px). Removing nowrap + adding
-   flex-wrap on the parent lets the label wrap between words (Avg /
-   rate) rather than clip. Values keep nowrap so numbers never wrap. */
-.kpi-story-k {
-  font-size: var(--kpi-size-micro); letter-spacing: 0.06em;
-  color: var(--n-600); text-transform: uppercase;
-  font-weight: 700;
-}
-
-/* Budget track (V8-10). V8-23: no longer floor-pinned - the left
-   panel sizes to its own content so the track sits directly under
-   the rail with a fixed rhythm gap from .kpi-story-left. */
-.kpi-track { padding-top: var(--kpi-space-1); }
-.kpi-track-rail {
-  height: var(--kpi-space-14px); background: var(--n-200);
-  border-radius: 7px; position: relative;
-}
-.kpi-track-spent {
-  position: absolute; left: 0; top: 0; bottom: 0;
-  border-radius: 7px 0 0 7px;
-  background: var(--navy-700);
-}
-.kpi-track-proj {
-  position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(21, 57, 104, 0.35) 4px 8px);
-}
-.kpi-track-today {
-  position: absolute; top: calc(-8px * var(--kf-scale)); bottom: calc(-8px * var(--kf-scale));
-  width: 2px; background: var(--n-900);
-}
-.kpi-track-today-lab {
-  position: absolute; bottom: 100%; left: 50%;
-  transform: translateX(-50%); margin-bottom: var(--kpi-space-1);
-  font-size: var(--kpi-size-tag); font-weight: 800; color: var(--n-700);
-  letter-spacing: 0.08em; white-space: nowrap;
-}
-.kpi-track-projend {
-  position: absolute; top: 100%; margin-top: var(--kpi-space-6px);
-  transform: translateX(-50%);
-  font-size: var(--kpi-size-tag); font-weight: 800; letter-spacing: 0.06em;
-  color: var(--navy-700); white-space: nowrap;
-}
-.kpi-track-keys {
-  display: flex; justify-content: space-between; gap: var(--kpi-space-10px);
-  margin-top: 26px;
-  font-size: var(--kpi-size-tick); color: var(--n-500);
-}
-.kpi-track-keys div {
-  display: flex; align-items: center; gap: var(--kpi-space-5px); white-space: nowrap;
-}
-.kpi-track-keys b { color: var(--n-900); font-weight: 700; }
-.kpi-track-keys i {
-  display: inline-block; width: 9px; height: 9px;
-  border-radius: 2px; flex: none;
-}
-.kpi-key-spent { background: var(--navy-700); }
-.kpi-key-proj {
-  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(21, 57, 104, 0.35) 3px 6px);
-  border: 1px solid var(--n-300);
 }
 
 /* Week strip header (V8-11) */
@@ -1731,19 +1630,6 @@
   color: var(--n-600); font-weight: 700; white-space: nowrap;
 }
 .kpi-wh-sp { flex: 1 1 auto; }
-.kpi-lpill {
-  display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
-  height: var(--kpi-lpill-h); padding: 0 var(--kpi-space-10px);
-  border-radius: var(--rad-pill);
-  font-size: var(--kpi-size-meta); font-weight: 700; white-space: nowrap;
-  border: 1px solid;
-}
-.kpi-lpill-a { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
-.kpi-lpill-n { background: #EAF0FA; color: var(--navy-700); border-color: #CBD9F0; }
-.kpi-lpill-dash {
-  width: var(--kpi-space-3); border-top: 2px dashed currentColor; display: inline-block;
-}
-.kpi-lpill b { font-weight: 800; }
 
 /* Tier A week columns (V8-12). V8-23: no longer bottom-aligned. */
 .kpi-wbars {
