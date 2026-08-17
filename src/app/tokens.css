@@ -240,6 +240,19 @@
   --kpi-accent-strong: var(--n-800);
   --kpi-accent-tint:   var(--navy-50);
 
+  /* ---------- KPI scale layer (KPI_SCALE_SPEC S-1..S-6) ------------
+     House scale variable published at :root so future surfaces can
+     opt in to the same pattern. Default 1 = no change. The --kpi-*
+     token family itself is redeclared under the .kpi-app scope below
+     (SC's .scv2 pattern): CSS custom properties resolve calc() AT
+     DECLARATION SITE, so a :root declaration of `--kpi-cmd-h: calc(60px
+     * var(--kf-scale))` bakes 60 * 1 = 60 into the inherited value
+     regardless of what --kf-scale becomes in subtrees. Redeclaring
+     inside .kpi-app lets .kpi-app's own --kf-scale reach the calc.
+     Do NOT touch --sc2-scale; SC keeps its own until a separate
+     ruling. */
+  --kf-scale: 1;
+
   /* Chart series color - HOLIDAY (D2, spec §3.5 F14). Violet reserved
      for the chart series; NEVER a state. If a module later claims
      purple as its accent, no collision - they never share a surface. */

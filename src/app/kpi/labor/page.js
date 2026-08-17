@@ -22,9 +22,10 @@ import { ACCOUNTS, FY_START } from "./lib/accounts";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
-import { Hero } from "./components/Hero";
-import { MetricGrid } from "./components/MetricGrid";
-import { TrendChart } from "./components/TrendChart";
+import { Sentence } from "./components/Sentence";
+import { StoryBlock } from "./components/StoryBlock";
+import { SignalCards } from "./components/SignalCards";
+import { DetailsStrip } from "./components/DetailsStrip";
 import { WeekTable } from "./components/WeekTable";
 import {
   StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
@@ -113,10 +114,12 @@ export default function KpiLaborPage() {
   // B10 live region text - kept separate so we can announce without a
   // visible toast (e.g., account switch, filter change).
   const [liveMsg, setLiveMsg] = useState("");
-  // B10: focus-to-hero handle after account switch or filter clear.
-  const heroRef = useRef(null);
-  const focusHero = useCallback(() => {
-    const el = heroRef.current;
+  // B10: focus target for account switch or filter clear. The ref lands
+  // on the board wrapper so keyboard users get the verdict sentence read
+  // aloud after every state change.
+  const boardRef = useRef(null);
+  const focusBoard = useCallback(() => {
+    const el = boardRef.current;
     if (el && typeof el.focus === "function") el.focus();
   }, []);
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
@@ -229,9 +232,8 @@ export default function KpiLaborPage() {
   }, [data, selectedWorkers]);
 
   // ── weeksInRange: unique week_start values, sorted desc ──────
-  // H3 fix - this is the ONE canonical week count. Hero, MetricGrid,
-  // Hero, MetricGrid, budget-for-range, pace calc, coverage caption all read
-  // this. Never read grouped.length as "week count" (that's period
+  // ONE canonical week count. Board + budget-for-range + pace calc all
+  // read this. Never read grouped.length as "week count" (that's period
   // count). Never read filteredActuals.length as "week count" (that's
   // worker-week rows).
   const weekAggregates = useMemo(() => {
@@ -535,7 +537,7 @@ export default function KpiLaborPage() {
     setParams({ account: a, workers: "", view: "" });
     setLiveMsg(`Switched to ${a}.`);
     // Let the render complete before we grab focus.
-    setTimeout(focusHero, 60);
+    setTimeout(focusBoard, 60);
   };
 
   const workersOnChangeSet = (nextSet) => {
@@ -607,7 +609,21 @@ export default function KpiLaborPage() {
     };
   })();
 
-  // ── Middle content (Hero · MetricGrid · Trend · Table + 9 states) ──
+  // Human range label for the sentence's multi-period template.
+  const rangeLabelForSentence = (() => {
+    if (rangeSelectionEarly?.kind === "period") return `Period ${rangeSelectionEarly.value}`;
+    if (rangeSelectionEarly?.kind === "month") {
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      return `${months[rangeSelectionEarly.value.monthIndex]} ${rangeSelectionEarly.value.year}`;
+    }
+    if (resolvedPreset === "fytd") return "fiscal year to date";
+    if (resolvedPreset === "last_4wk") return "the last 4 weeks";
+    if (resolvedPreset === "last_13wk") return "the last 13 weeks";
+    if (resolvedPreset === "this_period" || resolvedPreset === "last_period") return `Period ${data?.board?.period_no ?? ""}`.trim();
+    return `${start} to ${end}`;
+  })();
+
+  // ── Middle content: board (sentence + story) then WeekTable + 9 states ──
   const mainContent = (
     <>
       {/* C5.5 name-availability banner. */}
@@ -622,60 +638,22 @@ export default function KpiLaborPage() {
       )}
 
       {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
-        <>
-          <div ref={heroRef} tabIndex={-1} style={{ outline: "none" }}>
-            <Hero
-              account={account}
-              totals={totals}
-              weekCount={weeksInRange}
-              workerWeekCount={filteredActuals.length}
-              lastPreset={resolvedPreset}
-              start={start}
-              end={end}
-              today={today}
-              currentPeriodNo={currentPeriodNo}
-              budgetPeriods={data.budget_periods || []}
-              budgetMode={data.budget_mode || "static"}
-              budgetNotes={data.budget_notes || {}}
-            />
-          </div>
-          <MetricGrid
-            account={account}
-            totals={totals}
-            weekCount={weeksInRange}
-            lastPreset={resolvedPreset}
-            start={start}
-            end={end}
-            today={today}
-            currentPeriodNo={currentPeriodNo}
-            budgetPeriods={data.budget_periods || []}
-            budgetMode={data.budget_mode || "static"}
-          />
-          <TrendChart
-            account={account}
-            weeks={weekAggregates}
-            openWeeks={expandedWeeks}
-            budgetPeriods={data.budget_periods || []}
-            budgetMode={data.budget_mode || "static"}
-            onBarClick={(wk) => {
-              // M7 jump: open week + its period
-              const g = grouped.find(gg => gg.weeks.some(w => w.week_start === wk));
-              if (g && g.period_no != null) setExpandedPeriods(prev => new Set([...prev, g.period_no]));
-              setExpandedWeeks(prev => new Set([...prev, wk]));
-              setTimeout(() => {
-                const el = document.querySelector(`[data-wk="${wk}"]`);
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth", block: "center" });
-                  const tr = el.closest("tr");
-                  if (tr) {
-                    tr.classList.add("kpi-landed");
-                    setTimeout(() => tr.classList.remove("kpi-landed"), 400);
-                  }
-                }
-              }, 80);
-            }}
-          />
-        </>
+        <div ref={boardRef} tabIndex={-1} className="kpi-board" style={{ outline: "none" }}>
+          <Sentence board={data.board} account={account} rangeLabel={rangeLabelForSentence} />
+          {data.board?.applies !== false && (
+            <>
+              <StoryBlock
+                board={data.board}
+                account={account}
+                rangeLabel={rangeLabelForSentence}
+                budgetPeriods={data?.budget_periods || []}
+                todayISO={today}
+              />
+              <SignalCards board={data.board} freshness={freshness} />
+              <DetailsStrip board={data.board} />
+            </>
+          )}
+        </div>
       )}
 
       {loadState === "auth" && authError === "expired" ? (
@@ -705,7 +683,7 @@ export default function KpiLaborPage() {
         selectedWorkers && selectedWorkers.size > 0 ? (
           <StateEmptyFiltered
             workerCount={selectedWorkers.size}
-            onClear={() => { setParam("workers", ""); setLiveMsg("Worker filter cleared."); setTimeout(focusHero, 60); }}
+            onClear={() => { setParam("workers", ""); setLiveMsg("Worker filter cleared."); setTimeout(focusBoard, 60); }}
           />
         ) : !data?.derive_freshness?.last_derive_at ? (
           <StateEmptyFirstRun />
@@ -714,7 +692,7 @@ export default function KpiLaborPage() {
             onUseFYTD={() => {
               applyPreset("fytd");
               setLiveMsg("Range set to fiscal year to date.");
-              setTimeout(focusHero, 60);
+              setTimeout(focusBoard, 60);
             }}
           />
         )
@@ -772,17 +750,13 @@ export default function KpiLaborPage() {
           todayISO={today}
           workerRangeTotals={workerRangeTotals}
           aggregateMode={PSEUDO_KEYS.has(account)}
+          budgetPeriods={data?.budget_periods || []}
+          weekBudgets={data?.week_budgets || []}
+          onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "" }) : null}
+          rangeSelection={rangeSelectionEarly}
+          resolvedPreset={resolvedPreset}
         />
       ) : null}
-      {/* V6-5 - one-line grouping note beneath the table, states
-          active grouping and that it follows the selection. */}
-      {loadState === "ok" && filteredActuals.length > 0 && (
-        <div className="kpi-table-note">
-          {rangeSelectionEarly?.kind === "month"
-            ? "Grouping: calendar months (implied by the selection)."
-            : "Grouping: fiscal periods. Select a month in the Range menu to group by calendar month."}
-        </div>
-      )}
     </>
   );
 
@@ -854,17 +828,19 @@ function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH }
                  : freshnessH >= 54    ? "bad"
                  : freshnessH >= 30    ? "warn"
                  : "ok";
-  const feedValue = freshnessH == null ? "no walk on record"
-                  : feedTone === "bad" ? `stale · ${fmtTimestamp(freshness?.last_walk_at)}`
-                  : feedTone === "warn" ? `slow · ${fmtTimestamp(freshness?.last_walk_at)}`
-                  : `healthy · ${fmtTimestamp(freshness?.last_walk_at)}`;
+  // Drop the timestamp - it's redundant with the freshness pill in the
+  // command bar (which now owns the "when last touched" detail). Row
+  // reads the status token only so the 260px folio never overflows.
+  const feedValue = feedTone === "bad" ? "stale"
+                  : feedTone === "warn" ? "slow"
+                  : "healthy";
   return (
     <div className="kpi-sys" role="status" aria-label="System status">
       <div className="kpi-sys-h">SYSTEM</div>
       <div className="kpi-sys-r">
         <span className={`kpi-sys-dot kpi-sys-dot-${payTone}`} aria-hidden="true" />
         <span className="kpi-sys-k">Payroll data</span>
-        <span className={`kpi-sys-v kpi-sys-v-${payTone}`}>{complete} of {total} complete</span>
+        <span className={`kpi-sys-v kpi-sys-v-${payTone}`}>{complete} of {total}</span>
       </div>
       <div className="kpi-sys-r">
         <span className={`kpi-sys-dot kpi-sys-dot-${feedTone}`} aria-hidden="true" />

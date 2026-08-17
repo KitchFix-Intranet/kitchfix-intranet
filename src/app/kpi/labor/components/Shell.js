@@ -77,10 +77,14 @@ function FreshnessChip({ freshness, freshnessH, dataLoading, popContent }) {
     };
   }, [open]);
   const tint = dataLoading ? "warm" : (freshnessTint(freshnessH) === "kpi-chip-stale" ? "stale" : freshnessTint(freshnessH) === "kpi-chip-warm" ? "warm" : "");
-  const stamp = fmtTimestamp(freshness?.last_walk_at);
-  const label = freshnessH != null
-    ? `Data current · ${stamp}`
-    : dataLoading ? "Loading data..." : "no successful walk";
+  // SC parity: pill shows STATUS only; the full timestamp + pipeline
+  // diagnostics live in the popover. Stale + failed states remain
+  // scannable without a timestamp because the color + label carry it.
+  const label = dataLoading ? "Loading data"
+              : freshnessH == null ? "No recent walk"
+              : tint === "stale" ? "Data stale"
+              : tint === "warm" ? "Data slow"
+              : "Data current";
   return (
     <div className="kpi-fresh-anchor" ref={rootRef}>
       <button
@@ -135,9 +139,17 @@ export function Shell({
         <div>Generated {new Date().toLocaleString()}</div>
       </div>
 
-      {/* V7-7 - single command bar. */}
+      {/* V7-7 - single command bar. Responsive give order (S-10):
+          (1) Range date-tail ellipses first, (2) title account tail
+          next, (3) fiscal meta collapses to a compact `P<n> · W<w>`
+          under the .kpi-meta-narrow media rule. Section, Export, and
+          the freshness chip never shrink. */}
       <div className="kpi-cmd" role="banner">
-        <span className="kpi-cmd-title">KPI Dashboard <span className="kpi-cmd-dot" aria-hidden="true">·</span> {account}</span>
+        <span className="kpi-cmd-title">
+          <span className="kpi-cmd-title-brand">KPI Dashboard</span>
+          <span className="kpi-cmd-dot" aria-hidden="true">·</span>
+          <span className="kpi-cmd-title-acct">{account}</span>
+        </span>
 
         <SectionMenu activeKey={activeSection} />
 
@@ -156,11 +168,16 @@ export function Shell({
         )}
 
         <div className="kpi-meta">
-          {fiscal?.today && (<span>Today<b>{fiscal.today}</b></span>)}
-          {fiscal?.today && fiscal?.period != null && <span className="kpi-meta-sep" aria-hidden="true" />}
-          {fiscal?.period != null && (<span>Period<b>{fiscal.period}</b></span>)}
-          {fiscal?.period != null && fiscal?.week != null && <span className="kpi-meta-sep" aria-hidden="true" />}
-          {fiscal?.week != null && (<span>Week<b>{fiscal.week}</b></span>)}
+          {fiscal?.today && (<span className="kpi-meta-today">Today<b>{fiscal.today}</b></span>)}
+          {fiscal?.today && fiscal?.period != null && <span className="kpi-meta-sep kpi-meta-sep-today" aria-hidden="true" />}
+          {fiscal?.period != null && (<span className="kpi-meta-period">Period<b>{fiscal.period}</b></span>)}
+          {fiscal?.period != null && fiscal?.week != null && <span className="kpi-meta-sep kpi-meta-sep-week" aria-hidden="true" />}
+          {fiscal?.week != null && (<span className="kpi-meta-week">Week<b>{fiscal.week}</b></span>)}
+          {/* Compact fallback: shown only when meta collapses via
+              @media (max-width). Renders as `P<n> · W<w>`. */}
+          {fiscal?.period != null && fiscal?.week != null && (
+            <span className="kpi-meta-compact" aria-hidden="true">P<b>{fiscal.period}</b> · W<b>{fiscal.week}</b></span>
+          )}
         </div>
 
         <span className="kpi-cmd-spacer" aria-hidden="true" />
@@ -174,8 +191,8 @@ export function Shell({
             onClick={() => onExport?.(exportHref)}
           >
             <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span>Export</span>
           </a>
@@ -189,8 +206,8 @@ export function Shell({
             disabled
           >
             <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span>Export</span>
           </button>

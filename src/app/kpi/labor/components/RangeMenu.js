@@ -72,18 +72,18 @@ function resolvePreset(kind, { today, accountPeriods }) {
 // V6-4 - the visible label on the trigger button. Reads canonical
 // vocabulary: preset labels, "PERIOD n", "<MONTH> <year>", or
 // "CUSTOM · <dates>" fallback.
+//
+// Returns { primary, dates } so the caller can render the date tail
+// in its own span and let it ellipse first at narrow widths (S-10).
 function triggerLabel({ startISO, endISO, resolvedPreset, monthSelected, periodSelected }) {
+  const dates = `${fmtDate(startISO)} – ${fmtDate(endISO)}`;
   if (resolvedPreset) {
     const preset = PRESETS.find(p => p.key === resolvedPreset);
-    if (preset) return `${preset.label} · ${fmtDate(startISO)} – ${fmtDate(endISO)}`;
+    if (preset) return { primary: preset.label, dates };
   }
-  if (periodSelected != null) {
-    return `Period ${periodSelected} · ${fmtDate(startISO)} – ${fmtDate(endISO)}`;
-  }
-  if (monthSelected) {
-    return `${MONTH_LABELS[monthSelected.monthIndex]} ${monthSelected.year} · ${fmtDate(startISO)} – ${fmtDate(endISO)}`;
-  }
-  return `Custom · ${fmtDate(startISO)} – ${fmtDate(endISO)}`;
+  if (periodSelected != null) return { primary: `Period ${periodSelected}`, dates };
+  if (monthSelected) return { primary: `${MONTH_LABELS[monthSelected.monthIndex]} ${monthSelected.year}`, dates };
+  return { primary: "Custom", dates };
 }
 
 export function RangeMenu({
@@ -196,12 +196,13 @@ export function RangeMenu({
         disabled={disabled}
       >
         <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="3" y="4" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.75" />
-          <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          <line x1="8"  y1="2" x2="8"  y2="6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          <line x1="3"  y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="1.75" />
+          <rect x="3" y="4" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="2.5" />
+          <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="8"  y1="2" x2="8"  y2="6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="3"  y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2.5" />
         </svg>
-        <span className="kpi-rmenu-label">{label}</span>
+        <span className="kpi-rmenu-label kpi-rmenu-label-primary">{label.primary}</span>
+        <span className="kpi-rmenu-label kpi-rmenu-label-dates">{label.dates}</span>
       </button>
       {open && (
         <div className="kpi-rmenu-pop" role="dialog" aria-label="Select date range">
