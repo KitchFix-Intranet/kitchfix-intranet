@@ -1079,6 +1079,25 @@ async function upsertInvoiceSubmissionPostgres(input) {
     dupe_override:       input.dupeOverride === "not_duplicate",
     // is_historical + data_provenance: PG defaults FALSE + 'app_scan' fire automatically
   };
+
+  // A1 (2026-08-17): the invoice-submit handler now passes
+  // aiScanStatus='queued' so ai_scan_status is set inline in the same
+  // INSERT that creates the row. Any explicit value from the caller
+  // wins; when omitted, the column stays NULL (backward-compat with
+  // any non-submit path that upserts submissions - none exist in the
+  // current tree, but the guard keeps this adapter callable from a
+  // future script that shouldn't queue extraction).
+  //
+  // ai_scan_attempt starts at 0 (never claimed by the worker) and
+  // ai_scan_next_attempt_at is set to now() so the row is immediately
+  // eligible for the next worker tick. Both columns are populated ONLY
+  // when the caller queues extraction; a NULL aiScanStatus leaves both
+  // columns NULL to signal "not participating in the extraction queue."
+  if (input.aiScanStatus) {
+    payload.ai_scan_status         = input.aiScanStatus;
+    payload.ai_scan_attempt        = 0;
+    payload.ai_scan_next_attempt_at = new Date().toISOString();
+  }
   const { data: inserted, error } = await supabase
     .from("invoice_submissions")
     .insert(payload)
@@ -1102,6 +1121,33 @@ async function updateInvoiceFieldsPostgres(uuid, fields) {
   }
   if ("aiScanStatus" in fields) payload.ai_scan_status = fields.aiScanStatus || null;
   if ("aiScanError" in fields) payload.ai_scan_error = fields.aiScanError || null;
+  // A1 (2026-08-17): extraction-queue lease + attempt columns. Written
+  // by the worker at /api/cron/extract-line-items when a claim ends:
+  //   - success:            aiScanStatus='complete', aiScanClaimedAt=null,
+  //                         aiScanClaimedBy=null, aiScanError=null
+  //   - retryable failure:  aiScanStatus='queued' (retryable-later) or
+  //                         stay 'queued' with aiScanNextAttemptAt bumped
+  //   - terminal failure:   aiScanStatus='failed', aiScanClaimedAt=null,
+  //                         aiScanClaimedBy=null, aiScanError='<cause>'
+  // A null value on aiScanClaimedAt / aiScanClaimedBy releases the lease.
+  if ("aiScanAttempt" in fields) payload.ai_scan_attempt = Number(fields.aiScanAttempt) || 0;
+  if ("aiScanNextAttemptAt" in fields) {
+    payload.ai_scan_next_attempt_at = fields.aiScanNextAttemptAt === null
+      ? null
+      : (fields.aiScanNextAttemptAt instanceof Date
+          ? fields.aiScanNextAttemptAt.toISOString()
+          : String(fields.aiScanNextAttemptAt));
+  }
+  if ("aiScanClaimedAt" in fields) {
+    payload.ai_scan_claimed_at = fields.aiScanClaimedAt === null
+      ? null
+      : (fields.aiScanClaimedAt instanceof Date
+          ? fields.aiScanClaimedAt.toISOString()
+          : String(fields.aiScanClaimedAt));
+  }
+  if ("aiScanClaimedBy" in fields) {
+    payload.ai_scan_claimed_by = fields.aiScanClaimedBy || null;
+  }
   if (Object.keys(payload).length === 0) return;
   const { error } = await supabase
     .from("invoice_submissions")

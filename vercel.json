@@ -31,6 +31,10 @@
     {
       "path": "/api/cron/sc-chase",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/extract-line-items",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

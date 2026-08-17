@@ -946,6 +946,14 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
       // 4. Log via dataStore orchestrator (Sheets unconditional + PG
       // conditional on dual-write flag). Returns a dedup signal which
       // guards a race between two parallel submits with the same uuid.
+      //
+      // A1: aiScanStatus='queued' is set in the same INSERT that creates
+      // the row. Post-A1, ai_scan_status = NULL is structurally impossible
+      // for new submissions - the worker at /api/cron/extract-line-items
+      // owns the transition from 'queued' to 'complete' | 'failed' |
+      // 'pg_failed'. The old fire-and-forget triggerAIScan below this
+      // block is gone; extraction no longer races the Vercel-response-
+      // triggered instance suspend.
       let writeResult;
       try {
         writeResult = await upsertInvoiceSubmission({
@@ -963,6 +971,7 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
           type,
           rawDriveUrl,
           correctedFromUuid: correctedFromUuid || null,
+          aiScanStatus: "queued",
         });
       } catch (writeErr) {
         return { success: false, error: "Failed to log submission: " + writeErr.message };
@@ -1008,10 +1017,29 @@ const { account, vendor, vendorId, invoiceNumber, invoiceDate, totalAmount, glRo
         console.error("[Invoice] Email failed:", emailErr.message);
       }
 
-      // 6. Fire async AI scan (non-blocking)
-      triggerAIScan(token, email, uuid, pages, { account, vendor, invoiceNumber, invoiceDate, formType: type }).catch((err) => {
-        console.error("[Invoice] AI scan trigger failed:", err.message);
-      });
+      // 6. A1 (2026-08-17): the fire-and-forget triggerAIScan call that
+      // used to live here has been REMOVED. Rationale in
+      // docs/migrations/li-2-extraction-worker.sql (header) and in the
+      // A1 PR body. Summary:
+      //   - The promise had no awaiter and returned before extraction
+      //     started. On Vercel the instance suspends when the HTTP
+      //     response is sent; the pending work only advanced if a
+      //     later request happened to thaw that same instance. That
+      //     race left 552 submissions at ai_scan_status = NULL.
+      //   - Extraction is now owned by the worker at
+      //     /api/cron/extract-line-items, which claims rows via the
+      //     get_extraction_claims SQL function (FOR UPDATE SKIP LOCKED),
+      //     runs the same extractAndStoreLineItems that used to be
+      //     called here, and records the outcome atomically on the
+      //     submission row.
+      //   - The submit handler is now free of that hidden async work
+      //     entirely. ai_scan_status = 'queued' is set in the INSERT
+      //     above; the worker takes it from there.
+      // Do NOT re-add an after() / waitUntil / fire-and-forget call here.
+      // If extraction latency ever matters at submit time (it doesn't
+      // today - operators never see line items on the submit response),
+      // add a synchronous first-attempt path with an explicit await; but
+      // NOT a promise that runs after the response is sent.
 
       if (process.env.SLACK_INVOICE_WEBHOOK) {
         const totalFmt = `$${Number(totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
@@ -1664,6 +1692,181 @@ async function markScanStatus(uuid, status, errorMessage = null) {
   } catch (e) {
     console.warn(`[AI Scan] ${uuid}: status update failed (non-blocking):`, e.message);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A1: extraction-failure classifier + retry policy
+// ═══════════════════════════════════════════════════════════════════════════
+// classifyExtractionFailure + nextAttemptAt are used by the worker at
+// /api/cron/extract-line-items to decide, for a failed extraction:
+//   1. Should the row be retried, and when? (nextAttemptAt)
+//   2. Or is this terminal - stop retrying, land in 'failed' with a cause?
+//
+// Three classes, per Kevin's A1 spec:
+//
+//   retryable-soon  - transient. Network, 429, 5xx, JSON parse, zero-item.
+//                     Short exponential backoff bounded by MAX_ATTEMPTS.
+//                     Example causes:
+//                       "Claude API network error: fetch failed"
+//                       "Claude API 429: ..."  |  "Claude API 503: ..."
+//                       "Claude output JSON parse failed: ..."
+//                       "Claude returned 0 line items after 3 attempts - ..."
+//
+//   retryable-later - billing / quota class. HTTP 400 whose body mentions
+//                     credit balance, billing, quota, insufficient funds,
+//                     or account status. Long backoff (hours) because the
+//                     fix is external (top up the account); we self-heal
+//                     when the balance is restored. This is the specific
+//                     class the July outage hit: 47 invoices were pushed
+//                     to 'failed' terminal and nothing ever retried them.
+//                     Example causes:
+//                       "Claude API 400: {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low ..."}}"
+//                       "Claude API 400: ...billing..."
+//                       "Claude API 400: ...quota..."
+//
+//   terminal        - genuine bad request or configuration error. Stop
+//                     retrying, land in 'failed' immediately. Also the
+//                     landing state for retryable-soon after the attempt
+//                     ceiling is exhausted (the worker records the cause
+//                     with an "(attempt N)" tag so the row shows why).
+//                     Example causes:
+//                       "metadata.account missing - cannot route to per-account Sheets tab"
+//                       "Claude API 401: ..."  (bad API key)
+//                       "Claude API 403: ..."  (forbidden model)
+//                       "Claude API 400: <anything not credit/billing/quota>"
+//                       vendor-resolution throws from insertAILineItems
+//
+// The soon-vs-later distinction lives entirely in this function, not in
+// extractWithRetry itself, because extractWithRetry gets the RAW HTTP
+// error message; interpretation is a policy decision that belongs on
+// the worker's retention side.
+//
+// The retryable-later window is intentionally generous: A1's Anthropic
+// credit-balance repro on 2026-07-02 showed the balance restoration was
+// human-driven (an hours-scale event, not a minutes-scale one), so a
+// 30-minute retry is the right first delay and 2-hour is the ceiling.
+// The retry counter does NOT increment across a retryable-later cycle
+// (the worker treats it as a scheduling delay, not a failed attempt),
+// so a long billing outage doesn't burn the attempt ceiling.
+//
+// MAX_ATTEMPTS = 5: three inner retries inside extractWithRetry cover
+// most transients; five worker-level attempts on top handle the "same
+// row is truly bad" case (e.g., corrupt PDF that fails after retries
+// every tick). At 5 the row is stopped and marked 'failed' with a
+// cause that names the exhaustion.
+
+export const EXTRACTION_MAX_ATTEMPTS = 5;
+
+// Soon-retry schedule, minutes. Applied at attempt number 1..N-1 (attempt
+// 0 is the initial claim from the backfill or the fresh queue). After
+// MAX_ATTEMPTS the worker escalates to terminal 'failed'.
+const RETRYABLE_SOON_BACKOFF_MIN = [1, 5, 15, 60];
+
+// Later-retry (billing / credit-balance / quota class). Not attempt-
+// counted; the worker keeps this row 'queued' with a delayed
+// next_attempt_at until the balance is restored.
+const RETRYABLE_LATER_BACKOFF_MIN = [30, 60, 120, 120];
+
+export function classifyExtractionFailure(cause) {
+  const c = String(cause || "");
+  const lower = c.toLowerCase();
+
+  // Terminal cases FIRST - a "credit balance" string inside a metadata-
+  // routing failure should stay terminal.
+  if (
+    lower.includes("metadata.account missing") ||
+    lower.includes("did not resolve to a vendor_id") ||
+    lower.includes("submission ") && lower.includes(" not in pg")
+  ) {
+    return { class: "terminal", reason: "config_or_routing" };
+  }
+
+  // Billing / credit-balance / quota class. Anthropic returns these as
+  // 400s (not 429), which is what tripped the July outage - 400s aren't
+  // retried by extractWithRetry, so they landed as 'failed' terminal.
+  // The body wording seen in production: "Your credit balance is too low
+  // to access the Claude API" and variants mentioning billing / quota.
+  if (
+    /claude api 4\d\d/i.test(c) && (
+      lower.includes("credit balance") ||
+      lower.includes("billing") ||
+      lower.includes("quota") ||
+      lower.includes("insufficient") ||
+      lower.includes("payment") ||
+      lower.includes("account status")
+    )
+  ) {
+    return { class: "retryable-later", reason: "billing_or_quota" };
+  }
+
+  // Auth / genuine-bad-request 4xx. Terminal.
+  if (/claude api 4\d\d/i.test(c)) {
+    return { class: "terminal", reason: "http_4xx_non_billing" };
+  }
+
+  // Transient network + 5xx + rate-limit + parse + zero-item. Retryable-soon.
+  if (
+    lower.includes("network error") ||
+    lower.includes("fetch failed") ||
+    /claude api 5\d\d/i.test(c) ||
+    /claude api 429/.test(c) ||
+    lower.includes("json parse failed") ||
+    lower.includes("0 line items") ||
+    lower.includes("unreadable layout")
+  ) {
+    return { class: "retryable-soon", reason: "transient" };
+  }
+
+  // Drive fetch / PDF parse errors from the worker's page-loader. These
+  // are usually transient (Drive intermittent 503, network glitch) but
+  // occasionally structural (dead file, ownership change). Retry a few
+  // times as soon-class, then terminate.
+  if (
+    lower.includes("drive fetch:") ||
+    lower.includes("pdf parse:") ||
+    lower.includes("could not parse drive fileid") ||
+    lower.includes("no pages")
+  ) {
+    return { class: "retryable-soon", reason: "source_pdf" };
+  }
+
+  // Dual-write pg_failed / sheets-failed. Terminal here - these need
+  // manual DELETE-then-re-extract per Kevin's 2026-08-12 ruling; the
+  // worker should NOT loop on them.
+  if (lower.includes("[datastore.invoice.")) {
+    return { class: "terminal", reason: "dual_write_gap_needs_manual_delete" };
+  }
+
+  // Unknown. Treat as retryable-soon so nothing is silently dropped;
+  // the cause string is preserved for triage.
+  return { class: "retryable-soon", reason: "unknown" };
+}
+
+// Given a failure class and the current attempt count (1-indexed, i.e.,
+// the attempt that just failed), return the wall-clock next_attempt_at
+// timestamp. Returns null when the worker should mark the row terminal.
+export function nextAttemptAt(failureClass, attemptJustFailed, now = new Date()) {
+  if (failureClass === "terminal") return null;
+
+  if (failureClass === "retryable-soon") {
+    if (attemptJustFailed >= EXTRACTION_MAX_ATTEMPTS) return null;
+    // attemptJustFailed=1 -> schedule[0], attemptJustFailed=2 -> schedule[1], ...
+    const idx = Math.min(attemptJustFailed - 1, RETRYABLE_SOON_BACKOFF_MIN.length - 1);
+    const minutes = RETRYABLE_SOON_BACKOFF_MIN[idx];
+    return new Date(now.getTime() + minutes * 60 * 1000);
+  }
+
+  if (failureClass === "retryable-later") {
+    // Not attempt-capped. Use a monotonically-increasing delay bounded
+    // at 2 hours. attemptJustFailed indexes into the later schedule
+    // but never exhausts it.
+    const idx = Math.min(attemptJustFailed - 1, RETRYABLE_LATER_BACKOFF_MIN.length - 1);
+    const minutes = RETRYABLE_LATER_BACKOFF_MIN[Math.max(0, idx)];
+    return new Date(now.getTime() + minutes * 60 * 1000);
+  }
+
+  // Unknown class - treat as terminal so we don't loop forever.
+  return null;
 }
 
 // =============================================================================
