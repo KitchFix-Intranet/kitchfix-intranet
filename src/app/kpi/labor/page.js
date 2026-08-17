@@ -647,7 +647,7 @@ export default function KpiLaborPage() {
                 budgetPeriods={data?.budget_periods || []}
                 todayISO={today}
               />
-              <SignalCards board={data.board} freshness={freshness} />
+              <SignalCards board={data.board} />
               <DetailsStrip board={data.board} />
             </>
           )}

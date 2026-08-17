@@ -109,9 +109,13 @@
   --kpi-plot-c:       calc(150px  * var(--kf-scale));
 
   /* Gauge SVG box (S-5) - scale via rendered box only; viewBox +
-     angle math in SignalCards.js stay baked to 96x60. */
+     angle math in SignalCards.js stay baked to 96x60. V21-21 upsizes
+     the OT arc via --kpi-gauge2-* so it can carry the percentage
+     text INSIDE while keeping the small gauge available. */
   --kpi-gauge-w:      calc(96px   * var(--kf-scale));
   --kpi-gauge-h:      calc(60px   * var(--kf-scale));
+  --kpi-gauge2-w:     calc(150px  * var(--kf-scale));
+  --kpi-gauge2-h:     calc(94px   * var(--kf-scale));
 
   background: var(--surface-page);
   min-height: 100vh;
@@ -1927,24 +1931,29 @@
   font-size: var(--kpi-size-meta); font-weight: 700; margin-top: 1px;
 }
 
-/* Signal cards (V8-13..V8-16) - four cards, one grammar, fixed lane
-   heights so they bottom-align. V8-15 color discipline: state pills
-   grey by default; color only on the lead card and on WATCH+ states. */
+/* Signal cards (V8-13..V8-16 + V21-17..V21-24) - four cards, viz-led.
+   Each card: header lane (fixed height) + centred content region.
+   V21-17 strips the action link + hairline; V21-18 strips the prose
+   sentence; V21-19 requires equal card heights (grid stretches, plus
+   the body flex-fills). V8-15 colour discipline preserved: state pills
+   grey by default; colour only on the lead card + WATCH+ states. */
 .kpi-sigs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--kpi-space-4);
+  align-items: stretch;
 }
 .kpi-sig {
   background: var(--surface-card);
   border: 1px solid var(--n-300);
-  border-radius: 12px;
+  border-radius: var(--rad-10);
   box-shadow: var(--card-shadow);
-  padding: 16px 18px;
+  padding: var(--kpi-space-4) var(--kpi-space-4);
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: calc(200px * var(--kf-scale));
 }
 .kpi-sig::before {
   content: "";
@@ -1954,13 +1963,16 @@
 }
 .kpi-sig-lead-good::before { background: var(--green-500); }
 .kpi-sig-attn::before { background: var(--amber-600); }
-.kpi-sig-st {
+
+/* V21-19 header lane (fixed) */
+.kpi-sig-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--kpi-space-6px);
+  height: var(--kpi-space-5);
   font-size: var(--kpi-size-tick); letter-spacing: 0.08em;
   color: var(--n-600); font-weight: 800;
-  display: flex; justify-content: space-between; align-items: center;
-  gap: var(--kpi-space-6px); height: var(--kpi-space-5);
 }
-.kpi-sig-st span:first-child {
+.kpi-sig-eyebrow {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .kpi-sig-state {
@@ -1974,43 +1986,34 @@
 .kpi-sig-state-good { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
 .kpi-sig-state-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
 .kpi-sig-state-bad  { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
+
+/* V21-19 body region - flex-fill, centred content */
+.kpi-sig-body {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: var(--kpi-space-2);
+  padding-top: var(--kpi-space-3);
+  min-width: 0;
+}
 .kpi-sig-v {
-  font-size: var(--kpi-size-big); font-weight: 800;
-  color: var(--n-900); margin-top: var(--kpi-space-2); line-height: 1.1;
-  white-space: nowrap;
+  font-size: var(--kpi-size-splitv); font-weight: 800;
+  color: var(--n-900); line-height: 1.05;
+  white-space: nowrap; font-variant-numeric: var(--num-tabular);
+  letter-spacing: -0.012em;
 }
 .kpi-sig-v-good { color: var(--green-700); }
 .kpi-sig-v-bad  { color: var(--red-700); }
-.kpi-sig-u {
-  font-size: var(--kpi-size-caption); font-weight: 600;
-  color: var(--n-500); margin-left: 2px;
+.kpi-sig-sub {
+  font-size: var(--kpi-size-caption); color: var(--n-600); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  text-align: center;
 }
-.kpi-sig-sc {
-  font-size: var(--kpi-size-label); color: var(--n-700);
-  margin-top: var(--kpi-space-10px); line-height: 1.45;
-  min-height: calc(36px * var(--kf-scale));
-}
-.kpi-sig-sc b { color: var(--n-900); }
-.kpi-sig-vz {
-  margin-top: var(--kpi-space-3); height: var(--kpi-viz-h);
-  display: flex; align-items: center; gap: var(--kpi-space-14px);
-}
-.kpi-sig-act {
-  margin-top: var(--kpi-space-3); padding-top: var(--kpi-space-3);
-  border-top: 1px solid var(--n-100);
-  font-size: var(--kpi-size-note); font-weight: 700;
-  color: var(--navy-700); white-space: nowrap;
-  background: transparent; border-left: 0; border-right: 0; border-bottom: 0;
-  cursor: pointer;
-}
-.kpi-sig-act:hover { text-decoration: underline; }
-/* Viz primitives - all fixed-height, none stretch (V8-15) */
-.kpi-sig-vstack {
-  display: flex; flex-direction: column; gap: var(--kpi-space-7px); width: 100%;
-}
+
+/* V21-20 diverging bar (centred zero) */
 .kpi-sig-dvg {
   height: var(--kpi-space-10px); background: var(--n-200); border-radius: 5px;
-  position: relative; width: 100%;
+  position: relative; width: 100%; margin-top: var(--kpi-space-2);
 }
 .kpi-sig-dvg-zero {
   position: absolute; left: 50%; top: calc(-5px * var(--kf-scale)); bottom: calc(-5px * var(--kf-scale));
@@ -2022,13 +2025,54 @@
 }
 .kpi-sig-dvg-bar-over { background: var(--red-700); }
 .kpi-sig-vlab {
-  display: flex; justify-content: space-between;
+  display: flex; justify-content: space-between; width: 100%;
   font-size: var(--kpi-size-meta); color: var(--n-500); font-weight: 600;
+  margin-top: var(--kpi-space-1);
 }
 .kpi-sig-vlab .mid { color: var(--n-600); }
+
+/* V21-21 OT arc - larger, centred, percentage INSIDE the arc */
+.kpi-sig-gauge2 {
+  width: var(--kpi-gauge2-w); height: var(--kpi-gauge2-h);
+  flex: none; display: block;
+}
+.kpi-sig-gauge2 text {
+  font-family: var(--font-ui);
+  font-variant-numeric: var(--num-tabular);
+}
+
+/* V21-22 fraction display for hours-vs-budget */
+.kpi-sig-frac {
+  display: inline-flex; align-items: baseline;
+  gap: var(--kpi-space-2);
+  color: var(--n-900);
+  font-variant-numeric: var(--num-tabular);
+  white-space: nowrap;
+  letter-spacing: -0.012em;
+}
+.kpi-sig-frac-n {
+  font-size: var(--kpi-size-splitv); font-weight: 800; line-height: 1.05;
+}
+.kpi-sig-frac-of {
+  font-size: var(--kpi-size-caption); color: var(--n-500); font-weight: 600;
+  letter-spacing: 0;
+}
+.kpi-sig-frac-d {
+  font-size: var(--kpi-size-stat); font-weight: 700; color: var(--n-700);
+}
+.kpi-sig-pill {
+  display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
+  background: var(--n-50); border: 1px solid var(--n-200);
+  border-radius: var(--rad-pill);
+  padding: var(--kpi-space-1) var(--kpi-space-10px);
+  font-size: var(--kpi-size-tick); color: var(--n-700);
+  white-space: nowrap;
+}
+.kpi-sig-pill b { color: var(--n-900); font-weight: 800; font-variant-numeric: var(--num-tabular); }
+
 .kpi-sig-bullet {
   height: var(--kpi-space-10px); background: var(--n-200); border-radius: 5px;
-  position: relative; width: 100%;
+  position: relative; width: 100%; margin-top: var(--kpi-space-2);
 }
 .kpi-sig-bullet-f {
   position: absolute; left: 0; top: 0; bottom: 0;
@@ -2038,23 +2082,20 @@
   position: absolute; top: calc(-5px * var(--kf-scale)); bottom: calc(-5px * var(--kf-scale));
   width: 2px; background: var(--n-900);
 }
-/* S-5: scale via the rendered box, never the viewBox. angleToPoint()
-   in SignalCards.js keeps working against 96x60 coords. */
-.kpi-sig-gauge { width: var(--kpi-gauge-w); height: var(--kpi-gauge-h); flex: none; }
-.kpi-sig-gcol {
-  display: flex; flex-direction: column; gap: var(--kpi-space-5px);
-  font-size: var(--kpi-size-tick); color: var(--n-500);
+
+/* V21-23 payroll tick row - one mark per week in range. Only when
+   the range is <=13 weeks. Priced weeks filled dark; unpriced light. */
+.kpi-sig-ticks {
+  display: grid;
+  gap: var(--kpi-space-1);
+  width: 100%; margin-top: var(--kpi-space-2);
 }
-.kpi-sig-gcol b { color: var(--n-800); font-weight: 800; }
-.kpi-sig-chip {
-  display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
-  background: var(--n-50); border: 1px solid var(--n-200);
-  border-radius: var(--rad-pill);
-  padding: var(--kpi-space-1) var(--kpi-space-10px);
-  font-size: var(--kpi-size-tick); color: var(--n-600);
-  white-space: nowrap;
+.kpi-sig-tick {
+  height: var(--kpi-space-3);
+  border-radius: 2px;
+  background: var(--n-200);
 }
-.kpi-sig-chip b { color: var(--n-900); font-weight: 800; }
+.kpi-sig-tick-on { background: var(--navy-700); }
 
 /* Details strip (V8-17) - one bordered strip, six divided cells. */
 .kpi-det {
