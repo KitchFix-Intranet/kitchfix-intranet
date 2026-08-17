@@ -133,13 +133,35 @@
   gap: var(--kpi-space-5);
   position: relative;
   z-index: 1;
+  /* S-9 responsive floor: allow flex children to shrink below content
+     min so the compressible give surfaces (range date tail, title
+     account tail, fiscal meta) can ellipse / collapse instead of
+     overflowing the bar. */
+  min-width: 0;
 }
+/* S-10 give order: range date tail (higher shrink weight) ellipses
+   first, title account tail (default weight) second, fiscal meta
+   collapses to `P<n> · W<w>` under a media rule third. Section,
+   Export, and freshness stay whole (flex-shrink: 0). */
 .kpi-cmd-title {
   font-size: var(--kpi-size-title); font-weight: 700; letter-spacing: -0.01em;
-  white-space: nowrap; line-height: 1;
+  line-height: 1;
+  display: inline-flex; align-items: baseline;
+  min-width: 0;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.kpi-cmd-dot { color: #5C769A; margin: 0 6px; font-weight: 400; }
-.kpi-cmd-spacer { flex: 1 1 auto; }
+.kpi-cmd-title-brand { flex: 0 0 auto; white-space: nowrap; }
+.kpi-cmd-title-acct {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kpi-cmd-dot { color: #5C769A; margin: 0 6px; font-weight: 400; flex: none; }
+.kpi-cmd-spacer { flex: 1 1 auto; min-width: 0; }
 
 /* Shared control skin - every bar control uses this. */
 .kpi-ctl {
@@ -168,12 +190,16 @@
 }
 .kpi-ctl .kpi-ctl-v { font-weight: 600; }
 
-/* Fiscal meta - eyebrows on --meta scale, values on --ctl scale. */
+/* Fiscal meta - eyebrows on --meta scale, values on --ctl scale.
+   Compact fallback (`P<n> · W<w>`) is hidden by default and shown when
+   the meta collapses under the S-10 give rule (see @media below). */
 .kpi-meta {
   display: flex; align-items: center; height: 34px;
   font-size: var(--kpi-size-caption); letter-spacing: 0.06em; color: #B9C6DA;
   text-transform: uppercase;
   font-variant-numeric: var(--num-tabular);
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .kpi-meta > span { display: inline-flex; align-items: center; }
 .kpi-meta b {
@@ -183,6 +209,12 @@
 .kpi-meta-sep {
   width: 1px; height: 16px; background: #3D5578; margin: 0 14px;
   display: inline-block;
+  flex: none;
+}
+.kpi-meta-compact { display: none; }
+.kpi-meta-compact b {
+  color: #ffffff; font-weight: 600; margin: 0 2px;
+  letter-spacing: 0; text-transform: none;
 }
 
 /* Freshness chip - pill, click opens diagnostics popover (V7-9). */
@@ -842,10 +874,21 @@
    comes from .kpi-ctl.kpi-ctl-sel::after. Popover positioning + the
    three-column PRESETS / FISCAL PERIODS / MONTHS layout + the inline
    Custom expansion remain from v6 unchanged. */
-.kpi-rmenu { position: relative; display: inline-block; }
-.kpi-rmenu-label {
-  font-weight: 600;
-  font-variant-numeric: var(--num-tabular);
+/* Range trigger must be a flex item that can shrink; the date tail
+   is the S-10 primary elastic surface (ellipses first). */
+.kpi-rmenu { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; }
+.kpi-rmenu-trigger {
+  min-width: 0; max-width: 100%;
+}
+.kpi-rmenu-label { font-weight: 600; font-variant-numeric: var(--num-tabular); }
+.kpi-rmenu-label-primary { flex: none; }
+.kpi-rmenu-label-dates {
+  color: #B9C6DA;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .kpi-rmenu-pop {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
@@ -1336,6 +1379,20 @@
   font-variant-numeric: var(--num-tabular);
   font-weight: 500;
   color: var(--text-strong);
+}
+
+/* S-10 give-order breakpoint: at 1240px and below, fiscal meta
+   collapses to the compact `P<n> · W<w>` fallback so Section /
+   Export / freshness stay whole. Range date tail + title account
+   tail already shrink continuously via their per-child min-width:0
+   + flex-shrink rules above; this is the final give surface. */
+@media (max-width: 1240px) {
+  .kpi-meta > .kpi-meta-today,
+  .kpi-meta > .kpi-meta-period,
+  .kpi-meta > .kpi-meta-week,
+  .kpi-meta > .kpi-meta-sep { display: none; }
+  .kpi-meta > .kpi-meta-compact { display: inline-flex; align-items: baseline; gap: 3px; color: #ffffff; text-transform: none; letter-spacing: 0; font-size: var(--kpi-size-ctl); }
+  .kpi-meta > .kpi-meta-compact b { font-weight: 700; }
 }
 
 /* Mobile - shell adapts. Folio collapses to a horizontal strip of
