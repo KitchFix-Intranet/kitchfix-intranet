@@ -217,10 +217,18 @@ export default function FinalizeOverlay({
                   <dt>Service week</dt>
                   <dd>{fmtWeekRange(weekStart, weekEnd)}</dd>
                 </div>
-                {/* PR-D1: mono reserved for money + aligned columns.
-                    Days-served + meals-and-snacks return to sans -
-                    they read looser in mono than the sans labels
-                    beside them. Only Pre-tax total keeps mono. */}
+                {/* PR-H2 (2026-08-17) supersedes PR-D1's carve-out.
+                    PR-D1 kept the Pre-tax total in mono as a display-
+                    tier anchor while demoting mono elsewhere in the
+                    overlay. PR-H1 (entry-ledger rail) demonstrated on
+                    a side-by-side screenshot that mono reads as a
+                    different design from every other SC money surface,
+                    and Kevin ruled the same standard applies here: if
+                    mono reads wrong in the rail, it reads wrong in the
+                    overlay. .sc-finalize-num now resolves the UI font
+                    (Inter) + --num-tabular for column stacking - same
+                    combo the workspace and rail use. Class name kept
+                    so the CSS grammar is one-place-only. */}
                 <div className="sc-finalize-row">
                   <dt>Days served</dt>
                   <dd>
