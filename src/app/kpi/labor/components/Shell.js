@@ -77,10 +77,14 @@ function FreshnessChip({ freshness, freshnessH, dataLoading, popContent }) {
     };
   }, [open]);
   const tint = dataLoading ? "warm" : (freshnessTint(freshnessH) === "kpi-chip-stale" ? "stale" : freshnessTint(freshnessH) === "kpi-chip-warm" ? "warm" : "");
-  const stamp = fmtTimestamp(freshness?.last_walk_at);
-  const label = freshnessH != null
-    ? `Data current · ${stamp}`
-    : dataLoading ? "Loading data..." : "no successful walk";
+  // SC parity: pill shows STATUS only; the full timestamp + pipeline
+  // diagnostics live in the popover. Stale + failed states remain
+  // scannable without a timestamp because the color + label carry it.
+  const label = dataLoading ? "Loading data"
+              : freshnessH == null ? "No recent walk"
+              : tint === "stale" ? "Data stale"
+              : tint === "warm" ? "Data slow"
+              : "Data current";
   return (
     <div className="kpi-fresh-anchor" ref={rootRef}>
       <button
@@ -187,8 +191,8 @@ export function Shell({
             onClick={() => onExport?.(exportHref)}
           >
             <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span>Export</span>
           </a>
@@ -202,8 +206,8 @@ export function Shell({
             disabled
           >
             <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span>Export</span>
           </button>
