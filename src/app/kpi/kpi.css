@@ -206,63 +206,8 @@
   .kpi-content {
     grid-template-columns: 1fr;
   }
-  .kpi-rail { order: -1; }  /* rail moves above on mobile per spec */
 }
 
-/* D1-era orphans (kpi-metric, kpi-table, kpi-badge, kpi-rail card
-   family, kpi-alarm base, kpi-cov-row et al) removed in Push 3.
-   WeekTable, Hero, MetricGrid, and ContextRail carry their own class
-   families (kpi-tbl, kpi-hero, kpi-mtg, kpi-rl, kpi-alarm-v5, kpi-bdg,
-   kpi-cov-row-v5). See git diff for the removed block. */
-
-/* ── right rail v5 (Push 3) ───────────────────────────────────── */
-.kpi-rl-h {
-  font-size: var(--size-caption);
-  text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--text-subtle); font-weight: 600;
-  margin: 0 0 var(--space-2);
-}
-.kpi-rl-card {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--rad-10);
-  padding: var(--space-4);
-  display: flex; flex-direction: column;
-}
-.kpi-rl-note {
-  font-size: 11px; color: var(--text-subtle);
-  margin-top: 8px; font-style: italic;
-  padding-top: 8px; border-top: 1px dashed var(--border-subtle);
-}
-.kpi-alarms {
-  display: flex; flex-direction: column; gap: 8px;
-}
-.kpi-alarm-v5 {
-  display: flex; gap: 8px; align-items: flex-start;
-  padding: 10px 12px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
-  border-left: 4px solid var(--border-default);
-  border-radius: var(--rad-6);
-  font-size: 13px; color: var(--text-default);
-}
-.kpi-alarm-v5 svg { flex: 0 0 18px; margin-top: 2px; }
-.kpi-alarm-v5 b   { color: var(--text-strong); font-weight: 600; }
-.kpi-alarm-danger  { border-left-color: var(--red-500); }
-.kpi-alarm-warning { border-left-color: var(--amber-500); }
-.kpi-cov-row-v5 {
-  display: grid;
-  grid-template-columns: 42px auto 1fr;
-  align-items: center; gap: 10px;
-  padding: 5px 0;
-}
-.kpi-cov-row-v5 b {
-  font-family: var(--font-ui);
-  font-variant-numeric: var(--num-tabular);
-  font-weight: 600; font-size: 14px;
-  text-align: right; color: var(--text-strong);
-}
-.kpi-cov-desc-v5 { font-size: 12px; color: var(--text-muted); }
 .kpi-bdg {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; font-weight: 600;
@@ -275,31 +220,6 @@
 .kpi-bdg-unpriced { background: var(--amber-500); color: var(--n-0); }
 .kpi-bdg-unknown  { background: var(--n-0); color: var(--red-600); border: 1px solid var(--red-500); }
 .kpi-bdg-zero     { background: var(--fill-off); color: var(--text-muted); }
-.kpi-disc-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: transparent; border: 0;
-  color: var(--text-strong); font: inherit; font-size: 13px; font-weight: 600;
-  cursor: pointer; padding: 6px 0;
-  width: 100%; text-align: left;
-}
-.kpi-disc-btn .kpi-chev { transition: transform 120ms; color: var(--text-muted); }
-.kpi-disc-btn[aria-expanded="true"] .kpi-chev { transform: rotate(90deg); }
-@media (prefers-reduced-motion: reduce) { .kpi-disc-btn .kpi-chev { transition: none; } }
-.kpi-pipesum {
-  margin-left: auto;
-  font-weight: 500; font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.04em;
-}
-.kpi-pipe-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 4px 0;
-  font-size: 12px; color: var(--text-muted);
-  border-bottom: 1px dashed var(--border-subtle);
-}
-.kpi-pipe-row:last-child { border-bottom: 0; }
-.kpi-pipe-row b { color: var(--text-strong); font-weight: 600; }
-
 /* ── nine state boxes (Push 3, P9) ────────────────────────────── */
 .kpi-statebox {
   background: var(--surface-card);
@@ -841,8 +761,7 @@
 /* ── B12 print · current table state with scope header ──────── */
 @media print {
   .kpi-app, .kpi-wrap { background: #fff; color: #000; }
-  /* Hide navigation, folio, quick panel actions, context rail, toast */
-  .kpi-cmd, .kpi-folio, .kpi-rail, .kpi-rl-card,
+  .kpi-cmd, .kpi-folio,
   .kpi-toast-host, .kpi-sr-live,
   .kpi-jump-chips, .kpi-ttools,
   .kpi-trend, .kpi-trend-toggle,
@@ -1161,31 +1080,16 @@
   border-radius: 0 0 var(--rad-14) var(--rad-14);
   box-shadow: var(--sh-sm);
 }
+/* V7-17 - two-column layout after the rail retires. Main gains the
+   width the rail used to hold. */
 .kpi-cols {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 316px;
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 .kpi-main {
   padding: var(--space-card-pad);
   min-width: 0;
 }
-/* V6-17 - rail clipping fix. Root cause: the .kpi-rail column had no
-   scoped padding, so .kpi-rl-card filled the exact 300px grid track
-   and its right edge sat flush against the wrap's border-radius; the
-   corner rounding on .kpi-page clipped the card corner + shadow at
-   every viewport (worst-visible at 1800-2560px where the wrap is
-   centered and the visual weight of the shadow is unmasked).
-   Fix: pad the rail track + guarantee rl-cards respect their container
-   with box-sizing + min-width:0. */
-.kpi-rail {
-  padding: var(--space-4) var(--space-3);
-  border-left: 1px solid var(--border-subtle);
-  background: var(--surface-sunken);
-  display: flex; flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-.kpi-rl-card { box-sizing: border-box; max-width: 100%; }
 
 /* ── V7 carded portfolio folio (V7-10..V7-16) ──────────────────
    Column 260px, inner padding 16px, card gap 12px. Three cards -
@@ -1319,40 +1223,49 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Right rail v5 */
-.kpi-rl-card {
-  background: var(--surface-card);
-  border: 1px solid var(--n-300);
-  border-radius: var(--rad-10);
-  padding: var(--space-3);
-  box-shadow: var(--card-shadow);
+/* V7-19 SYSTEM status strip - hugs the folio foot. Quiet by design:
+   no card, no shadow, no border except the hairline top. */
+.kpi-folio-push { flex: 1 1 auto; min-height: 12px; }
+.kpi-sys {
+  border-top: 1px solid var(--n-200);
+  padding-top: 12px;
+  display: flex; flex-direction: column; gap: 6px;
 }
-/* V6-14 - PAYROLL DATA CHECK card: bigok number + status badge +
-   plain-language sentence. Copy is spec-normative. */
-.kpi-rl-bigok {
-  display: flex; align-items: baseline; gap: var(--space-3);
+.kpi-sys-h {
+  font-size: 9.5px; letter-spacing: 0.1em;
+  color: var(--n-400); font-weight: 800;
+  margin-bottom: 2px;
 }
-.kpi-rl-bigok b {
-  font-size: 26px; color: var(--text-heading);
-  letter-spacing: var(--track-tight);
-  font-variant-numeric: var(--num-tabular);
+.kpi-sys-r {
+  display: flex; align-items: center; gap: 8px;
+  height: 22px;
+  font-size: 11px; color: var(--n-600);
 }
-.kpi-rl-badge {
-  font-size: 11px; font-weight: 700;
-  border-radius: var(--rad-pill);
-  padding: 3px 10px;
-  border: 1px solid transparent;
-  letter-spacing: 0.02em;
+.kpi-sys-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green-500);
+  flex: none;
 }
-.kpi-rl-badge-ok    { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
-.kpi-rl-badge-warn  { background: var(--amber-100); color: var(--amber-700); border-color: #F3D9AE; }
-.kpi-rl-badge-bad   { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
-.kpi-rl-badge-muted { background: var(--fill-off);  color: var(--text-muted); border-color: var(--border-default); }
-.kpi-rl-plain {
+.kpi-sys-dot-ok   { background: var(--green-500); }
+.kpi-sys-dot-warn { background: var(--amber-500); }
+.kpi-sys-dot-bad  { background: var(--red-500); }
+.kpi-sys-k { flex: 1; white-space: nowrap; }
+.kpi-sys-v { font-weight: 600; color: var(--n-800); white-space: nowrap; }
+.kpi-sys-v-ok   { color: var(--green-700); }
+.kpi-sys-v-warn { color: var(--amber-700); }
+.kpi-sys-v-bad  { color: var(--red-700); }
+
+/* Freshness popover - plain-language coverage line + separator. */
+.kpi-fresh-pop-plain {
   font-size: 12px; color: var(--text-muted);
-  margin-top: var(--space-2);
   line-height: var(--lb-caption);
+  padding-bottom: 4px;
 }
+.kpi-fresh-pop-sep {
+  border-top: 1px dashed var(--border-subtle);
+  margin: 2px 0;
+}
+
 .kpi-qp-row {
   display: flex; align-items: center;
   gap: var(--space-2);
@@ -1371,13 +1284,15 @@
   color: var(--text-strong);
 }
 
-/* Mobile - shell adapts (GO-MOBILE full rework deferred). Folio
-   collapses to a horizontal strip of member chips; V7 group cards
-   dissolve to keep the strip scannable on 375px. */
+/* Mobile - shell adapts. Folio collapses to a horizontal strip of
+   pills; the SYSTEM strip lands inline at the strip's end (V7-22).
+   The command bar wraps to two lines at this breakpoint. */
 @media (max-width: 1023px) {
   .kpi-cols { grid-template-columns: 1fr; }
+  .kpi-cmd { flex-wrap: wrap; padding: 10px 16px; row-gap: 8px; }
   .kpi-folio {
     flex-direction: row;
+    align-items: center;
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--border-subtle);
@@ -1385,6 +1300,7 @@
     gap: 8px;
   }
   .kpi-folio-h, .kpi-folio-title { display: none; }
+  .kpi-folio-push { display: none; }
   .kpi-gcard {
     display: contents;
     background: transparent; border: 0; box-shadow: none;
@@ -1413,6 +1329,17 @@
   }
   .kpi-acct.on { border-color: var(--kpi-accent); background: #EEF3FA; }
   .kpi-acct .kpi-acct-desc { display: none; }
+  /* SYSTEM strip becomes a compact inline pill trailing the folio row. */
+  .kpi-sys {
+    border-top: 0;
+    padding-top: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .kpi-sys-h { display: none; }
   .kpi-hero-n { font-size: 32px; }
 }
 

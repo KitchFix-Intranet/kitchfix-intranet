@@ -144,6 +144,7 @@ export function FolioRail({
         </div>
       </div>
 
+      {folioFoot && <div className="kpi-folio-push" aria-hidden="true" />}
       {folioFoot}
     </>
   );

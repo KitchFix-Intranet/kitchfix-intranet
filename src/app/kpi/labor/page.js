@@ -26,7 +26,6 @@ import { Hero } from "./components/Hero";
 import { MetricGrid } from "./components/MetricGrid";
 import { TrendChart } from "./components/TrendChart";
 import { WeekTable } from "./components/WeekTable";
-import { ContextRail } from "./components/ContextRail";
 import {
   StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
   StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired,
@@ -551,16 +550,45 @@ export default function KpiLaborPage() {
     start, end, workerRoster, selectedWorkers, redact,
   });
 
-  // Freshness popover content (V7-9). C1 puts the former Nightly-data-
-  // feed disclosure content here. C3 layers coverage sentence + In view
-  // counts on top when the rail retires.
+  // Freshness popover content. Carries coverage plain-language + In
+  // view counts + pipeline lines that used to live in the retired rail.
+  const dominantCoverage = (() => {
+    const rank = { complete: 0, hours_only: 1, partial: 2, no_labor: 3, unknown: 4 };
+    const present = Object.keys(rank).filter(k => (coverageCounts?.[k] || 0) > 0);
+    if (present.length === 0) return "complete";
+    present.sort((a, b) => rank[b] - rank[a]);
+    return present[0];
+  })();
+  const COVERAGE_LINE = {
+    complete:   "Every shift in this range has priced hours. Nothing is missing from payroll.",
+    hours_only: "Hours are in, pay data has not landed yet.",
+    partial:    "Some shifts are missing pay data - dollars for those weeks are incomplete.",
+    no_labor:   "No labor recorded in this range.",
+    unknown:    "The data feed has not covered part of this range.",
+  };
   const freshnessPop = loadState === "ok" && data ? (
     <div className="kpi-fresh-pop-body">
+      <div className="kpi-fresh-pop-plain">{COVERAGE_LINE[dominantCoverage]}</div>
+      <div className="kpi-fresh-pop-row"><span>In view</span><b>{weeksInRange} weeks · {filteredActuals.length} worker-weeks</b></div>
+      <div className="kpi-fresh-pop-sep" aria-hidden="true" />
       <div className="kpi-fresh-pop-row"><span>Orphan facts</span><b>{data?.unattributed?.length ?? 0}</b></div>
       <div className="kpi-fresh-pop-row"><span>Unmapped earning types</span><b>{data?.unmapped_names?.length ?? 0}</b></div>
       <div className="kpi-fresh-pop-row"><span>Last derive</span><b>{data?.derive_freshness?.last_derive_at ? fmtTimestamp(data.derive_freshness.last_derive_at) : "—"}</b></div>
       <div className="kpi-fresh-pop-row"><span>Last pay-seg walk</span><b>{data?.derive_freshness?.last_walk_at ? fmtTimestamp(data.derive_freshness.last_walk_at) : "—"}</b></div>
     </div>
+  ) : null;
+
+  // SYSTEM status strip - hugs the folio foot (V7-19). Two 22px rows:
+  // Payroll data + Nightly feed. Colors come from coverage + freshness
+  // logic already established; the strip stays quiet (no card, no
+  // shadow).
+  const systemStrip = loadState === "ok" && data && !isSalaried ? (
+    <SystemStrip
+      coverageCounts={coverageCounts}
+      dominantCoverage={dominantCoverage}
+      freshness={freshness}
+      freshnessH={freshnessH}
+    />
   ) : null;
 
   // V6-1 fiscal context - TODAY (MM/DD), PERIOD n (from account_periods
@@ -758,22 +786,6 @@ export default function KpiLaborPage() {
     </>
   );
 
-  // ── Right rail content (C1 keeps ContextRail rendering; C3 retires) ──
-  const railStack = loadState === "ok" && data?.account_state !== "salaried_only" ? (
-    <ContextRail
-      filteredActuals={filteredActuals}
-      totals={totals}
-      coverageCounts={coverageCounts}
-      freshness={freshness}
-      freshnessHours={freshnessH}
-      data={data}
-      workers={data?.workers}
-      workerRangeTotals={workerRangeTotals}
-      redact={redact}
-      weeksInRange={weeksInRange}
-    />
-  ) : null;
-
   return (
     <div className="kpi-app" data-density={isCompact ? "compact" : undefined}>
       <div className="kpi-wrap">
@@ -813,10 +825,10 @@ export default function KpiLaborPage() {
               onPickAccount={onPickAccount}
               accountsDirectory={data?.accounts_directory}
               regionalDirectorsDisplay={data?.regional_directors_display}
+              folioFoot={systemStrip}
             />
           }
           main={mainContent}
-          rail={railStack}
         />
       </div>
 
@@ -825,6 +837,40 @@ export default function KpiLaborPage() {
 
       {/* ── P10/P11 toast host (M4 export) ─── */}
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
+    </div>
+  );
+}
+
+// SYSTEM status strip (V7-19). Two 22px rows, quietly stated: Payroll
+// data + Nightly feed. Colors mirror coverage severity + freshness
+// tint. Value classes: kpi-sys-v-ok / -warn / -bad. Dot mirrors.
+function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH }) {
+  const total = Object.values(coverageCounts || {}).reduce((s, n) => s + Number(n || 0), 0);
+  const complete = Number(coverageCounts?.complete || 0);
+  const payTone = dominantCoverage === "complete" ? "ok"
+                : dominantCoverage === "unknown"  ? "bad"
+                : "warn";
+  const feedTone = freshnessH == null ? "bad"
+                 : freshnessH >= 54    ? "bad"
+                 : freshnessH >= 30    ? "warn"
+                 : "ok";
+  const feedValue = freshnessH == null ? "no walk on record"
+                  : feedTone === "bad" ? `stale · ${fmtTimestamp(freshness?.last_walk_at)}`
+                  : feedTone === "warn" ? `slow · ${fmtTimestamp(freshness?.last_walk_at)}`
+                  : `healthy · ${fmtTimestamp(freshness?.last_walk_at)}`;
+  return (
+    <div className="kpi-sys" role="status" aria-label="System status">
+      <div className="kpi-sys-h">SYSTEM</div>
+      <div className="kpi-sys-r">
+        <span className={`kpi-sys-dot kpi-sys-dot-${payTone}`} aria-hidden="true" />
+        <span className="kpi-sys-k">Payroll data</span>
+        <span className={`kpi-sys-v kpi-sys-v-${payTone}`}>{complete} of {total} complete</span>
+      </div>
+      <div className="kpi-sys-r">
+        <span className={`kpi-sys-dot kpi-sys-dot-${feedTone}`} aria-hidden="true" />
+        <span className="kpi-sys-k">Nightly feed</span>
+        <span className={`kpi-sys-v kpi-sys-v-${feedTone}`}>{feedValue}</span>
+      </div>
     </div>
   );
 }

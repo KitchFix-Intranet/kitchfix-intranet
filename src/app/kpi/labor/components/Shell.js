@@ -123,7 +123,6 @@ export function Shell({
   // Layout children.
   folioRail,      // left aside
   main,           // middle content
-  rail,           // right aside (retired in C3; C1 still renders it)
 }) {
   const freshH = hoursSinceISO(freshness?.last_walk_at);
   return (
@@ -205,12 +204,11 @@ export function Shell({
         />
       </div>
 
-      {/* 3-zone grid (rail retires in C3; folio+main is the two-col target). */}
+      {/* Two-column grid: folio + main. */}
       <div className="kpi-page">
         <div className="kpi-cols">
           <aside className="kpi-folio" aria-label="Accounts">{folioRail}</aside>
           <div className="kpi-main" id="kpi-main">{main}</div>
-          {rail && <aside className="kpi-rail" aria-label="Actions and context">{rail}</aside>}
         </div>
       </div>
     </>
