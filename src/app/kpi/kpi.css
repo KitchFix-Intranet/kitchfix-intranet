@@ -847,7 +847,6 @@
 .kpi-btn,
 .kpi-pchip,
 .kpi-pchip.on,
-.kpi-pjump,
 .kpi-perbtn,
 .kpi-wkbtn,
 .kpi-acct {
@@ -859,7 +858,6 @@
 .kpi-param-workers > summary:active,
 .kpi-btn:active,
 .kpi-pchip:active,
-.kpi-pjump:active,
 .kpi-acct:active { background: var(--n-100); }
 /* Filled-accent elements (on/active): press to --kpi-accent-strong */
 .kpi-preset.kpi-preset-active:active,
@@ -878,7 +876,7 @@
   .kpi-preset, .kpi-redact-toggle, .kpi-btn-primary, .kpi-btn-secondary,
   .kpi-btn-danger, .kpi-state-cta,
   .kpi-param-workers > summary, .kpi-btn, .kpi-pchip, .kpi-pchip.on,
-  .kpi-pjump, .kpi-perbtn, .kpi-wkbtn,
+  .kpi-perbtn, .kpi-wkbtn,
   .kpi-acct { transition: none; }
 }
 
@@ -905,7 +903,7 @@
   .kpi-app, .kpi-wrap { background: #fff; color: #000; }
   .kpi-cmd, .kpi-folio,
   .kpi-toast-host, .kpi-sr-live,
-  .kpi-jump-chips, .kpi-ttools,
+  .kpi-tbar,
   .kpi-cal-root, .kpi-modal-scrim {
     display: none !important;
   }
@@ -1095,7 +1093,7 @@
 .kpi-tbar-btn:hover { border-color: var(--n-400); color: var(--n-800); }
 .kpi-tbar-btn .kpi-i { width: 12px; height: 12px; color: var(--n-500); }
 .kpi-tbar-btn-dd::after {
-  content: "\25BE"; font-size: 9px; color: var(--n-400);
+  content: "\25BE"; font-size: var(--kpi-size-tag); color: var(--n-400);
   margin-left: 2px;
 }
 .kpi-empdisp {
