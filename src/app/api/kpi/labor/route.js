@@ -26,6 +26,7 @@ import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerName } from "@/lib/kpi/resolveName";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
+import { buildBoard } from "@/app/kpi/labor/lib/board.js";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -394,6 +395,12 @@ export async function GET(request) {
       members,
       accounts_directory,
       regional_directors_display,
+      board: buildBoard({
+        account, start, end, today,
+        actuals: actualsRows,
+        budget_periods,
+        account_state: "hourly_ok",
+      }),
       name_availability: {
         has_names: resolvedNames > 0,
         resolved: resolvedNames,
@@ -422,6 +429,12 @@ export async function GET(request) {
       accounts_directory,
       regional_directors_display,
       name_availability: { has_names: false, resolved: 0, total: 0, reason: "salaried_only" },
+      board: buildBoard({
+        account, start, end, today,
+        actuals: [],
+        budget_periods: [],
+        account_state: "salaried_only",
+      }),
     });
   }
 
@@ -622,6 +635,12 @@ export async function GET(request) {
     budget_mode,
     accounts_directory,
     regional_directors_display,
+    board: buildBoard({
+      account, start, end, today,
+      actuals: actuals.data,
+      budget_periods,
+      account_state: budget_mode === "envelope" ? "envelope" : "hourly_ok",
+    }),
     name_availability: {
       has_names: resolvedNames > 0,
       resolved: resolvedNames,
