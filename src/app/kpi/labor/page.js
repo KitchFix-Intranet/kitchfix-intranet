@@ -419,6 +419,17 @@ export default function KpiLaborPage() {
 
   const isSalaried = data?.account_state === "salaried_only";
 
+  // V25-15 - has the board EVER rendered in this session? Ref flips
+  // true after the first successful data load. Cold start (never
+  // rendered) gets a layout-mirroring skeleton; warm nav (previous
+  // board present) keeps the previous board on screen at 0.45 opacity.
+  const hasEverRenderedRef = useRef(false);
+  useEffect(() => {
+    if (loadState === "ok" && (data?.actuals?.length || 0) > 0) {
+      hasEverRenderedRef.current = true;
+    }
+  }, [loadState, data]);
+
   // V25-4 + V25-18 - auto-open runs ONCE per account. Two rules:
   //   V25-4 - keying on `expandedPeriods.size === 0` re-fired every
   //           time the user emptied state (Collapse all), so Collapse
@@ -612,11 +623,11 @@ export default function KpiLaborPage() {
     </div>
   ) : null;
 
-  // SYSTEM status strip - hugs the folio foot (V7-19). Two 22px rows:
-  // Payroll data + Nightly feed. Colors come from coverage + freshness
-  // logic already established; the strip stays quiet (no card, no
-  // shadow).
-  const systemStrip = loadState === "ok" && data && !isSalaried ? (
+  // SYSTEM status strip - hugs the folio foot (V7-19). V25-14 keeps
+  // this mounted through every fetch (no unmount on `loadState ===
+  // "loading"`); values freeze on the last-known data until the new
+  // response lands, mirroring the freshness chip's `Loading data`.
+  const systemStrip = data && !isSalaried ? (
     <SystemStrip
       coverageCounts={coverageCounts}
       dominantCoverage={dominantCoverage}
@@ -669,8 +680,19 @@ export default function KpiLaborPage() {
         </div>
       )}
 
-      {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
-        <div ref={boardRef} tabIndex={-1} className="kpi-board" style={{ outline: "none" }}>
+      {/* V25-15 - board stays MOUNTED whenever we have data, regardless
+          of loadState. During a warm refetch (loadState === "loading"
+          with previous data) it renders at 0.45 opacity via
+          `.kpi-board-loading`. It only unmounts on genuine cold start
+          (no data ever), where the skeleton below takes over. */}
+      {!isSalaried && (data?.actuals?.length || 0) > 0 && (
+        <div
+          ref={boardRef}
+          tabIndex={-1}
+          className={`kpi-board ${loadState === "loading" ? "kpi-board-loading" : ""}`}
+          style={{ outline: "none" }}
+          aria-busy={loadState === "loading" ? "true" : undefined}
+        >
           {data.board?.applies !== false && (
             <>
               <StoryBlock
@@ -693,8 +715,15 @@ export default function KpiLaborPage() {
         <StateNotAuthorized />
       ) : loadState === "ok" && data.account_state === "salaried_only" ? (
         <StateSalaried account={account} message={data.account_state_message} />
+      ) : loadState === "loading" && !hasEverRenderedRef.current ? (
+        /* V25-16 - COLD skeleton mirrors the real layout so the shape
+           of what is coming is promised: spend card + four signal
+           cards + numbers strip + six table rows. */
+        <BoardSkeleton />
       ) : loadState === "loading" ? (
-        <StateLoading />
+        /* V25-15 warm nav: board above is opacity 0.45; render nothing
+           here (the previous board and table hold the layout height). */
+        null
       ) : loadState === "error" ? (
         <StateError
           code={errCode}
@@ -727,7 +756,13 @@ export default function KpiLaborPage() {
             }}
           />
         )
-      ) : loadState === "ok" && filteredActuals.length ? (
+      ) : null}
+
+      {/* V25-15 - WeekTable stays MOUNTED across every refetch as long
+          as data exists. Warm loading dims to 0.45 via wrapper class;
+          cold start (no data) omits it (skeleton is above). */}
+      {!isSalaried && (data?.actuals?.length || 0) > 0 && filteredActuals.length > 0 && (
+        <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
         <WeekTable
           account={account}
           grouped={grouped}
@@ -789,7 +824,8 @@ export default function KpiLaborPage() {
           rolledUpMembers={data?.rolled_up_members || []}
           aggregateExcludedMembers={data?.aggregate_excluded_members || []}
         />
-      ) : null}
+        </div>
+      )}
     </>
   );
 
@@ -803,7 +839,10 @@ export default function KpiLaborPage() {
           dataLoading={loadState === "loading" || loadState === "idle"}
           activeSection="labor"
           printScopeText={printScopeText}
-          rangeProps={!isSalaried && loadState === "ok" ? {
+          /* V25-14 - Range control stays MOUNTED through every refetch.
+             Uses last-known account_periods; the ranges keep responding
+             the moment the loading chip clears. */
+          rangeProps={!isSalaried && (data || loadState === "ok") ? {
             startISO: start,
             endISO: end,
             todayISO: today,
@@ -814,7 +853,7 @@ export default function KpiLaborPage() {
             selectedMonth,
             onCommit: onRangeCommit,
           } : null}
-          exportHref={loadState === "ok" && data?.account_state !== "salaried_only" ? exportHref() : null}
+          exportHref={data && data?.account_state !== "salaried_only" ? exportHref() : null}
           onExport={() => {
             setToast({
               message: redact ? "Export ready · names redacted." : "Export ready.",
@@ -844,6 +883,32 @@ export default function KpiLaborPage() {
 
       {/* ── P10/P11 toast host (M4 export) ─── */}
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
+    </div>
+  );
+}
+
+// V25-16 - COLD skeleton mirrors the actual board layout so the shape
+// of the incoming content is promised: a spend-card block, four
+// signal-card blocks, a numbers-strip block, six table rows, each at
+// its real height. Only renders when the board has NEVER rendered in
+// this session (first paint). Warm nav keeps the previous board.
+function BoardSkeleton() {
+  return (
+    <div className="kpi-board kpi-board-skel" role="status" aria-live="polite" aria-busy="true">
+      <span className="sr-only">Loading dashboard</span>
+      <div className="kpi-skel kpi-skel-spend" />
+      <div className="kpi-skel-sigs">
+        <div className="kpi-skel kpi-skel-sig" />
+        <div className="kpi-skel kpi-skel-sig" />
+        <div className="kpi-skel kpi-skel-sig" />
+        <div className="kpi-skel kpi-skel-sig" />
+      </div>
+      <div className="kpi-skel kpi-skel-det" />
+      <div className="kpi-skel-tbl">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="kpi-skel kpi-skel-row" />
+        ))}
+      </div>
     </div>
   );
 }

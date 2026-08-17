@@ -1612,6 +1612,55 @@
   gap: var(--kpi-space-3);
   margin-bottom: var(--kpi-space-3);
 }
+/* V25-15 - warm nav dims the existing board to 0.45 while the next
+   fetch is in flight. The `.kpi-board-loading` class is applied by
+   page.js on the board wrapper AND on the table wrapper so both
+   dim together. Layout is preserved (V25-13). */
+.kpi-board-loading {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.18s ease-out;
+}
+
+/* V25-16 - COLD skeleton mirrors the real board layout. Each block
+   sits at the real height so first paint promises the shape of the
+   coming content. V25-17 - respects prefers-reduced-motion: the
+   shimmer keyframe animation is suppressed in favour of a static tint. */
+.kpi-board-skel { gap: var(--kpi-space-3); }
+.kpi-skel {
+  background: linear-gradient(90deg, var(--n-100) 0%, var(--n-200) 50%, var(--n-100) 100%);
+  background-size: 200% 100%;
+  border-radius: var(--rad-10);
+  border: 1px solid var(--n-200);
+  animation: kpiSkelShimmer 1.4s ease-in-out infinite;
+}
+.kpi-skel-spend { height: calc(220px * var(--kf-scale)); }
+.kpi-skel-sigs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-space-4);
+}
+.kpi-skel-sig { height: calc(180px * var(--kf-scale)); }
+.kpi-skel-det { height: calc(52px * var(--kf-scale)); }
+.kpi-skel-tbl { display: flex; flex-direction: column; gap: var(--kpi-space-1); }
+.kpi-skel-row { height: var(--kpi-row-h); border-radius: var(--rad-6); }
+
+@keyframes kpiSkelShimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-skel {
+    animation: none;
+    background: var(--n-100);
+  }
+}
+@media (max-width: 1279px) {
+  .kpi-skel-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .kpi-skel-sigs { grid-template-columns: 1fr; }
+}
 
 /* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad}.
    V21-5: the pill relocates to the spend card header (was the retired
