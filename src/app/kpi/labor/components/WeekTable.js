@@ -23,8 +23,82 @@
 //
 // Esc collapses all open weeks (§3.7).
 
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting";
+
+// V7-5 - Workers filter on the table control bar. Behavior + URL state
+// unchanged from v6; only the anchor moves. Rendered inside .kpi-tbar,
+// immediately left of the Employee-display segmented control.
+function WorkersFilter({ workerRoster, selectedWorkers, onWorkersChange }) {
+  const [open, setOpen] = useState(false);
+  const total = workerRoster.length;
+  const shown = selectedWorkers && selectedWorkers.size > 0 ? selectedWorkers.size : total;
+  const rootRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return (
+    <div className="kpi-workers" ref={rootRef}>
+      <button
+        type="button"
+        className={`kpi-trig ${open ? "on" : ""}`}
+        aria-haspopup="dialog"
+        aria-expanded={open ? "true" : "false"}
+        onClick={() => setOpen(o => !o)}
+      >
+        <svg className="kpi-i" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.75" />
+          <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="1.75" />
+        </svg>
+        <span>Workers · {shown === total ? `all ${total}` : `${shown} of ${total}`}</span>
+      </button>
+      {open && (
+        <div className="kpi-pop kpi-pop-workers open">
+          <div className="kpi-pop-head">
+            <span className="kpi-pop-title">Workers</span>
+            <span style={{ display: "flex", gap: 6 }}>
+              <button type="button" className="kpi-btn kpi-btn-sm" onClick={() => onWorkersChange?.(null)}>All</button>
+              <button type="button" className="kpi-btn kpi-btn-sm" onClick={() => onWorkersChange?.(new Set())}>None</button>
+            </span>
+          </div>
+          <div className="kpi-wk-list">
+            {workerRoster.map(w => {
+              const checked = !selectedWorkers || selectedWorkers.size === 0 || selectedWorkers.has(w.id);
+              return (
+                <label key={w.id} className="kpi-wk-item">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      let next;
+                      if (!selectedWorkers || selectedWorkers.size === 0) {
+                        next = new Set(workerRoster.map(x => x.id));
+                      } else {
+                        next = new Set(selectedWorkers);
+                      }
+                      if (e.target.checked) next.add(w.id);
+                      else next.delete(w.id);
+                      onWorkersChange?.(next);
+                    }}
+                  />
+                  <span>{w.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function workerLabel(meta, worker_id, redact) {
   const num = meta?.number != null ? `#${meta.number}` : `#${String(worker_id).slice(0, 6)}`;
@@ -95,6 +169,12 @@ export function WeekTable({
   workers,               // { [worker_id]: { display_name, number, title } }
   redact,
   onToggleRedact,        // V6-13/V6-23 - Employee-display segmented control lives on the table bar right
+  // V7-5 - Workers filter moves from the retired scope band onto the
+  // table bar, immediately left of the Employee-display segmented
+  // control. Same behavior and URL state as v6.
+  workerRoster,          // [{ id, label }]
+  selectedWorkers,       // Set<string> or null (all)
+  onWorkersChange,       // (nextSet | null) => void
   expandedPeriods,       // Set<period_no>
   onTogglePeriod,        // (period_no) => void
   expandedWeeks,         // Set<week_start>
@@ -165,6 +245,13 @@ export function WeekTable({
           </div>
         )}
         <span className="kpi-tbar-spacer" aria-hidden="true" />
+        {onWorkersChange && workerRoster && workerRoster.length > 0 && (
+          <WorkersFilter
+            workerRoster={workerRoster}
+            selectedWorkers={selectedWorkers}
+            onWorkersChange={onWorkersChange}
+          />
+        )}
         {onToggleRedact && (
           <div className="kpi-empdisp">
             <span className="kpi-empdisp-lab">Employee display:</span>

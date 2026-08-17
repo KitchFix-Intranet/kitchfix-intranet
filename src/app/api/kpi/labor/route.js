@@ -61,12 +61,15 @@ function rdoDisplayName(email) {
   return `${first.charAt(0).toUpperCase()}. ${last.charAt(0).toUpperCase() + last.slice(1)}`;
 }
 
-// V6-18/19 - directory shape the folio consumes on every render.
-// Reads accounts.region live (per PR-1 Step 0). CORP excluded per
-// D17. Salaried flag drives the italic tag. Called once per request.
+// V6-18/19 + V7-16 - directory shape the folio consumes on every
+// render. Reads accounts.region + name + city + state live from
+// accounts. CORP excluded per D17. The folio uses team_name + city
+// to render the two-line member rows; salaried flag remains on the
+// wire (StateSalaried still gates the account page) but is no longer
+// echoed as a folio-row tag (V7-15). Called once per request.
 async function fetchAccountsDirectory(supa) {
   const q = await supa.from("accounts")
-    .select("team_key, region")
+    .select("team_key, region, name, city, state")
     .neq("team_key", "CORP")
     .order("team_key");
   if (q.error) return { error: q.error };
@@ -75,6 +78,9 @@ async function fetchAccountsDirectory(supa) {
     data: (q.data || []).map(r => ({
       team_key: r.team_key,
       region: r.region,
+      team_name: r.name || null,
+      city: r.city || null,
+      state: r.state || null,
       salaried: salaried.has(r.team_key),
     })),
   };

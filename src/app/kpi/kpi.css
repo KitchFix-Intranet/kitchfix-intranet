@@ -54,107 +54,144 @@
   padding: var(--space-5) var(--space-6) var(--space-7);
 }
 
-/* ── module command bar ─────────────────────────────────────────
-   H6 hotfix: --sc2-cmd-* tokens are scoped to .scv2 in tokens.css;
-   the KPI page has no .scv2 ancestor so those refs resolved to
-   invalid values and the navy band vanished. Using --n-900 (root)
-   for background and #ffffff for text keeps the intended navy chrome
-   without leaning on any product-scoped variable. */
+/* ── V7 command bar (V7-1..V7-9) ─────────────────────────────────
+   Single 60px navy bar. Every control on the bar shares one skin via
+   .kpi-ctl (V7-8): 34px height, 8px radius, 12px side padding, 12.5px
+   type, translucent white background/border. Eyebrows 11px uppercase
+   tracked .06em in #B9C6DA. Values 600 weight white. Gap 12px between
+   controls, 20px between groups. Fiscal-meta separators 1x16 in #3D5578
+   with 14px each side. Freshness stays pill (999px). */
 .kpi-cmd {
   background: var(--n-900);
   color: #ffffff;
   border-radius: var(--rad-14) var(--rad-14) 0 0;
-  padding: var(--space-3) var(--space-card-pad);
+  min-height: 60px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  /* Sit above the translucent global TopNav in stack order so the KPI
-     chrome reads as a solid navy band, not a mystery bleed. */
+  gap: 20px;
   position: relative;
   z-index: 1;
 }
-.kpi-cmd-title { font-size: var(--size-h3); font-weight: 600; letter-spacing: -0.01em; }
-.kpi-cmd-div   { width: 1px; height: 24px; background: rgba(255, 255, 255, 0.22); }
-.kpi-cmd-select {
-  min-height: 34px;
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.20);
-  color: #ffffff;
-  border-radius: var(--rad-6);
-  padding: 0 10px;
-  font: inherit; font-size: 13px; font-weight: 500;
+.kpi-cmd-title {
+  font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+  white-space: nowrap; line-height: 1;
 }
-.kpi-cmd-select option { color: var(--text-strong); }
-.kpi-cmd-ctx {
-  display: flex; align-items: center; gap: var(--space-3);
-  font-size: 12px; color: #c8d4e2;
-  letter-spacing: 0.04em; text-transform: uppercase;
-}
-.kpi-cmd-ctx b { color: #ffffff; font-weight: 600; }
-.kpi-cmd-r { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
-.kpi-cmd-chip {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: var(--rad-pill);
-  padding: 5px 12px;
-  font-size: 12px;
+.kpi-cmd-dot { color: #5C769A; margin: 0 6px; font-weight: 400; }
+.kpi-cmd-spacer { flex: 1 1 auto; }
+
+/* Shared control skin - every bar control uses this. */
+.kpi-ctl {
+  height: 34px;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 12.5px; line-height: 1;
+  display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   color: #ffffff;
-  font-family: var(--font-ui);
+  font: inherit; font-size: 12.5px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.kpi-ctl:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+.kpi-ctl:disabled, .kpi-ctl.kpi-ctl-off { opacity: 0.45; cursor: not-allowed; }
+.kpi-ctl .kpi-i { width: 14px; height: 14px; opacity: 0.85; }
+.kpi-ctl.kpi-ctl-sel::after {
+  content: "▾"; font-size: 10px; color: #B9C6DA; margin-left: 2px;
+}
+.kpi-ctl .kpi-ctl-k {
+  color: #B9C6DA; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.kpi-ctl .kpi-ctl-v { font-weight: 600; }
+
+/* Fiscal meta - eyebrows on --meta scale, values on --ctl scale. */
+.kpi-meta {
+  display: flex; align-items: center; height: 34px;
+  font-size: 11px; letter-spacing: 0.06em; color: #B9C6DA;
+  text-transform: uppercase;
   font-variant-numeric: var(--num-tabular);
 }
-.kpi-cmd-chip-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.kpi-cmd-chip-dot.kpi-chip-fresh  { background: var(--green-500); }
-.kpi-cmd-chip-dot.kpi-chip-warm   { background: var(--amber-500); }
-.kpi-cmd-chip-dot.kpi-chip-stale  { background: var(--red-500); }
-/* V6-2 - Copy link / Export buttons in the command bar right. */
-.kpi-cmd-act {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #ffffff;
-  border-radius: var(--rad-6);
-  padding: 6px 12px;
-  font: inherit; font-size: 12px; font-weight: 500;
-  cursor: pointer;
-  text-decoration: none;
+.kpi-meta > span { display: inline-flex; align-items: center; }
+.kpi-meta b {
+  color: #ffffff; font-size: 12.5px; font-weight: 600;
+  margin-left: 6px; letter-spacing: 0; text-transform: none;
 }
-.kpi-cmd-act:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
-.kpi-cmd-act:disabled { opacity: 0.4; cursor: not-allowed; }
-.kpi-cmd-act .kpi-i { width: 14px; height: 14px; }
+.kpi-meta-sep {
+  width: 1px; height: 16px; background: #3D5578; margin: 0 14px;
+  display: inline-block;
+}
 
-/* ── tab strip (Overview | Labor | ...) ───────────────────────── */
-.kpi-tabs {
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0 var(--space-card-pad);
-  display: flex; gap: 2px; align-items: center; overflow-x: auto;
+/* Freshness chip - pill, click opens diagnostics popover (V7-9). */
+.kpi-fresh-anchor { position: relative; display: inline-block; }
+.kpi-fresh {
+  height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 12.5px; line-height: 1;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font: inherit; font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: var(--num-tabular);
 }
-.kpi-tab {
-  padding: 12px 16px;
-  font-size: 14px; font-weight: 500;
-  color: var(--text-muted);
-  border: 0; background: transparent;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap; min-height: var(--control-height);
+.kpi-fresh:hover { background: rgba(255, 255, 255, 0.14); }
+.kpi-fresh-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green-500);
+  display: inline-block;
+}
+.kpi-fresh.stale .kpi-fresh-dot { background: var(--red-500); }
+.kpi-fresh.warm .kpi-fresh-dot  { background: var(--amber-500); }
+
+/* Bar popovers - Section menu + freshness diagnostics. */
+.kpi-secmenu { position: relative; display: inline-block; }
+.kpi-cmd-pop {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--rad-12);
+  box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
+  padding: 6px;
+  min-width: 190px;
+}
+.kpi-cmd-pop-item {
+  display: flex; width: 100%; justify-content: space-between; align-items: center;
+  text-align: left;
+  border-radius: var(--rad-8);
+  padding: 8px 10px;
+  font: inherit; font-size: 13px;
+  color: var(--text-strong);
+  background: none; border: 0;
   cursor: pointer;
 }
-.kpi-tab:hover { color: var(--text-strong); }
-.kpi-tab.kpi-tab-active {
-  color: var(--kpi-accent);
-  border-bottom-color: var(--kpi-accent);
-  font-weight: 600;
+.kpi-cmd-pop-item:hover:not(.ghost) { background: var(--n-100); }
+.kpi-cmd-pop-item.on { background: var(--navy-700); color: #ffffff; font-weight: 600; }
+.kpi-cmd-pop-item.ghost { color: var(--n-400); cursor: default; }
+.kpi-cmd-pop-item small {
+  font-size: 9px; letter-spacing: 0.08em; color: var(--n-400);
+  font-weight: 700;
 }
-.kpi-tab.kpi-tab-soon {
-  opacity: 0.45; cursor: not-allowed;
-  display: inline-flex; align-items: center; gap: 6px;
+.kpi-cmd-pop-item.on small { color: #B9C6DA; }
+
+/* Freshness popover - anchors right of the anchor (right-align to
+   the button so it doesn't fall off the viewport at right edge). */
+.kpi-fresh-pop {
+  left: auto; right: 0;
+  min-width: 260px;
+  padding: 10px 12px;
 }
-.kpi-tab-soon-chip {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
-  background: var(--n-200); color: var(--text-muted);
-  padding: 2px 6px; border-radius: var(--rad-4); font-weight: 600;
+.kpi-fresh-pop-body { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; }
+.kpi-fresh-pop-row {
+  display: flex; justify-content: space-between; align-items: center;
+  color: var(--text-muted);
 }
+.kpi-fresh-pop-row b { color: var(--text-strong); font-weight: 600; }
 
 /* ── content grid: main + rail ────────────────────────────────── */
 .kpi-content {
@@ -169,63 +206,8 @@
   .kpi-content {
     grid-template-columns: 1fr;
   }
-  .kpi-rail { order: -1; }  /* rail moves above on mobile per spec */
 }
 
-/* D1-era orphans (kpi-metric, kpi-table, kpi-badge, kpi-rail card
-   family, kpi-alarm base, kpi-cov-row et al) removed in Push 3.
-   WeekTable, Hero, MetricGrid, and ContextRail carry their own class
-   families (kpi-tbl, kpi-hero, kpi-mtg, kpi-rl, kpi-alarm-v5, kpi-bdg,
-   kpi-cov-row-v5). See git diff for the removed block. */
-
-/* ── right rail v5 (Push 3) ───────────────────────────────────── */
-.kpi-rl-h {
-  font-size: var(--size-caption);
-  text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--text-subtle); font-weight: 600;
-  margin: 0 0 var(--space-2);
-}
-.kpi-rl-card {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--rad-10);
-  padding: var(--space-4);
-  display: flex; flex-direction: column;
-}
-.kpi-rl-note {
-  font-size: 11px; color: var(--text-subtle);
-  margin-top: 8px; font-style: italic;
-  padding-top: 8px; border-top: 1px dashed var(--border-subtle);
-}
-.kpi-alarms {
-  display: flex; flex-direction: column; gap: 8px;
-}
-.kpi-alarm-v5 {
-  display: flex; gap: 8px; align-items: flex-start;
-  padding: 10px 12px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
-  border-left: 4px solid var(--border-default);
-  border-radius: var(--rad-6);
-  font-size: 13px; color: var(--text-default);
-}
-.kpi-alarm-v5 svg { flex: 0 0 18px; margin-top: 2px; }
-.kpi-alarm-v5 b   { color: var(--text-strong); font-weight: 600; }
-.kpi-alarm-danger  { border-left-color: var(--red-500); }
-.kpi-alarm-warning { border-left-color: var(--amber-500); }
-.kpi-cov-row-v5 {
-  display: grid;
-  grid-template-columns: 42px auto 1fr;
-  align-items: center; gap: 10px;
-  padding: 5px 0;
-}
-.kpi-cov-row-v5 b {
-  font-family: var(--font-ui);
-  font-variant-numeric: var(--num-tabular);
-  font-weight: 600; font-size: 14px;
-  text-align: right; color: var(--text-strong);
-}
-.kpi-cov-desc-v5 { font-size: 12px; color: var(--text-muted); }
 .kpi-bdg {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; font-weight: 600;
@@ -238,31 +220,6 @@
 .kpi-bdg-unpriced { background: var(--amber-500); color: var(--n-0); }
 .kpi-bdg-unknown  { background: var(--n-0); color: var(--red-600); border: 1px solid var(--red-500); }
 .kpi-bdg-zero     { background: var(--fill-off); color: var(--text-muted); }
-.kpi-disc-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: transparent; border: 0;
-  color: var(--text-strong); font: inherit; font-size: 13px; font-weight: 600;
-  cursor: pointer; padding: 6px 0;
-  width: 100%; text-align: left;
-}
-.kpi-disc-btn .kpi-chev { transition: transform 120ms; color: var(--text-muted); }
-.kpi-disc-btn[aria-expanded="true"] .kpi-chev { transform: rotate(90deg); }
-@media (prefers-reduced-motion: reduce) { .kpi-disc-btn .kpi-chev { transition: none; } }
-.kpi-pipesum {
-  margin-left: auto;
-  font-weight: 500; font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.04em;
-}
-.kpi-pipe-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 4px 0;
-  font-size: 12px; color: var(--text-muted);
-  border-bottom: 1px dashed var(--border-subtle);
-}
-.kpi-pipe-row:last-child { border-bottom: 0; }
-.kpi-pipe-row b { color: var(--text-strong); font-weight: 600; }
-
 /* ── nine state boxes (Push 3, P9) ────────────────────────────── */
 .kpi-statebox {
   background: var(--surface-card);
@@ -445,85 +402,6 @@
   .kpi-cal-months { grid-template-columns: 1fr; gap: 12px; }
 }
 
-/* ── C4.3 saved-view pill row ───────────────────────────────── */
-.kpi-view-pills {
-  display: flex; align-items: center; gap: 6px;
-  flex-wrap: wrap;
-  padding: var(--space-3) 0 var(--space-2);
-}
-.kpi-view-empty {
-  font-size: 12px; color: var(--text-muted); font-style: italic;
-}
-.kpi-view-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--rad-pill);
-  background: var(--surface-card);
-  color: var(--text-strong);
-  font: inherit; font-size: 12px; font-weight: 500;
-  min-height: 30px;
-  cursor: pointer;
-}
-.kpi-view-pill:hover:not(:disabled) { background: var(--surface-sunken); }
-.kpi-view-pill:disabled { opacity: 0.4; cursor: not-allowed; }
-.kpi-view-pill-active {
-  background: var(--kpi-accent);
-  color: var(--n-0);
-  border-color: var(--kpi-accent);
-}
-.kpi-view-pill-active:hover:not(:disabled) { background: var(--kpi-accent); }
-.kpi-view-pill-dirty { border-style: dashed; }
-.kpi-view-pill-dirty-dot {
-  color: var(--amber-500);
-  font-size: 18px; line-height: 0;
-}
-.kpi-view-pill-active .kpi-view-pill-dirty-dot { color: var(--n-0); }
-.kpi-view-pill-shared { font-size: 11px; opacity: 0.7; }
-.kpi-view-pill-save {
-  border-style: dashed;
-  color: var(--kpi-accent);
-  font-weight: 600;
-}
-.kpi-view-error {
-  font-size: 12px; color: var(--red-600);
-  margin-left: 8px;
-}
-
-/* Active-view line: name · resolved · workers · redact · actions */
-.kpi-view-active {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding: 8px 12px;
-  background: var(--surface-sunken);
-  border-radius: var(--rad-6);
-  font-size: 12px;
-  color: var(--text-default);
-  margin-bottom: var(--space-2);
-}
-.kpi-view-active-name { font-weight: 600; color: var(--text-heading); }
-.kpi-view-active-sep  { opacity: 0.4; }
-.kpi-view-active-mode { color: var(--text-strong); }
-.kpi-view-linkbtn {
-  background: transparent; border: 0;
-  color: var(--kpi-accent);
-  font: inherit; font-size: 12px; font-weight: 500;
-  cursor: pointer; padding: 2px 6px;
-  text-decoration: underline;
-}
-.kpi-view-linkbtn:hover { text-decoration: none; }
-.kpi-view-linkbtn-danger { color: var(--red-600); }
-.kpi-view-dirty-actions {
-  display: inline-flex; align-items: center; gap: 6px;
-  margin-left: auto;
-}
-.kpi-view-dirty-tag {
-  font-size: 11px; font-weight: 600;
-  color: var(--amber-700);
-  background: var(--amber-100);
-  padding: 2px 8px;
-  border-radius: var(--rad-pill);
-  text-transform: uppercase; letter-spacing: 0.04em;
-}
 
 /* ── C4.1 consolidated parameter strip ─────────────────────── */
 .kpi-param-strip {
@@ -811,23 +689,16 @@
    (spec v1.8 §7 explicit); each interactive selector gets its own
    deepened background token. prefers-reduced-motion zeroes the
    transition, not the state - the visual acknowledgement stays. */
-.kpi-tab,
-.kpi-tab.on,
-.kpi-view-pill,
-.kpi-view-pill-save,
 .kpi-preset,
 .kpi-redact-toggle,
 .kpi-btn-primary,
 .kpi-btn-secondary,
 .kpi-btn-danger,
 .kpi-state-cta,
-.kpi-view-linkbtn,
 .kpi-param-workers > summary,
 .kpi-btn,
 .kpi-pchip,
 .kpi-pchip.on,
-.kpi-vpill,
-.kpi-vpill.on,
 .kpi-pjump,
 .kpi-perbtn,
 .kpi-wkbtn,
@@ -838,43 +709,34 @@
   transition: background var(--duration-fast) var(--ease-standard);
 }
 /* Neutral (unfilled) elements: press to --n-100 */
-.kpi-tab:active,
-.kpi-view-pill:active,
-.kpi-view-pill-save:active,
 .kpi-preset:active,
 .kpi-redact-toggle:active,
 .kpi-param-workers > summary:active,
 .kpi-btn:active,
 .kpi-pchip:active,
-.kpi-vpill:active,
 .kpi-pjump:active,
 .kpi-acct:active,
 .kpi-tgl button:active,
 .kpi-trend-toggle:active { background: var(--n-100); }
 /* Filled-accent elements (on/active): press to --kpi-accent-strong */
-.kpi-tab.on:active,
-.kpi-view-pill.on:active,
 .kpi-preset.kpi-preset-active:active,
 .kpi-pchip.on:active,
-.kpi-vpill.on:active,
 .kpi-tgl button.on:active { background: var(--kpi-accent-strong); color: var(--n-0); }
 /* Primary action buttons: press to deeper primary bg */
 .kpi-btn-primary:active,
 .kpi-state-cta:active { background: var(--navy-800); }
-/* Secondary + link buttons: press to tint */
-.kpi-btn-secondary:active,
-.kpi-view-linkbtn:active { background: var(--kpi-accent-tint); }
+/* Secondary buttons: press to tint */
+.kpi-btn-secondary:active { background: var(--kpi-accent-tint); }
 /* Danger: press to deeper red */
 .kpi-btn-danger:active { background: var(--red-700); }
 /* Table period/week buttons sit on a tinted row; deepen to navy-100 */
 .kpi-perbtn:active,
 .kpi-wkbtn:active { background: var(--navy-100); }
 @media (prefers-reduced-motion: reduce) {
-  .kpi-tab, .kpi-tab.on, .kpi-view-pill, .kpi-view-pill-save,
   .kpi-preset, .kpi-redact-toggle, .kpi-btn-primary, .kpi-btn-secondary,
-  .kpi-btn-danger, .kpi-state-cta, .kpi-view-linkbtn,
+  .kpi-btn-danger, .kpi-state-cta,
   .kpi-param-workers > summary, .kpi-btn, .kpi-pchip, .kpi-pchip.on,
-  .kpi-vpill, .kpi-vpill.on, .kpi-pjump, .kpi-perbtn, .kpi-wkbtn,
+  .kpi-pjump, .kpi-perbtn, .kpi-wkbtn,
   .kpi-acct, .kpi-tgl button, .kpi-tgl button.on, .kpi-trend-toggle { transition: none; }
 }
 
@@ -899,11 +761,8 @@
 /* ── B12 print · current table state with scope header ──────── */
 @media print {
   .kpi-app, .kpi-wrap { background: #fff; color: #000; }
-  /* Hide navigation, folio, quick panel actions, context rail, toast */
-  .kpi-cmd, .kpi-tabs, .kpi-folio, .kpi-rail, .kpi-rl-card,
-  .kpi-scope, .kpi-vdef,
+  .kpi-cmd, .kpi-folio,
   .kpi-toast-host, .kpi-sr-live,
-  .kpi-view-active, .kpi-view-pills,
   .kpi-jump-chips, .kpi-ttools,
   .kpi-trend, .kpi-trend-toggle,
   .kpi-cal-root, .kpi-modal-scrim {
@@ -923,83 +782,17 @@
   .kpi-tbl tr.kpi-hidden { display: table-row !important; }
 }
 
-/* Command bar - v5 title style + freshness chip */
-.kpi-cmd-t {
-  font-size: var(--size-h3);
-  font-weight: 700;
-  letter-spacing: var(--track-tight);
-  line-height: var(--lb-h3);
-}
-.kpi-chip-fresh {
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: var(--rad-pill);
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--size-caption); color: #fff;
-}
-.kpi-chip-fresh .kpi-chip-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--green-500);
-}
-.kpi-chip-fresh.stale .kpi-chip-dot { background: var(--red-500); }
-.kpi-chip-fresh.warm .kpi-chip-dot  { background: var(--amber-500); }
 
-/* Tab strip v5 - pill fills for .on, ghost for future tabs */
-.kpi-tab.on {
-  background: var(--kpi-accent);
-  color: var(--n-0);
-  border-bottom-color: transparent;
-  border-radius: var(--rad-pill);
-  padding: 6px 16px;
-  min-height: unset;
-  font-weight: 600;
-}
-.kpi-tab.on:hover { color: var(--n-0); background: var(--kpi-accent-strong); }
-.kpi-tab.ghost { opacity: 0.38; cursor: default; }
-.kpi-tab.ghost small {
-  font-size: var(--size-micro);
-  color: var(--text-subtle);
-  font-weight: 600;
-  margin-left: 4px;
-}
-
-/* Scope band - one control tier, F3 consolidation */
-.kpi-scope {
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: var(--space-2) var(--space-card-pad);
-}
-.kpi-scope-row {
-  display: flex; align-items: center; gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.kpi-scope-spacer { flex: 1 1 auto; }
-.kpi-pdiv {
-  width: 1px; height: 22px;
-  background: var(--border-default);
-  margin: 0 4px;
-}
-
-/* ── V6-3..V6-8 · RangeMenu ─────────────────────────────────────
-   Trigger + three-column popover (PRESETS · FISCAL PERIODS · MONTHS)
-   + inline Custom expansion reusing the CalendarPopover MonthPanel. */
+/* ── V6-3..V6-8 · RangeMenu (v7 anchors it inside the command bar) ─
+   Trigger uses the shared .kpi-ctl skin (V7-8); the internal caret
+   comes from .kpi-ctl.kpi-ctl-sel::after. Popover positioning + the
+   three-column PRESETS / FISCAL PERIODS / MONTHS layout + the inline
+   Custom expansion remain from v6 unchanged. */
 .kpi-rmenu { position: relative; display: inline-block; }
-.kpi-rmenu-trigger {
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  min-height: var(--control-height);
-  padding: 0 12px 0 10px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--rad-6);
-  color: var(--text-strong);
-  font: inherit; font-size: 13px; font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(10, 37, 72, 0.05);
+.kpi-rmenu-label {
+  font-weight: 600;
+  font-variant-numeric: var(--num-tabular);
 }
-.kpi-rmenu-trigger:hover { background: var(--surface-sunken); }
-.kpi-rmenu-trigger.on { border-color: var(--kpi-accent); }
-.kpi-rmenu-caret { color: var(--text-muted); font-size: 11px; }
 .kpi-rmenu-pop {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
   background: var(--surface-card);
@@ -1119,14 +912,6 @@
   background: var(--n-900);
   color: var(--n-0); font-weight: 600;
 }
-.kpi-vdef {
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: 8px 2px 4px;
-  font-size: var(--size-caption); color: var(--text-muted);
-  border-top: 1px dashed var(--border-subtle);
-  margin-top: var(--space-2);
-  flex-wrap: wrap;
-}
 .kpi-mono {
   font-family: var(--font-ui);
   font-variant-numeric: var(--num-tabular);
@@ -1176,12 +961,12 @@
 }
 .kpi-pchip:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Workers details/popover pattern */
-.kpi-workers-details { display: inline-block; }
-.kpi-workers-details > summary {
-  list-style: none; cursor: pointer;
+/* V7-5 - Workers filter (moved to the table control bar). The trigger
+   uses .kpi-trig / .kpi-i; the popover reuses .kpi-pop grammar. */
+.kpi-workers { position: relative; display: inline-block; }
+.kpi-workers .kpi-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
 }
-.kpi-workers-details > summary::-webkit-details-marker { display: none; }
 .kpi-pop {
   background: var(--surface-card);
   border: 1px solid var(--border-default);
@@ -1219,47 +1004,6 @@
   width: 16px; height: 16px;
   accent-color: var(--kpi-accent);
 }
-
-/* View pills v5 */
-.kpi-views-inline {
-  display: contents;
-}
-.kpi-vpill {
-  min-height: var(--control-height);
-  padding: 0 var(--control-pad-x);
-  border-radius: var(--rad-pill);
-  border: 1px solid var(--border-default);
-  background: var(--surface-card);
-  font-size: var(--size-caption);
-  color: var(--text-default);
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  cursor: pointer;
-}
-.kpi-vpill:hover:not(:disabled) {
-  border-color: var(--kpi-accent);
-  color: var(--kpi-accent-strong);
-}
-.kpi-vpill.on {
-  background: var(--kpi-accent);
-  border-color: var(--kpi-accent);
-  color: var(--n-0);
-  font-weight: 600;
-}
-.kpi-vpill-owner {
-  font-size: var(--size-micro);
-  background: var(--n-100);
-  color: var(--text-muted);
-  border-radius: var(--rad-pill);
-  padding: 1px 7px;
-}
-.kpi-vpill.on .kpi-vpill-owner {
-  background: rgba(255, 255, 255, 0.2); color: var(--n-0);
-}
-.kpi-vpill-add {
-  border-style: dashed;
-  color: var(--text-muted);
-}
-.kpi-vpill-add:hover { color: var(--kpi-accent-strong); }
 
 /* Icon */
 .kpi-i {
@@ -1336,127 +1080,192 @@
   border-radius: 0 0 var(--rad-14) var(--rad-14);
   box-shadow: var(--sh-sm);
 }
+/* V7-17 - two-column layout after the rail retires. Main gains the
+   width the rail used to hold. */
 .kpi-cols {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 300px;
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 .kpi-main {
   padding: var(--space-card-pad);
   min-width: 0;
 }
-/* V6-17 - rail clipping fix. Root cause: the .kpi-rail column had no
-   scoped padding, so .kpi-rl-card filled the exact 300px grid track
-   and its right edge sat flush against the wrap's border-radius; the
-   corner rounding on .kpi-page clipped the card corner + shadow at
-   every viewport (worst-visible at 1800-2560px where the wrap is
-   centered and the visual weight of the shadow is unmasked).
-   Fix: pad the rail track + guarantee rl-cards respect their container
-   with box-sizing + min-width:0. */
-.kpi-rail {
-  padding: var(--space-4) var(--space-3);
-  border-left: 1px solid var(--border-subtle);
-  background: var(--surface-sunken);
-  display: flex; flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-.kpi-rl-card { box-sizing: border-box; max-width: 100%; }
 
-/* Folio rail (left) - account navigation only for D2 */
+/* ── V7 carded portfolio folio (V7-10..V7-16) ──────────────────
+   Column 260px, inner padding 16px, card gap 12px. Three cards -
+   ALL / EAST / WEST - each wearing the page card skin. The group
+   header row IS the pseudo-key selector; member rows sit inside
+   the card, 44px tall, two-line lockup. */
 .kpi-folio {
   border-right: 1px solid var(--border-subtle);
-  background: var(--surface-sunken);
-  padding: var(--space-3) 0;
+  background: var(--n-50);
+  padding: 16px;
   display: flex; flex-direction: column;
+  gap: 12px;
   min-width: 0;
 }
+/* Fallback (no directory yet) - v6 flat list rendered under a caption. */
 .kpi-folio-h {
-  padding: 0 var(--space-3) var(--space-2);
+  padding: 0 4px 4px;
   font-size: var(--size-micro);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-/* V6-18 - PORTFOLIO / EAST · RDO ... / WEST · RDO ... eyebrows above
-   each folio group. Same typographic tier as .kpi-folio-h but slightly
-   more pronounced tracking to read as a group divider, not a title. */
-.kpi-folio-eyebrow {
-  padding: var(--space-3) var(--space-3) var(--space-1);
-  font-size: var(--size-micro);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
   font-weight: 700;
 }
-.kpi-folio-eyebrow:first-child { padding-top: 0; }
-/* Pseudo-key rows (All accounts / EAST / WEST) render slightly heavier
-   than the member rows to signal "aggregate" without a hard rule. */
-.kpi-acct-roll .kpi-acct-nm { font-weight: 700; }
-.kpi-acct {
-  display: flex; align-items: center; gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: 0;
-  border-left: 3px solid transparent;
-  background: transparent;
-  min-height: 44px;
-  cursor: pointer;
-  text-align: left;
+/* PORTFOLIO title - option A (V7-11). Not a card. */
+.kpi-folio-title {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 2px 2px 4px;
 }
-.kpi-acct:hover { background: var(--n-100); }
-.kpi-acct.on {
-  background: var(--kpi-accent-tint);
-  border-left-color: var(--kpi-accent);
+.kpi-folio-title-h {
+  font-size: 14px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--n-900);
 }
-.kpi-acct-nm {
-  font-size: var(--size-caption); font-weight: 600;
-  color: var(--text-strong);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 130px;
+.kpi-folio-title-s {
+  font-size: 11px; color: var(--n-500);
 }
-.kpi-acct.on .kpi-acct-nm { color: var(--kpi-accent-strong); }
-.kpi-acct-sal {
-  font-size: var(--size-micro);
-  color: var(--text-subtle);
-  font-style: italic;
-  margin-left: auto;
-}
-
-/* Right rail v5 */
-.kpi-rl-card {
+/* Group card (page card skin). */
+.kpi-gcard {
   background: var(--surface-card);
   border: 1px solid var(--n-300);
   border-radius: var(--rad-10);
-  padding: var(--space-3);
   box-shadow: var(--card-shadow);
+  overflow: hidden;
+  transition: box-shadow 0.15s;
 }
-/* V6-14 - PAYROLL DATA CHECK card: bigok number + status badge +
-   plain-language sentence. Copy is spec-normative. */
-.kpi-rl-bigok {
-  display: flex; align-items: baseline; gap: var(--space-3);
+.kpi-gcard:hover { box-shadow: 0 2px 4px rgba(10, 37, 72, 0.08), 0 8px 20px rgba(10, 37, 72, 0.10); }
+/* Group header - IS the selector for ALL / EAST / WEST. */
+.kpi-ghead {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
 }
-.kpi-rl-bigok b {
-  font-size: 26px; color: var(--text-heading);
-  letter-spacing: var(--track-tight);
-  font-variant-numeric: var(--num-tabular);
+.kpi-ghead:hover { background: var(--n-50); }
+.kpi-ghead-lock {
+  display: flex; flex-direction: column; justify-content: center;
+  line-height: 1.3;
+  min-width: 0;
 }
-.kpi-rl-badge {
-  font-size: 11px; font-weight: 700;
+.kpi-ghead-name {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+  color: var(--n-800);
+  white-space: nowrap;
+}
+.kpi-ghead-sub {
+  font-size: 10px; color: var(--n-500); letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.kpi-ghead-cnt {
+  margin-left: auto; flex: none;
+  font-size: 10px; font-weight: 700;
+  color: var(--n-600);
+  background: var(--n-100);
+  border: 1px solid var(--n-200);
   border-radius: var(--rad-pill);
-  padding: 3px 10px;
-  border: 1px solid transparent;
-  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  line-height: 1.2;
 }
-.kpi-rl-badge-ok    { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
-.kpi-rl-badge-warn  { background: var(--amber-100); color: var(--amber-700); border-color: #F3D9AE; }
-.kpi-rl-badge-bad   { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
-.kpi-rl-badge-muted { background: var(--fill-off);  color: var(--text-muted); border-color: var(--border-default); }
-.kpi-rl-plain {
+.kpi-ghead.on {
+  background: var(--navy-700);
+  border-left-color: var(--navy-700);
+}
+.kpi-ghead.on .kpi-ghead-name { color: #ffffff; }
+.kpi-ghead.on .kpi-ghead-sub  { color: #B9C6DA; }
+.kpi-ghead.on .kpi-ghead-cnt {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+.kpi-gcard-members {
+  border-top: 1px solid var(--n-200);
+}
+/* Member row - 44px, two-line lockup (key + team + city). */
+.kpi-acct {
+  display: flex; align-items: center;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-top: 1px solid var(--n-100);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.kpi-acct:first-child { border-top: 0; }
+.kpi-acct:hover { background: var(--n-50); }
+.kpi-acct.on {
+  background: #EEF3FA;
+  border-left-color: var(--navy-700);
+}
+.kpi-acct-lock {
+  display: flex; flex-direction: column; justify-content: center;
+  min-width: 0;
+  line-height: 1.25;
+}
+.kpi-acct-key {
+  font-size: 12.5px; font-weight: 700;
+  color: var(--n-800);
+  white-space: nowrap;
+}
+.kpi-acct.on .kpi-acct-key { color: var(--navy-700); }
+.kpi-acct-desc {
+  font-size: 11px; color: var(--n-500);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* V7-19 SYSTEM status strip - hugs the folio foot. Quiet by design:
+   no card, no shadow, no border except the hairline top. */
+.kpi-folio-push { flex: 1 1 auto; min-height: 12px; }
+.kpi-sys {
+  border-top: 1px solid var(--n-200);
+  padding-top: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.kpi-sys-h {
+  font-size: 9.5px; letter-spacing: 0.1em;
+  color: var(--n-400); font-weight: 800;
+  margin-bottom: 2px;
+}
+.kpi-sys-r {
+  display: flex; align-items: center; gap: 8px;
+  height: 22px;
+  font-size: 11px; color: var(--n-600);
+}
+.kpi-sys-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green-500);
+  flex: none;
+}
+.kpi-sys-dot-ok   { background: var(--green-500); }
+.kpi-sys-dot-warn { background: var(--amber-500); }
+.kpi-sys-dot-bad  { background: var(--red-500); }
+.kpi-sys-k { flex: 1; white-space: nowrap; }
+.kpi-sys-v { font-weight: 600; color: var(--n-800); white-space: nowrap; }
+.kpi-sys-v-ok   { color: var(--green-700); }
+.kpi-sys-v-warn { color: var(--amber-700); }
+.kpi-sys-v-bad  { color: var(--red-700); }
+
+/* Freshness popover - plain-language coverage line + separator. */
+.kpi-fresh-pop-plain {
   font-size: 12px; color: var(--text-muted);
-  margin-top: var(--space-2);
   line-height: var(--lb-caption);
+  padding-bottom: 4px;
 }
+.kpi-fresh-pop-sep {
+  border-top: 1px dashed var(--border-subtle);
+  margin: 2px 0;
+}
+
 .kpi-qp-row {
   display: flex; align-items: center;
   gap: var(--space-2);
@@ -1475,28 +1284,62 @@
   color: var(--text-strong);
 }
 
-/* Mobile - shell adapts (GO-MOBILE full rework deferred) */
+/* Mobile - shell adapts. Folio collapses to a horizontal strip of
+   pills; the SYSTEM strip lands inline at the strip's end (V7-22).
+   The command bar wraps to two lines at this breakpoint. */
 @media (max-width: 1023px) {
   .kpi-cols { grid-template-columns: 1fr; }
+  .kpi-cmd { flex-wrap: wrap; padding: 10px 16px; row-gap: 8px; }
   .kpi-folio {
     flex-direction: row;
+    align-items: center;
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--border-subtle);
     padding: var(--space-2);
+    gap: 8px;
   }
-  .kpi-folio-h { display: none; }
-  .kpi-acct {
-    width: auto;
+  .kpi-folio-h, .kpi-folio-title { display: none; }
+  .kpi-folio-push { display: none; }
+  .kpi-gcard {
+    display: contents;
+    background: transparent; border: 0; box-shadow: none;
+  }
+  .kpi-gcard-members { display: contents; border-top: 0; }
+  .kpi-ghead {
+    width: auto; min-height: 40px; height: 40px;
+    padding: 0 12px;
     border-left: 0;
-    border-radius: var(--rad-pill);
     border: 1px solid var(--border-default);
-    min-height: 40px;
+    border-radius: var(--rad-pill);
+    background: var(--surface-card);
     flex: 0 0 auto;
   }
-  .kpi-acct.on { border-color: var(--kpi-accent); }
-  /* v5 line ~475 mobile hero override - preserves display-tier weight
-     without crowding the smaller viewport. */
+  .kpi-ghead.on { border-color: var(--kpi-accent); }
+  .kpi-ghead .kpi-ghead-sub { display: none; }
+  .kpi-acct {
+    width: auto;
+    height: 40px;
+    border-left: 0; border-top: 0;
+    border: 1px solid var(--border-default);
+    border-radius: var(--rad-pill);
+    background: var(--surface-card);
+    flex: 0 0 auto;
+    padding: 0 12px;
+  }
+  .kpi-acct.on { border-color: var(--kpi-accent); background: #EEF3FA; }
+  .kpi-acct .kpi-acct-desc { display: none; }
+  /* SYSTEM strip becomes a compact inline pill trailing the folio row. */
+  .kpi-sys {
+    border-top: 0;
+    padding-top: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .kpi-sys-h { display: none; }
   .kpi-hero-n { font-size: 32px; }
 }
 

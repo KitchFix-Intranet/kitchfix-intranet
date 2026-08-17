@@ -189,7 +189,7 @@ export function RangeMenu({
     <div className="kpi-rmenu" ref={rootRef}>
       <button
         type="button"
-        className={`kpi-rmenu-trigger ${open ? "on" : ""}`}
+        className={`kpi-ctl kpi-ctl-sel kpi-rmenu-trigger ${open ? "on" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open ? "true" : "false"}
         onClick={() => setOpen(o => !o)}
@@ -202,7 +202,6 @@ export function RangeMenu({
           <line x1="3"  y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="1.75" />
         </svg>
         <span className="kpi-rmenu-label">{label}</span>
-        <span className="kpi-rmenu-caret" aria-hidden="true">▾</span>
       </button>
       {open && (
         <div className="kpi-rmenu-pop" role="dialog" aria-label="Select date range">

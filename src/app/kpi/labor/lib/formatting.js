@@ -1,8 +1,7 @@
 // src/app/kpi/labor/lib/formatting.js
 //
-// Shared formatters for the KPI Labor surface. Extracted from page.js
-// as part of D2 (§CONVENTIONS component split). Consumed by page.js,
-// Shell, FolioRail, ScopeBand, ContextRail.
+// Shared formatters for the KPI Labor surface. Consumed by page.js and
+// the section components.
 
 export function fmt$(v) {
   if (v == null) return "—";
@@ -44,4 +43,14 @@ export function freshnessTint(hrs) {
   if (hrs < 30) return "kpi-chip-fresh";
   if (hrs < 54) return "kpi-chip-warm";
   return "kpi-chip-stale";
+}
+
+// Print-time scope line - kept for the @media print header on the
+// dashboard.
+export function buildPrintScopeLine({ start, end, workerRoster, selectedWorkers, redact }) {
+  const total = workerRoster?.length ?? 0;
+  const shown = selectedWorkers && selectedWorkers.size > 0 ? selectedWorkers.size : total;
+  const workers = shown === total ? `all ${total} workers` : `${shown} of ${total} workers`;
+  const names = redact ? "names hidden" : "names shown";
+  return `Range ${fmtDate(start)} – ${fmtDate(end)} · ${workers} · ${names}`;
 }
