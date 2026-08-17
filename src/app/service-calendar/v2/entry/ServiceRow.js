@@ -29,7 +29,7 @@ import {
 import { fmt$ } from "../../season/format";
 
 export default function ServiceRow({
-  svc, day, editValues, touched, flashDelay, onChange,
+  svc, day, editValues, touched, flashDelay, onChange, onFocus, onBlur,
   hideAmount = false, hideRate = false, readOnly = false,
   // sc-bulk-ui PR 2 item 2 (2026-08-03, owner ruling): annotation
   // text tucked under the service name when this row is off-schedule
@@ -72,6 +72,8 @@ export default function ServiceRow({
         value={editVal}
         disabled={readOnly}
         onChange={e => onChange(svc.colIndex, e.target.value)}
+        onFocus={onFocus ? () => onFocus(svc.colIndex) : undefined}
+        onBlur={onBlur ? () => onBlur(svc.colIndex) : undefined}
       />
       {chip ? (
         <span className={`sc-day-row-delta ${chip.cls}`}>{chip.text}</span>

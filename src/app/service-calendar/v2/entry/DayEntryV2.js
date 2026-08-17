@@ -205,6 +205,10 @@ import "./dayEntryV2.css";
 // P3-A (2026-07-25): accent-rail primitive for the failure banner
 // + dialog top-rails.
 import "../accentRail.css";
+// PR-H (2026-08-17): redesigned entry-ledger rail. Per-meal path
+// only; BillRailFee (fee-no-dollar) keeps its BillRail.
+import EntryLedgerRail from "./EntryLedgerRail";
+import "./entryLedgerRail.css";
 
 function DayEntryV2({
   day,
@@ -273,6 +277,10 @@ function DayEntryV2({
   const [historyEntries, setHistoryEntries] = useState(day.historyEntries || []);
   const [isPostingNote, setIsPostingNote] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(new Set());
+  // PR-H (2026-08-17): the rail's "lit ring" state - which service's
+  // input the operator is currently focused on. Set on focus, cleared
+  // on blur. Passed to EntryLedgerRail; not consumed anywhere else.
+  const [focusedColIndex, setFocusedColIndex] = useState(null);
   const [justSaved, setJustSaved] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showNoServiceConfirm, setShowNoServiceConfirm] = useState(false);
@@ -1595,6 +1603,7 @@ function DayEntryV2({
               flashMap={flashMap}
               accountSegment={accountSegment}
               onChange={handleChange}
+              onFocus={setFocusedColIndex}
               onFillProjections={fillGroupWithProjections}
               onClearToPreMatch={clearGroupToPreMatch}
               hasMatchSnapshot={!!matchSnapshots[group.name]}
@@ -1716,19 +1725,21 @@ function DayEntryV2({
               feeServedTotals={feeServedTotals}
             />
           ) : (
-            <BillRail
-              summary={summary}
-              enteredTotals={enteredTotals}
-              dayProjection={dayProjection}
-              hasTouchedAny={hasTouchedAny}
-              enteredCount={enteredCount}
-              totalToEnter={totalToEnter}
-              serviceGroups={railGroups}
+            // PR-H (2026-08-17): EntryLedgerRail replaces BillRail on
+            // the per-meal path. serviceGroups (not railGroups) is
+            // passed so the rail owns the running/not-running partition
+            // internally per the Best design (folded disclosure).
+            <EntryLedgerRail
+              serviceGroups={serviceGroups}
               day={day}
               editValues={editValues}
               touched={touched}
-              groupSummary={groupSummary}
-              projectedGroupSummary={projectedGroupSummary}
+              focusedColIndex={focusedColIndex}
+              enteredTotals={enteredTotals}
+              dayProjection={dayProjection}
+              enteredCount={enteredCount}
+              totalToEnter={totalToEnter}
+              hasTouchedAny={hasTouchedAny}
             />
           )}
         </aside>
@@ -1858,7 +1869,7 @@ function DayEntryV2({
 // CSS wrapper class via the same variant.
 export function GroupBlock({
   group, day, editValues, touched, flashMap, accountSegment,
-  onChange, onFillProjections,
+  onChange, onFocus, onBlur, onFillProjections,
   // Match/Clear (2026-07-28): Clear renders when parent flags a live
   // snapshot for this group. onClearToPreMatch restores the group to
   // pre-Match state. Both undefined = pre-2026-08 caller (bulk paths
@@ -1954,6 +1965,8 @@ export function GroupBlock({
             touched={touched}
             flashDelay={flashMap?.get(s.colIndex)}
             onChange={onChange}
+            onFocus={onFocus}
+            onBlur={onBlur}
             hideAmount={hideAmount}
             hideRate={hideRate}
             readOnly={readOnly}

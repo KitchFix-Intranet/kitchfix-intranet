@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix - Entry ledger, good / better / best</title>
+<style>
+  :root{
+    --panel:#17304F; --panel-2:#122741; --panel-3:#1D3A5E;
+    --rule:rgba(255,255,255,.09); --rule-2:rgba(255,255,255,.16);
+    --ink:#FFFFFF; --ink-2:#C3D2E8; --ink-3:#8CA1C2; --ink-4:#5E7599;
+    --green:#4FBF85; --green-dim:#2E7D55; --green-btn:#1F6B41;
+    --amber:#E5A054; --amber-dim:rgba(229,160,84,.14);
+    --page:#EEF1F5; --card:#fff; --n900:#0F172A; --n700:#475569;
+    --n500:#64748B; --n300:#CBD5E1; --n200:#E2E8F0; --n100:#F1F5F9;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);font-family:var(--ui);color:var(--n900);
+       -webkit-font-smoothing:antialiased;padding:40px 24px 100px}
+  .wrap{max-width:1200px;margin:0 auto}
+  .eyebrow{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500)}
+  h1{font-size:29px;line-height:36px;font-weight:800;letter-spacing:-.01em;margin-top:8px}
+  .sub{font-size:14px;line-height:20px;color:var(--n700);margin-top:10px;max-width:78ch}
+  .sub b{color:var(--n900);font-weight:600}
+  .rule{height:1px;background:var(--n200);margin:44px 0 28px}
+  h2.sec{font-size:11px;line-height:16px;font-weight:700;letter-spacing:.06em;
+         text-transform:uppercase;color:var(--n500);margin-bottom:18px}
+
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;align-items:start}
+  .col{min-width:0}
+  .tag{display:inline-block;font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;
+       text-transform:uppercase;padding:4px 9px;border-radius:999px;margin-bottom:9px}
+  .tag.g{background:var(--n100);color:var(--n500)}
+  .tag.b{background:#E6EEF9;color:#1E4A86}
+  .tag.x{background:#153968;color:#fff}
+  .col h3{font-size:19px;line-height:24px;font-weight:700;letter-spacing:-.01em}
+  .col .why{font-size:13px;line-height:20px;color:var(--n700);margin-top:6px;margin-bottom:16px}
+  .stack{display:flex;flex-direction:column;gap:20px}
+  .statelbl{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+            text-transform:uppercase;color:var(--n500);margin-bottom:7px}
+
+  /* ================= PANEL ================= */
+  .p{background:var(--panel);border-radius:14px;overflow:hidden;color:var(--ink);
+     box-shadow:0 10px 28px rgba(15,23,42,.18)}
+
+  .ph{padding:18px 18px 16px}
+  .kick{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.07em;
+        text-transform:uppercase;color:var(--ink-3)}
+  .big{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:32px;line-height:38px;
+       font-weight:800;letter-spacing:-.025em;margin-top:5px}
+  .big.sm{font-size:26px;line-height:32px}
+  .undr{font-size:12px;line-height:16px;color:var(--ink-3);margin-top:5px}
+  .undr b{color:var(--ink-2);font-weight:600}
+  .bar{height:5px;border-radius:999px;background:rgba(255,255,255,.13);margin-top:13px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--green);border-radius:999px;
+         transition:width .28s cubic-bezier(.2,0,0,1)}
+  .next{display:flex;align-items:baseline;gap:7px;margin-top:12px;font-size:12px;line-height:16px;
+        color:var(--ink-3)}
+  .next b{color:var(--ink);font-weight:700;font-size:13px}
+
+  .grp{display:flex;align-items:center;gap:9px;padding:16px 18px 8px}
+  .grp span{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.07em;
+            text-transform:uppercase;color:var(--ink-4);white-space:nowrap}
+  .grp i{flex:1;height:1px;background:var(--rule)}
+
+  /* single-line row: dot | name | qty | amount */
+  .r{display:grid;grid-template-columns:14px 1fr 46px 74px;column-gap:10px;align-items:center;
+     padding:8px 18px}
+  .r .dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink-4);
+          justify-self:center}
+  .r .nm{font-size:13px;line-height:18px;color:var(--ink-2);white-space:nowrap;
+         overflow:hidden;text-overflow:ellipsis}
+  .r .q{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+        font-size:14px;line-height:18px;font-weight:700;color:var(--ink-2)}
+  .r .a{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+        font-size:12px;line-height:18px;color:var(--ink-4)}
+
+  .r.done .dot{background:var(--green);border-color:var(--green)}
+  .r.done .nm{color:var(--ink);font-weight:500}
+  .r.done .q{color:var(--ink);font-size:15px}
+  .r.done .a{color:var(--ink-3)}
+  .r.now{background:rgba(255,255,255,.05)}
+  .r.now .dot{border-color:var(--green);box-shadow:0 0 0 3px rgba(79,191,133,.16)}
+  .r.now .nm{color:var(--ink);font-weight:600}
+
+  .flag{grid-column:2 / -1;display:flex;align-items:center;gap:7px;margin-top:5px;
+        background:var(--amber-dim);border-left:2px solid var(--amber);border-radius:0 4px 4px 0;
+        padding:5px 9px;font-size:11px;line-height:15px;color:#F0C48A}
+  .flag b{color:var(--amber);font-weight:700}
+
+  .tot{padding:14px 18px 16px;border-top:1px solid var(--rule-2);background:var(--panel-2)}
+  .tot .lbl{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.07em;
+            text-transform:uppercase;color:var(--ink-3)}
+  .tot .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:24px;
+            line-height:30px;font-weight:800;letter-spacing:-.02em;margin-top:3px}
+  .tot .vs{font-size:11px;line-height:16px;color:var(--ink-4);margin-top:3px}
+  .tot .vs b{color:var(--ink-3);font-weight:600}
+
+  .fold{padding:11px 18px;border-top:1px solid var(--rule)}
+  .fold button{width:100%;display:flex;justify-content:space-between;align-items:center;
+               background:none;border:none;cursor:pointer;font-family:inherit;font-size:12px;
+               line-height:16px;color:var(--ink-4)}
+  .fold button:hover{color:var(--ink-2)}
+  .fold .cta{font-size:10px;font-weight:800;letter-spacing:.06em}
+
+  .pf{padding:14px 18px;background:var(--panel-2);display:flex;justify-content:flex-end;gap:9px}
+  .btn{font-family:inherit;font-size:13px;line-height:20px;font-weight:700;border:none;
+       border-radius:7px;padding:10px 18px;background:var(--green-btn);color:#fff;cursor:pointer}
+  .btn[disabled]{background:rgba(255,255,255,.11);color:var(--ink-4);cursor:not-allowed}
+  .btn.ghost{background:transparent;border:1px solid var(--rule-2);color:var(--ink-2)}
+
+  .ready{padding:16px 18px;background:linear-gradient(180deg,rgba(79,191,133,.14),transparent);
+         border-top:1px solid rgba(79,191,133,.3)}
+  .ready .hd{display:flex;align-items:center;gap:8px;font-size:12px;line-height:16px;
+             font-weight:700;color:var(--green)}
+  .ready .ck{width:16px;height:16px;border-radius:50%;background:var(--green);color:#0B2418;
+             display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900}
+
+  .note{background:var(--card);border:1px solid var(--n200);border-radius:12px;
+        padding:18px 20px;margin-top:14px}
+  .note h4{font-size:11px;line-height:16px;font-weight:800;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500);margin-bottom:10px}
+  .note ul{list-style:none}
+  .note li{font-size:13px;line-height:20px;color:var(--n700);padding-left:16px;
+           position:relative;margin-bottom:7px}
+  .note li:last-child{margin-bottom:0}
+  .note li:before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;
+                  border-radius:50%;background:var(--n300)}
+  .note li b{color:var(--n900);font-weight:600}
+  @media(max-width:1000px){ .grid3{grid-template-columns:1fr;gap:36px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KitchFix Ops Hub · Service Calendar · Day entry rail</div>
+  <h1>Entry ledger - good, better, best</h1>
+  <p class="sub">Three escalating answers. All of them start from one question I could not
+     get past: <b>the chef is entering counts, so why is the largest number on the panel a
+     dollar figure they cannot act on?</b> Money still matters here, but as an error-catcher
+     rather than a goal. Each direction takes that further than the last.</p>
+
+  <div class="rule"></div>
+  <h2 class="sec">Shown at the same moment: 3 of 6 services entered</h2>
+
+  <div class="grid3">
+
+    <!-- ==================== GOOD ==================== -->
+    <div class="col">
+      <span class="tag g">Good</span>
+      <h3>Statement</h3>
+      <p class="why">Stop being a table. Column headers exist to disambiguate, and with one
+        count and one dollar figure per line there is nothing to disambiguate. Kill the
+        headers, kill the tildes, let type weight say what is entered and what is projected.
+        Total moves to the bottom, where a receipt puts it.</p>
+
+      <div class="p">
+        <div class="ph">
+          <div class="kick">Projected today</div>
+          <div class="big sm">$4,276.63</div>
+          <div class="bar"><i style="width:50%"></i></div>
+          <div class="undr">3 of 6 entered</div>
+        </div>
+
+        <div class="grp"><span>Minor League</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">104</span><span class="a">1,341.06</span></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Lunch</span><span class="q">112</span><span class="a">1,444.24</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Coffee Service</span><span class="q">1</span><span class="a">511.05</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Fountain Bev</span><span class="q">1</span><span class="a">283.92</span></div>
+
+        <div class="grp"><span>Rehab</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">25</span><span class="a">322.38</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Lunch</span><span class="q">25</span><span class="a">322.38</span></div>
+
+        <div class="fold"><button>4 services not running today <span class="cta">SHOW</span></button></div>
+
+        <div class="tot">
+          <div class="lbl">Entered so far</div>
+          <div class="val">$3,107.68</div>
+        </div>
+        <div class="pf"><button class="btn">Confirm and save</button></div>
+      </div>
+    </div>
+
+    <!-- ==================== BETTER ==================== -->
+    <div class="col">
+      <span class="tag b">Better</span>
+      <h3>Progress</h3>
+      <p class="why">Flip the hierarchy. The chef's real question is "am I done?", so
+        completion leads and money supports. Each service is a state, not a line item - filled
+        dot for entered, ring for pending, and the one you are on is lit. The panel fills in
+        as you type instead of sitting there being a report.</p>
+
+      <div class="p">
+        <div class="ph">
+          <div class="kick">Entry progress</div>
+          <div class="big">3 <span style="font-size:20px;color:var(--ink-3);font-weight:600">of 6</span></div>
+          <div class="bar"><i style="width:50%"></i></div>
+          <div class="next"><span>Next up</span><b>Coffee Service</b></div>
+        </div>
+
+        <div class="grp"><span>Minor League</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">104</span><span class="a">1,341.06</span></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Lunch</span><span class="q">112</span><span class="a">1,444.24</span></div>
+        <div class="r now"><span class="dot"></span><span class="nm">Coffee Service</span><span class="q">1</span><span class="a">511.05</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Fountain Bev</span><span class="q">1</span><span class="a">283.92</span></div>
+
+        <div class="grp"><span>Rehab</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">25</span><span class="a">322.38</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Lunch</span><span class="q">25</span><span class="a">322.38</span></div>
+
+        <div class="fold"><button>4 services not running today <span class="cta">SHOW</span></button></div>
+
+        <div class="tot">
+          <div class="lbl">Entered so far</div>
+          <div class="val">$3,107.68</div>
+          <div class="vs">of <b>$4,276.63</b> projected</div>
+        </div>
+        <div class="pf"><button class="btn">Confirm and save</button></div>
+      </div>
+    </div>
+
+    <!-- ==================== BEST ==================== -->
+    <div class="col">
+      <span class="tag x">Best</span>
+      <h3>Live receipt</h3>
+      <p class="why">Everything in Better, plus the thing none of the others do: <b>it checks
+        your work.</b> When an entered count lands well off its projection, the row says so
+        before you save. That is the mistake this panel is uniquely placed to catch, and
+        catching it is worth more than any amount of tidying.</p>
+
+      <div class="p">
+        <div class="ph">
+          <div class="kick">Entry progress</div>
+          <div class="big">3 <span style="font-size:20px;color:var(--ink-3);font-weight:600">of 6</span></div>
+          <div class="bar"><i style="width:50%"></i></div>
+          <div class="next"><span>Next up</span><b>Coffee Service</b></div>
+        </div>
+
+        <div class="grp"><span>Minor League</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">104</span><span class="a">1,341.06</span></div>
+        <div class="r done" style="padding-bottom:10px">
+          <span class="dot"></span><span class="nm">Lunch</span><span class="q">11</span><span class="a">141.79</span>
+          <span class="flag"><b>Check this</b> projected 110, entered 11</span>
+        </div>
+        <div class="r now"><span class="dot"></span><span class="nm">Coffee Service</span><span class="q">1</span><span class="a">511.05</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Fountain Bev</span><span class="q">1</span><span class="a">283.92</span></div>
+
+        <div class="grp"><span>Rehab</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">25</span><span class="a">322.38</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Lunch</span><span class="q">25</span><span class="a">322.38</span></div>
+
+        <div class="fold"><button>4 services not running today <span class="cta">SHOW</span></button></div>
+
+        <div class="tot">
+          <div class="lbl">Entered so far</div>
+          <div class="val">$1,805.23</div>
+          <div class="vs">of <b>$4,276.63</b> projected</div>
+        </div>
+        <div class="pf"><button class="btn">Confirm and save</button></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="rule"></div>
+  <h2 class="sec">Two more moments, for the direction that earns them</h2>
+
+  <div class="grid3">
+    <div class="col">
+      <div class="statelbl">Best - nothing entered yet</div>
+      <div class="p">
+        <div class="ph">
+          <div class="kick">Entry progress</div>
+          <div class="big">0 <span style="font-size:20px;color:var(--ink-3);font-weight:600">of 6</span></div>
+          <div class="bar"><i style="width:0%"></i></div>
+          <div class="next"><span>Start with</span><b>Breakfast</b></div>
+        </div>
+        <div class="grp"><span>Minor League</span><i></i></div>
+        <div class="r now"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">110</span><span class="a">1,418.45</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Lunch</span><span class="q">110</span><span class="a">1,418.45</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Coffee Service</span><span class="q">1</span><span class="a">511.05</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Fountain Bev</span><span class="q">1</span><span class="a">283.92</span></div>
+        <div class="grp"><span>Rehab</span><i></i></div>
+        <div class="r"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">25</span><span class="a">322.38</span></div>
+        <div class="r"><span class="dot"></span><span class="nm">Lunch</span><span class="q">25</span><span class="a">322.38</span></div>
+        <div class="fold"><button>4 services not running today <span class="cta">SHOW</span></button></div>
+        <div class="tot">
+          <div class="lbl">Projected today</div>
+          <div class="val">$4,276.63</div>
+          <div class="vs">nothing entered yet</div>
+        </div>
+        <div class="pf"><button class="btn" disabled>Confirm and save</button></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="statelbl">Best - all six in, ready to save</div>
+      <div class="p">
+        <div class="ph">
+          <div class="kick">Entry progress</div>
+          <div class="big">6 <span style="font-size:20px;color:var(--ink-3);font-weight:600">of 6</span></div>
+          <div class="bar"><i style="width:100%"></i></div>
+        </div>
+        <div class="ready">
+          <div class="hd"><span class="ck">&#10003;</span> Every service entered</div>
+        </div>
+        <div class="grp"><span>Minor League</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">104</span><span class="a">1,341.06</span></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Lunch</span><span class="q">112</span><span class="a">1,444.24</span></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Coffee Service</span><span class="q">1</span><span class="a">511.05</span></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Fountain Bev</span><span class="q">1</span><span class="a">283.92</span></div>
+        <div class="grp"><span>Rehab</span><i></i></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Breakfast</span><span class="q">26</span><span class="a">335.27</span></div>
+        <div class="r done"><span class="dot"></span><span class="nm">Lunch</span><span class="q">24</span><span class="a">309.48</span></div>
+        <div class="fold"><button>4 services not running today <span class="cta">SHOW</span></button></div>
+        <div class="tot">
+          <div class="lbl">Total entered</div>
+          <div class="val">$4,225.02</div>
+          <div class="vs"><b>$51.61 under</b> projection</div>
+        </div>
+        <div class="pf">
+          <button class="btn ghost">Back</button>
+          <button class="btn">Confirm and save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="note" style="margin-top:26px">
+        <h4>What I changed and why</h4>
+        <ul>
+          <li><b>Killed the column headers.</b> They were the misalignment you spotted, and
+            they were never earning their line. One count and one dollar figure per row is
+            self-evident.</li>
+          <li><b>Killed the tildes.</b> Twelve repetitions of "approximately" is noise.
+            Projected versus entered is now carried by weight and colour, which the eye reads
+            without decoding.</li>
+          <li><b>Dropped the dollar signs from rows.</b> Said once, at the total.</li>
+          <li><b>State by dot, not colour alone.</b> Filled means entered, ring means pending,
+            lit ring means you are here. Passes the colour-blind test and reads faster than
+            text ever would.</li>
+          <li><b>Total moved to the bottom.</b> A receipt totals at the end. It also puts the
+            number next to the button that commits it.</li>
+          <li><b>The four dead rows fold.</b> They were 40% of the height, saying nothing.</li>
+          <li><b>Variance flagging (Best only).</b> A count far off its projection gets caught
+            before save, not after billing. Typing 11 instead of 110 is the realistic mistake
+            here, and it is invisible in a wall of numbers.</li>
+        </ul>
+      </div>
+      <div class="note">
+        <h4>My recommendation</h4>
+        <ul>
+          <li><b>Best</b>, and not for the polish. The variance check is the only thing in
+            these three renders that prevents an error rather than presenting one more
+            neatly. Everything else is craft; that is function.</li>
+          <li>The threshold needs a ruling from you - percentage off projection, or absolute
+            count, and how far off before it speaks. It should be rare enough that people
+            read it when it appears.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

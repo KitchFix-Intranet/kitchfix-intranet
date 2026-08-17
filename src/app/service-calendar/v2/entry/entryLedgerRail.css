@@ -1,0 +1,344 @@
+/* ═══════════════════════════════════════════════════════════════════
+   entryLedgerRail - the redesigned day-entry rail (PR-H, 2026-08-17).
+   ═══════════════════════════════════════════════════════════════════
+
+   Design authority: docs/design/KF_LEDGER_GOOD_BETTER_BEST.html "Best".
+   Token-only per PR-H fence: no raw hex, no new px literals for type,
+   spacing, or radius. Fixed pixel values below are intrinsic shape
+   geometry (dot diameter, ring stroke, bar height, grid columns).
+
+   Container is the parent's `.sc-v2-entry-rail` aside. This file
+   styles the inner `.sc-elr-*` tree only.
+   ─────────────────────────────────────────────────────────────────── */
+
+.sc-elr-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-4);
+  min-height: 100%;
+  padding-bottom: var(--sc2-space-4);
+}
+
+/* ─── Header: kick / hero / bar / next-up ─── */
+
+.sc-elr-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.sc-elr-kick {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-subtle);
+}
+.sc-elr-hero {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.sc-elr-hero-count {
+  font-size: var(--sc2-size-rail-total);
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-rail-text-strong);
+}
+.sc-elr-hero-of {
+  font-size: var(--sc2-size-h3);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-rail-text-muted);
+}
+.sc-elr-bar {
+  height: 6px;
+  background: var(--sc2-rail-bg-shade);
+  border-radius: var(--sc2-radius-pill);
+  overflow: hidden;
+}
+.sc-elr-bar-fill {
+  height: 100%;
+  background: var(--sc2-rail-accent-success);
+  border-radius: var(--sc2-radius-pill);
+  transition: width var(--duration-base) var(--ease-standard);
+}
+.sc-elr-next {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+}
+.sc-elr-next b {
+  color: var(--sc2-rail-text-strong);
+  font-weight: var(--sc2-wt-bold);
+  font-size: var(--sc2-size-body);
+}
+.sc-elr-next-quiet {
+  color: var(--sc2-rail-text-ghost);
+  font-style: italic;
+}
+
+/* ─── Ready block (all entered) ─── */
+
+.sc-elr-ready {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-3);
+  border-radius: var(--sc2-radius-cell);
+  background: var(--sc2-rail-bg-shade);
+  border: var(--sc2-border-thin) solid var(--sc2-rail-accent-success);
+}
+.sc-elr-ready-check {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--sc2-radius-pill);
+  background: var(--sc2-rail-accent-success);
+  color: var(--sc2-rail-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-display);
+  flex-shrink: 0;
+}
+.sc-elr-ready-msg {
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-rail-accent-success);
+}
+
+/* ─── Groups + rows ─── */
+
+.sc-elr-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
+}
+.sc-elr-group {
+  display: flex;
+  flex-direction: column;
+}
+.sc-elr-grp-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-2) 0 var(--sc2-space-1) 0;
+}
+.sc-elr-grp-name {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-section);
+  white-space: nowrap;
+}
+.sc-elr-grp-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--sc2-rail-divider);
+}
+
+/* Single-line row: dot | name | qty | amount. One grid template so
+   columns align across every row in every group by construction. */
+.sc-elr-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 46px 74px;
+  column-gap: var(--sc2-space-2);
+  align-items: center;
+  padding: var(--sc2-space-2) 0;
+}
+.sc-elr-name {
+  font-size: var(--sc2-size-body);
+  color: var(--sc2-rail-text-item);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sc-elr-qty {
+  font-family: var(--sc2-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-rail-text-item);
+}
+.sc-elr-amount {
+  font-family: var(--sc2-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-ghost);
+}
+
+/* State-by-shape (color-alone rule):
+   pending = open ring
+   done    = filled disc
+   focus   = open ring with a lit halo ring around it */
+.sc-elr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sc2-rail-text-subtle);
+  background: transparent;
+  justify-self: center;
+}
+.sc-elr-dot--done {
+  background: var(--sc2-rail-accent-success);
+  border-color: var(--sc2-rail-accent-success);
+}
+.sc-elr-dot--focus {
+  border-color: var(--sc2-rail-accent-success);
+  box-shadow: 0 0 0 3px var(--sc2-rail-focus-halo);
+}
+.sc-elr-dot--muted {
+  border-color: var(--sc2-rail-text-ghost);
+}
+
+/* Row state emphasis (shape carries the primary signal; these
+   secondary treatments help the sighted eye scan). */
+.sc-elr-row--done .sc-elr-name {
+  color: var(--sc2-rail-text-strong);
+  font-weight: var(--sc2-wt-medium);
+}
+.sc-elr-row--done .sc-elr-qty {
+  color: var(--sc2-rail-text-strong);
+}
+.sc-elr-row--done .sc-elr-amount {
+  color: var(--sc2-rail-text-muted);
+}
+.sc-elr-row--focus {
+  background: var(--sc2-rail-card-bg);
+  border-radius: var(--sc2-radius-cell);
+  margin: 0 calc(var(--sc2-space-2) * -1);
+  padding-left: var(--sc2-space-2);
+  padding-right: var(--sc2-space-2);
+}
+.sc-elr-row--focus .sc-elr-name {
+  color: var(--sc2-rail-text-strong);
+  font-weight: var(--sc2-wt-semibold);
+}
+.sc-elr-row--pending .sc-elr-name {
+  color: var(--sc2-rail-text-item);
+}
+.sc-elr-row--pending .sc-elr-qty,
+.sc-elr-row--pending .sc-elr-amount {
+  color: var(--sc2-rail-text-ghost);
+}
+
+/* Variance advisory (digit-drop). Sits inline under the row it
+   applies to. Amber = notice, not alarm. Row keeps its state; the
+   flag adds one span to the grid on a new line via grid-column. */
+.sc-elr-row--flagged {
+  padding-bottom: var(--sc2-space-1);
+}
+.sc-elr-flag {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  margin-top: var(--sc2-space-1);
+  padding: var(--sc2-space-1) var(--sc2-space-2);
+  border-left: 2px solid var(--sc2-rail-accent-warn);
+  border-radius: 0 var(--sc2-radius-cell) var(--sc2-radius-cell) 0;
+  background: var(--sc2-rail-flag-bg);
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-accent-warn);
+  line-height: 1.4;
+}
+
+/* ─── Fold (not-running services) ─── */
+
+.sc-elr-fold {
+  padding-top: var(--sc2-space-3);
+  border-top: var(--sc2-border-thin) solid var(--sc2-rail-divider);
+}
+.sc-elr-fold-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-ghost);
+  padding: 0;
+}
+.sc-elr-fold-toggle:hover,
+.sc-elr-fold-toggle:focus-visible {
+  color: var(--sc2-rail-text-muted);
+  outline: none;
+}
+.sc-elr-fold-cta {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  color: var(--sc2-rail-text-subtle);
+}
+.sc-elr-fold-body {
+  padding-top: var(--sc2-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.sc-elr-fold-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+}
+.sc-elr-fold-group-name {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-subtle);
+}
+.sc-elr-fold-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  column-gap: var(--sc2-space-2);
+  align-items: center;
+  color: var(--sc2-rail-text-ghost);
+  font-size: var(--sc2-size-caption);
+}
+
+/* ─── Total block (at the bottom of the rail) ─── */
+
+.sc-elr-total {
+  margin-top: auto;
+  padding: var(--sc2-space-3);
+  border-top: var(--sc2-border-thin) solid var(--sc2-rail-border);
+  background: var(--sc2-rail-bg-shade);
+  border-radius: var(--sc2-radius-cell);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+}
+.sc-elr-total-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sc2-rail-text-subtle);
+}
+.sc-elr-total-value {
+  font-family: var(--sc2-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--sc2-size-rail-total);
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-rail-text-strong);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.sc-elr-total-vs {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-ghost);
+}
+.sc-elr-total-vs b {
+  color: var(--sc2-rail-text-item);
+  font-weight: var(--sc2-wt-semibold);
+}
