@@ -2210,6 +2210,24 @@
 /* ── V9 WEEK TABLE (V9-1..V9-23) ────────────────────────────────
    Period bands are data rows (V9-8); subtotal rows retire (V9-9);
    Coverage column deleted (V9-1); every row has vs-budget (V9-4). */
+
+/* V25-2 scope note - sits above the table on aggregate views where
+   an envelope member is excluded from the roll-up. Reader learns why
+   the compare is population-matched before they read a variance. */
+.kpi-tbl-scope {
+  font-size: var(--kpi-size-caption);
+  color: var(--n-700);
+  padding: var(--kpi-space-2) var(--kpi-space-3);
+  background: var(--n-50);
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-6);
+  margin-bottom: var(--kpi-space-2);
+  line-height: 1.5;
+}
+.kpi-tbl-notbudgeted {
+  font-style: normal; letter-spacing: 0;
+}
+
 .kpi-tbl-wrap {
   border: 1px solid var(--n-300);
   border-radius: 12px;

@@ -230,6 +230,20 @@ export default function KpiLaborPage() {
     return data.actuals.filter(r => selectedWorkers.has(r.worker_id));
   }, [data, selectedWorkers]);
 
+  // V25-1..V25-3 - aggregate roll-up POPULATION must match aggregate
+  // budget POPULATION. When the account is a pseudo-key (ALL/EAST/WEST)
+  // the server ships `aggregate_excluded_members` (envelope accounts
+  // excluded from the aggregate budget). Rollup sums (week.amount,
+  // grand.amount, totals) must exclude these members so both sides of
+  // every variance compare like with like. The excluded rows are STILL
+  // pushed into worker_rows so the aggregate drill can render them per
+  // V25-2 (envelope row is never hidden).
+  const aggregateExcludedSet = useMemo(
+    () => new Set(data?.aggregate_excluded_members || []),
+    [data]
+  );
+  const excludedFromRollup = (r) => aggregateExcludedSet.has(r.account_key);
+
   // ── weeksInRange: unique week_start values, sorted desc ──────
   // ONE canonical week count. Board + budget-for-range + pace calc all
   // read this. Never read grouped.length as "week count" (that's period
@@ -255,6 +269,11 @@ export default function KpiLaborPage() {
         });
       }
       const w = byWeek.get(wk);
+      // Drill payload gets EVERY row; rollup sums drop excluded members
+      // so the vs-budget compare stays population-matched (V25-3).
+      w.worker_rows.push(r);
+      w.coverage_states.add(r.coverage_state);
+      if (excludedFromRollup(r)) continue;
       w.hours_regular       += Number(r.hours_regular       || 0);
       w.hours_overtime      += Number(r.hours_overtime      || 0);
       w.hours_double_time   += Number(r.hours_double_time   || 0);
@@ -265,8 +284,6 @@ export default function KpiLaborPage() {
       w.dollars_premium_other += Number(r.dollars_premium_other || 0);
       w.amount                += Number(r.amount                || 0);
       w.hours_without_dollars += Number(r.hours_without_dollars || 0);
-      w.worker_rows.push(r);
-      w.coverage_states.add(r.coverage_state);
     }
     for (const w of byWeek.values()) {
       const states = [...w.coverage_states];
@@ -278,7 +295,7 @@ export default function KpiLaborPage() {
     }
     // Sort desc so the newest week (P9 today) appears first.
     return [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
-  }, [filteredActuals]);
+  }, [filteredActuals, aggregateExcludedSet]);
 
   const weeksInRange = weekAggregates.length; // canonical week count
 
@@ -753,6 +770,8 @@ export default function KpiLaborPage() {
           onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "" }) : null}
           rangeSelection={rangeSelectionEarly}
           resolvedPreset={resolvedPreset}
+          rolledUpMembers={data?.rolled_up_members || []}
+          aggregateExcludedMembers={data?.aggregate_excluded_members || []}
         />
       ) : null}
     </>

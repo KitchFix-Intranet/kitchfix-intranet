@@ -322,7 +322,11 @@ export function WeekTable({
   onPickAccount,         // (accountKey) => void   only for aggregate
   rangeSelection,        // { kind, value } from client
   resolvedPreset,
+  rolledUpMembers = [],           // V25-2 members in the aggregate roll-up
+  aggregateExcludedMembers = [],  // V25-2 envelope members excluded from the roll-up
 }) {
+  const excludedSet = useMemo(() => new Set(aggregateExcludedMembers), [aggregateExcludedMembers]);
+  const rolledUpCount = rolledUpMembers.length;
   const wrapRef = useRef(null);
   const [dense, setDense] = useState(false);
   useEffect(() => {
@@ -450,24 +454,38 @@ export function WeekTable({
     return start <= today && today <= end;
   }
 
-  // Grand row description
+  // Grand row description. V25-2: aggregate rows carry the roll-up
+  // account count (`N ACCOUNTS`) so the reader can see the population
+  // the roll-up covers matches the population in the vs-budget compare.
+  const acctSuffix = aggregateMode && rolledUpCount > 0
+    ? ` · ${rolledUpCount} ACCOUNT${rolledUpCount === 1 ? "" : "S"}`
+    : "";
   const totalDesc = (() => {
-    if (grouped.length === 0) return "TOTAL";
+    if (grouped.length === 0) return `TOTAL${acctSuffix}`;
     if (grouped.length === 1) {
       const g = grouped[0];
       if (g.groupHint?.kind === "period") {
-        return isPeriodInProgress(g, todayISO)
+        const base = isPeriodInProgress(g, todayISO)
           ? `TOTAL · PERIOD ${g.period_no} TO DATE`
           : `TOTAL · PERIOD ${g.period_no}`;
+        return `${base}${acctSuffix}`;
       }
       if (g.groupHint?.kind === "month") {
-        return `TOTAL · ${g.groupLabel}`;
+        return `TOTAL · ${g.groupLabel}${acctSuffix}`;
       }
     }
     const totalWeeks = grouped.reduce((n, g) => n + g.weeks.length, 0);
     const isMonth = grouped[0]?.groupHint?.kind === "month";
-    return `TOTAL · ${grouped.length} ${isMonth ? "MONTH" : "PERIOD"}${grouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}`;
+    return `TOTAL · ${grouped.length} ${isMonth ? "MONTH" : "PERIOD"}${grouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}${acctSuffix}`;
   })();
+
+  // V25-2 scope note. Renders above the table on aggregate views where
+  // one or more members are excluded from the roll-up (today: envelope-
+  // based accounts). Reader learns why the two sides of the compare use
+  // the same population before they read a variance.
+  const scopeNote = aggregateMode && aggregateExcludedMembers.length > 0 && rolledUpCount > 0
+    ? `Portfolio figures cover ${rolledUpCount} accounts. ${aggregateExcludedMembers.join(", ")} is envelope-based and is excluded from both spend and budget so the two sides compare like with like.`
+    : null;
 
   // Grand budget = sum of period budgets covered by the range.
   const grandBudget = (() => {
@@ -534,6 +552,9 @@ export function WeekTable({
         <HelpPop />
       </div>
 
+      {scopeNote && (
+        <div className="kpi-tbl-scope" role="note">{scopeNote}</div>
+      )}
       <div className={`kpi-tbl-wrap ${dense ? "kpi-tbl-dense" : ""}`} ref={wrapRef}>
         <div className="kpi-tbl-scroll">
           <table className="kpi-tbl">
@@ -605,6 +626,7 @@ export function WeekTable({
                     onToggleWeek={onToggleWeek}
                     onPickAccount={onPickAccount}
                     columns={{ showHoliday, showUnpriced, showRate }}
+                    excludedSet={excludedSet}
                   />
                 );
               })}
@@ -652,6 +674,7 @@ function FragmentRows({
   expandedWeeks, onToggleWeek,
   onPickAccount,
   columns,
+  excludedSet,
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
@@ -743,6 +766,7 @@ function FragmentRows({
                 mode="account"
                 columns={columns}
                 onPickAccount={onPickAccount}
+                excludedFromRollup={excludedSet?.has(c.account_key)}
               />
             ))}
           </>
@@ -752,7 +776,7 @@ function FragmentRows({
   );
 }
 
-function ChildRow({ child, weekAmount, mode, columns, onPickAccount }) {
+function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFromRollup }) {
   const { showHoliday, showUnpriced, showRate } = columns;
   const sharePct = weekAmount > 0 ? Math.max(0, Math.min(100, (child.amount / weekAmount) * 100)) : 0;
   const rate = blendedRate({ dollars: child.amount, hours: child.hours });
@@ -762,8 +786,13 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount }) {
   const subLabel = mode === "account" ? child.account_key : (child.title || null);
   const sev = child.coverage_state;
   const showExceptionChip = sev !== "complete" && sev !== "no_labor";
+  // V25-2 - excluded account rows read `not budgeted` in muted text
+  // instead of a bar+dash lockup. Never a zero, never a grey bar.
+  const vsBudgetCell = excludedFromRollup
+    ? <td className="kpi-tbl-nil"><span className="kpi-vb-d kpi-vb-d-mute kpi-tbl-notbudgeted">not budgeted</span></td>
+    : <td className="kpi-tbl-nil"><span className="kpi-vb"><span className="kpi-vb-bar" /><span className="kpi-vb-d kpi-vb-d-mute">–</span></span></td>;
   return (
-    <tr className={`kpi-tbl-child ${showExceptionChip ? "kpi-tbl-attn" : ""}`}>
+    <tr className={`kpi-tbl-child ${showExceptionChip ? "kpi-tbl-attn" : ""} ${excludedFromRollup ? "kpi-tbl-child-excluded" : ""}`}>
       <td>
         {mode === "account" && onPickAccount ? (
           <button type="button" className="kpi-tbl-accountbtn" onClick={() => onPickAccount?.(child.account_key)}>
@@ -778,7 +807,7 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount }) {
           </span>
         )}
       </td>
-      <td className="kpi-tbl-nil"><span className="kpi-vb"><span className="kpi-vb-bar" /><span className="kpi-vb-d kpi-vb-d-mute">–</span></span></td>
+      {vsBudgetCell}
       <td className="num">{fmtHrs(child.hours)}</td>
       <td className={`num ${child.hours_ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_ot > 0.004 ? fmtHrs(child.hours_ot) : "–"}</td>
       {showHoliday && <td className={`num ${child.hours_holiday > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_holiday > 0.004 ? fmtHrs(child.hours_holiday) : "–"}</td>}
