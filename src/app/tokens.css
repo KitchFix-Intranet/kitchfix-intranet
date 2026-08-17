@@ -240,6 +240,66 @@
   --kpi-accent-strong: var(--n-800);
   --kpi-accent-tint:   var(--navy-50);
 
+  /* ---------- KPI scale layer (KPI_SCALE_SPEC S-1..S-6) ------------
+     House scale variable. Named --kf-* (kitchfix) not --kpi-* so other
+     surfaces can adopt it under a later ruling. Default 1 = no change.
+     `.kpi-page` sets it to 0.9 (kpi.css) to match Service Calendar's
+     density. Reverting the .kpi-page rule restores today's rendering
+     exactly - the layer wiring is testable that way.
+     Do NOT touch --sc2-scale; SC keeps its own until a separate
+     ruling. */
+  --kf-scale: 1;
+
+  /* KPI type roles (S-2). Bases are the CURRENT ruled V7/V8/V9 values
+     so at scale 1 the module renders pixel-identical. */
+  --kpi-size-micro:   calc(9.5px  * var(--kf-scale));
+  --kpi-size-meta:    calc(10px   * var(--kf-scale));
+  --kpi-size-caption: calc(11px   * var(--kf-scale));
+  --kpi-size-label:   calc(12px   * var(--kf-scale));
+  --kpi-size-ctl:     calc(12.5px * var(--kf-scale));
+  --kpi-size-body:    calc(13px   * var(--kf-scale));
+  --kpi-size-flow:    calc(14px   * var(--kf-scale));  /* flow tier - week header, section headings */
+  --kpi-size-callout: calc(15.5px * var(--kf-scale));  /* sentence body */
+  --kpi-size-lead:    calc(17px   * var(--kf-scale));  /* details value */
+  --kpi-size-title:   calc(18px   * var(--kf-scale));  /* command bar title */
+  --kpi-size-stat:    calc(16px   * var(--kf-scale));  /* three-stat rail values */
+  --kpi-size-tick:    calc(10.5px * var(--kf-scale));  /* mid-caption tier: story sub-labels, key rows */
+  --kpi-size-note:    calc(11.5px * var(--kf-scale));  /* small notes: fresh-pop body, tips */
+  --kpi-size-tag:     calc(9px    * var(--kf-scale));  /* chip/tag tier: SOON tags, small caps */
+  --kpi-size-value:   calc(22px   * var(--kf-scale));  /* spec-reserved; unused today */
+  /* --kpi-size-big base: spec S-2 lists 26, current .kpi-sig-v ships
+     25. Using 25 here to preserve S-15 pixel parity in C1; the +1px
+     drift toward the spec ruling is a follow-up rule call. */
+  --kpi-size-big:     calc(25px   * var(--kf-scale));
+  --kpi-size-hero:    calc(38px   * var(--kf-scale));  /* story headline */
+
+  /* KPI space roles (S-2). Same 4/8/12/16/20/24 as the site-wide
+     --space-* scale but scaled through --kf-scale. Use --kpi-space-*
+     inside kpi.css so the scale flip reaches every gap. */
+  --kpi-space-1:      calc(4px    * var(--kf-scale));
+  --kpi-space-2:      calc(8px    * var(--kf-scale));
+  --kpi-space-3:      calc(12px   * var(--kf-scale));
+  --kpi-space-4:      calc(16px   * var(--kf-scale));
+  --kpi-space-5:      calc(20px   * var(--kf-scale));
+  --kpi-space-6:      calc(24px   * var(--kf-scale));
+
+  /* KPI control + row heights (S-2). */
+  --kpi-ctl-h:        calc(34px   * var(--kf-scale));  /* .kpi-ctl / .kpi-fresh */
+  --kpi-cmd-h:        calc(60px   * var(--kf-scale));  /* command bar */
+  --kpi-row-h:        calc(40px   * var(--kf-scale));  /* week table row (Comfortable) */
+  --kpi-row-h-dense:  calc(30px   * var(--kf-scale));  /* week table row (Dense) */
+  --kpi-thead-h:      calc(34px   * var(--kf-scale));  /* table column header */
+  --kpi-band-h:       calc(52px   * var(--kf-scale));  /* folio group header + period band */
+
+  /* KPI layout widths (S-2). */
+  --kpi-folio-w:      calc(260px  * var(--kf-scale));
+  --kpi-vb-bar:       calc(58px   * var(--kf-scale));
+  --kpi-vb-delta:     calc(72px   * var(--kf-scale));
+  --kpi-viz-h:        calc(64px   * var(--kf-scale));
+  --kpi-plot-a:       calc(104px  * var(--kf-scale));
+  --kpi-plot-b:       calc(140px  * var(--kf-scale));
+  --kpi-plot-c:       calc(150px  * var(--kf-scale));
+
   /* Chart series color - HOLIDAY (D2, spec §3.5 F14). Violet reserved
      for the chart series; NEVER a state. If a module later claims
      purple as its accent, no collision - they never share a surface. */
