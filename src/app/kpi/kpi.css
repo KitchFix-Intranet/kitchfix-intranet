@@ -1163,7 +1163,7 @@
 }
 .kpi-cols {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 300px;
+  grid-template-columns: 260px minmax(0, 1fr) 316px;
 }
 .kpi-main {
   padding: var(--space-card-pad);
@@ -1187,65 +1187,136 @@
 }
 .kpi-rl-card { box-sizing: border-box; max-width: 100%; }
 
-/* Folio rail (left) - account navigation only for D2 */
+/* ── V7 carded portfolio folio (V7-10..V7-16) ──────────────────
+   Column 260px, inner padding 16px, card gap 12px. Three cards -
+   ALL / EAST / WEST - each wearing the page card skin. The group
+   header row IS the pseudo-key selector; member rows sit inside
+   the card, 44px tall, two-line lockup. */
 .kpi-folio {
   border-right: 1px solid var(--border-subtle);
-  background: var(--surface-sunken);
-  padding: var(--space-3) 0;
+  background: var(--n-50);
+  padding: 16px;
   display: flex; flex-direction: column;
+  gap: 12px;
   min-width: 0;
 }
+/* Fallback (no directory yet) - v6 flat list rendered under a caption. */
 .kpi-folio-h {
-  padding: 0 var(--space-3) var(--space-2);
+  padding: 0 4px 4px;
   font-size: var(--size-micro);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-/* V6-18 - PORTFOLIO / EAST · RDO ... / WEST · RDO ... eyebrows above
-   each folio group. Same typographic tier as .kpi-folio-h but slightly
-   more pronounced tracking to read as a group divider, not a title. */
-.kpi-folio-eyebrow {
-  padding: var(--space-3) var(--space-3) var(--space-1);
-  font-size: var(--size-micro);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
   font-weight: 700;
 }
-.kpi-folio-eyebrow:first-child { padding-top: 0; }
-/* Pseudo-key rows (All accounts / EAST / WEST) render slightly heavier
-   than the member rows to signal "aggregate" without a hard rule. */
-.kpi-acct-roll .kpi-acct-nm { font-weight: 700; }
-.kpi-acct {
-  display: flex; align-items: center; gap: var(--space-2);
+/* PORTFOLIO title - option A (V7-11). Not a card. */
+.kpi-folio-title {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 2px 2px 4px;
+}
+.kpi-folio-title-h {
+  font-size: 14px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--n-900);
+}
+.kpi-folio-title-s {
+  font-size: 11px; color: var(--n-500);
+}
+/* Group card (page card skin). */
+.kpi-gcard {
+  background: var(--surface-card);
+  border: 1px solid var(--n-300);
+  border-radius: var(--rad-10);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.kpi-gcard:hover { box-shadow: 0 2px 4px rgba(10, 37, 72, 0.08), 0 8px 20px rgba(10, 37, 72, 0.10); }
+/* Group header - IS the selector for ALL / EAST / WEST. */
+.kpi-ghead {
+  display: flex; align-items: center; gap: 10px;
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  min-height: 52px;
+  padding: 8px 12px;
   border: 0;
   border-left: 3px solid transparent;
   background: transparent;
-  min-height: 44px;
   cursor: pointer;
   text-align: left;
+  transition: background 0.15s;
 }
-.kpi-acct:hover { background: var(--n-100); }
+.kpi-ghead:hover { background: var(--n-50); }
+.kpi-ghead-lock {
+  display: flex; flex-direction: column; justify-content: center;
+  line-height: 1.3;
+  min-width: 0;
+}
+.kpi-ghead-name {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+  color: var(--n-800);
+  white-space: nowrap;
+}
+.kpi-ghead-sub {
+  font-size: 10px; color: var(--n-500); letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.kpi-ghead-cnt {
+  margin-left: auto; flex: none;
+  font-size: 10px; font-weight: 700;
+  color: var(--n-600);
+  background: var(--n-100);
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-pill);
+  padding: 2px 8px;
+  line-height: 1.2;
+}
+.kpi-ghead.on {
+  background: var(--navy-700);
+  border-left-color: var(--navy-700);
+}
+.kpi-ghead.on .kpi-ghead-name { color: #ffffff; }
+.kpi-ghead.on .kpi-ghead-sub  { color: #B9C6DA; }
+.kpi-ghead.on .kpi-ghead-cnt {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+.kpi-gcard-members {
+  border-top: 1px solid var(--n-200);
+}
+/* Member row - 44px, two-line lockup (key + team + city). */
+.kpi-acct {
+  display: flex; align-items: center;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-top: 1px solid var(--n-100);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.kpi-acct:first-child { border-top: 0; }
+.kpi-acct:hover { background: var(--n-50); }
 .kpi-acct.on {
-  background: var(--kpi-accent-tint);
-  border-left-color: var(--kpi-accent);
+  background: #EEF3FA;
+  border-left-color: var(--navy-700);
 }
-.kpi-acct-nm {
-  font-size: var(--size-caption); font-weight: 600;
-  color: var(--text-strong);
+.kpi-acct-lock {
+  display: flex; flex-direction: column; justify-content: center;
+  min-width: 0;
+  line-height: 1.25;
+}
+.kpi-acct-key {
+  font-size: 12.5px; font-weight: 700;
+  color: var(--n-800);
+  white-space: nowrap;
+}
+.kpi-acct.on .kpi-acct-key { color: var(--navy-700); }
+.kpi-acct-desc {
+  font-size: 11px; color: var(--n-500);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 130px;
-}
-.kpi-acct.on .kpi-acct-nm { color: var(--kpi-accent-strong); }
-.kpi-acct-sal {
-  font-size: var(--size-micro);
-  color: var(--text-subtle);
-  font-style: italic;
-  margin-left: auto;
 }
 
 /* Right rail v5 */
@@ -1300,7 +1371,9 @@
   color: var(--text-strong);
 }
 
-/* Mobile - shell adapts (GO-MOBILE full rework deferred) */
+/* Mobile - shell adapts (GO-MOBILE full rework deferred). Folio
+   collapses to a horizontal strip of member chips; V7 group cards
+   dissolve to keep the strip scannable on 375px. */
 @media (max-width: 1023px) {
   .kpi-cols { grid-template-columns: 1fr; }
   .kpi-folio {
@@ -1309,19 +1382,37 @@
     border-right: 0;
     border-bottom: 1px solid var(--border-subtle);
     padding: var(--space-2);
+    gap: 8px;
   }
-  .kpi-folio-h { display: none; }
-  .kpi-acct {
-    width: auto;
+  .kpi-folio-h, .kpi-folio-title { display: none; }
+  .kpi-gcard {
+    display: contents;
+    background: transparent; border: 0; box-shadow: none;
+  }
+  .kpi-gcard-members { display: contents; border-top: 0; }
+  .kpi-ghead {
+    width: auto; min-height: 40px; height: 40px;
+    padding: 0 12px;
     border-left: 0;
-    border-radius: var(--rad-pill);
     border: 1px solid var(--border-default);
-    min-height: 40px;
+    border-radius: var(--rad-pill);
+    background: var(--surface-card);
     flex: 0 0 auto;
   }
-  .kpi-acct.on { border-color: var(--kpi-accent); }
-  /* v5 line ~475 mobile hero override - preserves display-tier weight
-     without crowding the smaller viewport. */
+  .kpi-ghead.on { border-color: var(--kpi-accent); }
+  .kpi-ghead .kpi-ghead-sub { display: none; }
+  .kpi-acct {
+    width: auto;
+    height: 40px;
+    border-left: 0; border-top: 0;
+    border: 1px solid var(--border-default);
+    border-radius: var(--rad-pill);
+    background: var(--surface-card);
+    flex: 0 0 auto;
+    padding: 0 12px;
+  }
+  .kpi-acct.on { border-color: var(--kpi-accent); background: #EEF3FA; }
+  .kpi-acct .kpi-acct-desc { display: none; }
   .kpi-hero-n { font-size: 32px; }
 }
 
