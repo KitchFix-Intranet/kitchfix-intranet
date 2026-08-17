@@ -60,8 +60,7 @@
   --kpi-size-stat:    calc(16px   * var(--kf-scale));
   --kpi-size-lead:    calc(17px   * var(--kf-scale));
   --kpi-size-title:   calc(18px   * var(--kf-scale));
-  --kpi-size-big:     calc(25px   * var(--kf-scale));
-  --kpi-size-splitv:  calc(28px   * var(--kf-scale)); /* V21-6 split-block value */
+  --kpi-size-splitv:  calc(28px   * var(--kf-scale)); /* V21-6 split-block value + V21-20/V21-22 signal-card value */
 
   /* Space (S-2). The canonical 4-based scale 1..6 (4/8/12/16/20/24)
      matches the site-wide --space-* semantic ramp; the -6px / -10px
@@ -103,17 +102,12 @@
   --kpi-folio-w:      calc(260px  * var(--kf-scale));
   --kpi-vb-bar:       calc(58px   * var(--kf-scale));
   --kpi-vb-delta:     calc(72px   * var(--kf-scale));
-  --kpi-viz-h:        calc(64px   * var(--kf-scale));
   --kpi-plot-a:       calc(104px  * var(--kf-scale));
   --kpi-plot-b:       calc(140px  * var(--kf-scale));
   --kpi-plot-c:       calc(150px  * var(--kf-scale));
 
-  /* Gauge SVG box (S-5) - scale via rendered box only; viewBox +
-     angle math in SignalCards.js stay baked to 96x60. V21-21 upsizes
-     the OT arc via --kpi-gauge2-* so it can carry the percentage
-     text INSIDE while keeping the small gauge available. */
-  --kpi-gauge-w:      calc(96px   * var(--kf-scale));
-  --kpi-gauge-h:      calc(60px   * var(--kf-scale));
+  /* V21-21 OT arc - scale via rendered box only; viewBox + angle math
+     in SignalCards.js stay baked to 150x94. */
   --kpi-gauge2-w:     calc(150px  * var(--kf-scale));
   --kpi-gauge2-h:     calc(94px   * var(--kf-scale));
 
