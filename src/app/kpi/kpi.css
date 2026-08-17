@@ -32,8 +32,69 @@
   white-space: nowrap; border: 0;
 }
 
-/* ── page shell ────────────────────────────────────────────────── */
+/* ── page shell + scale-scoped token layer (S-1..S-6) ─────────────
+   The --kpi-* family is REDECLARED here (SC's .scv2 pattern) so each
+   calc() resolves against .kpi-app's own --kf-scale. Placing them on
+   .kpi-app rather than :root ensures the module scale reaches every
+   descendant of both the sticky command bar (.kpi-cmd) and the page
+   (.kpi-page).
+
+   S-3 flip: --kf-scale is set once here. Revert to 1 to restore
+   pre-scale rendering exactly (the layer wiring test). */
 .kpi-app {
+  --kf-scale: 0.9;
+
+  /* Type roles (S-2). Bases are the CURRENT ruled V7/V8/V9 values.
+     size-big: spec S-2 lists 26, current .kpi-sig-v ships 25; using
+     25 for parity, +1px drift toward spec is a follow-up rule. */
+  --kpi-size-micro:   calc(9.5px  * var(--kf-scale));
+  --kpi-size-tag:     calc(9px    * var(--kf-scale));
+  --kpi-size-meta:    calc(10px   * var(--kf-scale));
+  --kpi-size-tick:    calc(10.5px * var(--kf-scale));
+  --kpi-size-caption: calc(11px   * var(--kf-scale));
+  --kpi-size-note:    calc(11.5px * var(--kf-scale));
+  --kpi-size-label:   calc(12px   * var(--kf-scale));
+  --kpi-size-ctl:     calc(12.5px * var(--kf-scale));
+  --kpi-size-body:    calc(13px   * var(--kf-scale));
+  --kpi-size-flow:    calc(14px   * var(--kf-scale));
+  --kpi-size-callout: calc(15.5px * var(--kf-scale));
+  --kpi-size-stat:    calc(16px   * var(--kf-scale));
+  --kpi-size-lead:    calc(17px   * var(--kf-scale));
+  --kpi-size-title:   calc(18px   * var(--kf-scale));
+  --kpi-size-value:   calc(22px   * var(--kf-scale));
+  --kpi-size-big:     calc(25px   * var(--kf-scale));
+  --kpi-size-hero:    calc(38px   * var(--kf-scale));
+
+  /* Space (S-2). */
+  --kpi-space-1:      calc(4px    * var(--kf-scale));
+  --kpi-space-2:      calc(8px    * var(--kf-scale));
+  --kpi-space-3:      calc(12px   * var(--kf-scale));
+  --kpi-space-4:      calc(16px   * var(--kf-scale));
+  --kpi-space-5:      calc(20px   * var(--kf-scale));
+  --kpi-space-6:      calc(24px   * var(--kf-scale));
+
+  /* Control + row heights (S-2). */
+  --kpi-ctl-h:        calc(34px   * var(--kf-scale));
+  --kpi-cmd-h:        calc(60px   * var(--kf-scale));
+  --kpi-row-h:        calc(40px   * var(--kf-scale));
+  --kpi-row-h-dense:  calc(30px   * var(--kf-scale));
+  --kpi-thead-h:      calc(34px   * var(--kf-scale));
+  --kpi-band-h:       calc(52px   * var(--kf-scale));
+
+  /* Layout widths (S-2). */
+  --kpi-folio-w:      calc(260px  * var(--kf-scale));
+  --kpi-vb-bar:       calc(58px   * var(--kf-scale));
+  --kpi-vb-delta:     calc(72px   * var(--kf-scale));
+  --kpi-viz-h:        calc(64px   * var(--kf-scale));
+  --kpi-plot-a:       calc(104px  * var(--kf-scale));
+  --kpi-plot-b:       calc(140px  * var(--kf-scale));
+  --kpi-plot-c:       calc(150px  * var(--kf-scale));
+
+  /* Gauge SVG box (S-5) - scale via rendered box only; viewBox +
+     angle math in SignalCards.js stay baked to 96x60. */
+  --kpi-gauge-w:      calc(96px   * var(--kf-scale));
+  --kpi-gauge-h:      calc(60px   * var(--kf-scale));
+
   background: var(--surface-page);
   min-height: 100vh;
   color: var(--text-default);
@@ -1065,7 +1126,7 @@
 .kpi-switch[aria-checked="true"] .kpi-sw { background: var(--kpi-accent); }
 .kpi-switch[aria-checked="true"] .kpi-sw::after { left: 18px; }
 
-/* Page + cols grid */
+/* Page + cols grid. */
 .kpi-page {
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
@@ -1821,7 +1882,9 @@
   position: absolute; top: -5px; bottom: -5px;
   width: 2px; background: var(--n-900);
 }
-.kpi-sig-gauge { width: 96px; height: 60px; flex: none; }
+/* S-5: scale via the rendered box, never the viewBox. angleToPoint()
+   in SignalCards.js keeps working against 96x60 coords. */
+.kpi-sig-gauge { width: var(--kpi-gauge-w); height: var(--kpi-gauge-h); flex: none; }
 .kpi-sig-gcol {
   display: flex; flex-direction: column; gap: 5px;
   font-size: var(--kpi-size-tick); color: var(--n-500);
