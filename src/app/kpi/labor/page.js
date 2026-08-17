@@ -828,17 +828,19 @@ function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH }
                  : freshnessH >= 54    ? "bad"
                  : freshnessH >= 30    ? "warn"
                  : "ok";
-  const feedValue = freshnessH == null ? "no walk on record"
-                  : feedTone === "bad" ? `stale · ${fmtTimestamp(freshness?.last_walk_at)}`
-                  : feedTone === "warn" ? `slow · ${fmtTimestamp(freshness?.last_walk_at)}`
-                  : `healthy · ${fmtTimestamp(freshness?.last_walk_at)}`;
+  // Drop the timestamp - it's redundant with the freshness pill in the
+  // command bar (which now owns the "when last touched" detail). Row
+  // reads the status token only so the 260px folio never overflows.
+  const feedValue = feedTone === "bad" ? "stale"
+                  : feedTone === "warn" ? "slow"
+                  : "healthy";
   return (
     <div className="kpi-sys" role="status" aria-label="System status">
       <div className="kpi-sys-h">SYSTEM</div>
       <div className="kpi-sys-r">
         <span className={`kpi-sys-dot kpi-sys-dot-${payTone}`} aria-hidden="true" />
         <span className="kpi-sys-k">Payroll data</span>
-        <span className={`kpi-sys-v kpi-sys-v-${payTone}`}>{complete} of {total} complete</span>
+        <span className={`kpi-sys-v kpi-sys-v-${payTone}`}>{complete} of {total}</span>
       </div>
       <div className="kpi-sys-r">
         <span className={`kpi-sys-dot kpi-sys-dot-${feedTone}`} aria-hidden="true" />

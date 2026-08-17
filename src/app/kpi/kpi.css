@@ -74,7 +74,9 @@
   --kpi-space-1:      calc(4px    * var(--kf-scale));
   --kpi-space-5px:    calc(5px    * var(--kf-scale));
   --kpi-space-6px:    calc(6px    * var(--kf-scale));
+  --kpi-space-7px:    calc(7px    * var(--kf-scale));  /* small marker/dot gap; 10 uses across strip + share bar */
   --kpi-space-2:      calc(8px    * var(--kf-scale));
+  --kpi-space-9px:    calc(9px    * var(--kf-scale));  /* cal-cell padding, some popover items; 7 uses */
   --kpi-space-10px:   calc(10px   * var(--kf-scale));
   --kpi-space-3:      calc(12px   * var(--kf-scale));
   --kpi-space-14px:   calc(14px   * var(--kf-scale));
@@ -199,7 +201,12 @@
 }
 .kpi-ctl:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
 .kpi-ctl:disabled, .kpi-ctl.kpi-ctl-off { opacity: 0.45; cursor: not-allowed; }
-.kpi-ctl .kpi-i { width: var(--kpi-space-14px); height: var(--kpi-space-14px); opacity: 0.85; }
+/* Cmd-bar icon parity with SC (12x12, stroke 2.5). Fixed 12px is
+   analogous to hairlines - a geometric constant matching a peer
+   product; SC's account-dropdown chevron is a literal 12 as well.
+   Icons live in an SVG that supplies its own stroke-width via inline
+   attributes (see Shell.js). */
+.kpi-ctl .kpi-i { width: 12px; height: 12px; opacity: 0.85; }
 .kpi-ctl.kpi-ctl-sel::after {
   content: "▾"; font-size: var(--kpi-size-meta); color: #B9C6DA; margin-left: 2px;
 }
@@ -208,45 +215,74 @@
 }
 .kpi-ctl .kpi-ctl-v { font-weight: 600; }
 
-/* Fiscal meta - eyebrows on --meta scale, values on --ctl scale.
-   Compact fallback (`P<n> · W<w>`) is hidden by default and shown when
-   the meta collapses under the S-10 give rule (see @media below). */
+/* Fiscal meta - parity with SC's .sc-ribbon-meta (overview.css:278-305).
+   Label 11 x 0.9 = 9.9px / 700 / 0.06em tracking / #C8D4E2 (SC's
+   --sc2-cmd-text-muted rendered value). Value 11 x 0.9 = 9.9px / 600 /
+   white. Separator 1x12 rgba(255,255,255,0.14) margin 0. Segment gap
+   4px between label + value; group gap 8px between segments (SC uses
+   --sc2-space-2 = 8*0.9 = 7.2). KPI's date format stays MM/DD (spec
+   ruling here is typography + separator, not date format). */
 .kpi-meta {
-  display: flex; align-items: center; height: var(--kpi-ctl-h);
-  font-size: var(--kpi-size-caption); letter-spacing: 0.06em; color: #B9C6DA;
+  display: inline-flex; align-items: center;
+  gap: var(--kpi-space-2);
+  font-size: var(--kpi-size-caption); letter-spacing: 0.06em; color: #C8D4E2;
   text-transform: uppercase;
   font-variant-numeric: var(--num-tabular);
   flex: 0 1 auto;
   min-width: 0;
 }
-.kpi-meta > span { display: inline-flex; align-items: center; }
+/* Meta segment labels are 700 (SC's --sc2-wt-bold on -meta-label);
+   values 600 white (SC's --sc2-wt-semibold on -meta-value). */
+.kpi-meta > span {
+  display: inline-flex; align-items: baseline;
+  gap: var(--kpi-space-1);
+  font-weight: 700;
+}
 .kpi-meta b {
-  color: #ffffff; font-size: var(--kpi-size-ctl); font-weight: 600;
-  margin-left: var(--kpi-space-6px); letter-spacing: 0; text-transform: none;
+  color: #ffffff; font-size: var(--kpi-size-caption); font-weight: 600;
+  margin-left: 0; letter-spacing: 0; text-transform: none;
 }
 .kpi-meta-sep {
-  width: 1px; height: var(--kpi-space-4); background: #3D5578; margin: 0 var(--kpi-space-14px);
+  width: 1px; height: 12px; background: rgba(255, 255, 255, 0.14);
+  margin: 0;
   display: inline-block;
   flex: none;
+  align-self: center;
 }
-.kpi-meta-compact { display: none; }
+/* Specificity note: `.kpi-meta > span { display: inline-flex }`
+   above at :222 matches ANY span child, including .kpi-meta-compact.
+   A bare `.kpi-meta-compact { display: none }` (0,1,0) loses the
+   cascade to `.kpi-meta > span` (0,1,1); the compact would paint at
+   every width. Scoping the hide rule as `.kpi-meta > .kpi-meta-compact`
+   (0,2,0) beats it, and the @media (max-width: 1240px) block below
+   promotes to display: inline-flex only when the give-order collapses.
+   Defect first seen on the live 1440 build - compact + full meta
+   painted simultaneously, overlapping into `WEEK 2P 9 · W 2`. */
+.kpi-meta > .kpi-meta-compact { display: none; }
 .kpi-meta-compact b {
   color: #ffffff; font-weight: 600; margin: 0 2px;
   letter-spacing: 0; text-transform: none;
 }
 
-/* Freshness chip - pill, click opens diagnostics popover (V7-9). */
+/* Freshness chip - parity with SC's .sc-chrome-bar-asof (28h,
+   padding 4x10, radius 9999, bg rgba(255,255,255,0.1), font 9.9).
+   Text shows STATUS only (`Data current` / `Data stale` / `No recent
+   walk`); the full timestamp + pipeline diagnostics live in the
+   popover the click opens (V7-9). Height + padding use fixed pixel
+   values to match SC's fixed geometry; font-size scales via
+   --kpi-size-caption (11 * 0.9 = 9.9 rendered). */
 .kpi-fresh-anchor { position: relative; display: inline-block; }
 .kpi-fresh {
-  height: var(--kpi-ctl-h);
+  height: 28px;
   border-radius: 999px;
-  padding: 0 var(--kpi-space-3);
-  font-size: var(--kpi-size-ctl); line-height: 1;
+  /* Padding 4px 10px matches SC's fixed pill geometry (unscaled). */
+  padding: 4px 10px;
+  font-size: var(--kpi-size-caption); line-height: 1;
   display: inline-flex; align-items: center; gap: var(--kpi-space-2);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.10);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #ffffff;
-  font: inherit; font-size: var(--kpi-size-ctl);
+  font: inherit; font-size: var(--kpi-size-caption);
   cursor: pointer;
   white-space: nowrap;
   font-variant-numeric: var(--num-tabular);
@@ -481,7 +517,7 @@
   display: grid; grid-template-columns: repeat(7, 1fr); margin-left: 2px;
 }
 .kpi-cal-cell {
-  min-height: 30px; padding: var(--kpi-space-1);
+  min-height: calc(30px * var(--kf-scale)); padding: var(--kpi-space-1);
   background: transparent; border: 0;
   color: var(--text-strong); font: inherit; font-size: var(--kpi-size-label);
   cursor: pointer; border-radius: var(--rad-4);
@@ -548,7 +584,7 @@
   padding: var(--kpi-space-1) var(--kpi-space-10px);
   font: inherit; font-size: var(--kpi-size-caption);
   font-weight: 500;
-  min-height: 26px;
+  min-height: calc(26px * var(--kf-scale));
   cursor: pointer;
 }
 .kpi-preset:hover:not(:disabled) { background: var(--surface-sunken); }
@@ -929,7 +965,7 @@
 .kpi-rmenu-list { display: flex; flex-direction: column; }
 .kpi-rmenu-item {
   text-align: left; width: 100%;
-  padding: 6px 9px;
+  padding: var(--kpi-space-6px) var(--kpi-space-9px);
   background: none; border: 0; border-radius: var(--rad-4);
   font: inherit; font-size: var(--kpi-size-body);
   color: var(--text-strong);
@@ -948,7 +984,7 @@
   border: 1px solid var(--border-default);
   background: var(--surface-sunken);
   border-radius: var(--rad-4);
-  padding: 7px 0;
+  padding: var(--kpi-space-7px) 0;
   font: inherit; font-size: var(--kpi-size-note); font-weight: 700;
   color: var(--text-subtle);
   cursor: pointer;
@@ -1018,7 +1054,7 @@
 }
 .kpi-seg button {
   border: 0; background: none;
-  padding: 5px 12px;
+  padding: var(--kpi-space-5px) var(--kpi-space-3);
   font: inherit; font-size: var(--kpi-size-label);
   color: var(--text-muted);
   cursor: pointer;
@@ -1108,7 +1144,7 @@
 }
 .kpi-wk-item {
   display: flex; align-items: center; gap: var(--space-3);
-  padding: 8px 9px;
+  padding: var(--kpi-space-2) var(--kpi-space-9px);
   border-radius: var(--rad-6);
   font-size: var(--size-caption);
   min-height: var(--kpi-wk-item-h);
@@ -1355,6 +1391,11 @@
   display: flex; align-items: center; gap: var(--kpi-space-2);
   height: var(--kpi-lpill-h);
   font-size: var(--kpi-size-caption); color: var(--n-600);
+  /* Row-level overflow safety: no matter how long a future value gets,
+     the row never escapes the 260 folio column. Label shrinks first
+     via min-width:0; value stays nowrap so numbers never wrap. */
+  min-width: 0;
+  overflow: hidden;
 }
 .kpi-sys-dot {
   width: 7px; height: 7px; border-radius: 50%;
@@ -1364,8 +1405,14 @@
 .kpi-sys-dot-ok   { background: var(--green-500); }
 .kpi-sys-dot-warn { background: var(--amber-500); }
 .kpi-sys-dot-bad  { background: var(--red-500); }
-.kpi-sys-k { flex: 1; white-space: nowrap; }
-.kpi-sys-v { font-weight: 600; color: var(--n-800); white-space: nowrap; }
+.kpi-sys-k {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-sys-v { font-weight: 600; color: var(--n-800); white-space: nowrap; flex: none; }
 .kpi-sys-v-ok   { color: var(--green-700); }
 .kpi-sys-v-warn { color: var(--amber-700); }
 .kpi-sys-v-bad  { color: var(--red-700); }
@@ -1409,8 +1456,15 @@
   .kpi-meta > .kpi-meta-period,
   .kpi-meta > .kpi-meta-week,
   .kpi-meta > .kpi-meta-sep { display: none; }
-  .kpi-meta > .kpi-meta-compact { display: inline-flex; align-items: baseline; gap: 3px; color: #ffffff; text-transform: none; letter-spacing: 0; font-size: var(--kpi-size-ctl); }
-  .kpi-meta > .kpi-meta-compact b { font-weight: 700; }
+  /* Compact inherits label typography + values 600 white, no separator
+     (the '·' between P/W is inline text). */
+  .kpi-meta > .kpi-meta-compact {
+    display: inline-flex; align-items: baseline;
+    gap: var(--kpi-space-1);
+    color: #ffffff; text-transform: none; letter-spacing: 0;
+    font-size: var(--kpi-size-caption);
+  }
+  .kpi-meta > .kpi-meta-compact b { font-weight: 600; color: #ffffff; }
 }
 
 /* Mobile - shell adapts. Folio collapses to a horizontal strip of
@@ -1543,7 +1597,7 @@
 .kpi-help-pop b { color: var(--n-900); }
 .kpi-help-calc {
   background: var(--n-50); border: 1px solid var(--n-200);
-  border-radius: 6px; padding: 7px 9px; margin: 8px 0;
+  border-radius: 6px; padding: var(--kpi-space-7px) var(--kpi-space-9px); margin: 8px 0;
   font-size: var(--kpi-size-caption); color: var(--n-800);
 }
 
@@ -1574,7 +1628,7 @@
 }
 
 /* Left panel: eyebrow + headline + 3-stat rail + track (V8-9) */
-.kpi-story-eye { display: flex; align-items: baseline; gap: 9px; }
+.kpi-story-eye { display: flex; align-items: baseline; gap: var(--kpi-space-9px); }
 .kpi-story-eye-1 {
   font-size: var(--kpi-size-caption); font-weight: 800; letter-spacing: 0.08em;
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
@@ -1757,7 +1811,7 @@
   position: relative;
 }
 .kpi-plotB {
-  height: 140px;
+  height: var(--kpi-plot-b);
   display: flex; align-items: flex-end; gap: var(--kpi-space-5px);
   position: relative;
   border-bottom: 1px solid var(--n-300);
@@ -1812,10 +1866,18 @@
   padding-top: var(--kpi-space-3);
 }
 .kpi-plotC {
-  height: 150px;
-  display: flex; align-items: flex-end; gap: var(--kpi-space-10px);
+  height: var(--kpi-plot-c);
+  display: flex; align-items: stretch; gap: var(--kpi-space-10px);
   border-bottom: 1px solid var(--n-300);
 }
+/* P0 defect fix: .kpi-plotC used `align-items: flex-end` so each
+   `.kpi-pcol` sized to its content, and the bar's percentage height
+   inside resolved against a 0-height parent - every bar collapsed to
+   0 while only the absolutely-positioned budget line still rendered.
+   Fix: switch container to `align-items: stretch` and rely on the
+   column's `justify-content: flex-end` to seat the bar at the bottom.
+   The column now gets a resolved height from the flex layout, so the
+   bar's percentage has something to resolve against. */
 .kpi-pcol {
   flex: 1;
   display: flex; flex-direction: column;
@@ -1933,7 +1995,7 @@
 .kpi-sig-act:hover { text-decoration: underline; }
 /* Viz primitives - all fixed-height, none stretch (V8-15) */
 .kpi-sig-vstack {
-  display: flex; flex-direction: column; gap: 7px; width: 100%;
+  display: flex; flex-direction: column; gap: var(--kpi-space-7px); width: 100%;
 }
 .kpi-sig-dvg {
   height: var(--kpi-space-10px); background: var(--n-200); border-radius: 5px;
@@ -2058,7 +2120,7 @@
   flex-wrap: wrap;
 }
 .kpi-pjump {
-  min-height: 28px;
+  min-height: calc(28px * var(--kf-scale));
   padding: 0 var(--space-2);
   border-radius: var(--rad-6);
   border: 1px solid var(--border-default);
@@ -2198,7 +2260,7 @@
   color: #92580A; background: var(--amber-100);
   border: 1px solid #F3D9AE;
   border-radius: 3px;
-  padding: 0 5px;
+  padding: 0 var(--kpi-space-5px);
   margin-left: var(--kpi-space-2);
   vertical-align: 1px;
   letter-spacing: 0.04em;
@@ -2236,7 +2298,7 @@
 /* V9-14 share bar lives inside dollars cell, not in vs budget. */
 .kpi-tbl-money { position: relative; }
 .kpi-tbl-share {
-  position: absolute; left: var(--kpi-space-3); right: var(--kpi-space-3); bottom: 7px;
+  position: absolute; left: var(--kpi-space-3); right: var(--kpi-space-3); bottom: var(--kpi-space-7px);
   height: 3px; border-radius: 2px;
   background: var(--n-200);
   overflow: hidden;

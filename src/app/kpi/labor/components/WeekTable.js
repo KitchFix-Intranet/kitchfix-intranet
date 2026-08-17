@@ -21,7 +21,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
-import { periodOf } from "../lib/periods.js";
+import { periodOf, periodStartISO, periodEndISO } from "../lib/periods.js";
 
 const DENSITY_KEY = "kpi:table:density";
 const WEEKS_PER_PERIOD = 4;
@@ -423,17 +423,31 @@ export function WeekTable({
     return { g, totals: t, states, periodBudget, weeksInBand };
   }), [grouped, budgetByPeriod, weekBudgetsByWeekStart]);
 
-  // In-progress period detection: today falls within the period's
-  // range. The old check inspected `g.weeks[last index]`, but grouped
-  // weeks are sorted week_start DESC (newest first), so the last-index
-  // week is the OLDEST - returning false on any period with a closed
-  // week even when today is still inside. That was the V9-7 defect
-  // (band + total rendered `▼ $X` delta instead of `<n>% used` on
-  // in-progress periods). Fix: check if ANY week in the group has
-  // week_start <= today <= week_end - the in-progress boundary.
+  // In-progress period detection.
+  //
+  // Prior attempts failed for the same reason from different angles:
+  //   Round 1: read `g.weeks[last-index]` - but grouped weeks are
+  //     sorted week_start DESC, so last-index is the OLDEST week.
+  //     Any period past its first week returned false.
+  //   Round 2: `g.weeks.some(w => today between w bounds)` - but
+  //     g.weeks only contains weeks that HAVE LABOR ROWS. For an
+  //     in-progress period like CIN - AZ P9 whose only recorded week
+  //     is the closed 08/10-08/16, the predicate returned false and
+  //     the band + total rendered a closed-week delta instead of
+  //     `<n>% used`.
+  //
+  // Correct: test today against the PERIOD's own bounds, not against
+  // the weeks that happen to carry rows. periodStartISO / periodEndISO
+  // compute the period range from the FY calendar - deterministic,
+  // independent of actuals presence. Fallback: if period_no is out of
+  // FY2026 (periodStartISO returns null), treat as not-in-progress.
+  // Month bands never trigger this rule.
   function isPeriodInProgress(g, today) {
-    if (g.groupHint?.kind !== "period") return false;
-    return g.weeks.some(w => w.week_start <= today && w.week_end >= today);
+    if (g.groupHint?.kind !== "period" || g.period_no == null) return false;
+    const start = periodStartISO(g.period_no);
+    const end = periodEndISO(g.period_no);
+    if (!start || !end) return false;
+    return start <= today && today <= end;
   }
 
   // Grand row description
@@ -543,11 +557,24 @@ export function WeekTable({
                 const bandSeverity = worstSeverity(states);
                 // Count of weeks with an exception (V9-3).
                 const exceptionWeekCount = g.weeks.filter(w => weekSeverity(w) !== "complete").length;
-                const bandSubLabel = inProgress
-                  ? `in progress · ${g.weeks.filter(w => w.week_end < todayISO).length + 1} of ${weeksInBand} wks`
-                  : periodBudget != null
-                    ? `${weeksInBand} wks · budget ${fmt$(periodBudget)}`
-                    : `${weeksInBand} wks`;
+                // `wk` / `wks` pluralization - defect: `1 wks` shipped
+                // when a period had exactly one week of labor rows.
+                const wkUnit = (n) => `${n} ${n === 1 ? "wk" : "wks"}`;
+                // In-progress fraction: count period weeks whose bounds
+                // are already closed vs today, +1 for the in-progress
+                // week itself. For periods the divisor is always 4 (V8-9);
+                // for months use weeksInBand (rows present in the range).
+                const bandSubLabel = (() => {
+                  if (inProgress) {
+                    const totalWeeks = g.groupHint?.kind === "period" ? 4 : weeksInBand;
+                    const closedCount = Math.max(0, Math.floor((new Date(todayISO) - new Date(periodStartISO(g.period_no))) / (7 * 86400000)));
+                    const done = Math.min(totalWeeks, closedCount + 1);
+                    return `in progress · ${done} of ${wkUnit(totalWeeks)}`;
+                  }
+                  return periodBudget != null
+                    ? `${wkUnit(weeksInBand)} · budget ${fmt$(periodBudget)}`
+                    : wkUnit(weeksInBand);
+                })();
                 const bandVs = periodBudget == null
                   ? { mode: "muted" }
                   : inProgress
