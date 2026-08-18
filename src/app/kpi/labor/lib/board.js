@@ -233,6 +233,11 @@ export function buildBoard({
   // Determine budget for the range. Sum of member period budgets that
   // fall inside the range's period span. If none, no verdict possible.
   const budgetByPeriod = new Map((budget_periods || []).map(b => [b.period_no, Number(b.amount)]));
+  // V37-4 - per-period basis flag ('envelope' | 'pnl') so the client
+  // can label the sub-line. For a single-period range this is the
+  // basis of that one period; for a multi-period range it is left
+  // null unless every touched period agrees.
+  const basisByPeriod = new Map((budget_periods || []).map(b => [b.period_no, b.basis || null]));
   let rangeBudget = 0;
   let periodsWithBudget = 0;
   for (const p of periodsTouched) {
@@ -450,6 +455,18 @@ export function buildBoard({
     // Money
     period_budget: isSinglePeriod ? budget : null,
     range_budget: budget,
+    // V37-4 - basis of the money above. Single period reads its one
+    // basis; multi-period agrees only if every touched period has
+    // the same basis (else null so the sub-line can drop the word).
+    budget_basis: (() => {
+      if (!hasBudget) return null;
+      const seen = new Set();
+      for (const p of periodsTouched) {
+        const b = basisByPeriod.get(p);
+        if (b) seen.add(b);
+      }
+      return seen.size === 1 ? [...seen][0] : null;
+    })(),
     spent_to_date,
     variance,
     verdict,

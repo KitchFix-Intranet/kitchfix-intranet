@@ -35,10 +35,14 @@ const D17_OUT_OF_SCOPE = new Set(["CORP"]);
 // to collide with nothing the account regex admits (which requires
 // spaced hyphens in the middle). URL: ?account=ALL / EAST / WEST.
 const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
-// Playbook 4.6 - envelope accounts are excluded from static aggregate
-// budgets (their variance is against the adjusted envelope in SC,
-// never against the original budget).
-const V6_ENVELOPE_ACCOUNTS = new Set(["TXR - TX - V"]);
+// V37 - revenue-flex accounts (TXR - TX - V) budget on a forecast
+// envelope: hourly_budget = revenue_forecast x accounts.labor_ratio,
+// stored per period in sc_labor_budgets. They participate in the
+// board the same way every other account does (playbook 4.5); the
+// only difference is the sub-line basis word - 'envelope' vs 'pnl' -
+// so the client can label how the number was reached. There is no
+// aggregate exclusion any more (V37-5).
+const V37_REVENUE_FLEX_ACCOUNTS = new Set(["TXR - TX - V"]);
 const V6_PAGE_DEFAULT = 1000;   // PostgREST default response cap
 
 function safeError(scope, err) {
@@ -115,10 +119,13 @@ async function paginateActuals(supa, { members, start, end, pageSize }) {
 }
 
 // Resolve the (member) account's budget_periods per playbook 4.5.
-// Returns [] for envelope accounts (caller decides envelope semantics).
+// V37 - revenue-flex accounts (TXR - TX - V) use the same 4.5
+// resolution as every other account. Their sc_labor_budgets rows
+// carry hourly_budget = revenue_forecast x accounts.labor_ratio; the
+// only downstream difference is the `basis` word on each period,
+// which the sub-line surfaces.
 // Empty on truly no rows. Never selects 3100.2 or any group total (8.2).
 async function resolveMemberBudget(supa, accountKey) {
-  if (V6_ENVELOPE_ACCOUNTS.has(accountKey)) return { data: [] };
   const [pnlQ, scQ] = await Promise.all([
     supa
       .from("kpi_budgets")
@@ -135,6 +142,7 @@ async function resolveMemberBudget(supa, accountKey) {
   if (pnlQ.error) return { error: pnlQ.error, scope: "kpi_budgets_3100_1" };
   if (scQ.error)  return { error: scQ.error,  scope: "sc_labor_budgets" };
 
+  const isRevenueFlex = V37_REVENUE_FLEX_ACCOUNTS.has(accountKey);
   const pnlByPeriod = new Map(
     (pnlQ.data || []).map(r => [Number(r.period_no), Number(r.amount)])
   );
@@ -157,6 +165,7 @@ async function resolveMemberBudget(supa, accountKey) {
         period_no: p,
         amount: Math.round(sc.amount * 100) / 100,
         source: "supersede",
+        basis: isRevenueFlex ? "envelope" : "pnl",
         superseded: pnlDiffers,
         ...(sc.reason ? { reason: sc.reason } : {}),
         ...(pnlDiffers ? { pnl_amount: Math.round(pnl * 100) / 100 } : {}),
@@ -166,6 +175,7 @@ async function resolveMemberBudget(supa, accountKey) {
         period_no: p,
         amount: Math.round(pnl * 100) / 100,
         source: "pnl",
+        basis: "pnl",
         superseded: false,
       });
     }
@@ -208,11 +218,12 @@ async function buildPriorPeriodComparison({ supa, rangeStart, rangeEnd, today, i
     currentElapsedWeeks = Math.max(0.01, Math.min(4, daysIn / 7));
   }
 
-  // Prior actuals - envelope members excluded on the aggregate path per
-  // V25-1 (rollup population must match).
+  // Prior actuals - V37-5 aggregates include every member (revenue-
+  // flex accounts no longer excluded); population is now defined by
+  // the members list alone.
   let priorActuals;
   if (isAggregate) {
-    const rolled = (members || []).filter(m => !V6_ENVELOPE_ACCOUNTS.has(m));
+    const rolled = members || [];
     if (rolled.length === 0) return { applies: false, reason: "no_rollup_members" };
     const q = await paginateActuals(supa, { members: rolled, start: priorStart, end: priorEnd, pageSize });
     if (q.error) return { applies: false, reason: "query_error" };
@@ -399,12 +410,12 @@ export async function GET(request) {
     if (unattr.error) return NextResponse.json(safeError("labor_unattributed", unattr.error), { status: 500 });
 
     // 6. Aggregate budget_periods - resolve each member via 4.5, sum
-    // per period, exclude envelope accounts (TXR - TX - V). Any
-    // superseded member period marks the aggregate period superseded;
-    // member_detail carries the per-member breakdown for the drill.
+    // per period. V37-5 - revenue-flex accounts (TXR - TX - V) now
+    // join every aggregate on both sides. Any superseded member
+    // period marks the aggregate period superseded; member_detail
+    // carries the per-member breakdown for the drill.
     const memberBudgets = new Map();
     for (const m of members) {
-      if (V6_ENVELOPE_ACCOUNTS.has(m)) continue;      // 4.6 - envelope excluded
       const b = await resolveMemberBudget(supa, m);
       if (b.error) return NextResponse.json(safeError(b.scope, b.error), { status: 500 });
       memberBudgets.set(m, b.data);
@@ -419,6 +430,7 @@ export async function GET(request) {
           account_key: m,
           amount: bp.amount,
           source: bp.source,
+          basis: bp.basis,
           superseded: !!bp.superseded,
           ...(bp.reason ? { reason: bp.reason } : {}),
         });
@@ -435,22 +447,10 @@ export async function GET(request) {
         member_detail: v.member_detail.sort((a, b) => a.account_key.localeCompare(b.account_key)),
       }));
 
-    // V6-20 - envelope exclusion note when V is in scope.
-    const envelopeExcluded = members.filter(m => V6_ENVELOPE_ACCOUNTS.has(m));
-    const budget_notes = envelopeExcluded.length > 0
-      ? { envelope_excluded: envelopeExcluded }
-      : {};
-
-    // V25-1..V25-3 - aggregate roll-up POPULATION must match aggregate
-    // budget POPULATION. Envelope members are excluded from the budget
-    // aggregate (see loop above) so they must also be excluded from the
-    // actuals aggregate. Keep full actuals in the response for the
-    // drill (V25-2 - excluded row still renders), but compute board +
-    // week_budgets from the non-envelope subset only. The client filters
-    // its own grand/week rollups via `aggregate_excluded_members`.
-    const rolledUpMembers = members.filter(m => !V6_ENVELOPE_ACCOUNTS.has(m));
-    const rolledUpActuals = actualsRows.filter(r => !V6_ENVELOPE_ACCOUNTS.has(r.account_key));
-    const aggregate_excluded_members = envelopeExcluded;
+    // V37-5 - aggregate rollup population is now the members list in
+    // full. envelope_excluded / aggregate_excluded_members retire.
+    const rolledUpMembers = members;
+    const rolledUpActuals = actualsRows;
 
     return NextResponse.json({
       ok: true,
@@ -477,10 +477,8 @@ export async function GET(request) {
       account_periods,
       budget_periods,
       budget_mode: "static",
-      budget_notes,
       members,
       rolled_up_members: rolledUpMembers,
-      aggregate_excluded_members,
       accounts_directory,
       regional_directors_display,
       board: buildBoard({
@@ -654,17 +652,19 @@ export async function GET(request) {
   //      P&L source.
   //   3. no row for that period - omit it entirely.
   //
-  // Playbook 4.6 - TXR - TX - V is envelope mode. This route ships
-  // NO budget_periods for envelope accounts; variance is against
-  // the ADJUSTED envelope (Service Calendar), never the original
-  // budget.
+  // V37 - revenue-flex accounts (TXR - TX - V) use the same 4.5
+  // resolution; there is no envelope carve-out any more (the Set is
+  // gone and every branch it fed collapsed). Basis names the flavour
+  // ('envelope' when the sc_labor_budgets row is a revenue-forecast
+  // envelope, 'pnl' otherwise) so the sub-line can label it.
   //
   // Playbook 8.2 hard rule: this route selects line_code = '3100.1'
   // ONLY. Never 3100.2. Never any 3100-group total. The salary
   // subtraction-attack surface must not open here.
-  const budget_mode = account === "TXR - TX - V" ? "envelope" : "static";
+  const budget_mode = "static";
+  const isRevenueFlexAcct = V37_REVENUE_FLEX_ACCOUNTS.has(account);
   let budget_periods = [];
-  if (budget_mode === "static") {
+  {
     // Pull all 13 periods for this account from the two sources in
     // parallel. Both queries are small (<= 13 rows each) - no
     // pagination concern.
@@ -705,6 +705,7 @@ export async function GET(request) {
           period_no: p,
           amount: Math.round(sc.amount * 100) / 100,
           source: "supersede",
+          basis: isRevenueFlexAcct ? "envelope" : "pnl",
           superseded: pnlDiffers,
           ...(sc.reason ? { reason: sc.reason } : {}),
           ...(pnlDiffers ? { pnl_amount: Math.round(pnl * 100) / 100 } : {}),
@@ -714,6 +715,7 @@ export async function GET(request) {
           period_no: p,
           amount: Math.round(pnl * 100) / 100,
           source: "pnl",
+          basis: "pnl",
           superseded: false,
         });
       }
@@ -739,9 +741,9 @@ export async function GET(request) {
       account, start, end, today,
       actuals: actuals.data,
       budget_periods,
-      account_state: budget_mode === "envelope" ? "envelope" : "hourly_ok",
+      account_state: "hourly_ok",
     }),
-    week_budgets: buildWeekBudgets({ start, end, budget_periods: budget_mode === "envelope" ? [] : budget_periods }),
+    week_budgets: buildWeekBudgets({ start, end, budget_periods }),
     prior_period_comparison: await buildPriorPeriodComparison({
       supa, rangeStart: start, rangeEnd: end, today,
       isAggregate: false, account,
