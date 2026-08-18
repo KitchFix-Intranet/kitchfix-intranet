@@ -56,9 +56,13 @@ function Hero({ children }) { return <div className="kpi-sig-hero-lane">{childre
 function Sub({ children }) { return <div className="kpi-sig-sub-lane">{children}</div>; }
 // V31 item 3 - facts row replaces the viz lane. Pinned to foot above
 // a hairline. n-up grid; every item is label + medium-size value.
+// V33 P0 - facts grid is always 2-col (see .kpi-sig-facts CSS) so four
+// facts wrap 2x2. Prior JSX set columns from items.length inline, so
+// four facts landed in one 57.6px x4 row that clipped 18 label/value
+// pairs at 1180.
 function Facts({ items }) {
   return (
-    <div className="kpi-sig-facts" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+    <div className="kpi-sig-facts">
       {items.map((it, i) => (
         <div key={i} className="kpi-sig-fact">
           <div className={`kpi-sig-fact-lab ${it.labClass || ""}`}>{it.label}</div>
@@ -105,11 +109,17 @@ function PaceCard({ board }) {
   const under = v < 0;
   const eyebrow = inProgress ? "SPENDING PACE" : "FINAL VS BUDGET";
 
-  // V32-2 sub-line differs per state.
+  // V32-2 + V33 P0 sub-line follows the SIGN of the variance (words
+  // and arrow must agree). Negative variance = spent LESS than the
+  // prorated budget = the account is BEHIND its even burn (spending
+  // slower than plan). Positive variance = spent MORE = ahead of it.
+  // Prior wording was inverted, so `▼ $1,330` (green, under pace) read
+  // as "ahead of an even burn" - the words said the opposite of the
+  // arrow.
   const subLine = inProgress
     ? (v == null || Math.abs(v) < 0.5
         ? `on an even burn, ${elapsedPct != null ? Math.round(elapsedPct) : "—"}% into the period`
-        : `${under ? "ahead of" : "behind"} an even burn, ${elapsedPct != null ? Math.round(elapsedPct) : "—"}% into the period`)
+        : `${under ? "behind" : "ahead of"} an even burn, ${elapsedPct != null ? Math.round(elapsedPct) : "—"}% into the period`)
     : "period closed";
 
   // V32-3 in-progress: Spent · Should be at · Projected end · Left to spend
@@ -208,7 +218,7 @@ function OvertimeCard({ board }) {
         { label: "OT cost", value: otCost != null ? fmt$(otCost) : "—" },
         hoursFact,
         { label: "OT workers", value: workersTotal > 0 ? `${otWorkers} of ${workersTotal}` : "—" },
-        { label: "Longest OT week", value: longest ? `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` : "—" },
+        { label: "Peak OT week", value: longest ? `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` : "—" },
       ]} />
     </SignalCard>
   );
@@ -247,7 +257,7 @@ function HoursLeftCard({ board }) {
         <Sub><span className="kpi-sig-sub-mute">no budget to compare</span></Sub>
         <Facts items={[
           { label: "Per week",     value: "—", muted: true },
-          { label: "Per worker/wk", value: "—", muted: true },
+          { label: "Per worker", value: "—", muted: true },
           { label: "Budget left",  value: "—" },
           { label: "Blended rate", value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
         ]} />
@@ -277,7 +287,7 @@ function HoursLeftCard({ board }) {
       <Sub>{heroSub}</Sub>
       <Facts items={[
         { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
-        { label: "Per worker/wk", value: perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—", muted: perWorkerPerWeek == null },
+        { label: "Per worker", value: perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—", muted: perWorkerPerWeek == null },
         { label: "Budget left",  value: isOver ? <ArrowFigure v={Math.abs(dollarsLeft)} size="value" /> : fmt$(dollarsLeft ?? 0) },
         { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
       ]} />
@@ -321,16 +331,22 @@ function PayrollDataCard({ board, freshness }) {
       <Hero>
         <span className="kpi-sig-hero-val num">{priced} of {total}</span>
       </Hero>
+      {/* V33 P0 payroll sub - "worker-weeks with pay data in" is the
+          main sub-line. When unapproved > 0 the action sentence renders
+          on its OWN LINE below (was concatenated, missing space, and
+          clipped at 294px card width). */}
       <Sub>
         worker-weeks with pay data in
-        {hasUnapproved && (
-          <>{" "}<span className="kpi-sig-sub-action">· {fmtHrs(unpricedHrs)} hrs need approval in Rippling</span></>
-        )}
       </Sub>
+      {hasUnapproved && (
+        <div className="kpi-sig-action-line">
+          {fmtHrs(unpricedHrs)} hrs need approval in Rippling
+        </div>
+      )}
       <Facts items={[
         { label: "Unapproved hrs", value: hasUnapproved ? fmtHrs(unpricedHrs) : "—", tone: hasUnapproved ? "warn" : undefined },
         {
-          label: <span className="kpi-sig-fact-est" title={willRiseTitle}>Dollars will rise</span>,
+          label: <span className="kpi-sig-fact-est" title={willRiseTitle}>Will rise</span>,
           value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
           muted: willRise == null,
         },

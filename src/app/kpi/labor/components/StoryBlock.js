@@ -482,7 +482,10 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
           {showOriginalLabel && (
             <span className="kpi-wh-tgt">
               <span className="kpi-wh-tgt-dash" aria-hidden="true" />
-              original <b>{fmt$(board.weekly_original_target)}</b>
+              {/* V33 item 4d - `original` only means something when an
+                  adjusted line renders alongside it. On closed periods
+                  (no adjusted) label it plainly `weekly target`. */}
+              {showAdjustedLabel ? "original" : "weekly target"} <b>{fmt$(board.weekly_original_target)}</b>
             </span>
           )}
           {showAdjustedLabel && (

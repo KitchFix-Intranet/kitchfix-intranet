@@ -42,27 +42,29 @@ const DEF_LINES = {
   cost_per_worker: "Cost / worker = spend / elapsed weeks / distinct workers ($/person/week). Percentage change vs prior. Less is greener.",
 };
 
+// V33 P0 - every strip value renders ABSOLUTE; the arrow carries
+// direction (V29-18). Prior fmt for delta$ passed a "-" sign alongside
+// the arrow, producing `▼ -$1.21` (double negative).
 function fmtDelta(now, prior, unit) {
-  if (now == null || prior == null) return { text: "—", tone: undefined, arrow: null };
+  if (now == null || prior == null) return { text: "—", arrow: null };
   if (unit === "delta$") {
     const d = now - prior;
-    if (Math.abs(d) < 0.005) return { text: `$${now.toFixed(2)}`, tone: undefined, arrow: null };
-    return { text: `${d < 0 ? "-" : ""}$${Math.abs(d).toFixed(2)}`, delta: d, arrow: d < 0 ? "▼" : "▲" };
+    if (Math.abs(d) < 0.005) return { text: `$${now.toFixed(2)}`, arrow: null };
+    return { text: `$${Math.abs(d).toFixed(2)}`, delta: d, arrow: d < 0 ? "▼" : "▲" };
   }
   if (unit === "points") {
     const d = now - prior;
-    if (Math.abs(d) < 0.05) return { text: `${d.toFixed(1)} pts`, arrow: null };
+    if (Math.abs(d) < 0.05) return { text: `${Math.abs(d).toFixed(1)} pts`, arrow: null };
     return { text: `${Math.abs(d).toFixed(1)} pts`, delta: d, arrow: d < 0 ? "▼" : "▲" };
   }
   if (unit === "workers") {
     const d = now - prior;
-    if (d === 0) return { text: `${d}`, arrow: null };
+    if (d === 0) return { text: "0", arrow: null };
     return { text: `${Math.abs(d)}`, delta: d, arrow: d < 0 ? "▼" : "▲" };
   }
-  // pct
   const base = prior === 0 ? 1 : prior;
   const dPct = ((now - prior) / base) * 100;
-  if (Math.abs(dPct) < 0.05) return { text: `${dPct.toFixed(1)}%`, arrow: null };
+  if (Math.abs(dPct) < 0.05) return { text: `${Math.abs(dPct).toFixed(1)}%`, arrow: null };
   return { text: `${Math.abs(dPct).toFixed(1)}%`, delta: dPct, arrow: dPct < 0 ? "▼" : "▲" };
 }
 
@@ -99,7 +101,7 @@ function HelpButton() {
       >?</button>
       {open && (
         <div className="kpi-cmp-help-pop" role="dialog">
-          <h5>COMPARISON</h5>
+          <h5>COMPARISON · SAME MEASURES, SCALE-FREE</h5>
           {MEASURE_ORDER.map(k => (
             <div key={k} className="kpi-cmp-help-row">
               <b>{MEASURE_META[k].label}</b>{" "}{DEF_LINES[k]}
@@ -141,7 +143,8 @@ export function ComparisonStrip({ prior_period_comparison }) {
           </div>
         ))}
       </div>
-      <HelpButton />
+      <div className="kpi-cmp-source">PERIOD {pp.prior_period_no} · 4 wks closed</div>
+      <div className="kpi-cmp-help-wrap"><HelpButton /></div>
     </div>
   );
 }

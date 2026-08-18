@@ -4,7 +4,7 @@
 // V21-13 - ALL THE NUMBERS. Two labeled groups side by side inside the
 // existing bordered strip.
 //   BUDGET · Budget · Spent to date · Pace · Projected end
-//   CREW   · Workers · Avg rate · Weekly allowance · Unpriced hours
+//   CREW   · Workers · Avg rate · Weekly allowance · Unapproved hours
 // Collapsed-by-default; state persisted (V8-12/S-12; key name unchanged).
 
 import { useEffect, useState } from "react";
@@ -101,6 +101,9 @@ export function DetailsStrip({ board }) {
                 caption="blended · $/hr"
                 muted={avgRate == null}
               />
+              {/* V33 item 4d - weekly allowance shows a bare dash with
+                  `does not apply` on closed periods. Correct; the muted
+                  colour tells the reader it is absent, not a value. */}
               <Cell
                 label="Weekly allowance"
                 value={allowance != null ? fmt$(allowance) : "—"}
@@ -109,8 +112,10 @@ export function DetailsStrip({ board }) {
                   : "does not apply"}
                 muted={allowance == null}
               />
+              {/* V33 item 4a - Unpriced -> Unapproved rename across the
+                  board so the vocabulary does not fragment. */}
               <Cell
-                label="Unpriced hours"
+                label="Unapproved hours"
                 value={fmtHrs(unpriced || 0)}
                 caption={unpriced > 0 ? "in range" : "none in range"}
                 muted={!(unpriced > 0)}

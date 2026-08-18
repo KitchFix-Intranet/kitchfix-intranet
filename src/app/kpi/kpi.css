@@ -41,6 +41,17 @@
 
    S-3 flip: --kf-scale is set once here. Revert to 1 to restore
    pre-scale rendering exactly (the layer wiring test). */
+/* V33 item 2 - ONE shared keyboard focus ring across every
+   interactive KPI element. Prior state: only .kpi-bB declared one, so
+   every other button/link/chip fell back to browser default (which is
+   suppressed by many resets). Applies to all interactive descendants
+   of .kpi-app. */
+.kpi-app :focus-visible {
+  outline: 2px solid var(--navy-700);
+  outline-offset: 2px;
+  border-radius: var(--kpi-ctl-r);
+}
+
 .kpi-app {
   --kf-scale: 0.9;
 
@@ -148,6 +159,10 @@
      weeks only). Kevin's spec: --kpi-blue-500 family, #3E97D1. */
   --kpi-blue-500:  #3E97D1;
   --kpi-blue-100:  #E4F1FA;
+
+  /* V33 - comparison strip left accent (purple, distinguishes the
+     context strip from the four signal cards' navy/green accents). */
+  --kpi-purple-600: #7A3E9D;
 
   background: var(--surface-page);
   min-height: 100vh;
@@ -1162,6 +1177,9 @@
   background: var(--n-900);
   color: var(--n-0); font-weight: 700;
 }
+/* V33 item 2 - hover on the unselected side; the selected side keeps
+   the navy fill so no hover feedback is needed there. */
+.kpi-seg button:not(.on):hover { background: var(--n-100); color: var(--n-800); }
 /* V25-12 - help button inside the control bar joins the tbar's control
    height, replacing its stand-alone 20px sizing (which broke the 28px
    band alignment). Global `.kpi-help` outside the tbar is untouched. */
@@ -1354,6 +1372,11 @@
    ALL / EAST / WEST - each wearing the page card skin. The group
    header row IS the pseudo-key selector; member rows sit inside
    the card, 44px tall, two-line lockup. */
+/* V33 item 1 - folio stretches to shell foot and its bottom-left
+   corner matches --kpi-card-r. Prior render stopped 33px short of the
+   app foot with a square corner while every other corner of the shell
+   was rounded. Grid `align-items: stretch` (default) drives the height
+   parity; explicit `height: 100%` is defensive. */
 .kpi-folio {
   border-right: 1px solid var(--border-subtle);
   background: var(--n-50);
@@ -1361,6 +1384,8 @@
   display: flex; flex-direction: column;
   gap: var(--kpi-sp-3);
   min-width: 0;
+  height: 100%;
+  border-bottom-left-radius: var(--kpi-card-r);
 }
 /* Fallback (no directory yet) - v6 flat list rendered under a caption. */
 .kpi-folio-h {
@@ -2221,8 +2246,17 @@
 }
 .kpi-sig-sub-mute { color: var(--n-500); }
 /* V32-10 - Payroll action sub-line calls out the required action in
-   Rippling; amber tone signals the ask. */
+   Rippling; amber tone signals the ask. V33 P0 - the action moves to
+   its own line beneath the sub lane so it does not clip on a 294px
+   card. Wraps if the text is too long. */
 .kpi-sig-sub-action { color: #92580A; font-weight: 700; }
+.kpi-sig-action-line {
+  font-size: var(--kpi-t-label);
+  color: #92580A;
+  font-weight: 700;
+  margin-top: var(--kpi-sp-1);
+  line-height: 1.35;
+}
 
 /* V31 item 3 - FACTS ROW replaces the viz lane. Pinned to card foot
    above a hairline. n-up grid; every item is label + medium-size
@@ -2232,6 +2266,7 @@
   padding-top: var(--kpi-sp-3);
   border-top: 1px solid var(--n-100);
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--kpi-sp-3);
   flex: none;
 }
@@ -2264,17 +2299,33 @@
   cursor: help;
 }
 
-/* V32-12..V32-15 - comparison strip. Context weight (tinted ground,
-   body-size figures, no card chrome). Six scale-free deltas + a `?`
-   at the right end. Sits between the signal row and ALL THE NUMBERS.
-   Not a fifth card. */
+/* V33 P0 - the comparison strip joins the card family. White ground,
+   card border, card shadow, --kpi-card-r radius, a 4px purple left
+   accent (matches the rule every signal card carries so it reads as
+   the same family). One row at --kpi-row (36 rendered) with hairline
+   dividers after the title and between every measure - the run-on
+   look was these dividers being absent entirely. */
 .kpi-cmp {
-  display: flex; align-items: center;
-  gap: var(--kpi-sp-4);
-  padding: var(--kpi-sp-3) var(--kpi-card-pad);
-  background: var(--n-50);
-  border: 1px solid var(--n-200);
+  display: flex; align-items: stretch;
+  height: var(--kpi-row);
+  background: var(--surface-card);
+  border: 1px solid var(--n-300);
   border-radius: var(--kpi-card-r);
+  box-shadow: var(--card-shadow);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-cmp::before {
+  content: "";
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--kpi-sp-1);
+  background: var(--kpi-purple-600, #7A3E9D);
+}
+.kpi-cmp-title {
+  display: flex; align-items: center;
+  padding: 0 var(--kpi-card-pad) 0 calc(var(--kpi-card-pad) + var(--kpi-sp-1));
+  border-right: 1px solid var(--n-200);
+  flex: none;
 }
 .kpi-cmp-title-lab {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.08em;
@@ -2283,10 +2334,18 @@
 .kpi-cmp-items {
   flex: 1 1 auto;
   display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--kpi-sp-3);
   min-width: 0;
+  align-items: center;
 }
-.kpi-cmp-item { min-width: 0; }
+.kpi-cmp-item {
+  min-width: 0;
+  padding: 0 var(--kpi-sp-3);
+  border-right: 1px solid var(--n-200);
+  display: flex; align-items: baseline; gap: var(--kpi-sp-2);
+  height: 100%;
+  overflow: hidden;
+}
+.kpi-cmp-item:last-child { border-right: 0; }
 .kpi-cmp-item-lab {
   font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 700;
   letter-spacing: 0.04em; text-transform: uppercase;
@@ -2297,12 +2356,26 @@
   color: var(--n-900);
   font-variant-numeric: var(--num-tabular);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: var(--kpi-sp-1);
   display: inline-flex; align-items: baseline; gap: var(--kpi-sp-1);
+  margin-left: auto;
 }
 .kpi-cmp-item-val-good { color: var(--green-700); }
 .kpi-cmp-item-val-bad  { color: var(--red-700); }
 .kpi-cmp-arr { font-size: 0.9em; }
+.kpi-cmp-source {
+  padding: 0 var(--kpi-sp-3);
+  border-left: 1px solid var(--n-200);
+  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500;
+  display: flex; align-items: center;
+  white-space: nowrap;
+  flex: none;
+}
+.kpi-cmp-help-wrap {
+  display: flex; align-items: center;
+  padding: 0 var(--kpi-sp-3);
+  border-left: 1px solid var(--n-200);
+  flex: none;
+}
 
 .kpi-cmp-help-anchor { position: relative; display: inline-block; }
 .kpi-cmp-help {
@@ -2374,16 +2447,22 @@
   overflow: hidden;
 }
 /* V30-3/V30-4 - numbers-strip header uses the same card-pad + inner
-   lane-head as the signal cards so first-text baselines match. */
+   lane-head as the signal cards so first-text baselines match.
+   V33 item 3 - header is a header, not a card body: padding shrinks
+   from card-pad all sides to `sp-2 card-pad`, giving ~36px matching
+   --kpi-row. Type size unchanged. */
 .kpi-det-h {
   display: flex; align-items: center; gap: var(--kpi-sp-3);
-  width: 100%; padding: var(--kpi-card-pad);
+  width: 100%; padding: var(--kpi-sp-2) var(--kpi-card-pad);
   background: var(--n-50);
   border: 0; border-bottom: 1px solid var(--n-200);
   cursor: pointer;
   font: inherit;
   text-align: left;
+  transition: background 0.12s;
 }
+/* V33 item 2 - collapsible header must show feedback. */
+.kpi-det-h:hover { background: var(--n-100); }
 .kpi-det-h > * {
   height: var(--kpi-h-lane);
   display: inline-flex; align-items: center;
@@ -2446,7 +2525,11 @@
   color: var(--n-900); margin-left: 2px;
   white-space: nowrap;
 }
-.kpi-det-v-mute { color: var(--n-400); }
+/* V33 item 4d - muted values (bare dash on cells that do not apply,
+   e.g. weekly allowance on closed periods) render at the same size
+   as live values but a lighter grey so the dash reads as absent, not
+   as a number to be interpreted. */
+.kpi-det-v-mute { color: var(--n-300); }
 .kpi-det-c {
   font-size: var(--kpi-t-label); color: var(--n-500);
   white-space: nowrap;
@@ -2559,7 +2642,11 @@
   font-weight: 800; font-size: var(--kpi-t-body);
   color: var(--navy-700);
   position: sticky; top: var(--hdr); z-index: 10;
+  transition: background 0.12s;
 }
+/* V33 item 2 - period band rows are expandable but had no hover; week
+   rows already do. Match. */
+.kpi-tbl-band:hover > td { background: #DFE7F3; }
 .kpi-tbl-bandbtn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   background: transparent; border: 0;

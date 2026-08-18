@@ -199,7 +199,7 @@ function worstSeverity(states) {
 
 function flagForSeverity(s) {
   if (s === "unknown") return { label: "not covered", cls: "kpi-flag-warn" };
-  if (s === "partial" || s === "hours_only") return { label: "unpriced", cls: "kpi-flag-warn" };
+  if (s === "partial" || s === "hours_only") return { label: "unapproved", cls: "kpi-flag-warn" };
   if (s === "no_labor") return { label: "no labor", cls: "kpi-flag-mute" };
   return null;
 }
@@ -253,7 +253,7 @@ function ExceptionChip({ severity }) {
 
 function ParentExceptionChip({ count, unit }) {
   if (!count || count <= 0) return null;
-  return <span className="kpi-tbl-flag kpi-flag-warn">⚠ {count} {unit}{count === 1 ? "" : "s"} unpriced</span>;
+  return <span className="kpi-tbl-flag kpi-flag-warn">⚠ {count} {unit}{count === 1 ? "" : "s"} unapproved</span>;
 }
 
 // Aggregate child rows: group actuals by account_key per week.
@@ -606,7 +606,7 @@ export function WeekTable({
                 <th>Hours</th>
                 <th>OT 1.5&times;</th>
                 {showHoliday && <th>Holiday 2&times;</th>}
-                {showUnpriced && <th>Unpriced</th>}
+                {showUnpriced && <th>Unapproved</th>}
                 {showRate && <th>Rate</th>}
                 <th>Dollars</th>
               </tr>
