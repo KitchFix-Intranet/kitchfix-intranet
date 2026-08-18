@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix - Bulk entry, good / better / best</title>
+<style>
+  :root{
+    --navy:#1A3050; --navy-2:#153968; --navy-3:#22406A;
+    --ink:#0F172A; --n800:#334155; --n700:#475569; --n500:#64748B;
+    --n400:#94A3B8; --n300:#CBD5E1; --n200:#E2E8F0; --n100:#F1F5F9; --n50:#F8FAFC;
+    --green:#1F6B41; --green-bg:#E8F5EC; --green-bd:#B8DCC4; --green-fg:#2F7D4F;
+    --amber:#D9892F; --amber-bg:#FDF6EC; --amber-bd:#F0D9B5; --amber-fg:#8A5A16;
+    --page:#EEF1F5;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);font-family:var(--ui);color:var(--ink);
+       -webkit-font-smoothing:antialiased;padding:40px 24px 100px}
+  .wrap{max-width:900px;margin:0 auto}
+  .eyebrow{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500)}
+  h1{font-size:29px;line-height:36px;font-weight:800;letter-spacing:-.01em;margin-top:8px}
+  .sub{font-size:14px;line-height:20px;color:var(--n700);margin-top:10px;max-width:76ch}
+  .sub b{color:var(--ink);font-weight:600}
+  .rule{height:1px;background:var(--n200);margin:44px 0 26px}
+  .tag{display:inline-block;font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;
+       text-transform:uppercase;padding:4px 9px;border-radius:999px;margin-bottom:9px}
+  .tag.g{background:var(--n100);color:var(--n500)}
+  .tag.b{background:#E6EEF9;color:#1E4A86}
+  .tag.x{background:var(--navy-2);color:#fff}
+  h3{font-size:19px;line-height:24px;font-weight:700;letter-spacing:-.01em}
+  .why{font-size:13px;line-height:20px;color:var(--n700);margin-top:6px;margin-bottom:18px;
+       max-width:74ch}
+  .why b{color:var(--ink);font-weight:600}
+
+  /* ============ modal shell ============ */
+  .m{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 12px 32px rgba(15,23,42,.16);
+     border:1px solid var(--n200)}
+  .mh{background:var(--navy);color:#fff;padding:16px 20px}
+  .mh .t{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+  .mh .t1{font-size:15px;line-height:20px;font-weight:700}
+  .mh .t1 span{font-weight:400;color:#A9BBD6;margin-left:8px;font-size:13px}
+  .back{font-size:12px;line-height:16px;font-weight:600;color:#fff;border:1px solid rgba(255,255,255,.28);
+        border-radius:999px;padding:5px 12px;background:none;cursor:pointer;font-family:inherit}
+  .mh .n{display:flex;align-items:baseline;gap:10px;margin-top:8px}
+  .mh .big{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:28px;line-height:34px;
+           font-weight:800;letter-spacing:-.02em}
+  .mh .meta{font-size:12px;line-height:16px;color:#A9BBD6}
+  .mb{padding:18px 20px;background:#fff}
+  .mf{padding:14px 20px;background:var(--n50);border-top:1px solid var(--n200);
+      display:flex;justify-content:flex-end;gap:10px}
+  .btn{font-family:inherit;font-size:13px;line-height:20px;font-weight:700;border-radius:7px;
+       padding:10px 18px;border:1px solid transparent;cursor:pointer}
+  .btn-go{background:var(--green);color:#fff}
+  .btn-gh{background:#fff;border-color:var(--n300);color:var(--n800)}
+
+  /* ============ A: accordion, fixed ============ */
+  .day{border:1px solid var(--n200);border-radius:10px;margin-bottom:8px;overflow:hidden}
+  .dayhd{display:grid;grid-template-columns:18px 1fr 78px 92px;gap:12px;align-items:center;
+         padding:11px 14px;cursor:pointer;background:#fff}
+  .dayhd:hover{background:var(--n50)}
+  .chev{font-size:9px;color:var(--n400)}
+  .dayname{font-size:13px;line-height:18px;font-weight:600}
+  .daymeals{font-size:12px;line-height:18px;color:var(--n500);text-align:right;
+            font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .daytot{font-size:13px;line-height:18px;font-weight:700;text-align:right;
+          font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .daybody{border-top:1px solid var(--n200);background:var(--n50);padding:10px 14px 12px}
+  .gl{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+      color:var(--n500);margin-bottom:6px}
+  .srow{display:grid;grid-template-columns:1fr 56px;gap:12px;padding:5px 0;
+        border-bottom:1px solid var(--n200)}
+  .srow:last-child{border-bottom:none}
+  .srow .s{font-size:13px;line-height:18px;color:var(--n800)}
+  .srow .q{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+           font-size:13px;line-height:18px;font-weight:700}
+  .fold{font-size:12px;line-height:16px;color:var(--n500);padding-top:8px;cursor:pointer;
+        background:none;border:none;font-family:inherit}
+  .fold:hover{color:var(--n800)}
+
+  /* ============ B: pattern + days ============ */
+  .pat{border:1px solid var(--n200);border-radius:10px;overflow:hidden;margin-bottom:16px}
+  .pathd{background:var(--n50);padding:10px 14px;border-bottom:1px solid var(--n200);
+         font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;
+         text-transform:uppercase;color:var(--n500)}
+  .patrow{display:grid;grid-template-columns:1fr 64px;gap:12px;padding:8px 14px;
+          border-bottom:1px solid var(--n100)}
+  .patrow:last-child{border-bottom:none}
+  .patrow .s{font-size:13px;line-height:18px;color:var(--n800)}
+  .patrow .q{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+             font-size:14px;line-height:18px;font-weight:700}
+  .applies{font-size:11px;line-height:16px;font-weight:800;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500);margin:0 0 8px}
+  .dchip{display:grid;grid-template-columns:1fr 72px 92px;gap:12px;align-items:center;
+         padding:9px 14px;border:1px solid var(--n200);border-radius:8px;margin-bottom:6px}
+  .dchip.diff{border-color:var(--amber-bd);background:var(--amber-bg)}
+  .dchip .d{font-size:13px;line-height:18px;font-weight:600}
+  .dchip .d em{font-style:normal;font-size:11px;font-weight:600;color:var(--amber-fg);
+               margin-left:8px}
+  .dchip .mm,.dchip .tt{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+                        font-size:12px;line-height:18px}
+  .dchip .mm{color:var(--n500)} .dchip .tt{font-weight:700;font-size:13px}
+
+  /* ============ C: matrix ============ */
+  .mx{border:1px solid var(--n200);border-radius:10px;overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:0}
+  .mx thead th{background:var(--n50);border-bottom:1px solid var(--n200);padding:9px 6px;
+               text-align:center;font-size:10px;line-height:13px;font-weight:800;
+               letter-spacing:.04em;text-transform:uppercase;color:var(--n500);white-space:nowrap}
+  .mx thead th.lead{text-align:left;padding-left:14px;width:170px}
+  .mx thead th b{display:block;font-size:12px;color:var(--ink);font-weight:700;letter-spacing:0;
+                 text-transform:none}
+  .mx tbody td{border-bottom:1px solid var(--n100);padding:8px 6px;text-align:center;
+               font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;
+               line-height:18px;font-weight:600;color:var(--n800)}
+  .mx tbody td.lead{text-align:left;padding-left:14px;font-family:var(--ui);font-weight:400;
+                    font-size:13px;color:var(--n800);white-space:nowrap}
+  .mx tbody tr.grp td{background:var(--n50);font-size:10px;line-height:14px;font-weight:800;
+                      letter-spacing:.06em;text-transform:uppercase;color:var(--n500);
+                      text-align:left;padding:6px 14px;font-family:var(--ui)}
+  .mx td.off{color:var(--n300)}
+  .mx td.diff{background:var(--amber-bg);color:var(--amber-fg);font-weight:800;
+              box-shadow:inset 0 0 0 1px var(--amber-bd)}
+  .mx tfoot td{border-top:2px solid var(--n200);padding:9px 6px;text-align:center;
+               font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;
+               line-height:18px;font-weight:700;background:var(--n50)}
+  .mx tfoot td.lead{text-align:left;padding-left:14px;font-family:var(--ui);font-size:10px;
+                    font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n500)}
+  .mx tfoot tr.money td{font-size:12px;color:var(--n700);font-weight:600}
+  .foldbar{padding:10px 14px;border-top:1px solid var(--n200);background:#fff}
+  .foldbar button{background:none;border:none;font-family:inherit;font-size:12px;line-height:16px;
+                  color:var(--n500);cursor:pointer;display:flex;justify-content:space-between;
+                  width:100%;align-items:center}
+  .foldbar button:hover{color:var(--n800)}
+  .foldbar .cta{font-size:10px;font-weight:800;letter-spacing:.06em}
+
+  .note{background:#fff;border:1px solid var(--n200);border-radius:12px;padding:18px 20px;
+        margin-top:16px}
+  .note h4{font-size:11px;line-height:16px;font-weight:800;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500);margin-bottom:10px}
+  .note ul{list-style:none}
+  .note li{font-size:13px;line-height:20px;color:var(--n700);padding-left:16px;position:relative;
+           margin-bottom:7px}
+  .note li:last-child{margin-bottom:0}
+  .note li:before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;
+                  border-radius:50%;background:var(--n300)}
+  .note li b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KitchFix Ops Hub · Service Calendar · Bulk entry</div>
+  <h1>Bulk entry - good, better, best</h1>
+  <p class="sub">The layout is pushed right and the nested cream card is inconsistent, but
+     those are symptoms. The real problem is the shape: <b>six accordions, each holding the
+     same table, so reviewing a week means scrolling through six identical tables to find
+     the one day that differs.</b> Bulk entry exists precisely because the days are mostly
+     the same. The design should exploit that, not fight it.</p>
+
+  <div class="rule"></div>
+
+  <!-- ==================== GOOD ==================== -->
+  <span class="tag g">Good</span>
+  <h3>Consistent accordion</h3>
+  <p class="why">Keep the shape, fix everything wrong with it. The left gutter goes so the
+     content starts where the eye already is. Day names stop truncating. The nested cream
+     card - a card inside a card inside a table - collapses to one surface. Rows use the same
+     grid as the entry ledger, so the two surfaces finally look related. Zeros fold.</p>
+
+  <div class="m">
+    <div class="mh">
+      <div class="t">
+        <div class="t1">Custom values, 6 days <span>Cincinnati Reds</span></div>
+        <button class="back">Go back</button>
+      </div>
+      <div class="n"><div class="big">$21,791.22</div><div class="meta">1,332 meals</div></div>
+    </div>
+    <div class="mb">
+      <div class="day">
+        <div class="dayhd"><span class="chev">&#9660;</span><span class="dayname">Mon, Aug 17</span>
+          <span class="daymeals">222 meals</span><span class="daytot">$3,631.87</span></div>
+        <div class="daybody">
+          <div class="gl">Minor League</div>
+          <div class="srow"><span class="s">Breakfast</span><span class="q">110</span></div>
+          <div class="srow"><span class="s">Lunch</span><span class="q">110</span></div>
+          <div class="srow"><span class="s">Coffee Service</span><span class="q">1</span></div>
+          <div class="srow"><span class="s">Fountain Bev</span><span class="q">1</span></div>
+          <button class="fold">2 services not running today</button>
+        </div>
+      </div>
+      <div class="day"><div class="dayhd"><span class="chev">&#9654;</span><span class="dayname">Tue, Aug 18</span>
+        <span class="daymeals">222 meals</span><span class="daytot">$3,631.87</span></div></div>
+      <div class="day"><div class="dayhd"><span class="chev">&#9654;</span><span class="dayname">Wed, Aug 19</span>
+        <span class="daymeals">222 meals</span><span class="daytot">$3,631.87</span></div></div>
+      <div class="day"><div class="dayhd"><span class="chev">&#9654;</span><span class="dayname">Thu, Aug 20</span>
+        <span class="daymeals">222 meals</span><span class="daytot">$3,631.87</span></div></div>
+      <div class="day"><div class="dayhd"><span class="chev">&#9654;</span><span class="dayname">Fri, Aug 21</span>
+        <span class="daymeals">222 meals</span><span class="daytot">$3,631.87</span></div></div>
+      <div class="day"><div class="dayhd"><span class="chev">&#9654;</span><span class="dayname">Sat, Aug 22</span>
+        <span class="daymeals">222 meals</span><span class="daytot">$3,631.87</span></div></div>
+    </div>
+    <div class="mf"><button class="btn btn-gh">Go back</button><button class="btn btn-go">Confirm and save</button></div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- ==================== BETTER ==================== -->
+  <span class="tag b">Better</span>
+  <h3>Pattern, then exceptions</h3>
+  <p class="why">Say the values <b>once</b>. That is what bulk entry means. The pattern sits
+     at the top as the thing being applied, and below it the days it applies to - each one a
+     single line. A day that differs from the pattern is tinted and says how. You review six
+     days in six lines instead of six tables.</p>
+
+  <div class="m">
+    <div class="mh">
+      <div class="t">
+        <div class="t1">Custom values, 6 days <span>Cincinnati Reds</span></div>
+        <button class="back">Go back</button>
+      </div>
+      <div class="n"><div class="big">$21,791.22</div><div class="meta">1,332 meals</div></div>
+    </div>
+    <div class="mb">
+      <div class="pat">
+        <div class="pathd">Applying these values &middot; Minor League</div>
+        <div class="patrow"><span class="s">Breakfast</span><span class="q">110</span></div>
+        <div class="patrow"><span class="s">Lunch</span><span class="q">110</span></div>
+        <div class="patrow"><span class="s">Coffee Service</span><span class="q">1</span></div>
+        <div class="patrow"><span class="s">Fountain Bev</span><span class="q">1</span></div>
+      </div>
+      <div class="applies">To these 6 days</div>
+      <div class="dchip"><span class="d">Mon, Aug 17</span><span class="mm">222 meals</span><span class="tt">$3,631.87</span></div>
+      <div class="dchip"><span class="d">Tue, Aug 18</span><span class="mm">222 meals</span><span class="tt">$3,631.87</span></div>
+      <div class="dchip diff"><span class="d">Wed, Aug 19 <em>Lunch 60</em></span><span class="mm">172 meals</span><span class="tt">$2,987.42</span></div>
+      <div class="dchip"><span class="d">Thu, Aug 20</span><span class="mm">222 meals</span><span class="tt">$3,631.87</span></div>
+      <div class="dchip"><span class="d">Fri, Aug 21</span><span class="mm">222 meals</span><span class="tt">$3,631.87</span></div>
+      <div class="dchip"><span class="d">Sat, Aug 22</span><span class="mm">222 meals</span><span class="tt">$3,631.87</span></div>
+    </div>
+    <div class="mf"><button class="btn btn-gh">Go back</button><button class="btn btn-go">Confirm and save</button></div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- ==================== BEST ==================== -->
+  <span class="tag x">Best</span>
+  <h3>The week at once</h3>
+  <p class="why">Services down, days across. The whole week in one table, no expanding, no
+     scrolling to compare. This is how anyone would do it in a spreadsheet, which is exactly
+     the mental model a chef brings. <b>Any cell that breaks the pattern is tinted</b> - so
+     the outlier finds you instead of you hunting for it. Totals sit at the foot of each
+     column where they belong.</p>
+
+  <div class="m">
+    <div class="mh">
+      <div class="t">
+        <div class="t1">Custom values, 6 days <span>Cincinnati Reds</span></div>
+        <button class="back">Go back</button>
+      </div>
+      <div class="n"><div class="big">$21,147.77</div><div class="meta">1,282 meals &middot; Mon Aug 17 to Sat Aug 22</div></div>
+    </div>
+    <div class="mb">
+      <div class="mx">
+        <table>
+          <thead>
+            <tr>
+              <th class="lead">Service</th>
+              <th>Mon<b>17</b></th><th>Tue<b>18</b></th><th>Wed<b>19</b></th>
+              <th>Thu<b>20</b></th><th>Fri<b>21</b></th><th>Sat<b>22</b></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="grp"><td colspan="7">Minor League</td></tr>
+            <tr><td class="lead">Breakfast</td>
+              <td>110</td><td>110</td><td>110</td><td>110</td><td>110</td><td>110</td></tr>
+            <tr><td class="lead">Lunch</td>
+              <td>110</td><td>110</td><td class="diff">60</td><td>110</td><td>110</td><td>110</td></tr>
+            <tr><td class="lead">Coffee Service</td>
+              <td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
+            <tr><td class="lead">Fountain Bev</td>
+              <td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
+          </tbody>
+          <tfoot>
+            <tr><td class="lead">Meals</td>
+              <td>222</td><td>222</td><td>172</td><td>222</td><td>222</td><td>222</td></tr>
+            <tr class="money"><td class="lead">Total</td>
+              <td>3,631</td><td>3,631</td><td>2,987</td><td>3,631</td><td>3,631</td><td>3,631</td></tr>
+          </tfoot>
+        </table>
+        <div class="foldbar">
+          <button>2 services not running this week <span class="cta">SHOW</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="mf"><button class="btn btn-gh">Go back</button><button class="btn btn-go">Confirm and save 6 days</button></div>
+  </div>
+
+  <div class="note">
+    <h4>Why Best</h4>
+    <ul>
+      <li><b>Six accordions become eight rows.</b> The entire week fits without scrolling or
+        expanding anything.</li>
+      <li><b>The outlier is the point.</b> Wednesday's Lunch at 60 is visible in the first
+        second. In the current design you would have to expand all six days and compare
+        tables from memory to find it.</li>
+      <li><b>It matches the mental model.</b> A chef checking a week of counts is doing a
+        spreadsheet task, and this is the spreadsheet shape.</li>
+      <li><b>No nested containers.</b> One table on one surface, rather than a card holding a
+        card holding a table.</li>
+      <li><b>Column totals do real work.</b> Meals and dollars per day sit under their own
+        column, so a wrong cell shows up twice - in the cell and in the foot.</li>
+      <li><b>Same discipline as the ledger redesign:</b> no tildes, no per-cell dollar signs,
+        tabular figures, zeros folded, and the outlier tint reuses the amber already used for
+        needs-attention everywhere else.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <h4>Open question for you</h4>
+    <ul>
+      <li><b>Should the cells be editable in place?</b> The matrix makes it natural - click
+        Wednesday's Lunch, type 60, tab onward. That turns bulk entry from "apply a pattern
+        then fix days one by one" into a single surface where the whole week is entered. It
+        is more build than the read-only version, and it is a real question rather than an
+        assumption, so I have rendered it read-only and left the decision with you.</li>
+      <li><b>Seven-day weeks</b> add one column. At the modal's current width that fits, but
+        it is the width worth checking on a 1024px laptop before committing.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,479 @@
+/* ═══════════════════════════════════════════════════════════════════
+   BulkReviewMatrix - services down, days across (PR-J, 2026-08-18).
+   ═══════════════════════════════════════════════════════════════════
+
+   Design authority: docs/design/KF_BULK_ENTRY_GOOD_BETTER_BEST.html
+   "Best" section.
+
+   Token-only. Fixed pixel values below are intrinsic layout geometry
+   (day-column floor width, sticky-column width, matrix row density).
+   Type, spacing, and radius all resolve to tokens.
+
+   No mono anywhere. Inter + var(--num-tabular) for every figure -
+   PR-H1 / PR-H2 supersession chain.
+   ─────────────────────────────────────────────────────────────────── */
+
+.sc-brm-card {
+  /* Overlay-card default already provides width; matrix widens the
+     modal comfortably on desktop while staying under the design's
+     ~900px ceiling. Overrides sc-overlay-card's tighter default. */
+  max-width: 960px;
+  width: min(96vw, 960px);
+}
+
+.sc-brm-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+  min-height: 0;
+  background: var(--surface-card);
+  border-radius: var(--sc2-radius-container);
+  overflow: hidden;
+  /* Opt back to the UI font (Inter) - matches the .sc-v2-entry
+     workaround for the .oh-app Mulish inheritance chain. Kevin ruling
+     2026-08-18 (PR-J): every figure resolves Inter, zero mono, by
+     computed style. See GOTCHAS "The Ops Hub screen typeface
+     disagrees with the design system doc" for the standing drift. */
+  font-family: var(--sc2-font-ui);
+}
+
+/* ─── Header (navy scoreboard) ─── */
+
+.sc-brm-head {
+  background: var(--sc2-rail-bg);
+  color: var(--sc2-rail-text);
+  padding: var(--sc2-space-4) var(--sc2-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.sc-brm-head-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sc2-space-4);
+}
+.sc-brm-head-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sc2-space-2);
+  flex-wrap: wrap;
+}
+.sc-brm-head-subtitle {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-rail-text-strong);
+}
+.sc-brm-head-account {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+  font-weight: var(--sc2-wt-medium);
+}
+.sc-brm-head-back {
+  font-family: inherit;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-rail-text);
+  border: var(--sc2-border-thin) solid var(--sc2-rail-cta-quiet-border);
+  border-radius: var(--sc2-radius-pill);
+  padding: var(--sc2-space-1) var(--sc2-space-3);
+  background: transparent;
+  cursor: pointer;
+}
+.sc-brm-head-back:hover {
+  border-color: var(--sc2-rail-text-muted);
+  color: var(--sc2-rail-text-strong);
+}
+.sc-brm-head-figs {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sc2-space-3);
+  flex-wrap: wrap;
+}
+.sc-brm-head-amount {
+  font-size: var(--sc2-size-h2);
+  font-weight: var(--sc2-wt-display);
+  color: var(--sc2-rail-text-strong);
+  letter-spacing: -0.02em;
+  font-variant-numeric: var(--num-tabular);
+  line-height: 1.1;
+}
+.sc-brm-head-meta {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-rail-text-muted);
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-brm-head-sep {
+  color: var(--sc2-rail-text-subtle);
+}
+
+/* ─── Body wrap ─── */
+
+.sc-brm-body {
+  padding: var(--sc2-space-4) var(--sc2-space-5) var(--sc2-space-3);
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
+}
+.sc-brm-note {
+  font-size: var(--sc2-size-caption);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  border-radius: var(--sc2-radius-cell);
+  line-height: 1.5;
+}
+.sc-brm-note--skip {
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: var(--sc2-border-thin) solid var(--border-subtle);
+}
+.sc-brm-note--overwrite {
+  /* Uses the shipped needs-attention amber family - same tokens as
+     the SC tile's needs-entry state, so the operator's palette is
+     consistent across the surface. */
+  color: var(--status-needs-fg);
+  background: var(--status-needs-subtle);
+  border-left: 3px solid var(--status-needs-strong);
+}
+.sc-brm-note-icon {
+  margin-right: var(--sc2-space-1);
+  font-weight: var(--sc2-wt-bold);
+}
+
+/* ─── Matrix (the point of this PR) ─── */
+
+.sc-brm-matrix-wrap {
+  border: var(--sc2-border-thin) solid var(--border-subtle);
+  border-radius: var(--sc2-radius-cell);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+/* Horizontal-scroll container (Kevin ruling 2026-08-18 requirement 3:
+   scroll when day columns no longer fit at the floor width; do not
+   shrink cells below legibility). The scoped scroll keeps the modal
+   frame + header + footer stationary; only the matrix scrolls. */
+.sc-brm-matrix-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.sc-brm-matrix-scroll:focus-visible {
+  outline: 2px solid var(--action-primary-bg);
+  outline-offset: -2px;
+}
+
+.sc-brm-matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: var(--num-tabular);
+}
+.sc-brm-matrix th,
+.sc-brm-matrix td {
+  padding: 0;
+}
+
+/* Column-width floor - three-digit values are the sizing target.
+   Body font at var(--sc2-size-body) is fluid (12.5-14px per tokens).
+   "999" at 14px tabular ~= 27px, plus 20px cell padding, plus 8px
+   breathing room per side to keep the outlier tint's inset shadow
+   from feeling squeezed = 68px minimum. Kevin ruling 2026-08-18
+   requirement 3. */
+.sc-brm-matrix thead th.sc-brm-th-day,
+.sc-brm-matrix tbody td.sc-brm-cell,
+.sc-brm-matrix tfoot td.sc-brm-cell {
+  min-width: 68px;
+  text-align: center;
+  padding: var(--sc2-space-2) var(--sc2-space-2);
+  font-family: inherit;
+  font-variant-numeric: var(--num-tabular);
+}
+
+/* Sticky first column - the requirement that makes horizontal scroll
+   acceptable rather than a compromise (Kevin ruling 2026-08-18
+   requirement 1). Applies to header, body, and footer left cells so
+   the service name column stays visible while the day columns scroll. */
+.sc-brm-th-lead,
+.sc-brm-cell-lead {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-card);
+  min-width: 168px;
+  max-width: 200px;
+  text-align: left;
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  font-family: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sc-brm-matrix thead th.sc-brm-th-lead {
+  background: var(--surface-sunken);
+  border-bottom: var(--sc2-border-thin) solid var(--border-default);
+}
+.sc-brm-matrix tfoot td.sc-brm-cell-lead {
+  background: var(--surface-sunken);
+  border-top: var(--border-thick) solid var(--border-default);
+}
+.sc-brm-matrix tbody td.sc-brm-cell-lead {
+  background: var(--surface-card);
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
+}
+/* Right-edge divider so the sticky column reads as anchored when the
+   matrix scrolls under it. Solid token-driven line rather than a
+   gradient - stays within the fence (no raw hex, no rgba). */
+.sc-brm-th-lead,
+.sc-brm-cell-lead {
+  border-right: var(--sc2-border-thin) solid var(--border-default);
+}
+
+/* Column headers - two-line "Mon 17" style per the render. */
+.sc-brm-matrix thead th {
+  background: var(--surface-sunken);
+  border-bottom: var(--sc2-border-thin) solid var(--border-default);
+  font-family: inherit;
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+.sc-brm-th-dow {
+  display: block;
+  color: var(--text-subtle);
+}
+.sc-brm-th-num {
+  display: block;
+  font-size: var(--sc2-size-caption);
+  color: var(--text-heading);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.sc-brm-th-lead {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* Group divider row - full-width band naming the group. */
+.sc-brm-row-group td {
+  background: var(--surface-sunken);
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
+  font-family: inherit;
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  padding: var(--sc2-space-1) var(--sc2-space-3);
+  text-align: left;
+  /* Also stick horizontally so the group header stays anchored under
+     the sticky lead column when scrolled. */
+  position: sticky;
+  left: 0;
+}
+
+/* Service rows */
+.sc-brm-row-svc td {
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
+  font-size: var(--sc2-size-body);
+  color: var(--text-default);
+  font-weight: var(--sc2-wt-semibold);
+  line-height: 1.4;
+}
+.sc-brm-cell-lead {
+  font-weight: var(--sc2-wt-regular);
+  color: var(--text-default);
+  font-size: var(--sc2-size-body);
+}
+
+/* Off cell - service not running this specific day. Muted glyph,
+   no participation in outlier tint. */
+.sc-brm-cell--off {
+  color: var(--text-subtle);
+  font-weight: var(--sc2-wt-regular);
+}
+
+/* Outlier tint - amber that already carries needs-attention meaning
+   everywhere else. State-by-shape: font-weight change PLUS colour, so
+   the distinction survives grayscale. Inset shadow acts as a border
+   without disturbing the table's row grid. Uses the shipped
+   needs-entry family so palette stays consistent with SC tiles. */
+.sc-brm-cell--diff {
+  background: var(--status-needs-bg);
+  color: var(--status-needs-fg);
+  font-weight: var(--sc2-wt-display);
+  box-shadow: inset 0 0 0 1px var(--status-needs-bd);
+}
+
+/* Footer rows */
+.sc-brm-matrix tfoot .sc-brm-cell {
+  border-top: var(--border-thick) solid var(--border-default);
+  background: var(--surface-sunken);
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--text-heading);
+}
+.sc-brm-matrix tfoot .sc-brm-foot-row--money .sc-brm-cell {
+  border-top: 0;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--text-muted);
+}
+.sc-brm-foot-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* ─── Fold (services not running this week) ─── */
+
+.sc-brm-fold {
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
+  background: var(--surface-card);
+}
+.sc-brm-fold-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--sc2-size-caption);
+  color: var(--text-muted);
+  padding: 0;
+}
+.sc-brm-fold-toggle:hover,
+.sc-brm-fold-toggle:focus-visible {
+  color: var(--text-heading);
+  outline: none;
+}
+.sc-brm-fold-cta {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+}
+.sc-brm-fold-body {
+  padding-top: var(--sc2-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.sc-brm-fold-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+}
+.sc-brm-fold-group-name {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.sc-brm-fold-row {
+  font-size: var(--sc2-size-caption);
+  color: var(--text-muted);
+  padding-left: var(--sc2-space-3);
+}
+
+/* ─── Batch note composer (unchanged shape from BulkReview) ─── */
+
+.sc-brm-note-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+  margin-top: var(--sc2-space-2);
+}
+.sc-brm-note-label {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.sc-brm-note-input {
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  border: var(--sc2-border-thin) solid var(--border-default);
+  border-radius: var(--sc2-radius-control);
+  background: var(--surface-card);
+  color: var(--text-default);
+}
+.sc-brm-note-input:focus-visible {
+  outline: 2px solid var(--action-primary-bg);
+  outline-offset: -1px;
+}
+.sc-brm-footer-note {
+  font-size: var(--sc2-size-micro);
+  color: var(--text-subtle);
+  text-align: right;
+  font-weight: var(--sc2-wt-medium);
+}
+
+/* ─── Modal footer ─── */
+
+.sc-brm-foot {
+  padding: var(--sc2-space-3) var(--sc2-space-5);
+  background: var(--surface-sunken);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sc2-space-2);
+}
+.sc-brm-btn {
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  padding: var(--sc2-space-2) var(--sc2-space-4);
+  border-radius: var(--sc2-radius-control);
+  cursor: pointer;
+  border: var(--sc2-border-thin) solid transparent;
+}
+.sc-brm-btn--ghost {
+  background: var(--surface-card);
+  border-color: var(--border-default);
+  color: var(--text-default);
+}
+.sc-brm-btn--ghost:hover { border-color: var(--border-strong); }
+.sc-brm-btn--primary {
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+}
+.sc-brm-btn--primary:hover { background: var(--action-primary-bg-hover); }
+.sc-brm-btn--primary[disabled] {
+  background: var(--surface-sunken);
+  color: var(--text-subtle);
+  border-color: var(--border-subtle);
+  cursor: not-allowed;
+}
+
+/* ─── 1024px + tighter viewports ─── */
+
+@media (max-width: 1152px) {
+  .sc-brm-card {
+    width: min(98vw, 960px);
+    max-width: 98vw;
+  }
+  .sc-brm-body { padding: var(--sc2-space-3) var(--sc2-space-4); }
+  .sc-brm-head { padding: var(--sc2-space-3) var(--sc2-space-4); }
+  .sc-brm-foot { padding: var(--sc2-space-3) var(--sc2-space-4); }
+  .sc-brm-th-lead,
+  .sc-brm-cell-lead { min-width: 148px; }
+}
