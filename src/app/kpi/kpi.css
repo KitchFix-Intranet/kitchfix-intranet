@@ -55,7 +55,7 @@
   --kpi-t-body:   calc(12.5px * var(--kf-scale));  /* body text, controls, table cells - 600 */
   --kpi-t-medium: calc(15px   * var(--kf-scale));  /* V30-1 NEW: spend cells, numbers-strip values, folio title, table total - 800 -.005em */
   --kpi-t-value:  calc(20px   * var(--kf-scale));  /* tertiary hero, budget footer - 800 -.01em */
-  --kpi-t-hero:   calc(30px   * var(--kf-scale));  /* ONE per card - 800 -.018em. V30-1 tightens to 28 in C2 alongside re-dress. */
+  --kpi-t-hero:   calc(28px   * var(--kf-scale));  /* V30-1 tightens 30 -> 28 · ONE per card - 800 -.018em */
 
   /* Chrome-only type tokens (title 18, meta 11, control 12.5). */
   --kpi-size-title:   calc(18px   * var(--kf-scale));
@@ -107,15 +107,16 @@
   --kpi-lane-sub:  calc(16px   * var(--kf-scale));  /* one supporting line */
   --kpi-lane-viz:  calc(58px   * var(--kf-scale));  /* the visual */
 
-  /* Chrome + table row/lane heights (retained; used by cmd bar, folio,
-     table row grid). Kept out of the product V29-4 set. */
-  --kpi-ctl-h:        calc(34px   * var(--kf-scale));
+  /* Chrome + table row/lane heights. V30-2 collapses --kpi-ctl-h and
+     --kpi-tbar-ctl-h to --kpi-ctl (30). --kpi-row-h aliased to --kpi-row
+     for consistency. */
+  --kpi-ctl-h:        var(--kpi-ctl);
   --kpi-cmd-h:        calc(60px   * var(--kf-scale));
-  --kpi-row-h:        calc(40px   * var(--kf-scale));
-  --kpi-row-h-dense:  calc(30px   * var(--kf-scale));
-  --kpi-thead-h:      calc(34px   * var(--kf-scale));
+  --kpi-row-h:        var(--kpi-row);
+  --kpi-row-h-dense:  var(--kpi-ctl);
+  --kpi-thead-h:      var(--kpi-ctl);
   --kpi-band-h:       calc(52px   * var(--kf-scale));
-  --kpi-wk-item-h:    calc(38px   * var(--kf-scale));
+  --kpi-wk-item-h:    var(--kpi-ctl);
 
   /* Table control bar (V25-12 - preserved shape). */
   --kpi-tbar-ctl-h:   var(--kpi-h-control);
@@ -219,7 +220,7 @@
 /* Shared control skin - every bar control uses this. */
 .kpi-ctl {
   height: var(--kpi-ctl-h);
-  border-radius: 8px;
+  border-radius: var(--kpi-ctl-r);
   padding: 0 var(--kpi-sp-3);
   font-size: var(--kpi-size-ctl); line-height: 1;
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
@@ -305,8 +306,9 @@
    values to match SC's fixed geometry; font-size scales via
    --kpi-size-caption (11 * 0.9 = 9.9 rendered). */
 .kpi-fresh-anchor { position: relative; display: inline-block; }
+/* V30 - freshness pill is a LABEL per V30-2: lane-head height. */
 .kpi-fresh {
-  height: 28px;
+  height: var(--kpi-h-lane);
   border-radius: 999px;
   /* Padding 4px 10px matches SC's fixed pill geometry (unscaled). */
   padding: var(--kpi-sp-1) var(--kpi-sp-3);
@@ -845,7 +847,7 @@
 /* ── state screens (loading / error / salaried-only / empty) ───── */
 .kpi-state {
   background: var(--surface-card);
-  border-radius: var(--rad-10);
+  border-radius: var(--kpi-card-r);
   padding: var(--kpi-sp-6) var(--kpi-sp-6);
   text-align: center;
   border: 1px solid var(--border-subtle);
@@ -1341,8 +1343,9 @@
   display: grid;
   grid-template-columns: var(--kpi-folio-w) minmax(0, 1fr);
 }
+/* V30-3 - main column padding at --kpi-card-pad (14.4). */
 .kpi-main {
-  padding: var(--space-card-pad);
+  padding: var(--kpi-card-pad);
   min-width: 0;
 }
 
@@ -1373,8 +1376,9 @@
   display: flex; align-items: baseline; gap: var(--kpi-sp-2);
   padding: 2px 2px var(--kpi-sp-1);
 }
+/* V30-1 - folio title at MEDIUM (15). Was body (12.5). */
 .kpi-folio-title-h {
-  font-size: var(--kpi-t-body); font-weight: 800; letter-spacing: 0.06em;
+  font-size: var(--kpi-t-medium); font-weight: 800; letter-spacing: -0.005em;
   color: var(--n-900);
 }
 .kpi-folio-title-s {
@@ -1442,11 +1446,11 @@
 .kpi-gcard-members {
   border-top: 1px solid var(--n-200);
 }
-/* Member row - 44px, two-line lockup (key + team + city). */
+/* V30-2 - folio account row is --kpi-row (40 base). Was 44 raw. */
 .kpi-acct {
   display: flex; align-items: center;
   width: 100%;
-  height: calc(44px * var(--kf-scale));
+  height: var(--kpi-row);
   padding: 0 var(--kpi-sp-3);
   border: 0;
   border-left: 3px solid transparent;
@@ -1695,13 +1699,15 @@
 /* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad}.
    V21-5: the pill relocates to the spend card header (was the retired
    sentence row). */
+/* V30 - vpill is a LABEL (not a control): lane-head height, label type. */
 .kpi-vpill {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
-  height: calc(32px * var(--kf-scale)); padding: 0 var(--kpi-sp-4);
+  height: var(--kpi-h-lane); padding: 0 var(--kpi-sp-3);
   border-radius: var(--rad-pill);
-  font-weight: 800; font-size: var(--kpi-size-ctl); letter-spacing: 0.03em;
+  font-weight: 800; font-size: var(--kpi-t-label); letter-spacing: 0.06em;
   border: 1px solid;
   flex: none;
+  text-transform: uppercase;
 }
 .kpi-vpill-dot { width: var(--kpi-sp-2); height: var(--kpi-sp-2); border-radius: 50%; background: currentColor; }
 .kpi-vpill-good { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
@@ -1748,20 +1754,21 @@
   display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.58fr);
   border: 1px solid var(--n-300);
-  border-radius: 12px;
+  border-radius: var(--kpi-card-r);
   box-shadow: var(--card-shadow);
   background: var(--surface-card);
   overflow: hidden;
 }
+/* V30-3 - story panels use --kpi-card-pad (14.4). */
 .kpi-story-left {
-  padding: var(--kpi-sp-5);
+  padding: var(--kpi-card-pad);
   border-right: 1px solid var(--n-200);
   display: flex; flex-direction: column;
-  gap: var(--kpi-sp-4);
+  gap: var(--kpi-sp-3);
   align-self: start;
 }
 .kpi-story-right {
-  padding: var(--kpi-sp-5);
+  padding: var(--kpi-card-pad);
   display: flex; flex-direction: column;
   min-width: 0;
   gap: var(--kpi-sp-1);
@@ -1795,10 +1802,10 @@
    bar and a `FY2026 budget · <n>% of period gone` sub-line. */
 .kpi-spend-budget {
   position: relative;
-  padding: var(--kpi-sp-4);
+  padding: var(--kpi-card-pad);
   padding-left: var(--kpi-sp-5);
   border: 1px solid var(--n-200);
-  border-radius: var(--rad-10);
+  border-radius: var(--kpi-card-r);
   background: var(--surface-card);
   display: flex; flex-direction: column;
   gap: var(--kpi-sp-1);
@@ -1838,10 +1845,12 @@
   display: grid; grid-template-columns: 1fr 1fr;
   gap: var(--kpi-sp-3);
 }
+/* V30-3 - spend inner cells at --kpi-card-pad (14.4), same as signal
+   cards beneath (was --kpi-sp-3 = 10.8). Nested cards share the skin. */
 .kpi-spend-cell {
-  padding: var(--kpi-sp-3);
+  padding: var(--kpi-card-pad);
   border: 1px solid var(--n-200);
-  border-radius: var(--rad-10);
+  border-radius: var(--kpi-card-r);
   background: var(--surface-card);
   display: flex; flex-direction: column;
   gap: var(--kpi-sp-1);
@@ -1852,8 +1861,11 @@
   color: var(--n-600); text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* V30-1 - spent/left cells at MEDIUM (15). Was --kpi-t-value (20)
+   under V29-6; V30 makes budget the ONLY hero and secondary values
+   land at medium. */
 .kpi-spend-cell-val {
-  font-size: var(--kpi-t-value); font-weight: 800; letter-spacing: -0.01em;
+  font-size: var(--kpi-t-medium); font-weight: 800; letter-spacing: -0.005em;
   color: var(--n-900); font-variant-numeric: var(--num-tabular);
   line-height: 1.05;
   white-space: nowrap;
@@ -2108,9 +2120,9 @@
 .kpi-sig {
   background: var(--surface-card);
   border: 1px solid var(--n-300);
-  border-radius: var(--rad-10);
+  border-radius: var(--kpi-card-r);
   box-shadow: var(--card-shadow);
-  padding: var(--kpi-sp-4);
+  padding: var(--kpi-card-pad);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -2204,7 +2216,10 @@
 }
 .kpi-sig-arrfig-hero  { font-size: var(--kpi-t-hero);  font-weight: 800; letter-spacing: -0.018em; line-height: 1; }
 .kpi-sig-arrfig-value { font-size: var(--kpi-t-value); font-weight: 800; letter-spacing: -0.01em;  line-height: 1; }
-.kpi-sig-arrfig-arrow { font-size: 0.72em; }
+/* V30-1 R3 - arrow is text inside a number; inherits the number's size
+   and weight. Prior 0.72em rendered a 19.44px arrow inside a 27px
+   figure (broken lockup). Now 1em so arrow == number. */
+.kpi-sig-arrfig-arrow { font-size: 1em; }
 .kpi-sig-arrfig-good  { color: var(--green-700); }
 .kpi-sig-arrfig-bad   { color: var(--red-700); }
 
@@ -2284,19 +2299,25 @@
 /* Details strip (V8-17) - one bordered strip, six divided cells. */
 .kpi-det {
   border: 1px solid var(--n-300);
-  border-radius: 12px;
+  border-radius: var(--kpi-card-r);
   background: var(--surface-card);
   box-shadow: var(--card-shadow);
   overflow: hidden;
 }
+/* V30-3/V30-4 - numbers-strip header uses the same card-pad + inner
+   lane-head as the signal cards so first-text baselines match. */
 .kpi-det-h {
   display: flex; align-items: center; gap: var(--kpi-sp-3);
-  width: 100%; padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  width: 100%; padding: var(--kpi-card-pad);
   background: var(--n-50);
   border: 0; border-bottom: 1px solid var(--n-200);
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+.kpi-det-h > * {
+  height: var(--kpi-h-lane);
+  display: inline-flex; align-items: center;
 }
 .kpi-det-h-caret { color: var(--n-500); font-size: var(--kpi-t-body); }
 .kpi-det-h-t {
@@ -2343,8 +2364,9 @@
   font-size: var(--kpi-t-meta); color: var(--n-600); font-weight: 600;
   white-space: nowrap;
 }
+/* V30-1 - numbers-strip values at MEDIUM (15). Was value (20). */
 .kpi-det-v {
-  font-size: var(--kpi-t-value); font-weight: 700;
+  font-size: var(--kpi-t-medium); font-weight: 800; letter-spacing: -0.005em;
   color: var(--n-900); margin-left: 2px;
   white-space: nowrap;
 }
@@ -2409,7 +2431,7 @@
 
 .kpi-tbl-wrap {
   border: 1px solid var(--n-300);
-  border-radius: 12px;
+  border-radius: var(--kpi-card-r);
   box-shadow: var(--card-shadow);
   overflow: hidden;
   background: var(--surface-card);
@@ -2505,7 +2527,7 @@
   border-radius: var(--rad-pill);
   padding: 1px var(--kpi-sp-2);
   border: 1px solid;
-  margin-left: 9px;
+  margin-left: var(--kpi-sp-2);
   vertical-align: 1px;
   letter-spacing: 0.03em;
 }
@@ -2536,7 +2558,9 @@
   font-weight: 500;
 }
 .kpi-tbl-child > td:first-child {
-  padding-left: calc(46px * var(--kf-scale));
+  /* Indent = sp-6 + sp-4 (24 + 16 = 40 base) so a child key clears the
+     vertical rail without being confused with the week button. */
+  padding-left: calc(var(--kpi-sp-6) + var(--kpi-sp-4));
   position: relative;
 }
 .kpi-tbl-child > td:first-child::before {
@@ -2590,19 +2614,23 @@
    on the page, not the least). Selectors are prefixed with `.kpi-tbl
    tbody` to beat `.kpi-tbl tbody td:first-child { color: var(--n-900) }`
    which was silently winning on the label cell. */
+/* V30-1 - table total row at MEDIUM (15). Was body (12.5). Label
+   cell keeps its uppercase tracking + LABEL size so it reads as an
+   eyebrow for the numeric cells. */
 .kpi-tbl tbody .kpi-tbl-total > td {
   background: var(--navy-900);
   color: #FFFFFF;
   font-weight: 800;
-  font-size: var(--kpi-t-body);
-  height: calc(46px * var(--kf-scale));
+  font-size: var(--kpi-t-medium);
+  height: var(--kpi-row-2l);
   border: 0;
   position: sticky; bottom: 0; z-index: 15;
 }
 .kpi-tbl tbody .kpi-tbl-total > td:first-child {
   color: #FFFFFF;
-  letter-spacing: 0.04em;
-  font-size: var(--kpi-t-meta);
+  letter-spacing: 0.08em;
+  font-size: var(--kpi-t-label);
+  text-transform: uppercase;
 }
 .kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-good { color: #8BE0A4; }
 .kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-bad  { color: #FCA5A5; }

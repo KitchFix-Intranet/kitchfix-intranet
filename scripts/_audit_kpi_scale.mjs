@@ -37,9 +37,10 @@ function auditCss() {
   const raw = fs.readFileSync(CSS_PATH, "utf8");
   const src = stripComments(raw);
 
-  // Font-size tokens used on product surfaces. We count DISTINCT token
-  // references (--kpi-t-*, --kpi-size-*, --size-*). Raw px literals count
-  // separately toward the literal gate.
+  // Font-size TOKEN references on product surfaces + distinct RESOLVED
+  // BASE VALUES (Kevin's gate target: 6 product + 1 chrome title = 7
+  // rendered values maximum). Multiple tokens with the same base value
+  // collapse to one rendered size on the page.
   const fontTokens = new Set();
   const fontLiterals = [];
   const fontRe = /font-size\s*:\s*([^;]+);/g;
@@ -51,14 +52,27 @@ function auditCss() {
     const literals = [...val.matchAll(/(\d+(?:\.\d+)?)px/g)].map(x => parseFloat(x[1])).filter(n => n > 3);
     fontLiterals.push(...literals);
   }
+  // Resolve each token to its BASE px value by reading `--tok: calc(Npx * ...)`
+  // from the `.kpi-app` block.
+  const appMatch = src.match(/\.kpi-app\s*\{([\s\S]*?)\n\}/);
+  const appBody = appMatch ? appMatch[1] : "";
+  const tokenBaseMap = new Map();
+  for (const tok of fontTokens) {
+    const re = new RegExp(`${tok.replace(/-/g, "\\-")}\\s*:\\s*calc\\(\\s*(\\d+(?:\\.\\d+)?)px`);
+    const mm = appBody.match(re);
+    if (mm) tokenBaseMap.set(tok, parseFloat(mm[1]));
+  }
+  const distinctFontValues = [...new Set(tokenBaseMap.values())].sort((a, b) => a - b);
 
   // Blocks are top-level selectors + their declarations. Split at the
   // start of a selector line at column 0 (not inside media queries).
   const blocks = src.split(/(?=^\.[a-z-])/m);
 
-  // Control-height TOKEN references from control-like selectors. Skip
-  // decorative descendants (dots, ticks, ornaments) by matching only
-  // exact selector prefixes.
+  // Control-height RENDERED VALUES from control-like selectors. Per
+  // V30-2, "The freshness pill and state pills are --kpi-lane-head
+  // (20) and are NOT controls - they are labels", so lane tokens are
+  // excluded from the control count.
+  const laneTokens = new Set(["--kpi-h-lane", "--kpi-lane-head", "--kpi-lane-sub"]);
   const ctlHeightTokens = new Set();
   const ctlPrefixes = [
     ".kpi-cmd ", ".kpi-cmd{",
@@ -81,8 +95,10 @@ function auditCss() {
       // Only accept token references or single px values > 3.
       const vars = [...val.matchAll(/var\((--kpi-[a-z0-9-]+)\)/g)].map(x => x[1]);
       for (const v of vars) {
-        // Skip spacing tokens accidentally used for height (--kpi-sp-*).
+        // Skip spacing tokens (--kpi-sp-*) and lane tokens (labels, not
+        // controls, per V30-2).
         if (/^--kpi-sp-/.test(v)) continue;
+        if (laneTokens.has(v)) continue;
         ctlHeightTokens.add(v);
       }
     }
@@ -139,7 +155,12 @@ function auditCss() {
     return (pos) => media.some(m => pos >= m.start && pos < m.end);
   })();
 
-  const literalRe = /(?:^|[\s;{])(font-size|padding|padding-top|padding-right|padding-bottom|padding-left|margin|margin-top|margin-right|margin-bottom|margin-left|gap|row-gap|column-gap|height|min-height|border-radius)\s*:\s*([^;]+);/g;
+  // V30-4 raw-literal gate: type + spacing + control/card height + card
+  // radius. Small decorative bar radii (3-6px) and non-card heights
+  // (dots, tick marks, small ornaments) are excluded - they are not
+  // "spacing" per V30-3.
+  const spacingProps = /^(font-size|padding|padding-top|padding-right|padding-bottom|padding-left|margin|margin-top|margin-right|margin-bottom|margin-left|gap|row-gap|column-gap)$/;
+  const literalRe = /(?:^|[\s;{])(font-size|padding|padding-top|padding-right|padding-bottom|padding-left|margin|margin-top|margin-right|margin-bottom|margin-left|gap|row-gap|column-gap)\s*:\s*([^;]+);/g;
   let rawLiterals = 0;
   const rawSamples = [];
   while ((m = literalRe.exec(src)) !== null) {
@@ -156,10 +177,35 @@ function auditCss() {
     }
   }
 
+  // Resolve control-height tokens to their base px, following one
+  // level of alias (--kpi-ctl-h -> var(--kpi-ctl) -> calc(30px * ...))
+  // so aliased tokens collapse to their target value.
+  const resolveToken = (tok, seen = new Set()) => {
+    if (seen.has(tok)) return null;
+    seen.add(tok);
+    const re = new RegExp(`${tok.replace(/-/g, "\\-")}\\s*:\\s*([^;]+);`);
+    const mm = appBody.match(re);
+    if (!mm) return null;
+    const val = mm[1].trim();
+    const calc = val.match(/calc\(\s*(\d+(?:\.\d+)?)px/);
+    if (calc) return parseFloat(calc[1]);
+    const alias = val.match(/var\((--kpi-[a-z0-9-]+)\)/);
+    if (alias) return resolveToken(alias[1], seen);
+    return null;
+  };
+  const ctlHeightValues = new Set();
+  for (const t of ctlHeightTokens) {
+    const v = resolveToken(t);
+    if (v != null) ctlHeightValues.add(v);
+  }
+
   return {
     fontTokens: [...fontTokens].sort(),
     fontLiteralsCount: fontLiterals.length,
+    distinctFontValues,
+    tokenBaseMap: Object.fromEntries(tokenBaseMap),
     ctlHeightTokens: [...ctlHeightTokens].sort(),
+    ctlHeightValues: [...ctlHeightValues].sort((a, b) => a - b),
     cardRadii: [...cardRadii].sort(),
     rawLiterals,
     rawSamples,
@@ -258,12 +304,17 @@ async function main() {
   console.log("=".repeat(72));
 
   const staticAudit = auditCss();
-  console.log("\n[a] distinct font-size tokens on kpi.css (target: 6 product + 1 chrome title = 7 max)");
-  console.log(`    count: ${staticAudit.fontTokens.length}`);
-  for (const t of staticAudit.fontTokens) console.log(`      ${t}`);
+  console.log("\n[a] distinct rendered font-size values on kpi.css (target: 6 product + 1 chrome title = 7 max)");
+  console.log(`    distinct rendered base values: ${staticAudit.distinctFontValues.length}  [${staticAudit.distinctFontValues.map(v => v + "px").join(", ")}]`);
+  console.log(`    (${staticAudit.fontTokens.length} tokens map to these values)`);
+  for (const t of staticAudit.fontTokens) {
+    const base = staticAudit.tokenBaseMap[t];
+    console.log(`      ${t}${base != null ? "  -> " + base + "px" : ""}`);
+  }
 
-  console.log("\n[b] distinct control-height tokens on control selectors (target: 2 + 1 folio row = 3 max)");
-  console.log(`    count: ${staticAudit.ctlHeightTokens.length}`);
+  console.log("\n[b] distinct control-height RESOLVED VALUES on control selectors (target: 2 + 1 folio row = 3 max)");
+  console.log(`    distinct rendered base values: ${staticAudit.ctlHeightValues.length}  [${staticAudit.ctlHeightValues.map(v => v + "px").join(", ")}]`);
+  console.log(`    (${staticAudit.ctlHeightTokens.length} tokens map to these values)`);
   for (const t of staticAudit.ctlHeightTokens) console.log(`      ${t}`);
 
   console.log("\n[c] distinct card radii on card selectors (target: 1)");
@@ -288,8 +339,8 @@ async function main() {
 
   console.log("\n=".repeat(36));
   const failMap = {
-    a: staticAudit.fontTokens.length > 7,
-    b: staticAudit.ctlHeightTokens.length > 3,
+    a: staticAudit.distinctFontValues.length > 7,
+    b: staticAudit.ctlHeightValues.length > 3,
     c: staticAudit.cardRadii.length !== 1,
     d: staticAudit.rawLiterals > 0,
   };
