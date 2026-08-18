@@ -149,6 +149,10 @@
   --kpi-blue-500:  #3E97D1;
   --kpi-blue-100:  #E4F1FA;
 
+  /* V33 - comparison strip left accent (purple, distinguishes the
+     context strip from the four signal cards' navy/green accents). */
+  --kpi-purple-600: #7A3E9D;
+
   background: var(--surface-page);
   min-height: 100vh;
   color: var(--text-default);
@@ -2274,17 +2278,33 @@
   cursor: help;
 }
 
-/* V32-12..V32-15 - comparison strip. Context weight (tinted ground,
-   body-size figures, no card chrome). Six scale-free deltas + a `?`
-   at the right end. Sits between the signal row and ALL THE NUMBERS.
-   Not a fifth card. */
+/* V33 P0 - the comparison strip joins the card family. White ground,
+   card border, card shadow, --kpi-card-r radius, a 4px purple left
+   accent (matches the rule every signal card carries so it reads as
+   the same family). One row at --kpi-row (36 rendered) with hairline
+   dividers after the title and between every measure - the run-on
+   look was these dividers being absent entirely. */
 .kpi-cmp {
-  display: flex; align-items: center;
-  gap: var(--kpi-sp-4);
-  padding: var(--kpi-sp-3) var(--kpi-card-pad);
-  background: var(--n-50);
-  border: 1px solid var(--n-200);
+  display: flex; align-items: stretch;
+  height: var(--kpi-row);
+  background: var(--surface-card);
+  border: 1px solid var(--n-300);
   border-radius: var(--kpi-card-r);
+  box-shadow: var(--card-shadow);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-cmp::before {
+  content: "";
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--kpi-sp-1);
+  background: var(--kpi-purple-600, #7A3E9D);
+}
+.kpi-cmp-title {
+  display: flex; align-items: center;
+  padding: 0 var(--kpi-card-pad) 0 calc(var(--kpi-card-pad) + var(--kpi-sp-1));
+  border-right: 1px solid var(--n-200);
+  flex: none;
 }
 .kpi-cmp-title-lab {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.08em;
@@ -2293,10 +2313,18 @@
 .kpi-cmp-items {
   flex: 1 1 auto;
   display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--kpi-sp-3);
   min-width: 0;
+  align-items: center;
 }
-.kpi-cmp-item { min-width: 0; }
+.kpi-cmp-item {
+  min-width: 0;
+  padding: 0 var(--kpi-sp-3);
+  border-right: 1px solid var(--n-200);
+  display: flex; align-items: baseline; gap: var(--kpi-sp-2);
+  height: 100%;
+  overflow: hidden;
+}
+.kpi-cmp-item:last-child { border-right: 0; }
 .kpi-cmp-item-lab {
   font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 700;
   letter-spacing: 0.04em; text-transform: uppercase;
@@ -2307,12 +2335,26 @@
   color: var(--n-900);
   font-variant-numeric: var(--num-tabular);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: var(--kpi-sp-1);
   display: inline-flex; align-items: baseline; gap: var(--kpi-sp-1);
+  margin-left: auto;
 }
 .kpi-cmp-item-val-good { color: var(--green-700); }
 .kpi-cmp-item-val-bad  { color: var(--red-700); }
 .kpi-cmp-arr { font-size: 0.9em; }
+.kpi-cmp-source {
+  padding: 0 var(--kpi-sp-3);
+  border-left: 1px solid var(--n-200);
+  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500;
+  display: flex; align-items: center;
+  white-space: nowrap;
+  flex: none;
+}
+.kpi-cmp-help-wrap {
+  display: flex; align-items: center;
+  padding: 0 var(--kpi-sp-3);
+  border-left: 1px solid var(--n-200);
+  flex: none;
+}
 
 .kpi-cmp-help-anchor { position: relative; display: inline-block; }
 .kpi-cmp-help {
