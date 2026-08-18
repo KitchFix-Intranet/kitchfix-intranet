@@ -1608,7 +1608,7 @@
    NUMBERS). V21 retired the sentence card, budget track, three-stat
    rail, strip legend pills, lens toggle, and help control. */
 
-/* S-13 board section gap tightens 16 -> 12 (base) via --kpi-space-3
+/* S-13 board section gap tightens 16 -> 12 (base) via --kpi-sp-3
    so the sentence + story + signals + details clear the fold at
    1280x650. Card interior padding stays on the 0.9 scale. */
 .kpi-board {
