@@ -185,7 +185,7 @@ export function buildBoard({
   actuals,              // all worker-week rows in [start, end]
   budget_periods,       // [{ period_no, amount, ... }]  (may be empty)
   account_state,        // "hourly_ok" | "salaried_only" | "envelope"
-  ot_thresholds = { watch_pct: 8, alarm_pct: 12 },
+  ot_thresholds = { watch_pct: 0, alarm_pct: 8 },
 }) {
   if (account_state === "salaried_only" || account_state === "envelope") {
     return {
@@ -376,11 +376,36 @@ export function buildBoard({
   }
   verdict = verdictBand(pace_points);
 
-  // Signals.
+  // Signals. V32-5 threshold rule: 0% = on target (state === "clear"),
+  // above 0% up to watch bound = "watch" (amber), above alarm bound =
+  // "alarm" (red). Strict > comparisons so 0.00% renders as green.
   const ot_pct = rangeTotals.hours > 0 ? r2((rangeTotals.ot / rangeTotals.hours) * 100) : 0;
-  const ot_state = ot_pct >= ot_thresholds.alarm_pct ? "alarm"
-                : ot_pct >= ot_thresholds.watch_pct ? "watch"
+  const ot_state = ot_pct > ot_thresholds.alarm_pct ? "alarm"
+                : ot_pct > ot_thresholds.watch_pct ? "watch"
                 : "clear";
+  // V32-6 - OT facts: 1.5x $ cost, workers with any OT, and the week
+  // with the highest OT hours. Iterate actuals rows once for cost + a
+  // per-worker set; iterate week aggregates for the longest week.
+  let ot_cost = 0;
+  const otWorkerIds = new Set();
+  for (const r of actuals) {
+    ot_cost += Number(r.dollars_overtime || 0);
+    if (Number(r.hours_overtime || 0) > 0.004 && r.worker_id) otWorkerIds.add(r.worker_id);
+  }
+  ot_cost = r2(ot_cost);
+  let longest_ot_week = null;
+  for (const w of weekAggs) {
+    if (!longest_ot_week || (w.ot_hours || 0) > (longest_ot_week.hours || 0)) {
+      longest_ot_week = { week_start: w.week_start, hours: r2(w.ot_hours || 0) };
+    }
+  }
+  if (longest_ot_week && longest_ot_week.hours < 0.004) longest_ot_week = null;
+
+  // V32-10 - payroll data. Weeks affected = count of weeks with any
+  // unpriced hours (someone's timesheet hasn't been approved yet).
+  let unapproved_weeks = 0;
+  for (const w of weekAggs) if ((w.unpriced_hrs || 0) > 0.004) unapproved_weeks += 1;
+
   // Budgeted hours - derive from budget and observed avg rate. Only
   // meaningful when we have both a budget and a rate observation.
   const avg_rate = rangeTotals.hours > 0 ? spent_to_date / rangeTotals.hours : null;
@@ -431,6 +456,11 @@ export function buildBoard({
       watch_pct: ot_thresholds.watch_pct,
       alarm_pct: ot_thresholds.alarm_pct,
       state: ot_state,
+      // V32-6 additions
+      cost: ot_cost,
+      workers: otWorkerIds.size,
+      workers_total: distinctWorkers,
+      longest_week: longest_ot_week,
     },
     hours_vs_budget: {
       worked: r2(rangeTotals.hours),
@@ -441,6 +471,9 @@ export function buildBoard({
       priced_ww: rangeTotals.complete,
       total_ww: rangeTotals.total,
       unpriced_hours: r2(rangeTotals.unpriced),
+      // V32-10 - how many weeks have any unapproved hours (drives
+      // action-card "Weeks affected" fact).
+      unapproved_weeks,
     },
     // Per-week
     weeks: weeksOut,

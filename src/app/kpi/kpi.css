@@ -2246,6 +2246,19 @@
 .kpi-sig-fact-val-good { color: var(--green-700); }
 .kpi-sig-fact-val-warn { color: #92580A; }
 .kpi-sig-fact-val-bad  { color: var(--red-700); }
+.kpi-sig-fact-val-mute { color: var(--n-400); }
+.kpi-sig-fact-sub {
+  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500;
+  letter-spacing: 0; text-transform: none;
+  margin-top: var(--kpi-sp-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* V32-11 - `Dollars will rise` label carries a dotted-underline so the
+   reader knows the figure is an estimate; hover reveals the derivation. */
+.kpi-sig-fact-est {
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+}
 
 /* V29-18 arrow-first signed figure. Never a `+` or `-` sign. */
 .kpi-sig-arrfig {
