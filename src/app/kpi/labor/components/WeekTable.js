@@ -53,9 +53,10 @@ function WorkersFilter({ workerRoster, selectedWorkers, onWorkersChange }) {
   }, [open]);
   return (
     <div className="kpi-workers" ref={rootRef}>
+      {/* V25-12 - Workers loses its pill shape and joins the button family. */}
       <button
         type="button"
-        className={`kpi-trig ${open ? "on" : ""}`}
+        className={`kpi-tbar-btn kpi-tbar-btn-dd ${open ? "on" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open ? "true" : "false"}
         onClick={() => setOpen(o => !o)}
@@ -64,7 +65,7 @@ function WorkersFilter({ workerRoster, selectedWorkers, onWorkersChange }) {
           <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.75" />
           <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="1.75" />
         </svg>
-        <span>Workers · {shown === total ? `all ${total}` : `${shown} of ${total}`}</span>
+        <span>{shown === total ? `All ${total} workers` : `${shown} of ${total} workers`}</span>
       </button>
       {open && (
         <div className="kpi-pop kpi-pop-workers open">
@@ -322,7 +323,11 @@ export function WeekTable({
   onPickAccount,         // (accountKey) => void   only for aggregate
   rangeSelection,        // { kind, value } from client
   resolvedPreset,
+  rolledUpMembers = [],           // V25-2 members in the aggregate roll-up
+  aggregateExcludedMembers = [],  // V25-2 envelope members excluded from the roll-up
 }) {
+  const excludedSet = useMemo(() => new Set(aggregateExcludedMembers), [aggregateExcludedMembers]);
+  const rolledUpCount = rolledUpMembers.length;
   const wrapRef = useRef(null);
   const [dense, setDense] = useState(false);
   useEffect(() => {
@@ -450,24 +455,38 @@ export function WeekTable({
     return start <= today && today <= end;
   }
 
-  // Grand row description
+  // Grand row description. V25-2: aggregate rows carry the roll-up
+  // account count (`N ACCOUNTS`) so the reader can see the population
+  // the roll-up covers matches the population in the vs-budget compare.
+  const acctSuffix = aggregateMode && rolledUpCount > 0
+    ? ` · ${rolledUpCount} ACCOUNT${rolledUpCount === 1 ? "" : "S"}`
+    : "";
   const totalDesc = (() => {
-    if (grouped.length === 0) return "TOTAL";
+    if (grouped.length === 0) return `TOTAL${acctSuffix}`;
     if (grouped.length === 1) {
       const g = grouped[0];
       if (g.groupHint?.kind === "period") {
-        return isPeriodInProgress(g, todayISO)
+        const base = isPeriodInProgress(g, todayISO)
           ? `TOTAL · PERIOD ${g.period_no} TO DATE`
           : `TOTAL · PERIOD ${g.period_no}`;
+        return `${base}${acctSuffix}`;
       }
       if (g.groupHint?.kind === "month") {
-        return `TOTAL · ${g.groupLabel}`;
+        return `TOTAL · ${g.groupLabel}${acctSuffix}`;
       }
     }
     const totalWeeks = grouped.reduce((n, g) => n + g.weeks.length, 0);
     const isMonth = grouped[0]?.groupHint?.kind === "month";
-    return `TOTAL · ${grouped.length} ${isMonth ? "MONTH" : "PERIOD"}${grouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}`;
+    return `TOTAL · ${grouped.length} ${isMonth ? "MONTH" : "PERIOD"}${grouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}${acctSuffix}`;
   })();
+
+  // V25-2 scope note. Renders above the table on aggregate views where
+  // one or more members are excluded from the roll-up (today: envelope-
+  // based accounts). Reader learns why the two sides of the compare use
+  // the same population before they read a variance.
+  const scopeNote = aggregateMode && aggregateExcludedMembers.length > 0 && rolledUpCount > 0
+    ? `Portfolio figures cover ${rolledUpCount} accounts. ${aggregateExcludedMembers.join(", ")} is envelope-based and is excluded from both spend and budget so the two sides compare like with like.`
+    : null;
 
   // Grand budget = sum of period budgets covered by the range.
   const grandBudget = (() => {
@@ -484,7 +503,13 @@ export function WeekTable({
   const showUnpriced = !!columns.unpriced;
   const showRate = !!columns.rate;
 
+  // V25-6 Share column - separate from Dollars; renders in aggregate
+  // mode only (worker rows carry no share). Kept in every row so the
+  // column reads as one column top to bottom.
+  const showShare = aggregateMode;
+
   const numCols = 2 /* label + vs budget */
+                + (showShare ? 1 : 0)
                 + 1 /* hours */
                 + 1 /* OT */
                 + (showHoliday ? 1 : 0)
@@ -494,53 +519,83 @@ export function WeekTable({
 
   return (
     <>
-      {/* V9-18 control bar - 32px baseline */}
+      {/* V25-12 - table control bar. One 28px control height, one 7px
+          radius, one label style, two gap values (6 in-group / 18
+          between groups), hairline rules between right-side clusters. */}
       <div className="kpi-tbar">
         {showChips && (
-          <div className="kpi-jump-chips" aria-label="Jump to group">
-            <span className="kpi-jumplab">JUMP TO</span>
+          <div className="kpi-tbar-grp" aria-label="Jump to group">
+            <span className="kpi-tbar-lbl">Jump to</span>
             {chips.map(c => (
               <button
                 key={c.key}
                 type="button"
-                className={`kpi-pjump ${expandedPeriods?.has(c.jumpKey) ? "open" : ""}`}
+                className={`kpi-tbar-chip ${expandedPeriods?.has(c.jumpKey) ? "on" : ""}`}
                 onClick={() => onJumpPeriod?.(c.jumpKey)}
               >{c.label}</button>
             ))}
           </div>
         )}
-        <button type="button" className="kpi-pjump" onClick={onExpandAll}>Expand all</button>
-        <button type="button" className="kpi-pjump" onClick={onCollapseAll}>Collapse all</button>
+        <div className="kpi-tbar-grp">
+          <button type="button" className="kpi-tbar-btn" onClick={onExpandAll}>Expand all</button>
+          <button type="button" className="kpi-tbar-btn" onClick={onCollapseAll}>Collapse all</button>
+        </div>
         <span className="kpi-tbar-spacer" aria-hidden="true" />
         {onWorkersChange && workerRoster && workerRoster.length > 0 && (
-          <WorkersFilter workerRoster={workerRoster} selectedWorkers={selectedWorkers} onWorkersChange={onWorkersChange} />
-        )}
-        {onToggleRedact && (
-          <div className="kpi-empdisp">
-            <span className="kpi-empdisp-lab">Show</span>
-            <span className="kpi-seg" role="group" aria-label="Employee display">
-              <button type="button" className={!redact ? "on" : ""} onClick={() => redact && onToggleRedact(false)} aria-pressed={!redact}>Names</button>
-              <button type="button" className={redact ? "on" : ""} onClick={() => !redact && onToggleRedact(true)} aria-pressed={redact}>Numbers</button>
-            </span>
+          <div className="kpi-tbar-grp">
+            <WorkersFilter workerRoster={workerRoster} selectedWorkers={selectedWorkers} onWorkersChange={onWorkersChange} />
           </div>
         )}
+        {onToggleRedact && (
+          <>
+            <span className="kpi-tbar-rule" aria-hidden="true" />
+            <div className="kpi-empdisp">
+              <span className="kpi-empdisp-lab">Show</span>
+              <span className="kpi-seg" role="group" aria-label="Employee display">
+                <button type="button" className={!redact ? "on" : ""} onClick={() => redact && onToggleRedact(false)} aria-pressed={!redact}>Names</button>
+                <button type="button" className={redact ? "on" : ""} onClick={() => !redact && onToggleRedact(true)} aria-pressed={redact}>Numbers</button>
+              </span>
+            </div>
+          </>
+        )}
+        <span className="kpi-tbar-rule" aria-hidden="true" />
         <div className="kpi-empdisp">
-          <span className="kpi-empdisp-lab">Density</span>
+          {/* V25-12 - `Density` relabelled `Rows` (what it actually controls). */}
+          <span className="kpi-empdisp-lab">Rows</span>
           <span className="kpi-seg" role="group" aria-label="Row density">
             <button type="button" className={!dense ? "on" : ""} onClick={() => commitDense(false)} aria-pressed={!dense}>Comfortable</button>
             <button type="button" className={dense ? "on" : ""} onClick={() => commitDense(true)} aria-pressed={dense}>Dense</button>
           </span>
         </div>
+        <span className="kpi-tbar-rule" aria-hidden="true" />
         <HelpPop />
       </div>
 
+      {scopeNote && (
+        <div className="kpi-tbl-scope" role="note">{scopeNote}</div>
+      )}
       <div className={`kpi-tbl-wrap ${dense ? "kpi-tbl-dense" : ""}`} ref={wrapRef}>
         <div className="kpi-tbl-scroll">
           <table className="kpi-tbl">
             <thead>
               <tr>
-                <th className="kpi-tbl-lcol">Week</th>
+                <th className="kpi-tbl-lcol">
+                  Week
+                  {/* V25-19 - `Names hidden` chip sits on the WEEK header when
+                      the table is in Numbers mode and worker rows are actually
+                      visible. Clickable to restore names. Neutral treatment,
+                      never amber. */}
+                  {redact && mode === "single" && expandedWeeks.size > 0 && (
+                    <button
+                      type="button"
+                      className="kpi-tbl-names-hidden"
+                      onClick={() => onToggleRedact?.(false)}
+                      aria-label="Names hidden - click to restore"
+                    >Names hidden</button>
+                  )}
+                </th>
                 <th className="kpi-tbl-vbcol">vs budget</th>
+                {showShare && <th className="kpi-tbl-shrcol">Share</th>}
                 <th>Hours</th>
                 <th>OT 1.5&times;</th>
                 {showHoliday && <th>Holiday 2&times;</th>}
@@ -604,7 +659,8 @@ export function WeekTable({
                     expandedWeeks={expandedWeeks}
                     onToggleWeek={onToggleWeek}
                     onPickAccount={onPickAccount}
-                    columns={{ showHoliday, showUnpriced, showRate }}
+                    columns={{ showHoliday, showUnpriced, showRate, showShare }}
+                    excludedSet={excludedSet}
                   />
                 );
               })}
@@ -617,13 +673,14 @@ export function WeekTable({
                     mode={grandBudget == null ? "muted" : rangeAllInProgress ? "in_progress" : "closed"}
                   />
                 </td>
+                {showShare && <td className="kpi-tbl-shrcol" />}
                 <td className="num">{fmtHrs((grandTotal?.hours_regular || 0) + (grandTotal?.hours_overtime || 0) + (grandTotal?.hours_double_time || 0))}</td>
-                <td className={`num ${(grandTotal?.hours_overtime || 0) > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{(grandTotal?.hours_overtime || 0) > 0.004 ? fmtHrs(grandTotal.hours_overtime) : "–"}</td>
+                <td className="num">{(grandTotal?.hours_overtime || 0) > 0.004 ? fmtHrs(grandTotal.hours_overtime) : "–"}</td>
                 {showHoliday && (
-                  <td className={`num ${(grandTotal?.hours_double_time || 0) > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{(grandTotal?.hours_double_time || 0) > 0.004 ? fmtHrs(grandTotal.hours_double_time) : "–"}</td>
+                  <td className="num">{(grandTotal?.hours_double_time || 0) > 0.004 ? fmtHrs(grandTotal.hours_double_time) : "–"}</td>
                 )}
                 {showUnpriced && (
-                  <td className={`num ${(grandTotal?.hours_without_dollars || 0) > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{(grandTotal?.hours_without_dollars || 0) > 0.004 ? fmtHrs(grandTotal.hours_without_dollars) : "–"}</td>
+                  <td className="num">{(grandTotal?.hours_without_dollars || 0) > 0.004 ? fmtHrs(grandTotal.hours_without_dollars) : "–"}</td>
                 )}
                 {showRate && (
                   <td className="num">{(() => {
@@ -652,10 +709,11 @@ function FragmentRows({
   expandedWeeks, onToggleWeek,
   onPickAccount,
   columns,
+  excludedSet,
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
-  const { showHoliday, showUnpriced, showRate } = columns;
+  const { showHoliday, showUnpriced, showRate, showShare } = columns;
   const rate = band.rate;
 
   return (
@@ -679,6 +737,7 @@ function FragmentRows({
         <td>
           <VsBudget spent={band.vs.spent} budget={band.vs.budget} mode={band.vs.mode} />
         </td>
+        {showShare && <td className="kpi-tbl-shrcol" />}
         <td className="num">{fmtHrs(band.totals.hours)}</td>
         <td className={`num ${band.totals.ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.ot > 0.004 ? fmtHrs(band.totals.ot) : "–"}</td>
         {showHoliday && <td className={`num ${band.totals.hol > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{band.totals.hol > 0.004 ? fmtHrs(band.totals.hol) : "–"}</td>}
@@ -688,7 +747,20 @@ function FragmentRows({
       </tr>
       {periodOpen && weeks.map(w => {
         const sev = weekSeverity(w);
-        const isAttn = sev !== "complete" && sev !== "no_labor";
+        // V25-7 - in AGGREGATE mode, the week is an ancestor row: it
+        // summarises the exception with a count chip and never carries
+        // the amber edge itself. In SINGLE mode, the week IS the owning
+        // row for its coverage exception, so it keeps the edge + chip.
+        const isAttn = mode === "single" && sev !== "complete" && sev !== "no_labor";
+        // Count member accounts in exception this week (aggregate mode).
+        const perMember = memberByWeekAndAcct.get(w.week_start);
+        let exceptionMemberCount = 0;
+        if (mode === "aggregate" && perMember) {
+          for (const [, agg] of perMember) {
+            const memberSev = worstSeverity(agg.states);
+            if (memberSev !== "complete" && memberSev !== "no_labor") exceptionMemberCount += 1;
+          }
+        }
         const inProgress = w.week_end >= todayISO && w.week_start <= todayISO;
         const isClosed = w.week_end < todayISO;
         const weekBudget = weekBudgetsByWeekStart.get(w.week_start)?.amount ?? null;
@@ -714,10 +786,14 @@ function FragmentRows({
                   <span className="kpi-tbl-chev">{weekOpen ? "⌄" : "›"}</span>
                   {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
                   <OTTag ot={w.hours_overtime} />
-                  <ExceptionChip severity={sev} />
+                  {mode === "single" && <ExceptionChip severity={sev} />}
+                  {mode === "aggregate" && exceptionMemberCount > 0 && (
+                    <span className="kpi-tbl-flag kpi-flag-warn">⚠ {exceptionMemberCount} site{exceptionMemberCount === 1 ? "" : "s"} unpriced</span>
+                  )}
                 </button>
               </td>
               <td><VsBudget spent={vs.spent} budget={vs.budget} mode={vs.mode} /></td>
+              {showShare && <td className="kpi-tbl-shrcol" />}
               <td className="num">{fmtHrs(hrs)}</td>
               <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>
               {showHoliday && <td className={`num ${w.hours_double_time > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_double_time > 0.004 ? fmtHrs(w.hours_double_time) : "–"}</td>}
@@ -743,6 +819,8 @@ function FragmentRows({
                 mode="account"
                 columns={columns}
                 onPickAccount={onPickAccount}
+                excludedFromRollup={excludedSet?.has(c.account_key)}
+                weekInProgress={inProgress}
               />
             ))}
           </>
@@ -752,18 +830,43 @@ function FragmentRows({
   );
 }
 
-function ChildRow({ child, weekAmount, mode, columns, onPickAccount }) {
-  const { showHoliday, showUnpriced, showRate } = columns;
+function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFromRollup, weekInProgress }) {
+  const { showHoliday, showUnpriced, showRate, showShare } = columns;
   const sharePct = weekAmount > 0 ? Math.max(0, Math.min(100, (child.amount / weekAmount) * 100)) : 0;
   const rate = blendedRate({ dollars: child.amount, hours: child.hours });
   const label = mode === "worker"
     ? `#${child.number ?? ""} ${child.title || ""}`.trim()
     : child.account_key;
-  const subLabel = mode === "account" ? child.account_key : (child.title || null);
   const sev = child.coverage_state;
   const showExceptionChip = sev !== "complete" && sev !== "no_labor";
+  // V25-5 - account rows carry a REAL vs-budget lockup, resolved per
+  // member. Budget lives on the child in `week_budget` (from
+  // `week_budgets[week].per_member`). Excluded rows (V25-2) read
+  // `not budgeted` in muted text; rows with no budget for the range
+  // read a muted `no budget` (no ghost bar - reads as zero).
+  let vsBudgetCell;
+  if (mode === "account") {
+    if (excludedFromRollup) {
+      vsBudgetCell = <td><span className="kpi-vb-d kpi-vb-d-mute kpi-tbl-notbudgeted">not budgeted</span></td>;
+    } else if (child.week_budget != null && child.week_budget > 0) {
+      const vs = weekInProgress
+        ? { mode: "in_progress", spent: child.amount, budget: child.week_budget }
+        : { mode: "closed", spent: child.amount, budget: child.week_budget };
+      vsBudgetCell = <td><VsBudget spent={vs.spent} budget={vs.budget} mode={vs.mode} /></td>;
+    } else {
+      vsBudgetCell = <td><span className="kpi-vb-d kpi-vb-d-mute kpi-tbl-notbudgeted">no budget</span></td>;
+    }
+  } else {
+    // Worker rows in single mode do not carry per-row vs-budget.
+    vsBudgetCell = <td className="kpi-tbl-nil"><span className="kpi-vb-d kpi-vb-d-mute">–</span></td>;
+  }
+  // V25-7 - only the OWNING row carries the amber edge + warm tint.
+  // In aggregate mode the child (account) IS the owning row for its
+  // coverage exception. In single mode the child (worker) is a leaf
+  // that doesn't carry an exception concept, so no tint on worker rows.
+  const isOwningException = mode === "account" && showExceptionChip;
   return (
-    <tr className={`kpi-tbl-child ${showExceptionChip ? "kpi-tbl-attn" : ""}`}>
+    <tr className={`kpi-tbl-child ${isOwningException ? "kpi-tbl-attn" : ""} ${excludedFromRollup ? "kpi-tbl-child-excluded" : ""}`}>
       <td>
         {mode === "account" && onPickAccount ? (
           <button type="button" className="kpi-tbl-accountbtn" onClick={() => onPickAccount?.(child.account_key)}>
@@ -778,16 +881,25 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount }) {
           </span>
         )}
       </td>
-      <td className="kpi-tbl-nil"><span className="kpi-vb"><span className="kpi-vb-bar" /><span className="kpi-vb-d kpi-vb-d-mute">–</span></span></td>
+      {vsBudgetCell}
+      {/* V25-6 Share column lives here, separate from Dollars. Filled
+          only on account rows (worker rows in single mode leave it
+          empty so the column alignment stays intact top to bottom). */}
+      {showShare && (
+        mode === "account" ? (
+          <td className="kpi-tbl-shrcol">
+            <span className="kpi-tbl-share2" aria-hidden="true"><i style={{ width: `${sharePct}%` }} /></span>
+          </td>
+        ) : (
+          <td className="kpi-tbl-shrcol" />
+        )
+      )}
       <td className="num">{fmtHrs(child.hours)}</td>
       <td className={`num ${child.hours_ot > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_ot > 0.004 ? fmtHrs(child.hours_ot) : "–"}</td>
       {showHoliday && <td className={`num ${child.hours_holiday > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_holiday > 0.004 ? fmtHrs(child.hours_holiday) : "–"}</td>}
       {showUnpriced && <td className={`num ${child.hours_unpriced > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{child.hours_unpriced > 0.004 ? fmtHrs(child.hours_unpriced) : "–"}</td>}
       {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
-      <td className="num kpi-tbl-money">
-        {fmt$(child.amount)}
-        <span className="kpi-tbl-share" aria-hidden="true"><i style={{ width: `${sharePct}%` }} /></span>
-      </td>
+      <td className="num">{fmt$(child.amount)}</td>
     </tr>
   );
 }

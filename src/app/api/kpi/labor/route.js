@@ -375,6 +375,17 @@ export async function GET(request) {
       ? { envelope_excluded: envelopeExcluded }
       : {};
 
+    // V25-1..V25-3 - aggregate roll-up POPULATION must match aggregate
+    // budget POPULATION. Envelope members are excluded from the budget
+    // aggregate (see loop above) so they must also be excluded from the
+    // actuals aggregate. Keep full actuals in the response for the
+    // drill (V25-2 - excluded row still renders), but compute board +
+    // week_budgets from the non-envelope subset only. The client filters
+    // its own grand/week rollups via `aggregate_excluded_members`.
+    const rolledUpMembers = members.filter(m => !V6_ENVELOPE_ACCOUNTS.has(m));
+    const rolledUpActuals = actualsRows.filter(r => !V6_ENVELOPE_ACCOUNTS.has(r.account_key));
+    const aggregate_excluded_members = envelopeExcluded;
+
     return NextResponse.json({
       ok: true,
       filters: { account, start, end },
@@ -393,11 +404,13 @@ export async function GET(request) {
       budget_mode: "static",
       budget_notes,
       members,
+      rolled_up_members: rolledUpMembers,
+      aggregate_excluded_members,
       accounts_directory,
       regional_directors_display,
       board: buildBoard({
         account, start, end, today,
-        actuals: actualsRows,
+        actuals: rolledUpActuals,
         budget_periods,
         account_state: "hourly_ok",
       }),

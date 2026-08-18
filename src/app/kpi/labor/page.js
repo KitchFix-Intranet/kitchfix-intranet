@@ -230,6 +230,20 @@ export default function KpiLaborPage() {
     return data.actuals.filter(r => selectedWorkers.has(r.worker_id));
   }, [data, selectedWorkers]);
 
+  // V25-1..V25-3 - aggregate roll-up POPULATION must match aggregate
+  // budget POPULATION. When the account is a pseudo-key (ALL/EAST/WEST)
+  // the server ships `aggregate_excluded_members` (envelope accounts
+  // excluded from the aggregate budget). Rollup sums (week.amount,
+  // grand.amount, totals) must exclude these members so both sides of
+  // every variance compare like with like. The excluded rows are STILL
+  // pushed into worker_rows so the aggregate drill can render them per
+  // V25-2 (envelope row is never hidden).
+  const aggregateExcludedSet = useMemo(
+    () => new Set(data?.aggregate_excluded_members || []),
+    [data]
+  );
+  const excludedFromRollup = (r) => aggregateExcludedSet.has(r.account_key);
+
   // ── weeksInRange: unique week_start values, sorted desc ──────
   // ONE canonical week count. Board + budget-for-range + pace calc all
   // read this. Never read grouped.length as "week count" (that's period
@@ -255,6 +269,11 @@ export default function KpiLaborPage() {
         });
       }
       const w = byWeek.get(wk);
+      // Drill payload gets EVERY row; rollup sums drop excluded members
+      // so the vs-budget compare stays population-matched (V25-3).
+      w.worker_rows.push(r);
+      w.coverage_states.add(r.coverage_state);
+      if (excludedFromRollup(r)) continue;
       w.hours_regular       += Number(r.hours_regular       || 0);
       w.hours_overtime      += Number(r.hours_overtime      || 0);
       w.hours_double_time   += Number(r.hours_double_time   || 0);
@@ -265,8 +284,6 @@ export default function KpiLaborPage() {
       w.dollars_premium_other += Number(r.dollars_premium_other || 0);
       w.amount                += Number(r.amount                || 0);
       w.hours_without_dollars += Number(r.hours_without_dollars || 0);
-      w.worker_rows.push(r);
-      w.coverage_states.add(r.coverage_state);
     }
     for (const w of byWeek.values()) {
       const states = [...w.coverage_states];
@@ -278,7 +295,7 @@ export default function KpiLaborPage() {
     }
     // Sort desc so the newest week (P9 today) appears first.
     return [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
-  }, [filteredActuals]);
+  }, [filteredActuals, aggregateExcludedSet]);
 
   const weeksInRange = weekAggregates.length; // canonical week count
 
@@ -402,21 +419,48 @@ export default function KpiLaborPage() {
 
   const isSalaried = data?.account_state === "salaried_only";
 
-  // Auto-open current + previous period on first grouped load (v5 default:
-  // §3.7). Only fires when nothing is open yet, so navigating back doesn't
-  // stomp user's manual collapses.
+  // V25-15 - has the board EVER rendered in this session? Ref flips
+  // true after the first successful data load. Cold start (never
+  // rendered) gets a layout-mirroring skeleton; warm nav (previous
+  // board present) keeps the previous board on screen at 0.45 opacity.
+  const hasEverRenderedRef = useRef(false);
   useEffect(() => {
-    if (!grouped.length || expandedPeriods.size > 0) return;
-    // Open first two groups by default. V6-5 - key varies by grouping
-    // mode (period_no in period mode, month-index in month mode).
+    if (loadState === "ok" && (data?.actuals?.length || 0) > 0) {
+      hasEverRenderedRef.current = true;
+    }
+  }, [loadState, data]);
+
+  // V25-4 + V25-18 - auto-open runs ONCE per account. Two rules:
+  //   V25-4 - keying on `expandedPeriods.size === 0` re-fired every
+  //           time the user emptied state (Collapse all), so Collapse
+  //           never won. Keying on a ref keeps this a one-shot init:
+  //             first mount / account switch  -> ref differs, open, update ref
+  //             toggle / collapse-all / range -> ref matches, early return
+  //   V25-18 - multi-period ranges open COLLAPSED. The collapsed period
+  //            view is the most useful read in the table; only single-
+  //            period ranges auto-open (their weeks visible on landing).
+  const autoOpenAccountRef = useRef(null);
+  useEffect(() => {
+    if (!grouped.length) return;
+    if (autoOpenAccountRef.current === account) return;
+    autoOpenAccountRef.current = account;
+    // V25-18 - only single-period ranges auto-open; multi-period
+    // ranges (FYTD, month, custom, last_4wk, last_13wk) land collapsed.
+    if (rangeSelectionEarly?.kind !== "period") {
+      setExpandedPeriods(new Set());
+      return;
+    }
+    // Open first two groups by default (single-period lands with its
+    // weeks visible). V6-5 - key varies by grouping mode (period_no in
+    // period mode, month-index in month mode).
     const openKey = (g) => g?.groupHint?.kind === "month" ? g.groupHint.monthIndex : g?.period_no;
     const next = new Set();
     const k0 = openKey(grouped[0]);
     const k1 = openKey(grouped[1]);
     if (k0 != null) next.add(k0);
     if (k1 != null) next.add(k1);
-    if (next.size > 0) setExpandedPeriods(next);
-  }, [grouped, expandedPeriods.size]);
+    setExpandedPeriods(next);
+  }, [grouped, account, rangeSelectionEarly]);
 
   // F16 - per-worker range totals for the rate-on-hover title. Cheap;
   // derived from filteredActuals which is already memo'd.
@@ -579,11 +623,11 @@ export default function KpiLaborPage() {
     </div>
   ) : null;
 
-  // SYSTEM status strip - hugs the folio foot (V7-19). Two 22px rows:
-  // Payroll data + Nightly feed. Colors come from coverage + freshness
-  // logic already established; the strip stays quiet (no card, no
-  // shadow).
-  const systemStrip = loadState === "ok" && data && !isSalaried ? (
+  // SYSTEM status strip - hugs the folio foot (V7-19). V25-14 keeps
+  // this mounted through every fetch (no unmount on `loadState ===
+  // "loading"`); values freeze on the last-known data until the new
+  // response lands, mirroring the freshness chip's `Loading data`.
+  const systemStrip = data && !isSalaried ? (
     <SystemStrip
       coverageCounts={coverageCounts}
       dominantCoverage={dominantCoverage}
@@ -636,8 +680,19 @@ export default function KpiLaborPage() {
         </div>
       )}
 
-      {!isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0 && (
-        <div ref={boardRef} tabIndex={-1} className="kpi-board" style={{ outline: "none" }}>
+      {/* V25-15 - board stays MOUNTED whenever we have data, regardless
+          of loadState. During a warm refetch (loadState === "loading"
+          with previous data) it renders at 0.45 opacity via
+          `.kpi-board-loading`. It only unmounts on genuine cold start
+          (no data ever), where the skeleton below takes over. */}
+      {!isSalaried && (data?.actuals?.length || 0) > 0 && (
+        <div
+          ref={boardRef}
+          tabIndex={-1}
+          className={`kpi-board ${loadState === "loading" ? "kpi-board-loading" : ""}`}
+          style={{ outline: "none" }}
+          aria-busy={loadState === "loading" ? "true" : undefined}
+        >
           {data.board?.applies !== false && (
             <>
               <StoryBlock
@@ -660,8 +715,15 @@ export default function KpiLaborPage() {
         <StateNotAuthorized />
       ) : loadState === "ok" && data.account_state === "salaried_only" ? (
         <StateSalaried account={account} message={data.account_state_message} />
+      ) : loadState === "loading" && !hasEverRenderedRef.current ? (
+        /* V25-16 - COLD skeleton mirrors the real layout so the shape
+           of what is coming is promised: spend card + four signal
+           cards + numbers strip + six table rows. */
+        <BoardSkeleton />
       ) : loadState === "loading" ? (
-        <StateLoading />
+        /* V25-15 warm nav: board above is opacity 0.45; render nothing
+           here (the previous board and table hold the layout height). */
+        null
       ) : loadState === "error" ? (
         <StateError
           code={errCode}
@@ -694,7 +756,13 @@ export default function KpiLaborPage() {
             }}
           />
         )
-      ) : loadState === "ok" && filteredActuals.length ? (
+      ) : null}
+
+      {/* V25-15 - WeekTable stays MOUNTED across every refetch as long
+          as data exists. Warm loading dims to 0.45 via wrapper class;
+          cold start (no data) omits it (skeleton is above). */}
+      {!isSalaried && (data?.actuals?.length || 0) > 0 && filteredActuals.length > 0 && (
+        <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
         <WeekTable
           account={account}
           grouped={grouped}
@@ -753,8 +821,11 @@ export default function KpiLaborPage() {
           onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "" }) : null}
           rangeSelection={rangeSelectionEarly}
           resolvedPreset={resolvedPreset}
+          rolledUpMembers={data?.rolled_up_members || []}
+          aggregateExcludedMembers={data?.aggregate_excluded_members || []}
         />
-      ) : null}
+        </div>
+      )}
     </>
   );
 
@@ -768,7 +839,10 @@ export default function KpiLaborPage() {
           dataLoading={loadState === "loading" || loadState === "idle"}
           activeSection="labor"
           printScopeText={printScopeText}
-          rangeProps={!isSalaried && loadState === "ok" ? {
+          /* V25-14 - Range control stays MOUNTED through every refetch.
+             Uses last-known account_periods; the ranges keep responding
+             the moment the loading chip clears. */
+          rangeProps={!isSalaried && (data || loadState === "ok") ? {
             startISO: start,
             endISO: end,
             todayISO: today,
@@ -779,7 +853,7 @@ export default function KpiLaborPage() {
             selectedMonth,
             onCommit: onRangeCommit,
           } : null}
-          exportHref={loadState === "ok" && data?.account_state !== "salaried_only" ? exportHref() : null}
+          exportHref={data && data?.account_state !== "salaried_only" ? exportHref() : null}
           onExport={() => {
             setToast({
               message: redact ? "Export ready · names redacted." : "Export ready.",
@@ -809,6 +883,32 @@ export default function KpiLaborPage() {
 
       {/* ── P10/P11 toast host (M4 export) ─── */}
       <ToastHost toast={toast} onDismiss={() => setToast(null)} />
+    </div>
+  );
+}
+
+// V25-16 - COLD skeleton mirrors the actual board layout so the shape
+// of the incoming content is promised: a spend-card block, four
+// signal-card blocks, a numbers-strip block, six table rows, each at
+// its real height. Only renders when the board has NEVER rendered in
+// this session (first paint). Warm nav keeps the previous board.
+function BoardSkeleton() {
+  return (
+    <div className="kpi-board kpi-board-skel" role="status" aria-live="polite" aria-busy="true">
+      <span className="sr-only">Loading dashboard</span>
+      <div className="kpi-skel kpi-skel-spend" />
+      <div className="kpi-skel-sigs">
+        <div className="kpi-skel kpi-skel-sig" />
+        <div className="kpi-skel kpi-skel-sig" />
+        <div className="kpi-skel kpi-skel-sig" />
+        <div className="kpi-skel kpi-skel-sig" />
+      </div>
+      <div className="kpi-skel kpi-skel-det" />
+      <div className="kpi-skel-tbl">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="kpi-skel kpi-skel-row" />
+        ))}
+      </div>
     </div>
   );
 }

@@ -97,6 +97,11 @@
   --kpi-row-h-dense:  calc(30px   * var(--kf-scale));
   --kpi-thead-h:      calc(34px   * var(--kf-scale));
   --kpi-band-h:       calc(52px   * var(--kf-scale));
+  /* V25-12 table control bar - one height, one radius, two gaps. */
+  --kpi-tbar-ctl-h:   calc(28px   * var(--kf-scale));
+  --kpi-tbar-gap-in:  calc(6px    * var(--kf-scale));
+  --kpi-tbar-gap-out: calc(18px   * var(--kf-scale));
+  --kpi-tbar-rad:     7px;
 
   /* Layout widths (S-2). */
   --kpi-folio-w:      calc(260px  * var(--kf-scale));
@@ -842,7 +847,6 @@
 .kpi-btn,
 .kpi-pchip,
 .kpi-pchip.on,
-.kpi-pjump,
 .kpi-perbtn,
 .kpi-wkbtn,
 .kpi-acct {
@@ -854,7 +858,6 @@
 .kpi-param-workers > summary:active,
 .kpi-btn:active,
 .kpi-pchip:active,
-.kpi-pjump:active,
 .kpi-acct:active { background: var(--n-100); }
 /* Filled-accent elements (on/active): press to --kpi-accent-strong */
 .kpi-preset.kpi-preset-active:active,
@@ -873,7 +876,7 @@
   .kpi-preset, .kpi-redact-toggle, .kpi-btn-primary, .kpi-btn-secondary,
   .kpi-btn-danger, .kpi-state-cta,
   .kpi-param-workers > summary, .kpi-btn, .kpi-pchip, .kpi-pchip.on,
-  .kpi-pjump, .kpi-perbtn, .kpi-wkbtn,
+  .kpi-perbtn, .kpi-wkbtn,
   .kpi-acct { transition: none; }
 }
 
@@ -900,7 +903,7 @@
   .kpi-app, .kpi-wrap { background: #fff; color: #000; }
   .kpi-cmd, .kpi-folio,
   .kpi-toast-host, .kpi-sr-live,
-  .kpi-jump-chips, .kpi-ttools,
+  .kpi-tbar,
   .kpi-cal-root, .kpi-modal-scrim {
     display: none !important;
   }
@@ -1025,39 +1028,112 @@
   }
 }
 
-/* ── V6-22/V6-23 · table bar layout ─────────────────────────────
-   Two-cell bar (jump-chip cluster left, employee-display right)
-   using the existing jump-chip family. */
+/* ── V25-12 · table control bar - one height, one rhythm ─────────
+   One 28px control height, one 7px radius, two gap values (6 inside a
+   group / 18 between groups), hairline rules for the right-side display
+   cluster. Every label is 9.5px/800 uppercase with line-height matched
+   to the control height so labels centre against what they label. */
 .kpi-tbar {
-  display: flex; align-items: center; gap: var(--space-3);
-  margin-bottom: var(--space-2);
+  display: flex; align-items: center;
+  gap: var(--kpi-tbar-gap-out);
+  min-height: var(--kpi-tbar-ctl-h);
+  margin-bottom: var(--kpi-space-3);
+  flex-wrap: wrap;
+}
+.kpi-tbar-grp {
+  display: inline-flex; align-items: center;
+  gap: var(--kpi-tbar-gap-in);
+  height: var(--kpi-tbar-ctl-h);
+}
+.kpi-tbar-lbl {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.09em;
+  color: var(--n-500); text-transform: uppercase;
+  white-space: nowrap;
+  line-height: var(--kpi-tbar-ctl-h);
 }
 .kpi-tbar-spacer { flex: 1 1 auto; }
-.kpi-jumplab {
-  font-size: var(--size-micro);
-  color: var(--text-subtle);
-  font-weight: 700; letter-spacing: 0.05em;
-  margin-bottom: 2px;
+.kpi-tbar-rule {
+  width: 1px; height: calc(16px * var(--kf-scale));
+  background: var(--n-200); flex: none;
 }
-.kpi-empdisp { display: inline-flex; align-items: center; gap: var(--kpi-space-2); }
-.kpi-empdisp-lab { font-size: var(--kpi-size-label); color: var(--text-muted); }
+.kpi-tbar-chip {
+  height: var(--kpi-tbar-ctl-h);
+  min-width: var(--kpi-tbar-ctl-h);
+  padding: 0 var(--kpi-space-9px);
+  border: 1px solid var(--n-300);
+  background: var(--surface-card);
+  border-radius: var(--kpi-tbar-rad);
+  font-size: var(--kpi-size-micro); font-weight: 800;
+  font-variant-numeric: var(--num-tabular);
+  color: var(--n-600);
+  display: inline-flex; align-items: center; justify-content: center;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.kpi-tbar-chip:hover { border-color: var(--n-400); color: var(--n-700); }
+.kpi-tbar-chip.on {
+  border-color: var(--navy-700); color: var(--navy-700);
+  background: var(--navy-100);
+  box-shadow: inset 0 0 0 1px var(--navy-700);
+}
+.kpi-tbar-btn {
+  height: var(--kpi-tbar-ctl-h);
+  padding: 0 var(--kpi-space-10px);
+  border: 1px solid var(--n-300);
+  background: var(--surface-card);
+  border-radius: var(--kpi-tbar-rad);
+  font-size: var(--kpi-size-caption);
+  color: var(--n-600);
+  display: inline-flex; align-items: center; gap: var(--kpi-space-6px);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.kpi-tbar-btn:hover { border-color: var(--n-400); color: var(--n-800); }
+.kpi-tbar-btn .kpi-i { width: 12px; height: 12px; color: var(--n-500); }
+.kpi-tbar-btn-dd::after {
+  content: "\25BE"; font-size: var(--kpi-size-tag); color: var(--n-400);
+  margin-left: 2px;
+}
+.kpi-empdisp {
+  display: inline-flex; align-items: center;
+  gap: var(--kpi-tbar-gap-in);
+  height: var(--kpi-tbar-ctl-h);
+}
+.kpi-empdisp-lab {
+  font-size: var(--kpi-size-micro); font-weight: 800; letter-spacing: 0.09em;
+  color: var(--n-500); text-transform: uppercase;
+  line-height: var(--kpi-tbar-ctl-h);
+}
 .kpi-seg {
   display: inline-flex;
-  border: 1px solid var(--border-default);
-  border-radius: var(--rad-pill);
+  height: var(--kpi-tbar-ctl-h);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-tbar-rad);
   overflow: hidden;
   background: var(--surface-card);
 }
 .kpi-seg button {
   border: 0; background: none;
-  padding: var(--kpi-space-5px) var(--kpi-space-3);
-  font: inherit; font-size: var(--kpi-size-label);
-  color: var(--text-muted);
+  padding: 0 var(--kpi-space-10px);
+  font: inherit; font-size: var(--kpi-size-caption);
+  color: var(--n-600);
+  display: inline-flex; align-items: center;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s;
 }
+.kpi-seg button + button { border-left: 1px solid var(--n-200); }
 .kpi-seg button.on {
   background: var(--n-900);
-  color: var(--n-0); font-weight: 600;
+  color: var(--n-0); font-weight: 700;
+}
+/* V25-12 - help button inside the control bar joins the tbar's control
+   height, replacing its stand-alone 20px sizing (which broke the 28px
+   band alignment). Global `.kpi-help` outside the tbar is untouched. */
+.kpi-tbar .kpi-help {
+  width: var(--kpi-tbar-ctl-h);
+  height: var(--kpi-tbar-ctl-h);
 }
 .kpi-mono {
   font-family: var(--font-ui);
@@ -1533,6 +1609,55 @@
   display: flex; flex-direction: column;
   gap: var(--kpi-space-3);
   margin-bottom: var(--kpi-space-3);
+}
+/* V25-15 - warm nav dims the existing board to 0.45 while the next
+   fetch is in flight. The `.kpi-board-loading` class is applied by
+   page.js on the board wrapper AND on the table wrapper so both
+   dim together. Layout is preserved (V25-13). */
+.kpi-board-loading {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.18s ease-out;
+}
+
+/* V25-16 - COLD skeleton mirrors the real board layout. Each block
+   sits at the real height so first paint promises the shape of the
+   coming content. V25-17 - respects prefers-reduced-motion: the
+   shimmer keyframe animation is suppressed in favour of a static tint. */
+.kpi-board-skel { gap: var(--kpi-space-3); }
+.kpi-skel {
+  background: linear-gradient(90deg, var(--n-100) 0%, var(--n-200) 50%, var(--n-100) 100%);
+  background-size: 200% 100%;
+  border-radius: var(--rad-10);
+  border: 1px solid var(--n-200);
+  animation: kpiSkelShimmer 1.4s ease-in-out infinite;
+}
+.kpi-skel-spend { height: calc(220px * var(--kf-scale)); }
+.kpi-skel-sigs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-space-4);
+}
+.kpi-skel-sig { height: calc(180px * var(--kf-scale)); }
+.kpi-skel-det { height: calc(52px * var(--kf-scale)); }
+.kpi-skel-tbl { display: flex; flex-direction: column; gap: var(--kpi-space-1); }
+.kpi-skel-row { height: var(--kpi-row-h); border-radius: var(--rad-6); }
+
+@keyframes kpiSkelShimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-skel {
+    animation: none;
+    background: var(--n-100);
+  }
+}
+@media (max-width: 1279px) {
+  .kpi-skel-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .kpi-skel-sigs { grid-template-columns: 1fr; }
 }
 
 /* Verdict pill - single source of truth uses .kpi-vpill-{good|warn|bad}.
@@ -2176,33 +2301,9 @@
 }
 
 
-/* Period jump chips + Expand/Collapse */
-.kpi-jump-chips {
-  display: flex; gap: var(--space-1);
-  margin-bottom: var(--space-2);
-  flex-wrap: wrap;
-}
-.kpi-pjump {
-  min-height: calc(28px * var(--kf-scale));
-  padding: 0 var(--space-2);
-  border-radius: var(--rad-6);
-  border: 1px solid var(--border-default);
-  font-size: var(--size-micro);
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--surface-card);
-  cursor: pointer;
-}
-.kpi-pjump:hover { border-color: var(--kpi-accent); color: var(--kpi-accent-strong); }
-.kpi-pjump.open {
-  background: var(--kpi-accent-tint);
-  border-color: var(--kpi-accent);
-  color: var(--kpi-accent-strong);
-}
-.kpi-ttools {
-  margin-left: auto;
-  display: inline-flex; gap: var(--space-1);
-}
+/* V25-12 period-chip and expand/collapse cluster share the .kpi-tbar-*
+   grammar above. Legacy .kpi-jump-chips / .kpi-pjump / .kpi-ttools
+   retired in favour of .kpi-tbar-grp + .kpi-tbar-chip + .kpi-tbar-btn. */
 
 /* Table v5 - clip, not hidden (B2 sticky trap). V6-11 - the table
    container shares the border+shadow grammar with cards + rail
@@ -2210,6 +2311,24 @@
 /* ── V9 WEEK TABLE (V9-1..V9-23) ────────────────────────────────
    Period bands are data rows (V9-8); subtotal rows retire (V9-9);
    Coverage column deleted (V9-1); every row has vs-budget (V9-4). */
+
+/* V25-2 scope note - sits above the table on aggregate views where
+   an envelope member is excluded from the roll-up. Reader learns why
+   the compare is population-matched before they read a variance. */
+.kpi-tbl-scope {
+  font-size: var(--kpi-size-caption);
+  color: var(--n-700);
+  padding: var(--kpi-space-2) var(--kpi-space-3);
+  background: var(--n-50);
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-6);
+  margin-bottom: var(--kpi-space-2);
+  line-height: 1.5;
+}
+.kpi-tbl-notbudgeted {
+  font-style: normal; letter-spacing: 0;
+}
+
 .kpi-tbl-wrap {
   border: 1px solid var(--n-300);
   border-radius: 12px;
@@ -2329,7 +2448,9 @@
   letter-spacing: 0.04em;
 }
 
-/* Child rows (worker / account) (V9-10) */
+/* Child rows (worker / account) (V9-10 + V25-10). V25-10 - the child
+   connector is a 1px vertical RAIL, not a horizontal glyph. Leading
+   dashes read as signed deltas in a table full of vs-budget cells. */
 .kpi-tbl-child > td {
   background: var(--n-50);
   font-size: var(--kpi-size-ctl);
@@ -2342,8 +2463,10 @@
 }
 .kpi-tbl-child > td:first-child::before {
   content: "";
-  position: absolute; left: 28px; top: 50%;
-  width: var(--kpi-space-10px); height: 1px;
+  position: absolute;
+  left: calc(22px * var(--kf-scale));
+  top: 0; bottom: 0;
+  width: 1px;
   background: var(--n-300);
 }
 .kpi-tbl-child:hover > td { background: var(--n-100); }
@@ -2358,41 +2481,79 @@
 .kpi-tbl-cchild-key { font-weight: 700; color: var(--n-800); }
 .kpi-tbl-cchild-label { color: var(--n-700); font-weight: 500; }
 
-/* V9-14 share bar lives inside dollars cell, not in vs budget. */
-.kpi-tbl-money { position: relative; }
-.kpi-tbl-share {
-  position: absolute; left: var(--kpi-space-3); right: var(--kpi-space-3); bottom: var(--kpi-space-7px);
-  height: 3px; border-radius: 2px;
-  background: var(--n-200);
-  overflow: hidden;
-}
-.kpi-tbl-share i {
-  position: absolute; right: 0; top: 0; bottom: 0;
+/* V25-6 - Share moves out of the Dollars cell into its own narrow
+   column, so it stops reading as an underline. Cell is empty on
+   non-child rows so alignment stays consistent top to bottom. */
+.kpi-tbl-shrcol { width: calc(52px * var(--kf-scale)); }
+.kpi-tbl-share2 {
+  display: inline-block;
+  width: 100%; height: calc(5px * var(--kf-scale));
   border-radius: 2px;
-  background: var(--n-400);
+  background: var(--n-200);
+  position: relative;
+  vertical-align: middle;
 }
-.kpi-tbl-child:hover .kpi-tbl-share i { background: #4A6076; }
+.kpi-tbl-share2 > i {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 2px;
+  background: #4A6076;
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+.kpi-tbl-child:hover .kpi-tbl-share2 > i { opacity: 1; }
 
-/* V9-10 total row - navy-900 sticky bottom. */
-.kpi-tbl-total > td {
-  background: var(--n-900);
-  color: #ffffff;
+/* V25-8 total row - navy-900 sticky bottom. Every numeric cell + the
+   label render #FFFFFF weight 800 (the total is the most legible row
+   on the page, not the least). Selectors are prefixed with `.kpi-tbl
+   tbody` to beat `.kpi-tbl tbody td:first-child { color: var(--n-900) }`
+   which was silently winning on the label cell. */
+.kpi-tbl tbody .kpi-tbl-total > td {
+  background: var(--navy-900);
+  color: #FFFFFF;
   font-weight: 800;
   font-size: var(--kpi-size-body);
   height: calc(46px * var(--kf-scale));
   border: 0;
   position: sticky; bottom: 0; z-index: 15;
 }
-.kpi-tbl-total > td:first-child {
-  color: #ffffff;
+.kpi-tbl tbody .kpi-tbl-total > td:first-child {
+  color: #FFFFFF;
   letter-spacing: 0.04em;
   font-size: var(--kpi-size-note);
 }
-.kpi-tbl-total .kpi-vb-d-good { color: #7BD389; }
-.kpi-tbl-total .kpi-vb-d-bad  { color: #FCA5A5; }
-.kpi-tbl-total .kpi-vb-d-mute { color: #B9C6DA; }
-.kpi-tbl-total .kpi-vb-d-neut { color: #B9C6DA; }
-.kpi-tbl-total .kpi-tbl-nil   { color: #7C90AE; }
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-good { color: #8BE0A4; }
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-bad  { color: #FCA5A5; }
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-mute,
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-d-neut { color: #FFFFFF; }
+.kpi-tbl tbody .kpi-tbl-total .kpi-tbl-nil   { color: #FFFFFF; }
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar { background: rgba(255, 255, 255, 0.18); }
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > i { background: #8BE0A4; }
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > i.kpi-vb-fill-over,
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > .kpi-vb-over { background: #FCA5A5; }
+.kpi-tbl tbody .kpi-tbl-total .kpi-vb-bar > .kpi-vb-tick { background: #FFFFFF; }
+
+/* V25-19 - `Names hidden` chip sits on the WEEK column header when
+   redact=1 and worker rows are actually visible. Neutral treatment,
+   never amber; hiding names is a deliberate choice, not a warning.
+   Clickable to restore names. */
+.kpi-tbl-names-hidden {
+  display: inline-flex; align-items: center;
+  height: calc(18px * var(--kf-scale));
+  margin-left: var(--kpi-space-2);
+  padding: 0 var(--kpi-space-2);
+  font-size: var(--kpi-size-tag); font-weight: 700; letter-spacing: 0.04em;
+  color: var(--n-600);
+  background: var(--n-100);
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-pill);
+  text-transform: none;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.kpi-tbl-names-hidden:hover {
+  border-color: var(--n-400);
+  color: var(--n-800);
+}
 
 /* V9-5 vs budget lockup: 58px bar + 72px right-aligned delta */
 .kpi-vb {
