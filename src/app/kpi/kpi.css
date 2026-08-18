@@ -2341,8 +2341,12 @@
 /* Board responsive: signals collapse; details strip stacks the two
    groups on top of each other under 1280 (4 cells still fit per row). */
 @media (max-width: 1279px) {
-  .kpi-sigs,
-  .kpi-sigs-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* V29-19 - the 3-card signal row must hold ONE row across all
+     supported widths so hero tops line up at 1180. Legacy 4-card
+     row (.kpi-sigs) still collapses to 2 columns at this breakpoint;
+     .kpi-sigs-3 keeps its 1fr 1fr 2fr layout. */
+  .kpi-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-sigs-3 { grid-template-columns: 1fr 1fr 2fr; }
   .kpi-det-table { grid-template-columns: 1fr; }
   .kpi-det-grp { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-det-grp:last-child { border-bottom: 0; }
