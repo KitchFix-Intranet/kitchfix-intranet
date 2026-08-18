@@ -61,67 +61,140 @@ function Facts({ items }) {
     <div className="kpi-sig-facts" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
       {items.map((it, i) => (
         <div key={i} className="kpi-sig-fact">
-          <div className="kpi-sig-fact-lab">{it.label}</div>
-          <div className={`kpi-sig-fact-val ${it.tone ? `kpi-sig-fact-val-${it.tone}` : ""}`}>{it.value}</div>
+          <div className={`kpi-sig-fact-lab ${it.labClass || ""}`}>{it.label}</div>
+          <div className={`kpi-sig-fact-val ${it.tone ? `kpi-sig-fact-val-${it.tone}` : ""} ${it.muted ? "kpi-sig-fact-val-mute" : ""}`}>{it.value}</div>
+          {it.sub && <div className="kpi-sig-fact-sub">{it.sub}</div>}
         </div>
       ))}
     </div>
   );
 }
 
-// ── Over/Under budget ─────────────────────────────────────────────
-function OverUnderCard({ board }) {
-  const v = board?.variance;
+// ── V32-1..V32-4 Pace card (was mislabelled "over/under budget") ──
+// State-dependent because the underlying figure changes definition
+// between in-progress and closed periods. Card that keeps one title
+// across that change tells two stories with one label.
+function PaceCard({ board }) {
   const budget = board?.period_budget || board?.range_budget;
   const spent = board?.spent_to_date;
-  const pace = board?.pace_pct;
+  const v = board?.variance;
   const verdict = board?.verdict;
+  const kind = board?.kind;
+  const elapsedPct = board?.elapsed_pct;
+  const elapsedWeeks = board?.elapsed_weeks;
+  const weeksInPeriod = board?.weeks_in_period || 4;
+  const closedWeeks = board?.closed_weeks_count || 0;
+  const projectedEnd = board?.projected_period_end;
+  const inProgress = kind === "single_period_in_progress";
+  const closed = kind === "single_period_closed";
+
   if (v == null || !budget) {
     return (
       <SignalCard>
-        <Head eyebrow="OVER / UNDER BUDGET" verdict={null} />
+        <Head eyebrow={inProgress ? "SPENDING PACE" : "FINAL VS BUDGET"} verdict={null} />
         <Hero><span className="kpi-sig-hero-mute">—</span></Hero>
         <Sub><span className="kpi-sig-sub-mute">no budget in range</span></Sub>
         <Facts items={[
-          { label: "Spent", value: "—" },
-          { label: "Pace",  value: "—" },
+          { label: "Spent", value: spent != null ? fmt$(spent) : "—" },
+          { label: "Budget", value: "—" },
         ]} />
       </SignalCard>
     );
   }
+
   const under = v < 0;
-  const paceTone = verdict === "over" ? "bad" : verdict === "watch" ? "warn" : "good";
+  const eyebrow = inProgress ? "SPENDING PACE" : "FINAL VS BUDGET";
+
+  // V32-2 sub-line differs per state.
+  const subLine = inProgress
+    ? (v == null || Math.abs(v) < 0.5
+        ? `on an even burn, ${elapsedPct != null ? Math.round(elapsedPct) : "—"}% into the period`
+        : `${under ? "ahead of" : "behind"} an even burn, ${elapsedPct != null ? Math.round(elapsedPct) : "—"}% into the period`)
+    : "period closed";
+
+  // V32-3 in-progress: Spent · Should be at · Projected end · Left to spend
+  //       closed:      Spent · Budget · Of budget used · Left unspent / Overrun
+  const shouldBeAt = inProgress
+    ? (spent != null && v != null ? spent - v : null)
+    : null;
+  const projectedFact = inProgress
+    ? (closedWeeks < 1
+        ? { value: "—", sub: "needs a closed week", muted: true }
+        : (projectedEnd != null
+            ? { value: <ArrowFigure v={projectedEnd - budget} size="value" /> }
+            : { value: "—", muted: true }))
+    : null;
+  const leftToSpend = inProgress && spent != null ? Math.max(0, budget - spent) : null;
+  const ofBudgetUsedPct = closed && budget > 0 && spent != null ? Math.round((spent / budget) * 100) : null;
+  const leftUnspent = closed && spent != null ? budget - spent : null;
+
+  const facts = inProgress
+    ? [
+        { label: "Spent",        value: spent != null ? fmt$(spent) : "—" },
+        { label: "Should be at", value: shouldBeAt != null ? fmt$(shouldBeAt) : "—" },
+        { label: "Projected end", value: projectedFact.value, tone: projectedFact.muted ? undefined : undefined, sub: projectedFact.sub, muted: projectedFact.muted },
+        { label: "Left to spend", value: leftToSpend != null ? fmt$(leftToSpend) : "—" },
+      ]
+    : [
+        { label: "Spent",  value: spent != null ? fmt$(spent) : "—" },
+        { label: "Budget", value: fmt$(budget) },
+        { label: "Of budget used", value: ofBudgetUsedPct != null ? `${ofBudgetUsedPct}%` : "—" },
+        leftUnspent != null && leftUnspent >= 0
+          ? { label: "Left unspent", value: fmt$(leftUnspent) }
+          : { label: "Overrun", value: leftUnspent != null ? fmt$(Math.abs(leftUnspent)) : "—", tone: "bad" },
+      ];
+
   return (
     <SignalCard className={under ? "kpi-sig-lead kpi-sig-lead-good" : ""}>
-      <Head eyebrow="OVER / UNDER BUDGET" verdict={verdict} />
+      <Head eyebrow={eyebrow} verdict={verdict} />
       <Hero>
         <ArrowFigure v={v} size="hero" />
       </Hero>
-      <Sub>of a {fmt$(budget)} budget</Sub>
-      <Facts items={[
-        { label: "Spent", value: spent != null ? fmt$(spent) : "—" },
-        { label: "Pace",  value: pace != null ? `${pace}%` : "—", tone: paceTone },
-      ]} />
+      <Sub>{subLine}</Sub>
+      <Facts items={facts} />
     </SignalCard>
   );
 }
 
-// ── Overtime ──────────────────────────────────────────────────────
-// V31 item 3 - OT hero turns amber past watch, red at alarm. Thresholds
-// come from board.overtime.watch_pct / .alarm_pct (server config; never
-// hardcoded). Facts row: "Watch line <N>%" (only the 8% watch is stated;
-// the 12% alarm label is dropped from copy but still drives colour) and
-// "Vs last period" (not currently in the board payload; shows dash
-// until the server ships a prior-period OT figure - see "found not
-// fixed").
+// ── V32-5..V32-7 Overtime ─────────────────────────────────────────
+// Thresholds: 0% on target (green), above 0 up to `watch_pct` amber
+// warning, above `alarm_pct` red off-target. BOTH bounds come from
+// server config (board.overtime.watch_pct / .alarm_pct); the copy
+// renders whatever config holds. `Hrs to target` flips to `Hrs over
+// target` at the alarm bound - allowed = worked_hours * alarm_pct/100;
+// remaining = allowed - ot_hours (positive = under target, negative =
+// over target; we render the absolute value with the appropriate label).
 function OvertimeCard({ board }) {
   const ot = board?.overtime;
   const pct = ot?.pct ?? 0;
+  const workedHours = board?.hours ?? 0;
   const watch = ot?.watch_pct;
+  const alarm = ot?.alarm_pct;
   const state = ot?.state ?? "clear";
   const verdict = state === "alarm" ? "over" : state === "watch" ? "watch" : "on_track";
   const heroTone = state === "alarm" ? "bad" : state === "watch" ? "warn" : null;
-  const vsLast = ot?.vs_last_period_pct;   // not currently populated
+
+  const otCost = ot?.cost;
+  const otWorkers = ot?.workers ?? 0;
+  const workersTotal = ot?.workers_total ?? 0;
+  const longest = ot?.longest_week;
+  // Sign convention: allowed = worked * alarm_pct/100 (the "off target"
+  // bound); remaining = allowed - actual. Positive remaining = hours
+  // still under the target (labeled "Hrs to target"); negative =
+  // hours already past the target (labeled "Hrs over target", absolute).
+  const allowed = (alarm != null && workedHours > 0) ? (workedHours * alarm / 100) : null;
+  const remaining = (allowed != null) ? allowed - (ot?.hours ?? 0) : null;
+  const overTarget = remaining != null && remaining < 0;
+  const hoursFact = remaining == null
+    ? { label: "Hrs to target", value: "—" }
+    : overTarget
+      ? { label: "Hrs over target", value: fmtHrs(Math.abs(remaining)), tone: "bad" }
+      : { label: "Hrs to target",  value: fmtHrs(remaining) };
+
+  const boundsCopy = (watch != null && alarm != null)
+    ? `watch above ${watch}% · off target above ${alarm}%`
+    : "of hours worked";
+
   return (
     <SignalCard>
       <Head eyebrow="OVERTIME" verdict={verdict} />
@@ -130,22 +203,32 @@ function OvertimeCard({ board }) {
           {pct.toFixed(1)}%
         </span>
       </Hero>
-      <Sub>of hours worked</Sub>
+      <Sub>{boundsCopy}</Sub>
       <Facts items={[
-        { label: "Watch line", value: watch != null ? `${watch}%` : "—" },
-        { label: "Vs last period", value: vsLast != null ? <ArrowFigure v={vsLast} size="value" fmt={(n) => `${n.toFixed(1)}%`} /> : "—" },
+        { label: "OT cost", value: otCost != null ? fmt$(otCost) : "—" },
+        hoursFact,
+        { label: "OT workers", value: workersTotal > 0 ? `${otWorkers} of ${workersTotal}` : "—" },
+        { label: "Longest OT week", value: longest ? `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` : "—" },
       ]} />
     </SignalCard>
   );
 }
 
-// ── Hours left (double-width) ─────────────────────────────────────
+// ── V32-8/V32-9 Hours left (single width, back on the 4-card row) ──
+// Facts: Per week (hours left / weeks not finished) · Per worker/wk
+// (that / distinct workers) · Budget left · Blended rate. `Worked`
+// drops off the card - it lives in ALL THE NUMBERS. Per-week facts
+// render a muted dash on ranges with no meaningful weeks-remaining
+// denominator (closed periods, FYTD, multi-period).
 function HoursLeftCard({ board }) {
   const budget = board?.period_budget || board?.range_budget;
   const spent = board?.spent_to_date ?? 0;
-  const worked = board?.hours ?? 0;
   const rate = board?.avg_rate;
+  const workers = board?.distinct_workers ?? 0;
   const kind = board?.kind;
+  const inProgress = kind === "single_period_in_progress";
+  const notStarted = board?.not_started_weeks_count || 0;
+  const weeksRemaining = inProgress ? (board?.in_progress_week_start ? 1 : 0) + notStarted : 0;
   const dollarsLeft = budget != null && budget > 0 ? budget - spent : null;
   const hoursLeft = (rate != null && rate > 0 && dollarsLeft != null)
     ? Math.max(0, dollarsLeft / rate)
@@ -158,12 +241,13 @@ function HoursLeftCard({ board }) {
 
   if (budget == null || rate == null || rate <= 0) {
     return (
-      <SignalCard wide>
+      <SignalCard>
         <Head eyebrow="HOURS LEFT TO SCHEDULE" verdict={null} />
-        <Hero><span className="kpi-sig-hero-val num">{fmtHrs(worked)}</span></Hero>
-        <Sub><span className="kpi-sig-sub-mute">hours worked · no budget to compare</span></Sub>
+        <Hero><span className="kpi-sig-hero-mute">—</span></Hero>
+        <Sub><span className="kpi-sig-sub-mute">no budget to compare</span></Sub>
         <Facts items={[
-          { label: "Worked",       value: fmtHrs(worked) },
+          { label: "Per week",     value: "—", muted: true },
+          { label: "Per worker/wk", value: "—", muted: true },
           { label: "Budget left",  value: "—" },
           { label: "Blended rate", value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
         ]} />
@@ -176,15 +260,24 @@ function HoursLeftCard({ board }) {
     ? "beyond what the budget covers"
     : (kind === "single_period_closed" ? "hours the period had left" : "you can still schedule this period");
 
+  // Per-week facts: only apply when the range has an in-progress
+  // period with weeks-remaining. Closed and multi-period ranges get
+  // muted dashes (V8-19 pattern).
+  const perWeek = (inProgress && weeksRemaining > 0 && hoursLeft != null)
+    ? hoursLeft / weeksRemaining
+    : null;
+  const perWorkerPerWeek = (perWeek != null && workers > 0) ? perWeek / workers : null;
+
   return (
-    <SignalCard wide>
+    <SignalCard>
       <Head eyebrow="HOURS LEFT TO SCHEDULE" verdict={verdict} />
       <Hero>
         <span className={`kpi-sig-hero-val num ${isOver ? "kpi-sig-hero-bad" : ""}`}>{fmtHrs(heroValue)}</span>
       </Hero>
       <Sub>{heroSub}</Sub>
       <Facts items={[
-        { label: "Worked",       value: fmtHrs(worked) },
+        { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
+        { label: "Per worker/wk", value: perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—", muted: perWorkerPerWeek == null },
         { label: "Budget left",  value: isOver ? <ArrowFigure v={Math.abs(dollarsLeft)} size="value" /> : fmt$(dollarsLeft ?? 0) },
         { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
       ]} />
@@ -192,13 +285,70 @@ function HoursLeftCard({ board }) {
   );
 }
 
-export function SignalCards({ board }) {
+// ── V32-10/V32-11 Payroll data (ACTION card) ─────────────────────
+// Unapproved hours = someone must approve them in Rippling or those
+// people do not get paid. This card names Rippling in the sub-line
+// when the situation calls for action. `Dollars will rise` is an
+// estimate (unapproved_hrs * blended_rate) and is marked as one via
+// a dotted-underline label + a hover reading the derivation.
+function PayrollDataCard({ board, freshness }) {
+  const pd = board?.payroll_data;
+  const priced = pd?.priced_ww ?? 0;
+  const total = pd?.total_ww ?? 0;
+  const unpricedHrs = pd?.unpriced_hours ?? 0;
+  const unapprovedWeeks = pd?.unapproved_weeks ?? 0;
+  const rate = board?.avg_rate;
+  const state = total === 0 ? null
+              : unpricedHrs > 0 ? "watch"
+              : "on_track";
+  const pillLabel = total === 0 ? "—" : unpricedHrs > 0 ? "PARTIAL" : "FINAL";
+  const pillTone = unpricedHrs > 0 ? "warn" : total === 0 ? "neutral" : "good";
+  const hasUnapproved = unpricedHrs > 0.004;
+  const willRise = (hasUnapproved && rate != null && rate > 0) ? unpricedHrs * rate : null;
+  const willRiseTitle = willRise != null
+    ? `Estimate. ${fmtHrs(unpricedHrs)} unapproved hrs x $${rate.toFixed(2)} blended rate. Unapproved hours skew to whoever has not been processed, so their true rate may differ from the blend.`
+    : "";
+  const lastPulled = freshness?.last_walk_at
+    ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : "—";
+
+  return (
+    <SignalCard>
+      <div className="kpi-sig-head">
+        <span className="kpi-sig-eyebrow">PAYROLL DATA</span>
+        <span className={`kpi-sig-state kpi-sig-state-${pillTone}`}>{pillLabel}</span>
+      </div>
+      <Hero>
+        <span className="kpi-sig-hero-val num">{priced} of {total}</span>
+      </Hero>
+      <Sub>
+        worker-weeks with pay data in
+        {hasUnapproved && (
+          <>{" "}<span className="kpi-sig-sub-action">· {fmtHrs(unpricedHrs)} hrs need approval in Rippling</span></>
+        )}
+      </Sub>
+      <Facts items={[
+        { label: "Unapproved hrs", value: hasUnapproved ? fmtHrs(unpricedHrs) : "—", tone: hasUnapproved ? "warn" : undefined },
+        {
+          label: <span className="kpi-sig-fact-est" title={willRiseTitle}>Dollars will rise</span>,
+          value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
+          muted: willRise == null,
+        },
+        { label: "Weeks affected", value: unapprovedWeeks > 0 ? `${unapprovedWeeks}` : "—", muted: unapprovedWeeks === 0 },
+        { label: "Last pulled", value: lastPulled },
+      ]} />
+    </SignalCard>
+  );
+}
+
+export function SignalCards({ board, freshness }) {
   if (!board || board.applies === false) return null;
   return (
-    <div className="kpi-sigs kpi-sigs-3">
-      <OverUnderCard board={board} />
+    <div className="kpi-sigs">
+      <PaceCard board={board} />
       <OvertimeCard board={board} />
       <HoursLeftCard board={board} />
+      <PayrollDataCard board={board} freshness={freshness} />
     </div>
   );
 }

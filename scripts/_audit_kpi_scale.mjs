@@ -147,10 +147,11 @@ const PROBE_HTML = `
         </div>
         <div class="kpi-story-right"></div>
       </div>
-      <div class="kpi-sigs kpi-sigs-3">
-        <div class="kpi-sig"><div class="kpi-sig-head"><span class="kpi-sig-eyebrow">OVER / UNDER BUDGET</span></div></div>
+      <div class="kpi-sigs">
+        <div class="kpi-sig"><div class="kpi-sig-head"><span class="kpi-sig-eyebrow">SPENDING PACE</span></div></div>
         <div class="kpi-sig"><div class="kpi-sig-head"><span class="kpi-sig-eyebrow">OVERTIME</span></div></div>
-        <div class="kpi-sig"><div class="kpi-sig-head"><span class="kpi-sig-eyebrow">HOURS</span></div></div>
+        <div class="kpi-sig"><div class="kpi-sig-head"><span class="kpi-sig-eyebrow">HOURS LEFT TO SCHEDULE</span></div></div>
+        <div class="kpi-sig"><div class="kpi-sig-head"><span class="kpi-sig-eyebrow">PAYROLL DATA</span></div></div>
       </div>
       <div class="kpi-det">
         <button class="kpi-det-h" type="button"><span class="kpi-det-h-caret">></span><span class="kpi-det-h-t">ALL THE NUMBERS</span></button>
@@ -194,6 +195,7 @@ async function auditRendered() {
       for (const el of cardEls) cardRadii.add(getComputedStyle(el).borderTopLeftRadius);
 
       // [e] lane-head parity
+      // V32-8 - four signal cards now, so parity spans 6 containers.
       const laneCards = [
         host.querySelector(".__probe-lanes .kpi-story"),
         ...host.querySelectorAll(".__probe-lanes .kpi-sig"),

@@ -2139,13 +2139,14 @@
    order, then an optional footer, so the row shares a baseline. A
    double-width card spends its extra width on a WIDER VISUAL, never by
    rearranging its internals into columns. */
+/* V32-8 - four equal cards on the row again. Hours narrows back to
+   single width; Payroll returns. */
 .kpi-sigs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--kpi-sp-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
   align-items: stretch;
 }
-.kpi-sigs-3 { grid-template-columns: 1fr 1fr 2fr; }
 
 .kpi-sig {
   background: var(--surface-card);
@@ -2219,6 +2220,9 @@
   flex: none;
 }
 .kpi-sig-sub-mute { color: var(--n-500); }
+/* V32-10 - Payroll action sub-line calls out the required action in
+   Rippling; amber tone signals the ask. */
+.kpi-sig-sub-action { color: #92580A; font-weight: 700; }
 
 /* V31 item 3 - FACTS ROW replaces the viz lane. Pinned to card foot
    above a hairline. n-up grid; every item is label + medium-size
@@ -2246,6 +2250,101 @@
 .kpi-sig-fact-val-good { color: var(--green-700); }
 .kpi-sig-fact-val-warn { color: #92580A; }
 .kpi-sig-fact-val-bad  { color: var(--red-700); }
+.kpi-sig-fact-val-mute { color: var(--n-400); }
+.kpi-sig-fact-sub {
+  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500;
+  letter-spacing: 0; text-transform: none;
+  margin-top: var(--kpi-sp-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* V32-11 - `Dollars will rise` label carries a dotted-underline so the
+   reader knows the figure is an estimate; hover reveals the derivation. */
+.kpi-sig-fact-est {
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+}
+
+/* V32-12..V32-15 - comparison strip. Context weight (tinted ground,
+   body-size figures, no card chrome). Six scale-free deltas + a `?`
+   at the right end. Sits between the signal row and ALL THE NUMBERS.
+   Not a fifth card. */
+.kpi-cmp {
+  display: flex; align-items: center;
+  gap: var(--kpi-sp-4);
+  padding: var(--kpi-sp-3) var(--kpi-card-pad);
+  background: var(--n-50);
+  border: 1px solid var(--n-200);
+  border-radius: var(--kpi-card-r);
+}
+.kpi-cmp-title-lab {
+  font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.08em;
+  color: var(--n-500); text-transform: uppercase; white-space: nowrap;
+}
+.kpi-cmp-items {
+  flex: 1 1 auto;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
+  min-width: 0;
+}
+.kpi-cmp-item { min-width: 0; }
+.kpi-cmp-item-lab {
+  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kpi-cmp-item-val {
+  font-size: var(--kpi-t-body); font-weight: 700;
+  color: var(--n-900);
+  font-variant-numeric: var(--num-tabular);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: var(--kpi-sp-1);
+  display: inline-flex; align-items: baseline; gap: var(--kpi-sp-1);
+}
+.kpi-cmp-item-val-good { color: var(--green-700); }
+.kpi-cmp-item-val-bad  { color: var(--red-700); }
+.kpi-cmp-arr { font-size: 0.9em; }
+
+.kpi-cmp-help-anchor { position: relative; display: inline-block; }
+.kpi-cmp-help {
+  width: var(--kpi-h-lane); height: var(--kpi-h-lane);
+  border-radius: 50%; border: 1px solid var(--n-300);
+  background: var(--surface-card); color: var(--n-500);
+  font-size: var(--kpi-t-label); font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex: none;
+}
+.kpi-cmp-help:hover { border-color: var(--navy-700); color: var(--navy-700); }
+.kpi-cmp-help-pop {
+  position: absolute; z-index: 30;
+  top: calc(100% + 8px); right: 0;
+  width: 360px;
+  background: var(--surface-card);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
+  padding: var(--kpi-card-pad);
+  font-size: var(--kpi-t-meta); line-height: 1.5; color: var(--n-700);
+  text-align: left; font-weight: 400; letter-spacing: 0;
+}
+.kpi-cmp-help-pop h5 {
+  margin: 0 0 var(--kpi-sp-2); font-size: var(--kpi-t-label); letter-spacing: 0.08em;
+  color: var(--n-500); font-weight: 800; text-transform: uppercase;
+}
+.kpi-cmp-help-row { margin-bottom: var(--kpi-sp-2); }
+.kpi-cmp-help-row b { color: var(--n-900); font-weight: 700; }
+.kpi-cmp-help-foot {
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: var(--kpi-sp-2);
+  color: var(--n-500);
+}
+
+@media (max-width: 1279px) {
+  .kpi-cmp { flex-direction: column; align-items: stretch; gap: var(--kpi-sp-2); }
+  .kpi-cmp-items { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .kpi-cmp-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* V29-18 arrow-first signed figure. Never a `+` or `-` sign. */
 .kpi-sig-arrfig {
@@ -2358,10 +2457,8 @@
 @media (max-width: 1279px) {
   /* V29-19 - the 3-card signal row must hold ONE row across all
      supported widths so hero tops line up at 1180. Legacy 4-card
-     row (.kpi-sigs) still collapses to 2 columns at this breakpoint;
-     .kpi-sigs-3 keeps its 1fr 1fr 2fr layout. */
+     row (.kpi-sigs) collapses to 2 columns at this breakpoint. */
   .kpi-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-sigs-3 { grid-template-columns: 1fr 1fr 2fr; }
   .kpi-det-table { grid-template-columns: 1fr; }
   .kpi-det-grp { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-det-grp:last-child { border-bottom: 0; }
@@ -2370,8 +2467,7 @@
   .kpi-story { grid-template-columns: 1fr; }
   .kpi-story-left { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-wbars { grid-template-columns: repeat(2, 1fr); }
-  .kpi-sigs,
-  .kpi-sigs-3 { grid-template-columns: 1fr; }
+  .kpi-sigs { grid-template-columns: 1fr; }
   .kpi-det-grp-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-det-grp-cells .kpi-det-cell:nth-child(2n) { border-right: 0; }
   .kpi-det-grp-cells .kpi-det-cell:nth-child(n+3) { border-top: 1px solid var(--n-100); }

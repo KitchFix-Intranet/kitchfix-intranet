@@ -29,6 +29,32 @@ import {
 const MS_PER_DAY = 86400000;
 const WEEKS_PER_PERIOD = 4;
 
+// V32-12..V32-15 - scale-free measures for the prior-period comparison
+// strip. Six ratios / per-week rates so mid-period totals stay
+// comparable to closed-period totals (P9 at 1.29 weeks vs P8 at 4).
+// Returns null when the input row-set is empty (no comparable period).
+export function computePeriodMeasures(actuals, elapsedWeeks) {
+  if (!actuals || actuals.length === 0 || !elapsedWeeks || elapsedWeeks <= 0) return null;
+  let spend = 0, hours = 0, ot = 0;
+  const workerIds = new Set();
+  for (const r of actuals) {
+    spend += Number(r.amount || 0);
+    hours += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
+    ot += Number(r.hours_overtime || 0);
+    if (r.worker_id) workerIds.add(r.worker_id);
+  }
+  const workers = workerIds.size;
+  if (hours <= 0 || workers <= 0) return null;
+  return {
+    blended_rate:    Math.round((spend / hours) * 100) / 100,
+    overtime_pct:    Math.round((ot / hours) * 10000) / 100,
+    crew_size:       workers,
+    spend_per_week:  Math.round((spend / elapsedWeeks) * 100) / 100,
+    hours_per_week:  Math.round((hours / elapsedWeeks) * 100) / 100,
+    cost_per_worker: Math.round((spend / elapsedWeeks / workers) * 100) / 100,
+  };
+}
+
 // V9-4 - per-week budget resolution for the table's `vs budget` cell.
 // Each fiscal week in the enumerated range gets the resolved period
 // budget / weeks-in-period; weeks whose period has no budget yield a
@@ -185,7 +211,7 @@ export function buildBoard({
   actuals,              // all worker-week rows in [start, end]
   budget_periods,       // [{ period_no, amount, ... }]  (may be empty)
   account_state,        // "hourly_ok" | "salaried_only" | "envelope"
-  ot_thresholds = { watch_pct: 8, alarm_pct: 12 },
+  ot_thresholds = { watch_pct: 0, alarm_pct: 8 },
 }) {
   if (account_state === "salaried_only" || account_state === "envelope") {
     return {
@@ -376,11 +402,36 @@ export function buildBoard({
   }
   verdict = verdictBand(pace_points);
 
-  // Signals.
+  // Signals. V32-5 threshold rule: 0% = on target (state === "clear"),
+  // above 0% up to watch bound = "watch" (amber), above alarm bound =
+  // "alarm" (red). Strict > comparisons so 0.00% renders as green.
   const ot_pct = rangeTotals.hours > 0 ? r2((rangeTotals.ot / rangeTotals.hours) * 100) : 0;
-  const ot_state = ot_pct >= ot_thresholds.alarm_pct ? "alarm"
-                : ot_pct >= ot_thresholds.watch_pct ? "watch"
+  const ot_state = ot_pct > ot_thresholds.alarm_pct ? "alarm"
+                : ot_pct > ot_thresholds.watch_pct ? "watch"
                 : "clear";
+  // V32-6 - OT facts: 1.5x $ cost, workers with any OT, and the week
+  // with the highest OT hours. Iterate actuals rows once for cost + a
+  // per-worker set; iterate week aggregates for the longest week.
+  let ot_cost = 0;
+  const otWorkerIds = new Set();
+  for (const r of actuals) {
+    ot_cost += Number(r.dollars_overtime || 0);
+    if (Number(r.hours_overtime || 0) > 0.004 && r.worker_id) otWorkerIds.add(r.worker_id);
+  }
+  ot_cost = r2(ot_cost);
+  let longest_ot_week = null;
+  for (const w of weekAggs) {
+    if (!longest_ot_week || (w.ot_hours || 0) > (longest_ot_week.hours || 0)) {
+      longest_ot_week = { week_start: w.week_start, hours: r2(w.ot_hours || 0) };
+    }
+  }
+  if (longest_ot_week && longest_ot_week.hours < 0.004) longest_ot_week = null;
+
+  // V32-10 - payroll data. Weeks affected = count of weeks with any
+  // unpriced hours (someone's timesheet hasn't been approved yet).
+  let unapproved_weeks = 0;
+  for (const w of weekAggs) if ((w.unpriced_hrs || 0) > 0.004) unapproved_weeks += 1;
+
   // Budgeted hours - derive from budget and observed avg rate. Only
   // meaningful when we have both a budget and a rate observation.
   const avg_rate = rangeTotals.hours > 0 ? spent_to_date / rangeTotals.hours : null;
@@ -431,6 +482,11 @@ export function buildBoard({
       watch_pct: ot_thresholds.watch_pct,
       alarm_pct: ot_thresholds.alarm_pct,
       state: ot_state,
+      // V32-6 additions
+      cost: ot_cost,
+      workers: otWorkerIds.size,
+      workers_total: distinctWorkers,
+      longest_week: longest_ot_week,
     },
     hours_vs_budget: {
       worked: r2(rangeTotals.hours),
@@ -441,6 +497,9 @@ export function buildBoard({
       priced_ww: rangeTotals.complete,
       total_ww: rangeTotals.total,
       unpriced_hours: r2(rangeTotals.unpriced),
+      // V32-10 - how many weeks have any unapproved hours (drives
+      // action-card "Weeks affected" fact).
+      unapproved_weeks,
     },
     // Per-week
     weeks: weeksOut,
