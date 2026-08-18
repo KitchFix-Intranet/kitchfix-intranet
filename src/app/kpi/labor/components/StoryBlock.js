@@ -78,16 +78,22 @@ function SpendCard({ board, eyebrowLabel, dateRange }) {
   })();
 
   // V29-6 budget-card sub line. V29-14: `period closed` becomes `range
-  // closed` on non-period ranges.
+  // closed` on non-period ranges. V37-4 - append `· envelope` or
+  // `· pnl` when board.budget_basis names one; multi-period ranges
+  // where periods disagree ship budget_basis=null and the word drops.
   const budgetSub = (() => {
     if (noBudget) return "no budget for this range";
     const prefix = isPeriod ? "FY2026 budget" : "FY2026 range budget";
+    let core;
     if (kind === "single_period_in_progress") {
       const p = board?.elapsed_pct;
-      return `${prefix} · ${p != null ? `${Math.round(p)}% of period gone` : ""}`;
+      core = `${prefix} · ${p != null ? `${Math.round(p)}% of period gone` : ""}`;
+    } else if (isPeriod) {
+      core = `${prefix} · period closed`;
+    } else {
+      core = `${prefix} · range closed`;
     }
-    if (isPeriod) return `${prefix} · period closed`;
-    return `${prefix} · range closed`;
+    return board?.budget_basis ? `${core} · ${board.budget_basis}` : core;
   })();
 
   return (

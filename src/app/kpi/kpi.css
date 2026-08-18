@@ -1940,27 +1940,34 @@
   font-size: var(--kpi-t-meta); color: var(--n-600);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.kpi-spend-cell-nav {
-  background: linear-gradient(180deg, #F2F6FC, var(--navy-100));
-  border-color: var(--navy-100);
+/* V39 - the state cell used to be the ONLY surface on the page that
+   painted state as a full background fill. Every other card is a 4px
+   left accent on white; the state cell now matches that grammar.
+   Both cells of the pair share background / border / radius / pad -
+   only the left stripe and the value + sub colour differ. */
+.kpi-spend-cell-nav,
+.kpi-spend-cell-under,
+.kpi-spend-cell-over {
+  background: var(--surface-card); border-color: var(--n-200);
+  position: relative; overflow: hidden;
 }
+.kpi-spend-cell-nav::before,
+.kpi-spend-cell-under::before,
+.kpi-spend-cell-over::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+}
+.kpi-spend-cell-nav::before   { background: var(--navy-700); }
+.kpi-spend-cell-under::before { background: var(--green-500); }
+.kpi-spend-cell-over::before  { background: var(--red-500); }
 .kpi-spend-cell-nav .kpi-spend-cell-lab,
-.kpi-spend-cell-nav .kpi-spend-cell-val,
-.kpi-spend-cell-nav .kpi-spend-cell-sub { color: var(--navy-700); }
-
-.kpi-spend-cell-under {
-  background: var(--green-100); border-color: #B5EAC8;
-}
 .kpi-spend-cell-under .kpi-spend-cell-lab,
+.kpi-spend-cell-over .kpi-spend-cell-lab { color: var(--n-500); }
+.kpi-spend-cell-nav .kpi-spend-cell-val,
+.kpi-spend-cell-nav .kpi-spend-cell-sub   { color: var(--navy-700); }
 .kpi-spend-cell-under .kpi-spend-cell-val,
 .kpi-spend-cell-under .kpi-spend-cell-sub { color: var(--green-700); }
-
-.kpi-spend-cell-over {
-  background: var(--red-100); border-color: #F3C4C4;
-}
-.kpi-spend-cell-over .kpi-spend-cell-lab,
 .kpi-spend-cell-over .kpi-spend-cell-val,
-.kpi-spend-cell-over .kpi-spend-cell-sub { color: var(--red-700); }
+.kpi-spend-cell-over .kpi-spend-cell-sub  { color: var(--red-700); }
 
 .kpi-spend-cell-mute .kpi-spend-cell-val { color: var(--n-400); }
 .kpi-spend-cell-mute .kpi-spend-cell-lab { color: var(--n-500); }
