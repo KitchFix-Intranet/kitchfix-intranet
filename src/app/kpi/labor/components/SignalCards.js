@@ -156,22 +156,45 @@ function PaceCard({ board }) {
   );
 }
 
-// ── Overtime ──────────────────────────────────────────────────────
-// V31 item 3 - OT hero turns amber past watch, red at alarm. Thresholds
-// come from board.overtime.watch_pct / .alarm_pct (server config; never
-// hardcoded). Facts row: "Watch line <N>%" (only the 8% watch is stated;
-// the 12% alarm label is dropped from copy but still drives colour) and
-// "Vs last period" (not currently in the board payload; shows dash
-// until the server ships a prior-period OT figure - see "found not
-// fixed").
+// ── V32-5..V32-7 Overtime ─────────────────────────────────────────
+// Thresholds: 0% on target (green), above 0 up to `watch_pct` amber
+// warning, above `alarm_pct` red off-target. BOTH bounds come from
+// server config (board.overtime.watch_pct / .alarm_pct); the copy
+// renders whatever config holds. `Hrs to target` flips to `Hrs over
+// target` at the alarm bound - allowed = worked_hours * alarm_pct/100;
+// remaining = allowed - ot_hours (positive = under target, negative =
+// over target; we render the absolute value with the appropriate label).
 function OvertimeCard({ board }) {
   const ot = board?.overtime;
   const pct = ot?.pct ?? 0;
+  const workedHours = board?.hours ?? 0;
   const watch = ot?.watch_pct;
+  const alarm = ot?.alarm_pct;
   const state = ot?.state ?? "clear";
   const verdict = state === "alarm" ? "over" : state === "watch" ? "watch" : "on_track";
   const heroTone = state === "alarm" ? "bad" : state === "watch" ? "warn" : null;
-  const vsLast = ot?.vs_last_period_pct;   // not currently populated
+
+  const otCost = ot?.cost;
+  const otWorkers = ot?.workers ?? 0;
+  const workersTotal = ot?.workers_total ?? 0;
+  const longest = ot?.longest_week;
+  // Sign convention: allowed = worked * alarm_pct/100 (the "off target"
+  // bound); remaining = allowed - actual. Positive remaining = hours
+  // still under the target (labeled "Hrs to target"); negative =
+  // hours already past the target (labeled "Hrs over target", absolute).
+  const allowed = (alarm != null && workedHours > 0) ? (workedHours * alarm / 100) : null;
+  const remaining = (allowed != null) ? allowed - (ot?.hours ?? 0) : null;
+  const overTarget = remaining != null && remaining < 0;
+  const hoursFact = remaining == null
+    ? { label: "Hrs to target", value: "—" }
+    : overTarget
+      ? { label: "Hrs over target", value: fmtHrs(Math.abs(remaining)), tone: "bad" }
+      : { label: "Hrs to target",  value: fmtHrs(remaining) };
+
+  const boundsCopy = (watch != null && alarm != null)
+    ? `watch above ${watch}% · off target above ${alarm}%`
+    : "of hours worked";
+
   return (
     <SignalCard>
       <Head eyebrow="OVERTIME" verdict={verdict} />
@@ -180,10 +203,12 @@ function OvertimeCard({ board }) {
           {pct.toFixed(1)}%
         </span>
       </Hero>
-      <Sub>of hours worked</Sub>
+      <Sub>{boundsCopy}</Sub>
       <Facts items={[
-        { label: "Watch line", value: watch != null ? `${watch}%` : "—" },
-        { label: "Vs last period", value: vsLast != null ? <ArrowFigure v={vsLast} size="value" fmt={(n) => `${n.toFixed(1)}%`} /> : "—" },
+        { label: "OT cost", value: otCost != null ? fmt$(otCost) : "—" },
+        hoursFact,
+        { label: "OT workers", value: workersTotal > 0 ? `${otWorkers} of ${workersTotal}` : "—" },
+        { label: "Longest OT week", value: longest ? `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` : "—" },
       ]} />
     </SignalCard>
   );
