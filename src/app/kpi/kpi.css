@@ -75,7 +75,7 @@
   /* ── V29-4 · NAMED COMPONENT HEIGHTS ──────────────────────────────
      Every load-bearing height on a KPI surface is a NAMED decision. */
   --kpi-h-lane:    calc(20px   * var(--kf-scale));  /* pill / chip / state badge / label row */
-  --kpi-h-control: calc(30px   * var(--kf-scale));  /* every control on the table bar */
+  --kpi-h-control: var(--kpi-ctl);                  /* alias to V30-2 canonical */
   --kpi-h-plot:    calc(84px   * var(--kf-scale));  /* Tier A weekly plot band */
   --kpi-h-arc:     calc(68px   * var(--kf-scale));  /* OT arc rendered box */
   --kpi-h-dvg:     calc(12px   * var(--kf-scale));  /* diverging bar track */
@@ -119,7 +119,7 @@
   --kpi-wk-item-h:    var(--kpi-ctl);
 
   /* Table control bar (V25-12 - preserved shape). */
-  --kpi-tbar-ctl-h:   var(--kpi-h-control);
+  --kpi-tbar-ctl-h:   var(--kpi-ctl);
   --kpi-tbar-gap-in:  var(--kpi-sp-2);
   --kpi-tbar-gap-out: var(--kpi-sp-5);
   --kpi-tbar-rad:     7px;
@@ -1070,20 +1070,20 @@
 .kpi-tbar {
   display: flex; align-items: center;
   gap: var(--kpi-tbar-gap-out);
-  min-height: var(--kpi-tbar-ctl-h);
+  min-height: var(--kpi-ctl);
   margin-bottom: var(--kpi-sp-3);
   flex-wrap: wrap;
 }
 .kpi-tbar-grp {
   display: inline-flex; align-items: center;
   gap: var(--kpi-tbar-gap-in);
-  height: var(--kpi-tbar-ctl-h);
+  height: var(--kpi-ctl);
 }
 .kpi-tbar-lbl {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.09em;
   color: var(--n-500); text-transform: uppercase;
   white-space: nowrap;
-  line-height: var(--kpi-tbar-ctl-h);
+  line-height: var(--kpi-ctl);
 }
 .kpi-tbar-spacer { flex: 1 1 auto; }
 .kpi-tbar-rule {
@@ -1091,8 +1091,8 @@
   background: var(--n-200); flex: none;
 }
 .kpi-tbar-chip {
-  height: var(--kpi-tbar-ctl-h);
-  min-width: var(--kpi-tbar-ctl-h);
+  height: var(--kpi-ctl);
+  min-width: var(--kpi-ctl);
   padding: 0 var(--kpi-sp-2);
   border: 1px solid var(--n-300);
   background: var(--surface-card);
@@ -1112,7 +1112,7 @@
   box-shadow: inset 0 0 0 1px var(--navy-700);
 }
 .kpi-tbar-btn {
-  height: var(--kpi-tbar-ctl-h);
+  height: var(--kpi-ctl);
   padding: 0 var(--kpi-sp-3);
   border: 1px solid var(--n-300);
   background: var(--surface-card);
@@ -1133,16 +1133,16 @@
 .kpi-empdisp {
   display: inline-flex; align-items: center;
   gap: var(--kpi-tbar-gap-in);
-  height: var(--kpi-tbar-ctl-h);
+  height: var(--kpi-ctl);
 }
 .kpi-empdisp-lab {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.09em;
   color: var(--n-500); text-transform: uppercase;
-  line-height: var(--kpi-tbar-ctl-h);
+  line-height: var(--kpi-ctl);
 }
 .kpi-seg {
   display: inline-flex;
-  height: var(--kpi-tbar-ctl-h);
+  height: var(--kpi-ctl);
   border: 1px solid var(--n-300);
   border-radius: var(--kpi-tbar-rad);
   overflow: hidden;
@@ -1166,8 +1166,8 @@
    height, replacing its stand-alone 20px sizing (which broke the 28px
    band alignment). Global `.kpi-help` outside the tbar is untouched. */
 .kpi-tbar .kpi-help {
-  width: var(--kpi-tbar-ctl-h);
-  height: var(--kpi-tbar-ctl-h);
+  width: var(--kpi-ctl);
+  height: var(--kpi-ctl);
 }
 .kpi-mono {
   font-family: var(--font-ui);
@@ -1384,11 +1384,12 @@
 .kpi-folio-title-s {
   font-size: var(--kpi-size-caption); color: var(--n-500);
 }
-/* Group card (page card skin). */
+/* Group card (page card skin). V31 item 2 - moves off raw --rad-10 to
+   --kpi-card-r so it matches every other card at 10.8 rendered. */
 .kpi-gcard {
   background: var(--surface-card);
   border: 1px solid var(--n-300);
-  border-radius: var(--rad-10);
+  border-radius: var(--kpi-card-r);
   box-shadow: var(--card-shadow);
   overflow: hidden;
   transition: box-shadow 0.15s;
