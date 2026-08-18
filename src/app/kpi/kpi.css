@@ -2239,13 +2239,17 @@
   display: flex; align-items: center;
   flex: none;
 }
+/* V35-1 - card heroes drop one type step (t-hero -> t-value) so the
+   period budget on the story card is the only tier-1 number on the
+   page. Weight stays 800; --kpi-lane-hero stays 38 so the smaller
+   hero still centres in the same lane, hero-top parity holds. */
 .kpi-sig-hero-val {
-  font-size: var(--kpi-t-hero); font-weight: 800;
+  font-size: var(--kpi-t-value); font-weight: 800;
   color: var(--n-900); line-height: 1;
   white-space: nowrap; font-variant-numeric: var(--num-tabular);
-  letter-spacing: -0.018em;
+  letter-spacing: -0.01em;
 }
-.kpi-sig-hero-mute { color: var(--n-400); font-size: var(--kpi-t-hero); font-weight: 800; }
+.kpi-sig-hero-mute { color: var(--n-400); font-size: var(--kpi-t-value); font-weight: 800; }
 
 /* V34 - sub-line weight 500 (was 600). Supporting, not competing with
    the hero. */
@@ -2454,7 +2458,8 @@
   font-variant-numeric: var(--num-tabular);
   color: var(--n-900); white-space: nowrap;
 }
-.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-hero); font-weight: 800; letter-spacing: -0.018em; line-height: 1; }
+/* V35-1 - hero ArrowFigure matches the new card-hero size (t-value). */
+.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-value); font-weight: 800; letter-spacing: -0.01em; line-height: 1; }
 /* V34 - inline ArrowFigure inside a fact value matches the surrounding
    fact size/weight (body/700), not the old medium/800. */
 .kpi-sig-arrfig-value { font-size: var(--kpi-t-body); font-weight: 700; letter-spacing: 0; line-height: 1; }
