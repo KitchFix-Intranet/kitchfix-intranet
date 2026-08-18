@@ -692,6 +692,24 @@ getComputedStyle(el).height  // 54px inside .kpi-app; 60px at :root
 
 **First seen:** 2026-08-17 KPI scale layer PR (#686). Cost: caught by the C1 parity harness before merge; would have shipped as "the 0.9 flip does nothing" defect otherwise.
 
+### The Ops Hub screen typeface disagrees with the design system doc
+
+`docs/DESIGN_SYSTEM_REFERENCE.md:316` (Captain's log 2026-05-05) records: *"Inter locked as canonical screen typeface; Mulish demoted to print/PDF only."* Reinforced at line 205: *"Pre-Service Materials (print): Exception - has its own illustration system using Mulish font."* Reinforced again in `src/app/tokens.css:31` inline comment: *"screen body = Inter; Mulish is print/PDF only (Pre-Service Materials pipeline)."*
+
+**Code contradicts the doc.** `src/app/ops/css/ops-shared.css:30` still defines `--oh-font-body: "Mulish", -apple-system, sans-serif;` and applies it at `.oh-app` (`ops-shared.css:47`). Every top-level Ops Hub page wraps its tree in `.oh-app`:
+
+- `src/app/ops/page.js` (the Ops Hub landing)
+- `src/app/service-calendar/page.js` (all SC surfaces)
+- `src/app/financial/page.js`
+
+That means every surface inside those three pages resolves Mulish for body text unless a nested element explicitly opts back to `var(--sc2-font-ui)` or `var(--font-ui)`. Five ops CSS files reinforce `font-family: var(--oh-font-body)` on their own root scopes (`ops-executive.css`, `ops-inventory.css`, `ops-invoice.css`, `ops-labor.css`, `ops-vendor.css`).
+
+**Only one surface opts back to Inter today**: the SC v2 entry modal via `src/app/service-calendar/v2/entry/dayEntryV2.css:19` (`.sc-v2-entry { font-family: var(--sc2-font-ui); }` where `--sc2-font-ui` = `--font-ui` = Inter). That is a workaround, not a fix - the workspace lockup, weeks list, day tiles, month cards, and everything else on SC still inherits Mulish. Playwright `getComputedStyle` on `.sc-workspace-band-sum` returned `Mulish, -apple-system, sans-serif` on 2026-08-17 (PR-H1 audit).
+
+**Real-fix cost.** Flip `ops-shared.css:30` from `"Mulish"` to `"Inter"` (one line). Any Ops Hub surface intentionally on Mulish would need to opt in explicitly. Unknown risk on the five reinforcing ops files - most likely they inherit the flipped value without incident, but a proper P2 sweep should audit each one before flipping. Tracked as `SR-Mulish-drift` in the design audit ledger.
+
+**Related:** PR-H1 (#689) removed JetBrains Mono from the entry-ledger rail; PR-H2 (#TBD) does the same on the FinalizeOverlay Pre-tax total. Both PRs left the workspace-vs-modal Mulish/Inter split intact because it is broader than either PR's scope.
+
 ---
 
 ## Service Calendar

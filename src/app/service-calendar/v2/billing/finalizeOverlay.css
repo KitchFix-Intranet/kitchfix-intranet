@@ -109,8 +109,11 @@
   color: var(--text-heading);
 }
 .sc-finalize-num {
-  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
-  font-variant-numeric: tabular-nums;
+  /* PR-H2 (2026-08-17) supersedes PR-D1's mono carve-out for the
+     Pre-tax total. UI font + --num-tabular matches the entry-ledger
+     rail (PR-H1) and every other SC money surface. See the code
+     comment at FinalizeOverlay.js :220-232 for the rationale. */
+  font-variant-numeric: var(--num-tabular);
 }
 /* Pre-tax total - the visual anchor. Display tier + no bottom rule. */
 .sc-finalize-row--big {
