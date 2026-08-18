@@ -2139,13 +2139,14 @@
    order, then an optional footer, so the row shares a baseline. A
    double-width card spends its extra width on a WIDER VISUAL, never by
    rearranging its internals into columns. */
+/* V32-8 - four equal cards on the row again. Hours narrows back to
+   single width; Payroll returns. */
 .kpi-sigs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--kpi-sp-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
   align-items: stretch;
 }
-.kpi-sigs-3 { grid-template-columns: 1fr 1fr 2fr; }
 
 .kpi-sig {
   background: var(--surface-card);
@@ -2219,6 +2220,9 @@
   flex: none;
 }
 .kpi-sig-sub-mute { color: var(--n-500); }
+/* V32-10 - Payroll action sub-line calls out the required action in
+   Rippling; amber tone signals the ask. */
+.kpi-sig-sub-action { color: #92580A; font-weight: 700; }
 
 /* V31 item 3 - FACTS ROW replaces the viz lane. Pinned to card foot
    above a hairline. n-up grid; every item is label + medium-size
@@ -2371,10 +2375,8 @@
 @media (max-width: 1279px) {
   /* V29-19 - the 3-card signal row must hold ONE row across all
      supported widths so hero tops line up at 1180. Legacy 4-card
-     row (.kpi-sigs) still collapses to 2 columns at this breakpoint;
-     .kpi-sigs-3 keeps its 1fr 1fr 2fr layout. */
+     row (.kpi-sigs) collapses to 2 columns at this breakpoint. */
   .kpi-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-sigs-3 { grid-template-columns: 1fr 1fr 2fr; }
   .kpi-det-table { grid-template-columns: 1fr; }
   .kpi-det-grp { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-det-grp:last-child { border-bottom: 0; }
@@ -2383,8 +2385,7 @@
   .kpi-story { grid-template-columns: 1fr; }
   .kpi-story-left { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-wbars { grid-template-columns: repeat(2, 1fr); }
-  .kpi-sigs,
-  .kpi-sigs-3 { grid-template-columns: 1fr; }
+  .kpi-sigs { grid-template-columns: 1fr; }
   .kpi-det-grp-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-det-grp-cells .kpi-det-cell:nth-child(2n) { border-right: 0; }
   .kpi-det-grp-cells .kpi-det-cell:nth-child(n+3) { border-top: 1px solid var(--n-100); }

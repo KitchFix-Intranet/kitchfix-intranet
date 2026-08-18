@@ -214,13 +214,21 @@ function OvertimeCard({ board }) {
   );
 }
 
-// ── Hours left (double-width) ─────────────────────────────────────
+// ── V32-8/V32-9 Hours left (single width, back on the 4-card row) ──
+// Facts: Per week (hours left / weeks not finished) · Per worker/wk
+// (that / distinct workers) · Budget left · Blended rate. `Worked`
+// drops off the card - it lives in ALL THE NUMBERS. Per-week facts
+// render a muted dash on ranges with no meaningful weeks-remaining
+// denominator (closed periods, FYTD, multi-period).
 function HoursLeftCard({ board }) {
   const budget = board?.period_budget || board?.range_budget;
   const spent = board?.spent_to_date ?? 0;
-  const worked = board?.hours ?? 0;
   const rate = board?.avg_rate;
+  const workers = board?.distinct_workers ?? 0;
   const kind = board?.kind;
+  const inProgress = kind === "single_period_in_progress";
+  const notStarted = board?.not_started_weeks_count || 0;
+  const weeksRemaining = inProgress ? (board?.in_progress_week_start ? 1 : 0) + notStarted : 0;
   const dollarsLeft = budget != null && budget > 0 ? budget - spent : null;
   const hoursLeft = (rate != null && rate > 0 && dollarsLeft != null)
     ? Math.max(0, dollarsLeft / rate)
@@ -233,12 +241,13 @@ function HoursLeftCard({ board }) {
 
   if (budget == null || rate == null || rate <= 0) {
     return (
-      <SignalCard wide>
+      <SignalCard>
         <Head eyebrow="HOURS LEFT TO SCHEDULE" verdict={null} />
-        <Hero><span className="kpi-sig-hero-val num">{fmtHrs(worked)}</span></Hero>
-        <Sub><span className="kpi-sig-sub-mute">hours worked · no budget to compare</span></Sub>
+        <Hero><span className="kpi-sig-hero-mute">—</span></Hero>
+        <Sub><span className="kpi-sig-sub-mute">no budget to compare</span></Sub>
         <Facts items={[
-          { label: "Worked",       value: fmtHrs(worked) },
+          { label: "Per week",     value: "—", muted: true },
+          { label: "Per worker/wk", value: "—", muted: true },
           { label: "Budget left",  value: "—" },
           { label: "Blended rate", value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
         ]} />
@@ -251,15 +260,24 @@ function HoursLeftCard({ board }) {
     ? "beyond what the budget covers"
     : (kind === "single_period_closed" ? "hours the period had left" : "you can still schedule this period");
 
+  // Per-week facts: only apply when the range has an in-progress
+  // period with weeks-remaining. Closed and multi-period ranges get
+  // muted dashes (V8-19 pattern).
+  const perWeek = (inProgress && weeksRemaining > 0 && hoursLeft != null)
+    ? hoursLeft / weeksRemaining
+    : null;
+  const perWorkerPerWeek = (perWeek != null && workers > 0) ? perWeek / workers : null;
+
   return (
-    <SignalCard wide>
+    <SignalCard>
       <Head eyebrow="HOURS LEFT TO SCHEDULE" verdict={verdict} />
       <Hero>
         <span className={`kpi-sig-hero-val num ${isOver ? "kpi-sig-hero-bad" : ""}`}>{fmtHrs(heroValue)}</span>
       </Hero>
       <Sub>{heroSub}</Sub>
       <Facts items={[
-        { label: "Worked",       value: fmtHrs(worked) },
+        { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
+        { label: "Per worker/wk", value: perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—", muted: perWorkerPerWeek == null },
         { label: "Budget left",  value: isOver ? <ArrowFigure v={Math.abs(dollarsLeft)} size="value" /> : fmt$(dollarsLeft ?? 0) },
         { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
       ]} />
@@ -267,13 +285,70 @@ function HoursLeftCard({ board }) {
   );
 }
 
-export function SignalCards({ board }) {
+// ── V32-10/V32-11 Payroll data (ACTION card) ─────────────────────
+// Unapproved hours = someone must approve them in Rippling or those
+// people do not get paid. This card names Rippling in the sub-line
+// when the situation calls for action. `Dollars will rise` is an
+// estimate (unapproved_hrs * blended_rate) and is marked as one via
+// a dotted-underline label + a hover reading the derivation.
+function PayrollDataCard({ board, freshness }) {
+  const pd = board?.payroll_data;
+  const priced = pd?.priced_ww ?? 0;
+  const total = pd?.total_ww ?? 0;
+  const unpricedHrs = pd?.unpriced_hours ?? 0;
+  const unapprovedWeeks = pd?.unapproved_weeks ?? 0;
+  const rate = board?.avg_rate;
+  const state = total === 0 ? null
+              : unpricedHrs > 0 ? "watch"
+              : "on_track";
+  const pillLabel = total === 0 ? "—" : unpricedHrs > 0 ? "PARTIAL" : "FINAL";
+  const pillTone = unpricedHrs > 0 ? "warn" : total === 0 ? "neutral" : "good";
+  const hasUnapproved = unpricedHrs > 0.004;
+  const willRise = (hasUnapproved && rate != null && rate > 0) ? unpricedHrs * rate : null;
+  const willRiseTitle = willRise != null
+    ? `Estimate. ${fmtHrs(unpricedHrs)} unapproved hrs x $${rate.toFixed(2)} blended rate. Unapproved hours skew to whoever has not been processed, so their true rate may differ from the blend.`
+    : "";
+  const lastPulled = freshness?.last_walk_at
+    ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : "—";
+
+  return (
+    <SignalCard>
+      <div className="kpi-sig-head">
+        <span className="kpi-sig-eyebrow">PAYROLL DATA</span>
+        <span className={`kpi-sig-state kpi-sig-state-${pillTone}`}>{pillLabel}</span>
+      </div>
+      <Hero>
+        <span className="kpi-sig-hero-val num">{priced} of {total}</span>
+      </Hero>
+      <Sub>
+        worker-weeks with pay data in
+        {hasUnapproved && (
+          <>{" "}<span className="kpi-sig-sub-action">· {fmtHrs(unpricedHrs)} hrs need approval in Rippling</span></>
+        )}
+      </Sub>
+      <Facts items={[
+        { label: "Unapproved hrs", value: hasUnapproved ? fmtHrs(unpricedHrs) : "—", tone: hasUnapproved ? "warn" : undefined },
+        {
+          label: <span className="kpi-sig-fact-est" title={willRiseTitle}>Dollars will rise</span>,
+          value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
+          muted: willRise == null,
+        },
+        { label: "Weeks affected", value: unapprovedWeeks > 0 ? `${unapprovedWeeks}` : "—", muted: unapprovedWeeks === 0 },
+        { label: "Last pulled", value: lastPulled },
+      ]} />
+    </SignalCard>
+  );
+}
+
+export function SignalCards({ board, freshness }) {
   if (!board || board.applies === false) return null;
   return (
-    <div className="kpi-sigs kpi-sigs-3">
+    <div className="kpi-sigs">
       <PaceCard board={board} />
       <OvertimeCard board={board} />
       <HoursLeftCard board={board} />
+      <PayrollDataCard board={board} freshness={freshness} />
     </div>
   );
 }
