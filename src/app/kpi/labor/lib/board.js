@@ -29,6 +29,32 @@ import {
 const MS_PER_DAY = 86400000;
 const WEEKS_PER_PERIOD = 4;
 
+// V32-12..V32-15 - scale-free measures for the prior-period comparison
+// strip. Six ratios / per-week rates so mid-period totals stay
+// comparable to closed-period totals (P9 at 1.29 weeks vs P8 at 4).
+// Returns null when the input row-set is empty (no comparable period).
+export function computePeriodMeasures(actuals, elapsedWeeks) {
+  if (!actuals || actuals.length === 0 || !elapsedWeeks || elapsedWeeks <= 0) return null;
+  let spend = 0, hours = 0, ot = 0;
+  const workerIds = new Set();
+  for (const r of actuals) {
+    spend += Number(r.amount || 0);
+    hours += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
+    ot += Number(r.hours_overtime || 0);
+    if (r.worker_id) workerIds.add(r.worker_id);
+  }
+  const workers = workerIds.size;
+  if (hours <= 0 || workers <= 0) return null;
+  return {
+    blended_rate:    Math.round((spend / hours) * 100) / 100,
+    overtime_pct:    Math.round((ot / hours) * 10000) / 100,
+    crew_size:       workers,
+    spend_per_week:  Math.round((spend / elapsedWeeks) * 100) / 100,
+    hours_per_week:  Math.round((hours / elapsedWeeks) * 100) / 100,
+    cost_per_worker: Math.round((spend / elapsedWeeks / workers) * 100) / 100,
+  };
+}
+
 // V9-4 - per-week budget resolution for the table's `vs budget` cell.
 // Each fiscal week in the enumerated range gets the resolved period
 // budget / weeks-in-period; weeks whose period has no budget yield a

@@ -24,6 +24,7 @@ import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
 import { StoryBlock } from "./components/StoryBlock";
 import { SignalCards } from "./components/SignalCards";
+import { ComparisonStrip } from "./components/ComparisonStrip";
 import { DetailsStrip } from "./components/DetailsStrip";
 import { WeekTable } from "./components/WeekTable";
 import {
@@ -709,6 +710,7 @@ export default function KpiLaborPage() {
                 todayISO={today}
               />
               <SignalCards board={data.board} freshness={freshness} />
+              <ComparisonStrip prior_period_comparison={data.prior_period_comparison} />
               <DetailsStrip board={data.board} />
             </>
           )}

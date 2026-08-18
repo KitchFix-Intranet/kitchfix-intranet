@@ -26,7 +26,8 @@ import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerName } from "@/lib/kpi/resolveName";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
-import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/kpi/labor/lib/board.js";
+import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
+import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -171,6 +172,71 @@ async function resolveMemberBudget(supa, accountKey) {
     // else: no row - omit.
   }
   return { data: out };
+}
+
+// V32-12..V32-15 - prior-period comparison payload for the context
+// strip. Renders only when the range is a SINGLE fiscal period
+// (rangeSelection.kind === "period") with a prior period in FY2026.
+// Returns { applies: false, reason } otherwise; the client renders
+// nothing (no partial fallback per V32-15).
+async function buildPriorPeriodComparison({ supa, rangeStart, rangeEnd, today, isAggregate, members, account, currentActuals, pageSize }) {
+  const selection = fyInferRange(rangeStart, rangeEnd);
+  if (!selection || selection.kind !== "period") {
+    return { applies: false, reason: "range_not_single_period" };
+  }
+  const currentPeriodNo = selection.value;
+  if (currentPeriodNo <= 1) return { applies: false, reason: "no_prior_period" };
+
+  const priorPeriodNo = currentPeriodNo - 1;
+  const priorStart = fyPeriodStart(priorPeriodNo);
+  const priorEnd = fyPeriodEnd(priorPeriodNo);
+  if (!priorStart || !priorEnd) return { applies: false, reason: "no_prior_range" };
+
+  // Current elapsed weeks - closed periods use 4, in-progress uses the
+  // fractional elapsed. computePeriodMeasures floors 0 so a not-yet-
+  // started period returns null (client hides the strip).
+  const currentPeriodEnd = fyPeriodEnd(currentPeriodNo);
+  const isClosed = currentPeriodEnd < today;
+  let currentElapsedWeeks;
+  if (isClosed) {
+    currentElapsedWeeks = 4;
+  } else {
+    const currentStart = fyPeriodStart(currentPeriodNo);
+    const todayDate = new Date(today).getTime();
+    const startDate = new Date(currentStart).getTime();
+    const daysIn = Math.max(0, Math.floor((todayDate - startDate) / 86400000) + 1);
+    currentElapsedWeeks = Math.max(0.01, Math.min(4, daysIn / 7));
+  }
+
+  // Prior actuals - envelope members excluded on the aggregate path per
+  // V25-1 (rollup population must match).
+  let priorActuals;
+  if (isAggregate) {
+    const rolled = (members || []).filter(m => !V6_ENVELOPE_ACCOUNTS.has(m));
+    if (rolled.length === 0) return { applies: false, reason: "no_rollup_members" };
+    const q = await paginateActuals(supa, { members: rolled, start: priorStart, end: priorEnd, pageSize });
+    if (q.error) return { applies: false, reason: "query_error" };
+    priorActuals = q.data;
+  } else {
+    const q = await supa.from("labor_actuals_latest")
+      .select("account_key, worker_id, week_start, week_end, hours_regular, hours_overtime, hours_double_time, hours_premium_other, amount")
+      .eq("account_key", account)
+      .lte("week_start", priorEnd).gte("week_end", priorStart);
+    if (q.error) return { applies: false, reason: "query_error" };
+    priorActuals = q.data;
+  }
+
+  const prior = computePeriodMeasures(priorActuals, 4);
+  const now = computePeriodMeasures(currentActuals, currentElapsedWeeks);
+  if (!prior || !now) return { applies: false, reason: "insufficient_data" };
+
+  return {
+    applies: true,
+    current_period_no: currentPeriodNo,
+    prior_period_no: priorPeriodNo,
+    now,
+    prior,
+  };
 }
 
 export async function GET(request) {
@@ -424,6 +490,11 @@ export async function GET(request) {
         account_state: "hourly_ok",
       }),
       week_budgets: buildAggregateWeekBudgets({ start, end, member_budgets: memberBudgets }),
+      prior_period_comparison: await buildPriorPeriodComparison({
+        supa, rangeStart: start, rangeEnd: end, today,
+        isAggregate: true, members: rolledUpMembers,
+        currentActuals: rolledUpActuals, pageSize: pageSizeParam,
+      }),
       name_availability: {
         has_names: resolvedNames > 0,
         resolved: resolvedNames,
@@ -671,6 +742,11 @@ export async function GET(request) {
       account_state: budget_mode === "envelope" ? "envelope" : "hourly_ok",
     }),
     week_budgets: buildWeekBudgets({ start, end, budget_periods: budget_mode === "envelope" ? [] : budget_periods }),
+    prior_period_comparison: await buildPriorPeriodComparison({
+      supa, rangeStart: start, rangeEnd: end, today,
+      isAggregate: false, account,
+      currentActuals: actuals.data,
+    }),
     name_availability: {
       has_names: resolvedNames > 0,
       resolved: resolvedNames,
