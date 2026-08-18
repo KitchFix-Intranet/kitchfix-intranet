@@ -44,17 +44,18 @@
 .kpi-app {
   --kf-scale: 0.9;
 
-  /* ── V29-1 · TYPE SCALE ───────────────────────────────────────────
-     FIVE steps for KPI product surfaces, tokenised. Nothing on a
-     product surface may use a sixth. Chrome keeps its approved three
-     (title 18, meta 11, control 12.5); those tokens remain below the
-     product set and are consumed only by .kpi-cmd*, .kpi-ctl,
-     .kpi-fresh*, .kpi-folio + .kpi-acct + .kpi-sys. */
-  --kpi-t-label:   calc(10px   * var(--kf-scale));  /* labels, eyebrows, card titles - 800 .09em uppercase */
-  --kpi-t-meta:    calc(11px   * var(--kf-scale));  /* sub-lines, captions, axes - 500 */
-  --kpi-t-body:    calc(12.5px * var(--kf-scale));  /* body text, controls, table cells - 600 */
-  --kpi-t-value:   calc(20px   * var(--kf-scale));  /* secondary values, numbers-strip cells - 800 -.01em */
-  --kpi-t-hero:    calc(30px   * var(--kf-scale));  /* ONE per card - 800 -.018em */
+  /* ── V30-1 · SIX TYPE ROLES ───────────────────────────────────────
+     Every text element on a KPI product surface maps to exactly one of
+     six roles. There is no seventh step. The MEDIUM step is the missing
+     rung that caused invented sizes (16, 16.2, 18, 19.44) - it now
+     absorbs them. Chrome keeps its approved title/caption/ctl trio and
+     is not re-derived here. */
+  --kpi-t-label:  calc(10px   * var(--kf-scale));  /* labels, eyebrows, card titles - 800 .08em uppercase */
+  --kpi-t-meta:   calc(11px   * var(--kf-scale));  /* sub-lines, captions, axes - 500 */
+  --kpi-t-body:   calc(12.5px * var(--kf-scale));  /* body text, controls, table cells - 600 */
+  --kpi-t-medium: calc(15px   * var(--kf-scale));  /* V30-1 NEW: spend cells, numbers-strip values, folio title, table total - 800 -.005em */
+  --kpi-t-value:  calc(20px   * var(--kf-scale));  /* tertiary hero, budget footer - 800 -.01em */
+  --kpi-t-hero:   calc(30px   * var(--kf-scale));  /* ONE per card - 800 -.018em. V30-1 tightens to 28 in C2 alongside re-dress. */
 
   /* Chrome-only type tokens (title 18, meta 11, control 12.5). */
   --kpi-size-title:   calc(18px   * var(--kf-scale));
@@ -80,6 +81,21 @@
   --kpi-h-dvg:     calc(12px   * var(--kf-scale));  /* diverging bar track */
   --kpi-h-bullet:  calc(8px    * var(--kf-scale));  /* bullet track */
   --kpi-h-sig:     calc(168px  * var(--kf-scale));  /* signal-card min height */
+
+  /* ── V30-2 · TWO CONTROL HEIGHTS ──────────────────────────────────
+     Every control on a KPI surface is one of these two. --kpi-ctl-r is
+     the shared control radius; pill (999) and circular help (50%) are
+     the two named exceptions. */
+  --kpi-ctl:       calc(30px   * var(--kf-scale));  /* button / chip / segmented / help */
+  --kpi-row:       calc(40px   * var(--kf-scale));  /* clickable row: folio account, table row */
+  --kpi-row-2l:    calc(48px   * var(--kf-scale));  /* two-line folio group header */
+  --kpi-ctl-r:     calc(8px    * var(--kf-scale));  /* one control radius (7.2 @ 0.9) */
+
+  /* ── V30-3 · ONE CARD SKIN ────────────────────────────────────────
+     Every card on the page - story, spend inner cells, signal cards,
+     numbers strip, folio cards, the table container - shares this. */
+  --kpi-card-r:    calc(12px   * var(--kf-scale));  /* was mixed 12 + 10; both collapse to 10.8 */
+  --kpi-card-pad:  calc(16px   * var(--kf-scale));  /* was mixed 10.8, 14.4, 12; all become 14.4 */
 
   /* V29-19 SIGNAL ROW SHARED LANES. Every card in the signal row -
      single or double-width - uses these four fixed lane heights stacked
