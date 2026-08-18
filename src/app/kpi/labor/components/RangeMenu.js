@@ -81,7 +81,10 @@ function triggerLabel({ startISO, endISO, resolvedPreset, monthSelected, periodS
     const preset = PRESETS.find(p => p.key === resolvedPreset);
     if (preset) return { primary: preset.label, dates };
   }
-  if (periodSelected != null) return { primary: `Period ${periodSelected}`, dates };
+  // V33 item 4e - unify uppercase everywhere: table total prints
+  // `TOTAL · PERIOD N` and the spend-card eyebrow prints `PERIOD N`;
+  // the range-menu trigger now matches.
+  if (periodSelected != null) return { primary: `PERIOD ${periodSelected}`, dates };
   if (monthSelected) return { primary: `${MONTH_LABELS[monthSelected.monthIndex]} ${monthSelected.year}`, dates };
   return { primary: "Custom", dates };
 }

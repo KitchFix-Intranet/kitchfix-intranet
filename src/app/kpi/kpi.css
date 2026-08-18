@@ -41,6 +41,17 @@
 
    S-3 flip: --kf-scale is set once here. Revert to 1 to restore
    pre-scale rendering exactly (the layer wiring test). */
+/* V33 item 2 - ONE shared keyboard focus ring across every
+   interactive KPI element. Prior state: only .kpi-bB declared one, so
+   every other button/link/chip fell back to browser default (which is
+   suppressed by many resets). Applies to all interactive descendants
+   of .kpi-app. */
+.kpi-app :focus-visible {
+  outline: 2px solid var(--navy-700);
+  outline-offset: 2px;
+  border-radius: var(--kpi-ctl-r);
+}
+
 .kpi-app {
   --kf-scale: 0.9;
 
@@ -1166,6 +1177,9 @@
   background: var(--n-900);
   color: var(--n-0); font-weight: 700;
 }
+/* V33 item 2 - hover on the unselected side; the selected side keeps
+   the navy fill so no hover feedback is needed there. */
+.kpi-seg button:not(.on):hover { background: var(--n-100); color: var(--n-800); }
 /* V25-12 - help button inside the control bar joins the tbar's control
    height, replacing its stand-alone 20px sizing (which broke the 28px
    band alignment). Global `.kpi-help` outside the tbar is untouched. */
@@ -1358,6 +1372,11 @@
    ALL / EAST / WEST - each wearing the page card skin. The group
    header row IS the pseudo-key selector; member rows sit inside
    the card, 44px tall, two-line lockup. */
+/* V33 item 1 - folio stretches to shell foot and its bottom-left
+   corner matches --kpi-card-r. Prior render stopped 33px short of the
+   app foot with a square corner while every other corner of the shell
+   was rounded. Grid `align-items: stretch` (default) drives the height
+   parity; explicit `height: 100%` is defensive. */
 .kpi-folio {
   border-right: 1px solid var(--border-subtle);
   background: var(--n-50);
@@ -1365,6 +1384,8 @@
   display: flex; flex-direction: column;
   gap: var(--kpi-sp-3);
   min-width: 0;
+  height: 100%;
+  border-bottom-left-radius: var(--kpi-card-r);
 }
 /* Fallback (no directory yet) - v6 flat list rendered under a caption. */
 .kpi-folio-h {
@@ -2426,16 +2447,22 @@
   overflow: hidden;
 }
 /* V30-3/V30-4 - numbers-strip header uses the same card-pad + inner
-   lane-head as the signal cards so first-text baselines match. */
+   lane-head as the signal cards so first-text baselines match.
+   V33 item 3 - header is a header, not a card body: padding shrinks
+   from card-pad all sides to `sp-2 card-pad`, giving ~36px matching
+   --kpi-row. Type size unchanged. */
 .kpi-det-h {
   display: flex; align-items: center; gap: var(--kpi-sp-3);
-  width: 100%; padding: var(--kpi-card-pad);
+  width: 100%; padding: var(--kpi-sp-2) var(--kpi-card-pad);
   background: var(--n-50);
   border: 0; border-bottom: 1px solid var(--n-200);
   cursor: pointer;
   font: inherit;
   text-align: left;
+  transition: background 0.12s;
 }
+/* V33 item 2 - collapsible header must show feedback. */
+.kpi-det-h:hover { background: var(--n-100); }
 .kpi-det-h > * {
   height: var(--kpi-h-lane);
   display: inline-flex; align-items: center;
@@ -2498,7 +2525,11 @@
   color: var(--n-900); margin-left: 2px;
   white-space: nowrap;
 }
-.kpi-det-v-mute { color: var(--n-400); }
+/* V33 item 4d - muted values (bare dash on cells that do not apply,
+   e.g. weekly allowance on closed periods) render at the same size
+   as live values but a lighter grey so the dash reads as absent, not
+   as a number to be interpreted. */
+.kpi-det-v-mute { color: var(--n-300); }
 .kpi-det-c {
   font-size: var(--kpi-t-label); color: var(--n-500);
   white-space: nowrap;
@@ -2611,7 +2642,11 @@
   font-weight: 800; font-size: var(--kpi-t-body);
   color: var(--navy-700);
   position: sticky; top: var(--hdr); z-index: 10;
+  transition: background 0.12s;
 }
+/* V33 item 2 - period band rows are expandable but had no hover; week
+   rows already do. Match. */
+.kpi-tbl-band:hover > td { background: #DFE7F3; }
 .kpi-tbl-bandbtn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   background: transparent; border: 0;

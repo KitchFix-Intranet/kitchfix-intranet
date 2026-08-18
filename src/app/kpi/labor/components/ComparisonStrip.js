@@ -143,7 +143,7 @@ export function ComparisonStrip({ prior_period_comparison }) {
           </div>
         ))}
       </div>
-      <div className="kpi-cmp-source">Period {pp.prior_period_no} · 4 wks closed</div>
+      <div className="kpi-cmp-source">PERIOD {pp.prior_period_no} · 4 wks closed</div>
       <div className="kpi-cmp-help-wrap"><HelpButton /></div>
     </div>
   );
