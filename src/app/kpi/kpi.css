@@ -1538,6 +1538,12 @@
   border-top: 1px dashed var(--border-subtle);
   margin: 2px 0;
 }
+/* V31 item 1 - freshness contract sentence; states the nightly rhythm
+   so operators know why the current week reads partial. */
+.kpi-fresh-pop-contract {
+  font-size: var(--kpi-t-meta); color: var(--n-600); line-height: 1.5;
+  padding-top: var(--kpi-sp-1);
+}
 
 .kpi-qp-row {
   display: flex; align-items: center;
@@ -2214,23 +2220,32 @@
 }
 .kpi-sig-sub-mute { color: var(--n-500); }
 
-.kpi-sig-viz-lane {
-  min-height: var(--kpi-lane-viz);
-  margin-top: var(--kpi-sp-3);
-  display: flex; flex-direction: column; justify-content: center;
-  gap: var(--kpi-sp-1);
-  flex: 1 1 auto;
-}
-.kpi-sig-foot-lane {
-  margin-top: var(--kpi-sp-3);
-  padding-top: var(--kpi-sp-2);
+/* V31 item 3 - FACTS ROW replaces the viz lane. Pinned to card foot
+   above a hairline. n-up grid; every item is label + medium-size
+   value. Signed values render via .kpi-sig-arrfig (▼ / ▲ + colour). */
+.kpi-sig-facts {
+  margin-top: auto;
+  padding-top: var(--kpi-sp-3);
   border-top: 1px solid var(--n-100);
-  display: flex; justify-content: space-between; align-items: center;
-  gap: var(--kpi-sp-2);
-  font-size: var(--kpi-t-meta); color: var(--n-600);
+  display: grid;
+  gap: var(--kpi-sp-3);
   flex: none;
 }
-.kpi-sig-foot-rate { color: var(--n-500); font-weight: 500; white-space: nowrap; }
+.kpi-sig-fact { min-width: 0; }
+.kpi-sig-fact-lab {
+  font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.08em;
+  color: var(--n-500); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kpi-sig-fact-val {
+  font-size: var(--kpi-t-medium); font-weight: 800; letter-spacing: -0.005em;
+  color: var(--n-900); font-variant-numeric: var(--num-tabular);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: var(--kpi-sp-1);
+}
+.kpi-sig-fact-val-good { color: var(--green-700); }
+.kpi-sig-fact-val-warn { color: #92580A; }
+.kpi-sig-fact-val-bad  { color: var(--red-700); }
 
 /* V29-18 arrow-first signed figure. Never a `+` or `-` sign. */
 .kpi-sig-arrfig {
@@ -2238,87 +2253,18 @@
   font-variant-numeric: var(--num-tabular);
   color: var(--n-900); white-space: nowrap;
 }
-.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-hero);  font-weight: 800; letter-spacing: -0.018em; line-height: 1; }
-.kpi-sig-arrfig-value { font-size: var(--kpi-t-value); font-weight: 800; letter-spacing: -0.01em;  line-height: 1; }
+.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-hero);   font-weight: 800; letter-spacing: -0.018em; line-height: 1; }
+.kpi-sig-arrfig-value { font-size: var(--kpi-t-medium); font-weight: 800; letter-spacing: -0.005em; line-height: 1; }
 /* V30-1 R3 - arrow is text inside a number; inherits the number's size
-   and weight. Prior 0.72em rendered a 19.44px arrow inside a 27px
-   figure (broken lockup). Now 1em so arrow == number. */
+   and weight. */
 .kpi-sig-arrfig-arrow { font-size: 1em; }
 .kpi-sig-arrfig-good  { color: var(--green-700); }
 .kpi-sig-arrfig-bad   { color: var(--red-700); }
 
-/* V21-20 diverging bar (centred zero) - kept, moved to shared lanes. */
-.kpi-sig-dvg {
-  height: var(--kpi-h-dvg); background: var(--n-200); border-radius: 5px;
-  position: relative; width: 100%;
-}
-.kpi-sig-dvg-zero {
-  position: absolute; left: 50%; top: calc(-5px * var(--kf-scale)); bottom: calc(-5px * var(--kf-scale));
-  width: 2px; background: var(--n-600);
-}
-.kpi-sig-dvg-bar {
-  position: absolute; top: 0; bottom: 0;
-  border-radius: 5px; background: var(--green-500);
-}
-.kpi-sig-dvg-bar-over { background: var(--red-700); }
-.kpi-sig-vlab {
-  display: flex; justify-content: space-between; width: 100%;
-  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 600;
-  margin-top: var(--kpi-sp-1);
-}
-.kpi-sig-vlab .mid { color: var(--n-600); }
-
-/* V29-11 OT arc - centred, scale via rendered box. */
-.kpi-sig-arc {
-  width: 100%; max-width: var(--kpi-gauge2-w);
-  height: var(--kpi-h-arc);
-  margin: 0 auto; display: block;
-}
-
-/* V29-16 hours bar - one bar in hours. Solid navy = worked, hatched
-   blue = remaining, red segment past the end when over. */
-.kpi-sig-hbar {
-  position: relative; width: 100%;
-  height: var(--kpi-h-dvg);
-  background: var(--n-100);
-  border: 1px solid var(--n-200);
-  border-radius: 5px;
-  overflow: hidden;
-}
-.kpi-sig-hbar-worked {
-  position: absolute; left: 0; top: 0; bottom: 0;
-  background: var(--navy-700);
-  border-radius: 5px 0 0 5px;
-}
-.kpi-sig-hbar-left {
-  position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(45deg, var(--kpi-blue-100) 0 6px, #FFFFFF 6px 12px);
-  border-left: 1px solid var(--kpi-blue-500);
-}
-.kpi-sig-hbar-over {
-  position: absolute; top: 0; bottom: 0;
-  background: var(--red-700);
-  border-radius: 0 5px 5px 0;
-}
-.kpi-sig-hbar-lab {
-  display: flex; justify-content: space-between;
-  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 700;
-  letter-spacing: 0.04em;
-  margin-top: var(--kpi-sp-1);
-}
-.kpi-sig-hbar-lab b { color: var(--n-900); font-weight: 800; font-variant-numeric: var(--num-tabular); }
-
-/* Footer chip (Hours card money segment). */
-.kpi-sig-chip {
-  display: inline-flex; align-items: center;
-  height: var(--kpi-lane-head);
-  padding: 0 var(--kpi-sp-3);
-  background: var(--n-50); border: 1px solid var(--n-200);
-  border-radius: var(--rad-pill);
-  font-size: var(--kpi-t-label); color: var(--n-700); font-weight: 600;
-  white-space: nowrap;
-}
-.kpi-sig-chip b { color: var(--n-900); font-weight: 800; font-variant-numeric: var(--num-tabular); }
+/* V31 item 3 - OT hero turns amber past watch, red at alarm. Colour
+   is driven by the state pill's config (never hardcoded). */
+.kpi-sig-hero-warn { color: #92580A; }
+.kpi-sig-hero-bad  { color: var(--red-700); }
 
 /* Details strip (V8-17) - one bordered strip, six divided cells. */
 .kpi-det {
