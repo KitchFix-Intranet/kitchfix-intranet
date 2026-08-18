@@ -1447,12 +1447,14 @@
 .kpi-gcard-members {
   border-top: 1px solid var(--n-200);
 }
-/* V30-2 - folio account row is --kpi-row (40 base). Was 44 raw. */
+/* V30-2 - folio account row is a clickable row. V31 item 5 - height
+   is CONTENT-driven with sp-3 padding all-round so the two-line
+   lockup (key + description) has air above the key and below the
+   description. Selected-row accent unchanged. */
 .kpi-acct {
   display: flex; align-items: center;
   width: 100%;
-  height: var(--kpi-row);
-  padding: 0 var(--kpi-sp-3);
+  padding: var(--kpi-sp-3);
   border: 0;
   border-left: 3px solid transparent;
   border-top: 1px solid var(--n-100);
@@ -1760,7 +1762,10 @@
   background: var(--surface-card);
   overflow: hidden;
 }
-/* V30-3 - story panels use --kpi-card-pad (14.4). */
+/* V30-3 - story panels use --kpi-card-pad (14.4). V31 item 6 -
+   story-right is a flex-column that lets the strip's plot GROW into
+   the panel's spare height (bottom-anchored). Story-left keeps
+   align-self: start so it sizes to the spend card content. */
 .kpi-story-left {
   padding: var(--kpi-card-pad);
   border-right: 1px solid var(--n-200);
@@ -1774,6 +1779,12 @@
   min-width: 0;
   gap: var(--kpi-sp-1);
 }
+/* V31 item 6 - the strip container (Tier A/B/C) fills the remaining
+   height of story-right so spare height sits ABOVE the bars, not below
+   the captions. Each strip's plot bottom-anchors and grows. */
+.kpi-story-right > .kpi-wbars,
+.kpi-story-right > .kpi-stripB,
+.kpi-story-right > .kpi-stripC { flex: 1 1 auto; min-height: 0; }
 
 /* Left panel: spend card (V21-5..V21-9). Header row / equal-height
    split block / bottom-anchored budget footer. Halves are ONE grid
@@ -1936,8 +1947,12 @@
 .kpi-wb {
   display: flex; flex-direction: column; min-width: 0;
 }
+/* V31 item 6 - plot GROWS into spare panel height with a floor of
+   lane-viz + sp-6; bars stay bottom-anchored via align-items: flex-end. */
 .kpi-wb-plot {
-  height: var(--kpi-h-plot); position: relative;
+  flex: 1 1 auto;
+  min-height: calc(var(--kpi-lane-viz) + var(--kpi-sp-6));
+  position: relative;
   display: flex; align-items: flex-end;
   padding-top: var(--kpi-sp-3);
 }
@@ -1993,13 +2008,17 @@
 }
 
 /* ── V8-21 Tier B (7-13 weeks): single row of compact bars, shared
-   vertical scale, stepped budget line, alternating axis labels. ── */
+   vertical scale, stepped budget line, alternating axis labels. V31
+   item 6 - plot grows into spare panel height, floor is the tier's
+   named minimum. ── */
 .kpi-stripB {
   padding-top: var(--kpi-sp-3);
   position: relative;
+  display: flex; flex-direction: column;
 }
 .kpi-plotB {
-  height: var(--kpi-plot-b);
+  flex: 1 1 auto;
+  min-height: var(--kpi-plot-b);
   display: flex; align-items: flex-end; gap: var(--kpi-sp-1);
   position: relative;
   border-bottom: 1px solid var(--n-300);
@@ -2049,12 +2068,16 @@
 .kpi-stripB-tip .kpi-wb-d-bad  { color: #FCA5A5; }
 .kpi-stripB-tip .kpi-wb-d-mute { color: #B9C6DA; }
 
-/* ── V8-21 Tier C (> 13 weeks): one bar per fiscal period. ── */
+/* ── V8-21 Tier C (> 13 weeks): one bar per fiscal period. V31
+   item 6 - plot grows into spare panel height, floor is the tier's
+   named minimum. ── */
 .kpi-stripC {
   padding-top: var(--kpi-sp-3);
+  display: flex; flex-direction: column;
 }
 .kpi-plotC {
-  height: var(--kpi-plot-c);
+  flex: 1 1 auto;
+  min-height: var(--kpi-plot-c);
   display: flex; align-items: stretch; gap: var(--kpi-sp-3);
   border-bottom: 1px solid var(--n-300);
 }
@@ -2334,15 +2357,17 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
+/* V31 item 4 - one skin. Both groups pad `--kpi-card-pad` on all four
+   sides (same as every card). Label sits sp-2 above its first cell. */
 .kpi-det-grp {
-  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  padding: var(--kpi-card-pad);
   border-right: 1px solid var(--n-200);
   min-width: 0;
 }
 .kpi-det-grp:last-child { border-right: 0; }
-/* V29-9 - second group gets sp-6 of left padding so its labels clear
-   the divider instead of hugging it. No cell may truncate. */
-.kpi-det-grp + .kpi-det-grp { padding-left: var(--kpi-sp-6); }
+/* V29-9 + V31 item 4 - the right group keeps its extra sp-6 inset in
+   ADDITION to the card-pad so its labels clear the divider. */
+.kpi-det-grp + .kpi-det-grp { padding-left: calc(var(--kpi-card-pad) + var(--kpi-sp-6)); }
 .kpi-det-grp-h {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.09em;
   color: var(--n-500); text-transform: uppercase;
@@ -2351,7 +2376,12 @@
 .kpi-det-grp-cells {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+/* V31 item 7 - EVERY cell (including the first) gets padding-left
+   sp-3 so the value column starts inside the group's own pad. Value's
+   left edge = card-pad + sp-3 = ~25px from the card edge; the right
+   group adds sp-6 more so it never sits within ~25px of the divider. */
 .kpi-det-cell {
+  padding-left: var(--kpi-sp-3);
   padding-right: var(--kpi-sp-3);
   border-right: 1px solid var(--n-100);
   min-width: 0;
