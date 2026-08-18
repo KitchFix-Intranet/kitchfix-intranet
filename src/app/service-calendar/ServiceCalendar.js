@@ -46,11 +46,18 @@ import DrillRail from "./v2/DrillRail";
 import OpsRail from "./v2/OpsRail";
 import MobileBooksBar from "./v2/MobileBooksBar";
 // Phase 2A bulk convergence (2026-07-24): shared review + pos-style
-// custom entry. Both bulk paths converge on BulkReview; BulkEntry
-// replaces the legacy .sc-day bulk shell.
+// custom entry. Both bulk paths converge on the review shell;
+// BulkEntry replaces the legacy .sc-day bulk shell.
+// PR-J (2026-08-18) supersedes BulkReview with BulkReviewMatrix -
+// services down, days across, one surface instead of six accordions.
+// Kevin ruling 2026-08-18. BulkReview.js + bulk.css review-only
+// classes are retained by legacy imports below in case a future
+// small-batch flow wants the accordion shape; the two active call
+// sites (match-projections + custom-values) both moved to the matrix.
 import BulkEntry from "./v2/bulk/BulkEntry";
-import BulkReview from "./v2/bulk/BulkReview";
+import BulkReviewMatrix from "./v2/bulk/BulkReviewMatrix";
 import "./v2/bulk/bulk.css";
+import "./v2/bulk/bulkReviewMatrix.css";
 import { isFeeNoDollar } from "./v2/vocab";
 // Phase 3-B (2026-07-28; flight retired 2026-08-01): Handoff coordinator.
 // Owns sessionMap, month-complete card state, and the finalize timer
@@ -4210,12 +4217,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           return rows;
         };
         return (
-          <BulkReview
+          <BulkReviewMatrix
             cardRef={bulkReviewOverlayCardRef}
             days={days}
             serviceGroups={data.serviceGroups}
             subtitle={`Match projections - ${days.length} day${days.length !== 1 ? "s" : ""}`}
-            statusPill="projected totals"
             headerTotals={{ meals: totMeals, revenue: totRev }}
             perDayRow={(d) => {
               let m = 0;
@@ -4359,12 +4365,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           if (applicable === 0) zeroApplicableDays.add(d.date);
         }
         return (
-          <BulkReview
+          <BulkReviewMatrix
             cardRef={bulkCustomReviewOverlayCardRef}
             days={days}
             serviceGroups={data.serviceGroups}
             subtitle={`Custom values - ${days.length} day${days.length !== 1 ? "s" : ""}`}
-            statusPill="custom totals"
             headerTotals={{ meals: totMeals, revenue: totRev }}
             perDayRow={(d) => ({ meals: perDayMeals(d), revenue: perDayRev(d) })}
             perDayServices={() => entries.map(e => ({
