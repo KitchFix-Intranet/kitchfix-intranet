@@ -79,8 +79,10 @@ import { deriveOpsHeroTotals } from "./v2/opsRailDerive";
 // fmt$ already imported at line 15 for the bulk-review rows; reused
 // at the W8 mobile-bar sites.
 import DayEntryV2 from "./v2/entry/DayEntryV2";
-import ResetToast from "./v2/entry/ResetToast";
-import SaveConfirmation from "./v2/entry/SaveConfirmation";
+// PR-K (2026-08-18): ResetToast + SaveConfirmation retired. Both
+// confirmations now render through the shared <Toast /> mounted in
+// page.js via showToast. The cream "No service recorded" block in
+// DayEntryV2 was also removed - one action, one confirmation shape.
 import "./v2/shell.css";
 import "./v2/overview.css";
 import "./v2/drill.css";
@@ -587,46 +589,18 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   const [partialError, setPartialError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [focusDay, setFocusDay] = useState(null);
-  // Polish wave item 4 (2026-08-04): reset-day success toast. Uses
-  // the SAME hoisted-overlay pattern as SaveConfirmation (see the
-  // ResetToast.js header for the full write-up). Sibling shape:
-  //   - State on ServiceCalendarInner (parent survives the modal
-  //     unmount that refetch triggers - see SC_STATUS'
-  //     'Day-detail modal remounts during post-save refetch'
-  //     backlog entry for the failure class)
-  //   - Setter fires from handleResetDay's `result.success` branch
-  //   - <ResetToast> renders at workspace level (sibling of the
-  //     day-overlay conditional), position: fixed at --z-toast
-  //   - Auto-clear via this useEffect + setTimeout, cleared on
-  //     unmount so a rapid unmount cannot leak the timer
-  //
-  // Different content per owner ruling: subtle top-centered pill,
-  // small type. Reset is a correction, not an achievement - do NOT
-  // reuse the SaveConfirmation stamp shape.
-  const [resetToast, setResetToast] = useState(null);
-  useEffect(() => {
-    if (!resetToast) return undefined;
-    const id = setTimeout(() => setResetToast(null), 1800);
-    return () => clearTimeout(id);
-  }, [resetToast]);
+  // PR-K (2026-08-18): resetToast state + saveConfirm state retired.
+  // Both fire through the shared showToast now, which mounts the new
+  // <Toast /> in page.js. Kevin ruling 2026-08-18: one confirmation
+  // shape for one action. `handleSaveConfirmed` / `SaveComplete` kept
+  // as noops so DayEntryV2's onSaveConfirmed / onSaveConfirmComplete
+  // wiring stays intact - the child still calls them at the same
+  // sequence points; they just do nothing (the toast fires from
+  // handleSave / handleReset upstream).
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  // sc-save-confirm state (hoisted 2026-08-03 per #598 gate-bounce
-  // ruling). Lives here because the modal itself unmounts during the
-  // post-save refetch when periodDays goes null mid-invalidation and
-  // the mount gate at :3826 collapses. State inside DayEntryV2 gets
-  // discarded before the overlay can render. Hoisted state survives
-  // the child's tear-down; the overlay is mounted at the workspace
-  // level (viewport-scale, above the modal backdrop) so its scrim
-  // masks the ~400-1000ms remount blink instead of exposing it.
-  //   shape: { meals: number, revenue: number | null } | null
-  const [saveConfirm, setSaveConfirm] = useState(null);
-  const handleSaveConfirmed = useCallback((meals, revenue) => {
-    setSaveConfirm({ meals, revenue });
-  }, []);
-  const handleSaveConfirmComplete = useCallback(() => {
-    setSaveConfirm(null);
-  }, []);
+  const handleSaveConfirmed = useCallback(() => {}, []);
+  const handleSaveConfirmComplete = useCallback(() => {}, []);
 
   // F3: save-queue state. syncingKeys is the set of `${account}|${date}`
   // for entries currently pending replay across ALL accounts (the driver
@@ -1831,29 +1805,70 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   }, []);
 
   const buildRecordedToast = useCallback((opts) => {
-    const { amount = 0, meals = 0, newlyEntered = 0, isBulk = false, bulkDays = 0, noService = false } = opts;
-    // Step-0 (SC-066): mirror aggregateWorkspaceMetrics's widened
-     // "complete" predicate so the toast progress bar agrees with the
-    // header the operator just read.
+    const {
+      amount = 0, meals = 0, newlyEntered = 0,
+      isBulk = false, bulkDays = 0,
+      noService = false, date = null,
+      dateRange = null,   // { first, last } for bulk
+    } = opts;
+    // PR-K (2026-08-18): payload now matches the shared <Toast />.
+    // The old SubmissionToast rich payload retired with this PR.
+    // Progress bar renders only on the bulk variant per design.
     const currentComplete = activeDrillDays
       ? activeDrillDays.filter(d => d.hasActuals || d.status === "no-service").length
       : null;
     const totalDays = activeDrillDays?.length ?? null;
-    const scopeWord = isPeriodView ? "period" : isMonthView ? "month" : "period";
+    const scopeWord = isPeriodView ? "period" : isMonthView ? "month" : "month";
+
+    // No-service: shape 3 per render ("Marked no service" + date +
+    // Undo). Caller supplies Undo via handleSave's post-success
+    // wire-up (we cannot construct onAction here without the day
+    // context).
+    if (noService && date) {
+      return {
+        variant: "generic",
+        tier: "ok",
+        title: "Marked no service",
+        detail: fmtDateShort(date),
+      };
+    }
+
+    // Bulk save: title "N days saved", meta "range · N meals",
+    // progress bar based on this drill scope completion.
+    if (isBulk) {
+      const rangeStr = dateRange
+        ? `${fmtDateShort(dateRange.first)} to ${fmtDateShort(dateRange.last)}`
+        : null;
+      const detail = rangeStr && Number.isFinite(meals)
+        ? `${rangeStr} - ${meals.toLocaleString()} meals`
+        : rangeStr || null;
+      const pct = (currentComplete != null && totalDays && totalDays > 0)
+        ? Math.min(100, Math.round(((currentComplete + newlyEntered) / totalDays) * 100))
+        : null;
+      return {
+        variant: "generic",
+        tier: "ok",
+        title: `${bulkDays} day${bulkDays === 1 ? "" : "s"} saved`,
+        detail,
+        ...(Number.isFinite(pct) ? {
+          progress: {
+            pct,
+            label: `${(currentComplete ?? 0) + newlyEntered} of ${totalDays ?? "-"} days entered this ${scopeWord}`,
+          },
+        } : {}),
+      };
+    }
+
+    // Single day save. Title "Day saved", meta "date · N meals · $X".
+    const parts = [];
+    if (date) parts.push(fmtDateShort(date));
+    if (Number.isFinite(meals)) parts.push(`${meals.toLocaleString()} meals`);
+    if (!isFeeAccount && Number.isFinite(amount)) parts.push(fmt$(amount));
     return {
-      variant: "recorded",
-      amount,
-      meals,
-      daysEntered: currentComplete != null ? currentComplete + newlyEntered : null,
-      totalDays,
-      scopeWord,
-      isBulk,
-      bulkDays,
-      isFeeAccount,
-      // SC-066: SubmissionToast reads this to override the headline to
-      // "No service recorded" and drop the money line (which would be
-      // $0 - visually confusing on a per-meal day).
-      noService,
+      variant: "generic",
+      tier: "ok",
+      title: "Day saved",
+      detail: parts.length > 0 ? parts.join(" - ") : null,
     };
   }, [activeDrillDays, isPeriodView, isMonthView, isFeeAccount]);
 
@@ -1887,44 +1902,64 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       if (!isMountedRef.current) return result;
       if (result.success) {
         const newlyEntered = day.hasActuals ? 0 : 1;
-        // P2 item 2 + A3 amend (2026-07-24): partial-success cases.
-        // Save landed but a note append failed post-save. Both flags
-        // surface honestly:
-        //   noteFailed       - rideNote (operator-authored) failed
-        //   auditNoteFailed  - no-service audit note failed
-        // Different literal messages; same partial-success shape.
+        // Partial-success cases keep their honest error copy per
+        // Kevin fence "don't rewrite error copy in this PR". They
+        // now render through the shared toast via showToast's
+        // string-with-tier path (tier "bad" for these two).
         if (result.noteFailed) {
           showToast("Saved - note couldn't post, use Add note", "error");
         } else if (result.auditNoteFailed) {
           showToast("Saved - no-service note couldn't post", "error");
-        } else if (!opts.silentSuccess) {
-          // P3-B (2026-07-28): silentSuccess suppresses the recorded
-          // toast on clean single-day saves from v2 (DayEntryV2's
-          // Handoff sequence replaces the toast). v1 DayDetail
-          // (MLB fee) does NOT pass silentSuccess, so this toast
-          // still fires for MLB - preserves the MLB byte-identical
-          // rule since MLB never sees the Handoff. No-service saves
-          // from v2 also pass silentSuccess (Ruling 5: no-service
-          // toast dies with no Handoff; the panel's inline state
-          // is the confirmation).
-          //
-          // PR-B kept toast fix (2026-07-22): guard amount/meals on
-          // Number.isFinite. If server response omits either total
-          // (queued replay or future server variant), pass null so
-          // SubmissionToast's Number.isFinite gate at :33 hides the
-          // money line instead of printing a fabricated "$0". Prior
-          // `Number(x) || 0` would coerce absent to 0 -> "$0".
+        } else {
+          // PR-K (2026-08-18): every clean save fires ONE toast.
+          // silentSuccess retired - the old suppression was there
+          // because SubmissionToast covered the grid; the new
+          // bottom-centre shape does not.
           const rawSavedRevenue = Number(result.savedRevenue);
           const rawSavedMeals   = Number(result.savedMeals);
           const hasFiniteTotals = Number.isFinite(rawSavedRevenue) && Number.isFinite(rawSavedMeals);
-          showToast(buildRecordedToast({
+          const payload = buildRecordedToast({
             amount: hasFiniteTotals ? rawSavedRevenue : null,
             meals:  hasFiniteTotals ? rawSavedMeals   : null,
             newlyEntered,
-            // SC-066: mark-no-service flag flows through so the toast
-            // reads "No service recorded" instead of "0 meals / $0".
             noService: !!opts.noService,
-          }));
+            date: day.date,
+          });
+          // PR-K (2026-08-18): no-service Undo. Capture the pre-mark
+          // actuals BEFORE the write clobbered them (day.actual is
+          // stale post-write; we captured pre-values in
+          // `preMarkEntries` opts.undoEntries at the call site).
+          // If the caller supplied undoEntries, wire Undo that
+          // re-POSTs via sc-submit-day (Kevin fence: reverse the
+          // action, not a client-side visual revert).
+          if (opts.noService && Array.isArray(opts.undoEntries) && opts.undoEntries.length > 0) {
+            payload.actionLabel = "Undo";
+            payload.onAction = async () => {
+              const undoRes = await fetch("/api/service-calendar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "sc-submit-day",
+                  accountKey: data.account.key,
+                  date: day.date,
+                  entries: opts.undoEntries,
+                }),
+              });
+              const undoJson = await undoRes.json();
+              if (undoJson?.success) {
+                const mk2 = day.date.slice(0, 7);
+                setMonthCache(prev => {
+                  if (!(mk2 in prev)) return prev;
+                  const next = { ...prev }; delete next[mk2]; return next;
+                });
+                setReloadKey(k => k + 1);
+                showToast({ variant: "generic", tier: "ok", title: "Undo saved", detail: fmtDateShort(day.date) });
+              } else {
+                showToast({ variant: "generic", tier: "bad", title: "Could not undo", detail: undoJson?.error || "Check your connection and try again." });
+              }
+            };
+          }
+          showToast(payload);
         }
         // Surgical monthCache invalidation: drop only the month we wrote
         // to so the drill-in refetches just that month, not the whole
@@ -2146,11 +2181,54 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         const next = { ...prev }; delete next[mk]; return next;
       });
       setReloadKey(k => k + 1);
-      // Polish wave item 4 (2026-08-04): fire the workspace-level
-      // toast BEFORE the modal unmounts. Setting state here means
-      // the resetToast render (below, sibling of the day overlay)
-      // survives the refetch tear-down of DayEntryV2.
-      setResetToast({ message: "Day reset to projections" });
+      // PR-K (2026-08-18): fire the shared toast with an Undo action
+      // that re-POSTs the pre-reset actuals via sc-submit-day. Kevin
+      // fence: Undo actually reverses the action - not a client-side
+      // visual revert. If sc-submit-day fails, the failure toast
+      // fires and the operator retries.
+      const preResetEntries = [];
+      const preActual = day.actual || {};
+      for (const g of data.serviceGroups) {
+        for (const s of g.services) {
+          const v = preActual[s.colIndex];
+          if (v == null) continue;
+          preResetEntries.push({ colIndex: s.colIndex, value: Number(v) || 0 });
+        }
+      }
+      const detail = fmtDateShort(day.date);
+      const undoOnly = preResetEntries.length > 0;
+      showToast({
+        variant: "generic",
+        tier: "warn",
+        title: "Day cleared",
+        detail: `${detail} - entries removed`,
+        ...(undoOnly ? {
+          actionLabel: "Undo",
+          onAction: async () => {
+            const undoRes = await fetch("/api/service-calendar", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "sc-submit-day",
+                accountKey: data.account.key,
+                date: day.date,
+                entries: preResetEntries,
+              }),
+            });
+            const undoJson = await undoRes.json();
+            if (undoJson?.success) {
+              setMonthCache(prev => {
+                if (!(mk in prev)) return prev;
+                const next = { ...prev }; delete next[mk]; return next;
+              });
+              setReloadKey(k => k + 1);
+              showToast({ variant: "generic", tier: "ok", title: "Undo saved", detail });
+            } else {
+              showToast({ variant: "generic", tier: "bad", title: "Could not undo", detail: undoJson?.error || "Check your connection and try again." });
+            }
+          },
+        } : {}),
+      });
       return result;
     } catch (err) {
       if (err?.name === "AbortError") return { success: false, error: "aborted" };
@@ -4024,27 +4102,14 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         </div>
       )}
 
-      {/* Two hoisted overlays, siblings by design. Same pattern
-          (workspace-level state + fixed-position render + auto-
-          clear) with different content per owner ruling: save is
-          a celebration, reset is a correction. Both mount here
-          rather than inside the modal because the modal itself
-          unmounts during the post-write refetch (see SC_STATUS'
-          'Day-detail modal remounts during post-save refetch'
-          entry - same failure class either write hits).
-          SaveConfirmation is a viewport-scale scrim + stamp that
-          masks the modal remount blink; ResetToast is a subtle
-          top-centered pill that fires after sc-reset-day. Not
-          alternatives - both can be present in different
-          sequences (a save from the modal fires SaveConfirmation;
-          a reset from the same modal fires ResetToast). */}
-      {saveConfirm && (
-        <SaveConfirmation
-          meals={saveConfirm.meals}
-          revenue={saveConfirm.revenue}
-        />
-      )}
-      {resetToast && <ResetToast message={resetToast.message} />}
+      {/* PR-K (2026-08-18): SaveConfirmation + ResetToast retired.
+          Both now render through the single <Toast /> mounted at
+          page.js via showToast. The hoisted-overlay pattern (state
+          at parent, mount at workspace level) is preserved by the
+          fact that showToast lives on page.js - it survives every
+          child unmount by construction. Not touched: the accent-rail
+          note-posted and offline-chip variants, which are
+          notification chips, not confirmations. */}
 
       {/* Bulk custom-entry - pos-style panel (Phase 2A 2026-07-24,
           redline #11). Legacy .sc-day inline shell replaced by

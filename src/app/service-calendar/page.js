@@ -1,16 +1,20 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
-import SubmissionToast from "./season/SubmissionToast";
+// PR-K (2026-08-18): one SC-scoped toast supersedes SubmissionToast +
+// SaveConfirmation + ResetToast + the cream "No service recorded"
+// block. oh-toast remains the primitive on Financial + Ops per Kevin
+// ruling (see GOTCHAS "SC toast is the reference implementation").
+import Toast from "./toast/Toast";
 // P3-A (2026-07-25): note-posted chip uses the accent-rail primitive.
 // Import the CSS at the page level so the chip renders with correct
 // styles regardless of which SC subtree fires the toast.
 import "@/app/ops/css/ops-shared.css";
 import "./ops-sc.css";
 import "./dayDetail.css";
-import "./submissionToast.css";
+import "./toast/toast.css";
 import "./v2/accentRail.css";
 
 // Page-level gate. Currently identical to SC_ADMINS - only the two
@@ -23,49 +27,37 @@ export default function ServiceCalendarPage() {
   const [toast, setToast] = useState(null);
 
   const showToast = useCallback((msgOrObj, type = "success") => {
-    // Accept a string (plain oh-toast) OR an object payload. The rich
-    // "recorded" variant renders <SubmissionToast />; SC-068 aligns its
-    // auto-dismiss with the plain oh-toast timing (3.5s) so a toast
-    // never lingers past the operator's next intent.
-    // P3-B (2026-07-28): persistent variants (offline-chip) do NOT
-    // auto-dismiss; they stay until an explicit `{dismiss: true}` fires
-    // OR the state that produced them clears. `{dismiss: true}` clears
-    // any current toast (used by HandoffAmbient to drop the chip when
-    // the queue empties).
+    // PR-K (2026-08-18): the SC toast lifetime + pause-on-hover live
+    // inside the Toast component. This function just sets the payload;
+    // dismissal timers are the component's concern.
+    //
+    // Payload shapes accepted:
+    //   string, type -> generic toast (tier from type: error -> "bad")
+    //   { variant: "recorded", ... } -> Toast (day / bulk / no-service)
+    //   { variant: "note-posted" | "offline-chip", ... } -> accent-rail chip
+    //   { dismiss: true } -> clear current toast (persistent-chip driver)
+    //
+    // Persistent variants (offline-chip) skip the Toast lifetime and
+    // stay mounted until an explicit `{ dismiss: true }` fires.
     if (msgOrObj && typeof msgOrObj === "object") {
       if (msgOrObj.dismiss) {
         setToast(null);
         return;
       }
       setToast(msgOrObj);
-      if (!msgOrObj.persistent) {
-        setTimeout(() => setToast(null), 3500);
-      }
     } else {
-      setToast({ msg: String(msgOrObj || ""), type });
-      setTimeout(() => setToast(null), 3500);
+      // Type "error" -> bad tier; anything else -> ok. Copy stays as
+      // authored (Kevin fence: this PR migrates the shape, not the
+      // error strings).
+      setToast({ variant: "generic", tier: type === "error" ? "bad" : "ok", title: String(msgOrObj || "") });
     }
   }, []);
 
-  // SC-068: outside-click dismiss for the recorded toast. Attach a
-  // document-level mousedown while a recorded toast is mounted; any
-  // click whose target is NOT inside the toast card clears the toast.
-  // No preventDefault / stopPropagation - the click still lands on
-  // whatever was under it (opening a tile also dismisses; that's the
-  // intended behavior). Cleanup on unmount + on toast change so we
-  // never stack listeners. Non-recorded toasts skip this path (they
-  // aren't the "sits over the grid for 4.5s and blocks flow" case).
-  const toastCardRef = useRef(null);
-  useEffect(() => {
-    if (!toast || toast.variant !== "recorded") return;
-    const handler = (e) => {
-      if (toastCardRef.current && !toastCardRef.current.contains(e.target)) {
-        setToast(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [toast]);
+  // PR-K (2026-08-18): outside-click dismiss retired. The new Toast
+  // component owns auto-dismiss (5s), pause-on-hover, and explicit
+  // close via its own x button. An outside-click dismisser on the
+  // page was a workaround for the old SubmissionToast covering the
+  // grid; the new dark-bottom-centre shape does not need it.
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -163,20 +155,14 @@ export default function ServiceCalendarPage() {
           isDev={isDev}
         />
       </div>
-      {toast && (
+      {/* PR-K (2026-08-18): note-posted + offline-chip stay on the
+          accent-rail primitive because they are notification chips,
+          not confirmations. The three post-action confirmation
+          patterns (day-saved, bulk-saved, no-service / week-finalized
+          / day-cleared / failed) all render through <Toast /> below. */}
+      {toast && (toast.variant === "note-posted" || toast.variant === "offline-chip") && (
         <div className="oh-toast-container oh-toast-container--sc-center">
-          {toast.variant === "recorded" ? (
-            // SC-060: click-to-dismiss on the toast card. Auto-dismiss
-            // aligned to 3.5s in SC-068 above. toastCardRef wraps the
-            // toast so the outside-click mousedown listener above can
-            // scope "outside" correctly.
-            <div ref={toastCardRef}>
-              <SubmissionToast {...toast} onDismiss={() => setToast(null)} />
-            </div>
-          ) : toast.variant === "note-posted" ? (
-            // P3-A: note-posted chip. Accent-rail primitive, --success
-            // (green). Copy verbatim from RENDER_HANDOFF_BLENDED.html:141.
-            // Auto-dismisses via the same 3.5s timer set by showToast.
+          {toast.variant === "note-posted" ? (
             <div
               className="sc-ar sc-ar--success"
               role="status"
@@ -194,11 +180,7 @@ export default function ServiceCalendarPage() {
                 <div className="sc-ar-body">{toast.body}</div>
               </div>
             </div>
-          ) : toast.variant === "offline-chip" ? (
-            // P3-B (2026-07-28): offline chip. Accent-rail --warning
-            // (amber). Persistent (no auto-dismiss) while the save
-            // queue is non-empty; HandoffAmbient re-fires the toast
-            // with {dismiss: true} when the queue empties.
+          ) : (
             <div
               className="sc-ar sc-ar--warning"
               role="status"
@@ -220,9 +202,20 @@ export default function ServiceCalendarPage() {
                 <div className="sc-ar-body">{toast.body}</div>
               </div>
             </div>
-          ) : (
-            <div className={`oh-toast oh-toast--${toast.type}`}>{toast.msg}</div>
           )}
+        </div>
+      )}
+      {toast && toast.variant !== "note-posted" && toast.variant !== "offline-chip" && (
+        <div className="sc-toast-container">
+          <Toast
+            tier={toast.tier || "ok"}
+            title={toast.title}
+            detail={toast.detail}
+            progress={toast.progress}
+            actionLabel={toast.actionLabel}
+            onAction={toast.onAction}
+            onDismiss={() => setToast(null)}
+          />
         </div>
       )}
     </div>

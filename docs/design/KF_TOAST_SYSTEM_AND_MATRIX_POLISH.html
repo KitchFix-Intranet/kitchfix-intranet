@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix - One toast system + matrix polish</title>
+<style>
+  :root{
+    --navy:#1A3050; --navy-2:#153968;
+    --ink:#0F172A; --n800:#334155; --n700:#475569; --n500:#64748B;
+    --n400:#94A3B8; --n300:#CBD5E1; --n200:#E2E8F0; --n100:#F1F5F9; --n50:#F8FAFC;
+    --green:#2F7D4F; --green-br:#4FBF85; --green-bg:#E8F5EC; --green-bd:#B8DCC4;
+    --amber:#D9892F; --amber-bg:#FDF6EC; --amber-bd:#F0D9B5; --amber-fg:#8A5A16;
+    --red:#B3261E; --red-br:#E8635A;
+    --toast:#101B2D; --toast-2:#8FA3C4;
+    --page:#EEF1F5;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);font-family:var(--ui);color:var(--ink);
+       -webkit-font-smoothing:antialiased;padding:40px 24px 100px}
+  .wrap{max-width:960px;margin:0 auto}
+  .eyebrow{font-size:10px;line-height:12px;font-weight:700;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500)}
+  h1{font-size:29px;line-height:36px;font-weight:800;letter-spacing:-.01em;margin-top:8px}
+  .sub{font-size:14px;line-height:20px;color:var(--n700);margin-top:10px;max-width:78ch}
+  .sub b{color:var(--ink);font-weight:600}
+  .rule{height:1px;background:var(--n200);margin:44px 0 26px}
+  h2{font-size:20px;line-height:26px;font-weight:700;letter-spacing:-.01em}
+  .lede{font-size:13px;line-height:20px;color:var(--n700);margin-top:6px;margin-bottom:20px;
+        max-width:76ch}
+  .lede b{color:var(--ink);font-weight:600}
+  .lbl{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;
+       text-transform:uppercase;color:var(--n500);margin:22px 0 9px}
+
+  /* ================= TOAST ================= */
+  .stage{background:#DDE3EB;border-radius:12px;padding:26px 20px;display:flex;
+         flex-direction:column;align-items:center;gap:12px;border:1px solid var(--n200)}
+  .t{display:flex;align-items:flex-start;gap:13px;background:var(--toast);color:#fff;
+     border-radius:11px;padding:13px 15px;width:min(430px,100%);
+     box-shadow:0 12px 30px rgba(15,23,42,.30)}
+  .t .ic{width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:flex;
+         align-items:center;justify-content:center;font-size:11px;font-weight:900;
+         margin-top:1px}
+  .t .ic.ok{background:var(--green-br);color:#0A2416}
+  .t .ic.warn{background:var(--amber);color:#2B1A05}
+  .t .ic.bad{background:var(--red-br);color:#2B0907}
+  .t .bd{flex:1;min-width:0}
+  .t .t1{font-size:13px;line-height:18px;font-weight:700}
+  .t .t2{font-size:12px;line-height:17px;color:var(--toast-2);margin-top:2px}
+  .t .t2 b{color:#D6E0F0;font-weight:600}
+  .t .act{background:none;border:none;font-family:inherit;font-size:12px;line-height:18px;
+          font-weight:700;color:#fff;text-decoration:underline;cursor:pointer;
+          padding:0;margin-top:7px}
+  .t .x{background:none;border:none;color:var(--toast-2);font-size:15px;line-height:18px;
+        cursor:pointer;padding:0 0 0 6px;font-family:inherit}
+  .t .x:hover{color:#fff}
+  .tbar{height:3px;border-radius:999px;background:rgba(255,255,255,.15);margin-top:9px;
+        overflow:hidden}
+  .tbar i{display:block;height:100%;background:var(--green-br);border-radius:999px}
+
+  /* ================= MATRIX ================= */
+  .m{background:#fff;border-radius:14px;overflow:hidden;border:1px solid var(--n200);
+     box-shadow:0 10px 28px rgba(15,23,42,.12)}
+  .mh{background:var(--navy);color:#fff;padding:15px 20px}
+  .mh .t{all:unset;display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+  .mh .t1{font-size:15px;line-height:20px;font-weight:700;color:#fff}
+  .mh .t1 span{font-weight:400;color:#A9BBD6;margin-left:8px;font-size:13px}
+  .back{font-size:12px;line-height:16px;font-weight:600;color:#fff;
+        border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:5px 12px;
+        background:none;cursor:pointer;font-family:inherit}
+  .mh .n{display:flex;align-items:baseline;gap:10px;margin-top:7px}
+  .mh .big{font-size:26px;line-height:32px;font-weight:800;letter-spacing:-.02em;
+           font-variant-numeric:tabular-nums}
+  .mh .meta{font-size:12px;line-height:16px;color:#A9BBD6}
+  .mb{padding:16px 20px 18px}
+
+  table{width:100%;border-collapse:collapse}
+  thead th{padding:0 10px 9px;text-align:center;font-size:10px;line-height:13px;
+           font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--n500);
+           border-bottom:1px solid var(--n200);white-space:nowrap}
+  thead th.lead{text-align:left;padding-left:0;width:180px}
+  thead th b{display:block;font-size:13px;color:var(--ink);font-weight:700;letter-spacing:0;
+             margin-top:1px}
+  tbody td{padding:9px 10px;text-align:center;font-size:14px;line-height:20px;font-weight:600;
+           color:var(--n800);font-variant-numeric:tabular-nums;
+           border-bottom:1px solid var(--n100)}
+  tbody td.lead{text-align:left;padding-left:0;font-weight:400;color:var(--n800);
+                white-space:nowrap}
+  tbody tr.grp td{background:var(--n50);font-size:10px;line-height:14px;font-weight:800;
+                  letter-spacing:.06em;text-transform:uppercase;color:var(--n500);
+                  text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--n200);
+                  border-top:1px solid var(--n200)}
+  tbody tr:first-child td{border-top:none}
+  td.diff{background:var(--amber-bg);color:var(--amber-fg);font-weight:800;border-radius:4px}
+  tfoot td{padding:10px;text-align:center;font-size:13px;line-height:18px;font-weight:700;
+           font-variant-numeric:tabular-nums;border-top:2px solid var(--n200)}
+  tfoot td.lead{text-align:left;padding-left:0;font-size:10px;font-weight:800;
+                letter-spacing:.06em;text-transform:uppercase;color:var(--n500)}
+  tfoot tr.money td{border-top:none;padding-top:2px;color:var(--n700);font-size:13px}
+  tfoot tr.money td.lead{color:var(--n500)}
+
+  .foldrow{display:flex;justify-content:space-between;align-items:center;
+           padding:11px 0 0;margin-top:12px;border-top:1px solid var(--n200)}
+  .foldrow span{font-size:12px;line-height:16px;color:var(--n500)}
+  .foldrow button{background:none;border:none;font-family:inherit;font-size:10px;
+                  font-weight:800;letter-spacing:.06em;color:var(--n500);cursor:pointer}
+  .foldrow button:hover{color:var(--n800)}
+  .notewrap{margin-top:18px}
+  .notewrap label{display:block;font-size:10px;line-height:12px;font-weight:800;
+                  letter-spacing:.06em;text-transform:uppercase;color:var(--n500);
+                  margin-bottom:7px}
+  .notewrap input{width:100%;font-family:inherit;font-size:13px;line-height:20px;
+                  padding:10px 12px;border:1px solid var(--n300);border-radius:7px;
+                  color:var(--ink)}
+  .notewrap input::placeholder{color:var(--n400)}
+  .mf{padding:14px 20px;background:var(--n50);border-top:1px solid var(--n200);
+      display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .mf .hint{font-size:12px;line-height:16px;color:var(--n500)}
+  .mf .btns{display:flex;gap:10px}
+  .btn{font-family:inherit;font-size:13px;line-height:20px;font-weight:700;border-radius:7px;
+       padding:10px 18px;border:1px solid transparent;cursor:pointer}
+  .btn-go{background:var(--navy-2);color:#fff}
+  .btn-gh{background:#fff;border-color:var(--n300);color:var(--n800)}
+
+  .note{background:#fff;border:1px solid var(--n200);border-radius:12px;padding:18px 20px;
+        margin-top:16px}
+  .note h4{font-size:11px;line-height:16px;font-weight:800;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500);margin-bottom:10px}
+  .note ul{list-style:none}
+  .note li{font-size:13px;line-height:20px;color:var(--n700);padding-left:16px;
+           position:relative;margin-bottom:7px}
+  .note li:last-child{margin-bottom:0}
+  .note li:before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;
+                  border-radius:50%;background:var(--n300)}
+  .note li b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KitchFix Ops Hub · Service Calendar</div>
+  <h1>One toast system, and the matrix polished</h1>
+  <p class="sub">There are three confirmation patterns in the product today: a dark green
+     pill with a progress bar, a full-width cream block with a Close button, and a white
+     centred overlay with no chrome at all. <b>Three shapes for the same job means every
+     save feels like a different product.</b> One system below, covering every action the
+     Service Calendar takes.</p>
+
+  <div class="rule"></div>
+  <h2>The toast</h2>
+  <p class="lede">Bottom centre, dark, one shape. Icon carries state, title says what
+     happened, second line carries the detail worth reading. Auto-dismisses after five
+     seconds, pauses on hover, dismissible by click. Anything that needs a decision is a
+     dialog, not a toast - <b>a confirmation never has a Close button, because a message you
+     must dismiss is not a confirmation, it is an interruption.</b></p>
+
+  <div class="lbl">Day saved</div>
+  <div class="stage">
+    <div class="t">
+      <span class="ic ok">&#10003;</span>
+      <div class="bd">
+        <div class="t1">Day saved</div>
+        <div class="t2">Monday, August 17 &middot; <b>50 meals</b> &middot; $644.76</div>
+      </div>
+      <button class="x">&times;</button>
+    </div>
+  </div>
+
+  <div class="lbl">Bulk saved - the one case that earns a progress bar</div>
+  <div class="stage">
+    <div class="t">
+      <span class="ic ok">&#10003;</span>
+      <div class="bd">
+        <div class="t1">4 days saved</div>
+        <div class="t2">Wed Aug 19 to Sat Aug 22 &middot; <b>1,080 meals</b></div>
+        <div class="tbar"><i style="width:65%"></i></div>
+        <div class="t2" style="margin-top:6px">20 of 31 days entered this month</div>
+      </div>
+      <button class="x">&times;</button>
+    </div>
+  </div>
+
+  <div class="lbl">Marked no service - replaces the cream block entirely</div>
+  <div class="stage">
+    <div class="t">
+      <span class="ic ok">&#10003;</span>
+      <div class="bd">
+        <div class="t1">Marked no service</div>
+        <div class="t2">Monday, August 17</div>
+        <button class="act">Undo</button>
+      </div>
+      <button class="x">&times;</button>
+    </div>
+  </div>
+
+  <div class="lbl">Week finalized</div>
+  <div class="stage">
+    <div class="t">
+      <span class="ic ok">&#10003;</span>
+      <div class="bd">
+        <div class="t1">Week finalized</div>
+        <div class="t2">AP has the invoice for review.</div>
+      </div>
+      <button class="x">&times;</button>
+    </div>
+  </div>
+
+  <div class="lbl">Day cleared</div>
+  <div class="stage">
+    <div class="t">
+      <span class="ic warn">!</span>
+      <div class="bd">
+        <div class="t1">Day cleared</div>
+        <div class="t2">Monday, August 17 &middot; entries removed</div>
+        <button class="act">Undo</button>
+      </div>
+      <button class="x">&times;</button>
+    </div>
+  </div>
+
+  <div class="lbl">Save failed</div>
+  <div class="stage">
+    <div class="t">
+      <span class="ic bad">!</span>
+      <div class="bd">
+        <div class="t1">Could not save</div>
+        <div class="t2">Nothing was changed. Check your connection and try again.</div>
+        <button class="act">Try again</button>
+      </div>
+      <button class="x">&times;</button>
+    </div>
+  </div>
+
+  <div class="note">
+    <h4>What this replaces, and the two calls inside it</h4>
+    <ul>
+      <li><b>The cream "No service recorded" block goes.</b> It was a full-screen dialog
+        doing a toast's job, and it made the smallest action in the product feel like the
+        largest. It also demanded a click to dismiss for a message that needs no decision.</li>
+      <li><b>The white centred overlay goes.</b> Covering the page to report a success
+        blocks the next entry, which is exactly what a chef is about to do.</li>
+      <li><b>Undo replaces Close.</b> Where the old pattern asked you to acknowledge, the new
+        one offers the only thing you might actually want - to take it back. On the actions
+        that can be taken back.</li>
+      <li><b>"4 days in - nice haul" becomes "4 days saved".</b> My call, and worth
+        disagreeing with if you like the warmth. The joke lands once and grates on the
+        hundredth save, only one of the three current toasts has any personality so it reads
+        as random rather than characterful, and it does not scale - there is no version of it
+        for one day or for twenty-eight. The green check and the progress bar carry the
+        satisfaction; the copy stays out of the way.</li>
+      <li><b>Progress belongs to bulk only.</b> A month-completion bar on a single-day save
+        is noise; on a four-day batch it is the answer to "how much is left".</li>
+    </ul>
+  </div>
+
+  <div class="rule"></div>
+  <h2>The matrix, polished</h2>
+  <p class="lede">The structure is right. What makes it feel unfinished is grid weight:
+     borders on all four sides of every cell turn a summary into a spreadsheet, and the group
+     rows fill only part of the width so the table looks misaligned even when it is not.</p>
+
+  <div class="m">
+    <div class="mh">
+      <div class="t">
+        <div class="t1">Match projections, 4 days <span>Cincinnati Reds</span></div>
+        <button class="back">Go back</button>
+      </div>
+      <div class="n">
+        <div class="big">$13,926.64</div>
+        <div class="meta">1,080 meals &middot; Wed Aug 19 to Sat Aug 22</div>
+      </div>
+    </div>
+    <div class="mb">
+      <table>
+        <thead>
+          <tr><th class="lead">Service</th>
+            <th>Wed<b>19</b></th><th>Thu<b>20</b></th><th>Fri<b>21</b></th><th>Sat<b>22</b></th></tr>
+        </thead>
+        <tbody>
+          <tr class="grp"><td colspan="5">Minor League</td></tr>
+          <tr><td class="lead">Breakfast</td><td>110</td><td>110</td><td>110</td><td>110</td></tr>
+          <tr><td class="lead">Lunch</td><td>110</td><td>110</td><td class="diff">60</td><td>110</td></tr>
+          <tr class="grp"><td colspan="5">Rehab</td></tr>
+          <tr><td class="lead">Breakfast</td><td>25</td><td>25</td><td>25</td><td>25</td></tr>
+          <tr><td class="lead">Lunch</td><td>25</td><td>25</td><td>25</td><td>25</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td class="lead">Meals</td><td>270</td><td>270</td><td>220</td><td>270</td></tr>
+          <tr class="money"><td class="lead">Total</td>
+            <td>$3,482</td><td>$3,482</td><td>$2,837</td><td>$3,482</td></tr>
+        </tfoot>
+      </table>
+
+      <div class="foldrow">
+        <span>9 services not running this week</span>
+        <button>SHOW</button>
+      </div>
+
+      <div class="notewrap">
+        <label>Add a note to every day in this batch (optional)</label>
+        <input type="text" placeholder="e.g. Cancelled morning setup for weather">
+      </div>
+    </div>
+    <div class="mf">
+      <span class="hint">Saves as one batch. All 4 days or none.</span>
+      <div class="btns">
+        <button class="btn btn-gh">Go back</button>
+        <button class="btn btn-go">Confirm and save 4 days</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <h4>What changed in the matrix</h4>
+    <ul>
+      <li><b>Vertical rules gone.</b> Columns are held by alignment, not by lines. This is
+        the single biggest change - it turns a spreadsheet back into a summary.</li>
+      <li><b>Row rules lightened</b> to the faintest tier, and the service column loses its
+        boxed border so the first column reads as a label, not a cell.</li>
+      <li><b>Group rows span the full width</b> including the service column. Currently the
+        fill stops short, which is what makes the table look misaligned.</li>
+      <li><b>Dollar signs restored on the Total row.</b> Two adjacent all-numeric rows where
+        one is counts and one is money genuinely need the disambiguator - this is the
+        exception to the drop-the-dollar-signs rule, not a contradiction of it.</li>
+      <li><b>The outlier tint gets a rounded fill</b> rather than a full-bleed cell
+        background, so it reads as a marked value rather than a broken row.</li>
+      <li><b>The batch hint moved next to the buttons</b> it describes. "Saves as one batch,
+        all 4 or none" is a consequence of pressing Confirm, so it belongs beside Confirm,
+        not stranded above the note field.</li>
+      <li><b>Day headers keep the two-line stack</b> - weekday over date reads faster than
+        "Wed 19" on one line, and it was already right.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

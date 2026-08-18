@@ -214,23 +214,22 @@
 }
 .sc-brm-matrix thead th.sc-brm-th-lead {
   background: var(--surface-sunken);
-  border-bottom: var(--sc2-border-thin) solid var(--border-default);
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
 }
 .sc-brm-matrix tfoot td.sc-brm-cell-lead {
   background: var(--surface-sunken);
-  border-top: var(--border-thick) solid var(--border-default);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
 }
 .sc-brm-matrix tbody td.sc-brm-cell-lead {
   background: var(--surface-card);
-  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
+  /* PR-K matrix polish (Kevin ruling 2026-08-18): service column
+     loses its boxed border - reads as a label, not a cell. */
+  border-bottom: none;
 }
-/* Right-edge divider so the sticky column reads as anchored when the
-   matrix scrolls under it. Solid token-driven line rather than a
-   gradient - stays within the fence (no raw hex, no rgba). */
-.sc-brm-th-lead,
-.sc-brm-cell-lead {
-  border-right: var(--sc2-border-thin) solid var(--border-default);
-}
+/* PR-K matrix polish (Kevin ruling 2026-08-18): vertical rules
+   removed entirely. Columns are held by alignment, not by lines. The
+   sticky column's prior right-edge divider is deleted - it was the
+   single largest source of grid weight per the design lede. */
 
 /* Column headers - two-line "Mon 17" style per the render. */
 .sc-brm-matrix thead th {
@@ -264,9 +263,16 @@
   color: var(--text-subtle);
 }
 
-/* Group divider row - full-width band naming the group. */
+/* Group divider row - full-width band naming the group. Kevin ruling
+   2026-08-18 (matrix polish): the band spans the full table width
+   INCLUDING the service column. Prior sticky positioning made the
+   group name stay in view during horizontal scroll but broke the
+   flush-left band appearance the render calls out ("Currently the
+   fill stops short, which is what makes the table look misaligned").
+   Full-width band wins over sticky group name. */
 .sc-brm-row-group td {
   background: var(--surface-sunken);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
   border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
   font-family: inherit;
   font-size: var(--sc2-size-micro);
@@ -276,13 +282,11 @@
   color: var(--text-subtle);
   padding: var(--sc2-space-1) var(--sc2-space-3);
   text-align: left;
-  /* Also stick horizontally so the group header stays anchored under
-     the sticky lead column when scrolled. */
-  position: sticky;
-  left: 0;
 }
 
-/* Service rows */
+/* Service rows. Kevin ruling 2026-08-18: row rules lighten to the
+   faintest tier (--border-subtle) - what was already there but calling
+   it out explicitly so nobody re-heavies the border in a future PR. */
 .sc-brm-row-svc td {
   border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
   font-size: var(--sc2-size-body);
@@ -303,21 +307,29 @@
   font-weight: var(--sc2-wt-regular);
 }
 
-/* Outlier tint - amber that already carries needs-attention meaning
-   everywhere else. State-by-shape: font-weight change PLUS colour, so
-   the distinction survives grayscale. Inset shadow acts as a border
-   without disturbing the table's row grid. Uses the shipped
-   needs-entry family so palette stays consistent with SC tiles. */
-.sc-brm-cell--diff {
+/* Outlier tint. Kevin ruling 2026-08-18 (matrix polish): the tint
+   becomes a ROUNDED FILL INSET from the cell edge, not a full-bleed
+   background. Reads as a marked value rather than a broken row.
+   Implementation: the cell keeps its transparent bg; the wrapper span
+   (rendered by BulkReviewMatrix at .sc-brm-cell-fill) carries the
+   amber pill. Weight step 400 -> 800 stays as the grayscale-safe
+   redundant carrier per K4 / K8. */
+.sc-brm-cell--diff .sc-brm-cell-fill {
+  display: inline-block;
   background: var(--status-needs-bg);
   color: var(--status-needs-fg);
   font-weight: var(--sc2-wt-display);
+  padding: 2px var(--sc2-space-2);
+  border-radius: var(--sc2-radius-cell);
+  min-width: 44px;
   box-shadow: inset 0 0 0 1px var(--status-needs-bd);
 }
 
-/* Footer rows */
+/* Footer rows. Kevin ruling 2026-08-18: separator lightens to the
+   faintest tier - the border-thick above the footer read as a hard
+   line in a design where the whole grid weight is coming down. */
 .sc-brm-matrix tfoot .sc-brm-cell {
-  border-top: var(--border-thick) solid var(--border-default);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
   background: var(--surface-sunken);
   font-size: var(--sc2-size-body);
   font-weight: var(--sc2-wt-bold);
@@ -420,12 +432,9 @@
   outline: 2px solid var(--action-primary-bg);
   outline-offset: -1px;
 }
-.sc-brm-footer-note {
-  font-size: var(--sc2-size-micro);
-  color: var(--text-subtle);
-  text-align: right;
-  font-weight: var(--sc2-wt-medium);
-}
+/* PR-K matrix polish (Kevin ruling 2026-08-18): .sc-brm-footer-note
+   retired - the batch hint moved into .sc-brm-foot-hint next to
+   Confirm. */
 
 /* ─── Modal footer ─── */
 
@@ -434,8 +443,23 @@
   background: var(--surface-sunken);
   border-top: var(--sc2-border-thin) solid var(--border-subtle);
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  flex-wrap: wrap;
+}
+/* PR-K matrix polish (Kevin ruling 2026-08-18): hint sits next to
+   Confirm. Left-aligned within the footer's space-between layout so
+   the buttons stay flush-right. */
+.sc-brm-foot-hint {
+  font-size: var(--sc2-size-caption);
+  color: var(--text-muted);
+  font-weight: var(--sc2-wt-medium);
+}
+.sc-brm-foot-actions {
+  display: flex;
   gap: var(--sc2-space-2);
+  margin-left: auto;
 }
 .sc-brm-btn {
   font-family: inherit;

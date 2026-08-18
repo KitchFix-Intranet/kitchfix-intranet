@@ -330,9 +330,16 @@ export default function BulkReviewMatrix({
                                 const isOff  = !isServiceDay;
                                 const isDiff = mode !== null && isServiceDay && v !== mode;
                                 const cellClass = `sc-brm-cell${isOff ? " sc-brm-cell--off" : ""}${isDiff ? " sc-brm-cell--diff" : ""}`;
+                                const label = isOff ? "-" : v.toLocaleString();
                                 return (
                                   <td key={sortedDays[i].date} className={cellClass}>
-                                    {isOff ? "-" : v.toLocaleString()}
+                                    {/* PR-K matrix polish (Kevin ruling
+                                        2026-08-18): outlier tint is a
+                                        rounded pill inset from the cell
+                                        edge, not a full-bleed fill. The
+                                        wrapper span carries the pill;
+                                        non-diff cells stay unwrapped. */}
+                                    {isDiff ? <span className="sc-brm-cell-fill">{label}</span> : label}
                                   </td>
                                 );
                               })}
@@ -352,8 +359,14 @@ export default function BulkReviewMatrix({
                     {!isFeeAccount && (
                       <tr className="sc-brm-foot-row sc-brm-foot-row--money">
                         <td className="sc-brm-cell-lead sc-brm-foot-label">Total</td>
+                        {/* PR-K matrix polish (Kevin ruling 2026-08-18):
+                            dollar signs on the Total row. Two adjacent
+                            all-numeric footer rows (meals + money) need
+                            the disambiguator - this is the deliberate
+                            exception to the drop-the-dollar-signs rule
+                            established in the ledger + rail redesign. */}
                         {perDayFooters.map(f => (
-                          <td key={`t-${f.date}`} className="sc-brm-cell">{Math.round(f.revenue).toLocaleString()}</td>
+                          <td key={`t-${f.date}`} className="sc-brm-cell">${Math.round(f.revenue).toLocaleString()}</td>
                         ))}
                       </tr>
                     )}
@@ -404,21 +417,28 @@ export default function BulkReviewMatrix({
               />
             </div>
 
-            <p className="sc-brm-footer-note">
-              Saves as one batch. All {writableDays.toLocaleString()} or none.
-            </p>
           </div>
 
           <footer className="sc-brm-foot">
-            <button type="button" className="sc-brm-btn sc-brm-btn--ghost" onClick={onBack}>Go back</button>
-            <button
-              type="button"
-              className="sc-brm-btn sc-brm-btn--primary"
-              disabled={saving || writableDays === 0}
-              onClick={() => onConfirm(batchNote)}
-            >
-              {saving ? "Saving..." : (confirmLabel === "Confirm & save" ? `Confirm and save ${writableDays} day${writableDays === 1 ? "" : "s"}` : confirmLabel)}
-            </button>
+            {/* PR-K matrix polish (Kevin ruling 2026-08-18): batch hint
+                moves next to Confirm - "Saves as one batch, all N or
+                none" is a consequence of pressing Confirm, so it
+                belongs beside Confirm, not stranded above the note
+                field. */}
+            <span className="sc-brm-foot-hint">
+              Saves as one batch. All {writableDays.toLocaleString()} or none.
+            </span>
+            <div className="sc-brm-foot-actions">
+              <button type="button" className="sc-brm-btn sc-brm-btn--ghost" onClick={onBack}>Go back</button>
+              <button
+                type="button"
+                className="sc-brm-btn sc-brm-btn--primary"
+                disabled={saving || writableDays === 0}
+                onClick={() => onConfirm(batchNote)}
+              >
+                {saving ? "Saving..." : (confirmLabel === "Confirm & save" ? `Confirm and save ${writableDays} day${writableDays === 1 ? "" : "s"}` : confirmLabel)}
+              </button>
+            </div>
           </footer>
         </div>
       </div>

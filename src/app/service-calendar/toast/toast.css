@@ -1,0 +1,195 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Toast - the single SC confirmation shape (PR-K, 2026-08-18).
+   ═══════════════════════════════════════════════════════════════════
+
+   Design authority: docs/design/KF_TOAST_SYSTEM_AND_MATRIX_POLISH.html.
+
+   Token-only. Fixed pixel values below are intrinsic shape geometry
+   (icon disc diameter, progress-bar height, close-button size).
+
+   Inter with var(--num-tabular) for every figure. Icon tier colours
+   consume the shipped status family (--status-* tokens) rather than
+   inventing new shades.
+   ─────────────────────────────────────────────────────────────────── */
+
+/* Container. .sc-toast-container is mounted at the app shell so the
+   toast escapes any scrolling overflow. Bottom-centre, above all
+   other SC z layers, pointer-events pass through the empty space so
+   the operator can click a tile through the container's dead area. */
+.sc-toast-container {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--sc2-space-5) + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sc2-space-2);
+}
+
+.sc-toast {
+  /* Opt back to the UI font (Inter) - matches the .sc-v2-entry
+     workaround for the .oh-app Mulish inheritance chain. Kevin
+     ruling 2026-08-17. GOTCHAS covers the standing drift. */
+  font-family: var(--sc2-font-ui);
+  color: var(--n-0);
+  background: var(--sc2-toast-bg);
+  border-radius: var(--sc2-radius-container);
+  padding: var(--sc2-space-3) var(--sc2-space-4);
+  min-width: 300px;
+  max-width: min(440px, 92vw);
+  box-shadow: var(--sc2-el-widget);
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  column-gap: var(--sc2-space-3);
+  align-items: start;
+  pointer-events: auto;
+  font-variant-numeric: var(--num-tabular);
+  animation: sc-toast-in var(--duration-base) var(--ease-standard) both;
+}
+
+/* Icon disc - 22px circle, tier-coloured background, dark glyph. */
+.sc-toast-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-display);
+  margin-top: 1px;
+}
+.sc-toast-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.sc-toast-icon--ok {
+  /* Bright green disc; dark glyph for AA contrast on the disc. */
+  background: var(--sc2-rail-cta-bg);
+  color: var(--sc2-rail-cta-text);
+}
+.sc-toast-icon--warn {
+  /* Amber disc; dark brown glyph. */
+  background: var(--accent);
+  color: var(--n-900);
+}
+.sc-toast-icon--bad {
+  /* Red disc; dark ink glyph. */
+  background: var(--red-400);
+  color: var(--n-900);
+}
+.sc-toast-icon-glyph {
+  line-height: 1;
+  font-weight: var(--sc2-wt-display);
+  font-size: var(--sc2-size-caption);
+}
+
+/* Body block - title, detail, progress, action. */
+.sc-toast-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+}
+.sc-toast-title {
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--n-0);
+  line-height: 1.35;
+}
+.sc-toast-detail {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-toast-fg-mute);
+  line-height: 1.4;
+}
+.sc-toast-detail b {
+  color: var(--sc2-toast-fg-bright);
+  font-weight: var(--sc2-wt-semibold);
+}
+.sc-toast-detail--muted {
+  color: var(--sc2-toast-fg-mute);
+}
+
+/* Progress bar - bulk variant only. Thin, subtle, green fill. */
+.sc-toast-bar {
+  height: 3px;
+  border-radius: var(--sc2-radius-pill);
+  background: var(--sc2-toast-track);
+  overflow: hidden;
+  margin-top: var(--sc2-space-1);
+}
+.sc-toast-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--sc2-rail-cta-bg);
+  border-radius: var(--sc2-radius-pill);
+  transition: width var(--duration-slow) var(--ease-standard);
+}
+
+/* Action button (Undo / Try again). Underlined text, no chrome -
+   Kevin design: the toast is the surface; the action lives inside it
+   as a decision the operator can take, not a button demanding a
+   click. */
+.sc-toast-action {
+  align-self: flex-start;
+  margin-top: var(--sc2-space-1);
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--n-0);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+.sc-toast-action:hover { color: var(--sc2-toast-fg-bright); }
+.sc-toast-action:disabled { color: var(--sc2-toast-fg-mute); cursor: wait; }
+
+/* Close (x). Kevin explicit fence: a confirmation NEVER has a Close-
+   to-continue button. The x is early-dismiss - not an acknowledgement
+   gate. Muted colour so it does not draw the eye. */
+.sc-toast-x {
+  background: none;
+  border: none;
+  color: var(--sc2-toast-fg-mute);
+  font-family: inherit;
+  font-size: var(--sc2-size-h3);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  margin: -2px 0 0 var(--sc2-space-1);
+  align-self: flex-start;
+}
+.sc-toast-x:hover { color: var(--n-0); }
+
+/* Enter/exit motion. Reduced-motion collapses both to zero. */
+@keyframes sc-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-toast {
+    animation: none;
+  }
+  .sc-toast-bar-fill {
+    transition: none;
+  }
+}
+
+/* Tighter viewports (mobile). Preserve the shape; shrink margins. */
+@media (max-width: 640px) {
+  .sc-toast-container {
+    left: var(--sc2-space-3);
+    right: var(--sc2-space-3);
+    transform: none;
+    align-items: stretch;
+  }
+  .sc-toast {
+    max-width: 100%;
+  }
+}
