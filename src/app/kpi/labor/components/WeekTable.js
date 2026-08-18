@@ -727,7 +727,7 @@ function FragmentRows({
 
   return (
     <>
-      <tr className="kpi-tbl-band">
+      <tr className={`kpi-tbl-band ${periodOpen ? "kpi-tbl-band-open" : ""}`}>
         <td>
           <button
             type="button"

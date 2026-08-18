@@ -61,6 +61,24 @@
 .kpi-app {
   --kf-scale: 0.9;
 
+  /* ── V36 · KPI-scoped cool tint palette ───────────────────────────
+     tokens.css sets --navy-100 to #D1DAE6 (a steel blue) and the
+     light n-scale (n-50..n-400) to warm off-whites; ops-inv-mgmt
+     depends on those. The KPI redesign moved the whole surface to a
+     cool palette (V29..V35), so scope the overrides to .kpi-app.
+     Values come from Kevin's V46 reference render. The V36 spec
+     called out --navy-100 and --navy-bd explicitly; the n-scale
+     overrides are a companion finding - the V36 table CSS uses
+     var(--n-50) / var(--n-100) etc. and expects the reference
+     values, not the codebase's warm defaults. */
+  --navy-100: #EAF0FA;
+  --navy-bd:  #CBD9F0;
+  --n-50:  #F8FAFC;
+  --n-100: #F1F5F9;
+  --n-200: #E7EDF4;
+  --n-300: #DDE5EE;
+  --n-400: #CBD5E1;
+
   /* ── V30-1 · SIX TYPE ROLES ───────────────────────────────────────
      Every text element on a KPI product surface maps to exactly one of
      six roles. There is no seventh step. The MEDIUM step is the missing
@@ -2688,19 +2706,47 @@
 .kpi-tbl-nil { color: var(--n-300); }
 .kpi-tbl-ot { color: var(--amber-600); font-weight: 700; }
 
-/* Period band (V9-8) - data row, sticky under header (V9-11). */
+/* Period band (V9-8) - data row, sticky under header (V9-11).
+   V36 - collapsed bands lose their steel-blue fill so the eight
+   period rows do not compete with the cards. The only tinted band
+   is the one the user has open; the tint means "expanded" now, not
+   "band". The :has() selector reads aria-expanded on the chevron. */
 .kpi-tbl-band > td {
-  background: var(--navy-100);
-  border-top: 1px solid #CBD9F0;
-  border-bottom: 1px solid #CBD9F0;
+  background: var(--surface-card);
+  border-top: 1px solid var(--n-300);
+  border-bottom: 1px solid var(--n-100);
   font-weight: 800; font-size: var(--kpi-t-body);
-  color: var(--navy-700);
+  color: var(--n-900);
   position: sticky; top: var(--hdr); z-index: 10;
   transition: background 0.12s;
 }
-/* V33 item 2 - period band rows are expandable but had no hover; week
-   rows already do. Match. */
-.kpi-tbl-band:hover > td { background: #DFE7F3; }
+.kpi-tbl-band:hover > td { background: var(--n-100); }
+/* V36 - the open band is the only tinted row. The class rule is
+   the primary trigger (WeekTable.js toggles .kpi-tbl-band-open
+   alongside aria-expanded); the :has() rule is a defensive twin so
+   the tint applies even if the class shim ever falls out. Split into
+   separate rule blocks (grouping the two selectors caused older
+   engines to drop the whole rule silently on the :has() half). */
+.kpi-tbl-band.kpi-tbl-band-open > td {
+  background: var(--navy-100);
+  border-top-color: var(--navy-bd);
+  color: var(--navy-700);
+}
+.kpi-tbl-band.kpi-tbl-band-open > td:first-child {
+  box-shadow: inset 3px 0 0 var(--navy-700);
+}
+.kpi-tbl-band.kpi-tbl-band-open:hover > td { background: var(--navy-100); }
+.kpi-tbl-band:has(> td .kpi-tbl-bandbtn[aria-expanded="true"]) > td {
+  background: var(--navy-100);
+  border-top-color: var(--navy-bd);
+  color: var(--navy-700);
+}
+.kpi-tbl-band:has(> td .kpi-tbl-bandbtn[aria-expanded="true"]) > td:first-child {
+  box-shadow: inset 3px 0 0 var(--navy-700);
+}
+.kpi-tbl-band:has(> td .kpi-tbl-bandbtn[aria-expanded="true"]):hover > td {
+  background: var(--navy-100);
+}
 /* V35-4 - chevron button was inert on hover (row background changed
    but the actual click target gave no feedback). Match the treatment
    .kpi-tbar-btn uses on hover: tint background, deepen text. */
@@ -2719,12 +2765,17 @@
   letter-spacing: 0;
 }
 
-/* Week row (V9-10) */
+/* Week row (V9-10). V36 - weeks sit on n-50 so bands can be white
+   (the only tinted row is the OPEN band). Hover deepens one step
+   to n-100 - the prior rule hovered to the same colour the row
+   already was and produced no visible feedback. */
 .kpi-tbl-week > td {
-  background: var(--surface-card);
+  background: var(--n-50);
+  border-top: 1px solid var(--n-200);
   font-weight: 600;
+  color: var(--n-800);
 }
-.kpi-tbl-week:hover > td { background: var(--n-50); }
+.kpi-tbl-week:hover > td { background: var(--n-100); }
 /* V35-4 - same hover as the band button; the week chevron opens the
    worker table and needs the same "clickable" cue. */
 .kpi-tbl-weekbtn {
@@ -2741,8 +2792,10 @@
   color: var(--n-500); font-size: var(--kpi-size-caption);
 }
 
-/* V9-2 exception rendering - warm bg + amber left edge + chip. */
-.kpi-tbl-attn > td { background: #FFFCF6; }
+/* V9-2 exception rendering - amber left edge + chip. V36 - warm
+   cream fill removed; only the amber inset marks the flagged week
+   against the cool page. */
+.kpi-tbl-attn > td { background: var(--n-50); }
 .kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--amber-600); }
 
 /* V9-2 flag chip beside row label. */
@@ -2775,9 +2828,12 @@
 
 /* Child rows (worker / account) (V9-10 + V25-10). V25-10 - the child
    connector is a 1px vertical RAIL, not a horizontal glyph. Leading
-   dashes read as signed deltas in a table full of vs-budget cells. */
+   dashes read as signed deltas in a table full of vs-budget cells.
+   V36 - child bg moves to white; the rail alone reads the nesting
+   without a fill. */
 .kpi-tbl-child > td {
-  background: var(--n-50);
+  background: var(--surface-card);
+  border-top: 1px solid var(--n-100);
   font-size: var(--kpi-size-ctl);
   color: var(--n-700);
   font-weight: 500;
@@ -2794,10 +2850,10 @@
   left: calc(22px * var(--kf-scale));
   top: 0; bottom: 0;
   width: 1px;
-  background: var(--n-300);
+  background: var(--n-200);
 }
 .kpi-tbl-child:hover > td { background: var(--n-100); }
-.kpi-tbl-child.kpi-tbl-attn > td { background: #FFFCF6; }
+.kpi-tbl-child.kpi-tbl-attn > td { background: var(--n-50); }
 .kpi-tbl-child.kpi-tbl-attn > td:first-child { box-shadow: inset 3px 0 0 var(--amber-600); }
 .kpi-tbl-accountbtn {
   background: transparent; border: 0; cursor: pointer;
