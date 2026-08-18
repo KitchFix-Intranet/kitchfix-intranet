@@ -41,15 +41,21 @@
 
    S-3 flip: --kf-scale is set once here. Revert to 1 to restore
    pre-scale rendering exactly (the layer wiring test). */
-/* V33 item 2 - ONE shared keyboard focus ring across every
-   interactive KPI element. Prior state: only .kpi-bB declared one, so
-   every other button/link/chip fell back to browser default (which is
-   suppressed by many resets). Applies to all interactive descendants
-   of .kpi-app. */
-.kpi-app :focus-visible {
+/* V35-5 - ONE shared keyboard focus ring across every interactive
+   KPI element. Prior V33 attempt used `.kpi-app :focus-visible` with
+   a forced --kpi-ctl-r radius, so buttons that carry their own
+   radius (pills, chevrons, help disc) lost their shape when focused.
+   Scope the selector to real interactives via :is() and inherit the
+   target's own radius so the ring hugs whatever it wraps. The second
+   rule suppresses the outline for mouse-driven focus so click states
+   stay quiet. */
+.kpi-app :is(button, [role="button"], a, [tabindex="0"]):focus-visible {
   outline: 2px solid var(--navy-700);
   outline-offset: 2px;
-  border-radius: var(--kpi-ctl-r);
+  border-radius: inherit;
+}
+.kpi-app :is(button, [role="button"], a, [tabindex="0"]):focus:not(:focus-visible) {
+  outline: none;
 }
 
 .kpi-app {
@@ -2686,12 +2692,17 @@
 /* V33 item 2 - period band rows are expandable but had no hover; week
    rows already do. Match. */
 .kpi-tbl-band:hover > td { background: #DFE7F3; }
+/* V35-4 - chevron button was inert on hover (row background changed
+   but the actual click target gave no feedback). Match the treatment
+   .kpi-tbar-btn uses on hover: tint background, deepen text. */
 .kpi-tbl-bandbtn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   background: transparent; border: 0;
   color: inherit; font: inherit; font-weight: 800;
-  cursor: pointer; padding: 0;
+  cursor: pointer; padding: 2px 6px;
+  border-radius: var(--kpi-ctl-r);
 }
+.kpi-tbl-bandbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-bandsub {
   font-weight: 500; font-size: var(--kpi-t-label);
   color: var(--n-600); margin-left: var(--kpi-sp-3);
@@ -2704,12 +2715,16 @@
   font-weight: 600;
 }
 .kpi-tbl-week:hover > td { background: var(--n-50); }
+/* V35-4 - same hover as the band button; the week chevron opens the
+   worker table and needs the same "clickable" cue. */
 .kpi-tbl-weekbtn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   background: transparent; border: 0; color: inherit;
   font: inherit; font-weight: 600; cursor: pointer;
   width: 100%; text-align: left;
+  padding: 2px 6px; border-radius: var(--kpi-ctl-r);
 }
+.kpi-tbl-weekbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-chev {
   display: inline-block; width: 15px;
   color: var(--n-500); font-size: var(--kpi-size-caption);
