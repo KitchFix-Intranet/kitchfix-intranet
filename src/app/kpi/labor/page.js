@@ -805,8 +805,23 @@ export default function KpiLaborPage() {
             setExpandedWeeks(new Set());
           }}
           onJumpPeriod={(p) => {
-            setExpandedPeriods(prev => new Set([...prev, p]));
+            // V29-20 - chip TOGGLES. Prior handler was `new Set([...prev, p])`
+            // (add-only) so a chip could open but never close. Now:
+            //   closed group -> open + scroll
+            //   open group   -> close + do NOT scroll (the group's row
+            //                   is already in view; scrolling would be
+            //                   disorienting).
+            // V25-4 regression guard: Collapse all still clears every
+            // group including the first (unchanged handler above).
+            let willOpen;
+            setExpandedPeriods(prev => {
+              const next = new Set(prev);
+              if (next.has(p)) { next.delete(p); willOpen = false; }
+              else             { next.add(p);    willOpen = true;  }
+              return next;
+            });
             setTimeout(() => {
+              if (!willOpen) return;
               // Try period anchor first, then month anchor.
               const el = document.getElementById(`kpi-per${p}`) || document.getElementById(`kpi-permo${p}`);
               if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
