@@ -19,7 +19,7 @@ name: purchasing sync (billcom + rippling spend)
 #      slowness - and the labor path is production, blast-radius high.
 #   2. Failure isolation: a bill.com proxy 500 must NOT fail the labor
 #      derive. Separate workflows mean a red purchasing check does not
---     hide a green labor check.
+#      hide a green labor check.
 #   3. Different secrets scope: BILLCOM_PROXY_BASE / BILLCOM_PROXY_KEY
 #      are net-new; scoping them to a purchasing workflow keeps the
 #      labor workflow's secret surface unchanged.
