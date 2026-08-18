@@ -75,7 +75,7 @@ export function DetailsStrip({ board }) {
               <Cell
                 label="Pace"
                 value={pace != null ? `${pace}%` : "—"}
-                caption={elapsed != null ? `of budget · ${elapsed}% elapsed` : ""}
+                caption={elapsed != null ? `${elapsed}% elapsed` : ""}
                 muted={pace == null}
               />
               <Cell

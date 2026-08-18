@@ -661,6 +661,7 @@ export function WeekTable({
                     onPickAccount={onPickAccount}
                     columns={{ showHoliday, showUnpriced, showRate, showShare }}
                     excludedSet={excludedSet}
+                    redact={redact}
                   />
                 );
               })}
@@ -710,6 +711,7 @@ function FragmentRows({
   onPickAccount,
   columns,
   excludedSet,
+  redact,
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
@@ -809,6 +811,7 @@ function FragmentRows({
                 mode="worker"
                 columns={columns}
                 onPickAccount={null}
+                redact={redact}
               />
             ))}
             {weekOpen && mode === "aggregate" && aggregateChildrenForWeek(w, weekBudgetsByWeekStart, memberByWeekAndAcct).map(c => (
@@ -830,15 +833,24 @@ function FragmentRows({
   );
 }
 
-function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFromRollup, weekInProgress }) {
+function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFromRollup, weekInProgress, redact }) {
   const { showHoliday, showUnpriced, showRate, showShare } = columns;
   const sharePct = weekAmount > 0 ? Math.max(0, Math.min(100, (child.amount / weekAmount) * 100)) : 0;
   const rate = blendedRate({ dollars: child.amount, hours: child.hours });
-  const label = mode === "worker"
-    ? `#${child.number ?? ""} ${child.title || ""}`.trim()
-    : child.account_key;
   const sev = child.coverage_state;
   const showExceptionChip = sev !== "complete" && sev !== "no_labor";
+  // V29-10 - worker rows have THREE elements in descending weight in
+  // Names mode: name (700), then #number (label size), then title
+  // (label size). Numbers mode drops the name and shows #number +
+  // title only. The title is a stand-in for the name when hidden; it
+  // must never REPLACE the name when names are shown.
+  const workerLabelParts = (() => {
+    if (mode !== "worker") return null;
+    const num = child.number != null ? `#${child.number}` : (child.worker_id ? `#${String(child.worker_id).slice(0, 6)}` : "");
+    const title = child.title || null;
+    const showName = !redact && !!child.display_name;
+    return { showName, name: child.display_name, num, title };
+  })();
   // V25-5 - account rows carry a REAL vs-budget lockup, resolved per
   // member. Budget lives on the child in `week_budget` (from
   // `week_budgets[week].per_member`). Excluded rows (V25-2) read
@@ -873,9 +885,21 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFro
             <span className="kpi-tbl-cchild-key">{child.account_key}</span>
             {showExceptionChip && <ExceptionChip severity={sev} />}
           </button>
+        ) : mode === "worker" ? (
+          <span className="kpi-tbl-cchild-label">
+            {workerLabelParts?.showName && (
+              <b className="kpi-tbl-wname">{workerLabelParts.name}</b>
+            )}
+            <span className="kpi-tbl-wnum">{workerLabelParts?.num}</span>
+            {workerLabelParts?.title && (
+              <span className="kpi-tbl-wtitle">{workerLabelParts.title}</span>
+            )}
+            <OTTag ot={child.hours_ot} />
+            {showExceptionChip && <ExceptionChip severity={sev} />}
+          </span>
         ) : (
           <span className="kpi-tbl-cchild-label">
-            {label}
+            {child.account_key}
             <OTTag ot={child.hours_ot} />
             {showExceptionChip && <ExceptionChip severity={sev} />}
           </span>
