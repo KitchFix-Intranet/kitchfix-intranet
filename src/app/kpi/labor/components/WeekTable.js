@@ -526,14 +526,21 @@ export function WeekTable({
         {showChips && (
           <div className="kpi-tbar-grp" aria-label="Jump to group">
             <span className="kpi-tbar-lbl">Jump to</span>
-            {chips.map(c => (
-              <button
-                key={c.key}
-                type="button"
-                className={`kpi-tbar-chip ${expandedPeriods?.has(c.jumpKey) ? "on" : ""}`}
-                onClick={() => onJumpPeriod?.(c.jumpKey)}
-              >{c.label}</button>
-            ))}
+            {chips.map(c => {
+              const open = expandedPeriods?.has(c.jumpKey);
+              // V29-20 - chip carries aria-pressed reflecting the same
+              // state its `on` class reflects, so the toggle is
+              // announced rather than only coloured.
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  className={`kpi-tbar-chip ${open ? "on" : ""}`}
+                  aria-pressed={open ? "true" : "false"}
+                  onClick={() => onJumpPeriod?.(c.jumpKey)}
+                >{c.label}</button>
+              );
+            })}
           </div>
         )}
         <div className="kpi-tbar-grp">

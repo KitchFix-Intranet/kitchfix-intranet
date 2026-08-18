@@ -1,82 +1,110 @@
 "use client";
 // src/app/kpi/labor/components/SignalCards.js
 //
-// V21-17..V21-24 - viz-led signal cards. Four cards, one grammar:
-// header lane (eyebrow + state pill) then a centred content region.
-// No action links (V21-17), no prose sentences (V21-18). Equal card
-// heights (V21-19). Card-specific bodies:
-//   V21-20 OVER / UNDER BUDGET : signed variance + diverging bar
-//   V21-21 OVERTIME            : centred arc with % inside, threshold
-//                                band remains (unlabeled) - geometry
-//                                comes from ot config, never hardcoded
-//   V21-22 HOURS VS BUDGET     : fraction + avg-rate pill + bullet
-//   V21-23 PAYROLL DATA        : priced/total + tick row (cap 13 weeks)
+// V29-15..V29-19 - signal row REBUILD.
+//   V29-15 payroll data card retired (priced/total lives in the SYSTEM
+//          strip; unpriced hours lives in ALL THE NUMBERS).
+//   V29-16 hours card answers ONE question - how many hours left to
+//          schedule. One bar. Money as a footer chip. Blended rate as
+//          quiet right-aligned text. Percentages, planned-rate
+//          comparisons and rate-gap figures are EXPLICITLY forbidden.
+//   V29-17 state pills carry a state word only: ON TARGET / WATCH / OVER.
+//   V29-18 arrows never signs: ▼ for under, ▲ for over.
+//   V29-19 shared lanes across the row (head 20 / hero 38 / sub 16 /
+//          viz 58); a double-width card widens the VISUAL, not internals.
 
 import { fmt$, fmtHrs } from "../lib/formatting.js";
 
-function StatePill({ label, tone = "neutral" }) {
-  return <span className={`kpi-sig-state kpi-sig-state-${tone}`}>{label}</span>;
+// V29-17 - pill vocabulary is the SAME on every card. Verdict maps to
+// the same three words regardless of which signal drove it.
+function pillFor(verdict) {
+  if (verdict === "on_track") return { label: "ON TARGET", tone: "good" };
+  if (verdict === "watch")    return { label: "WATCH",     tone: "warn" };
+  if (verdict === "over")     return { label: "OVER",      tone: "bad"  };
+  return { label: "—", tone: "neutral" };
 }
 
-function Head({ eyebrow, stateLabel, stateTone }) {
+function Head({ eyebrow, verdict }) {
+  const p = pillFor(verdict);
   return (
     <div className="kpi-sig-head">
       <span className="kpi-sig-eyebrow">{eyebrow}</span>
-      <StatePill label={stateLabel} tone={stateTone} />
+      <span className={`kpi-sig-state kpi-sig-state-${p.tone}`}>{p.label}</span>
     </div>
   );
 }
 
-// V21-20
+// V29-18 - arrow-first signed figure. `▼` for under (v < 0, green),
+// `▲` for over (v > 0, red). Never `+` or `-`.
+function ArrowFigure({ v, size = "hero" }) {
+  if (v == null) return <span className={`kpi-sig-arrfig kpi-sig-arrfig-${size}`}>—</span>;
+  const abs = Math.abs(v);
+  if (abs < 0.5) return <span className={`kpi-sig-arrfig kpi-sig-arrfig-${size}`}>{fmt$(0)}</span>;
+  const under = v < 0;
+  const cls = under ? "kpi-sig-arrfig-good" : "kpi-sig-arrfig-bad";
+  const arrow = under ? "▼" : "▲";
+  return (
+    <span className={`kpi-sig-arrfig kpi-sig-arrfig-${size} ${cls}`}>
+      <span className="kpi-sig-arrfig-arrow" aria-hidden="true">{arrow}</span>
+      {fmt$(abs)}
+    </span>
+  );
+}
+
+// V29-19 - three-lane card shell. Every card in the row instantiates
+// this so the computed `top` of each hero lane matches across the row.
+function SignalCard({ children, wide, className }) {
+  return (
+    <div className={`kpi-sig ${wide ? "kpi-sig-wide" : ""} ${className || ""}`}>
+      {children}
+    </div>
+  );
+}
+function Hero({ children }) { return <div className="kpi-sig-hero-lane">{children}</div>; }
+function Sub({ children }) { return <div className="kpi-sig-sub-lane">{children}</div>; }
+function Viz({ children }) { return <div className="kpi-sig-viz-lane">{children}</div>; }
+function Footer({ children }) { return <div className="kpi-sig-foot-lane">{children}</div>; }
+
+// ── V29-8/V29-19 Over/Under budget ─────────────────────────────────
 function OverUnderCard({ board }) {
   const v = board?.variance;
   const budget = board?.period_budget || board?.range_budget;
+  const verdict = board?.verdict;
   if (v == null || !budget) {
     return (
-      <div className="kpi-sig">
-        <Head eyebrow="OVER / UNDER BUDGET" stateLabel="—" stateTone="neutral" />
-        <div className="kpi-sig-body">
-          <div className="kpi-sig-v">—</div>
-          <div className="kpi-sig-sub">no budget in range</div>
-        </div>
-      </div>
+      <SignalCard>
+        <Head eyebrow="OVER / UNDER BUDGET" verdict={null} />
+        <Hero><span className="kpi-sig-hero-mute">—</span></Hero>
+        <Sub><span className="kpi-sig-sub-mute">no budget in range</span></Sub>
+        <Viz />
+      </SignalCard>
     );
   }
-  const sign = v < 0 ? "UNDER" : v > 0 ? "OVER" : "ON BUDGET";
-  const tone = v <= 0 ? "good" : (board.verdict === "watch" ? "warn" : board.verdict === "over" ? "bad" : "neutral");
-  const leadCls = v <= 0 ? "kpi-sig-lead-good" : "";
+  const under = v < 0;
   const scale = Math.min(1, Math.abs(v) / (budget * 0.6));
   const barPct = 50 * scale;
-  const valCls = v <= 0 ? "kpi-sig-v-good" : (v > 0 && board.verdict === "over" ? "kpi-sig-v-bad" : "");
   return (
-    <div className={`kpi-sig ${v <= 0 ? "kpi-sig-lead" : ""} ${leadCls}`}>
-      <Head eyebrow="OVER / UNDER BUDGET" stateLabel={sign} stateTone={tone} />
-      <div className="kpi-sig-body">
-        <div className={`kpi-sig-v num ${valCls}`}>
-          {v < 0 ? "-" : v > 0 ? "+" : ""}{fmt$(Math.abs(v))}
-        </div>
-        <div className="kpi-sig-sub">of a {fmt$(budget)} budget</div>
-        <div className="kpi-sig-dvg" role="img" aria-label={`Variance ${fmt$(Math.abs(v))} ${sign.toLowerCase()}`}>
+    <SignalCard className={under ? "kpi-sig-lead kpi-sig-lead-good" : ""}>
+      <Head eyebrow="OVER / UNDER BUDGET" verdict={verdict} />
+      <Hero>
+        <ArrowFigure v={v} size="hero" />
+      </Hero>
+      <Sub>of a {fmt$(budget)} budget</Sub>
+      <Viz>
+        <div className="kpi-sig-dvg" role="img" aria-label={`Variance ${fmt$(Math.abs(v))} ${under ? "under" : "over"} budget`}>
           <span className="kpi-sig-dvg-zero" />
           <span
-            className={`kpi-sig-dvg-bar ${v > 0 ? "kpi-sig-dvg-bar-over" : ""}`}
-            style={v <= 0 ? { right: "50%", width: `${barPct}%` } : { left: "50%", width: `${barPct}%` }}
+            className={`kpi-sig-dvg-bar ${!under ? "kpi-sig-dvg-bar-over" : ""}`}
+            style={under ? { right: "50%", width: `${barPct}%` } : { left: "50%", width: `${barPct}%` }}
           />
         </div>
         <div className="kpi-sig-vlab"><span>under</span><span className="mid">on budget</span><span>over</span></div>
-      </div>
-    </div>
+      </Viz>
+    </SignalCard>
   );
 }
 
-// V21-21 + V29-11 - OT arc is the centrepiece. Percent SET INSIDE.
-// Amber threshold band renders in every state (silent when the value
-// arc has not reached it; self-explanatory once it does). Band geometry
-// comes from the server-config watch_pct/alarm_pct - NEVER hardcoded.
-// V29-11 cause of prior invisibility: --amber-100 (warm cream) has too
-// little contrast against the white card surface; the band was drawn
-// but blended with the background. Fix: use `--amber-bd` (a mid amber
-// used for chip borders) so the band reads as a visible zone.
+// ── V29-11 Overtime arc ────────────────────────────────────────────
 function OvertimeCard({ board }) {
   const ot = board?.overtime;
   const hours = ot?.hours ?? 0;
@@ -84,16 +112,12 @@ function OvertimeCard({ board }) {
   const watch = ot?.watch_pct;
   const alarm = ot?.alarm_pct;
   const state = ot?.state ?? "clear";
-  const tone = state === "alarm" ? "bad" : state === "watch" ? "warn" : "neutral";
+  const verdict = state === "alarm" ? "over" : state === "watch" ? "watch" : "on_track";
   const totalHrs = board?.hours ?? 0;
-  // Gauge geometry lives in a 150x94 viewBox. Arc from angle 180 (left)
-  // to 0 (right) with radius 58 centred at (75, 82). Watch band from
-  // watchAngle -> alarmAngle (both derived from config).
   const angleToPoint = (angle) => {
     const rad = (angle * Math.PI) / 180;
     return { x: 75 + 58 * Math.cos(rad), y: 82 - 58 * Math.sin(rad) };
   };
-  // Bounding domain: 0..20% maps to 180..0 (same as before).
   const pctToAngle = (p) => Math.max(0, 180 - Math.min(20, p) / 20 * 180);
   const watchAngle = pctToAngle(watch || 0);
   const alarmAngle = pctToAngle(alarm || 0);
@@ -108,10 +132,14 @@ function OvertimeCard({ board }) {
                  : "var(--green-500)";
   const hasBand = watch != null && alarm != null && watch > 0 && alarm > watch;
   return (
-    <div className="kpi-sig">
-      <Head eyebrow="OVERTIME" stateLabel={state === "clear" ? "CLEAR" : state === "watch" ? "WATCH" : "ALARM"} stateTone={tone} />
-      <div className="kpi-sig-body">
-        <svg className="kpi-sig-gauge2" viewBox="0 0 150 94" aria-label={`Overtime ${pct.toFixed(1)}%`}>
+    <SignalCard>
+      <Head eyebrow="OVERTIME" verdict={verdict} />
+      <Hero>
+        <span className="kpi-sig-hero-val num">{pct.toFixed(1)}%</span>
+      </Hero>
+      <Sub>{fmtHrs(hours)} OT hrs of {fmtHrs(totalHrs)} worked</Sub>
+      <Viz>
+        <svg className="kpi-sig-arc" viewBox="0 0 150 94" aria-label={`Overtime ${pct.toFixed(1)}%`} preserveAspectRatio="xMidYMid meet">
           <path d={`M${start.x} ${start.y} A58 58 0 0 1 ${end.x} ${end.y}`} fill="none" stroke="var(--n-200)" strokeWidth="12" strokeLinecap="round" />
           {hasBand && (
             <path d={`M${wStart.x} ${wStart.y} A58 58 0 0 1 ${wEnd.x} ${wEnd.y}`} fill="none" stroke="#F3D9AE" strokeWidth="12" strokeLinecap="round" />
@@ -119,112 +147,111 @@ function OvertimeCard({ board }) {
           {pct > 0.01 && (
             <path d={`M${start.x} ${start.y} A58 58 0 0 1 ${vPoint.x} ${vPoint.y}`} fill="none" stroke={arcColor} strokeWidth="12" strokeLinecap="round" />
           )}
-          <text x="75" y="76" textAnchor="middle" fontSize="24" fontWeight="800" fill="var(--n-900)">{pct.toFixed(1)}%</text>
         </svg>
-        <div className="kpi-sig-sub">{fmtHrs(hours)} OT hrs of {fmtHrs(totalHrs)} worked</div>
-      </div>
-    </div>
+      </Viz>
+    </SignalCard>
   );
 }
 
-// V21-22 - fraction, avg rate pill, bullet track.
-function HoursVsBudgetCard({ board }) {
-  const h = board?.hours_vs_budget;
-  const worked = h?.worked ?? 0;
-  const budgeted = h?.budgeted;
-  const pct = h?.pct;
-  const elapsedPct = board?.elapsed_pct;
-  const avg = board?.avg_rate;
-  if (budgeted == null) {
+// ── V29-16 Hours card - ONE UNIT, NO HYPOTHETICALS ────────────────
+// The card answers ONE question: how many hours are left to schedule.
+// Hero = hours remaining (in progress) OR hours over (closed/over).
+// Visual = ONE bar in hours: solid navy for hours worked, hatched blue
+// for hours remaining, red for the overrun past the end. Money is a
+// footer chip; blended rate is quiet right-aligned text.
+//
+// NOT ON THIS CARD (owner ruled confusing after testing): percent-of-plan,
+// planned-rate comparisons, rate-gap figures, or any second scenario.
+function HoursLeftCard({ board }) {
+  const budget = board?.period_budget || board?.range_budget;
+  const spent = board?.spent_to_date ?? 0;
+  const worked = board?.hours ?? 0;
+  const rate = board?.avg_rate;
+  const kind = board?.kind;
+  const dollarsLeft = budget != null && budget > 0 ? budget - spent : null;
+  // Blended hours-left = (budget - spent) / rate. Floored at 0.
+  const hoursLeft = (rate != null && rate > 0 && dollarsLeft != null)
+    ? Math.max(0, dollarsLeft / rate)
+    : null;
+  const isOver = dollarsLeft != null && dollarsLeft < 0;
+  const hoursOver = isOver && rate != null && rate > 0
+    ? Math.abs(dollarsLeft) / rate
+    : 0;
+  // Budgeted hours (for the bar denominator). Not surfaced as a
+  // separate figure - only the bar denominator.
+  const budgetedHours = (rate != null && rate > 0 && budget != null && budget > 0)
+    ? budget / rate
+    : null;
+
+  // Verdict: use board.verdict (spend-based) for the pill so cards align.
+  const verdict = board?.verdict;
+
+  if (budget == null || rate == null || rate <= 0) {
     return (
-      <div className="kpi-sig">
-        <Head eyebrow="HOURS VS BUDGET" stateLabel="—" stateTone="neutral" />
-        <div className="kpi-sig-body">
-          <div className="kpi-sig-v num">{fmtHrs(worked)}</div>
-          <div className="kpi-sig-sub">no budgeted-hours estimate</div>
-        </div>
-      </div>
+      <SignalCard wide>
+        <Head eyebrow="HOURS LEFT TO SCHEDULE" verdict={null} />
+        <Hero><span className="kpi-sig-hero-val num">{fmtHrs(worked)}</span></Hero>
+        <Sub><span className="kpi-sig-sub-mute">hours worked · no budget to compare</span></Sub>
+        <Viz />
+        <Footer />
+      </SignalCard>
     );
   }
-  const barPct = Math.max(0, Math.min(100, pct || 0));
-  const markPct = elapsedPct != null ? Math.max(0, Math.min(100, elapsedPct)) : null;
-  return (
-    <div className="kpi-sig">
-      <Head eyebrow="HOURS VS BUDGET" stateLabel="ON PACE" stateTone="neutral" />
-      <div className="kpi-sig-body">
-        <div className="kpi-sig-frac num">
-          <span className="kpi-sig-frac-n">{Math.round(worked)}</span>
-          <span className="kpi-sig-frac-of">of</span>
-          <span className="kpi-sig-frac-d">{budgeted}</span>
-        </div>
-        <div className="kpi-sig-sub">budgeted hours used</div>
-        {avg != null && <div className="kpi-sig-pill">avg rate <b>${avg.toFixed(2)}/hr</b></div>}
-        <div className="kpi-sig-bullet" role="img" aria-label={`Hours ${barPct.toFixed(0)}% of budgeted`}>
-          <span className="kpi-sig-bullet-f" style={{ width: `${barPct}%` }} />
-          {markPct != null && <span className="kpi-sig-bullet-m" style={{ left: `${markPct}%` }} />}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-// V21-23 + V29-8 - priced-of-total + tick row. Ticks omitted above
-// 13 weeks. Per-tick state: complete-priced = navy; any unpriced
-// worker-week in the week = amber; empty (no rows) = grey. Unpriced
-// weeks light up rather than only being stated in the count.
-function PayrollDataCard({ board }) {
-  const pd = board?.payroll_data;
-  const priced = pd?.priced_ww ?? 0;
-  const total = pd?.total_ww ?? 0;
-  const state = total === 0 ? "—"
-              : priced === total ? "FINAL"
-              : "PARTIAL";
-  const tone = state === "PARTIAL" ? "warn" : "neutral";
-  const weeks = board?.weeks || [];
-  const weeksCount = weeks.length;
-  const showTicks = weeksCount > 0 && weeksCount <= 13;
-  // Per-week status. Complete = every worker-week in the week is
-  // priced. Unpriced = >0 total_ww with unpriced_hrs > 0 or a
-  // partial/hours_only coverage. Empty = no worker-weeks in the week.
-  const tickState = weeks.map(w => {
-    const totalWw = w.total_ww || w.complete_ww || 0;
-    if (totalWw === 0) return "empty";
-    const unpricedHrs = w.unpriced_hrs || 0;
-    if (unpricedHrs > 0.004 || w.unapproved_flag) return "unpriced";
-    if (w.complete_ww === w.total_ww && w.total_ww > 0) return "priced";
-    return "unpriced";
-  });
+  const heroValue = isOver ? hoursOver : (hoursLeft ?? 0);
+  const heroSub = isOver
+    ? "beyond what the budget covers"
+    : (kind === "single_period_closed" ? "hours the period had left" : "you can still schedule this period");
+
+  // Bar geometry. Domain = max(budgetedHours, worked) so the overrun
+  // segment has room past the end when over.
+  const domain = Math.max(budgetedHours || 0, worked, 1);
+  const workedPct = Math.min(100, Math.max(0, (worked / domain) * 100));
+  const remainingHrs = Math.max(0, (budgetedHours || 0) - worked);
+  const remainingPct = Math.min(100 - workedPct, (remainingHrs / domain) * 100);
+  const overPct = isOver ? Math.min(100 - workedPct, (hoursOver / domain) * 100) : 0;
+
   return (
-    <div className="kpi-sig">
-      <Head eyebrow="PAYROLL DATA" stateLabel={state} stateTone={tone} />
-      <div className="kpi-sig-body">
-        <div className="kpi-sig-v num">{priced} of {total}</div>
-        <div className="kpi-sig-sub">worker-weeks priced</div>
-        {showTicks && (
-          <div
-            className="kpi-sig-ticks"
-            style={{ gridTemplateColumns: `repeat(${weeksCount}, minmax(0, 1fr))` }}
-            role="img"
-            aria-label={`${priced} of ${weeksCount} weeks priced`}
-          >
-            {tickState.map((st, i) => (
-              <span key={i} className={`kpi-sig-tick kpi-sig-tick-${st}`} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <SignalCard wide>
+      <Head eyebrow="HOURS LEFT TO SCHEDULE" verdict={verdict} />
+      <Hero>
+        <span className="kpi-sig-hero-val num">{fmtHrs(heroValue)}</span>
+      </Hero>
+      <Sub>{heroSub}</Sub>
+      <Viz>
+        <div className="kpi-sig-hbar" role="img" aria-label={`${fmtHrs(worked)} worked of ${fmtHrs(budgetedHours || 0)} budgeted`}>
+          <span className="kpi-sig-hbar-worked" style={{ width: `${workedPct}%` }} />
+          {!isOver && remainingPct > 0 && (
+            <span className="kpi-sig-hbar-left" style={{ left: `${workedPct}%`, width: `${remainingPct}%` }} />
+          )}
+          {isOver && overPct > 0 && (
+            <span className="kpi-sig-hbar-over" style={{ left: `${workedPct}%`, width: `${overPct}%` }} />
+          )}
+        </div>
+        <div className="kpi-sig-hbar-lab">
+          <span><b>{fmtHrs(worked)}</b>{" "}WORKED</span>
+          <span>{isOver ? <><b>{fmtHrs(hoursOver)}</b>{" "}OVER</> : <><b>{fmtHrs(remainingHrs)}</b>{" "}LEFT</>}</span>
+        </div>
+      </Viz>
+      <Footer>
+        <span className="kpi-sig-chip">
+          {isOver
+            ? <><b>{fmt$(Math.abs(dollarsLeft))}</b>{" "}over budget</>
+            : <><b>{fmt$(dollarsLeft ?? 0)}</b>{" "}of budget left</>}
+        </span>
+        <span className="kpi-sig-foot-rate">at {fmt$(rate)}/hr</span>
+      </Footer>
+    </SignalCard>
   );
 }
 
 export function SignalCards({ board }) {
   if (!board || board.applies === false) return null;
   return (
-    <div className="kpi-sigs">
+    <div className="kpi-sigs kpi-sigs-3">
       <OverUnderCard board={board} />
       <OvertimeCard board={board} />
-      <HoursVsBudgetCard board={board} />
-      <PayrollDataCard board={board} />
+      <HoursLeftCard board={board} />
     </div>
   );
 }
