@@ -2221,8 +2221,17 @@
 }
 .kpi-sig-sub-mute { color: var(--n-500); }
 /* V32-10 - Payroll action sub-line calls out the required action in
-   Rippling; amber tone signals the ask. */
+   Rippling; amber tone signals the ask. V33 P0 - the action moves to
+   its own line beneath the sub lane so it does not clip on a 294px
+   card. Wraps if the text is too long. */
 .kpi-sig-sub-action { color: #92580A; font-weight: 700; }
+.kpi-sig-action-line {
+  font-size: var(--kpi-t-label);
+  color: #92580A;
+  font-weight: 700;
+  margin-top: var(--kpi-sp-1);
+  line-height: 1.35;
+}
 
 /* V31 item 3 - FACTS ROW replaces the viz lane. Pinned to card foot
    above a hairline. n-up grid; every item is label + medium-size
@@ -2232,6 +2241,7 @@
   padding-top: var(--kpi-sp-3);
   border-top: 1px solid var(--n-100);
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--kpi-sp-3);
   flex: none;
 }
