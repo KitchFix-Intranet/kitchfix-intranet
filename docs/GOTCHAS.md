@@ -710,6 +710,21 @@ That means every surface inside those three pages resolves Mulish for body text 
 
 **Related:** PR-H1 (#689) removed JetBrains Mono from the entry-ledger rail; PR-H2 (#TBD) does the same on the FinalizeOverlay Pre-tax total. Both PRs left the workspace-vs-modal Mulish/Inter split intact because it is broader than either PR's scope.
 
+### The Ops Hub carries two toast primitives - deliberately, for now
+
+The Service Calendar owns one shared toast component at `src/app/service-calendar/toast/Toast.js` (introduced PR-K, 2026-08-18). It is the reference implementation for post-action confirmations across the SC surface: single shape, dark bottom-centre, icon-carried tier, auto-dismiss at 5s with pause-on-hover, Undo replaces Close on reversible actions, progress bar bulk-only.
+
+The Ops Hub and Financial pages continue to use the older `oh-toast` primitive defined at `src/app/ops/css/ops-shared.css:461-463` and consumed by:
+
+- `src/app/ops/page.js:148-149`
+- `src/app/financial/page.js:90`
+
+**This is a deliberate inconsistency, not an oversight.** Kevin ruled 2026-08-18: *"the pilots train on the Service Calendar within weeks and neither of those pages is in that path; widening this turns polish into a cross-module refactor with a much larger regression surface."*
+
+**Rule for future work:** when Financial or Ops gets a polish pass and their toasts come into scope, the SC `Toast` component is the reference implementation. Copy the shape, tokens (`--sc2-toast-*` in `src/app/tokens.css:456-459`), and behavior; do not build a third variant.
+
+**Related:** PR-K also retired three older SC-specific confirmation surfaces (`SubmissionToast` / `SaveConfirmation` / cream "No service recorded" block) - those are gone. Only `oh-toast` remains as the second primitive, and only outside SC.
+
 ---
 
 ## Service Calendar

@@ -563,11 +563,22 @@ function DayEntryV2({
     const literal = "Service cancelled - marked no service";
     const auditNote = trimmed ? `${trimmed}\n${literal}` : literal;
     setShowNoServiceConfirm(false);
-    // P3-B (2026-07-28): silentSuccess suppresses the parent's
-    // recorded-toast fire on success. No-service confirmation lives
-    // in this panel's inline justSaved screen + tile flip + ambient
-    // ring/queue updates (owner Ruling 5). No Handoff fires here.
-    const result = await onSave(day, entries, { noService: true, auditNote, silentSuccess: true });
+    // PR-K (2026-08-18): capture pre-mark actuals BEFORE the write
+    // clobbers them. Passed as opts.undoEntries so the parent's
+    // handleSave can wire Undo on the resulting toast. Undo re-POSTs
+    // through sc-submit-day (Kevin fence: reverse the action, not a
+    // client-side visual revert). silentSuccess retired; every save
+    // now fires one shared toast.
+    const undoEntries = [];
+    const preActual = day.actual || {};
+    for (const g of serviceGroups) {
+      for (const s of g.services) {
+        const v = preActual[s.colIndex];
+        if (v == null) continue;
+        undoEntries.push({ colIndex: s.colIndex, value: Number(v) || 0 });
+      }
+    }
+    const result = await onSave(day, entries, { noService: true, auditNote, undoEntries });
     if (result?.success) {
       if (result.queued) {
         const hasDraft = (notes || "").trim().length > 0;
@@ -578,8 +589,8 @@ function DayEntryV2({
           onClose?.();
         }
       } else {
-        setJustSaved(true);
         setNotes("");
+        onClose?.();
         // P3-B re-gate 5 fix 3 (2026-07-28, Ruling 5): commit the
         // no-service day to the session strip at zero units. The
         // Handoff sequence never fires for no-service (correct - no
@@ -1365,28 +1376,18 @@ function DayEntryV2({
   // Header nav - DayDetail day nav for prev/next.
   const showDayNav = onPrev || onNext;
 
-  // P3-B (2026-07-28): the justSaved success screen is RETIRED. The
-  // coordinator's session commit + workspace-level tile flip + the
-  // finalize timer (advance / close) carry the confirmation.
-  // executeConfirm no longer calls setJustSaved(true); the state
-  // remains only for legacy no-service path fallback
-  // (setJustSaved(true) at :438 in executeMarkNoService). No-service
-  // still fires its own confirmation via the panel inline state per
-  // owner Ruling 5.
-  if (justSaved) {
-    return (
-      <div className="sc-v2-entry sc-v2-entry--success" role="status" aria-live="polite">
-        <div className="sc-v2-entry-success-inner">
-          <div className="sc-v2-entry-success-check">✓</div>
-          <h3 className="sc-v2-entry-success-title">{feeNoDollar ? "Confirmed no service" : "No service recorded"}</h3>
-          <p className="sc-v2-entry-success-sub">{formatDate(day.date)}</p>
-          <div className="sc-v2-entry-success-actions">
-            <button ref={successPrimaryBtnRef} className="sc-btn sc-btn--outline" onClick={onClose}>Close</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // PR-K (2026-08-18): the cream "No service recorded" success block
+  // is retired. It was the third of the three duplicate SC confirmation
+  // shapes (SubmissionToast + SaveConfirmation + cream block) that
+  // Kevin's toast-system ruling collapses into one <Toast /> per action.
+  // No-service now fires the same shared toast via showToast at the
+  // executeMarkNoService success branch above, with an Undo action
+  // that re-POSTs pre-mark values through sc-submit-day.
+  //
+  // `justSaved` state is retained (no-op after PR-K) rather than
+  // deleted so the DiscardConfirm queued-save branch at :575 stays
+  // structurally untouched - that branch reads a truthy justSaved
+  // implicitly via handoff.commitSessionOnly + onClose.
 
   return (
     <div className={`sc-v2-entry${mobileBillOpen ? " sc-v2-entry--mobile-bill-open" : ""}`}>
