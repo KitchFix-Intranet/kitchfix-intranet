@@ -2335,7 +2335,12 @@
    dividers after the title and between every measure - the run-on
    look was these dividers being absent entirely. */
 /* V34 - strip centres vertically. Every child sits on one line so the
-   strip reads as a ticker instead of a table with stacked cells. */
+   strip reads as a ticker instead of a table with stacked cells.
+   V35-6 - overflow was hidden so the purple stripe would clip to the
+   rounded corner, but that also clipped the help popover into a 36px
+   clip box (the strip's height). Flip overflow to visible; the stripe
+   gets its own left-corner clip via border-radius on the ::before so
+   the corner stays clean without clipping children. */
 .kpi-cmp {
   display: flex; align-items: center;
   height: var(--kpi-row);
@@ -2344,14 +2349,17 @@
   border-radius: var(--kpi-card-r);
   box-shadow: var(--card-shadow);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
-/* V34 - explicit 4px stripe to match the signal card family. */
+/* V34 - explicit 4px stripe to match the signal card family.
+   V35-6 - stripe carries its own left-corner clip so the strip can
+   run overflow: visible without a squared purple edge. */
 .kpi-cmp::before {
   content: "";
   position: absolute; left: 0; top: 0; bottom: 0;
   width: 4px;
   background: var(--kpi-purple-600, #7A3E9D);
+  border-radius: var(--kpi-card-r) 0 0 var(--kpi-card-r);
 }
 .kpi-cmp-title {
   display: flex; align-items: center;
@@ -2426,8 +2434,10 @@
   cursor: pointer; flex: none;
 }
 .kpi-cmp-help:hover { border-color: var(--navy-700); color: var(--navy-700); }
+/* V35-6 - z-index 40 matches the app's other popovers and beats the
+   numbers-strip sticky headers below (which sit at 10-20). */
 .kpi-cmp-help-pop {
-  position: absolute; z-index: 30;
+  position: absolute; z-index: 40;
   top: calc(100% + 8px); right: 0;
   width: 360px;
   background: var(--surface-card);
