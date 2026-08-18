@@ -41,15 +41,21 @@
 
    S-3 flip: --kf-scale is set once here. Revert to 1 to restore
    pre-scale rendering exactly (the layer wiring test). */
-/* V33 item 2 - ONE shared keyboard focus ring across every
-   interactive KPI element. Prior state: only .kpi-bB declared one, so
-   every other button/link/chip fell back to browser default (which is
-   suppressed by many resets). Applies to all interactive descendants
-   of .kpi-app. */
-.kpi-app :focus-visible {
+/* V35-5 - ONE shared keyboard focus ring across every interactive
+   KPI element. Prior V33 attempt used `.kpi-app :focus-visible` with
+   a forced --kpi-ctl-r radius, so buttons that carry their own
+   radius (pills, chevrons, help disc) lost their shape when focused.
+   Scope the selector to real interactives via :is() and inherit the
+   target's own radius so the ring hugs whatever it wraps. The second
+   rule suppresses the outline for mouse-driven focus so click states
+   stay quiet. */
+.kpi-app :is(button, [role="button"], a, [tabindex="0"]):focus-visible {
   outline: 2px solid var(--navy-700);
   outline-offset: 2px;
-  border-radius: var(--kpi-ctl-r);
+  border-radius: inherit;
+}
+.kpi-app :is(button, [role="button"], a, [tabindex="0"]):focus:not(:focus-visible) {
+  outline: none;
 }
 
 .kpi-app {
@@ -1781,35 +1787,34 @@
   font-size: var(--kpi-size-caption); color: var(--n-800);
 }
 
-/* Story block - two panels (V8-8). V8-23: left panel sizes to its own
-   content; the two panels no longer bottom-align. A tall right panel
-   must never open a void in the left one. */
+/* V35-7 - the story block splits into two sibling CARDS that share
+   the signal-card skin (radius, border, shadow, pad). The .kpi-story
+   wrapper drops its own chrome and becomes a grid container with
+   --kpi-sp-3 gap between the two cards; each card sizes to its own
+   content so the spend card no longer stretches to the plot's height.
+   Nothing inside either panel changes. */
 .kpi-story {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.58fr);
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.6fr);
+  gap: var(--kpi-sp-3);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* V35-7 - card skin lives on each panel now, matches .kpi-sig. */
+.kpi-story-left,
+.kpi-story-right {
+  background: var(--surface-card);
   border: 1px solid var(--n-300);
   border-radius: var(--kpi-card-r);
   box-shadow: var(--card-shadow);
-  background: var(--surface-card);
-  overflow: hidden;
-}
-/* V30-3 - story panels use --kpi-card-pad (14.4). V31 item 6 -
-   story-right is a flex-column that lets the strip's plot GROW into
-   the panel's spare height (bottom-anchored). Story-left keeps
-   align-self: start so it sizes to the spend card content. */
-.kpi-story-left {
   padding: var(--kpi-card-pad);
-  border-right: 1px solid var(--n-200);
-  display: flex; flex-direction: column;
-  gap: var(--kpi-sp-3);
-  align-self: start;
-}
-.kpi-story-right {
-  padding: var(--kpi-card-pad);
-  display: flex; flex-direction: column;
   min-width: 0;
-  gap: var(--kpi-sp-1);
+  display: flex; flex-direction: column;
 }
+.kpi-story-left  { gap: var(--kpi-sp-3); align-self: start; }
+.kpi-story-right { gap: var(--kpi-sp-1); }
 /* V31 item 6 - the strip container (Tier A/B/C) fills the remaining
    height of story-right so spare height sits ABOVE the bars, not below
    the captions. Each strip's plot bottom-anchors and grows. */
@@ -2239,13 +2244,17 @@
   display: flex; align-items: center;
   flex: none;
 }
+/* V35-1 - card heroes drop one type step (t-hero -> t-value) so the
+   period budget on the story card is the only tier-1 number on the
+   page. Weight stays 800; --kpi-lane-hero stays 38 so the smaller
+   hero still centres in the same lane, hero-top parity holds. */
 .kpi-sig-hero-val {
-  font-size: var(--kpi-t-hero); font-weight: 800;
+  font-size: var(--kpi-t-value); font-weight: 800;
   color: var(--n-900); line-height: 1;
   white-space: nowrap; font-variant-numeric: var(--num-tabular);
-  letter-spacing: -0.018em;
+  letter-spacing: -0.01em;
 }
-.kpi-sig-hero-mute { color: var(--n-400); font-size: var(--kpi-t-hero); font-weight: 800; }
+.kpi-sig-hero-mute { color: var(--n-400); font-size: var(--kpi-t-value); font-weight: 800; }
 
 /* V34 - sub-line weight 500 (was 600). Supporting, not competing with
    the hero. */
@@ -2325,7 +2334,12 @@
    dividers after the title and between every measure - the run-on
    look was these dividers being absent entirely. */
 /* V34 - strip centres vertically. Every child sits on one line so the
-   strip reads as a ticker instead of a table with stacked cells. */
+   strip reads as a ticker instead of a table with stacked cells.
+   V35-6 - overflow was hidden so the purple stripe would clip to the
+   rounded corner, but that also clipped the help popover into a 36px
+   clip box (the strip's height). Flip overflow to visible; the stripe
+   gets its own left-corner clip via border-radius on the ::before so
+   the corner stays clean without clipping children. */
 .kpi-cmp {
   display: flex; align-items: center;
   height: var(--kpi-row);
@@ -2334,14 +2348,17 @@
   border-radius: var(--kpi-card-r);
   box-shadow: var(--card-shadow);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
-/* V34 - explicit 4px stripe to match the signal card family. */
+/* V34 - explicit 4px stripe to match the signal card family.
+   V35-6 - stripe carries its own left-corner clip so the strip can
+   run overflow: visible without a squared purple edge. */
 .kpi-cmp::before {
   content: "";
   position: absolute; left: 0; top: 0; bottom: 0;
   width: 4px;
   background: var(--kpi-purple-600, #7A3E9D);
+  border-radius: var(--kpi-card-r) 0 0 var(--kpi-card-r);
 }
 .kpi-cmp-title {
   display: flex; align-items: center;
@@ -2416,8 +2433,10 @@
   cursor: pointer; flex: none;
 }
 .kpi-cmp-help:hover { border-color: var(--navy-700); color: var(--navy-700); }
+/* V35-6 - z-index 40 matches the app's other popovers and beats the
+   numbers-strip sticky headers below (which sit at 10-20). */
 .kpi-cmp-help-pop {
-  position: absolute; z-index: 30;
+  position: absolute; z-index: 40;
   top: calc(100% + 8px); right: 0;
   width: 360px;
   background: var(--surface-card);
@@ -2454,7 +2473,8 @@
   font-variant-numeric: var(--num-tabular);
   color: var(--n-900); white-space: nowrap;
 }
-.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-hero); font-weight: 800; letter-spacing: -0.018em; line-height: 1; }
+/* V35-1 - hero ArrowFigure matches the new card-hero size (t-value). */
+.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-value); font-weight: 800; letter-spacing: -0.01em; line-height: 1; }
 /* V34 - inline ArrowFigure inside a fact value matches the surrounding
    fact size/weight (body/700), not the old medium/800. */
 .kpi-sig-arrfig-value { font-size: var(--kpi-t-body); font-weight: 700; letter-spacing: 0; line-height: 1; }
@@ -2581,8 +2601,8 @@
   .kpi-det-grp:last-child { border-bottom: 0; }
 }
 @media (max-width: 767px) {
+  /* V35-7 - two cards stack; wrapper's gap already spaces them. */
   .kpi-story { grid-template-columns: 1fr; }
-  .kpi-story-left { border-right: 0; border-bottom: 1px solid var(--n-200); }
   .kpi-wbars { grid-template-columns: repeat(2, 1fr); }
   .kpi-sigs { grid-template-columns: 1fr; }
   .kpi-det-grp-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2681,12 +2701,18 @@
 /* V33 item 2 - period band rows are expandable but had no hover; week
    rows already do. Match. */
 .kpi-tbl-band:hover > td { background: #DFE7F3; }
+/* V35-4 - chevron button was inert on hover (row background changed
+   but the actual click target gave no feedback). Match the treatment
+   .kpi-tbar-btn uses on hover: tint background, deepen text. */
 .kpi-tbl-bandbtn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   background: transparent; border: 0;
   color: inherit; font: inherit; font-weight: 800;
-  cursor: pointer; padding: 0;
+  cursor: pointer;
+  padding: var(--kpi-sp-1) var(--kpi-sp-2);
+  border-radius: var(--kpi-ctl-r);
 }
+.kpi-tbl-bandbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-bandsub {
   font-weight: 500; font-size: var(--kpi-t-label);
   color: var(--n-600); margin-left: var(--kpi-sp-3);
@@ -2699,12 +2725,17 @@
   font-weight: 600;
 }
 .kpi-tbl-week:hover > td { background: var(--n-50); }
+/* V35-4 - same hover as the band button; the week chevron opens the
+   worker table and needs the same "clickable" cue. */
 .kpi-tbl-weekbtn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   background: transparent; border: 0; color: inherit;
   font: inherit; font-weight: 600; cursor: pointer;
   width: 100%; text-align: left;
+  padding: var(--kpi-sp-1) var(--kpi-sp-2);
+  border-radius: var(--kpi-ctl-r);
 }
+.kpi-tbl-weekbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-chev {
   display: inline-block; width: 15px;
   color: var(--n-500); font-size: var(--kpi-size-caption);

@@ -243,7 +243,8 @@ async function probeCase(page, c) {
     log(`title weight = ${card.title_weight} (want 700)`, card.title_weight === "700");
     log(`pill  weight = ${card.pill_weight} (want 700)`, card.pill_weight === "700");
     log(`sub   weight = ${card.sub_weight} (want 500)`, card.sub_weight === "500");
-    log(`hero size    = ${card.hero_size} (want 25.2px)`, card.hero_size === "25.2px");
+    // V35-1 - card heroes dropped one step (t-hero -> t-value). 25.2 -> 18.
+    log(`hero size    = ${card.hero_size} (want 18px)`, card.hero_size === "18px");
     log(`hero weight  = ${card.hero_weight} (want 800)`, card.hero_weight === "800");
     for (let i = 0; i < card.lab_weights.length; i++) {
       log(`lab[${i}] weight = ${card.lab_weights[i]} (want 600)`, card.lab_weights[i] === "600");
