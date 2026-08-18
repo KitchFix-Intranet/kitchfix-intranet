@@ -618,8 +618,14 @@ export default function KpiLaborPage() {
       <div className="kpi-fresh-pop-sep" aria-hidden="true" />
       <div className="kpi-fresh-pop-row"><span>Orphan facts</span><b>{data?.unattributed?.length ?? 0}</b></div>
       <div className="kpi-fresh-pop-row"><span>Unmapped earning types</span><b>{data?.unmapped_names?.length ?? 0}</b></div>
-      <div className="kpi-fresh-pop-row"><span>Last derive</span><b>{data?.derive_freshness?.last_derive_at ? fmtTimestamp(data.derive_freshness.last_derive_at) : "—"}</b></div>
-      <div className="kpi-fresh-pop-row"><span>Last pay-seg walk</span><b>{data?.derive_freshness?.last_walk_at ? fmtTimestamp(data.derive_freshness.last_walk_at) : "—"}</b></div>
+      {/* V31 item 1 - plain-English labels; walk + derive run on ONE
+          nightly job so both timestamps land the same night. */}
+      <div className="kpi-fresh-pop-row"><span>Rippling data pulled</span><b>{data?.derive_freshness?.last_walk_at ? fmtTimestamp(data.derive_freshness.last_walk_at) : "—"}</b></div>
+      <div className="kpi-fresh-pop-row"><span>Dashboard figures rebuilt</span><b>{data?.derive_freshness?.last_derive_at ? fmtTimestamp(data.derive_freshness.last_derive_at) : "—"}</b></div>
+      <div className="kpi-fresh-pop-sep" aria-hidden="true" />
+      <div className="kpi-fresh-pop-contract">
+        Updates nightly around 2:00 AM CT. Hours land as timesheets are approved; dollars land when payroll processes, so the current week reads as partial until then.
+      </div>
     </div>
   ) : null;
 

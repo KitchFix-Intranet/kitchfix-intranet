@@ -396,7 +396,16 @@ export async function GET(request) {
       derive_freshness: {
         last_walk_at: freshness.last_walk_at,
         last_walk_ids_seen: freshness.last_walk_ids_seen,
-        last_derive_at: actualsRows[0]?.derived_at || null,
+        // V31 item 1 - MAX(derived_at) across in-scope rows. Derive is
+        // incremental (only rewrites rows whose inputs changed), so the
+        // FIRST row's timestamp reads as a five-day lag on settled
+        // weeks. Max reflects the most recent rebuild. No dedicated
+        // derive_runs table exists yet; when one lands, prefer its
+        // recorded run timestamp.
+        last_derive_at: actualsRows.reduce(
+          (max, r) => (r.derived_at && (!max || r.derived_at > max) ? r.derived_at : max),
+          null
+        ),
       },
       unmapped_names: unmapped.data || [],
       account_periods,
@@ -550,7 +559,12 @@ export async function GET(request) {
   const derive_freshness = {
     last_walk_at: freshness.last_walk_at,
     last_walk_ids_seen: freshness.last_walk_ids_seen,
-    last_derive_at: actuals.data[0]?.derived_at || null,
+    // V31 item 1 - MAX(derived_at) across in-scope rows. See aggregate
+    // path above for cause.
+    last_derive_at: (actuals.data || []).reduce(
+      (max, r) => (r.derived_at && (!max || r.derived_at > max) ? r.derived_at : max),
+      null
+    ),
   };
 
   const unmapped = await supa
