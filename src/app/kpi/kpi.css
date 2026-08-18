@@ -2185,14 +2185,21 @@
   flex-direction: column;
   min-width: 0;
 }
+/* V34 - explicit 4px stripe. --kpi-sp-1 renders 3.59px at kf-scale
+   0.9 and reads soft against the card edge; 4px is deliberate. Every
+   card must carry a kpi-sig-st-* class; the prior mechanism
+   (kpi-sig-lead / -attn) reached only the first card. */
 .kpi-sig::before {
   content: "";
   position: absolute; left: 0; top: 0; bottom: 0;
-  width: var(--kpi-sp-1);
+  width: 4px;
   background: var(--n-300);
 }
-.kpi-sig-lead-good::before { background: var(--green-500); }
-.kpi-sig-attn::before { background: var(--amber-600); }
+.kpi-sig-st-good::before    { background: var(--green-500); }
+.kpi-sig-st-warn::before    { background: var(--amber-600); }
+.kpi-sig-st-bad::before     { background: var(--red-500); }
+.kpi-sig-st-info::before    { background: var(--navy-700); }
+.kpi-sig-st-neutral::before { background: var(--n-300); }
 
 /* V29-19 shared lanes - fixed heights so the computed `top` of each
    lane is identical across every card in the row. */
@@ -2200,15 +2207,18 @@
   display: flex; justify-content: space-between; align-items: center;
   gap: var(--kpi-sp-2);
   height: var(--kpi-lane-head);
-  font-size: var(--kpi-t-label); letter-spacing: 0.08em;
-  color: var(--n-600); font-weight: 800;
   flex: none;
 }
+/* V34 - card title weight 700 (was 800). Half the board was 800 and
+   fought the hero for the eye; hero is now the only 800 on the card. */
 .kpi-sig-eyebrow {
+  font-size: var(--kpi-t-label); letter-spacing: 0.08em;
+  color: var(--n-500); font-weight: 700;
+  text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .kpi-sig-state {
-  font-size: var(--kpi-t-label); font-weight: 800;
+  font-size: var(--kpi-t-label); font-weight: 700;
   height: var(--kpi-lane-head);
   display: inline-flex; align-items: center;
   border-radius: var(--rad-pill);
@@ -2217,10 +2227,11 @@
   border: 1px solid var(--n-200);
   flex: none;
 }
-.kpi-sig-state-good { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
-.kpi-sig-state-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
-.kpi-sig-state-bad  { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
-.kpi-sig-state-neutral { background: var(--n-100); color: var(--n-600); border-color: var(--n-200); }
+.kpi-sig-state-good    { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
+.kpi-sig-state-warn    { background: var(--amber-100); color: var(--amber-600); border-color: #F3D9AE; }
+.kpi-sig-state-bad     { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
+.kpi-sig-state-info    { background: var(--navy-100);  color: var(--navy-700);  border-color: var(--navy-200); }
+.kpi-sig-state-neutral { background: var(--n-100);     color: var(--n-600);     border-color: var(--n-200); }
 
 .kpi-sig-hero-lane {
   height: var(--kpi-lane-hero);
@@ -2236,11 +2247,13 @@
 }
 .kpi-sig-hero-mute { color: var(--n-400); font-size: var(--kpi-t-hero); font-weight: 800; }
 
+/* V34 - sub-line weight 500 (was 600). Supporting, not competing with
+   the hero. */
 .kpi-sig-sub-lane {
   height: var(--kpi-lane-sub);
   margin-top: var(--kpi-sp-1);
   display: flex; align-items: center;
-  font-size: var(--kpi-t-meta); color: var(--n-600); font-weight: 600;
+  font-size: var(--kpi-t-meta); color: var(--n-500); font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   flex: none;
 }
@@ -2270,22 +2283,28 @@
   gap: var(--kpi-sp-3);
   flex: none;
 }
-.kpi-sig-fact { min-width: 0; }
+.kpi-sig-fact { min-width: 0; display: flex; flex-direction: column; }
+/* V34 - fact LABELS drop from 800 to 600. Half the board was 800
+   weight; this is most of it. */
 .kpi-sig-fact-lab {
-  font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.08em;
+  font-size: var(--kpi-t-label); font-weight: 600; letter-spacing: 0.06em;
   color: var(--n-500); text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* V34 - fact VALUES drop from medium/800/n-900 to body/700/n-800.
+   Tier 2 = body size. Signed values switch on -good / -warn / -bad. */
 .kpi-sig-fact-val {
-  font-size: var(--kpi-t-medium); font-weight: 800; letter-spacing: -0.005em;
-  color: var(--n-900); font-variant-numeric: var(--num-tabular);
+  font-size: var(--kpi-t-body); font-weight: 700; letter-spacing: 0;
+  color: var(--n-800); font-variant-numeric: var(--num-tabular);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: var(--kpi-sp-1);
+  margin-top: 1px;
 }
 .kpi-sig-fact-val-good { color: var(--green-700); }
-.kpi-sig-fact-val-warn { color: #92580A; }
+.kpi-sig-fact-val-warn { color: var(--amber-600); }
 .kpi-sig-fact-val-bad  { color: var(--red-700); }
-.kpi-sig-fact-val-mute { color: var(--n-400); }
+/* V34 - muted values keep --n-300 (V33 item 4d) and drop weight to
+   500 so a bare dash reads absent rather than announced. */
+.kpi-sig-fact-val-mute { color: var(--n-300); font-weight: 500; }
 .kpi-sig-fact-sub {
   font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500;
   letter-spacing: 0; text-transform: none;
@@ -2305,8 +2324,10 @@
    the same family). One row at --kpi-row (36 rendered) with hairline
    dividers after the title and between every measure - the run-on
    look was these dividers being absent entirely. */
+/* V34 - strip centres vertically. Every child sits on one line so the
+   strip reads as a ticker instead of a table with stacked cells. */
 .kpi-cmp {
-  display: flex; align-items: stretch;
+  display: flex; align-items: center;
   height: var(--kpi-row);
   background: var(--surface-card);
   border: 1px solid var(--n-300);
@@ -2315,10 +2336,11 @@
   position: relative;
   overflow: hidden;
 }
+/* V34 - explicit 4px stripe to match the signal card family. */
 .kpi-cmp::before {
   content: "";
   position: absolute; left: 0; top: 0; bottom: 0;
-  width: var(--kpi-sp-1);
+  width: 4px;
   background: var(--kpi-purple-600, #7A3E9D);
 }
 .kpi-cmp-title {
@@ -2327,9 +2349,10 @@
   border-right: 1px solid var(--n-200);
   flex: none;
 }
+/* V34 - title reads as a purple owner of its family, matches the stripe. */
 .kpi-cmp-title-lab {
-  font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.08em;
-  color: var(--n-500); text-transform: uppercase; white-space: nowrap;
+  font-size: var(--kpi-t-label); font-weight: 700; letter-spacing: 0.08em;
+  color: var(--kpi-purple-600); text-transform: uppercase; white-space: nowrap;
 }
 .kpi-cmp-items {
   flex: 1 1 auto;
@@ -2337,26 +2360,32 @@
   min-width: 0;
   align-items: center;
 }
+/* V34 - each item lays label + value out on ONE line, centred. Prior
+   `align-items: baseline` still stacked in reality because the two
+   children were separate rows underneath a wider flex-column. */
 .kpi-cmp-item {
   min-width: 0;
   padding: 0 var(--kpi-sp-3);
   border-right: 1px solid var(--n-200);
-  display: flex; align-items: baseline; gap: var(--kpi-sp-2);
+  display: flex; align-items: center; gap: var(--kpi-sp-2);
   height: 100%;
   overflow: hidden;
 }
 .kpi-cmp-item:last-child { border-right: 0; }
+/* V34 - item label weight 600, matches the fact-label tier. */
 .kpi-cmp-item-lab {
-  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 700;
-  letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* V34 - value matches fact-value tier: body / 700 / n-800. Tone
+   classes below switch to green / red when signed. */
 .kpi-cmp-item-val {
   font-size: var(--kpi-t-body); font-weight: 700;
-  color: var(--n-900);
+  color: var(--n-800);
   font-variant-numeric: var(--num-tabular);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  display: inline-flex; align-items: baseline; gap: var(--kpi-sp-1);
+  display: inline-flex; align-items: center; gap: var(--kpi-sp-1);
   margin-left: auto;
 }
 .kpi-cmp-item-val-good { color: var(--green-700); }
@@ -2425,8 +2454,10 @@
   font-variant-numeric: var(--num-tabular);
   color: var(--n-900); white-space: nowrap;
 }
-.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-hero);   font-weight: 800; letter-spacing: -0.018em; line-height: 1; }
-.kpi-sig-arrfig-value { font-size: var(--kpi-t-medium); font-weight: 800; letter-spacing: -0.005em; line-height: 1; }
+.kpi-sig-arrfig-hero  { font-size: var(--kpi-t-hero); font-weight: 800; letter-spacing: -0.018em; line-height: 1; }
+/* V34 - inline ArrowFigure inside a fact value matches the surrounding
+   fact size/weight (body/700), not the old medium/800. */
+.kpi-sig-arrfig-value { font-size: var(--kpi-t-body); font-weight: 700; letter-spacing: 0; line-height: 1; }
 /* V30-1 R3 - arrow is text inside a number; inherits the number's size
    and weight. */
 .kpi-sig-arrfig-arrow { font-size: 1em; }
@@ -2434,8 +2465,11 @@
 .kpi-sig-arrfig-bad   { color: var(--red-700); }
 
 /* V31 item 3 - OT hero turns amber past watch, red at alarm. Colour
-   is driven by the state pill's config (never hardcoded). */
-.kpi-sig-hero-warn { color: #92580A; }
+   is driven by the state pill's config (never hardcoded). V34 - adds
+   the green -good class beside the existing -warn / -bad so the hero
+   can carry the same three-tone language every fact and pill uses. */
+.kpi-sig-hero-good { color: var(--green-700); }
+.kpi-sig-hero-warn { color: var(--amber-600); }
 .kpi-sig-hero-bad  { color: var(--red-700); }
 
 /* Details strip (V8-17) - one bordered strip, six divided cells. */
