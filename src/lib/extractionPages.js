@@ -1,13 +1,13 @@
 // ══════════════════════════════════════════════════════════════════════════
-// Shared helper: download an invoice PDF from Drive and turn it into the
-// { pages } array shape that extractAndStoreLineItems expects.
+// Shared helper: fetch an invoice PDF and turn it into the { pages } array
+// shape that extractAndStoreLineItems expects.
 //
-// Extracted verbatim from scripts/_sweep_failed_invoice_reextraction.mjs
+// Extracted from scripts/_sweep_failed_invoice_reextraction.mjs
 // (2026-08-17) as part of A1 (feat/li-a1-durable-extraction). The sweep
 // script had this inline; the worker at /api/cron/extract-line-items
 // needs the same behavior, and copying the code twice invites drift.
 //
-// The pattern:
+// ─── The pattern ─────────────────────────────────────────────────────────
 //   1. Parse the Drive fileId from the URL (or raw ID).
 //   2. Download bytes via the service account (drive.readonly scope).
 //   3. Parse with pdf-lib and pull the DCT/CCITT-encoded image XObject
@@ -16,10 +16,72 @@
 //      largest by encoded byte count.
 //   4. Return the base64 data URLs in the shape Claude wants.
 //
-// This is the raw path only. drive_urls[0] is the STAMPED PDF (photo +
-// GL-coding summary page sent to bill.com); passing that to Claude
-// causes the summary page to be misread as line items. Callers must
-// hand this function the raw_drive_url or a specific unstamped URL.
+// ─── Answers to A1 Correction 2 (source-of-truth) ────────────────────────
+//
+// Q1: raw_drive_url vs drive_urls?
+//   ALWAYS raw_drive_url. `drive_urls[0]` is the STAMPED PDF: photo pages
+//   + KitchFix's GL-coding summary appended (sent to Bill.com). Passing
+//   the stamped copy to Claude causes the summary page to be misread as
+//   invoice line items (there is no rule in EXTRACTION_PROMPT telling
+//   the model to skip a KitchFix summary; it would happily emit our own
+//   GL codes as line rows).
+//   Fallback: 1,163 of 1,164 live invoices have a raw copy (2026-08-18);
+//   the one that does not (STL-MO Kuna Foodservice 2026-07-22, uuid
+//   38f757e5-cd20-4c0f-9eb1-a67e4125892c) lands 'failed' with cause
+//   "raw_drive_url missing - cannot re-extract" at the worker (see
+//   route.js line ~201) and stays terminal until an operator manually
+//   re-runs the browser path.
+//
+// Q2: Effective width + quality?
+//   1200px wide JPEG at quality 0.85, exactly matching InvoiceTool's
+//   toDataURL parameters (InvoiceTool.js:523-532). The archived raw PDF
+//   is BUILT from those exact JPEGs - createRawInvoicePDF in
+//   stampInvoice.js:319-386 embeds the base64 image bytes verbatim via
+//   pdf-lib's embedJpg with NO re-encoding. There is no detail above
+//   1200px in the file to recover; this helper extracts those same
+//   bytes back out unchanged. Byte-level parity confirmed for control
+//   0d5ae028 (74-line Sysco): pages 249KB/217KB/227KB/230KB/185KB - all
+//   inside the 180-250KB envelope produced by canvas.toDataURL("image/jpeg", 0.85)
+//   at 1200px wide.
+//
+// Q3: Rotation handling?
+//   Returns rotation: 0 for every extracted page. This does NOT
+//   introduce drift because the pre-A1 extraction path also ignored
+//   rotation - extractAndStoreLineItems (invoiceActions.js:1451-1456)
+//   builds imageBlocks from `page.data` only and never applies the
+//   rotation flag. The rotation is a display-time and stamping-time
+//   concern, and Claude Sonnet's vision handles sideways receipts
+//   well enough that it has never been surfaced as a defect. If a
+//   future operator-side rotation-baking landed, that same value would
+//   flow through this path unchanged. Neither double-applied nor
+//   dropped: never applied at all, matching pre-PR behavior.
+//
+// Q4: Control-invoice comparison (2026-08-18, live extract vs DB):
+//   Control: 0d5ae028-4401-4ff3-9e0e-d286b7d4e770 (STL-FL Sysco
+//   invoice 532448972, 2026-07-20, 74 line items, 5 raw pages).
+//   New path line count: 74 (identical). 24 field diffs across 74*14=1036
+//   compared fields (2.3%), all in the model's known-stochastic ranges:
+//     - pack_size digit-splitting on 6 dense lines
+//       (baseline "2SCS 45LB" vs new "45LB"; "1/15 DZ" vs "15 DZ" etc.)
+//     - uom_raw single-char boundary ("S" vs "1S")
+//     - 2 category re-classifications (produce vs beverage - lime juice,
+//       lemon juice; smallwares vs supplies on line 66)
+//     - line 7 zero-quantity NULL-vs-0 (script comparison artifact,
+//       not a data drift - baseline stores 0 as fallback, new returns null
+//       from Claude and the derived-column layer would fill).
+//   No line missing. No line spurious. Same 74 items in the same order.
+//   This is expected model variance on a re-run, not a pipeline drift.
+//
+// ─── Architectural note for Phase B ──────────────────────────────────────
+//
+// Phase B adds a SECOND page source: the operator's original upload,
+// preserved in Supabase Storage (raw JPEG frames, no PDF wrap). The
+// interface below is designed so that becomes another provider, not a
+// rewrite. downloadAndExtractPages takes a URL (Drive today; may be a
+// Supabase storage URL tomorrow) and returns the same { pages,
+// pdfPageCount, fileBytes } shape. Drive is not hardcoded as the only
+// possible origin - it's the only provider we have wiring for now.
+// The Supabase-side path is NOT built in this PR; keep the seam.
 // ══════════════════════════════════════════════════════════════════════════
 
 import { PDFDocument, PDFName } from "pdf-lib";

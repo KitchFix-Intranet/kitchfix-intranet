@@ -11,13 +11,70 @@
 // target set every time and never touches a row that already has a
 // terminal state.
 //
-// ─── Target set (verified against live PG on 2026-08-17) ────────────────
+// ─── Target set (verified against live PG on 2026-08-18) ────────────────
+//
+// The unfiltered "no terminal outcome" backlog:
 //   ai_scan_status IS NULL           : 552
 //   ai_scan_status = 'failed'        :  65
 //   ai_scan_status = 'pending'       :   7  (legacy pre-migration status)
 //   ai_scan_status = 'pg_failed'     :   9  (special handling - see below)
 //                                    ---
 //                                       633
+//
+// The unfiltered 633 is NOT what we queue. Composition breakdown from
+// the 2026-08-18 A1-corrections audit:
+//
+//   cohort               | invoices | already have line items
+//   ---------------------+----------+------------------------
+//   live, NULL           |    164   |        37
+//   live, failed         |     52   |         0
+//   live, pending        |      0   |         0
+//   live, pg_failed      |      9   |         0
+//   historical, NULL     |    388   |       330  (4,421 total ai_line_items rows)
+//   historical, failed   |     13   |         0
+//   historical, pending  |      7   |         1
+//   historical, pg_failed|      0   |         0
+//
+// Historical rows have NO unique protection on ai_line_items (the dedup
+// index `UNIQUE (invoice_uuid, line_num) WHERE is_historical = false`
+// exempts them by design). Queuing the 330 historical rows that already
+// hold 4,421 line items would silently duplicate every one of those
+// rows. The historical corpus is Phase F (ruling R6 in the A1 spec):
+// DELETE-then-INSERT with dedup protection, gated on quality work,
+// out of scope here.
+//
+// Live rows with existing line items (37 of the live NULL bucket) are
+// covered by the live unique index - they'd throw 23505 as pg_failed
+// noise. Still not what we want.
+//
+// Credit memos (type = 'credit') are not invoices and must never be
+// line-extracted. Also excluded.
+//
+// So we compute an ELIGIBLE subset from the NULL + failed + pending
+// buckets (pg_failed remains its own hand-processed track):
+//
+//   is_historical = false
+//   AND type = 'invoice'
+//   AND raw_drive_url IS NOT NULL   (worker can't extract without a source PDF)
+//   AND status <> 'deleted'
+//   AND NO existing rows in ai_line_items for that submission
+//
+// Live PG count of the eligible set (2026-08-18):
+//
+//   Eligible NULL:    115
+//   Eligible failed:   45
+//   Eligible pending:   0
+//   Eligible TOTAL:   160
+//
+// Excluded breakdown (from combined = NULL + failed + pending = 624):
+//   historical:             408
+//   live but already has LI: 37
+//   type != invoice:         17
+//   no raw_drive_url:         1
+//   status = deleted:         1
+//   TOTAL excluded:         464
+//
+// 160 sits inside Chat-Claude's 155-180 forecast band, within noise.
 //
 // ─── pg_failed handling ─────────────────────────────────────────────────
 //
@@ -149,7 +206,7 @@ async function pageThrough({ isNull, eq }) {
   while (true) {
     let q = supa
       .from("invoice_submissions")
-      .select("id, client_uuid, submitted_at, account_key, vendor_name, invoice_number, invoice_date, raw_drive_url, ai_scan_status, ai_scan_error, ai_scan_attempt")
+      .select("id, client_uuid, submitted_at, account_key, vendor_name, invoice_number, invoice_date, raw_drive_url, ai_scan_status, ai_scan_error, ai_scan_attempt, is_historical, type, status")
       .range(from, from + step - 1)
       .order("submitted_at", { ascending: false });
     if (isNull) q = q.is("ai_scan_status", null);
@@ -161,6 +218,61 @@ async function pageThrough({ isNull, eq }) {
     from += step;
   }
   return out;
+}
+
+// ── Build the set of invoice_uuids that already have ai_line_items ────
+// Returns a Set of submission.id values. Batched in small IN() queries
+// because PostgREST URL length limits kick in around 100 UUIDs per IN.
+async function buildInvoicesWithLineItems(subIds) {
+  const set = new Set();
+  const batchSize = 50;
+  const step = 1000;
+  for (let i = 0; i < subIds.length; i += batchSize) {
+    const batch = subIds.slice(i, i + batchSize);
+    let from = 0;
+    while (true) {
+      const { data, error } = await supa
+        .from("ai_line_items")
+        .select("invoice_uuid")
+        .in("invoice_uuid", batch)
+        .range(from, from + step - 1);
+      if (error) throw new Error(`ai_line_items query: ${error.message}`);
+      if (!data || data.length === 0) break;
+      for (const row of data) set.add(row.invoice_uuid);
+      if (data.length < step) break;
+      from += step;
+    }
+  }
+  return set;
+}
+
+// ── Apply the corrected eligibility filter (per A1 corrections spec) ──
+// Excludes:
+//   is_historical = true                (Phase F, not this backfill)
+//   type != 'invoice'                   (credit memos, cc receipts)
+//   raw_drive_url missing               (worker cannot re-extract)
+//   status = 'deleted'                  (submission tombstoned)
+//   row already has ai_line_items rows  (would duplicate on live via 23505,
+//                                        or SILENTLY on historical with no
+//                                        unique protection)
+function applyEligibilityFilter(rows, invoicesWithLI) {
+  const excluded = {
+    historical: 0,
+    hasLineItems: 0,
+    notInvoice: 0,
+    noRawDriveUrl: 0,
+    deleted: 0,
+  };
+  const eligible = [];
+  for (const r of rows) {
+    if (r.is_historical) { excluded.historical++; continue; }
+    if (invoicesWithLI.has(r.id)) { excluded.hasLineItems++; continue; }
+    if ((r.type || "invoice") !== "invoice") { excluded.notInvoice++; continue; }
+    if (!r.raw_drive_url) { excluded.noRawDriveUrl++; continue; }
+    if (r.status === "deleted") { excluded.deleted++; continue; }
+    eligible.push(r);
+  }
+  return { eligible, excluded };
 }
 
 // ── Compute a staggered next_attempt_at ──
@@ -252,6 +364,23 @@ async function main() {
     seen.add(r.client_uuid);
     return true;
   });
+
+  // ── Apply eligibility filter ───────────────────────────────────────────
+  // Look up which of these submissions already carry ai_line_items rows.
+  // We batch a single set of ids for the whole combined pool because
+  // the exclusion is per-row.
+  console.log(`[backfill] resolving existing ai_line_items for ${combined.length} candidate submissions...`);
+  const withLI = await buildInvoicesWithLineItems(combined.map((r) => r.id));
+  const { eligible, excluded } = applyEligibilityFilter(combined, withLI);
+  console.log(`[backfill] eligibility filter:`);
+  console.log(`[backfill]   excluded historical:              ${excluded.historical}`);
+  console.log(`[backfill]   excluded already-has-line-items:  ${excluded.hasLineItems}`);
+  console.log(`[backfill]   excluded type != invoice:         ${excluded.notInvoice}`);
+  console.log(`[backfill]   excluded no raw_drive_url:        ${excluded.noRawDriveUrl}`);
+  console.log(`[backfill]   excluded status = deleted:        ${excluded.deleted}`);
+  console.log(`[backfill]   ELIGIBLE:                         ${eligible.length}`);
+
+  combined = eligible;
 
   if (LIMIT > 0) {
     combined = combined.slice(0, LIMIT);

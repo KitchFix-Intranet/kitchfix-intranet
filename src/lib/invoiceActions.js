@@ -1767,12 +1767,46 @@ const RETRYABLE_SOON_BACKOFF_MIN = [1, 5, 15, 60];
 // next_attempt_at until the balance is restored.
 const RETRYABLE_LATER_BACKOFF_MIN = [30, 60, 120, 120];
 
+// Elapsed-time ceiling on retryable-later. Without a ceiling, an invoice
+// that hits a persistently billing-shaped error every 2 hours retries
+// forever with no terminal state - invisible infinite churn. 7 days is
+// well past any observed Anthropic billing outage (2026-07-02 was
+// hours-scale) and past any human-scale "we forgot to top up" window.
+// After 7 days the row lands in 'failed' terminal with a distinct cause
+// so A3's digest surfaces it as a specific class rather than blending
+// into general failure noise.
+const RETRYABLE_LATER_CEILING_MS = 7 * 24 * 60 * 60 * 1000;
+export const RETRYABLE_LATER_TERMINAL_CAUSE = "retryable-later-ceiling: 7 days of billing/quota retries elapsed without recovery";
+
 export function classifyExtractionFailure(cause) {
   const c = String(cause || "");
   const lower = c.toLowerCase();
 
   // Terminal cases FIRST - a "credit balance" string inside a metadata-
   // routing failure should stay terminal.
+  //
+  // "did not resolve to a vendor_id" is kept terminal deliberately. Argued:
+  //   - `learnVendorAlias` is live and has added 24 aliases so far (most
+  //     recent 2026-08-11). An invoice that cannot resolve today could
+  //     resolve next week once a matching alias is learned, so "never
+  //     comes back on its own" - the definition of terminal - is not
+  //     strictly true.
+  //   - However: zero occurrences of this cause exist in production
+  //     history. The vendor-resolution path throws only when the alias
+  //     set has zero match AND the fuzzy match also misses. In practice
+  //     that happens only for genuinely new vendors, and the operator's
+  //     visible-terminal-failed state is exactly what surfaces the case
+  //     to the human who can (a) add the vendor to the master, or (b)
+  //     add the alias by hand. Silent retryable-later would delay that
+  //     surfacing by hours/days without changing the outcome.
+  //   - The alternative (moving it to retryable-later) would cost a
+  //     small number of tokens per unresolved invoice per retry cycle
+  //     and would push the operator-visible failure downstream. On zero
+  //     historical occurrences the upside is theoretical; the downside
+  //     is real (hidden churn on the exact class where a human decision
+  //     is required).
+  //   - Ruling: TERMINAL. Reconsider if we see this cause in production
+  //     more than 3x in a rolling 30-day window.
   if (
     lower.includes("metadata.account missing") ||
     lower.includes("did not resolve to a vendor_id") ||
@@ -1842,10 +1876,17 @@ export function classifyExtractionFailure(cause) {
   return { class: "retryable-soon", reason: "unknown" };
 }
 
-// Given a failure class and the current attempt count (1-indexed, i.e.,
-// the attempt that just failed), return the wall-clock next_attempt_at
+// Given a failure class, the current attempt count (1-indexed, i.e., the
+// attempt that just failed), and OPTIONALLY the first-attempted-at wall-
+// clock for retryable-later ceiling enforcement, return the next_attempt_at
 // timestamp. Returns null when the worker should mark the row terminal.
-export function nextAttemptAt(failureClass, attemptJustFailed, now = new Date()) {
+//
+// `firstAttemptedAt` is used ONLY by retryable-later. Callers should pass
+// the invoice_submissions.submitted_at (or the first ai_scan tick that
+// hit this row - whichever is earlier and known). If omitted, retryable-
+// later has no ceiling (backwards-compatible for existing call sites
+// that predate the elapsed-time guard).
+export function nextAttemptAt(failureClass, attemptJustFailed, now = new Date(), firstAttemptedAt = null) {
   if (failureClass === "terminal") return null;
 
   if (failureClass === "retryable-soon") {
@@ -1857,7 +1898,18 @@ export function nextAttemptAt(failureClass, attemptJustFailed, now = new Date())
   }
 
   if (failureClass === "retryable-later") {
-    // Not attempt-capped. Use a monotonically-increasing delay bounded
+    // Elapsed-time ceiling. Without it, a persistently billing-shaped
+    // error retries forever with no terminal state. See
+    // RETRYABLE_LATER_CEILING_MS above for the rationale.
+    if (firstAttemptedAt) {
+      const firstAtMs = firstAttemptedAt instanceof Date
+        ? firstAttemptedAt.getTime()
+        : new Date(firstAttemptedAt).getTime();
+      if (!Number.isNaN(firstAtMs) && (now.getTime() - firstAtMs) >= RETRYABLE_LATER_CEILING_MS) {
+        return null;
+      }
+    }
+    // Below the ceiling: apply a monotonically-increasing delay bounded
     // at 2 hours. attemptJustFailed indexes into the later schedule
     // but never exhausts it.
     const idx = Math.min(attemptJustFailed - 1, RETRYABLE_LATER_BACKOFF_MIN.length - 1);
@@ -1867,6 +1919,19 @@ export function nextAttemptAt(failureClass, attemptJustFailed, now = new Date())
 
   // Unknown class - treat as terminal so we don't loop forever.
   return null;
+}
+
+// Callers use this to distinguish "hit the retryable-later ceiling"
+// from other terminal cases so the row can land with the specific
+// RETRYABLE_LATER_TERMINAL_CAUSE string (surfaced by A3's digest).
+export function isRetryableLaterCeilingHit(failureClass, firstAttemptedAt, now = new Date()) {
+  if (failureClass !== "retryable-later") return false;
+  if (!firstAttemptedAt) return false;
+  const firstAtMs = firstAttemptedAt instanceof Date
+    ? firstAttemptedAt.getTime()
+    : new Date(firstAttemptedAt).getTime();
+  if (Number.isNaN(firstAtMs)) return false;
+  return (now.getTime() - firstAtMs) >= RETRYABLE_LATER_CEILING_MS;
 }
 
 // =============================================================================

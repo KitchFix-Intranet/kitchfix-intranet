@@ -82,7 +82,9 @@ import { extractAndStoreLineItems } from "@/lib/invoiceActions";
 import {
   classifyExtractionFailure,
   nextAttemptAt,
+  isRetryableLaterCeilingHit,
   EXTRACTION_MAX_ATTEMPTS,
+  RETRYABLE_LATER_TERMINAL_CAUSE,
 } from "@/lib/invoiceActions";
 import { updateInvoiceFields } from "@/lib/dataStore";
 import { downloadAndExtractPages } from "@/lib/extractionPages";
@@ -183,9 +185,11 @@ export async function GET(request) {
       //    it (kept the function payload minimal so a schema change on
       //    invoice_submissions doesn't force a function-signature change);
       //    a targeted read here is one round-trip.
+      // submitted_at threads through to nextAttemptAt so the
+      // retryable-later ceiling has a first-attempt anchor.
       const { data: sub, error: subErr } = await supabase
         .from("invoice_submissions")
-        .select("raw_drive_url, invoice_number, invoice_date, type")
+        .select("raw_drive_url, invoice_number, invoice_date, type, submitted_at")
         .eq("client_uuid", clientUuid)
         .maybeSingle();
       if (subErr || !sub) {
@@ -214,11 +218,13 @@ export async function GET(request) {
         summary.driveErrors++;
         const cause = dlErr || "no extractable pages in PDF";
         const cls = classifyExtractionFailure(cause);
-        const naa = nextAttemptAt(cls.class, claim.ai_scan_attempt);
+        const naa = nextAttemptAt(cls.class, claim.ai_scan_attempt, new Date(), sub.submitted_at);
         if (naa === null) {
-          perRow.outcome = "drive_terminal";
-          perRow.error = cause;
-          await releaseAsFailed(supabase, clientUuid, cause, claim.ai_scan_attempt);
+          const ceilingHit = isRetryableLaterCeilingHit(cls.class, sub.submitted_at);
+          const landingCause = ceilingHit ? `${RETRYABLE_LATER_TERMINAL_CAUSE} (last: ${cause})` : cause;
+          perRow.outcome = ceilingHit ? "retryable_later_ceiling" : "drive_terminal";
+          perRow.error = landingCause;
+          await releaseAsFailed(supabase, clientUuid, landingCause, claim.ai_scan_attempt);
           summary.terminal++;
         } else {
           perRow.outcome = "drive_retry";
@@ -250,11 +256,13 @@ export async function GET(request) {
         // threw). Treat as retryable-soon under the attempt ceiling.
         const cause = `worker: extractAndStoreLineItems threw: ${throwErr.message}`;
         const cls = classifyExtractionFailure(cause);
-        const naa = nextAttemptAt(cls.class, claim.ai_scan_attempt);
+        const naa = nextAttemptAt(cls.class, claim.ai_scan_attempt, new Date(), sub.submitted_at);
         if (naa === null) {
-          perRow.outcome = "worker_throw_terminal";
-          perRow.error = cause;
-          await releaseAsFailed(supabase, clientUuid, cause, claim.ai_scan_attempt);
+          const ceilingHit = isRetryableLaterCeilingHit(cls.class, sub.submitted_at);
+          const landingCause = ceilingHit ? `${RETRYABLE_LATER_TERMINAL_CAUSE} (last: ${cause})` : cause;
+          perRow.outcome = ceilingHit ? "retryable_later_ceiling" : "worker_throw_terminal";
+          perRow.error = landingCause;
+          await releaseAsFailed(supabase, clientUuid, landingCause, claim.ai_scan_attempt);
           summary.terminal++;
         } else {
           perRow.outcome = "worker_throw_retry";
@@ -302,19 +310,37 @@ export async function GET(request) {
         // Classify and decide retry vs terminal.
         const cause = post?.ai_scan_error || "unknown (ai_scan_error null)";
         const cls = classifyExtractionFailure(cause);
-        const naa = nextAttemptAt(cls.class, claim.ai_scan_attempt);
+        const naa = nextAttemptAt(cls.class, claim.ai_scan_attempt, new Date(), sub.submitted_at);
         if (naa === null) {
-          // Terminal - already at 'failed', just release the lease and
-          // clear next_attempt_at so it's out of the queue index.
-          perRow.outcome = "terminal";
-          perRow.error = cause;
-          perRow.class = cls.class;
-          await updateInvoiceFields(clientUuid, {
-            aiScanClaimedAt: null,
-            aiScanClaimedBy: null,
-            aiScanNextAttemptAt: null,
-          }, { module: "ops" });
-          summary.terminal++;
+          const ceilingHit = isRetryableLaterCeilingHit(cls.class, sub.submitted_at);
+          if (ceilingHit) {
+            // retryable-later ceiling hit - rewrite the cause with the
+            // distinct terminal marker so A3's digest can separate this
+            // from ordinary terminal failures.
+            const landingCause = `${RETRYABLE_LATER_TERMINAL_CAUSE} (last: ${cause})`;
+            perRow.outcome = "retryable_later_ceiling";
+            perRow.error = landingCause;
+            perRow.class = cls.class;
+            await updateInvoiceFields(clientUuid, {
+              aiScanError: landingCause,
+              aiScanClaimedAt: null,
+              aiScanClaimedBy: null,
+              aiScanNextAttemptAt: null,
+            }, { module: "ops" });
+            summary.terminal++;
+          } else {
+            // Terminal - already at 'failed', just release the lease and
+            // clear next_attempt_at so it's out of the queue index.
+            perRow.outcome = "terminal";
+            perRow.error = cause;
+            perRow.class = cls.class;
+            await updateInvoiceFields(clientUuid, {
+              aiScanClaimedAt: null,
+              aiScanClaimedBy: null,
+              aiScanNextAttemptAt: null,
+            }, { module: "ops" });
+            summary.terminal++;
+          }
         } else {
           // Retry - flip 'failed' back to 'queued' with backoff so the
           // eligibility predicate in get_extraction_claims picks it up.
