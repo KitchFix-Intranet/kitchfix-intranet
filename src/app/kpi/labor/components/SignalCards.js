@@ -350,7 +350,11 @@ function PayrollDataCard({ board, freshness }) {
           value: hasUnapproved ? (willRise != null ? `~ ${fmt$(willRise)}` : "—") : "none",
           tone: hasUnapproved ? "warn" : "good",
         },
-        { label: "Weeks affected", value: unapprovedWeeks > 0 ? `${unapprovedWeeks}` : "—", muted: unapprovedWeeks === 0 },
+        // V34 - same "none @ good" pattern as unapproved / will rise so a
+        // closed period never renders an em-dash on a payroll fact.
+        { label: "Weeks affected",
+          value: unapprovedWeeks > 0 ? `${unapprovedWeeks}` : "none",
+          tone: unapprovedWeeks > 0 ? "warn" : "good" },
         { label: "Last pulled", value: lastPulled },
       ]} />
     </SignalCard>
