@@ -218,7 +218,7 @@ function TierAStrip({ board }) {
       {tgtFrac != null && (
         <span
           className="kpi-tierA-tgt"
-          style={{ top: `calc(var(--kpi-space-3) + ${1 - tgtFrac} * var(--kpi-plot-a))` }}
+          style={{ top: `calc(var(--kpi-sp-3) + ${1 - tgtFrac} * var(--kpi-h-plot))` }}
           aria-hidden="true"
         />
       )}
