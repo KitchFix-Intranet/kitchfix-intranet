@@ -2708,7 +2708,8 @@
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   background: transparent; border: 0;
   color: inherit; font: inherit; font-weight: 800;
-  cursor: pointer; padding: 2px 6px;
+  cursor: pointer;
+  padding: var(--kpi-sp-1) var(--kpi-sp-2);
   border-radius: var(--kpi-ctl-r);
 }
 .kpi-tbl-bandbtn:hover { background: var(--n-100); color: var(--n-800); }
@@ -2731,7 +2732,8 @@
   background: transparent; border: 0; color: inherit;
   font: inherit; font-weight: 600; cursor: pointer;
   width: 100%; text-align: left;
-  padding: 2px 6px; border-radius: var(--kpi-ctl-r);
+  padding: var(--kpi-sp-1) var(--kpi-sp-2);
+  border-radius: var(--kpi-ctl-r);
 }
 .kpi-tbl-weekbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-chev {

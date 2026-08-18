@@ -121,12 +121,15 @@ const PROBE_HTML = `
       </div>
     </div>
 
-    <!-- card radii (V30-3 named cards only: story, spend-budget,
-         spend-cell, sig, det, tbl-wrap, gcard). .kpi-note-info is a
-         banner with an intentional partial-corner radius and is not in
-         the V30-3 card list. -->
+    <!-- card radii (V35-7 - .kpi-story split; the wrapper is no
+         longer a card, the two children (.kpi-story-left / -right)
+         carry the shared skin). Named cards: story-left / story-right
+         / spend-budget / spend-cell / sig / det / tbl-wrap / gcard.
+         .kpi-note-info is a banner with an intentional partial-corner
+         radius and is not in the card list. -->
     <div class="__probe-cards" style="width: 900px">
-      <div class="kpi-story"><div class="kpi-story-left"></div><div class="kpi-story-right"></div></div>
+      <div class="kpi-story-left"></div>
+      <div class="kpi-story-right"></div>
       <div class="kpi-spend-budget"></div>
       <div class="kpi-spend-cell"></div>
       <div class="kpi-sig"></div>
