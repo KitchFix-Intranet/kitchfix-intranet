@@ -228,11 +228,15 @@ function OvertimeCard({ board }) {
   );
 }
 
-// ── Hours left to schedule ────────────────────────────────────────
-// V32-8/V32-9. V34 - state is CONTEXTUAL: an in-progress range is
-// information (blue), not a state to violate; a closed range is a
-// verdict (good under budget, bad over). The pill label still reads
-// "ON TARGET" / "OVER" so the badge stays legible.
+// ── Hours vs budget / Hours left to schedule ─────────────────────
+// V32-8/V32-9. V34 - state is CONTEXTUAL. V35-2 - the card takes
+// TWO shapes:
+//   in progress: eyebrow HOURS LEFT TO SCHEDULE, hero = hours you
+//     can still schedule, facts = per-week burn view.
+//   closed:      eyebrow HOURS VS BUDGET, hero = signed delta hrs
+//     (arrow + colour), facts = Budgeted / Used / Unused-or-Overrun
+//     / Blended rate. The fact set swaps between shapes - it does
+//     not dash out a fact that never applied.
 function HoursLeftCard({ board }) {
   const budget = board?.period_budget || board?.range_budget;
   const spent = board?.spent_to_date ?? 0;
@@ -273,32 +277,48 @@ function HoursLeftCard({ board }) {
   // expression.
   const state = inProgress ? "info" : (closed && isOver ? "bad" : "good");
   const label = closed && isOver ? "OVER" : "ON TARGET";
-
-  const heroValue = isOver ? hoursOver : (hoursLeft ?? 0);
-  const heroSub = isOver
-    ? "beyond what the budget covers"
-    : (closed ? "hours the period had left" : "you can still schedule this period");
+  const eyebrow = closed ? "HOURS VS BUDGET" : "HOURS LEFT TO SCHEDULE";
 
   const perWeek = (inProgress && weeksRemaining > 0 && hoursLeft != null)
     ? hoursLeft / weeksRemaining
     : null;
   const perWorkerPerWeek = (perWeek != null && workers > 0) ? perWeek / workers : null;
 
-  return (
-    <SignalCard state={state}>
-      <Head eyebrow="HOURS LEFT TO SCHEDULE" state={state} label={label} />
-      <Hero>
-        <span className={`kpi-sig-hero-val num ${isOver ? "kpi-sig-hero-bad" : ""}`}>{fmtHrs(heroValue)}</span>
-      </Hero>
-      <Sub>{heroSub}</Sub>
-      <Facts items={[
+  const budgetedHours = rate > 0 ? budget / rate : null;
+  const usedHours = board?.hours_vs_budget?.worked ?? null;
+
+  const heroNode = closed
+    ? <ArrowFigure v={isOver ? hoursOver : -(hoursLeft ?? 0)} size="hero" fmt={fmtHrs} />
+    : <span className={`kpi-sig-hero-val num ${isOver ? "kpi-sig-hero-bad" : ""}`}>{fmtHrs(isOver ? hoursOver : (hoursLeft ?? 0))}</span>;
+
+  const heroSub = closed
+    ? (isOver ? "beyond what the budget covered" : "under what the budget covered")
+    : (isOver ? "beyond what the budget covers" : "you can still schedule this period");
+
+  const facts = closed
+    ? [
+        { label: "Budgeted", value: budgetedHours != null ? fmtHrs(budgetedHours) : "—" },
+        { label: "Used",     value: usedHours != null ? fmtHrs(usedHours) : "—" },
+        isOver
+          ? { label: "Overrun",     value: fmtHrs(hoursOver), tone: "bad" }
+          : { label: "Unused",      value: fmtHrs(hoursLeft ?? 0), tone: "good" },
+        { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
+      ]
+    : [
         { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
         { label: "Per worker",   value: perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—", muted: perWorkerPerWeek == null },
         { label: "Budget left",
           value: isOver ? <ArrowFigure v={Math.abs(dollarsLeft)} size="value" /> : fmt$(dollarsLeft ?? 0),
           tone: isOver ? "bad" : "good" },
         { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
-      ]} />
+      ];
+
+  return (
+    <SignalCard state={state}>
+      <Head eyebrow={eyebrow} state={state} label={label} />
+      <Hero>{heroNode}</Hero>
+      <Sub>{heroSub}</Sub>
+      <Facts items={facts} />
     </SignalCard>
   );
 }
@@ -315,6 +335,9 @@ function PayrollDataCard({ board, freshness }) {
   const unpricedHrs = pd?.unpriced_hours ?? 0;
   const unapprovedWeeks = pd?.unapproved_weeks ?? 0;
   const rate = board?.avg_rate;
+  const workers = board?.distinct_workers ?? 0;
+  const closedWeeks = board?.closed_weeks_count ?? 0;
+  const weeksInPeriod = board?.weeks_in_period;
   const hasUnapproved = unpricedHrs > 0.004;
   const state = total === 0 ? "neutral" : hasUnapproved ? "warn" : "good";
   const label = total === 0 ? "—" : hasUnapproved ? "PARTIAL" : "FINAL";
@@ -325,6 +348,26 @@ function PayrollDataCard({ board, freshness }) {
   const lastPulled = freshness?.last_walk_at
     ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "—";
+
+  // V35-3 - the fact set SWAPS between "there is an ask" and
+  // "everything is in". Complete periods report the crew + week
+  // coverage; incomplete periods report the ask that has to be
+  // resolved. Same rule as Hours: swap the set, do not dash it out.
+  const facts = hasUnapproved
+    ? [
+        { label: "Unapproved hrs", value: fmtHrs(unpricedHrs), tone: "warn" },
+        { label: <span className="kpi-sig-fact-est" title={willRiseTitle}>Will rise</span>,
+          value: willRise != null ? `~ ${fmt$(willRise)}` : "—", tone: "warn" },
+        { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
+        { label: "Last pulled", value: lastPulled },
+      ]
+    : [
+        { label: "Unapproved", value: "none", tone: "good" },
+        { label: "Workers", value: workers > 0 ? `${workers}` : "—" },
+        { label: "Weeks",
+          value: weeksInPeriod ? `${closedWeeks} of ${weeksInPeriod}` : (closedWeeks > 0 ? `${closedWeeks}` : "—") },
+        { label: "Last pulled", value: lastPulled },
+      ];
 
   return (
     <SignalCard state={state}>
@@ -338,25 +381,7 @@ function PayrollDataCard({ board, freshness }) {
           {fmtHrs(unpricedHrs)} hrs need approval in Rippling
         </div>
       )}
-      <Facts items={[
-        // V34 - `none` at good tone on complete periods (was an em-dash
-        // in the muted style, which read as "no data" rather than "all
-        // approved"). Warn tone + hour count when there IS an ask.
-        { label: "Unapproved hrs",
-          value: hasUnapproved ? fmtHrs(unpricedHrs) : "none",
-          tone: hasUnapproved ? "warn" : "good" },
-        {
-          label: <span className="kpi-sig-fact-est" title={willRiseTitle}>Will rise</span>,
-          value: hasUnapproved ? (willRise != null ? `~ ${fmt$(willRise)}` : "—") : "none",
-          tone: hasUnapproved ? "warn" : "good",
-        },
-        // V34 - same "none @ good" pattern as unapproved / will rise so a
-        // closed period never renders an em-dash on a payroll fact.
-        { label: "Weeks affected",
-          value: unapprovedWeeks > 0 ? `${unapprovedWeeks}` : "none",
-          tone: unapprovedWeeks > 0 ? "warn" : "good" },
-        { label: "Last pulled", value: lastPulled },
-      ]} />
+      <Facts items={facts} />
     </SignalCard>
   );
 }
