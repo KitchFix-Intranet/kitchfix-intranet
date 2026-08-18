@@ -1765,94 +1765,101 @@
   font-size: var(--kpi-t-meta); color: var(--n-500); white-space: nowrap;
 }
 
-.kpi-split {
-  display: grid; grid-template-columns: 1fr 1fr;
-  border: 1px solid var(--n-200);
-  border-radius: var(--rad-10);
-  overflow: hidden;
-}
-.kpi-split-half {
+/* V29-6 - BUDGET LEADS. Hero-size period budget with a navy accent
+   bar and a `FY2026 budget · <n>% of period gone` sub-line. */
+.kpi-spend-budget {
   position: relative;
   padding: var(--kpi-sp-4);
-  /* Accent height + gap so it never overlaps the label - the render
-     defect V21-6 calls out. Value is a hairline; kept literal. */
-  padding-top: calc(var(--kpi-sp-4) + 3px + var(--kpi-sp-2));
+  padding-left: var(--kpi-sp-5);
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-10);
+  background: var(--surface-card);
   display: flex; flex-direction: column;
   gap: var(--kpi-sp-1);
   min-width: 0;
-  background: var(--surface-card);
 }
-.kpi-split-half + .kpi-split-half {
-  border-left: 1px solid var(--n-200);
+.kpi-spend-budget-accent {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--kpi-sp-1);
+  background: linear-gradient(180deg, var(--navy-700), var(--navy-500, #2C5187));
+  border-radius: var(--rad-10) 0 0 var(--rad-10);
 }
-.kpi-split-accent {
-  position: absolute; top: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--n-300);
-}
-.kpi-split-lab {
+.kpi-spend-budget-lab {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.1em;
   color: var(--n-600); text-transform: uppercase;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.kpi-split-val {
-  font-size: var(--kpi-t-hero); font-weight: 800; letter-spacing: -0.012em;
+.kpi-spend-budget-val {
+  font-size: var(--kpi-t-hero); font-weight: 800; letter-spacing: -0.018em;
   color: var(--n-900); font-variant-numeric: var(--num-tabular);
   line-height: 1.05;
   white-space: nowrap;
 }
-.kpi-split-sub {
-  font-size: var(--kpi-t-label); color: var(--n-600);
+/* V29-2 - if the hero string is longer than 11 chars (i.e. millions
+   figure), it renders at value size. Applied via data attribute so JSX
+   doesn't have to inspect the DOM to size. */
+.kpi-spend-budget-val[data-long="true"] {
+  font-size: var(--kpi-t-value); letter-spacing: -0.012em;
+}
+.kpi-spend-budget-sub {
+  font-size: var(--kpi-t-meta); color: var(--n-600);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* Right-half state variants: accent + background + text move together. */
-.kpi-split-half-nav {
-  background: linear-gradient(180deg, #F2F6FC, var(--navy-100));
+
+/* V29-6 paired secondary cells. Spent so far on the left; Left to
+   spend / Under budget / Over budget on the right per state. */
+.kpi-spend-pair {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: var(--kpi-sp-3);
 }
-.kpi-split-half-nav .kpi-split-accent {
-  background: linear-gradient(90deg, var(--navy-700), #2C5187);
+.kpi-spend-cell {
+  padding: var(--kpi-sp-3);
+  border: 1px solid var(--n-200);
+  border-radius: var(--rad-10);
+  background: var(--surface-card);
+  display: flex; flex-direction: column;
+  gap: var(--kpi-sp-1);
+  min-width: 0;
 }
-.kpi-split-half-nav .kpi-split-lab,
-.kpi-split-half-nav .kpi-split-val,
-.kpi-split-half-nav .kpi-split-sub { color: var(--navy-700); }
-
-.kpi-split-half-under { background: var(--green-100); }
-.kpi-split-half-under .kpi-split-accent { background: var(--green-700); }
-.kpi-split-half-under .kpi-split-lab,
-.kpi-split-half-under .kpi-split-val,
-.kpi-split-half-under .kpi-split-sub { color: var(--green-700); }
-
-.kpi-split-half-over { background: var(--red-100); }
-.kpi-split-half-over .kpi-split-accent { background: var(--red-700); }
-.kpi-split-half-over .kpi-split-lab,
-.kpi-split-half-over .kpi-split-val,
-.kpi-split-half-over .kpi-split-sub { color: var(--red-700); }
-
-.kpi-split-half-mute .kpi-split-val { color: var(--n-400); }
-.kpi-split-half-mute .kpi-split-lab { color: var(--n-500); }
-
-.kpi-spend-foot {
-  display: flex; align-items: baseline; gap: var(--kpi-sp-4);
-  padding-top: var(--kpi-sp-3);
-  border-top: 1px solid var(--n-200);
-  margin-top: auto;
-}
-.kpi-spend-foot-lab {
+.kpi-spend-cell-lab {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.1em;
   color: var(--n-600); text-transform: uppercase;
-  /* Explicit gap to value - the missing-gap defect V21-7 calls out. */
-  margin-right: var(--kpi-sp-2);
-}
-.kpi-spend-foot-val {
-  font-size: var(--kpi-t-value); font-weight: 800;
-  color: var(--n-900); font-variant-numeric: var(--num-tabular);
-  white-space: nowrap;
-}
-.kpi-spend-foot-ctx {
-  font-size: var(--kpi-t-label); color: var(--n-500);
-  margin-left: auto;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.kpi-spend-cell-val {
+  font-size: var(--kpi-t-value); font-weight: 800; letter-spacing: -0.01em;
+  color: var(--n-900); font-variant-numeric: var(--num-tabular);
+  line-height: 1.05;
+  white-space: nowrap;
+}
+.kpi-spend-cell-sub {
+  font-size: var(--kpi-t-meta); color: var(--n-600);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kpi-spend-cell-nav {
+  background: linear-gradient(180deg, #F2F6FC, var(--navy-100));
+  border-color: var(--navy-100);
+}
+.kpi-spend-cell-nav .kpi-spend-cell-lab,
+.kpi-spend-cell-nav .kpi-spend-cell-val,
+.kpi-spend-cell-nav .kpi-spend-cell-sub { color: var(--navy-700); }
+
+.kpi-spend-cell-under {
+  background: var(--green-100); border-color: #B5EAC8;
+}
+.kpi-spend-cell-under .kpi-spend-cell-lab,
+.kpi-spend-cell-under .kpi-spend-cell-val,
+.kpi-spend-cell-under .kpi-spend-cell-sub { color: var(--green-700); }
+
+.kpi-spend-cell-over {
+  background: var(--red-100); border-color: #F3C4C4;
+}
+.kpi-spend-cell-over .kpi-spend-cell-lab,
+.kpi-spend-cell-over .kpi-spend-cell-val,
+.kpi-spend-cell-over .kpi-spend-cell-sub { color: var(--red-700); }
+
+.kpi-spend-cell-mute .kpi-spend-cell-val { color: var(--n-400); }
+.kpi-spend-cell-mute .kpi-spend-cell-lab { color: var(--n-500); }
 
 /* Week strip header (V8-11) */
 .kpi-wh { display: flex; align-items: center; gap: var(--kpi-sp-3); }
@@ -1861,32 +1868,31 @@
   color: var(--n-600); font-weight: 700; white-space: nowrap;
 }
 .kpi-wh-sp { flex: 1 1 auto; }
-/* V21-10 - one target-line label sits at the right of the strip header
-   for Tier A only. Text pattern: `╌ weekly target $X`. */
+/* V29-7 - Tier A strip header carries two labels (amber original,
+   light-blue adjusted). The adjusted label renders only when the
+   weekly allowance applies (single-period in-progress + not-started
+   weeks); otherwise it is omitted entirely (no dead legend entry). */
 .kpi-wh-tgt {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   font-size: var(--kpi-t-label); font-weight: 700;
   color: var(--amber-700, #92580A);
   white-space: nowrap;
+  margin-left: var(--kpi-sp-3);
 }
+.kpi-wh-tgt-adj { color: var(--kpi-blue-500); }
 .kpi-wh-tgt-dash {
   width: var(--kpi-sp-3); border-top: 2px dashed currentColor;
   display: inline-block;
 }
 .kpi-wh-tgt b { font-weight: 800; color: var(--n-900); font-variant-numeric: var(--num-tabular); }
 
-/* Tier A week columns (V8-12). V21-10: grid template comes from the
-   week count inline (never hardcoded); position:relative anchors the
-   continuous target line drawn across the plot band. */
+/* Tier A week columns (V8-12 + V29-7). Per-week target line: amber
+   ORIGINAL on closed/in-progress weeks, light-blue ADJUSTED on
+   not-started weeks. Each week carries only the line that applies. */
 .kpi-wbars {
   position: relative;
   display: grid;
   gap: var(--kpi-sp-4); padding-top: var(--kpi-sp-3);
-}
-.kpi-tierA-tgt {
-  position: absolute; left: 0; right: 0;
-  height: 0; border-top: 2px dashed var(--amber-600);
-  pointer-events: none; z-index: 1;
 }
 .kpi-wb {
   display: flex; flex-direction: column; min-width: 0;
@@ -1912,11 +1918,14 @@
   width: 100%; height: var(--kpi-sp-2); border-radius: 3px;
   background: var(--n-200);
 }
+/* V29-7 per-week target lines. Amber (original) for closed + running;
+   light-blue (adjusted / weekly allowance) for not-started. */
 .kpi-wb-target {
   position: absolute; left: 0; right: 0;
   border-top: 2px dashed var(--amber-600);
+  pointer-events: none;
 }
-.kpi-wb-target-roll { border-top-color: var(--navy-700); }
+.kpi-wb-target-blue { border-top-color: var(--kpi-blue-500); }
 .kpi-wb-cap {
   margin-top: var(--kpi-sp-3); text-align: center; line-height: 1.35;
 }
@@ -2220,6 +2229,11 @@
   border-radius: 2px;
   background: var(--n-200);
 }
+.kpi-sig-tick-priced   { background: var(--navy-700); }
+.kpi-sig-tick-unpriced { background: var(--amber-600); }
+.kpi-sig-tick-empty    { background: var(--n-200); }
+/* Legacy .kpi-sig-tick-on retained for the receipt probe injections; V29
+   tickState resolves to priced/unpriced/empty on the real render. */
 .kpi-sig-tick-on { background: var(--navy-700); }
 
 /* Details strip (V8-17) - one bordered strip, six divided cells. */
@@ -2259,6 +2273,9 @@
   min-width: 0;
 }
 .kpi-det-grp:last-child { border-right: 0; }
+/* V29-9 - second group gets sp-6 of left padding so its labels clear
+   the divider instead of hugging it. No cell may truncate. */
+.kpi-det-grp + .kpi-det-grp { padding-left: var(--kpi-sp-6); }
 .kpi-det-grp-h {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.09em;
   color: var(--n-500); text-transform: uppercase;
@@ -2273,9 +2290,13 @@
   min-width: 0;
 }
 .kpi-det-grp-cells .kpi-det-cell:last-child { border-right: 0; }
+/* V29-13 - no cell truncates. Labels and captions keep white-space
+   nowrap so they don't wrap, but overflow/ellipsis is removed so the
+   text is always fully visible. If width is tight the group padding
+   from V29-9 gives them room to breathe. */
 .kpi-det-k {
   font-size: var(--kpi-t-meta); color: var(--n-600); font-weight: 600;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .kpi-det-v {
   font-size: var(--kpi-t-value); font-weight: 700;
@@ -2285,7 +2306,7 @@
 .kpi-det-v-mute { color: var(--n-400); }
 .kpi-det-c {
   font-size: var(--kpi-t-label); color: var(--n-500);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Board responsive: signals collapse; details strip stacks the two
@@ -2485,7 +2506,12 @@
 }
 .kpi-tbl-accountbtn:hover .kpi-tbl-cchild-key { text-decoration: underline; }
 .kpi-tbl-cchild-key { font-weight: 700; color: var(--n-800); }
-.kpi-tbl-cchild-label { color: var(--n-700); font-weight: 500; }
+.kpi-tbl-cchild-label { color: var(--n-700); font-weight: 500; display: inline-flex; align-items: baseline; gap: var(--kpi-sp-2); }
+/* V29-10 worker rows: three elements in descending weight. Name is
+   the primary; #number and title are label-sized supporting text. */
+.kpi-tbl-wname   { font-weight: 700; color: var(--n-900); }
+.kpi-tbl-wnum    { font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 700; letter-spacing: 0.02em; }
+.kpi-tbl-wtitle  { font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500; }
 
 /* V25-6 - Share moves out of the Dollars cell into its own narrow
    column, so it stops reading as an underline. Cell is empty on

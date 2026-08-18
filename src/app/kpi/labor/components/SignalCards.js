@@ -69,9 +69,14 @@ function OverUnderCard({ board }) {
   );
 }
 
-// V21-21 - OT arc becomes the centrepiece. Percent SET INSIDE. Amber
-// threshold band remains, unlabeled. Band geometry comes from the
-// server-config watch_pct/alarm_pct - never hardcoded.
+// V21-21 + V29-11 - OT arc is the centrepiece. Percent SET INSIDE.
+// Amber threshold band renders in every state (silent when the value
+// arc has not reached it; self-explanatory once it does). Band geometry
+// comes from the server-config watch_pct/alarm_pct - NEVER hardcoded.
+// V29-11 cause of prior invisibility: --amber-100 (warm cream) has too
+// little contrast against the white card surface; the band was drawn
+// but blended with the background. Fix: use `--amber-bd` (a mid amber
+// used for chip borders) so the band reads as a visible zone.
 function OvertimeCard({ board }) {
   const ot = board?.overtime;
   const hours = ot?.hours ?? 0;
@@ -101,13 +106,16 @@ function OvertimeCard({ board }) {
   const arcColor = state === "alarm" ? "var(--red-700)"
                  : state === "watch" ? "var(--amber-600)"
                  : "var(--green-500)";
+  const hasBand = watch != null && alarm != null && watch > 0 && alarm > watch;
   return (
     <div className="kpi-sig">
       <Head eyebrow="OVERTIME" stateLabel={state === "clear" ? "CLEAR" : state === "watch" ? "WATCH" : "ALARM"} stateTone={tone} />
       <div className="kpi-sig-body">
         <svg className="kpi-sig-gauge2" viewBox="0 0 150 94" aria-label={`Overtime ${pct.toFixed(1)}%`}>
           <path d={`M${start.x} ${start.y} A58 58 0 0 1 ${end.x} ${end.y}`} fill="none" stroke="var(--n-200)" strokeWidth="12" strokeLinecap="round" />
-          <path d={`M${wStart.x} ${wStart.y} A58 58 0 0 1 ${wEnd.x} ${wEnd.y}`} fill="none" stroke="var(--amber-100)" strokeWidth="12" strokeLinecap="round" />
+          {hasBand && (
+            <path d={`M${wStart.x} ${wStart.y} A58 58 0 0 1 ${wEnd.x} ${wEnd.y}`} fill="none" stroke="#F3D9AE" strokeWidth="12" strokeLinecap="round" />
+          )}
           {pct > 0.01 && (
             <path d={`M${start.x} ${start.y} A58 58 0 0 1 ${vPoint.x} ${vPoint.y}`} fill="none" stroke={arcColor} strokeWidth="12" strokeLinecap="round" />
           )}
@@ -160,7 +168,10 @@ function HoursVsBudgetCard({ board }) {
   );
 }
 
-// V21-23 - priced-of-total + tick row. Ticks omitted above 13 weeks.
+// V21-23 + V29-8 - priced-of-total + tick row. Ticks omitted above
+// 13 weeks. Per-tick state: complete-priced = navy; any unpriced
+// worker-week in the week = amber; empty (no rows) = grey. Unpriced
+// weeks light up rather than only being stated in the count.
 function PayrollDataCard({ board }) {
   const pd = board?.payroll_data;
   const priced = pd?.priced_ww ?? 0;
@@ -172,7 +183,17 @@ function PayrollDataCard({ board }) {
   const weeks = board?.weeks || [];
   const weeksCount = weeks.length;
   const showTicks = weeksCount > 0 && weeksCount <= 13;
-  const tickPriced = weeks.map(w => (w.complete_ww === w.total_ww && w.total_ww > 0));
+  // Per-week status. Complete = every worker-week in the week is
+  // priced. Unpriced = >0 total_ww with unpriced_hrs > 0 or a
+  // partial/hours_only coverage. Empty = no worker-weeks in the week.
+  const tickState = weeks.map(w => {
+    const totalWw = w.total_ww || w.complete_ww || 0;
+    if (totalWw === 0) return "empty";
+    const unpricedHrs = w.unpriced_hrs || 0;
+    if (unpricedHrs > 0.004 || w.unapproved_flag) return "unpriced";
+    if (w.complete_ww === w.total_ww && w.total_ww > 0) return "priced";
+    return "unpriced";
+  });
   return (
     <div className="kpi-sig">
       <Head eyebrow="PAYROLL DATA" stateLabel={state} stateTone={tone} />
@@ -186,8 +207,8 @@ function PayrollDataCard({ board }) {
             role="img"
             aria-label={`${priced} of ${weeksCount} weeks priced`}
           >
-            {tickPriced.map((on, i) => (
-              <span key={i} className={`kpi-sig-tick ${on ? "kpi-sig-tick-on" : ""}`} />
+            {tickState.map((st, i) => (
+              <span key={i} className={`kpi-sig-tick kpi-sig-tick-${st}`} />
             ))}
           </div>
         )}
