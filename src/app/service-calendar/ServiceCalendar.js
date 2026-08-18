@@ -1681,7 +1681,14 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           if (isMountedRef.current) {
             refreshSyncing();
             if (json.noteFailed) {
-              showToast(`Saved ${entry.date} - its note couldn't post, re-add it from the day`, "error");
+              // PR-K2 (2026-08-18): split compound. Actuals landed
+              // (warn tier), note did not. Detail names the recovery.
+              showToast({
+                variant: "generic",
+                tier: "warn",
+                title: `Saved ${entry.date}`,
+                detail: "Its note could not post. Re-add it from the day.",
+              });
             }
             const mk = entry.date.slice(0, 7);
             setMonthCache(prev => {
@@ -1694,7 +1701,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           scDequeue(key);
           if (isMountedRef.current) {
             refreshSyncing();
-            showToast(`A queued save for ${entry.date} was rejected on retry`, "error");
+            // PR-K2 (2026-08-18): split. Nothing landed - bad tier.
+            showToast({
+              variant: "generic",
+              tier: "bad",
+              title: "Queued save rejected",
+              detail: `The queued save for ${entry.date} was rejected on retry.`,
+            });
           }
         }
       } catch (err) {
@@ -1907,9 +1920,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         // now render through the shared toast via showToast's
         // string-with-tier path (tier "bad" for these two).
         if (result.noteFailed) {
-          showToast("Saved - note couldn't post, use Add note", "error");
+          // PR-K2 (2026-08-18): split mixed-signal into title +
+          // detail. Actuals saved (warn, not bad) - only the note
+          // failed. Recovery direction in the detail.
+          showToast({
+            variant: "generic",
+            tier: "warn",
+            title: "Saved. Note did not post.",
+            detail: "Use Add note from the day panel to attach it.",
+          });
         } else if (result.auditNoteFailed) {
-          showToast("Saved - no-service note couldn't post", "error");
+          showToast({
+            variant: "generic",
+            tier: "warn",
+            title: "Saved. Audit note did not post.",
+            detail: "The no-service note did not attach; the actuals saved.",
+          });
         } else {
           // PR-K (2026-08-18): every clean save fires ONE toast.
           // silentSuccess retired - the old suppression was there
@@ -2020,7 +2046,18 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       // DayEntryV2 passes silentFailure:true; v1 DayDetail leaves it
       // absent to preserve existing failure behavior.
       if (!opts.silentFailure) {
-        showToast(result.error || "Save failed", "error");
+        // PR-K2 (2026-08-18): render-exact failure copy + Try again
+        // action that re-fires handleSave. Kevin ruling: the render
+        // words are the operator's words. Server error text is not
+        // interpolated - most site leads cannot act on a 500 stack.
+        showToast({
+          variant: "generic",
+          tier: "bad",
+          title: "Could not save",
+          detail: "Nothing was changed. Check your connection and try again.",
+          actionLabel: "Try again",
+          onAction: () => handleSave(day, entries, opts),
+        });
       }
       return result;
     } catch (err) {
@@ -2045,7 +2082,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         return { success: true, queued: true };
       }
       if (!isMountedRef.current) return { success: false, error: "Network error" };
-      showToast("Network error", "error");
+      // PR-K2 (2026-08-18): same render-exact copy + Try again on the
+      // non-network catch (server returned a non-JSON body or the
+      // fetch died on something other than a scIsNetworkError shape).
+      showToast({
+        variant: "generic",
+        tier: "bad",
+        title: "Could not save",
+        detail: "Nothing was changed. Check your connection and try again.",
+        actionLabel: "Try again",
+        onAction: () => handleSave(day, entries, opts),
+      });
       return { success: false, error: "Network error" };
     } finally {
       inFlightControllersRef.current.delete(controller);
@@ -2172,7 +2219,17 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       const result = await res.json();
       if (!isMountedRef.current) return result;
       if (!result.success) {
-        showToast(result.message || result.error || "Reset failed", "error");
+        // PR-K2 (2026-08-18): render-shape failure copy + Try again
+        // action that re-fires handleResetDay. Same discipline as the
+        // save + bulk failures.
+        showToast({
+          variant: "generic",
+          tier: "bad",
+          title: "Could not reset day",
+          detail: "Nothing was changed. Check your connection and try again.",
+          actionLabel: "Try again",
+          onAction: () => handleResetDay(day),
+        });
         return result;
       }
       const mk = day.date.slice(0, 7);
@@ -2232,7 +2289,19 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       return result;
     } catch (err) {
       if (err?.name === "AbortError") return { success: false, error: "aborted" };
-      if (isMountedRef.current) showToast("Reset failed - check connection", "error");
+      if (isMountedRef.current) {
+        // PR-K2 (2026-08-18): same render-shape copy + Try again on
+        // the network catch. Retry re-fires handleResetDay from a
+        // fresh AbortController.
+        showToast({
+          variant: "generic",
+          tier: "bad",
+          title: "Could not reset day",
+          detail: "Nothing was changed. Check your connection and try again.",
+          actionLabel: "Try again",
+          onAction: () => handleResetDay(day),
+        });
+      }
       return { success: false, error: "Network error" };
     } finally {
       inFlightControllersRef.current.delete(controller);
@@ -2257,7 +2326,15 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       }
     }
     if (entries.length === 0) {
-      showToast("Enter at least one value before bulk saving", "error");
+      // PR-K2 (2026-08-18): instructional guard, not a failure -
+      // nothing was attempted, nothing to change. Warn tier per
+      // Kevin ruling: bar keys action-driving states; "no entries"
+      // is user-input state, not a failed write.
+      showToast({
+        variant: "generic",
+        tier: "warn",
+        title: "Enter at least one value before bulk saving",
+      });
       return;
     }
     setSaving(true);
@@ -2334,10 +2411,15 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         // many days to revisit. Actuals stay committed regardless -
         // this is a warning, not an error.
         if (Number.isFinite(result.noteFailCount) && result.noteFailCount > 0) {
-          showToast(
-            `Saved counts on ${successCount} day${successCount === 1 ? "" : "s"}. Batch note failed on ${result.noteFailCount} day${result.noteFailCount === 1 ? "" : "s"} - re-post from the day if needed.`,
-            "error",
-          );
+          // PR-K2 (2026-08-18): split the compound partial-success
+          // string into title + detail. Actuals landed (warn tier,
+          // not bad) - the note is what didn't post.
+          showToast({
+            variant: "generic",
+            tier: "warn",
+            title: `Saved counts on ${successCount} day${successCount === 1 ? "" : "s"}`,
+            detail: `Batch note failed on ${result.noteFailCount} day${result.noteFailCount === 1 ? "" : "s"}. Re-post from the day if needed.`,
+          });
         }
       } else {
         // A3 failure-UI (2026-07-24): server returns serviceDate for
@@ -2345,9 +2427,18 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         // catch). Name the offending day inline so the operator knows
         // WHICH day to fix - per §8B all-or-nothing message. Nothing
         // committed (bulk is server-atomic).
+        // PR-K2 (2026-08-18): split "Bulk rejected: ...Nothing
+        // committed." into title + detail + Try again action.
         const bulkErr = result.error || "Bulk save failed";
         const dayHint = result.serviceDate ? `on ${result.serviceDate} - ` : "";
-        showToast(`Bulk rejected: ${dayHint}${bulkErr}. Nothing committed.`, "error");
+        showToast({
+          variant: "generic",
+          tier: "bad",
+          title: "Bulk rejected",
+          detail: `${dayHint}${bulkErr}. Nothing committed.`,
+          actionLabel: "Try again",
+          onAction: () => handleBulkSave(batchNote),
+        });
       }
     } catch (err) {
       if (err?.name !== "AbortError") {
@@ -2373,7 +2464,16 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             queuedCount++;
           }
         } else {
-          showToast("Bulk save failed", "error");
+          // PR-K2 (2026-08-18): render-shape copy + Try again for the
+          // bulk network catch.
+          showToast({
+            variant: "generic",
+            tier: "bad",
+            title: "Could not save the batch",
+            detail: "Nothing was changed. Check your connection and try again.",
+            actionLabel: "Try again",
+            onAction: () => handleBulkSave(batchNote),
+          });
         }
       }
     } finally { inFlightControllersRef.current.delete(controller); }
@@ -2402,7 +2502,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         return changed ? next : prev;
       });
     }
-    setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
+    // PR-K2 (2026-08-18): only tear down bulk mode on a positive
+    // outcome (write landed or replay queued). On pure failure keep
+    // the selection + values so the shared-toast "Try again" action
+    // can re-fire the original call.
+    if (successCount > 0 || queuedCount > 0) {
+      setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
+    }
     setReloadKey(k => k + 1);
   }, [data, dayMap, activeDrillDays, bulkSelected, bulkValues, showToast, buildRecordedToast, refreshSyncing]);
 
@@ -2467,18 +2573,29 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         // when a partial note failure occurs. See handleBulkSave's
         // comment for the actuals-safe / notes-recoverable rationale.
         if (Number.isFinite(result.noteFailCount) && result.noteFailCount > 0) {
-          showToast(
-            `Saved counts on ${successCount} day${successCount === 1 ? "" : "s"}. Batch note failed on ${result.noteFailCount} day${result.noteFailCount === 1 ? "" : "s"} - re-post from the day if needed.`,
-            "error",
-          );
+          // PR-K2 (2026-08-18): mirror handleBulkSave's split.
+          showToast({
+            variant: "generic",
+            tier: "warn",
+            title: `Saved counts on ${successCount} day${successCount === 1 ? "" : "s"}`,
+            detail: `Batch note failed on ${result.noteFailCount} day${result.noteFailCount === 1 ? "" : "s"}. Re-post from the day if needed.`,
+          });
         }
       } else {
         // A3 failure-UI (2026-07-24): mirror handleBulkSave's enhanced
         // error message. Confirm-as-projected uses the same bulk
         // endpoint, so serviceDate can flow through the same way.
+        // PR-K2 (2026-08-18): split + Try again re-fires handleBulkConfirm.
         const bulkErr = result.error || "Confirm as projected failed";
         const dayHint = result.serviceDate ? `on ${result.serviceDate} - ` : "";
-        showToast(`Bulk rejected: ${dayHint}${bulkErr}. Nothing committed.`, "error");
+        showToast({
+          variant: "generic",
+          tier: "bad",
+          title: "Bulk rejected",
+          detail: `${dayHint}${bulkErr}. Nothing committed.`,
+          actionLabel: "Try again",
+          onAction: () => handleBulkConfirm(batchNote),
+        });
       }
     } catch (err) {
       if (err?.name !== "AbortError") {
@@ -2501,7 +2618,15 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             queuedCount++;
           }
         } else {
-          showToast("Confirm as projected failed", "error");
+          // PR-K2 (2026-08-18): render-shape copy + Try again.
+          showToast({
+            variant: "generic",
+            tier: "bad",
+            title: "Could not save the batch",
+            detail: "Nothing was changed. Check your connection and try again.",
+            actionLabel: "Try again",
+            onAction: () => handleBulkConfirm(batchNote),
+          });
         }
       }
     } finally { inFlightControllersRef.current.delete(controller); }
@@ -2525,7 +2650,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         return changed ? next : prev;
       });
     }
-    setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
+    // PR-K2 (2026-08-18): same outcome gate as handleBulkSave so
+    // confirm-as-projected "Try again" has state to re-fire against.
+    if (successCount > 0 || queuedCount > 0) {
+      setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false);
+    }
     setReloadKey(k => k + 1);
   }, [data, dayMap, activeDrillDays, bulkSelected, showToast, buildRecordedToast, refreshSyncing]);
 
