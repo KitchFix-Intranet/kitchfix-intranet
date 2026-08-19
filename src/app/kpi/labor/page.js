@@ -970,7 +970,7 @@ function BoardSkeleton() {
 // SYSTEM status strip (V7-19). Two 22px rows, quietly stated: Payroll
 // data + Nightly feed. Colors mirror coverage severity + freshness
 // tint. Value classes: kpi-sys-v-ok / -warn / -bad. Dot mirrors.
-function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH }) {
+function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH, salarySummary }) {
   const total = Object.values(coverageCounts || {}).reduce((s, n) => s + Number(n || 0), 0);
   const complete = Number(coverageCounts?.complete || 0);
   const payTone = dominantCoverage === "complete" ? "ok"
@@ -999,6 +999,17 @@ function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH }
         <span className="kpi-sys-k">Nightly feed</span>
         <span className={`kpi-sys-v kpi-sys-v-${feedTone}`}>{feedValue}</span>
       </div>
+      {/* Salary PR 3 C2 - Salary line renders only when the response
+          carries salary_included. Count comes from salary_summary.workers
+          (spec-explicit). No dot, no tone - salary presence is state,
+          not a health signal. */}
+      {salarySummary && (
+        <div className="kpi-sys-r">
+          <span className="kpi-sys-dot" aria-hidden="true" />
+          <span className="kpi-sys-k">Salary</span>
+          <span className="kpi-sys-v">{salarySummary.workers} worker{salarySummary.workers === 1 ? "" : "s"}</span>
+        </div>
+      )}
     </div>
   );
 }
