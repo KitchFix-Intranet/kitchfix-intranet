@@ -175,7 +175,7 @@ function pillFor(verdict) {
 // V34 - state IS the pill tone: clear=good, watch=warn, alarm=bad.
 // Hrs to target carries the same tone as the state (headroom good,
 // close to limit watch, past limit bad).
-function OvertimeCard({ board }) {
+function OvertimeCard({ board, salary }) {
   const ot = board?.overtime;
   const pct = ot?.pct ?? 0;
   const workedHours = board?.hours ?? 0;
@@ -205,9 +205,16 @@ function OvertimeCard({ board }) {
       ? { label: "Hrs over target", value: fmtHrs(Math.abs(remaining)), tone: "bad" }
       : { label: "Hrs to target",  value: fmtHrs(remaining), tone: state === "warn" ? "warn" : "good" };
 
-  const boundsCopy = (watch != null && alarm != null)
-    ? `watch above ${watch}% · off target above ${alarm}%`
-    : "of hours worked";
+  // V34 sub-line copy. Salary PR 3 C2 - when salary is on, OT % is
+  // a share of HOURLY cost (spec explicit: putting salary into that
+  // denominator would silently improve OT from 13% to 8% with
+  // nobody doing anything). Sub-line labels the basis so the reader
+  // sees the number and knows what it is a share of.
+  const boundsCopy = salary
+    ? "share of hourly cost"
+    : (watch != null && alarm != null
+      ? `watch above ${watch}% · off target above ${alarm}%`
+      : "of hours worked");
 
   return (
     <SignalCard state={state}>
@@ -237,10 +244,18 @@ function OvertimeCard({ board }) {
 //     (arrow + colour), facts = Budgeted / Used / Unused-or-Overrun
 //     / Blended rate. The fact set swaps between shapes - it does
 //     not dash out a fact that never applied.
-function HoursLeftCard({ board }) {
+function HoursLeftCard({ board, salary }) {
   const budget = board?.period_budget || board?.range_budget;
   const spent = board?.spent_to_date ?? 0;
-  const rate = board?.avg_rate;
+  // Salary PR 3 C2 - when salary is on, the merged board's avg_rate
+  // recomputes as (hourly + salary $) / (hourly hours only) and is
+  // semantically wrong (PR 2 flagged this). Read the explicit
+  // blended_rate_hourly the route ships instead; the rate stays
+  // hourly-basis and the card labels it below.
+  const rate = salary?.blended_rate_hourly ?? board?.avg_rate;
+  const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
+  const hoursBasisHourlyOnly = salary?.hours_basis === "hourly_only";
+  const rateLabel = rateBasisHourlyOnly ? "Hourly rate" : "Blended rate";
   const workers = board?.distinct_workers ?? 0;
   const kind = board?.kind;
   const inProgress = kind === "single_period_in_progress";
@@ -266,7 +281,7 @@ function HoursLeftCard({ board }) {
           { label: "Per week",     value: "—", muted: true },
           { label: "Per worker",   value: "—", muted: true },
           { label: "Budget left",  value: "—" },
-          { label: "Blended rate", value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
+          { label: rateLabel, value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
         ]} />
       </SignalCard>
     );
@@ -302,15 +317,21 @@ function HoursLeftCard({ board }) {
         isOver
           ? { label: "Overrun",     value: fmtHrs(hoursOver), tone: "bad" }
           : { label: "Unused",      value: fmtHrs(hoursLeft ?? 0), tone: "good" },
-        { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
+        { label: rateLabel, value: `$${rate.toFixed(2)}/hr` },
       ]
     : [
         { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
-        { label: "Per worker",   value: perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—", muted: perWorkerPerWeek == null },
+        // Salary PR 3 C2 - salaried people are not scheduled and
+        // carry zero hours by construction. When hours_basis is
+        // hourly_only, the per-worker fact reads 'hourly only'
+        // rather than a number that would silently exclude them.
+        { label: "Per worker",
+          value: hoursBasisHourlyOnly ? "hourly only" : (perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—"),
+          muted: hoursBasisHourlyOnly ? false : (perWorkerPerWeek == null) },
         { label: "Budget left",
           value: isOver ? <ArrowFigure v={Math.abs(dollarsLeft)} size="value" /> : fmt$(dollarsLeft ?? 0),
           tone: isOver ? "bad" : "good" },
-        { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
+        { label: rateLabel, value: `$${rate.toFixed(2)}/hr` },
       ];
 
   return (
@@ -386,13 +407,13 @@ function PayrollDataCard({ board, freshness }) {
   );
 }
 
-export function SignalCards({ board, freshness }) {
+export function SignalCards({ board, freshness, salary }) {
   if (!board || board.applies === false) return null;
   return (
     <div className="kpi-sigs">
       <PaceCard board={board} />
-      <OvertimeCard board={board} />
-      <HoursLeftCard board={board} />
+      <OvertimeCard board={board} salary={salary} />
+      <HoursLeftCard board={board} salary={salary} />
       <PayrollDataCard board={board} freshness={freshness} />
     </div>
   );

@@ -645,6 +645,7 @@ export default function KpiLaborPage() {
       dominantCoverage={dominantCoverage}
       freshness={freshness}
       freshnessH={freshnessH}
+      salarySummary={data?.salary_included ? data.salary_summary : null}
     />
   ) : null;
 
@@ -713,8 +714,24 @@ export default function KpiLaborPage() {
                 rangeLabel={rangeLabelForBoard}
                 budgetPeriods={data?.budget_periods || []}
                 todayISO={today}
+                salary={data?.salary_included ? {
+                  summary: data.salary_summary,
+                  vacancy: data.salary_vacancy,
+                  budget_total: data.budget_total,
+                  hours_basis: data.hours_basis,
+                  rate_basis: data.rate_basis,
+                  blended_rate_hourly: data.blended_rate_hourly,
+                } : null}
               />
-              <SignalCards board={data.board} freshness={freshness} />
+              <SignalCards
+                board={data.board}
+                freshness={freshness}
+                salary={data?.salary_included ? {
+                  hours_basis: data.hours_basis,
+                  rate_basis: data.rate_basis,
+                  blended_rate_hourly: data.blended_rate_hourly,
+                } : null}
+              />
               <ComparisonStrip prior_period_comparison={data.prior_period_comparison} />
               <DetailsStrip board={data.board} />
             </>
