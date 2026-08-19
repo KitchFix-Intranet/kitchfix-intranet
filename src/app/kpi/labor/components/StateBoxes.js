@@ -52,6 +52,7 @@ export function StateBox({ variant, title, children, cta, errCode }) {
           {variant === "stale" && <Icon><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></Icon>}
           {variant === "salaried" && <Icon><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></Icon>}
           {variant === "not-authorized" && <Icon><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></Icon>}
+          {variant === "locked" && <Icon><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></Icon>}
           {variant === "session-expired" && <Icon><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 2" /></Icon>}
           <h3>{title}</h3>
           <div className="kpi-statebox-body">{children}</div>
@@ -139,6 +140,20 @@ export function StateNotAuthorized() {
     <StateBox variant="not-authorized" title="Access limited to operations leadership">
       This dashboard is restricted to the operations leadership group.
       If you should have access, reach out to Kevin.
+    </StateBox>
+  );
+}
+// V-role-gates - the LOCKED PANEL. Rendered in place of the board
+// when the server ships { locked: true } for an account the caller
+// cannot view. The command bar, portfolio rail, and section switcher
+// (all in Shell above this) STAY visible so the person navigates
+// back to their own account without the browser back button.
+// Copy is verbatim from spec §3.
+export function LockedPanel() {
+  return (
+    <StateBox variant="locked" title="ACCOUNT LOCKED">
+      You do not have access to this account&apos;s data.
+      If you need access, please reach out to Kevin Fietek.
     </StateBox>
   );
 }

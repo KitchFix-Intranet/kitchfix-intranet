@@ -15,7 +15,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+// V-role-gates - OPS_LEADERSHIP_EMAILS retired here; server decides.
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp, buildPrintScopeLine } from "./lib/formatting";
 import { ACCOUNTS, FY_START } from "./lib/accounts";
@@ -29,7 +29,7 @@ import { DetailsStrip } from "./components/DetailsStrip";
 import { WeekTable } from "./components/WeekTable";
 import {
   StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
-  StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired,
+  StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired, LockedPanel,
   errorCode,
 } from "./components/StateBoxes";
 import { ToastHost } from "./components/Toast";
@@ -58,13 +58,24 @@ export default function KpiLaborPage() {
   const searchParams = useSearchParams();
 
   const email = session?.user?.email?.toLowerCase().trim() || "";
-  const isAllowed = OPS_LEADERSHIP_EMAILS.includes(email);
+  // V-role-gates - the server is the sole authority for KPI access
+  // (see docs/KPI_ROLE_GATES_SPEC.md + src/lib/kpi/roleGate.js).
+  // Client-side gating is removed here; the fetch below returns
+  // { error: 'forbidden' } (mapped to loadState='auth' /
+  // authError='forbidden' -> StateNotAuthorized) if the caller has
+  // no role, or { locked: true, landing_account } if the caller
+  // has a role but not for the requested account. The client no
+  // longer holds an OPS_LEADERSHIP list.
+  const isAllowed = !!email;
 
-  // B15: default account resolution. URL wins. Otherwise on first client
-  // mount we adopt the last-viewed account from localStorage; if none,
-  // fall back to "CIN - OH" (the sentinel account).
+  // V-role-gates - account resolution now leans on the server for
+  // the default. If the URL has no account and localStorage has no
+  // saved account, we fetch with account='' and let the route ship
+  // landing_account (spec §4). Explicit URL wins; a stale saved
+  // account still hydrates and simply renders locked if the role
+  // no longer permits it - the user can navigate.
   const urlAccount = searchParams.get("account");
-  const account = urlAccount || "CIN - OH";
+  const account = urlAccount || "";
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (urlAccount) {
@@ -84,6 +95,13 @@ export default function KpiLaborPage() {
   }, [urlAccount, router, searchParams]);
 
   const today = new Date().toISOString().slice(0, 10);
+  // V-role-gates - landing_account redirect. When the URL has no
+  // account (and localStorage has nothing to hydrate), the initial
+  // fetch runs with account='' and the server ships landing_account
+  // per spec §4. This effect redirects into it. Guarded so a person
+  // who is deliberately on ?account=X but happens to receive a
+  // landing_account in the response is NOT re-routed - the guard is
+  // "no URL account".
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
   const start = urlStart || FY_START;
@@ -212,6 +230,20 @@ export default function KpiLaborPage() {
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
   }, [status, isAllowed, account, start, end, searchParams]);
+
+  // V-role-gates - landing redirect. Fires when the server ships
+  // landing_account back on a URL that had no explicit account
+  // (the initial cold-load for a role whose home is not CIN - OH).
+  // Explicit URL accounts are never re-routed by this effect - the
+  // guard is "urlAccount is empty", not "landing_account is set".
+  useEffect(() => {
+    if (urlAccount) return;
+    const landing = data?.landing_account;
+    if (!landing) return;
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("account", landing);
+    router.replace(`/kpi/labor?${p.toString()}`);
+  }, [urlAccount, data?.landing_account, router, searchParams]);
 
   // ── URL setters ──────────────────────────────────────
   const setParam = (key, value) => {
@@ -760,6 +792,19 @@ export default function KpiLaborPage() {
         <StateSessionExpired />
       ) : loadState === "auth" && authError === "forbidden" ? (
         <StateNotAuthorized />
+      ) : loadState === "ok" && data?.locked === true ? (
+        /* V-role-gates - locked panel replaces the board region ONLY.
+           The command bar, portfolio rail, and section switcher (all
+           in the Shell above this JSX branch) stay visible so the
+           person can navigate back to their own account without the
+           browser back button. Copy per spec §3. */
+        <LockedPanel />
+      ) : loadState === "ok" && !urlAccount && data?.landing_account ? (
+        /* V-role-gates - transient landing state. The route ships
+           landing_account when the URL has no account; the effect
+           above redirects. Render a loading box while the redirect
+           navigates to keep the "empty range" flash off screen. */
+        <StateLoading />
       ) : loadState === "ok" && data.account_state === "salaried_only" ? (
         <StateSalaried account={account} message={data.account_state_message} />
       ) : loadState === "loading" && !hasEverRenderedRef.current ? (
