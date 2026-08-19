@@ -33,6 +33,11 @@ import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { auth } from "@/lib/auth";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+// KPI PREVIEW FENCE - single source of truth in roleGate.js. Sits in
+// FRONT of the OPS_LEADERSHIP_EMAILS check so a fenced caller cannot
+// pull labor data through the export route while the labor board is
+// closed to non-Kevin sessions.
+import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerName } from "@/lib/kpi/resolveName";
 
@@ -61,6 +66,13 @@ export async function GET(request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   const email = session.user?.email?.toLowerCase().trim();
+  // KPI PREVIEW FENCE - refuse non-allowlisted callers before the
+  // legacy OPS_LEADERSHIP check. Flipping KPI_PREVIEW_ONLY to false
+  // in src/lib/kpi/roleGate.js opens this route back up to the six
+  // OPS_LEADERSHIP emails.
+  if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

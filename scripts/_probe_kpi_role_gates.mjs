@@ -17,7 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRoleGate } from "../src/lib/kpi/roleGate.js";
+import { loadRoleGate, KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "../src/lib/kpi/roleGate.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
@@ -42,6 +42,8 @@ const supa = createClient(
 console.log("=".repeat(72));
 console.log("KPI role gates acceptance probe");
 console.log("=".repeat(72));
+console.log(`preview fence: KPI_PREVIEW_ONLY=${KPI_PREVIEW_ONLY}  allowlist size=${KPI_PREVIEW_ALLOWLIST.length}`);
+const fenceOn = !!KPI_PREVIEW_ONLY;
 
 // ─── Load fixtures + gate ────────────────────────────────────────────
 const [rolesQ, leadersQ, mgrsQ] = await Promise.all([
@@ -103,9 +105,141 @@ if (gate.error) { console.log("gate error:", gate.error); process.exit(1); }
 const ACCOUNTS = ["CIN - AZ", "CIN - OH", "CIN - KY", "STL - FL", "STL - MO", "TBJ - FL", "TBJ - NY", "TBR - FL", "TXR - AZ", "TXR - TX - H", "TXR - TX - V"];
 const PSEUDOS  = ["ALL", "EAST", "WEST"];
 
-// ─── G1 - corporate ─────────────────────────────────────────────────
+// ─── F1..F5 - preview fence acceptance (fence-aware, always runs) ───
+console.log("");
+console.log("[F1] fence ON: an allowlisted email resolves to its true role (byte-identical to pre-fence)");
+if (!fenceOn) skip("KPI_PREVIEW_ONLY=false; F1 is only meaningful with the fence on");
+else if (!corpEmail) fail("no corporate email in kpi_roles - cannot exercise F1");
+else if (!KPI_PREVIEW_ALLOWLIST.includes(corpEmail.toLowerCase().trim())) skip("primary corporate fixture is not in KPI_PREVIEW_ALLOWLIST; F1 requires an allowlisted corporate email");
+else {
+  const caller = await gate.resolveKpiRole(corpEmail);
+  if (caller?.role !== "corporate") fail(`allowlisted corporate did not resolve to corporate (got ${JSON.stringify(caller)})`);
+  else {
+    let bad = 0;
+    for (const a of ["ALL", "EAST", "WEST", "TBR - FL", "STL - MO"]) {
+      if (!gate.canViewAccount(caller, a)) { fail(`allowlisted corp cannot view ${a}`); bad++; }
+      if (!gate.canSeeSalary(caller, a))   { fail(`allowlisted corp no salary on ${a}`); bad++; }
+    }
+    if (bad === 0) ok("allowlisted corporate: full view + salary; lands ALL");
+    if (gate.landingAccount(caller) !== "ALL") fail("allowlisted corp landing != ALL");
+  }
+}
+
+console.log("");
+console.log("[F2] fence ON: all 11 seeded leader emails resolve to null (route returns 403)");
+if (!fenceOn) skip("KPI_PREVIEW_ONLY=false; F2 only meaningful with the fence on");
+else {
+  let leaked = 0;
+  for (const l of leaders) {
+    if (!l.work_email) continue;
+    if (KPI_PREVIEW_ALLOWLIST.includes(l.work_email.toLowerCase().trim())) continue;   // deliberately allowlisted
+    const caller = await gate.resolveKpiRole(l.work_email);
+    if (caller !== null) { fail(`seeded leader ${mask(l.work_email)} (${l.account_key}) resolved to ${JSON.stringify(caller)} - fence failed`); leaked++; }
+  }
+  if (leaked === 0) ok(`all ${leaders.length} seeded leader emails resolve null under the fence`);
+}
+
+console.log("");
+console.log("[F3] fence ON: rdo + other corporate + a sample site-manager all resolve to null");
+if (!fenceOn) skip("KPI_PREVIEW_ONLY=false; F3 only meaningful with the fence on");
+else {
+  const nonAllowlisted = (rolesQ.data || [])
+    .filter(r => r.role === "corporate" || r.role === "rdo")
+    .filter(r => !KPI_PREVIEW_ALLOWLIST.includes(r.email.toLowerCase().trim()));
+  let leaked = 0;
+  for (const r of nonAllowlisted) {
+    const caller = await gate.resolveKpiRole(r.email);
+    if (caller !== null) { fail(`${r.role} ${mask(r.email)} resolved to ${JSON.stringify(caller)}`); leaked++; }
+  }
+  if (tbrMgr?.work_email && !KPI_PREVIEW_ALLOWLIST.includes(tbrMgr.work_email.toLowerCase().trim())) {
+    const caller = await gate.resolveKpiRole(tbrMgr.work_email);
+    if (caller !== null) { fail(`site-manager ${mask(tbrMgr.work_email)} resolved to ${JSON.stringify(caller)}`); leaked++; }
+  }
+  if (leaked === 0) ok(`${nonAllowlisted.length} non-allowlisted rdo/corporate emails + sample site-manager all resolve null`);
+}
+
+console.log("");
+console.log("[F4] simulate fence-OFF against the data underneath (proves reversibility + data intact)");
+// Cannot flip a hardcoded const at runtime; instead re-implement the
+// resolution rules over the raw data and prove the expected bucket
+// counts hold. When Kevin flips KPI_PREVIEW_ONLY to false, the live
+// resolver will produce these same buckets - which is what "the fence
+// is reversible" means in practice.
+{
+  const kpi = new Map();
+  for (const r of (rolesQ.data || [])) {
+    if (r.role !== "corporate" && r.role !== "rdo") continue;
+    kpi.set((r.email || "").toLowerCase().trim(), { role: r.role, scope: r.scope || null });
+  }
+  const activePeople = await supa.from("people")
+    .select("work_email, status, is_site_leader, worker_class, account_key")
+    .eq("status", "ACTIVE");
+  const buckets = { corporate: 0, rdo: 0, site_leader: 0, site_manager: 0, null: 0 };
+  const seen = new Set();
+  // corporate + rdo from kpi_roles
+  for (const [email, v] of kpi) { buckets[v.role]++; seen.add(email); }
+  // site_leader from people (skip if already in kpi as corp/rdo -
+  // first-match-wins)
+  for (const p of (activePeople.data || [])) {
+    const e = (p.work_email || "").toLowerCase().trim();
+    if (!e || seen.has(e)) continue;
+    if (p.is_site_leader) { buckets.site_leader++; seen.add(e); }
+  }
+  // site_manager from people (rule 4 filters: worker_class=salaried,
+  // account_key not null, account_key <> 'CORP')
+  for (const p of (activePeople.data || [])) {
+    const e = (p.work_email || "").toLowerCase().trim();
+    if (!e || seen.has(e)) continue;
+    if (p.worker_class === "salaried" && p.account_key && p.account_key !== "CORP") {
+      buckets.site_manager++;
+      seen.add(e);
+    }
+  }
+  console.log(`  simulated buckets: corporate=${buckets.corporate}, rdo=${buckets.rdo}, site_leader=${buckets.site_leader}, site_manager=${buckets.site_manager}`);
+  // Expected shape post-migration: 9 corp + 2 rdo + 11 leaders + 8 site mgrs.
+  // Pre-migration (kpi_roles still has 3 corp), buckets shift.
+  const migrationApplied = siteRoleRows.length === 0;
+  if (migrationApplied) {
+    if (buckets.corporate !== 9) fail(`corporate simulated = ${buckets.corporate}, want 9`);
+    else ok("corporate = 9");
+    if (buckets.rdo !== 2) fail(`rdo simulated = ${buckets.rdo}, want 2`);
+    else ok("rdo = 2");
+    if (buckets.site_leader !== 11) fail(`site_leader simulated = ${buckets.site_leader}, want 11`);
+    else ok("site_leader = 11");
+    if (buckets.site_manager !== 8) fail(`site_manager simulated = ${buckets.site_manager}, want 8`);
+    else ok("site_manager = 8");
+  } else {
+    // Pre-migration: 3 corp + 2 rdo + 11 leaders + (8 site mgrs unchanged; possibly 6 addl if some kpi_roles 'site' emails aren't in people).
+    if (buckets.site_leader === 11) ok("site_leader = 11 (pre-migration)");
+    else fail(`site_leader simulated = ${buckets.site_leader}, want 11`);
+    if (buckets.site_manager === 8) ok("site_manager = 8 (pre-migration; rule 4 CORP-filter working)");
+    else fail(`site_manager simulated = ${buckets.site_manager}, want 8`);
+    if (buckets.rdo === 2) ok("rdo = 2 (pre-migration)");
+    else fail(`rdo simulated = ${buckets.rdo}, want 2`);
+    skip("corporate count assertion (migration not applied; will land at 9 after M1..M4)");
+  }
+}
+
+console.log("");
+console.log("[F5] this PR changed no data: kpi_roles counts + is_site_leader count are what the role-gates PR left");
+{
+  const leaderCount = leaders.length;
+  if (leaderCount !== 11) fail(`is_site_leader count = ${leaderCount}, want 11`);
+  else ok("is_site_leader count = 11 (unchanged by this PR)");
+  const migrationApplied = siteRoleRows.length === 0;
+  if (migrationApplied) {
+    if (corpCount === 9 && rdoCount === 2 && siteRoleRows.length === 0) ok("kpi_roles = 9 corp + 2 rdo + 0 site (post-M4, unchanged by this PR)");
+    else fail(`kpi_roles = ${corpCount} corp + ${rdoCount} rdo + ${siteRoleRows.length} site`);
+  } else {
+    if (corpCount === 3 && rdoCount === 2 && siteRoleRows.length === 27) ok("kpi_roles = 3 corp + 2 rdo + 27 site (pre-migration baseline, unchanged by this PR)");
+    else fail(`kpi_roles unexpected shape: ${corpCount} corp / ${rdoCount} rdo / ${siteRoleRows.length} site`);
+  }
+}
+
+// ─── G1..G7 - full role-model acceptance (fence-off only) ──────────
 console.log("");
 console.log("[G1] corporate sees every account + every pseudo, salary true everywhere");
+if (fenceOn && corpEmail && !KPI_PREVIEW_ALLOWLIST.includes(corpEmail.toLowerCase().trim())) skip("fence ON and primary corp fixture not allowlisted; G1 waits for fence-off run");
 if (!corpEmail) fail("no corporate email in kpi_roles - cannot exercise G1");
 else {
   const caller = await gate.resolveKpiRole(corpEmail);
@@ -125,6 +259,7 @@ else {
 // ─── G2 - rdo/East ──────────────────────────────────────────────────
 console.log("");
 console.log("[G2] rdo sees every account + every pseudo (full picture), salary true everywhere, lands on region");
+if (fenceOn) { skip("fence ON; G2 fixture (rdo) is not allowlisted - covered by F2/F3"); } else
 if (!rdoEast) fail("no rdo/East email in kpi_roles - cannot exercise G2");
 else {
   const caller = await gate.resolveKpiRole(rdoEast);
@@ -144,6 +279,7 @@ else {
 // ─── G3 - site_leader (TBR - FL) ────────────────────────────────────
 console.log("");
 console.log("[G3] site_leader (TBR - FL): own true, every other account + every pseudo locked; salary true only on own, false on aggregates");
+if (fenceOn) { skip("fence ON; leader fixture is not allowlisted - covered by F2"); } else
 if (!tbrLeader) fail("no TBR - FL leader seeded - cannot exercise G3");
 else {
   const caller = await gate.resolveKpiRole(tbrLeader.work_email);
@@ -171,6 +307,7 @@ else {
 // ─── G4 - site_manager (salaried non-leader at same account) ────────
 console.log("");
 console.log("[G4] site_manager: own view true, salary ALWAYS false (byte-identical with/without include_salary=1)");
+if (fenceOn) { skip("fence ON; site-manager fixture is not allowlisted - covered by F3"); } else
 if (!tbrMgr) skip("no TBR - FL non-leader salaried worker in people; G4 waits for an operational example");
 else {
   const caller = await gate.resolveKpiRole(tbrMgr.work_email);
@@ -219,25 +356,34 @@ else {
 // ─── G6 - landing per role ──────────────────────────────────────────
 console.log("");
 console.log("[G6] landing accounts per §4");
-if (corpEmail) {
-  const c = await gate.resolveKpiRole(corpEmail);
-  if (gate.landingAccount(c) !== "ALL") fail(`corp landing != ALL`); else ok("corporate -> ALL");
-}
-if (rdoEast) {
-  const c = await gate.resolveKpiRole(rdoEast);
-  if (gate.landingAccount(c) !== "EAST") fail(`rdo/E landing != EAST`); else ok("rdo/East -> EAST");
-}
-if (rdoWest) {
-  const c = await gate.resolveKpiRole(rdoWest);
-  if (gate.landingAccount(c) !== "WEST") fail(`rdo/W landing != WEST`); else ok("rdo/West -> WEST");
-}
-if (tbrLeader) {
-  const c = await gate.resolveKpiRole(tbrLeader.work_email);
-  if (gate.landingAccount(c) !== "TBR - FL") fail(`leader landing != TBR - FL`); else ok("site_leader -> own account");
-}
-if (tbrMgr) {
-  const c = await gate.resolveKpiRole(tbrMgr.work_email);
-  if (gate.landingAccount(c) !== tbrMgr.account_key) fail(`mgr landing != own`); else ok("site_manager -> own account");
+if (fenceOn) {
+  skip("fence ON; only allowlisted callers resolve - landing for other roles covered by F4 simulation");
+  if (corpEmail && KPI_PREVIEW_ALLOWLIST.includes(corpEmail.toLowerCase().trim())) {
+    const c = await gate.resolveKpiRole(corpEmail);
+    if (gate.landingAccount(c) !== "ALL") fail(`allowlisted corp landing != ALL`);
+    else ok("allowlisted corporate -> ALL");
+  }
+} else {
+  if (corpEmail) {
+    const c = await gate.resolveKpiRole(corpEmail);
+    if (gate.landingAccount(c) !== "ALL") fail(`corp landing != ALL`); else ok("corporate -> ALL");
+  }
+  if (rdoEast) {
+    const c = await gate.resolveKpiRole(rdoEast);
+    if (gate.landingAccount(c) !== "EAST") fail(`rdo/E landing != EAST`); else ok("rdo/East -> EAST");
+  }
+  if (rdoWest) {
+    const c = await gate.resolveKpiRole(rdoWest);
+    if (gate.landingAccount(c) !== "WEST") fail(`rdo/W landing != WEST`); else ok("rdo/West -> WEST");
+  }
+  if (tbrLeader) {
+    const c = await gate.resolveKpiRole(tbrLeader.work_email);
+    if (gate.landingAccount(c) !== "TBR - FL") fail(`leader landing != TBR - FL`); else ok("site_leader -> own account");
+  }
+  if (tbrMgr) {
+    const c = await gate.resolveKpiRole(tbrMgr.work_email);
+    if (gate.landingAccount(c) !== tbrMgr.account_key) fail(`mgr landing != own`); else ok("site_manager -> own account");
+  }
 }
 
 // ─── G7 - kpi_roles.role='site' rows have no effect ─────────────────
@@ -278,33 +424,38 @@ else {
 // ─── Duplicate-email defence (spec §8 update, seasonal-rehire) ──────
 console.log("");
 console.log("[dup] every seeded leader email resolves via EXACTLY one active row (rule 4 ACTIVE filter is load-bearing)");
-let dupDefects = 0;
-for (const l of leaders) {
-  const email = (l.work_email || "").trim().toLowerCase();
-  if (!email) { fail(`leader for ${l.account_key} has no work_email`); dupDefects++; continue; }
-  // Count all people rows with the same email (case-insensitive) so
-  // we see the seasonal-rehire shadow.
-  const q = await supa
-    .from("people")
-    .select("worker_id, status, is_site_leader, worker_class, account_key")
-    .ilike("work_email", email);
-  const rows = q.data || [];
-  const active = rows.filter(r => r.status === "ACTIVE");
-  const activeSalaried = active.filter(r => r.worker_class === "salaried" && r.account_key != null);
-  const seededLeader = rows.filter(r => r.is_site_leader === true);
-  if (seededLeader.length !== 1) { fail(`${l.account_key}: ${seededLeader.length} leader rows for one email`); dupDefects++; continue; }
-  if (activeSalaried.length !== 1) { fail(`${l.account_key}: ${activeSalaried.length} active-salaried rows for one email`); dupDefects++; continue; }
-  // Prove resolver picks the leader row, not any shadow.
-  const caller = await gate.resolveKpiRole(email);
-  if (caller?.role !== "site_leader" || caller.scope !== l.account_key) {
-    fail(`${l.account_key}: leader email resolved to ${JSON.stringify(caller)}`); dupDefects++;
+if (fenceOn) {
+  skip("fence ON; leader-resolver assertion covered by F2 (all resolve null under fence)");
+} else {
+  let dupDefects = 0;
+  for (const l of leaders) {
+    const email = (l.work_email || "").trim().toLowerCase();
+    if (!email) { fail(`leader for ${l.account_key} has no work_email`); dupDefects++; continue; }
+    // Count all people rows with the same email (case-insensitive) so
+    // we see the seasonal-rehire shadow.
+    const q = await supa
+      .from("people")
+      .select("worker_id, status, is_site_leader, worker_class, account_key")
+      .ilike("work_email", email);
+    const rows = q.data || [];
+    const active = rows.filter(r => r.status === "ACTIVE");
+    const activeSalaried = active.filter(r => r.worker_class === "salaried" && r.account_key != null);
+    const seededLeader = rows.filter(r => r.is_site_leader === true);
+    if (seededLeader.length !== 1) { fail(`${l.account_key}: ${seededLeader.length} leader rows for one email`); dupDefects++; continue; }
+    if (activeSalaried.length !== 1) { fail(`${l.account_key}: ${activeSalaried.length} active-salaried rows for one email`); dupDefects++; continue; }
+    // Prove resolver picks the leader row, not any shadow.
+    const caller = await gate.resolveKpiRole(email);
+    if (caller?.role !== "site_leader" || caller.scope !== l.account_key) {
+      fail(`${l.account_key}: leader email resolved to ${JSON.stringify(caller)}`); dupDefects++;
+    }
   }
+  if (dupDefects === 0) ok(`all ${leaders.length} leader emails resolve uniquely; seasonal rehires do not shadow`);
 }
-if (dupDefects === 0) ok(`all ${leaders.length} leader emails resolve uniquely; seasonal rehires do not shadow`);
 
 // ─── CORP filter on rule 4 (spec §2 update) ─────────────────────────
 console.log("");
 console.log("[corp-not-mgr] active salaried at account_key='CORP' must NOT resolve to site_manager");
+if (fenceOn) { skip("fence ON; CORP mgrs resolve null under fence - CORP-filter behaviour is covered by F4 simulation"); } else
 if (corpMgrs.length === 0) skip("no active-salaried CORP rows to check");
 else {
   let leaks = 0;
@@ -323,6 +474,59 @@ else {
   }
   if (leaks === 0) ok(`checked ${corpMgrs.length} active-salaried CORP rows; none resolved to site_manager scope='CORP'`);
 }
+
+// ─── F6 - every /api/kpi/**/route.js carries the fence ─────────────
+// This is the check Kevin was missing when PR #725's fence went in
+// - it enumerates the KPI API surface off the filesystem rather than
+// off a hand-maintained list, so a future endpoint cannot ship
+// unfenced. Any route that has a legitimate reason to bypass the
+// fence must add the marker comment `// KPI_PREVIEW_FENCE_EXEMPT:
+// <reason>` on the module so future readers see the exception was
+// deliberate.
+console.log("");
+console.log("[F6] every route file under src/app/api/kpi/**/route.js carries the KPI preview fence");
+function findRoutes(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...findRoutes(p));
+    else if (entry.isFile() && entry.name === "route.js") out.push(p);
+  }
+  return out;
+}
+const routeFiles = findRoutes(path.join(REPO_ROOT, "src/app/api/kpi"));
+console.log(`  enumerated ${routeFiles.length} route file(s)`);
+const missing = [];
+for (const f of routeFiles) {
+  const src = fs.readFileSync(f, "utf8");
+  const rel = path.relative(REPO_ROOT, f);
+  if (/KPI_PREVIEW_FENCE_EXEMPT:/i.test(src)) {
+    ok(`${rel} explicit KPI_PREVIEW_FENCE_EXEMPT marker (skipping)`);
+    continue;
+  }
+  // Two shapes count as fenced:
+  //  (a) direct: imports KPI_PREVIEW_ONLY + KPI_PREVIEW_ALLOWLIST and
+  //      runs the "KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST" check.
+  //      This is what routes that still gate on OPS_LEADERSHIP_EMAILS
+  //      (views / views[id] / export / purchasing) look like.
+  //  (b) via resolver: imports loadRoleGate and calls
+  //      resolveKpiRole(email). The fence lives inside the closure,
+  //      so a null return already means "fenced-out caller, refuse".
+  //      This is what labor/route.js looks like.
+  const directFence = /import[\s\S]*?KPI_PREVIEW_ONLY[\s\S]*?KPI_PREVIEW_ALLOWLIST[\s\S]*?from\s*["'][^"']*roleGate/i.test(src)
+                    && /KPI_PREVIEW_ONLY\s*&&\s*!KPI_PREVIEW_ALLOWLIST\.includes\(/.test(src);
+  const viaResolver = /import[\s\S]*?loadRoleGate[\s\S]*?from\s*["'][^"']*roleGate/i.test(src)
+                    && /resolveKpiRole\(/.test(src);
+  if (directFence) {
+    ok(`${rel} fenced (direct fence pattern)`);
+  } else if (viaResolver) {
+    ok(`${rel} fenced (via resolveKpiRole - fence lives in the closure)`);
+  } else {
+    fail(`${rel} MISSING fence (direct=${directFence}, viaResolver=${viaResolver})`);
+    missing.push(rel);
+  }
+}
+if (missing.length === 0) ok(`all ${routeFiles.length} KPI route files carry the fence (or an explicit exempt marker)`);
 
 // ─── Locked-response shape (code-read) ──────────────────────────────
 console.log("");

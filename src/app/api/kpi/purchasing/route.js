@@ -68,6 +68,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+// KPI PREVIEW FENCE - single source of truth in roleGate.js. The
+// purchasing route has not adopted the full role model yet (that is
+// Phase 2 work); until it does, the same allowlist that gates the
+// labor route also gates this one.
+import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { getServiceClient } from "@/lib/supabase";
 import {
   FY_START_ISO, periodOf, periodStartISO, periodEndISO,
@@ -369,6 +374,14 @@ export async function GET(request) {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
     const email = session.user?.email?.toLowerCase().trim();
+    // KPI PREVIEW FENCE - sits in FRONT of the existing
+    // OPS_LEADERSHIP_EMAILS gate so a fenced caller is refused even
+    // if they are on the ops leadership list. Flipping
+    // KPI_PREVIEW_ONLY to false in src/lib/kpi/roleGate.js opens
+    // this route back up to OPS_LEADERSHIP_EMAILS.
+    if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
