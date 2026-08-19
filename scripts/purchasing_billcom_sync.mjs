@@ -467,20 +467,42 @@ async function deriveForTouchedBills({ touchedBillIds }) {
   const runId = runInsert.data?.id;
 
   // Load maps.
-  const [classMapResp, accountsResp] = await Promise.all([
-    supa.from("billcom_class_site_map").select("actg_class_id, account_key, excluded"),
-    supa.from("billcom_ref_accounts").select("id, account_number"),
-  ]);
+  //
+  // billcom_ref_accounts has 1,072 rows and PostgREST caps a single
+  // .select() at 1000 rows by default. A single-shot select silently
+  // truncates the tail 72 rows (which happen to include multi-dot
+  // sub-accounts like 1371.2, 1373.5, 3200.1.2), leaving those lines
+  // with gl_line_code NULL. Page via .range() to load all rows.
+  const classMapResp = await supa
+    .from("billcom_class_site_map")
+    .select("actg_class_id, account_key, excluded");
   if (classMapResp.error) {
     console.error(`[derive] class map load FAILED: ${classMapResp.error.message}`);
     return { ok: false, billsDerived: 0, rowsWritten: 0, error: classMapResp.error.message };
   }
-  if (accountsResp.error) {
-    console.error(`[derive] accounts load FAILED: ${accountsResp.error.message}`);
-    return { ok: false, billsDerived: 0, rowsWritten: 0, error: accountsResp.error.message };
+  const accountsRows = [];
+  {
+    const PAGE = 1000;
+    let start = 0;
+    // Guard against infinite loops in case count grows unexpectedly.
+    for (let iter = 0; iter < 20; iter++) {
+      const { data, error } = await supa
+        .from("billcom_ref_accounts")
+        .select("id, account_number")
+        .range(start, start + PAGE - 1);
+      if (error) {
+        console.error(`[derive] accounts load FAILED at range ${start}..${start + PAGE - 1}: ${error.message}`);
+        return { ok: false, billsDerived: 0, rowsWritten: 0, error: error.message };
+      }
+      if (!data || data.length === 0) break;
+      accountsRows.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
   }
   const classMap = new Map((classMapResp.data || []).map(r => [r.actg_class_id, r]));
-  const accountToNumber = new Map((accountsResp.data || []).map(r => [r.id, r.account_number]));
+  const accountToNumber = new Map(accountsRows.map(r => [r.id, r.account_number]));
+  console.log(`[derive] loaded ${accountsRows.length} ref accounts into lookup map`);
 
   let billsDerived = 0;
   let rowsWritten = 0;
@@ -754,6 +776,113 @@ async function runProbes({ touchedBillIds }) {
     const uncoded = uncodedResp.count || 0;
     probes.push({ id: "P6", pass: true, note: `unattributed=${unattr} uncoded=${uncoded}` });
     console.log(`P6 INFO: billcom unattributed=${unattr} uncoded=${uncoded}`);
+  }
+
+  // P7. Any purchasing_actuals billcom row with gl_line_code NULL
+  //     whose raw line's chart_of_account_id EXISTS in
+  //     billcom_ref_accounts is a lookup miss -> FAIL. Rows whose coa
+  //     is genuinely absent from ref are reported separately and are
+  //     not a failure. Applies across ALL billcom rows (not just the
+  //     touched window) because ref refresh is a full replace and
+  //     coverage is a global property.
+  {
+    // Load full ref-account id set (page past 1000-row PostgREST cap).
+    const refIds = new Set();
+    {
+      const PAGE = 1000;
+      let start = 0;
+      for (let iter = 0; iter < 20; iter++) {
+        const { data, error } = await supa
+          .from("billcom_ref_accounts")
+          .select("id")
+          .range(start, start + PAGE - 1);
+        if (error) {
+          console.log(`P7 FAIL: ref accounts load error - ${error.message}`);
+          probes.push({ id: "P7", pass: false, note: "ref load error" });
+          return { probes, allPass: false };
+        }
+        if (!data || data.length === 0) break;
+        for (const r of data) refIds.add(r.id);
+        if (data.length < PAGE) break;
+        start += PAGE;
+      }
+    }
+
+    // Load all billcom purchasing_actuals rows that are still uncoded.
+    // Page past the 1000-row PostgREST cap defensively.
+    const uncodedRows = [];
+    {
+      const PAGE = 1000;
+      let start = 0;
+      for (let iter = 0; iter < 100; iter++) {
+        const { data, error } = await supa
+          .from("purchasing_actuals")
+          .select("source_line_id")
+          .eq("source", "billcom")
+          .is("gl_line_code", null)
+          .range(start, start + PAGE - 1);
+        if (error) {
+          console.log(`P7 FAIL: uncoded scan error - ${error.message}`);
+          probes.push({ id: "P7", pass: false, note: "uncoded scan error" });
+          return { probes, allPass: false };
+        }
+        if (!data || data.length === 0) break;
+        uncodedRows.push(...data);
+        if (data.length < PAGE) break;
+        start += PAGE;
+      }
+    }
+
+    if (uncodedRows.length === 0) {
+      probes.push({ id: "P7", pass: true, note: "no uncoded billcom rows" });
+      console.log("P7 PASS: no uncoded billcom rows");
+    } else {
+      // source_line_id is stored as "billcom:<line_id>"; strip the
+      // prefix to join to billcom_raw_bill_lines_latest.line_id which
+      // is stored bare.
+      const lineIds = uncodedRows.map(r => {
+        const s = String(r.source_line_id || "");
+        return s.startsWith("billcom:") ? s.slice("billcom:".length) : s;
+      });
+      const coaById = new Map();
+      for (let i = 0; i < lineIds.length; i += 500) {
+        const chunk = lineIds.slice(i, i + 500);
+        const { data, error } = await supa
+          .from("billcom_raw_bill_lines_latest")
+          .select("line_id, chart_of_account_id")
+          .in("line_id", chunk);
+        if (error) {
+          console.log(`P7 FAIL: line lookup error - ${error.message}`);
+          probes.push({ id: "P7", pass: false, note: "line lookup error" });
+          return { probes, allPass: false };
+        }
+        for (const r of data || []) coaById.set(r.line_id, r.chart_of_account_id);
+      }
+      let lookupMiss = 0;   // coa exists in ref but derive left NULL -> bug
+      let genuineAbsent = 0;// coa not in ref (or line has no coa at all)
+      const missingCoaCounts = new Map();
+      for (const lid of lineIds) {
+        const coa = coaById.get(lid);
+        if (coa && refIds.has(coa)) {
+          lookupMiss++;
+        } else {
+          genuineAbsent++;
+          if (coa) missingCoaCounts.set(coa, (missingCoaCounts.get(coa) || 0) + 1);
+        }
+      }
+      const topAbsent = [...missingCoaCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id, n]) => `${id}=${n}`)
+        .join(" ");
+      const pass = lookupMiss === 0;
+      probes.push({
+        id: "P7",
+        pass,
+        note: `lookup_miss=${lookupMiss} genuine_absent=${genuineAbsent}${topAbsent ? ` top_absent=[${topAbsent}]` : ""}`,
+      });
+      console.log(`P7 ${pass ? "PASS" : "FAIL"}: uncoded billcom rows whose coa EXISTS in ref (must be 0): ${lookupMiss}. Genuinely-absent coa: ${genuineAbsent}${topAbsent ? ` top=[${topAbsent}]` : ""}`);
+    }
   }
 
   const allPass = probes.every(p => p.pass);
