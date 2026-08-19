@@ -1955,6 +1955,25 @@
   font-size: var(--kpi-t-meta); color: var(--n-600);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Salary PR 3 C3 - vacancy line under the spend-pair when salary is
+   on. States the arithmetic; the class carries the tone so under /
+   at / over budget read at a glance. b elements carry the two dollar
+   figures; percentage sits after a mid-dot. */
+.kpi-spend-salary {
+  margin-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kpi-spend-salary b {
+  font-weight: 700; color: var(--n-800);
+  font-variant-numeric: var(--num-tabular);
+}
+.kpi-spend-salary-at    { color: var(--n-600); }
+.kpi-spend-salary-under { color: var(--amber-600); }
+.kpi-spend-salary-under b { color: var(--amber-600); }
+.kpi-spend-salary-over  { color: var(--red-700); }
+.kpi-spend-salary-over b  { color: var(--red-700); }
 /* V39 - the state cell used to be the ONLY surface on the page that
    painted state as a full background fill. Every other card is a 4px
    left accent on white; the state cell now matches that grammar.

@@ -146,6 +146,32 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary }) {
           <div className="kpi-spend-cell-sub">{right.sub}</div>
         </div>
       </div>
+
+      {/* Salary PR 3 C3 - salary vacancy line. States the arithmetic;
+          never guesses the cause (spec is explicit: "under budget can
+          be an unfilled role, a mid-period departure, or a role filled
+          below budget - the board cannot tell them apart"). Three
+          shapes: at-budget (== budget), under-budget (< budget),
+          over-budget (> budget). Roles-filled clause omitted here -
+          we do not carry a budgeted-headcount on the wire, and
+          salary_summary.workers is filled count only. */}
+      {salary && salary.vacancy && (() => {
+        const rows = salary.vacancy.filter(v => v.budget > 0 || v.actual > 0);
+        if (rows.length === 0) return null;
+        const budgetSum = rows.reduce((s, v) => s + Number(v.budget || 0), 0);
+        const actualSum = rows.reduce((s, v) => s + Number(v.actual || 0), 0);
+        if (budgetSum <= 0 && actualSum <= 0) return null;
+        const pct = budgetSum > 0 ? Math.round((actualSum / budgetSum) * 100) : null;
+        const cls = actualSum > budgetSum ? "kpi-spend-salary-over"
+                  : Math.abs(actualSum - budgetSum) < 0.5 ? "kpi-spend-salary-at"
+                  : "kpi-spend-salary-under";
+        return (
+          <div className={`kpi-spend-salary ${cls}`}>
+            salary <b>{fmt$(actualSum)}</b> of <b>{fmt$(budgetSum)}</b>
+            {pct != null && <> · {pct}%</>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
