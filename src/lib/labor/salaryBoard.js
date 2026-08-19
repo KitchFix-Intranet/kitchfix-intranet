@@ -188,6 +188,7 @@ export function withSalary(body, {
   end,
   today,
   buildBoard,
+  buildWeekBudgets,
   salary3100_2,
   salaryRows,
   otThresholds,
@@ -251,10 +252,26 @@ export function withSalary(body, {
   //    avg_rate under the explicit name; downstream labels this.
   const blended_rate_hourly = body.board?.avg_rate ?? null;
 
+  // 8. 2026-08-19 V40 BUG 2 - week_budgets on the salary path.
+  //    Prior state: withSalary spread body.week_budgets unchanged
+  //    (hourly-only), which put the week strip (fed from
+  //    budget_periods = merged, correct) and the WeekTable (fed from
+  //    week_budgets = hourly-only, wrong) into opposite verdicts
+  //    on the same week - measured live at TBR-FL P8 week 07/13:
+  //    strip said "▼ $759 under $12,245.74"; table said "▲ $3,424
+  //    over $8,063.05". Recomputing week_budgets from merged
+  //    budget_periods restores the same source both surfaces read.
+  //    buildWeekBudgets is passed by the caller so this module has
+  //    no direct dep on lib/board.
+  const week_budgets = (typeof buildWeekBudgets === "function")
+    ? buildWeekBudgets({ start, end, budget_periods: merged.periods })
+    : body.week_budgets;
+
   return {
     ...body,
     actuals: mergedActuals,
     budget_periods: merged.periods,
+    week_budgets,
     board: mergedBoard,
     salary_included: true,
     salary_summary,

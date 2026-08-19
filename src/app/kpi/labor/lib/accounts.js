@@ -11,6 +11,32 @@ export const ACCOUNTS = [
   "TXR - AZ", "TXR - TX - H", "TXR - TX - V",
 ];
 
+// V40 FIX 4 - static directory + RDO map so the folio renders the FULL
+// grouped rail (region cards + RDO subline + all 11 members) on the
+// first paint instead of the flat 11-row skeleton. The account list is
+// stable for a session; region + salaried are structural facts, RDO
+// display names are hard-coded elsewhere in the codebase (see
+// src/lib/admin.js and src/lib/incidentSchema.js). Team_name / city /
+// state stay null in the static rows to avoid stale-copy risk; the
+// row height CSS reserves the desc-line slot so the swap when live
+// data lands does not reflow the rail. Regions come from
+// docs/SC_ADMIN_RECON_REPORT.md and match accounts.region in Supabase.
+export const STATIC_DIRECTORY = [
+  { team_key: "CIN - AZ",     region: "West", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "CIN - KY",     region: "West", team_name: null, city: null, state: null, salaried: true  },
+  { team_key: "CIN - OH",     region: "West", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "STL - FL",     region: "East", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "STL - MO",     region: "East", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "TBJ - FL",     region: "East", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "TBJ - NY",     region: "East", team_name: null, city: null, state: null, salaried: true  },
+  { team_key: "TBR - FL",     region: "East", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "TXR - AZ",     region: "West", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "TXR - TX - H", region: "West", team_name: null, city: null, state: null, salaried: false },
+  { team_key: "TXR - TX - V", region: "West", team_name: null, city: null, state: null, salaried: false },
+];
+
+export const STATIC_RDO_DISPLAY = { East: "S. Lynch", West: "R. Moore" };
+
 // V7-3 - Sections are the command-bar dropdown that replaces the v6
 // tabs row. K5 preserved: non-Labor items ghosted with a SOON tag.
 export const SECTIONS = [

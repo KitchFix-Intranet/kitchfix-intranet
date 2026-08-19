@@ -872,6 +872,10 @@ export default function KpiLaborPage() {
           aggregateMode={PSEUDO_KEYS.has(account)}
           budgetPeriods={data?.budget_periods || []}
           weekBudgets={data?.week_budgets || []}
+          salary={data?.salary_included ? {
+            rate_basis: data.rate_basis,
+            blended_rate_hourly: data.blended_rate_hourly,
+          } : null}
           onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "" }) : null}
           rangeSelection={rangeSelectionEarly}
           resolvedPreset={resolvedPreset}
@@ -956,10 +960,15 @@ export default function KpiLaborPage() {
 // its real height. Only renders when the board has NEVER rendered in
 // this session (first paint). Warm nav keeps the previous board.
 function BoardSkeleton() {
+  // V40 FIX 4 - V35 shape: two top cards (StoryBlock + comparison
+  // companion), four signal cards, details strip, numbers header
+  // above the table, six table rows. Acceptance: skeleton height
+  // within 40px of the mounted board at 1180/1280/1440.
   return (
     <div className="kpi-board kpi-board-skel" role="status" aria-live="polite" aria-busy="true">
       <span className="sr-only">Loading dashboard</span>
       <div className="kpi-skel kpi-skel-spend" />
+      <div className="kpi-skel kpi-skel-companion" />
       <div className="kpi-skel-sigs">
         <div className="kpi-skel kpi-skel-sig" />
         <div className="kpi-skel kpi-skel-sig" />
@@ -967,6 +976,7 @@ function BoardSkeleton() {
         <div className="kpi-skel kpi-skel-sig" />
       </div>
       <div className="kpi-skel kpi-skel-det" />
+      <div className="kpi-skel kpi-skel-nums" />
       <div className="kpi-skel-tbl">
         {Array.from({ length: 6 }, (_, i) => (
           <div key={i} className="kpi-skel kpi-skel-row" />

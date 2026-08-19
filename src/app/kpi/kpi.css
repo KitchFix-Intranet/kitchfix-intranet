@@ -254,6 +254,22 @@
   white-space: nowrap;
 }
 .kpi-cmd-dot { color: #5C769A; margin: 0 var(--kpi-sp-2); font-weight: 400; flex: none; }
+/* V40 FIX 3b - persistent amber pill in the command bar title when
+   salary is on. Sits just after the account tail; small caps so it
+   reads as an attribute of the title, not a second heading. */
+.kpi-cmd-title-salary {
+  flex: none;
+  margin-left: var(--kpi-sp-2);
+  padding: 2px var(--kpi-sp-2);
+  border-radius: 999px;
+  background: var(--amber-600);
+  color: var(--n-0);
+  font-size: var(--kpi-size-caption);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  align-self: center;
+}
 
 /* Salary PR 3 C1 - Hourly / + Salary toggle. Sits between Section
    and Range in the command bar and only renders when the route
@@ -1216,8 +1232,18 @@
   background: var(--n-900);
   color: var(--n-0); font-weight: 700;
 }
+/* V40 FIX 3a - when salary is on the ACTIVE segment reads amber so the
+   toggle changes colour with meaning. Only the .on button is repainted;
+   the inactive side keeps its neutral background. */
+.kpi-seg.kpi-seg-salary-on button.on {
+  background: var(--amber-600);
+  color: var(--n-0);
+}
 /* V33 item 2 - hover on the unselected side; the selected side keeps
-   the navy fill so no hover feedback is needed there. */
+   the navy fill so no hover feedback is needed there.
+   V40 FIX 3 - bump inactive text to n-700 so contrast on the white
+   seg background clears 4.5:1 regardless of salary state. */
+.kpi-seg button { color: var(--n-700); }
 .kpi-seg button:not(.on):hover { background: var(--n-100); color: var(--n-800); }
 /* V25-12 - help button inside the control bar joins the tbar's control
    height, replacing its stand-alone 20px sizing (which broke the 28px
@@ -1547,6 +1573,11 @@
 .kpi-acct-desc {
   font-size: var(--kpi-size-caption); color: var(--n-500);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* V40 FIX 4 - reserve the desc line-box height so a member row is
+     the same height with or without live team_name/city/state. Static
+     directory renders empty desc lines; live data fills them without
+     a reflow. */
+  display: block; min-height: 1.25em;
 }
 
 /* V7-19 SYSTEM status strip - hugs the folio foot. Quiet by design:
@@ -1742,6 +1773,11 @@
   animation: kpiSkelShimmer 1.4s ease-in-out infinite;
 }
 .kpi-skel-spend { height: calc(220px * var(--kf-scale)); }
+/* V40 FIX 4 - companion top card (ComparisonStrip mirror) so the
+   skeleton reflects the V35 two-top-cards shape. Numbers header sits
+   above the six row skeletons to mirror WeekTable's THead. */
+.kpi-skel-companion { height: calc(60px * var(--kf-scale)); }
+.kpi-skel-nums { height: calc(40px * var(--kf-scale)); }
 .kpi-skel-sigs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

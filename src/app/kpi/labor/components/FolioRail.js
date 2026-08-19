@@ -11,7 +11,7 @@
 // the labor route payload. Falls back to a flat list if the directory
 // hasn't landed yet.
 
-import { ACCOUNTS, folioMemberDescription } from "../lib/accounts";
+import { folioMemberDescription, STATIC_DIRECTORY, STATIC_RDO_DISPLAY } from "../lib/accounts";
 
 const PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 
@@ -43,7 +43,10 @@ function MemberRow({ teamKey, meta, isActive, onClick }) {
     >
       <span className="kpi-acct-lock">
         <span className="kpi-acct-key">{teamKey}</span>
-        {desc.line && <span className="kpi-acct-desc">{desc.line}</span>}
+        {/* V40 FIX 4 - always render the desc slot so the row is the
+            same height with or without a live desc line. Prevents the
+            static -> live directory swap from reflowing the rail. */}
+        <span className="kpi-acct-desc">{desc.line || " "}</span>
       </span>
     </button>
   );
@@ -56,31 +59,22 @@ export function FolioRail({
   regionalDirectorsDisplay,   // { East: "S. Lynch", West: "R. Moore" } | undefined
   folioFoot,                  // node - SYSTEM strip lands in C3 via this slot
 }) {
-  const hasDirectory = Array.isArray(accountsDirectory) && accountsDirectory.length > 0;
+  const hasLive = Array.isArray(accountsDirectory) && accountsDirectory.length > 0;
 
-  if (!hasDirectory) {
-    return (
-      <>
-        <div className="kpi-folio-h">Accounts</div>
-        {ACCOUNTS.map(a => (
-          <MemberRow
-            key={a}
-            teamKey={a}
-            meta={null}
-            isActive={a === activeAccount}
-            onClick={onPickAccount}
-          />
-        ))}
-        {folioFoot}
-      </>
-    );
-  }
+  // V40 FIX 4 - render the same grouped rail from STATIC_DIRECTORY on
+  // the cold paint. Prior fallback was a flat 11-row list that swapped
+  // to a grouped 3-card layout when live data arrived (measured 279px
+  // grow at 2.0s). Static rows carry region + team_key only; the desc
+  // line slot is reserved via .kpi-acct min-height so the swap when
+  // live team_name/city/state land does not reflow.
+  const directory = hasLive ? accountsDirectory : STATIC_DIRECTORY;
+  const rdoDisplay = hasLive ? regionalDirectorsDisplay : STATIC_RDO_DISPLAY;
 
-  const east = accountsDirectory.filter(a => a.region === "East");
-  const west = accountsDirectory.filter(a => a.region === "West");
-  const eastRdo = regionalDirectorsDisplay?.East;
-  const westRdo = regionalDirectorsDisplay?.West;
-  const total = accountsDirectory.length;
+  const east = directory.filter(a => a.region === "East");
+  const west = directory.filter(a => a.region === "West");
+  const eastRdo = rdoDisplay?.East;
+  const westRdo = rdoDisplay?.West;
+  const total = directory.length;
 
   return (
     <>
