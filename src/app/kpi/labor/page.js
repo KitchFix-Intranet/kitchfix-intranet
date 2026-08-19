@@ -732,8 +732,17 @@ export default function KpiLaborPage() {
                   blended_rate_hourly: data.blended_rate_hourly,
                 } : null}
               />
-              <ComparisonStrip prior_period_comparison={data.prior_period_comparison} />
-              <DetailsStrip board={data.board} />
+              <ComparisonStrip
+                prior_period_comparison={data.prior_period_comparison}
+                salaryIncluded={data?.salary_included === true}
+              />
+              <DetailsStrip
+                board={data.board}
+                salary={data?.salary_included ? {
+                  rate_basis: data.rate_basis,
+                  blended_rate_hourly: data.blended_rate_hourly,
+                } : null}
+              />
             </>
           )}
         </div>

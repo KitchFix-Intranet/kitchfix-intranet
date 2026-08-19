@@ -349,13 +349,19 @@ function HoursLeftCard({ board, salary }) {
 // no worker-weeks yet -> neutral. Unapproved hrs and Will rise carry
 // the same tone the card carries; complete periods render `none` at
 // good tone (not an em-dash).
-function PayrollDataCard({ board, freshness }) {
+function PayrollDataCard({ board, freshness, salary }) {
   const pd = board?.payroll_data;
   const priced = pd?.priced_ww ?? 0;
   const total = pd?.total_ww ?? 0;
   const unpricedHrs = pd?.unpriced_hours ?? 0;
   const unapprovedWeeks = pd?.unapproved_weeks ?? 0;
-  const rate = board?.avg_rate;
+  // Salary PR 3 - Will rise = unapproved HOURS * rate. Rate MUST be
+  // the hourly-only rate, not the merged board's avg_rate (which is
+  // mixed dollars over hourly hours). Unapproved hours are hourly
+  // hours by construction (salaried people do not clock in - S1h
+  // proves it), so multiplying by blended_rate_hourly is correct.
+  const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
+  const rate = salary?.blended_rate_hourly ?? board?.avg_rate;
   const workers = board?.distinct_workers ?? 0;
   const closedWeeks = board?.closed_weeks_count ?? 0;
   const weeksInPeriod = board?.weeks_in_period;
@@ -363,8 +369,9 @@ function PayrollDataCard({ board, freshness }) {
   const state = total === 0 ? "neutral" : hasUnapproved ? "warn" : "good";
   const label = total === 0 ? "—" : hasUnapproved ? "PARTIAL" : "FINAL";
   const willRise = (hasUnapproved && rate != null && rate > 0) ? unpricedHrs * rate : null;
+  const rateLabelInTitle = rateBasisHourlyOnly ? "hourly rate" : "blended rate";
   const willRiseTitle = willRise != null
-    ? `Estimate. ${fmtHrs(unpricedHrs)} unapproved hrs x $${rate.toFixed(2)} blended rate. Unapproved hours skew to whoever has not been processed, so their true rate may differ from the blend.`
+    ? `Estimate. ${fmtHrs(unpricedHrs)} unapproved hrs x $${rate.toFixed(2)} ${rateLabelInTitle}. Unapproved hours skew to whoever has not been processed, so their true rate may differ from the ${rateBasisHourlyOnly ? "hourly average" : "blend"}.`
     : "";
   const lastPulled = freshness?.last_walk_at
     ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
@@ -414,7 +421,7 @@ export function SignalCards({ board, freshness, salary }) {
       <PaceCard board={board} />
       <OvertimeCard board={board} salary={salary} />
       <HoursLeftCard board={board} salary={salary} />
-      <PayrollDataCard board={board} freshness={freshness} />
+      <PayrollDataCard board={board} freshness={freshness} salary={salary} />
     </div>
   );
 }
