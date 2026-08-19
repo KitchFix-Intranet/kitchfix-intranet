@@ -66,7 +66,7 @@ console.log("=".repeat(72));
 // ─── Load ────────────────────────────────────────────────────────────
 const [rawWorkers, people] = await Promise.all([
   fetchAll("rippling_raw_workers_latest", "payload"),
-  fetchAll("people", "worker_id, status, display_name, account_key, is_manager, is_salaried, is_site_leader, site_leader_note, last_synced_at"),
+  fetchAll("people", "worker_id, status, display_name, account_key, is_manager, is_salaried, is_site_leader, site_leader_note, worker_class, worker_class_source, last_synced_at"),
 ]);
 const activeRaw = rawWorkers.filter(w => (w.payload || {}).status === "ACTIVE");
 const peopleById = new Map();
@@ -86,11 +86,11 @@ if (noName.length === 0) ok(`active people=${activePeople.length} all have displ
 else fail(`active people without display_name: ${noName.length}  (worker_ids: ${noName.slice(0, 5).map(p => p.worker_id).join(", ")}...)`);
 
 console.log("");
-console.log("[P3] derive never writes owner columns is_site_leader / site_leader_note");
-// STATIC leg: the upsert payload does not include the two owner
-// columns. This is the definitive proof - PG cannot update columns
-// not in the ON CONFLICT DO UPDATE SET, which the js client derives
-// from the row's keys.
+console.log("[P3] derive preserves owner-maintained columns (is_site_leader, site_leader_note, worker_class when source='owner')");
+// STATIC leg 1: the upsert payload does not include is_site_leader
+// or site_leader_note at all. PG cannot update columns not in the
+// ON CONFLICT DO UPDATE SET, which the js client derives from the
+// row's keys.
 const deriveSrc = fs.readFileSync(path.join(REPO_ROOT, "scripts/derive_people.mjs"), "utf8");
 const rowShapeMatch = deriveSrc.match(/rows\.push\(\{([\s\S]*?)\}\);/);
 if (!rowShapeMatch) fail("could not locate rows.push({...}) payload in derive_people.mjs");
@@ -101,29 +101,44 @@ else {
   if (!hasLeader && !hasNote) ok("upsert payload omits is_site_leader + site_leader_note (owner columns preserved by construction)");
   else fail(`upsert payload leaks owner columns: is_site_leader=${hasLeader} site_leader_note=${hasNote}`);
 }
-// DYNAMIC leg: any currently-seeded rows survive a fresh derive run.
-// The probe itself runs the derive to guarantee "two consecutive runs"
-// against a known snapshot (the workflow's Derive people step is the
-// first; this is the second).
-const seeded = people.filter(p => p.is_site_leader);
-if (seeded.length === 0) {
-  skip(`no is_site_leader=true rows currently in people; P3 dynamic check waits for Kevin's seed pass`);
+// STATIC leg 2: worker_class + worker_class_source ARE in the payload
+// (they must round-trip), but the derive carries the existing DB value
+// through when worker_class_source='owner'. Assert the branch exists.
+const carriesOwner = /ownerClassByWorker\.get\(workerId\)/.test(deriveSrc)
+  && /isOwner\s*\?\s*"owner"\s*:\s*"derived"/.test(deriveSrc)
+  && /isOwner\)\s*\{\s*workerClass\s*=\s*ownerClass;/.test(deriveSrc);
+if (carriesOwner) ok("derive carries owner-marked worker_class through the upsert (no overwrite branch verified)");
+else fail("derive does not carry owner-marked worker_class through (check ownerClassByWorker branch in derive_people.mjs)");
+// STATIC leg 3: derive NEVER emits 'contract' as a derived value.
+const emitsContract = /worker_class\s*=\s*"contract"/.test(deriveSrc);
+if (!emitsContract) ok("derive never emits worker_class='contract' (owner-only value)");
+else fail("derive emits 'contract' - remove that heuristic; contract is owner-only");
+// DYNAMIC leg 1: is_site_leader survives a second derive run.
+const seededLeader = people.filter(p => p.is_site_leader);
+// DYNAMIC leg 2: worker_class_source='owner' rows survive a second derive run.
+const seededOwner = people.filter(p => p.worker_class_source === "owner");
+if (seededLeader.length === 0 && seededOwner.length === 0) {
+  skip(`no seeded rows yet (0 is_site_leader, 0 worker_class_source='owner'); P3 dynamic checks wait for Kevin's seed pass`);
 } else {
-  const snapshot = new Map();
-  for (const p of seeded) snapshot.set(p.worker_id, { on: p.is_site_leader, note: p.site_leader_note });
-  console.log(`  running a second derive against ${seeded.length} seeded row(s)`);
+  const leaderSnap = new Map();
+  for (const p of seededLeader) leaderSnap.set(p.worker_id, { note: p.site_leader_note });
+  const ownerSnap = new Map();
+  for (const p of seededOwner) ownerSnap.set(p.worker_id, { cls: p.worker_class });
+  console.log(`  running a second derive against ${seededLeader.length} leader row(s) + ${seededOwner.length} owner-class row(s)`);
   const r = spawnSync("node", ["scripts/derive_people.mjs", "--source=manual"], { cwd: REPO_ROOT, stdio: "pipe", encoding: "utf8" });
   if (r.status !== 0) fail(`second derive run failed exit=${r.status}: ${(r.stderr || "").slice(0, 200)}`);
   else {
-    const after = await fetchAll("people", "worker_id, is_site_leader, site_leader_note");
-    let drifted = 0;
+    const after = await fetchAll("people", "worker_id, is_site_leader, site_leader_note, worker_class, worker_class_source");
+    let leaderDrift = 0;
+    let ownerDrift = 0;
     for (const a of after) {
-      const before = snapshot.get(a.worker_id);
-      if (!before) continue;
-      if (!a.is_site_leader || (before.note || null) !== (a.site_leader_note || null)) drifted++;
+      const bLead = leaderSnap.get(a.worker_id);
+      if (bLead && (!a.is_site_leader || (bLead.note || null) !== (a.site_leader_note || null))) leaderDrift++;
+      const bOwn = ownerSnap.get(a.worker_id);
+      if (bOwn && (a.worker_class_source !== "owner" || bOwn.cls !== a.worker_class)) ownerDrift++;
     }
-    if (drifted === 0) ok(`${seeded.length} seeded row(s) survived a second derive run unchanged`);
-    else fail(`seeded rows drifted after second derive run: ${drifted}`);
+    if (leaderDrift === 0 && ownerDrift === 0) ok(`seeded rows survived: leaders=${seededLeader.length}, owner-class=${seededOwner.length}`);
+    else fail(`drift after second derive - leaders=${leaderDrift}, owner-class=${ownerDrift}`);
   }
 }
 
@@ -156,7 +171,7 @@ for (const p of people) beforeSnap.set(p.worker_id, JSON.stringify({
 }));
 // Re-select a hash-friendly subset for the diff.
 const before6 = await fetchAll("people",
-  "worker_id, user_id, display_name, title, status, start_date, end_date, department_id, account_key, is_corp, work_email, personal_email, phone, manager_worker_id, is_manager, is_salaried");
+  "worker_id, user_id, display_name, title, status, start_date, end_date, department_id, account_key, is_corp, work_email, personal_email, phone, manager_worker_id, is_manager, is_salaried, worker_class, worker_class_source");
 const beforeMap = new Map();
 for (const r of before6) beforeMap.set(r.worker_id, JSON.stringify(r));
 console.log(`  running a fresh derive to test idempotency (${before6.length} rows will be re-upserted)`);
@@ -164,7 +179,7 @@ const r6 = spawnSync("node", ["scripts/derive_people.mjs", "--source=manual"], {
 if (r6.status !== 0) fail(`idempotency derive run failed exit=${r6.status}: ${(r6.stderr || "").slice(0, 200)}`);
 else {
   const after6 = await fetchAll("people",
-    "worker_id, user_id, display_name, title, status, start_date, end_date, department_id, account_key, is_corp, work_email, personal_email, phone, manager_worker_id, is_manager, is_salaried");
+    "worker_id, user_id, display_name, title, status, start_date, end_date, department_id, account_key, is_corp, work_email, personal_email, phone, manager_worker_id, is_manager, is_salaried, worker_class, worker_class_source");
   let changed = 0;
   for (const a of after6) {
     const b = beforeMap.get(a.worker_id);
@@ -192,6 +207,18 @@ const perAcct = new Map();
 for (const p of activePeople) {
   const key = p.account_key ?? "(unmapped)";
   perAcct.set(key, (perAcct.get(key) || 0) + 1);
+}
+console.log("  worker_class:");
+const byClass = new Map();
+for (const p of people) byClass.set(p.worker_class, (byClass.get(p.worker_class) || 0) + 1);
+for (const k of ["hourly", "salaried", "contract", "unknown"]) {
+  console.log(`    ${k.padEnd(10)} ${byClass.get(k) || 0}`);
+}
+console.log("  worker_class_source:");
+const bySource = new Map();
+for (const p of people) bySource.set(p.worker_class_source, (bySource.get(p.worker_class_source) || 0) + 1);
+for (const k of ["derived", "owner"]) {
+  console.log(`    ${k.padEnd(10)} ${bySource.get(k) || 0}`);
 }
 console.log("  active per account:");
 for (const [k, v] of [...perAcct.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {

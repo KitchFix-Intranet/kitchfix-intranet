@@ -70,14 +70,38 @@ async function fetchAll(table, sel) {
   return out;
 }
 
-// ─── 1. Load raw ─────────────────────────────────────────────────────
-console.log("loading workers, users, department map");
-const [workers, users, deptMap] = await Promise.all([
+// ─── 1. Load raw + existing owner-marked worker_class ───────────────
+// Pre-fetch (worker_id, worker_class, worker_class_source) from
+// people so the upsert can carry owner-marked worker_class values
+// through unchanged. An owner row is any row Kevin has set to
+// worker_class_source='owner' in Studio; the derive treats it the
+// same way it treats is_site_leader - never overwritten. On first
+// run the table is empty and every row derives normally. If the
+// people table does not exist yet (pre-migration dry-run), the
+// derive proceeds with an empty owner-class map instead of crashing.
+console.log("loading workers, users, department map, existing owner-class rows");
+async function fetchAllTolerant(table, sel) {
+  try { return await fetchAll(table, sel); }
+  catch (e) {
+    if (/Could not find the table/i.test(e.message)) {
+      console.log(`  ${table} does not exist yet - proceeding with empty set (pre-migration dry-run posture)`);
+      return [];
+    }
+    throw e;
+  }
+}
+const [workers, users, deptMap, existingClass] = await Promise.all([
   fetchAll("rippling_raw_workers_latest", "payload"),
   fetchAll("rippling_raw_users_latest",   "rippling_id, payload"),
   fetchAll("rippling_department_map",     "department_id, account_key, is_container"),
+  fetchAllTolerant("people",              "worker_id, worker_class, worker_class_source"),
 ]);
-console.log(`  workers=${workers.length}  users=${users.length}  dept_map=${deptMap.length}`);
+console.log(`  workers=${workers.length}  users=${users.length}  dept_map=${deptMap.length}  existing_people=${existingClass.length}`);
+const ownerClassByWorker = new Map();
+for (const r of existingClass) {
+  if (r.worker_class_source === "owner") ownerClassByWorker.set(r.worker_id, r.worker_class);
+}
+console.log(`  owner-marked worker_class rows: ${ownerClassByWorker.size}`);
 
 // Index users by rippling_id for the join.
 const userById = new Map();
@@ -151,24 +175,45 @@ for (const w of workers) {
     }
   }
 
+  // worker_class default derivation from overtime_exemption. The
+  // derive NEVER emits 'contract' - there is no signal in Rippling
+  // that distinguishes a contractor from a salaried employee, which
+  // is the entire reason worker_class exists as an owner-editable
+  // column. For any worker Kevin has marked source='owner' in Studio,
+  // carry the existing DB value back through the upsert so the
+  // ON CONFLICT DO UPDATE SET is a no-op on those two columns.
+  const ownerClass = ownerClassByWorker.get(workerId);
+  const isOwner = ownerClass !== undefined;
+  let workerClass;
+  if (isOwner) {
+    workerClass = ownerClass;
+  } else {
+    const ot = p.overtime_exemption;
+    workerClass = ot === "EXEMPT" ? "salaried"
+                : ot === "NON_EXEMPT" ? "hourly"
+                : "unknown";
+  }
+
   rows.push({
-    worker_id:         workerId,
-    user_id:           p.user_id ?? null,
-    display_name:      displayName,
-    title:             typeof p.title === "string" ? p.title.trim() : null,
-    status:            p.status || null,
-    start_date:        p.start_date || null,
-    end_date:          p.end_date || null,
-    department_id:     deptId,
-    account_key:       accountKey,
-    is_corp:           isCorp,
-    work_email:        p.work_email || null,
-    personal_email:    p.personal_email || null,
+    worker_id:           workerId,
+    user_id:             p.user_id ?? null,
+    display_name:        displayName,
+    title:               typeof p.title === "string" ? p.title.trim() : null,
+    status:              p.status || null,
+    start_date:          p.start_date || null,
+    end_date:            p.end_date || null,
+    department_id:       deptId,
+    account_key:         accountKey,
+    is_corp:             isCorp,
+    work_email:          p.work_email || null,
+    personal_email:      p.personal_email || null,
     phone,
-    manager_worker_id: p.manager_id || null,
-    is_manager:        p.is_manager ?? null,
-    is_salaried:       isSalariedWorker(p),
-    last_synced_at:    nowISO,
+    manager_worker_id:   p.manager_id || null,
+    is_manager:          p.is_manager ?? null,
+    is_salaried:         isSalariedWorker(p),
+    worker_class:        workerClass,
+    worker_class_source: isOwner ? "owner" : "derived",
+    last_synced_at:      nowISO,
   });
 }
 
@@ -203,7 +248,7 @@ if (args.dryRun) {
 if (!args.dryRun) {
   const q = await supa
     .from("people")
-    .select("account_key, status, is_manager, is_salaried, last_synced_at");
+    .select("account_key, status, is_manager, is_salaried, worker_class, worker_class_source, last_synced_at");
   if (q.error) { console.error(`summary select failed: ${q.error.message}`); process.exit(2); }
   const all = q.data || [];
   const total = all.length;
@@ -221,6 +266,13 @@ if (!args.dryRun) {
   }
   const perAcct = [...activeByAccount.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
+  const byClass = new Map();
+  const bySource = new Map();
+  for (const r of all) {
+    byClass.set(r.worker_class,        (byClass.get(r.worker_class)        || 0) + 1);
+    bySource.set(r.worker_class_source,(bySource.get(r.worker_class_source)|| 0) + 1);
+  }
+
   console.log("");
   console.log("summary:");
   console.log(`  total rows:            ${total}`);
@@ -229,6 +281,14 @@ if (!args.dryRun) {
   console.log(`  salaried:              ${salariedCount}`);
   console.log(`  null account_key:      ${nullAcct}`);
   console.log(`  rows not touched this run (stale last_synced_at): ${staleCount}`);
+  console.log("  worker_class:");
+  for (const k of ["hourly", "salaried", "contract", "unknown"]) {
+    console.log(`    ${k.padEnd(10)} ${byClass.get(k) || 0}`);
+  }
+  console.log("  worker_class_source:");
+  for (const k of ["derived", "owner"]) {
+    console.log(`    ${k.padEnd(10)} ${bySource.get(k) || 0}`);
+  }
   console.log("  active per account:");
   for (const [k, v] of perAcct) console.log(`    ${k.padEnd(14)} ${v}`);
 }

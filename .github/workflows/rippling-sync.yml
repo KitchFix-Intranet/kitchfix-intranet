@@ -111,6 +111,20 @@ jobs:
           echo "derive_labor_actuals --source=${SOURCE}"
           node scripts/derive_labor_actuals.mjs --source=${SOURCE}
 
+      # Salary derive rebuilds the trailing 8 fiscal weeks of
+      # labor_salary_actuals so a late-entered raise or a backdated
+      # termination self-heals without anyone touching a script.
+      # Runs AFTER Derive labor actuals - if this step goes red, the
+      # log makes plain that HOURLY already wrote successfully and
+      # only SALARY is stale. --window=fytd stays manual-only.
+      - name: Derive salary actuals
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          echo "note: hourly derive already wrote successfully; failure here isolates to salary"
+          echo "derive_salary_actuals --source=${SOURCE} --window=trailing8"
+          node scripts/derive_salary_actuals.mjs --source=${SOURCE} --window=trailing8
+
       # People roster is one clean nightly snapshot derived from the
       # workers + users walks the sync step just landed. Explicit
       # `if: success()` per the same silent-gap posture as labor.
