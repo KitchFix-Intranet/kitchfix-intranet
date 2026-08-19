@@ -1,13 +1,16 @@
 name: rippling raw sync + labor derivation
 
-# Nightly ingest of raw Rippling records into Postgres (PR 8a + 8a-2)
-# followed by the labor_actuals derivation (PR 8b).
+# Nightly ingest of raw Rippling records into Postgres (PR 8a + 8a-2
+# + C5 + salary PR 1) followed by the labor_actuals and
+# labor_salary_actuals derivations.
 #
-# Four Rippling walks per run, sequential:
+# Six Rippling walks per run, sequential:
 #   /time-entries                                    -> rippling_raw_time_entries
 #   /custom-objects/time_entry_computed_pay_segment  -> rippling_raw_pay_segments
 #   /workers                                         -> rippling_raw_workers
 #   /custom-objects/time_entry_zo                    -> rippling_raw_time_entry_zo
+#   /users                                           -> rippling_raw_users
+#   /compensations                                   -> rippling_raw_compensations
 #
 # On sync success, the derivation step runs. It reads presence
 # (rippling_current_presence), earning_type_map, rippling_department_map,
@@ -110,3 +113,15 @@ jobs:
           SOURCE="${{ inputs.source || 'nightly' }}"
           echo "derive_labor_actuals --source=${SOURCE}"
           node scripts/derive_labor_actuals.mjs --source=${SOURCE}
+
+      # Salary PR 1 · nightly salary derive. Trailing-8-weeks window
+      # is the same idempotent rebuild pattern the hourly derive uses:
+      # a late-entered raise / termination / transfer self-heals on
+      # the next run without a manual step. Runs only on sync success
+      # (same silent-gap gate); dry-run of sync skips it.
+      - name: Derive salary actuals
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          echo "derive_salary_actuals --source=${SOURCE} --window=trailing8"
+          node scripts/derive_salary_actuals.mjs --source=${SOURCE} --window=trailing8
