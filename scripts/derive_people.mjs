@@ -205,8 +205,12 @@ for (const w of workers) {
     department_id:       deptId,
     account_key:         accountKey,
     is_corp:             isCorp,
-    work_email:          p.work_email || null,
-    personal_email:      p.personal_email || null,
+    // V-role-gates spec §8c - normalise emails on ingest, not at
+    // query time. Rippling has shipped values with trailing
+    // whitespace + mixed case; fixing it here means every consumer
+    // (resolver, probes, admin queries) reads a clean column.
+    work_email:          p.work_email ? String(p.work_email).trim().toLowerCase() || null : null,
+    personal_email:      p.personal_email ? String(p.personal_email).trim().toLowerCase() || null : null,
     phone,
     manager_worker_id:   p.manager_id || null,
     is_manager:          p.is_manager ?? null,
