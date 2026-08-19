@@ -21,10 +21,11 @@
 --     trailing 8 weeks every run so late-entered transfers, raises,
 --     and terminations self-heal. Idempotent by construction.
 --
---   REVOKE TRUNCATE from anon + authenticated:
---     Same posture as labor_actuals. Rebuild the trailing window by
---     DELETE + INSERT scoped to that window; the derive never wants
---     to blow the whole table away.
+--   REVOKE TRUNCATE from PUBLIC + anon + authenticated:
+--     House rule fences those three roles only; service_role's
+--     inherited TRUNCATE stays in place (precedent: labor_actuals,
+--     purchasing_actuals). Rebuild the trailing window is DELETE +
+--     INSERT scoped to that window; the derive itself never TRUNCATEs.
 --
 --   No UPDATE grant:
 --     Rebuild is DELETE + INSERT; there is nothing to UPDATE. Grant
@@ -108,8 +109,9 @@ CREATE INDEX IF NOT EXISTS labor_salary_actuals_week_idx
 -- ─── Grants ─────────────────────────────────────────────────────────
 -- Rebuild pattern: DELETE + INSERT scoped to the trailing window. No
 -- UPDATE ever - the derive rewrites rows, it does not mutate them.
--- TRUNCATE explicitly revoked; the derive never needs to blow the
--- whole table away.
+-- TRUNCATE fenced from PUBLIC + anon + authenticated only (house
+-- rule + precedent: labor_actuals, purchasing_actuals). service_role
+-- keeps its inherited TRUNCATE.
 GRANT SELECT, INSERT, DELETE ON labor_salary_actuals TO service_role;
 REVOKE TRUNCATE ON labor_salary_actuals FROM PUBLIC;
 REVOKE TRUNCATE ON labor_salary_actuals FROM anon;
@@ -118,7 +120,7 @@ REVOKE TRUNCATE ON labor_salary_actuals FROM authenticated;
 -- ─── Post-flight ────────────────────────────────────────────────────
 DO $$
 DECLARE
-  sa_sel BOOLEAN; sa_ins BOOLEAN; sa_del BOOLEAN; sa_upd BOOLEAN; sa_trunc BOOLEAN;
+  sa_sel BOOLEAN; sa_ins BOOLEAN; sa_del BOOLEAN; sa_upd BOOLEAN;
   sa_uq_ok BOOLEAN;
 BEGIN
   IF to_regclass('public.labor_salary_actuals') IS NULL THEN
@@ -148,18 +150,20 @@ BEGIN
     RAISE EXCEPTION 'post-flight: labor_salary_actuals missing UNIQUE (worker_id, week_start)';
   END IF;
 
-  sa_sel   := has_table_privilege('service_role', 'labor_salary_actuals', 'SELECT');
-  sa_ins   := has_table_privilege('service_role', 'labor_salary_actuals', 'INSERT');
-  sa_del   := has_table_privilege('service_role', 'labor_salary_actuals', 'DELETE');
-  sa_upd   := has_table_privilege('service_role', 'labor_salary_actuals', 'UPDATE');
-  sa_trunc := has_table_privilege('service_role', 'labor_salary_actuals', 'TRUNCATE');
+  sa_sel := has_table_privilege('service_role', 'labor_salary_actuals', 'SELECT');
+  sa_ins := has_table_privilege('service_role', 'labor_salary_actuals', 'INSERT');
+  sa_del := has_table_privilege('service_role', 'labor_salary_actuals', 'DELETE');
+  sa_upd := has_table_privilege('service_role', 'labor_salary_actuals', 'UPDATE');
   IF NOT sa_sel THEN RAISE EXCEPTION 'post-flight: service_role missing SELECT on labor_salary_actuals'; END IF;
   IF NOT sa_ins THEN RAISE EXCEPTION 'post-flight: service_role missing INSERT on labor_salary_actuals'; END IF;
   IF NOT sa_del THEN RAISE EXCEPTION 'post-flight: service_role missing DELETE on labor_salary_actuals'; END IF;
   IF sa_upd     THEN RAISE EXCEPTION 'post-flight: service_role has UPDATE on labor_salary_actuals (rebuild is delete+insert, no UPDATE)'; END IF;
-  IF sa_trunc   THEN RAISE EXCEPTION 'post-flight: service_role has TRUNCATE on labor_salary_actuals (must be revoked)'; END IF;
+  -- No TRUNCATE assertion on service_role: precedent (labor_actuals,
+  -- purchasing_actuals) leaves service_role's inherited TRUNCATE in
+  -- place. The REVOKE block above fences anon + authenticated per
+  -- house rule; service_role is not part of that fence.
 
-  RAISE NOTICE 'salary-1b post-flight PASS - table + indexes + UNIQUE present, grants set (no UPDATE, no TRUNCATE)';
+  RAISE NOTICE 'salary-1b post-flight PASS - table + indexes + UNIQUE present, grants set (no UPDATE; anon/authenticated fenced from TRUNCATE)';
 END $$;
 
 COMMIT;
