@@ -2,6 +2,14 @@
 //
 // S1i: permanent probe for the 2026-08-19 rippling_id re-issue class.
 //
+// RED IS ACCURATE, NOT A FAILURE TO FIX. This probe measures the
+// derive's INPUT (raw table). The derive consumes dedup-corrected
+// input; its writes are right. The probe stays red for as long as
+// Rippling issues multiple rippling_ids for the same external_id and
+// goes green on its own the first nightly Rippling stops re-issuing.
+// Do not "fix" the red by editing the probe.
+
+//
 // Mirrors the DERIVE's actual read path (raw table, all versions,
 // then presence-filter) - not the `_latest` view. Two inflation
 // paths converge here and the derive sees both before dedup:
