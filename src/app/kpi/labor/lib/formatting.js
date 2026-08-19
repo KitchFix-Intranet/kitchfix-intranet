@@ -46,11 +46,22 @@ export function freshnessTint(hrs) {
 }
 
 // Print-time scope line - kept for the @media print header on the
-// dashboard.
-export function buildPrintScopeLine({ start, end, workerRoster, selectedWorkers, redact }) {
+// dashboard. V41 C2 - a fourth segment states the salary scope so a
+// printed sheet reads what the screen reads. Pass salaryIncluded as
+// null (the default) when the caller cannot see salary at all; the
+// segment is skipped in that case and the line stays byte-identical
+// to what a permission-less caller saw before V41. The two permitted
+// strings reuse wording already on the budget sub-line and the
+// weekly-target legend.
+export function buildPrintScopeLine({
+  start, end, workerRoster, selectedWorkers, redact,
+  salaryIncluded = null,
+}) {
   const total = workerRoster?.length ?? 0;
   const shown = selectedWorkers && selectedWorkers.size > 0 ? selectedWorkers.size : total;
   const workers = shown === total ? `all ${total} workers` : `${shown} of ${total} workers`;
   const names = redact ? "names hidden" : "names shown";
-  return `Range ${fmtDate(start)} – ${fmtDate(end)} · ${workers} · ${names}`;
+  const base = `Range ${fmtDate(start)} – ${fmtDate(end)} · ${workers} · ${names}`;
+  if (salaryIncluded === null || salaryIncluded === undefined) return base;
+  return `${base} · ${salaryIncluded ? "hourly + salary" : "hourly only"}`;
 }
