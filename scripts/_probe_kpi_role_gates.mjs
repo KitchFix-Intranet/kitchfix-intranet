@@ -475,6 +475,59 @@ else {
   if (leaks === 0) ok(`checked ${corpMgrs.length} active-salaried CORP rows; none resolved to site_manager scope='CORP'`);
 }
 
+// ─── F6 - every /api/kpi/**/route.js carries the fence ─────────────
+// This is the check Kevin was missing when PR #725's fence went in
+// - it enumerates the KPI API surface off the filesystem rather than
+// off a hand-maintained list, so a future endpoint cannot ship
+// unfenced. Any route that has a legitimate reason to bypass the
+// fence must add the marker comment `// KPI_PREVIEW_FENCE_EXEMPT:
+// <reason>` on the module so future readers see the exception was
+// deliberate.
+console.log("");
+console.log("[F6] every route file under src/app/api/kpi/**/route.js carries the KPI preview fence");
+function findRoutes(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...findRoutes(p));
+    else if (entry.isFile() && entry.name === "route.js") out.push(p);
+  }
+  return out;
+}
+const routeFiles = findRoutes(path.join(REPO_ROOT, "src/app/api/kpi"));
+console.log(`  enumerated ${routeFiles.length} route file(s)`);
+const missing = [];
+for (const f of routeFiles) {
+  const src = fs.readFileSync(f, "utf8");
+  const rel = path.relative(REPO_ROOT, f);
+  if (/KPI_PREVIEW_FENCE_EXEMPT:/i.test(src)) {
+    ok(`${rel} explicit KPI_PREVIEW_FENCE_EXEMPT marker (skipping)`);
+    continue;
+  }
+  // Two shapes count as fenced:
+  //  (a) direct: imports KPI_PREVIEW_ONLY + KPI_PREVIEW_ALLOWLIST and
+  //      runs the "KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST" check.
+  //      This is what routes that still gate on OPS_LEADERSHIP_EMAILS
+  //      (views / views[id] / export / purchasing) look like.
+  //  (b) via resolver: imports loadRoleGate and calls
+  //      resolveKpiRole(email). The fence lives inside the closure,
+  //      so a null return already means "fenced-out caller, refuse".
+  //      This is what labor/route.js looks like.
+  const directFence = /import[\s\S]*?KPI_PREVIEW_ONLY[\s\S]*?KPI_PREVIEW_ALLOWLIST[\s\S]*?from\s*["'][^"']*roleGate/i.test(src)
+                    && /KPI_PREVIEW_ONLY\s*&&\s*!KPI_PREVIEW_ALLOWLIST\.includes\(/.test(src);
+  const viaResolver = /import[\s\S]*?loadRoleGate[\s\S]*?from\s*["'][^"']*roleGate/i.test(src)
+                    && /resolveKpiRole\(/.test(src);
+  if (directFence) {
+    ok(`${rel} fenced (direct fence pattern)`);
+  } else if (viaResolver) {
+    ok(`${rel} fenced (via resolveKpiRole - fence lives in the closure)`);
+  } else {
+    fail(`${rel} MISSING fence (direct=${directFence}, viaResolver=${viaResolver})`);
+    missing.push(rel);
+  }
+}
+if (missing.length === 0) ok(`all ${routeFiles.length} KPI route files carry the fence (or an explicit exempt marker)`);
+
 // ─── Locked-response shape (code-read) ──────────────────────────────
 console.log("");
 console.log("[locked-shape] route.js locked branch omits board / actuals / budget / budget_periods keys");

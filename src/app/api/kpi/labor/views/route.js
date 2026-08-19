@@ -26,6 +26,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+// KPI PREVIEW FENCE - single source of truth in roleGate.js. Sits in
+// FRONT of the OPS_LEADERSHIP_EMAILS check on both GET and POST so a
+// fenced caller cannot read or write saved-view records while the
+// labor board is closed to non-Kevin sessions.
+import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { getServiceClient } from "@/lib/supabase";
 
 const VALID_PRESETS = new Set(["this_period", "last_period", "last_4wk", "last_13wk", "fytd"]);
@@ -92,6 +97,8 @@ export async function GET(request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   const email = session.user?.email?.toLowerCase().trim();
+  // KPI PREVIEW FENCE - refuse before the legacy admin gate.
+  if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   if (!OPS_LEADERSHIP_EMAILS.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
@@ -114,6 +121,8 @@ export async function POST(request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   const email = session.user?.email?.toLowerCase().trim();
+  // KPI PREVIEW FENCE - refuse before the legacy admin gate.
+  if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   if (!OPS_LEADERSHIP_EMAILS.includes(email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   let body;
