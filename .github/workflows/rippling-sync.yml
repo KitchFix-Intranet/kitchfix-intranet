@@ -111,6 +111,26 @@ jobs:
           echo "derive_labor_actuals --source=${SOURCE}"
           node scripts/derive_labor_actuals.mjs --source=${SOURCE}
 
+      # Daily grain rebuild - same input as the weekly, bucketed by
+      # segment_date. Runs AFTER Derive labor actuals so the D1
+      # reconciliation probe reads a stable weekly. --window=trailing8
+      # matches the weekly + salary derives; --window=fytd stays
+      # manual-only. Same shared dedupe helper as the weekly so a
+      # tripled-Tuesday cannot happen without also tripling the week.
+      - name: Derive labor actuals daily
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          echo "note: weekly derive already wrote successfully; failure here isolates to the daily rollup"
+          echo "derive_labor_actuals_daily --source=${SOURCE} --window=trailing8"
+          node scripts/derive_labor_actuals_daily.mjs --source=${SOURCE} --window=trailing8
+
+      - name: Daily grain probes
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          echo "probe_daily_grain"
+          node scripts/_probe_daily_grain.mjs
+
       # Salary derive rebuilds the trailing 8 fiscal weeks of
       # labor_salary_actuals so a late-entered raise or a backdated
       # termination self-heals without anyone touching a script.
