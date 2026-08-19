@@ -165,6 +165,11 @@ export default function KpiLaborPage() {
     setErrCode(null);
     setAuthError(null);
     const params = new URLSearchParams({ account, start, end });
+    // Salary PR 3 C1 - opt into the salary-merged response when the
+    // URL flag says so. The route re-checks the gate on every request
+    // (spec T-2), so a shared link that opens as a site leader is
+    // silently rendered hourly - no message needed, that is correct.
+    if (searchParams.get("salary") === "1") params.set("include_salary", "1");
     const markBase = `kpi-labor-fetch-${account}`;
     try { performance.mark(`${markBase}-start`); } catch {}
     fetch(`/api/kpi/labor?${params}`, { signal: ctrl.signal })
@@ -206,7 +211,7 @@ export default function KpiLaborPage() {
       })
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
-  }, [status, isAllowed, account, start, end]);
+  }, [status, isAllowed, account, start, end, searchParams]);
 
   // ── URL setters ──────────────────────────────────────
   const setParam = (key, value) => {
@@ -640,6 +645,7 @@ export default function KpiLaborPage() {
       dominantCoverage={dominantCoverage}
       freshness={freshness}
       freshnessH={freshnessH}
+      salarySummary={data?.salary_included ? data.salary_summary : null}
     />
   ) : null;
 
@@ -708,10 +714,35 @@ export default function KpiLaborPage() {
                 rangeLabel={rangeLabelForBoard}
                 budgetPeriods={data?.budget_periods || []}
                 todayISO={today}
+                salary={data?.salary_included ? {
+                  summary: data.salary_summary,
+                  vacancy: data.salary_vacancy,
+                  budget_total: data.budget_total,
+                  hours_basis: data.hours_basis,
+                  rate_basis: data.rate_basis,
+                  blended_rate_hourly: data.blended_rate_hourly,
+                } : null}
               />
-              <SignalCards board={data.board} freshness={freshness} />
-              <ComparisonStrip prior_period_comparison={data.prior_period_comparison} />
-              <DetailsStrip board={data.board} />
+              <SignalCards
+                board={data.board}
+                freshness={freshness}
+                salary={data?.salary_included ? {
+                  hours_basis: data.hours_basis,
+                  rate_basis: data.rate_basis,
+                  blended_rate_hourly: data.blended_rate_hourly,
+                } : null}
+              />
+              <ComparisonStrip
+                prior_period_comparison={data.prior_period_comparison}
+                salaryIncluded={data?.salary_included === true}
+              />
+              <DetailsStrip
+                board={data.board}
+                salary={data?.salary_included ? {
+                  rate_basis: data.rate_basis,
+                  blended_rate_hourly: data.blended_rate_hourly,
+                } : null}
+              />
             </>
           )}
         </div>
@@ -862,6 +893,15 @@ export default function KpiLaborPage() {
           dataLoading={loadState === "loading" || loadState === "idle"}
           activeSection="labor"
           printScopeText={printScopeText}
+          /* Salary PR 3 C1 - segmented toggle rendered ONLY when the
+             route ships salary_available=true. Absent, never disabled,
+             for anyone the gate would refuse (spec T-1). URL flag is
+             the source of truth; the fetch effect above reads it and
+             re-fires the request. */
+          salaryToggle={data?.salary_available === true ? {
+            on: searchParams.get("salary") === "1",
+            onChange: (next) => setParam("salary", next ? "1" : ""),
+          } : null}
           /* V25-14 - Range control stays MOUNTED through every refetch.
              Uses last-known account_periods; the ranges keep responding
              the moment the loading chip clears. */
@@ -939,7 +979,7 @@ function BoardSkeleton() {
 // SYSTEM status strip (V7-19). Two 22px rows, quietly stated: Payroll
 // data + Nightly feed. Colors mirror coverage severity + freshness
 // tint. Value classes: kpi-sys-v-ok / -warn / -bad. Dot mirrors.
-function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH }) {
+function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH, salarySummary }) {
   const total = Object.values(coverageCounts || {}).reduce((s, n) => s + Number(n || 0), 0);
   const complete = Number(coverageCounts?.complete || 0);
   const payTone = dominantCoverage === "complete" ? "ok"
@@ -968,6 +1008,17 @@ function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH }
         <span className="kpi-sys-k">Nightly feed</span>
         <span className={`kpi-sys-v kpi-sys-v-${feedTone}`}>{feedValue}</span>
       </div>
+      {/* Salary PR 3 C2 - Salary line renders only when the response
+          carries salary_included. Count comes from salary_summary.workers
+          (spec-explicit). No dot, no tone - salary presence is state,
+          not a health signal. */}
+      {salarySummary && (
+        <div className="kpi-sys-r">
+          <span className="kpi-sys-dot" aria-hidden="true" />
+          <span className="kpi-sys-k">Salary</span>
+          <span className="kpi-sys-v">{salarySummary.workers} worker{salarySummary.workers === 1 ? "" : "s"}</span>
+        </div>
+      )}
     </div>
   );
 }

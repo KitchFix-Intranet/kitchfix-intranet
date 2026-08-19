@@ -75,7 +75,7 @@ function toneFor(delta, betterDown) {
   return (betterDown ? down : !down) ? "good" : "bad";
 }
 
-function HelpButton() {
+function HelpButton({ salaryIncluded }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   useEffect(() => {
@@ -110,13 +110,24 @@ function HelpButton() {
           <div className="kpi-cmp-help-foot">
             Only rates and ratios appear here because the current period is part-run. Raw totals are not comparable until both periods are closed.
           </div>
+          {/* Salary PR 3 - reconciliation caveat. Base-only salary
+              is what the derive produces; anyone reconciling against
+              the P&L (which totals base + bonuses + one-time
+              payments) would otherwise wonder where the gap is.
+              Renders only when salary is on so hourly-only mode
+              stays clean. */}
+          {salaryIncluded && (
+            <div className="kpi-cmp-help-foot">
+              Salary figures are base only; bonuses and one-time payments are not included.
+            </div>
+          )}
         </div>
       )}
     </span>
   );
 }
 
-export function ComparisonStrip({ prior_period_comparison }) {
+export function ComparisonStrip({ prior_period_comparison, salaryIncluded }) {
   const pp = prior_period_comparison;
   if (!pp || !pp.applies) return null;
 
@@ -144,7 +155,7 @@ export function ComparisonStrip({ prior_period_comparison }) {
         ))}
       </div>
       <div className="kpi-cmp-source">PERIOD {pp.prior_period_no} · 4 wks closed</div>
-      <div className="kpi-cmp-help-wrap"><HelpButton /></div>
+      <div className="kpi-cmp-help-wrap"><HelpButton salaryIncluded={salaryIncluded} /></div>
     </div>
   );
 }

@@ -22,7 +22,7 @@ function Cell({ label, value, caption, muted }) {
   );
 }
 
-export function DetailsStrip({ board }) {
+export function DetailsStrip({ board, salary }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -42,7 +42,17 @@ export function DetailsStrip({ board }) {
   const projected = board.projected_period_end;
   const unpriced = board.unpriced_hours;
   const workers = board.distinct_workers ?? 0;
-  const avgRate = board.avg_rate;
+  // Salary PR 3 - ALL THE NUMBERS panel claims to show every figure
+  // the board is built from; a silently wrong rate here is worse
+  // than on a card. Read blended_rate_hourly when salary is on;
+  // board.avg_rate on the merged board is mixed dollars over
+  // hourly hours and is meaningless. Label swaps to `Hourly rate`
+  // + caption swaps to `hourly only · $/hr` so an operator
+  // reconciling to the P&L reads the basis at a glance.
+  const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
+  const avgRate = salary?.blended_rate_hourly ?? board.avg_rate;
+  const rateLabel = rateBasisHourlyOnly ? "Hourly rate" : "Avg rate";
+  const rateCaption = rateBasisHourlyOnly ? "hourly only · $/hr" : "blended · $/hr";
   const budgetCaption = board.period_no ? "FY2026 budget" : "FY2026 range budget";
   const denomLeft = (board.in_progress_week_start ? 1 : 0) + (board.not_started_weeks_count || 0);
 
@@ -96,9 +106,9 @@ export function DetailsStrip({ board }) {
                 muted={!workers}
               />
               <Cell
-                label="Avg rate"
+                label={rateLabel}
                 value={avgRate != null ? `$${avgRate.toFixed(2)}` : "—"}
-                caption="blended · $/hr"
+                caption={rateCaption}
                 muted={avgRate == null}
               />
               {/* V33 item 4d - weekly allowance shows a bare dash with

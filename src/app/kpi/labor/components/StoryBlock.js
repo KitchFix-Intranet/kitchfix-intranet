@@ -25,7 +25,7 @@ function verdictDisplay(verdict) {
 // (Spent so far | Left to spend). Budget is the dominant figure; spent
 // and left are secondary. Closed periods keep the under/over treatment
 // on the right cell of the pair.
-function SpendCard({ board, eyebrowLabel, dateRange }) {
+function SpendCard({ board, eyebrowLabel, dateRange, salary }) {
   const budget = board?.period_budget || board?.range_budget || null;
   const spent = board?.spent_to_date ?? 0;
   const variance = board?.variance ?? null;
@@ -93,6 +93,11 @@ function SpendCard({ board, eyebrowLabel, dateRange }) {
     } else {
       core = `${prefix} · range closed`;
     }
+    // Salary PR 3 C2 - when salary is on, the sub-line names the
+    // combined basis so the reader knows the budget hero includes
+    // 3100.2 not just 3100.1. Overrides the envelope/pnl basis word
+    // - a merged budget is neither; the basis is the composition.
+    if (salary) return `${core} · hourly + salary`;
     return board?.budget_basis ? `${core} · ${board.budget_basis}` : core;
   })();
 
@@ -141,6 +146,32 @@ function SpendCard({ board, eyebrowLabel, dateRange }) {
           <div className="kpi-spend-cell-sub">{right.sub}</div>
         </div>
       </div>
+
+      {/* Salary PR 3 C3 - salary vacancy line. States the arithmetic;
+          never guesses the cause (spec is explicit: "under budget can
+          be an unfilled role, a mid-period departure, or a role filled
+          below budget - the board cannot tell them apart"). Three
+          shapes: at-budget (== budget), under-budget (< budget),
+          over-budget (> budget). Roles-filled clause omitted here -
+          we do not carry a budgeted-headcount on the wire, and
+          salary_summary.workers is filled count only. */}
+      {salary && salary.vacancy && (() => {
+        const rows = salary.vacancy.filter(v => v.budget > 0 || v.actual > 0);
+        if (rows.length === 0) return null;
+        const budgetSum = rows.reduce((s, v) => s + Number(v.budget || 0), 0);
+        const actualSum = rows.reduce((s, v) => s + Number(v.actual || 0), 0);
+        if (budgetSum <= 0 && actualSum <= 0) return null;
+        const pct = budgetSum > 0 ? Math.round((actualSum / budgetSum) * 100) : null;
+        const cls = actualSum > budgetSum ? "kpi-spend-salary-over"
+                  : Math.abs(actualSum - budgetSum) < 0.5 ? "kpi-spend-salary-at"
+                  : "kpi-spend-salary-under";
+        return (
+          <div className={`kpi-spend-salary ${cls}`}>
+            salary <b>{fmt$(actualSum)}</b> of <b>{fmt$(budgetSum)}</b>
+            {pct != null && <> · {pct}%</>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -455,7 +486,7 @@ function classifyTier(weekCount) {
   return "C";
 }
 
-export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO }) {
+export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary }) {
   const eyebrowLabel = board?.kind === "single_period_in_progress" || board?.kind === "single_period_closed"
     ? `PERIOD ${board.period_no}`
     : (rangeLabel || "").toUpperCase();
@@ -478,7 +509,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
   return (
     <div className="kpi-story">
       <div className="kpi-story-left">
-        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} />
+        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} salary={salary} />
       </div>
 
       <div className="kpi-story-right">
@@ -499,6 +530,12 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
               <span className="kpi-wh-tgt-dash" aria-hidden="true" />
               adjusted <b>{fmt$(board.weekly_allowance)}</b>
             </span>
+          )}
+          {/* Salary PR 3 C2 - name the basis on the legend when
+              salary is on so the target reads as combined not
+              hourly-only. */}
+          {salary && showOriginalLabel && (
+            <span className="kpi-wh-tgt-basis">· hourly + salary</span>
           )}
         </div>
 
