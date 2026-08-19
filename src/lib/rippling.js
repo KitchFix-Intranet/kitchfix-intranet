@@ -75,6 +75,14 @@ const HASH_EXCLUDE_TOP = {
   // baseline for the first nightly is 1,126 users (parity with the
   // workers count, per the C5.1 diagnostic).
   users: ["updated_at", "__meta"],
+  // compensations: salary PR 1. One record per (worker, effective
+  // period). `updated_at` moves whenever Rippling touches the record
+  // even if the amount + effective date did not; strip it. `__meta`
+  // is the standard envelope. Every substantive field
+  // (annual_compensation.value, payment_type, salary_effective_date,
+  // hourly_wage.value, ...) stays in the hash - a real raise or a
+  // reclassification produces a new observation.
+  compensations: ["updated_at", "__meta"],
 };
 
 // ─── Fetch ───────────────────────────────────────────────────────────
