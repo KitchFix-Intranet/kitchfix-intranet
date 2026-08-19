@@ -22,13 +22,15 @@
 
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
+// V-role-gates - OPS_LEADERSHIP_EMAILS retired here. Access is now
+// resolved by roleGate.js (four roles: corporate, rdo, site_leader,
+// site_manager). A caller who resolves to null gets 403.
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
-import { loadSalaryGate } from "@/lib/labor/salaryGate.js";
+import { loadRoleGate } from "@/lib/kpi/roleGate.js";
 import { load3100_2Budgets, loadSalaryActuals, withSalary as withSalaryMerge } from "@/lib/labor/salaryBoard.js";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
@@ -256,33 +258,71 @@ export async function GET(request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   const email = session.user?.email?.toLowerCase().trim();
-  if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
 
   const { searchParams } = new URL(request.url);
   const today = new Date().toISOString().slice(0, 10);
   const account = (searchParams.get("account") || "").trim();
   const start = searchParams.get("start") || "2025-12-29";  // FY2026 opens
   const end = searchParams.get("end") || today;
-  // v6 PR-1 - internal pagination-loop knob for the aggregate probe.
-  // Ignored on single-account requests. Never surfaced to the UI.
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
-  // Salary PR 2 - include_salary=1 opts into the salary-merged
-  // response IF the caller's role + scope permits (spec R-3). Flag
-  // ignored silently when the gate denies; response then matches the
-  // default byte-for-byte. Every response also ships `salary_available`
-  // so PR 3 renders the toggle only for callers the route would grant.
   const includeSalaryReq = searchParams.get("include_salary") === "1";
 
+  const supa = getServiceClient();
+
+  // V-role-gates - resolve the caller once. corporate + rdo come from
+  // kpi_roles; site_leader + site_manager come from people. See
+  // docs/KPI_ROLE_GATES_SPEC.md for the design contract and
+  // src/lib/kpi/roleGate.js for the resolver.
+  const gate = await loadRoleGate(supa);
+  if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
+  let caller;
+  try { caller = await gate.resolveKpiRole(email); }
+  catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
+  if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const landing_account = gate.landingAccount(caller);
+
+  // Fetch the accounts directory + regional-director display names
+  // BEFORE any account-branch logic; every response path (landing,
+  // locked, single, aggregate, salaried-only) carries them so the
+  // folio and command bar can render without a second network call.
+  const dirQ = await fetchAccountsDirectory(supa);
+  if (dirQ.error) return NextResponse.json(safeError("accounts_directory", dirQ.error), { status: 500 });
+  const accounts_directory = dirQ.data;
+  const regional_directors_display = {
+    East: rdoDisplayName(REGIONAL_DIRECTORS.East),
+    West: rdoDisplayName(REGIONAL_DIRECTORS.West),
+  };
+
+  // Empty account -> landing response. 200, not 400; the client
+  // redirects to landing_account. Zero board data.
   if (!account) {
-    return NextResponse.json({ error: "account_required", detail: "?account=<team_key> is required" }, { status: 400 });
+    return NextResponse.json({
+      landing_account,
+      accounts_directory,
+      regional_directors_display,
+    });
   }
   if (D17_OUT_OF_SCOPE.has(account)) {
     return NextResponse.json({ error: "account_out_of_scope", account }, { status: 400 });
   }
 
-  const supa = getServiceClient();
+  // V-role-gates - locked-state response for any account the caller
+  // cannot view. NO board, NO actuals, NO budget keys - spec §3
+  // makes this a serialized-payload guarantee, not a client hide.
+  // Aggregates (ALL / EAST / WEST) are locked for site_leader and
+  // site_manager. The directory + landing_account still ship so the
+  // client keeps the shell + rail + section switcher visible.
+  if (!gate.canViewAccount(caller, account)) {
+    return NextResponse.json({
+      locked: true,
+      account,
+      reason: "not_authorised",
+      landing_account,
+      accounts_directory,
+      regional_directors_display,
+    });
+  }
 
   const psWalkGlobal = await supa
     .from("rippling_walks")
@@ -298,28 +338,12 @@ export async function GET(request) {
     last_derive_at: null,
   };
 
-  // V6-18/19 - fetch the accounts directory + regional-director
-  // display names once per request; every response path (single,
-  // aggregate, salaried-only, out-of-scope) carries them so the
-  // folio can render regions and RDO eyebrows without a second
-  // network call.
-  const dirQ = await fetchAccountsDirectory(supa);
-  if (dirQ.error) return NextResponse.json(safeError("accounts_directory", dirQ.error), { status: 500 });
-  const accounts_directory = dirQ.data;
-  const regional_directors_display = {
-    East: rdoDisplayName(REGIONAL_DIRECTORS.East),
-    West: rdoDisplayName(REGIONAL_DIRECTORS.West),
-  };
-
-  // Salary PR 2 - one gate load per request, two names for the same
-  // predicate. `salary_available` ships on EVERY response so PR 3
-  // renders the toggle only for callers the route would grant.
-  // `includeSalary` mixes the flag AND the gate; a caller who does
-  // not pass gate sees a byte-identical default response, whether
-  // they asked for salary or not.
-  const gate = await loadSalaryGate(supa);
-  if (gate.error) return NextResponse.json(safeError("kpi_roles", gate.error), { status: 500 });
-  const salary_available = gate.salaryAvailable(email, account);
+  // V-role-gates - salary_available now comes from the same resolver
+  // that gated view access above. `include_salary=1` is silently
+  // dropped when the gate denies, so a caller who cannot see salary
+  // gets a byte-identical default response whether they asked for
+  // salary or not (spec §6, probe G4).
+  const salary_available = gate.canSeeSalary(caller, account);
   const includeSalary = includeSalaryReq && salary_available;
 
   // ── v6 PR-1 · aggregate pseudo-keys (ALL / EAST / WEST) ──────────
@@ -520,6 +544,7 @@ export async function GET(request) {
       }
     }
     body.salary_available = salary_available;
+    body.landing_account = landing_account;
     return NextResponse.json(body);
   }
 
@@ -575,6 +600,7 @@ export async function GET(request) {
       }
     }
     bodyD26.salary_available = salary_available;
+    bodyD26.landing_account = landing_account;
     return NextResponse.json(bodyD26);
   }
 
@@ -789,5 +815,6 @@ export async function GET(request) {
     }
   }
   bodySingle.salary_available = salary_available;
+  bodySingle.landing_account = landing_account;
   return NextResponse.json(bodySingle);
 }

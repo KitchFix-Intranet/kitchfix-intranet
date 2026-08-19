@@ -2,7 +2,7 @@
 //
 // Salary PR 2 · commit 2. Salary-side data loaders + a merge helper
 // that folds salary into the default response WITHOUT touching the
-// hourly path. The gate module (salaryGate.js) is the only authority
+// hourly path. The gate module (src/lib/kpi/roleGate.js) is the only authority
 // for who calls in here; nothing in this module re-decides.
 //
 // Design posture:
