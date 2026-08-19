@@ -2040,25 +2040,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         setReloadKey(k => k + 1);
         return result;
       }
-      // A3 failure-UI amend (2026-07-24): caller can suppress the
-      // floating toast when it renders the failure inline in its own
-      // panel (per §8B "failure is the absence of the handoff"). v2
-      // DayEntryV2 passes silentFailure:true; v1 DayDetail leaves it
-      // absent to preserve existing failure behavior.
-      if (!opts.silentFailure) {
-        // PR-K2 (2026-08-18): render-exact failure copy + Try again
-        // action that re-fires handleSave. Kevin ruling: the render
-        // words are the operator's words. Server error text is not
-        // interpolated - most site leads cannot act on a 500 stack.
-        showToast({
-          variant: "generic",
-          tier: "bad",
-          title: "Could not save",
-          detail: "Nothing was changed. Check your connection and try again.",
-          actionLabel: "Try again",
-          onAction: () => handleSave(day, entries, opts),
-        });
-      }
+      // PR-K2 (2026-08-18): render-exact failure copy + Try again
+      // action that re-fires handleSave. Kevin ruling: the render
+      // words are the operator's words. Server error text is not
+      // interpolated - most site leads cannot act on a 500 stack.
+      // PR-K3 (2026-08-18): silentFailure gate removed. v2 no longer
+      // suppresses this toast; the inline banner it used has been
+      // deleted so failure fires here on both v1 and v2. See
+      // DayEntryV2.js executeConfirm comment for the removal note.
+      showToast({
+        variant: "generic",
+        tier: "bad",
+        title: "Could not save",
+        detail: "Nothing was changed. Check your connection and try again.",
+        actionLabel: "Try again",
+        onAction: () => handleSave(day, entries, opts),
+      });
       return result;
     } catch (err) {
       // C1b (F4): user navigated away mid-save; mount-ref already

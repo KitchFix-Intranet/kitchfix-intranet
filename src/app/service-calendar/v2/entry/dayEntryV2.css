@@ -170,23 +170,6 @@
 .sc-v2-entry-coaching--entered { background: var(--sc2-state-entered-bg); color: var(--sc2-state-entered-fg); }
 .sc-v2-entry-coaching--neutral { background: var(--sc2-surface-sunken); color: var(--sc2-ink-soft); }
 
-/* ─── A3 inline save-failure alert (§8B) ───────────────────
-   Renders above the pane when a save is rejected server-side. The
-   accent rail (left border) carries the type. Panel counts + typed
-   values remain unchanged in the body below - failure is "the
-   handoff didn't happen." Cleared by handleChange (retry) or
-   day-nav in DayEntryV2. Tokens only (§13A). */
-/* P3-A (2026-07-25): the alert's own background / border-left /
-   head + body typography now come from the shared .sc-ar accent-rail
-   primitive (accentRail.css). This class remains as a panel-position
-   shim - it carries the panel-width margin and the bottom divider
-   that visually separates the alert from the two-pane body below. */
-.sc-v2-entry-alert {
-  margin: var(--sc2-space-3) var(--sc2-space-5) 0;
-  border-bottom: var(--sc2-border-thin) solid var(--sc2-line);
-  padding-bottom: var(--sc2-space-3);
-}
-
 /* ─── Two-pane ────────────────────────────────────────────── */
 .sc-v2-entry-pane {
   display: grid;

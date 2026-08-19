@@ -6,9 +6,11 @@
    Every accent-carrying element in the product routes through this.
 
    Consumers landing in P3-A:
-     - v2 inline failure banner (.sc-v2-entry-alert becomes .sc-ar--danger)
      - NEW note-posted chip (.sc-ar--success)
      - Confirmation dialogs top-rail variant (--top --warning)
+   Retired (PR-K3, 2026-08-18):
+     - v2 inline save-failure banner (.sc-v2-entry-alert / .sc-ar--danger)
+       Replaced by the shared workspace toast (Could not save + Try again)
    Future consumers (Phase 3-B and later):
      - Confirmed pill (--success, in-modal, animated)
      - Session strip (--success)

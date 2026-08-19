@@ -296,16 +296,10 @@ function DayEntryV2({
   // driven via the onSaveConfirmed / onSaveConfirmComplete callbacks
   // supplied by the parent. See CSS block-level comment on
   // .sc-v2-entry-save-confirm for the full remount analysis.
-  // A3 failure UI (2026-07-24): inline failure state. Set by
-  // executeConfirm when onSave returns !success (server rejected the
-  // write; nothing committed). Rendered as a red-rail banner at the
-  // top of the modal body. Cleared on next handleChange (operator is
-  // retrying) and on any successful save. Shape:
-  //   { message: string, serviceId?: string }
-  // The serviceId is present for validation errors (from the server's
-  // ActualCountValidationError path); UI can highlight the offending
-  // input if we choose. Absent for other rejection classes.
-  const [saveError, setSaveError] = useState(null);
+  // PR-K3 (2026-08-18): inline failure banner removed. Save failure
+  // now surfaces through the shared workspace toast (Could not save +
+  // Try again), same shape as reset + bulk. See ServiceCalendar.js's
+  // handleSave failure branch (:~2020) for the toast payload.
   // W7 PR 2/3 motion: colIndexes currently mid-flash. Populated by
   // handleChange (ghost -> solid transition) and by fillGroupWithProjections
   // (Match-projections cascade). Each colIndex is a Map key -> stagger
@@ -445,10 +439,6 @@ function DayEntryV2({
     setShowResetConfirm(false);
     setStandaloneDraft("");
     setMobileBillOpen(false);
-    // A3 failure UI (2026-07-24): clear inline save error on day-nav.
-    // Failure state belongs to the day + values that failed - opening
-    // a different day shouldn't inherit it.
-    setSaveError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day.date, serviceGroups, day.actual, day.noteEntries, day.historyEntries]);
 
@@ -508,10 +498,6 @@ function DayEntryV2({
   }, [showResetConfirm]);
 
   const handleChange = useCallback((colIndex, value) => {
-    // A3 failure UI (2026-07-24): clear any prior save error - the
-    // operator is retrying by typing. Panel is no longer in a failed
-    // state until their next Confirm & save resolves.
-    setSaveError(null);
     const clean = value.replace(/[^0-9]/g, "");
     setEditValues(prev => {
       const was = prev[colIndex] ?? "";
@@ -934,16 +920,14 @@ function DayEntryV2({
     if (entries.length === 0) return;
     const trimmedDraft = (notes || "").trim();
     const rideNote = trimmedDraft.length > 0 ? trimmedDraft : undefined;
-    // A3 failure UI (2026-07-24): pass silentFailure so handleSave
-    // does NOT fire its floating "Save failed" toast. The failure
-    // renders inline in this panel instead (per §8B "failure is the
-    // absence of the handoff"). Panel stays open, counts intact.
-    // P3-B (2026-07-28): silentSuccess suppresses the parent's
-    // recorded-toast fire on clean save. The Handoff (below)
-    // replaces the toast for the confirmation.
-    const result = await onSave(day, entries, { rideNote, silentFailure: true, silentSuccess: true });
+    // PR-K3 (2026-08-18): silentFailure dropped. Failure now surfaces
+    // through the shared workspace toast (Could not save + Try again).
+    // Panel still stays open on failure (no onClose in the else
+    // branch below) so the operator can correct values in place.
+    // silentSuccess kept - the Handoff below replaces the toast for
+    // the confirmation shape.
+    const result = await onSave(day, entries, { rideNote, silentSuccess: true });
     if (result?.success) {
-      setSaveError(null);   // any prior failure state is stale now
       if (result.queued) {
         setNotes("");
         onClose?.();
@@ -997,13 +981,12 @@ function DayEntryV2({
           else onClose?.();
         },
       });
-    } else {
-      // Nothing committed. Panel stays open, counts intact.
-      setSaveError({
-        message: result?.error || "Save failed",
-        serviceId: result?.serviceId || null,
-      });
     }
+    // PR-K3 (2026-08-18): failure branch is a no-op here. The shared
+    // toast has already fired from ServiceCalendar.js's handleSave
+    // failure branch; the panel stays open + values stay typed so
+    // the operator can correct in place OR click Try again in the
+    // toast to re-fire the same save.
   }, [serviceGroups, touched, getVal, day, onSave, onClose, notes, feeNoDollar, feeServedTotals, summary, handoff, onNextException, onSaveConfirmed, onSaveConfirmComplete]);
 
   // Status + coaching = DayDetail.js:741-835.
@@ -1542,20 +1525,11 @@ function DayEntryV2({
         </div>
       )}
 
-      {/* A3 failure UI (2026-07-24): inline save-failure banner. Red
-          left-rail per §8B. Renders above the pane so it's the first
-          thing above the input area. Counts/typed values remain intact
-          in the body below. Cleared on retry (handleChange) or day-nav.
-          Panel does not close - operator can fix the reason and retry
-          in place. */}
-      {saveError && (
-        <div className="sc-v2-entry-alert sc-ar sc-ar--danger" role="alert" aria-live="assertive">
-          <div className="sc-ar-content">
-            <div className="sc-ar-title">Save failed - nothing recorded</div>
-            <div className="sc-ar-body">{saveError.message}</div>
-          </div>
-        </div>
-      )}
+      {/* PR-K3 (2026-08-18): inline save-failure banner deleted. The
+          shared workspace toast (Could not save + Try again) is now
+          the single failure surface. Panel still stays open on
+          failure so the operator can correct values in place, but
+          the copy + retry action live in the toast, not here. */}
 
       {/* ─── Two-pane workspace ─── */}
       <div className="sc-v2-entry-pane">
