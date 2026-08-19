@@ -14,7 +14,9 @@ import { FY_START_ISO, FY_END_ISO } from "../src/app/kpi/labor/lib/periods.js";
 
 const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-const SALARIED_PAYMENT_TYPES = new Set(["SALARY", "SALARIED"]);
+// Salaried predicate on the WORKER payload per spec S-1 fallback.
+// C2's enumeration ruled out payment_type as the discriminator.
+const SALARIED_OT_EXEMPTION = "EXEMPT";
 
 let hardFail = 0;
 function log(line, ok = true) {
@@ -40,7 +42,7 @@ async function fetchAll(table, sel, filters = {}) {
 
 async function main() {
   console.log("=".repeat(72));
-  console.log("Salary PR 1 · probes S1..S1g");
+  console.log("Salary PR 1 · probes S1..S1h");
   console.log("=".repeat(72));
 
   // ── S1: sum(labor_salary_actuals) per (account, period) == sum over
@@ -73,7 +75,10 @@ async function main() {
   //   the later.
   console.log("\n[S1b - effective-dating]");
   const comps = await fetchAll("rippling_raw_compensations_latest", "worker_id, annual_value, salary_effective_date, payment_type");
-  const salariedComps = comps.filter(c => SALARIED_PAYMENT_TYPES.has(String(c.payment_type || "").toUpperCase()));
+  // Salaried predicate is on WORKER.overtime_exemption; join here.
+  const workersEarly = await fetchAll("rippling_raw_workers_latest", "rippling_id, payload");
+  const exemptWorkerIds = new Set(workersEarly.filter(w => w.payload?.overtime_exemption === SALARIED_OT_EXEMPTION).map(w => w.rippling_id));
+  const salariedComps = comps.filter(c => c.worker_id && exemptWorkerIds.has(c.worker_id));
   const byWorker = new Map();
   for (const c of salariedComps) {
     if (!byWorker.has(c.worker_id)) byWorker.set(c.worker_id, []);
@@ -111,7 +116,7 @@ async function main() {
   // ── S1c: termination. Any worker with end_date inside FY2026 has NO
   //   row for a week after their last active week.
   console.log("\n[S1c - termination]");
-  const workers = await fetchAll("rippling_raw_workers_latest", "rippling_id, payload");
+  const workers = workersEarly;
   const fyTerminated = workers.filter(w => {
     const ed = w.payload?.end_date;
     return ed && ed >= FY_START_ISO && ed <= FY_END_ISO;
@@ -178,25 +183,64 @@ async function main() {
   }
   log(`hourly P8 snapshot recorded (untouched-ness verified by comparing this list before vs after PR)`, true);
 
-  // ── S1g: coverage. Count of ACTIVE salaried workers with NO
-  //   compensation record (spec S-1: should be 0). If not 0, list
-  //   the count; the derive did not invent a rate.
+  // ── S1g: coverage. Active EXEMPT workers who cannot be derived -
+  //   no compensation record at all, OR record present but
+  //   annual_value is null (VARIED records: 107 in the enumeration).
+  //   These surface here rather than defaulting to zero on the board.
+  //   Also enumerate site vs CORP so the site-count matches the
+  //   spec's expected pool.
   console.log("\n[S1g - salaried worker coverage]");
-  const salariedWorkerIds = new Set(salariedComps.map(c => c.worker_id).filter(Boolean));
   const activeWorkers = workers.filter(w => (w.payload?.status || "").toUpperCase() === "ACTIVE");
-  // Which active workers have overtime_exemption EXEMPT (a proxy for
-  // salaried since payment_type on /workers is null) but no
-  // salaried comp record?
-  const activeExemptNoComp = activeWorkers.filter(w =>
-    (w.payload?.overtime_exemption || "").toUpperCase() === "EXEMPT" && !salariedWorkerIds.has(w.rippling_id)
-  ).length;
+  const activeExempt = activeWorkers.filter(w => (w.payload?.overtime_exemption || "").toUpperCase() === "EXEMPT");
+  const workerDeptG = new Map();
+  for (const w of workers) workerDeptG.set(w.rippling_id, w.payload?.department_id || null);
+  const activeExemptSite = activeExempt.filter(w => {
+    const d = workerDeptG.get(w.rippling_id);
+    return d && !corpDepts.has(d);
+  });
+  const activeExemptCorp = activeExempt.length - activeExemptSite.length;
+  const compsByWorkerG = new Map();
+  for (const c of comps) if (c.worker_id) compsByWorkerG.set(c.worker_id, c);
+  const noComp = activeExemptSite.filter(w => !compsByWorkerG.has(w.rippling_id)).length;
+  const nullAnnual = activeExemptSite.filter(w => {
+    const c = compsByWorkerG.get(w.rippling_id);
+    return c && c.annual_value == null;
+  }).length;
   console.log(`  active workers total: ${activeWorkers.length}`);
-  console.log(`  salaried workers with a compensation record: ${salariedWorkerIds.size}`);
-  console.log(`  active + EXEMPT + no salaried comp record: ${activeExemptNoComp}`);
-  log(`no salaried-shaped worker missing a compensation record (want 0)  found=${activeExemptNoComp}`, activeExemptNoComp === 0);
+  console.log(`  active + EXEMPT total: ${activeExempt.length}  (corp=${activeExemptCorp}, site=${activeExemptSite.length})`);
+  console.log(`  active + EXEMPT + site + NO compensation record:              ${noComp}`);
+  console.log(`  active + EXEMPT + site + compensation record but annual=null: ${nullAnnual}  (VARIED rows on active EXEMPT workers)`);
+  log(`every active site EXEMPT worker has a usable compensation record (want noComp+nullAnnual == 0)`, noComp + nullAnnual === 0);
+
+  // ── S1h: cross-check. An EXEMPT worker with pay segments in a
+  //   fiscal week is a contradiction (salaried people do not clock
+  //   in). Zero expected today; surface any occurrence rather than
+  //   double-counting the same person in hourly + salary.
+  console.log("\n[S1h - EXEMPT vs pay-segments contradiction]");
+  const payQ = await supa.from("rippling_raw_pay_segments_latest").select("payload").limit(20000);
+  const paySegs = payQ.data || [];
+  const contradictions = new Map();  // worker_id -> segment count
+  for (const s of paySegs) {
+    const p = s.payload || {};
+    const wid = p.worker_id || p.worker?.id || null;
+    if (wid && exemptWorkerIds.has(wid)) {
+      contradictions.set(wid, (contradictions.get(wid) || 0) + 1);
+    }
+  }
+  console.log(`  pay-segments scanned: ${paySegs.length}`);
+  console.log(`  EXEMPT worker_ids with any pay segment: ${contradictions.size}`);
+  if (contradictions.size > 0) {
+    let printed = 0;
+    for (const [wid, n] of [...contradictions.entries()].sort((a, b) => b[1] - a[1])) {
+      if (printed >= 5) break;
+      console.log(`    worker id (first 8): ${String(wid).slice(0, 8)}...  segments=${n}`);
+      printed++;
+    }
+  }
+  log(`no EXEMPT worker has any pay segment (contradiction check)`, contradictions.size === 0);
 
   console.log(`\n${"=".repeat(72)}`);
-  console.log(hardFail === 0 ? "S1..S1g PROBE: PASS" : `S1..S1g PROBE: ${hardFail} FAIL`);
+  console.log(hardFail === 0 ? "S1..S1h PROBE: PASS" : `S1..S1h PROBE: ${hardFail} FAIL`);
   console.log("=".repeat(72));
   process.exit(hardFail === 0 ? 0 : 1);
 }

@@ -54,19 +54,26 @@ if (!VALID_WINDOWS.has(args.window)) {
 
 // ─── Config ──────────────────────────────────────────────────────────
 //
-// SALARIED_PAYMENT_TYPES: the set of `payment_type` values on
-// /compensations records that identify a salaried worker per spec
-// S-1. S0b saw `payment_type: string` on the record shape but did
-// not enumerate the distinct values (that requires a completed
-// walk). Starting with the canonical Rippling label; extend once C2
-// receipt confirms the actual value set. If Rippling returns a
-// mixed-case or SCREAMING_SNAKE_CASE variant, compare uppercase.
+// SALARIED PREDICATE per spec S-1 fallback. C2's enumeration on the
+// compensations walk showed payment_type values are DEFAULT (1136)
+// and VARIED (177); neither aligns with salaried-vs-hourly (DEFAULT
+// covers both EXEMPT + NON_EXEMPT workers, VARIED likewise).
+// payment_terms is null on every DEFAULT row; annual_salary_equivalent
+// is populated on exactly one row. S-1 explicitly authorizes
+// overtime_exemption as the fallback when employment_type is not
+// populated (it is null on all 1126 workers).
 //
-// Extending this set is the ONLY hand-tune required to admit new
-// salaried categories. Anything not in the set is treated as hourly
-// and not written by this derive; the hourly derive (deriveActuals.js)
-// remains the authority for those workers.
-const SALARIED_PAYMENT_TYPES = new Set(["SALARY", "SALARIED"]);
+// Cross-check via titles on active workers landed 30 EXEMPT people
+// across 11 CORP + 19 site (CEO/CFO/VP/RDO/GM/Exec Chef/Director) -
+// correct set. The 144 EXEMPT figure in the raw table includes
+// terminated workers; the active-week predicate below already
+// excludes those.
+//
+// The salaried predicate is a WORKER-payload check now, not a
+// compensation-record filter. The derive still iterates
+// compensation-by-worker (one worker may have raise history), but
+// worker.overtime_exemption is what admits them.
+const SALARIED_OT_EXEMPTION = "EXEMPT";
 
 // ─── Env + Supabase ──────────────────────────────────────────────────
 const SB_URL = process.env.SUPABASE_URL;
@@ -147,20 +154,39 @@ const corpDeptIds = new Set(
 const deptToAccount = new Map();
 for (const d of deptMap) deptToAccount.set(d.department_id, { account_key: d.account_key, is_container: !!d.is_container });
 
-// ─── 2. Index compensations by worker, ordered by effective date ─────
+// ─── 2. Index workers by rippling_id + admit EXEMPT only ─────────────
+//
+// Salaried predicate lives on the WORKER payload
+// (overtime_exemption === 'EXEMPT'), not the compensation record.
+// Index all workers here so the compensation loop can filter cheap
+// on load.
+const workerById = new Map();
+let exemptCount = 0;
+for (const w of workers) {
+  const p = w.payload || {};
+  workerById.set(w.rippling_id, p);
+  if (p.overtime_exemption === SALARIED_OT_EXEMPTION) exemptCount++;
+}
+console.log(`    workers total=${workers.length}  EXEMPT (any status)=${exemptCount}`);
+
+// ─── 3. Index compensations by worker, ordered by effective date ─────
 //
 // One worker may have multiple compensation records (raise history).
 // For each week we pick the record with the LATEST
-// salary_effective_date <= week_start. Filter to salaried at load
-// time so the per-week loop stays fast.
+// salary_effective_date <= week_start. Filter to salaried workers
+// here so the per-week loop stays fast; also skip null annual_value
+// (VARIED records) since we can't produce a rate from them - probe
+// S1g surfaces the count of active EXEMPT workers who ended up here.
 const compsByWorker = new Map();
 let skippedNoWorker = 0;
-let skippedNonSalaried = 0;
+let skippedNotExempt = 0;
+let skippedNoAnnual = 0;
 for (const c of comps) {
   const wid = c.worker_id;
   if (!wid) { skippedNoWorker++; continue; }
-  const pt = String(c.payment_type || "").toUpperCase();
-  if (!SALARIED_PAYMENT_TYPES.has(pt)) { skippedNonSalaried++; continue; }
+  const w = workerById.get(wid);
+  if (!w || w.overtime_exemption !== SALARIED_OT_EXEMPTION) { skippedNotExempt++; continue; }
+  if (c.annual_value == null) { skippedNoAnnual++; continue; }
   const list = compsByWorker.get(wid) || [];
   list.push(c);
   compsByWorker.set(wid, list);
@@ -168,12 +194,8 @@ for (const c of comps) {
 for (const list of compsByWorker.values()) {
   list.sort((a, b) => String(a.salary_effective_date || "").localeCompare(String(b.salary_effective_date || "")));
 }
-console.log(`    salaried workers with >=1 compensation record: ${compsByWorker.size}`);
-console.log(`    skipped (no worker_id / non-salaried payment_type): ${skippedNoWorker} / ${skippedNonSalaried}`);
-
-// ─── 3. Index workers by rippling_id ─────────────────────────────────
-const workerById = new Map();
-for (const w of workers) workerById.set(w.rippling_id, w.payload || {});
+console.log(`    salaried (EXEMPT) workers with >=1 usable compensation record: ${compsByWorker.size}`);
+console.log(`    compensation rows skipped: no_worker=${skippedNoWorker}  not_exempt=${skippedNotExempt}  null_annual_value=${skippedNoAnnual}`);
 
 // Active-week predicate: worker.start_date <= week_end AND
 // (end_date IS NULL OR end_date >= week_start) AND status not
