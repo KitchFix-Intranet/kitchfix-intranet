@@ -597,8 +597,16 @@ export default function KpiLaborPage() {
   };
 
   // Print-time scope line - kept for @media print sheet identification.
+  // V41 C2 - fourth segment when the caller can see salary at all;
+  // null (== permission absent) skips it so the line for a
+  // permission-less caller stays byte-identical to pre-V41. Reads
+  // from the same two sources the toggle reads (data.salary_available
+  // + the salary=1 URL flag) to keep them in lockstep.
   const printScopeText = buildPrintScopeLine({
     start, end, workerRoster, selectedWorkers, redact,
+    salaryIncluded: data?.salary_available === true
+      ? searchParams.get("salary") === "1"
+      : null,
   });
 
   // Freshness popover content. Carries coverage plain-language + In

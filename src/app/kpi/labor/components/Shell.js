@@ -154,12 +154,18 @@ export function Shell({
           <span className="kpi-cmd-title-brand">KPI Dashboard</span>
           <span className="kpi-cmd-dot" aria-hidden="true">·</span>
           <span className="kpi-cmd-title-acct">{account}</span>
-          {salaryToggle?.on && (
-            // V40 FIX 3b - persistent amber pill outside the seg control
-            // so the "you are viewing more than hourly" signal survives
-            // the eye leaving the toggle. Paired with the amber active
-            // segment (FIX 3a) so the control and the title agree.
-            <span className="kpi-cmd-title-salary" aria-label="Salary included">+ SALARY</span>
+          {salaryToggle && (
+            // V41 C1 - symmetric scope pill. Renders whenever the
+            // toggle exists (i.e. the caller can see salary), in one
+            // of two states: outline HOURLY ONLY when off, amber
+            // + SALARY when on. Paired with the amber active segment
+            // (V40 FIX 3a) so the pill and the seg agree; absent
+            // entirely for callers without salary permission so no
+            // new surface hints that a salary view exists.
+            <span
+              className={"kpi-cmd-scope " + (salaryToggle.on ? "kpi-cmd-scope--salary" : "kpi-cmd-scope--hourly")}
+              aria-label={salaryToggle.on ? "Salary included" : "Hourly labor only"}
+            >{salaryToggle.on ? "+ SALARY" : "HOURLY ONLY"}</span>
           )}
         </span>
 

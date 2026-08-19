@@ -254,21 +254,32 @@
   white-space: nowrap;
 }
 .kpi-cmd-dot { color: #5C769A; margin: 0 var(--kpi-sp-2); font-weight: 400; flex: none; }
-/* V40 FIX 3b - persistent amber pill in the command bar title when
-   salary is on. Sits just after the account tail; small caps so it
-   reads as an attribute of the title, not a second heading. */
-.kpi-cmd-title-salary {
+/* V41 C1 - symmetric scope pill in the command bar title. Always
+   renders when the toggle exists so an hourly view is never
+   unlabeled; hourly reads as an outline on the navy bar (muted
+   text + faint border, no fill), salary keeps V40's amber. Both
+   states share the same geometry (radius, padding, size, weight,
+   tracking) so the swap does not shift layout. */
+.kpi-cmd-scope {
   flex: none;
   margin-left: var(--kpi-sp-2);
   padding: 2px var(--kpi-sp-2);
   border-radius: 999px;
-  background: var(--amber-600);
-  color: var(--n-0);
   font-size: var(--kpi-size-caption);
   font-weight: 700;
   letter-spacing: 0.06em;
   line-height: 1.15;
   align-self: center;
+}
+.kpi-cmd-scope--hourly {
+  background: transparent;
+  color: #C8D4E2;
+  border: 1px solid rgba(255, 255, 255, 0.30);
+}
+.kpi-cmd-scope--salary {
+  background: var(--amber-600);
+  color: var(--n-0);
+  border: 1px solid var(--amber-600);
 }
 
 /* Salary PR 3 C1 - Hourly / + Salary toggle. Sits between Section

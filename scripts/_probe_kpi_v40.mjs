@@ -104,13 +104,59 @@ async function main() {
   log("kpi.css defines .kpi-skel-companion + .kpi-skel-nums",
       /\.kpi-skel-companion\s*\{[^}]*height/.test(cssSrc) && /\.kpi-skel-nums\s*\{[^}]*height/.test(cssSrc));
 
-  console.log("\n[V40-4 - toggle reads as state (amber active + title pill)]");
+  console.log("\n[V40-4 / V41 - toggle + symmetric scope pill]");
   log("Shell.js adds kpi-seg-salary-on when on",        /kpi-seg-salary-on/.test(shellSrc));
-  log("Shell.js renders + SALARY pill when on",         /salaryToggle\?\.on\s*&&[\s\S]*?kpi-cmd-title-salary[\s\S]*?\+\s*SALARY/.test(shellSrc));
   log("kpi.css paints .kpi-seg-salary-on button.on amber",
       /\.kpi-seg\.kpi-seg-salary-on\s+button\.on\s*\{[^}]*var\(--amber-600\)/.test(cssSrc));
-  log("kpi.css defines .kpi-cmd-title-salary pill",     /\.kpi-cmd-title-salary\s*\{[^}]*background:\s*var\(--amber-600\)/.test(cssSrc));
   log("kpi.css tightens inactive seg text to n-700",    /\.kpi-seg button\s*\{\s*color:\s*var\(--n-700\)/.test(cssSrc));
+
+  console.log("\n[V41 - .kpi-cmd-scope pill renders in both salary states]");
+  // Rename gate: the old .kpi-cmd-title-salary class is gone from src.
+  const oldClassInSrc = /kpi-cmd-title-salary/.test(shellSrc) || /kpi-cmd-title-salary/.test(cssSrc) || /kpi-cmd-title-salary/.test(pageSrc);
+  log("no source file references the retired .kpi-cmd-title-salary class", !oldClassInSrc);
+  // Pill renders whenever salaryToggle EXISTS, not only when .on.
+  log("Shell.js renders scope pill on salaryToggle presence (both states)",
+      /\{salaryToggle\s*&&\s*\(\s*\/\/[\s\S]*?<span[\s\S]*?kpi-cmd-scope/.test(shellSrc));
+  log("Shell.js emits HOURLY ONLY when off + Hourly labor only aria",
+      /"HOURLY ONLY"/.test(shellSrc) && /"Hourly labor only"/.test(shellSrc));
+  log("Shell.js emits + SALARY when on + Salary included aria",
+      /"\+ SALARY"/.test(shellSrc) && /"Salary included"/.test(shellSrc));
+  log("Shell.js switches modifier class on salaryToggle.on",
+      /kpi-cmd-scope--salary[\s\S]*?kpi-cmd-scope--hourly|kpi-cmd-scope--hourly[\s\S]*?kpi-cmd-scope--salary|salaryToggle\.on\s*\?\s*"kpi-cmd-scope--salary"\s*:\s*"kpi-cmd-scope--hourly"/.test(shellSrc));
+  log("kpi.css defines .kpi-cmd-scope base geometry",
+      /\.kpi-cmd-scope\s*\{[^}]*border-radius:\s*999px[\s\S]*?align-self:\s*center/.test(cssSrc));
+  log("kpi.css --hourly modifier is transparent + muted text + faint border",
+      /\.kpi-cmd-scope--hourly\s*\{[^}]*background:\s*transparent[\s\S]*?color:\s*#C8D4E2[\s\S]*?border:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.30\)/.test(cssSrc));
+  log("kpi.css --salary modifier keeps amber fill",
+      /\.kpi-cmd-scope--salary\s*\{[^}]*background:\s*var\(--amber-600\)[\s\S]*?color:\s*var\(--n-0\)/.test(cssSrc));
+  // V30 gate - the .kpi-cmd-scope* rules only introduce px in border
+  // (1px) and reuse pre-existing sizes (2px padding, 999px radius);
+  // no new dimensional px slipped in.
+  const scopeBlock = (cssSrc.match(/\.kpi-cmd-scope[\s\S]*?\.kpi-cmd-scope--salary\s*\{[\s\S]*?\}/) || [""])[0];
+  const pxLiterals = [...scopeBlock.matchAll(/\d+px/g)].map(m => m[0]).sort();
+  const allowed = new Set(["1px", "2px", "999px"]);
+  const stray = pxLiterals.filter(p => !allowed.has(p));
+  log(`no unexpected raw px literals in .kpi-cmd-scope rules (found: ${[...new Set(pxLiterals)].join(", ")}; stray: ${stray.join(", ") || "none"})`,
+      stray.length === 0);
+
+  console.log("\n[V41 C2 - print scope line carries salary segment]");
+  // Wire check: page.js reads from data?.salary_available + salary=1 URL flag.
+  log("page.js wires salaryIncluded from data.salary_available + salary URL flag",
+      /salaryIncluded:\s*data\?\.salary_available\s*===\s*true[\s\S]*?searchParams\.get\("salary"\)\s*===\s*"1"[\s\S]*?:\s*null/.test(pageSrc));
+  // Unit-run the helper.
+  const { buildPrintScopeLine } = await import(path.join(REPO_ROOT, "src/app/kpi/labor/lib/formatting.js"));
+  const roster = Array.from({ length: 36 }, (_, i) => ({ id: `w${i}`, label: `#${i}` }));
+  const fx = { start: "2026-07-13", end: "2026-08-09", workerRoster: roster, selectedWorkers: null, redact: false };
+  const lineHourly = buildPrintScopeLine({ ...fx, salaryIncluded: false });
+  const lineSalary = buildPrintScopeLine({ ...fx, salaryIncluded: true });
+  const lineNone   = buildPrintScopeLine({ ...fx, salaryIncluded: null });
+  const lineOmit   = buildPrintScopeLine(fx);
+  log(`salaryIncluded=false line ends with " · hourly only" (got: "${lineHourly}")`,   /·\s*hourly only$/.test(lineHourly));
+  log(`salaryIncluded=true  line ends with " · hourly + salary" (got: "${lineSalary}")`, /·\s*hourly \+ salary$/.test(lineSalary));
+  log("salaryIncluded=null line contains neither hourly/salary segment",
+      !/hourly only|hourly \+ salary/.test(lineNone));
+  log("omitting salaryIncluded is byte-identical to null (pre-V41 shape)",
+      lineNone === lineOmit && !/hourly only|hourly \+ salary/.test(lineOmit));
 
   console.log("\n[V40 hotfix - WeekTable-local function helpers must not leak into siblings]");
   // Regression check for PR #720 crash: FragmentRows called displayRate
