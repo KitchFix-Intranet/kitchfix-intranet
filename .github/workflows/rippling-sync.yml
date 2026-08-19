@@ -114,14 +114,31 @@ jobs:
           echo "derive_labor_actuals --source=${SOURCE}"
           node scripts/derive_labor_actuals.mjs --source=${SOURCE}
 
-      # Salary PR 1 · nightly salary derive. Trailing-8-weeks window
-      # is the same idempotent rebuild pattern the hourly derive uses:
-      # a late-entered raise / termination / transfer self-heals on
-      # the next run without a manual step. Runs only on sync success
-      # (same silent-gap gate); dry-run of sync skips it.
+      # Salary PR 1 · nightly salary derive. Runs AFTER the sync
+      # (which finishes with the /compensations walk, the sixth and
+      # last) so rippling_raw_compensations_latest is fresh, and
+      # AFTER the hourly derive so ordering is: raw sync -> hourly
+      # derive -> salary derive. Trailing-8-weeks window is the same
+      # idempotent rebuild the hourly derive uses; a late-entered
+      # raise / backdated termination / transfer self-heals on the
+      # next run without a manual step.
+      #
+      # --window=fytd stays manual-only (run locally with
+      # --source=manual --window=fytd for a full backfill).
+      #
+      # Failure posture: exit non-zero fails the whole job. The pre-
+      # step banner names the source + window so a red check makes
+      # clear which step failed AND that hourly already succeeded -
+      # hourly is correct at that point, salary is the one to
+      # investigate.
       - name: Derive salary actuals
         if: success() && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
-          echo "derive_salary_actuals --source=${SOURCE} --window=trailing8"
+          echo "::group::salary derive (trailing8)"
+          echo "step: derive_salary_actuals   source=${SOURCE}   window=trailing8"
+          echo "context: raw sync + hourly derive already succeeded above;"
+          echo "         labor_actuals is up to date. Only labor_salary_actuals"
+          echo "         is being (re)computed in this step."
+          echo "::endgroup::"
           node scripts/derive_salary_actuals.mjs --source=${SOURCE} --window=trailing8
