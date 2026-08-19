@@ -332,7 +332,13 @@ async function loadCoverage(supa, { members, start, end }) {
       if (!excludedWLIds.has(r.work_location_id)) continue;      // not excluded -> normal attribution path
       const accountKey = deptToAccount.get(r.department_id);
       if (!accountKey) continue;                                 // department not mapped
-      if (accountKey === "CORP") continue;                       // CORP dept coded to Remote/HQ is not a miscoding
+      // miscoding definition: CORP-department cards coded to Remote are
+      // expected, not miscodes. Single site of truth for this rule
+      // (owner ruling 2026-08-19, PR #713 flag 2 - ACCEPTED as built).
+      // A corporate person coding to Remote is expected behaviour: they
+      // work remotely. Filtering CORP-department rows out of the count
+      // here is the definition, not a policy layered on top.
+      if (accountKey === "CORP") continue;
       byAcct.set(accountKey, (byAcct.get(accountKey) || 0) + 1);
     }
     miscoded.count = [...byAcct.values()].reduce((s, n) => s + n, 0);

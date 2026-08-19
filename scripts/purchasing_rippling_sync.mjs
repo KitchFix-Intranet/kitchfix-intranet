@@ -61,6 +61,27 @@ const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
 const PAGE_SIZE = 100;
 const MAX_PAGES_HARD = 500;
 
+// ─── Label fallback for excluded work_location ids ───────────────────
+//
+// Owner ruling 2026-08-19 (PR #713 flag 1 hardening). The id-seed in
+// migration purchasing-2-work-location-attribution.sql is authoritative
+// - id hits win. When a work_location_id is NOT in the map, compare
+// the raw line's work_location display_value against THIS EXACT set
+// (case-sensitive, full string equality, NO regex, NO prefix matching,
+// three literals only). A match -> excluded=TRUE, account_key NULL, and
+// the newly-seen id is INSERTed into spend_work_location_site_map with
+// excluded=TRUE so the map self-heals and the next run is an id hit.
+// No match -> unattributed (account_key NULL, excluded FALSE) and
+// counted, so the miss is visible not silent. Do NOT generalise to
+// prefixes or regex; three literal strings only.
+//
+// The constant IS the spec. Do not import from elsewhere.
+const EXCLUDED_LABEL_FALLBACK = new Set([
+  "Remote",
+  "Corporate (CORP)",
+  "Headquarters & Chicago Commissary Kitchen",
+]);
+
 function parseArgs(argv) {
   const args = { source: null, dryRun: false };
   for (const a of argv.slice(2)) {
@@ -476,6 +497,15 @@ async function deriveSpendLines({ rippling_ids }) {
   let linesDerived = 0;
   let uncoded = 0;
   let unattributed = 0;
+  // Label-fallback self-heal (owner ruling 2026-08-19, PR #713 flag 1
+  // hardening): when a work_location_id misses the map and its label is
+  // one of the three EXCLUDED_LABEL_FALLBACK literals, we stage an
+  // INSERT into spend_work_location_site_map so the next run is an id
+  // hit. Non-zero on a stable corpus means the corpus changed since the
+  // seed (a new Remote id, typically) - the map self-heals rather than
+  // drifting into false unattributed.
+  const labelFallbackInserts = new Map();  // work_location_id -> { label, note }
+  const labelFallbackDate = startedAt.toISOString().slice(0, 10);
   const derived = [];
   function glBucketFor(accountNumber) {
     if (!accountNumber) return null;
@@ -495,7 +525,25 @@ async function deriveSpendLines({ rippling_ids }) {
     // (counted as unattributed). Excluded rows have account_key NULL
     // by construction (constraint on the map).
     const wlRow    = r.work_location_id ? wlMap.get(r.work_location_id) : null;
-    const excluded = wlRow?.excluded === true;
+    // Label fallback (owner ruling 2026-08-19, PR #713 flag 1
+    // hardening). id-seed wins; this only fires when the id is NOT in
+    // the map. Exact case-sensitive full-string equality against the
+    // three literals in EXCLUDED_LABEL_FALLBACK. Match -> excluded=TRUE
+    // AND stage a self-heal insert so the next run is an id hit. No
+    // match -> fall through to the normal unattributed path (visible,
+    // not silent). This is EXCLUSION ONLY - it never mints an
+    // account_key, so a label-fallback miss cannot invent site cost.
+    let labelFallbackHit = false;
+    if (!wlRow && r.work_location_id && r.work_location_label && EXCLUDED_LABEL_FALLBACK.has(r.work_location_label)) {
+      labelFallbackHit = true;
+      if (!labelFallbackInserts.has(r.work_location_id)) {
+        labelFallbackInserts.set(r.work_location_id, {
+          label: r.work_location_label,
+          note:  `auto: label fallback ${labelFallbackDate}`,
+        });
+      }
+    }
+    const excluded = wlRow?.excluded === true || labelFallbackHit;
     const accountKey = excluded ? null : (wlRow?.account_key || null);
     const glLine = r.category_id ? (catMap.get(r.category_id) || null) : null;
     if (!accountKey && !excluded) unattributed++;
@@ -552,6 +600,33 @@ async function deriveSpendLines({ rippling_ids }) {
     }
   }
 
+  // Self-heal the label-fallback ids into spend_work_location_site_map.
+  // ON CONFLICT DO NOTHING so an id already seeded by Kevin is never
+  // overwritten. Non-zero here on a stable corpus means the corpus
+  // changed since the seed (typically a newly minted Remote id).
+  let labelFallbackInserted = 0;
+  if (!args.dryRun && labelFallbackInserts.size > 0) {
+    const rows = [...labelFallbackInserts.entries()].map(([work_location_id, { label, note }]) => ({
+      work_location_id,
+      work_location_label: label,
+      account_key: null,
+      excluded: true,
+      note,
+    }));
+    const { error } = await supa
+      .from("spend_work_location_site_map")
+      .upsert(rows, { onConflict: "work_location_id", ignoreDuplicates: true });
+    if (error) {
+      console.error(`[derive] label-fallback self-heal insert FAILED: ${error.message}`);
+      return { ok: false, linesDerived, error: error.message };
+    }
+    labelFallbackInserted = rows.length;
+    console.log(`[derive] label-fallback self-heal: inserted ${labelFallbackInserted} excluded id(s) into spend_work_location_site_map`);
+  } else if (args.dryRun && labelFallbackInserts.size > 0) {
+    labelFallbackInserted = labelFallbackInserts.size;
+    console.log(`[derive] label-fallback self-heal: dry-run - would insert ${labelFallbackInserted} excluded id(s)`);
+  }
+
   if (runId) {
     await supa.from("purchasing_derive_runs").update({
       completed_at:  new Date().toISOString(),
@@ -561,8 +636,8 @@ async function deriveSpendLines({ rippling_ids }) {
     }).eq("id", runId);
   }
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`[derive] lines_derived=${linesDerived} unattributed=${unattributed} uncoded=${uncoded} duration=${dur}s`);
-  return { ok: true, linesDerived, uncoded, unattributed };
+  console.log(`[derive] lines_derived=${linesDerived} unattributed=${unattributed} uncoded=${uncoded} label_fallback_inserted=${labelFallbackInserted} duration=${dur}s`);
+  return { ok: true, linesDerived, uncoded, unattributed, labelFallbackInserted };
 }
 
 // ─── Probes ──────────────────────────────────────────────────────────
@@ -700,6 +775,58 @@ async function runProbes({ rippling_ids }) {
     }
   }
 
+  // R7. NEW (owner ruling 2026-08-19, PR #713 flag 1 hardening): zero
+  //     rows exist whose work_location display_value is one of the
+  //     three EXCLUDED_LABEL_FALLBACK literals and whose derived state
+  //     is not excluded. Guards against a future refactor that quietly
+  //     drops the label-fallback path or a case-sensitivity slip in the
+  //     literal set. Fail-visible if the fallback and the map ever
+  //     disagree.
+  {
+    const literals = [...EXCLUDED_LABEL_FALLBACK];
+    const { data: rawRows, error: rawErr } = await supa
+      .from("rippling_raw_spend_lines_latest")
+      .select("rippling_id, work_location_label")
+      .in("work_location_label", literals);
+    if (rawErr) {
+      probes.push({ id: "R7", pass: false, note: rawErr.message });
+      console.log(`R7 FAIL: raw lookup error ${rawErr.message}`);
+    } else {
+      const rawIds = (rawRows || []).map(r => r.rippling_id);
+      if (rawIds.length === 0) {
+        probes.push({ id: "R7", pass: true, note: "no raw rows with fallback labels" });
+        console.log("R7 PASS: no raw rows carry any of the three fallback labels (vacuous)");
+      } else {
+        // Chunk source_line_id IN() lookup - each key is
+        // "rippling_spend:<uuid>" (51 chars) so 100 per chunk matches
+        // the derive-step chunk size to stay under the URL limit.
+        const sourceLineIds = rawIds.map(id => `rippling_spend:${id}`);
+        let bad = 0;
+        for (let i = 0; i < sourceLineIds.length; i += 100) {
+          const chunk = sourceLineIds.slice(i, i + 100);
+          const { data, error } = await supa
+            .from("purchasing_actuals")
+            .select("source_line_id, excluded, account_key")
+            .eq("source", "rippling_spend")
+            .in("source_line_id", chunk)
+            .eq("excluded", false);
+          if (error) {
+            probes.push({ id: "R7", pass: false, note: error.message });
+            console.log(`R7 FAIL: actuals lookup chunk ${i} error ${error.message}`);
+            bad = -1;
+            break;
+          }
+          bad += (data || []).length;
+        }
+        if (bad >= 0) {
+          const pass = bad === 0;
+          probes.push({ id: "R7", pass, note: `bad=${bad}/${rawIds.length}` });
+          console.log(`R7 ${pass ? "PASS" : "FAIL"}: rows whose work_location label is in fallback set but derived state is not excluded (bad=${bad}/${rawIds.length})`);
+        }
+      }
+    }
+  }
+
   const allPass = probes.every(p => p.pass);
   return { probes, allPass };
 }
@@ -729,7 +856,7 @@ console.log("");
 console.log("purchasing_rippling_sync summary:");
 if (walkResult) console.log(`  spend_lines:   ${walkResult.ok ? "ok" : "FAIL"}  pages=${walkResult.pageNo} examined=${walkResult.examined} inserted=${walkResult.inserted}`);
 if (catCandResult) console.log(`  category_map:  ${catCandResult.ok ? "ok" : "FAIL"}  upserted=${catCandResult.upserted}`);
-if (deriveResult) console.log(`  derive:        ${deriveResult.ok ? "ok" : "FAIL"}  lines_derived=${deriveResult.linesDerived} unattributed=${deriveResult.unattributed} uncoded=${deriveResult.uncoded}`);
+if (deriveResult) console.log(`  derive:        ${deriveResult.ok ? "ok" : "FAIL"}  lines_derived=${deriveResult.linesDerived} unattributed=${deriveResult.unattributed} uncoded=${deriveResult.uncoded} label_fallback_inserted=${deriveResult.labelFallbackInserted ?? 0}`);
 if (probesResult) console.log(`  probes:        ${probesResult.allPass ? "ALL PASS" : "FAIL"}  ${probesResult.probes.map(p => `${p.id}=${p.pass ? "P" : "F"}`).join(" ")}`);
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
