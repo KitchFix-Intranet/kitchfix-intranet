@@ -124,6 +124,11 @@ export function Shell({
   freshnessPop,   // node - rendered inside the popover
   // Print scope line (kept from v6 for @media print sheet identification).
   printScopeText,
+  // Salary PR 3 C1 - segmented Hourly/+Salary control. Renders only
+  // when the route ships salary_available: true (spec T-1). ABSENT
+  // for anyone without permission, never disabled - the toggle can
+  // never appear for a caller the route would refuse.
+  salaryToggle,   // { on: boolean, onChange: (next: boolean) => void } | null
   // Layout children.
   folioRail,      // left aside
   main,           // middle content
@@ -152,6 +157,26 @@ export function Shell({
         </span>
 
         <SectionMenu activeKey={activeSection} />
+
+        {salaryToggle && (
+          <span className="kpi-cmd-salary" role="group" aria-label="Include salary">
+            <span className="kpi-ctl-k">Include</span>
+            <span className="kpi-seg">
+              <button
+                type="button"
+                className={!salaryToggle.on ? "on" : ""}
+                onClick={() => salaryToggle.on && salaryToggle.onChange(false)}
+                aria-pressed={!salaryToggle.on}
+              >Hourly</button>
+              <button
+                type="button"
+                className={salaryToggle.on ? "on" : ""}
+                onClick={() => !salaryToggle.on && salaryToggle.onChange(true)}
+                aria-pressed={salaryToggle.on}
+              >+ Salary</button>
+            </span>
+          </span>
+        )}
 
         {rangeProps && (
           <RangeMenu

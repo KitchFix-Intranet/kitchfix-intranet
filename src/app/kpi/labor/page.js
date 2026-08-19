@@ -165,6 +165,11 @@ export default function KpiLaborPage() {
     setErrCode(null);
     setAuthError(null);
     const params = new URLSearchParams({ account, start, end });
+    // Salary PR 3 C1 - opt into the salary-merged response when the
+    // URL flag says so. The route re-checks the gate on every request
+    // (spec T-2), so a shared link that opens as a site leader is
+    // silently rendered hourly - no message needed, that is correct.
+    if (searchParams.get("salary") === "1") params.set("include_salary", "1");
     const markBase = `kpi-labor-fetch-${account}`;
     try { performance.mark(`${markBase}-start`); } catch {}
     fetch(`/api/kpi/labor?${params}`, { signal: ctrl.signal })
@@ -206,7 +211,7 @@ export default function KpiLaborPage() {
       })
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
-  }, [status, isAllowed, account, start, end]);
+  }, [status, isAllowed, account, start, end, searchParams]);
 
   // ── URL setters ──────────────────────────────────────
   const setParam = (key, value) => {
@@ -862,6 +867,15 @@ export default function KpiLaborPage() {
           dataLoading={loadState === "loading" || loadState === "idle"}
           activeSection="labor"
           printScopeText={printScopeText}
+          /* Salary PR 3 C1 - segmented toggle rendered ONLY when the
+             route ships salary_available=true. Absent, never disabled,
+             for anyone the gate would refuse (spec T-1). URL flag is
+             the source of truth; the fetch effect above reads it and
+             re-fires the request. */
+          salaryToggle={data?.salary_available === true ? {
+            on: searchParams.get("salary") === "1",
+            onChange: (next) => setParam("salary", next ? "1" : ""),
+          } : null}
           /* V25-14 - Range control stays MOUNTED through every refetch.
              Uses last-known account_periods; the ranges keep responding
              the moment the loading chip clears. */

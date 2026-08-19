@@ -254,6 +254,21 @@
   white-space: nowrap;
 }
 .kpi-cmd-dot { color: #5C769A; margin: 0 var(--kpi-sp-2); font-weight: 400; flex: none; }
+
+/* Salary PR 3 C1 - Hourly / + Salary toggle. Sits between Section
+   and Range in the command bar and only renders when the route
+   ships salary_available=true. The .kpi-ctl-k label styling mirrors
+   the SectionMenu chip so the eye reads the two as one control
+   family. Reuses the shared .kpi-seg pattern; no raw px literals. */
+.kpi-cmd-salary {
+  display: inline-flex; align-items: center;
+  gap: var(--kpi-sp-2);
+  flex: none;
+}
+.kpi-cmd-salary .kpi-ctl-k {
+  color: #B9C6DA; font-size: var(--kpi-size-caption);
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
 .kpi-cmd-spacer { flex: 1 1 auto; min-width: 0; }
 
 /* Shared control skin - every bar control uses this. */
