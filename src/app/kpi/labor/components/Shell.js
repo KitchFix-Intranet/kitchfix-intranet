@@ -154,6 +154,13 @@ export function Shell({
           <span className="kpi-cmd-title-brand">KPI Dashboard</span>
           <span className="kpi-cmd-dot" aria-hidden="true">·</span>
           <span className="kpi-cmd-title-acct">{account}</span>
+          {salaryToggle?.on && (
+            // V40 FIX 3b - persistent amber pill outside the seg control
+            // so the "you are viewing more than hourly" signal survives
+            // the eye leaving the toggle. Paired with the amber active
+            // segment (FIX 3a) so the control and the title agree.
+            <span className="kpi-cmd-title-salary" aria-label="Salary included">+ SALARY</span>
+          )}
         </span>
 
         <SectionMenu activeKey={activeSection} />
@@ -161,7 +168,11 @@ export function Shell({
         {salaryToggle && (
           <span className="kpi-cmd-salary" role="group" aria-label="Include salary">
             <span className="kpi-ctl-k">Include</span>
-            <span className="kpi-seg">
+            {/* V40 FIX 3a - kpi-seg-salary-on flips the ACTIVE segment's
+                fill to amber-600 when salary is on (see kpi.css). When
+                off, the segment stays navy so the toggle changes colour
+                only when it also changes meaning. */}
+            <span className={"kpi-seg" + (salaryToggle.on ? " kpi-seg-salary-on" : "")}>
               <button
                 type="button"
                 className={!salaryToggle.on ? "on" : ""}

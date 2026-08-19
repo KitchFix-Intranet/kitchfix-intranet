@@ -24,7 +24,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase";
-import { resolveWorkerName } from "@/lib/kpi/resolveName";
+import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
@@ -357,38 +357,11 @@ export async function GET(request) {
     const actualsRows = aQ.data;
 
     // 3. Workers - union by rippling_id (collisions = same person).
+    //    V40 BUG 5 - name resolution extracted to resolveWorkerMeta so
+    //    the salary path can call it too. Prior state left salaried
+    //    workers unresolved (rendered as id hashes at CIN - AZ).
     const workerIds = [...new Set(actualsRows.map(r => r.worker_id))];
-    const workerMeta = {};
-    let resolvedNames = 0;
-    let usersReachable = false;
-    if (workerIds.length > 0) {
-      const w = await supa.from("rippling_raw_workers_latest").select("payload").in("rippling_id", workerIds);
-      if (!w.error) {
-        const userIds = [...new Set((w.data || []).map(r => r.payload?.user_id).filter(Boolean))];
-        const userByRipplingId = new Map();
-        if (userIds.length > 0) {
-          const u = await supa.from("rippling_raw_users_latest").select("rippling_id, payload").in("rippling_id", userIds);
-          if (!u.error) {
-            usersReachable = true;
-            for (const r of u.data || []) userByRipplingId.set(r.rippling_id, r.payload || {});
-          }
-        }
-        for (const r of w.data || []) {
-          const p = r.payload || {};
-          const userPayload = p.user_id ? userByRipplingId.get(p.user_id) : null;
-          const title = p.title ? String(p.title).trim() : null;
-          const name = resolveWorkerName(p, userPayload);
-          if (name) resolvedNames++;
-          workerMeta[p.id] = {
-            worker_id: p.id,
-            number: p.number ?? null,
-            display_name: name,
-            title,
-            status: p.status || null,
-          };
-        }
-      }
-    }
+    const { workerMeta, resolvedNames, usersReachable } = await resolveWorkerMeta(supa, workerIds);
 
     // 4. account_periods - fiscal calendar is universal across accounts;
     // use the first member as the canonical source (any account would
@@ -533,9 +506,18 @@ export async function GET(request) {
       body = withSalaryMerge(body, {
         account, members, start, end, today,
         buildBoard,
+        buildWeekBudgets,
         salary3100_2: budQ.byAccount,
         salaryRows: actQ.rows,
       });
+      // V40 BUG 5 - resolve names for salary worker_ids not already
+      // covered by the hourly resolve above. Same helper, same fallback.
+      const salaryOnly = [...new Set(actQ.rows.map(r => r.worker_id))]
+        .filter(id => id && !body.workers[id]);
+      if (salaryOnly.length > 0) {
+        const extra = await resolveWorkerMeta(supa, salaryOnly);
+        body.workers = { ...body.workers, ...extra.workerMeta };
+      }
     }
     body.salary_available = salary_available;
     return NextResponse.json(body);
@@ -579,9 +561,18 @@ export async function GET(request) {
       bodyD26 = withSalaryMerge(bodyD26, {
         account, members: [account], start, end, today,
         buildBoard,
+        buildWeekBudgets,
         salary3100_2: budQ.byAccount,
         salaryRows: actQ.rows,
       });
+      // V40 BUG 5 - D26 accounts arrive with an empty workers dict.
+      // Resolve the salary worker_ids so their names render.
+      const salaryOnly = [...new Set(actQ.rows.map(r => r.worker_id))]
+        .filter(id => id && !bodyD26.workers[id]);
+      if (salaryOnly.length > 0) {
+        const extra = await resolveWorkerMeta(supa, salaryOnly);
+        bodyD26.workers = { ...bodyD26.workers, ...extra.workerMeta };
+      }
     }
     bodyD26.salary_available = salary_available;
     return NextResponse.json(bodyD26);
@@ -603,54 +594,11 @@ export async function GET(request) {
     .order("amount", { ascending: false });
   if (unattr.error) return NextResponse.json(safeError("labor_unattributed", unattr.error), { status: 500 });
 
+  // V40 BUG 5 - name resolution extracted to resolveWorkerMeta so the
+  // salary path can call it too. Prior inlined block was byte-identical
+  // to the aggregate one; both now share resolveWorkerMeta.
   const workerIds = [...new Set(actuals.data.map(r => r.worker_id))];
-  const workerMeta = {};
-  let resolvedNames = 0;
-  let usersReachable = false;
-  if (workerIds.length > 0) {
-    const w = await supa
-      .from("rippling_raw_workers_latest")
-      .select("payload")
-      .in("rippling_id", workerIds);
-    if (!w.error) {
-      // Collect user_ids from worker payloads, then batch-fetch users.
-      // Users table may be empty if the C5 walk has not run yet; the
-      // resolver returns null and the surface falls back to #N + title.
-      const userIds = [...new Set((w.data || []).map(r => r.payload?.user_id).filter(Boolean))];
-      const userByRipplingId = new Map();
-      if (userIds.length > 0) {
-        const u = await supa
-          .from("rippling_raw_users_latest")
-          .select("rippling_id, payload")
-          .in("rippling_id", userIds);
-        // A missing users table (migration not yet applied) surfaces
-        // as an error here. Do not fail the whole route; just skip the
-        // join and let the resolver return null. Kevin sees the
-        // fraction-resolved signal in the response.
-        if (!u.error) {
-          usersReachable = true;
-          for (const r of u.data || []) userByRipplingId.set(r.rippling_id, r.payload || {});
-        }
-      }
-      for (const r of w.data || []) {
-        const p = r.payload || {};
-        const uid = p.user_id;
-        const userPayload = uid ? userByRipplingId.get(uid) : null;
-        // Trim title on ingest (Rippling returns some titles with
-        // trailing spaces - "Cook " was showing up in the C4 export).
-        const title = p.title ? String(p.title).trim() : null;
-        const name = resolveWorkerName(p, userPayload);
-        if (name) resolvedNames++;
-        workerMeta[p.id] = {
-          worker_id: p.id,
-          number: p.number ?? null,
-          display_name: name,                        // null when unresolvable
-          title,
-          status: p.status || null,
-        };
-      }
-    }
-  }
+  const { workerMeta, resolvedNames, usersReachable } = await resolveWorkerMeta(supa, workerIds);
 
   // account_periods: full FY period boundaries from sc_day_metadata for
   // this account. Powers client-side "this period" / "last period"
@@ -826,9 +774,19 @@ export async function GET(request) {
     bodySingle = withSalaryMerge(bodySingle, {
       account, members: [account], start, end, today,
       buildBoard,
+      buildWeekBudgets,
       salary3100_2: budQ.byAccount,
       salaryRows: actQ.rows,
     });
+    // V40 BUG 5 - resolve any salary worker_ids not covered by the
+    // hourly resolve. This is the CIN - AZ path (three salaried
+    // workers, none in labor_actuals hourly).
+    const salaryOnly = [...new Set(actQ.rows.map(r => r.worker_id))]
+      .filter(id => id && !bodySingle.workers[id]);
+    if (salaryOnly.length > 0) {
+      const extra = await resolveWorkerMeta(supa, salaryOnly);
+      bodySingle.workers = { ...bodySingle.workers, ...extra.workerMeta };
+    }
   }
   bodySingle.salary_available = salary_available;
   return NextResponse.json(bodySingle);

@@ -107,7 +107,7 @@ function WorkersFilter({ workerRoster, selectedWorkers, onWorkersChange }) {
   );
 }
 
-function HelpPop() {
+function HelpPop({ rateBasisHourlyOnly }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   useEffect(() => {
@@ -136,7 +136,9 @@ function HelpPop() {
           <h5>ABOUT THIS TABLE</h5>
           <p><b>Coverage</b> appears only when something is wrong - a clean row means every entry has priced hours.</p>
           <p><b>vs budget</b> compares each row against its own budget: a week against the weekly budget, a period against the period budget. The tick is the budget line; the bar is what was spent.</p>
-          <p><b>Rate</b> is blended - dollars divided by hours. Dollars come from Rippling pay segments, never hours &times; rate.</p>
+          <p><b>{rateBasisHourlyOnly ? "Hourly rate" : "Rate"}</b>{rateBasisHourlyOnly
+            ? " is hourly dollars divided by hourly hours. Salaried people are not included in the denominator on this column; the total dollars figure below stays hourly + salary."
+            : " is blended - dollars divided by hours. Dollars come from Rippling pay segments, never hours × rate."}</p>
           <p>Columns with no values anywhere in the range are hidden.</p>
         </div>
       )}
@@ -325,7 +327,21 @@ export function WeekTable({
   resolvedPreset,
   rolledUpMembers = [],           // V25-2 members in the aggregate roll-up
   aggregateExcludedMembers = [],  // V25-2 envelope members excluded from the roll-up
+  salary,                          // V40 BUG 1 - { rate_basis, blended_rate_hourly } | null
 }) {
+  // V40 BUG 1 - table Rate column, when salary is on, must show the
+  // SAME hourly rate the cards show. blendedRate(amount, hours) here
+  // divides SALARY-INCLUSIVE dollars by hourly-only hours - measured
+  // at TBR-FL P8, the table printed $34.27 while the Hours card
+  // correctly printed $22.27. When rate_basis === 'hourly_only',
+  // portfolio / period / week / grand-total rate cells all read the
+  // route-shipped blended_rate_hourly directly. Per-worker child
+  // rows keep the local blendedRate (each worker's own dollars over
+  // their own hours; no dilution because the row IS a worker).
+  const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
+  const hourlyRate = salary?.blended_rate_hourly;
+  const displayRate = (fallback) => rateBasisHourlyOnly ? hourlyRate : fallback;
+  const rateHeaderLabel = rateBasisHourlyOnly ? "HOURLY RATE" : "RATE";
   const excludedSet = useMemo(() => new Set(aggregateExcludedMembers), [aggregateExcludedMembers]);
   const rolledUpCount = rolledUpMembers.length;
   const wrapRef = useRef(null);
@@ -575,7 +591,7 @@ export function WeekTable({
           </span>
         </div>
         <span className="kpi-tbar-rule" aria-hidden="true" />
-        <HelpPop />
+        <HelpPop rateBasisHourlyOnly={rateBasisHourlyOnly} />
       </div>
 
       {scopeNote && (
@@ -607,7 +623,7 @@ export function WeekTable({
                 <th>OT 1.5&times;</th>
                 {showHoliday && <th>Holiday 2&times;</th>}
                 {showUnpriced && <th>Unapproved</th>}
-                {showRate && <th>Rate</th>}
+                {showRate && <th>{rateHeaderLabel}</th>}
                 <th>Dollars</th>
               </tr>
             </thead>
@@ -642,7 +658,10 @@ export function WeekTable({
                   : inProgress
                     ? { mode: "in_progress", spent: totals.amount, budget: periodBudget }
                     : { mode: "closed", spent: totals.amount, budget: periodBudget };
-                const rate = blendedRate({ dollars: totals.amount, hours: totals.hours });
+                // V40 BUG 1 - portfolio-level rate on the salary path
+                // reads the hourly-only rate the route ships; anything
+                // else mixes salary dollars into hourly hours.
+                const rate = displayRate(blendedRate({ dollars: totals.amount, hours: totals.hours }));
                 const bandLabel = isMonth ? g.groupLabel : `FY2026 · PERIOD ${g.period_no}`;
                 return (
                   <FragmentRows
@@ -693,7 +712,9 @@ export function WeekTable({
                 {showRate && (
                   <td className="num">{(() => {
                     const hrs = (grandTotal?.hours_regular || 0) + (grandTotal?.hours_overtime || 0) + (grandTotal?.hours_double_time || 0);
-                    const r = blendedRate({ dollars: grandTotal?.amount || 0, hours: hrs });
+                    // V40 BUG 1 - grand-total rate on the salary path
+                    // reads the hourly-only rate directly.
+                    const r = displayRate(blendedRate({ dollars: grandTotal?.amount || 0, hours: hrs }));
                     return r != null ? `$${r.toFixed(2)}` : "–";
                   })()}</td>
                 )}
@@ -779,7 +800,10 @@ function FragmentRows({
             ? { mode: "in_progress", spent: w.amount, budget: weekBudget }
             : { mode: "closed", spent: w.amount, budget: weekBudget };
         const hrs = (w.hours_regular || 0) + (w.hours_overtime || 0) + (w.hours_double_time || 0);
-        const rate = blendedRate({ dollars: w.amount, hours: hrs });
+        // V40 BUG 1 - week-row rate on the salary path reads the
+        // hourly-only rate; the week's `w.amount` includes salary
+        // but its hours are hourly only.
+        const rate = displayRate(blendedRate({ dollars: w.amount, hours: hrs }));
         const weekOpen = expandedWeeks.has(w.week_start);
         return (
           <>
