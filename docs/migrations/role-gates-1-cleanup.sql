@@ -2,33 +2,60 @@
 -- role-gates-1-cleanup.sql
 --
 -- Cleans up kpi_roles for the four-role KPI gate that lands with
--- this PR (see docs/KPI_ROLE_GATES_SPEC.md).
+-- this PR (see docs/KPI_ROLE_GATES_SPEC.md §9). All emails below are
+-- OWNER-CONFIRMED; do not guess or derive any from the worker set.
 --
 -- What lands
---   M1  DELETE all role='site' rows (27, per §9 / OQ-1). site-level
---       access is now authoritative from `people` (is_site_leader,
---       worker_class='salaried'), never from kpi_roles.
---   M2  Tighten the role CHECK to ('corporate','rdo') so a 'site'
---       row cannot come back. Named constraint so a future reader
---       sees the ruling.
---   M3  INSERT the four new corporate rows (Sebastian, Britt,
---       Mariela, Alex). Emails supplied by Kevin - PLACEHOLDERS
---       below; do NOT guess from the worker set. ON CONFLICT DO
---       NOTHING so re-application is safe.
+--   M1  DELETE all role='site' rows (27; superseded by people.
+--       is_site_leader + worker_class='salaried' + account_key
+--       filters, per §2).
+--   M2  Tighten the role CHECK to ('corporate','rdo'). Named
+--       constraint so a future reader sees the ruling.
+--   M3  CORRECT the two wrong corporate emails already in the table.
+--       kpi_roles carries `j.katt@` and `j.lessard@`; NEITHER
+--       matches any Rippling work_email. The real addresses are
+--       `josh@` and `joe@` (owner-confirmed). Left uncorrected, the
+--       CEO and the VP of Operations miss rule 1 on sign-in and fall
+--       through to rule 4 - locked out of the board they
+--       commissioned. UPDATE rather than delete-and-reinsert so
+--       nothing depends on insert order.
+--   M4  INSERT the six new corporate rows (Mariela, Alex, Sebastian,
+--       Britt, John, Dararet Corporate Field Chef). role='corporate',
+--       scope=NULL, ON CONFLICT DO NOTHING.
 --
--- Post-state assertion at the tail: exactly 7 corporate + 2 rdo = 9
--- rows in kpi_roles, zero 'site'.
+-- Post-state assertion: 9 corporate + 2 rdo = 11 rows in kpi_roles,
+-- zero 'site', and every corporate/rdo email matches an ACTIVE
+-- person in `people` by work_email.
+--
+-- ORDERING IS LOAD-BEARING
+-- ────────────────────────
+-- M1 MUST RUN BEFORE M4. Three of the six M4 emails (m.chavez,
+-- s.castro, britt) ALREADY exist in kpi_roles as role='site',
+-- scope='CORP'. `email` is the PK and M4 uses ON CONFLICT DO
+-- NOTHING, so an insert-first order would silently skip them, then
+-- M1 would delete them - three people with no access and no error
+-- anywhere. josh@ and joe@ are ALSO currently in kpi_roles as
+-- role='site' (with the CORP scope) - they get deleted by M1 first,
+-- then M3 renames the wrong-address corporate rows onto their
+-- freed emails without a PK collision. Do not reorder for
+-- convenience.
 --
 -- Apply discipline
---   1. Kevin applies statements sequentially in Supabase Studio.
---   2. Fill in the four placeholder emails BEFORE running M3, or
---      run M1 + M2 now and M3 after emails land - both are safe.
---   3. Fill in the attestation block at the tail with the SHA the
---      apply matched.
+-- ────────────────
+-- 1. Kevin applies statements sequentially in Supabase Studio, in
+--    the exact M1 -> M2 -> M3 -> M4 order.
+-- 2. After each block, verify the running row-count:
+--      after M1: 5 rows (3 corp + 2 rdo, 'site' gone)
+--      after M2: 5 rows (constraint tightened, no data change)
+--      after M3: 5 rows (2 emails corrected; still 3 corp + 2 rdo)
+--      after M4: 11 rows (9 corp + 2 rdo)
+-- 3. Fill in the attestation block at the tail with the SHA the
+--    apply matched.
 --
--- PII posture: emails travel through this migration for the four
--- corporate additions. Handled the same way the salary-1c seed did;
--- no additional exposure surface.
+-- PII posture: nine emails travel through this file. They belong to
+-- the operations leadership + RDO + designated site leaders; the
+-- addresses are already in Studio and this file simply corrects and
+-- extends them.
 -- ═══════════════════════════════════════════════════════════════════
 
 -- ─── M1 - delete role='site' rows (superseded by people) ───────────
@@ -43,32 +70,52 @@ ALTER TABLE kpi_roles
   ADD CONSTRAINT kpi_roles_role_corporate_or_rdo
   CHECK (role IN ('corporate', 'rdo'));
 
--- ─── M3 - four new corporate rows ──────────────────────────────────
--- PLACEHOLDER emails. Kevin: replace the four <fill-in> values with
--- the real addresses before running M3. Do NOT guess from the worker
--- set - kpi_roles is authoritative and a wrong email would grant
--- corporate access to the wrong person.
+-- ─── M3 - correct the two wrong corporate emails ───────────────────
+-- Existing rows carry j.katt@ and j.lessard@; owner-confirmed real
+-- addresses are josh@ and joe@. UPDATE preserves created_by /
+-- created_at so audit history stays intact.
+UPDATE kpi_roles SET email = 'josh@kitchfix.com'
+  WHERE email = 'j.katt@kitchfix.com';
+UPDATE kpi_roles SET email = 'joe@kitchfix.com'
+  WHERE email = 'j.lessard@kitchfix.com';
+
+-- ─── M4 - insert the six new corporate rows ────────────────────────
+-- M4 comes AFTER M1 by design; see the ORDERING block in the
+-- header. All addresses are owner-confirmed verbatim.
 INSERT INTO kpi_roles (email, role, scope, created_by, created_at)
 VALUES
-  ('<fill-in-sebastian-email>', 'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
-  ('<fill-in-britt-email>',     'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
-  ('<fill-in-mariela-email>',   'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
-  ('<fill-in-alex-email>',      'corporate', NULL, 'k.fietek@kitchfix.com', NOW())
+  ('m.chavez@kitchfix.com',    'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
+  ('a.wasserman@kitchfix.com', 'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
+  ('s.castro@kitchfix.com',    'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
+  ('britt@kitchfix.com',       'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
+  ('john@kitchfix.com',        'corporate', NULL, 'k.fietek@kitchfix.com', NOW()),
+  ('d.inthavone@kitchfix.com', 'corporate', NULL, 'k.fietek@kitchfix.com', NOW())
 ON CONFLICT (email) DO NOTHING;
 
 -- ─── Post-state verify (paste output in the attestation) ───────────
--- Expected after M1 + M2 + M3:
---   role='corporate'  count = 7   (Kevin + Josh + Joe + the four
---                                   above; the seed from salary-1c
---                                   already covers Kevin/Josh/Joe)
---   role='rdo'        count = 2   (Shane, Ryan)
+-- Expected after M1 + M2 + M3 + M4:
+--   role='corporate'  count = 9   (kevin, josh, joe, mariela, alex,
+--                                   sebastian, britt, john,
+--                                   d.inthavone)
+--   role='rdo'        count = 2   (shane, ryan)
 --   role='site'       count = 0
 --
--- Run this SELECT in Studio after applying:
+-- Run in Studio:
 --   SELECT role, count(*) FROM kpi_roles GROUP BY role ORDER BY role;
 -- Expected output:
---   corporate | 7
+--   corporate | 9
 --   rdo       | 2
+--
+-- Match assertion (every corporate/rdo email exists as an ACTIVE
+-- person in people by work_email):
+--   SELECT k.email, k.role
+--     FROM kpi_roles k
+--     LEFT JOIN people p
+--       ON lower(p.work_email) = lower(k.email)
+--      AND p.status = 'ACTIVE'
+--    WHERE p.worker_id IS NULL
+--    ORDER BY k.role, k.email;
+-- Expected output: zero rows.
 
 
 -- ═══════════════════════════════════════════════════════════════════
@@ -77,7 +124,7 @@ ON CONFLICT (email) DO NOTHING;
 --
 -- ═══════════════════════════════════════════════════════════════════
 --
--- Kevin fills in below AFTER applying the file (M1, M2, M3
+-- Kevin fills in below AFTER applying the file (M1 -> M2 -> M3 -> M4
 -- sequentially) in Supabase Studio. This records the exact SHA the
 -- apply matched. The migration-gate check on the PR looks for the
 -- phrase `applied in Studio: YES` in a comment from an OWNER account.
@@ -86,4 +133,8 @@ ON CONFLICT (email) DO NOTHING;
 -- sha:                <fill in commit SHA>
 -- applied by:         k.fietek@kitchfix.com
 -- applied at:         <fill in ISO timestamp>
+-- post-state row counts (paste from Studio):
+--   corporate: <count>
+--   rdo:       <count>
+--   site:      <count, expect 0>
 -- notes:              <optional - any statement that needed manual attention>

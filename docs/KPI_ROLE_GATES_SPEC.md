@@ -48,11 +48,29 @@ salary toggle is gated to corporate + RDOs only. Joe's review changed both halve
   RESOLUTION ORDER, first match wins:
     1. kpi_roles.role = 'corporate'          -> corporate
     2. kpi_roles.role = 'rdo'                -> rdo, scope = region
-    3. people.is_site_leader = true          -> site_leader, scope = account_key
-    4. people.worker_class = 'salaried'
+    3. people.status = 'ACTIVE'
+       AND people.is_site_leader = true      -> site_leader, scope = account_key
+    4. people.status = 'ACTIVE'
+       AND people.worker_class = 'salaried'
        AND people.account_key IS NOT NULL
-       AND people.status = 'ACTIVE'          -> site_manager, scope = account_key
+       AND people.account_key <> 'CORP'      -> site_manager, scope = account_key
     5. otherwise                             -> no access
+
+  `status = 'ACTIVE'` IS LOAD-BEARING ON BOTH SITE RULES, not a tidiness filter. Seasonal
+  staff are rehired under a NEW worker_id each season while keeping the same work_email:
+  measured 2026-08-19, 142 rows carry an email across 129 distinct addresses, and NINE emails
+  appear on more than one row (one person has five rows, 2022 through 2026). Zero appear on
+  more than one ACTIVE row. So an email lookup without the ACTIVE filter returns several
+  people rows for one login, and the wrong one may carry a stale account_key or a stale
+  is_site_leader. The resolver must return AT MOST ONE row; assert it.
+
+  `account_key <> 'CORP'` ON RULE 4 IS ALSO LOAD-BEARING. CORP is a value in
+  rippling_department_map, not an account on the board, and it is NOT NULL - so without this
+  clause every corporate salaried person who is not already in kpi_roles falls through to
+  rule 4 and becomes a "site_manager scoped to CORP", holding a site that does not exist.
+  Measured 2026-08-19 before the fix: 4 people hit this, including the CFO and the Corporate
+  Field Chef. Corporate membership is a DECISION recorded in kpi_roles, never derived from a
+  department.
 
   Verified 2026-08-19: all 30 active EXEMPT workers carry a work_email (zero without), so the
   join covers the whole salaried population. 4 of the 32 kpi_roles rows do not match a Rippling
@@ -176,7 +194,25 @@ salary toggle is gated to corporate + RDOs only. Joe's review changed both halve
   M1  DELETE FROM kpi_roles WHERE role = 'site';            -- 27 rows, per OQ-1
   M2  Tighten the role CHECK to ('corporate','rdo') so a 'site' row cannot come back. Drop
       and re-add the constraint; name it in the migration so a future reader sees why.
-  M3  INSERT the four new corporate rows (Sebastian, Britt, Mariela, Alex) with role
-      'corporate' and scope NULL, ON CONFLICT DO NOTHING. Emails supplied by Kevin - do NOT
-      guess them from the worker set.
-  Post-state to assert: kpi_roles holds exactly 7 corporate + 2 rdo = 9 rows, zero 'site'.
+  M3  CORRECT the two wrong corporate emails already in the table. kpi_roles carries
+      `j.katt@kitchfix.com` and `j.lessard@kitchfix.com`; NEITHER matches any Rippling work
+      email. The real addresses are `josh@kitchfix.com` and `joe@kitchfix.com` (owner
+      confirmed). Left uncorrected, the CEO and the VP of Operations miss rule 1 on sign-in
+      and fall through to rule 4 - locked out of the board they commissioned. UPDATE the two
+      rows rather than deleting and re-inserting, so nothing depends on insert order.
+  M4  INSERT the six new corporate rows, role 'corporate', scope NULL, ON CONFLICT DO NOTHING:
+        m.chavez@kitchfix.com       Mariela Chavez
+        a.wasserman@kitchfix.com    Alex Wasserman
+        s.castro@kitchfix.com       Sebastian Castro
+        britt@kitchfix.com          Brittany Chernikovich
+        john@kitchfix.com           CFO
+        d.inthavone@kitchfix.com    Corporate Field Chef
+
+  ORDERING IS LOAD-BEARING - M1 MUST RUN BEFORE M4. Mariela, Sebastian and Britt ALREADY
+  exist in kpi_roles as role='site', scope='CORP'. `email` is the key and M4 uses ON CONFLICT
+  DO NOTHING, so if the insert ran first their rows would silently skip, and M1 would then
+  delete them - three people with no access and no error anywhere. Do not reorder for
+  convenience.
+
+  Post-state to assert: kpi_roles holds exactly 9 corporate + 2 rdo = 11 rows, zero 'site',
+  and every corporate/rdo email matches an ACTIVE person in `people` by work_email.

@@ -100,13 +100,18 @@ export async function loadRoleGate(supa) {
     // Rule 3: site_leader. Match on is_site_leader alone; do NOT
     // add a worker_class check - the leader flag is owner-set and
     // must override worker_class (spec §8 OQ-4, contract RD case).
-    // The partial UNIQUE (account_key) WHERE is_site_leader means
-    // at most one leader per account, but a single email could in
-    // principle map to two leader rows on two accounts. The probe
-    // asserts no such duplication for our 11 seeded emails.
+    // status='ACTIVE' is load-bearing (spec §2 update): seasonal
+    // staff are rehired under a new worker_id each season and keep
+    // the same work_email. Without the ACTIVE filter an email could
+    // resolve to a terminated row carrying a stale is_site_leader
+    // flag from a prior season. The partial UNIQUE
+    // (account_key) WHERE is_site_leader enforces at most one
+    // active leader per account; the probe asserts no duplication
+    // for our 11 seeded emails.
     const leadQ = await supa
       .from("people")
       .select("worker_id, account_key, status")
+      .eq("status", "ACTIVE")
       .eq("is_site_leader", true)
       .ilike("work_email", e);
     if (leadQ.error) throw new Error(`role gate: people leader lookup: ${leadQ.error.message}`);
@@ -118,15 +123,24 @@ export async function loadRoleGate(supa) {
       return v;
     }
 
-    // Rule 4: site_manager. status='ACTIVE' is load-bearing here
-    // to defeat the seasonal-rehire trap (a terminated seasonal
-    // row can share a work_email with a current worker).
+    // Rule 4: site_manager. Two load-bearing filters:
+    //   - status='ACTIVE' defeats the seasonal-rehire trap (a
+    //     terminated row can share a work_email with a current
+    //     worker; without ACTIVE the wrong row wins).
+    //   - account_key <> 'CORP' (spec §2 update): CORP is a value
+    //     in rippling_department_map, not an account on the board.
+    //     Without this clause every corporate salaried person not
+    //     already in kpi_roles would become 'site_manager scoped to
+    //     CORP', holding a site that does not exist. Corporate
+    //     membership is a DECISION recorded in kpi_roles, never
+    //     derived from a department.
     const mgrQ = await supa
       .from("people")
       .select("worker_id, account_key")
       .eq("status", "ACTIVE")
       .eq("worker_class", "salaried")
       .not("account_key", "is", null)
+      .neq("account_key", "CORP")
       .ilike("work_email", e);
     if (mgrQ.error) throw new Error(`role gate: people manager lookup: ${mgrQ.error.message}`);
     const managers = mgrQ.data || [];

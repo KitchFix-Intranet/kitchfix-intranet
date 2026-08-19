@@ -62,8 +62,9 @@ if (leadersQ.error) { console.log("leadersQ error:", leadersQ.error.message); pr
 if (mgrsQ.error)    { console.log("mgrsQ error:",    mgrsQ.error.message);    process.exit(1); }
 
 const leaders = leadersQ.data || [];
-const mgrs    = mgrsQ.data    || [];
-console.log(`fixtures: ${leaders.length} seeded leaders, ${mgrs.length} active-salaried non-leaders`);
+const mgrs    = (mgrsQ.data    || []).filter(r => r.account_key !== "CORP");
+const corpMgrs = (mgrsQ.data   || []).filter(r => r.account_key === "CORP");
+console.log(`fixtures: ${leaders.length} seeded leaders, ${mgrs.length} active-salaried non-leaders at sites, ${corpMgrs.length} at CORP (must NOT resolve to site_manager)`);
 
 const corpEmail = (rolesQ.data || []).find(r => r.role === "corporate")?.email;
 const rdoEast   = (rolesQ.data || []).find(r => r.role === "rdo" && r.scope === "East")?.email;
@@ -75,6 +76,26 @@ const tbrMgr    = mgrs.find(r => r.account_key === "TBR - FL");
 console.log(`corporate fixture: ${mask(corpEmail)}   rdo/E: ${mask(rdoEast)}   rdo/W: ${mask(rdoWest)}`);
 console.log(`TBR - FL leader: ${mask(tbrLeader?.work_email)}   TBR - FL non-leader mgr: ${mask(tbrMgr?.work_email)}`);
 console.log(`kpi_roles role='site' rows still present: ${siteRoleRows.length}  (c1 migration deletes them)`);
+const corpCount = (rolesQ.data || []).filter(r => r.role === "corporate").length;
+const rdoCount  = (rolesQ.data || []).filter(r => r.role === "rdo").length;
+const migrationApplied = siteRoleRows.length === 0;
+console.log(`kpi_roles counts: corporate=${corpCount}, rdo=${rdoCount}, site=${siteRoleRows.length}  (post-M4 target: 9/2/0)`);
+if (migrationApplied) {
+  if (corpCount !== 9) fail(`post-migration corporate count = ${corpCount}, want 9`);
+  else ok("post-migration kpi_roles corporate count = 9");
+  if (rdoCount !== 2) fail(`post-migration rdo count = ${rdoCount}, want 2`);
+  else ok("post-migration kpi_roles rdo count = 2");
+  // Every corporate/rdo email matches an ACTIVE people row by
+  // work_email. Zero unmatched expected.
+  const emails = (rolesQ.data || []).map(r => r.email.toLowerCase().trim());
+  const peopleMatch = await supa.from("people").select("work_email").eq("status", "ACTIVE").in("work_email", emails);
+  const matched = new Set((peopleMatch.data || []).map(r => (r.work_email || "").toLowerCase().trim()));
+  const unmatched = emails.filter(e => !matched.has(e));
+  if (unmatched.length === 0) ok(`every kpi_roles email matches an ACTIVE people row (${emails.length} of ${emails.length})`);
+  else fail(`unmatched kpi_roles emails: ${unmatched.length} (${unmatched.map(mask).join(", ")})`);
+} else {
+  skip("kpi_roles post-migration count assertion (c1 migration not yet applied in Studio)");
+}
 
 const gate = await loadRoleGate(supa);
 if (gate.error) { console.log("gate error:", gate.error); process.exit(1); }
@@ -280,6 +301,28 @@ for (const l of leaders) {
   }
 }
 if (dupDefects === 0) ok(`all ${leaders.length} leader emails resolve uniquely; seasonal rehires do not shadow`);
+
+// ─── CORP filter on rule 4 (spec §2 update) ─────────────────────────
+console.log("");
+console.log("[corp-not-mgr] active salaried at account_key='CORP' must NOT resolve to site_manager");
+if (corpMgrs.length === 0) skip("no active-salaried CORP rows to check");
+else {
+  let leaks = 0;
+  for (const r of corpMgrs) {
+    if (!r.work_email) continue;
+    const caller = await gate.resolveKpiRole(r.work_email);
+    // Post-migration these should be corporate (via kpi_roles).
+    // Pre-migration they should be null (kpi_roles has them as
+    // role='site' which the resolver ignores, and rule 4 excludes
+    // CORP). Either outcome is correct - what MUST NOT happen is
+    // site_manager scope=CORP.
+    if (caller?.role === "site_manager" && caller.scope === "CORP") {
+      fail(`${mask(r.work_email)} resolved to site_manager scope='CORP' - rule 4 leaked CORP`);
+      leaks++;
+    }
+  }
+  if (leaks === 0) ok(`checked ${corpMgrs.length} active-salaried CORP rows; none resolved to site_manager scope='CORP'`);
+}
 
 // ─── Locked-response shape (code-read) ──────────────────────────────
 console.log("");
