@@ -187,6 +187,13 @@ This is a discipline aid, not a CI check. Do not automate it.
 | `QBO_PROXY_KEY` | Static `X-API-Key` header value for the proxy. Chat-burned during the 2026-08-06 recon; rotate + narrow to read-only until PR-C's writer ships (K-18 open). PR-C reads it for POSTs; a read-only key returns an auth error and the adapter records a `failed` ledger row. | Local `.env.local`; Prod when PR-C activates | Same as `QBO_PROXY_BASE` - reads fail with a named error |
 | `NEXT_PUBLIC_APP_BASE_URL` | Origin used to compose N1 (invoice created) and N2 (push failed) links in `src/lib/billing/qboNotifications.js`. Empty in local dev is fine (links become relative); production sets the full origin. PR-C only. | Local + Prod | Notification links come out relative rather than absolute |
 
+### bill.com proxy (KPI PURCHASING PHASE 1)
+
+| Variable | Description | Scope | If missing |
+|---|---|---|---|
+| `BILLCOM_PROXY_BASE` | Prefix of Josh's bill.com proxy: origin + `/billcom`. Same ngrok-tunnel host pattern as `QBO_PROXY_BASE`. The proxy holds bill.com OAuth server-side and exposes `GET /bills/filtered?invoiceDateStart&invoiceDateEnd&start&max`, `GET /chartofaccounts`, `GET /classes`, `GET /departments`. Endpoints return the v2 envelope (`response_data: []`, numeric status codes as strings). Read by `src/lib/billcom.js` and `scripts/purchasing_billcom_sync.mjs`. | Local `.env.local` (dev + probe scripts); GitHub Actions secrets (purchasing-sync workflow) | The nightly bill.com sync throws `billcom: BILLCOM_PROXY_BASE required` before the first network call and exits 1. |
+| `BILLCOM_PROXY_KEY` | Static `X-API-Key` header value for the bill.com proxy. Same shape as `QBO_PROXY_KEY`; the proxy scopes it to READ-ONLY. Read by `src/lib/billcom.js` on every proxy call. NEVER echoed to stdout. | Local `.env.local`; GitHub Actions secrets | Sync throws `billcom: BILLCOM_PROXY_KEY required (never echoed)` and exits 1. |
+
 ### Testing / feature flags
 
 | Variable | Description | Scope | If missing |

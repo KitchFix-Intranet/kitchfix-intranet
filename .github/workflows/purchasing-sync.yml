@@ -1,0 +1,128 @@
+name: purchasing sync (billcom + rippling spend)
+
+# Nightly ingest of bill.com bills + Rippling card spend into Postgres
+# for KPI PURCHASING PHASE 1 (spec §2). Two independent sync scripts,
+# sequential: bill.com first (references + bills + derive), Rippling
+# spend second (raw + candidate maps + derive).
+#
+# One script per source keeps the lock granularity clean:
+#   purchasing_sync_locks: holder='purchasing_billcom_sync'
+#   purchasing_sync_locks: holder='purchasing_rippling_sync'
+# The two lock rows are independent so an operator running one manually
+# does not block the other's nightly.
+#
+# Reason for a NEW workflow (vs extending rippling-sync.yml):
+#   1. rippling-sync.yml runs the LABOR pipeline (4 walks + labor
+#      derive) with a ~30-minute total budget. Adding a bill.com pass
+#      whose latency is dominated by a proxy (Josh's ngrok) puts the
+#      combined workflow well over the 90-minute mark on any bill.com
+#      slowness - and the labor path is production, blast-radius high.
+#   2. Failure isolation: a bill.com proxy 500 must NOT fail the labor
+#      derive. Separate workflows mean a red purchasing check does not
+#      hide a green labor check.
+#   3. Different secrets scope: BILLCOM_PROXY_BASE / BILLCOM_PROXY_KEY
+#      are net-new; scoping them to a purchasing workflow keeps the
+#      labor workflow's secret surface unchanged.
+#   4. Different cron slot: labor runs at 07:00 UTC; purchasing runs at
+#      07:30 UTC so if labor is still finishing (in-season peak), the
+#      two never race on the shared Actions runner budget.
+#
+# Failure surface:
+#   exit 2 = walk failed mid-flight (partial data in raw tables)
+#   exit 3 = another sync in flight (lock)
+#   exit 4 = probes failed (data landed but not spec-compliant)
+# Every non-zero fails the job. GitHub concurrency: block prevents a
+# second scheduled trigger from stepping on this one; the lock table
+# handles cross-environment (local + Action) collisions.
+
+on:
+  schedule:
+    - cron: '30 7 * * *'   # 07:30 UTC = 02:30 CST / 03:30 CDT
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'fetch_source value (nightly | backfill | manual | fytd for billcom). Default nightly.'
+        required: false
+        default: 'nightly'
+      period:
+        description: 'fiscal period 1..13 (required when source=fytd)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'If "true", walk sources but skip Postgres writes.'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: purchasing-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: purchasing sync (billcom + rippling spend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      BILLCOM_PROXY_BASE:       ${{ secrets.BILLCOM_PROXY_BASE }}
+      BILLCOM_PROXY_KEY:        ${{ secrets.BILLCOM_PROXY_KEY }}
+      RIPPLING_API_KEY:         ${{ secrets.RIPPLING_API_KEY }}
+      SUPABASE_URL:             ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run billcom sync
+        id: billcom
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          DRY_RUN="${{ inputs.dry_run || 'false' }}"
+          PERIOD="${{ inputs.period || '' }}"
+          ARGS="--source=${SOURCE}"
+          if [ "${SOURCE}" = "fytd" ] && [ -n "${PERIOD}" ]; then
+            ARGS="${ARGS} --period=${PERIOD}"
+          fi
+          if [ "${DRY_RUN}" = "true" ]; then
+            ARGS="${ARGS} --dry-run"
+          fi
+          echo "purchasing_billcom_sync ${ARGS}"
+          node scripts/purchasing_billcom_sync.mjs ${ARGS}
+
+      # Rippling spend sync runs regardless of billcom outcome (`if:
+      # always()`). Rationale: the two data lanes are independent; a
+      # bill.com proxy 500 must not skip the card-spend refresh. If
+      # billcom failed the job already, this step still runs so the
+      # rippling side of purchasing_actuals stays current, and the
+      # workflow's aggregate status remains RED (jobs return the worst
+      # exit code across all steps).
+      - name: Run rippling spend sync
+        if: always()
+        id: rippling
+        run: |
+          SOURCE_IN="${{ inputs.source || 'nightly' }}"
+          # rippling script rejects 'fytd' - normalize to 'nightly' for
+          # the rippling step regardless of billcom's source value.
+          case "${SOURCE_IN}" in
+            backfill|nightly|manual) SOURCE="${SOURCE_IN}" ;;
+            *)                       SOURCE="nightly" ;;
+          esac
+          DRY_RUN="${{ inputs.dry_run || 'false' }}"
+          ARGS="--source=${SOURCE}"
+          if [ "${DRY_RUN}" = "true" ]; then
+            ARGS="${ARGS} --dry-run"
+          fi
+          echo "purchasing_rippling_sync ${ARGS}"
+          node scripts/purchasing_rippling_sync.mjs ${ARGS}
