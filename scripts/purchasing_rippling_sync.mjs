@@ -671,20 +671,34 @@ async function runProbes({ rippling_ids }) {
   }
 
   // R2. excluded rows carry account_key null.
+  //     Paginate via .range() - a plain .select() is capped at PostgREST's
+  //     default 1000 rows and prints a misleading denominator. Same
+  //     pattern as the ref_accounts fetcher fix in 12a1f4b.
   {
-    const { data, error } = await supa
-      .from("purchasing_actuals")
-      .select("account_key, excluded")
-      .eq("source", "rippling_spend")
-      .eq("excluded", true)
-      .limit(50000);
-    if (error) {
-      probes.push({ id: "R2", pass: false, note: error.message });
+    const PAGE = 1000;
+    let bad = 0;
+    let total = 0;
+    let from = 0;
+    let err = null;
+    for (;;) {
+      const { data, error } = await supa
+        .from("purchasing_actuals")
+        .select("account_key, excluded")
+        .eq("source", "rippling_spend")
+        .eq("excluded", true)
+        .range(from, from + PAGE - 1);
+      if (error) { err = error; break; }
+      const rows = data || [];
+      total += rows.length;
+      for (const r of rows) if (r.account_key !== null) bad++;
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    if (err) {
+      probes.push({ id: "R2", pass: false, note: err.message });
     } else {
-      let bad = 0;
-      for (const r of data || []) if (r.account_key !== null) bad++;
-      probes.push({ id: "R2", pass: bad === 0, note: `bad=${bad}` });
-      console.log(`R2 ${bad === 0 ? "PASS" : "FAIL"}: excluded rows have account_key null (bad=${bad}/${(data || []).length})`);
+      probes.push({ id: "R2", pass: bad === 0, note: `bad=${bad}/${total}` });
+      console.log(`R2 ${bad === 0 ? "PASS" : "FAIL"}: excluded rows have account_key null (bad=${bad}/${total})`);
     }
   }
 
@@ -784,15 +798,30 @@ async function runProbes({ rippling_ids }) {
   //     disagree.
   {
     const literals = [...EXCLUDED_LABEL_FALLBACK];
-    const { data: rawRows, error: rawErr } = await supa
-      .from("rippling_raw_spend_lines_latest")
-      .select("rippling_id, work_location_label")
-      .in("work_location_label", literals);
+    // Paginate via .range() - a plain .select() is capped at PostgREST's
+    // default 1000 rows and prints a misleading denominator. Same
+    // pattern as the ref_accounts fetcher fix in 12a1f4b.
+    const PAGE = 1000;
+    const rawRows = [];
+    let rawErr = null;
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supa
+        .from("rippling_raw_spend_lines_latest")
+        .select("rippling_id, work_location_label")
+        .in("work_location_label", literals)
+        .range(from, from + PAGE - 1);
+      if (error) { rawErr = error; break; }
+      const rows = data || [];
+      for (const r of rows) rawRows.push(r);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
     if (rawErr) {
       probes.push({ id: "R7", pass: false, note: rawErr.message });
       console.log(`R7 FAIL: raw lookup error ${rawErr.message}`);
     } else {
-      const rawIds = (rawRows || []).map(r => r.rippling_id);
+      const rawIds = rawRows.map(r => r.rippling_id);
       if (rawIds.length === 0) {
         probes.push({ id: "R7", pass: true, note: "no raw rows with fallback labels" });
         console.log("R7 PASS: no raw rows carry any of the three fallback labels (vacuous)");
