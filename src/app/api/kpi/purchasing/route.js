@@ -1,7 +1,7 @@
 // /api/kpi/purchasing
 //
-// KPI PURCHASING PHASE 1 - C4: the read-only route the (future Phase 2)
-// board calls. Contract: docs/KPI_PURCHASING_PHASE1_SPEC.md §3.
+// KPI PURCHASING PHASE 2 - PR 1 (route addendum). Contract:
+// docs/KPI_PURCHASING_PHASE2_BUILD_SPEC.md §6.1-6.6.
 //
 // DATA ONLY. No UI. No writes to Invoice Capture tables. No changes
 // to /api/kpi/labor. Never touches Rippling or bill.com directly - it
@@ -9,7 +9,7 @@
 // (C2 + C3) do the writes.
 //
 // Mirrors /api/kpi/labor's contract exactly:
-//   - same range resolution via periods.js
+//   - same range resolution via periods.js (imported, never forked)
 //   - same account / aggregate / region paths (ALL / EAST / WEST +
 //     single-account team_keys)
 //   - same PSEUDO_KEYS discipline
@@ -22,8 +22,35 @@
 //   budget             { by_gl_line_code: [{ gl_line_code, amount }] }
 //                       amount summed via labor's per-week convention
 //                      (period amount / 4 per fiscal week in range).
-//   actuals            [{ gl_line_code, gl_bucket, week_start, amount,
-//                        lines, bills, paid_amount, sources }]
+//   weekly             [{ account_key, gl_line_code, gl_bucket,
+//                         week_start, week_end, amount, line_count,
+//                         bill_count, paid_amount }]
+//                       Weekly rollup from v_purchasing_by_site_week
+//                       (SQL-side aggregation, floor identical to
+//                       weekStartsInRange). Replaces the per-line
+//                       `actuals` array as the primary weekly series.
+//   pending            { amount, line_count } - rippling_spend rows in
+//                       range whose gl_line_code IS NULL. A dollar sum
+//                       + line count. Never split by bucket (§3.5):
+//                       card spend carries no GL line, which is the
+//                       whole reason it sits outside the buckets.
+//                       Bills-only excluded (source='rippling_spend').
+//                       excluded=false. Members-filtered.
+//   buckets            [{ bucket ('food'|'packaging'|'vehicle'),
+//                         gl_prefix ('3200'|'3400'|'3500'),
+//                         budget, spent, variance, pace_pct, state,
+//                         line_codes: [gl_line_code, ...] }]
+//                       Rollup of 3200.x/3400.x/3500.x from bills
+//                       only (§3.4: bucket card state uses bills
+//                       only; card spend cannot be attributed to a
+//                       bucket). Envelope accounts excluded from
+//                       budget rollup (V6_ENVELOPE_ACCOUNTS).
+//   periods            [{ period_no, start, end, spent, budget,
+//                         weeks, closed }] for P1..currentPeriodNo.
+//                       Spent is bills+card (bucket-neutral - matches
+//                       the totals hero on the period card, §4.1).
+//                       Trend card reads this. Cached to FYTD scope,
+//                       not the request range.
 //   categories         ADAPTIVE list per (account, range). Every
 //                      gl_line_code with budget > 0 OR actual > 0 in
 //                      range, priority-ordered:
@@ -54,15 +81,22 @@
 //                       (bill.com entry-lag p90).
 //   freshness          { last_billcom_sync, last_rippling_sync,
 //                       last_derive_at }
-//   sentinel           the frozen (TBR - FL, P8, 3200.1) value. See PR
-//                     body for the freeze number.
+//   sentinel           the frozen (TBR - FL, P8, 3200.1) value.
+//   actuals            ONLY present when ?drill=lines. Bill-level raw
+//                       rows for the drill-down table. Same shape and
+//                       filters as prior default. Off-by-default:
+//                       12,672 rows / 4.5 MB on ALL FYTD is the
+//                       wrong shape for a board.
 //
 // Query params:
 //   account            accounts.team_key OR ALL / EAST / WEST (required)
 //   start              YYYY-MM-DD (defaults to fiscal-year start)
 //   end                YYYY-MM-DD (defaults to today)
+//   drill              'lines' to include the per-line `actuals` array
 //
 // Auth: session gate via OPS_LEADERSHIP_EMAILS (identical to labor).
+// TEST_MODE bypass mirrors src/middleware.js for local Playwright +
+// smoke runs; never fires on Vercel (VERCEL=1 unsets regardless).
 // No name / dollar / vendor / merchant echo in error paths.
 
 import { NextResponse } from "next/server";
@@ -78,6 +112,13 @@ const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
 const V6_ENVELOPE_ACCOUNTS = new Set(["TXR - TX - V"]);
 const V6_PAGE_DEFAULT = 1000;
+// PostgREST .in() with 100+ 36-char UUIDs or 51+ char
+// rippling_spend:<uuid> ids overflows the URL and throws
+// `TypeError: fetch failed` before any HTTP status. Chunk at 100.
+// team_keys are short enough that this could go higher for members,
+// but the same constant applies consistently to every .in() so a
+// single ceiling is remembered.
+const IN_CHUNK = 100;
 
 // bill.com entry-lag p90 per master §3. A period is provisional until
 // range_end + 16 days is in the past.
@@ -88,6 +129,25 @@ const PROVISIONAL_WINDOW_DAYS = 16;
 const CATEGORY_PRIORITY = [
   "3200.1", "3200.2", "3400.1", "3400.2", "3400.5",
 ];
+
+// Bucket definitions. See PHASE2_BUILD_SPEC.md §1 table:
+//   Food     3200.x  (general + resale)
+//   Packaging & supplies 3400.x  (packaging + supplies + linen)
+//   Vehicle  3500.x  (lease + fuel + insurance + R&M)
+const BUCKETS = [
+  { key: "food",      gl_prefix: "3200", label: "Food" },
+  { key: "packaging", gl_prefix: "3400", label: "Packaging & supplies" },
+  { key: "vehicle",   gl_prefix: "3500", label: "Vehicle" },
+];
+
+function bucketForGl(gl) {
+  if (!gl) return null;
+  const s = String(gl);
+  if (s.startsWith("3200")) return "food";
+  if (s.startsWith("3400")) return "packaging";
+  if (s.startsWith("3500")) return "vehicle";
+  return null;
+}
 
 function comparePriority(a, b) {
   const ai = CATEGORY_PRIORITY.indexOf(a);
@@ -127,32 +187,143 @@ function safeError(scope, err) {
   return { error: "server_error", scope };
 }
 
+// Chunk a values array to IN_CHUNK-size slices. Callers loop and
+// merge results (concat for rows, add for counts).
+function chunk(values, size = IN_CHUNK) {
+  const out = [];
+  for (let i = 0; i < values.length; i += size) out.push(values.slice(i, i + size));
+  return out;
+}
+
+// State resolver (§3.4). One implementation. The pill, the bar
+// pattern, the hero colour and the table variance all read from this.
+// Three elements disagreeing about the same bucket is a P0.
+function stateOf({ spent, budget, elapsedFrac, hasBills }) {
+  if (!(budget > 0)) return "nobud";
+  if (!hasBills) return "none";
+  if (!(elapsedFrac > 0)) return "none";
+  const pace = spent / (budget * elapsedFrac);
+  if (pace > 1.03) return "over";
+  if (pace < 0.97) return "under";
+  return "onpace";
+}
+
 // Paginate purchasing_actuals for a members set and a date range.
 // Filter drops excluded rows and null account_key rows so the caller
 // never has to remember to exclude them. Unattributed / uncoded
 // analysis reads a separate query (below) that keeps the null rows.
+//
+// Population: bills + coded card lines. Pending sum + coverage nulls
+// go via separate paths that keep the rows this drops.
 async function paginateActuals(supa, { members, start, end, pageSize }) {
   const PS = pageSize && pageSize > 0 && pageSize <= V6_PAGE_DEFAULT ? pageSize : V6_PAGE_DEFAULT;
   const out = [];
-  let from = 0;
-  while (true) {
-    const q = await supa
-      .from("purchasing_actuals")
-      .select("id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at")
-      .in("account_key", members)
-      .eq("excluded", false)
-      .gte("txn_date", start)
-      .lte("txn_date", end)
-      .order("txn_date", { ascending: true })
-      .order("account_key", { ascending: true })
-      .range(from, from + PS - 1);
-    if (q.error) return { error: q.error };
-    const rows = q.data || [];
-    for (const r of rows) out.push(r);
-    if (rows.length < PS) break;
-    from += PS;
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const q = await supa
+        .from("purchasing_actuals")
+        .select("id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at")
+        .in("account_key", memberChunk)
+        .eq("excluded", false)
+        .gte("txn_date", start)
+        .lte("txn_date", end)
+        .order("txn_date", { ascending: true })
+        .order("account_key", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PS - 1);
+      if (q.error) return { error: q.error };
+      const rows = q.data || [];
+      for (const r of rows) out.push(r);
+      if (rows.length < PS) break;
+      from += PS;
+    }
   }
   return { data: out };
+}
+
+// Paginate v_purchasing_by_site_week for the weekly series. Same
+// members + range filter as paginateActuals, but the view has already
+// aggregated per (account_key, week_start, gl_line_code, gl_bucket),
+// so payload size drops by ~2 orders of magnitude for ALL FYTD.
+//
+// View's week_start floor is DATE '2025-12-29' + floor((txn_date -
+// FY_START)/7)*7. INV-P1 Q4 confirmed byte-identical to
+// weekStartsInRange('2025-12-29', today) - 34 weeks on ALL FYTD.
+//
+// Population: bills + coded card lines (view excludes excluded=true
+// and null account_key). Uncoded card lines don't have gl_line_code
+// so they group under NULL gl_line_code - callers that only want
+// bill buckets should filter gl_bucket='pl_cogs'.
+async function paginateWeekly(supa, { members, start, end }) {
+  const PS = V6_PAGE_DEFAULT;
+  const out = [];
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const q = await supa
+        .from("v_purchasing_by_site_week")
+        .select("account_key, week_start, week_end, gl_line_code, gl_bucket, amount, line_count, bill_count, paid_amount")
+        .in("account_key", memberChunk)
+        .gte("week_start", start)
+        .lte("week_start", end)
+        .order("account_key", { ascending: true })
+        .order("week_start", { ascending: true })
+        .order("gl_line_code", { ascending: true, nullsFirst: false })
+        .range(from, from + PS - 1);
+      if (q.error) return { error: q.error };
+      const rows = q.data || [];
+      for (const r of rows) out.push(r);
+      if (rows.length < PS) break;
+      from += PS;
+    }
+  }
+  return { data: out };
+}
+
+// Pending: SUM(amount) + line count of rippling_spend rows in range
+// whose gl_line_code IS NULL. Members-filtered so ALL/EAST/WEST return
+// the aggregate. excluded=false always. §3.5: a dollar sum, never
+// split by bucket. Card spend carries no GL line - that IS why it
+// sits outside the buckets.
+//
+// Population differs from paginateActuals (which drops gl_line_code
+// only if account_key is null too): we specifically WANT the
+// gl_line_code=NULL rows.
+async function loadPending(supa, { members, start, end }) {
+  let amount = 0;
+  let line_count = 0;
+  const PS = V6_PAGE_DEFAULT;
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const q = await supa
+        .from("purchasing_actuals")
+        .select("amount, source_line_id")
+        .eq("source", "rippling_spend")
+        .eq("excluded", false)
+        .is("gl_line_code", null)
+        .in("account_key", memberChunk)
+        .gte("txn_date", start)
+        .lte("txn_date", end)
+        .order("source_line_id", { ascending: true })
+        .range(from, from + PS - 1);
+      if (q.error) return { error: q.error };
+      const rows = q.data || [];
+      for (const r of rows) {
+        amount += Number(r.amount || 0);
+        line_count += 1;
+      }
+      if (rows.length < PS) break;
+      from += PS;
+    }
+  }
+  return {
+    data: {
+      amount:     Math.round(amount * 100) / 100,
+      line_count,
+    },
+  };
 }
 
 async function fetchMembers(supa, account) {
@@ -212,6 +383,24 @@ function budgetForRange({ byLine, glLineCode, members, start, end }) {
       if (amt == null) continue;
       total += amt / 4;
     }
+  }
+  return Math.round(total * 100) / 100;
+}
+
+// Sum period budget for a gl_line_code across members (no per-week
+// prorate - the caller wants the full-period figure). Envelope
+// accounts excluded.
+function budgetForPeriod({ byLine, glLineCode, members, periodNo }) {
+  const perLine = byLine.get(glLineCode);
+  if (!perLine) return 0;
+  let total = 0;
+  for (const m of members) {
+    if (V6_ENVELOPE_ACCOUNTS.has(m)) continue;
+    const byAcct = perLine.get(m);
+    if (!byAcct) continue;
+    const amt = byAcct.get(periodNo);
+    if (amt == null) continue;
+    total += amt;
   }
   return Math.round(total * 100) / 100;
 }
@@ -313,6 +502,7 @@ async function loadCoverage(supa, { members, start, end }) {
         .not("department_id", "is", null)
         .gte("first_seen_at", start + "T00:00:00.000Z")
         .lte("first_seen_at", end + "T23:59:59.999Z")
+        .order("rippling_id", { ascending: true })
         .range(from, from + CHUNK - 1);
       if (q.error) break;
       const rows = q.data || [];
@@ -379,6 +569,8 @@ export async function GET(request) {
   const account = (searchParams.get("account") || "").trim();
   const start = searchParams.get("start") || FY_START_ISO;
   const end = searchParams.get("end") || today;
+  const drill = (searchParams.get("drill") || "").trim().toLowerCase();
+  const includeLines = drill === "lines";
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
 
   if (!account) {
@@ -400,38 +592,65 @@ export async function GET(request) {
 
   const isAggregate = V6_PSEUDO_KEYS.has(account);
 
-  // Actuals for the range.
-  const actualsResp = await paginateActuals(supa, { members, start, end, pageSize: pageSizeParam });
-  if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
-  const actuals = actualsResp.data;
-
-  // Budgets for members.
+  // Budgets for members (needed by budget block, categories, buckets,
+  // periods).
   const fyForRange = 2026;   // FY2026 hard-coded; matches labor's convention
   const budgetsResp = await loadPurchasingBudgets(supa, members, fyForRange);
   if (budgetsResp.error) return NextResponse.json(safeError("kpi_budgets", budgetsResp.error), { status: 500 });
   const budgetsByLine = budgetsResp.data;
 
-  // Coverage + freshness.
-  const [coverage, freshness] = await Promise.all([
+  // Fetch weekly / pending / raw actuals / coverage / freshness in
+  // parallel. Weekly reads the SQL-aggregated view; raw actuals are
+  // still needed for source-level splits (bills-only bucket state,
+  // totals.card by source). Parallelising cuts wall-time on the
+  // common ALL/FYTD path where the largest read (actuals ~ 12.7k
+  // rows) would otherwise serialise behind the weekly read.
+  const [weeklyResp, pendingResp, actualsResp, coverage, freshness] = await Promise.all([
+    paginateWeekly(supa, { members, start, end }),
+    loadPending(supa, { members, start, end }),
+    paginateActuals(supa, { members, start, end, pageSize: pageSizeParam }),
     loadCoverage(supa, { members, start, end }),
     loadFreshness(supa),
   ]);
+  if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
+  if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
+  if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
+  const weekly = weeklyResp.data;
+  const pending = pendingResp.data;
+  const actuals = actualsResp.data;
 
   // Adaptive categories: union of every gl_line_code with actual > 0
-  // in range OR budget > 0 in range.
-  const glLineCodesInActuals = new Set();
-  for (const r of actuals) if (r.gl_line_code) glLineCodesInActuals.add(r.gl_line_code);
+  // in range OR budget > 0 in range. Actual side sourced from the
+  // weekly view (already aggregated + filtered to non-excluded rows).
+  const glLineCodesInWeekly = new Set();
+  for (const r of weekly) if (r.gl_line_code) glLineCodesInWeekly.add(r.gl_line_code);
   const glLineCodesInBudget = new Set([...budgetsByLine.keys()].filter(gl => {
     const b = budgetForRange({ byLine: budgetsByLine, glLineCode: gl, members, start, end });
     return b > 0;
   }));
-  const allGl = new Set([...glLineCodesInActuals, ...glLineCodesInBudget]);
+  const allGl = new Set([...glLineCodesInWeekly, ...glLineCodesInBudget]);
   const orderedGl = [...allGl].sort(comparePriority);
 
   // Rollup helpers.
+  // Bills-only spent by gl_line_code (source='billcom' + coded card
+  // lines both roll here via gl_bucket, but weekly view groups by
+  // gl_line_code independently of source). §3.4 bucket state uses
+  // BILLS ONLY: the view path counts every non-excluded coded row.
+  // For the categories rollup below we retain the historical
+  // behaviour (spent = every non-excluded row with this gl_line_code)
+  // so category variance stays comparable to prior payloads.
   function spentForGl(gl) {
     let s = 0;
-    for (const r of actuals) if (r.gl_line_code === gl) s += Number(r.amount || 0);
+    for (const r of weekly) if (r.gl_line_code === gl) s += Number(r.amount || 0);
+    return Math.round(s * 100) / 100;
+  }
+  function billsOnlySpentForGl(gl) {
+    let s = 0;
+    for (const r of actuals) {
+      if (r.gl_line_code !== gl) continue;
+      if (r.source !== "billcom") continue;
+      s += Number(r.amount || 0);
+    }
     return Math.round(s * 100) / 100;
   }
 
@@ -480,10 +699,103 @@ export async function GET(request) {
     };
   });
 
-  // Totals by bucket.
+  // Buckets rollup (§6.3 + §3.4). food/packaging/vehicle -
+  // budget + spent (bills only) + variance + state. Bucket state
+  // uses BILLS ONLY. Line_codes lists the gl_line_codes that
+  // contributed to this bucket in this (account, range).
+  const buckets = BUCKETS.map(({ key, gl_prefix, label }) => {
+    let budget = 0;
+    let spent = 0;
+    const line_codes = [];
+    for (const gl of orderedGl) {
+      if (bucketForGl(gl) !== key) continue;
+      line_codes.push(gl);
+      budget += budgetForRange({ byLine: budgetsByLine, glLineCode: gl, members, start, end });
+      spent  += billsOnlySpentForGl(gl);
+    }
+    const budgetR = Math.round(budget * 100) / 100;
+    const spentR  = Math.round(spent  * 100) / 100;
+    const varianceR = Math.round((spentR - budgetR) * 100) / 100;
+    let pace_pct = null;
+    if (endDate < todayDate) {
+      pace_pct = budgetR > 0 ? Math.round((spentR / budgetR) * 100 * 100) / 100 : null;
+    } else if (elapsedFrac > 0 && budgetR > 0) {
+      pace_pct = Math.round(((spentR / (budgetR * elapsedFrac))) * 100 * 100) / 100;
+    }
+    const state = stateOf({
+      spent:       spentR,
+      budget:      budgetR,
+      elapsedFrac,
+      hasBills:    spentR > 0,
+    });
+    return {
+      bucket:       key,
+      label,
+      gl_prefix,
+      budget:       budgetR,
+      spent:        spentR,
+      variance:     varianceR,
+      pace_pct,
+      state,
+      line_codes,
+    };
+  });
+
+  // Periods series (§6.4). FYTD P1..currentPeriodNo. Spent uses the
+  // period card population (bills + card), matching §4.1's hero. This
+  // series is not range-scoped: the trend card is always full-year.
+  const currentP = currentPeriodNo(today) || 1;
+  const periods = [];
+  {
+    // Fetch weekly view over the whole FYTD once (members-filtered).
+    // Reuse `weekly` when the request range IS FYTD - saves a
+    // duplicate round-trip on the most common query.
+    let fyWeekly;
+    if (start === FY_START_ISO && end === today) {
+      fyWeekly = weekly;
+    } else {
+      const fyWeeklyResp = await paginateWeekly(supa, { members, start: FY_START_ISO, end: today });
+      if (fyWeeklyResp.error) {
+        return NextResponse.json(safeError("periods_weekly", fyWeeklyResp.error), { status: 500 });
+      }
+      fyWeekly = fyWeeklyResp.data;
+    }
+    // Bucket weekly rows by period.
+    const spentByPeriod = new Map();
+    for (const r of fyWeekly) {
+      const p = periodOf(r.week_start);
+      if (p == null) continue;
+      spentByPeriod.set(p, (spentByPeriod.get(p) || 0) + Number(r.amount || 0));
+    }
+    for (let p = 1; p <= currentP; p += 1) {
+      const pStart = periodStartISO(p);
+      const pEnd = periodEndISO(p);
+      // Budget for period: sum kpi_budgets over members for this
+      // period_no (envelope-excluded).
+      let budgetP = 0;
+      for (const gl of budgetsByLine.keys()) {
+        budgetP += budgetForPeriod({ byLine: budgetsByLine, glLineCode: gl, members, periodNo: p });
+      }
+      const spentP = Math.round((spentByPeriod.get(p) || 0) * 100) / 100;
+      // Was this period closed on the date the request ran?
+      const closed = new Date(pEnd) < todayDate;
+      periods.push({
+        period_no: p,
+        start:     pStart,
+        end:       pEnd,
+        spent:     spentP,
+        budget:    Math.round(budgetP * 100) / 100,
+        closed,
+      });
+    }
+  }
+
+  // Totals by bucket. Weekly view is bills + coded card (gl_bucket
+  // reflects the coded gl). Card + rippling filtering still needs the
+  // raw actuals to distinguish source, so both paths coexist.
   function sumSpentByBucket(bucket) {
     let s = 0;
-    for (const r of actuals) if (r.gl_bucket === bucket) s += Number(r.amount || 0);
+    for (const r of weekly) if (r.gl_bucket === bucket) s += Number(r.amount || 0);
     return Math.round(s * 100) / 100;
   }
   function sumBudgetByBucket(bucket) {
@@ -498,7 +810,8 @@ export async function GET(request) {
   const pl_cogs_budget = sumBudgetByBucket("pl_cogs");
   const reimb_spent    = sumSpentByBucket("reimbursable");
   const sga_spent      = sumSpentByBucket("sga");
-  // Card totals from rippling_spend rows in range.
+  // Card totals from rippling_spend rows in range. Sourced from
+  // paginateActuals (source predicate lives on raw rows, not the view).
   let card_spent = 0;
   let card_unattributed = 0;
   let card_uncoded = 0;
@@ -533,13 +846,12 @@ export async function GET(request) {
   const provisionalCutoff = new Date(endDate.getTime() + PROVISIONAL_WINDOW_DAYS * 86400000);
   const provisional = provisionalCutoff > todayDate;
 
-  // Sentinel: value the route returns for the frozen probe. Freeze in
-  // the PR body once the syncs run against prod for the first time.
+  // Sentinel: value the route returns for the frozen probe.
   const sentinelResp = await computeSentinel(supa);
 
-  return NextResponse.json({
+  const payload = {
     ok: true,
-    filters: { account, start, end },
+    filters: { account, start, end, drill: includeLines ? "lines" : null },
     is_aggregate: isAggregate,
     members,
     range: { start, end },
@@ -556,12 +868,18 @@ export async function GET(request) {
         amount: budgetForRange({ byLine: budgetsByLine, glLineCode: gl, members, start, end }),
       })),
     },
-    actuals,
+    weekly,
+    pending,
+    buckets,
+    periods,
     categories,
     totals,
     coverage,
     provisional,
     freshness,
     sentinel: sentinelResp.error ? null : sentinelResp.data,
-  });
+  };
+  if (includeLines) payload.actuals = actuals;
+
+  return NextResponse.json(payload);
 }
