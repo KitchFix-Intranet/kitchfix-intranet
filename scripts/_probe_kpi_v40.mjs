@@ -65,8 +65,17 @@ async function main() {
   log("WeekTable accepts salary prop",              /export function WeekTable\([\s\S]*?salary[,\s]/.test(weekSrc));
   log("WeekTable derives rateBasisHourlyOnly",      /rateBasisHourlyOnly\s*=\s*salary\?\.rate_basis\s*===\s*"hourly_only"/.test(weekSrc));
   log("WeekTable defines displayRate helper",       /const\s+displayRate\s*=/.test(weekSrc));
-  const displayCalls = [...week.matchAll(/displayRate\s*\(\s*blendedRate\s*\(/g)];
-  log(`displayRate wraps blendedRate at three consumer sites (found ${displayCalls.length}, want 3)`, displayCalls.length === 3);
+  // WeekTable owns two rate sites (period totals :~664, grand total :~717)
+  // that call displayRate(blendedRate(...)). The third site lives inside
+  // FragmentRows (:~806), which cannot see WeekTable's local scope; the
+  // V40 hotfix inlines rateBasisHourlyOnly?hourlyRate:blendedRate(...) via
+  // props. Total rate-swap coverage stays 3.
+  const displayCalls  = [...week.matchAll(/displayRate\s*\(\s*blendedRate\s*\(/g)];
+  const inlineCalls   = [...week.matchAll(/rateBasisHourlyOnly\s*\?\s*hourlyRate\s*:\s*blendedRate\s*\(/g)];
+  const rateSwapSites = displayCalls.length + inlineCalls.length;
+  log(`displayRate wraps blendedRate at two WeekTable sites (found ${displayCalls.length}, want 2)`, displayCalls.length === 2);
+  log(`FragmentRows inlines the same rule at 1 site (found ${inlineCalls.length}, want 1)`,          inlineCalls.length === 1);
+  log(`total rate-swap coverage across the file = ${rateSwapSites} (want 3)`,                        rateSwapSites === 3);
   log("Rate column <th> uses rateHeaderLabel",      /<th>\{rateHeaderLabel\}<\/th>/.test(weekSrc));
   log("HelpPop consumes rateBasisHourlyOnly",       /function HelpPop\(\{[^}]*rateBasisHourlyOnly/.test(weekSrc));
   log("page.js threads salary prop to WeekTable",   /salary=\{data\?\.salary_included\s*\?\s*\{\s*rate_basis:\s*data\.rate_basis/.test(pageSrc));
@@ -102,6 +111,31 @@ async function main() {
       /\.kpi-seg\.kpi-seg-salary-on\s+button\.on\s*\{[^}]*var\(--amber-600\)/.test(cssSrc));
   log("kpi.css defines .kpi-cmd-title-salary pill",     /\.kpi-cmd-title-salary\s*\{[^}]*background:\s*var\(--amber-600\)/.test(cssSrc));
   log("kpi.css tightens inactive seg text to n-700",    /\.kpi-seg button\s*\{\s*color:\s*var\(--n-700\)/.test(cssSrc));
+
+  console.log("\n[V40 hotfix - WeekTable-local function helpers must not leak into siblings]");
+  // Regression check for PR #720 crash: FragmentRows called displayRate
+  // (defined inside WeekTable) and ReferenceError'd on band expand.
+  // Narrowly scan for FUNCTION helpers (arrow fns + fn decls) declared
+  // inside WeekTable, and verify none are referenced from FragmentRows
+  // / ChildRow. Data locals (bandLabel, hourlyRate, etc.) are excluded
+  // because they get intentionally threaded as props and would cause
+  // false positives here.
+  const weekLines = weekSrc.split(/\r?\n/);
+  const bodyLines = weekLines.slice(302, 729).join("\n");
+  const fnLocals = new Set();
+  for (const m of bodyLines.matchAll(/\b(?:const|let)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:async\s*)?\(?[A-Za-z_,\s{}]*\)?\s*=>/g)) {
+    fnLocals.add(m[1]);
+  }
+  for (const m of bodyLines.matchAll(/\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) {
+    fnLocals.add(m[1]);
+  }
+  const siblings = stripComments(weekLines.slice(732).join("\n"));
+  const leaks = [];
+  for (const name of fnLocals) {
+    const re = new RegExp(`(?<![\\.A-Za-z0-9_])${name}\\s*\\(`);
+    if (re.test(siblings)) leaks.push(name);
+  }
+  log(`no WeekTable-local helpers called from FragmentRows / ChildRow (leaks: ${leaks.length === 0 ? "none" : leaks.join(", ")})`, leaks.length === 0);
 
   console.log("\n[V40-5 - BUG 5: salaried worker rows resolve names via shared helper]");
   log("resolveWorkerMeta exists",                       /export async function resolveWorkerMeta\(supa,\s*workerIds\)/.test(resolvSrc));
