@@ -51,6 +51,24 @@ function normEmail(e) {
   return String(e || "").trim().toLowerCase();
 }
 
+// KPI PREVIEW FENCE - 2026-08-19.
+// The role model in this file is complete and correct; the BOARD is
+// still under active development. Until Kevin opens it, only the
+// preview allowlist resolves to a role. Everyone else resolves null
+// and the route returns 403, exactly as an unknown caller would.
+//
+// TO OPEN THE BOARD: set KPI_PREVIEW_ONLY = false. That single edit
+// restores the full four-role model with no data changes - the 11
+// seeded site leaders, the 9 corporate rows and the 2 rdo rows are
+// untouched by this fence and need no re-seeding.
+//
+// A hardcoded constant, not an env var, on purpose: Kevin merges
+// through GitHub Desktop and does not want a Vercel dashboard edit
+// in the loop. A constant is greppable, diff-visible, and cannot
+// drift between environments.
+export const KPI_PREVIEW_ONLY = true;
+export const KPI_PREVIEW_ALLOWLIST = ["k.fietek@kitchfix.com"];
+
 /**
  * Load the KPI role gate for one request.
  *
@@ -90,6 +108,15 @@ export async function loadRoleGate(supa) {
   async function resolveKpiRole(email) {
     const e = normEmail(email);
     if (!e) return null;
+    // KPI PREVIEW FENCE - see the constant declaration above the
+    // loadRoleGate export for the full rationale. This early return
+    // sits IN FRONT of the kpi_roles + people reads so the fence is
+    // additive: flipping KPI_PREVIEW_ONLY to false restores the
+    // full four-role model with zero data or seeding work.
+    if (KPI_PREVIEW_ONLY && !KPI_PREVIEW_ALLOWLIST.includes(e)) {
+      cache.set(e, null);
+      return null;
+    }
     if (cache.has(e)) return cache.get(e);
 
     // Rules 1 + 2: kpi_roles.
