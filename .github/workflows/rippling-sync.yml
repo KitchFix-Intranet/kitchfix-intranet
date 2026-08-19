@@ -110,3 +110,16 @@ jobs:
           SOURCE="${{ inputs.source || 'nightly' }}"
           echo "derive_labor_actuals --source=${SOURCE}"
           node scripts/derive_labor_actuals.mjs --source=${SOURCE}
+
+      # People roster is one clean nightly snapshot derived from the
+      # workers + users walks the sync step just landed. Explicit
+      # `if: success()` per the same silent-gap posture as labor.
+      # Owner columns (is_site_leader / site_leader_note) are
+      # preserved by the derive's explicit upsert column list; probe
+      # P3 gates that contract on every run.
+      - name: Derive people
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          echo "derive_people --source=${SOURCE}"
+          node scripts/derive_people.mjs --source=${SOURCE}
