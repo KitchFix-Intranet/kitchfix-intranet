@@ -217,8 +217,7 @@ async function main() {
   //   in). Zero expected today; surface any occurrence rather than
   //   double-counting the same person in hourly + salary.
   console.log("\n[S1h - EXEMPT vs pay-segments contradiction]");
-  const payQ = await supa.from("rippling_raw_pay_segments_latest").select("payload").limit(20000);
-  const paySegs = payQ.data || [];
+  const paySegs = await fetchAll("rippling_raw_pay_segments_latest", "payload");
   const contradictions = new Map();  // worker_id -> segment count
   for (const s of paySegs) {
     const p = s.payload || {};
