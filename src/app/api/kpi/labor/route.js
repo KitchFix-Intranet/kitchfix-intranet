@@ -28,6 +28,8 @@ import { resolveWorkerName } from "@/lib/kpi/resolveName";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
+import { loadSalaryGate } from "@/lib/labor/salaryGate.js";
+import { load3100_2Budgets, loadSalaryActuals, withSalary as withSalaryMerge } from "@/lib/labor/salaryBoard.js";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -266,6 +268,12 @@ export async function GET(request) {
   // v6 PR-1 - internal pagination-loop knob for the aggregate probe.
   // Ignored on single-account requests. Never surfaced to the UI.
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
+  // Salary PR 2 - include_salary=1 opts into the salary-merged
+  // response IF the caller's role + scope permits (spec R-3). Flag
+  // ignored silently when the gate denies; response then matches the
+  // default byte-for-byte. Every response also ships `salary_available`
+  // so PR 3 renders the toggle only for callers the route would grant.
+  const includeSalaryReq = searchParams.get("include_salary") === "1";
 
   if (!account) {
     return NextResponse.json({ error: "account_required", detail: "?account=<team_key> is required" }, { status: 400 });
@@ -302,6 +310,17 @@ export async function GET(request) {
     East: rdoDisplayName(REGIONAL_DIRECTORS.East),
     West: rdoDisplayName(REGIONAL_DIRECTORS.West),
   };
+
+  // Salary PR 2 - one gate load per request, two names for the same
+  // predicate. `salary_available` ships on EVERY response so PR 3
+  // renders the toggle only for callers the route would grant.
+  // `includeSalary` mixes the flag AND the gate; a caller who does
+  // not pass gate sees a byte-identical default response, whether
+  // they asked for salary or not.
+  const gate = await loadSalaryGate(supa);
+  if (gate.error) return NextResponse.json(safeError("kpi_roles", gate.error), { status: 500 });
+  const salary_available = gate.salaryAvailable(email, account);
+  const includeSalary = includeSalaryReq && salary_available;
 
   // ── v6 PR-1 · aggregate pseudo-keys (ALL / EAST / WEST) ──────────
   // Resolves members from live accounts.region, aggregates actuals,
@@ -452,7 +471,7 @@ export async function GET(request) {
     const rolledUpMembers = members;
     const rolledUpActuals = actualsRows;
 
-    return NextResponse.json({
+    let body = {
       ok: true,
       filters: { account, start, end },
       account_state: "hourly_ok",
@@ -503,11 +522,27 @@ export async function GET(request) {
             ? "users_table_empty_or_unreachable"
             : "some_workers_lack_user_id_or_canonical_name",
       },
-    });
+    };
+    if (includeSalary) {
+      const [budQ, actQ] = await Promise.all([
+        load3100_2Budgets(supa, members),
+        loadSalaryActuals(supa, members, start, end),
+      ]);
+      if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
+      if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+      body = withSalaryMerge(body, {
+        account, members, start, end, today,
+        buildBoard,
+        salary3100_2: budQ.byAccount,
+        salaryRows: actQ.rows,
+      });
+    }
+    body.salary_available = salary_available;
+    return NextResponse.json(body);
   }
 
   if (D26_SALARIED_ONLY.has(account)) {
-    return NextResponse.json({
+    let bodyD26 = {
       ok: true,
       filters: { account, start, end },
       account_state: "salaried_only",
@@ -528,7 +563,28 @@ export async function GET(request) {
         account_state: "salaried_only",
       }),
       week_budgets: [],
-    });
+    };
+    if (includeSalary) {
+      // D26 accounts on the salary path get a real board. Override
+      // account_state to hourly_ok so buildBoard emits the full shape;
+      // hourly rows are still zero, but salary provides the figures.
+      const [budQ, actQ] = await Promise.all([
+        load3100_2Budgets(supa, [account]),
+        loadSalaryActuals(supa, [account], start, end),
+      ]);
+      if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
+      if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+      bodyD26.account_state = "hourly_ok";
+      bodyD26.account_state_message = undefined;
+      bodyD26 = withSalaryMerge(bodyD26, {
+        account, members: [account], start, end, today,
+        buildBoard,
+        salary3100_2: budQ.byAccount,
+        salaryRows: actQ.rows,
+      });
+    }
+    bodyD26.salary_available = salary_available;
+    return NextResponse.json(bodyD26);
   }
 
   const actuals = await supa
@@ -723,7 +779,7 @@ export async function GET(request) {
     }
   }
 
-  return NextResponse.json({
+  let bodySingle = {
     ok: true,
     filters: { account, start, end },
     account_state: "hourly_ok",
@@ -759,5 +815,21 @@ export async function GET(request) {
           ? "users_table_empty_or_unreachable"
           : "some_workers_lack_user_id_or_canonical_name",
     },
-  });
+  };
+  if (includeSalary) {
+    const [budQ, actQ] = await Promise.all([
+      load3100_2Budgets(supa, [account]),
+      loadSalaryActuals(supa, [account], start, end),
+    ]);
+    if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
+    if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+    bodySingle = withSalaryMerge(bodySingle, {
+      account, members: [account], start, end, today,
+      buildBoard,
+      salary3100_2: budQ.byAccount,
+      salaryRows: actQ.rows,
+    });
+  }
+  bodySingle.salary_available = salary_available;
+  return NextResponse.json(bodySingle);
 }
