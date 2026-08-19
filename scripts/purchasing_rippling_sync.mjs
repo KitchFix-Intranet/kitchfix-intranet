@@ -202,12 +202,67 @@ function pickScalar(row, keys) {
 }
 
 // Extract normalized ingest payload from one raw record.
+//
+// PAYLOAD SHAPE (verified 2026-08-19 against rippling_raw_spend_lines_latest.raw):
+//   amount:            { currency_type: "USD", value: "311.40" }   OBJECT, value is a STRING
+//   category:          "65aad3b6ecda651e1c45f971"                  BARE STRING id, no display_value
+//   department:        { id, display_value }
+//   work_location:     { id, display_value }
+//   spend_transaction: { id, display_value, has_perm }              display_value = merchant name
+//
+// Bugs 1 + 2 (fixed here):
+//   1. amount used to be `Number(pickScalar(row, ["amount", ...]) || 0) || null`.
+//      pickScalar returns null for an OBJECT, so every row parsed to null.
+//      Fix: read row.amount.value (string) and parse; fall back to scalar
+//      shapes for defensiveness. Amount object present but unparseable is
+//      an ERROR (throws), not a silent null.
+//   2. category used to be `category?.id || pickScalar(row, ["category_id"]) || null`
+//      via pickNested. category is a BARE STRING id in this payload, so
+//      pickNested returned null and category?.id was undefined.
+//      Fix: accept both shapes - if row.category is a string, use as id;
+//      if it is an object, use .id. No display_value in this payload
+//      shape - category_label lands NULL and Kevin labels via spend_category_map.
 function normalizeSpendLine(row) {
-  const category    = pickNested(row, ["category"]);
   const department  = pickNested(row, ["department"]);
   const workLoc     = pickNested(row, ["work_location"]);
   const merchant    = pickNested(row, ["merchant"]);
   const parentTxn   = pickNested(row, ["parent_txn", "spend_transaction", "spend_transaction_zo", "parent"]);
+
+  // Bug 2 fix: category is a bare string in this payload; support both shapes.
+  let categoryId = null;
+  let categoryLabel = null;
+  const rawCat = row?.category;
+  if (typeof rawCat === "string" && rawCat.length > 0) {
+    categoryId = rawCat;
+  } else if (rawCat && typeof rawCat === "object") {
+    categoryId = rawCat.id || null;
+    categoryLabel = rawCat.display_value || null;
+  }
+  if (!categoryId) categoryId = pickScalar(row, ["category_id"]) || null;
+
+  // Bug 1 fix: amount is { value: "STRING", currency_type: "USD" } in this
+  // payload. Object shape wins; scalar fallback preserved for older shapes.
+  let amount = null;
+  let currency = null;
+  const rawAmt = row?.amount;
+  if (rawAmt && typeof rawAmt === "object" && !Array.isArray(rawAmt)) {
+    const v = rawAmt.value;
+    if (v != null && v !== "") {
+      const parsed = Number(v);
+      if (!Number.isFinite(parsed)) {
+        throw new Error(`normalizeSpendLine: amount object present but unparseable for rippling_id=${row.id} value=${JSON.stringify(v)}`);
+      }
+      amount = parsed;
+    }
+    currency = rawAmt.currency_type || rawAmt.currency || null;
+  } else {
+    const scalarAmt = pickScalar(row, ["amount", "total_amount", "line_amount"]);
+    if (scalarAmt != null) {
+      const parsed = Number(scalarAmt);
+      amount = Number.isFinite(parsed) ? parsed : null;
+    }
+  }
+  if (!currency) currency = pickScalar(row, ["currency"]);
 
   const merchantName = merchant?.display_value
     || parentTxn?.display_value
@@ -218,9 +273,9 @@ function normalizeSpendLine(row) {
     rippling_id:         String(row.id),
     external_id:         pickScalar(row, ["external_id", "reference_id"]),
     content_hash:        spendContentHash(row),
-    amount:              Number(pickScalar(row, ["amount", "total_amount", "line_amount"]) || 0) || null,
-    currency:            pickScalar(row, ["currency"]),
-    category_id:         category?.id || pickScalar(row, ["category_id"]) || null,
+    amount,
+    currency,
+    category_id:         categoryId,
     department_id:       department?.id || pickScalar(row, ["department_id"]) || null,
     department_label:    department?.display_value || null,
     work_location_id:    workLoc?.id || pickScalar(row, ["work_location_id"]) || null,
@@ -231,7 +286,7 @@ function normalizeSpendLine(row) {
     updated_at:          pickScalar(row, ["updated_at", "mongo_updated_at", "system_updated_at"]) || null,
     raw:                 row,
     fetch_source:        args.source,
-    _category_label:     category?.display_value || null,   // for candidate map
+    _category_label:     categoryLabel,   // for candidate map (null in current payload shape)
   };
 }
 
@@ -278,6 +333,17 @@ async function walkSpendLines() {
     }
 
     // Compare-then-insert on raw table.
+    //
+    // Standard path: hash differs -> insert (append-only-on-hash-change).
+    //
+    // Projection-repair path: raw JSONB is unchanged (content_hash matches),
+    // but the current-latest row has a projected column NULL that the
+    // fixed normalizer now produces non-null. This is the bug-1/bug-2
+    // repair case - the payload was correct all along, our reader was
+    // wrong. Insert a corrective observation so the _latest view
+    // resolves to the corrected projection. Idempotent: once amount +
+    // category_id are non-null on the latest row, this branch stops
+    // firing on subsequent runs.
     if (!args.dryRun && normalized.length > 0) {
       const ids = normalized.map(r => r.rippling_id);
       const currentByID = new Map();
@@ -286,16 +352,23 @@ async function walkSpendLines() {
         const chunk = ids.slice(i, i + 500);
         const { data, error } = await supa
           .from("rippling_raw_spend_lines_latest")
-          .select("rippling_id, content_hash")
+          .select("rippling_id, content_hash, amount, category_id")
           .in("rippling_id", chunk);
         if (error) {
           console.error(`[spend_lines] page ${pageNo} latest lookup FAILED: ${error.message}`);
           return { ok: false, pageNo, examined, inserted, categoryCandidates, departmentCandidates, rippling_ids, error: error.message };
         }
-        for (const r of data || []) currentByID.set(r.rippling_id, r.content_hash);
+        for (const r of data || []) currentByID.set(r.rippling_id, r);
       }
       const toInsert = normalized
-        .filter(r => currentByID.get(r.rippling_id) !== r.content_hash)
+        .filter(r => {
+          const current = currentByID.get(r.rippling_id);
+          if (!current) return true;                                                       // new row
+          if (current.content_hash !== r.content_hash) return true;                        // payload changed
+          if (current.amount == null && r.amount != null) return true;                     // bug 1 repair
+          if (current.category_id == null && r.category_id != null) return true;           // bug 2 repair
+          return false;
+        })
         .map(({ _category_label, ...rest }) => rest);
       if (toInsert.length > 0) {
         for (let i = 0; i < toInsert.length; i += 500) {
