@@ -211,8 +211,42 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   log("loading pay-segments (raw, presence-filtered client-side)...");
   const paySegsRaw = await fetchAll(supa, "rippling_raw_pay_segments",
     "rippling_id, payload");
-  const paySegs = paySegsRaw.filter(s => presencePaySegs.has(s.rippling_id));
-  log(`  raw=${paySegsRaw.length} live-in-presence=${paySegs.length} orphan-observations=${paySegsRaw.length - paySegs.length}`);
+  const paySegsAfterPresence = paySegsRaw.filter(s => presencePaySegs.has(s.rippling_id));
+  // 2026-08-19 hotfix: Rippling re-issues `rippling_id` for the same
+  // logical segment (owner_role.id, time_entry.id, segment_date all
+  // identical; only id + updated_at family + owner_role denormalised
+  // block differ). Between 2026-08-07 and 2026-08-18 the P8 population
+  // inflated to 8,848 rippling_id observations of 4,764 distinct
+  // external_ids. The 08-18 07:27 write predates the re-issue wave
+  // and is clean, but re-deriving against the current raw would
+  // triple P8 hours across every account (blast radius on 2026-08-19:
+  // CIN-AZ 240%, TBJ-FL 234%, TBR-FL 237%, TXR-AZ 237% naive vs
+  // deduped). Sanity assert (hours_regular > 48) held the last-good
+  // write; this dedup restores identity between logical segments and
+  // derived rows.
+  //
+  // Dedup key: `external_id` = `<time_entry_id>_<timestamp>`, stable
+  // across re-issues. First-seen wins by system_updated_at DESC
+  // (latest observation of the logical segment). Segments with no
+  // external_id pass through unchanged (contract preserved; presence
+  // still gates their liveness).
+  //
+  // Raw stays authoritative - no schema change, no reclassification.
+  // Once Rippling stops re-issuing rippling_ids, each external_id
+  // has one rippling_id and this filter is a no-op.
+  const bestByExt = new Map();
+  for (const s of paySegsAfterPresence) {
+    const ext = s.payload?.external_id;
+    if (!ext) continue;
+    const su = s.payload?.system_updated_at || s.payload?.updated_at || "";
+    const prev = bestByExt.get(ext);
+    if (!prev || su > prev.su) bestByExt.set(ext, { s, su });
+  }
+  const noExtId = paySegsAfterPresence.filter(s => !s.payload?.external_id);
+  const paySegs = [...bestByExt.values()].map(x => x.s).concat(noExtId);
+  const dedupDropped = paySegsAfterPresence.length - paySegs.length;
+  log(`  raw=${paySegsRaw.length} live-in-presence=${paySegsAfterPresence.length} orphan-observations=${paySegsRaw.length - paySegsAfterPresence.length}`);
+  log(`  external_id dedup: ${paySegsAfterPresence.length} -> ${paySegs.length} (${dedupDropped} rippling_id re-issues collapsed; ${noExtId.length} segments carry no external_id and pass through)`);
 
   log("loading time_entries...");
   const teRows = await fetchAll(supa, "rippling_raw_time_entries_latest", "rippling_id, payload");
