@@ -28,6 +28,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { FY_START_ISO, periodOf } from "../src/app/kpi/labor/lib/periods.js";
+import { SALARIED_OT_EXEMPTION, isSalariedWorker } from "../src/lib/labor/salariedPredicate.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -73,7 +74,12 @@ if (!VALID_WINDOWS.has(args.window)) {
 // compensation-record filter. The derive still iterates
 // compensation-by-worker (one worker may have raise history), but
 // worker.overtime_exemption is what admits them.
-const SALARIED_OT_EXEMPTION = "EXEMPT";
+//
+// V-people-1 extract - SALARIED_OT_EXEMPTION + isSalariedWorker are
+// now imported from src/lib/labor/salariedPredicate.js so the
+// people derive uses the identical rule. The const stays visible
+// here for grep continuity; the value + helper live in the shared
+// module.
 
 // ─── Env + Supabase ──────────────────────────────────────────────────
 const SB_URL = process.env.SUPABASE_URL;
@@ -165,7 +171,7 @@ let exemptCount = 0;
 for (const w of workers) {
   const p = w.payload || {};
   workerById.set(w.rippling_id, p);
-  if (p.overtime_exemption === SALARIED_OT_EXEMPTION) exemptCount++;
+  if (isSalariedWorker(p)) exemptCount++;
 }
 console.log(`    workers total=${workers.length}  EXEMPT (any status)=${exemptCount}`);
 
@@ -185,7 +191,7 @@ for (const c of comps) {
   const wid = c.worker_id;
   if (!wid) { skippedNoWorker++; continue; }
   const w = workerById.get(wid);
-  if (!w || w.overtime_exemption !== SALARIED_OT_EXEMPTION) { skippedNotExempt++; continue; }
+  if (!isSalariedWorker(w)) { skippedNotExempt++; continue; }
   if (c.annual_value == null) { skippedNoAnnual++; continue; }
   const list = compsByWorker.get(wid) || [];
   list.push(c);
