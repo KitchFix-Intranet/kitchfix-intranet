@@ -688,6 +688,8 @@ export function WeekTable({
                     columns={{ showHoliday, showUnpriced, showRate, showShare }}
                     excludedSet={excludedSet}
                     redact={redact}
+                    rateBasisHourlyOnly={rateBasisHourlyOnly}
+                    hourlyRate={hourlyRate}
                   />
                 );
               })}
@@ -740,6 +742,8 @@ function FragmentRows({
   columns,
   excludedSet,
   redact,
+  rateBasisHourlyOnly,   // V40 hotfix - was closing over WeekTable scope
+  hourlyRate,            //   (crashed on expand); now threaded as prop.
 }) {
   const bandKey = band.isMonth ? band.monthIndex : band.period_no;
   const periodOpen = expandedPeriods.has(bandKey);
@@ -802,8 +806,10 @@ function FragmentRows({
         const hrs = (w.hours_regular || 0) + (w.hours_overtime || 0) + (w.hours_double_time || 0);
         // V40 BUG 1 - week-row rate on the salary path reads the
         // hourly-only rate; the week's `w.amount` includes salary
-        // but its hours are hourly only.
-        const rate = displayRate(blendedRate({ dollars: w.amount, hours: hrs }));
+        // but its hours are hourly only. displayRate lives in the
+        // WeekTable scope, so this callsite inlines the same rule
+        // from the props FragmentRows now receives.
+        const rate = rateBasisHourlyOnly ? hourlyRate : blendedRate({ dollars: w.amount, hours: hrs });
         const weekOpen = expandedWeeks.has(w.week_start);
         return (
           <>
