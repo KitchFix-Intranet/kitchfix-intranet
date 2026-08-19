@@ -123,3 +123,12 @@ jobs:
           SOURCE="${{ inputs.source || 'nightly' }}"
           echo "derive_people --source=${SOURCE}"
           node scripts/derive_people.mjs --source=${SOURCE}
+
+      # P1..P6 acceptance. FAIL fails the job. The probe itself runs
+      # the derive a second time (P3 dynamic + P6 idempotency); the
+      # earlier Derive people step is the first run.
+      - name: People probes
+        if: success() && (inputs.dry_run || 'false') != 'true'
+        run: |
+          echo "probe_people"
+          node scripts/_probe_people.mjs
