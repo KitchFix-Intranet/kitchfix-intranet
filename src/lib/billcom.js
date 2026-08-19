@@ -187,17 +187,17 @@ export function contentHash(payload, kind) {
 // ─── paymentStatus mapping (v2 numeric codes as strings) ─────────────
 //
 // Standing bill.com v2 semantics per public docs + Phase 0 spike:
-//   "0" = OPEN          (unpaid)
-//   "1" = PAID          (fully paid)
-//   "2" = PARTIAL_PAID  (partially paid)
-//   "3" = SCHEDULED     (scheduled to pay)
-//   "4" = PAID_IN_FULL  (same as 1 in some tenants; treat as paid)
+// First prod run 2026-08-18 observed distribution across 3367 bills:
+//   status="0" -> 2640 bills, ALL with paidAmount >= amount     (PAID)
+//   status="1" ->  727 bills, NONE  with paidAmount >= amount   (UNPAID)
+//   status="2"/"3"/"4" -> 0 bills observed
 //
-// The paid set is {"1", "4"}. The sync ALSO cross-checks paidAmount
-// against amount (>= amount within 1 cent) as a defense-in-depth
-// signal - if either the code says paid or paidAmount matches, the
-// row's `paid` flag is TRUE. Report the settled mapping in the PR body.
-export const PAYMENT_STATUS_PAID = new Set(["1", "4"]);
+// So for THIS tenant the paid set is {"0"}. Correcting from the old
+// {"1","4"} default which was inverted for our tenant. The sync ALSO
+// cross-checks paidAmount against amount (>= amount within 1 cent) as
+// a defense-in-depth signal - if either the code says paid or paidAmount
+// matches, the row's `paid` flag is TRUE.
+export const PAYMENT_STATUS_PAID = new Set(["0"]);
 
 export function isPaid(bill) {
   const codeIsPaid = bill?.paymentStatus != null && PAYMENT_STATUS_PAID.has(String(bill.paymentStatus));

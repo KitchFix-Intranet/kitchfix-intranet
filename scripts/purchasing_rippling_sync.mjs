@@ -393,15 +393,19 @@ async function deriveSpendLines({ rippling_ids }) {
   const catMap = new Map((catResp.data || []).map(r => [r.category_id, r.gl_line_code]));
   const deptMap = new Map((deptResp.data || []).map(r => [r.department_id, r]));
 
-  // Load the current-latest rows for the touched ids.
+  // Load the current-latest rows for the touched ids. Chunk at 100 to
+  // keep the IN() URL under the PostgREST/proxy request-line limit -
+  // rippling_ids are 36-char UUIDs so 500-per-chunk overflows the URL
+  // (fetch fails with "TypeError: fetch failed" before any HTTP status).
   const ids = [...rippling_ids];
+  const CHUNK_IDS = 100;
   const rowsByRippling = new Map();
-  for (let i = 0; i < ids.length; i += 500) {
-    const chunk = ids.slice(i, i + 500);
+  for (let i = 0; i < ids.length; i += CHUNK_IDS) {
+    const chunk = ids.slice(i, i + CHUNK_IDS);
     const { data, error } = await supa.from("rippling_raw_spend_lines_latest")
       .select("rippling_id, amount, category_id, department_id, department_label, merchant_name, first_seen_at, parent_txn_id")
       .in("rippling_id", chunk);
-    if (error) return { ok: false, error: error.message };
+    if (error) { console.error(`[derive] load latest chunk ${i}..${i + chunk.length} FAILED: ${error.message}`); return { ok: false, error: error.message }; }
     for (const r of data || []) rowsByRippling.set(r.rippling_id, r);
   }
 
@@ -448,15 +452,34 @@ async function deriveSpendLines({ rippling_ids }) {
   }
 
   if (args.dryRun) {
-    console.log(`[derive] dry-run - would upsert ${derived.length} rows`);
+    console.log(`[derive] dry-run - would rebuild ${derived.length} rows`);
     linesDerived = derived.length;
   } else {
-    // Batch upsert on (source, source_line_id).
+    // DELETE-then-INSERT to match the granted permissions on
+    // purchasing_actuals (SELECT/INSERT/DELETE - no UPDATE) and the
+    // atomicity pattern already used by the billcom derive. Delete in
+    // chunks by source_line_id for the touched ids, then insert the new
+    // rows in chunks. Idempotency probe (R4 content hash on raw) is
+    // unaffected because the raw table stays append-only.
+    // source_line_id is "rippling_spend:<uuid>" - 51 chars each. Same
+    // URL-length concern as the latest load above; chunk at 100.
+    const touchedSourceLineIds = derived.map(d => d.source_line_id);
+    for (let i = 0; i < touchedSourceLineIds.length; i += 100) {
+      const chunk = touchedSourceLineIds.slice(i, i + 100);
+      const delResp = await supa.from("purchasing_actuals")
+        .delete()
+        .eq("source", "rippling_spend")
+        .in("source_line_id", chunk);
+      if (delResp.error) {
+        console.error(`[derive] delete batch ${i}..${i + chunk.length} FAILED: ${delResp.error.message}`);
+        return { ok: false, linesDerived, error: delResp.error.message };
+      }
+    }
     for (let i = 0; i < derived.length; i += 500) {
       const batch = derived.slice(i, i + 500);
-      const { error } = await supa.from("purchasing_actuals").upsert(batch, { onConflict: "source,source_line_id" });
+      const { error } = await supa.from("purchasing_actuals").insert(batch);
       if (error) {
-        console.error(`[derive] upsert batch ${i}..${i + batch.length} FAILED: ${error.message}`);
+        console.error(`[derive] insert batch ${i}..${i + batch.length} FAILED: ${error.message}`);
         return { ok: false, linesDerived, error: error.message };
       }
       linesDerived += batch.length;

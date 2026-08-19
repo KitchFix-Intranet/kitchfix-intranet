@@ -291,11 +291,17 @@ async function loadCoverage(supa, { members, start, end }) {
 // ─── Route handler ───────────────────────────────────────────────────
 
 export async function GET(request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-  const email = session.user?.email?.toLowerCase().trim();
-  if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  // TEST_MODE double-gate mirrors src/middleware.js so local Playwright
+  // + smoke runs can reach the read-only API. Never fires on Vercel
+  // (VERCEL=1 unsets the bypass regardless of env vars).
+  const testModeBypass = process.env.TEST_MODE === "true" && process.env.VERCEL !== "1";
+  if (!testModeBypass) {
+    const session = await auth();
+    if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    const email = session.user?.email?.toLowerCase().trim();
+    if (!OPS_LEADERSHIP_EMAILS.includes(email)) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
   }
 
   const { searchParams } = new URL(request.url);
