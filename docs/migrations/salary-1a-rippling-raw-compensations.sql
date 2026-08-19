@@ -147,6 +147,53 @@ CREATE OR REPLACE VIEW rippling_raw_compensations_latest AS
   FROM rippling_raw_compensations
   ORDER BY rippling_id, fetched_at DESC, id DESC;
 
+-- ─── Extend CHECK constraints on kind columns ───────────────────────
+-- rippling_walks + rippling_current_presence gate `kind` to the known
+-- set. Same named-constraint drop-and-add pattern kpi-c5 used to add
+-- 'users'. Match by column via conkey (pg_get_constraintdef renders
+-- IN as `= ANY(ARRAY[...])`; string matching on 'IN' would miss).
+DO $$
+DECLARE
+  walks_cn TEXT; walks_cnt INTEGER;
+  pres_cn  TEXT; pres_cnt  INTEGER;
+BEGIN
+  SELECT count(*), max(c.conname) INTO walks_cnt, walks_cn
+  FROM pg_constraint c
+  JOIN pg_class t ON c.conrelid = t.oid
+  JOIN pg_namespace n ON t.relnamespace = n.oid
+  WHERE n.nspname = 'public'
+    AND t.relname = 'rippling_walks'
+    AND c.contype = 'c'
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute a
+      WHERE a.attrelid = t.oid AND a.attname = 'kind' AND a.attnum = ANY (c.conkey)
+    );
+  IF walks_cnt = 0 THEN RAISE EXCEPTION 'salary-1a: kind CHECK missing on rippling_walks'; END IF;
+  IF walks_cnt > 1 THEN RAISE EXCEPTION 'salary-1a: % kind CHECK constraints on rippling_walks; refusing to drop arbitrarily', walks_cnt; END IF;
+  EXECUTE format('ALTER TABLE rippling_walks DROP CONSTRAINT %I', walks_cn);
+  ALTER TABLE rippling_walks
+    ADD CONSTRAINT rippling_walks_kind_check
+    CHECK (kind IN ('time_entries','pay_segments','workers','time_entry_zo','users','compensations'));
+
+  SELECT count(*), max(c.conname) INTO pres_cnt, pres_cn
+  FROM pg_constraint c
+  JOIN pg_class t ON c.conrelid = t.oid
+  JOIN pg_namespace n ON t.relnamespace = n.oid
+  WHERE n.nspname = 'public'
+    AND t.relname = 'rippling_current_presence'
+    AND c.contype = 'c'
+    AND EXISTS (
+      SELECT 1 FROM pg_attribute a
+      WHERE a.attrelid = t.oid AND a.attname = 'kind' AND a.attnum = ANY (c.conkey)
+    );
+  IF pres_cnt = 0 THEN RAISE EXCEPTION 'salary-1a: kind CHECK missing on rippling_current_presence'; END IF;
+  IF pres_cnt > 1 THEN RAISE EXCEPTION 'salary-1a: % kind CHECK constraints on rippling_current_presence; refusing to drop arbitrarily', pres_cnt; END IF;
+  EXECUTE format('ALTER TABLE rippling_current_presence DROP CONSTRAINT %I', pres_cn);
+  ALTER TABLE rippling_current_presence
+    ADD CONSTRAINT rippling_current_presence_kind_check
+    CHECK (kind IN ('time_entries','pay_segments','workers','time_entry_zo','users','compensations'));
+END $$;
+
 -- ─── Grants ─────────────────────────────────────────────────────────
 -- SELECT + INSERT only, mirror rippling_raw_workers. UPDATE + DELETE
 -- absent by construction; post-flight asserts both.

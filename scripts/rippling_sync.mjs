@@ -164,7 +164,7 @@ process.on("SIGTERM", async () => { await releaseLock(); process.exit(143); });
 // Every counted disposition is explicit: examined -> unchanged (matched
 // current) + inserted (differed) + failed (walk aborts, never silent).
 
-async function walkAndInsert({ endpoint, table, latestView, kind }) {
+async function walkAndInsert({ endpoint, table, latestView, kind, project }) {
   const t0 = Date.now();
   let url = firstPageUrl(endpoint, PAGE_SIZE);
   let pages = 0;
@@ -188,16 +188,22 @@ async function walkAndInsert({ endpoint, table, latestView, kind }) {
     pages++;
     examined += rows.length;
 
-    // Build hash-computed rows for this page.
+    // Build hash-computed rows for this page. The optional `project`
+    // hook (salary PR 1: compensations walk) pulls a few fields out of
+    // the payload into first-class columns so the derive can filter +
+    // join without JSONB unpacking. Projections are read-only convenience;
+    // the JSONB payload stays authoritative.
     const hashedRows = [];
     for (const raw of rows) {
       if (!raw.id) continue;
-      hashedRows.push({
+      const row = {
         rippling_id:  String(raw.id),
         content_hash: contentHash(raw, kind),
         payload:      raw,
         fetch_source: args.source,
-      });
+      };
+      if (project) Object.assign(row, project(raw));
+      hashedRows.push(row);
     }
 
     // Record presence for every seen id this page.
@@ -347,13 +353,14 @@ async function runWalkWithPresence(walkArgs) {
   }
 }
 
-// ─── Run all four walks ─────────────────────────────────────────────
-// Sequential: time_entries, pay_segments (PR 8a), then workers and
-// time_entry_zo (PR 8a-2). Wrapped in try/finally so the lock releases
-// on both success and caught failure paths. SIGINT/SIGTERM handlers
-// registered above cover the killed-by-signal path.
+// ─── Run all six walks ──────────────────────────────────────────────
+// Sequential: time_entries, pay_segments (PR 8a), workers and
+// time_entry_zo (PR 8a-2), users (C5), compensations (salary PR 1).
+// Wrapped in try/finally so the lock releases on both success and
+// caught failure paths. SIGINT/SIGTERM handlers registered above cover
+// the killed-by-signal path.
 
-let teResult, psResult, wkResult, zoResult, usResult;
+let teResult, psResult, wkResult, zoResult, usResult, cpResult;
 try {
   // One kind failing must not prevent the others from writing their
   // presence. Each runWalkWithPresence is independent - it returns a
@@ -399,6 +406,37 @@ try {
     latestView:  "rippling_raw_users_latest",
     kind:        "users",
   });
+
+  // Salary PR 1 · sixth walk. /compensations carries the salary
+  // record referenced by workers.compensation_id (S0b established
+  // the pattern; /workers returns null with a reference, the record
+  // lives here). Same cursor-walk contract - filter surface is
+  // silently ignored per S0b (?worker_id= returned 5 rows on a
+  // single-worker query). No amount / name / id is ever logged; the
+  // derive downstream is the only reader that unpacks the payload.
+  //
+  // `project` writes convenience columns (worker_id, payment_type,
+  // annual_value, salary_effective_date, currency) into the raw row
+  // alongside the JSONB payload. Payload stays authoritative; the
+  // columns exist so the derive can filter on payment_type + join on
+  // worker_id + resolve effective dates without JSONB unpacking.
+  cpResult = await runWalkWithPresence({
+    endpoint:    "compensations",
+    table:       "rippling_raw_compensations",
+    latestView:  "rippling_raw_compensations_latest",
+    kind:        "compensations",
+    project: (raw) => ({
+      worker_id:             raw.worker_id || null,
+      payment_type:          raw.payment_type || null,
+      annual_value:          raw.annual_compensation && typeof raw.annual_compensation.value === "number"
+                               ? raw.annual_compensation.value
+                               : null,
+      salary_effective_date: raw.salary_effective_date || null,
+      currency:              raw.annual_compensation?.currency_type
+                               ?? raw.hourly_wage?.currency_type
+                               ?? null,
+    }),
+  });
 } finally {
   await releaseLock();
 }
@@ -423,7 +461,8 @@ console.log("  " + fmtResult("pay_segments",  psResult));
 console.log("  " + fmtResult("workers",       wkResult));
 console.log("  " + fmtResult("time_entry_zo", zoResult));
 console.log("  " + fmtResult("users",         usResult));
+console.log("  " + fmtResult("compensations", cpResult));
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
-if (!teResult.ok || !psResult.ok || !wkResult.ok || !zoResult.ok || !usResult.ok) process.exit(2);
+if (!teResult.ok || !psResult.ok || !wkResult.ok || !zoResult.ok || !usResult.ok || !cpResult.ok) process.exit(2);
 process.exit(0);
