@@ -83,10 +83,11 @@ const EXCLUDED_LABEL_FALLBACK = new Set([
 ]);
 
 function parseArgs(argv) {
-  const args = { source: null, dryRun: false };
+  const args = { source: null, dryRun: false, deriveOnly: false };
   for (const a of argv.slice(2)) {
     if (a.startsWith("--source=")) args.source = a.slice("--source=".length);
     else if (a === "--dry-run") args.dryRun = true;
+    else if (a === "--derive-only") args.deriveOnly = true;
     else { console.error("unknown arg: " + a); process.exit(1); }
   }
   return args;
@@ -101,7 +102,12 @@ if (!args.source || !VALID_SOURCES.has(args.source)) {
 const KEY    = process.env.RIPPLING_API_KEY;
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!KEY)    { console.error("RIPPLING_API_KEY not set"); process.exit(1); }
+// RIPPLING_API_KEY is only needed for the API walk. In --derive-only
+// mode we skip the walk and rebuild purchasing_actuals purely from
+// what's already in rippling_raw_spend_lines_latest + the (freshly
+// updated) spend_category_map. Used by G3 to re-apply category
+// rulings without a full sync.
+if (!KEY && !args.deriveOnly) { console.error("RIPPLING_API_KEY not set"); process.exit(1); }
 if (!SB_URL) { console.error("SUPABASE_URL not set"); process.exit(1); }
 if (!SB_KEY) { console.error("SUPABASE_SERVICE_ROLE_KEY not set"); process.exit(1); }
 
@@ -1304,16 +1310,58 @@ async function runProbes({ rippling_ids }) {
 
 // ─── Main ────────────────────────────────────────────────────────────
 
+// --derive-only path: skip the API walk and load every rippling_id from
+// rippling_raw_spend_lines_latest. Used by G3 to re-derive purchasing_actuals
+// after updating spend_category_map without a full Rippling sync. Neither
+// populateCategoryCandidates nor a new walk is needed - the category
+// candidates were already seeded by prior syncs and gl_line_code labels
+// are what changed (the derive re-reads catMap fresh at line 526).
+async function loadAllRipplingIds() {
+  const t0 = Date.now();
+  const ids = new Set();
+  const PAGE = 1000;
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supa
+      .from("rippling_raw_spend_lines_latest")
+      .select("rippling_id")
+      .order("rippling_id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) return { ok: false, error: error.message, rippling_ids: ids };
+    if (!data || data.length === 0) break;
+    for (const r of data) if (r.rippling_id) ids.add(r.rippling_id);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  const dur = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`[derive-only] loaded ${ids.size} rippling_ids from _latest in ${dur}s`);
+  return { ok: true, rippling_ids: ids };
+}
+
 let walkResult, catCandResult, deriveResult, probesResult;
 try {
-  walkResult = await walkSpendLines();
-  if (!walkResult.ok) {
-    console.error("[fatal] spend line walk failed; derive skipped");
+  if (args.deriveOnly) {
+    const loadResult = await loadAllRipplingIds();
+    if (!loadResult.ok) {
+      console.error(`[fatal] derive-only id load failed: ${loadResult.error}`);
+      walkResult = { ok: false };
+    } else {
+      // Synthesize a walkResult shell so the summary log stays consistent.
+      walkResult = { ok: true, pageNo: 0, examined: loadResult.rippling_ids.size, inserted: 0, categoryCandidates: new Map(), rippling_ids: loadResult.rippling_ids };
+      catCandResult = { ok: true, upserted: 0 };
+      deriveResult = await deriveSpendLines({ rippling_ids: loadResult.rippling_ids });
+      probesResult = await runProbes({ rippling_ids: loadResult.rippling_ids });
+    }
   } else {
-    catCandResult  = await populateCategoryCandidates(walkResult.categoryCandidates);
-    if (catCandResult.ok) {
-      deriveResult = await deriveSpendLines({ rippling_ids: walkResult.rippling_ids });
-      probesResult = await runProbes({ rippling_ids: walkResult.rippling_ids });
+    walkResult = await walkSpendLines();
+    if (!walkResult.ok) {
+      console.error("[fatal] spend line walk failed; derive skipped");
+    } else {
+      catCandResult  = await populateCategoryCandidates(walkResult.categoryCandidates);
+      if (catCandResult.ok) {
+        deriveResult = await deriveSpendLines({ rippling_ids: walkResult.rippling_ids });
+        probesResult = await runProbes({ rippling_ids: walkResult.rippling_ids });
+      }
     }
   }
 } finally {
