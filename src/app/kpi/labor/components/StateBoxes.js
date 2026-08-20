@@ -157,6 +157,17 @@ export function LockedPanel() {
     </StateBox>
   );
 }
+// PR-3b - refusal state for pre-floor partial-week ranges. Replaces
+// the misroute to StateEmptyFirstRun ("pipeline never derived") that
+// dropped the server's owner-approved message on the floor. Copy is
+// the server's refusalMessage verbatim; no client-side string.
+export function RefusalPanel({ message }) {
+  return (
+    <StateBox variant="empty-range" title="Daily detail not available for this range">
+      {message}
+    </StateBox>
+  );
+}
 export function StateSessionExpired({ returnUrl }) {
   const url = returnUrl || (typeof window !== "undefined" ? window.location.pathname + window.location.search : "/kpi/labor");
   return (

@@ -266,9 +266,20 @@ async function buildPriorPeriodComparison({ supa, rangeStart, rangeEnd, today, i
 }
 
 export async function GET(request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-  const email = session.user?.email?.toLowerCase().trim();
+  // PR-3b - TEST_MODE double-gate mirrors src/middleware.js and the
+  // sibling kpi/purchasing route (route.js:562-578) so local live
+  // probes + Playwright smokes can reach the read-only labor API
+  // without an OAuth login. Never fires on Vercel (VERCEL=1 kills
+  // the bypass regardless of env vars). The synthetic caller is
+  // corporate with full scope + can_see_salary=true so acceptance
+  // probes can exercise every response shape.
+  const testModeBypass = process.env.TEST_MODE === "true" && process.env.VERCEL !== "1";
+  let email = null;
+  if (!testModeBypass) {
+    const session = await auth();
+    if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    email = session.user?.email?.toLowerCase().trim();
+  }
 
   const { searchParams } = new URL(request.url);
   const today = new Date().toISOString().slice(0, 10);
@@ -287,9 +298,13 @@ export async function GET(request) {
   const gate = await loadRoleGate(supa);
   if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
   let caller;
-  try { caller = await gate.resolveKpiRole(email); }
-  catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
-  if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (testModeBypass) {
+    caller = { role: "corporate", scope: null, can_see_salary: true };
+  } else {
+    try { caller = await gate.resolveKpiRole(email); }
+    catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }
+    if (!caller) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const landing_account = gate.landingAccount(caller);
 
