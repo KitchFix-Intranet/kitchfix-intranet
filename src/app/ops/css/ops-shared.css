@@ -27,7 +27,12 @@
   --oh-blue: #2563eb;
   --oh-error: #ef4444;
   --oh-success: #10b981;
-  --oh-font-body: "Mulish", -apple-system, sans-serif;
+  /* PR-L (2026-08-20): Mulish -> Inter across /ops, /service-calendar,
+     /financial. Mulish demoted to print/PDF only (Pre-Service Materials
+     pipeline in src/lib/print/assets.js). Screen typography aligns
+     with tokens.css `--font-body` and `--font-ui`. Five Inter opt-backs
+     in SC removed the same day - workaround retired with the drift. */
+  --oh-font-body: "Inter", -apple-system, sans-serif;
   --oh-font-head: "Inter", -apple-system, sans-serif;
   --oh-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --oh-shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
