@@ -11,6 +11,7 @@ import { sendInvoiceEmail, sendRejectionEmail } from "@/lib/gmail";
 import { createStampedInvoicePDF, createRawInvoicePDF } from "@/lib/stampInvoice";
 import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { fuzzyMatchVendor } from "@/lib/vendorMatching";
+import { CLAUDE_SONNET_MODEL } from "@/lib/anthropicModel";
 import {
   getVendorsForList,
   getVendorsForBootstrap,
@@ -384,7 +385,7 @@ A mostly-blank page with only a URL, page number, or footer text at the bottom i
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: CLAUDE_SONNET_MODEL,
           max_tokens: 300,
           messages: [{
             role: "user",
@@ -551,7 +552,7 @@ INVOICE DATE RULES:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: CLAUDE_SONNET_MODEL,
           max_tokens: 500,
           messages: [{
             role: "user",
@@ -689,7 +690,7 @@ pageIndex is 0-based. If all pages belong together, return consistent: true and 
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: CLAUDE_SONNET_MODEL,
           max_tokens: 300,
           messages: [{
             role: "user",
@@ -1344,10 +1345,10 @@ async function triggerAIScan(token, userEmail, invoiceUuid, pages, metadata) {
   return extractAndStoreLineItems(invoiceUuid, pages, metadata);
 }
 
-// Exported so scripts/_probe_stage_a_extraction.mjs (and any future
-// validation harness) can test the EXACT live prompt without
-// duplication drift. The string is module-level so the function body
-// keeps a single reference to it.
+// Module-level export so any external validation harness can test
+// the EXACT live prompt without duplication drift. Single reference
+// keeps the function body from copying the prompt inline and out of
+// sync with what actually runs.
 export const EXTRACTION_PROMPT = `You are an invoice data extraction engine for KitchFix, a food service company. Extract ALL line items from this invoice into RAW LABELED columns. Downstream code derives the inventory/pricing values from the raw fields. Your job is fidelity to the invoice as printed, NOT derivation.
 
 Return ONLY valid JSON:
@@ -1623,11 +1624,11 @@ async function callClaudeOnce(apiKey, imageBlocks) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: CLAUDE_SONNET_MODEL,
         // Raised from 8192 -> 16384 after the 2026-06-12 sweep audit found
         // two persistent failures (5a447c0a What Chefs Want, 29c8ff9f Truly
         // Good Foods) whose JSON output truncated at the old cap. Verified
-        // against this model via scripts/_probe_max_tokens_16384_verification.mjs:
+        // during the audit:
         //   - API accepts 16384 cleanly
         //   - Both failed invoices now produce complete valid JSON
         //     (48 items / 8203 out_t, 52 items / 9296 out_t - just over 8192)

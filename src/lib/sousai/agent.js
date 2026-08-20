@@ -35,9 +35,13 @@ import { SOUSAI_SYSTEM_PROMPT } from "./agentPrompt.js";
 import { getToolDefinitions, getTool } from "./tools/registry.js";
 import { checkReceipts, hasSuccessfulDataCall, redactMissingFigures } from "./receiptCheck.js";
 import { applySelfCheck } from "./selfCheck.js";
+import { CLAUDE_SONNET_MODEL } from "../anthropicModel.js";
 
 // ── Tunables ─────────────────────────────────────────────────────────────────
-export const SOUSAI_AGENT_MODEL = "claude-sonnet-4-6";
+// Aliased so the route + agent keep their existing named import while
+// the model string tracks the shared source. Redefine only if Sous
+// deliberately diverges from the shared Sonnet.
+export const SOUSAI_AGENT_MODEL = CLAUDE_SONNET_MODEL;
 // R3-05 rider (Kevin ruling): raised from 8 to 14 to comfortably cover a
 // full account fan-out (an 11-account "breakfast per account" ask hit the
 // old 8 budget after 6 tool calls, leaving 5 accounts unanswered). This is

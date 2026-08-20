@@ -414,7 +414,7 @@ The cron's writes follow the same schemas documented above. Idempotency is invoi
 
 11. **`item_aliases.confidence` is always 100.** Dead field in current writes. Drop or implement fuzzy-confidence scoring (e.g. from Levenshtein distance against the canonical name).
 
-12. **`callClaude` model alias consolidation.** `claude-sonnet-4-20250514` appears in both `invoiceActions.js` and `inventoryActions.js`. Pre-existing backlog item — consolidation should batch with the broader Anthropic SDK upgrade work.
+12. ~~**`callClaude` model alias consolidation.** `claude-sonnet-4-20250514` appears in both `invoiceActions.js` and `inventoryActions.js`.~~ **DONE 2026-08-20.** Consolidated to `CLAUDE_SONNET_MODEL` in `src/lib/anthropicModel.js`. See `docs/CONVENTIONS.md` "Anthropic model string" for the single-source pattern.
 
 ---
 

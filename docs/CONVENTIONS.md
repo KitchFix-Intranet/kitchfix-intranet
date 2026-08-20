@@ -201,6 +201,24 @@ batchRead(...)         // multiple sheet reads in parallel
 
 ---
 
+## Anthropic model string
+
+**Single source: `CLAUDE_SONNET_MODEL` at `src/lib/anthropicModel.js`.** Currently resolves to `"claude-sonnet-4-6"`. Every Anthropic call under `src/` imports this constant - do NOT hardcode the model string at a call site.
+
+**Deprecation reference:** https://docs.anthropic.com/en/docs/about-claude/model-deprecations. Anthropic emails maintainers when a model retires; a retired string returns 404 at runtime, not at deploy or type-check, so silent breakage is the default failure mode. The previous string `claude-sonnet-4-20250514` retired on 2026-06-15 and the swap to `claude-sonnet-4-6` in production landed via commit `ad1e460` on 2026-06-17. When Anthropic emails about the next retirement, `src/lib/anthropicModel.js` is the one-line change.
+
+**Call sites today (all via the constant):**
+
+- `src/lib/sousai/agent.js:40` - re-exports as `SOUSAI_AGENT_MODEL = CLAUDE_SONNET_MODEL` (readability alias; consumed at `agent.js:283` and `src/app/api/sousai/route.js:315`)
+- `src/lib/invoiceActions.js` - imports `CLAUDE_SONNET_MODEL`, used at the four Claude POST call sites
+- `src/lib/inventoryActions.js` - imports `CLAUDE_SONNET_MODEL`, used at the matcher POST site
+
+**Divergence is a deliberate override at the call site**, not a reason to redefine the constant. If invoice extraction ever needs Opus, `model: "claude-opus-4-1"` at THAT call site is correct - do not fork the shared constant into `INVOICE_MODEL` and `SOUSAI_AGENT_MODEL` and re-invite the sync drift.
+
+**Scripts drift separately.** `scripts/` had 11 files pinned to the retired `claude-sonnet-4-20250514` string until 2026-08-20 - all 10 diagnostic probes were deleted (closed investigations, unrunnable, would 404) and `scripts/extraction-test-rig.mjs` was updated. New scripts that call Claude should import `CLAUDE_SONNET_MODEL` from `src/lib/anthropicModel.js`, be deleted when the investigation closes, and - if kept as reusable tooling - be cited from the code path they validate so they do not sit friendless in `scripts/`.
+
+---
+
 ## Analytics event logging
 
 Every meaningful user action gets logged via `logEventSA()` (or `logEvent()` if a token is on hand).

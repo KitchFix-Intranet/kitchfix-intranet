@@ -70,6 +70,7 @@ import {
   undoLastAction,
   getCanonicalUnits,
 } from "@/lib/dataStore";
+import { CLAUDE_SONNET_MODEL } from "@/lib/anthropicModel";
 
 const MH_ACTION_IDX = 8;
 const MH_MERGED_IDS_IDX = 6;
@@ -213,7 +214,7 @@ async function callClaude(prompt, maxTokens = 8192, retries = 3) {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: maxTokens,
+          model: CLAUDE_SONNET_MODEL, max_tokens: maxTokens,
           system: "You are a JSON API. Respond with ONLY valid JSON. No prose, no markdown, no explanation, no preamble. Start your response with { and end with }.",
           messages: [{ role: "user", content: prompt }],
         }),
