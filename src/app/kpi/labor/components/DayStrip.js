@@ -12,33 +12,30 @@
 // The pro-rate label the server sends on budget_prorate is rendered
 // verbatim; the client never restates or reformats it (spec).
 
+import { useEffect, useRef, useState } from "react";
 import { fmt$, fmtDate } from "../lib/formatting.js";
+import {
+  isoRange,
+  aggregatePerDay,
+  chooseLabelDensity,
+} from "@/lib/labor/dayRangeAggregate";
 
-const MS_PER_DAY = 86400000;
-
-function isoRange(startISO, endISO) {
-  const out = [];
-  let cur = new Date(`${startISO}T00:00:00.000Z`).getTime();
-  const end = new Date(`${endISO}T00:00:00.000Z`).getTime();
-  while (cur <= end) {
-    out.push(new Date(cur).toISOString().slice(0, 10));
-    cur += MS_PER_DAY;
-  }
-  return out;
+// Compact date "MM/DD". fmtDate returns "MM/DD/YY" which is fine at
+// wide bars but collides at narrow ones. Dropping the year is safe
+// because the range header above the strip carries the full dates
+// with year - the per-bar label only needs to disambiguate within
+// the range.
+function fmtDayLabel(iso) {
+  const [ , m, d] = iso.slice(0, 10).split("-");
+  return `${m}/${d}`;
 }
 
-// Aggregate actuals_daily into per-day totals. Integer-cent accumulator
-// so a cross-grain sum stays exact to the cent.
-function aggregatePerDay(actualsDaily, days) {
-  const bucket = new Map(days.map(d => [d, 0]));
-  for (const r of (actualsDaily || [])) {
-    if (!bucket.has(r.work_date)) continue;
-    bucket.set(r.work_date, bucket.get(r.work_date) + Math.round(Number(r.amount || 0) * 10000));
-  }
-  return days.map(d => ({ workDate: d, amountX10000: bucket.get(d) }));
+function dowShort(iso) {
+  return new Date(`${iso}T00:00:00.000Z`)
+    .toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
 }
 
-function DayBar({ day, dailyTarget, scale, todayISO }) {
+function DayBar({ day, dailyTarget, scale, todayISO, density }) {
   const amount = day.amountX10000 / 10000;
   const isToday = day.workDate === todayISO;
   const isFuture = day.workDate > todayISO;
@@ -49,8 +46,17 @@ function DayBar({ day, dailyTarget, scale, todayISO }) {
     ? Math.max(0, Math.min(100, (dailyTarget / scale) * 90))
     : null;
 
-  const dowLabel = new Date(`${day.workDate}T00:00:00.000Z`)
-    .toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  // Caption form is driven by the MEASURED per-bar width in the
+  // parent's ResizeObserver, not by day count. See
+  // chooseLabelDensity in src/lib/labor/dayRangeAggregate.js for
+  // the boundaries (>= 90px full, >= 44px compact, < 44px minimal)
+  // and the probe P11 for the assertion.
+  const dateStr = fmtDayLabel(day.workDate);
+  const caption = density === "full"
+    ? `${dateStr} · ${dowShort(day.workDate)}`
+    : density === "compact"
+      ? dateStr
+      : null;   // minimal: no date caption, value only
 
   return (
     <div className="kpi-wb">
@@ -66,7 +72,9 @@ function DayBar({ day, dailyTarget, scale, todayISO }) {
       </div>
       <div className="kpi-wb-cap">
         <b className="kpi-wb-cap-value">{isFuture ? "—" : fmt$(amount)}</b>
-        <span className="kpi-wb-dates">{fmtDate(day.workDate)} · {dowLabel}</span>
+        {caption != null && (
+          <span className="kpi-wb-dates" title={day.workDate}>{caption}</span>
+        )}
       </div>
     </div>
   );
@@ -75,7 +83,7 @@ function DayBar({ day, dailyTarget, scale, todayISO }) {
 export function DayStrip({ data, todayISO }) {
   const { filters, actuals_daily, actuals_range, budget_prorate, range } = data;
   const days = isoRange(filters.start, filters.end);
-  const perDay = aggregatePerDay(actuals_daily, days);
+  const { perDay } = aggregatePerDay(actuals_daily, days);
   const budgetTotal = Number(budget_prorate?.total || 0);
   const spentTotal = (actuals_range || [])
     .filter(r => !r.salaried)
@@ -99,6 +107,29 @@ export function DayStrip({ data, todayISO }) {
     : variance > 0
       ? "Over pro-rated budget"
       : "Under pro-rated budget";
+
+  // Measure the plot strip and pick the caption density from the
+  // actual per-bar pixel width. Kevin's field measurement: at
+  // 1920px the plot is 1162px so N=10 gives 103px per bar (full);
+  // at 375px the plot is ~340px so N=10 gives 34px per bar
+  // (minimal). A count-based rule cannot distinguish those. The
+  // pure chooseLabelDensity(width, count) function is in
+  // dayRangeAggregate.js so the probe can drive both boundaries
+  // without a viewport it cannot resize in CI.
+  const stripRef = useRef(null);
+  const [density, setDensity] = useState(() => chooseLabelDensity(0, days.length));
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const update = () => {
+      const w = el.getBoundingClientRect().width;
+      setDensity(chooseLabelDensity(w, days.length));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [days.length]);
 
   return (
     <div className="kpi-day-range" role="region" aria-label="Custom range summary">
@@ -129,8 +160,10 @@ export function DayStrip({ data, todayISO }) {
       </div>
 
       <div
+        ref={stripRef}
         className="kpi-wbars kpi-day-range-strip"
         style={{ gridTemplateColumns: `repeat(${Math.max(1, days.length)}, minmax(0, 1fr))` }}
+        data-density={density}
       >
         {perDay.map(day => (
           <DayBar
@@ -139,6 +172,7 @@ export function DayStrip({ data, todayISO }) {
             dailyTarget={dailyTarget}
             scale={scale}
             todayISO={todayISO}
+            density={density}
           />
         ))}
       </div>

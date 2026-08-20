@@ -3132,6 +3132,16 @@
 .kpi-day-range-strip {
   min-height: calc(180px * var(--kf-scale));
 }
+/* Caption clip - JS density switch (see DayStrip.js) drops the DOW
+   beyond 10 days per strip, but at very narrow bars (deep on mobile,
+   or a 21-day span in a folio-open desktop) even "MM/DD" can be
+   tight. Clip the tail rather than wrap, so the row stays one line
+   and adjacent captions never overlap. */
+.kpi-day-range-strip .kpi-wb-cap { min-width: 0; }
+.kpi-day-range-strip .kpi-wb-dates {
+  display: block;
+  overflow: hidden; text-overflow: clip; white-space: nowrap;
+}
 @media (max-width: 767px) {
   .kpi-day-range-cards { grid-template-columns: 1fr; }
 }

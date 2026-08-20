@@ -38,6 +38,11 @@
 
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
+import {
+  isoRange,
+  aggregatePerDay,
+  chooseLabelDensity,
+} from "../src/lib/labor/dayRangeAggregate.js";
 
 const PORT = process.env.PROBE_PORT || "3100";
 const BASE = `http://localhost:${PORT}`;
@@ -202,6 +207,106 @@ try {
       }
     }
 
+    // ── P9 row-to-day collapse, wide range ──────────────────────────
+    // Kevin found "days: 71 -> 20 bars drawn" on a 20-day range. The
+    // API returns per-worker-per-day rows; the client collapses them
+    // into calendar-day buckets. A silent truncation (rows outside
+    // the [start, end] window, or fewer buckets than span_days) would
+    // hide behind a plausible-looking strip. Assert both invariants
+    // against a live response, then run the extracted client
+    // aggregator to prove the drawn-bar count exactly matches
+    // span_days with zero dropped rows.
+    console.log("");
+    console.log("[P9] row-to-day collapse: worker-day rows collapse to N calendar bars, no silent truncation");
+    {
+      const start = "2026-07-06";
+      const end   = "2026-07-25";   // 20 calendar days spanning three weeks
+      const r = await get(`/api/kpi/labor?account=CIN%20-%20AZ&start=${start}&end=${end}`);
+      if (r.body.source !== "daily") { fail(`source=${r.body.source}, expected 'daily'`); }
+      else {
+        const spanDays = r.body.range?.span_days;
+        const wantSpan = 20;
+        if (spanDays === wantSpan) ok(`range.span_days = ${spanDays}`);
+        else fail(`range.span_days = ${spanDays}, expected ${wantSpan}`);
+
+        const rows = r.body.actuals_daily || [];
+        const distinctDays = new Set(rows.map(rr => rr.work_date));
+        if (distinctDays.size <= spanDays) ok(`distinct work_date count = ${distinctDays.size} (<= span ${spanDays})`);
+        else fail(`distinct work_date count = ${distinctDays.size} > span_days = ${spanDays}`);
+
+        const withinWindow = rows.every(rr => rr.work_date >= start && rr.work_date <= end);
+        if (withinWindow) ok(`all ${rows.length} rows have work_date within [${start}, ${end}]`);
+        else fail(`some rows have work_date outside [${start}, ${end}]`);
+
+        if (rows.length > distinctDays.size) ok(`${rows.length} worker-day rows collapse to ${distinctDays.size} distinct days (multi-worker per day - real collapse)`);
+        else fail(`rows.length=${rows.length} <= distinctDays.size=${distinctDays.size} - no actual collapse to test`);
+
+        // Run the extracted client aggregator against the live rows.
+        const days = isoRange(start, end);
+        const { perDay, droppedOutsideWindow } = aggregatePerDay(rows, days);
+        if (perDay.length === spanDays) ok(`aggregatePerDay drew ${perDay.length} buckets = span_days ${spanDays} exactly (bar count binding)`);
+        else fail(`aggregatePerDay drew ${perDay.length} buckets, expected ${spanDays}`);
+        if (droppedOutsideWindow === 0) ok("aggregatePerDay droppedOutsideWindow=0 - no silent truncation");
+        else fail(`aggregatePerDay droppedOutsideWindow=${droppedOutsideWindow} - rows fell outside the bucket window`);
+      }
+    }
+
+    // ── P10 row-to-day collapse, short range ────────────────────────
+    // Kevin's warning: "so a silent truncation could never hide at
+    // short ranges." A single-partial-week (4-day) response must
+    // still collapse cleanly - span=4, buckets=4, dropped=0.
+    console.log("");
+    console.log("[P10] row-to-day collapse holds at short ranges too");
+    {
+      const start = "2026-07-09";
+      const end   = "2026-07-12";   // 4 days
+      const r = await get(`/api/kpi/labor?account=CIN%20-%20AZ&start=${start}&end=${end}`);
+      if (r.body.source !== "daily") { fail(`source=${r.body.source}, expected 'daily'`); }
+      else {
+        const spanDays = r.body.range?.span_days;
+        const days = isoRange(start, end);
+        const { perDay, droppedOutsideWindow } = aggregatePerDay(r.body.actuals_daily || [], days);
+        if (spanDays === 4 && perDay.length === 4 && droppedOutsideWindow === 0) {
+          ok(`span=4, buckets=4, dropped=0 - clean at short range too`);
+        } else {
+          fail(`span=${spanDays}, buckets=${perDay.length}, dropped=${droppedOutsideWindow}`);
+        }
+      }
+    }
+
+    // ── P11 chooseLabelDensity boundary tests ────────────────────────
+    // Kevin's field measurement drove the thresholds: at 1920px the
+    // plot is 1162px (N=10 -> 116.2px/bar, full) and at 375px the
+    // plot is ~340px (N=10 -> 34px/bar, minimal). A count-based rule
+    // cannot distinguish those. Pin both boundaries by driving the
+    // container width directly so the assertion does not depend on
+    // a viewport this probe cannot resize.
+    console.log("");
+    console.log("[P11] chooseLabelDensity flips at both measured boundaries under driven widths");
+    {
+      const cases = [
+        // width, N, expected
+        [1162, 10, "full"],       // Kevin's 1920px desktop: 116.2px/bar
+        [900,  10, "full"],       // exact 90px/bar boundary (inclusive)
+        [899,  10, "compact"],    // 89.9px/bar - just below the full threshold
+        [500,  10, "compact"],    // 50px/bar - clearly compact
+        [440,  10, "compact"],    // exact 44px/bar boundary (inclusive)
+        [439,  10, "minimal"],    // 43.9px/bar - just below the compact threshold
+        [340,  10, "minimal"],    // Kevin's 375px phone: 34px/bar
+        // 20-day span cases
+        [1800, 20, "full"],       // 90px/bar - full at 20 days
+        [1000, 20, "compact"],    // 50px/bar
+        [800,  20, "minimal"],    // 40px/bar - just below 44
+      ];
+      let boundaryFails = 0;
+      for (const [w, n, want] of cases) {
+        const got = chooseLabelDensity(w, n);
+        if (got === want) ok(`width=${w}px N=${n} -> ${got} (${(w/n).toFixed(1)}px/bar)`);
+        else { fail(`width=${w}px N=${n} -> ${got}, expected ${want}`); boundaryFails++; }
+      }
+      if (boundaryFails === 0) ok("all boundary transitions match measured thresholds (>= 90 full, >= 44 compact, < 44 minimal)");
+    }
+
     // ── Sentinel: CIN - OH 06/29 weekly = $4,328.27 ─────────────────
     console.log("");
     console.log("[Sentinel] CIN - OH week 2026-06-29 whole-week - sentinel $4,328.27 unchanged");
@@ -220,6 +325,8 @@ try {
 
 console.log("");
 console.log("=".repeat(72));
-console.log(hardFail === 0 && exit === 0 ? "PR-3b LIVE ACCEPTANCE: ALL PROBES PASS" : `PR-3b LIVE ACCEPTANCE: ${hardFail} FAILURE(S)`);
+if (hardFail === 0 && exit === 0) console.log("PR-3b LIVE ACCEPTANCE: ALL PROBES PASS");
+else if (exit !== 0)             console.log("PR-3b LIVE ACCEPTANCE: dev server never came up - no probes ran");
+else                             console.log(`PR-3b LIVE ACCEPTANCE: ${hardFail} FAILURE(S)`);
 console.log("=".repeat(72));
 process.exit(hardFail === 0 && exit === 0 ? 0 : 1);
