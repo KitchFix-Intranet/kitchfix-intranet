@@ -30,6 +30,24 @@ import fs from "node:fs";
 import ExcelJS from "exceljs";
 import { createClient } from "@supabase/supabase-js";
 
+// Duplicated from purchasing_apply_category_rulings.mjs. The applier runs at
+// import time (top-level DB queries), so we can't safely `import` from it -
+// this list is short and Kevin adjudicates additions per-collision, so a
+// duplicated small Set is safer than importing side-effectful code. Kevin
+// ruling 2026-08-20: for these cat_ids, do NOT resolve by majority vote.
+// Include them in the Part C worksheet with BOTH names shown.
+const COLLISION_UNROUTED = new Set([
+  "68ed4977b7aabd4234afda3a",  // "Equipment Lease" vs "**Please Select A Category**"
+]);
+
+// Names carried by each collision cat_id, as identified by the sheets audit
+// (three-part audit's LIVE verdict, 2026-08-20). We render these directly
+// rather than re-computing via a CSV (txn|amt) join because that join is
+// lossy (multiple CSV rows can share a (txn|amt) with an unrelated DB row).
+const COLLISION_NAMES = new Map([
+  ["68ed4977b7aabd4234afda3a", ["Equipment Lease", "**Please Select A Category**"]],
+]);
+
 const OUT = `${process.env.HOME}/Downloads/spend_category_review_2026-08-20.xlsx`;
 const CSV = "/Users/kevinfietek/Downloads/Custom_report-6a87456dd3e0e4d972a07439.csv";
 
@@ -179,6 +197,10 @@ async function loadActualsPaginated() {
 // ─── Compose the worksheet ────────────────────────────────────────────
 const catIdToName = await buildCategoryIdToName();
 console.log(`[names] resolved ${catIdToName.size} names`);
+console.log(`[collision] set size: ${COLLISION_UNROUTED.size}`);
+for (const c of COLLISION_UNROUTED) {
+  console.log(`  ${c}: ${(COLLISION_NAMES.get(c) || []).join(" / ")}`);
+}
 const scm = await loadSpendCategoryMap();
 console.log(`[scm] loaded ${scm.length}`);
 const raw = await loadRawSpendPaginated();
@@ -221,6 +243,7 @@ for (const row of scm) {
   const name = catIdToName.get(row.category_id) || row.category_label || null;
   const g = byCat.get(row.category_id) || null;
   const nonExcl = g ? g.actual_non_excl : 0;
+  const isCollision = COLLISION_UNROUTED.has(row.category_id);
   // Category is "resolved" if gl_line_code is set (post-applier) OR
   // if the name parses (Part A). Pre-applier we compute from name.
   const parseRe = /^(\d{4}(?:\.\d+)*)/;
@@ -236,16 +259,31 @@ for (const row of scm) {
     "Account Management Travel", "Training", "Due to EE",
   ]);
   const ruled = name && RULINGS.has(name);
-  if (parses || ruled) continue;
-  // Include: unnamed OR named-but-unhandled (Equipment, Please Select, others)
+  // Kevin ruling 2026-08-20: collision cat_ids bypass the "already-ruled"
+  // exclusion. The id carries two names in the CSV so the majority-vote
+  // resolution is unsafe. Route into the worksheet with BOTH names shown.
+  if ((parses || ruled) && !isCollision) continue;
+  let displayName, notesPreFill;
+  if (isCollision) {
+    const names = COLLISION_NAMES.get(row.category_id) || [];
+    displayName = names.length
+      ? `${names.join(" / ")}  (COLLISION - id carries multiple names)`
+      : `(COLLISION - names not enumerated)`;
+    notesPreFill = "Cat id carries two names in CSV. Kevin to decide: rule under one name, split into two, or stay unrouted.";
+  } else {
+    displayName = name || "(no CSV name)";
+    notesPreFill = "";
+  }
   NEEDS_REVIEW.push({
     category_id: row.category_id,
-    name: name || "(no CSV name)",
+    name: displayName,
+    notes_prefill: notesPreFill,
     fytd_non_excluded: nonExcl,
     raw_amount: g ? g.raw_amount : 0,
     actual_excluded: g ? g.actual_excl : 0,
     raw_count: g ? g.raw_count : 0,
     top_merchants: g ? [...g.merchants.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m, n]) => `${m} (${n})`) : [],
+    is_collision: isCollision,
   });
 }
 NEEDS_REVIEW.sort((a, b) => b.fytd_non_excluded - a.fytd_non_excluded);
@@ -301,7 +339,7 @@ for (const r of NEEDS_REVIEW) {
     r.fytd_non_excluded,
     pct / 100,
     "",  // ruling
-    "",  // notes
+    r.notes_prefill || "",
     r.top_merchants.join("; "),
     r.category_id,
     r.raw_amount,
@@ -311,6 +349,13 @@ for (const r of NEEDS_REVIEW) {
   row.getCell(3).numFmt = '0.0%';
   row.getCell(8).numFmt = '"$"#,##0.00';
   row.getCell(9).numFmt = '"$"#,##0.00';
+  // Highlight collision rows so Kevin sees them at a glance.
+  if (r.is_collision) {
+    row.font = { bold: true };
+    for (let c = 1; c <= 9; c++) {
+      row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE599" } };
+    }
+  }
 }
 // Total row
 const totalRow = ws.addRow(["TOTAL awaiting a ruling", totalReview, 1, "", "", "", "", "", ""]);

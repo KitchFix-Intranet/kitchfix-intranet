@@ -110,6 +110,19 @@ const ACKNOWLEDGED_UNROUTED = new Set([
   "Equipment",                        // owner-marked SPLIT (col F "SPLIT - needs a rule"); not decided per G3 spec
 ]);
 
+// Category IDs that carry MULTIPLE names in the CSV. Ambiguous by
+// construction - the majority-vote resolver is disabled for these (Kevin
+// ruling 2026-08-20). Route UNROUTED and expose in Part C worksheet with
+// both names shown. Kevin decides in the worksheet.
+//
+// Step 1 date-split investigation (2026-08-20) for the first entry:
+// both 'Equipment Lease' and '**Please Select A Category**' rows appear
+// on the same day (2026-08-10) attributed to this cat_id via the CSV
+// join. Interleaved - not a rename. Id is permanently ambiguous.
+const COLLISION_UNROUTED = new Set([
+  "68ed4977b7aabd4234afda3a",  // "Equipment Lease" vs "**Please Select A Category**"
+]);
+
 // ─── Part A parser: leading \d{4}(\.\d+)* on category name ───────────
 const PART_A_RE = /^(\d{4}(?:\.\d+)*)/;
 
@@ -308,6 +321,7 @@ const summary = {
   by_parse: 0,
   by_ruling: 0,
   ruling_acknowledged_unrouted: 0,
+  collision_unrouted: 0,
   no_name_no_ruling: 0,
   skipped_existing_ruling: 0,
   no_change_still_null: 0,
@@ -319,8 +333,16 @@ for (const row of scm) {
   let newGl = null;
   let newProv = null;
 
+  // Case Z (highest precedence): collision cat_ids. Kevin's ruling
+  // 2026-08-20: id carries multiple names in the CSV, do NOT resolve
+  // by majority vote. Route UNROUTED with a distinct provenance so
+  // Part C worksheet + downstream analytics can identify why.
+  if (COLLISION_UNROUTED.has(row.category_id)) {
+    newGl = null;
+    newProv = "collision_unrouted_2026-08-20";
+  }
   // Case A: owner ruling by name
-  if (name && RULINGS.has(name)) {
+  else if (name && RULINGS.has(name)) {
     const r = RULINGS.get(name);
     newGl = r.gl;
     newProv = "owner_ruling_2026-08-20";
@@ -352,6 +374,7 @@ for (const row of scm) {
   if (newProv === "parsed_from_name") summary.by_parse++;
   else if (newProv === "owner_ruling_2026-08-20") summary.by_ruling++;
   else if (newProv === "unrouted") summary.ruling_acknowledged_unrouted++;
+  else if (newProv === "collision_unrouted_2026-08-20") summary.collision_unrouted++;
   else if (!name) summary.no_name_no_ruling++;
   else summary.no_change_still_null++;
 
@@ -366,6 +389,7 @@ console.log(`\n[applier] categories categorized:`);
 console.log(`  parsed_from_name:              ${summary.by_parse}`);
 console.log(`  owner_ruling_2026-08-20 (gl):  ${summary.by_ruling}`);
 console.log(`  owner_ruling ack. UNROUTED:    ${summary.ruling_acknowledged_unrouted}`);
+console.log(`  collision_unrouted_2026-08-20: ${summary.collision_unrouted}`);
 console.log(`  no_name_no_ruling:             ${summary.no_name_no_ruling}`);
 console.log(`  unrouted (name, no ruling, no parse): ${summary.no_change_still_null}`);
 console.log(`  updates to write:              ${updates.length}`);
