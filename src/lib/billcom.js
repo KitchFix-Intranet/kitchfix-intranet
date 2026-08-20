@@ -107,6 +107,20 @@ export function extractRowsV2(body) {
   return [];
 }
 
+// v3 envelope row extractor. `results` is authoritative. The v3 endpoint
+// (verified for /vendors 2026-08-20) also carries a `nextPage` cursor
+// string; we page on start/max offsets instead (both are honored) to
+// match the discipline of the v2 walks. Kept separate from
+// extractRowsV2 so a "wrong parser" mistake is a compile-time miss on
+// the import name, not a silent data drop.
+export function extractRowsV3(body) {
+  if (Array.isArray(body?.results))       return body.results;
+  if (Array.isArray(body?.response_data)) return body.response_data;
+  if (Array.isArray(body?.data))          return body.data;
+  if (Array.isArray(body))                return body;
+  return [];
+}
+
 // ─── Endpoint helpers ────────────────────────────────────────────────
 
 // Build a URL for /billcom/bills/filtered with an inclusive
@@ -140,6 +154,28 @@ export function classesUrl({ start = 0, max = 500 }) {
   return `${base}/classes?${qs.toString()}`;
 }
 
+// Vendors URL. v3 envelope (top-level `results` array + `nextPage`
+// cursor). Proxy caps max at 100 per page - verified 2026-08-20 (400
+// with message "max: must be less than or equal to 100" when exceeded).
+// Do NOT bump the default without re-probing.
+//
+// Pagination gotcha (verified 2026-08-20): `start=<n>` in the query
+// string is IGNORED by the proxy on /vendors - every request returns
+// the first 100 rows. The proxy advances ONLY when the caller passes
+// `page=<nextPage>` where nextPage is the opaque base64 cursor from
+// the previous response (decodes to something like "start=100").
+// First page: pass nothing. Subsequent pages: pass page=<cursor>.
+// Walking with `start=` is a silent-loop trap - the earlier probe hit
+// the HARD page limit of 200 with 200 * 100 = 20,000 "rows" that were
+// the same 100 vendors on repeat (distinct=100, dup=19,900).
+export function vendorsUrl({ pageCursor = null, max = 100 }) {
+  const base = _proxyBase();
+  const capped = Math.min(Number(max) || 100, 100);
+  const qs = new URLSearchParams({ max: String(capped) });
+  if (pageCursor) qs.set("page", String(pageCursor));
+  return `${base}/vendors?${qs.toString()}`;
+}
+
 // Optional per-bill line items endpoint (used only when /filtered
 // does not embed lineItems in the response_data row). The v2 envelope
 // on /bills returns lineItems embedded; the proxy respects that.
@@ -162,6 +198,7 @@ const HASH_EXCLUDE_TOP = {
   bill_line: ["updatedTime", "cacheAt", "__meta"],
   account:   ["updatedTime", "cacheAt", "__meta"],
   class:     ["updatedTime", "cacheAt", "__meta"],
+  vendor:    ["updatedTime", "cacheAt", "__meta"],
 };
 
 function _normalizeForHash(node, topExcludeSet) {
