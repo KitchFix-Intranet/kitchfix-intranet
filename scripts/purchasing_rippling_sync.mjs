@@ -466,6 +466,8 @@ async function populateCategoryCandidates(candidates) {
 import {
   assertNoSupersededSplitParents,
   assertNoNonUsdAmountsSummed,
+  assertNoAuthPairSurvivors,
+  assertTxnDateHasMultipleValues,
 } from "../src/lib/purchasingSpendAsserts.js";
 
 // ─── INV-P8c Ruling 1: txn_date from parent ObjectID timestamp ───────
@@ -528,6 +530,43 @@ async function deriveSpendLines({ rippling_ids }) {
   if (wlResp.error) return { ok: false, error: wlResp.error.message };
   const catMap = new Map((catResp.data || []).map(r => [r.category_id, r.gl_line_code]));
   const wlMap  = new Map((wlResp.data || []).map(r => [r.work_location_id, r]));
+
+  // ─── Ruling 4 seed: parent IDs in the unfiltered Rippling report ────
+  // Populated one-shot by scripts/purchasing_report_load.mjs. Consulted for
+  // report-arbitration precedence (spec §PRECEDENCE 1..3):
+  //   1. Both parents in report -> keep both
+  //   2. Only earlier in report -> keep earlier
+  //   3. Otherwise              -> keep later
+  // Empty set is OK on first run (before the seed loads) - degrades
+  // gracefully to deterministic "keep later" (rule 3 only). Owner will
+  // seed before merging PR.
+  const reportSeen = new Set();
+  {
+    const PAGE = 1000;
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supa
+        .from("rippling_report_seen_txns")
+        .select("parent_txn_id")
+        .order("parent_txn_id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        // Table absent -> proceed with empty set (deterministic keep-later).
+        // Explicit code check: 42P01 = undefined_table.
+        if (error.code === "42P01") {
+          console.log("[ruling-4] rippling_report_seen_txns table absent; proceeding with empty set (deterministic keep-later)");
+          break;
+        }
+        console.error(`[ruling-4] report-seen load FAILED: ${error.message}`);
+        return { ok: false, error: error.message };
+      }
+      const rows = data || [];
+      for (const r of rows) reportSeen.add(r.parent_txn_id);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    console.log(`[ruling-4] report-seen parents loaded: ${reportSeen.size}`);
+  }
 
   // Load the current-latest rows for the touched ids. Chunk at 100 to
   // keep the IN() URL under the PostgREST/proxy request-line limit -
@@ -598,6 +637,133 @@ async function deriveSpendLines({ rippling_ids }) {
     }
   }
 
+  // ─── Ruling 4 pre-scan: same-merchant same-amount pair detection ────
+  //
+  // Owner ruling 2026-08-20. Where two parents share the same merchant
+  // and the same amount within 5 days, keep the later and exclude the
+  // earlier. Report acts as arbiter for border cases:
+  //   Precedence 1: both parents in report -> keep both (neither excluded)
+  //   Precedence 2: only earlier in report -> keep earlier (later excluded)
+  //   Precedence 3: otherwise              -> keep later (earlier excluded)
+  //
+  // Detection is at the PARENT level (not the line level). Parent amount
+  // = sum of its non-excluded lines' amounts. Duplicate-split parents
+  // (Ruling 2) are already excluded and are NOT considered for pairing -
+  // their contribution to the fact table is zero, so pairing them can't
+  // change any total. We compute parent-level totals from the raw rows.
+  //
+  // Do NOT widen the 5-day window. Do NOT match on amount alone.
+  const WINDOW_DAYS = 5;
+
+  // Build parent -> { amount_cents (USD sum), merchant, txn_date, currencies }
+  const parentAgg = new Map();
+  for (const rid of ids) {
+    const r = rowsByRippling.get(rid);
+    if (!r) continue;
+    const parent = parentIdFromExternalId(r.external_id);
+    if (!parent) continue;
+    const merchant = (r.merchant_name || "").trim();
+    if (!merchant) continue;
+    const ccy = String(r.currency || "").toUpperCase();
+    if (!parentAgg.has(parent)) {
+      const parentHex = (r.parent_txn_id && OBJECTID_HEX24.test(String(r.parent_txn_id))) ? String(r.parent_txn_id) : parent;
+      parentAgg.set(parent, {
+        merchant,
+        cents:     0,
+        txn_date:  objectIdToTxnDate(parentHex),
+        anyNonUSD: false,
+      });
+    }
+    const agg = parentAgg.get(parent);
+    if (ccy && ccy !== "USD") agg.anyNonUSD = true;
+    else if (r.amount != null) agg.cents += Math.round(Number(r.amount) * 100);
+  }
+
+  // ─── Ruling 4 PRE-RULE assert (added post-#735-rerun) ────────────────
+  //
+  // A date-bound rule (5-day window) is meaningless if the candidate slice
+  // carries a single distinct date. That IS the failure mode caught on
+  // 2026-08-20: the first #740 derive ran while purchasing_actuals still
+  // held the pre-#735 `first_seen_at::date` stamps (every row = sync date
+  // = '2026-08-19'), so the 5-day window matched every same-merchant
+  // same-amount pair across the fiscal year - 2,767 auth_pair exclusions
+  // that were effectively "keep the coin-flip winner". Fires on the same
+  // candidate set the pair sweep will scan (parents with merchant + txn_date,
+  // non-excluded upstream, non-zero, USD).
+  const authPairCandidateForAssert = [];
+  for (const [, agg] of parentAgg.entries()) {
+    // Match the same filters used in the byKey builder below
+    if (agg.anyNonUSD) continue;
+    if (agg.cents === 0) continue;
+    if (!agg.txn_date) continue;
+    authPairCandidateForAssert.push({ txn_date: agg.txn_date });
+  }
+  const dateAssertResult = assertTxnDateHasMultipleValues(authPairCandidateForAssert);
+  console.log(`[assert] date-rule pre-check: candidates=${dateAssertResult.candidates} distinct_dates=${dateAssertResult.distinctDates}`);
+
+  // authPairEarlierParents: parents to exclude with reason='auth_pair'.
+  // authPairKeptEarlierParents: earlier parents kept because of report
+  // precedence 1 or 2 (both-in-report or earlier-in-report). Counted for
+  // visibility - the pair still exists in the fact table.
+  const authPairEarlierParents = new Set();
+  const authPairKeptEarlierParents = new Set();
+  // Track partner-of-kept-earlier for exclusion (Precedence 2: later gets excluded)
+  const authPairLaterParentExcluded = new Set();
+  // For Ruling 5: parents whose USD sum is exactly zero (in-window)
+  const zeroAmountParents = new Set();
+  {
+    // Group by (merchant, cents)
+    const byKey = new Map();
+    for (const [parent, agg] of parentAgg.entries()) {
+      // Skip already-excluded parents (dup-split, non-USD). They contribute
+      // nothing to totals so pairing them is a no-op.
+      if (duplicateSplitParents.has(parent)) continue;
+      if (agg.anyNonUSD) continue;
+      // Ruling 5: zero-amount parents get flagged for exclusion here
+      // regardless of pairing. Skip them from pair detection because a
+      // $0 pair is not the auth->settlement shape we're catching.
+      if (agg.cents === 0) { zeroAmountParents.add(parent); continue; }
+      if (!agg.txn_date) continue;
+      const key = JSON.stringify([agg.merchant, agg.cents]);
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push({ parent, ...agg });
+    }
+    // Within each group sort by date + parent id (stable tiebreak).
+    // Adjacent-pair sweep with 5-day window.
+    for (const arr of byKey.values()) {
+      if (arr.length < 2) continue;
+      arr.sort((a, b) => {
+        if (a.txn_date < b.txn_date) return -1;
+        if (a.txn_date > b.txn_date) return 1;
+        return a.parent < b.parent ? -1 : a.parent > b.parent ? 1 : 0;
+      });
+      for (let i = 0; i < arr.length - 1; i++) {
+        const a = arr[i];      // earlier
+        const b = arr[i + 1];  // later
+        const da = new Date(a.txn_date + "T00:00:00Z").getTime();
+        const db = new Date(b.txn_date + "T00:00:00Z").getTime();
+        const days = Math.round((db - da) / 86400000);
+        if (days < 0 || days > WINDOW_DAYS) continue;
+        const aIn = reportSeen.has(a.parent);
+        const bIn = reportSeen.has(b.parent);
+        if (aIn && bIn) {
+          // Precedence 1: both in report -> keep both
+          authPairKeptEarlierParents.add(a.parent);
+        } else if (aIn && !bIn) {
+          // Precedence 2: earlier in report -> keep earlier, exclude later
+          authPairKeptEarlierParents.add(a.parent);
+          authPairLaterParentExcluded.add(b.parent);
+        } else {
+          // Precedence 3 (default) - includes both-not-in-report + later-in-report only.
+          // Keep later, exclude earlier.
+          authPairEarlierParents.add(a.parent);
+        }
+      }
+    }
+  }
+  console.log(`[ruling-4] pair detection: earlier_excluded_parents=${authPairEarlierParents.size} later_excluded_parents=${authPairLaterParentExcluded.size} both_in_report_kept=${authPairKeptEarlierParents.size}`);
+  console.log(`[ruling-5] zero-amount parents: ${zeroAmountParents.size}`);
+
   // Derive into purchasing_actuals. Per-line upsert; source_line_id
   // uniqueness is the atomic key.
   let linesDerived = 0;
@@ -612,6 +778,10 @@ async function deriveSpendLines({ rippling_ids }) {
   // Ruling 1 (txn_date via ObjectID) counters
   let ridTxnDateFromObjectId = 0;
   let ridTxnDateFallback = 0;
+  // Ruling 4 (auth-pair) + Ruling 5 (zero-amount) counters at the LINE level
+  let authPairExcludedLines = 0;
+  let authPairExcludedUsdCents = 0;
+  let zeroAmountExcludedLines = 0;
   // Label-fallback self-heal (owner ruling 2026-08-19, PR #713 flag 1
   // hardening): when a work_location_id misses the map and its label is
   // one of the three EXCLUDED_LABEL_FALLBACK literals, we stage an
@@ -673,7 +843,29 @@ async function deriveSpendLines({ rippling_ids }) {
     const ccy = String(r.currency || "").toUpperCase();
     const currencyHit = ccy && ccy !== "USD" && ccy !== "";
 
-    const excluded = wlRow?.excluded === true || labelFallbackHit || dupSplitHit || currencyHit;
+    // ─── Ruling 4 (auth-pair) + Ruling 5 (zero-amount) ──────────────
+    // Parent-level flags computed in the pre-scan above.
+    const authPairEarlierHit  = parent ? authPairEarlierParents.has(parent) : false;
+    const authPairLaterHit    = parent ? authPairLaterParentExcluded.has(parent) : false;
+    const zeroAmountHit       = parent ? zeroAmountParents.has(parent) : false;
+
+    // Reason precedence for the recorded reason column. First hit wins.
+    // The order below matches the exclusion causality:
+    //   1. map_excluded    - work_location owner-seeded excluded=TRUE
+    //   2. label_fallback  - one of three EXCLUDED_LABEL_FALLBACK literals
+    //   3. dup_split       - Ruling 2 duplicate-split parent
+    //   4. non_usd         - Ruling 3
+    //   5. auth_pair       - Ruling 4 (earlier of pair; or later when earlier-in-report)
+    //   6. zero_amount     - Ruling 5
+    let reason = null;
+    if (wlRow?.excluded === true) reason = "map_excluded";
+    else if (labelFallbackHit)    reason = "label_fallback";
+    else if (dupSplitHit)         reason = "dup_split";
+    else if (currencyHit)         reason = "non_usd";
+    else if (authPairEarlierHit || authPairLaterHit) reason = "auth_pair";
+    else if (zeroAmountHit)       reason = "zero_amount";
+
+    const excluded = reason !== null;
     const accountKey = excluded ? null : (wlRow?.account_key || null);
     const glLine = r.category_id ? (catMap.get(r.category_id) || null) : null;
     if (!accountKey && !excluded) unattributed++;
@@ -691,6 +883,13 @@ async function deriveSpendLines({ rippling_ids }) {
       currencyExcludedLines++;
       const cents = Math.round(Number(r.amount || 0) * 100);
       currencyExcludedNativeByCcy.set(ccy, (currencyExcludedNativeByCcy.get(ccy) || 0) + cents);
+    }
+    if (reason === "auth_pair") {
+      authPairExcludedLines++;
+      if (ccy === "USD" && r.amount != null) authPairExcludedUsdCents += Math.round(Number(r.amount) * 100);
+    }
+    if (reason === "zero_amount") {
+      zeroAmountExcludedLines++;
     }
 
     // ─── INV-P8c Ruling 1: txn_date from parent ObjectID timestamp ──
@@ -715,6 +914,7 @@ async function deriveSpendLines({ rippling_ids }) {
       source_line_id:     `rippling_spend:${rid}`,
       account_key:        accountKey,
       excluded:           excluded,
+      reason:             reason,
       gl_line_code:       glLine,
       gl_bucket:          glBucketFor(glLine),
       // Ruling 1 (2026-08-20): parent ObjectID timestamp minus 1 day.
@@ -729,7 +929,7 @@ async function deriveSpendLines({ rippling_ids }) {
     });
   }
 
-  // ─── INV-P8c summary log for Rulings 1/2/3 ──────────────────────────
+  // ─── INV-P8c + Ruling 4/5 summary log ───────────────────────────────
   // Emit counts + dollars so exclusion is visible, not silent.
   const dupDollars = (dupExcludedUsdCents / 100).toFixed(2);
   console.log(`[ruling-1] txn_date derivation: from_objectid=${ridTxnDateFromObjectId} fallback_to_first_seen_at=${ridTxnDateFallback}`);
@@ -737,25 +937,71 @@ async function deriveSpendLines({ rippling_ids }) {
   const ccyBreakdown = [...currencyExcludedNativeByCcy.entries()]
     .map(([c, cents]) => `${c}=${(cents / 100).toFixed(2)}`).join(" ");
   console.log(`[ruling-3] non-USD exclusion: lines=${currencyExcludedLines} native_totals=(${ccyBreakdown || "none"})`);
+  const apDollars = (authPairExcludedUsdCents / 100).toFixed(2);
+  console.log(`[ruling-4] auth-pair line exclusion: lines=${authPairExcludedLines} usd_amount=$${apDollars} parent_earlier=${authPairEarlierParents.size} parent_later_excluded_via_report=${authPairLaterParentExcluded.size} both_in_report_kept=${authPairKeptEarlierParents.size}`);
+  console.log(`[ruling-5] zero-amount line exclusion: lines=${zeroAmountExcludedLines} parents=${zeroAmountParents.size}`);
 
-  // ─── Sanity asserts (INV-P8b Part E) - PRE-WRITE gate ─────────────
-  // These are deterministic-from-payload checks that catch the two
-  // bug shapes INV-P8b found and INV-P8 mis-diagnosed:
+  // ─── Sanity asserts (INV-P8b Part E + Ruling 4) - PRE-WRITE gate ──
+  // These are deterministic-from-payload checks that catch bug shapes:
   //   - superseded-split (Part C) - coexisting multi-set shape
   //   - non-USD summing into USD roll-up (Part D)
-  // Both throw. Neither corrects.
+  //   - auth-pair survivor (Ruling 4) - the earlier-and-later pair
+  //     leaking into the fact table after the pre-scan
+  // All throw. None correct.
   //
   // INV-P8c (2026-08-20): Rulings 2 + 3 mark duplicate-split parents
-  // and non-USD rows as excluded=TRUE BEFORE the asserts run. The
-  // asserts see only the non-excluded slice, so they now fire only if
+  // and non-USD rows as excluded=TRUE BEFORE the asserts run.
+  // Ruling 4/5 mark pair earlier + zero-amount parents excluded=TRUE.
+  // The asserts see only the non-excluded slice, so they fire only if
   // a bug-shape row slips past the exclusion logic - defense in depth.
-  // If either assert fires post-exclusion, the derive stopped a leak.
   try {
     const nonExcluded = derived.filter(d => !d.excluded);
     const supRes = assertNoSupersededSplitParents(nonExcluded, rowsByRippling);
     console.log(`[assert] superseded-split guard (post-Ruling-2 filter): parents_checked=${supRes.parentsChecked} flagged=${supRes.flagged}`);
     const fxRes = assertNoNonUsdAmountsSummed(nonExcluded, rowsByRippling);
     console.log(`[assert] non-USD-into-USD guard (post-Ruling-3 filter): checked=${fxRes.checked} offenders=${fxRes.offenders}`);
+    // Aggregate to parent level BEFORE running the auth-pair assert. The
+    // assert works at parent granularity because Ruling 4 arbitration
+    // groups pairs by (merchant, parent-total-amount), not by line.
+    // Also skips parents present in report (report-arbitration precedence
+    // 1 + 2 permit both/earlier to survive).
+    const parentAggAssert = new Map();
+    for (const d of nonExcluded) {
+      const rid = d.source_line_id.startsWith("rippling_spend:") ? d.source_line_id.slice("rippling_spend:".length) : null;
+      const raw = rid ? rowsByRippling.get(rid) : null;
+      const parent = parentIdFromExternalId(raw?.external_id);
+      if (!parent) continue;
+      if (!parentAggAssert.has(parent)) {
+        parentAggAssert.set(parent, {
+          source_line_id: `parent:${parent}`,
+          vendor_or_merchant: d.vendor_or_merchant,
+          txn_date: d.txn_date,
+          amount: 0,
+        });
+      }
+      parentAggAssert.get(parent).amount += Number(d.amount || 0);
+    }
+    // Filter out parents in the report so report-arbitration precedence 1+2
+    // do not fire the assert. Assert only enforces precedence 3 (deterministic
+    // keep-later where both parents are NOT in the report).
+    const parentRowsForAssert = [...parentAggAssert.entries()]
+      .filter(([parent]) => !reportSeen.has(parent))
+      .map(([, agg]) => agg);
+    const apRes = assertNoAuthPairSurvivors(parentRowsForAssert, { windowDays: WINDOW_DAYS });
+    console.log(`[assert] auth-pair survivor guard (post-Ruling-4 filter, report-arbitrated): groups_checked=${apRes.groupsChecked} flagged=${apRes.flagged}`);
+    // Positive-control probe: prove the assert fires on a seeded case.
+    // Skipped when no auth-pair exclusions exist (vacuous run).
+    if (authPairEarlierParents.size > 0) {
+      const seed = [
+        { source_line_id: "seed:earlier", vendor_or_merchant: "AssertSeedVendor__DoNotUse", txn_date: "2026-01-10", amount: 100 },
+        { source_line_id: "seed:later",   vendor_or_merchant: "AssertSeedVendor__DoNotUse", txn_date: "2026-01-13", amount: 100 },
+      ];
+      let seedFired = false;
+      try { assertNoAuthPairSurvivors(seed, { windowDays: WINDOW_DAYS }); }
+      catch (e) { seedFired = /auth-pair survivors/.test(e.message); }
+      if (!seedFired) throw new Error("[assert] positive-control seed did NOT fire assertNoAuthPairSurvivors - guard is broken");
+      console.log("[assert] auth-pair positive-control seed: fired as expected");
+    }
   } catch (e) {
     console.error(`[assert] pre-write assertion failed: ${e.message}`);
     return { ok: false, linesDerived: 0, error: e.message };
