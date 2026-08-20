@@ -68,7 +68,12 @@ const runSource = `daily/${args.source}/${runStartISO}`;
 console.log(`derive_labor_actuals_daily source=${args.source} dryRun=${args.dryRun} window=${args.window} started=${runStartISO}`);
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
-const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+// V-daily-grain D3 fix - store to 4 decimal places (matches
+// labor_actuals_daily NUMERIC(14,4) after daily-2 precision
+// migration). Per-day rounding to 2dp loses cents on the week
+// aggregate ($4,328.26 vs $4,328.27 on CIN - OH 06/29); rounding
+// to 4dp preserves sub-cent precision through the sum.
+const r4 = (v) => Math.round((Number(v) || 0) * 10000) / 10000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 async function fetchAll(table, sel) {
@@ -103,7 +108,34 @@ let windowStartISO;
 if (args.window === "fytd") windowStartISO = FY_START_ISO;
 else                        windowStartISO = addDaysISO(mondayOnOrBefore(todayISO), -7 * 8);
 const windowEndISO = todayISO;
-console.log(`  window: ${windowStartISO} .. ${windowEndISO}`);
+console.log(`  delete window: ${windowStartISO} .. ${windowEndISO}`);
+
+// ─── V-daily-grain D1 fix - data-derived floor ──────────────────────
+// Kevin ruling 2026-08-20: the earliest week where
+// labor_actuals.week_source='sc_day_metadata' is the ONLY reachable
+// day-grain floor. Weeks before that were backfilled from a Rippling
+// REPORT export (totals-only, no per-segment breakdown, retention
+// already passed for the underlying segments); they are a permanent
+// grain boundary, not a gap we can fill.
+//
+// The derive REFUSES to write below this floor. Defense at the data
+// layer so a future backfill cannot silently reintroduce
+// low-confidence rows. Floor is data-derived (not a hardcoded date)
+// so the code documents why the boundary exists.
+const floorQ = await supa
+  .from("labor_actuals")
+  .select("week_start")
+  .eq("week_source", "sc_day_metadata")
+  .order("week_start")
+  .limit(1)
+  .maybeSingle();
+if (floorQ.error) { console.error("floor lookup:", floorQ.error.message); process.exit(2); }
+const dailyFloorISO = floorQ.data?.week_start;
+if (!dailyFloorISO) { console.error("no sc_day_metadata weeks in labor_actuals - cannot derive day-grain floor"); process.exit(2); }
+console.log(`  day-grain floor: ${dailyFloorISO}  (min sc_day_metadata week_start; earlier weeks are rippling_report-backfilled, no segments)`);
+// The DELETE still runs on the broader window so pre-floor rows
+// from earlier backfills are swept out. Only the INSERT is floored.
+const writeFloorISO = dailyFloorISO;
 
 // ─── 1. Load reference maps ─────────────────────────────────────────
 console.log("loading earning_type_map, workers, department_map");
@@ -192,13 +224,16 @@ function getBucket(account_key, worker_id, work_date, line_code) {
   return b;
 }
 
-let skippedCorp = 0, skippedContainer = 0, skippedUnattr = 0, skippedOutOfWindow = 0, skippedNoDate = 0;
+let skippedCorp = 0, skippedContainer = 0, skippedUnattr = 0, skippedOutOfWindow = 0, skippedNoDate = 0, skippedBelowFloor = 0;
 for (const seg of paySegs) {
   const p = seg.payload || {};
   const workerId = p.owner_role?.id;
   const segDate = p.segment_date;
   if (!segDate) { skippedNoDate++; continue; }
   if (segDate < windowStartISO || segDate > windowEndISO) { skippedOutOfWindow++; continue; }
+  // V-daily-grain D1 fix - reject sub-floor writes at the derive.
+  // See dailyFloorISO computation above for the rationale.
+  if (segDate < writeFloorISO) { skippedBelowFloor++; continue; }
 
   const attr = attribute(workerId);
   if (attr === null) { skippedCorp++; continue; }
@@ -234,26 +269,30 @@ for (const seg of paySegs) {
   }
 }
 console.log(`  buckets: ${buckets.size}`);
-console.log(`  skipped: corp=${skippedCorp} container=${skippedContainer} unattr=${skippedUnattr} out_of_window=${skippedOutOfWindow} no_date=${skippedNoDate}`);
+console.log(`  skipped: corp=${skippedCorp} container=${skippedContainer} unattr=${skippedUnattr} out_of_window=${skippedOutOfWindow} no_date=${skippedNoDate} below_floor=${skippedBelowFloor}`);
 
 // ─── 5. Build rows (round ONLY here) ────────────────────────────────
 const derivedAt = new Date().toISOString();
 const rows = [];
+// Hours stay at 2dp (integer-ish input from Rippling; 2dp is
+// well within stored NUMERIC(10,2) precision). Dollars round to
+// 4dp per D3 fix - see r4 declaration above.
+const h2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 for (const b of buckets.values()) {
   rows.push({
     account_key:           b.account_key,
     worker_id:             b.worker_id,
     work_date:             b.work_date,
     line_code:             b.line_code,
-    hours_regular:         r2(b.hours_regular),
-    hours_overtime:        r2(b.hours_overtime),
-    hours_double_time:     r2(b.hours_double_time),
-    hours_premium_other:   r2(b.hours_premium_other),
-    dollars_regular:       r2(b.dollars_regular),
-    dollars_overtime:      r2(b.dollars_overtime),
-    dollars_double_time:   r2(b.dollars_double_time),
-    dollars_premium_other: r2(b.dollars_premium_other),
-    amount:                r2(b.amount),
+    hours_regular:         h2(b.hours_regular),
+    hours_overtime:        h2(b.hours_overtime),
+    hours_double_time:     h2(b.hours_double_time),
+    hours_premium_other:   h2(b.hours_premium_other),
+    dollars_regular:       r4(b.dollars_regular),
+    dollars_overtime:      r4(b.dollars_overtime),
+    dollars_double_time:   r4(b.dollars_double_time),
+    dollars_premium_other: r4(b.dollars_premium_other),
+    amount:                r4(b.amount),
     segment_count:         b.segment_count,
     derived_at:            derivedAt,
     source_run:            runSource,

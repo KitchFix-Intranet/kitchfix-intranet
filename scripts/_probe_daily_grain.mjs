@@ -95,16 +95,26 @@ if (daily.length === 0) {
   process.exit(0);
 }
 
-// ─── D5 - coverage floor ─────────────────────────────────────────────
+// ─── D5 - data-derived coverage floor ────────────────────────────────
+// Kevin ruling 2026-08-20: the floor is the earliest week where
+// labor_actuals.week_source = 'sc_day_metadata'. Earlier weeks were
+// backfilled from a Rippling REPORT export (totals-only, retention
+// already passed for the segments underneath). Permanent grain
+// boundary. The derive rejects sub-floor writes; this probe asserts
+// no leak.
 console.log("");
-console.log("[D5] coverage floor - min(work_date)");
+console.log("[D5] coverage floor - data-derived from labor_actuals.week_source='sc_day_metadata'");
+const floorQ = await supa.from("labor_actuals").select("week_start").eq("week_source", "sc_day_metadata").order("week_start").limit(1).maybeSingle();
+const dailyFloorISO = floorQ.data?.week_start;
+if (!dailyFloorISO) { fail("no sc_day_metadata weeks in labor_actuals - cannot derive floor"); }
 const dates = daily.map(r => r.work_date).sort();
 const minDate = dates[0];
 const maxDate = dates[dates.length - 1];
-console.log(`  min work_date = ${minDate}   max work_date = ${maxDate}   distinct dates = ${new Set(dates).size}`);
+console.log(`  labor_actuals sc_day_metadata min week: ${dailyFloorISO}`);
+console.log(`  labor_actuals_daily min work_date = ${minDate}   max work_date = ${maxDate}   distinct dates = ${new Set(dates).size}`);
 if (!minDate) fail("no work_date rows");
-else if (minDate < "2025-11-08") fail(`min work_date ${minDate} predates the expected floor 2025-11-08`);
-else ok(`min work_date ${minDate} is >= 2025-11-08 - PR-2 range picker floor`);
+else if (minDate < dailyFloorISO) fail(`daily min work_date ${minDate} is BELOW the sc_day_metadata floor ${dailyFloorISO} - sub-floor rows leaked`);
+else ok(`daily min work_date ${minDate} is at or above the sc_day_metadata floor ${dailyFloorISO}`);
 
 // ─── D6 - no CORP, no container ──────────────────────────────────────
 console.log("");
@@ -223,16 +233,20 @@ else {
 
 // ─── D3 - week sentinel through the daily path ──────────────────────
 console.log("");
-console.log("[D3] CIN - OH week 2026-06-29 sums to 156.21 hours / $4,328.27 through the daily path");
+console.log("[D3] CIN - OH week 2026-06-29 sums to 156.21 hours / $4,328.27 through the daily path (exact)");
 const wkRows = daily.filter(r => r.account_key === "CIN - OH" && r.work_date >= "2026-06-29" && r.work_date <= "2026-07-05");
 if (wkRows.length === 0) skip("CIN - OH week 2026-06-29 not in daily window");
 else {
   const hrs = wkRows.reduce((s, r) => s + Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0) + Number(r.hours_premium_other || 0), 0);
   const amt = wkRows.reduce((s, r) => s + Number(r.amount || 0), 0);
-  if (Math.abs(hrs - 156.21) < 0.01) ok(`total hours = ${hrs.toFixed(2)}  (want 156.21)`);
-  else                               fail(`total hours = ${hrs.toFixed(2)}, want 156.21`);
-  if (Math.abs(amt - 4328.27) < 0.01) ok(`amount = $${amt.toFixed(2)}  (want $4,328.27)`);
-  else                                fail(`amount = $${amt.toFixed(2)}, want $4,328.27`);
+  if (Math.abs(hrs - 156.21) < 0.005) ok(`total hours = ${hrs.toFixed(2)}  (want 156.21)`);
+  else                                fail(`total hours = ${hrs.toFixed(4)}, want 156.21`);
+  // D3 fix (2026-08-20): NUMERIC(14,4) storage + accumulator at full
+  // precision means the sum matches the weekly sentinel to the cent.
+  // If this fails, either the daily-2 precision migration has not
+  // been applied yet or the derive was not re-run after apply.
+  if (Math.abs(amt - 4328.27) < 0.005) ok(`amount = $${amt.toFixed(4)}  (want $4,328.27 EXACT)`);
+  else                                 fail(`amount = $${amt.toFixed(4)}, want $4,328.27 exact - daily-2 precision migration not applied, or derive not re-run`);
 }
 
 // ─── D4 - dedupe report ──────────────────────────────────────────────
