@@ -179,6 +179,8 @@
   font-size: var(--size-caption);
   font-weight: var(--wt-bold);
   color: var(--text-heading);
+  /* PR-L: numeric column, tabular for the Mulish -> Inter flip. */
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-chrome-bar-stats-sep {
   width: 1px;
@@ -208,6 +210,8 @@
   background: transparent;
   min-height: 32px;
   font-family: inherit;
+  /* PR-L: pill carries the count; tabular for the Mulish -> Inter flip. */
+  font-variant-numeric: var(--num-tabular);
   /* Owner-review 2026-07-08: label copy was wrapping inside the pill
      at real counts + label lengths. nowrap + no-shrink pins each pill
      to one line regardless of the count or any future label change. */

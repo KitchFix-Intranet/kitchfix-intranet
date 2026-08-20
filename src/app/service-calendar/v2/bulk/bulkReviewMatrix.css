@@ -254,6 +254,8 @@
   font-weight: var(--sc2-wt-bold);
   letter-spacing: 0;
   text-transform: none;
+  /* PR-L: numeric header column - tabular for the Mulish -> Inter flip. */
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-brm-th-lead {
   font-size: var(--sc2-size-micro);

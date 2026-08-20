@@ -531,6 +531,8 @@
 .sc-day-extras-band-count {
   font-weight: var(--wt-semibold);
   color: var(--text-muted);
+  /* PR-L: extras count column - tabular for the Mulish -> Inter flip. */
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-day-extras-band-chip {
   width: 22px; height: 22px;

@@ -45,6 +45,9 @@
   font-size: var(--sc2-size-rail-total);
   font-weight: var(--sc2-wt-display);
   color: var(--sc2-rail-text-strong);
+  /* PR-L: hero count changes as counts fire; tabular for stable
+     digit rhythm under the Mulish -> Inter flip. */
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-elr-hero-of {
   font-size: var(--sc2-size-h3);
