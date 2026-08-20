@@ -38,6 +38,7 @@ import {
   startOfMonth,
   addMonths,
 } from "./CalendarPopover";
+import { isCustomCellSelectable } from "@/lib/labor/customPickerGate";
 
 const PRESETS = [
   { key: "this_period", label: "This period" },
@@ -182,6 +183,14 @@ export function RangeMenu({
   }
   const visStart = customStaged ? customStaged.start : (customPending || parseISOLocal(startISO));
   const visEnd   = customStaged ? customStaged.end   : (customPending ? null   : parseISOLocal(endISO));
+
+  // PR-3a picker guard - see src/lib/labor/customPickerGate.js.
+  // Predicate is extracted as a pure function so the acceptance probe
+  // can assert every interesting case in Node without a jsdom render.
+  const customSelectable = useCallback(
+    (d) => isCustomCellSelectable(d, { customPending, customStaged }),
+    [customPending, customStaged],
+  );
   const customHint = customStaged
     ? `${fmtDate(isoOf(customStaged.start))} – ${fmtDate(isoOf(customStaged.end))} staged · nothing applies until you press Apply`
     : customPending
@@ -280,13 +289,16 @@ export function RangeMenu({
           </div>
           {customOpen && (
             <div className="kpi-rmenu-custom">
+              <div className="kpi-rmenu-custom-note" role="note">
+                Custom ranges use whole weeks. Day-level ranges are coming.
+              </div>
               <div className="kpi-rmenu-custom-nav">
                 <button type="button" className="kpi-cal-navbtn" onClick={() => setCustomAnchor(a => addMonths(a, -1))} aria-label="Previous month">‹</button>
                 <button type="button" className="kpi-cal-navbtn kpi-cal-navbtn-right" onClick={() => setCustomAnchor(a => addMonths(a, 1))} aria-label="Next month">›</button>
               </div>
               <div className="kpi-cal-months">
-                <MonthPanel monthAnchor={customAnchor} startD={visStart} endD={visEnd} onPick={customPick} />
-                <MonthPanel monthAnchor={addMonths(customAnchor, 1)} startD={visStart} endD={visEnd} onPick={customPick} />
+                <MonthPanel monthAnchor={customAnchor} startD={visStart} endD={visEnd} onPick={customPick} isSelectable={customSelectable} />
+                <MonthPanel monthAnchor={addMonths(customAnchor, 1)} startD={visStart} endD={visEnd} onPick={customPick} isSelectable={customSelectable} />
               </div>
               <div className="kpi-cal-foot">
                 <span className="kpi-cal-hint">{customHint}</span>
