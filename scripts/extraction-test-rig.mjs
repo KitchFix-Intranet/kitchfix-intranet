@@ -33,7 +33,11 @@ import { EXTRACTION_PROMPT } from "@/lib/invoiceActions";
 import { readFile } from "node:fs/promises";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const MODEL = "claude-sonnet-4-20250514";
+// 2026-08-20 model-string bump: was "claude-sonnet-4-20250514" (retired
+// 2026-06-15). Aligned with the production model used by
+// src/lib/invoiceActions.js. See docs/CONVENTIONS.md "Anthropic model
+// string" for the canonical constant + deprecation reference.
+const MODEL = "claude-sonnet-4-6";
 
 const HELDOUT = [
   { vendor: "Sysco",               invoiceNumber: "103353513" },
