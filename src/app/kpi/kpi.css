@@ -640,6 +640,17 @@
 }
 .kpi-cal-cell:hover:not(.kpi-cal-cell-out) { background: var(--kpi-accent-tint); }
 .kpi-cal-cell-out { color: var(--text-subtle); opacity: 0.4; }
+/* PR-3a picker guard - non-boundary cells render disabled, not
+   hidden. Slightly stronger dim than -out so the pattern of
+   week starts (Mondays) or week ends (Sundays) is visually
+   scannable while the picker is in each staging mode. */
+.kpi-cal-cell-off,
+.kpi-cal-cell:disabled {
+  color: var(--text-subtle); opacity: 0.32;
+  cursor: not-allowed;
+}
+.kpi-cal-cell-off:hover,
+.kpi-cal-cell:disabled:hover { background: transparent; }
 .kpi-cal-cell-in { background: var(--kpi-accent-tint); }
 .kpi-cal-cell-endpoint {
   background: var(--kpi-accent) !important;
@@ -1129,6 +1140,11 @@
 }
 .kpi-rmenu-custom-nav {
   display: flex; justify-content: space-between; margin-bottom: var(--kpi-sp-2);
+}
+/* PR-3a picker guard - honest disclosure of the temporary limit. */
+.kpi-rmenu-custom-note {
+  font-size: var(--kpi-t-meta); color: var(--text-muted);
+  padding: 0 var(--kpi-sp-1) var(--kpi-sp-2);
 }
 @media (max-width: 767px) {
   /* V6-24 - Range menu becomes a full-width sheet under 1024px, and
