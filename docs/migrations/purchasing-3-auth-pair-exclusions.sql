@@ -44,29 +44,48 @@
 ALTER TABLE purchasing_actuals
   ADD COLUMN IF NOT EXISTS reason TEXT;
 
--- Statement 2: constraint - if reason is non-null then excluded must be TRUE.
--- The converse (excluded -> reason non-null) is NOT enforced at the DB layer
--- because historical rows excluded before this migration carry NULL. The
--- derive back-fills reason on its next DELETE+INSERT pass.
+-- Statement 2: drop the constraint if it exists (idempotent). Separate from
+-- the ADD (Statement 4) so Studio applies each half independently; a failure
+-- on ADD does not leave the DROP entangled with the ADD in a single paste.
 ALTER TABLE purchasing_actuals
   DROP CONSTRAINT IF EXISTS purchasing_actuals_reason_shape;
 
+-- Statement 3: pre-flight check - COUNT rows that would violate the
+-- constraint about to be added in Statement 4. READ-ONLY. Expect 0.
+-- A violating row is one where reason is populated but the row is not
+-- marked excluded (reason IS NOT NULL AND excluded IS DISTINCT FROM TRUE).
+-- If this returns > 0, STOP - inspect the violating rows before Statement 4:
+--   SELECT id, source_line_id, reason, excluded
+--     FROM purchasing_actuals
+--    WHERE reason IS NOT NULL AND excluded IS DISTINCT FROM TRUE;
+SELECT COUNT(*) || ' violating rows (reason IS NOT NULL AND excluded IS DISTINCT FROM TRUE)'
+         AS preflight_result
+  FROM purchasing_actuals
+ WHERE reason IS NOT NULL AND excluded IS DISTINCT FROM TRUE;
+
+-- Statement 4: add the constraint - if reason is non-null then excluded
+-- must be TRUE. The converse (excluded -> reason non-null) is NOT enforced
+-- at the DB layer because historical rows excluded before this migration
+-- carry NULL. The derive back-fills reason on its next DELETE+INSERT pass.
 ALTER TABLE purchasing_actuals
   ADD CONSTRAINT purchasing_actuals_reason_shape
     CHECK (reason IS NULL OR excluded = TRUE);
 
--- Statement 3: reference table - parent transaction IDs seen in the current
+-- Statement 5: reference table - parent transaction IDs seen in the current
 -- unfiltered Rippling custom report. Seeded by scripts/purchasing_report_load.mjs.
+-- loaded_at (not first_seen_at) - unambiguous "when this ID was ingested
+-- from the report". first_seen_at is the column name behind the #735/INV-P8c
+-- txn_date defect on rippling_raw_spend_lines; do not reuse it here.
 CREATE TABLE IF NOT EXISTS rippling_report_seen_txns (
   parent_txn_id  TEXT PRIMARY KEY,
-  first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  loaded_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   source_note    TEXT
 );
 
--- Statement 4: REVOKE TRUNCATE on the new table (money-adjacent lookup).
+-- Statement 6: REVOKE TRUNCATE on the new table (money-adjacent lookup).
 REVOKE TRUNCATE ON rippling_report_seen_txns FROM anon, authenticated;
 
--- Statement 5: index for pair-detection lookup and workbook joins.
+-- Statement 7: index for pair-detection lookup and workbook joins.
 CREATE INDEX IF NOT EXISTS purchasing_actuals_reason_idx
   ON purchasing_actuals (reason)
   WHERE reason IS NOT NULL;
