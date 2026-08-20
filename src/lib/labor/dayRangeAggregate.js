@@ -24,6 +24,32 @@ export function isoRange(startISO, endISO) {
 }
 
 /**
+ * Choose the per-day label density from the MEASURED per-bar width.
+ * Thresholds measured against caption widths: "MM/DD · Mon" needs
+ * ~90px, "MM/DD" needs ~44px. Below 44px the caption is dropped
+ * entirely so a phone-width strip does not collide even at the
+ * 21-day span cap.
+ *
+ * A pure function so the probe can drive `containerWidthPx` directly
+ * and pin the boundary behaviour without a viewport it cannot resize
+ * in CI. Both boundaries are INCLUSIVE at the wider end (>= 90 ->
+ * full, >= 44 -> compact) so a bar exactly on the threshold gets
+ * the label form the width comfortably fits.
+ *
+ *   >= 90px per bar  -> 'full'     "MM/DD · Mon"
+ *   44..89.99px      -> 'compact'  "MM/DD"
+ *   < 44px           -> 'minimal'  value only, no date caption
+ */
+export function chooseLabelDensity(containerWidthPx, dayCount) {
+  if (!dayCount || dayCount <= 0) return "full";
+  if (!containerWidthPx || containerWidthPx <= 0) return "compact";
+  const perBar = containerWidthPx / dayCount;
+  if (perBar >= 90) return "full";
+  if (perBar >= 44) return "compact";
+  return "minimal";
+}
+
+/**
  * Aggregate worker-day rows (actuals_daily) into per-calendar-day
  * totals. Rows with a work_date outside `days` are recorded in
  * `droppedOutsideWindow`; the probe asserts this is always zero (the

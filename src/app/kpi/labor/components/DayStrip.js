@@ -12,8 +12,13 @@
 // The pro-rate label the server sends on budget_prorate is rendered
 // verbatim; the client never restates or reformats it (spec).
 
+import { useEffect, useRef, useState } from "react";
 import { fmt$, fmtDate } from "../lib/formatting.js";
-import { isoRange, aggregatePerDay } from "@/lib/labor/dayRangeAggregate";
+import {
+  isoRange,
+  aggregatePerDay,
+  chooseLabelDensity,
+} from "@/lib/labor/dayRangeAggregate";
 
 // Compact date "MM/DD". fmtDate returns "MM/DD/YY" which is fine at
 // wide bars but collides at narrow ones. Dropping the year is safe
@@ -30,7 +35,7 @@ function dowShort(iso) {
     .toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
 }
 
-function DayBar({ day, dailyTarget, scale, todayISO, dense }) {
+function DayBar({ day, dailyTarget, scale, todayISO, density }) {
   const amount = day.amountX10000 / 10000;
   const isToday = day.workDate === todayISO;
   const isFuture = day.workDate > todayISO;
@@ -41,13 +46,17 @@ function DayBar({ day, dailyTarget, scale, todayISO, dense }) {
     ? Math.max(0, Math.min(100, (dailyTarget / scale) * 90))
     : null;
 
-  // Caption density switch. At <= 10 days per strip the bar is wide
-  // enough for "MM/DD · Mon"; beyond that the DOW gets dropped so
-  // adjacent captions do not collide. Kevin found "07/21/26 · Tue"
-  // running into "07/22/26 · Wed" at 44px per bar on a 20-day range
-  // at 1920px. See probe P9 for the row-to-day collapse invariant.
+  // Caption form is driven by the MEASURED per-bar width in the
+  // parent's ResizeObserver, not by day count. See
+  // chooseLabelDensity in src/lib/labor/dayRangeAggregate.js for
+  // the boundaries (>= 90px full, >= 44px compact, < 44px minimal)
+  // and the probe P11 for the assertion.
   const dateStr = fmtDayLabel(day.workDate);
-  const caption = dense ? dateStr : `${dateStr} · ${dowShort(day.workDate)}`;
+  const caption = density === "full"
+    ? `${dateStr} · ${dowShort(day.workDate)}`
+    : density === "compact"
+      ? dateStr
+      : null;   // minimal: no date caption, value only
 
   return (
     <div className="kpi-wb">
@@ -63,25 +72,18 @@ function DayBar({ day, dailyTarget, scale, todayISO, dense }) {
       </div>
       <div className="kpi-wb-cap">
         <b className="kpi-wb-cap-value">{isFuture ? "—" : fmt$(amount)}</b>
-        <span className="kpi-wb-dates" title={day.workDate}>{caption}</span>
+        {caption != null && (
+          <span className="kpi-wb-dates" title={day.workDate}>{caption}</span>
+        )}
       </div>
     </div>
   );
 }
 
-// Caption density threshold. At or below this day count each bar has
-// room for "MM/DD · Mon"; above it the DOW is dropped so adjacent
-// captions do not collide at narrow bar widths. Chosen to keep the
-// current visual for the common single-partial-week (<=7 days) case
-// while covering the 8-10 day span. See DayBar for the render side
-// and the day-collapse probe for the invariant it guards.
-const DENSE_LABELS_ABOVE_N_DAYS = 10;
-
 export function DayStrip({ data, todayISO }) {
   const { filters, actuals_daily, actuals_range, budget_prorate, range } = data;
   const days = isoRange(filters.start, filters.end);
   const { perDay } = aggregatePerDay(actuals_daily, days);
-  const dense = days.length > DENSE_LABELS_ABOVE_N_DAYS;
   const budgetTotal = Number(budget_prorate?.total || 0);
   const spentTotal = (actuals_range || [])
     .filter(r => !r.salaried)
@@ -105,6 +107,29 @@ export function DayStrip({ data, todayISO }) {
     : variance > 0
       ? "Over pro-rated budget"
       : "Under pro-rated budget";
+
+  // Measure the plot strip and pick the caption density from the
+  // actual per-bar pixel width. Kevin's field measurement: at
+  // 1920px the plot is 1162px so N=10 gives 103px per bar (full);
+  // at 375px the plot is ~340px so N=10 gives 34px per bar
+  // (minimal). A count-based rule cannot distinguish those. The
+  // pure chooseLabelDensity(width, count) function is in
+  // dayRangeAggregate.js so the probe can drive both boundaries
+  // without a viewport it cannot resize in CI.
+  const stripRef = useRef(null);
+  const [density, setDensity] = useState(() => chooseLabelDensity(0, days.length));
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const update = () => {
+      const w = el.getBoundingClientRect().width;
+      setDensity(chooseLabelDensity(w, days.length));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [days.length]);
 
   return (
     <div className="kpi-day-range" role="region" aria-label="Custom range summary">
@@ -135,8 +160,10 @@ export function DayStrip({ data, todayISO }) {
       </div>
 
       <div
+        ref={stripRef}
         className="kpi-wbars kpi-day-range-strip"
         style={{ gridTemplateColumns: `repeat(${Math.max(1, days.length)}, minmax(0, 1fr))` }}
+        data-density={density}
       >
         {perDay.map(day => (
           <DayBar
@@ -145,7 +172,7 @@ export function DayStrip({ data, todayISO }) {
             dailyTarget={dailyTarget}
             scale={scale}
             todayISO={todayISO}
-            dense={dense}
+            density={density}
           />
         ))}
       </div>

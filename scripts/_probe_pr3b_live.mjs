@@ -38,7 +38,11 @@
 
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { isoRange, aggregatePerDay } from "../src/lib/labor/dayRangeAggregate.js";
+import {
+  isoRange,
+  aggregatePerDay,
+  chooseLabelDensity,
+} from "../src/lib/labor/dayRangeAggregate.js";
 
 const PORT = process.env.PROBE_PORT || "3100";
 const BASE = `http://localhost:${PORT}`;
@@ -268,6 +272,39 @@ try {
           fail(`span=${spanDays}, buckets=${perDay.length}, dropped=${droppedOutsideWindow}`);
         }
       }
+    }
+
+    // ── P11 chooseLabelDensity boundary tests ────────────────────────
+    // Kevin's field measurement drove the thresholds: at 1920px the
+    // plot is 1162px (N=10 -> 116.2px/bar, full) and at 375px the
+    // plot is ~340px (N=10 -> 34px/bar, minimal). A count-based rule
+    // cannot distinguish those. Pin both boundaries by driving the
+    // container width directly so the assertion does not depend on
+    // a viewport this probe cannot resize.
+    console.log("");
+    console.log("[P11] chooseLabelDensity flips at both measured boundaries under driven widths");
+    {
+      const cases = [
+        // width, N, expected
+        [1162, 10, "full"],       // Kevin's 1920px desktop: 116.2px/bar
+        [900,  10, "full"],       // exact 90px/bar boundary (inclusive)
+        [899,  10, "compact"],    // 89.9px/bar - just below the full threshold
+        [500,  10, "compact"],    // 50px/bar - clearly compact
+        [440,  10, "compact"],    // exact 44px/bar boundary (inclusive)
+        [439,  10, "minimal"],    // 43.9px/bar - just below the compact threshold
+        [340,  10, "minimal"],    // Kevin's 375px phone: 34px/bar
+        // 20-day span cases
+        [1800, 20, "full"],       // 90px/bar - full at 20 days
+        [1000, 20, "compact"],    // 50px/bar
+        [800,  20, "minimal"],    // 40px/bar - just below 44
+      ];
+      let boundaryFails = 0;
+      for (const [w, n, want] of cases) {
+        const got = chooseLabelDensity(w, n);
+        if (got === want) ok(`width=${w}px N=${n} -> ${got} (${(w/n).toFixed(1)}px/bar)`);
+        else { fail(`width=${w}px N=${n} -> ${got}, expected ${want}`); boundaryFails++; }
+      }
+      if (boundaryFails === 0) ok("all boundary transitions match measured thresholds (>= 90 full, >= 44 compact, < 44 minimal)");
     }
 
     // ── Sentinel: CIN - OH 06/29 weekly = $4,328.27 ─────────────────
