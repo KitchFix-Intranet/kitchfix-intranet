@@ -43,30 +43,53 @@ console.log("=".repeat(72));
 console.log("labor_actuals RPC coverage guard");
 console.log("=".repeat(72));
 
-const q = await supa.rpc("labor_actuals_rpc_coverage");
+// Prefer the multi-subject labor_actuals_coverage (v42-2). Fall
+// back to labor_actuals_rpc_coverage (v42-1b) when v42-2 has not
+// yet been applied - keeps the probe useful mid-apply.
+let q = await supa.rpc("labor_actuals_coverage");
+let usingLegacy = false;
+if (q.error && /does not exist/i.test(q.error.message)) {
+  usingLegacy = true;
+  q = await supa.rpc("labor_actuals_rpc_coverage");
+  console.log("");
+  console.log("  NOTE  falling back to v42-1b coverage function (RPC only). Apply v42-2-view-rebind.sql to also check the view.");
+}
 if (q.error) {
   fail(`coverage function error: ${q.error.message}`);
   console.log("");
-  console.log("If the function does not exist, apply v42-1b-rpc-rebind.sql first.");
+  console.log("If neither function exists, apply v42-1b + v42-2 first.");
 } else {
-  const row = Array.isArray(q.data) ? q.data[0] : q.data;
-  if (!row) {
+  const rows = Array.isArray(q.data) ? q.data : [q.data];
+  if (!rows.length) {
     fail("coverage function returned no rows");
-  } else {
+  } else if (usingLegacy) {
+    // v42-1b single-row shape.
+    const row = rows[0];
     console.log("");
     console.log(`  writable columns on labor_actuals: ${row.actual_col_count}`);
     console.log(`  columns named in RPC INSERT:       ${row.insert_col_count}`);
     const missing = row.missing_columns || [];
     const extra   = row.extra_columns || [];
-    if (missing.length > 0) {
-      fail(`RPC drops ${missing.length} writable column(s): ${missing.join(", ")}`);
-      console.log("      Fix: extend swap_labor_actuals_for_account's INSERT list + SELECT to name each column. If a column truly should not be written from the payload (a serial PK / trigger column / generated column), mark it is_identity or is_generated at the schema level so the guard skips it.");
-    }
-    if (extra.length > 0) {
-      console.log(`  NOTE  ${extra.length} name(s) in the RPC INSERT list are not columns on labor_actuals: ${extra.join(", ")} (typo or a dropped column)`);
-    }
-    if (row.pass && missing.length === 0) {
-      ok(`RPC INSERT list covers every writable labor_actuals column (${row.actual_col_count} total)`);
+    if (missing.length > 0) fail(`RPC drops ${missing.length} writable column(s): ${missing.join(", ")}`);
+    if (extra.length > 0)   console.log(`  NOTE  RPC INSERT names not on labor_actuals: ${extra.join(", ")}`);
+    if (row.pass && missing.length === 0) ok(`RPC INSERT covers every writable column (${row.actual_col_count})`);
+  } else {
+    // v42-2 multi-subject shape: one row per subject.
+    for (const row of rows) {
+      console.log("");
+      const label = row.subject === "rpc_insert" ? "swap RPC INSERT list" : "labor_actuals_latest view SELECT";
+      console.log(`  [${row.subject}] ${label}`);
+      console.log(`    writable columns on labor_actuals: ${row.actual_col_count}`);
+      console.log(`    columns named:                     ${row.named_col_count}`);
+      const missing = row.missing_columns || [];
+      const extra   = row.extra_columns || [];
+      if (missing.length > 0) {
+        fail(`[${row.subject}] drops ${missing.length} writable column(s): ${missing.join(", ")}`);
+        if (row.subject === "rpc_insert") console.log("      Fix: extend swap_labor_actuals_for_account's INSERT list + SELECT to name each column.");
+        else console.log("      Fix: DROP + CREATE labor_actuals_latest with the missing column(s) in the SELECT projection.");
+      }
+      if (extra.length > 0) console.log(`    NOTE  ${extra.length} name(s) not on labor_actuals: ${extra.join(", ")}`);
+      if (row.pass && missing.length === 0) ok(`[${row.subject}] covers every writable column (${row.actual_col_count})`);
     }
   }
 }

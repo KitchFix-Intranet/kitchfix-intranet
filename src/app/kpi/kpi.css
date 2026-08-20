@@ -2077,6 +2077,19 @@
   display: inline-block;
 }
 .kpi-wh-tgt b { font-weight: 800; color: var(--n-900); font-variant-numeric: var(--num-tabular); }
+/* V42 REVISED (C2 legend swatch) - small block with the same hatched
+   gradient as the bar cap, so the reader sees the pattern before
+   reading the label. Reuses kpi-wb-bar-prog's gradient inline. */
+.kpi-wh-tgt-cap {
+  color: var(--text-muted, #5C769A);
+  font-weight: 600;
+}
+.kpi-wh-cap-swatch {
+  display: inline-block;
+  width: var(--kpi-sp-3); height: var(--kpi-sp-2);
+  border-radius: 2px;
+  background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
+}
 
 /* Tier A week columns (V8-12 + V29-7). Per-week target line: amber
    ORIGINAL on closed/in-progress weeks, light-blue ADJUSTED on
@@ -2122,6 +2135,17 @@
   pointer-events: none;
 }
 .kpi-wb-target-blue { border-top-color: var(--kpi-blue-500); }
+/* V42 REVISED (C2) - hatched cap. Stacks on top of the solid bar
+   via absolute position + `bottom` in inline style. Reuses the
+   in-progress hatch (kpi-wb-bar-prog above) so the pattern + colour
+   are unchanged - only the placement is new. Rounded top only,
+   flat bottom so it visually merges with the solid segment beneath.
+   Owner ruling 2026-08-20: no new hatch pattern or colour token. */
+.kpi-wb-cap-est {
+  position: absolute; left: 0; right: 0;
+  border-radius: 4px 4px 0 0;
+  pointer-events: auto;   /* keep the title tooltip reachable */
+}
 .kpi-wb-cap {
   margin-top: var(--kpi-sp-3); text-align: center; line-height: 1.35;
 }
@@ -2900,6 +2924,17 @@
 .kpi-flag-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
 .kpi-flag-bad  { background: var(--red-100); color: var(--red-700); border-color: #F5C6C6; }
 .kpi-flag-mute { background: var(--n-100); color: var(--n-500); border-color: var(--n-200); }
+/* V42 REVISED (State 3a hygiene) - softer amber for a closed-week
+   `awaiting approval` flag. Same amber family as kpi-flag-warn so
+   the reader knows it is the same class of concern, but visibly
+   lighter so it does not compete with State 2 (anomaly) or State 3b
+   (money) at the same read level. Owner ruling 2026-08-20: state a
+   condition, do not verdict the operator. */
+.kpi-flag-warn.kpi-flag-warn-soft {
+  background: var(--amber-50, #FEF3E2);
+  color: #92580A;
+  border-color: #F7E5C4;
+}
 
 /* V9-16 OT tag on a row containing OT. */
 .kpi-tbl-otflag {

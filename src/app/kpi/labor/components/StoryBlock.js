@@ -10,6 +10,7 @@
 
 import { useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
+import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 
 // V8-7 verdict label + variant. One source of truth for the pill in
 // the spend card header (was in the retired sentence card's helper).
@@ -182,7 +183,7 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary }) {
 //   not-started          -> LIGHT BLUE adjusted target (weekly allowance)
 // V29-14 - a zero-spend week renders a baseline rule only, with NO
 // floating target line, so it does not read as broken.
-function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
+function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   const isNotStarted = w.state === "not_started";
   const isInProgress = w.state === "in_progress";
   const isClosed = w.state === "closed";
@@ -196,6 +197,25 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
     : isClosed
       ? `kpi-wb-bar ${w.delta_sign === "over" ? "kpi-wb-bar-over" : "kpi-wb-bar-under"}`
       : "";
+  // V42 REVISED (C2) - hatched cap. Estimated dollars for hours with
+  // no covering pay-segment yet - "this bar will grow when payroll
+  // processes those hours." Signal is unpriced_hrs (aggregate of
+  // hours_without_dollars), NOT draft_hours: priced drafts are
+  // already in the solid bar, so capping by draft_hours would
+  // double-count. Owner correction 2026-08-20 after TXR - AZ 08/10
+  // measurement (173.93 draft hrs, 0.00 unpriced, $3,430.45 priced).
+  //
+  // Cap renders on any week where unpriced_hrs > 0, closed or in
+  // progress. Reuses existing kpi-wb-bar-prog (45deg amber gradient) -
+  // no new pattern, no new colour token. Clamp: total (bar + cap)
+  // cannot exceed plot; cap gets at least 0.5% so it never scales
+  // to zero when it is real.
+  const capDollars = estimateUnpricedDollars(w.unpriced_hrs, rate);
+  const capPctRaw = capDollars != null ? (capDollars / scale) * 90 : 0;
+  const capHeadroom = Math.max(0, 90 - barPct);
+  const capPct = capDollars != null
+    ? Math.max(0.5, Math.min(capHeadroom, capPctRaw))
+    : 0;
   // V29-7 per-week target line. Amber for closed/in-progress at the
   // week's ORIGINAL weekly target; light blue for not-started at the
   // ADJUSTED target (weekly allowance). Omitted for zero-spend weeks
@@ -208,19 +228,25 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
     : null;
   const targetCls = isNotStarted ? "kpi-wb-target kpi-wb-target-blue" : "kpi-wb-target";
 
-  const captionValue = isInProgress && w.unapproved_flag ? `≥ ${fmt$(value)}` : fmt$(value);
+  // V42 REVISED - `≥` prefix on the caption fires when the bar will
+  // grow (unpriced money signal), not when there are drafts.
+  const hasUnpriced = (w.unpriced_hrs || 0) > 0.004;
+  const captionValue = hasUnpriced ? `≥ ${fmt$(value)}` : fmt$(value);
   let statusLine;
   if (isClosed && w.delta_vs_original != null) {
     const arrow = w.delta_sign === "under" ? "▼" : w.delta_sign === "over" ? "▲" : "•";
     const cls = w.delta_sign === "under" ? "kpi-wb-d-good" : w.delta_sign === "over" ? "kpi-wb-d-bad" : "kpi-wb-d-mute";
     statusLine = <span className={`kpi-wb-d ${cls}`}>{arrow} {fmt$(Math.abs(w.delta_vs_original))} {w.delta_sign}</span>;
   } else if (isInProgress) {
-    // V21-10 status line uses the allowance. V29-12 fix: explicit space
-    // token between the money and the "allowance" word so the render
-    // never elides it.
+    // V42 REVISED (State 1 informational) - current week with drafts
+    // reads "running · N hrs not yet approved" at neutral tone. The
+    // hatched cap above already carries the money signal visually;
+    // this line is the operator's approval prompt. Falls through to
+    // the existing allowance line when there are no drafts.
     const allow = w.weekly_allowance ?? weeklyAllowance;
-    if (w.unapproved_flag && w.unapproved_hours > 0) {
-      statusLine = <span className="kpi-wb-warn">⚠ {fmtHrs(w.unapproved_hours)} hrs awaiting approval</span>;
+    const draftHrs = Number(w.draft_hours || 0);
+    if (draftHrs > 0.004) {
+      statusLine = <span className="kpi-wb-d kpi-wb-d-mute">running · <b>{fmtHrs(draftHrs)}</b>{" "}hrs not yet approved</span>;
     } else if (allow != null) {
       statusLine = <span className="kpi-wb-d kpi-wb-d-mute">running · <b>{fmt$(allow)}</b>{" "}allowance</span>;
     } else {
@@ -241,6 +267,18 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
         ) : (
           <div className={barCls} style={{ height: `${Math.max(barPct, 2)}%` }} />
         )}
+        {/* V42 REVISED - hatched cap. Sits ON TOP of the solid bar,
+            visually "stacked" via `bottom` position. Reuses the
+            existing in-progress hatch (kpi-wb-bar-prog) so no new
+            pattern or colour token. */}
+        {capPct > 0 && (
+          <div
+            className="kpi-wb-bar kpi-wb-bar-prog kpi-wb-cap-est"
+            style={{ height: `${capPct}%`, bottom: `${barPct}%` }}
+            title={capDollars != null ? `Estimated ~${fmt$(capDollars)} pending pay data` : undefined}
+            aria-label="pay data pending, estimated"
+          />
+        )}
       </div>
       <div className="kpi-wb-cap">
         <b className={captionCls}>{captionValue}</b>
@@ -251,12 +289,16 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale }) {
   );
 }
 
-function TierAStrip({ board }) {
+function TierAStrip({ board, salary }) {
   const weeks = board?.weeks || [];
   const weeklyOriginal = board?.weekly_original_target;
   const weeklyAllowance = board?.weekly_allowance;
+  // V42 REVISED - rate for the hatched cap. Same source the Payroll
+  // Data card reads (SignalCards.js) so bar + card cannot disagree.
+  const rate = salary?.blended_rate_hourly ?? board?.avg_rate ?? null;
   // Shared scale across the strip so both target lines and every bar
-  // reference the same plot band.
+  // reference the same plot band. V42: include the hatched cap in
+  // the scale so a large cap does not clip the bar it sits on top of.
   const scale = (() => {
     let max = 1;
     for (const w of weeks) {
@@ -266,7 +308,8 @@ function TierAStrip({ board }) {
       const t = w.state === "not_started"
         ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
         : (w.original_target ?? weeklyOriginal ?? 0);
-      const local = Math.max(v, t || 0);
+      const cap = estimateUnpricedDollars(w.unpriced_hrs, rate) || 0;
+      const local = Math.max(v + cap, t || 0);
       if (local > max) max = local;
     }
     if (weeklyOriginal) max = Math.max(max, weeklyOriginal);
@@ -286,6 +329,7 @@ function TierAStrip({ board }) {
           weeklyOriginal={weeklyOriginal}
           weeklyAllowance={weeklyAllowance}
           scale={scale}
+          rate={rate}
         />
       ))}
     </div>
@@ -537,9 +581,19 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
           {salary && showOriginalLabel && (
             <span className="kpi-wh-tgt-basis">· hourly + salary</span>
           )}
+          {/* V42 REVISED (C2 legend) - name the hatched cap that
+              stacks on top of any bar with unpriced hours. Standing
+              rule: every tracker screen carries a visible state key;
+              never ship an unexplained pattern. */}
+          {tier === "A" && (
+            <span className="kpi-wh-tgt kpi-wh-tgt-cap">
+              <span className="kpi-wh-cap-swatch" aria-hidden="true" />
+              hatched = pay data pending, estimated
+            </span>
+          )}
         </div>
 
-        {tier === "A" && <TierAStrip board={board} />}
+        {tier === "A" && <TierAStrip board={board} salary={salary} />}
         {tier === "B" && <TierBStrip board={board} />}
         {tier === "C" && <TierCStrip board={board} budgetPeriods={budgetPeriods} todayISO={todayISO} />}
       </div>

@@ -201,9 +201,56 @@ function worstSeverity(states) {
 
 function flagForSeverity(s) {
   if (s === "unknown") return { label: "not covered", cls: "kpi-flag-warn" };
-  if (s === "partial" || s === "hours_only") return { label: "unapproved", cls: "kpi-flag-warn" };
   if (s === "no_labor") return { label: "no labor", cls: "kpi-flag-mute" };
+  // V42 REVISED - the old `partial | hours_only -> unapproved` branch
+  // moved off coverage_state. See flagForV42State below; the unapproved
+  // signal is now driven by draft_entry_count + anomaly counts +
+  // week state, per owner ruling 2026-08-20.
   return null;
+}
+
+// V42 REVISED (C3) - four-state week flag driven by status + money
+// signals, NOT coverage_state. Order of precedence:
+//   State 2 actionable  - any anomaly > 0 (any week)
+//   State 3b money      - closed week AND unpriced_hrs > 0
+//   State 3a hygiene    - closed week AND drafts, dollars complete
+//   State 1 info        - no flag (bar carries the visual only)
+// Copy per owner ruling: `awaiting approval` (not `not approved`) -
+// states a condition, not a verdict on the operator. Popover on hover
+// carries the reassurance for 3a: dollars are complete, click missing.
+function flagForV42State(w, isClosed) {
+  const anomalies = Number(w.anomaly_total || 0);
+  const unpriced  = Number(w.unpriced_hrs || 0);
+  const drafts    = Number(w.draft_entry_count || 0);
+  if (anomalies > 0) {
+    const detail = [];
+    const nc = Number(w.anomaly_no_clockout || 0);
+    const u1 = Number(w.anomaly_under_1h    || 0);
+    const o16 = Number(w.anomaly_over_16h   || 0);
+    if (nc  > 0) detail.push(`${nc} never clocked out`);
+    if (u1  > 0) detail.push(`${u1} under 1h`);
+    if (o16 > 0) detail.push(`${o16} over 16h`);
+    return {
+      label: `${anomalies} need${anomalies === 1 ? "s" : ""} attention - ${detail.join(", ")}`,
+      cls: "kpi-flag-warn",
+      tooltip: "These time entries can't be approved as-is - a human has to fix them in Rippling.",
+    };
+  }
+  if (isClosed && unpriced > 0.004) {
+    return {
+      label: `closed week understated - ${unpriced.toFixed(1)} hrs missing pay data`,
+      cls: "kpi-flag-bad",
+      tooltip: "This closed week's dollar total is incomplete. Pay-segments for the missing hours have not landed yet.",
+    };
+  }
+  if (isClosed && drafts > 0) {
+    return {
+      label: "closed week awaiting approval",
+      cls: "kpi-flag-warn kpi-flag-warn-soft",
+      tooltip: "Dollars for this week are complete. The entries have not been formally approved in Rippling.",
+    };
+  }
+  return null;   // State 1: bar carries the informational signal
 }
 
 function weekSeverity(week) {
@@ -246,8 +293,22 @@ function OTTag({ ot }) {
 }
 
 // V9-2 exception rendering: flag chip beside the row label. Rendered
-// for week/period rows whose worst coverage is not complete.
-function ExceptionChip({ severity }) {
+// for week/period rows.
+//
+// V42 REVISED - checks the V42 state model FIRST (draft + anomaly
+// signals off deriveActuals), falls back to the coverage-state flag
+// for the missing/failed cases coverage_state legitimately owns.
+// The `unapproved` label that used to fire on partial/hours_only is
+// gone; V42's three closed-week flavours + State 2 anomaly flag
+// replace it with signal-appropriate copy.
+function ExceptionChip({ severity, week, todayISO }) {
+  if (week) {
+    const isClosed = todayISO != null && week.week_end < todayISO;
+    const v42 = flagForV42State(week, isClosed);
+    if (v42) {
+      return <span className={`kpi-tbl-flag ${v42.cls}`} title={v42.tooltip}>⚠ {v42.label}</span>;
+    }
+  }
   const f = flagForSeverity(severity);
   if (!f) return null;
   return <span className={`kpi-tbl-flag ${f.cls}`}>⚠ {f.label}</span>;
@@ -825,7 +886,7 @@ function FragmentRows({
                   <span className="kpi-tbl-chev">{weekOpen ? "⌄" : "›"}</span>
                   {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
                   <OTTag ot={w.hours_overtime} />
-                  {mode === "single" && <ExceptionChip severity={sev} />}
+                  {mode === "single" && <ExceptionChip severity={sev} week={w} todayISO={todayISO} />}
                   {mode === "aggregate" && exceptionMemberCount > 0 && (
                     <span className="kpi-tbl-flag kpi-flag-warn">⚠ {exceptionMemberCount} site{exceptionMemberCount === 1 ? "" : "s"} unpriced</span>
                   )}
