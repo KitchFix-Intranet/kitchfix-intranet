@@ -30,10 +30,9 @@
 }
 
 .sc-toast {
-  /* Opt back to the UI font (Inter) - matches the .sc-v2-entry
-     workaround for the .oh-app Mulish inheritance chain. Kevin
-     ruling 2026-08-17. GOTCHAS covers the standing drift. */
-  font-family: var(--sc2-font-ui);
+  /* PR-L (2026-08-20): opt-back to Inter removed. .oh-app now
+     inherits Inter directly (was Mulish), so the workaround is
+     dead code. */
   color: var(--n-0);
   background: var(--sc2-toast-bg);
   border-radius: var(--sc2-radius-container);
