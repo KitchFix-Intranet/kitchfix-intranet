@@ -90,6 +90,16 @@ CREATE INDEX IF NOT EXISTS purchasing_actuals_reason_idx
   ON purchasing_actuals (reason)
   WHERE reason IS NOT NULL;
 
+-- Statement 8: grant service_role read + write on the reference table.
+-- The service_role key is what the loader (scripts/purchasing_report_load.mjs)
+-- and derive (scripts/purchasing_rippling_sync.mjs) authenticate as. Without
+-- this grant the loader hit 403 permission denied post-apply, despite V1-V5
+-- passing on structure. Any migration that creates a table must include
+-- both the grant and a verify (see V6) that proves it.
+--
+-- parent_txn_id is TEXT PK (not serial), so no sequence grant needed.
+GRANT SELECT, INSERT ON rippling_report_seen_txns TO service_role;
+
 -- ─── VERIFY BLOCK - READ-ONLY (no BEGIN/UPDATE/ROLLBACK) ─────────────────
 -- Run these in Studio after the DDL lands. Every query is a SELECT.
 --
@@ -119,6 +129,16 @@ CREATE INDEX IF NOT EXISTS purchasing_actuals_reason_idx
 --     SELECT indexname FROM pg_indexes
 --      WHERE tablename = 'purchasing_actuals'
 --        AND indexname = 'purchasing_actuals_reason_idx';
+--
+-- V6: confirm service_role holds SELECT and INSERT on the new table. Expect
+-- both privileges present. If either row is missing after Statement 8, the
+-- ACL did not take and the loader will 403 again.
+-- SELECT grantee, privilege_type
+--   FROM information_schema.role_table_grants
+--  WHERE table_name = 'rippling_report_seen_txns'
+--    AND grantee = 'service_role'
+--    AND privilege_type IN ('SELECT', 'INSERT')
+--  ORDER BY privilege_type;
 --
 -- ─── OWNER ATTESTATION ───────────────────────────────────────────────────
 -- applied in Studio: YES
