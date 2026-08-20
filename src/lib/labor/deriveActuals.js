@@ -352,8 +352,21 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
         line_code: lineCode,
         week_source: weekInfo.week_source,
         hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
-        dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
-        amount: 0,
+        // V-weekly-integer-cent 2026-08-20 - dollars accumulated as
+        // integers in 4dp precision (x10000) so the final round-to-2dp
+        // is deterministic. Prior FP accumulator (`dollars_regular +=
+        // amt` with `Math.round(x*100)/100` at write) landed on either
+        // side of a .5-cent midpoint depending on segment iteration
+        // order (918.225 raw -> 918.2249999...FP -> $918.22 stored,
+        // vs proper round -> $918.23). Daily grain PR-1 landed at 4dp
+        // integer arithmetic; weekly now matches so D1 reconciles to
+        // zero without a classifier. Owner ruling 2026-08-20 after
+        // measuring 8 midpoint rows / $0.08 aggregate drift.
+        dollarsRegularX10000:      0,
+        dollarsOvertimeX10000:     0,
+        dollarsDoubleTimeX10000:   0,
+        dollarsPremiumOtherX10000: 0,
+        amountX10000:              0,
         hours_without_dollars: 0,
         segment_count: 0,
         entry_count: 0,
@@ -383,27 +396,31 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
 
     const hrs = Number(p.segment_duration_hours || 0);
     const amt = Number(p.estimated_amount || 0);
-    bucket.amount += amt;
+    // V-weekly-integer-cent - accumulate dollars as integer x10000
+    // (4dp precision preserved from raw). Hours stay FP; the .5-cent
+    // midpoint class is dollars-only per the D1 finding.
+    const amtInt = Math.round(amt * 10000);
+    bucket.amountX10000 += amtInt;
     bucket.segment_count++;
 
     const etName = p.merged_earning_type_name || null;
     const mapEntry = etName ? earningMap.get(etName) : null;
     if (!mapEntry) {
       bucket.hours_premium_other += hrs;
-      bucket.dollars_premium_other += amt;
+      bucket.dollarsPremiumOtherX10000 += amtInt;
       if (etName) bumpUnmapped(etName, seg);
     } else if (mapEntry.bucket === "regular") {
       bucket.hours_regular += hrs;
-      bucket.dollars_regular += amt;
+      bucket.dollarsRegularX10000 += amtInt;
     } else if (mapEntry.bucket === "overtime") {
       bucket.hours_overtime += hrs;
-      bucket.dollars_overtime += amt;
+      bucket.dollarsOvertimeX10000 += amtInt;
     } else if (mapEntry.bucket === "double_time") {
       bucket.hours_double_time += hrs;
-      bucket.dollars_double_time += amt;
+      bucket.dollarsDoubleTimeX10000 += amtInt;
     } else {
       bucket.hours_premium_other += hrs;
-      bucket.dollars_premium_other += amt;
+      bucket.dollarsPremiumOtherX10000 += amtInt;
     }
   }
 
@@ -468,6 +485,12 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
 
     // Round to 2 decimals
     const round2 = x => Math.round(x * 100) / 100;
+    // V-weekly-integer-cent - dollars via integer-cent round from the
+    // 4dp accumulator. int4dp / 100 is cent-precision; Math.round then
+    // rounds .005 cases up deterministically (918.2250 -> 91823 cents
+    // -> $918.23, not the FP-drifted $918.22). Hours stay round2 -
+    // no drift found there.
+    const round2FromX10000 = i => Math.round(i / 100) / 100;
     const row = {
       account_key: b.account_key,
       worker_id: b.worker_id,
@@ -477,11 +500,11 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
       hours_overtime: round2(b.hours_overtime),
       hours_double_time: round2(b.hours_double_time),
       hours_premium_other: round2(b.hours_premium_other),
-      dollars_regular: round2(b.dollars_regular),
-      dollars_overtime: round2(b.dollars_overtime),
-      dollars_double_time: round2(b.dollars_double_time),
-      dollars_premium_other: round2(b.dollars_premium_other),
-      amount: round2(b.amount),
+      dollars_regular:       round2FromX10000(b.dollarsRegularX10000),
+      dollars_overtime:      round2FromX10000(b.dollarsOvertimeX10000),
+      dollars_double_time:   round2FromX10000(b.dollarsDoubleTimeX10000),
+      dollars_premium_other: round2FromX10000(b.dollarsPremiumOtherX10000),
+      amount:                round2FromX10000(b.amountX10000),
       hours_without_dollars: round2(b.hours_without_dollars),
       week_start: b.week_start,
       week_end: b.week_end,
