@@ -640,17 +640,6 @@
 }
 .kpi-cal-cell:hover:not(.kpi-cal-cell-out) { background: var(--kpi-accent-tint); }
 .kpi-cal-cell-out { color: var(--text-subtle); opacity: 0.4; }
-/* PR-3a picker guard - non-boundary cells render disabled, not
-   hidden. Slightly stronger dim than -out so the pattern of
-   week starts (Mondays) or week ends (Sundays) is visually
-   scannable while the picker is in each staging mode. */
-.kpi-cal-cell-off,
-.kpi-cal-cell:disabled {
-  color: var(--text-subtle); opacity: 0.32;
-  cursor: not-allowed;
-}
-.kpi-cal-cell-off:hover,
-.kpi-cal-cell:disabled:hover { background: transparent; }
 .kpi-cal-cell-in { background: var(--kpi-accent-tint); }
 .kpi-cal-cell-endpoint {
   background: var(--kpi-accent) !important;
@@ -1140,11 +1129,6 @@
 }
 .kpi-rmenu-custom-nav {
   display: flex; justify-content: space-between; margin-bottom: var(--kpi-sp-2);
-}
-/* PR-3a picker guard - honest disclosure of the temporary limit. */
-.kpi-rmenu-custom-note {
-  font-size: var(--kpi-t-meta); color: var(--text-muted);
-  padding: 0 var(--kpi-sp-1) var(--kpi-sp-2);
 }
 @media (max-width: 767px) {
   /* V6-24 - Range menu becomes a full-width sheet under 1024px, and
@@ -3092,3 +3076,62 @@
 
 /* V9-19 help popover - reuses .kpi-help-pop from the board */
 .kpi-help-pop-table { width: 350px; }
+
+/* ── PR-3b day-range subtree ─────────────────────────────────────
+   Rendered when the labor route returns source='daily'. Reuses the
+   existing week-strip bar grammar (.kpi-wbars / .kpi-wb / .kpi-wb-*)
+   so the day strip inherits scale, target-line style, in-progress
+   hatch, and V30 spacing tokens byte-for-byte from the weekly board.
+   Only the range frame + two-card summary need their own tokens. */
+.kpi-day-range {
+  display: flex; flex-direction: column;
+  gap: var(--kpi-sp-4);
+  padding: var(--kpi-sp-5) var(--kpi-sp-6);
+  background: var(--n-50);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--rad-6);
+}
+.kpi-day-range-hdr {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: var(--kpi-sp-4);
+}
+.kpi-day-range-title {
+  display: flex; flex-direction: column; gap: var(--kpi-sp-1);
+}
+.kpi-day-range-eyebrow {
+  font-size: var(--kpi-t-meta); color: var(--text-muted);
+  font-weight: 600; letter-spacing: 0.06em;
+}
+.kpi-day-range-dates {
+  font-size: var(--kpi-t-medium); color: var(--text-strong);
+  font-weight: 700;
+}
+.kpi-day-range-cards {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kpi-sp-4);
+}
+.kpi-day-range-card {
+  padding: var(--kpi-sp-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--rad-4);
+  display: flex; flex-direction: column; gap: var(--kpi-sp-1);
+}
+.kpi-day-range-card-eyebrow {
+  font-size: var(--kpi-t-meta); color: var(--text-muted);
+  font-weight: 600; letter-spacing: 0.06em;
+}
+.kpi-day-range-card-figure {
+  font-size: var(--kpi-t-hero); color: var(--text-strong);
+  font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.kpi-day-range-card-sub {
+  font-size: var(--kpi-t-body); color: var(--text-muted);
+}
+.kpi-day-range-card-sub.kpi-spend-cell-over,
+.kpi-day-range-card-sub.kpi-spend-cell-under { padding: 0; }
+.kpi-day-range-strip {
+  min-height: calc(180px * var(--kf-scale));
+}
+@media (max-width: 767px) {
+  .kpi-day-range-cards { grid-template-columns: 1fr; }
+}

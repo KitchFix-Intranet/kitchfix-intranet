@@ -27,9 +27,11 @@ import { SignalCards } from "./components/SignalCards";
 import { ComparisonStrip } from "./components/ComparisonStrip";
 import { DetailsStrip } from "./components/DetailsStrip";
 import { WeekTable } from "./components/WeekTable";
+import { DayStrip } from "./components/DayStrip";
 import {
   StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
   StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired, LockedPanel,
+  RefusalPanel,
   errorCode,
 } from "./components/StateBoxes";
 import { ToastHost } from "./components/Toast";
@@ -807,6 +809,21 @@ export default function KpiLaborPage() {
         <StateLoading />
       ) : loadState === "ok" && data.account_state === "salaried_only" ? (
         <StateSalaried account={account} message={data.account_state_message} />
+      ) : loadState === "ok" && data?.refused === true ? (
+        /* PR-3b - pre-floor partial-week range. Server ships the
+           owner-approved message on data.message; render it verbatim.
+           Replaces the misroute to StateEmptyFirstRun ("pipeline
+           never derived") that dropped the refusal message on the
+           floor when the picker guard came off. */
+        <RefusalPanel message={data.message} />
+      ) : loadState === "ok" && data?.source === "daily" ? (
+        /* PR-3b - partial-week custom range routed to the daily
+           branch. Renders the day strip subtree; the weekly board
+           block above stayed unmounted because it gates on
+           `data.actuals?.length` and daily responses ship actuals_range
+           instead. Projection / pace / projected close / weekly
+           allowance are ABSENT in this subtree, not zeroed. */
+        <DayStrip data={data} todayISO={today} />
       ) : loadState === "loading" && !hasEverRenderedRef.current ? (
         /* V25-16 - COLD skeleton mirrors the real layout so the shape
            of what is coming is promised: spend card + four signal

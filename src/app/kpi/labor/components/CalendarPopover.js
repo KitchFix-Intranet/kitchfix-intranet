@@ -43,16 +43,11 @@ function monthGrid(monthAnchor) {
   return cells;
 }
 
-// isSelectable: optional (date) => boolean. When provided, cells that
-// return false render disabled (with `kpi-cal-cell-off`) rather than
-// hidden - see PR-3a picker guard in RangeMenu.js. Default keeps every
-// date selectable (back-compat for CalendarPopover).
-export function MonthPanel({ monthAnchor, startD, endD, onPick, isSelectable }) {
+export function MonthPanel({ monthAnchor, startD, endD, onPick }) {
   const cells = useMemo(() => monthGrid(monthAnchor), [monthAnchor]);
   const label = monthAnchor.toLocaleString("en-US", { month: "long", year: "numeric" });
   const inRange = (d) => startD && endD && d >= startD && d <= endD;
   const isEndpoint = (d) => (startD && d.getTime() === startD.getTime()) || (endD && d.getTime() === endD.getTime());
-  const cellSelectable = typeof isSelectable === "function" ? isSelectable : () => true;
   return (
     <div className="kpi-cal-month" role="group" aria-label={label}>
       <div className="kpi-cal-monthlabel">{label}</div>
@@ -63,13 +58,11 @@ export function MonthPanel({ monthAnchor, startD, endD, onPick, isSelectable }) 
       </div>
       <div className="kpi-cal-grid">
         {cells.map((c, i) => {
-          const selectable = cellSelectable(c.date);
           const cls = [
             "kpi-cal-cell",
             !c.inMonth ? "kpi-cal-cell-out" : "",
             inRange(c.date) ? "kpi-cal-cell-in" : "",
             isEndpoint(c.date) ? "kpi-cal-cell-endpoint" : "",
-            !selectable ? "kpi-cal-cell-off" : "",
           ].filter(Boolean).join(" ");
           return (
             <button
@@ -79,7 +72,6 @@ export function MonthPanel({ monthAnchor, startD, endD, onPick, isSelectable }) 
               onClick={() => onPick(c.date)}
               aria-label={c.date.toLocaleDateString()}
               aria-pressed={isEndpoint(c.date) ? "true" : "false"}
-              disabled={!selectable}
             >
               {c.date.getDate()}
             </button>
