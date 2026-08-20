@@ -105,6 +105,43 @@ export function assertNoSupersededSplitParents(derivedRows, rawRowsByRippling) {
 }
 
 /**
+ * Ruling 4 pre-rule assert (2026-08-20, added post-#735-rerun). A date-
+ * bound rule (auth-pair collapse with 5-day window) running on a candidate
+ * set that carries a single distinct txn_date is meaningless - the window
+ * either matches everything (if the single date is used) or nothing
+ * (never). That IS the failure mode #740's first run had: every row
+ * carried `2026-08-19` because #735's fix landed but the sync had not
+ * been re-run, so Ruling 4 collapsed 2,767 parents on same-date pairs
+ * across the entire fiscal year (a "same merchant, same amount, anywhere"
+ * rule, not the 5-day-window rule).
+ *
+ * Fires BEFORE Ruling 4's pair sweep, on the same candidate slice the
+ * sweep will scan. Throws if distinct txn_date count <= 1. Do NOT count
+ * null txn_date as a distinct value.
+ *
+ * Contract:
+ *   candidateRows : array of {txn_date} - the rows Ruling 4 will scan
+ *                   (i.e. non-excluded, USD, non-zero-amount, with merchant).
+ */
+export function assertTxnDateHasMultipleValues(candidateRows) {
+  const distinct = new Set();
+  for (const r of candidateRows) {
+    if (r?.txn_date) distinct.add(r.txn_date);
+  }
+  if (distinct.size <= 1) {
+    const sample = [...distinct].slice(0, 3).join(", ") || "(none)";
+    throw new Error(
+      `[assert] date-rule pre-check FAILED: candidate rows carry ${distinct.size} `
+      + `distinct txn_date value(s) [${sample}] across ${candidateRows.length} rows. `
+      + `A 5-day window rule on a single-date table over-matches (matches everything) `
+      + `or under-matches (matches nothing). Refuse to apply Ruling 4 - the sync `
+      + `must be re-run so txn_date carries real per-row dates.`
+    );
+  }
+  return { candidates: candidateRows.length, distinctDates: distinct.size };
+}
+
+/**
  * Ruling 4 assert (2026-08-20). No non-excluded parent may have a later
  * same-merchant same-amount partner within 5 days that is ALSO non-
  * excluded. Enforces the pair collapse the derive is supposed to have

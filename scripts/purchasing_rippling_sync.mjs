@@ -467,6 +467,7 @@ import {
   assertNoSupersededSplitParents,
   assertNoNonUsdAmountsSummed,
   assertNoAuthPairSurvivors,
+  assertTxnDateHasMultipleValues,
 } from "../src/lib/purchasingSpendAsserts.js";
 
 // ─── INV-P8c Ruling 1: txn_date from parent ObjectID timestamp ───────
@@ -677,6 +678,28 @@ async function deriveSpendLines({ rippling_ids }) {
     if (ccy && ccy !== "USD") agg.anyNonUSD = true;
     else if (r.amount != null) agg.cents += Math.round(Number(r.amount) * 100);
   }
+
+  // ─── Ruling 4 PRE-RULE assert (added post-#735-rerun) ────────────────
+  //
+  // A date-bound rule (5-day window) is meaningless if the candidate slice
+  // carries a single distinct date. That IS the failure mode caught on
+  // 2026-08-20: the first #740 derive ran while purchasing_actuals still
+  // held the pre-#735 `first_seen_at::date` stamps (every row = sync date
+  // = '2026-08-19'), so the 5-day window matched every same-merchant
+  // same-amount pair across the fiscal year - 2,767 auth_pair exclusions
+  // that were effectively "keep the coin-flip winner". Fires on the same
+  // candidate set the pair sweep will scan (parents with merchant + txn_date,
+  // non-excluded upstream, non-zero, USD).
+  const authPairCandidateForAssert = [];
+  for (const [, agg] of parentAgg.entries()) {
+    // Match the same filters used in the byKey builder below
+    if (agg.anyNonUSD) continue;
+    if (agg.cents === 0) continue;
+    if (!agg.txn_date) continue;
+    authPairCandidateForAssert.push({ txn_date: agg.txn_date });
+  }
+  const dateAssertResult = assertTxnDateHasMultipleValues(authPairCandidateForAssert);
+  console.log(`[assert] date-rule pre-check: candidates=${dateAssertResult.candidates} distinct_dates=${dateAssertResult.distinctDates}`);
 
   // authPairEarlierParents: parents to exclude with reason='auth_pair'.
   // authPairKeptEarlierParents: earlier parents kept because of report

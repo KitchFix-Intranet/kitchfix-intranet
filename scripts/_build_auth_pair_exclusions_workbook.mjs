@@ -484,14 +484,34 @@ async function main() {
   ws4.getRow(1).font = { bold: true };
 
   // Sheet 5 - Read me
+  //
+  // Distinct-date count: how many distinct txn_date values sit in the
+  // non-excluded rippling_spend rows of purchasing_actuals. Added
+  // 2026-08-20 (spec Step 5): the first #740 run collapsed on a
+  // single-date table (all rows stamped '2026-08-19' because #735's
+  // txn_date fix landed but the sync had not been re-run). This one-
+  // glance number lets the reviewer confirm the fact table now carries
+  // real per-row dates before trusting the pair collapse.
+  const distinctTxnDates = new Set();
+  let minTxnDate = null, maxTxnDate = null;
+  for (const a of actuals) {
+    if (a.excluded) continue;
+    if (!a.txn_date) continue;
+    distinctTxnDates.add(a.txn_date);
+    if (minTxnDate === null || a.txn_date < minTxnDate) minTxnDate = a.txn_date;
+    if (maxTxnDate === null || a.txn_date > maxTxnDate) maxTxnDate = a.txn_date;
+  }
+
   const ws5 = wb.addWorksheet("Read me");
   ws5.columns = [{ header: "auth_pair_exclusions review workbook", key: "line", width: 100 }];
   const rulingLines = [
+    `Distinct txn_date values on non-excluded rippling_spend rows: ${distinctTxnDates.size} (min=${minTxnDate}, max=${maxTxnDate}). If this is 1, the date-bound rule below is meaningless - re-run scripts/purchasing_rippling_sync.mjs first.`,
     `Ruling 4 (2026-08-20): same-merchant same-amount within ${WINDOW_DAYS} days -> keep later, exclude earlier. Report arbitrates - both-in-report -> keep both; earlier-in-report only -> keep earlier.`,
     `Ruling 5 (2026-08-20): in-window zero-amount parents excluded regardless of pairing.`,
     `What this changed: ${authPairEarlierParents.size + authPairLaterParentExcluded.size} auth-pair parents excluded; ${zeroAmountParents.size} zero-amount parents excluded. ${authPairKeptEarlierParents.size} pair earlier-halves KEPT by report arbitration (both-in-report).`,
     `Portfolio card FYTD: before $${beforeCardTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} -> after $${afterCardTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} (delta $${totalDelta.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}).`,
-    `Unpaired parents (survived Ruling 4/5, no in-window partner): ${unpaired.length} totalling $${unpaired.reduce((s,u)=>s+u.amount,0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}. These remain unexplained - Cut+Dry-at-$11,412.92 is the example.`,
+    `Unpaired parents (survived Ruling 4/5, no in-window partner): ${unpaired.length} totalling $${unpaired.reduce((s,u)=>s+u.amount,0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}. These remain unexplained.`,
+    `Sheet 2 "Excluded - auth half" now shows real per-row dates and a real days-apart spread. If every row shows the same date, the sync did not carry the #735 fix.`,
     `Do the new bucket totals on Sheet 1 look right to you?`,
   ];
   for (const line of rulingLines) ws5.addRow([line]);
@@ -510,6 +530,15 @@ async function main() {
   console.log("");
   console.log(`ruling counts: auth_pair_parents=${authPairEarlierParents.size + authPairLaterParentExcluded.size}  zero_amount_parents=${zeroAmountParents.size}  both_in_report_kept=${authPairKeptEarlierParents.size}  unpaired=${unpaired.length}`);
   console.log(`unpaired total: $${unpaired.reduce((s,u)=>s+u.amount,0).toFixed(2)}`);
+  // Auth-pair excluded dollars: sum of parent USD totals for excluded parents.
+  let authPairExcludedUsd = 0;
+  for (const p of parentAgg.values()) {
+    if (authPairEarlierParents.has(p.parent) || authPairLaterParentExcluded.has(p.parent)) {
+      authPairExcludedUsd += p.cents / 100;
+    }
+  }
+  console.log(`auth_pair excluded dollars (projected): $${authPairExcludedUsd.toFixed(2)}`);
+  console.log(`in-window parents (before Ruling 4/5): ${(() => { let n=0; for (const p of parentAgg.values()) { if (!p.alreadyExcluded && !p.anyNonUSD && p.cents !== 0 && p.txn_date) n++; } return n; })()}`);
   // Also emit in-window parents projection
   let inWindowParentsAfter = 0;
   const FY_START = "2025-12-29";
