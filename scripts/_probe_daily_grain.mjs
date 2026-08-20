@@ -148,19 +148,30 @@ else fail(`${containerLeaks} daily-row workers back to a container department`);
 // ─── D1 - reconciliation ─────────────────────────────────────────────
 console.log("");
 console.log("[D1] for every (account, week) in the daily window, sum(daily) = weekly to the cent");
-// Sum daily by (account, week_start_monday, worker, line_code) so
-// we can compare row-for-row to the weekly fact.
+// V-weekly-integer-cent hotfix - sum daily via INTEGER CENTS so FP
+// summation-order artifacts cannot manufacture a mismatch. Postgres
+// row order is not deterministic vs the weekly derive's segment
+// iteration; summing as integers eliminates the drift entirely.
+// Hours in hundredths (x100); dollars in myriadths (x10000) since
+// labor_actuals_daily stores amount at NUMERIC(14,4).
 function bucketAdd(map, key, row) {
   const cur = map.get(key) || {
-    hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
-    amount: 0,
+    hours_regularX100: 0, hours_overtimeX100: 0, hours_double_timeX100: 0, hours_premium_otherX100: 0,
+    amountX10000: 0,
   };
-  cur.hours_regular       += Number(row.hours_regular || 0);
-  cur.hours_overtime      += Number(row.hours_overtime || 0);
-  cur.hours_double_time   += Number(row.hours_double_time || 0);
-  cur.hours_premium_other += Number(row.hours_premium_other || 0);
-  cur.amount              += Number(row.amount || 0);
+  cur.hours_regularX100       += Math.round(Number(row.hours_regular || 0) * 100);
+  cur.hours_overtimeX100      += Math.round(Number(row.hours_overtime || 0) * 100);
+  cur.hours_double_timeX100   += Math.round(Number(row.hours_double_time || 0) * 100);
+  cur.hours_premium_otherX100 += Math.round(Number(row.hours_premium_other || 0) * 100);
+  cur.amountX10000            += Math.round(Number(row.amount || 0) * 10000);
   map.set(key, cur);
+}
+function readCents(dSum, field) {
+  // integer-cent readback matching the weekly derive's storage
+  // precision (NUMERIC(14,2) on weekly). For amount, sum in
+  // myriadths then round to cents; for hours, hundredths already.
+  if (field === "amount") return Math.round(dSum.amountX10000 / 100);
+  return dSum[`${field}X100`];
 }
 const dailyByAWL = new Map();
 for (const r of daily) {
@@ -196,9 +207,11 @@ for (const w of weeklyInWindow) {
   }
   checked++;
   for (const field of ["hours_regular", "hours_overtime", "hours_double_time", "hours_premium_other", "amount"]) {
-    if (Math.abs(r2(dSum[field]) - Number(w[field])) > 0.005) {
+    const dailyCents = readCents(dSum, field);
+    const weeklyCents = Math.round(Number(w[field]) * 100);
+    if (dailyCents !== weeklyCents) {
       mismatches++;
-      if (sampleMismatches.length < 5) sampleMismatches.push(`${w.account_key} ${w.week_start} worker=${w.worker_id.slice(0,8)} ${w.line_code} ${field}: daily=${r2(dSum[field])} weekly=${w[field]}`);
+      if (sampleMismatches.length < 5) sampleMismatches.push(`${w.account_key} ${w.week_start} worker=${w.worker_id.slice(0,8)} ${w.line_code} ${field}: daily=${(dailyCents/100).toFixed(2)} weekly=${w[field]}`);
     }
   }
 }
@@ -233,20 +246,26 @@ else {
 
 // ─── D3 - week sentinel through the daily path ──────────────────────
 console.log("");
-console.log("[D3] CIN - OH week 2026-06-29 sums to 156.21 hours / $4,328.27 through the daily path (exact)");
+console.log("[D3] CIN - OH week 2026-06-29 sums to 156.21 hours / $4,328.27 through the daily path (exact, integer-cent compare)");
 const wkRows = daily.filter(r => r.account_key === "CIN - OH" && r.work_date >= "2026-06-29" && r.work_date <= "2026-07-05");
 if (wkRows.length === 0) skip("CIN - OH week 2026-06-29 not in daily window");
 else {
-  const hrs = wkRows.reduce((s, r) => s + Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0) + Number(r.hours_premium_other || 0), 0);
-  const amt = wkRows.reduce((s, r) => s + Number(r.amount || 0), 0);
-  if (Math.abs(hrs - 156.21) < 0.005) ok(`total hours = ${hrs.toFixed(2)}  (want 156.21)`);
-  else                                fail(`total hours = ${hrs.toFixed(4)}, want 156.21`);
+  const hrsX100 = wkRows.reduce((s, r) => s
+    + Math.round(Number(r.hours_regular || 0)     * 100)
+    + Math.round(Number(r.hours_overtime || 0)    * 100)
+    + Math.round(Number(r.hours_double_time || 0) * 100)
+    + Math.round(Number(r.hours_premium_other || 0)* 100), 0);
+  const amtX10000 = wkRows.reduce((s, r) => s + Math.round(Number(r.amount || 0) * 10000), 0);
+  const hrs = hrsX100 / 100;
+  const amt = Math.round(amtX10000 / 100) / 100;
+  if (hrsX100 === Math.round(156.21 * 100)) ok(`total hours = ${hrs.toFixed(2)}  (want 156.21)`);
+  else                                       fail(`total hours = ${hrs.toFixed(2)}, want 156.21`);
   // D3 fix (2026-08-20): NUMERIC(14,4) storage + accumulator at full
   // precision means the sum matches the weekly sentinel to the cent.
   // If this fails, either the daily-2 precision migration has not
   // been applied yet or the derive was not re-run after apply.
-  if (Math.abs(amt - 4328.27) < 0.005) ok(`amount = $${amt.toFixed(4)}  (want $4,328.27 EXACT)`);
-  else                                 fail(`amount = $${amt.toFixed(4)}, want $4,328.27 exact - daily-2 precision migration not applied, or derive not re-run`);
+  if (Math.round(amt * 100) === Math.round(4328.27 * 100)) ok(`amount = $${amt.toFixed(2)}  (want $4,328.27 EXACT)`);
+  else                                                     fail(`amount = $${amt.toFixed(4)}, want $4,328.27 exact`);
 }
 
 // ─── D4 - dedupe report ──────────────────────────────────────────────
