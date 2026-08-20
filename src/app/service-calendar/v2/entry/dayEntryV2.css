@@ -16,7 +16,9 @@
   min-height: 0;
   background: var(--sc2-surface-app);
   color: var(--sc2-ink);
-  font-family: var(--sc2-font-ui);
+  /* PR-L (2026-08-20): opt-back to Inter removed. .oh-app now
+     inherits Inter directly (was Mulish), so the workaround is
+     dead code. */
 }
 
 /* ─── Header ─────────────────────────────────────────────── */

@@ -27,7 +27,12 @@
   --oh-blue: #2563eb;
   --oh-error: #ef4444;
   --oh-success: #10b981;
-  --oh-font-body: "Mulish", -apple-system, sans-serif;
+  /* PR-L (2026-08-20): Mulish -> Inter across /ops, /service-calendar,
+     /financial. Mulish demoted to print/PDF only (Pre-Service Materials
+     pipeline in src/lib/print/assets.js). Screen typography aligns
+     with tokens.css `--font-body` and `--font-ui`. Five Inter opt-backs
+     in SC removed the same day - workaround retired with the drift. */
+  --oh-font-body: "Inter", -apple-system, sans-serif;
   --oh-font-head: "Inter", -apple-system, sans-serif;
   --oh-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --oh-shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
@@ -704,4 +709,57 @@ body:has(.oh-app) {
   display: flex;
   gap: 8px;
   margin-top: 20px;
+}
+
+/* â”€â”€ Tabular numerals â”€â”€
+   PR-L (2026-08-20). Mulish digits are near-tabular by default; Inter
+   digits are proportional. Any column of numbers that currently aligns
+   by luck under Mulish starts drifting the moment .oh-app inherits
+   Inter. These class families cover Financial KPI hero + PeriodCard +
+   PeriodSnapshot + Invoice + Inventory + inline utility. Rule stays
+   in one block so future audits have one place to grep for coverage.
+   .oh-num-tabular is the utility class for spans that lack a
+   numeric-family class of their own. Token: --num-tabular declared
+   in tokens.css. */
+.oh-num-tabular,
+/* Financial + Labor KPI display */
+.oh-kpi-value,
+.oh-kpi-cost-pct,
+.oh-kpi-cost-footer,
+/* Labor scorecard cells */
+.oh-sc-val,
+.oh-sc-val-sm,
+.oh-sc-val-lg,
+.oh-sc-val-muted,
+.oh-sc-kpi-cell,
+.oh-sc-rev-context-val,
+/* Labor snapshot cells */
+.oh-sp-header-total,
+.oh-snap-metric-value,
+.oh-snap-pct-value,
+.oh-snap-proj-value,
+.oh-snap-ytd-value,
+/* Invoice totals + GL amounts */
+.oh-footer-total,
+.oh-ticket-total,
+.oh-inv-gl-amount,
+.oh-inv-gl-amount-wrap,
+.oh-inv-gl-balance-total,
+.oh-inv-gl-dollar,
+.oh-inv-money-input,
+.oh-inv-review-total,
+.oh-inv-review-value,
+.oh-inv-review-gl-total,
+.oh-inv-tab-count,
+.oh-inv-offline-count,
+.oh-inv-session-counter,
+.oh-inv-vs-dollar-input,
+/* Inventory history + rollups */
+.oh-hx-total,
+.oh-hx-cat-total,
+.oh-hx-cat-pct,
+.oh-hx-account,
+.oh-kcb-total,
+.oh-cost-input {
+  font-variant-numeric: var(--num-tabular);
 }

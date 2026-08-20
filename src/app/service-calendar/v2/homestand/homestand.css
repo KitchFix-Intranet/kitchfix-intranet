@@ -10,7 +10,8 @@
   gap: var(--sc2-space-5);
   padding: var(--sc2-space-4) var(--sc2-space-5);
   color: var(--sc2-ink);
-  font-family: var(--sc2-font-ui);
+  /* PR-L (2026-08-20): opt-back to Inter removed. .oh-app now
+     inherits Inter directly (was Mulish). */
   font-size: var(--sc2-size-body);
   line-height: 1.5;
 }
@@ -748,7 +749,12 @@
   border-radius: var(--sc2-radius-control);
   background: var(--sc2-surface);
   color: var(--sc2-ink);
-  font-family: var(--sc2-font-ui);
+  /* PR-L (2026-08-20): opt-back to Inter removed. Form controls do
+     not inherit font-family from their parent by default; use
+     `inherit` so we track whatever the .oh-app chain resolves to
+     (now Inter). Not a workaround, just standard form-control
+     hygiene. */
+  font-family: inherit;
   font-size: var(--sc2-size-body);
   outline: none;
   resize: vertical;

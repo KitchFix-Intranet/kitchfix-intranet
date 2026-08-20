@@ -29,12 +29,10 @@
   background: var(--surface-card);
   border-radius: var(--sc2-radius-container);
   overflow: hidden;
-  /* Opt back to the UI font (Inter) - matches the .sc-v2-entry
-     workaround for the .oh-app Mulish inheritance chain. Kevin ruling
-     2026-08-18 (PR-J): every figure resolves Inter, zero mono, by
-     computed style. See GOTCHAS "The Ops Hub screen typeface
-     disagrees with the design system doc" for the standing drift. */
-  font-family: var(--sc2-font-ui);
+  /* PR-L (2026-08-20): opt-back to Inter removed. .oh-app now
+     inherits Inter directly (was Mulish), so the workaround is
+     dead code. PR-J K7 acceptance for tabular figures continues
+     to hold: every figure resolves Inter via the .oh-app chain. */
 }
 
 /* ─── Header (navy scoreboard) ─── */
@@ -254,6 +252,8 @@
   font-weight: var(--sc2-wt-bold);
   letter-spacing: 0;
   text-transform: none;
+  /* PR-L: numeric header column - tabular for the Mulish -> Inter flip. */
+  font-variant-numeric: var(--num-tabular);
 }
 .sc-brm-th-lead {
   font-size: var(--sc2-size-micro);

@@ -162,7 +162,8 @@ body:has(.sc-root.scv2) {
 }
 .scv2 .sc-ribbon-title {
   margin: 0;
-  font-family: var(--sc2-font-ui);
+  /* PR-L (2026-08-20): opt-back to Inter removed. .oh-app now
+     inherits Inter directly (was Mulish). */
   /* OV-3 §S3 - chrome title 19/800 (per spec v4 delta: "~19-20px 800"). */
   font-size: 19px;
   font-weight: var(--sc2-wt-display);

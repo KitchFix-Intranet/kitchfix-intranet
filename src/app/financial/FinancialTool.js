@@ -332,7 +332,7 @@ export default function FinancialTool({ showToast, openConfirm }) {
                               <div className="oh-kpi-value" style={{ fontSize: 22 }}>
                                 ${sm.seasonBudgetTotal.toLocaleString()}
                               </div>
-                              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                              <div className="oh-num-tabular" style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
                                 ${sm.budgetRemaining.toLocaleString()} left
                               </div>
                             </div>
@@ -347,7 +347,7 @@ export default function FinancialTool({ showToast, openConfirm }) {
                           >
                             {sm.cumulativeVariance >= 0 ? "+" : "-"}${Math.abs(sm.cumulativeVariance).toLocaleString()}
                           </span>
-                          <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>
+                          <span className="oh-num-tabular" style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>
                             {sm.completedCount === 1
                               ? `${items.find(x => x.plan)?.id || "P1"} only`
                               : `across ${sm.completedCount} completed periods`}
@@ -367,10 +367,10 @@ export default function FinancialTool({ showToast, openConfirm }) {
                           <>
                             <div className="oh-kpi-ctx-item">
                               <span className="oh-kpi-label">Revenue</span>
-                              <span style={{ fontSize: 15, fontWeight: 900, color: "#0f172a" }}>
+                              <span className="oh-num-tabular" style={{ fontSize: 15, fontWeight: 900, color: "#0f172a" }}>
                                 ${Math.round(totalActualRev / 1000)}K
                               </span>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: revDelta >= 0 ? "#16a34a" : "#dc2626" }}>
+                              <span className="oh-num-tabular" style={{ fontSize: 11, fontWeight: 700, color: revDelta >= 0 ? "#16a34a" : "#dc2626" }}>
                                 {revDelta >= 0 ? "+" : ""}{Math.round(revDelta / 1000)}K vs forecast ({revDeltaPct >= 0 ? "+" : ""}{revDeltaPct}%)
                               </span>
                             </div>
@@ -385,11 +385,11 @@ export default function FinancialTool({ showToast, openConfirm }) {
                               total={sm.totalHomestands}
                               results={periodResultsArr}
                             />
-                            <span style={{ fontSize: 14, fontWeight: 900, color: "#0f172a" }}>
+                            <span className="oh-num-tabular" style={{ fontSize: 14, fontWeight: 900, color: "#0f172a" }}>
                               {sm.completedCount}/{sm.totalHomestands}
                             </span>
                             {sm.currentStreak > 0
-                              ? <span style={{ fontSize: 11, fontWeight: 800, color: "#92400e" }}>🔥 {sm.currentStreak} on target</span>
+                              ? <span className="oh-num-tabular" style={{ fontSize: 11, fontWeight: 800, color: "#92400e" }}>🔥 {sm.currentStreak} on target</span>
                               : sm.completedCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8" }}>no streak</span>
                             }
                           </div>
@@ -397,10 +397,10 @@ export default function FinancialTool({ showToast, openConfirm }) {
                         <div className="oh-kpi-ctx-divider" />
                         <div className="oh-kpi-ctx-item">
                           <span className="oh-kpi-label">{budgetLabel} Cost Budget</span>
-                          <span style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
+                          <span className="oh-num-tabular" style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
                             ${sm.seasonBudgetTotal.toLocaleString()}
                           </span>
-                          <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>
+                          <span className="oh-num-tabular" style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>
                             ${sm.budgetRemaining.toLocaleString()} remaining
                           </span>
                         </div>
