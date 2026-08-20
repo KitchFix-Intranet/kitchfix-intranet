@@ -12,6 +12,7 @@
 // only the first card, which is why three stripes stayed grey.
 
 import { fmt$, fmtHrs } from "../lib/formatting.js";
+import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 
 // V34 - the pill and the card stripe come from ONE expression per card.
 // Each caller derives its `state`; Head renders the pill from the same
@@ -368,7 +369,11 @@ function PayrollDataCard({ board, freshness, salary }) {
   const hasUnapproved = unpricedHrs > 0.004;
   const state = total === 0 ? "neutral" : hasUnapproved ? "warn" : "good";
   const label = total === 0 ? "—" : hasUnapproved ? "PARTIAL" : "FINAL";
-  const willRise = (hasUnapproved && rate != null && rate > 0) ? unpricedHrs * rate : null;
+  // V42 REVISED (C2) - route through the shared estimator so the
+  // week-bar hatched cap and this "Will rise" figure can never
+  // disagree to the cent. See src/lib/labor/estimateUnpricedDollars.js
+  // for the signal-source rationale (unpriced_hrs, not draft_hours).
+  const willRise = estimateUnpricedDollars(unpricedHrs, rate);
   const rateLabelInTitle = rateBasisHourlyOnly ? "hourly rate" : "blended rate";
   const willRiseTitle = willRise != null
     ? `Estimate. ${fmtHrs(unpricedHrs)} unapproved hrs x $${rate.toFixed(2)} ${rateLabelInTitle}. Unapproved hours skew to whoever has not been processed, so their true rate may differ from the ${rateBasisHourlyOnly ? "hourly average" : "blend"}.`

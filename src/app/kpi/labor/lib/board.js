@@ -132,6 +132,12 @@ function parseISO(iso) {
 function sumRows(rows) {
   let amount = 0, hours = 0, ot = 0, unpriced_hrs = 0;
   let complete = 0, total = 0;
+  // V42 REVISED (C1 state model). Sum status-based approval signals
+  // separately from the coverage-based unpriced_hrs. draft_hours can
+  // include priced drafts and is NOT the money signal; the client
+  // uses it for the current-week informational render only.
+  let draft_entries = 0, draft_hours = 0;
+  let anomaly_no_clockout = 0, anomaly_under_1h = 0, anomaly_over_16h = 0;
   const workerIds = new Set();
   for (const r of rows) {
     total += 1;
@@ -139,10 +145,21 @@ function sumRows(rows) {
     hours += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
     ot += Number(r.hours_overtime || 0);
     unpriced_hrs += Number(r.hours_without_dollars || 0);
+    draft_entries       += Number(r.draft_entry_count   || 0);
+    draft_hours         += Number(r.draft_hours         || 0);
+    anomaly_no_clockout += Number(r.anomaly_no_clockout || 0);
+    anomaly_under_1h    += Number(r.anomaly_under_1h    || 0);
+    anomaly_over_16h    += Number(r.anomaly_over_16h    || 0);
     if (r.coverage_state === "complete") complete += 1;
     if (r.worker_id) workerIds.add(r.worker_id);
   }
-  return { amount: r2(amount), hours: r2(hours), ot: r2(ot), unpriced_hrs: r2(unpriced_hrs), complete, total, worker_count: workerIds.size };
+  return {
+    amount: r2(amount), hours: r2(hours), ot: r2(ot), unpriced_hrs: r2(unpriced_hrs),
+    complete, total, worker_count: workerIds.size,
+    draft_entry_count: draft_entries,
+    draft_hours: r2(draft_hours),
+    anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h,
+  };
 }
 
 // Build the per-week aggregates for [start, end]. Returns array in
@@ -165,6 +182,17 @@ function buildWeekAggregates(actuals, weekStarts) {
       unpriced_hrs: s.unpriced_hrs,
       complete_ww: s.complete, total_ww: s.total, worker_count: s.worker_count,
       coverage_states: [...new Set(rows.map(r => r.coverage_state))],
+      // V42 REVISED - status-based approval signals + anomaly counts
+      // per week. The client's four-state model (StoryBlock TierAWeekBar
+      // + WeekTable) reads these; the OLD unapproved_flag/unapproved_hours
+      // fields below stay for backward-compatible surfaces but are no
+      // longer the source of truth for the flag or the cap.
+      draft_entry_count:   s.draft_entry_count,
+      draft_hours:         s.draft_hours,
+      anomaly_no_clockout: s.anomaly_no_clockout,
+      anomaly_under_1h:    s.anomaly_under_1h,
+      anomaly_over_16h:    s.anomaly_over_16h,
+      anomaly_total:       s.anomaly_no_clockout + s.anomaly_under_1h + s.anomaly_over_16h,
     });
   }
   return out;
@@ -330,6 +358,17 @@ export function buildBoard({
       worker_count: w.worker_count,
       unapproved_flag,
       unapproved_hours,
+      // V42 REVISED - status-based approval signals + anomaly counts
+      // per week. Drives the four-state model in StoryBlock TierAWeekBar
+      // and WeekTable's flagForV42State. See src/lib/labor/estimateUnpricedDollars.js
+      // for the hatched-cap dollars estimator (uses unpriced_hrs, NOT
+      // draft_hours - priced drafts are already in the solid bar).
+      draft_entry_count:   w.draft_entry_count,
+      draft_hours:         w.draft_hours,
+      anomaly_no_clockout: w.anomaly_no_clockout,
+      anomaly_under_1h:    w.anomaly_under_1h,
+      anomaly_over_16h:    w.anomaly_over_16h,
+      anomaly_total:       w.anomaly_total,
       original_target,
       delta_vs_original,
       delta_sign,
