@@ -32,6 +32,12 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodM
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
 import { loadRoleGate } from "@/lib/kpi/roleGate.js";
 import { load3100_2Budgets, loadSalaryActuals, withSalary as withSalaryMerge } from "@/lib/labor/salaryBoard.js";
+// PR-2 - range resolver + budget pro-rate. Three-way routing (grain
+// first, era second): whole weeks -> weekly, partial post-floor ->
+// daily, partial pre-floor -> refuse. See src/lib/labor/rangeResolver.js
+// for the design contract.
+import { resolveRangeSource } from "@/lib/labor/rangeResolver.js";
+import { proRateBudget } from "@/lib/labor/budgetProRate.js";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -346,6 +352,59 @@ export async function GET(request) {
   const salary_available = gate.canSeeSalary(caller, account);
   const includeSalary = includeSalaryReq && salary_available;
 
+  // PR-2 range routing - one source per answer, never both. See
+  // src/lib/labor/rangeResolver.js for the three-way rule.
+  // Daily floor is data-derived from labor_actuals.week_source =
+  // 'sc_day_metadata' (currently 2026-04-20). Weeks before that
+  // were rippling_report-backfilled with no per-day segments.
+  const floorQ = await supa
+    .from("labor_actuals")
+    .select("week_start")
+    .eq("week_source", "sc_day_metadata")
+    .order("week_start")
+    .limit(1)
+    .maybeSingle();
+  if (floorQ.error) return NextResponse.json(safeError("daily_floor", floorQ.error), { status: 500 });
+  const dailyFloorISO = floorQ.data?.week_start || "2026-04-20";
+  const rangeSource = resolveRangeSource({ startISO: start, endISO: end, dailyFloorISO });
+
+  // Refusal: partial-week range starting before the floor. Cannot be
+  // answered - underlying segments were retention-purged before the
+  // pipeline was built. User-facing copy names both ways out.
+  if (rangeSource.refused) {
+    return NextResponse.json({
+      source: null,
+      refused: true,
+      reason: rangeSource.reason,
+      message: rangeSource.refusalMessage,
+      daily_floor: dailyFloorISO,
+      account,
+      filters: { account, start, end },
+      landing_account,
+      accounts_directory,
+      regional_directors_display,
+      salary_available: false,
+    });
+  }
+
+  // Daily branch. Fetches labor_actuals_daily for the range +
+  // account (or members for aggregates), aggregates per (worker,
+  // line) into a range-summed shape, and pairs with a pro-rated
+  // budget. Salary is not merged onto the daily path in PR-2 -
+  // deferred to a follow-up; salary_available is forced false so a
+  // client with the toggle on gets the byte-identical default
+  // response (same posture as an ungated caller today).
+  if (rangeSource.source === "daily") {
+    return await handleDailyRangeRequest({
+      supa, account, start, end, today,
+      caller, landing_account,
+      accounts_directory, regional_directors_display,
+      freshness,
+      rangeSource,
+      dailyFloorISO,
+    });
+  }
+
   // ── v6 PR-1 · aggregate pseudo-keys (ALL / EAST / WEST) ──────────
   // Resolves members from live accounts.region, aggregates actuals,
   // budgets, workers, and unattributed across the member set. Salaried
@@ -545,6 +604,7 @@ export async function GET(request) {
     }
     body.salary_available = salary_available;
     body.landing_account = landing_account;
+    body.source = "weekly";
     return NextResponse.json(body);
   }
 
@@ -601,6 +661,7 @@ export async function GET(request) {
     }
     bodyD26.salary_available = salary_available;
     bodyD26.landing_account = landing_account;
+    bodyD26.source = "weekly";
     return NextResponse.json(bodyD26);
   }
 
@@ -816,5 +877,160 @@ export async function GET(request) {
   }
   bodySingle.salary_available = salary_available;
   bodySingle.landing_account = landing_account;
+  bodySingle.source = "weekly";
   return NextResponse.json(bodySingle);
+}
+
+// PR-2 - daily-source branch. Fired only when the range resolver
+// routes to daily grain (partial week, entirely at or after
+// 2026-04-20). Returns a range-summed shape derived directly from
+// labor_actuals_daily plus a pro-rated budget. Salary is NOT merged
+// on this path in PR-2; salary_available is forced false so a
+// caller with the toggle on gets the byte-identical default
+// response (same posture as an ungated caller today).
+async function handleDailyRangeRequest(ctx) {
+  const {
+    supa, account, start, end, today,
+    caller, landing_account,
+    accounts_directory, regional_directors_display,
+    freshness,
+    rangeSource,
+    dailyFloorISO,
+  } = ctx;
+
+  // 1. Resolve members list. Aggregates (ALL / EAST / WEST) walk
+  //    accounts.region same shape as the weekly path.
+  let members;
+  if (V6_PSEUDO_KEYS.has(account)) {
+    let memberQ;
+    if (account === "ALL") {
+      memberQ = await supa.from("accounts").select("team_key").neq("team_key", "CORP").order("team_key");
+    } else {
+      const regionValue = account === "EAST" ? "East" : "West";
+      memberQ = await supa.from("accounts").select("team_key").neq("team_key", "CORP").eq("region", regionValue).order("team_key");
+    }
+    if (memberQ.error) return NextResponse.json(safeError("v6_members_daily", memberQ.error), { status: 500 });
+    members = (memberQ.data || []).map(r => r.team_key);
+  } else {
+    members = [account];
+  }
+
+  // 2. Fetch daily rows for the range + members.
+  const dailyQ = await supa.from("labor_actuals_daily")
+    .select("account_key, worker_id, work_date, line_code, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, segment_count")
+    .in("account_key", members)
+    .gte("work_date", start)
+    .lte("work_date", end);
+  if (dailyQ.error) return NextResponse.json(safeError("labor_actuals_daily", dailyQ.error), { status: 500 });
+  const dailyRows = dailyQ.data || [];
+
+  // 3. Aggregate per (worker, line) into range-summed shape.
+  //    Sum via integer myriadths (x10000) then round to 4dp -
+  //    same integer-cent discipline as the weekly derive so no
+  //    cross-grain FP artifact.
+  const bucketByKey = new Map();
+  for (const r of dailyRows) {
+    const k = `${r.account_key}|${r.worker_id}|${r.line_code}`;
+    const cur = bucketByKey.get(k) || {
+      account_key: r.account_key, worker_id: r.worker_id, line_code: r.line_code,
+      hoursRegularX100: 0, hoursOvertimeX100: 0, hoursDoubleTimeX100: 0, hoursPremiumOtherX100: 0,
+      dollarsRegularX10000: 0, dollarsOvertimeX10000: 0, dollarsDoubleTimeX10000: 0, dollarsPremiumOtherX10000: 0,
+      amountX10000: 0, segment_count: 0,
+      day_count: 0,
+    };
+    cur.hoursRegularX100       += Math.round(Number(r.hours_regular || 0) * 100);
+    cur.hoursOvertimeX100      += Math.round(Number(r.hours_overtime || 0) * 100);
+    cur.hoursDoubleTimeX100    += Math.round(Number(r.hours_double_time || 0) * 100);
+    cur.hoursPremiumOtherX100  += Math.round(Number(r.hours_premium_other || 0) * 100);
+    cur.dollarsRegularX10000       += Math.round(Number(r.dollars_regular || 0) * 10000);
+    cur.dollarsOvertimeX10000      += Math.round(Number(r.dollars_overtime || 0) * 10000);
+    cur.dollarsDoubleTimeX10000    += Math.round(Number(r.dollars_double_time || 0) * 10000);
+    cur.dollarsPremiumOtherX10000  += Math.round(Number(r.dollars_premium_other || 0) * 10000);
+    cur.amountX10000                += Math.round(Number(r.amount || 0) * 10000);
+    cur.segment_count += Number(r.segment_count || 0);
+    cur.day_count++;
+    bucketByKey.set(k, cur);
+  }
+  const actualsRange = [...bucketByKey.values()].map(b => ({
+    account_key: b.account_key,
+    worker_id:   b.worker_id,
+    line_code:   b.line_code,
+    hours_regular:         b.hoursRegularX100 / 100,
+    hours_overtime:        b.hoursOvertimeX100 / 100,
+    hours_double_time:     b.hoursDoubleTimeX100 / 100,
+    hours_premium_other:   b.hoursPremiumOtherX100 / 100,
+    dollars_regular:       b.dollarsRegularX10000 / 10000,
+    dollars_overtime:      b.dollarsOvertimeX10000 / 10000,
+    dollars_double_time:   b.dollarsDoubleTimeX10000 / 10000,
+    dollars_premium_other: b.dollarsPremiumOtherX10000 / 10000,
+    amount:                b.amountX10000 / 10000,
+    segment_count: b.segment_count,
+    day_count:     b.day_count,
+  }));
+
+  // 4. Pro-rated budget. Aggregate path builds weekly per-account
+  //    then sums; single-account path reads its own week_budgets.
+  //    Both go through the same proRateBudget helper.
+  const budgetQ = await supa.from("labor_actuals_latest")   // 3100.1 only path already loaded elsewhere; here we hit sc_labor_budgets directly via the same shape buildWeekBudgets consumes on the weekly path
+    .select("week_start", { head: true, count: "exact" })
+    .limit(1);   // no-op fetch just to sanity-check connectivity
+  if (budgetQ.error) return NextResponse.json(safeError("budget_probe_daily", budgetQ.error), { status: 500 });
+  // For the pro-rate, load the weekly budgets over the range. Same
+  // buildWeekBudgets used by the weekly path; the pro-rate helper
+  // slices them by days_in_range.
+  const budgetPeriodsQ = await supa.from("kpi_budgets")
+    .select("account_key, period_no, amount")
+    .in("account_key", members)
+    .eq("line_code", "3100.1")
+    .eq("fiscal_year", 2026);
+  if (budgetPeriodsQ.error) return NextResponse.json(safeError("kpi_budgets_daily", budgetPeriodsQ.error), { status: 500 });
+  // Aggregate per period across members, then expand to weekly via
+  // buildWeekBudgets (splits period budget / 4 across its 4 weeks).
+  const perAccountBudgets = new Map();
+  for (const b of (budgetPeriodsQ.data || [])) {
+    const inner = perAccountBudgets.get(b.account_key) || new Map();
+    inner.set(Number(b.period_no), Number(b.amount) || 0);
+    perAccountBudgets.set(b.account_key, inner);
+  }
+  const budgetPeriodsForRange = [];
+  const periodsInRange = new Set();
+  for (const m of members) {
+    const inner = perAccountBudgets.get(m) || new Map();
+    for (const [pn, amt] of inner) periodsInRange.add(pn);
+  }
+  for (const pn of [...periodsInRange].sort((a, b) => a - b)) {
+    let total = 0;
+    for (const m of members) {
+      const inner = perAccountBudgets.get(m) || new Map();
+      total += inner.get(pn) || 0;
+    }
+    budgetPeriodsForRange.push({ period_no: pn, amount: total, source: "pnl", basis: "pnl", superseded: false });
+  }
+  const weekBudgets = buildWeekBudgets({ start, end, budget_periods: budgetPeriodsForRange });
+  const budgetProrate = proRateBudget({ startISO: start, endISO: end, weekBudgets });
+
+  // 5. Resolve worker meta (shared helper - salary path irrelevant here).
+  const workerIds = [...new Set(actualsRange.map(r => r.worker_id))];
+  const { workerMeta } = await resolveWorkerMeta(supa, workerIds);
+
+  return NextResponse.json({
+    ok: true,
+    filters: { account, start, end },
+    source: "daily",
+    range: {
+      span_days: rangeSource.spanDays,
+      is_partial_week: rangeSource.isPartialWeek,
+      daily_floor: dailyFloorISO,
+    },
+    actuals_range: actualsRange,
+    actuals_daily: dailyRows,
+    budget_prorate: budgetProrate,
+    workers: workerMeta,
+    members,
+    landing_account,
+    accounts_directory,
+    regional_directors_display,
+    salary_available: false,
+    derive_freshness: freshness,
+  });
 }

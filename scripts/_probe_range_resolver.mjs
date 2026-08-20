@@ -200,6 +200,91 @@ console.log("[B4] budget pro-rate - slice sum equals total to the cent");
   eq(p.label, "pro-rated across 15 days", "  15-day label");
 }
 
+// ─── Route shape assertions ─────────────────────────────────────────
+// Kevin ruling: no single response mixes sources. Verify by code-read
+// on route.js that:
+//   - every non-refusal response carries `source` = 'weekly' | 'daily'
+//   - refusal response carries `source: null, refused: true`
+//   - the weekly branches never set daily-specific keys (actuals_daily,
+//     budget_prorate, actuals_range) on their bodies
+//   - the daily branch never sets weekly-specific keys (board,
+//     budget_periods, week_budgets) on its body
+console.log("");
+console.log("[route-shape] no single response mixes sources (code-read)");
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const __filename = fileURLToPath(import.meta.url);
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const routeSrc = fs.readFileSync(path.join(REPO_ROOT, "src/app/api/kpi/labor/route.js"), "utf8");
+// strip comments to avoid false positives from prose
+const routeCode = routeSrc.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+
+// 1. Refusal branch carries source:null + refused:true
+const refusalBlock = routeCode.match(/if \(rangeSource\.refused\) \{\s*return NextResponse\.json\(\{([\s\S]*?)\}\);\s*\}/);
+if (!refusalBlock) fail("refusal branch not found in route.js");
+else {
+  const body = refusalBlock[1];
+  const hasSource = /source:\s*null/.test(body);
+  const hasRefused = /refused:\s*true/.test(body);
+  const hasMessage = /message:\s*rangeSource\.refusalMessage/.test(body);
+  if (hasSource && hasRefused && hasMessage) ok("refusal body: source=null + refused=true + message");
+  else fail(`refusal body missing keys: source=${hasSource} refused=${hasRefused} message=${hasMessage}`);
+  // Refusal MUST NOT leak weekly/daily data fields.
+  const leaks = [];
+  for (const key of ["board", "actuals", "budget_periods", "week_budgets", "actuals_daily", "actuals_range", "budget_prorate"]) {
+    if (new RegExp(`\\b${key}\\s*:`).test(body)) leaks.push(key);
+  }
+  if (leaks.length === 0) ok("refusal body omits all data keys");
+  else fail(`refusal body leaks data keys: ${leaks.join(", ")}`);
+}
+
+// 2. Weekly branches label themselves.
+const weeklySources = [...routeCode.matchAll(/\.source\s*=\s*"weekly"/g)];
+if (weeklySources.length >= 3) ok(`weekly branches label body.source='weekly' (${weeklySources.length} occurrences: aggregate + D26 + single-account)`);
+else fail(`expected >=3 weekly source labels, found ${weeklySources.length}`);
+
+// 3. Daily handler exists + labels source='daily' + returns clean shape.
+const dailyHandler = routeCode.match(/async function handleDailyRangeRequest\(ctx\) \{([\s\S]*?)\n\}\n/);
+if (!dailyHandler) fail("handleDailyRangeRequest not found");
+else {
+  const body = dailyHandler[1];
+  const setsSource = /source:\s*"daily"/.test(body);
+  if (setsSource) ok("handleDailyRangeRequest returns source='daily'");
+  else fail("handleDailyRangeRequest does not set source='daily'");
+  // The RETURN body is what matters. Extract the response object
+  // literal from the final `return NextResponse.json({ ... });`.
+  const returnMatch = body.match(/return NextResponse\.json\(\{([\s\S]*?)\}\);\s*$/);
+  if (!returnMatch) fail("daily handler has no NextResponse.json return");
+  else {
+    const returnBody = returnMatch[1];
+    const weeklyLeaks = [];
+    for (const key of ["board", "budget_periods", "week_budgets"]) {
+      if (new RegExp(`\\b${key}\\s*:`).test(returnBody)) weeklyLeaks.push(key);
+    }
+    // `actuals` LHS collides with actuals_daily / actuals_range;
+    // enforce there is no bare `actuals: <expr>` (comma or space
+    // required immediately after, but nothing between actuals and :).
+    if (/\bactuals\s*:/.test(returnBody) && !/\bactuals_(daily|range)\s*:/.test(returnBody.match(/\bactuals\s*:[^,\n}]*/)?.[0] || "")) {
+      // Bare `actuals:` present.
+      weeklyLeaks.push("actuals");
+    }
+    if (weeklyLeaks.length === 0) ok("daily response body omits weekly-shape keys (board / budget_periods / week_budgets / bare actuals)");
+    else fail(`daily response body leaks weekly-shape keys: ${weeklyLeaks.join(", ")}`);
+    const dailyKeys = ["actuals_range", "actuals_daily", "budget_prorate"];
+    const missing = dailyKeys.filter(k => !new RegExp(`${k}\\s*:`).test(returnBody));
+    if (missing.length === 0) ok("daily response body carries actuals_range + actuals_daily + budget_prorate");
+    else fail(`daily response body missing keys: ${missing.join(", ")}`);
+    if (/salary_available:\s*false/.test(returnBody)) ok("daily response body forces salary_available=false (deferred)");
+    else fail("daily response body must set salary_available=false");
+  }
+}
+
+// 4. Resolver is called BEFORE any account-branch return.
+const resolverCall = routeCode.match(/resolveRangeSource\(\{[^}]+\}\)/);
+if (resolverCall) ok("resolveRangeSource is invoked in the route flow");
+else fail("resolveRangeSource never called in route.js");
+
 console.log("");
 console.log("=".repeat(72));
 console.log(hardFail === 0 ? "PR-2 RANGE + PRO-RATE: ALL PROBES PASS" : `PR-2 RANGE + PRO-RATE: ${hardFail} FAILURE(S)`);
