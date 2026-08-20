@@ -453,6 +453,59 @@ async function populateCategoryCandidates(candidates) {
 // The department map was on the wrong axis (see migration
 // purchasing-2-work-location-attribution.sql).
 
+// ─── Sanity asserts (INV-P8b Part E) ─────────────────────────────────
+//
+// Deterministic-from-payload PRE-WRITE asserts imported from
+// src/lib/purchasingSpendAsserts.js. They fail the write - they never
+// silently correct. Pattern mirrors labor's pay-segment inflation guard:
+// catch the bug shape at derive time so it never lands in the fact table.
+//
+// The guards do NOT assert against the report or against employment
+// status, per Kevin's spec.
+
+import {
+  assertNoSupersededSplitParents,
+  assertNoNonUsdAmountsSummed,
+} from "../src/lib/purchasingSpendAsserts.js";
+
+// ─── INV-P8c Ruling 1: txn_date from parent ObjectID timestamp ───────
+//
+// Owner ruling 2026-08-20 (INV-P8c). The Rippling spend endpoint does
+// not carry a real transaction_date on the line payload; the spend_transaction
+// parent object is API-blocked. Interim source of truth: the parent Mongo
+// ObjectID first-4-byte Unix timestamp, minus 1 day for calibration.
+//
+// Calibration source: verified against 4,906 report rows with real
+// `Purchased at`. Median offset +1.03 days after purchase; 89.6% within
+// 2 days; 98.6% within 7 days. Offset is one-sided (ObjectID created
+// AFTER purchase) so subtract 1 day to centre it.
+//
+// This is EXPLICITLY INTERIM. When the Rippling custom-report ingest
+// lands, real `Purchased at` values replace this and history backfills.
+// The -1 day calibration lives ONLY here; anything else calling
+// objectIdDateForTxn must import this function, not re-derive.
+const OBJECTID_HEX24 = /^[a-f0-9]{24}$/;
+const RULING_1_CALIBRATION_DAYS = -1;  // Ruling 1, 2026-08-20
+
+function parentIdFromExternalId(ext) {
+  if (!ext || typeof ext !== "string") return null;
+  const idx = ext.indexOf("__");
+  if (idx <= 0) return null;
+  const tok = ext.slice(0, idx).toLowerCase();
+  return OBJECTID_HEX24.test(tok) ? tok : null;
+}
+
+function objectIdToTxnDate(hex24) {
+  // Decode ObjectID first-4-byte Unix timestamp (seconds), apply Ruling 1
+  // calibration, return YYYY-MM-DD.
+  if (!hex24 || !OBJECTID_HEX24.test(hex24)) return null;
+  const secs = parseInt(hex24.slice(0, 8), 16);
+  if (!Number.isFinite(secs)) return null;
+  const ms = (secs + RULING_1_CALIBRATION_DAYS * 86400) * 1000;
+  const d = new Date(ms);
+  return d.toISOString().slice(0, 10);
+}
+
 // ─── Step c: derive purchasing_actuals for spend lines ───────────────
 
 async function deriveSpendLines({ rippling_ids }) {
@@ -480,16 +533,69 @@ async function deriveSpendLines({ rippling_ids }) {
   // keep the IN() URL under the PostgREST/proxy request-line limit -
   // rippling_ids are 36-char UUIDs so 500-per-chunk overflows the URL
   // (fetch fails with "TypeError: fetch failed" before any HTTP status).
+  // INV-P8b: also loads external_id + currency so the pre-write asserts
+  // can partition by parent + detect non-USD leaks before they land in
+  // purchasing_actuals.
   const ids = [...rippling_ids];
   const CHUNK_IDS = 100;
   const rowsByRippling = new Map();
   for (let i = 0; i < ids.length; i += CHUNK_IDS) {
     const chunk = ids.slice(i, i + CHUNK_IDS);
     const { data, error } = await supa.from("rippling_raw_spend_lines_latest")
-      .select("rippling_id, amount, category_id, department_id, department_label, work_location_id, work_location_label, merchant_name, first_seen_at, parent_txn_id")
+      .select("rippling_id, external_id, amount, currency, category_id, department_id, department_label, work_location_id, work_location_label, merchant_name, first_seen_at, parent_txn_id")
       .in("rippling_id", chunk);
     if (error) { console.error(`[derive] load latest chunk ${i}..${i + chunk.length} FAILED: ${error.message}`); return { ok: false, error: error.message }; }
     for (const r of data || []) rowsByRippling.set(r.rippling_id, r);
+  }
+
+  // ─── INV-P8c Ruling 2 pre-scan: duplicate-split parent detection ────
+  //
+  // Owner ruling 2026-08-20 (INV-P8c Ruling 2). Two duplicate-split
+  // shapes are deterministic from the payload and must be excluded from
+  // fact-table totals until owner arbitrates via the Rippling custom
+  // report ingest:
+  //   - bucketA: parent has N>=2 identical-amount lines (all-lines-equal)
+  //   - bucketB: parent has >=2 distinct amount buckets whose (amount * count)
+  //             products match on the same sum (coexisting multi-set,
+  //             INV-P8 exemplar 6a6c093207bd8eb94ef93ca4)
+  // Where the parent EXISTS in the unfiltered custom report, its amount
+  // is truth (78 of 109 bucketA per INV-P8b) - but the report is an
+  // offline artifact, not queryable at sync time. Interim behaviour:
+  // exclude ALL bucketA + bucketB parents from fact-table totals
+  // (excluded=TRUE), so they are visible-and-counted but do NOT sum.
+  // The assert continues to fire on any bucketB parent that slips
+  // through non-excluded. The Rippling-report ingest lands later and
+  // will resolve the arbitration.
+  const duplicateSplitParents = new Set();
+  const dupParentExclusionSample = [];
+  {
+    const parentToAmounts = new Map();  // parent -> [amount_cents, ...]
+    for (const rid of ids) {
+      const r = rowsByRippling.get(rid);
+      if (!r) continue;
+      const parent = parentIdFromExternalId(r.external_id);
+      if (!parent) continue;
+      const cents = Math.round(Number(r.amount || 0) * 100);
+      if (!parentToAmounts.has(parent)) parentToAmounts.set(parent, []);
+      parentToAmounts.get(parent).push(cents);
+    }
+    for (const [parent, arr] of parentToAmounts.entries()) {
+      if (arr.length < 2) continue;
+      const amtCount = new Map();
+      for (const c of arr) amtCount.set(c, (amtCount.get(c) || 0) + 1);
+      // bucketA: all lines equal (single amount bucket, N>=2)
+      if (amtCount.size === 1) { duplicateSplitParents.add(parent); continue; }
+      // bucketB: coexisting multi-set (>=2 buckets whose amount*count
+      // sums collide on the same value)
+      const sumsByValue = new Map();
+      for (const [amtC, n] of amtCount.entries()) {
+        const s = amtC * n;
+        sumsByValue.set(s, (sumsByValue.get(s) || 0) + 1);
+      }
+      for (const [, bucketCount] of sumsByValue.entries()) {
+        if (bucketCount >= 2) { duplicateSplitParents.add(parent); break; }
+      }
+    }
   }
 
   // Derive into purchasing_actuals. Per-line upsert; source_line_id
@@ -497,6 +603,15 @@ async function deriveSpendLines({ rippling_ids }) {
   let linesDerived = 0;
   let uncoded = 0;
   let unattributed = 0;
+  // Ruling 2 (duplicate-split exclusion) counters
+  let dupExcludedLines = 0;
+  let dupExcludedUsdCents = 0;
+  // Ruling 3 (non-USD exclusion) counters
+  let currencyExcludedLines = 0;
+  const currencyExcludedNativeByCcy = new Map();  // ccy -> cents
+  // Ruling 1 (txn_date via ObjectID) counters
+  let ridTxnDateFromObjectId = 0;
+  let ridTxnDateFallback = 0;
   // Label-fallback self-heal (owner ruling 2026-08-19, PR #713 flag 1
   // hardening): when a work_location_id misses the map and its label is
   // one of the three EXCLUDED_LABEL_FALLBACK literals, we stage an
@@ -543,11 +658,57 @@ async function deriveSpendLines({ rippling_ids }) {
         });
       }
     }
-    const excluded = wlRow?.excluded === true || labelFallbackHit;
+    // ─── INV-P8c Ruling 2: duplicate-split parent exclusion ─────────
+    // Parent flagged as bucketA or bucketB in the pre-scan above:
+    // exclude ALL lines under it from fact-table totals until the
+    // Rippling custom-report ingest lands to arbitrate.
+    const parent = parentIdFromExternalId(r.external_id);
+    const dupSplitHit = parent ? duplicateSplitParents.has(parent) : false;
+
+    // ─── INV-P8c Ruling 3: non-USD exclusion ────────────────────────
+    // purchasing_actuals.amount is a bare USD column (no currency
+    // field). Any non-USD row summing into it produces a garbage total.
+    // No FX rate source is ruled yet; do not convert. Exclude non-USD
+    // from totals; surface via native-currency counter.
+    const ccy = String(r.currency || "").toUpperCase();
+    const currencyHit = ccy && ccy !== "USD" && ccy !== "";
+
+    const excluded = wlRow?.excluded === true || labelFallbackHit || dupSplitHit || currencyHit;
     const accountKey = excluded ? null : (wlRow?.account_key || null);
     const glLine = r.category_id ? (catMap.get(r.category_id) || null) : null;
     if (!accountKey && !excluded) unattributed++;
     if (!glLine) uncoded++;
+
+    // Track exclusion causes for the summary log
+    if (dupSplitHit) {
+      dupExcludedLines++;
+      if (ccy === "USD" && r.amount != null) dupExcludedUsdCents += Math.round(Number(r.amount) * 100);
+      if (dupParentExclusionSample.length < 5 && !dupParentExclusionSample.includes(parent)) {
+        dupParentExclusionSample.push(parent);
+      }
+    }
+    if (currencyHit) {
+      currencyExcludedLines++;
+      const cents = Math.round(Number(r.amount || 0) * 100);
+      currencyExcludedNativeByCcy.set(ccy, (currencyExcludedNativeByCcy.get(ccy) || 0) + cents);
+    }
+
+    // ─── INV-P8c Ruling 1: txn_date from parent ObjectID timestamp ──
+    // Prefer parent_txn_id (Mongo ObjectID) then external_id-derived
+    // parent hex. Fallback to first_seen_at only when both are absent
+    // (should not happen on the current corpus - counted for visibility).
+    let txnDate = null;
+    const parentHex = (r.parent_txn_id && OBJECTID_HEX24.test(String(r.parent_txn_id))) ? String(r.parent_txn_id) : parent;
+    if (parentHex) {
+      txnDate = objectIdToTxnDate(parentHex);
+    }
+    if (txnDate) {
+      ridTxnDateFromObjectId++;
+    } else {
+      ridTxnDateFallback++;
+      txnDate = r.first_seen_at ? String(r.first_seen_at).slice(0, 10) : null;
+    }
+
     derived.push({
       source:             "rippling_spend",
       source_bill_id:     r.parent_txn_id || null,
@@ -556,13 +717,48 @@ async function deriveSpendLines({ rippling_ids }) {
       excluded:           excluded,
       gl_line_code:       glLine,
       gl_bucket:          glBucketFor(glLine),
-      txn_date:           r.first_seen_at ? String(r.first_seen_at).slice(0, 10) : null,
+      // Ruling 1 (2026-08-20): parent ObjectID timestamp minus 1 day.
+      // Interim until Rippling custom-report ingest carries real
+      // Purchased-at values. See objectIdToTxnDate + RULING_1_CALIBRATION_DAYS.
+      txn_date:           txnDate,
       posting_date:       null,
       amount:             r.amount != null ? Number(r.amount) : 0,
       vendor_or_merchant: r.merchant_name || null,
       paid:               false,   // Rippling card spend is card-charged; paid semantic not applicable
-      approx_date:        true,    // parent object blocked; date is first_seen_at not real txn date
+      approx_date:        true,    // Ruling 1 interim - real Purchased-at replaces this on report ingest
     });
+  }
+
+  // ─── INV-P8c summary log for Rulings 1/2/3 ──────────────────────────
+  // Emit counts + dollars so exclusion is visible, not silent.
+  const dupDollars = (dupExcludedUsdCents / 100).toFixed(2);
+  console.log(`[ruling-1] txn_date derivation: from_objectid=${ridTxnDateFromObjectId} fallback_to_first_seen_at=${ridTxnDateFallback}`);
+  console.log(`[ruling-2] duplicate-split parent exclusion: parents=${duplicateSplitParents.size} lines=${dupExcludedLines} usd_amount=$${dupDollars}${dupParentExclusionSample.length > 0 ? ` sample_parents=${dupParentExclusionSample.join(",")}` : ""}`);
+  const ccyBreakdown = [...currencyExcludedNativeByCcy.entries()]
+    .map(([c, cents]) => `${c}=${(cents / 100).toFixed(2)}`).join(" ");
+  console.log(`[ruling-3] non-USD exclusion: lines=${currencyExcludedLines} native_totals=(${ccyBreakdown || "none"})`);
+
+  // ─── Sanity asserts (INV-P8b Part E) - PRE-WRITE gate ─────────────
+  // These are deterministic-from-payload checks that catch the two
+  // bug shapes INV-P8b found and INV-P8 mis-diagnosed:
+  //   - superseded-split (Part C) - coexisting multi-set shape
+  //   - non-USD summing into USD roll-up (Part D)
+  // Both throw. Neither corrects.
+  //
+  // INV-P8c (2026-08-20): Rulings 2 + 3 mark duplicate-split parents
+  // and non-USD rows as excluded=TRUE BEFORE the asserts run. The
+  // asserts see only the non-excluded slice, so they now fire only if
+  // a bug-shape row slips past the exclusion logic - defense in depth.
+  // If either assert fires post-exclusion, the derive stopped a leak.
+  try {
+    const nonExcluded = derived.filter(d => !d.excluded);
+    const supRes = assertNoSupersededSplitParents(nonExcluded, rowsByRippling);
+    console.log(`[assert] superseded-split guard (post-Ruling-2 filter): parents_checked=${supRes.parentsChecked} flagged=${supRes.flagged}`);
+    const fxRes = assertNoNonUsdAmountsSummed(nonExcluded, rowsByRippling);
+    console.log(`[assert] non-USD-into-USD guard (post-Ruling-3 filter): checked=${fxRes.checked} offenders=${fxRes.offenders}`);
+  } catch (e) {
+    console.error(`[assert] pre-write assertion failed: ${e.message}`);
+    return { ok: false, linesDerived: 0, error: e.message };
   }
 
   if (args.dryRun) {
