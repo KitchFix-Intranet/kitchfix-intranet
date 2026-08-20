@@ -453,6 +453,21 @@ async function populateCategoryCandidates(candidates) {
 // The department map was on the wrong axis (see migration
 // purchasing-2-work-location-attribution.sql).
 
+// ─── Sanity asserts (INV-P8b Part E) ─────────────────────────────────
+//
+// Deterministic-from-payload PRE-WRITE asserts imported from
+// src/lib/purchasingSpendAsserts.js. They fail the write - they never
+// silently correct. Pattern mirrors labor's pay-segment inflation guard:
+// catch the bug shape at derive time so it never lands in the fact table.
+//
+// The guards do NOT assert against the report or against employment
+// status, per Kevin's spec.
+
+import {
+  assertNoSupersededSplitParents,
+  assertNoNonUsdAmountsSummed,
+} from "../src/lib/purchasingSpendAsserts.js";
+
 // ─── Step c: derive purchasing_actuals for spend lines ───────────────
 
 async function deriveSpendLines({ rippling_ids }) {
@@ -480,13 +495,16 @@ async function deriveSpendLines({ rippling_ids }) {
   // keep the IN() URL under the PostgREST/proxy request-line limit -
   // rippling_ids are 36-char UUIDs so 500-per-chunk overflows the URL
   // (fetch fails with "TypeError: fetch failed" before any HTTP status).
+  // INV-P8b: also loads external_id + currency so the pre-write asserts
+  // can partition by parent + detect non-USD leaks before they land in
+  // purchasing_actuals.
   const ids = [...rippling_ids];
   const CHUNK_IDS = 100;
   const rowsByRippling = new Map();
   for (let i = 0; i < ids.length; i += CHUNK_IDS) {
     const chunk = ids.slice(i, i + CHUNK_IDS);
     const { data, error } = await supa.from("rippling_raw_spend_lines_latest")
-      .select("rippling_id, amount, category_id, department_id, department_label, work_location_id, work_location_label, merchant_name, first_seen_at, parent_txn_id")
+      .select("rippling_id, external_id, amount, currency, category_id, department_id, department_label, work_location_id, work_location_label, merchant_name, first_seen_at, parent_txn_id")
       .in("rippling_id", chunk);
     if (error) { console.error(`[derive] load latest chunk ${i}..${i + chunk.length} FAILED: ${error.message}`); return { ok: false, error: error.message }; }
     for (const r of data || []) rowsByRippling.set(r.rippling_id, r);
@@ -563,6 +581,26 @@ async function deriveSpendLines({ rippling_ids }) {
       paid:               false,   // Rippling card spend is card-charged; paid semantic not applicable
       approx_date:        true,    // parent object blocked; date is first_seen_at not real txn date
     });
+  }
+
+  // ─── Sanity asserts (INV-P8b Part E) - PRE-WRITE gate ─────────────
+  // These are deterministic-from-payload checks that catch the two
+  // bug shapes INV-P8b found and INV-P8 mis-diagnosed:
+  //   - superseded-split (Part C) - coexisting multi-set shape
+  //   - non-USD summing into USD roll-up (Part D)
+  // Both throw. Neither corrects. Owner rulings are outstanding on the
+  // canonical-set rule (C) and FX-rate source (D); until those land,
+  // the assert failing the write IS the correct behaviour - it stops
+  // bad totals from landing in the fact table. Run in dry-run too so
+  // probes exercise the same guard.
+  try {
+    const supRes = assertNoSupersededSplitParents(derived, rowsByRippling);
+    console.log(`[assert] superseded-split guard: parents_checked=${supRes.parentsChecked} flagged=${supRes.flagged}`);
+    const fxRes = assertNoNonUsdAmountsSummed(derived, rowsByRippling);
+    console.log(`[assert] non-USD-into-USD guard: checked=${fxRes.checked} offenders=${fxRes.offenders}`);
+  } catch (e) {
+    console.error(`[assert] pre-write assertion failed: ${e.message}`);
+    return { ok: false, linesDerived: 0, error: e.message };
   }
 
   if (args.dryRun) {
