@@ -352,8 +352,21 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
         line_code: lineCode,
         week_source: weekInfo.week_source,
         hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
-        dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
-        amount: 0,
+        // V-weekly-integer-cent 2026-08-20 - dollars accumulated as
+        // integers in 4dp precision (x10000) so the final round-to-2dp
+        // is deterministic. Prior FP accumulator (`dollars_regular +=
+        // amt` with `Math.round(x*100)/100` at write) landed on either
+        // side of a .5-cent midpoint depending on segment iteration
+        // order (918.225 raw -> 918.2249999...FP -> $918.22 stored,
+        // vs proper round -> $918.23). Daily grain PR-1 landed at 4dp
+        // integer arithmetic; weekly now matches so D1 reconciles to
+        // zero without a classifier. Owner ruling 2026-08-20 after
+        // measuring 8 midpoint rows / $0.08 aggregate drift.
+        dollarsRegularX10000:      0,
+        dollarsOvertimeX10000:     0,
+        dollarsDoubleTimeX10000:   0,
+        dollarsPremiumOtherX10000: 0,
+        amountX10000:              0,
         hours_without_dollars: 0,
         segment_count: 0,
         entry_count: 0,
@@ -383,27 +396,31 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
 
     const hrs = Number(p.segment_duration_hours || 0);
     const amt = Number(p.estimated_amount || 0);
-    bucket.amount += amt;
+    // V-weekly-integer-cent - accumulate dollars as integer x10000
+    // (4dp precision preserved from raw). Hours stay FP; the .5-cent
+    // midpoint class is dollars-only per the D1 finding.
+    const amtInt = Math.round(amt * 10000);
+    bucket.amountX10000 += amtInt;
     bucket.segment_count++;
 
     const etName = p.merged_earning_type_name || null;
     const mapEntry = etName ? earningMap.get(etName) : null;
     if (!mapEntry) {
       bucket.hours_premium_other += hrs;
-      bucket.dollars_premium_other += amt;
+      bucket.dollarsPremiumOtherX10000 += amtInt;
       if (etName) bumpUnmapped(etName, seg);
     } else if (mapEntry.bucket === "regular") {
       bucket.hours_regular += hrs;
-      bucket.dollars_regular += amt;
+      bucket.dollarsRegularX10000 += amtInt;
     } else if (mapEntry.bucket === "overtime") {
       bucket.hours_overtime += hrs;
-      bucket.dollars_overtime += amt;
+      bucket.dollarsOvertimeX10000 += amtInt;
     } else if (mapEntry.bucket === "double_time") {
       bucket.hours_double_time += hrs;
-      bucket.dollars_double_time += amt;
+      bucket.dollarsDoubleTimeX10000 += amtInt;
     } else {
       bucket.hours_premium_other += hrs;
-      bucket.dollars_premium_other += amt;
+      bucket.dollarsPremiumOtherX10000 += amtInt;
     }
   }
 
@@ -468,6 +485,52 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
 
     // Round to 2 decimals
     const round2 = x => Math.round(x * 100) / 100;
+    // V-weekly-integer-cent (kevin ruling 2026-08-20). Two invariants:
+    //
+    //   G_A internal consistency: amount == sum(dollars_regular +
+    //       dollars_overtime + dollars_double_time + dollars_premium_other)
+    //       on 100% of rows.
+    //   G_D sentinel: amount at the accumulator's integer-cent round
+    //       (so week-level sums like CIN - OH 06/29 = $4,328.27 hold).
+    //
+    // Both requires largest-remainder distribution across sub-buckets.
+    //   1. amountCents = integer-cent round of the amount accumulator
+    //      (x10000 / 100, Math.round). This is authoritative for amount.
+    //   2. floorCents on each sub-bucket = floor(x10000 / 100) in
+    //      cents. Their sum is at most amountCents (usually equal or
+    //      up to 4c less because each bucket can lose <1c of fraction).
+    //   3. Distribute the residual cents to the sub-buckets with the
+    //      largest remainders (largest-remainder method). Deterministic
+    //      given the sort order below.
+    //
+    // Result: amount == sum(sub-buckets) EXACTLY, amount matches the
+    // accumulator round to the cent, and sub-bucket values are within
+    // 1 cent of their unrounded true value.
+    const amountCents = Math.round(b.amountX10000 / 100);
+    const buckets = [
+      { key: "R", x10000: b.dollarsRegularX10000 },
+      { key: "O", x10000: b.dollarsOvertimeX10000 },
+      { key: "D", x10000: b.dollarsDoubleTimeX10000 },
+      { key: "P", x10000: b.dollarsPremiumOtherX10000 },
+    ];
+    for (const bk of buckets) {
+      bk.floorCents = Math.floor(bk.x10000 / 100);
+      bk.remainder  = (bk.x10000 / 100) - bk.floorCents;   // 0..<1 cent fraction
+    }
+    let residual = amountCents - buckets.reduce((s, x) => s + x.floorCents, 0);
+    // Distribute residual (positive: add +1 to top remainders; negative:
+    // subtract 1 from smallest remainders). Kevin: negative residuals
+    // are theoretically possible when the amount accumulator ends
+    // below the sub-bucket floors due to FP drift on tiny values; the
+    // symmetric branch preserves the amount = accumulator invariant.
+    if (residual > 0) {
+      buckets.sort((a, b) => b.remainder - a.remainder || a.key.localeCompare(b.key));
+      for (let i = 0; i < residual; i++) buckets[i].floorCents++;
+    } else if (residual < 0) {
+      buckets.sort((a, b) => a.remainder - b.remainder || a.key.localeCompare(b.key));
+      for (let i = 0; i < -residual; i++) buckets[i].floorCents--;
+    }
+    const centsByKey = Object.fromEntries(buckets.map(x => [x.key, x.floorCents]));
     const row = {
       account_key: b.account_key,
       worker_id: b.worker_id,
@@ -477,11 +540,11 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
       hours_overtime: round2(b.hours_overtime),
       hours_double_time: round2(b.hours_double_time),
       hours_premium_other: round2(b.hours_premium_other),
-      dollars_regular: round2(b.dollars_regular),
-      dollars_overtime: round2(b.dollars_overtime),
-      dollars_double_time: round2(b.dollars_double_time),
-      dollars_premium_other: round2(b.dollars_premium_other),
-      amount: round2(b.amount),
+      dollars_regular:       centsByKey.R / 100,
+      dollars_overtime:      centsByKey.O / 100,
+      dollars_double_time:   centsByKey.D / 100,
+      dollars_premium_other: centsByKey.P / 100,
+      amount:                amountCents / 100,
       hours_without_dollars: round2(b.hours_without_dollars),
       week_start: b.week_start,
       week_end: b.week_end,
