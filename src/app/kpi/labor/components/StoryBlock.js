@@ -268,12 +268,13 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
           <div className={barCls} style={{ height: `${Math.max(barPct, 2)}%` }} />
         )}
         {/* V42 REVISED - hatched cap. Sits ON TOP of the solid bar,
-            visually "stacked" via `bottom` position. Reuses the
-            existing in-progress hatch (kpi-wb-bar-prog) so no new
-            pattern or colour token. */}
+            visually stacked via `bottom` position. Hatch is unique
+            to this element after the PR-B render fix; the in-progress
+            bar itself is now solid amber, so the legend reads true:
+            hatched means exactly one thing (pay data pending). */}
         {capPct > 0 && (
           <div
-            className="kpi-wb-bar kpi-wb-bar-prog kpi-wb-cap-est"
+            className="kpi-wb-bar kpi-wb-cap-est"
             style={{ height: `${capPct}%`, bottom: `${barPct}%` }}
             title={capDollars != null ? `Estimated ~${fmt$(capDollars)} pending pay data` : undefined}
             aria-label="pay data pending, estimated"

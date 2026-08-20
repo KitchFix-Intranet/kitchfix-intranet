@@ -219,18 +219,26 @@ function flagForSeverity(s) {
 // states a condition, not a verdict on the operator. Popover on hover
 // carries the reassurance for 3a: dollars are complete, click missing.
 function flagForV42State(w, isClosed) {
-  const anomalies = Number(w.anomaly_total || 0);
-  const unpriced  = Number(w.unpriced_hrs || 0);
-  const drafts    = Number(w.draft_entry_count || 0);
+  // Sum anomaly parts directly - server-side board weeks carry a
+  // pre-summed anomaly_total, client-side weekAggregates in page.js
+  // does not. Reading parts always agrees.
+  const nc  = Number(w.anomaly_no_clockout || 0);
+  const u1  = Number(w.anomaly_under_1h    || 0);
+  const o16 = Number(w.anomaly_over_16h    || 0);
+  const anomalies = nc + u1 + o16;
+  // Aggregated week rows in page.js expose the raw column name
+  // `hours_without_dollars`; server-side board weeks expose the
+  // renamed `unpriced_hrs`. Read either so both callers land here
+  // correctly.
+  const unpriced = Number(w.unpriced_hrs ?? w.hours_without_dollars ?? 0);
+  const drafts   = Number(w.draft_entry_count || 0);
   if (anomalies > 0) {
     const detail = [];
-    const nc = Number(w.anomaly_no_clockout || 0);
-    const u1 = Number(w.anomaly_under_1h    || 0);
-    const o16 = Number(w.anomaly_over_16h   || 0);
     if (nc  > 0) detail.push(`${nc} never clocked out`);
     if (u1  > 0) detail.push(`${u1} under 1h`);
     if (o16 > 0) detail.push(`${o16} over 16h`);
     return {
+      state: "s2",
       label: `${anomalies} need${anomalies === 1 ? "s" : ""} attention - ${detail.join(", ")}`,
       cls: "kpi-flag-warn",
       tooltip: "These time entries can't be approved as-is - a human has to fix them in Rippling.",
@@ -238,6 +246,7 @@ function flagForV42State(w, isClosed) {
   }
   if (isClosed && unpriced > 0.004) {
     return {
+      state: "s3b",
       label: `closed week understated - ${unpriced.toFixed(1)} hrs missing pay data`,
       cls: "kpi-flag-bad",
       tooltip: "This closed week's dollar total is incomplete. Pay-segments for the missing hours have not landed yet.",
@@ -245,6 +254,7 @@ function flagForV42State(w, isClosed) {
   }
   if (isClosed && drafts > 0) {
     return {
+      state: "s3a",
       label: "closed week awaiting approval",
       cls: "kpi-flag-warn kpi-flag-warn-soft",
       tooltip: "Dollars for this week are complete. The entries have not been formally approved in Rippling.",
@@ -306,7 +316,14 @@ function ExceptionChip({ severity, week, todayISO }) {
     const isClosed = todayISO != null && week.week_end < todayISO;
     const v42 = flagForV42State(week, isClosed);
     if (v42) {
-      return <span className={`kpi-tbl-flag ${v42.cls}`} title={v42.tooltip}>⚠ {v42.label}</span>;
+      return (
+        <span
+          className={`kpi-tbl-flag ${v42.cls}`}
+          title={v42.tooltip}
+          data-v42-state={v42.state}
+          data-wk={week.week_start}
+        >⚠ {v42.label}</span>
+      );
     }
   }
   const f = flagForSeverity(severity);

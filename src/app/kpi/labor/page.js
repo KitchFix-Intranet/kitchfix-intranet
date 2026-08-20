@@ -305,6 +305,16 @@ export default function KpiLaborPage() {
           hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0,
           dollars_regular: 0, dollars_overtime: 0, dollars_double_time: 0, dollars_premium_other: 0,
           amount: 0, hours_without_dollars: 0,
+          // V42 REVISED (PR-B render fix) - the client-side weekly
+          // rollup needs the status + anomaly totals too; WeekTable's
+          // flagForV42State reads them directly off the aggregated
+          // `w` object. Without these, the table row saw undefined
+          // and the four-state model never fired.
+          draft_entry_count:   0,
+          draft_hours:         0,
+          anomaly_no_clockout: 0,
+          anomaly_under_1h:    0,
+          anomaly_over_16h:    0,
           worker_rows: [], coverage_states: new Set(),
         });
       }
@@ -324,6 +334,13 @@ export default function KpiLaborPage() {
       w.dollars_premium_other += Number(r.dollars_premium_other || 0);
       w.amount                += Number(r.amount                || 0);
       w.hours_without_dollars += Number(r.hours_without_dollars || 0);
+      // V42 REVISED (PR-B render fix) - sum status + anomaly fields
+      // per week so WeekTable.flagForV42State can read them off `w`.
+      w.draft_entry_count     += Number(r.draft_entry_count     || 0);
+      w.draft_hours           += Number(r.draft_hours           || 0);
+      w.anomaly_no_clockout   += Number(r.anomaly_no_clockout   || 0);
+      w.anomaly_under_1h      += Number(r.anomaly_under_1h      || 0);
+      w.anomaly_over_16h      += Number(r.anomaly_over_16h      || 0);
     }
     for (const w of byWeek.values()) {
       const states = [...w.coverage_states];
