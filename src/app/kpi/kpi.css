@@ -2118,10 +2118,16 @@
 /* V8-25 lighter red so a run of over bars reads as information, not
    an alarm wall. Same tone used across Tier A / B / C. */
 .kpi-wb-bar-over  { background: #DC5A5A; }
-/* V21-10 - Tier A in-progress bar is AMBER hatched (running-week
-   treatment). Tier B/C prog styles remain navy and are untouched. */
+/* V21-10 - Tier A in-progress bar was AMBER hatched (running-week
+   treatment). V42 PR-B - flipped to SOLID amber so the hatch is
+   reserved exclusively for kpi-wb-cap-est. Owner ruling 2026-08-20:
+   two stacked hatch layers made the cap invisible AND made the
+   legend a lie (hatch had said "running" since V21-10, the new
+   legend says "pay data pending, estimated"). Solid amber still
+   signals "running" via colour; hatch now means exactly one thing.
+   Tier B/C prog styles remain navy and are untouched. */
 .kpi-wb-bar-prog {
-  background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
+  background: var(--amber-600);
 }
 .kpi-wb-basel {
   width: 100%; height: var(--kpi-sp-2); border-radius: 3px;
@@ -2136,14 +2142,16 @@
 }
 .kpi-wb-target-blue { border-top-color: var(--kpi-blue-500); }
 /* V42 REVISED (C2) - hatched cap. Stacks on top of the solid bar
-   via absolute position + `bottom` in inline style. Reuses the
-   in-progress hatch (kpi-wb-bar-prog above) so the pattern + colour
-   are unchanged - only the placement is new. Rounded top only,
-   flat bottom so it visually merges with the solid segment beneath.
-   Owner ruling 2026-08-20: no new hatch pattern or colour token. */
+   via absolute position + `bottom` in inline style. Carries the
+   ONLY hatch pattern on the bar (after PR-B revision: the
+   in-progress bar itself is now solid amber). Same 45deg amber
+   gradient the strip has always used - no new colour token; only
+   the meaning is new: "pay data pending, estimated". Rounded top,
+   flat bottom so it visually merges with the solid segment beneath. */
 .kpi-wb-cap-est {
   position: absolute; left: 0; right: 0;
   border-radius: 4px 4px 0 0;
+  background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
   pointer-events: auto;   /* keep the title tooltip reachable */
 }
 .kpi-wb-cap {
