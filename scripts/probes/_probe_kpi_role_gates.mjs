@@ -545,6 +545,150 @@ else {
   else fail(`locked branch leaks data keys: ${leaks.join(", ")}`);
 }
 
+// ─── S1..S5 - role-gates-2 salary suppression ───────────────────────
+// One person (d.inthavone@kitchfix.com, Corporate Field Chef) keeps
+// full account visibility but never sees salary. Owner ruling
+// 2026-08-19. See docs/migrations/role-gates-2-salary-suppression.sql.
+//
+// The preview fence today only lets Kevin's email through, so
+// d.inthavone@ normally resolves null and S1..S4 have nothing to
+// assert on. Rather than defer the acceptance until Kevin opens the
+// fence, S1..S4 build a SECOND gate with the suppressed email
+// temporarily added to a scoped-local allowlist copy. S5 asserts
+// the REAL fence still wins - which it must, and does.
+const SUPPRESSED_EMAIL = "d.inthavone@kitchfix.com";
+// Load a probe-only gate whose allowlist includes d.inthavone@ so
+// resolveKpiRole can return the corporate caller and canSeeSalary
+// can be exercised. This mutates the shared KPI_PREVIEW_ALLOWLIST
+// array (const binding but mutable value) and restores it at the
+// end of the S-block.
+const allowlistSnapshot = [...KPI_PREVIEW_ALLOWLIST];
+if (!KPI_PREVIEW_ALLOWLIST.includes(SUPPRESSED_EMAIL)) KPI_PREVIEW_ALLOWLIST.push(SUPPRESSED_EMAIL);
+const suppressGate = await loadRoleGate(supa);
+if (suppressGate.error) fail(`suppression gate load error: ${suppressGate.error}`);
+
+console.log("");
+console.log("[S1] suppressed corporate: view TRUE on all 14 targets, salary FALSE on all 14, lands ALL");
+{
+  const caller = await suppressGate.resolveKpiRole(SUPPRESSED_EMAIL);
+  if (!caller) fail(`${mask(SUPPRESSED_EMAIL)} did not resolve to a role - migration applied?`);
+  else if (caller.role !== "corporate") fail(`${mask(SUPPRESSED_EMAIL)} resolved as ${caller.role}, expected corporate`);
+  else if (caller.can_see_salary !== false) fail(`${mask(SUPPRESSED_EMAIL)} resolved with can_see_salary=${caller.can_see_salary}, expected false`);
+  else {
+    ok(`${mask(SUPPRESSED_EMAIL)} resolves corporate, can_see_salary=false`);
+    let badView = 0, badSalary = 0;
+    for (const a of [...PSEUDOS, ...ACCOUNTS]) {
+      if (!gate.canViewAccount(caller, a)) { fail(`view FALSE on ${a} - suppression must not affect view`); badView++; }
+      if (gate.canSeeSalary(caller, a))    { fail(`salary TRUE on ${a} - suppression broken`); badSalary++; }
+    }
+    if (badView === 0)   ok(`canViewAccount TRUE on all 14 targets (view untouched)`);
+    if (badSalary === 0) ok(`canSeeSalary FALSE on all 14 targets (suppression complete)`);
+    if (gate.landingAccount(caller) !== "ALL") fail(`landing = ${gate.landingAccount(caller)}, expected ALL - suppression must not affect landing`);
+    else ok(`landingAccount = ALL (unchanged)`);
+  }
+}
+
+console.log("");
+console.log("[S2] suppression is BYTE-IDENTICAL with/without include_salary=1 (same route gate as G4)");
+{
+  // Same rationale G4 documents: since salary_available = canSeeSalary
+  // and includeSalary = includeSalaryReq && salary_available, when
+  // canSeeSalary is false, includeSalary is ALWAYS false regardless
+  // of the URL flag. The salary-merge branch is gated on includeSalary,
+  // so the payload is byte-identical with/without ?include_salary=1.
+  const routeSrc = fs.readFileSync(path.join(REPO_ROOT, "src/app/api/kpi/labor/route.js"), "utf8");
+  const inclLogic = /const includeSalary\s*=\s*includeSalaryReq\s*&&\s*salary_available;/.test(routeSrc);
+  if (inclLogic) ok("route.js: includeSalary = includeSalaryReq && salary_available (suppressed flag drops silently)");
+  else fail("route.js includeSalary gating branch not found - byte-identical claim broken");
+
+  // Runtime confirmation via the scoped-allowlist gate.
+  const caller = await suppressGate.resolveKpiRole(SUPPRESSED_EMAIL);
+  if (caller) {
+    const targets = ["TBR - FL", "CIN - OH", "ALL"];
+    let bad = 0;
+    for (const a of targets) {
+      if (suppressGate.canSeeSalary(caller, a)) { fail(`canSeeSalary TRUE on ${a}`); bad++; }
+    }
+    if (bad === 0) ok(`canSeeSalary FALSE on the two accounts + one aggregate S2 spec names (TBR - FL, CIN - OH, ALL)`);
+  }
+}
+
+console.log("");
+console.log("[S3] other corporate + rdo emails still see salary TRUE on all 14 targets");
+{
+  // Widen the scoped allowlist to include EVERY corporate + rdo
+  // email for this block, so the resolver actually returns their
+  // callers. Restored below with the rest of the S-block.
+  const scoped = (rolesQ.data || [])
+    .filter(r => r.role === "corporate" || r.role === "rdo")
+    .map(r => r.email.toLowerCase().trim());
+  for (const e of scoped) if (!KPI_PREVIEW_ALLOWLIST.includes(e)) KPI_PREVIEW_ALLOWLIST.push(e);
+  const wideGate = await loadRoleGate(supa);
+  const nonSuppressedCorpRdo = (rolesQ.data || []).filter(r =>
+    (r.role === "corporate" || r.role === "rdo") &&
+    r.email.toLowerCase().trim() !== SUPPRESSED_EMAIL
+  );
+  let leaked = 0;
+  for (const r of nonSuppressedCorpRdo) {
+    const caller = await wideGate.resolveKpiRole(r.email);
+    if (!caller) { fail(`${mask(r.email)} did not resolve`); leaked++; continue; }
+    if (caller.can_see_salary === false) { fail(`${mask(r.email)} unexpectedly suppressed`); leaked++; continue; }
+    for (const a of [...PSEUDOS, ...ACCOUNTS]) {
+      if (!wideGate.canSeeSalary(caller, a)) { fail(`${r.role} ${mask(r.email)} lost salary on ${a}`); leaked++; }
+    }
+  }
+  if (leaked === 0) ok(`${nonSuppressedCorpRdo.length} non-suppressed corporate + rdo emails: salary TRUE on all 14 targets each - suppression is per-person, not a global regression`);
+}
+
+console.log("");
+console.log("[S4] site roles unchanged - suppression column is absent on people, resolver treats undefined as TRUE");
+{
+  // Widen the scoped allowlist to include the TBR fixtures so the
+  // resolver returns their site_leader / site_manager callers.
+  const extra = [tbrLeader?.work_email, tbrMgr?.work_email].filter(Boolean).map(e => e.toLowerCase().trim());
+  for (const e of extra) if (!KPI_PREVIEW_ALLOWLIST.includes(e)) KPI_PREVIEW_ALLOWLIST.push(e);
+  const siteGate = await loadRoleGate(supa);
+  let badLead = 0, badMgr = 0;
+  if (tbrLeader?.work_email) {
+    const caller = await siteGate.resolveKpiRole(tbrLeader.work_email);
+    if (caller?.role !== "site_leader") { fail(`TBR - FL leader ${mask(tbrLeader.work_email)} resolved as ${caller?.role}`); badLead++; }
+    else if (!siteGate.canSeeSalary(caller, caller.scope)) { fail(`site_leader ${mask(tbrLeader.work_email)} cannot see salary on own account - regression`); badLead++; }
+    else ok(`site_leader ${mask(tbrLeader.work_email)}: salary TRUE on own account (unchanged)`);
+  } else skip("no TBR - FL leader fixture");
+  if (tbrMgr?.work_email) {
+    // Use the WIDENED siteGate here - the original `gate` cached
+    // this email as null during F3's unfenced-null assertion pass.
+    const caller = await siteGate.resolveKpiRole(tbrMgr.work_email);
+    if (caller?.role !== "site_manager") { fail(`TBR - FL mgr ${mask(tbrMgr.work_email)} resolved as ${JSON.stringify(caller)}`); badMgr++; }
+    else if (siteGate.canSeeSalary(caller, caller.scope)) { fail(`site_manager ${mask(tbrMgr.work_email)} sees salary on own account - regression`); badMgr++; }
+    else ok(`site_manager ${mask(tbrMgr.work_email)}: salary FALSE on own account (unchanged)`);
+  } else skip("no TBR - FL manager fixture");
+}
+
+// Restore the REAL allowlist before S5 - that assertion is the
+// whole point of the scoped-mutation pattern: after all the widened
+// gates prove suppression + regression, put the fence back and
+// confirm d.inthavone@ resolves null exactly as an unlisted email.
+KPI_PREVIEW_ALLOWLIST.length = 0;
+for (const e of allowlistSnapshot) KPI_PREVIEW_ALLOWLIST.push(e);
+
+console.log("");
+console.log("[S5] preview fence still wins: d.inthavone@ resolves null under KPI_PREVIEW_ONLY = true");
+if (!fenceOn) skip("fence OFF; S5 only meaningful under KPI_PREVIEW_ONLY = true");
+else {
+  const fenceGate = await loadRoleGate(supa);
+  const caller = await fenceGate.resolveKpiRole(SUPPRESSED_EMAIL);
+  if (!KPI_PREVIEW_ALLOWLIST.includes(SUPPRESSED_EMAIL)) {
+    if (caller !== null) fail(`${mask(SUPPRESSED_EMAIL)} resolved to ${JSON.stringify(caller)} under the fence - suppression must not create a path around the allowlist`);
+    else ok(`${mask(SUPPRESSED_EMAIL)} resolves null under the fence (suppression sits INSIDE the role model)`);
+  } else {
+    // If d.inthavone@ is ever added to the allowlist for a preview,
+    // the fence lets them through; S1 then covers the suppression.
+    if (caller?.role === "corporate" && caller?.can_see_salary === false) ok(`${mask(SUPPRESSED_EMAIL)} allowlisted; fence passes, suppression carries through`);
+    else fail(`allowlisted ${mask(SUPPRESSED_EMAIL)} resolved as ${JSON.stringify(caller)}`);
+  }
+}
+
 // ─── Sentinel: CIN - OH 06/29 on a corporate session ────────────────
 console.log("");
 console.log("[sentinel] CIN - OH 06/29 account-week sum unchanged (113.98 / 2.32 / 4328.27)");
