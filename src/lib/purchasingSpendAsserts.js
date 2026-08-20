@@ -1,13 +1,14 @@
 // src/lib/purchasingSpendAsserts.js
 //
 // PRE-WRITE sanity asserts for the Rippling spend derive
-// (scripts/purchasing_rippling_sync.mjs), added by INV-P8b Part E.
+// (scripts/purchasing_rippling_sync.mjs), added by INV-P8b Part E and
+// extended by Ruling 4 (2026-08-20).
 //
 // These are DETERMINISTIC FROM PAYLOAD. They fail the write; they never
 // silently correct. Pattern mirrors labor's pay-segment inflation guard:
 // catch the bug SHAPE at derive time so it never lands in the fact table.
 //
-// INV-P8b findings driving these:
+// INV-P8b findings driving the original two:
 //   Part C - the payload carries NO version / revision / is_current
 //     flag, so a "canonical set" cannot be inferred without owner
 //     ruling. But the coexisting-multi-set SHAPE (parent has lines
@@ -22,14 +23,14 @@
 //     current corpus - unreliable). Any non-USD amount summing into a
 //     USD roll-up is a defect regardless of the FX rule.
 //
-// The guards do NOT assert against the report or against employment
-// status, per Kevin's spec.
+// Ruling 4 (2026-08-20) adds a third: no non-excluded parent may have a
+// later same-merchant same-amount partner within 5 days that is ALSO
+// non-excluded. Enforces the auth->settlement pair collapse the derive
+// applies with report-arbitration precedence.
 //
-// Both throw an Error with a diagnostic first-5-samples string so the
-// operator sees which parents / lines fired the guard. Owner rulings
-// on the canonical-set rule (C) and FX-rate source (D) are outstanding;
-// until those land, the assert failing the write IS the correct
-// behaviour.
+// The guards do NOT assert against the report or against employment
+// status per Kevin's spec. Ruling 4's report-arbitration lookup happens
+// in the derive; the assert only checks the post-arbitration slice.
 //
 // Contract:
 //   derivedRows        : array of objects with `source_line_id` (string
@@ -101,6 +102,79 @@ export function assertNoSupersededSplitParents(derivedRows, rawRowsByRippling) {
     );
   }
   return { parentsChecked: byParent.size, flagged: flagged.length };
+}
+
+/**
+ * Ruling 4 assert (2026-08-20). No non-excluded parent may have a later
+ * same-merchant same-amount partner within 5 days that is ALSO non-
+ * excluded. Enforces the pair collapse the derive is supposed to have
+ * applied. Report-arbitration precedence is expressed by the derive; this
+ * assert only checks the post-arbitration slice for leaks.
+ *
+ * Contract:
+ *   nonExcludedDerived : array of {source_line_id, amount, txn_date,
+ *                        vendor_or_merchant}
+ * Groups by (merchant, amount-cents). Within each group, sorts by
+ * txn_date + source_line_id (stable tiebreak). Fires if any adjacent pair
+ * is within 5 days.
+ *
+ * Do NOT widen the 5-day window. Do NOT match on amount alone.
+ */
+export function assertNoAuthPairSurvivors(nonExcludedDerived, { windowDays = 5 } = {}) {
+  // Group by (merchant, cents). Key uses JSON.stringify so any merchant
+  // name is unambiguous; per-row _merchant / _cents avoid needing to
+  // split the key back apart.
+  const byKey = new Map();
+  for (const r of nonExcludedDerived) {
+    if (r.amount == null) continue;
+    const cents = Math.round(Number(r.amount) * 100);
+    if (cents === 0) continue;  // zero-amount handled by Ruling 5, not Ruling 4
+    const merchant = (r.vendor_or_merchant || "").trim();
+    if (!merchant) continue;    // Rule requires merchant AND amount; no merchant -> no group
+    if (!r.txn_date) continue;
+    const key = JSON.stringify([merchant, cents]);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push({ ...r, _merchant: merchant, _cents: cents });
+  }
+  const flagged = [];
+  for (const arr of byKey.values()) {
+    if (arr.length < 2) continue;
+    arr.sort((a, b) => {
+      if (a.txn_date < b.txn_date) return -1;
+      if (a.txn_date > b.txn_date) return 1;
+      const aid = String(a.source_line_id || "");
+      const bid = String(b.source_line_id || "");
+      return aid < bid ? -1 : aid > bid ? 1 : 0;
+    });
+    for (let i = 0; i < arr.length - 1; i++) {
+      const a = arr[i];
+      const b = arr[i + 1];
+      const da = new Date(a.txn_date + "T00:00:00Z").getTime();
+      const db = new Date(b.txn_date + "T00:00:00Z").getTime();
+      const days = Math.round((db - da) / 86400000);
+      if (days >= 0 && days <= windowDays) {
+        flagged.push({
+          merchant: a._merchant,
+          cents:    a._cents,
+          days,
+          earlier:  a.source_line_id,
+          later:    b.source_line_id,
+        });
+      }
+    }
+  }
+  if (flagged.length > 0) {
+    const sample = flagged.slice(0, 5)
+      .map(f => `${f.merchant}@$${(f.cents / 100).toFixed(2)} days=${f.days} earlier=${f.earlier} later=${f.later}`)
+      .join(" | ");
+    throw new Error(
+      `[assert] auth-pair survivors: ${flagged.length} non-excluded pair(s) found `
+      + `within ${windowDays} days sharing merchant + amount. Ruling 4 requires the earlier `
+      + `to be excluded (or both kept when both are in the report). First 5: ${sample}. `
+      + `Write blocked - the derive did not apply Ruling 4 precedence correctly.`
+    );
+  }
+  return { groupsChecked: byKey.size, flagged: 0 };
 }
 
 /**
