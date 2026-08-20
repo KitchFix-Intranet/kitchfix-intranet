@@ -372,6 +372,15 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
         entry_count: 0,
         coveredEntries: new Set(),   // te.rippling_id -> covered by at least one live segment
         seenEntries:    new Set(),   // te.rippling_id -> exists in bucket
+        // V42 REVISED (C1 state model) - status-based unapproved
+        // accumulators. Read p.status explicitly rather than infer
+        // approval from hours_without_dollars (a coverage proxy).
+        // Populates the five columns added in v42-1-unapproved-derive.sql.
+        draft_entry_count:   0,
+        draft_hours:         0,   // sum of time_entry_summary.duration on DRAFT entries
+        anomaly_no_clockout: 0,   // DRAFT + end_time missing/empty (18 today, ZERO ever approved)
+        anomaly_under_1h:    0,   // DRAFT + duration < 1.0h (double-punch class)
+        anomaly_over_16h:    0,   // DRAFT + duration > 16.0h (deliberately above 15.32h approved max)
       };
       bucketRows.set(k, b);
     }
@@ -424,8 +433,9 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
     }
   }
 
-  // ── 9. Second pass: time-entries -> entry_count, hours_without_dollars
-  log("processing time-entries for coverage + hours_without_dollars...");
+  // ── 9. Second pass: time-entries -> entry_count, hours_without_dollars,
+  //       + V42 REVISED draft-status accumulators
+  log("processing time-entries for coverage + hours_without_dollars + V42 unapproved state...");
   for (const te of teRows) {
     const p = te.payload || {};
     const workerId = p.worker_id;
@@ -453,6 +463,27 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
       // NOT from zo.duration_hours (which is null once ZO is pruned)
       const dur = Number(p.time_entry_summary?.duration || 0);
       bucket.hours_without_dollars += dur;
+    }
+
+    // V42 REVISED (C1 state model) - status-based unapproved fields.
+    // Read p.status explicitly (APPROVED / DRAFT). Duration comes
+    // from p.time_entry_summary.duration - same source the existing
+    // hours_without_dollars accumulator uses; NOT from zo.duration_hours,
+    // which is null once the ZO record is pruned.
+    //
+    // Anomalies are DRAFT-only. Owner ruling 2026-08-20: 12-14 hour
+    // shifts are real doubleheaders (14 APPROVED in the measurement),
+    // so the over-hours threshold sits at 16.0h - deliberately above
+    // the observed 15.32h approved max. Under-1h catches double-punch
+    // (1 approved in the measurement, versus 18 no-clock-out DRAFT
+    // entries and ZERO approved - never legitimate).
+    if (p.status === "DRAFT") {
+      const dur = Number(p.time_entry_summary?.duration || 0);
+      bucket.draft_entry_count++;
+      bucket.draft_hours += dur;
+      if (!p.end_time) bucket.anomaly_no_clockout++;
+      if (dur > 0 && dur < 1.0) bucket.anomaly_under_1h++;
+      if (dur > 16.0) bucket.anomaly_over_16h++;
     }
   }
 
@@ -554,6 +585,16 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
       segment_count: b.segment_count,
       entry_count: b.entry_count,
       coverage_state,
+      // V42 REVISED (C1 state model). Nullable columns per
+      // v42-1-unapproved-derive.sql; the derive always emits an
+      // integer for the counts and a rounded number for hours so
+      // downstream aggregators see zero, not null, on a re-derived
+      // row. Existing rows stay NULL until the first re-derive.
+      draft_entry_count:   b.draft_entry_count,
+      draft_hours:         round2(b.draft_hours),
+      anomaly_no_clockout: b.anomaly_no_clockout,
+      anomaly_under_1h:    b.anomaly_under_1h,
+      anomaly_over_16h:    b.anomaly_over_16h,
     };
 
     if (!perAccount.has(b.account_key)) perAccount.set(b.account_key, []);

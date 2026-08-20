@@ -1,0 +1,117 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- v42-1-unapproved-derive.sql
+--
+-- V42 REVISED (C1 state model). Adds five nullable columns to
+-- labor_actuals so the derive can carry the three-state unapproved
+-- model directly off time_entry.status + end_time + duration, instead
+-- of inferring approval from hours_without_dollars (a coverage
+-- proxy, not an approval one).
+--
+-- Why these five columns
+-- ──────────────────────
+-- The board today reads a single "unapproved_hours" signal wired
+-- through hours_without_dollars in the derive. Measured 2026-08-20:
+-- every closed week from 06/29 forward carries ZERO unapproved
+-- hours; only the CURRENT week does. That means the "unapproved"
+-- flag would fire on every account, every day, on a state that is
+-- normal operation (someone's shift is still open, or their timesheet
+-- hasn't been approved yet). Alarm fatigue on a normal state kills
+-- the exact instinct the flag was meant to trigger.
+--
+-- V42 splits that one signal into three states that the client will
+-- render separately (in a follow-up PR-B). This migration only lands
+-- the schema; the derive change in the same commit populates the
+-- new columns without touching any existing dollar or hour field.
+--
+--   draft_entry_count     INT     - count of DRAFT entries in the bucket
+--   draft_hours           NUMERIC - sum of duration on DRAFT entries
+--                                   (source: time_entry_summary.duration,
+--                                   same field the existing
+--                                   hours_without_dollars accumulator
+--                                   uses at deriveActuals.js:454)
+--   anomaly_no_clockout   INT     - DRAFT entries with end_time null/empty
+--                                   (18 today, ZERO ever approved -
+--                                   never legitimate; the actionable class)
+--   anomaly_under_1h      INT     - DRAFT entries with duration < 1.0h
+--                                   (double-punch class)
+--   anomaly_over_16h      INT     - DRAFT entries with duration > 16.0h
+--                                   (deliberately above the observed
+--                                   15.32h APPROVED max; 12-14h is a
+--                                   real doubleheader class and would
+--                                   trigger alarm fatigue if flagged)
+--
+-- Owner ruling 2026-08-20: read status explicitly, do not infer
+-- approval from hours_without_dollars, do not flag 12-14 hour shifts.
+--
+-- Schema safety
+-- ─────────────
+-- All five columns are NULLABLE with no explicit default, so:
+--   (1) the ALTER TABLE below is a metadata change on the existing
+--       (~5,000-row) labor_actuals table and should complete in
+--       seconds - no row rewrite;
+--   (2) existing rows keep NULL until the next full re-derive
+--       populates them; the client's V42 aggregators (PR-B) treat
+--       NULL as 0 so closed weeks with no re-derived data still
+--       render correctly;
+--   (3) no existing dollar or hour column is touched. The sentinel
+--       probe scripts/_probe_v42_sentinel.mjs is expected to return
+--       IDENTICAL values before this migration and after (and after
+--       the re-derive) for CIN - OH week 2026-06-29: 113.98 reg /
+--       2.32 ot / 39.91 dt / $4,328.27. Any drift is the FIRST
+--       thing to investigate.
+--
+-- Apply discipline
+-- ────────────────
+-- 1. Kevin applies statements sequentially in Supabase Studio.
+-- 2. The ALTER TABLE below is metadata only; no data movement.
+-- 3. After apply, run the full nightly re-derive (or wait for the
+--    next scheduled walk) so the new columns populate for every
+--    worker-week from FY-start forward.
+-- 4. Re-run scripts/_probe_v42_sentinel.mjs after the re-derive
+--    completes and verify the sentinel line matches exactly.
+-- 5. PR-B (bar + table flag + Payroll card retarget) can safely
+--    merge once the sentinel probe passes post-re-derive.
+-- ═══════════════════════════════════════════════════════════════════
+
+-- ─── Five new columns on labor_actuals ─────────────────────────────
+ALTER TABLE labor_actuals
+  ADD COLUMN IF NOT EXISTS draft_entry_count   INT           NULL,
+  ADD COLUMN IF NOT EXISTS draft_hours         NUMERIC(10,2) NULL,
+  ADD COLUMN IF NOT EXISTS anomaly_no_clockout INT           NULL,
+  ADD COLUMN IF NOT EXISTS anomaly_under_1h    INT           NULL,
+  ADD COLUMN IF NOT EXISTS anomaly_over_16h    INT           NULL;
+
+-- ─── Post-state (paste in the attestation) ─────────────────────────
+--   SELECT column_name, data_type, is_nullable
+--     FROM information_schema.columns
+--    WHERE table_name = 'labor_actuals'
+--      AND column_name IN ('draft_entry_count','draft_hours',
+--                          'anomaly_no_clockout','anomaly_under_1h',
+--                          'anomaly_over_16h')
+--    ORDER BY column_name;
+-- expected: 5 rows, all is_nullable = YES.
+--
+--   SELECT hours_regular, hours_overtime, hours_double_time, amount
+--     FROM labor_actuals
+--    WHERE account_key = 'CIN - OH' AND week_start = '2026-06-29';
+-- expected (weekly integer-cent sentinel, per PR #729):
+--   sum of hours_regular = 113.98
+--   sum of hours_overtime = 2.32
+--   sum of hours_double_time = 39.91
+--   sum of amount = 4328.27
+-- No value should have moved from before this migration.
+
+
+-- ═══════════════════════════════════════════════════════════════════
+--
+--   A P P L I E D   I N   S T U D I O   A T T E S T A T I O N
+--
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- applied in Studio: PENDING
+-- sha:                <fill in commit SHA>
+-- applied by:         k.fietek@kitchfix.com
+-- applied at:         <fill in ISO timestamp>
+-- re-derive run:      <fill in ISO timestamp of the next full derive after apply>
+-- sentinel probe:     <PASS | FAIL - result of _probe_v42_sentinel.mjs post-re-derive>
+-- notes:              <optional - anything that needed manual attention>
