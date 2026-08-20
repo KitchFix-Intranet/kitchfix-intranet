@@ -43,8 +43,13 @@
 //                       Rollup of 3200.x/3400.x/3500.x from bills
 //                       only (§3.4: bucket card state uses bills
 //                       only; card spend cannot be attributed to a
-//                       bucket). Envelope accounts excluded from
-//                       budget rollup (V6_ENVELOPE_ACCOUNTS).
+//                       bucket). Envelope-account exclusion is now a
+//                       named empty set - see PURCHASING_ENVELOPE_EXCLUSIONS
+//                       in src/lib/accountModels.js. For pass_through
+//                       accounts (CIN - OH, STL - FL, STL - MO) each
+//                       bucket returns state='passthru', variance=null,
+//                       pace_pct=null - the stewardship budget still
+//                       returns as context, not as a target.
 //   periods            [{ period_no, start, end, spent, budget,
 //                         weeks, closed }] for P1..currentPeriodNo.
 //                       Spent is bills+card (bucket-neutral - matches
@@ -112,10 +117,27 @@ import {
   FY_START_ISO, periodOf, periodStartISO, periodEndISO,
   weekStartsInRange, inferRangeSelection, currentPeriodNo,
 } from "@/app/kpi/labor/lib/periods.js";
+// Cost-model constants live in the shared module (Kevin ruling
+// 2026-08-20). PASS_THROUGH_ACCOUNTS drives the state-resolver
+// distinction (see stateOf below + pass_through short-circuit in the
+// buckets rollup). PURCHASING_ENVELOPE_EXCLUSIONS replaces the inline
+// V6_ENVELOPE_ACCOUNTS constant this route used to carry - it is now
+// a named empty set (TXR - TX - V's purchasing envelope was removed
+// per the same ruling; its budget resolves from kpi_budgets like every
+// other at-risk account).
+import {
+  PASS_THROUGH_ACCOUNTS,
+  PURCHASING_ENVELOPE_EXCLUSIONS,
+  costModelFor,
+} from "@/lib/accountModels";
 
 const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
-const V6_ENVELOPE_ACCOUNTS = new Set(["TXR - TX - V"]);
+// V6_ENVELOPE_ACCOUNTS is retained as an alias for readability at the
+// call sites that still spell it that way. It now points at the
+// shared PURCHASING_ENVELOPE_EXCLUSIONS - an empty set - so the
+// exclusion is a named empty concept, not a per-route silent removal.
+const V6_ENVELOPE_ACCOUNTS = PURCHASING_ENVELOPE_EXCLUSIONS;
 const V6_PAGE_DEFAULT = 1000;
 // PostgREST .in() with 100+ 36-char UUIDs or 51+ char
 // rippling_spend:<uuid> ids overflows the URL and throws
@@ -203,7 +225,21 @@ function chunk(values, size = IN_CHUNK) {
 // State resolver (§3.4). One implementation. The pill, the bar
 // pattern, the hero colour and the table variance all read from this.
 // Three elements disagreeing about the same bucket is a P0.
-function stateOf({ spent, budget, elapsedFrac, hasBills }) {
+//
+// PASS_THROUGH SEMANTICS (Kevin ruling 2026-08-20):
+//   For a pass_through account (CIN - OH, STL - FL, STL - MO) the
+//   caller passes { isPassThrough: true } and this returns 'passthru'
+//   - a distinct state, not 'under'. The stewardship budget still
+//     rides on the payload as context; there is NO variance state,
+//     NO over/under verdict, NO pace pill. Rendering rules elsewhere
+//     must map 'passthru' to a "Billed back to client" affordance
+//     rather than dropping the row.
+//   This is deliberately BEFORE the budget check - a pass-through
+//   account with no budget populated still resolves to 'passthru',
+//   not 'nobud', so the render stays consistent while the
+//   stewardship-budget seeding lands.
+function stateOf({ spent, budget, elapsedFrac, hasBills, isPassThrough }) {
+  if (isPassThrough) return "passthru";
   if (!(budget > 0)) return "nobud";
   if (!hasBills) return "none";
   if (!(elapsedFrac > 0)) return "none";
@@ -687,9 +723,44 @@ export async function GET(request) {
     return wEnd < todayDate;
   }).length;
 
+  // PASS_THROUGH single-account short-circuit (Kevin ruling 2026-08-20):
+  //   For a single pass_through account (CIN - OH, STL - FL, STL - MO)
+  //   the operator is NOT held to a KPI on the reimbursable bucket. In
+  //   the purchasing route this means:
+  //     - state = 'passthru' (a distinct value; not 'under')
+  //     - no variance
+  //     - no pace_pct
+  //     - the stewardship budget from kpi_budgets still returns as
+  //       CONTEXT (a number to compare against for the report reader)
+  //       but is NOT rendered as a target with over/under semantics
+  //   The bucket-level `spent` still reports in full, per bucket, per
+  //   week - passing the raw spend up to the caller is the point of
+  //   the route; only the verdict layer is suppressed.
+  //
+  //   Aggregates (ALL / EAST / WEST) are NOT short-circuited - a mixed
+  //   aggregate rolls up at-risk and pass_through spend together and
+  //   the caller must decide how to present. This route does not gross-
+  //   up or net-out - that is a rendering-layer question Kevin ruled
+  //   is UNKNOWN in INV-P9 Q5.
+  const isPassThroughAccount = !isAggregate && PASS_THROUGH_ACCOUNTS.has(account);
+
   const categories = orderedGl.map(gl => {
     const budget = budgetForRange({ byLine: budgetsByLine, glLineCode: gl, members, start, end });
     const spent = spentForGl(gl);
+    // Pass-through: suppress variance + pace_pct at the category level.
+    // Budget and spent still flow (context values); variance/pace are
+    // null because the operator is not measured on them.
+    if (isPassThroughAccount) {
+      return {
+        gl_line_code: gl,
+        bucket:       glBucketFor(gl),
+        budget:       budget,
+        spent:        spent,
+        variance:     null,
+        pace_pct:     null,
+        final:        false,
+      };
+    }
     const variance = Math.round((spent - budget) * 100) / 100;
     // pace_pct: for in-progress ranges, spend rate vs allowed rate.
     // Closed: pace_pct = spent/budget (final variance implied).
@@ -728,6 +799,22 @@ export async function GET(request) {
     }
     const budgetR = Math.round(budget * 100) / 100;
     const spentR  = Math.round(spent  * 100) / 100;
+    // Pass-through short-circuit: null variance + null pace, state
+    // resolves to 'passthru'. Budget and spent still return as
+    // context.
+    if (isPassThroughAccount) {
+      return {
+        bucket:       key,
+        label,
+        gl_prefix,
+        budget:       budgetR,
+        spent:        spentR,
+        variance:     null,
+        pace_pct:     null,
+        state:        stateOf({ isPassThrough: true }),
+        line_codes,
+      };
+    }
     const varianceR = Math.round((spentR - budgetR) * 100) / 100;
     let pace_pct = null;
     if (endDate < todayDate) {
@@ -862,12 +949,37 @@ export async function GET(request) {
   // Sentinel: value the route returns for the frozen probe.
   const sentinelResp = await computeSentinel(supa);
 
+  // cost_model: single-account calls carry the resolved cost model
+  // (at_risk / pass_through / revenue_flex). Aggregates get null -
+  // aggregates roll up mixed cost models and the caller must decide
+  // how to present.
+  //
+  // billed_back_reachable: is "billed back to client" derivable from
+  // data we hold today? The route reports the honest answer per INV-P9
+  // Q5. Reimbursable spend IS captured (13xx GL bucket, per PLAYBOOK
+  // §5.2). The client-invoice-back TIMESTAMP + AMOUNT event is NOT
+  // captured today - we know KitchFix ordered it, we do not have a
+  // record of when/whether Sebastian invoiced the client for it. So
+  // reachable = false. What it would need: a bill.com AR-side hook or
+  // a manual "billed on" field on the reimbursable row.
+  //
+  // Do NOT build the billed-back-to-client stream here - Kevin ruled
+  // Part B is report-only in this PR.
+  const cost_model = isAggregate ? null : costModelFor(account);
+  const billed_back_reachable = {
+    reachable: false,
+    reason: "no AR-side event captured today - reimbursable spend row (13xx) records KitchFix order + cost, but the client-invoice-back timestamp and amount are not persisted",
+    would_need: "a bill.com AR-side hook that stamps the reimbursable row on client invoice, or a manual 'billed_on' field on the reimbursable row",
+  };
+
   const payload = {
     ok: true,
     filters: { account, start, end, drill: includeLines ? "lines" : null },
     is_aggregate: isAggregate,
     members,
     range: { start, end },
+    cost_model,
+    billed_back_reachable,
     fiscal: {
       fiscal_year:           fyForRange,
       period_no:             periodNo,
