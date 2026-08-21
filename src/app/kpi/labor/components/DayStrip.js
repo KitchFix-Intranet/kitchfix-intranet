@@ -35,13 +35,26 @@ function dowShort(iso) {
     .toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
 }
 
-function DayBar({ day, dailyTarget, scale, todayISO, density }) {
+function DayBar({ day, dailyTarget, scale, todayISO, density, variant, gameDates, nightGameDates }) {
   const amount = day.amountX10000 / 10000;
   const isToday = day.workDate === todayISO;
   const isFuture = day.workDate > todayISO;
   const isZero = !isFuture && amount <= 0.5;
   const barPct = isFuture ? 0 : Math.max(0, Math.min(100, (amount / scale) * 90));
-  const barCls = isToday ? "kpi-wb-bar kpi-wb-bar-prog" : "kpi-wb-bar kpi-wb-bar-under";
+  // Fill class: variance encodes STATE (green under, amber running today);
+  // identity encodes IDENTITY (navy night, blue day, hatch prep, stub zero).
+  // Owner reminder 2026-08-21: identity variant must never use green
+  // or red - those mean under/over budget on the rail card, and a
+  // green day-game would read as "good" when it only means daylight.
+  let barCls;
+  if (variant === "identity") {
+    if (isZero || isFuture) barCls = "kpi-wb-bar kpi-hs-day-zero";
+    else if (nightGameDates?.has(day.workDate)) barCls = "kpi-wb-bar kpi-hs-day-night";
+    else if (gameDates?.has(day.workDate)) barCls = "kpi-wb-bar kpi-hs-day-day";
+    else barCls = "kpi-wb-bar kpi-hs-day-prep";
+  } else {
+    barCls = isToday ? "kpi-wb-bar kpi-wb-bar-prog" : "kpi-wb-bar kpi-wb-bar-under";
+  }
   const targetPct = (dailyTarget != null && dailyTarget > 0)
     ? Math.max(0, Math.min(100, (dailyTarget / scale) * 90))
     : null;
@@ -108,29 +121,6 @@ export function DayStrip({ data, todayISO }) {
       ? "Over pro-rated budget"
       : "Under pro-rated budget";
 
-  // Measure the plot strip and pick the caption density from the
-  // actual per-bar pixel width. Kevin's field measurement: at
-  // 1920px the plot is 1162px so N=10 gives 103px per bar (full);
-  // at 375px the plot is ~340px so N=10 gives 34px per bar
-  // (minimal). A count-based rule cannot distinguish those. The
-  // pure chooseLabelDensity(width, count) function is in
-  // dayRangeAggregate.js so the probe can drive both boundaries
-  // without a viewport it cannot resize in CI.
-  const stripRef = useRef(null);
-  const [density, setDensity] = useState(() => chooseLabelDensity(0, days.length));
-  useEffect(() => {
-    const el = stripRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const update = () => {
-      const w = el.getBoundingClientRect().width;
-      setDensity(chooseLabelDensity(w, days.length));
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [days.length]);
-
   return (
     <div className="kpi-day-range" role="region" aria-label="Custom range summary">
       <header className="kpi-day-range-hdr">
@@ -159,23 +149,84 @@ export function DayStrip({ data, todayISO }) {
         </div>
       </div>
 
-      <div
-        ref={stripRef}
-        className="kpi-wbars kpi-day-range-strip"
-        style={{ gridTemplateColumns: `repeat(${Math.max(1, days.length)}, minmax(0, 1fr))` }}
-        data-density={density}
-      >
-        {perDay.map(day => (
-          <DayBar
-            key={day.workDate}
-            day={day}
-            dailyTarget={dailyTarget}
-            scale={scale}
-            todayISO={todayISO}
-            density={density}
-          />
-        ))}
-      </div>
+      <DayStripPlot
+        perDay={perDay}
+        dailyTarget={dailyTarget}
+        scale={scale}
+        todayISO={todayISO}
+        variant="variance"
+      />
     </div>
   );
 }
+
+// The bar plot in isolation - callable from any parent card that
+// wants a per-day strip without the CUSTOM RANGE header + budget/spent
+// summary. Owner ruling 2026-08-21 after PR-2 review: keep density
+// picker + layout + zero-day stub in ONE place, only the fill rule
+// branches on `variant`. See DayBar for the identity vs variance
+// fill logic.
+export function DayStripPlot({
+  perDay, dailyTarget = 0, scale, todayISO,
+  variant = "variance",
+  gameDates,           // Set<ISO string>  - required for variant="identity"
+  nightGameDates,      // Set<ISO string>  - required for variant="identity"
+  ariaLabel = "Per-day labor",
+}) {
+  // Measure the plot strip and pick the caption density from the
+  // actual per-bar pixel width. Kevin's field measurement: at
+  // 1920px the plot is 1162px so N=10 gives 103px per bar (full);
+  // at 375px the plot is ~340px so N=10 gives 34px per bar
+  // (minimal). A count-based rule cannot distinguish those. Both
+  // variants share this picker so a density fix lands once.
+  const stripRef = useRef(null);
+  const n = perDay?.length || 0;
+  const [density, setDensity] = useState(() => chooseLabelDensity(0, n));
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const update = () => {
+      const w = el.getBoundingClientRect().width;
+      setDensity(chooseLabelDensity(w, n));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [n]);
+
+  const effectiveScale = scale ?? (() => {
+    let max = dailyTarget || 1;
+    for (const d of perDay || []) if (d.amountX10000 / 10000 > max) max = d.amountX10000 / 10000;
+    return max * 1.10;
+  })();
+
+  return (
+    <div
+      ref={stripRef}
+      className="kpi-wbars kpi-day-range-strip"
+      style={{ gridTemplateColumns: `repeat(${Math.max(1, n)}, minmax(0, 1fr))` }}
+      data-density={density}
+      data-variant={variant}
+      aria-label={ariaLabel}
+    >
+      {(perDay || []).map(day => (
+        <DayBar
+          key={day.workDate}
+          day={day}
+          dailyTarget={variant === "variance" ? dailyTarget : null}
+          scale={effectiveScale}
+          todayISO={todayISO}
+          density={density}
+          variant={variant}
+          gameDates={gameDates}
+          nightGameDates={nightGameDates}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Convenience: same aggregator the custom-range path uses, exported
+// for callers that already have actuals_daily rows in hand.
+export { aggregatePerDay, isoRange };

@@ -28,6 +28,7 @@ import { ComparisonStrip } from "./components/ComparisonStrip";
 import { DetailsStrip } from "./components/DetailsStrip";
 import { WeekTable } from "./components/WeekTable";
 import { DayStrip } from "./components/DayStrip";
+import { HomestandBoard } from "./components/HomestandBoard";
 import {
   StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
   StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired, LockedPanel,
@@ -109,6 +110,14 @@ export default function KpiLaborPage() {
   const start = urlStart || FY_START;
   const end = urlEnd || today;
   const redact = searchParams.get("redact") === "1";
+  // homestand PR-2 - view + homestand params. `?view=homestand`
+  // switches the render subtree; default is period. `?homestand=<game_start>`
+  // is the URL key for the selected stand (owner ruling 2026-08-21:
+  // one format for all six accounts, deterministic, human-readable
+  // in a shared link, and it sorts).
+  const urlView = searchParams.get("view") || "period";
+  const urlHomestand = searchParams.get("homestand");
+  const [expandedHomestand, setExpandedHomestand] = useState(null);
   const workersParam = (searchParams.get("workers") || "").trim();
   const selectedWorkers = useMemo(
     () => (workersParam ? new Set(workersParam.split(",").filter(Boolean)) : null),
@@ -190,6 +199,11 @@ export default function KpiLaborPage() {
     // (spec T-2), so a shared link that opens as a site leader is
     // silently rendered hourly - no message needed, that is correct.
     if (searchParams.get("salary") === "1") params.set("include_salary", "1");
+    // homestand PR-2 - if the URL selects a stand, the route uses
+    // its window as [start, end] regardless of the start/end params.
+    // Include the flag so the route builds the split + selected-stand
+    // metadata into the response.
+    if (urlHomestand) params.set("homestand", urlHomestand);
     const markBase = `kpi-labor-fetch-${account}`;
     try { performance.mark(`${markBase}-start`); } catch {}
     fetch(`/api/kpi/labor?${params}`, { signal: ctrl.signal })
@@ -738,9 +752,75 @@ export default function KpiLaborPage() {
     return `${start} to ${end}`;
   })();
 
+  // homestand PR-2 - view tab click handler. Preserves the account +
+  // salary flags; drops the homestand param when leaving the view so
+  // period requests do not carry a stale selection.
+  const setView = (nextView) => {
+    const p = new URLSearchParams(searchParams.toString());
+    if (nextView === "period") { p.delete("view"); p.delete("homestand"); }
+    else                       { p.set("view", nextView); }
+    router.push(`/kpi/labor?${p.toString()}`);
+  };
+  const selectHomestand = (gameStart) => {
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("view", "homestand");
+    p.set("homestand", gameStart);
+    router.push(`/kpi/labor?${p.toString()}`);
+  };
+  const hasHomestandTab = !isSalaried && loadState === "ok" && (data?.homestands?.length || 0) > 0;
+  const inHomestandView = urlView === "homestand" && hasHomestandTab;
+  const hourlyRate = data?.salary_available && data?.blended_rate_hourly
+    ? data.blended_rate_hourly
+    : (data?.board?.avg_rate || 0);
+
   // ── Middle content: board (sentence + story) then WeekTable + 9 states ──
   const mainContent = (
     <>
+      {/* homestand PR-2 - view tabs. Rendered only for MLB accounts
+          (data.homestands is non-empty). Absent, not disabled, on
+          non-MLB accounts per owner ruling 2026-08-21. */}
+      {hasHomestandTab && (
+        <div className="kpi-hs-view-tabs" role="tablist" aria-label="Board view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!inHomestandView}
+            className={`kpi-hs-view-tab ${!inHomestandView ? "on" : ""}`}
+            onClick={() => setView("period")}
+            data-view-tab="period"
+          >
+            Period
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={inHomestandView}
+            className={`kpi-hs-view-tab ${inHomestandView ? "on" : ""}`}
+            onClick={() => setView("homestand")}
+            data-view-tab="homestand"
+          >
+            Homestand
+            <span className="kpi-hs-view-tab-cnt">{data.homestands.length} stands</span>
+          </button>
+        </div>
+      )}
+      {/* homestand PR-2 - homestand render branch. Preempts the
+          entire period board when active. Same salary/gate posture:
+          data.homestands + data.homestand_bank + data.homestand +
+          data.homestand_split are what the server sent, filtered by
+          the same salary predicate. Nothing here re-derives dollars. */}
+      {inHomestandView && (
+        <HomestandBoard
+          data={data}
+          selectedGameStart={urlHomestand}
+          onSelectStand={selectHomestand}
+          expandedGameStart={expandedHomestand}
+          onToggleExpand={(gs) => setExpandedHomestand(prev => prev === gs ? null : gs)}
+          todayISO={today}
+          redact={redact}
+          hourlyRate={hourlyRate}
+        />
+      )}
       {/* C5.5 name-availability banner. */}
       {!isSalaried && loadState === "ok" && data?.name_availability && data.name_availability.total > 0 && data.name_availability.resolved < data.name_availability.total && (
         <div className="kpi-note-info" role="status">
@@ -757,7 +837,7 @@ export default function KpiLaborPage() {
           with previous data) it renders at 0.45 opacity via
           `.kpi-board-loading`. It only unmounts on genuine cold start
           (no data ever), where the skeleton below takes over. */}
-      {!isSalaried && (data?.actuals?.length || 0) > 0 && (
+      {!inHomestandView && !isSalaried && (data?.actuals?.length || 0) > 0 && (
         <div
           ref={boardRef}
           tabIndex={-1}
@@ -856,6 +936,11 @@ export default function KpiLaborPage() {
           category={errorMsg}
           onRetry={() => setParam("_r", Date.now())}
         />
+      ) : inHomestandView ? (
+        /* homestand PR-2 - homestand view already rendered above; skip
+           the period-empty branches so we do not stack an empty-range
+           message underneath. */
+        null
       ) : loadState === "ok" && !filteredActuals.length ? (
         // Fix 4 (D2.1) - three-way branch per spec 3.9 + v5 line ~1052:
         //   worker filter active   -> StateEmptyFiltered
@@ -887,7 +972,7 @@ export default function KpiLaborPage() {
       {/* V25-15 - WeekTable stays MOUNTED across every refetch as long
           as data exists. Warm loading dims to 0.45 via wrapper class;
           cold start (no data) omits it (skeleton is above). */}
-      {!isSalaried && (data?.actuals?.length || 0) > 0 && filteredActuals.length > 0 && (
+      {!inHomestandView && !isSalaried && (data?.actuals?.length || 0) > 0 && filteredActuals.length > 0 && (
         <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
         <WeekTable
           account={account}

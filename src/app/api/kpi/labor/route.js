@@ -415,66 +415,102 @@ export async function GET(request) {
   // regardless of branch. Non-MLB accounts always get an empty list
   // and no homestand fields - client reads the empty list as "no
   // homestand tab here" (absent, not disabled).
+  // homestand PR-2 - always fetch stands + FY daily actuals for MLB
+  // accounts, attach per-stand actual to each stand in the list, and
+  // compute season-to-date bank. The client's season rail card and
+  // season-to-date card need this on EVERY request, not only when a
+  // stand is selected. `homestand_split` still only fires when a
+  // stand is selected. Cost: one extra labor_actuals_daily read per
+  // request on the six MLB accounts.
   let homestandSplice = null;
   let allHomestands = null;
+  let homestandBank = null;
+  let homestandGameDatesByStand = null;   // Map<game_start ISO, Set<GAME ISO dates>> - only for MLB
   if (MLB_HOMESTAND_ACCOUNTS.has(account)) {
     try { allHomestands = await listHomestands(supa, account, 2026); }
     catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
-  }
-  if (homestandParam && allHomestands) {
-    const found = findHomestandByGameStart(allHomestands, homestandParam);
-    if (!found) {
-      return NextResponse.json({
-        error: "homestand_not_found",
-        message: `No homestand for ${account} with game_start=${homestandParam}`,
-        account, homestand_param: homestandParam,
-      }, { status: 400 });
-    }
-    if (found.pre_floor) {
-      // Client should not select pre-floor stands per spec ("dimmed
-      // and hatched, labelled no detail, not selectable"); this branch
-      // is a defensive refusal so the route never renders bogus zeros.
-      return NextResponse.json({
-        source: null, refused: true, reason: "pre_floor_homestand",
-        message: "This stand is before the daily-grain floor - no detail available. Stands after 2026-04-20 have detail.",
-        daily_floor: dailyFloorISO,
-        homestand: found,
-        account, filters: { account, homestand: homestandParam },
-        landing_account, accounts_directory, regional_directors_display,
-        salary_available: false,
-      });
-    }
-    start = found.window_start;
-    end   = found.window_end;
 
-    // Pre-compute split + bank once here. Both depend on FY daily
-    // actuals for the account; fetching them here (rather than
-    // threading down into the daily/weekly branches) keeps the
-    // splice point clean.
-    const [dailyQ, gameDatesQ] = await Promise.all([
-      supa.from("labor_actuals_daily")
-        .select("work_date, amount")
-        .eq("account_key", account),
-      supa.from("sc_homestand_schedule")
-        .select("service_date")
-        .eq("account_key", account)
-        .gte("service_date", found.game_start)
-        .lte("service_date", found.game_end)
-        .eq("day_type", "GAME"),
-    ]);
-    if (dailyQ.error)    return NextResponse.json(safeError("homestand_daily",    dailyQ.error),    { status: 500 });
-    if (gameDatesQ.error) return NextResponse.json(safeError("homestand_schedule", gameDatesQ.error), { status: 500 });
-    const gameDates = new Set((gameDatesQ.data || []).map(r => r.service_date));
-    const actMap = actualsByStand(allHomestands, dailyQ.data || []);
-    homestandSplice = {
-      homestand: found,
-      homestand_split: computeSplitWithGameDates(dailyQ.data || [], found, gameDates),
-      homestand_bank:  computeHomestandBank(allHomestands, actMap, today),
-    };
+    if (allHomestands.length > 0) {
+      const [dailyQ, schedQ] = await Promise.all([
+        supa.from("labor_actuals_daily")
+          .select("work_date, amount")
+          .eq("account_key", account),
+        supa.from("sc_homestand_schedule")
+          .select("service_date, day_type, day_night")
+          .eq("account_key", account),
+      ]);
+      if (dailyQ.error) return NextResponse.json(safeError("homestand_daily", dailyQ.error), { status: 500 });
+      if (schedQ.error) return NextResponse.json(safeError("homestand_schedule", schedQ.error), { status: 500 });
+      const dailyRows = dailyQ.data || [];
+      const schedRows = schedQ.data || [];
+
+      // Per-stand actual (myriadth accumulator, cent-rounded per stand -
+      // same discipline the bank uses per owner ruling 2026-08-21).
+      const actMap = actualsByStand(allHomestands, dailyRows);
+      allHomestands = allHomestands.map(h => ({
+        ...h,
+        actual: h.pre_floor ? null : Math.round((actMap.get(h.game_start) || 0) / 100) / 100,
+      }));
+      // Season-to-date bank - fixed truth per owner reminder #3, does
+      // NOT change with selection. Included on every MLB request so
+      // the season-to-date card renders on cold-load with no stand.
+      homestandBank = computeHomestandBank(allHomestands, actMap, today);
+
+      // GAME date sets per stand, keyed by game_start. Client uses
+      // these for the identity-variant day strip fill rules; also
+      // used below for split computation on the selected stand.
+      homestandGameDatesByStand = new Map();
+      for (const h of allHomestands) {
+        if (h.pre_floor) continue;
+        const gameDates = new Set(
+          schedRows
+            .filter(r => r.day_type === "GAME" && r.service_date >= h.game_start && r.service_date <= h.game_end)
+            .map(r => r.service_date)
+        );
+        homestandGameDatesByStand.set(h.game_start, gameDates);
+      }
+
+      if (homestandParam) {
+        const found = allHomestands.find(x => x.game_start === homestandParam);
+        if (!found) {
+          return NextResponse.json({
+            error: "homestand_not_found",
+            message: `No homestand for ${account} with game_start=${homestandParam}`,
+            account, homestand_param: homestandParam,
+          }, { status: 400 });
+        }
+        if (found.pre_floor) {
+          return NextResponse.json({
+            source: null, refused: true, reason: "pre_floor_homestand",
+            message: "This stand is before the daily-grain floor - no detail available. Stands after 2026-04-20 have detail.",
+            daily_floor: dailyFloorISO,
+            homestand: found,
+            homestands: allHomestands,
+            homestand_bank: homestandBank,
+            account, filters: { account, homestand: homestandParam },
+            landing_account, accounts_directory, regional_directors_display,
+            salary_available: false,
+          });
+        }
+        start = found.window_start;
+        end   = found.window_end;
+        const gameDatesForFound = homestandGameDatesByStand.get(found.game_start) || new Set();
+        // For the identity day strip, also expose night-game dates.
+        const nightDatesForFound = new Set(
+          schedRows
+            .filter(r => r.day_type === "GAME" && r.day_night === "night"
+                      && r.service_date >= found.game_start && r.service_date <= found.game_end)
+            .map(r => r.service_date)
+        );
+        homestandSplice = {
+          homestand: found,
+          homestand_game_dates: [...gameDatesForFound].sort(),
+          homestand_night_dates: [...nightDatesForFound].sort(),
+          homestand_split: computeSplitWithGameDates(dailyRows, found, gameDatesForFound),
+        };
+      }
+    }
   }
-  // Even without a homestand selection, MLB accounts get the list on
-  // the response so the client can render the segmented control
-  // without a second round-trip.
   const homestandsList = allHomestands || [];
 
   const rangeSource = resolveRangeSource({ startISO: start, endISO: end, dailyFloorISO });
@@ -515,8 +551,8 @@ export async function GET(request) {
       dailyFloorISO,
       salary_available, includeSalary,
       resolveWorkerMeta,
-      // homestand PR-1 - wrapper splices these into the daily body.
-      homestandSplice, homestandsList,
+      // homestand PR-1/2 - wrapper splices these into the daily body.
+      homestandSplice, homestandsList, homestandBank,
     });
   }
 
@@ -997,6 +1033,7 @@ export async function GET(request) {
   // get `homestands: []` so the client's tab-visibility check is
   // one predicate everywhere.
   bodySingle.homestands = homestandsList;
+  if (homestandBank) bodySingle.homestand_bank = homestandBank;
   if (homestandSplice) Object.assign(bodySingle, homestandSplice);
   return NextResponse.json(bodySingle);
 }
@@ -1015,6 +1052,7 @@ export async function handleDailyRangeRequest(ctx) {
   // fields land only when the caller requested a homestand.
   const body = { ...out.body };
   if (ctx.homestandsList) body.homestands = ctx.homestandsList;
+  if (ctx.homestandBank)  body.homestand_bank = ctx.homestandBank;
   if (ctx.homestandSplice) Object.assign(body, ctx.homestandSplice);
   return NextResponse.json(body);
 }
