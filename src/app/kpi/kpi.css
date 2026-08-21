@@ -3511,7 +3511,12 @@
 }
 
 /* Season table */
-.kpi-hs-card-table { padding: 0; overflow: hidden; }
+/* PR-2 audit 2026-08-21 - overflow:visible so the qPeak popover on
+   the "Peak" column header does not clip against the card edge or
+   the table body. Table itself still clips at the border-radius via
+   its own inherited chrome; nothing bleeds past the card border under
+   normal render. */
+.kpi-hs-card-table { padding: 0; overflow: visible; }
 .kpi-hs-table {
   width: 100%;
   border-collapse: collapse;
@@ -3620,3 +3625,116 @@
 @media (max-width: 640px) {
   .kpi-hs-skel-sigs { grid-template-columns: 1fr; }
 }
+
+/* PR-2 audit 2026-08-21 - HS card popovers. One `?` on every card
+   per v11; copy is v11 verbatim. Design notes:
+   - .kpi-hs-qwrap is inline in the card header; the button + pop are
+     both position-relative to this wrapper.
+   - .kpi-hs-pop uses absolute positioning under the button; the
+     .kpi-hs-pop-flip variant swaps to bottom-anchored positioning
+     when the trigger sits near the viewport bottom (JS toggles).
+   - Z-index lift on the OPEN card uses :has() so the popover paints
+     above sibling cards in the SignalCards grid. Also lifts the
+     card ITSELF (position:relative was already on .kpi-hs-card).
+   - Card headers on the signal grid also need a lift so the button
+     row (which has flex-wrap) never intercepts the popover click. */
+.kpi-hs-qwrap {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  line-height: 0;
+}
+.kpi-hs-qbtn {
+  width: 17px; height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--n-300);
+  background: var(--surface-card);
+  color: var(--n-500);
+  font-size: 10px; font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  transition: border-color 0.12s, color 0.12s;
+}
+.kpi-hs-qbtn:hover {
+  border-color: var(--n-500);
+  color: var(--n-800);
+}
+.kpi-hs-qbtn:focus-visible {
+  outline: 2px solid var(--navy-700);
+  outline-offset: 2px;
+}
+.kpi-hs-pop {
+  position: absolute;
+  z-index: 500;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 310px;
+  background: var(--surface-card);
+  border: 1px solid var(--n-300);
+  border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
+  padding: 12px 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--n-700);
+  text-align: left;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kpi-hs-pop-flip {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.kpi-hs-pop-title {
+  display: block;
+  color: var(--n-900, #0A2548);
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.kpi-hs-pop-body { font-weight: 400; }
+.kpi-hs-pop-body b { color: var(--n-900); font-weight: 700; }
+.kpi-hs-pop-table {
+  width: 100%;
+  margin-top: 9px;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+.kpi-hs-pop-table td {
+  padding: 3px 0;
+  border: 0;
+  text-align: right;
+  white-space: normal;
+  background: none;
+  color: var(--n-700);
+  font-weight: 600;
+}
+.kpi-hs-pop-table td:first-child {
+  text-align: left;
+  font-weight: 500;
+  color: var(--n-600);
+  padding-left: 0;
+}
+.kpi-hs-pop-foot {
+  display: block;
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--n-500);
+}
+/* Lift the open card + its parent grid item so the popover paints
+   above sibling cards. `:has()` is supported in every browser this
+   app targets. */
+.kpi-hs-card:has(.kpi-hs-qwrap.on) { z-index: 20; }
+/* Peak column header - `?` sits inline to the right of "Peak". The
+   header cell needs position:relative so the popover's absolute
+   positioning anchors correctly, and overflow:visible so the popover
+   is not clipped by the table cell chrome. */
+.kpi-hs-th-help {
+  position: relative;
+  overflow: visible;
+  white-space: nowrap;
+}
+.kpi-hs-th-help .kpi-hs-qwrap { margin-left: 4px; vertical-align: middle; }
