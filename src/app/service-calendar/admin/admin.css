@@ -909,6 +909,27 @@
   margin-left: auto;
   margin-right: auto;
 }
+/* PR-N audit P2-10 (2026-08-21): overview empty state gets the same
+   shape as the rail's empty state - icon + heading + one-line + tip. */
+.scav-cat-empty--overview {
+  padding: var(--sc2-space-7) var(--sc2-space-4);
+}
+.scav-cat-empty-ic {
+  width: 54px;
+  height: 54px;
+  border-radius: var(--sc2-radius-container);
+  background: var(--sc2-cmd-band-bg);
+  color: var(--sc2-cmd-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--sc2-space-3);
+}
+.scav-cat-empty .tip {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  margin-top: var(--sc2-space-3);
+}
 
 /* ────── Modals (add-service, add-group, archive-group, reactivate-group) ────── */
 .scav-modal-scrim {
