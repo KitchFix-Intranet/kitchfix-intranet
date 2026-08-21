@@ -4,8 +4,14 @@
 // Contract: docs/KPI_PURCHASING_PHASE1_SPEC.md §2 (billcom step a-c).
 //
 // Steps (per spec §2 billcom):
-//   a. refresh billcom_ref_accounts (2 pages of 999) and billcom_ref_classes
-//      via full replace.
+//   a. refresh billcom_ref_accounts (2 pages of 999), billcom_ref_classes,
+//      and billcom_ref_vendors via full replace. Vendors added per
+//      purchasing-5 migration - INV-P10 found bill headers carry NO
+//      vendor name (organizationName is our own company), so /vendors
+//      is the sole source of a real vendor name for the By-vendor UI
+//      card and the miscoded-vendor search. /vendors uses the v3
+//      envelope (results + nextPage), NOT v2 - do not mix parsers.
+//      Proxy caps max at 100/page.
 //   b. bills: /bills/filtered on invoiceDate window [today-45d, today] paged
 //      with start/max=500. On the 1st of each fiscal period, also a
 //      full-FY pass filtered per period. Upsert header + lines by content
@@ -49,8 +55,8 @@
 import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import {
-  fetchJson, extractRowsV2, billsFilteredUrl, chartOfAccountsUrl, classesUrl,
-  contentHash, isPaid, glBucketFor,
+  fetchJson, extractRowsV2, extractRowsV3, billsFilteredUrl, chartOfAccountsUrl,
+  classesUrl, vendorsUrl, contentHash, isPaid, glBucketFor,
 } from "../src/lib/billcom.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
@@ -292,6 +298,91 @@ async function refreshClasses() {
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`[ref_classes] refreshed ${rows.length} rows in ${dur}s`);
   return { ok: true, count: rows.length };
+}
+
+async function refreshVendors() {
+  console.log("[ref_vendors] refresh (full replace, v3 envelope, page-cursor pagination)");
+  const t0 = Date.now();
+  const MAX = 100;                // proxy caps /vendors at max=100 (verified 2026-08-20)
+  const HARD_PAGE_LIMIT = 1000;   // 1000 * 100 = 100k vendors ceiling
+  let pageCursor = null;
+  let pageNo = 0;
+  let rows = [];
+  while (pageNo < HARD_PAGE_LIMIT) {
+    const url = vendorsUrl({ pageCursor, max: MAX });
+    const res = await fetchJson(url);
+    if (!res.ok) {
+      console.error(`[ref_vendors] page ${pageNo + 1} FAILED status=${res.status} error=${res.error}`);
+      return { ok: false, count: rows.length, error: res.error };
+    }
+    const pageRows = extractRowsV3(res.body);
+    rows = rows.concat(pageRows);
+    pageNo++;
+    const nextPage = res.body?.nextPage;
+    process.stderr.write(`[ref_vendors] page ${pageNo} rows=${pageRows.length} cumulative=${rows.length} nextPage=${nextPage ? "yes" : "null"}\r`);
+    // Break on empty page, short page, or missing nextPage cursor.
+    // Missing nextPage is the definitive "no more data" signal on
+    // this v3 endpoint. `start=` is IGNORED (see vendorsUrl header) -
+    // do NOT fall back to offset pagination.
+    if (pageRows.length === 0 || pageRows.length < MAX || !nextPage) break;
+    pageCursor = nextPage;
+  }
+  process.stderr.write("\n");
+
+  if (args.dryRun) {
+    console.log(`[ref_vendors] dry-run - would refresh ${rows.length} rows`);
+    return { ok: true, count: rows.length, dryRun: true };
+  }
+
+  // Full replace: DELETE then INSERT. TRUNCATE not available to
+  // service_role by design (standing rule for money-adjacent + all
+  // new tables via purchasing-5 REVOKE).
+  const delResp = await supa.from("billcom_ref_vendors").delete().neq("id", "__never__");
+  if (delResp.error) {
+    console.error(`[ref_vendors] delete FAILED: ${delResp.error.message}`);
+    return { ok: false, count: rows.length, error: delResp.error.message };
+  }
+
+  // Dedupe on id in case /vendors returns the same vendor twice
+  // across pages (defensive - v3 pagination could double-emit on a
+  // mid-walk mutation).
+  const dedupedById = new Map();
+  for (const r of rows) {
+    if (r.id) dedupedById.set(String(r.id), r);
+  }
+  const rowsToInsert = [...dedupedById.values()].map(r => ({
+    id:             String(r.id),
+    name:           r.name || null,
+    account_type:   r.accountType || null,
+    // v3 uses `archived` boolean natively - store as-is. Do NOT invert
+    // to is_active; that flip is exactly how the wrong-envelope trap
+    // bites (per purchasing-5 header).
+    archived:       r.archived === true,
+    account_number: r.accountNumber || null,
+    bill_currency:  r.billCurrency || null,
+    created_time:   toTimestampTZ(r.createdTime),
+    updated_time:   toTimestampTZ(r.updatedTime),
+    raw:            r,
+    refreshed_at:   new Date().toISOString(),
+  }));
+
+  if (rowsToInsert.length > 0) {
+    for (let i = 0; i < rowsToInsert.length; i += 500) {
+      const batch = rowsToInsert.slice(i, i + 500);
+      const insResp = await supa.from("billcom_ref_vendors").insert(batch);
+      if (insResp.error) {
+        console.error(`[ref_vendors] insert batch ${i}..${i + batch.length} FAILED: ${insResp.error.message}`);
+        return { ok: false, count: i, error: insResp.error.message };
+      }
+    }
+  }
+
+  const dur = ((Date.now() - t0) / 1000).toFixed(1);
+  const dedupeNote = rowsToInsert.length !== rows.length
+    ? ` (deduped ${rows.length - rowsToInsert.length} duplicate ids)`
+    : "";
+  console.log(`[ref_vendors] refreshed ${rowsToInsert.length} rows in ${dur}s${dedupeNote}`);
+  return { ok: true, count: rowsToInsert.length, rawCount: rows.length };
 }
 
 // ─── Step b: bills window ────────────────────────────────────────────
@@ -891,11 +982,12 @@ async function runProbes({ touchedBillIds }) {
 
 // ─── Main ────────────────────────────────────────────────────────────
 
-let refAccountsResult, refClassesResult, billsResult, deriveResult, probesResult;
+let refAccountsResult, refClassesResult, refVendorsResult, billsResult, deriveResult, probesResult;
 try {
   refAccountsResult = await refreshChartOfAccounts();
   refClassesResult  = await refreshClasses();
-  if (!refAccountsResult.ok || !refClassesResult.ok) {
+  refVendorsResult  = await refreshVendors();
+  if (!refAccountsResult.ok || !refClassesResult.ok || !refVendorsResult.ok) {
     console.error("[fatal] reference refresh failed; derive skipped");
   } else {
     // Compute window.
@@ -931,6 +1023,7 @@ console.log("");
 console.log("purchasing_billcom_sync summary:");
 console.log(`  ref_accounts:  ${refAccountsResult?.ok ? "ok" : "FAIL"}  count=${refAccountsResult?.count}`);
 console.log(`  ref_classes:   ${refClassesResult?.ok ? "ok" : "FAIL"}  count=${refClassesResult?.count}`);
+console.log(`  ref_vendors:   ${refVendorsResult?.ok ? "ok" : "FAIL"}  count=${refVendorsResult?.count}`);
 if (billsResult) {
   console.log(`  bills:         ${billsResult.ok ? "ok" : "FAIL"}  bills_examined=${billsResult.billsExamined} bills_inserted=${billsResult.billsInserted} lines_examined=${billsResult.linesExamined} lines_inserted=${billsResult.linesInserted}`);
 }
@@ -943,6 +1036,6 @@ if (probesResult) {
 console.log(`  total elapsed=${totalSec}s  source=${args.source}  dryRun=${args.dryRun}`);
 
 // Exit code
-if (!refAccountsResult?.ok || !refClassesResult?.ok || !billsResult?.ok || !deriveResult?.ok) process.exit(2);
+if (!refAccountsResult?.ok || !refClassesResult?.ok || !refVendorsResult?.ok || !billsResult?.ok || !deriveResult?.ok) process.exit(2);
 if (probesResult && !probesResult.allPass) process.exit(4);
 process.exit(0);

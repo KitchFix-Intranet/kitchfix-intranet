@@ -3,19 +3,25 @@
 // bill.com proxy client for the KPI PURCHASING PHASE 1 sync.
 //
 // The proxy is hosted alongside the QBO proxy (Josh's ngrok tunnel).
-// Auth is a static X-API-Key header. Endpoints use the v2 envelope
-// (`response_data: []`, numeric status codes as strings like
-// approvalStatus "3"). Do NOT mix with v3.
+// Auth is a static X-API-Key header. Endpoints span TWO envelope shapes:
+//   v2 (`response_data: []`, numeric status codes as STRINGS like
+//       approvalStatus "3") - /bills, /chartofaccounts, /classes
+//   v3 (`results: []` + `nextPage` cursor) - /vendors
+// Do NOT mix parsers - use extractRowsV2 vs extractRowsV3 by endpoint.
 //
 // Endpoints used:
 //   GET /billcom/bills/filtered?invoiceDateStart&invoiceDateEnd&start&max
-//       page with start offset, max 500/page. Returns bill headers.
+//       page with start offset, max 500/page. Returns bill headers. v2.
 //   GET /billcom/bills/{id}/lineItems
-//       line items for a bill (if the /filtered call does not embed).
+//       line items for a bill (if the /filtered call does not embed). v2.
 //   GET /billcom/chartofaccounts?start&max
-//       1,072 rows across 2 pages of 999.
+//       1,072 rows across 2 pages of 999. v2.
 //   GET /billcom/classes?start&max
-//       51 rows; the 13 that matter map 1:1 to sites.
+//       51 rows; the 13 that matter map 1:1 to sites. v2.
+//   GET /billcom/vendors?max&page=<cursor>
+//       vendor snapshot. v3 envelope (results + nextPage cursor).
+//       Max capped at 100/page by the proxy. `start=` is IGNORED -
+//       walk via page=<nextPage> only.
 //
 // Env:
 //   BILLCOM_PROXY_BASE   proxy origin + /billcom prefix
@@ -107,6 +113,19 @@ export function extractRowsV2(body) {
   return [];
 }
 
+// v3 envelope row extractor. `results` is authoritative. The v3 endpoint
+// (verified for /vendors 2026-08-20) also carries a `nextPage` cursor
+// string that the caller must pass back as `page=<cursor>` on the next
+// request. Kept separate from extractRowsV2 so a "wrong parser" mistake
+// is a compile-time miss on the import name, not a silent data drop.
+export function extractRowsV3(body) {
+  if (Array.isArray(body?.results))       return body.results;
+  if (Array.isArray(body?.response_data)) return body.response_data;
+  if (Array.isArray(body?.data))          return body.data;
+  if (Array.isArray(body))                return body;
+  return [];
+}
+
 // ─── Endpoint helpers ────────────────────────────────────────────────
 
 // Build a URL for /billcom/bills/filtered with an inclusive
@@ -140,6 +159,27 @@ export function classesUrl({ start = 0, max = 500 }) {
   return `${base}/classes?${qs.toString()}`;
 }
 
+// Vendors URL. v3 envelope (top-level `results` array + `nextPage`
+// cursor). Proxy caps max at 100 per page - verified 2026-08-20 (400
+// with message "max: must be less than or equal to 100" when exceeded).
+// Do NOT bump the default without re-probing.
+//
+// Pagination gotcha (verified 2026-08-20): `start=<n>` in the query
+// string is IGNORED by the proxy on /vendors - every request returns
+// the first 100 rows. The proxy advances ONLY when the caller passes
+// `page=<nextPage>` where nextPage is the opaque cursor from the
+// previous response. First page: pass nothing. Subsequent pages: pass
+// page=<cursor>. Walking with `start=` is a silent-loop trap - an
+// earlier probe hit the HARD page limit of 200 with 200 * 100 = 20,000
+// "rows" that were the same 100 vendors on repeat.
+export function vendorsUrl({ pageCursor = null, max = 100 }) {
+  const base = _proxyBase();
+  const capped = Math.min(Number(max) || 100, 100);
+  const qs = new URLSearchParams({ max: String(capped) });
+  if (pageCursor) qs.set("page", String(pageCursor));
+  return `${base}/vendors?${qs.toString()}`;
+}
+
 // Optional per-bill line items endpoint (used only when /filtered
 // does not embed lineItems in the response_data row). The v2 envelope
 // on /bills returns lineItems embedded; the proxy respects that.
@@ -162,6 +202,7 @@ const HASH_EXCLUDE_TOP = {
   bill_line: ["updatedTime", "cacheAt", "__meta"],
   account:   ["updatedTime", "cacheAt", "__meta"],
   class:     ["updatedTime", "cacheAt", "__meta"],
+  vendor:    ["updatedTime", "cacheAt", "__meta"],
 };
 
 function _normalizeForHash(node, topExcludeSet) {
