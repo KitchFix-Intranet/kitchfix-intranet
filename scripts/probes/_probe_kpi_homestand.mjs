@@ -409,6 +409,30 @@ console.log("[H8] salary integration: hourly-only unchanged; salary-on adds to b
   } else {
     fail(`hourly-only re-run drift: budget=${hs11H2.budget} budget_hourly=${hs11H2.budget_hourly} budget_salary=${hs11H2.budget_salary}`);
   }
+
+  // 6. THE LOAD-BEARING ASSERTION owner ruling 2026-08-21 (post-#771):
+  // abs(bank_salary_on - bank_hourly_only) must be < $1.00. This is
+  // the single check that fails LOUDLY on the exact failure mode PR
+  // #274 was built to prevent - actual folding in salary while budget
+  // stays hourly-only (or vice versa) would shift the bank by the
+  // salary contribution across the finished-stand era (thousands),
+  // never a dime.
+  //
+  // Why the delta stays tiny: CIN - OH salary is flat at $1,680.38 /
+  // week, one distinct amount across 34 weeks (verified 2026-08-21).
+  // The finished-stand era carries $28,566 of salary against a
+  // $69,181 hourly base. Adding a flat cost to BOTH budget and
+  // actual nearly cancels - the residue is nine stands of one-cent
+  // independent rounding, hence the observed $0.10 drift. If either
+  // side were missing salary, the bank would shift by ~$28K - and
+  // this assertion catches that in one line, invisible in any single-
+  // stand check.
+  const deltaCents = Math.abs(Math.round((bankS.bank - bankH.bank) * 100));
+  if (deltaCents < 100) {
+    ok(`bank delta across bases < $1.00: |${bankS.bank.toFixed(2)} - ${bankH.bank.toFixed(2)}| = $${(deltaCents/100).toFixed(2)} (both sides moved together)`);
+  } else {
+    fail(`bank delta across bases = $${(deltaCents/100).toFixed(2)} >= $1.00 - ONE SIDE PICKED UP SALARY, THE OTHER DID NOT. This is the exact failure PR #274 was built to prevent. Check listHomestands includeSalary flag vs the route's salary-fold on actMap.`);
+  }
 }
 
 // ─── HSent sentinel ────────────────────────────────────────────────
