@@ -370,9 +370,20 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
                 onClick={() => setBootReloadKey((k) => k + 1)}>Try again</button>
             </div>
           ) : (
-            <div className="scav-cat-empty">
+            /* PR-N audit P2-10 (2026-08-21): overview empty state
+               gets the same treatment as the rail's empty state -
+               icon + heading + one-line + tip. */
+            <div className="scav-cat-empty scav-cat-empty--overview">
+              <div className="scav-cat-empty-ic" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <line x1="8" y1="4" x2="8" y2="20" />
+                </svg>
+              </div>
               <div className="t">Pick an account</div>
-              <div className="d">Choose an account on the left to view its catalog.</div>
+              <div className="d">Choose an account on the left to view its catalog, edit prices, add or archive services.</div>
+              <div className="tip">{accounts.length} account{accounts.length === 1 ? "" : "s"} available</div>
             </div>
           )}
         </div>

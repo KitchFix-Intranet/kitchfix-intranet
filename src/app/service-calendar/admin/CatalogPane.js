@@ -9,22 +9,13 @@
 // only, with no Price column at all (Kevin ruling #5).
 
 import { useMemo } from "react";
+// PR-N audit P2-18 (2026-08-21): shared formatters across admin
+// (was two identical implementations). One place to change format.
+import { fmtDateHuman as fmtDate, fmtPrice, localToday } from "./railFormHelpers";
 
 const BADGE_ACTIVE = "scav-badge scav-badge--ok";
 const BADGE_SCHED = "scav-badge scav-badge--sch";
 const BADGE_ARC = "scav-badge scav-badge--arc";
-
-function fmtPrice(n) { return "$" + Number(n).toFixed(2); }
-function fmtDate(iso) {
-  if (!iso) return "";
-  const [y, m, day] = String(iso).slice(0, 10).split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${months[Number(m) - 1]} ${Number(day)}, ${y}`;
-}
-function localToday() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 function archiveStatus(activeUntil, today) {
   if (!activeUntil) return { state: "active" };
   const date = String(activeUntil).slice(0, 10);
