@@ -57,6 +57,7 @@ import {
   computeHomestandBank,
   actualsByStand,
 } from "@/lib/labor/homestandResolver.js";
+import { foldPreFloorEstimates } from "@/lib/labor/preFloorEstimator.js";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -500,6 +501,19 @@ export async function GET(request) {
       // request so the season-to-date card renders on cold-load.
       homestandBank = computeHomestandBank(allHomestands, actMap, today);
 
+      // PR #273 - pre-floor stand estimator. Attaches actual_estimated
+      // + is_estimated + estimator_meta onto pre-floor stands so the
+      // rail + season table + selected-stand view can render something
+      // other than "no detail." Bank is untouched (pre-floor stands
+      // stay excluded from computeHomestandBank per owner ruling
+      // 2026-08-21 - estimates never enter the bank). H9 asserts
+      // bank byte-identical with the estimator on and off.
+      try {
+        allHomestands = await foldPreFloorEstimates(supa, account, allHomestands, dailyFloorISO, today);
+      } catch (e) {
+        return NextResponse.json(safeError("pre_floor_estimator", e), { status: 500 });
+      }
+
       // GAME date sets per stand, keyed by game_start. Client uses
       // these for the identity-variant day strip fill rules; also
       // used below for split computation on the selected stand.
@@ -524,11 +538,27 @@ export async function GET(request) {
           }, { status: 400 });
         }
         if (found.pre_floor) {
+          // PR #273 - pre-floor stand ships an ESTIMATED response body
+          // instead of the earlier refusal. Client renders plan-mode
+          // cards using found.actual_estimated + found.estimator_meta.
+          // No daily/weekly board (no source-of-truth per-day rows
+          // exist pre-floor), no employee expansion (per-worker
+          // attribution unavailable). source: "estimated" is a new
+          // value alongside "daily" and "weekly". Route-shape probe
+          // in _probe_range_resolver treats it as a distinct branch.
           return NextResponse.json({
-            source: null, refused: true, reason: "pre_floor_homestand",
-            message: "This stand is before the daily-grain floor - no detail available. Stands after 2026-04-20 have detail.",
-            daily_floor: dailyFloorISO,
+            source: "estimated",
+            refused: false,
             homestand: found,
+            homestand_estimated: found.is_estimated ? {
+              total:         found.actual_estimated,
+              per_day:       found.estimator_meta?.per_day || [],
+              base_rates:    found.estimator_meta?.base_rates || null,
+              source_stands: found.estimator_meta?.source_stands || 0,
+              method:        "game_day_weighted",
+              note:          "Estimated: this stand is before daily detail started (04/20/26). Each week's real total is distributed across days by what the schedule says happened (night game, day game, prep day). Derived from the account's own low-OT stands.",
+            } : null,
+            daily_floor: dailyFloorISO,
             homestands: allHomestands,
             homestand_bank: homestandBank,
             account, filters: { account, homestand: homestandParam },

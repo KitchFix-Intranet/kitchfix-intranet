@@ -3309,6 +3309,16 @@
 .kpi-hs-rail-bar-pre {
   background: repeating-linear-gradient(45deg, var(--n-200) 0 4px, var(--n-100) 4px 8px);
 }
+/* PR #273 - estimated (pre-floor) stand bar. Hatched pattern signals
+   "not a measured actual" while still using amber to distinguish from
+   the future dashed bar. The bar is sized by actual_estimated so the
+   operator gets a visual sense of pre-floor spend against post-floor
+   played stands. */
+.kpi-hs-rail-bar-est {
+  background: repeating-linear-gradient(45deg, var(--amber-100, #FEF3E2) 0 4px, var(--amber-200, #FCE4B6) 4px 8px);
+  border: 1px dashed var(--amber-600, #B25800);
+  border-bottom: 0;
+}
 .kpi-hs-rail-bar-future {
   background: repeating-linear-gradient(45deg, var(--n-300) 0 5px, var(--n-100) 5px 10px);
   border: 1px dashed var(--n-400);
@@ -3336,6 +3346,12 @@
   font-size: 8.5px; font-weight: 800; color: var(--n-400);
   margin-top: 2px;
 }
+.kpi-hs-rail-tag-est {
+  color: #92580A;
+}
+.kpi-hs-rail-stand.est .kpi-hs-rail-amt { color: #92580A; }
+.kpi-hs-rail-stand.est .kpi-hs-rail-nm  { color: var(--n-700); }
+.kpi-hs-rail-stand.est { cursor: pointer; }
 .kpi-hs-rail-stand.on .kpi-hs-rail-amt,
 .kpi-hs-rail-stand.on .kpi-hs-rail-nm { color: #153968; }
 .kpi-hs-rail-stand.pre .kpi-hs-rail-amt,
@@ -3353,6 +3369,7 @@
 .kpi-hs-key-under  { background: #22A45D; }
 .kpi-hs-key-over   { background: #DC5A5A; }
 .kpi-hs-key-pre    { background: repeating-linear-gradient(45deg, var(--n-200) 0 3px, var(--n-100) 3px 6px); }
+.kpi-hs-key-est    { background: repeating-linear-gradient(45deg, var(--amber-100, #FEF3E2) 0 3px, var(--amber-200, #FCE4B6) 3px 6px); border: 1px dashed var(--amber-600, #B25800); }
 .kpi-hs-key-future { background: repeating-linear-gradient(45deg, var(--n-300) 0 4px, var(--n-100) 4px 8px); border: 1px dashed var(--n-400); }
 .kpi-hs-key-line   { color: #0A2548; }
 
@@ -3579,7 +3596,10 @@
   border: 1px solid var(--n-200);
 }
 .kpi-hs-tr-prefloor td { opacity: 0.55; }
+.kpi-hs-tr-prefloor-est td { opacity: 0.85; }
+.kpi-hs-tr-prefloor-est:hover td { background: var(--n-50); cursor: pointer; }
 .kpi-hs-tr-prefloor-note { text-align: right; font-style: italic; color: var(--n-500); }
+.kpi-hs-est-tag { color: #92580A; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; margin-left: 4px; }
 .kpi-hs-tr-future td { opacity: 0.75; }
 .kpi-hs-tr-future-note { text-align: right; font-style: italic; color: var(--n-500); }
 .kpi-hs-chev {
