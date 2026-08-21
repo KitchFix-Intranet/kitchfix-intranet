@@ -361,6 +361,95 @@ for (const width of [1024, 1152, 1280, 1366, 1536]) {
 // N10: skeleton + error states reachable
 // ────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────
+// R2-G: Selecting a fee account and touching nothing then switching
+// must NOT trigger the guard. Reproduces the false-dirty bug Kevin
+// found in audit round 2.
+// ────────────────────────────────────────────────────────────────
+
+test('R2-G: fee account with no edits does not trigger guard on switch', async ({ page }) => {
+  await openAdmin(page);
+  // Click a fee account (CIN - OH)
+  await page.locator(`.scav-acct[data-account-key="CIN - OH"]`).click();
+  await page.waitForSelector('.scav-insp-scroll[data-rail-variant="fee"]', { timeout: 8_000 });
+  // Touch nothing.
+  await page.waitForTimeout(300);
+  // Switch to another account
+  await page.locator(`.scav-acct[data-account-key="${ACCOUNT}"]`).click();
+  // Guard MUST NOT fire
+  await page.waitForTimeout(400);
+  const guardVisible = await page.locator('.scav-insp-scroll[data-rail-variant="guard"]').count();
+  expect(guardVisible).toBe(0);
+  // Should have switched to the new account cleanly
+  await expect(page.locator('.scav-acct[aria-current="true"][data-account-key="TXR - AZ"]')).toBeVisible({ timeout: 3_000 });
+});
+
+// ────────────────────────────────────────────────────────────────
+// R2-F: Backdate save requires an explicit credit decision. Save
+// disabled until picked. Payload includes creditDecision.
+// ────────────────────────────────────────────────────────────────
+
+test('R2-F: backdate requires credit-decision; Save disabled until picked; payload includes it', async ({ page }) => {
+  await openAdmin(page);
+  await selectAccountAndFirstService(page);
+  const priceInput = page.locator('.scav-insp-scroll[data-rail-variant="service"] input[id^="np-"]').first();
+  const orig = await priceInput.inputValue();
+  const newPrice = (Number(orig) + 0.99).toFixed(2);
+
+  // Switch to Backdate mode
+  await page.locator('.scav-insp-scroll[data-rail-variant="service"] .scav-seg button', { hasText: 'Backdate' }).click();
+
+  // Pick a backdate 2 weeks ago
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  const backdateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dateInput = page.locator('.scav-insp-scroll[data-rail-variant="service"] input[type="date"]').first();
+  await dateInput.fill(backdateStr);
+
+  // Fill price + reason
+  await priceInput.fill(newPrice);
+  await page.locator('.scav-insp-scroll[data-rail-variant="service"] textarea[id^="rs-"]').first().fill('R2-F test');
+
+  // Wait for the credit-decision block to appear (fires when backdate + price + valid)
+  await page.waitForSelector('.scav-credit-choice', { timeout: 5_000 });
+
+  // Save button must be disabled - credit decision not picked yet
+  const saveBtn = page.locator('.scav-insp-scroll[data-rail-variant="service"] .scav-save').first();
+  await expect(saveBtn).toBeDisabled();
+
+  // Pick "No credit" (least destructive test choice, still enables Save)
+  await page.locator('.scav-credit-opt input[value=""], .scav-credit-opt input[type="radio"]').nth(1).check();
+
+  // Save enabled now
+  await expect(saveBtn).toBeEnabled();
+
+  // Intercept the save to verify payload
+  let capturedPayload: any = null;
+  await page.route('**/api/service-calendar', async (route, request) => {
+    if (request.method() === 'POST') {
+      try {
+        const body = JSON.parse(request.postData() || '{}');
+        if (body.action === 'sc-config-update') {
+          capturedPayload = body;
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ success: false, error: 'R2-F-intercept-do-not-write' }),
+          });
+        }
+      } catch {}
+    }
+    return route.continue();
+  });
+
+  await saveBtn.click();
+  await page.waitForTimeout(1000);
+
+  expect(capturedPayload).toBeTruthy();
+  expect(capturedPayload?.changes?.[0]?.allowBackdate).toBe(true);
+  expect(capturedPayload?.changes?.[0]?.creditDecision).toBe('none');
+});
+
 test('N10: catalog error state reachable via forced fetch failure', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.route('**/api/service-calendar?action=sc-admin-account-config**', async (route) => {
