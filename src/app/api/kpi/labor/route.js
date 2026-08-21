@@ -32,6 +32,7 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodM
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
 import { loadRoleGate } from "@/lib/kpi/roleGate.js";
 import { load3100_2Budgets, loadSalaryActuals, withSalary as withSalaryMerge } from "@/lib/labor/salaryBoard.js";
+import { salaryProRate } from "@/lib/labor/salaryProRate.js";
 // PR-2 - range resolver + budget pro-rate. Three-way routing (grain
 // first, era second): whole weeks -> weekly, partial post-floor ->
 // daily, partial pre-floor -> refuse. See src/lib/labor/rangeResolver.js
@@ -428,7 +429,7 @@ export async function GET(request) {
   let allHomestands = null;
   let homestandBank = null;
   let homestandGameDatesByStand = null;   // Map<game_start ISO, Set<GAME ISO dates>>
-  try { allHomestands = await listHomestands(supa, account, 2026); }
+  try { allHomestands = await listHomestands(supa, account, 2026, { includeSalary }); }
   catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
   if (allHomestands && allHomestands.length > 0) {
     const [dailyQ, schedQ] = await Promise.all([
@@ -444,24 +445,59 @@ export async function GET(request) {
       const dailyRows = dailyQ.data || [];
       const schedRows = schedQ.data || [];
 
-      // Per-stand actual (myriadth accumulator, cent-rounded per stand -
-      // same discipline the bank uses per owner ruling 2026-08-21).
-      // actual is null for pre_floor AND for stands whose game_end
-      // has not yet passed today - both classes have no attributable
-      // actual (pre_floor lacks daily rows before 04/20; future
-      // stands have not been played yet). Matches the bank's own
-      // finished-vs-remaining discrimination so client "actual" state
-      // and the bank agree on which stands are complete.
-      const actMap = actualsByStand(allHomestands, dailyRows);
-      allHomestands = allHomestands.map(h => ({
-        ...h,
-        actual: (h.pre_floor || h.game_end > today)
-          ? null
-          : Math.round((actMap.get(h.game_start) || 0) / 100) / 100,
-      }));
+      // Per-stand HOURLY actual (myriadth accumulator, cent-rounded per
+      // stand - same discipline the bank uses per owner ruling
+      // 2026-08-21). actual is null for pre_floor AND for stands
+      // whose game_end has not yet passed today - both classes have
+      // no attributable actual. Matches the bank's own finished-vs-
+      // remaining discrimination so client "actual" state and the
+      // bank agree on which stands are complete.
+      const hourlyActMap = actualsByStand(allHomestands, dailyRows);
+      // Salary integration (PR #274, owner ruling 2026-08-21): when
+      // the toggle is on, pro-rate labor_salary_actuals per stand
+      // window and add to the actuals map. Both sides (budget +
+      // actual) must move together, or every stand reads over-budget
+      // the instant the toggle flips. actMap ends up salary-inclusive
+      // when includeSalary; hourly-only otherwise.
+      const actMap = new Map(hourlyActMap);
+      const salaryX10000ByStand = new Map();
+      if (includeSalary) {
+        const salActuals = await loadSalaryActuals(supa, [account], "2025-12-29", "2026-12-27");
+        if (salActuals.error) return NextResponse.json(safeError("homestand_salary_actuals", { message: salActuals.error }), { status: 500 });
+        for (const h of allHomestands) {
+          if (h.pre_floor) continue;
+          const pr = salaryProRate({
+            startISO: h.window_start,
+            endISO:   h.window_end,
+            salaryRows: salActuals.rows || [],
+          });
+          const salX10000 = Math.round((pr.total || 0) * 10000);
+          salaryX10000ByStand.set(h.game_start, salX10000);
+          actMap.set(h.game_start, (actMap.get(h.game_start) || 0) + salX10000);
+        }
+      }
+      allHomestands = allHomestands.map(h => {
+        const hourlyX = hourlyActMap.get(h.game_start) || 0;
+        const salX    = salaryX10000ByStand.get(h.game_start) || 0;
+        const totalX  = actMap.get(h.game_start) || 0;
+        return {
+          ...h,
+          actual: (h.pre_floor || h.game_end > today)
+            ? null
+            : Math.round(totalX / 100) / 100,
+          actual_hourly: (h.pre_floor || h.game_end > today)
+            ? null
+            : Math.round(hourlyX / 100) / 100,
+          actual_salary: (h.pre_floor || h.game_end > today || !includeSalary)
+            ? null
+            : Math.round(salX / 100) / 100,
+        };
+      });
       // Season-to-date bank - fixed truth per owner reminder #3, does
-      // NOT change with selection. Included on every MLB request so
-      // the season-to-date card renders on cold-load with no stand.
+      // NOT change with selection. Bank reconciles on the same basis
+      // as stand.budget + stand.actual - so hourly-only when the
+      // toggle is off, hourly+salary when on. Included on every
+      // request so the season-to-date card renders on cold-load.
       homestandBank = computeHomestandBank(allHomestands, actMap, today);
 
       // GAME date sets per stand, keyed by game_start. Client uses
