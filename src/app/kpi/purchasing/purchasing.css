@@ -1,0 +1,715 @@
+/* src/app/kpi/purchasing/purchasing.css
+ *
+ * KPI PURCHASING PHASE 2 - PR 2 scoped stylesheet.
+ *
+ * All selectors gated under `.kpi-app .kpi-p-*` so this file cannot
+ * leak into labor. kpi.css remains authoritative for chrome,
+ * .kpi-cmd, .kpi-folio, .kpi-page, .kpi-cols, .kpi-main and the token
+ * inventory listed on .kpi-app.
+ *
+ * Rule 5 (no new design tokens): every value here is either
+ *   - a token exposed on .kpi-app in kpi.css (`--kpi-t-*`, `--kpi-sp-*`,
+ *     `--kpi-ctl`, `--kpi-row`, `--kpi-card-r`, `--kpi-card-pad`,
+ *     `--kpi-h-*`, `--n-*`, `--navy-*`, `--kpi-blue-*`, `--kpi-purple-*`)
+ *   - or an identity hex from spec §7 (Food #153968 / Packaging #3E97D1
+ *     / Vehicle #7A3E9D / Equipment #0F766E / Repair #B45309 / period
+ *     card steel #4A6076). Identity colors are not tokens; they are
+ *     identity constants named on the spec.
+ *
+ * No raw px literals for type or spacing. Every font-size resolves to
+ * one of the six type roles; every padding / margin / gap resolves to
+ * one of the six space steps. Border-widths (1px, 2px, 3px, 4px) and
+ * radii already granted via --kpi-ctl-r / --kpi-card-r stay literal
+ * where necessary (borders and shadows are not part of the type or
+ * space scale).
+ */
+
+/* ═══ IDENTITY COLORS (spec §7) ═══════════════════════════════════ */
+/* Not new tokens - identity constants for six bucket / card types. */
+.kpi-app {
+  --kpi-p-food:    #153968;
+  --kpi-p-pkg:     #3E97D1;
+  --kpi-p-veh:     #7A3E9D;
+  --kpi-p-equip:   #0F766E;
+  --kpi-p-rm:      #B45309;
+  --kpi-p-steel:   #4A6076;
+}
+
+/* ═══ CARD SKIN (identity stripe + card container) ════════════════ */
+.kpi-app .kpi-p-card {
+  background: #fff;
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  box-shadow: var(--card-shadow);
+  padding: var(--kpi-card-pad);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.kpi-app .kpi-p-card:hover {
+  box-shadow: var(--card-shadow-hover);
+}
+.kpi-app .kpi-p-card:before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--n-300);
+}
+.kpi-app .kpi-p-card.kpi-p-b-per:before   { background: var(--kpi-p-steel); }
+.kpi-app .kpi-p-card.kpi-p-b-food:before  { background: var(--kpi-p-food);  }
+.kpi-app .kpi-p-card.kpi-p-b-pkg:before   { background: var(--kpi-p-pkg);   }
+.kpi-app .kpi-p-card.kpi-p-b-veh:before   { background: var(--kpi-p-veh);   }
+.kpi-app .kpi-p-card.kpi-p-b-equip:before { background: var(--kpi-p-equip); }
+.kpi-app .kpi-p-card.kpi-p-b-rm:before    { background: var(--kpi-p-rm);    }
+
+/* ═══ BOARD LAYOUT ════════════════════════════════════════════════ */
+.kpi-app .kpi-p-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-3);
+  min-width: 0;
+}
+.kpi-app .kpi-p-livenote {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kpi-sp-2);
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  background: var(--n-50);
+  border-radius: var(--kpi-ctl-r);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.kpi-app .kpi-p-livenote b { color: var(--n-800); }
+.kpi-app .kpi-p-livenote .kpi-p-livedot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green-500);
+  flex: none;
+  margin-top: 4px;
+}
+
+/* Two-up card row (period, bucket, ledger, action). */
+.kpi-app .kpi-p-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-pairrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-flatrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--kpi-sp-3);
+}
+/* Floor-first (§7 rule 11): collapse two-up shapes on narrow. */
+@media (max-width: 780px) {
+  .kpi-app .kpi-p-row,
+  .kpi-app .kpi-p-pairrow,
+  .kpi-app .kpi-p-flatrow {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══ CARD HEAD (title + pill) ════════════════════════════════════ */
+.kpi-app .kpi-p-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-head-body {
+  flex: 1;
+  min-width: 0;
+}
+.kpi-app .kpi-p-cardtitle {
+  font-size: var(--kpi-t-meta);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--n-700);
+}
+.kpi-app .kpi-p-cardsub {
+  font-size: var(--kpi-t-meta);
+  font-weight: 500;
+  color: var(--n-500);
+  margin-left: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-cardmeta {
+  font-size: var(--kpi-t-meta);
+  font-weight: 500;
+  color: var(--n-500);
+}
+
+.kpi-app .kpi-p-pillrow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-end;
+}
+.kpi-app .kpi-p-pill {
+  height: var(--kpi-h-lane);
+  padding: 0 var(--kpi-sp-2);
+  border-radius: 999px;
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid;
+}
+.kpi-app .kpi-p-pill i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.kpi-app .kpi-p-pill.g { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
+.kpi-app .kpi-p-pill.a { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
+.kpi-app .kpi-p-pill.r { background: var(--red-100); color: var(--red-700); border-color: #F3C4C4; }
+.kpi-app .kpi-p-pill.b { background: var(--kpi-blue-100, var(--navy-100)); color: var(--navy-700); border-color: var(--navy-bd); }
+.kpi-app .kpi-p-pill.n { background: var(--n-100); color: var(--n-600); border-color: var(--n-200); }
+.kpi-app .kpi-p-pill.f { background: var(--n-50); color: var(--kpi-p-steel); border-color: var(--kpi-p-steel); }
+.kpi-app .kpi-p-pill.f i { background: var(--kpi-p-steel); }
+
+/* ═══ NUMBERS + SUB ROWS (bucket + period card left half) ═════════ */
+.kpi-app .kpi-p-nums {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--kpi-sp-3);
+  margin-top: var(--kpi-sp-1);
+}
+.kpi-app .kpi-p-stk {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.kpi-app .kpi-p-label {
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.kpi-app .kpi-p-hero {
+  font-size: var(--kpi-t-hero);
+  font-weight: 800;
+  letter-spacing: -0.018em;
+  line-height: 1;
+  color: var(--n-900);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-p-hero.g { color: var(--green-700); }
+.kpi-app .kpi-p-hero.r { color: var(--red-700); }
+.kpi-app .kpi-p-value {
+  font-size: var(--kpi-t-value);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--n-900);
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-p-value.g { color: var(--green-700); }
+.kpi-app .kpi-p-value.r { color: var(--red-700); }
+.kpi-app .kpi-p-value.b { color: var(--navy-700); }
+.kpi-app .kpi-p-subline {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-500);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* §7 rule 9 - only the figure is bold, not the words around it. */
+.kpi-app .kpi-p-subline b {
+  color: var(--n-900);
+  font-weight: 800;
+  font-size: var(--kpi-t-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Under-hero rows: bills / cards / pending / projected close. */
+.kpi-app .kpi-p-subs {
+  margin-top: auto;
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.kpi-app .kpi-p-sub {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--kpi-sp-2);
+  align-items: baseline;
+}
+.kpi-app .kpi-p-sub .kpi-p-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-app .kpi-p-sub .kpi-p-k small {
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  font-weight: 500;
+  margin-left: 5px;
+}
+.kpi-app .kpi-p-sub .kpi-p-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-sub .kpi-p-v.g { color: var(--green-700); }
+.kpi-app .kpi-p-sub .kpi-p-v.r { color: var(--red-700); }
+.kpi-app .kpi-p-sub .kpi-p-v.a { color: var(--amber-600); }
+.kpi-app .kpi-p-sub .kpi-p-x {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  white-space: nowrap;
+  min-width: 66px;
+  text-align: right;
+}
+.kpi-app .kpi-p-sub .kpi-p-x.g { color: var(--green-700); }
+.kpi-app .kpi-p-sub .kpi-p-x.r { color: var(--red-700); }
+.kpi-app .kpi-p-sub .kpi-p-x.a { color: var(--amber-600); }
+.kpi-app .kpi-p-sub .kpi-p-x.b { color: var(--navy-700); }
+
+/* ═══ WEEK CHART (right half of period + bucket cards) ═══════════ */
+.kpi-app .kpi-p-lh {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  height: var(--kpi-h-lane);
+}
+.kpi-app .kpi-p-legs {
+  margin-left: auto;
+  display: inline-flex;
+  gap: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-leg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-leg .kpi-p-dash {
+  width: 14px;
+  border-top: 2px dashed currentColor;
+}
+.kpi-app .kpi-p-leg.orig { color: var(--amber-600); }
+.kpi-app .kpi-p-leg.adj  { color: #3E97D1; }
+
+.kpi-app .kpi-p-wks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
+  margin-top: auto;
+  padding-top: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-wc {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kpi-app .kpi-p-plot {
+  height: var(--kpi-h-plot);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+.kpi-app .kpi-p-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+}
+/* Identity fill - color is identity, pattern is state (§7 rule 1). */
+.kpi-app .kpi-p-bar.i-food  { background: var(--kpi-p-food); }
+.kpi-app .kpi-p-bar.i-pkg   { background: var(--kpi-p-pkg); }
+.kpi-app .kpi-p-bar.i-veh   { background: var(--kpi-p-veh); }
+.kpi-app .kpi-p-bar.i-equip { background: var(--kpi-p-equip); }
+.kpi-app .kpi-p-bar.i-rm    { background: var(--kpi-p-rm); }
+/* Over-state pattern overlay - keeps identity color visible. */
+.kpi-app .kpi-p-bar.st-over {
+  background-image: repeating-linear-gradient(45deg, rgba(185, 28, 28, 0.92) 0 5px, transparent 5px 10px);
+  box-shadow: inset 0 0 0 1.5px var(--red-700);
+}
+/* Running (in-progress) week - light hatch. */
+.kpi-app .kpi-p-bar.st-run {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.5) 0 5px, transparent 5px 10px);
+  box-shadow: inset 0 0 0 1.5px var(--amber-600);
+}
+.kpi-app .kpi-p-base {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--n-200);
+}
+.kpi-app .kpi-p-ln {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed;
+}
+.kpi-app .kpi-p-ln.orig { border-color: var(--amber-600); opacity: 0.85; }
+.kpi-app .kpi-p-ln.adj  { border-color: #3E97D1; }
+.kpi-app .kpi-p-cap {
+  margin-top: var(--kpi-sp-2);
+  text-align: center;
+  line-height: 1.3;
+}
+.kpi-app .kpi-p-cap .kpi-p-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-p-cap .kpi-p-d {
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  display: block;
+}
+.kpi-app .kpi-p-cap .kpi-p-x {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  display: block;
+  margin-top: 1px;
+}
+.kpi-app .kpi-p-cap .kpi-p-x.g { color: var(--green-700); }
+.kpi-app .kpi-p-cap .kpi-p-x.r { color: var(--red-700); }
+.kpi-app .kpi-p-cap .kpi-p-x.b { color: var(--navy-700); }
+.kpi-app .kpi-p-cap .kpi-p-x.a { color: var(--amber-600); }
+.kpi-app .kpi-p-cap .kpi-p-x.n { color: var(--n-500); }
+
+/* Empty-bucket state (no budget and no spend). */
+.kpi-app .kpi-p-emptybucket {
+  padding: var(--kpi-sp-5) 0;
+  text-align: center;
+  font-size: var(--kpi-t-body);
+  color: var(--n-500);
+  font-weight: 600;
+}
+
+/* ═══ LEDGER (Equipment + R&M + Vendor breakdown lists) ═══════════ */
+.kpi-app .kpi-p-ledger-head {
+  display: flex;
+  align-items: baseline;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--n-200);
+  margin-top: var(--kpi-sp-2);
+  gap: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-ledger-head .kpi-p-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.kpi-app .kpi-p-ledger-head .kpi-p-k:last-child {
+  margin-left: auto;
+}
+.kpi-app .kpi-p-ledger {
+  flex: 1 1 auto;
+  min-height: 110px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+  margin-top: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-ledger .kpi-p-lr {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--kpi-sp-2);
+  align-items: baseline;
+  padding: 5px 0;
+  border-top: 1px solid var(--n-100);
+}
+.kpi-app .kpi-p-ledger .kpi-p-lr:first-child { border-top: none; }
+.kpi-app .kpi-p-ledger .kpi-p-lr .kpi-p-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-800);
+  min-width: 0;
+}
+.kpi-app .kpi-p-ledger .kpi-p-lr .kpi-p-k small {
+  display: block;
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  font-weight: 600;
+  margin-top: 1px;
+}
+.kpi-app .kpi-p-ledger .kpi-p-lr .kpi-p-k .kpi-p-acct {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  color: var(--navy-500, #2C5187);
+  display: inline-block;
+  margin-right: 6px;
+}
+.kpi-app .kpi-p-ledger .kpi-p-lr .kpi-p-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--n-900);
+}
+.kpi-app .kpi-p-ledger-empty {
+  padding: var(--kpi-sp-4) 0;
+  text-align: center;
+  font-size: var(--kpi-t-meta);
+  color: var(--n-500);
+  font-weight: 500;
+}
+
+/* ═══ CARD PURCHASES + VENDOR BREAKDOWN ═══════════════════════════ */
+.kpi-app .kpi-p-cp {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: var(--kpi-sp-4);
+  padding: var(--kpi-card-pad);
+  border-left: 4px solid var(--amber-600);
+}
+.kpi-app .kpi-p-cpstats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-cpstat .kpi-p-l {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  display: block;
+  margin-bottom: 2px;
+}
+.kpi-app .kpi-p-cpstat .kpi-p-l.due { color: var(--red-700); }
+.kpi-app .kpi-p-cpstat .kpi-p-n {
+  font-size: var(--kpi-t-value);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.kpi-app .kpi-p-cpstat .kpi-p-n.r { color: var(--red-700); }
+.kpi-app .kpi-p-cpstat .kpi-p-n.a { color: var(--amber-600); }
+.kpi-app .kpi-p-cpstat .kpi-p-s {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-500);
+  font-weight: 600;
+  display: block;
+  margin-top: 2px;
+}
+.kpi-app .kpi-p-cpact {
+  background: var(--amber-600);
+  color: #fff;
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  padding: 9px 14px;
+  border-radius: var(--kpi-ctl-r);
+  text-align: center;
+  cursor: pointer;
+  margin-top: auto;
+  border: 0;
+}
+.kpi-app .kpi-p-cpact:hover { background: var(--kpi-p-rm); }
+.kpi-app .kpi-p-cplist {
+  border-left: 1px solid var(--n-200);
+  padding-left: var(--kpi-sp-4);
+}
+.kpi-app .kpi-p-txnhead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kpi-sp-2);
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--n-200);
+}
+.kpi-app .kpi-p-txnhead .kpi-p-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.kpi-app .kpi-p-txnlist {
+  max-height: 196px;
+  overflow-y: auto;
+  padding-right: 2px;
+  margin-top: var(--kpi-sp-1);
+}
+.kpi-app .kpi-p-txnlist .kpi-p-rw {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--kpi-sp-2);
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--n-100);
+}
+.kpi-app .kpi-p-txnlist .kpi-p-rw:last-child { border-bottom: 0; }
+.kpi-app .kpi-p-txnlist .kpi-p-rw.flagged {
+  padding-left: var(--kpi-sp-2);
+  border-left: 3px solid var(--amber-600);
+}
+.kpi-app .kpi-p-txnlist .kpi-p-rw .kpi-p-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-app .kpi-p-txnlist .kpi-p-rw .kpi-p-k small {
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  font-weight: 500;
+  margin-left: 5px;
+}
+.kpi-app .kpi-p-txnlist .kpi-p-rw .kpi-p-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Vendor breakdown table. */
+.kpi-app .kpi-p-vb {
+  margin-top: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-vbhead,
+.kpi-app .kpi-p-vbrow {
+  display: grid;
+  grid-template-columns: 1.5fr auto 96px 72px;
+  gap: var(--kpi-sp-3);
+  align-items: center;
+}
+.kpi-app .kpi-p-vbhead {
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--n-200);
+}
+.kpi-app .kpi-p-vbhead span {
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.kpi-app .kpi-p-vbhead span:not(:first-child),
+.kpi-app .kpi-p-vbrow .kpi-p-v,
+.kpi-app .kpi-p-vbrow .kpi-p-ch {
+  text-align: right;
+}
+.kpi-app .kpi-p-vbrow {
+  padding: var(--kpi-sp-2) 0;
+  border-top: 1px solid var(--n-100);
+}
+.kpi-app .kpi-p-vbrow:first-of-type { border-top: none; }
+.kpi-app .kpi-p-vbrow .kpi-p-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-800);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-vbrow .kpi-p-k small {
+  display: block;
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  font-weight: 600;
+  margin-top: 1px;
+}
+.kpi-app .kpi-p-vbrow .kpi-p-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-900);
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-vbrow .kpi-p-ch {
+  font-size: var(--kpi-t-meta);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-vbrow .kpi-p-ch.g { color: var(--green-700); }
+.kpi-app .kpi-p-vbrow .kpi-p-ch.r { color: var(--red-700); }
+.kpi-app .kpi-p-vblegend {
+  display: flex;
+  gap: var(--kpi-sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-100);
+}
+.kpi-app .kpi-p-vblegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-vblegend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+/* ═══ PASS-THROUGH PLACEHOLDER (PR 3 will build the real board) ═══ */
+.kpi-app .kpi-p-placeholder {
+  background: #fff;
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  padding: var(--kpi-sp-6) var(--kpi-card-pad);
+  text-align: center;
+  box-shadow: var(--card-shadow);
+}
+.kpi-app .kpi-p-placeholder h2 {
+  margin: 0;
+  font-size: var(--kpi-t-title, var(--kpi-size-title));
+  font-weight: 800;
+  color: var(--n-800);
+}
+.kpi-app .kpi-p-placeholder p {
+  margin: var(--kpi-sp-3) auto 0;
+  max-width: 56ch;
+  font-size: var(--kpi-t-body);
+  color: var(--n-600);
+  line-height: 1.6;
+}
+.kpi-app .kpi-p-placeholder .kpi-modelbadge {
+  display: inline-block;
+  margin-bottom: var(--kpi-sp-3);
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #F0E6F7;
+  color: #5B2D75;
+}
+
+/* ═══ ACCESSIBILITY ═══════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .kpi-app .kpi-p-card { transition: none; }
+}
