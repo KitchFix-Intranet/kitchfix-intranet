@@ -479,14 +479,21 @@ function RailService({
 
           <div className="scav-f">
             <label htmlFor={`rs-${service.id}`}>
-              Reason <span className="hint">required</span>
+              Reason <span className="hint">
+                {/* PR-N R4 item 2 (Kevin 2026-08-21): "say why" moves
+                    out of the No-credit option and into THIS hint
+                    when No credit is selected. That is where it will
+                    be seen, and it earns the reason field's required
+                    marker rather than being ceremony. */}
+                {creditDecision === "none" ? "say why the client is not credited" : "required"}
+              </span>
             </label>
             <textarea
               id={`rs-${service.id}`}
               value={reason}
               disabled={saving}
               onChange={(e) => { setReason(e.target.value); setTouched(true); }}
-              placeholder="Contract amendment"
+              placeholder={creditDecision === "none" ? "Why does no credit apply here?" : "Contract amendment"}
               maxLength={280}
               rows={2}
             />
@@ -507,54 +514,75 @@ function RailService({
             />
           </div>
 
-          {/* F (Kevin ruling 2026-08-21): backdate save requires an
-              explicit credit-decision. Two options, neither preselected.
-              Save disabled until picked. AP notification itself is
-              Track B (K-7) and is NOT wired in this PR.
-              PR-N R3 defect 1 (Kevin 2026-08-21): the credit-decision
-              block renders as soon as Backdate is active with a valid
-              date - "can they act" not "is there something to show."
-              The preview block ~line 464 is the "is there something to
-              show" gate and correctly requires priceChanged. Two gates,
-              two questions. Guarded by test R3-1 so it cannot drift
-              back into "hidden until price changes." */}
+          {/* F + R3 defect 1 + R4 item 2 (Kevin 2026-08-21):
+              credit-decision matches the rail form rhythm. No outer
+              box. Sentence-case labels at 14/semibold. One-line
+              descriptions at 12/regular in --rail-3ink. Each option
+              is a full-width card with the radio inside. Arrow keys
+              navigate. Selected = green border + 10% green fill +
+              green radio. Track B is a footnote (11/rail-4ink, no
+              italics). "Say why in Reason" migrates OUT of the
+              option and INTO the reason field's hint when "No
+              credit" is selected. Guarded by tests R3-1 + R3-3. */}
           {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
-            <div className="scav-f scav-credit-choice" data-credit-choice="1">
-              <label>
-                Credit decision <span className="hint">required, no default</span>
-              </label>
-              <div className="scav-credit-options" role="radiogroup" aria-label="Credit decision">
-                <label className="scav-credit-opt">
-                  <input
-                    type="radio"
-                    name={`cd-${service.id}`}
-                    checked={creditDecision === "issue"}
-                    onChange={() => { setCreditDecision("issue"); setTouched(true); }}
-                    disabled={saving}
-                  />
-                  <span>
-                    <strong>Issue the credit</strong>
-                    <span className="scav-credit-hint">AP receives the amount and issues a credit memo.</span>
-                  </span>
+            <>
+              <div className="scav-f" data-credit-choice="1">
+                <label>
+                  Credit decision <span className="hint">required, no default</span>
                 </label>
-                <label className="scav-credit-opt">
-                  <input
-                    type="radio"
-                    name={`cd-${service.id}`}
-                    checked={creditDecision === "none"}
-                    onChange={() => { setCreditDecision("none"); setTouched(true); }}
-                    disabled={saving}
-                  />
-                  <span>
-                    <strong>No credit</strong>
-                    <span className="scav-credit-hint">Price corrected going forward; already-billed weeks stand. Say why in Reason.</span>
-                  </span>
-                </label>
+                <div
+                  className="scav-credit-cards"
+                  role="radiogroup"
+                  aria-label="Credit decision"
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowDown" && e.key !== "ArrowUp"
+                        && e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                    e.preventDefault();
+                    const next = (e.key === "ArrowDown" || e.key === "ArrowRight")
+                      ? (creditDecision === "issue" ? "none" : "issue")
+                      : (creditDecision === "none" ? "issue" : "none");
+                    setCreditDecision(next);
+                    setTouched(true);
+                  }}
+                >
+                  <label
+                    className={"scav-credit-card" + (creditDecision === "issue" ? " scav-credit-card--on" : "")}
+                    data-credit-opt="issue"
+                  >
+                    <input
+                      type="radio"
+                      name={`cd-${service.id}`}
+                      checked={creditDecision === "issue"}
+                      onChange={() => { setCreditDecision("issue"); setTouched(true); }}
+                      disabled={saving}
+                    />
+                    <span className="scav-credit-card-body">
+                      <span className="scav-credit-card-t">Issue the credit</span>
+                      <span className="scav-credit-card-d">AP issues a credit memo.</span>
+                    </span>
+                  </label>
+                  <label
+                    className={"scav-credit-card" + (creditDecision === "none" ? " scav-credit-card--on" : "")}
+                    data-credit-opt="none"
+                  >
+                    <input
+                      type="radio"
+                      name={`cd-${service.id}`}
+                      checked={creditDecision === "none"}
+                      onChange={() => { setCreditDecision("none"); setTouched(true); }}
+                      disabled={saving}
+                    />
+                    <span className="scav-credit-card-body">
+                      <span className="scav-credit-card-t">No credit</span>
+                      <span className="scav-credit-card-d">Weeks already billed stand.</span>
+                    </span>
+                  </label>
+                </div>
+                <p className="scav-credit-note" role="note">
+                  Nothing is emailed yet. The decision is recorded on the changelog; AP notification lands with Track B.
+                </p>
               </div>
-              <div className="scav-credit-track-b" role="note">
-                Nothing is emailed yet. The decision is recorded on the changelog; AP notification lands with Track B.
-              </div>
-            </div>
+            </>
           )}
 
           <button

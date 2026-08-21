@@ -410,15 +410,15 @@ test('R2-F: backdate requires credit-decision; Save disabled until picked; paylo
   await priceInput.fill(newPrice);
   await page.locator('.scav-insp-scroll[data-rail-variant="service"] textarea[id^="rs-"]').first().fill('R2-F test');
 
-  // Wait for the credit-decision block to appear (fires when backdate + price + valid)
-  await page.waitForSelector('.scav-credit-choice', { timeout: 5_000 });
+  // Wait for the credit-decision block to appear.
+  await page.waitForSelector('[data-credit-choice="1"]', { timeout: 5_000 });
 
   // Save button must be disabled - credit decision not picked yet
   const saveBtn = page.locator('.scav-insp-scroll[data-rail-variant="service"] .scav-save').first();
   await expect(saveBtn).toBeDisabled();
 
-  // Pick "No credit" (least destructive test choice, still enables Save)
-  await page.locator('.scav-credit-opt input[value=""], .scav-credit-opt input[type="radio"]').nth(1).check();
+  // Pick "No credit" (data-credit-opt="none") to enable Save.
+  await page.locator('[data-credit-opt="none"] input[type="radio"]').check();
 
   // Save enabled now
   await expect(saveBtn).toBeEnabled();
@@ -533,11 +533,17 @@ test('R3-3: hint names the first blocker only (Kevin defect 3)', async ({ page }
   expect(hintAfterPrice).not.toContain('Enter a price');
 
   // Now pick a credit decision. Hint's first blocker shifts to reason.
-  await page.locator('.scav-credit-opt input[type="radio"]').first().check();
+  await page.locator('[data-credit-opt="issue"] input[type="radio"]').check();
   await page.waitForTimeout(200);
   const hintAfterCredit = await hint.innerText();
-  expect(hintAfterCredit).toContain('reason');
-  expect(hintAfterCredit).not.toContain('credit');
+  // "Add a reason" - name-check that reason text is present + credit
+  // clause + price clause are absent. Note: the reason field's OWN
+  // hint reads "required" by default (or "say why the client is not
+  // credited" when No credit is picked), but that's a separate hint
+  // node - the Save-disabled hint here is inside the price field's
+  // label.
+  expect(hintAfterCredit.toLowerCase()).toContain('reason');
+  expect(hintAfterCredit).not.toContain('credit the client');
   expect(hintAfterCredit).not.toContain('Enter a price');
 });
 
