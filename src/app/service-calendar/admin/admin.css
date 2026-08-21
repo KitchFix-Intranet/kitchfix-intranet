@@ -645,7 +645,12 @@
   border-color: rgba(232, 99, 90, 0.38);
   color: rgba(243, 179, 174, 1);
 }
-.scav-warn.bad b { color: var(--sc2-state-overdue-fg); }
+/* PR-N audit G1 (Kevin ruling 2026-08-21): bold lead uses red-bright
+   (#E8635A) instead of red-deep (#8a3a2c). Red-deep reads as three
+   layers of the same hue on the tinted panel over dark navy - the
+   text disappears into the panel. Bright reads clearly and matches
+   the panel's own border tone. */
+.scav-warn.bad b { color: var(--sc2-accent-red-bright); }
 .scav-f { margin-top: var(--sc2-space-4); }
 .scav-f label {
   display: flex;
@@ -767,6 +772,58 @@
 .scav-save--muted {
   background: rgba(255, 255, 255, 0.10);
   color: var(--sc2-rail-text);
+}
+
+/* PR-N audit F (Kevin ruling 2026-08-21): backdate credit-decision
+   radio group. No preselection. AP notification is Track B (K-7). */
+.scav-credit-choice {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--sc2-radius-control);
+  padding: var(--sc2-space-3);
+  background: rgba(255, 255, 255, 0.04);
+}
+.scav-credit-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scav-credit-opt {
+  display: flex;
+  gap: var(--sc2-space-2);
+  align-items: flex-start;
+  cursor: pointer;
+  padding: var(--sc2-space-2);
+  border-radius: var(--sc2-radius-control);
+  transition: background var(--motion-control);
+}
+.scav-credit-opt:hover { background: rgba(255, 255, 255, 0.06); }
+.scav-credit-opt input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--sc2-accent-green);
+  cursor: pointer;
+}
+.scav-credit-opt > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--sc2-rail-text);
+  font-size: var(--sc2-size-body);
+}
+.scav-credit-opt strong {
+  font-weight: var(--sc2-wt-bold);
+}
+.scav-credit-hint {
+  color: var(--sc2-rail-text-subtle);
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-regular);
+}
+.scav-credit-track-b {
+  margin-top: var(--sc2-space-3);
+  padding-top: var(--sc2-space-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--sc2-rail-text-subtle);
+  font-size: var(--sc2-size-caption);
+  font-style: italic;
 }
 .scav-spin {
   width: 14px;

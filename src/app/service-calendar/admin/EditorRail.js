@@ -214,6 +214,20 @@ function RailService({
   const [reason, setReason] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
   const [saving, setSaving] = useState(false);
+  // PR-N audit G (Kevin ruling 2026-08-21): dirty flag comes from a
+  // real user interaction, not from a value diff on mount. The old
+  // pattern flagged dirty when currentPrice changed after mount
+  // (e.g. selection arrived from an async fetch) because the visible
+  // newPrice was still the initial "0.00" against the freshly-loaded
+  // real price. Masked in most cases by two-decimal storage, would
+  // expose on a whole-number price.
+  const [touched, setTouched] = useState(false);
+  // F (Kevin ruling 2026-08-21): backdate save requires an explicit
+  // credit-decision. Two options, neither preselected. Save disabled
+  // until one is chosen. AP notification itself is Track B (K-7) and
+  // is NOT wired in this PR - the choice is recorded, nobody is
+  // emailed yet. Noted in PR body.
+  const [creditDecision, setCreditDecision] = useState(null); // null | "issue" | "none"
 
   const today = useMemo(() => localToday(), []);
   const tomorrow = useMemo(() => localTomorrow(), []);
@@ -230,12 +244,19 @@ function RailService({
     (effMode === "backdate" && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday);
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
   const priceValid = newPriceRounded !== null && newPriceRounded > 0;
-  const canSave = !saving && priceChanged && priceValid && effReady && reasonReady;
+  const creditReady = !isBackdate || creditDecision != null;
+  const canSave = !saving && touched && priceChanged && priceValid && effReady && reasonReady && creditReady;
 
-  // Dirty = any change from the current snapshot. Reported up so the
-  // host can fire the guard on service/account switch attempts.
-  const dirty = priceChanged || reason.trim().length > 0 || effMode !== "today" || requestedBy.trim().length > 0;
+  // Dirty comes from the touched flag now, not from value comparison.
+  // See PR-N audit G ruling.
+  const dirty = touched;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+
+  // Sync newPrice to the latest currentPrice ONLY when the user has
+  // not touched yet. Once touched, respect the operator's input.
+  useEffect(() => {
+    if (!touched) setNewPrice(currentPrice.toFixed(2));
+  }, [currentPrice, touched]);
 
   // Reactive backdate preview - same pattern as the retired PriceEditPanel.
   const backdateReady =
@@ -303,7 +324,10 @@ function RailService({
         reason: reason.trim(),
         requestedBy: requestedBy.trim() || undefined,
       };
-      if (isBackdate) change.allowBackdate = true;
+      if (isBackdate) {
+        change.allowBackdate = true;
+        change.creditDecision = creditDecision;   // "issue" | "none"
+      }
       const res = await fetch("/api/service-calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -380,7 +404,7 @@ function RailService({
               value={newPrice}
               disabled={saving}
               className={newPrice !== "" && !priceValid ? "err" : ""}
-              onChange={(e) => setNewPrice(e.target.value.replace(/[^0-9.]/g, ""))}
+              onChange={(e) => { setNewPrice(e.target.value.replace(/[^0-9.]/g, "")); setTouched(true); }}
               placeholder="0.00"
             />
           </div>
@@ -391,19 +415,19 @@ function RailService({
               <button
                 type="button"
                 aria-pressed={effMode === "today"}
-                onClick={() => setEffMode("today")}
+                onClick={() => { setEffMode("today"); setTouched(true); }}
                 disabled={saving}
               >Today</button>
               <button
                 type="button"
                 aria-pressed={effMode === "future"}
-                onClick={() => setEffMode("future")}
+                onClick={() => { setEffMode("future"); setTouched(true); }}
                 disabled={saving}
               >Future</button>
               <button
                 type="button"
                 aria-pressed={effMode === "backdate"}
-                onClick={() => setEffMode("backdate")}
+                onClick={() => { setEffMode("backdate"); setTouched(true); }}
                 disabled={saving}
               >Backdate</button>
             </div>
@@ -413,7 +437,7 @@ function RailService({
                 min={tomorrow}
                 value={futureDate}
                 disabled={saving}
-                onChange={(e) => setFutureDate(e.target.value)}
+                onChange={(e) => { setFutureDate(e.target.value); setTouched(true); }}
                 style={{ marginTop: "var(--sc2-space-2)" }}
               />
             )}
@@ -424,7 +448,7 @@ function RailService({
                 max={yesterday}
                 value={backdateDate}
                 disabled={saving}
-                onChange={(e) => setBackdateDate(e.target.value)}
+                onChange={(e) => { setBackdateDate(e.target.value); setTouched(true); }}
                 style={{ marginTop: "var(--sc2-space-2)" }}
               />
             )}
@@ -451,7 +475,7 @@ function RailService({
               id={`rs-${service.id}`}
               value={reason}
               disabled={saving}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(e) => { setReason(e.target.value); setTouched(true); }}
               placeholder="Contract amendment"
               maxLength={280}
               rows={2}
@@ -467,11 +491,55 @@ function RailService({
               type="text"
               value={requestedBy}
               disabled={saving}
-              onChange={(e) => setRequestedBy(e.target.value)}
+              onChange={(e) => { setRequestedBy(e.target.value); setTouched(true); }}
               placeholder="Who asked for this?"
               maxLength={280}
             />
           </div>
+
+          {/* F (Kevin ruling 2026-08-21): backdate save requires an
+              explicit credit-decision. Two options, neither
+              preselected. Save disabled until picked. AP notification
+              itself is Track B (K-7) and is NOT wired in this PR - the
+              choice is recorded, nobody is emailed until Track B ships. */}
+          {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && priceValid && priceChanged && (
+            <div className="scav-f scav-credit-choice">
+              <label>
+                Credit decision <span className="hint">required, no default</span>
+              </label>
+              <div className="scav-credit-options" role="radiogroup" aria-label="Credit decision">
+                <label className="scav-credit-opt">
+                  <input
+                    type="radio"
+                    name={`cd-${service.id}`}
+                    checked={creditDecision === "issue"}
+                    onChange={() => { setCreditDecision("issue"); setTouched(true); }}
+                    disabled={saving}
+                  />
+                  <span>
+                    <strong>Issue the credit</strong>
+                    <span className="scav-credit-hint">AP receives the amount and issues a credit memo.</span>
+                  </span>
+                </label>
+                <label className="scav-credit-opt">
+                  <input
+                    type="radio"
+                    name={`cd-${service.id}`}
+                    checked={creditDecision === "none"}
+                    onChange={() => { setCreditDecision("none"); setTouched(true); }}
+                    disabled={saving}
+                  />
+                  <span>
+                    <strong>No credit</strong>
+                    <span className="scav-credit-hint">Price corrected going forward; already-billed weeks stand. Say why in Reason.</span>
+                  </span>
+                </label>
+              </div>
+              <div className="scav-credit-track-b" role="note">
+                Nothing is emailed yet. The decision is recorded on the changelog; AP notification lands with Track B.
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
@@ -492,6 +560,10 @@ function RailService({
 }
 
 function BackdatePriceCopy({ preview, backdateDate, today, spanDays, fromPrice, toPrice }) {
+  // PR-N audit F (Kevin ruling 2026-08-21): removed the "AP is emailed
+  // with the credit owed" clause. It was not true - the server does
+  // not email AP on this path. AP notification is Track B (K-7),
+  // separate PR. See docs/backlog/ADMIN_HISTORY_PANELS.md siblings.
   const spanText = (
     <span>
       <b>{spanDays} calendar day{spanDays === 1 ? "" : "s"} will recompute</b><br />
@@ -514,10 +586,8 @@ function BackdatePriceCopy({ preview, backdateDate, today, spanDays, fromPrice, 
     });
   return (
     <span>
-      <b>{spanDays} days will recompute</b><br />
-      Weeks already billed at {fmtPrice(fromPrice)} become {fmtPrice(toPrice)} across {affectedDayCount} {dayWord} in {periodList}, {closedClause}.
-      {deltaStr ? <> AP is emailed with the {dollars >= 0 ? "credit" : "invoice"} owed ({deltaStr}).</> : null}
-      {" "}This system has no record of which days have been invoiced - verify against your billing before saving.
+      <b>{affectedDayCount} {dayWord} in {periodList} &middot; {deltaStr || "delta pending"} {dollars != null ? (dollars >= 0 ? "owed to the client" : "owed by the client") : ""}</b><br />
+      Weeks already billed at {fmtPrice(fromPrice)} become {fmtPrice(toPrice)} across the calendar span, {closedClause}. This system has no record of which days have been invoiced - verify against your billing before saving.
     </span>
   );
 }
@@ -547,10 +617,24 @@ function RailFee({
   const [reason, setReason] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
   const [saving, setSaving] = useState(false);
+  // PR-N audit G (Kevin ruling 2026-08-21): dirty from real
+  // interaction, not value diff on mount. Reproduces most easily
+  // on fee accounts because feeData may arrive async - currentAmount
+  // jumps from 0 to (e.g.) 376686 on the second render while
+  // newAmount state is still the initial "0.00", which the old
+  // pattern read as amountChanged=true and fired the unsaved-guard
+  // on account switch even though the operator had touched nothing.
+  const [touched, setTouched] = useState(false);
 
   const today = useMemo(() => localToday(), []);
   const tomorrow = useMemo(() => localTomorrow(), []);
   const yesterday = useMemo(() => localYesterday(), []);
+
+  // Sync newAmount to the latest currentAmount ONLY when the user
+  // has not touched yet. See PR-N audit G ruling.
+  useEffect(() => {
+    if (!touched) setNewAmount(currentAmount.toFixed(2));
+  }, [currentAmount, touched]);
 
   const newAmountNum = Number(newAmount);
   const newAmountRounded = isNaN(newAmountNum) ? null : roundCents(newAmountNum);
@@ -563,9 +647,10 @@ function RailFee({
     (effMode === "backdate" && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday);
   const reasonReady = reason.trim().length > 0 && reason.length <= 280;
   const amountValid = newAmountRounded !== null && newAmountRounded >= 0;
-  const canSave = !isBundled && !saving && amountChanged && amountValid && effReady && reasonReady;
+  const canSave = !isBundled && !saving && touched && amountChanged && amountValid && effReady && reasonReady;
 
-  const dirty = !isBundled && (amountChanged || reason.trim().length > 0 || effMode !== "today" || requestedBy.trim().length > 0);
+  // Dirty from real interaction, not value diff. See G fix comment above.
+  const dirty = !isBundled && touched;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const isMlb = MLB_LABOR_BUDGET_ACCOUNTS.has(accountKey);
@@ -676,7 +761,7 @@ function RailFee({
                   value={newAmount}
                   disabled={saving}
                   className={newAmount !== "" && !amountValid ? "err" : ""}
-                  onChange={(e) => setNewAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                  onChange={(e) => { setNewAmount(e.target.value.replace(/[^0-9.]/g, "")); setTouched(true); }}
                   placeholder="0.00"
                 />
               </div>
@@ -684,17 +769,17 @@ function RailFee({
               <div className="scav-f">
                 <label>Effective from</label>
                 <div className="scav-seg" role="group">
-                  <button type="button" aria-pressed={effMode === "today"} onClick={() => setEffMode("today")} disabled={saving}>Today</button>
-                  <button type="button" aria-pressed={effMode === "future"} onClick={() => setEffMode("future")} disabled={saving}>Future</button>
-                  <button type="button" aria-pressed={effMode === "backdate"} onClick={() => setEffMode("backdate")} disabled={saving}>Backdate</button>
+                  <button type="button" aria-pressed={effMode === "today"} onClick={() => { setEffMode("today"); setTouched(true); }} disabled={saving}>Today</button>
+                  <button type="button" aria-pressed={effMode === "future"} onClick={() => { setEffMode("future"); setTouched(true); }} disabled={saving}>Future</button>
+                  <button type="button" aria-pressed={effMode === "backdate"} onClick={() => { setEffMode("backdate"); setTouched(true); }} disabled={saving}>Backdate</button>
                 </div>
                 {effMode === "future" && (
                   <input type="date" min={tomorrow} value={futureDate} disabled={saving}
-                    onChange={(e) => setFutureDate(e.target.value)} style={{ marginTop: "var(--sc2-space-2)" }} />
+                    onChange={(e) => { setFutureDate(e.target.value); setTouched(true); }} style={{ marginTop: "var(--sc2-space-2)" }} />
                 )}
                 {effMode === "backdate" && (
                   <input type="date" min={BACKDATE_FLOOR} max={yesterday} value={backdateDate} disabled={saving}
-                    onChange={(e) => setBackdateDate(e.target.value)} style={{ marginTop: "var(--sc2-space-2)" }} />
+                    onChange={(e) => { setBackdateDate(e.target.value); setTouched(true); }} style={{ marginTop: "var(--sc2-space-2)" }} />
                 )}
                 {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
                   <div className="scav-warn" role="alert">
@@ -711,7 +796,7 @@ function RailFee({
                   Reason <span className="hint">required</span>
                 </label>
                 <textarea id={`frs-${accountKey}`} value={reason} disabled={saving}
-                  onChange={(e) => setReason(e.target.value)}
+                  onChange={(e) => { setReason(e.target.value); setTouched(true); }}
                   placeholder="Contract renewal" maxLength={280} rows={2} />
               </div>
 
@@ -720,7 +805,7 @@ function RailFee({
                   Requested by <span className="hint">optional</span>
                 </label>
                 <input id={`frq-${accountKey}`} type="text" value={requestedBy} disabled={saving}
-                  onChange={(e) => setRequestedBy(e.target.value)}
+                  onChange={(e) => { setRequestedBy(e.target.value); setTouched(true); }}
                   placeholder="Who asked for this?" maxLength={280} />
               </div>
 

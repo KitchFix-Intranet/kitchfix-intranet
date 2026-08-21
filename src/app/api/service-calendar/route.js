@@ -1709,6 +1709,22 @@ export async function POST(request) {
               { status: 400 }
             );
           }
+          // PR-N audit F (Kevin ruling 2026-08-21): backdate price
+          // changes require an explicit credit decision. Two values,
+          // no default, no fallback - the client's UI has no
+          // preselection and Save is disabled until the operator
+          // picks one, so the payload MUST carry the choice. Recorded
+          // in the changelog's new_value JSONB (no schema change).
+          // AP notification itself is Track B (K-7) and is NOT wired
+          // in this PR - the choice is recorded, nobody is emailed
+          // until Track B ships. Server enforces the presence + value
+          // as defense in depth; a payload without it is a bug.
+          if (c.creditDecision !== "issue" && c.creditDecision !== "none") {
+            return NextResponse.json(
+              { success: false, error: "creditDecision required on backdated price changes; must be \"issue\" or \"none\"" },
+              { status: 400 }
+            );
+          }
         } else if (c.effectiveDate < yesterday) {
           return NextResponse.json(
             { success: false, error: "effectiveDate must be today or future; choose Backdate to set a past date" },
@@ -1799,6 +1815,11 @@ export async function POST(request) {
             notes:         composedReason,
             requestedBy:   c.requestedBy ? c.requestedBy.trim() : null,
             entityLabel:   `${c.groupName} - ${c.serviceName}`,
+            // PR-N audit F: pass the operator's credit decision through
+            // to updateServiceConfig so it lands in the changelog's
+            // new_value JSONB. Only set on backdate paths (see
+            // validation above; non-backdate changes never carry it).
+            creditDecision: c.allowBackdate === true ? c.creditDecision : undefined,
           };
         }
         throw new Error(`Unknown change type: ${c.type}`);

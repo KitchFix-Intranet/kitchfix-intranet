@@ -2535,6 +2535,16 @@ async function updateServiceConfigPostgres(accountKey, changes, email) {
       // migration), so there's no UPDATE/DELETE bypass to worry about.
       // reason is required at the route layer; the schema CHECK is
       // defense in depth.
+      // PR-N audit F (Kevin ruling 2026-08-21): backdate price changes
+      // carry the operator's credit decision. Recorded on the changelog
+      // in new_value JSONB - no schema change, queryable via
+      // `new_value->>'creditDecision'`. Non-backdate changes never
+      // carry the field; the route validates presence + value on the
+      // backdate path.
+      const newValue = { price: newPriceRounded };
+      if (ch.creditDecision === "issue" || ch.creditDecision === "none") {
+        newValue.creditDecision = ch.creditDecision;
+      }
       const { error: logErr } = await supa.from(SC_TABLES.changelog).insert({
         account_key:    accountKey,
         entity_type:    "price",
@@ -2542,7 +2552,7 @@ async function updateServiceConfigPostgres(accountKey, changes, email) {
         entity_label:   ch.entityLabel || null,
         change_type:    priorPrice === null ? "create" : "update",
         old_value:      priorPrice === null ? null : { price: priorPrice },
-        new_value:      { price: newPriceRounded },
+        new_value:      newValue,
         effective_date: effDate,
         reason:         ch.notes,
         requested_by:   ch.requestedBy || null,

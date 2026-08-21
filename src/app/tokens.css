@@ -146,6 +146,12 @@
      and light-navy wash used by admin badges adjacent to the command bar. */
   --sc2-accent-green-ink:#0A2416;
   --sc2-cmd-band-bg:#E7EEF8;
+  /* PR-N audit R2 (2026-08-21): red-bright for warning bold text on
+     dark-rail tinted panels. --sc2-accent-red-deep (#8a3a2c) reads
+     as three layers of similar hue when placed on the red-tinted
+     warning panel over dark navy - unreadable per Chat-Claude's
+     G1 finding. Measured on the .scav-warn.bad panel background. */
+  --sc2-accent-red-bright:#E8635A;
   --disabled-opacity:var(--opacity-disabled);
   /* density-aware semantic spacing (Comfortable defaults) */
   --space-stack:var(--space-6); --space-card-pad:var(--space-4); --space-inline:var(--space-3);
