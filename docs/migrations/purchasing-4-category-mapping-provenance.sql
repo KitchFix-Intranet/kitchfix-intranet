@@ -12,12 +12,41 @@
 --                                  category name (e.g. "3200.1 General Food"
 --                                  -> "3200.1"). 32 categories.
 --   'owner_ruling_2026-08-20'  -> Part B: owner ruling from the xlsx
---                                  Rulings sheet column F. 22 categories
---                                  routed by ruling (23 rulings total; one
---                                  is `**Please Select A Category**`
---                                  which stays unrouted).
+--                                  Rulings sheet column F. 21 categories
+--                                  routed by ruling (23 rulings total;
+--                                  one is `**Please Select A Category**`
+--                                  which stays unrouted; one is
+--                                  `Equipment Lease` which shares cat id
+--                                  with Please Select and is handled
+--                                  under collision_unrouted_2026-08-20).
+--                                  (Also covers Equipment -> 5002.5 per
+--                                  owner ruling 2026-08-21, folded into
+--                                  the same provenance batch string so
+--                                  audit queries stay simple.)
+--   'collision_unrouted_2026-08-20' -> Part B addendum (owner ruling
+--                                  2026-08-20): category id carries
+--                                  multiple names in the CSV
+--                                  (68ed4977b7aabd4234afda3a shows
+--                                  `Equipment Lease` and
+--                                  `**Please Select A Category**` -
+--                                  interleaved same-day, permanently
+--                                  ambiguous). Route UNROUTED with
+--                                  distinct provenance for audit trail.
+--                                  1 category.
 --   'unrouted'                 -> nothing applies. Category stays in the
 --                                  visible queue.
+--
+-- ─── APPLICATION HISTORY ─────────────────────────────────────────────────
+-- Applied once 2026-08-20 with 3 provenance values in Statement 4's CHECK
+-- (parsed_from_name / owner_ruling_2026-08-20 / unrouted). The applier's
+-- Phase 1.5 addition of the 4th provenance value (collision_unrouted_...)
+-- means Phase 2's LIVE applier run would violate the 3-value constraint.
+-- To incorporate the 4th value, Kevin re-runs Statements 2, 4, 5, 6
+-- (Statement 2 drops the existing constraint via DROP IF EXISTS, Statement
+-- 4 re-adds with 4 values, Statement 5 is idempotent CREATE INDEX IF NOT
+-- EXISTS, Statement 6 is COMMENT which is idempotent). Statements 1 + 3
+-- are ADD COLUMN IF NOT EXISTS + a READ-ONLY pre-flight - safe to re-run
+-- but not required.
 --
 -- ─── SCHEMA CHANGES (this migration) ─────────────────────────────────────
 --
@@ -46,7 +75,7 @@ ALTER TABLE spend_category_map
 -- Statement 3: pre-flight check - COUNT rows that would violate the
 -- constraint about to be added in Statement 4. READ-ONLY. Expect 0.
 -- A violating row is one where gl_line_code is populated but provenance
--- is not one of the three allowed values (or is NULL).
+-- is not one of the four allowed values (or is NULL).
 -- If this returns > 0, STOP - inspect the violating rows before Statement 4:
 --   SELECT category_id, category_label, gl_line_code, provenance
 --     FROM spend_category_map
@@ -54,6 +83,7 @@ ALTER TABLE spend_category_map
 --      AND (provenance IS NULL
 --           OR provenance NOT IN ('parsed_from_name',
 --                                 'owner_ruling_2026-08-20',
+--                                 'collision_unrouted_2026-08-20',
 --                                 'unrouted'));
 SELECT COUNT(*) || ' violating rows (gl_line_code IS NOT NULL AND provenance not in allowed set)'
          AS preflight_result
@@ -62,19 +92,22 @@ SELECT COUNT(*) || ' violating rows (gl_line_code IS NOT NULL AND provenance not
    AND (provenance IS NULL
         OR provenance NOT IN ('parsed_from_name',
                               'owner_ruling_2026-08-20',
+                              'collision_unrouted_2026-08-20',
                               'unrouted'));
 
 -- Statement 4: add the constraint - if gl_line_code is populated then
--- provenance MUST be one of the three allowed values. The converse
+-- provenance MUST be one of the four allowed values. The converse
 -- (provenance -> gl_line_code non-null) is NOT enforced because
--- 'unrouted' is a legitimate provenance for a row whose gl_line_code
--- stays NULL - the ruling was "keep it in the queue" and that ruling
--- itself is a decision worth recording.
+-- 'unrouted' and 'collision_unrouted_2026-08-20' are legitimate
+-- provenances for a row whose gl_line_code stays NULL - the ruling was
+-- "keep it in the queue" (or "id is permanently ambiguous") and that
+-- ruling itself is a decision worth recording.
 ALTER TABLE spend_category_map
   ADD CONSTRAINT spend_category_map_provenance_shape
     CHECK (gl_line_code IS NULL
            OR provenance IN ('parsed_from_name',
                              'owner_ruling_2026-08-20',
+                             'collision_unrouted_2026-08-20',
                              'unrouted'));
 
 -- Statement 5: index for provenance lookups (audit queries).
@@ -86,7 +119,10 @@ CREATE INDEX IF NOT EXISTS spend_category_map_provenance_idx
 COMMENT ON COLUMN spend_category_map.provenance IS
   'Populated by scripts/purchasing_apply_category_rulings.mjs (G3, 2026-08-20). '
   'Values: parsed_from_name (leading \d{4}(\.\d+)* on category_label), '
-  'owner_ruling_2026-08-20 (Kevin''s ruling in card_category_rulings.xlsx col F), '
+  'owner_ruling_2026-08-20 (Kevin''s ruling in card_category_rulings.xlsx col F, '
+  'plus Equipment ruled to 5002.5 on 2026-08-21), '
+  'collision_unrouted_2026-08-20 (cat id carries multiple names in CSV; interleaved, '
+  'permanently ambiguous), '
   'unrouted (nothing applies - category stays in the visible queue).';
 
 -- ─── VERIFY BLOCK - READ-ONLY (no BEGIN/UPDATE/ROLLBACK) ─────────────────
