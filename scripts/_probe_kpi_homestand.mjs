@@ -229,29 +229,39 @@ console.log("[H7] CIN - OH verified fixtures");
     // ruling 2026-08-21. Freeze today against the measurement date
     // so finished-stand count is exactly 9.
     //
-    // Rounding order matters and is easy to get wrong. There are
-    // three principled paths and they produce THREE DIFFERENT
-    // answers on this fixture:
-    //   $6,008.62  per-stand rounded on BOTH sides, then summed
-    //              (what the resolver ships, what operators see)
-    //   $6,008.63  round once at the end (mille-cent parallel
-    //              accumulator - PR-1 v1's approach; drifted 2c
-    //              from the design-pass fixture and lost)
-    //   $6,008.57  round each labor_actuals_daily row to cent,
-    //              then sum (loses sub-cent precision at row level)
+    // Post-audit 2026-08-21: expected value MOVED from $6,008.62 to
+    // $4,218.39. Reason: PR-2 audit surfaced that HS 3's window was
+    // reaching three days behind the daily floor (HS 2 pre-floor,
+    // HS 3 inherited HS 2's game_end + 1 = 04/17, floor 04/20). PR-2
+    // v2 clamps EVERY non-pre-floor window_start up to the floor;
+    // HS 3 becomes 04/20-04/30 (11 days) and its budget recomputes
+    // from $8,354.43 to $6,564.20. That $1,790.23 of budget the
+    // 04/17-04/19 window used to own had no attributable actual,
+    // so removing it shrinks the bank by the same amount ($6,008.62
+    // - $1,790.23 = $4,218.39). This is the same "budget without
+    // attributable actual fakes a surplus" logic that excludes pre-
+    // floor STANDS from the bank; extending it to pre-floor DAYS
+    // owned by non-pre-floor stands is the audit correction.
     //
-    // Owner ruling 2026-08-21: use the FIRST path. An operator
-    // adding the nine stands on screen must land on the bank
-    // exactly. The design-pass fixture ($6,008.61) had a 1c slip
-    // from a per-stand-variance summation order; corrected value is
-    // $6,008.62. Do not re-derive with a different rounding order
-    // and file a bug.
+    // Rounding order still matters: per-stand rounded on BOTH sides
+    // then summed. See PR-1 fixture note (removed here for brevity)
+    // for the three-way comparison against round-once-at-end and
+    // per-row-cent paths.
     const actMap = actualsByStand(hs, daily);
     const bank = computeHomestandBank(hs, actMap, "2026-08-21");
-    const wantBankCents = 600862;   // $6008.62 - owner-verified 2026-08-21
+    const wantBankCents = 421839;   // $4218.39 - owner-verified 2026-08-21 post-clamp
     const gotBankCents = Math.round(bank.bank * 100);
-    if (gotBankCents === wantBankCents) ok(`bank across 9 finished stands = $${bank.bank.toFixed(2)} EXACT (per-stand rounded, both sides, summed)`);
-    else fail(`bank $${bank.bank.toFixed(2)} != $6008.62 (delta ${gotBankCents - wantBankCents}c) - see rounding-order comment above`);
+    if (gotBankCents === wantBankCents) ok(`bank across 9 finished stands = $${bank.bank.toFixed(2)} EXACT (per-stand rounded, both sides, summed; post-clamp)`);
+    else fail(`bank $${bank.bank.toFixed(2)} != $4218.39 (delta ${gotBankCents - wantBankCents}c) - see rounding-order + clamp comment above`);
+    // stands_finished + stands_remaining + remaining_budget are the
+    // new fields from the season-card hotfix. Assert them here so a
+    // future re-derive lands exact.
+    if (bank.stands_finished === 9)        ok(`stands_finished = 9`);
+    else                                    fail(`stands_finished = ${bank.stands_finished}, want 9`);
+    if (bank.stands_remaining === 2)       ok(`stands_remaining = 2`);
+    else                                    fail(`stands_remaining = ${bank.stands_remaining}, want 2`);
+    if (Math.round(bank.remaining_budget * 100) === 1501809) ok(`remaining_budget = $15,018.09`);
+    else                                    fail(`remaining_budget = $${bank.remaining_budget}, want $15,018.09`);
   }
 }
 
@@ -278,6 +288,20 @@ console.log("[HSent] CIN - OH 06/29 weekly sentinel: 113.98 / 2.32 / 39.91 / $4,
 }
 
 // ─── H6 live HTTP - route shape ─────────────────────────────────────
+// Owner ruling 2026-08-21: dev-server smoke tests cost 20 min twice
+// on this repo. H6 is gated behind PROBE_LIVE_HTTP=1 - when unset,
+// we skip the dev-server spin-up entirely. The deployed-URL probe
+// in PR-3 (against Vercel) is the intended regression net for the
+// route contract.
+if (process.env.PROBE_LIVE_HTTP !== "1") {
+  console.log("");
+  console.log("[H6] SKIP - live HTTP requires PROBE_LIVE_HTTP=1 (deployed-URL probe covers this in PR-3)");
+  console.log("");
+  console.log("=".repeat(72));
+  console.log(hardFail === 0 ? "HOMESTAND PR-1: ALL PROBES PASS (H6 SKIPPED)" : `HOMESTAND PR-1: ${hardFail} FAILURE(S)`);
+  console.log("=".repeat(72));
+  process.exit(hardFail === 0 ? 0 : 1);
+}
 console.log("");
 console.log("[H6] live HTTP: homestand request routes through the existing range resolver + splices homestand fields");
 console.log(`spinning up next dev on :${PORT} with TEST_MODE=true`);

@@ -3569,3 +3569,21 @@
 }
 .kpi-hs-chip-salary { background: #F3E8FA; color: #7A3E9D; }
 .kpi-hs-chip-amber  { background: var(--amber-100, #FEF3E2); color: #B25800; border: 1px solid #F0D9B5; }
+
+/* Refusal card - shown in the stand region when the server sends
+   refused:true. Rail + season card + tabs above stay live. */
+.kpi-hs-card-refusal {
+  border-color: #F0D9B5;
+  background: var(--amber-100, #FEF3E2);
+}
+.kpi-hs-refusal-msg {
+  font-size: var(--kpi-t-body);
+  color: #92580A;
+  font-weight: 600;
+  margin-top: var(--kpi-sp-2);
+}
+.kpi-hs-refusal-hint {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  margin-top: var(--kpi-sp-1);
+}

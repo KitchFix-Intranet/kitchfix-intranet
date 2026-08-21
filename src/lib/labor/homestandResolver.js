@@ -221,19 +221,34 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
     const game_end   = stand[stand.length - 1].service_date;
 
     // window_start:
-    //   i == 0: bound to daily floor OR game_start (whichever is later).
-    //           If game_start < floor, the stand is PRE-FLOOR - its
-    //           budget + actual land as null in the response and it
-    //           is excluded from the bank rollup.
-    //   i > 0:  day after previous stand's last game.
-    let windowStart, preFloor = false;
+    //   Non-pre-floor stands take the day after the previous stand's
+    //   last game (or game_start on the first stand of the season).
+    //   The result is then clamped up to the daily floor, so no
+    //   non-pre-floor stand ever owns days before the daily-grain
+    //   floor. Kevin's post-PR-2 audit 2026-08-21: PR-1 v1 only
+    //   clamped the FIRST stand, which meant HS 3 inherited a window
+    //   reaching three days behind the floor (HS 2 was pre-floor,
+    //   HS 3 got HS 2's game_end + 1 = 04/17, floor 04/20). The
+    //   range resolver then refused HS 3 - "Daily detail starts
+    //   04/20/26" - blanking the page for the operator.
+    //
+    //   pre_floor stays a property of the STAND (game_end < floor),
+    //   not the window: HS 1 and HS 2 stay pre-floor because their
+    //   games completed before daily detail started, so no attributable
+    //   actual exists for them at all.
+    let windowStart;
     if (i === 0) {
-      windowStart = game_start > dailyFloorIso ? dailyFloorIso : game_start;
-      if (game_start < dailyFloorIso) preFloor = true;
+      windowStart = game_start;
     } else {
       windowStart = addDaysIso(groups[i - 1][groups[i - 1].length - 1].service_date, 1);
-      if (game_end < dailyFloorIso) preFloor = true;
     }
+    // Clamp NON-PRE-FLOOR windows up to the daily floor so the range
+    // resolver stops refusing (was blanking the page for HS 3 through
+    // HS 13 - Kevin's audit 2026-08-21). Pre-floor stands keep their
+    // original window so start <= end stays coherent for display
+    // even though they never render an actual.
+    const preFloor = game_end < dailyFloorIso;
+    if (!preFloor && windowStart < dailyFloorIso) windowStart = dailyFloorIso;
     const windowEnd = game_end;
 
     const nightGames = stand.filter(g => classifyDN(g.day_night) === "night").length;
@@ -261,9 +276,9 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
       opponents,
       budget: budgetCents == null ? null : budgetCents / 100,
       pre_floor: preFloor,
-      window_start_bounded_by: i === 0
-        ? (game_start < dailyFloorIso ? "game_start" : "daily_floor")
-        : "prev_game_end_plus_1",
+      window_start_bounded_by: windowStart === dailyFloorIso
+        ? "daily_floor"
+        : (i === 0 ? "game_start" : "prev_game_end_plus_1"),
       index: i + 1,
       of_total: groups.length,
     });

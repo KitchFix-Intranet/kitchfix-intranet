@@ -515,6 +515,12 @@ export function HomestandBoard({
   const bank = data?.homestand_bank || null;
   const stand = data?.homestand || null;
   const split = data?.homestand_split || null;
+  // Owner ruling 2026-08-21 after PR-2 audit: a refusal must not
+  // destroy navigation. Rail + season card + tabs survive; the stand
+  // region alone shows the refusal message. Same rule as the
+  // account-locked panel: board region is replaced, navigation stays.
+  const isRefused = data?.refused === true;
+  const refusalMessage = isRefused ? data?.message : null;
   const gameDates = useMemo(() => new Set(data?.homestand_game_dates || []), [data?.homestand_game_dates]);
   const nightGameDates = useMemo(() => new Set(data?.homestand_night_dates || []), [data?.homestand_night_dates]);
 
@@ -544,8 +550,8 @@ export function HomestandBoard({
         homestands={homestands}
         selectedGameStart={selectedGameStart}
       />
-      {stand && <StandHeader stand={stand} />}
-      {stand && (
+      {stand && !isRefused && <StandHeader stand={stand} />}
+      {stand && !isRefused && (
         <StandDayStrip
           stand={stand}
           actualsDaily={data.actuals_daily || []}
@@ -554,13 +560,20 @@ export function HomestandBoard({
           todayISO={todayISO}
         />
       )}
-      {stand && split && (
+      {stand && split && !isRefused && (
         <SignalCards
           stand={stand}
           split={split}
           employees={employeesByStand.get(stand.game_start) || []}
           hourlyRate={hourlyRate}
         />
+      )}
+      {isRefused && (
+        <div className="kpi-hs-card kpi-hs-card-refusal" role="alert" data-refusal>
+          <div className="kpi-hs-eyebrow">Selected stand unavailable</div>
+          <div className="kpi-hs-refusal-msg">{refusalMessage}</div>
+          <div className="kpi-hs-refusal-hint">Pick another stand from the rail above.</div>
+        </div>
       )}
       <SeasonTable
         homestands={homestands}

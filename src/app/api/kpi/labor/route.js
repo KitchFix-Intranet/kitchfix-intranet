@@ -527,6 +527,14 @@ export async function GET(request) {
   // answered - underlying segments were retention-purged before the
   // pipeline was built. User-facing copy names both ways out.
   if (rangeSource.refused) {
+    // Homestand PR-2 audit 2026-08-21: refusal must not destroy
+    // navigation. Include the homestands list + season-to-date bank
+    // so the client's rail + season card + tabs survive; only the
+    // stand-specific region shows the refusal message. Same rule as
+    // the account-locked panel: board region is replaced, navigation
+    // stays. `homestand` is left off deliberately (no valid stand
+    // selection reached this branch under the corrected clamp) so
+    // the client's selection state falls back to unset.
     return NextResponse.json({
       source: null,
       refused: true,
@@ -539,6 +547,8 @@ export async function GET(request) {
       accounts_directory,
       regional_directors_display,
       salary_available: false,
+      homestands: homestandsList,
+      homestand_bank: homestandBank,
     });
   }
 
