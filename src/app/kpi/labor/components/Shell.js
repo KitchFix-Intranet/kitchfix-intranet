@@ -10,13 +10,39 @@
 // Shared control skin is `.kpi-ctl` in kpi.css.
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { fmtTimestamp, hoursSinceISO, freshnessTint } from "../lib/formatting";
 import { SECTIONS } from "../lib/accounts";
 import { RangeMenu } from "./RangeMenu";
 
+// Build the target href for a section item, carrying ONLY the params
+// that both boards (labor + purchasing) read with the same semantic:
+//   ?account   team_key / ALL / EAST / WEST
+//   ?start     YYYY-MM-DD (ISO period boundary)
+//   ?end       YYYY-MM-DD (ISO period boundary)
+// Labor-only params (?workers, ?redact, ?view, ?homestand, ?salary)
+// are deliberately dropped - purchasing does not read them and carrying
+// them would risk confusing a future purchasing reader with the same
+// name meaning something different. See src/app/kpi/purchasing/page.js
+// URL-state comment: "subset of labor's, no ?workers / ?redact /
+// ?homestand". `account` + `start` + `end` are the safe trio.
+function buildSectionHref(basePath, searchParams) {
+  const carry = new URLSearchParams();
+  const account = searchParams?.get("account");
+  const start = searchParams?.get("start");
+  const end = searchParams?.get("end");
+  if (account) carry.set("account", account);
+  if (start) carry.set("start", start);
+  if (end) carry.set("end", end);
+  const qs = carry.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
+}
+
 function SectionMenu({ activeKey }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
+  const searchParams = useSearchParams();
   useEffect(() => {
     if (!open) return;
     const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
@@ -43,19 +69,40 @@ function SectionMenu({ activeKey }) {
       </button>
       {open && (
         <div className="kpi-cmd-pop" role="menu" aria-label="Section">
-          {SECTIONS.map(s => (
-            <button
-              key={s.key}
-              type="button"
-              role="menuitem"
-              className={`kpi-cmd-pop-item ${s.enabled ? "" : "ghost"} ${s.key === activeKey ? "on" : ""}`}
-              aria-disabled={s.enabled ? undefined : "true"}
-              onClick={() => { if (s.enabled) setOpen(false); }}
-            >
-              <span>{s.label}</span>
-              {!s.enabled && <small>SOON</small>}
-            </button>
-          ))}
+          {SECTIONS.map(s => {
+            const isActive = s.key === activeKey;
+            const className = `kpi-cmd-pop-item ${s.enabled ? "" : "ghost"} ${isActive ? "on" : ""}`;
+            // Enabled + has path + NOT the current section -> real Link
+            // that navigates. Current section stays a non-navigating
+            // button (keeps `on` styling, no self-navigation churn).
+            // Disabled items stay non-navigating buttons with SOON.
+            if (s.enabled && s.path && !isActive) {
+              return (
+                <Link
+                  key={s.key}
+                  href={buildSectionHref(s.path, searchParams)}
+                  role="menuitem"
+                  className={className}
+                  onClick={() => setOpen(false)}
+                >
+                  <span>{s.label}</span>
+                </Link>
+              );
+            }
+            return (
+              <button
+                key={s.key}
+                type="button"
+                role="menuitem"
+                className={className}
+                aria-disabled={s.enabled ? undefined : "true"}
+                onClick={() => { if (s.enabled) setOpen(false); }}
+              >
+                <span>{s.label}</span>
+                {!s.enabled && <small>SOON</small>}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
