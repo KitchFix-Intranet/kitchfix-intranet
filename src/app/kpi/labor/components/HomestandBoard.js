@@ -280,7 +280,7 @@ const OT_NORMS = {
   10: [26.0, 43.2, 34.4],
 };
 
-function SignalCards({ stand, split, employees, hourlyRate }) {
+function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = false, salaryOn = false }) {
   if (!stand || !split) return null;
   const budget = stand.budget || 0;
   const actual = stand.actual || 0;
@@ -297,12 +297,26 @@ function SignalCards({ stand, split, employees, hourlyRate }) {
 
   return (
     <div className="kpi-hs-signals" role="region" aria-label="Stand signal cards">
-      {/* Spend - variance is the hero */}
+      {/* Spend - variance is the hero. Scope pill sits beside the
+          on-track / over-budget pill per the header cleanup - moved
+          off the command-bar title into the first card at that
+          card's pill scale. Renders whenever the caller can toggle
+          salary so a printed / screenshotted stand board always
+          states which pool of workers it counted. */}
       <div className={`kpi-hs-card kpi-hs-signal ${variance >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="spend">
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">HS {stand.index} spend</span>
-          <span className={`kpi-hs-pill ${variance >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
-            {variance >= 0 ? "Under" : "Over"}
+          <span className="kpi-hs-card-hdr-pills">
+            <span className={`kpi-hs-pill ${variance >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
+              {variance >= 0 ? "Under" : "Over"}
+            </span>
+            {salaryAvailable && (
+              <span
+                className={"kpi-hs-pill " + (salaryOn ? "kpi-hs-pill-amber" : "kpi-hs-pill-mute")}
+                aria-label={salaryOn ? "Salary included" : "Hourly labor only"}
+                data-scope-pill
+              >{salaryOn ? "+ SALARY" : "HOURLY ONLY"}</span>
+            )}
           </span>
         </header>
         <div className={`kpi-hs-hero ${arr.cls}`} data-figure="variance">
@@ -532,6 +546,8 @@ export function HomestandBoard({
   redact,
   hourlyRate,
   loading = false,
+  salaryAvailable = false,
+  salaryOn = false,
 }) {
   const homestands = data?.homestands || [];
   const bank = data?.homestand_bank || null;
@@ -618,6 +634,8 @@ export function HomestandBoard({
               split={split}
               employees={employeesByStand.get(stand.game_start) || []}
               hourlyRate={hourlyRate}
+              salaryAvailable={salaryAvailable}
+              salaryOn={salaryOn}
             />
           )}
           {settledRefusal && (

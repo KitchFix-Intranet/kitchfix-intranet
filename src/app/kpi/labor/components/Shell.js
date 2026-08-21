@@ -154,46 +154,17 @@ export function Shell({
           <span className="kpi-cmd-title-brand">KPI Dashboard</span>
           <span className="kpi-cmd-dot" aria-hidden="true">·</span>
           <span className="kpi-cmd-title-acct">{account}</span>
-          {salaryToggle && (
-            // V41 C1 - symmetric scope pill. Renders whenever the
-            // toggle exists (i.e. the caller can see salary), in one
-            // of two states: outline HOURLY ONLY when off, amber
-            // + SALARY when on. Paired with the amber active segment
-            // (V40 FIX 3a) so the pill and the seg agree; absent
-            // entirely for callers without salary permission so no
-            // new surface hints that a salary view exists.
-            <span
-              className={"kpi-cmd-scope " + (salaryToggle.on ? "kpi-cmd-scope--salary" : "kpi-cmd-scope--hourly")}
-              aria-label={salaryToggle.on ? "Salary included" : "Hourly labor only"}
-            >{salaryToggle.on ? "+ SALARY" : "HOURLY ONLY"}</span>
-          )}
+          {/* Homestand PR-2 audit 2026-08-21 - the scope pill moved
+              out of the title. It now lives on the first card (StoryBlock
+              in period view, HS spend SignalCard in homestand view) beside
+              the on-track / over-budget pill, at that card's pill scale
+              rather than carrying the title pill's sizing over. Print
+              header retains its own scope line via printScopeText below,
+              so printed / screenshotted output still states what was
+              counted (V41 duplication for print sanity). */}
         </span>
 
         <SectionMenu activeKey={activeSection} />
-
-        {salaryToggle && (
-          <span className="kpi-cmd-salary" role="group" aria-label="Include salary">
-            <span className="kpi-ctl-k">Include</span>
-            {/* V40 FIX 3a - kpi-seg-salary-on flips the ACTIVE segment's
-                fill to amber-600 when salary is on (see kpi.css). When
-                off, the segment stays navy so the toggle changes colour
-                only when it also changes meaning. */}
-            <span className={"kpi-seg" + (salaryToggle.on ? " kpi-seg-salary-on" : "")}>
-              <button
-                type="button"
-                className={!salaryToggle.on ? "on" : ""}
-                onClick={() => salaryToggle.on && salaryToggle.onChange(false)}
-                aria-pressed={!salaryToggle.on}
-              >Hourly</button>
-              <button
-                type="button"
-                className={salaryToggle.on ? "on" : ""}
-                onClick={() => !salaryToggle.on && salaryToggle.onChange(true)}
-                aria-pressed={salaryToggle.on}
-              >+ Salary</button>
-            </span>
-          </span>
-        )}
 
         {rangeProps && (
           <RangeMenu
@@ -223,6 +194,32 @@ export function Shell({
         </div>
 
         <span className="kpi-cmd-spacer" aria-hidden="true" />
+
+        {/* Homestand PR-2 audit 2026-08-21 - salary toggle moved to
+            the right side, adjacent to Export. Its meaning is a
+            board-scope control (which pool of workers are counted),
+            paired with the other view-scoped controls (Export, print)
+            rather than the left-side identity block. Same rendering
+            rules: absent when the caller cannot see salary. */}
+        {salaryToggle && (
+          <span className="kpi-cmd-salary" role="group" aria-label="Include salary">
+            <span className="kpi-ctl-k">Include</span>
+            <span className={"kpi-seg" + (salaryToggle.on ? " kpi-seg-salary-on" : "")}>
+              <button
+                type="button"
+                className={!salaryToggle.on ? "on" : ""}
+                onClick={() => salaryToggle.on && salaryToggle.onChange(false)}
+                aria-pressed={!salaryToggle.on}
+              >Hourly</button>
+              <button
+                type="button"
+                className={salaryToggle.on ? "on" : ""}
+                onClick={() => !salaryToggle.on && salaryToggle.onChange(true)}
+                aria-pressed={salaryToggle.on}
+              >+ Salary</button>
+            </span>
+          </span>
+        )}
 
         {exportHref && !exportDisabledReason && (
           <a

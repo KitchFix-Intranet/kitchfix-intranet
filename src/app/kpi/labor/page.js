@@ -830,6 +830,8 @@ export default function KpiLaborPage() {
           redact={redact}
           hourlyRate={hourlyRate}
           loading={loadState === "loading"}
+          salaryAvailable={data?.salary_available === true}
+          salaryOn={data?.salary_included === true}
         />
       )}
       {/* C5.5 name-availability banner. */}
@@ -872,6 +874,7 @@ export default function KpiLaborPage() {
                   rate_basis: data.rate_basis,
                   blended_rate_hourly: data.blended_rate_hourly,
                 } : null}
+                salaryAvailable={data?.salary_available === true}
               />
               <SignalCards
                 board={data.board}
