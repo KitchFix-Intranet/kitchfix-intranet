@@ -254,39 +254,12 @@
   white-space: nowrap;
 }
 .kpi-cmd-dot { color: #5C769A; margin: 0 var(--kpi-sp-2); font-weight: 400; flex: none; }
-/* V41 C1 - symmetric scope pill in the command bar title. Always
-   renders when the toggle exists so an hourly view is never
-   unlabeled; hourly reads as an outline on the navy bar (muted
-   text + faint border, no fill), salary keeps V40's amber. Both
-   states share the same geometry (radius, padding, size, weight,
-   tracking) so the swap does not shift layout. */
-.kpi-cmd-scope {
-  flex: none;
-  margin-left: var(--kpi-sp-2);
-  padding: 2px var(--kpi-sp-2);
-  border-radius: 999px;
-  font-size: var(--kpi-size-caption);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  line-height: 1.15;
-  align-self: center;
-}
-.kpi-cmd-scope--hourly {
-  background: transparent;
-  color: #C8D4E2;
-  border: 1px solid rgba(255, 255, 255, 0.30);
-}
-.kpi-cmd-scope--salary {
-  background: var(--amber-600);
-  color: var(--n-0);
-  border: 1px solid var(--amber-600);
-}
 
-/* Salary PR 3 C1 - Hourly / + Salary toggle. Sits between Section
-   and Range in the command bar and only renders when the route
-   ships salary_available=true. The .kpi-ctl-k label styling mirrors
-   the SectionMenu chip so the eye reads the two as one control
-   family. Reuses the shared .kpi-seg pattern; no raw px literals. */
+/* Salary PR 3 C1 - Hourly / + Salary toggle. Homestand PR-2 audit
+   2026-08-21 moved this to the right side of the command bar,
+   adjacent to Export. Renders only when the route ships
+   salary_available=true; absent (not disabled) for callers without
+   permission. Reuses the shared .kpi-seg pattern; no raw px literals. */
 .kpi-cmd-salary {
   display: inline-flex; align-items: center;
   gap: var(--kpi-sp-2);
@@ -1918,6 +1891,30 @@
   display: flex; align-items: baseline; gap: var(--kpi-sp-2);
   min-width: 0; flex: 1 1 auto;
 }
+/* Homestand PR-2 audit 2026-08-21 - right side of the SpendCard
+   header now holds two pills: the verdict pill (on-track /
+   over-budget) and the scope pill (HOURLY ONLY / + SALARY). */
+.kpi-spend-h-right {
+  display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
+  flex: none;
+}
+
+/* Scope pill on the SpendCard header. Reuses .kpi-vpill geometry so
+   both pills read as one family; the modifier classes carry the
+   visual (muted outline for HOURLY, amber for + SALARY). Kept
+   distinct from the verdict pill's semantic tones so nobody reads
+   HOURLY as a "watch" state. */
+.kpi-vpill-scope { text-transform: uppercase; }
+.kpi-vpill-scope-off {
+  background: var(--surface-card);
+  color: var(--n-600);
+  border-color: var(--n-300);
+}
+.kpi-vpill-scope-on {
+  background: var(--amber-100, #FEF3E2);
+  color: #92580A;
+  border-color: #F3D9AE;
+}
 .kpi-spend-h-title {
   font-size: var(--kpi-t-meta); font-weight: 800; letter-spacing: 0.08em;
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
@@ -3256,6 +3253,15 @@
   border: 1px solid transparent; white-space: nowrap;
   margin-left: auto;
 }
+/* Homestand PR-2 audit 2026-08-21 - HS signal-card header pill group
+   for the spend card. The scope pill (HOURLY / + SALARY) sits beside
+   the verdict pill (Under / Over); .margin-left:auto on .kpi-hs-pill
+   pushes the WHOLE group to the right so both pills stay together. */
+.kpi-hs-card-hdr-pills {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: auto;
+}
+.kpi-hs-card-hdr-pills .kpi-hs-pill { margin-left: 0; }
 .kpi-hs-pill-good  { background: #E8F5EC; color: #15803D; border-color: #BCE0C8; }
 .kpi-hs-pill-bad   { background: #FDECEC; color: #B91C1C; border-color: #F5C3C3; }
 .kpi-hs-pill-amber { background: var(--amber-100, #FEF3E2); color: #92580A; border-color: #F0D9B5; }

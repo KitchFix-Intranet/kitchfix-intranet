@@ -26,7 +26,7 @@ function verdictDisplay(verdict) {
 // (Spent so far | Left to spend). Budget is the dominant figure; spent
 // and left are secondary. Closed periods keep the under/over treatment
 // on the right cell of the pair.
-function SpendCard({ board, eyebrowLabel, dateRange, salary }) {
+function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable }) {
   const budget = board?.period_budget || board?.range_budget || null;
   const spent = board?.spent_to_date ?? 0;
   const variance = board?.variance ?? null;
@@ -104,18 +104,33 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary }) {
 
   return (
     <div className="kpi-spend">
-      {/* Header row: period + dates + verdict pill (V29-5: state word). */}
+      {/* Header row: period + dates + verdict pill (V29-5: state word)
+          + scope pill (Homestand PR-2 audit 2026-08-21). Scope pill
+          moved off the command-bar title into the first card, beside
+          the on-track / over-budget pill, at the card's pill scale.
+          Renders whenever the caller can toggle salary (regardless of
+          on/off state), so a printed / screenshotted board always
+          states which pool of workers it counted. */}
       <div className="kpi-spend-h">
         <div className="kpi-spend-h-left">
           <span className="kpi-spend-h-title">{eyebrowLabel}</span>
           {dateRange && <span className="kpi-spend-h-dates">{dateRange}</span>}
         </div>
-        {vd && (
-          <span className={`kpi-vpill kpi-vpill-${vd.cls}`}>
-            <span className="kpi-vpill-dot" aria-hidden="true" />
-            {vd.label}
-          </span>
-        )}
+        <div className="kpi-spend-h-right">
+          {vd && (
+            <span className={`kpi-vpill kpi-vpill-${vd.cls}`}>
+              <span className="kpi-vpill-dot" aria-hidden="true" />
+              {vd.label}
+            </span>
+          )}
+          {salaryAvailable && (
+            <span
+              className={"kpi-vpill kpi-vpill-scope " + (salary ? "kpi-vpill-scope-on" : "kpi-vpill-scope-off")}
+              aria-label={salary ? "Salary included" : "Hourly labor only"}
+              data-scope-pill
+            >{salary ? "+ SALARY" : "HOURLY ONLY"}</span>
+          )}
+        </div>
       </div>
 
       {/* V29-6 BUDGET LEADS - hero-size budget card with navy accent.
@@ -531,7 +546,7 @@ function classifyTier(weekCount) {
   return "C";
 }
 
-export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary }) {
+export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary, salaryAvailable }) {
   const eyebrowLabel = board?.kind === "single_period_in_progress" || board?.kind === "single_period_closed"
     ? `PERIOD ${board.period_no}`
     : (rangeLabel || "").toUpperCase();
@@ -554,7 +569,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
   return (
     <div className="kpi-story">
       <div className="kpi-story-left">
-        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} salary={salary} />
+        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} salary={salary} salaryAvailable={salaryAvailable} />
       </div>
 
       <div className="kpi-story-right">
