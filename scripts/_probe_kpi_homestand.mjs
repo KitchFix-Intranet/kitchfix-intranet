@@ -48,6 +48,7 @@ import {
   MLB_HOMESTAND_ACCOUNTS,
   listHomestands,
   actualsByStand,
+  computeHomestandBank,
   isoToDate, dateToIso, addDaysIso,
   perDayMilleCents,
 } from "../src/lib/labor/homestandResolver.js";
@@ -224,33 +225,33 @@ console.log("[H7] CIN - OH verified fixtures");
     eq  ("HS 10 window_end  ", hs10.window_end,   "2026-08-06");
     near("HS 10 budget      ", hs10.budget, 12432.19);
     eq  ("HS 10 peak_in_week", hs10.peak_games_in_week, 7);
-    // Bank across 9 finished stands. Owner-cited 6008.61; aggregate
-    // rounding drift <= 5c is acceptable per PR-1 probe design.
+    // Bank across 9 finished stands - EXACT to the cent per owner
+    // ruling 2026-08-21. Freeze today against the measurement date
+    // so finished-stand count is exactly 9.
+    //
+    // Rounding order matters and is easy to get wrong. There are
+    // three principled paths and they produce THREE DIFFERENT
+    // answers on this fixture:
+    //   $6,008.62  per-stand rounded on BOTH sides, then summed
+    //              (what the resolver ships, what operators see)
+    //   $6,008.63  round once at the end (mille-cent parallel
+    //              accumulator - PR-1 v1's approach; drifted 2c
+    //              from the design-pass fixture and lost)
+    //   $6,008.57  round each labor_actuals_daily row to cent,
+    //              then sum (loses sub-cent precision at row level)
+    //
+    // Owner ruling 2026-08-21: use the FIRST path. An operator
+    // adding the nine stands on screen must land on the bank
+    // exactly. The design-pass fixture ($6,008.61) had a 1c slip
+    // from a per-stand-variance summation order; corrected value is
+    // $6,008.62. Do not re-derive with a different rounding order
+    // and file a bug.
     const actMap = actualsByStand(hs, daily);
-    const bank = 0.01 * (() => {
-      let bMille = 0, sX10000 = 0;
-      for (const h of hs) {
-        if (h.pre_floor) continue;
-        if (h.game_end >= "2026-08-21") continue;   // freeze against owner's measurement date
-        // Sum window budget in mille-cents (matches owner's compute path).
-        // Also sum daily amount in myriadths across the window.
-        // Skip: we simplify by reading the pre-rounded stand budget and
-        // the sum of daily row amounts in the window. Small drift OK.
-        bMille += Math.round((h.budget || 0) * 100 * 1000);
-        for (const r of daily) {
-          if (r.work_date >= h.window_start && r.work_date <= h.window_end) {
-            sX10000 += Math.round(Number(r.amount || 0) * 10000);
-          }
-        }
-      }
-      const budgetCents = Math.round(bMille / 1000);
-      const spentCents  = Math.round(sX10000 / 100);
-      return budgetCents - spentCents;
-    })();
-    const bankGot = Math.round(bank * 100) / 100;
-    const bankDelta = Math.abs(bankGot - 6008.61);
-    if (bankDelta <= 0.05) ok(`bank across 9 finished stands = $${bankGot.toFixed(2)} (owner cited $6008.61, delta $${bankDelta.toFixed(2)} <= 5c tolerance)`);
-    else fail(`bank $${bankGot.toFixed(2)} vs owner $6008.61 delta $${bankDelta.toFixed(2)} exceeds 5c`);
+    const bank = computeHomestandBank(hs, actMap, "2026-08-21");
+    const wantBankCents = 600862;   // $6008.62 - owner-verified 2026-08-21
+    const gotBankCents = Math.round(bank.bank * 100);
+    if (gotBankCents === wantBankCents) ok(`bank across 9 finished stands = $${bank.bank.toFixed(2)} EXACT (per-stand rounded, both sides, summed)`);
+    else fail(`bank $${bank.bank.toFixed(2)} != $6008.62 (delta ${gotBankCents - wantBankCents}c) - see rounding-order comment above`);
   }
 }
 

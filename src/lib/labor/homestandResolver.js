@@ -342,33 +342,35 @@ export function computeSplitWithGameDates(actualsDaily, stand, gameDates) {
  * budget but no attributable actual - counting one without the other
  * fakes a surplus (design-pass inflated $6,009 to $10,783).
  *
- * Consumes per-stand actual myriadths (from actualsByStand). Budget
- * is summed in mille-cents (from the resolver's per-day helper) so
- * both sides of the diff have >= 3dp precision through the sum;
- * output cents are rounded at the field boundary.
+ * Rounding boundary is PER STAND on both sides, matching the values
+ * an operator sees on the season rail. `h.budget` is already
+ * cent-rounded by the resolver (from the mille-cent per-day sum).
+ * Actual comes from actualsByStand's myriadth accumulator and is
+ * rounded to cents PER STAND before it enters the sum. This means
+ * the bank equals `sum(per-stand budget shown) - sum(per-stand
+ * actual shown)` exactly - an operator adding the nine stands on
+ * screen lands on the bank to the cent. Owner ruling 2026-08-21
+ * after PR-1 v1's mille-cent parallel accumulator drifted 2c.
  *
  * @param {Array} homestands
  * @param {Map<string, number>} actualX10000ByGameStart  myriadths per stand
  * @param {string} todayIso
  */
 export function computeHomestandBank(homestands, actualX10000ByGameStart, todayIso) {
-  let budgetMille = 0;   // mille-cents = cents * 1000
-  let spentX10000 = 0;   // myriadths    = cents * 100
+  let budgetCents = 0;
+  let spentCents  = 0;
   let standsRemaining = 0;
   for (const h of homestands) {
     if (h.pre_floor) continue;
     if (h.game_end < todayIso) {
-      // Budget from the stand's already-rounded field (cents), lifted
-      // to mille to keep the accumulator homogeneous.
-      budgetMille += Math.round((h.budget || 0) * 100 * 1000);
-      spentX10000 += actualX10000ByGameStart.get(h.game_start) || 0;
+      budgetCents += Math.round((h.budget || 0) * 100);              // per-stand rounded
+      const x10000 = actualX10000ByGameStart.get(h.game_start) || 0;
+      spentCents  += Math.round(x10000 / 100);                       // per-stand rounded
     } else {
       standsRemaining++;
     }
   }
-  const budgetCents = Math.round(budgetMille / 1000);
-  const spentCents  = Math.round(spentX10000 / 100);
-  const bankCents   = budgetCents - spentCents;
+  const bankCents = budgetCents - spentCents;
   const bankShareCents = standsRemaining > 0 ? Math.round(bankCents / standsRemaining) : 0;
   return {
     budget_to_date:  budgetCents / 100,
