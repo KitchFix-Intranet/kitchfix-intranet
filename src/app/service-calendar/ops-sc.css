@@ -235,6 +235,15 @@
   border-radius: var(--radius-control);
   padding: var(--space-1) var(--space-3);
 }
+/* PR-N audit R2 B1 (2026-08-21): caption-scale variant for the
+   admin mode indicator. The chip names a mode, not an action -
+   button scale competed with the product name beside it. */
+.sc-admin-mode-chip--sm {
+  font-size: var(--size-caption);
+  font-weight: var(--wt-bold);
+  padding: 2px var(--space-2);
+  letter-spacing: 0.02em;
+}
 /* In-hero "Overview" back-button. Same treatment as the editor's
    .sc-admin-back (in ops-sc-admin.css) so the two back-affordances read
    as the same control - quiet secondary button, white on neutral

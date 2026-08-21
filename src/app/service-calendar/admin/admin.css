@@ -4,24 +4,24 @@
    outside structural border widths (per §13A). */
 
 .scav {
-  --rail-w: 214px;
+  --rail-w: 240px;
   --insp-w: 340px;
+  /* PR-N audit R2 A3 (2026-08-21): three panes as cards on page-grey
+     with consistent gutters. Was one shell card with flush children.
+     Grid gap gives the gutter; shell drops its container shadow +
+     border-radius so the three cards inside carry the elevation. */
   display: grid;
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--insp-w);
+  gap: var(--sc2-space-3);
   min-height: 660px;
-  /* PR-N audit P0-2 (2026-08-21): background swapped from
-     --sc2-surface-app (warm cream) to --sc2-canvas (page grey the
-     calendar uses). Cream is a card accent, not a page canvas. */
+  padding: var(--sc2-space-3);
   background: var(--sc2-canvas);
-  border-radius: var(--sc2-radius-container);
-  overflow: hidden;
-  box-shadow: var(--sc2-el-widget);
   font-family: var(--sc2-font-ui);
   font-variant-numeric: var(--num-tabular);
 }
 
 @media (max-width: 1180px) {
-  .scav { --rail-w: 190px; --insp-w: 310px; }
+  .scav { --rail-w: 210px; --insp-w: 310px; }
 }
 
 /* ────── Command bar ────── */
@@ -144,88 +144,164 @@
   padding: 1px 5px;
 }
 
-/* ────── Accounts rail (left) ────── */
+/* ────── Accounts rail (left) ──────
+   PR-N audit R2 A1 + A3 (2026-08-21): pane is a card on page-grey;
+   inside it, each PER-MEAL / FEE group is its OWN white card (KPI
+   portfolio treatment). Two-line rows with accounts.name as the
+   subtitle. Selected = filled navy card, not a tint. */
 .scav-accts {
-  background: var(--sc2-surface-card);
-  border-right: 1px solid var(--sc2-line);
+  background: var(--sc2-canvas);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-radius: var(--sc2-radius-container);
+  padding: var(--sc2-space-3);
+  gap: var(--sc2-space-3);
 }
 .scav-accts-scroll {
   flex: 1;
   overflow: auto;
-  padding: var(--sc2-space-2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
 }
-.scav-agrp {
+.scav-acct-card {
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  overflow: hidden;
+  box-shadow: var(--sc2-el-inset);
+}
+.scav-acct-card-hd {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  border-bottom: 1px solid var(--sc2-line);
+  background: var(--sc2-surface-sunken);
+}
+.scav-acct-card-name {
   font-size: var(--sc2-size-micro);
   font-weight: var(--sc2-wt-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--sc2-ink-muted);
-  padding: var(--sc2-space-3) var(--sc2-space-4) var(--sc2-space-2);
+  flex: 1;
+}
+.scav-acct-card-cnt {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-muted);
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line-2);
+  border-radius: var(--sc2-radius-pill);
+  padding: 2px var(--sc2-space-2);
+  line-height: 1.2;
+  font-variant-numeric: var(--num-tabular);
+}
+.scav-acct-card-members {
+  display: flex;
+  flex-direction: column;
 }
 .scav-acct {
   display: flex;
   align-items: center;
   gap: var(--sc2-space-2);
-  padding: var(--sc2-space-2) var(--sc2-space-4);
+  padding: var(--sc2-space-3);
   cursor: pointer;
-  border-left: 3px solid transparent;
   transition: background var(--motion-control);
   background: none;
-  border-top: none;
-  border-right: none;
-  border-bottom: none;
+  border: none;
+  border-top: 1px solid var(--sc2-line);
   width: 100%;
   text-align: left;
   font-family: inherit;
 }
+.scav-acct:first-child { border-top: none; }
 .scav-acct:hover { background: var(--sc2-surface-sunken); }
-.scav-acct[aria-current="true"] {
-  background: var(--sc2-state-entered-bg);
-  border-left-color: var(--sc2-accent-green-deep);
+.scav-acct--on {
+  /* Filled navy card per Kevin ruling A1 - "filled navy card rather
+     than a tint." White text, white subtitle, white-tinted pill. */
+  background: var(--sc2-cmd-bg);
 }
+.scav-acct--on:hover { background: var(--sc2-cmd-bg-deep); }
 .scav-acct:focus-visible {
   outline: 2px solid var(--sc2-cmd-bg);
   outline-offset: -2px;
 }
-.scav-acct-k {
+.scav-acct-lock {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
   flex: 1;
+}
+.scav-acct-key {
   font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
   color: var(--sc2-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.scav-acct[aria-current="true"] .scav-acct-k {
-  font-weight: var(--sc2-wt-bold);
-}
-.scav-acct-c {
+.scav-acct-desc {
   font-size: var(--sc2-size-micro);
   color: var(--sc2-ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 1.25em;
+}
+.scav-acct--on .scav-acct-key { color: var(--sc2-cmd-text); }
+.scav-acct--on .scav-acct-desc { color: var(--sc2-cmd-text-muted); }
+.scav-acct-cnt {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-muted);
+  background: var(--sc2-surface-sunken);
+  border: 1px solid var(--sc2-line-2);
+  border-radius: var(--sc2-radius-pill);
+  padding: 2px var(--sc2-space-2);
+  line-height: 1.2;
   font-variant-numeric: var(--num-tabular);
+}
+.scav-acct--on .scav-acct-cnt {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--sc2-cmd-text);
 }
 .scav-acct-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--sc2-state-needs-fg-strong);
+  flex-shrink: 0;
 }
 .scav-accts-foot {
-  border-top: 1px solid var(--sc2-line);
-  padding: var(--sc2-space-3) var(--sc2-space-4);
+  padding: var(--sc2-space-3);
   font-size: var(--sc2-size-micro);
   color: var(--sc2-ink-muted);
-  background: var(--sc2-surface-sunken);
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  box-shadow: var(--sc2-el-inset);
 }
 .scav-accts-foot b {
   color: var(--sc2-ink-soft);
   font-variant-numeric: var(--num-tabular);
 }
 
-/* ────── Catalog (center) ────── */
+/* ────── Catalog (center) ──────
+   PR-N audit R2 A2 + A3 (2026-08-21): the catalog pane is ONE white
+   card containing the account header, subtitle, search, groups as
+   sections separated by their cream bands, then Add group at the
+   foot. One container edge instead of five (was: floating group
+   cards on grey with the account title on raw background). */
 .scav-cat {
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line);
+  border-radius: var(--sc2-radius-container);
+  box-shadow: var(--sc2-el-inset);
   padding: var(--sc2-space-4) var(--sc2-space-5);
   overflow: auto;
 }
@@ -304,12 +380,14 @@
   padding: 1px 5px;
 }
 .scav-group-card {
+  /* PR-N audit R2 A2: sections inside the catalog card, separated
+     by their cream header bands. Not floating cards - the outer
+     .scav-cat is the container. */
   background: var(--sc2-surface-card);
   border: 1px solid var(--sc2-line);
   border-radius: var(--sc2-radius-container);
   overflow: hidden;
   margin-bottom: var(--sc2-space-4);
-  box-shadow: var(--sc2-el-inset);
 }
 .scav-group-hd {
   display: flex;
@@ -325,31 +403,38 @@
   margin: 0;
 }
 .scav-group-hd .b {
+  /* PR-N audit R2 C2 (2026-08-21): PDC/MLB/AAA badge legibility on
+     the cream band. Previously nearly invisible - cream on cream.
+     White fill + higher-weight cream-ink text + tightened border. */
   font-size: var(--sc2-size-micro);
   font-weight: var(--sc2-wt-display);
   letter-spacing: 0.05em;
   color: var(--sc2-band-cream-ink);
   border: 1px solid var(--sc2-band-cream-bd);
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--sc2-surface-card);
   padding: 2px var(--sc2-space-2);
   border-radius: var(--sc2-radius-pill);
 }
 .scav-ghost {
+  /* PR-N audit R2 C1 (2026-08-21): standard ghost - white fill,
+     --n-300 border (was --sc2-line-2, nearly invisible on cream),
+     hover to green-deep + card shadow. Matches the product's
+     canonical secondary-action button per Kevin's audit ruling. */
   font-family: inherit;
   font-size: var(--sc2-size-body);
   font-weight: var(--sc2-wt-bold);
   background: var(--sc2-surface-card);
-  border: 1px solid var(--sc2-line-2);
+  border: 1px solid var(--n-300);
   border-radius: var(--sc2-radius-control);
   padding: var(--sc2-space-2) var(--sc2-space-3);
   color: var(--sc2-ink-soft);
   cursor: pointer;
-  transition: border-color var(--motion-control), color var(--motion-control);
+  transition: border-color var(--motion-control), color var(--motion-control), box-shadow var(--motion-control);
 }
 .scav-ghost:hover {
   border-color: var(--sc2-accent-green-deep);
   color: var(--sc2-accent-green-deep);
-  box-shadow: var(--sc2-el-inset);
+  box-shadow: var(--sc2-el-card);
 }
 .scav-ghost:focus-visible {
   outline: 2px solid var(--sc2-cmd-bg);
@@ -544,18 +629,17 @@
   background: var(--sc2-state-entered-bg);
 }
 
-/* ────── Editor rail (right, dark) ────── */
+/* ────── Editor rail (right, dark) ──────
+   PR-N audit R2 A3: dark card floating on page-grey with matching
+   gutters. Rail keeps its dark identity; stops being a flush slab. */
 .scav-insp {
   background: var(--sc2-rail-bg);
   color: var(--sc2-rail-text);
-  /* PR-N audit P1-7 (2026-08-21, Kevin re-ruling Q1 withdrew the
-     history panel): footer links pull up under the form for every
-     service. No dead navy field between form and footer. Rail is
-     one scroll container; empty space (if any) sits below the
-     footer at the panel bottom, not between form and footer. */
   overflow: auto;
   display: flex;
   flex-direction: column;
+  border-radius: var(--sc2-radius-container);
+  box-shadow: var(--sc2-el-inset);
 }
 .scav-insp-scroll {
   flex: 0 0 auto;
@@ -1028,6 +1112,72 @@
 }
 .scav-modal-body {
   padding: var(--sc2-space-4) var(--sc2-space-5);
+}
+/* PR-N audit R2 D1 + D2 + D3 (2026-08-21): modal field rhythm on
+   the 4px grid via sc2-space; standard focus ring on controls
+   ONLY, never on the modal shell; checkboxes at same indent. */
+.scav-modal-body .sc-admin-field { margin-top: var(--sc2-space-4); }
+.scav-modal-body .sc-admin-field:first-child { margin-top: 0; }
+.scav-modal-body .sc-admin-field-label {
+  display: block;
+  font-size: var(--sc2-size-caption);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-soft);
+  margin-bottom: var(--sc2-space-2);
+}
+.scav-modal-body .sc-admin-field-required,
+.scav-modal-body .sc-admin-field-optional {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-regular);
+  color: var(--sc2-ink-muted);
+  margin-left: var(--sc2-space-2);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.scav-modal-body .sc-admin-text-input,
+.scav-modal-body .sc-admin-textarea,
+.scav-modal-body .sc-admin-price-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  border: 1px solid var(--n-300);
+  border-radius: var(--sc2-radius-control);
+  background: var(--sc2-surface-card);
+  color: var(--sc2-ink);
+  transition: border-color var(--motion-control), box-shadow var(--motion-control);
+}
+.scav-modal-body .sc-admin-text-input:focus,
+.scav-modal-body .sc-admin-textarea:focus,
+.scav-modal-body .sc-admin-price-input:focus {
+  outline: none;
+  border-color: var(--sc2-accent-green);
+  box-shadow: 0 0 0 2px rgba(47, 125, 79, 0.20);
+}
+.scav-modal-body .sc-admin-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+.scav-modal:focus,
+.scav-modal:focus-visible {
+  outline: none;   /* D2: modal itself never renders a focus ring. */
+}
+.scav-checkbox-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-2);
+}
+.scav-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  font-size: var(--sc2-size-body);
+  color: var(--sc2-ink);
+  cursor: pointer;
+}
+.scav-checkbox input[type="checkbox"] {
+  accent-color: var(--sc2-accent-green);
+  cursor: pointer;
 }
 .scav-modal-ft {
   padding: var(--sc2-space-3) var(--sc2-space-5);

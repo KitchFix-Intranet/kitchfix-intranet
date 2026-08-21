@@ -33,7 +33,13 @@ function ModalShell({ title, onClose, children }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   useEffect(() => {
-    cardRef.current?.focus();
+    // PR-N audit R2 D2 (2026-08-21): focus lands on the first
+    // focusable CONTROL, not the modal itself. The modal never
+    // renders a focus ring - one ring token, on controls only.
+    const first = cardRef.current?.querySelector(
+      "input:not([disabled]), textarea:not([disabled]), select:not([disabled])"
+    );
+    (first || cardRef.current)?.focus();
   }, []);
   return (
     <div className="scav-modal-scrim" onClick={onClose}>
@@ -128,11 +134,15 @@ export function AddServiceModal({ accountKey, group, feeNoDollar, onClose, onSav
             </div>
           </div>
         )}
-        <div className="sc-admin-field">
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+        {/* PR-N audit R2 D3 (2026-08-21): checkboxes at the same
+            indent, stacked. The prior `marginLeft: 16` on Non-revenue
+            implied a dependency on Tax-free - they are unrelated
+            flags. */}
+        <div className="sc-admin-field scav-checkbox-stack">
+          <label className="scav-checkbox">
             <input type="checkbox" checked={isTaxFree} disabled={saving} onChange={(e) => setIsTaxFree(e.target.checked)} /> Tax-free
           </label>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginLeft: 16 }}>
+          <label className="scav-checkbox">
             <input type="checkbox" checked={isNonRevenue} disabled={saving} onChange={(e) => setIsNonRevenue(e.target.checked)} /> Non-revenue
           </label>
         </div>
@@ -257,7 +267,14 @@ export function ArchiveGroupModal({ accountKey, group, activeServiceCount, onClo
   const [backdateDate, setBackdateDate] = useState("");
   const [reason, setReason] = useState("");
   const [requestedBy, setRequestedBy] = useState("");
-  const [acknowledged, setAcknowledged] = useState(false);
+  // PR-N audit R2 C3 (Kevin ruling 2026-08-21): acknowledged auto-
+  // checks when the group has zero services - there is no blast
+  // radius to acknowledge. The server still requires the flag; this
+  // just spares the operator a deliberate act on the safe case.
+  // Wherever there is anything to lose (activeServiceCount > 0), the
+  // checkbox remains a deliberate act.
+  const isEmpty = activeServiceCount === 0;
+  const [acknowledged, setAcknowledged] = useState(isEmpty);
   const [saving, setSaving] = useState(false);
 
   const today = useMemo(() => localToday(), []);
@@ -311,7 +328,11 @@ export function ArchiveGroupModal({ accountKey, group, activeServiceCount, onClo
     <ModalShell title={`Archive ${group.groupName}`} onClose={onClose}>
       <div className="scav-modal-body">
         <div className="sc-admin-panel-current">
-          Archiving <strong>{group.groupName}</strong> hides <strong>{activeServiceCount}</strong> active service{activeServiceCount === 1 ? "" : "s"} from the group.
+          {isEmpty ? (
+            <>This group has no services. Nothing will be archived with it.</>
+          ) : (
+            <>Archiving <strong>{group.groupName}</strong> hides <strong>{activeServiceCount}</strong> active service{activeServiceCount === 1 ? "" : "s"} from the group.</>
+          )}
         </div>
         <div className="sc-admin-field">
           <span className="sc-admin-field-label">Effective</span>
@@ -364,13 +385,18 @@ export function ArchiveGroupModal({ accountKey, group, activeServiceCount, onClo
             onChange={(e) => setRequestedBy(e.target.value)}
             placeholder="Who asked for this?" maxLength={280} />
         </div>
-        <div className="sc-admin-field">
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            <input type="checkbox" checked={acknowledged} disabled={saving}
-              onChange={(e) => setAcknowledged(e.target.checked)} />
-            I understand this hides {activeServiceCount} active service{activeServiceCount === 1 ? "" : "s"}.
-          </label>
-        </div>
+        {!isEmpty && (
+          /* PR-N audit R2 C3: checkbox only renders when there's
+             something to lose. Empty groups auto-check acknowledged
+             (see useState default) and drop the confirm-friction. */
+          <div className="sc-admin-field">
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+              <input type="checkbox" checked={acknowledged} disabled={saving}
+                onChange={(e) => setAcknowledged(e.target.checked)} />
+              I understand this hides {activeServiceCount} active service{activeServiceCount === 1 ? "" : "s"}.
+            </label>
+          </div>
+        )}
       </div>
       <div className="scav-modal-ft">
         <button type="button" className="sc-admin-btn sc-admin-btn--ghost" onClick={onClose} disabled={saving}>Cancel</button>
