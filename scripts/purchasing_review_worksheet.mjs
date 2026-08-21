@@ -236,8 +236,10 @@ for (const a of actuals) {
 // Determine which categories need review: any where provenance is NOT
 // 'owner_ruling_2026-08-20' AND NOT 'parsed_from_name'. Include:
 //   - the 2 unnamed (no ruling, no parse)
-//   - Equipment (SPLIT), Please Select (UNROUTED) - acknowledged but need concrete
-// Do NOT include: 32 parsed + 22 ruled = 54 already-routed.
+//   - Please Select (UNROUTED) - acknowledged but stays in queue
+//   - collision cat_id (Equipment Lease / Please Select)
+// Do NOT include: 32 parsed + 21 ruled = 53 already-routed (Equipment
+// moved into RULINGS 2026-08-21: 5002.5).
 const NEEDS_REVIEW = [];
 for (const row of scm) {
   const name = catIdToName.get(row.category_id) || row.category_label || null;
@@ -257,6 +259,7 @@ for (const row of scm) {
     "Equipment Lease", "General Utilities", "Recruiting", "Printer Lease",
     "Office Supplies", "General Liability Insurance",
     "Account Management Travel", "Training", "Due to EE",
+    "Equipment",  // owner ruling 2026-08-21: 5002.5 (Purchasing - Equipment)
   ]);
   const ruled = name && RULINGS.has(name);
   // Kevin ruling 2026-08-20: collision cat_ids bypass the "already-ruled"

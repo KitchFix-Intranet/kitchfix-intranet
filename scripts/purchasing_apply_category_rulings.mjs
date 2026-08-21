@@ -22,7 +22,7 @@
 //   Operations Travel               -> SG&A               -> 5000
 //   Dues & Subscriptions            -> SG&A               -> 5000  (2 cat_ids share this name)
 //   Sales Travel                    -> SG&A               -> 5000
-//   Equipment                       -> SPLIT-needs-rule   -> UNROUTED (see G3 spec: not decided)
+//   Equipment                       -> Purchasing         -> 5002.5 (owner ruling 2026-08-21; was SPLIT-needs-rule)
 //   General Repair & Maintenance    -> SPLIT-needs-rule   -> 5002.1 (spec override: R&M; vehicle repairs stay in R&M)
 //   Sales Function Event            -> SG&A               -> 5000
 //   **Please Select A Category**    -> UNROUTED           -> NULL (spec: keep in queue)
@@ -71,10 +71,10 @@ const RULINGS = new Map([
   ["Operations Travel",            { gl: SGA_PLACEHOLDER, note: "SG&A" }],
   ["Dues & Subscriptions",         { gl: SGA_PLACEHOLDER, note: "SG&A" }],
   ["Sales Travel",                 { gl: SGA_PLACEHOLDER, note: "SG&A" }],
-  // Equipment: F says "SPLIT - needs a rule". G3 spec does not carry a
-  // concrete decision, so stays UNROUTED. Kevin's Column G intent is a
-  // future move to COGS; not applied now.
-  //   ["Equipment",                    { gl: null, note: "SPLIT - not yet decided" }],
+  // Equipment: xlsx col F said "SPLIT - needs a rule". Owner ruling
+  // 2026-08-21 lands it at 5002.5 (Purchasing - Equipment). Provenance
+  // value stays owner_ruling_2026-08-20 for batch-tracing simplicity.
+  ["Equipment",                    { gl: "5002.5", note: "Purchasing - Equipment (owner ruling 2026-08-21)" }],
   ["General Repair & Maintenance", { gl: "5002.1", note: "R&M (spec override; vehicle repairs stay in R&M and are flagged)" }],
   ["Sales Function Event",         { gl: SGA_PLACEHOLDER, note: "SG&A" }],
   // **Please Select A Category**: UNROUTED - stay in queue.
@@ -107,7 +107,7 @@ const RULINGS = new Map([
 // gets both, filtered by provenance IS DISTINCT FROM 'owner_ruling_...'.
 const ACKNOWLEDGED_UNROUTED = new Set([
   "**Please Select A Category**",     // owner-ruled UNROUTED (spec: visible queue)
-  "Equipment",                        // owner-marked SPLIT (col F "SPLIT - needs a rule"); not decided per G3 spec
+  // Equipment moved to RULINGS 2026-08-21: owner ruled 5002.5 (Purchasing - Equipment).
 ]);
 
 // Category IDs that carry MULTIPLE names in the CSV. Ambiguous by
