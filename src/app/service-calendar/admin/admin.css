@@ -371,6 +371,14 @@
   gap: var(--sc2-space-3);
   align-items: center;
 }
+/* PR-N audit P1-6 (2026-08-21): fee accounts collapse to a 3-col
+   grid (service / effective / status). Reserving the price track
+   with an empty cell left a visible gap between service and
+   effective. */
+.scav-group-card--nodollar .scav-colhd,
+.scav-group-card--nodollar .scav-srow {
+  grid-template-columns: 1fr 108px 96px;
+}
 .scav-colhd {
   padding: var(--sc2-space-2) var(--sc2-space-4);
   border-bottom: 1px solid var(--sc2-line);
@@ -428,10 +436,20 @@
   margin-left: var(--sc2-space-2);
 }
 .scav-srow-pr {
-  font-size: var(--sc2-size-subhead);
-  font-weight: var(--sc2-wt-bold);
+  /* PR-N audit P2-12 (2026-08-21): price at body/semibold, not
+     subhead/bold. Name is what someone scans for; price is the
+     attribute. Column position already signals which is which. */
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
   text-align: right;
   font-variant-numeric: var(--num-tabular);
+}
+.scav-srow-pr--missing {
+  /* PR-N audit P2-11 + Kevin Q3 (2026-08-21): $0.00 on active
+     services is unpriced, not a real price. Muted italic. */
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-regular);
+  font-style: italic;
 }
 .scav-srow-ef {
   font-size: var(--sc2-size-body);
@@ -474,6 +492,39 @@
   font-weight: var(--sc2-wt-semibold);
 }
 .scav-group-ft b { font-variant-numeric: var(--num-tabular); }
+/* PR-N audit P1-3 + P2-9 (2026-08-21, Kevin ruling Q2): archive-group
+   is a quiet destructive text link in the card footer, right side.
+   Solves two audit items at once - the destructive action moves
+   physically away from the constructive Add service, AND the footer's
+   permanently-empty right half gets real content. */
+.scav-group-ft-archive {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-state-overdue-fg);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.scav-group-ft-archive:hover { color: var(--sc2-accent-red-deep); }
+.scav-group-ft-archive:disabled {
+  color: var(--sc2-ink-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+.scav-group-ft-reactivate {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-accent-green-deep);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
 .scav-add-group {
   width: 100%;
   font-family: inherit;
@@ -497,13 +548,17 @@
 .scav-insp {
   background: var(--sc2-rail-bg);
   color: var(--sc2-rail-text);
+  /* PR-N audit P1-7 (2026-08-21, Kevin re-ruling Q1 withdrew the
+     history panel): footer links pull up under the form for every
+     service. No dead navy field between form and footer. Rail is
+     one scroll container; empty space (if any) sits below the
+     footer at the panel bottom, not between form and footer. */
+  overflow: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .scav-insp-scroll {
-  flex: 1;
-  overflow: auto;
+  flex: 0 0 auto;
   padding: var(--sc2-space-4);
 }
 .scav-fadein {
@@ -731,6 +786,9 @@
   gap: var(--sc2-space-4);
   flex-wrap: wrap;
   background: var(--sc2-rail-card-bg);
+  /* Sits directly under the scroll container, not pinned to panel
+     bottom. See .scav-insp comment. */
+  flex: 0 0 auto;
 }
 .scav-insp-foot button {
   background: none;

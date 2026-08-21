@@ -150,40 +150,29 @@ export default function CatalogPane({
             const activeSvcCount = (servicesByGroup.get(g.id) || []).filter((s) => archiveStatus(s.activeUntil, today).state !== "archived").length;
             const gsch = svcs.filter((s) => s.upcomingPrice != null).length;
             return (
-              <div key={g.id} className="scav-group-card">
+              <div key={g.id} className={"scav-group-card" + (feeNoDollar ? " scav-group-card--nodollar" : "")}>
                 <div className="scav-group-hd">
                   <h3>{g.groupName}</h3>
                   <span className="b">{(accountLevel || "").toUpperCase() === "PDC" ? "PDC" : accountLevel}</span>
                   <span className="scav-grow" />
-                  {grpArchived ? (
-                    <button type="button" className="scav-ghost" onClick={() => onReactivateGroup(g)}>
-                      Reactivate group
-                    </button>
-                  ) : (
-                    <>
-                      <button type="button" className="scav-ghost" onClick={() => onAddService(g)}>Add service</button>
-                      <button
-                        type="button"
-                        className="scav-ghost scav-ghost--danger"
-                        onClick={() => onArchiveGroup(g)}
-                        disabled={activeSvcCount === 0}
-                        title={activeSvcCount === 0 ? "No active services to archive" : ""}
-                      >
-                        Archive group
-                      </button>
-                    </>
+                  {/* PR-N audit P1-3 + Kevin Q2 (2026-08-21):
+                      "Archive group" moved to the card FOOTER as a
+                      quiet destructive text link. Header carries only
+                      constructive actions. */}
+                  {!grpArchived && (
+                    <button type="button" className="scav-ghost" onClick={() => onAddService(g)}>Add service</button>
                   )}
                 </div>
                 <div className="scav-colhd">
                   <span>Service</span>
                   {!feeNoDollar && <span className="r">Price</span>}
-                  {feeNoDollar && <span className="r">&nbsp;</span>}
                   <span className="r">Effective</span>
                   <span className="r">Status</span>
                 </div>
                 {svcs.map((s) => {
                   const svcStatus = archiveStatus(s.activeUntil, today);
                   const svcArchived = svcStatus.state === "archived";
+                  const priceMissing = !feeNoDollar && (!s.price || Number(s.price) === 0);
                   const st = svcArchived
                     ? <span className={BADGE_ARC}>Archived</span>
                     : s.upcomingPrice != null
@@ -206,16 +195,41 @@ export default function CatalogPane({
                         {s.isTaxFree && <em>tax-free</em>}
                         {s.isNonRevenue && <em>non-rev</em>}
                       </span>
-                      {!feeNoDollar && <span className="scav-srow-pr">{fmtPrice(s.price)}</span>}
-                      {feeNoDollar && <span className="scav-srow-pr">&nbsp;</span>}
+                      {/* PR-N audit P2-11 + Kevin Q3 (2026-08-21): a
+                          $0.00 on an active per-meal service is an
+                          unpriced row, not a real price. Render as
+                          muted "Not priced" instead of a confident
+                          $0.00. Fee accounts drop the column entirely. */}
+                      {!feeNoDollar && (
+                        <span className={"scav-srow-pr" + (priceMissing ? " scav-srow-pr--missing" : "")}>
+                          {priceMissing ? "Not priced" : fmtPrice(s.price)}
+                        </span>
+                      )}
                       <span className="scav-srow-ef">{fmtDate(s.priceSinceDate || s.activeSince || "")}</span>
                       <span className="scav-srow-st">{st}</span>
                     </button>
                   );
                 })}
                 <div className="scav-group-ft">
-                  <span><b>{svcs.length}</b> service{svcs.length === 1 ? "" : "s"}</span>
-                  <span>{gsch > 0 && <><b>{gsch}</b> scheduled</>}</span>
+                  <span>
+                    <b>{svcs.length}</b> service{svcs.length === 1 ? "" : "s"}
+                    {gsch > 0 && <> &middot; <b>{gsch}</b> scheduled</>}
+                  </span>
+                  {grpArchived ? (
+                    <button type="button" className="scav-group-ft-reactivate" onClick={() => onReactivateGroup(g)}>
+                      Reactivate group
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="scav-group-ft-archive"
+                      onClick={() => onArchiveGroup(g)}
+                      disabled={activeSvcCount === 0}
+                      title={activeSvcCount === 0 ? "No active services to archive" : ""}
+                    >
+                      Archive group
+                    </button>
+                  )}
                 </div>
               </div>
             );
