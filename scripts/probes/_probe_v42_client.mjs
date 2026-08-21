@@ -37,10 +37,10 @@ import { setTimeout as sleep } from "node:timers/promises";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { estimateUnpricedDollars } from "../src/lib/labor/estimateUnpricedDollars.js";
+import { estimateUnpricedDollars } from "../../src/lib/labor/estimateUnpricedDollars.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 
 const PORT = process.env.PROBE_PORT || "3100";
 const BASE = `http://localhost:${PORT}`;

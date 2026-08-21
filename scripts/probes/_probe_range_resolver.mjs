@@ -24,8 +24,8 @@
 //
 // Usage: node scripts/_probe_range_resolver.mjs
 
-import { resolveRangeSource, MAX_DAILY_SPAN_DAYS, REFUSAL_MESSAGE_PARTIAL_BEFORE_FLOOR } from "../src/lib/labor/rangeResolver.js";
-import { proRateBudget } from "../src/lib/labor/budgetProRate.js";
+import { resolveRangeSource, MAX_DAILY_SPAN_DAYS, REFUSAL_MESSAGE_PARTIAL_BEFORE_FLOOR } from "../../src/lib/labor/rangeResolver.js";
+import { proRateBudget } from "../../src/lib/labor/budgetProRate.js";
 
 let hardFail = 0;
 function ok(line)   { console.log(`  OK    ${line}`); }
@@ -215,7 +215,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 const routeSrc = fs.readFileSync(path.join(REPO_ROOT, "src/app/api/kpi/labor/route.js"), "utf8");
 // strip comments to avoid false positives from prose
 const routeCode = routeSrc.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");

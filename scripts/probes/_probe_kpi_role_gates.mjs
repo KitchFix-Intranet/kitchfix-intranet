@@ -17,10 +17,10 @@ import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRoleGate, KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "../src/lib/kpi/roleGate.js";
+import { loadRoleGate, KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "../../src/lib/kpi/roleGate.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 
 let hardFail = 0;
 function ok(line)   { console.log(`  OK    ${line}`); }

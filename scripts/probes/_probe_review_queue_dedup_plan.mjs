@@ -5,7 +5,7 @@
 // READ-ONLY. No deletes, no writes. Pure analysis.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 import { createClient } from "@supabase/supabase-js";
 
 // review_queue Sheets columns - matches row-shapes.js QUEUE_COLS

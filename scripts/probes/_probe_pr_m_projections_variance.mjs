@@ -37,7 +37,7 @@
 // will collapse to "unknown"; the other buckets still work.
 
 import { createClient } from "@supabase/supabase-js";
-import { PER_ACCOUNT_2026 } from "../src/app/service-calendar/season/phaseCalendar.js";
+import { PER_ACCOUNT_2026 } from "../../src/app/service-calendar/season/phaseCalendar.js";
 
 const supa = createClient(
   process.env.SUPABASE_URL,

@@ -26,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 const BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3001";
 const URL = `${BASE}/kpi/labor?account=ALL`;
 

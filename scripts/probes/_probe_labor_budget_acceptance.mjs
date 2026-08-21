@@ -15,11 +15,11 @@ import { createClient } from "@supabase/supabase-js";
 import {
   deriveLaborBudgets,
   buildGameDerivedDaysPerPeriod,
-} from "../src/app/service-calendar/season/laborBudgetDerivation.js";
+} from "../../src/app/service-calendar/season/laborBudgetDerivation.js";
 import {
   deriveHomestandSegments,
   DERIVE_HOMESTANDS_ACCOUNTS,
-} from "../src/app/service-calendar/season/homestandDerivation.js";
+} from "../../src/app/service-calendar/season/homestandDerivation.js";
 
 const supa = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,

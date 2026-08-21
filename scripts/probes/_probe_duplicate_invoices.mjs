@@ -16,7 +16,7 @@
 // in the group have ai_line_items rows (= true duplicate ingestion).
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 const SUB_IDX = {
   uuid:           0,

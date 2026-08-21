@@ -36,7 +36,7 @@
 //   Override the old/new cutoff: --cutoff=2026-05-25
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 const args = process.argv.slice(2);
 function getArg(name, fallback) {

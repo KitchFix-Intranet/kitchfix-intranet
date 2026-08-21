@@ -25,7 +25,7 @@
 //   Optional: --top=20  show top-N vendors (default 15)
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 const args = process.argv.slice(2);
 function getArg(name, fallback) {

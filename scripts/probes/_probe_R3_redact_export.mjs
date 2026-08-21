@@ -17,7 +17,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import ExcelJS from "exceljs";
-import { resolveWorkerName } from "../src/lib/kpi/resolveName.js";
+import { resolveWorkerName } from "../../src/lib/kpi/resolveName.js";
 
 const ACCOUNT = process.argv[2] || "CIN - OH";
 const START = "2026-04-20";  // dollar-coverage floor

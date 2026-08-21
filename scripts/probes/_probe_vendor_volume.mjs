@@ -32,7 +32,7 @@
 //                    AI_LINE_ITEMS (slower but complete).
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS, getServiceAccountSheetsClient } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS, getServiceAccountSheetsClient } from "../../src/lib/sheets.js";
 
 const args = process.argv.slice(2);
 function getArg(name, fallback) {

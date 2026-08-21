@@ -17,7 +17,7 @@
 //        --env-file=.env.local scripts/_probe_shadow_diagnostic.mjs
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 const PR133_MERGE_UTC = new Date("2026-06-09T20:31:36Z").getTime();
 

@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 const STORAGE_STATE = path.join(REPO_ROOT, "tests/.auth/user.json");
 
 const PORT = process.env.PROBE_PORT || "3100";

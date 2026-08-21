@@ -8,7 +8,7 @@
 // will use when Kevin approves and runs it.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 import { createClient } from "@supabase/supabase-js";
 
 const TAB = "review_queue";

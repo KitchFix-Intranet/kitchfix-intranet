@@ -25,7 +25,7 @@
 // Usage: node --env-file=.env.local scripts/_probe_daily_grain.mjs
 
 import { createClient } from "@supabase/supabase-js";
-import { dedupePaySegments } from "../src/lib/labor/paySegmentDedupe.js";
+import { dedupePaySegments } from "../../src/lib/labor/paySegmentDedupe.js";
 
 let hardFail = 0;
 function ok(line)   { console.log(`  OK    ${line}`); }

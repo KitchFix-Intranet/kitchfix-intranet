@@ -36,6 +36,31 @@ node --env-file=/absolute/path/to/.env.local \
 A few Python probes (`_probe_price_audit_join.py`,
 `_probe_pricing_summit_pl_extract.py`) take their env from the shell.
 
+## Relocation guard
+
+`scripts/_audit_probe_imports.mjs` walks every `.mjs` / `.js` in this
+directory and catches two shapes of relocation bug (which is what
+happened silently when the tree was moved from `scripts/` into
+`scripts/probes/` - 33 probes broke and nobody noticed until the
+homestand PR-2 sweep):
+
+  1. Relative `import ... from "../..."` where the resolved path no
+     longer exists.
+  2. `REPO_ROOT = path.resolve(path.dirname(__filename), "..")` that
+     resolves to something other than the actual repo root.
+
+Exit code is non-zero if any broken finding is present. Run it after
+any move under `scripts/`:
+
+```
+node scripts/_audit_probe_imports.mjs
+```
+
+The tool checks whether a probe can START; it does NOT verify that
+the probe's assertions still hold (stale grep patterns / stale data
+thresholds are a separate class - those show up when a probe is
+actually invoked).
+
 ## Writes (scripts/probes/writes/)
 
 These probes execute Postgres writes as part of their verification and

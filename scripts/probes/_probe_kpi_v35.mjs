@@ -33,7 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 const CARDS_SRC = path.join(REPO_ROOT, "src/app/kpi/labor/components/SignalCards.js");
 const CSS_SRC   = path.join(REPO_ROOT, "src/app/kpi/kpi.css");
 const BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3001";

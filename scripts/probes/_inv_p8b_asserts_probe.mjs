@@ -11,7 +11,7 @@
 import {
   assertNoSupersededSplitParents,
   assertNoNonUsdAmountsSummed,
-} from "../src/lib/purchasingSpendAsserts.js";
+} from "../../src/lib/purchasingSpendAsserts.js";
 
 let ok = true;
 function log(name, expected, actual, detail) {

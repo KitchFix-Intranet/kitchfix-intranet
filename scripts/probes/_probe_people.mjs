@@ -29,10 +29,10 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isSalariedWorker } from "../src/lib/labor/salariedPredicate.js";
+import { isSalariedWorker } from "../../src/lib/labor/salariedPredicate.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 
 let hardFail = 0;
 function ok(line)   { console.log(`  OK    ${line}`); }
