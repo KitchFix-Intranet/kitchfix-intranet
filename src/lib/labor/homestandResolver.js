@@ -281,16 +281,23 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026, opts =
     const game_end   = stand[stand.length - 1].service_date;
 
     // window_start:
-    //   Non-pre-floor stands take the day after the previous stand's
-    //   last game (or game_start on the first stand of the season).
+    //   Stands 2+ take the day after the previous stand's last game -
+    //   which naturally includes the prep day before the next opener.
+    //   The FIRST stand of the season (i === 0) has no predecessor, so
+    //   PR-1 originally set it to game_start. Owner ruling 2026-08-21
+    //   after PR #773 v3 surfaced the gap: that made HS 1 the only
+    //   stand in the season that did not own its prep day - the
+    //   season's first prep day (game_start - 1) fell into no stand
+    //   at all, and its share of the weekly total ($1,264 on CIN - OH's
+    //   week 03/23-03/29) went unattributed in the pre-floor estimator.
+    //   Fix: HS 1's window starts at game_start - 1 (its prep day).
+    //   Every stand now owns exactly one prep day.
+    //
     //   The result is then clamped up to the daily floor, so no
     //   non-pre-floor stand ever owns days before the daily-grain
-    //   floor. Kevin's post-PR-2 audit 2026-08-21: PR-1 v1 only
+    //   floor. Kevin's earlier audit 2026-08-21: PR-1 v1 only
     //   clamped the FIRST stand, which meant HS 3 inherited a window
-    //   reaching three days behind the floor (HS 2 was pre-floor,
-    //   HS 3 got HS 2's game_end + 1 = 04/17, floor 04/20). The
-    //   range resolver then refused HS 3 - "Daily detail starts
-    //   04/20/26" - blanking the page for the operator.
+    //   reaching three days behind the floor.
     //
     //   pre_floor stays a property of the STAND (game_end < floor),
     //   not the window: HS 1 and HS 2 stay pre-floor because their
@@ -298,7 +305,7 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026, opts =
     //   actual exists for them at all.
     let windowStart;
     if (i === 0) {
-      windowStart = game_start;
+      windowStart = addDaysIso(game_start, -1);
     } else {
       windowStart = addDaysIso(groups[i - 1][groups[i - 1].length - 1].service_date, 1);
     }
@@ -353,7 +360,7 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026, opts =
       pre_floor: preFloor,
       window_start_bounded_by: windowStart === dailyFloorIso
         ? "daily_floor"
-        : (i === 0 ? "game_start" : "prev_game_end_plus_1"),
+        : (i === 0 ? "prep_day" : "prev_game_end_plus_1"),
       index: i + 1,
       of_total: groups.length,
     });

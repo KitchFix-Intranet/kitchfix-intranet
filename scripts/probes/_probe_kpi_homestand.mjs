@@ -530,37 +530,39 @@ console.log("[H9] pre-floor stand estimator: counts, no-straddle, bank-byte-iden
     for (const d of roadTripDates) check("CIN - OH HS 2 road-trip sanity", perDayHs2, d, 0);
 
     // Pin to the value the corrected derivation produces (owner rule
-    // 2026-08-21 after PR #773 v2: "find the divergence, fix it, and
-    // pin HS 1 to the value the corrected derivation produces. A
-    // tolerance that accommodates an unexplained difference stops
-    // being an assertion").
+    // 2026-08-21). Three fixes now applied:
     //
-    // Base rates now BYTE-IDENTICAL to the spec (fixes in this PR:
-    // dollars_regular instead of amount, and exclude zero-amount days
-    // from the sample):
-    //   night $1,136.15 / 25 games (matches spec)
-    //   day   $806.89   / 11 games (matches spec)
+    //   1. dollars_regular (not amount) for base-rate derivation -
+    //      excludes OT/DT/premium that the low-OT restriction was
+    //      already supposed to keep out.
+    //   2. Exclude zero-amount days from the sample - CIN - OH
+    //      2026-08-20 (HS 11 game_end, one day before todayIso) was
+    //      $0 from Rippling lag and dragged the day base sample from
+    //      11 games to 12 games, $806.89 down to $739.65.
+    //   3. HS 1's window starts at its PREP DAY (game_start - 1)
+    //      instead of game_start. Owner ruling after PR #773 v3
+    //      surfaced the walk: every other stand owns the prep day
+    //      before it (because window_start = prev.game_end + 1),
+    //      but HS 1 had no predecessor and its prep day fell into
+    //      no stand at all. That put ~$1,276 (CIN - OH week 03/23-
+    //      03/29 prep-day slice) into a gap. First-stand window
+    //      now consistent with every other stand.
     //
-    // HS 2 lands on the spec's $7,326 EXACT because its window fully
-    // contains the two middle weeks - the weight distribution allocates
-    // the full weekly totals to HS 2 without partial-week fractions.
+    // Base rates BYTE-IDENTICAL to spec:
+    //   night $1,136.15 / 25 games
+    //   day   $806.89   / 11 games
     //
-    // HS 1 lands at $7,690.35. The +$987 residual vs owner's verified
-    // $6,703 is unexplained. Base rates match spec, method matches
-    // spec description ("weight every day by what the schedule says
-    // happened, then distribute that week's real total across the
-    // weights"). HS 1 spans two partial weeks (03/23-03/29 and
-    // 03/30-04/05); the delta is entirely on week 03/23-03/29's
-    // partial-fraction attribution. Documented for follow-up; H9
-    // pins the DERIVED value not the spec value so a regression in
-    // the algorithm is caught, and Kevin can review the walk in the
-    // PR body to see which definition his snapshot used.
+    // HS 1 = $8,966.72 (added $1,276.37 prep-day slice on top of the
+    // previous $7,690.35 - matches the walk in PR #773's comment
+    // thread that predicted this delta byte-for-byte).
+    // HS 2 = $7,325.83 (unchanged; HS 2's window already spanned its
+    // own prep day 04/09 under the old rule).
     const near = (label, got, want, tol = 0.50) => {
       if (Math.abs(got - want) < tol) ok(`${label}: $${got.toFixed(2)}`);
       else fail(`${label}: got $${got.toFixed(2)}, want $${want.toFixed(2)} (delta $${(got - want).toFixed(2)})`);
     };
-    near("CIN - OH HS 1 estimate (pinned to corrected derivation)", hs1?.actual_estimated, 7690.35);
-    near("CIN - OH HS 2 estimate (matches spec EXACT)", hs2?.actual_estimated, 7325.83);
+    near("CIN - OH HS 1 estimate (window extended to prep day per owner ruling)", hs1?.actual_estimated, 8966.72);
+    near("CIN - OH HS 2 estimate (unchanged - already spanned own prep day)", hs2?.actual_estimated, 7325.83);
   }
 }
 
