@@ -8,15 +8,26 @@
 //   2. Only the earlier in report        -> keep the earlier
 //   3. Otherwise                          -> keep the later
 //
-// One-shot seed. When the scheduled report-email lane (per
-// KPI_PURCHASING_MASTER §6.6) lands, it takes over as the maintainer of
-// this table. Idempotent on repeat runs (ON CONFLICT DO NOTHING).
+// Two input paths, both idempotent:
+//
+//   A. Fresh Rippling CSV export via --csv=<path> (the original path).
+//      Preserved verbatim so a re-export can seed the table without
+//      needing an intermediate step.
+//
+//   B. Repo-committed ID snapshot at data/rippling_report_seen_txns.txt
+//      (the fresh-clone reproducibility path). Fires when no --csv= is
+//      supplied. The file is pure 24-hex ObjectIDs, one per line, and
+//      is described in data/rippling_report_seen_txns.md - including
+//      the fact that it is a SNAPSHOT that decays until the scheduled
+//      report-email ingestion lane (KPI_PURCHASING_MASTER §6.6) lands.
+//
+// Both paths upsert with ignoreDuplicates so repeat runs are no-ops.
 //
 // CLI:
 //   node --env-file=/Users/kevinfietek/dev/kitchfix-intranet/.env.local \
 //     scripts/purchasing_report_load.mjs \
-//     --csv=/absolute/path/to/Custom_report-<hash>.csv \
-//     --source-note="seed 2026-08-20 auth-pair"
+//     [--csv=/absolute/path/to/Custom_report-<hash>.csv] \
+//     [--source-note="seed 2026-08-20 auth-pair"]
 //
 // Required env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
@@ -35,8 +46,18 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv);
-if (!args.csv) { console.error("--csv is required"); process.exit(1); }
-if (!fs.existsSync(args.csv)) { console.error(`csv not found: ${args.csv}`); process.exit(1); }
+
+// Path B (repo snapshot) fires when --csv= is not supplied. Guard the
+// CSV existence check to path A only so the fallback can run.
+const SNAPSHOT_PATH = "data/rippling_report_seen_txns.txt";
+if (args.csv && !fs.existsSync(args.csv)) {
+  console.error(`csv not found: ${args.csv}`);
+  process.exit(1);
+}
+if (!args.csv && !fs.existsSync(SNAPSHOT_PATH)) {
+  console.error(`no --csv supplied and snapshot missing: ${SNAPSHOT_PATH}`);
+  process.exit(1);
+}
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -74,33 +95,57 @@ function parseCSV(text) {
 }
 
 const t0 = Date.now();
-console.log(`purchasing_report_load csv=${args.csv} dryRun=${args.dryRun}`);
-const raw = fs.readFileSync(args.csv, "utf8");
-const rows = parseCSV(raw);
-if (rows.length < 2) { console.error("csv is empty or header-only"); process.exit(1); }
-const header = rows[0];
-const txnIdx = header.indexOf("Transaction ID");
-if (txnIdx < 0) { console.error("csv missing 'Transaction ID' column; got: " + header.slice(0, 8).join(",") + " ..."); process.exit(1); }
+const source = args.csv ? args.csv : SNAPSHOT_PATH;
+const sourceKind = args.csv ? "csv" : "snapshot";
+console.log(`purchasing_report_load source=${source} kind=${sourceKind} dryRun=${args.dryRun}`);
 
 const parents = new Set();
-let dataRows = 0;
-let missing = 0;
-for (let i = 1; i < rows.length; i++) {
-  const id = rows[i][txnIdx];
-  dataRows++;
-  if (!id) { missing++; continue; }
-  parents.add(id);
+
+if (sourceKind === "csv") {
+  const raw = fs.readFileSync(args.csv, "utf8");
+  const rows = parseCSV(raw);
+  if (rows.length < 2) { console.error("csv is empty or header-only"); process.exit(1); }
+  const header = rows[0];
+  const txnIdx = header.indexOf("Transaction ID");
+  if (txnIdx < 0) { console.error("csv missing 'Transaction ID' column; got: " + header.slice(0, 8).join(",") + " ..."); process.exit(1); }
+  let dataRows = 0;
+  let missing = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const id = rows[i][txnIdx];
+    dataRows++;
+    if (!id) { missing++; continue; }
+    parents.add(id);
+  }
+  console.log(`parsed: data_rows=${dataRows}  missing_txn_id=${missing}  distinct_parent_ids=${parents.size}`);
+} else {
+  // Path B: snapshot file. Pure 24-hex ObjectIDs, one per line, sorted.
+  // Skip blanks. Anything not matching the hex shape is a repo bug the
+  // .md sibling forbids - fail loudly rather than seed a garbage id.
+  const raw = fs.readFileSync(SNAPSHOT_PATH, "utf8");
+  const lines = raw.split(/\r?\n/);
+  const HEX24 = /^[a-f0-9]{24}$/;
+  let bad = 0;
+  for (const line of lines) {
+    if (!line) continue;
+    if (!HEX24.test(line)) { bad++; continue; }
+    parents.add(line);
+  }
+  if (bad > 0) {
+    console.error(`snapshot has ${bad} non-hex lines; refusing to seed. Rebuild from a fresh Rippling export.`);
+    process.exit(1);
+  }
+  console.log(`parsed snapshot: lines=${lines.length}  distinct_parent_ids=${parents.size}`);
 }
-console.log(`parsed: data_rows=${dataRows}  missing_txn_id=${missing}  distinct_parent_ids=${parents.size}`);
 
 if (args.dryRun) {
   console.log("dry-run - no insert");
   process.exit(0);
 }
 
+const defaultNote = `seed ${new Date().toISOString().slice(0, 10)} (${sourceKind})`;
 const rowsToInsert = [...parents].map(id => ({
   parent_txn_id: id,
-  source_note:   args.sourceNote || `seed ${new Date().toISOString().slice(0, 10)}`,
+  source_note:   args.sourceNote || defaultNote,
 }));
 
 let inserted = 0;
