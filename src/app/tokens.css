@@ -135,6 +135,17 @@
   /* focus + motion + disabled */
   --focus-ring-width:var(--border-thick); --focus-ring-offset:2px; --focus-ring-color:var(--navy-700);
   --motion-control:var(--duration-fast) var(--ease-standard); --motion-surface:var(--duration-base) var(--ease-emphasized);
+  --motion-widget:var(--duration-slow) var(--ease-standard);
+  /* PR-N (2026-08-21): band-cream chrome for the admin group-card
+     header/footer, matching the day-entry modal's cream bands. Added
+     as tokens so admin.css does not carry raw hex. */
+  --sc2-band-cream-bg:#F5F0E4;
+  --sc2-band-cream-bd:#E6DEC9;
+  --sc2-band-cream-ink:#6B5B32;
+  /* PR-N: text colour for pressed segmented-control on --sc2-accent-green,
+     and light-navy wash used by admin badges adjacent to the command bar. */
+  --sc2-accent-green-ink:#0A2416;
+  --sc2-cmd-band-bg:#E7EEF8;
   --disabled-opacity:var(--opacity-disabled);
   /* density-aware semantic spacing (Comfortable defaults) */
   --space-stack:var(--space-6); --space-card-pad:var(--space-4); --space-inline:var(--space-3);
