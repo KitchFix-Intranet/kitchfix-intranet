@@ -120,12 +120,23 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
 }
 
 // ─── Season-to-date card - FIXED per owner reminder #3 ─────────────
+// Owner ruling 2026-08-21 after PR-2 v1 shipped a display bug: any
+// figure the server computes must be READ, never re-derived
+// client-side. Previous client filtered `h.actual != null` for
+// "finished" - but future stands had actual = 0 (not null), which
+// (a) counted 11 finished (9 + 2 future) instead of 9, and (b) left
+// stands_remaining at 0 and remaining_budget at $0. Bug was invisible
+// because the load-bearing money figures (bank, spent, budget_to_date)
+// were correct - only the counts and remaining-budget were wrong.
+// Fix: read stands_finished, stands_remaining, and remaining_budget
+// directly off bank. Server owns the discrimination.
 function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
   if (!bank) return null;
-  const finished = homestands.filter(h => h.actual != null);
-  const remaining = homestands.filter(h => !h.pre_floor && h.actual == null);
-  const seasonBudget = homestands.reduce((s, h) => s + (h.budget || 0), 0);
-  const remainingBudget = remaining.reduce((s, h) => s + (h.budget || 0), 0);
+  const finishedCount   = Number(bank.stands_finished || 0);
+  const remainingCount  = Number(bank.stands_remaining || 0);
+  const remainingBudget = Number(bank.remaining_budget || 0);
+  const budgetToDate    = Number(bank.budget_to_date || 0);
+  const seasonBudget    = budgetToDate + remainingBudget;
   const scale = seasonBudget || 1;
   const pct = v => Math.max((v / scale) * 100, 0);
   const bankVal = Number(bank.bank || 0);
@@ -152,7 +163,7 @@ function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
       <header className="kpi-hs-card-hdr">
         <span className="kpi-hs-eyebrow">Season to date</span>
         <span className="kpi-hs-note" data-season-rn>
-          {finished.length} stand{finished.length === 1 ? "" : "s"} finished · {remaining.length} remaining
+          {finishedCount} stand{finishedCount === 1 ? "" : "s"} finished · {remainingCount} remaining
         </span>
         <span className={`kpi-hs-pill ${bankVal >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`} data-bank-pill>
           Bank {bankVal >= 0 ? "▲" : "▼"} {fmt$0(bankAbs)}
@@ -181,11 +192,11 @@ function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
       </div>
       <div className="kpi-hs-sbar-key">
         <span><b data-key-season-budget>{fmt$0(seasonBudget)}</b> season budget</span>
-        <span><b data-key-spent>{fmt$0(spent)}</b> spent · {finished.length} stand{finished.length === 1 ? "" : "s"}</span>
+        <span><b data-key-spent>{fmt$0(spent)}</b> spent · {finishedCount} stand{finishedCount === 1 ? "" : "s"}</span>
         <span className={bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"} data-key-bank>
           <b>{bankVal >= 0 ? "▲ " : "▼ "}{fmt$0(bankAbs)}</b> in the bank
         </span>
-        <span><b data-key-remaining>{fmt$0(remainingBudget)}</b> budgeted for the {remaining.length} remaining stand{remaining.length === 1 ? "" : "s"}</span>
+        <span><b data-key-remaining>{fmt$0(remainingBudget)}</b> budgeted for the {remainingCount} remaining stand{remainingCount === 1 ? "" : "s"}</span>
       </div>
     </div>
   );
