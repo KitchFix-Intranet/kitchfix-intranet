@@ -9,7 +9,10 @@
   display: grid;
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--insp-w);
   min-height: 660px;
-  background: var(--sc2-surface-app);
+  /* PR-N audit P0-2 (2026-08-21): background swapped from
+     --sc2-surface-app (warm cream) to --sc2-canvas (page grey the
+     calendar uses). Cream is a card accent, not a page canvas. */
+  background: var(--sc2-canvas);
   border-radius: var(--sc2-radius-container);
   overflow: hidden;
   box-shadow: var(--sc2-el-widget);
@@ -255,8 +258,50 @@
 .scav-cat-sub {
   font-size: var(--sc2-size-body);
   color: var(--sc2-ink-muted);
-  margin-bottom: var(--sc2-space-4);
   font-variant-numeric: var(--num-tabular);
+}
+/* PR-N audit P0-1 (2026-08-21): search moved from the retired
+   inner command bar into the catalog header. Anchored to the thing
+   it filters. */
+.scav-cat-sub-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  margin-bottom: var(--sc2-space-4);
+}
+.scav-cat-search {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line-2);
+  border-radius: var(--sc2-radius-control);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  min-width: 240px;
+  transition: border-color var(--motion-control);
+}
+.scav-cat-search:focus-within {
+  border-color: var(--sc2-accent-green);
+  background: var(--sc2-surface-card);
+}
+.scav-cat-search input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--sc2-ink);
+  font-family: inherit;
+  font-size: var(--sc2-size-caption);
+  width: 100%;
+}
+.scav-cat-search input::placeholder { color: var(--sc2-ink-muted); }
+.scav-cat-search .k {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-muted);
+  border: 1px solid var(--sc2-line-2);
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 .scav-group-card {
   background: var(--sc2-surface-card);

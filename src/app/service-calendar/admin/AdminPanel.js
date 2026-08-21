@@ -10,7 +10,6 @@
 // shapes to existing endpoints unchanged.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import AdminCommandBar from "./AdminCommandBar";
 import AccountsRail from "./AccountsRail";
 import CatalogPane from "./CatalogPane";
 import EditorRail from "./EditorRail";
@@ -315,13 +314,6 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
     setBootReloadKey((k) => k + 1);
   }, []);
 
-  // ─────────────── back to calendar ───────────────
-  const handleBackToCalendar = useCallback(() => {
-    runOrGuard("return to the calendar", () => {
-      onViewChange?.({ mode: "overview" });
-    });
-  }, [runOrGuard, onViewChange]);
-
   // ─────────────── render ───────────────
   const activeAccountLevel = activeAccount?.level || activeAccount?.category || "";
   const activeAccountBillingModel = activeAccount?.billingModel || null;
@@ -347,17 +339,13 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
 
   return (
     <div className="scav" role="application" aria-label="SC Admin">
-      <AdminCommandBar
-        activeAccountKey={activeAccountKey}
-        activeAccountName={activeAccount?.name}
-        totalAccounts={accounts.length}
-        totalServices={totalServices}
-        totalScheduled={totalScheduled}
-        search={search}
-        onSearchChange={setSearch}
-        onBackToCalendar={handleBackToCalendar}
-        searchInputRef={searchInputRef}
-      />
+      {/* PR-N audit P0-1 fix (2026-08-21): inner command bar deleted.
+          The calendar shell already carries product name, admin mode
+          chip, account context (via the highlighted accounts-rail
+          row), freshness stamp, and back arrow. Two command bars
+          stacked read as a widget inside a widget. Search moved to
+          the catalog header where it is anchored to the thing it
+          filters. Counts moved to the accounts-rail footer only. */}
       <AccountsRail
         accounts={accounts}
         activeAccountKey={activeAccountKey}
@@ -395,7 +383,9 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
           error={catalogError}
           onRetry={() => setCatReloadKey((k) => k + 1)}
           search={search}
+          onSearchChange={setSearch}
           onClearSearch={() => setSearch("")}
+          searchInputRef={searchInputRef}
           selectedServiceId={selectedServiceId}
           kbFocusServiceId={kbFocusServiceId}
           onSelectService={handleSelectService}

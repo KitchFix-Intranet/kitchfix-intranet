@@ -43,7 +43,9 @@ export default function CatalogPane({
   error,
   onRetry,
   search,
+  onSearchChange,     // PR-N audit P0-1: search input moved into this pane
   onClearSearch,
+  searchInputRef,     // exposed so "/" hotkey in AdminPanel can focus
   selectedServiceId,
   kbFocusServiceId,   // for the navy keyboard cursor
   onSelectService,    // (serviceId, { groupName, kb: bool }) => void
@@ -99,10 +101,24 @@ export default function CatalogPane({
         <span className="scav-cat-name">{accountName}</span>
         <span className="scav-cat-badge">{badge}</span>
       </div>
-      <div className="scav-cat-sub">
-        {totalActual} service{totalActual === 1 ? "" : "s"} in {grpCount} group{grpCount === 1 ? "" : "s"}
-        {scheduledCount > 0 && <> &middot; {scheduledCount} scheduled</>}
-        {q && <> &middot; filtered by &ldquo;{search}&rdquo;</>}
+      <div className="scav-cat-sub-row">
+        <div className="scav-cat-sub">
+          {totalActual} service{totalActual === 1 ? "" : "s"} in {grpCount} group{grpCount === 1 ? "" : "s"}
+          {scheduledCount > 0 && <> &middot; {scheduledCount} scheduled</>}
+          {q && <> &middot; filtered by &ldquo;{search}&rdquo;</>}
+        </div>
+        <div className="scav-cat-search">
+          <input
+            ref={searchInputRef}
+            id="scav-search-input"
+            type="search"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Find a service in this account"
+            aria-label="Find a service in this account's catalog"
+          />
+          <span className="k" aria-hidden="true">/</span>
+        </div>
       </div>
 
       {q && totalVisible === 0 ? (
