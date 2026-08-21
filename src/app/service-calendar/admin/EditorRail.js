@@ -300,15 +300,19 @@ function RailService({
   const backdateSpanDays = isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate)
     ? daysBetweenInclusive(backdateDate, today) : 0;
 
+  // PR-N audit R2 E3 (Kevin ruling 2026-08-21): shortened to
+  // "Same as current" so NEW PRICE stops wrapping. The
+  // current-price block above supplies the number at 30px; the
+  // hint does not need to repeat it.
   const hintText = !newPrice
-    ? `Enter a price. Must differ from ${fmtPrice(currentPrice)}.`
+    ? "Enter a price"
     : !priceValid
-      ? "Enter a valid positive number."
+      ? "Not a valid number"
       : !priceChanged
-        ? `Same as current ${fmtPrice(currentPrice)}. Enter a different one.`
+        ? "Same as current"
         : !reasonReady
-          ? "Add a reason before saving."
-          : "Ready to save.";
+          ? "Add a reason"
+          : "Ready to save";
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -655,15 +659,16 @@ function RailFee({
 
   const isMlb = MLB_LABOR_BUDGET_ACCOUNTS.has(accountKey);
 
+  // PR-N audit R2 E3: shortened per RailService pattern.
   const hintText = !newAmount
-    ? `Enter an amount. Must differ from ${fmtAmount(currentAmount)}.`
+    ? "Enter an amount"
     : !amountValid
-      ? "Enter a valid non-negative number."
+      ? "Not a valid number"
       : !amountChanged
-        ? `Same as current ${fmtAmount(currentAmount)}.`
+        ? "Same as current"
         : !reasonReady
-          ? "Add a reason before saving."
-          : "Ready to save.";
+          ? "Add a reason"
+          : "Ready to save";
 
   const handleSave = async () => {
     if (!canSave) return;

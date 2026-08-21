@@ -383,7 +383,14 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
               </div>
               <div className="t">Pick an account</div>
               <div className="d">Choose an account on the left to view its catalog, edit prices, add or archive services.</div>
-              <div className="tip">{accounts.length} account{accounts.length === 1 ? "" : "s"} available</div>
+              {/* PR-N audit R2 H1 (2026-08-21): dropped "N accounts
+                  available" - the accounts-rail footer already
+                  carries that count, and it was a fourth count on a
+                  surface that only needed the ones already shown.
+                  Kevin's suggested replacement ("Jump to the account
+                  changed most recently") requires knowing recent
+                  changes per account, which is a new query - filed
+                  as a future tidy rather than a guess. */}
             </div>
           )}
         </div>

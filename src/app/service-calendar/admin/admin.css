@@ -753,40 +753,82 @@
   text-transform: none;
   font-size: var(--sc2-size-body);
 }
+/* PR-N audit R2 E1 + E4 + E7 (Kevin ruling 2026-08-21):
+   - E1: inputs get a lighter fill than the panel plus --shadow-inset-input
+     so they read as recessed. Disabled controls DROP the inset entirely
+     (flat means inert, recessed means type here).
+   - E4: numeric inputs render 16px semibold tabular; text inputs and
+     textareas render 14px regular with tabular DISABLED. Column position
+     already signals which is which - weight/size does not need to do it
+     twice, and a name field is not a money field.
+   - E7: native date inputs share the same fill/border/inset; the picker
+     indicator gets inverted for the dark surface. */
 .scav-f input,
 .scav-f textarea {
   width: 100%;
   font-family: inherit;
-  font-size: var(--sc2-size-h3);
-  font-weight: var(--sc2-wt-semibold);
   padding: var(--sc2-space-3);
   border-radius: var(--sc2-radius-control);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   color: var(--sc2-rail-text);
-  font-variant-numeric: var(--num-tabular);
-  transition: border-color var(--motion-control), background var(--motion-control);
+  box-shadow: var(--shadow-inset-input);
+  transition: border-color var(--motion-control), background var(--motion-control), box-shadow var(--motion-control);
 }
+/* Numeric inputs: 16px semibold tabular. Price + amount + date. */
+.scav-f input[inputmode="decimal"],
+.scav-f input[type="date"] {
+  font-size: 16px;
+  font-weight: var(--sc2-wt-semibold);
+  font-variant-numeric: var(--num-tabular);
+}
+/* Text inputs + textareas: 14px regular, proportional digits. */
+.scav-f input[type="text"],
+.scav-f input[type="search"],
 .scav-f textarea {
   font-size: var(--sc2-size-body);
   font-weight: var(--sc2-wt-regular);
+  font-variant-numeric: normal;
+}
+.scav-f textarea {
   resize: vertical;
+  min-height: 60px;
 }
 .scav-f input::placeholder,
 .scav-f textarea::placeholder {
   color: var(--sc2-rail-text-subtle);
   font-weight: var(--sc2-wt-regular);
+  font-size: var(--sc2-size-body);
 }
 .scav-f input:focus,
 .scav-f textarea:focus {
   outline: none;
   border-color: var(--sc2-accent-green);
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 0 3px rgba(79, 191, 133, 0.20);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: var(--shadow-inset-input), 0 0 0 3px rgba(79, 191, 133, 0.20);
+}
+.scav-f input:disabled,
+.scav-f textarea:disabled {
+  /* E1: disabled DROPS the inset - flat means inert. */
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: var(--sc2-rail-text-subtle);
 }
 .scav-f input.err {
   border-color: var(--sc2-state-overdue-fg);
-  box-shadow: 0 0 0 3px rgba(232, 99, 90, 0.18);
+  box-shadow: var(--shadow-inset-input), 0 0 0 3px rgba(232, 99, 90, 0.18);
+}
+/* E7: recolor the native date-input picker indicator for the dark
+   surface. Webkit uses ::-webkit-calendar-picker-indicator; the
+   Firefox indicator is not user-styleable, so the invert is a
+   Webkit-only enhancement. */
+.scav-f input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.6);
+  cursor: pointer;
+}
+.scav-f input[type="date"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 0.9;
 }
 .scav-seg {
   display: flex;
@@ -838,9 +880,14 @@
 .scav-save:hover:not(:disabled) { background: var(--sc2-accent-green); }
 .scav-save:active:not(:disabled) { transform: translateY(1px); }
 .scav-save:disabled {
-  background: rgba(255, 255, 255, 0.10);
-  color: var(--sc2-rail-text-subtle);
+  /* PR-N audit R2 E2 (Kevin ruling 2026-08-21): disabled Save keeps
+     a readable label. Was navy-on-navy - functionally invisible.
+     Rail-text-muted (Lc 64.6, AA-strong) on 8% white reads clearly
+     on the navy panel; hint text above still explains WHY. */
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--sc2-rail-text-muted);
   cursor: not-allowed;
+  box-shadow: none;
 }
 .scav-save:focus-visible {
   outline: 2px solid var(--sc2-accent-green);
@@ -850,9 +897,14 @@
   background: var(--sc2-state-overdue-fg);
 }
 .scav-save--warn {
-  background: var(--sc2-state-needs-fg-strong);
-  color: var(--sc2-state-overdue-fg);
+  /* PR-N audit R2 E5 (Kevin ruling 2026-08-21): amber fill with the
+     dark cocoa (#2B1A05) text pair - same pairing as the SC amber
+     toast icon, well past AA. Was amber-brown fill with dark-red
+     text - two colours that never appear together anywhere else. */
+  background: var(--sc2-accent-amber-bright);
+  color: var(--sc2-accent-amber-ink);
 }
+.scav-save--warn:hover:not(:disabled) { background: var(--sc2-accent-amber); }
 .scav-save--muted {
   background: rgba(255, 255, 255, 0.10);
   color: var(--sc2-rail-text);
@@ -924,25 +976,45 @@
   border-top: 1px solid rgba(255, 255, 255, 0.10);
   padding: var(--sc2-space-3) var(--sc2-space-4);
   display: flex;
-  gap: var(--sc2-space-4);
+  gap: var(--sc2-space-2);
   flex-wrap: wrap;
   background: var(--sc2-rail-card-bg);
   /* Sits directly under the scroll container, not pinned to panel
      bottom. See .scav-insp comment. */
   flex: 0 0 auto;
 }
+/* PR-N audit R2 E6 (Kevin ruling 2026-08-21): footer actions are
+   BUTTONS on the rail, not underlined text links. Ghost fills the
+   default; destructive-ghost for Archive now (red border, red
+   text, fills red on hover); other actions are navigation and
+   take the plain ghost treatment. */
 .scav-insp-foot button {
-  background: none;
-  border: none;
   font-family: inherit;
   font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
   color: var(--sc2-rail-text-muted);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--sc2-radius-control);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
   cursor: pointer;
-  text-decoration: underline;
+  text-decoration: none;
+  transition: color var(--motion-control), background var(--motion-control), border-color var(--motion-control);
 }
-.scav-insp-foot button:hover { color: var(--sc2-rail-text); }
-.scav-insp-foot button.danger { color: var(--sc2-state-overdue-fg); }
-.scav-insp-foot button.danger:hover { color: var(--sc2-state-overdue-fg); }
+.scav-insp-foot button:hover {
+  color: var(--sc2-rail-text);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.scav-insp-foot button.danger {
+  color: var(--sc2-accent-red-bright);
+  border-color: rgba(232, 99, 90, 0.38);
+}
+.scav-insp-foot button.danger:hover {
+  color: var(--sc2-cmd-text);
+  background: rgba(232, 99, 90, 0.20);
+  border-color: var(--sc2-accent-red-bright);
+}
 
 .scav-empty {
   margin: auto;
