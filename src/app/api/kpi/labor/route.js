@@ -43,6 +43,20 @@ import { proRateBudget } from "@/lib/labor/budgetProRate.js";
 // it in-process against real Supabase (no HTTP, no auth session).
 // See src/lib/labor/dailyRangeBody.js.
 import { buildDailyRangeBody } from "@/lib/labor/dailyRangeBody.js";
+// homestand PR-1 - MLB clubhouse view. Six accounts get a homestand
+// tab (CIN - OH, STL - MO, TXR - TX - H, TXR - TX - V, CIN - KY,
+// TBJ - NY); every other account gets an empty list -> tab absent.
+// `?homestand=<game_start ISO>` selects a stand; the resolver returns
+// its window, which passes through the existing range resolver
+// unchanged (no new source value). See src/lib/labor/homestandResolver.js.
+import {
+  MLB_HOMESTAND_ACCOUNTS,
+  listHomestands,
+  findHomestandByGameStart,
+  computeSplitWithGameDates,
+  computeHomestandBank,
+  actualsByStand,
+} from "@/lib/labor/homestandResolver.js";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -284,10 +298,15 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const today = new Date().toISOString().slice(0, 10);
   const account = (searchParams.get("account") || "").trim();
-  const start = searchParams.get("start") || "2025-12-29";  // FY2026 opens
-  const end = searchParams.get("end") || today;
+  // homestand PR-1 - start/end can be overridden by the homestand
+  // selection below. `let` so the override lands cleanly; the
+  // downstream range resolver, board build, and daily branch see
+  // the window as if it had been requested directly.
+  let start = searchParams.get("start") || "2025-12-29";  // FY2026 opens
+  let end = searchParams.get("end") || today;
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
   const includeSalaryReq = searchParams.get("include_salary") === "1";
+  const homestandParam = searchParams.get("homestand");   // <game_start ISO>, e.g. 2026-08-14
 
   const supa = getServiceClient();
 
@@ -386,6 +405,78 @@ export async function GET(request) {
     .maybeSingle();
   if (floorQ.error) return NextResponse.json(safeError("daily_floor", floorQ.error), { status: 500 });
   const dailyFloorISO = floorQ.data?.week_start || "2026-04-20";
+
+  // homestand PR-1 - MLB clubhouse selection. If `?homestand=<game_start ISO>`
+  // is set AND the account has a homestand tab (six MLB accounts),
+  // resolve the stand to its window and override start/end BEFORE the
+  // range resolver sees them. The window then routes to daily or
+  // weekly by the existing rule; homestand introduces no new source.
+  // Response splices in `homestand`, `homestand_split`, `homestand_bank`
+  // regardless of branch. Non-MLB accounts always get an empty list
+  // and no homestand fields - client reads the empty list as "no
+  // homestand tab here" (absent, not disabled).
+  let homestandSplice = null;
+  let allHomestands = null;
+  if (MLB_HOMESTAND_ACCOUNTS.has(account)) {
+    try { allHomestands = await listHomestands(supa, account, 2026); }
+    catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
+  }
+  if (homestandParam && allHomestands) {
+    const found = findHomestandByGameStart(allHomestands, homestandParam);
+    if (!found) {
+      return NextResponse.json({
+        error: "homestand_not_found",
+        message: `No homestand for ${account} with game_start=${homestandParam}`,
+        account, homestand_param: homestandParam,
+      }, { status: 400 });
+    }
+    if (found.pre_floor) {
+      // Client should not select pre-floor stands per spec ("dimmed
+      // and hatched, labelled no detail, not selectable"); this branch
+      // is a defensive refusal so the route never renders bogus zeros.
+      return NextResponse.json({
+        source: null, refused: true, reason: "pre_floor_homestand",
+        message: "This stand is before the daily-grain floor - no detail available. Stands after 2026-04-20 have detail.",
+        daily_floor: dailyFloorISO,
+        homestand: found,
+        account, filters: { account, homestand: homestandParam },
+        landing_account, accounts_directory, regional_directors_display,
+        salary_available: false,
+      });
+    }
+    start = found.window_start;
+    end   = found.window_end;
+
+    // Pre-compute split + bank once here. Both depend on FY daily
+    // actuals for the account; fetching them here (rather than
+    // threading down into the daily/weekly branches) keeps the
+    // splice point clean.
+    const [dailyQ, gameDatesQ] = await Promise.all([
+      supa.from("labor_actuals_daily")
+        .select("work_date, amount")
+        .eq("account_key", account),
+      supa.from("sc_homestand_schedule")
+        .select("service_date")
+        .eq("account_key", account)
+        .gte("service_date", found.game_start)
+        .lte("service_date", found.game_end)
+        .eq("day_type", "GAME"),
+    ]);
+    if (dailyQ.error)    return NextResponse.json(safeError("homestand_daily",    dailyQ.error),    { status: 500 });
+    if (gameDatesQ.error) return NextResponse.json(safeError("homestand_schedule", gameDatesQ.error), { status: 500 });
+    const gameDates = new Set((gameDatesQ.data || []).map(r => r.service_date));
+    const actMap = actualsByStand(allHomestands, dailyQ.data || []);
+    homestandSplice = {
+      homestand: found,
+      homestand_split: computeSplitWithGameDates(dailyQ.data || [], found, gameDates),
+      homestand_bank:  computeHomestandBank(allHomestands, actMap, today),
+    };
+  }
+  // Even without a homestand selection, MLB accounts get the list on
+  // the response so the client can render the segmented control
+  // without a second round-trip.
+  const homestandsList = allHomestands || [];
+
   const rangeSource = resolveRangeSource({ startISO: start, endISO: end, dailyFloorISO });
 
   // Refusal: partial-week range starting before the floor. Cannot be
@@ -424,6 +515,8 @@ export async function GET(request) {
       dailyFloorISO,
       salary_available, includeSalary,
       resolveWorkerMeta,
+      // homestand PR-1 - wrapper splices these into the daily body.
+      homestandSplice, homestandsList,
     });
   }
 
@@ -900,6 +993,11 @@ export async function GET(request) {
   bodySingle.salary_available = salary_available;
   bodySingle.landing_account = landing_account;
   bodySingle.source = "weekly";
+  // homestand PR-1 - splice into the weekly body. Non-MLB accounts
+  // get `homestands: []` so the client's tab-visibility check is
+  // one predicate everywhere.
+  bodySingle.homestands = homestandsList;
+  if (homestandSplice) Object.assign(bodySingle, homestandSplice);
   return NextResponse.json(bodySingle);
 }
 
@@ -912,5 +1010,11 @@ export async function GET(request) {
 export async function handleDailyRangeRequest(ctx) {
   const out = await buildDailyRangeBody(ctx);
   if (out.error) return NextResponse.json(out.error.payload, { status: out.error.status });
-  return NextResponse.json(out.body);
+  // homestand PR-1 - splice into the daily body. `homestands` is the
+  // full list for MLB accounts (empty otherwise); the selected-stand
+  // fields land only when the caller requested a homestand.
+  const body = { ...out.body };
+  if (ctx.homestandsList) body.homestands = ctx.homestandsList;
+  if (ctx.homestandSplice) Object.assign(body, ctx.homestandSplice);
+  return NextResponse.json(body);
 }
