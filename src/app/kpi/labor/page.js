@@ -767,7 +767,17 @@ export default function KpiLaborPage() {
     p.set("homestand", gameStart);
     router.push(`/kpi/labor?${p.toString()}`);
   };
-  const hasHomestandTab = !isSalaried && loadState === "ok" && (data?.homestands?.length || 0) > 0;
+  // Homestand PR-2 transition-stability fix (Kevin audit 2026-08-21):
+  // dropped the `loadState === "ok"` gate. During a stand-click the
+  // fetch effect flips loadState to "loading" for ~1s; that used to
+  // make hasHomestandTab false, inHomestandView false, and the entire
+  // HomestandBoard unmount - rail, season card, tabs - until the next
+  // response landed. Kevin measured the blink at 380ms in three stands.
+  // Same discipline as the period board (V25-15): data is not cleared
+  // during a warm refetch, so keep the tab visible off the prior
+  // data.homestands and let HomestandBoard show a stand-region
+  // skeleton for the pending selection while the rail stays mounted.
+  const hasHomestandTab = !isSalaried && (data?.homestands?.length || 0) > 0;
   const inHomestandView = urlView === "homestand" && hasHomestandTab;
   const hourlyRate = data?.salary_available && data?.blended_rate_hourly
     ? data.blended_rate_hourly
@@ -819,6 +829,7 @@ export default function KpiLaborPage() {
           todayISO={today}
           redact={redact}
           hourlyRate={hourlyRate}
+          loading={loadState === "loading"}
         />
       )}
       {/* C5.5 name-availability banner. */}

@@ -500,6 +500,27 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
   );
 }
 
+// ─── Stand-region skeleton (warm-nav pending) ──────────────────────
+// PR-2 transition stability. Mirrors the height stack of the three
+// stand-region cards (StandHeader, StandDayStrip, SignalCards row) so
+// the rail below does not jump when the real content lands. Uses the
+// existing .kpi-skel shimmer from kpi.css; new .kpi-hs-skel-* classes
+// carry heights.
+function StandRegionSkeleton() {
+  return (
+    <div className="kpi-hs-skel" role="status" aria-live="polite" aria-busy="true" data-hs-skel>
+      <span className="sr-only">Loading selected homestand</span>
+      <div className="kpi-skel kpi-hs-skel-header" />
+      <div className="kpi-skel kpi-hs-skel-strip" />
+      <div className="kpi-hs-skel-sigs">
+        <div className="kpi-skel kpi-hs-skel-sig" />
+        <div className="kpi-skel kpi-hs-skel-sig" />
+        <div className="kpi-skel kpi-hs-skel-sig" />
+      </div>
+    </div>
+  );
+}
+
 // ─── The board ─────────────────────────────────────────────────────
 export function HomestandBoard({
   data,
@@ -510,6 +531,7 @@ export function HomestandBoard({
   todayISO,
   redact,
   hourlyRate,
+  loading = false,
 }) {
   const homestands = data?.homestands || [];
   const bank = data?.homestand_bank || null;
@@ -521,6 +543,32 @@ export function HomestandBoard({
   // account-locked panel: board region is replaced, navigation stays.
   const isRefused = data?.refused === true;
   const refusalMessage = isRefused ? data?.message : null;
+  // Only trust `refused` as terminal state when the fetch has settled.
+  // A stale refusal from the prior selection must not linger through
+  // a new stand's fetch - skeleton wins over stale amber.
+  const settledRefusal = !loading && isRefused;
+  // Homestand PR-2 transition-stability (Kevin audit 2026-08-21):
+  // "the entire page goes blank, then returns. Sampling at 380ms after
+  // a click catches three stands with no rail and no board at all."
+  //
+  // The blink was upstream (hasHomestandTab dropped through fetch);
+  // fixed in page.js. Here we handle the follow-on: after the URL
+  // moves to a new stand, `stand` still reflects the PRIOR selection
+  // until the next response lands, so the stand region would show
+  // stale content for ~1s. Detect the mismatch and render a skeleton
+  // in the stand region only. Rail + season card + season table stay
+  // mounted on the prior data - they're either fixed truth (season
+  // card) or not selection-dependent (rail, table).
+  //
+  // Refusal is a terminal state (server ships refused:true without a
+  // matching stand); it must resolve to the refusal card, not the
+  // skeleton. Same for cold homestand-view browse (no ?homestand=
+  // in URL): render nothing in the stand region, not a skeleton.
+  // Use `settledRefusal`, not `isRefused`, so a stale refusal from
+  // the previous fetch doesn't override the pending skeleton.
+  const standIsPending = !settledRefusal && !!selectedGameStart && (
+    loading || (stand?.game_start !== selectedGameStart)
+  );
   const gameDates = useMemo(() => new Set(data?.homestand_game_dates || []), [data?.homestand_game_dates]);
   const nightGameDates = useMemo(() => new Set(data?.homestand_night_dates || []), [data?.homestand_night_dates]);
 
@@ -550,30 +598,36 @@ export function HomestandBoard({
         homestands={homestands}
         selectedGameStart={selectedGameStart}
       />
-      {stand && !isRefused && <StandHeader stand={stand} />}
-      {stand && !isRefused && (
-        <StandDayStrip
-          stand={stand}
-          actualsDaily={data.actuals_daily || []}
-          gameDates={gameDates}
-          nightGameDates={nightGameDates}
-          todayISO={todayISO}
-        />
-      )}
-      {stand && split && !isRefused && (
-        <SignalCards
-          stand={stand}
-          split={split}
-          employees={employeesByStand.get(stand.game_start) || []}
-          hourlyRate={hourlyRate}
-        />
-      )}
-      {isRefused && (
-        <div className="kpi-hs-card kpi-hs-card-refusal" role="alert" data-refusal>
-          <div className="kpi-hs-eyebrow">Selected stand unavailable</div>
-          <div className="kpi-hs-refusal-msg">{refusalMessage}</div>
-          <div className="kpi-hs-refusal-hint">Pick another stand from the rail above.</div>
-        </div>
+      {standIsPending ? (
+        <StandRegionSkeleton />
+      ) : (
+        <>
+          {stand && !settledRefusal && <StandHeader stand={stand} />}
+          {stand && !settledRefusal && (
+            <StandDayStrip
+              stand={stand}
+              actualsDaily={data.actuals_daily || []}
+              gameDates={gameDates}
+              nightGameDates={nightGameDates}
+              todayISO={todayISO}
+            />
+          )}
+          {stand && split && !settledRefusal && (
+            <SignalCards
+              stand={stand}
+              split={split}
+              employees={employeesByStand.get(stand.game_start) || []}
+              hourlyRate={hourlyRate}
+            />
+          )}
+          {settledRefusal && (
+            <div className="kpi-hs-card kpi-hs-card-refusal" role="alert" data-refusal>
+              <div className="kpi-hs-eyebrow">Selected stand unavailable</div>
+              <div className="kpi-hs-refusal-msg">{refusalMessage}</div>
+              <div className="kpi-hs-refusal-hint">Pick another stand from the rail above.</div>
+            </div>
+          )}
+        </>
       )}
       <SeasonTable
         homestands={homestands}

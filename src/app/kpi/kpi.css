@@ -3587,3 +3587,30 @@
   color: var(--n-600);
   margin-top: var(--kpi-sp-1);
 }
+
+/* Stand-region skeleton - warm-nav pending state per Kevin's audit
+   2026-08-21. Rail + season card + season table stay MOUNTED off
+   prior data; only this block occupies the stand region while the
+   next fetch is in flight. Height stack mirrors StandHeader (~46px),
+   StandDayStrip card (~160px), SignalCards grid row (~180px) so the
+   season table below does not jump when the real content lands.
+   Reuses .kpi-skel shimmer + prefers-reduced-motion opt-out from the
+   period-board skeleton block above. */
+.kpi-hs-skel {
+  display: flex; flex-direction: column;
+  gap: var(--kpi-sp-3);
+  margin: var(--kpi-sp-3) 0;
+}
+.kpi-hs-skel-header { height: 46px; }
+.kpi-hs-skel-strip  { height: 160px; }
+.kpi-hs-skel-sigs {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: var(--kpi-sp-3);
+}
+.kpi-hs-skel-sig { height: 180px; }
+@media (max-width: 1024px) {
+  .kpi-hs-skel-sigs { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .kpi-hs-skel-sigs { grid-template-columns: 1fr; }
+}
