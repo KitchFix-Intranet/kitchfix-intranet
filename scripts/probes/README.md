@@ -1,5 +1,7 @@
 # scripts/probes/
 
+> **WRITES SUBDIRECTORY.** Scripts in `scripts/probes/writes/` execute Postgres INSERT/UPDATE/DELETE/RPC calls, not read-only SELECT. They were used to verify schema changes and derive round-trips in place. Do not run them casually - each one names its target table and revert pattern in its header. `_probe_inv1_live_schema.mjs` was deleted 2026-08-21 (Kevin ruling) because it called `.rpc("exec_sql", ...)` with arbitrary SQL. If you need an arbitrary-SQL probe, write it as a one-shot script in this directory with the specific SQL, not as a generic executor.
+
 Audit-trail scripts. Each one was written to prove a single thing at a
 single moment. They are evidence, not running code.
 
@@ -34,33 +36,38 @@ node --env-file=/absolute/path/to/.env.local \
 A few Python probes (`_probe_price_audit_join.py`,
 `_probe_pricing_summit_pl_extract.py`) take their env from the shell.
 
-## Probes that write (not read-only)
+## Writes (scripts/probes/writes/)
 
-These probes execute Postgres writes as part of their verification.
-Most follow an insert-then-delete round-trip pattern for post-migration
-sanity checks; a couple call `.rpc()` against server-side functions.
-None are safe to re-run blindly - inspect the code first.
+These probes execute Postgres writes as part of their verification and
+live in the `writes/` subdirectory as of 2026-08-21. Most follow an
+insert-then-delete round-trip pattern for post-migration sanity checks;
+a couple call `.rpc()` against server-side functions. None are safe to
+re-run blindly - inspect the code first.
 
-- `_probe_amount_column_state.mjs` - insert-then-delete sanity check
-  that PostgREST sees `ai_line_items.amount` (proves pr-9-1 applied).
-- `_probe_inv1_ghost_tables.mjs` - `sb.rpc(fn, {})` - RPC probe
+- `writes/_probe_amount_column_state.mjs` - insert-then-delete sanity
+  check that PostgREST sees `ai_line_items.amount` (proves pr-9-1
+  applied).
+- `writes/_probe_inv1_ghost_tables.mjs` - `sb.rpc(fn, {})` - RPC probe
   driven by a variable function name; effect depends on which RPC.
-- `_probe_inv1_live_schema.mjs` - `sb.rpc("exec_sql", { sql })` -
-  arbitrary SQL executor (INV-1 recon).
-- `_probe_labor_rpc_coverage.mjs` - `.rpc("labor_actuals_coverage")` /
+- `writes/_probe_labor_rpc_coverage.mjs` -
+  `.rpc("labor_actuals_coverage")` /
   `.rpc("labor_actuals_rpc_coverage")`; server functions.
-- `_probe_m3_no_projection.mjs` - deletes and restores a single
+- `writes/_probe_m3_no_projection.mjs` - deletes and restores a single
   `sc_daily_projections` row to prove the M-3 refusal path.
-- `_probe_p3_131_verify.mjs` - seeds sentinel `review_queue` /
+- `writes/_probe_p3_131_verify.mjs` - seeds sentinel `review_queue` /
   `ai_line_items` rows, verifies undo, cleans up.
-- `_probe_p3_batch1_verify.mjs` - same pattern for P3 batch 1.
-- `_probe_p3_batch2_verify.mjs` - same pattern for P3 batch 2.
-- `_probe_p3_batch3_verify.mjs` - same pattern for P3 batch 3.
-- `_probe_pr_9_1_post_apply.mjs` - insert-then-delete round-trip
+- `writes/_probe_p3_batch1_verify.mjs` - same pattern for P3 batch 1.
+- `writes/_probe_p3_batch2_verify.mjs` - same pattern for P3 batch 2.
+- `writes/_probe_p3_batch3_verify.mjs` - same pattern for P3 batch 3.
+- `writes/_probe_pr_9_1_post_apply.mjs` - insert-then-delete round-trip
   post pr-9-1 apply.
 
+`_probe_inv1_live_schema.mjs` was deleted 2026-08-21 (Kevin ruling):
+it called `.rpc("exec_sql", { sql })` with arbitrary SQL, a generic
+executor surface we no longer keep in the tree.
+
 Every other probe below is `.select()`-only. If a new probe adds a
-write, add it to this list.
+write, put it under `writes/` and add it to this list.
 
 ## Probe index
 
@@ -101,13 +108,25 @@ follow-on question set from the purchasing engine build.
 - `_g3_verify_worksheet_collision.mjs` - Worksheet collision reproduction.
 - `_g3_which_ruling_missing.mjs` - Ad-hoc: which of the 21 RULINGS keys did not match any CSV/DB category name.
 
-### G7 engine-determinism family (`_g7_*`)
+### G7 engine-determinism family (`_g7_*`, `g7_*`)
 
 Snapshot + lock probes for the purchasing engine determinism gate.
 
 - `_g7_env_preflight.mjs` - reports PRESENT/ABSENT only for required env vars; never prints values.
 - `_g7_lock_check.mjs` - lock-table pre-run check; expects empty.
 - `_g7_snapshot.mjs` - computed the SHA-256 checksum of purchasing_actuals (sorted by `(source, source_line_id)`, paginated 1000/page) that the G7 Section A determinism gate used to prove three consecutive derives byte-identical.
+- `g7_section_b.mjs` - G7 Section B audit (swept from `scripts/audit/` 2026-08-21).
+- `g7_section_g_p7.mjs` - G7 Section G / P7 audit (swept from `scripts/audit/` 2026-08-21).
+- `g7_skew.mjs` - G7 skew probe (swept from `scripts/audit/` 2026-08-21).
+- `g7_skew_deep.mjs` - G7 skew deep-dive (swept from `scripts/audit/` 2026-08-21).
+- `g7_snapshot.mjs` - G7 snapshot variant (swept from `scripts/audit/` 2026-08-21); distinct from `_g7_snapshot.mjs` above.
+
+### G5 P&L tie-out family (`g5*`)
+
+P&L tie-out audits swept from `scripts/audit/` 2026-08-21.
+
+- `g5_pl_tie_out.mjs` - G5 P&L tie-out audit.
+- `g5b_pl_tie_out_rollup.mjs` - G5b P&L tie-out rollup audit.
 
 ### PR1B verify (`_pr1b_*`)
 
@@ -146,7 +165,6 @@ Acceptance and calibration probes for the labor / KPI stack.
 - `_probe_kpi_v40.mjs` - V40 acceptance: two salary math bugs, toggle clarity, cold-load.
 - `_probe_labor_budget_acceptance.mjs` - M-1 labor-budget acceptance.
 - `_probe_labor_plans.mjs` - one-off dump of labor_plans + homestand_schedule shape.
-- `_probe_labor_rpc_coverage.mjs` - guard against the silent-truncation class PR-A hit (v42-1); WRITES.
 - `_probe_salary_s1.mjs` - Salary PR 1 · C4: probes S1..S1g.
 - `_probe_salary_s2.mjs` - Salary PR 2 · C3: probes S2..S7 + sentinel.
 - `_probe_v25_aggregate_population.mjs` - V25-3 permanent probe: aggregate range vs member sum.
@@ -164,7 +182,6 @@ Read-only investigations for the SC redesign + migration arc.
 - `_probe_after_state_projection.mjs` - projection of what the rederive will produce ONCE migration lands.
 - `_probe_before_state.mjs` - baseline snapshot BEFORE the work-location-attribution migration.
 - `_probe_m2_year_summary.mjs` - M-2 smoke: year-summary payload emits `homestands` for CIN-OH (pilot) but not for fence-class accounts.
-- `_probe_m3_no_projection.mjs` - M-3 hardest-gate #2: prove the no-projection path refuses; WRITES (delete+restore).
 - `_probe_m6_post_fix_state.mjs` - Module 6 post-visibility-fix state; new-invoice extraction lands in PG right now?
 - `_probe_m6_today_uploads.mjs` - what did today's invoice uploads do; PR #138 divide.
 - `_probe_pr_m_projections_variance.mjs` - SC projection calibration recon for PR-M TXR-AZ vs CIN-AZ.
@@ -206,7 +223,6 @@ class, catalog match, and Sheets/PG dual-write drift.
 - `_probe_ai_line_items_h3_redo.mjs` - H3 redo with correct UUID join through invoice_submissions.
 - `_probe_aili_late_dates.mjs` - PG rows with created_at >= 2026-06-10.
 - `_probe_ailineitems_sheets_vs_pg.mjs` - Sheets vs PG row-level ai_line_items diff.
-- `_probe_amount_column_state.mjs` - ai_line_items.amount schema state; WRITES (insert+delete).
 - `_probe_arithmetic_fail_dropdown_coverage.mjs` - arithmetic_fail rows with suggestedMatchId: do they carry catalog detail.
 - `_probe_arithmetic_holds.mjs` - arithmetic_fail held rows + the math that put them there.
 - `_probe_arithmetic_holds_breakdown.mjs` - arithmetic_fail breakdown by vendor / week / account.
@@ -230,8 +246,6 @@ class, catalog match, and Sheets/PG dual-write drift.
 - `_probe_extraction_timing.mjs` - Stage A raw_json field appearance timing.
 - `_probe_failure_taxonomy.mjs` - arithmetic_fail taxonomy across top-N failing vendors.
 - `_probe_gap_static_trace.mjs` - static trace of the 34 dual-write gap invoices.
-- `_probe_inv1_ghost_tables.mjs` - INV-1 ghost-table check; WRITES (rpc).
-- `_probe_inv1_live_schema.mjs` - INV-1 live schema recon; WRITES (rpc exec_sql).
 - `_probe_inv1_live_schema_v2.mjs` - INV-1 recon v2 via PostgREST OpenAPI (read-only).
 - `_probe_inv1_table_name_grep.mjs` - INV-1 table-name grep.
 - `_probe_inventory_items_dup_recon.mjs` - PG.inventory_items dup groups pre-Module 7 cleanup.
@@ -244,10 +258,6 @@ class, catalog match, and Sheets/PG dual-write drift.
 - `_probe_ocr_failure_characterization.mjs` - OCR/extraction failure rate at scale (last 30 days).
 - `_probe_orphan_uuids_sheets.mjs` - orphan uuid in AI_LINE_ITEMS per-account tabs.
 - `_probe_overcount_stl_mo_state.mjs` - 6 STL-MO invoices flagged overcount_suspect_reextract.
-- `_probe_p3_131_verify.mjs` - Task #131: undoMatchPostgres + undoReconcilePostgres DELETE the row; WRITES (insert+delete).
-- `_probe_p3_batch1_verify.mjs` - P3 batch 1 RQ PG mirror verification; WRITES.
-- `_probe_p3_batch2_verify.mjs` - P3 batch 2 RQ PG mirror verification; WRITES.
-- `_probe_p3_batch3_verify.mjs` - P3 batch 3 round-trip undo verification; WRITES.
 - `_probe_p3_batch4_verify.mjs` - P3 batch 4 round-trip undo verification against Sheets.
 - `_probe_parse_tracker.mjs` - parse-tracker inspection.
 - `_probe_people.mjs` - People derive acceptance.
@@ -260,7 +270,6 @@ class, catalog match, and Sheets/PG dual-write drift.
 - `_probe_pr3b_live.mjs` - PR-3b live acceptance against real HTTP.
 - `_probe_pr_8_1_state_check.mjs` - PR 8.1: probe/PROBE junk rows + real invoice landing.
 - `_probe_pr_8_1_vendor_resolution.mjs` - PR 8.1 vendor resolution algorithm mirror.
-- `_probe_pr_9_1_post_apply.mjs` - pr-9-1 post-apply column visibility + read/write; WRITES.
 - `_probe_range_resolver.mjs` - PR-2 range resolver + budget pro-rate acceptance (pure functions).
 - `_probe_rescan_candidates.mjs` - rescan-canary candidates: status=failed/null and PG=0 AND Sheets=0.
 - `_probe_review_queue_cleanup_preview.mjs` - preview-only output for the review_queue cleanup (string log only).
