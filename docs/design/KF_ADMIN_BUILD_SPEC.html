@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KitchFix - SC Admin, build spec</title>
+<style>
+  :root{
+    --bar:#1A3050; --rail:#1B3357; --rail-2:#16294A; --rail-3:#22406A;
+    --rail-ink:#FFFFFF; --rail-2ink:#C3D2E8; --rail-3ink:#8CA1C2; --rail-4ink:#5E7599;
+    --rail-line:rgba(255,255,255,.10); --rail-line2:rgba(255,255,255,.18);
+    --green:#4FBF85; --green-dk:#1F6B41; --green-fg:#2F7D4F; --green-bg:#E8F5EC;
+    --tile:#C5E4D0; --tile-bd:#A6D3B8; --tile-ink:#14331F;
+    --cream:#F5F0E4; --cream-bd:#E6DEC9; --cream-ink:#6B5B32;
+    --amber:#E5A054; --amber-bg:#FDF3E6; --amber-bd:#F0D9B5; --amber-fg:#8A5A16;
+    --red:#B3261E; --red-br:#E8635A; --red-bg:#FCEEED; --red-bd:#F0C9C6;
+    --ink:#0F172A; --n800:#334155; --n700:#475569; --n500:#64748B;
+    --n400:#94A3B8; --n300:#CBD5E1; --n200:#E2E8F0; --n100:#F1F5F9; --n50:#F8FAFC;
+    --page:#EDF0F4; --toast:#101B2D;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+    --tab:tabular-nums;
+    /* elevation */
+    --e1:0 1px 2px rgba(15,23,42,.05);
+    --e2:0 4px 12px rgba(15,23,42,.09);
+    --e3:0 14px 36px rgba(15,23,42,.14);
+    --e4:0 18px 44px rgba(15,23,42,.26);
+    /* motion */
+    --d1:120ms; --d2:180ms; --d3:280ms; --ez:cubic-bezier(.2,0,0,1);
+  }
+  @media (prefers-reduced-motion:reduce){ :root{--d1:0ms;--d2:0ms;--d3:0ms} }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);font-family:var(--ui);color:var(--ink);
+       -webkit-font-smoothing:antialiased;padding:30px 18px 90px}
+  .wrap{max-width:1420px;margin:0 auto}
+  .eyebrow{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500)}
+  h1{font-size:27px;line-height:34px;font-weight:800;letter-spacing:-.01em;margin-top:7px}
+  .sub{font-size:14px;line-height:20px;color:var(--n700);margin-top:9px;max-width:86ch}
+  .sub b{color:var(--ink);font-weight:600}
+  .hr{height:1px;background:var(--n200);margin:42px 0 22px}
+  h2.sec{font-size:11px;line-height:16px;font-weight:800;letter-spacing:.06em;
+         text-transform:uppercase;color:var(--n500);margin-bottom:14px}
+  .keys{display:inline-flex;gap:4px;align-items:center;margin-left:8px}
+  kbd{font-family:var(--ui);font-size:10px;font-weight:700;background:#fff;
+      border:1px solid var(--n300);border-bottom-width:2px;border-radius:5px;padding:2px 6px;
+      color:var(--n700)}
+
+  /* ================= shell ================= */
+  .app{border-radius:16px;overflow:hidden;box-shadow:var(--e3);background:#fff}
+  .bar{background:var(--bar);padding:13px 18px;display:flex;align-items:center;gap:11px;
+       flex-wrap:wrap}
+  .brand{font-size:19px;line-height:24px;font-weight:800;color:#fff;letter-spacing:-.01em}
+  .vr{width:1px;height:22px;background:rgba(255,255,255,.18)}
+  .sel,.tagpill,.navgrp,.infogrp,.stamp,.iconbtn{transition:background var(--d1) var(--ez),
+        border-color var(--d1) var(--ez)}
+  .sel{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.09);
+       border:1px solid rgba(255,255,255,.20);border-radius:9px;padding:7px 12px;
+       font-size:13px;line-height:18px;color:#fff;font-weight:600;cursor:pointer}
+  .sel:hover{background:rgba(255,255,255,.15)}
+  .sel .cv{color:#8CA1C2;font-size:10px}
+  .tagpill{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.20);
+           color:#fff;font-size:10px;font-weight:800;letter-spacing:.05em;padding:5px 10px;
+           border-radius:8px}
+  .navgrp{display:flex;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.20);
+          border-radius:9px;padding:3px}
+  .navgrp button{background:none;border:none;color:#fff;font-family:inherit;font-size:12px;
+                 font-weight:700;padding:5px 11px;border-radius:6px;cursor:pointer;
+                 transition:background var(--d1) var(--ez)}
+  .navgrp button:hover{background:rgba(255,255,255,.12)}
+  .infogrp{display:flex;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);
+           border-radius:9px;overflow:hidden}
+  .infogrp span{font-size:10px;font-weight:800;letter-spacing:.05em;color:#8CA1C2;
+                padding:8px 13px;border-right:1px solid rgba(255,255,255,.12);white-space:nowrap}
+  .infogrp span:last-child{border-right:none}
+  .infogrp b{color:#fff;margin-left:5px;font-variant-numeric:var(--tab)}
+  .grow{flex:1}
+  .barsearch{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.09);
+             border:1px solid rgba(255,255,255,.20);border-radius:9px;padding:7px 11px;
+             min-width:210px;transition:border-color var(--d1) var(--ez)}
+  .barsearch:focus-within{border-color:var(--green);background:rgba(255,255,255,.14)}
+  .barsearch input{background:none;border:none;outline:none;color:#fff;font-family:inherit;
+                   font-size:13px;line-height:18px;width:100%}
+  .barsearch input::placeholder{color:#8CA1C2}
+  .barsearch .k{font-size:10px;font-weight:700;color:#8CA1C2;
+                border:1px solid rgba(255,255,255,.22);border-radius:4px;padding:1px 5px}
+  .stamp{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.09);
+         border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:6px 12px;
+         font-size:11px;color:#C3D2E8;white-space:nowrap}
+  .stamp i{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .iconbtn{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.09);
+           border:1px solid rgba(255,255,255,.20);color:#fff;display:flex;align-items:center;
+           justify-content:center;cursor:pointer;font-size:14px}
+  .iconbtn:hover{background:rgba(255,255,255,.16)}
+
+  .body{display:grid;grid-template-columns:214px minmax(0,1fr) 340px;min-height:660px;
+        background:var(--page)}
+
+  /* ---- accounts rail ---- */
+  .accts{background:#fff;border-right:1px solid var(--n200);display:flex;flex-direction:column;
+         overflow:hidden}
+  .acctscroll{flex:1;overflow:auto;padding:8px 0 4px}
+  .agrp{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;
+        text-transform:uppercase;color:var(--n400);padding:13px 15px 7px}
+  .acct{display:flex;align-items:center;gap:8px;padding:9px 15px;cursor:pointer;
+        border-left:3px solid transparent;transition:background var(--d1) var(--ez)}
+  .acct:hover{background:var(--n50)}
+  .acct[aria-current="true"]{background:var(--green-bg);border-left-color:var(--green-dk)}
+  .acct:focus-visible{outline:2px solid var(--bar);outline-offset:-2px}
+  .acct .k{flex:1;font-size:13px;line-height:18px;color:var(--n800);white-space:nowrap;
+           overflow:hidden;text-overflow:ellipsis}
+  .acct[aria-current="true"] .k{font-weight:700;color:var(--ink)}
+  .acct .c{font-size:11px;color:var(--n400);font-variant-numeric:var(--tab)}
+  .acct .dot{width:6px;height:6px;border-radius:50%;background:var(--amber)}
+  .acctfoot{border-top:1px solid var(--n200);padding:11px 15px;font-size:11px;line-height:16px;
+            color:var(--n400);background:var(--n50)}
+  .acctfoot b{color:var(--n700);font-variant-numeric:var(--tab)}
+
+  /* ---- catalog ---- */
+  .cat{padding:16px 18px 26px;overflow:auto}
+  .cathd{display:flex;align-items:center;gap:10px;margin-bottom:3px;flex-wrap:wrap}
+  .cathd h2{font-size:21px;line-height:26px;font-weight:800;letter-spacing:-.01em}
+  .cathd .nm{font-size:13px;color:var(--n500)}
+  .catbadge{font-size:10px;font-weight:800;letter-spacing:.05em;padding:4px 9px;
+            border-radius:7px;background:#E7EEF8;color:#1E4A86}
+  .catsub{font-size:12px;line-height:16px;color:var(--n500);margin-bottom:15px}
+  .card{background:#fff;border:1px solid var(--n200);border-radius:12px;overflow:hidden;
+        margin-bottom:14px;box-shadow:var(--e1)}
+  .cardhd{display:flex;align-items:center;gap:10px;padding:12px 15px;background:var(--cream);
+          border-bottom:1px solid var(--cream-bd)}
+  .cardhd h3{font-size:15px;line-height:20px;font-weight:800}
+  .cardhd .b{font-size:10px;font-weight:800;letter-spacing:.05em;color:var(--cream-ink);
+             border:1px solid var(--cream-bd);background:rgba(255,255,255,.65);
+             padding:3px 8px;border-radius:6px}
+  .ghost{font-family:inherit;font-size:12px;line-height:16px;font-weight:700;background:#fff;
+         border:1px solid var(--n300);border-radius:7px;padding:6px 12px;color:var(--n700);
+         cursor:pointer;transition:all var(--d1) var(--ez)}
+  .ghost:hover{border-color:var(--green-dk);color:var(--green-dk);box-shadow:var(--e1)}
+  .ghost:focus-visible{outline:2px solid var(--bar);outline-offset:2px}
+  .colhd,.srow{display:grid;grid-template-columns:1fr 104px 108px 96px;gap:12px;
+               align-items:center}
+  .colhd{padding:8px 15px;border-bottom:1px solid var(--n200)}
+  .colhd span{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.06em;
+              text-transform:uppercase;color:var(--n500)}
+  .colhd .r{text-align:right}
+  .srow{padding:11px 15px;border-bottom:1px solid var(--n100);cursor:pointer;
+        box-shadow:inset 3px 0 0 transparent;
+        transition:background var(--d1) var(--ez),box-shadow var(--d1) var(--ez)}
+  .srow:last-of-type{border-bottom:none}
+  .srow:hover{background:var(--n50)}
+  .srow[aria-current="true"]{background:var(--green-bg);box-shadow:inset 3px 0 0 var(--green-dk)}
+  .srow[data-kb="true"]{background:#EEF3FA;box-shadow:inset 3px 0 0 var(--bar)}
+  .srow.arc .nm,.srow.arc .pr,.srow.arc .ef{color:var(--n400)}
+  .srow .nm{font-size:14px;line-height:20px;color:var(--ink)}
+  .srow .nm em{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.04em;
+               text-transform:uppercase;color:var(--n500);background:var(--n100);
+               border-radius:5px;padding:2px 6px;margin-left:8px}
+  .srow .pr{font-size:15px;line-height:20px;font-weight:700;text-align:right;
+            font-variant-numeric:var(--tab)}
+  .srow .ef{font-size:12px;line-height:20px;color:var(--n500);text-align:right}
+  .srow .st{text-align:right}
+  .badge{font-size:10px;font-weight:800;letter-spacing:.04em;padding:3px 8px;border-radius:6px;
+         white-space:nowrap}
+  .badge.ok{background:var(--tile);color:var(--tile-ink);border:1px solid var(--tile-bd)}
+  .badge.sch{background:var(--amber-bg);color:var(--amber-fg);border:1px solid var(--amber-bd)}
+  .badge.arc{background:var(--n100);color:var(--n500);border:1px solid var(--n200)}
+  .cardft{display:flex;align-items:center;justify-content:space-between;padding:9px 15px;
+          background:var(--cream);border-top:1px solid var(--cream-bd);font-size:12px;
+          line-height:16px;color:var(--cream-ink);font-weight:600}
+  .cardft b{font-variant-numeric:var(--tab)}
+  .addgrp{width:100%;font-family:inherit;font-size:13px;font-weight:700;color:var(--n500);
+          background:#fff;border:1px dashed var(--n300);border-radius:12px;padding:14px;
+          cursor:pointer;transition:all var(--d1) var(--ez)}
+  .addgrp:hover{border-color:var(--green-dk);color:var(--green-dk);background:var(--green-bg)}
+
+  /* ---- inspector rail ---- */
+  .insp{background:var(--rail);color:var(--rail-ink);display:flex;flex-direction:column;
+        overflow:hidden}
+  .inspscroll{flex:1;overflow:auto;padding:18px}
+  .fadein{animation:fade var(--d3) var(--ez)}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .kick{font-size:10px;line-height:12px;font-weight:800;letter-spacing:.07em;
+        text-transform:uppercase;color:var(--rail-3ink)}
+  .ih{font-size:20px;line-height:26px;font-weight:800;letter-spacing:-.01em;margin-top:5px}
+  .im{font-size:12px;line-height:16px;color:var(--rail-3ink);margin-top:3px}
+  .cur{background:rgba(255,255,255,.06);border:1px solid var(--rail-line);border-radius:11px;
+       padding:13px 15px;margin-top:15px}
+  .cur .l{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+          color:var(--rail-3ink)}
+  .cur .v{font-size:30px;line-height:36px;font-weight:800;letter-spacing:-.025em;margin-top:3px;
+          font-variant-numeric:var(--tab)}
+  .cur .s{font-size:11px;line-height:16px;color:var(--rail-4ink);margin-top:3px}
+  .rwarn{display:flex;gap:9px;align-items:flex-start;background:rgba(229,160,84,.13);
+         border:1px solid rgba(229,160,84,.35);border-radius:9px;padding:9px 12px;margin-top:11px;
+         font-size:11px;line-height:16px;color:#F0C48A}
+  .rwarn b{color:var(--amber);font-weight:800}
+  .rwarn.bad{background:rgba(232,99,90,.13);border-color:rgba(232,99,90,.38);color:#F3B3AE}
+  .rwarn.bad b{color:var(--red-br)}
+  .f{margin-top:15px}
+  .f label{display:flex;justify-content:space-between;font-size:10px;line-height:12px;
+           font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--rail-3ink);
+           margin-bottom:7px}
+  .f label .hint{color:var(--rail-4ink);font-weight:600;letter-spacing:0;text-transform:none;
+                 font-size:11px}
+  .f input{width:100%;font-family:inherit;font-size:16px;line-height:22px;font-weight:600;
+           padding:10px 13px;border-radius:9px;background:rgba(255,255,255,.07);
+           border:1px solid var(--rail-line2);color:#fff;font-variant-numeric:var(--tab);
+           transition:border-color var(--d1) var(--ez),background var(--d1) var(--ez)}
+  .f input::placeholder{color:var(--rail-4ink);font-weight:400;font-size:14px}
+  .f input:focus{outline:none;border-color:var(--green);background:rgba(255,255,255,.12);
+                 box-shadow:0 0 0 3px rgba(79,191,133,.20)}
+  .f input.err{border-color:var(--red-br);box-shadow:0 0 0 3px rgba(232,99,90,.18)}
+  .seg{display:flex;border:1px solid var(--rail-line2);border-radius:9px;overflow:hidden}
+  .seg button{flex:1;font-family:inherit;font-size:12px;line-height:16px;font-weight:700;
+              padding:9px 4px;background:transparent;border:none;color:var(--rail-2ink);
+              border-right:1px solid var(--rail-line);cursor:pointer;
+              transition:background var(--d1) var(--ez),color var(--d1) var(--ez)}
+  .seg button:last-child{border-right:none}
+  .seg button:hover{background:rgba(255,255,255,.07)}
+  .seg button[aria-pressed="true"]{background:var(--green);color:#0A2416}
+  .seg button:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
+  .save{width:100%;font-family:inherit;font-size:14px;line-height:20px;font-weight:800;
+        background:var(--green-dk);color:#fff;border:none;border-radius:9px;padding:12px;
+        margin-top:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+        gap:9px;transition:background var(--d1) var(--ez),transform var(--d1) var(--ez)}
+  .save:hover:not(:disabled){background:#175434}
+  .save:active:not(:disabled){transform:translateY(1px)}
+  .save:disabled{background:rgba(255,255,255,.10);color:var(--rail-4ink);cursor:not-allowed}
+  .save:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+        border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .inspfoot{border-top:1px solid var(--rail-line);padding:13px 18px;display:flex;gap:14px;
+            flex-wrap:wrap;background:var(--rail-2)}
+  .inspfoot button{background:none;border:none;font-family:inherit;font-size:12px;
+                   line-height:16px;color:var(--rail-3ink);cursor:pointer;text-decoration:underline}
+  .inspfoot button:hover{color:#fff}
+  .inspfoot button.danger{color:#E8908A}
+  .inspfoot button.danger:hover{color:var(--red-br)}
+  .empty{margin:auto;text-align:center;padding:24px 20px}
+  .empty .ic{width:54px;height:54px;border-radius:14px;background:rgba(255,255,255,.06);
+             border:1px solid var(--rail-line);display:flex;align-items:center;
+             justify-content:center;margin:0 auto 14px}
+  .empty h5{font-size:14px;line-height:20px;font-weight:700;color:var(--rail-2ink)}
+  .empty p{font-size:12px;line-height:18px;color:var(--rail-4ink);margin-top:5px;max-width:26ch;
+           margin-left:auto;margin-right:auto}
+  .empty .tip{margin-top:16px;font-size:11px;color:var(--rail-4ink)}
+  .empty kbd{background:rgba(255,255,255,.08);border-color:var(--rail-line2);color:var(--rail-2ink)}
+
+  /* ---- skeleton ---- */
+  .sk{background:linear-gradient(90deg,var(--n100) 25%,var(--n200) 37%,var(--n100) 63%);
+      background-size:400% 100%;animation:shim 1.3s ease-in-out infinite;border-radius:6px}
+  @keyframes shim{0%{background-position:100% 50%}100%{background-position:0 50%}}
+  .sk-d{background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.11) 37%,
+        rgba(255,255,255,.05) 63%);background-size:400% 100%;
+        animation:shim 1.3s ease-in-out infinite;border-radius:7px}
+  @media (prefers-reduced-motion:reduce){ .sk,.sk-d{animation:none} }
+
+  /* ---- toast ---- */
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(70px);
+         background:var(--toast);color:#fff;border-radius:11px;padding:13px 15px;display:flex;
+         gap:13px;align-items:flex-start;box-shadow:0 12px 30px rgba(15,23,42,.32);
+         opacity:0;pointer-events:none;transition:all var(--d3) var(--ez);z-index:200;
+         width:min(400px,calc(100vw - 32px))}
+  .toast.on{opacity:1;transform:translateX(-50%);pointer-events:auto}
+  .toast .ic{width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:flex;
+             align-items:center;justify-content:center;font-size:11px;font-weight:900;
+             background:var(--green);color:#0A2416;margin-top:1px}
+  .toast .ic.warn{background:var(--amber);color:#2B1A05}
+  .toast .ic.bad{background:var(--red-br);color:#2B0907}
+  .toast .act{background:none;border:none;font-family:inherit;font-size:12px;line-height:18px;
+              font-weight:700;color:#fff;text-decoration:underline;cursor:pointer;padding:0;
+              margin-top:7px}
+  .toast .act:hover{color:var(--green)}
+  /* static gallery copies of the toast */
+  .tdemo{background:var(--toast);color:#fff;border-radius:11px;padding:13px 15px;display:flex;
+         gap:13px;align-items:flex-start;box-shadow:0 8px 20px rgba(15,23,42,.24)}
+  .tdemo .ic{width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:flex;
+             align-items:center;justify-content:center;font-size:11px;font-weight:900;
+             background:var(--green);color:#0A2416;margin-top:1px}
+  .tdemo .ic.warn{background:var(--amber);color:#2B1A05}
+  .tdemo .ic.bad{background:var(--red-br);color:#2B0907}
+  .tdemo .t1{font-size:13px;line-height:18px;font-weight:700}
+  .tdemo .t2{font-size:12px;line-height:17px;color:#8FA3C4;margin-top:2px}
+  .tdemo .act{background:none;border:none;font-family:inherit;font-size:12px;font-weight:700;
+              color:#fff;text-decoration:underline;cursor:pointer;padding:0;margin-top:7px}
+  .tdemo .x{background:none;border:none;color:#8FA3C4;font-size:15px;cursor:pointer;
+            font-family:inherit;padding:0 0 0 6px}
+  .failtog{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.09);
+           border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:6px 12px;
+           font-size:11px;color:#C3D2E8;cursor:pointer;white-space:nowrap}
+  .failtog input{accent-color:var(--red-br);cursor:pointer}
+  .toast .t1{font-size:13px;line-height:18px;font-weight:700}
+  .toast .t2{font-size:12px;line-height:17px;color:#8FA3C4;margin-top:2px}
+  .toast .x{background:none;border:none;color:#8FA3C4;font-size:15px;cursor:pointer;
+            font-family:inherit;padding:0 0 0 6px}
+
+  /* ---- state gallery ---- */
+  .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:20px}
+  .gcard{background:#fff;border:1px solid var(--n200);border-radius:12px;overflow:hidden;
+         box-shadow:var(--e1)}
+  .gh{padding:11px 14px;border-bottom:1px solid var(--n200);background:var(--n50)}
+  .gh .t{font-size:13px;line-height:18px;font-weight:700}
+  .gh .d{font-size:11px;line-height:16px;color:var(--n500);margin-top:1px}
+  .gb{padding:0}
+  .gb.dark{background:var(--rail);padding:16px}
+  .gb.pad{padding:14px}
+
+  .note{background:#fff;border:1px solid var(--n200);border-radius:12px;padding:18px 20px;
+        margin-top:18px}
+  .note h4{font-size:11px;line-height:16px;font-weight:800;letter-spacing:.06em;
+           text-transform:uppercase;color:var(--n500);margin-bottom:10px}
+  .note ul{list-style:none}
+  .note li{font-size:13px;line-height:20px;color:var(--n700);padding-left:16px;position:relative;
+           margin-bottom:7px}
+  .note li:last-child{margin-bottom:0}
+  .note li:before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;
+                  border-radius:50%;background:var(--n300)}
+  .note li b{color:var(--ink);font-weight:600}
+  @media(max-width:1180px){ .body{grid-template-columns:190px minmax(0,1fr) 310px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KitchFix Ops Hub · Service Calendar · Admin</div>
+  <h1>Admin - build spec</h1>
+  <p class="sub">The approved Direction A, finished. Every state CC has to build is rendered
+     below the live panel. <b>The panel itself is fully interactive</b> - click accounts and
+     services, use <kbd>&uarr;</kbd><kbd>&darr;</kbd> and <kbd>Enter</kbd>, edit a price and
+     try to switch away without saving, search from the bar, save to see the toast.</p>
+
+  <div class="app">
+    <div class="bar">
+      <div class="brand">Service Calendar</div>
+      <div class="vr"></div>
+      <div class="sel">CIN - AZ - Cincinnati Reds <span class="cv">&#9660;</span></div>
+      <span class="tagpill">ADMIN</span>
+      <div class="navgrp"><button>&#8249; Calendar</button></div>
+      <div class="infogrp">
+        <span>ACCOUNTS <b>11</b></span><span>SERVICES <b>82</b></span><span>SCHEDULED <b>2</b></span>
+      </div>
+      <div class="grow"></div>
+      <div class="barsearch"><input id="q" placeholder="Find a service"><span class="k">/</span></div>
+      <label class="failtog" title="Demo only - makes the next save fail">
+        <input type="checkbox" id="failmode"> force failure</label>
+      <div class="stamp"><i></i>as of 9:19 AM</div>
+    </div>
+    <div class="body">
+      <div class="accts"><div class="acctscroll" id="accts"></div>
+        <div class="acctfoot"><b>82</b> services &middot; <b>2</b> scheduled changes</div></div>
+      <div class="cat" id="cat"></div>
+      <div class="insp"><div class="inspscroll" id="insp"></div><div id="inspfoot"></div></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">
+    <span class="ic" id="tic">&#10003;</span>
+    <div style="flex:1"><div class="t1" id="tt1">Price updated</div>
+      <div class="t2" id="tt2">Breakfast at CIN - AZ is now $13.10, effective today.</div>
+      <button class="act" id="tact" style="display:none">Try again</button></div>
+    <button class="x" onclick="document.getElementById('toast').classList.remove('on')">&times;</button>
+  </div>
+
+  <div class="hr"></div>
+  <h2 class="sec">Every other state CC has to build</h2>
+
+  <div class="gal">
+
+    <div class="gcard"><div class="gh"><div class="t">Catalog loading</div>
+      <div class="d">Skeleton matching the final shape, never a spinner</div></div>
+      <div class="gb pad">
+        <div class="sk" style="height:22px;width:40%"></div>
+        <div class="sk" style="height:12px;width:26%;margin-top:8px"></div>
+        <div style="border:1px solid var(--n200);border-radius:12px;margin-top:14px;overflow:hidden">
+          <div style="background:var(--cream);padding:12px 14px;border-bottom:1px solid var(--cream-bd)">
+            <div class="sk" style="height:15px;width:34%"></div></div>
+          <div style="padding:10px 14px"><div class="sk" style="height:14px"></div></div>
+          <div style="padding:10px 14px"><div class="sk" style="height:14px"></div></div>
+          <div style="padding:10px 14px"><div class="sk" style="height:14px"></div></div>
+        </div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Catalog failed to load</div>
+      <div class="d">Says what happened, what it means, what to do</div></div>
+      <div class="gb pad">
+        <div style="background:var(--red-bg);border:1px solid var(--red-bd);border-radius:10px;
+                    padding:14px 16px">
+          <div style="font-size:14px;font-weight:800;color:var(--red)">Could not load CIN - AZ</div>
+          <div style="font-size:12px;line-height:18px;color:var(--n700);margin-top:5px">
+            Nothing was changed. The catalog is still safe.</div>
+          <button class="ghost" style="margin-top:11px">Try again</button>
+        </div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Nothing selected</div>
+      <div class="d">Rail rest state, teaches the keyboard path</div></div>
+      <div class="gb dark" style="min-height:250px;display:flex">
+        <div class="empty">
+          <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="#8CA1C2" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/>
+            <line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="14" y2="13"/></svg></div>
+          <h5>No service selected</h5>
+          <p>Pick a service to change its price, schedule a change, or archive it.</p>
+          <div class="tip"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> to move &middot; <kbd>Enter</kbd> to open</div>
+        </div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Rail loading</div>
+      <div class="d">Same skeleton discipline on the dark surface</div></div>
+      <div class="gb dark" style="min-height:250px">
+        <div class="sk-d" style="height:11px;width:30%"></div>
+        <div class="sk-d" style="height:24px;width:56%;margin-top:9px"></div>
+        <div class="sk-d" style="height:12px;width:44%;margin-top:7px"></div>
+        <div class="sk-d" style="height:80px;margin-top:16px;border-radius:11px"></div>
+        <div class="sk-d" style="height:44px;margin-top:16px;border-radius:9px"></div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Unsaved changes guard</div>
+      <div class="d">Blocks the switch in the rail, never a browser dialog</div></div>
+      <div class="gb dark" style="min-height:250px">
+        <div class="kick">Service</div>
+        <div class="ih">Breakfast</div>
+        <div class="im">CIN - AZ &middot; Minor League</div>
+        <div class="rwarn bad" style="margin-top:15px"><span>&#9888;</span>
+          <span><b>You have an unsaved price</b><br>$13.10 has not been saved. Discard it and
+            open Lunch, or go back and save.</span></div>
+        <div style="display:flex;gap:9px;margin-top:14px">
+          <button class="ghost" style="flex:1">Go back</button>
+          <button class="save" style="margin:0;flex:1;background:var(--red);font-size:13px">Discard</button>
+        </div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Saving</div>
+      <div class="d">Button owns the in-flight state; fields lock</div></div>
+      <div class="gb dark" style="min-height:250px">
+        <div class="f" style="margin-top:0"><label>New price</label>
+          <input value="13.10" disabled style="opacity:.6"></div>
+        <div class="f"><label>Effective from</label><div class="seg" style="opacity:.6">
+          <button aria-pressed="true">Today</button><button>Future</button><button>Backdate</button>
+        </div></div>
+        <button class="save" disabled><span class="spin"></span>Saving...</button>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Validation</div>
+      <div class="d">Save stays disabled until the change is real</div></div>
+      <div class="gb dark" style="min-height:250px">
+        <div class="f" style="margin-top:0">
+          <label>New price <span class="hint">must differ from $12.90</span></label>
+          <input value="12.90" class="err"></div>
+        <div class="rwarn bad"><span>&#9888;</span><span>That is the current price. Enter a
+          different one, or close the editor.</span></div>
+        <button class="save" disabled>Save price change</button>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Backdate warning</div>
+      <div class="d">Names the span and the money consequence before saving</div></div>
+      <div class="gb dark" style="min-height:250px">
+        <div class="f" style="margin-top:0"><label>Effective from</label><div class="seg">
+          <button>Today</button><button>Future</button><button aria-pressed="true">Backdate</button>
+        </div></div>
+        <div class="f"><label>Backdate to</label><input value="2026-01-01"></div>
+        <div class="rwarn"><span>&#9888;</span><span><b>233 days will recompute</b><br>
+          Weeks already billed at $12.90 become $11.00. AP is emailed with the credit owed.</span></div>
+        <button class="save" style="background:var(--amber);color:#2B1A05">Save backdated change</button>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Archived service</div>
+      <div class="d">Editing is closed; the only action is bringing it back</div></div>
+      <div class="gb dark" style="min-height:250px">
+        <div class="kick">Service</div>
+        <div class="ih">Shake</div>
+        <div class="im">CIN - KY &middot; Minor League</div>
+        <div class="cur"><div class="l">Last price</div><div class="v">$4.10</div>
+          <div class="s">archived Mar 1, 2026</div></div>
+        <div class="rwarn" style="margin-top:12px"><span>&#9888;</span>
+          <span>Archived services cannot be priced. Reactivate it first.</span></div>
+        <button class="save" style="background:rgba(255,255,255,.10)">Reactivate service</button>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Fee account</div>
+      <div class="d">The rail changes shape; per-service pricing never appears</div></div>
+      <div class="gb dark" style="min-height:250px">
+        <div class="kick">Fee schedule</div>
+        <div class="ih">Annual contract fee</div>
+        <div class="im">CIN - OH &middot; 2026 season</div>
+        <div class="cur"><div class="l">Current amount</div><div class="v">$376,686</div>
+          <div class="s">CPI escalation, effective Jan 1, 2026</div></div>
+        <div class="f"><label>New amount</label><input value="376686.00"></div>
+        <div class="f"><label>Effective from</label><input value="2027-01-01"></div>
+        <button class="save">Save fee change</button>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Empty search</div>
+      <div class="d">Names the query and offers the way out</div></div>
+      <div class="gb pad" style="text-align:center;padding:38px 20px">
+        <div style="font-size:14px;font-weight:700">No service matches "brekfast"</div>
+        <div style="font-size:12px;line-height:18px;color:var(--n500);margin-top:5px">
+          Search covers every account, not just this one.</div>
+        <button class="ghost" style="margin-top:12px">Clear search</button>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Toast - price saved</div>
+      <div class="d">Shared SC toast, bottom centre, 5s, pause on hover</div></div>
+      <div class="gb pad" style="background:var(--n100)">
+        <div class="tdemo"><span class="ic">&#10003;</span>
+          <div style="flex:1"><div class="t1">Price updated</div>
+            <div class="t2">Breakfast at CIN - AZ is now $13.10, effective today.</div></div>
+          <button class="x">&times;</button></div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Toast - backdated change</div>
+      <div class="d">Names the recompute and the AP notification</div></div>
+      <div class="gb pad" style="background:var(--n100)">
+        <div class="tdemo"><span class="ic warn">&#10003;</span>
+          <div style="flex:1"><div class="t1">Backdated price saved</div>
+            <div class="t2">233 days recomputed. AP has been emailed the $3,892.00 credit.</div></div>
+          <button class="x">&times;</button></div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Toast - save failed</div>
+      <div class="d">Says nothing changed, offers the retry</div></div>
+      <div class="gb pad" style="background:var(--n100)">
+        <div class="tdemo"><span class="ic bad">!</span>
+          <div style="flex:1"><div class="t1">Could not save the price</div>
+            <div class="t2">Nothing was changed and your entry is still here. Check your connection and try again.</div>
+            <button class="act">Try again</button></div>
+          <button class="x">&times;</button></div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Toast - archived, with undo</div>
+      <div class="d">Undo re-posts; it never just dismisses</div></div>
+      <div class="gb pad" style="background:var(--n100)">
+        <div class="tdemo"><span class="ic">&#10003;</span>
+          <div style="flex:1"><div class="t1">Shake archived</div>
+            <div class="t2">CIN - KY &middot; no longer available to enter from today.</div>
+            <button class="act">Undo</button></div>
+          <button class="x">&times;</button></div>
+      </div></div>
+
+    <div class="gcard"><div class="gh"><div class="t">Account with no catalog</div>
+      <div class="d">First-run state, not an apology</div></div>
+      <div class="gb pad" style="text-align:center;padding:34px 20px">
+        <div style="font-size:14px;font-weight:700">No services yet</div>
+        <div style="font-size:12px;line-height:18px;color:var(--n500);margin-top:5px;
+                    max-width:34ch;margin-left:auto;margin-right:auto">
+          Add a group first, then the services that sit inside it.</div>
+        <button class="ghost" style="margin-top:12px">Add the first group</button>
+      </div></div>
+
+  </div>
+
+  <div class="note">
+    <h4>Interaction spec CC builds against</h4>
+    <ul>
+      <li><b>Keyboard.</b> <kbd>&uarr;</kbd><kbd>&darr;</kbd> move through visible service rows
+        across group boundaries, <kbd>Enter</kbd> opens the selected row in the rail,
+        <kbd>Esc</kbd> clears the rail selection, <kbd>/</kbd> focuses search. The keyboard
+        cursor is a distinct navy tint, visibly different from the green selected state - one
+        is where you are, the other is what is open.</li>
+      <li><b>Unsaved-change guard.</b> Editing the price field marks the rail dirty. Selecting
+        another service, switching account, or clearing shows the guard <i>in the rail</i> -
+        never a browser confirm dialog. Discard is destructive-coloured; Go back is the safe
+        default and takes focus.</li>
+      <li><b>Save is disabled</b> until the value parses, differs from the current price, and
+        carries a reason. Disabled state explains itself in the field hint rather than being
+        silently inert.</li>
+      <li><b>Motion.</b> Rail content fades and rises 6px over 280ms on selection change; rows
+        and buttons transition backgrounds over 120ms; the toast rises over 280ms. All of it
+        zeroes under <code>prefers-reduced-motion</code> at the token layer.</li>
+      <li><b>Elevation is four tiers only:</b> cards at e1, dropdowns at e2, the app shell at
+        e3, popovers and the toast at e4. Nothing invents a fifth shadow.</li>
+      <li><b>Focus rings are visible everywhere</b> - navy on light surfaces, green on the
+        dark rail, always 2px with 2px offset. Every interactive element is a real button.</li>
+      <li><b>Toast is the shared SC toast</b> from PR-K, bottom centre, pause on hover. Not a
+        new pattern. Success dismisses at five seconds; <b>failure holds for eight</b>, because
+        a message that offers a retry has to survive long enough to be read and acted on.</li>
+      <li><b>A failed save changes nothing and keeps everything.</b> The entered value stays in
+        the field, the rail stays dirty, and the toast says so explicitly - "nothing was changed
+        and your entry is still here" - so the operator does not retype. Try again re-fires the
+        same save.</li>
+      <li><b>Symmetry.</b> The catalog column grid is fixed at 1fr / 104 / 108 / 96 so headers
+        and every row share one grid. Card header and footer carry equal 15px side padding, so
+        the cream bands line up top and bottom. The rail scrolls its content while its footer
+        actions stay pinned, so Archive never drifts up the panel on a short service.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <h4>Three decisions inside this render worth your eye</h4>
+    <ul>
+      <li><b>Fee accounts get a different rail, not a disabled one.</b> They have a real editor
+        today. The rail shows the annual amount and its effective date, and per-service pricing
+        never appears at all - which is the standing ruling that a fee account's billing is the
+        fee, not its services.</li>
+      <li><b>The backdate warning names the money</b>, not just the date span. "233 days will
+        recompute, weeks already billed become $11.00, AP is emailed with the credit owed" is
+        what the operator actually needs to know before pressing save. It is the same event
+        that produced the $3,892 credit on TBR.</li>
+      <li><b>Archived services cannot be priced at all.</b> The rail refuses and offers
+        Reactivate instead, rather than letting someone set a price on something that is not
+        running and wondering later why nothing changed.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var ACCOUNTS=[
+    {k:"CIN - AZ",n:"Cincinnati Reds",t:"per",c:13,s:1},
+    {k:"TXR - AZ",n:"Texas Rangers",t:"per",c:13,s:1},
+    {k:"TBR - FL",n:"Tampa Bay Rays",t:"per",c:20},
+    {k:"TBJ - FL",n:"Toronto Blue Jays",t:"per",c:21},
+    {k:"CIN - KY",n:"Louisville Bats",t:"per",c:5},
+    {k:"TBJ - NY",n:"Buffalo Bisons",t:"per",c:6},
+    {k:"CIN - OH",n:"Cincinnati Reds",t:"fee",c:8},
+    {k:"STL - MO",n:"St. Louis Cardinals",t:"fee",c:9},
+    {k:"STL - FL",n:"Palm Beach Cardinals",t:"fee",c:14},
+    {k:"TXR - TX - H",n:"Texas Rangers",t:"fee",c:11},
+    {k:"TXR - TX - V",n:"Rangers visitor",t:"fee",c:4}
+  ];
+  var CAT={
+    "CIN - AZ":[
+      {g:"Minor League",b:"PDC",s:"Breakfast",p:12.90,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Lunch",p:12.90,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Dinner",p:12.90,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Pre-Game Snack",p:6.45,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Coffee Service",p:511.05,e:"Jan 1, 2026",tag:"weekly"},
+      {g:"Minor League",b:"PDC",s:"Fountain Bev",p:283.92,e:"Jan 1, 2026",tag:"weekly"},
+      {g:"Major League",b:"PDC",s:"Breakfast",p:20.31,e:"Jun 16, 2026"},
+      {g:"Major League",b:"PDC",s:"Lunch",p:20.31,e:"Jun 16, 2026"},
+      {g:"Major League",b:"PDC",s:"Dinner",p:20.31,e:"Jun 16, 2026"},
+      {g:"Rehab",b:"PDC",s:"Breakfast",p:12.90,e:"Jun 16, 2026"},
+      {g:"Rehab",b:"PDC",s:"Lunch",p:12.90,e:"Jun 16, 2026"},
+      {g:"Rehab",b:"PDC",s:"Dinner",p:12.90,e:"Jun 16, 2026"},
+      {g:"Rehab",b:"PDC",s:"Continental Plus",p:6.36,e:"Jun 16, 2026"}
+    ],
+    "TXR - AZ":[
+      {g:"Minor League",b:"PDC",s:"Breakfast",p:14.29,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Lunch",p:14.29,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Dinner",p:14.29,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Continental Breakfast",p:8.44,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Pre-Game Hot Snack",p:10.93,e:"Jun 16, 2026"},
+      {g:"Minor League",b:"PDC",s:"Regular Snack",p:5.89,e:"Jun 16, 2026",sch:"$6.10 on Sep 1"},
+      {g:"Minor League",b:"PDC",s:"Extra Protein - Chicken/Pork",p:0,e:"Jan 1, 2026",tag:"unused"},
+      {g:"Major League",b:"PDC",s:"Breakfast",p:17.87,e:"Jun 16, 2026"},
+      {g:"Major League",b:"PDC",s:"Lunch",p:17.87,e:"Jun 16, 2026"},
+      {g:"Major League",b:"PDC",s:"Dinner",p:17.87,e:"Jun 16, 2026"}
+    ],
+    "TBR - FL":[
+      {g:"Minor League",b:"PDC",s:"Breakfast",p:11.75,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"PDC",s:"Lunch",p:11.75,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"PDC",s:"Dinner",p:11.75,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"PDC",s:"Road Sandwiches",p:11.00,e:"Jan 1, 2026",sch:"$11.50 on Oct 1"},
+      {g:"Major League",b:"PDC",s:"Breakfast",p:16.40,e:"Apr 1, 2026"}
+    ],
+    "TBJ - FL":[
+      {g:"Minor League",b:"PDC",s:"Breakfast",p:13.10,e:"Mar 1, 2026"},
+      {g:"Minor League",b:"PDC",s:"Lunch",p:13.10,e:"Mar 1, 2026"},
+      {g:"Minor League",b:"PDC",s:"Pre-Game Snack",p:6.05,e:"Mar 1, 2026"}
+    ],
+    "CIN - KY":[
+      {g:"Minor League",b:"AAA",s:"Breakfast",p:12.40,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"AAA",s:"Lunch",p:12.40,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"AAA",s:"Dinner",p:12.40,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"AAA",s:"Snack",p:5.20,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"AAA",s:"Shake",p:4.10,e:"Mar 1, 2026",arc:true}
+    ],
+    "TBJ - NY":[
+      {g:"Minor League",b:"AAA",s:"Breakfast",p:12.60,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"AAA",s:"Lunch",p:12.60,e:"Apr 1, 2026"},
+      {g:"Minor League",b:"AAA",s:"Stadium Staff Meals",p:9.75,e:"Apr 1, 2026"}
+    ]
+  };
+  var FEE={"CIN - OH":376686,"STL - MO":473000,"STL - FL":1400000,"TXR - TX - H":604032,"TXR - TX - V":0};
+  ["CIN - OH","STL - MO","STL - FL","TXR - TX - H","TXR - TX - V"].forEach(function(k){
+    CAT[k]=[{g:"Fee schedule",b:"FEE",s:"Annual contract fee",p:FEE[k],e:"Jan 1, 2026",fee:true}];
+  });
+
+  var cur="CIN - AZ", sel=null, kb=-1, dirty=false, pending=null, q="";
+  function money(n){ return "$"+Number(n).toFixed(2); }
+  function big(n){ return "$"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0}); }
+  function visible(){
+    var it=CAT[cur]||[];
+    if(!q) return it;
+    return it.filter(function(i){ return (i.s+" "+i.g).toLowerCase().indexOf(q.toLowerCase())>=0; });
+  }
+
+  function rail(){
+    var h="";
+    ["per","fee"].forEach(function(t){
+      h+='<div class="agrp">'+(t==="per"?"Per-meal":"Fee")+'</div>';
+      ACCOUNTS.filter(function(a){return a.t===t;}).forEach(function(a){
+        h+='<div class="acct" tabindex="0" data-k="'+a.k+'" aria-current="'+(a.k===cur)+'">'+
+           '<span class="k">'+a.k+'</span>'+(a.s?'<span class="dot" title="scheduled"></span>':'')+
+           '<span class="c">'+a.c+'</span></div>';
+      });
+    });
+    document.getElementById("accts").innerHTML=h;
+    document.querySelectorAll("#accts .acct").forEach(function(el){
+      el.onclick=function(){ tryGo(function(){ cur=el.dataset.k; sel=null; kb=-1; draw(); }); };
+    });
+  }
+
+  function cat(){
+    var a=ACCOUNTS.find(function(x){return x.k===cur;});
+    var items=visible();
+    var box=document.getElementById("cat");
+    var gs=[]; items.forEach(function(i){ if(gs.indexOf(i.g)<0) gs.push(i.g); });
+    var sch=items.filter(function(i){return i.sch;}).length;
+    var h='<div class="cathd"><h2>'+cur+'</h2><span class="nm">'+a.n+'</span>'+
+      '<span class="catbadge">'+(a.t==="fee"?"FEE ACCOUNT":"PER-MEAL")+'</span></div>'+
+      '<div class="catsub">'+items.length+' service'+(items.length===1?"":"s")+' in '+gs.length+
+      ' group'+(gs.length===1?"":"s")+(sch?' &middot; '+sch+' scheduled':"")+
+      (q?' &middot; filtered by "'+q+'"':"")+'</div>';
+    if(!items.length){
+      h+='<div style="text-align:center;padding:40px 20px;background:#fff;border:1px solid var(--n200);border-radius:12px">'+
+         '<div style="font-size:14px;font-weight:700">No service matches "'+q+'"</div>'+
+         '<div style="font-size:12px;color:var(--n500);margin-top:5px">Search covers this account\'s catalog.</div>'+
+         '<button class="ghost" style="margin-top:12px" id="clr">Clear search</button></div>';
+      box.innerHTML=h;
+      var c=document.getElementById("clr"); if(c) c.onclick=function(){ q=""; document.getElementById("q").value=""; draw(); };
+      return;
+    }
+    var idx=0;
+    gs.forEach(function(g){
+      var rows=items.filter(function(i){return i.g===g;});
+      var gsch=rows.filter(function(i){return i.sch;}).length;
+      h+='<div class="card"><div class="cardhd"><h3>'+g+'</h3><span class="b">'+rows[0].b+'</span>'+
+         '<span class="grow"></span><button class="ghost">Add service</button></div>'+
+         '<div class="colhd"><span>Service</span><span class="r">Price</span>'+
+         '<span class="r">Effective</span><span class="r">Status</span></div>';
+      rows.forEach(function(i){
+        var id=g+"|"+i.s, myIdx=idx++;
+        var st=i.arc?'<span class="badge arc">Archived</span>':
+               i.sch?'<span class="badge sch">Scheduled</span>':
+               '<span class="badge ok">Active</span>';
+        h+='<div class="srow'+(i.arc?" arc":"")+'" data-id="'+id+'" data-i="'+myIdx+'" '+
+           'aria-current="'+(sel===id)+'" data-kb="'+(kb===myIdx)+'">'+
+           '<span class="nm">'+i.s+(i.tag?'<em>'+i.tag+'</em>':'')+'</span>'+
+           '<span class="pr">'+(i.fee?big(i.p):money(i.p))+'</span>'+
+           '<span class="ef">'+i.e+'</span><span class="st">'+st+'</span></div>';
+      });
+      h+='<div class="cardft"><span><b>'+rows.length+'</b> service'+(rows.length===1?"":"s")+'</span>'+
+         '<span>'+(gsch?'<b>'+gsch+'</b> scheduled':'')+'</span></div></div>';
+    });
+    h+='<button class="addgrp">+ Add group</button>';
+    box.innerHTML=h;
+    document.querySelectorAll("#cat .srow").forEach(function(el){
+      el.onclick=function(){ tryGo(function(){ sel=el.dataset.id; kb=+el.dataset.i; draw(); }); };
+    });
+  }
+
+  function tryGo(fn){
+    if(dirty){ pending=fn; drawGuard(); return; }
+    fn();
+  }
+  function drawGuard(){
+    var box=document.getElementById("insp");
+    box.innerHTML='<div class="fadein"><div class="kick">Unsaved change</div>'+
+      '<div class="ih">Hold on</div>'+
+      '<div class="rwarn bad" style="margin-top:15px"><span>&#9888;</span>'+
+      '<span><b>You have an unsaved price</b><br>It has not been saved yet. Discard it and move on, or go back and save.</span></div>'+
+      '<div style="display:flex;gap:9px;margin-top:14px">'+
+      '<button class="ghost" style="flex:1" id="gback">Go back</button>'+
+      '<button class="save" style="margin:0;flex:1;background:var(--red);font-size:13px" id="gdisc">Discard</button></div></div>';
+    document.getElementById("inspfoot").innerHTML="";
+    document.getElementById("gback").onclick=function(){ pending=null; drawInsp(); };
+    document.getElementById("gdisc").onclick=function(){ dirty=false; var f=pending; pending=null; if(f) f(); };
+    document.getElementById("gback").focus();
+  }
+
+  function drawInsp(){
+    var box=document.getElementById("insp"), foot=document.getElementById("inspfoot");
+    if(!sel){
+      box.innerHTML='<div class="empty fadein"><div class="ic">'+
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8CA1C2" stroke-width="1.6">'+
+        '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/>'+
+        '<line x1="7" y1="13" x2="14" y2="13"/></svg></div>'+
+        '<h5>No service selected</h5><p>Pick a service to change its price, schedule a change, or archive it.</p>'+
+        '<div class="tip"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> to move &middot; <kbd>Enter</kbd> to open</div></div>';
+      foot.innerHTML=""; return;
+    }
+    var p=sel.split("|");
+    var i=(CAT[cur]||[]).find(function(x){return x.g===p[0]&&x.s===p[1];});
+    if(!i){ box.innerHTML=""; foot.innerHTML=""; return; }
+
+    if(i.fee){
+      box.innerHTML='<div class="fadein"><div class="kick">Fee schedule</div>'+
+        '<div class="ih">Annual contract fee</div><div class="im">'+cur+' &middot; 2026 season</div>'+
+        '<div class="cur"><div class="l">Current amount</div><div class="v">'+
+        (i.p?big(i.p):"Covered by TXR - TX - H")+'</div><div class="s">effective '+i.e+'</div></div>'+
+        '<div class="f"><label>New amount</label><input value="'+Number(i.p).toFixed(2)+'" id="pv"></div>'+
+        '<div class="f"><label>Effective from</label><input value="2027-01-01"></div>'+
+        '<div class="f"><label>Reason</label><input placeholder="Contract renewal"></div>'+
+        '<button class="save" id="sv">Save fee change</button></div>';
+      foot.innerHTML='<div class="inspfoot"><button>Labor budgets</button><button>Fee history</button></div>';
+      wire(i); return;
+    }
+    if(i.arc){
+      box.innerHTML='<div class="fadein"><div class="kick">Service</div><div class="ih">'+i.s+'</div>'+
+        '<div class="im">'+cur+' &middot; '+i.g+'</div>'+
+        '<div class="cur"><div class="l">Last price</div><div class="v">'+money(i.p)+'</div>'+
+        '<div class="s">archived '+i.e+'</div></div>'+
+        '<div class="rwarn" style="margin-top:12px"><span>&#9888;</span>'+
+        '<span>Archived services cannot be priced. Reactivate it first.</span></div>'+
+        '<button class="save" style="background:rgba(255,255,255,.10)">Reactivate service</button></div>';
+      foot.innerHTML='<div class="inspfoot"><button>View history</button></div>'; return;
+    }
+    box.innerHTML='<div class="fadein"><div class="kick">Service</div><div class="ih">'+i.s+'</div>'+
+      '<div class="im">'+cur+' &middot; '+i.g+'</div>'+
+      '<div class="cur"><div class="l">Current price</div><div class="v">'+money(i.p)+'</div>'+
+      '<div class="s">effective '+i.e+'</div></div>'+
+      (i.sch?'<div class="rwarn"><span>&#9888;</span><span><b>Change already scheduled</b><br>'+
+        i.sch+'. Saving here replaces it.</span></div>':'')+
+      '<div class="f"><label>New price <span class="hint" id="hint">must differ from '+money(i.p)+'</span></label>'+
+      '<input value="'+Number(i.p).toFixed(2)+'" id="pv"></div>'+
+      '<div class="f"><label>Effective from</label><div class="seg" id="seg">'+
+      '<button aria-pressed="true">Today</button><button>Future</button><button>Backdate</button></div></div>'+
+      '<div class="f"><label>Reason</label><input placeholder="Contract amendment" id="rs"></div>'+
+      '<button class="save" id="sv" disabled>Save price change</button></div>';
+    foot.innerHTML='<div class="inspfoot"><button>Schedule archive</button>'+
+      '<button class="danger">Archive now</button></div>';
+    wire(i);
+  }
+
+  function wire(i){
+    var pv=document.getElementById("pv"), sv=document.getElementById("sv"),
+        rs=document.getElementById("rs"), hint=document.getElementById("hint");
+    if(!pv||!sv) return;
+    function check(){
+      var v=parseFloat(pv.value);
+      var ok=!isNaN(v)&&v>=0&&Math.abs(v-i.p)>0.001;
+      dirty=Math.abs((parseFloat(pv.value)||0)-i.p)>0.001;
+      pv.classList.toggle("err", pv.value!=="" && !ok);
+      if(hint) hint.textContent = ok ? "ready to save" : "must differ from "+money(i.p);
+      sv.disabled=!ok;
+    }
+    pv.addEventListener("input",check); check();
+    if(rs) rs.addEventListener("input",function(){ dirty=true; });
+    var seg=document.getElementById("seg");
+    if(seg) seg.querySelectorAll("button").forEach(function(b){
+      b.onclick=function(){ seg.querySelectorAll("button").forEach(function(x){x.setAttribute("aria-pressed","false");});
+        b.setAttribute("aria-pressed","true"); dirty=true; };
+    });
+    sv.onclick=function(){
+      if(sv.disabled) return;
+      var label=sv.textContent;
+      sv.disabled=true; sv.innerHTML='<span class="spin"></span>Saving...';
+      var willFail=document.getElementById("failmode").checked;
+      setTimeout(function(){
+        if(willFail){
+          // failure: nothing is written, the entry stays, the rail stays dirty
+          sv.disabled=false; sv.textContent=label;
+          toast("bad","Could not save the price",
+                "Nothing was changed and your entry is still here. Check your connection and try again.",
+                "Try again", function(){ sv.click(); });
+          return;
+        }
+        var nv=parseFloat(pv.value); i.p=nv; dirty=false;
+        toast("ok","Price updated", i.s+" at "+cur+" is now "+money(nv)+", effective today.");
+        draw();
+      },900);
+    };
+  }
+
+  var toastTimer=null;
+  function toast(kind,t1,t2,actLabel,actFn){
+    var el=document.getElementById("toast"),
+        ic=document.getElementById("tic"), act=document.getElementById("tact");
+    ic.className="ic"+(kind==="bad"?" bad":kind==="warn"?" warn":"");
+    ic.innerHTML = kind==="bad" ? "!" : "&#10003;";
+    document.getElementById("tt1").textContent=t1;
+    document.getElementById("tt2").textContent=t2;
+    if(actLabel){ act.style.display=""; act.textContent=actLabel;
+      act.onclick=function(){ el.classList.remove("on"); if(actFn) actFn(); }; }
+    else act.style.display="none";
+    el.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){ el.classList.remove("on"); }, kind==="bad"?8000:5000);
+    el.onmouseenter=function(){ clearTimeout(toastTimer); };
+    el.onmouseleave=function(){ toastTimer=setTimeout(function(){ el.classList.remove("on"); },2500); };
+  }
+
+  function draw(){ rail(); cat(); drawInsp(); }
+
+  document.getElementById("q").addEventListener("input",function(e){ q=e.target.value; kb=-1; cat(); });
+  document.addEventListener("keydown",function(e){
+    if(e.key==="/" && document.activeElement.tagName!=="INPUT"){ e.preventDefault(); document.getElementById("q").focus(); return; }
+    if(document.activeElement.tagName==="INPUT") return;
+    var rows=document.querySelectorAll("#cat .srow");
+    if(!rows.length) return;
+    if(e.key==="ArrowDown"){ e.preventDefault(); kb=Math.min(rows.length-1,kb+1); cat(); scrollKb(); }
+    if(e.key==="ArrowUp"){ e.preventDefault(); kb=Math.max(0,kb-1); cat(); scrollKb(); }
+    if(e.key==="Enter"&&kb>=0){ e.preventDefault(); var el=document.querySelector('#cat .srow[data-i="'+kb+'"]'); if(el) el.click(); }
+    if(e.key==="Escape"){ tryGo(function(){ sel=null; draw(); }); }
+  });
+  function scrollKb(){ var el=document.querySelector('#cat .srow[data-kb="true"]');
+    if(el) el.scrollIntoView({block:"nearest"}); }
+
+  draw();
+})();
+</script>
+</body>
+</html>
