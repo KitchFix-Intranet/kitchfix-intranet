@@ -748,7 +748,17 @@
    the panel's own border tone. */
 .scav-warn.bad b { color: var(--sc2-accent-red-bright); }
 .scav-f { margin-top: var(--sc2-space-4); }
-.scav-f label {
+/* PR-N R6 (Kevin 2026-08-21): the eyebrow field-label rule is now
+   opt-in via `.scav-label` (a class), not tag-based on `<label>`.
+   The previous `.scav-f label` selector (specificity 0,1,1) silently
+   captured any `<label>` at any depth inside `.scav-f` - which is
+   how `.scav-credit-card` radio wrappers got uppercased/tracked/
+   flexed in R4. Converting to an opt-in class + direct-child
+   combinator (`.scav-f > .scav-label`) closes the trap at the
+   source: a new `<label>` added anywhere below `.scav-f` no
+   longer inherits the eyebrow treatment unless the author asks
+   for it. */
+.scav-f > .scav-label {
   display: flex;
   justify-content: space-between;
   font-size: var(--sc2-size-micro);
@@ -758,12 +768,17 @@
   color: var(--sc2-rail-text-muted);
   margin-bottom: var(--sc2-space-2);
 }
-.scav-f label .hint {
-  color: var(--sc2-rail-text-subtle);
-  font-weight: var(--sc2-wt-semibold);
-  letter-spacing: 0;
+/* Hint sits inside the eyebrow label. R6: stepped down to 11px
+   regular in --rail-3ink so it reads as a hint rather than
+   competing with the eyebrow label beside it (previously 14px
+   semibold in --rail-4ink outweighed the 11px display-weight
+   label despite the label being uppercase). */
+.scav-f > .scav-label .hint {
+  color: var(--sc2-rail-text-muted);
+  font-weight: var(--sc2-wt-regular);
+  letter-spacing: normal;
   text-transform: none;
-  font-size: var(--sc2-size-body);
+  font-size: var(--sc2-size-micro);
 }
 /* PR-N audit R2 E1 + E4 + E7 (Kevin ruling 2026-08-21):
    - E1: inputs get a lighter fill than the panel plus --shadow-inset-input

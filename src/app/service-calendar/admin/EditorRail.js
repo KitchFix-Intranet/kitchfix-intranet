@@ -402,7 +402,7 @@ function RailService({
           )}
 
           <div className="scav-f">
-            <label htmlFor={`np-${service.id}`}>
+            <label className="scav-label" htmlFor={`np-${service.id}`}>
               New price <span className="hint">{hintText}</span>
             </label>
             <input
@@ -418,7 +418,7 @@ function RailService({
           </div>
 
           <div className="scav-f">
-            <label>Effective from</label>
+            <label className="scav-label">Effective from</label>
             <div className="scav-seg" role="group">
               <button
                 type="button"
@@ -478,7 +478,7 @@ function RailService({
           </div>
 
           <div className="scav-f">
-            <label htmlFor={`rs-${service.id}`}>
+            <label className="scav-label" htmlFor={`rs-${service.id}`}>
               Reason <span className="hint">
                 {/* PR-N R4 item 2 (Kevin 2026-08-21): "say why" moves
                     out of the No-credit option and into THIS hint
@@ -500,7 +500,7 @@ function RailService({
           </div>
 
           <div className="scav-f">
-            <label htmlFor={`rq-${service.id}`}>
+            <label className="scav-label" htmlFor={`rq-${service.id}`}>
               Requested by <span className="hint">optional</span>
             </label>
             <input
@@ -527,7 +527,7 @@ function RailService({
           {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
             <>
               <div className="scav-f" data-credit-choice="1">
-                <label>
+                <label className="scav-label">
                   Credit decision <span className="hint">required, no default</span>
                 </label>
                 <div
@@ -794,7 +794,7 @@ function RailFee({
           {!isBundled && (
             <>
               <div className="scav-f">
-                <label htmlFor={`fa-${accountKey}`}>
+                <label className="scav-label" htmlFor={`fa-${accountKey}`}>
                   New amount <span className="hint">{hintText}</span>
                 </label>
                 <input
@@ -810,7 +810,7 @@ function RailFee({
               </div>
 
               <div className="scav-f">
-                <label>Effective from</label>
+                <label className="scav-label">Effective from</label>
                 <div className="scav-seg" role="group">
                   <button type="button" aria-pressed={effMode === "today"} onClick={() => { setEffMode("today"); setTouched(true); }} disabled={saving}>Today</button>
                   <button type="button" aria-pressed={effMode === "future"} onClick={() => { setEffMode("future"); setTouched(true); }} disabled={saving}>Future</button>
@@ -835,7 +835,7 @@ function RailFee({
               </div>
 
               <div className="scav-f">
-                <label htmlFor={`frs-${accountKey}`}>
+                <label className="scav-label" htmlFor={`frs-${accountKey}`}>
                   Reason <span className="hint">required</span>
                 </label>
                 <textarea id={`frs-${accountKey}`} value={reason} disabled={saving}
@@ -844,7 +844,7 @@ function RailFee({
               </div>
 
               <div className="scav-f">
-                <label htmlFor={`frq-${accountKey}`}>
+                <label className="scav-label" htmlFor={`frq-${accountKey}`}>
                   Requested by <span className="hint">optional</span>
                 </label>
                 <input id={`frq-${accountKey}`} type="text" value={requestedBy} disabled={saving}
@@ -991,7 +991,7 @@ function RailArchiveService({ accountKey, service, initialMode, onSaved, onCance
           </div>
 
           <div className="scav-f">
-            <label>Effective from</label>
+            <label className="scav-label">Effective from</label>
             <div className="scav-seg" role="group">
               <button type="button" aria-pressed={mode === "today"} onClick={() => setMode("today")} disabled={saving}>Today</button>
               <button type="button" aria-pressed={mode === "future"} onClick={() => setMode("future")} disabled={saving}>Future</button>
@@ -1016,7 +1016,7 @@ function RailArchiveService({ accountKey, service, initialMode, onSaved, onCance
           </div>
 
           <div className="scav-f">
-            <label htmlFor={`arcrs-${service.id}`}>
+            <label className="scav-label" htmlFor={`arcrs-${service.id}`}>
               Reason <span className="hint">required</span>
             </label>
             <textarea id={`arcrs-${service.id}`} value={reason} disabled={saving}
@@ -1025,7 +1025,7 @@ function RailArchiveService({ accountKey, service, initialMode, onSaved, onCance
           </div>
 
           <div className="scav-f">
-            <label htmlFor={`arcrq-${service.id}`}>
+            <label className="scav-label" htmlFor={`arcrq-${service.id}`}>
               Requested by <span className="hint">optional</span>
             </label>
             <input id={`arcrq-${service.id}`} type="text" value={requestedBy} disabled={saving}
@@ -1138,7 +1138,7 @@ function RailArchived({
           </div>
 
           <div className="scav-f">
-            <label htmlFor={`rea-${service.id}`}>
+            <label className="scav-label" htmlFor={`rea-${service.id}`}>
               Reason <span className="hint">required</span>
             </label>
             <textarea id={`rea-${service.id}`} value={reason} disabled={saving}
@@ -1147,7 +1147,7 @@ function RailArchived({
           </div>
 
           <div className="scav-f">
-            <label htmlFor={`rearq-${service.id}`}>
+            <label className="scav-label" htmlFor={`rearq-${service.id}`}>
               Requested by <span className="hint">optional</span>
             </label>
             <input id={`rearq-${service.id}`} type="text" value={requestedBy} disabled={saving}
