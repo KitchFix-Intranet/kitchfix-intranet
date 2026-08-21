@@ -107,8 +107,13 @@ export default function CatalogPane({
 
       {q && totalVisible === 0 ? (
         <div className="scav-cat-empty">
-          <div className="t">No service matches &ldquo;{search}&rdquo;</div>
-          <div className="d">Search covers this account&apos;s catalog.</div>
+          {/* PR-N (2026-08-21): copy MUST match the build's actual
+              scope. Cross-account search is deferred behind a new
+              endpoint (see docs/backlog/CROSS_ACCOUNT_ADMIN_SEARCH.md).
+              A screen promising cross-account search that does not do
+              it is worse than one that does not promise it. */}
+          <div className="t">No service matches &ldquo;{search}&rdquo; in this account&apos;s catalog</div>
+          <div className="d">Clear the search to see the full catalog, or pick a different account from the rail.</div>
           <button type="button" className="scav-ghost" style={{ marginTop: "var(--sc2-space-3)" }} onClick={onClearSearch}>
             Clear search
           </button>
