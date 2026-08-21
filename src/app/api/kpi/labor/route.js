@@ -446,10 +446,18 @@ export async function GET(request) {
 
       // Per-stand actual (myriadth accumulator, cent-rounded per stand -
       // same discipline the bank uses per owner ruling 2026-08-21).
+      // actual is null for pre_floor AND for stands whose game_end
+      // has not yet passed today - both classes have no attributable
+      // actual (pre_floor lacks daily rows before 04/20; future
+      // stands have not been played yet). Matches the bank's own
+      // finished-vs-remaining discrimination so client "actual" state
+      // and the bank agree on which stands are complete.
       const actMap = actualsByStand(allHomestands, dailyRows);
       allHomestands = allHomestands.map(h => ({
         ...h,
-        actual: h.pre_floor ? null : Math.round((actMap.get(h.game_start) || 0) / 100) / 100,
+        actual: (h.pre_floor || h.game_end > today)
+          ? null
+          : Math.round((actMap.get(h.game_start) || 0) / 100) / 100,
       }));
       // Season-to-date bank - fixed truth per owner reminder #3, does
       // NOT change with selection. Included on every MLB request so

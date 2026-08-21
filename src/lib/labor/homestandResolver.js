@@ -359,6 +359,8 @@ export function computeSplitWithGameDates(actualsDaily, stand, gameDates) {
 export function computeHomestandBank(homestands, actualX10000ByGameStart, todayIso) {
   let budgetCents = 0;
   let spentCents  = 0;
+  let remainingBudgetCents = 0;
+  let standsFinished = 0;
   let standsRemaining = 0;
   for (const h of homestands) {
     if (h.pre_floor) continue;
@@ -366,17 +368,27 @@ export function computeHomestandBank(homestands, actualX10000ByGameStart, todayI
       budgetCents += Math.round((h.budget || 0) * 100);              // per-stand rounded
       const x10000 = actualX10000ByGameStart.get(h.game_start) || 0;
       spentCents  += Math.round(x10000 / 100);                       // per-stand rounded
+      standsFinished++;
     } else {
       standsRemaining++;
+      remainingBudgetCents += Math.round((h.budget || 0) * 100);
     }
   }
   const bankCents = budgetCents - spentCents;
   const bankShareCents = standsRemaining > 0 ? Math.round(bankCents / standsRemaining) : 0;
+  // Owner ruling 2026-08-21: any figure the server computes must be
+  // read on the client, never re-derived. The season-to-date card's
+  // "9 finished / 2 remaining / $15,018.09 budgeted" trio all comes
+  // from this return so the client cannot count pre-floor stands or
+  // count future stands as finished. Same discrimination the bank
+  // itself uses (pre_floor excluded, game_end < today = finished).
   return {
     budget_to_date:  budgetCents / 100,
     spent_to_date:   spentCents  / 100,
     bank:            bankCents   / 100,
+    stands_finished:  standsFinished,
     stands_remaining: standsRemaining,
+    remaining_budget: remainingBudgetCents / 100,
     bank_share:      bankShareCents / 100,
   };
 }
