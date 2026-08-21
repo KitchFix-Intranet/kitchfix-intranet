@@ -10,7 +10,6 @@
 // shapes to existing endpoints unchanged.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import AdminCommandBar from "./AdminCommandBar";
 import AccountsRail from "./AccountsRail";
 import CatalogPane from "./CatalogPane";
 import EditorRail from "./EditorRail";
@@ -235,13 +234,18 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
   }, [runOrGuard, onViewChange]);
 
   const handleSelectService = useCallback((serviceId, { service } = {}) => {
+    // PR-N audit P1-5 (2026-08-21): keyboard cursor and mouse
+    // selection are DISTINCT states per spec (green = what is open;
+    // navy = where the keyboard cursor is). Do NOT auto-move the
+    // kb cursor to the clicked row - that collapses the two states
+    // into one and the navy [data-kb] rule then masks the green
+    // [aria-current] rule via CSS cascade order. Keyboard cursor
+    // moves only via arrow keys.
     runOrGuard(`open ${service?.serviceName || "this service"}`, () => {
       setSelectedServiceId(serviceId);
       setLaborRailOpen(false);
-      const idx = visibleServiceIds.indexOf(serviceId);
-      if (idx >= 0) setKbFocusIdx(idx);
     });
-  }, [runOrGuard, visibleServiceIds]);
+  }, [runOrGuard]);
 
   const handleGuardBack = useCallback(() => {
     setGuardPending(null);
@@ -315,13 +319,6 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
     setBootReloadKey((k) => k + 1);
   }, []);
 
-  // ─────────────── back to calendar ───────────────
-  const handleBackToCalendar = useCallback(() => {
-    runOrGuard("return to the calendar", () => {
-      onViewChange?.({ mode: "overview" });
-    });
-  }, [runOrGuard, onViewChange]);
-
   // ─────────────── render ───────────────
   const activeAccountLevel = activeAccount?.level || activeAccount?.category || "";
   const activeAccountBillingModel = activeAccount?.billingModel || null;
@@ -347,17 +344,13 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
 
   return (
     <div className="scav" role="application" aria-label="SC Admin">
-      <AdminCommandBar
-        activeAccountKey={activeAccountKey}
-        activeAccountName={activeAccount?.name}
-        totalAccounts={accounts.length}
-        totalServices={totalServices}
-        totalScheduled={totalScheduled}
-        search={search}
-        onSearchChange={setSearch}
-        onBackToCalendar={handleBackToCalendar}
-        searchInputRef={searchInputRef}
-      />
+      {/* PR-N audit P0-1 fix (2026-08-21): inner command bar deleted.
+          The calendar shell already carries product name, admin mode
+          chip, account context (via the highlighted accounts-rail
+          row), freshness stamp, and back arrow. Two command bars
+          stacked read as a widget inside a widget. Search moved to
+          the catalog header where it is anchored to the thing it
+          filters. Counts moved to the accounts-rail footer only. */}
       <AccountsRail
         accounts={accounts}
         activeAccountKey={activeAccountKey}
@@ -377,9 +370,20 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
                 onClick={() => setBootReloadKey((k) => k + 1)}>Try again</button>
             </div>
           ) : (
-            <div className="scav-cat-empty">
+            /* PR-N audit P2-10 (2026-08-21): overview empty state
+               gets the same treatment as the rail's empty state -
+               icon + heading + one-line + tip. */
+            <div className="scav-cat-empty scav-cat-empty--overview">
+              <div className="scav-cat-empty-ic" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <line x1="8" y1="4" x2="8" y2="20" />
+                </svg>
+              </div>
               <div className="t">Pick an account</div>
-              <div className="d">Choose an account on the left to view its catalog.</div>
+              <div className="d">Choose an account on the left to view its catalog, edit prices, add or archive services.</div>
+              <div className="tip">{accounts.length} account{accounts.length === 1 ? "" : "s"} available</div>
             </div>
           )}
         </div>
@@ -395,7 +399,9 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
           error={catalogError}
           onRetry={() => setCatReloadKey((k) => k + 1)}
           search={search}
+          onSearchChange={setSearch}
           onClearSearch={() => setSearch("")}
+          searchInputRef={searchInputRef}
           selectedServiceId={selectedServiceId}
           kbFocusServiceId={kbFocusServiceId}
           onSelectService={handleSelectService}

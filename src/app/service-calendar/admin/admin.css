@@ -9,7 +9,10 @@
   display: grid;
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--insp-w);
   min-height: 660px;
-  background: var(--sc2-surface-app);
+  /* PR-N audit P0-2 (2026-08-21): background swapped from
+     --sc2-surface-app (warm cream) to --sc2-canvas (page grey the
+     calendar uses). Cream is a card accent, not a page canvas. */
+  background: var(--sc2-canvas);
   border-radius: var(--sc2-radius-container);
   overflow: hidden;
   box-shadow: var(--sc2-el-widget);
@@ -255,8 +258,50 @@
 .scav-cat-sub {
   font-size: var(--sc2-size-body);
   color: var(--sc2-ink-muted);
-  margin-bottom: var(--sc2-space-4);
   font-variant-numeric: var(--num-tabular);
+}
+/* PR-N audit P0-1 (2026-08-21): search moved from the retired
+   inner command bar into the catalog header. Anchored to the thing
+   it filters. */
+.scav-cat-sub-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-3);
+  margin-bottom: var(--sc2-space-4);
+}
+.scav-cat-search {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sc2-space-2);
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--sc2-line-2);
+  border-radius: var(--sc2-radius-control);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  min-width: 240px;
+  transition: border-color var(--motion-control);
+}
+.scav-cat-search:focus-within {
+  border-color: var(--sc2-accent-green);
+  background: var(--sc2-surface-card);
+}
+.scav-cat-search input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--sc2-ink);
+  font-family: inherit;
+  font-size: var(--sc2-size-caption);
+  width: 100%;
+}
+.scav-cat-search input::placeholder { color: var(--sc2-ink-muted); }
+.scav-cat-search .k {
+  font-size: var(--sc2-size-micro);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink-muted);
+  border: 1px solid var(--sc2-line-2);
+  border-radius: 4px;
+  padding: 1px 5px;
 }
 .scav-group-card {
   background: var(--sc2-surface-card);
@@ -326,6 +371,14 @@
   gap: var(--sc2-space-3);
   align-items: center;
 }
+/* PR-N audit P1-6 (2026-08-21): fee accounts collapse to a 3-col
+   grid (service / effective / status). Reserving the price track
+   with an empty cell left a visible gap between service and
+   effective. */
+.scav-group-card--nodollar .scav-colhd,
+.scav-group-card--nodollar .scav-srow {
+  grid-template-columns: 1fr 108px 96px;
+}
 .scav-colhd {
   padding: var(--sc2-space-2) var(--sc2-space-4);
   border-bottom: 1px solid var(--sc2-line);
@@ -383,10 +436,20 @@
   margin-left: var(--sc2-space-2);
 }
 .scav-srow-pr {
-  font-size: var(--sc2-size-subhead);
-  font-weight: var(--sc2-wt-bold);
+  /* PR-N audit P2-12 (2026-08-21): price at body/semibold, not
+     subhead/bold. Name is what someone scans for; price is the
+     attribute. Column position already signals which is which. */
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
   text-align: right;
   font-variant-numeric: var(--num-tabular);
+}
+.scav-srow-pr--missing {
+  /* PR-N audit P2-11 + Kevin Q3 (2026-08-21): $0.00 on active
+     services is unpriced, not a real price. Muted italic. */
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-regular);
+  font-style: italic;
 }
 .scav-srow-ef {
   font-size: var(--sc2-size-body);
@@ -429,6 +492,39 @@
   font-weight: var(--sc2-wt-semibold);
 }
 .scav-group-ft b { font-variant-numeric: var(--num-tabular); }
+/* PR-N audit P1-3 + P2-9 (2026-08-21, Kevin ruling Q2): archive-group
+   is a quiet destructive text link in the card footer, right side.
+   Solves two audit items at once - the destructive action moves
+   physically away from the constructive Add service, AND the footer's
+   permanently-empty right half gets real content. */
+.scav-group-ft-archive {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-state-overdue-fg);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.scav-group-ft-archive:hover { color: var(--sc2-accent-red-deep); }
+.scav-group-ft-archive:disabled {
+  color: var(--sc2-ink-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+.scav-group-ft-reactivate {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-accent-green-deep);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
 .scav-add-group {
   width: 100%;
   font-family: inherit;
@@ -452,13 +548,17 @@
 .scav-insp {
   background: var(--sc2-rail-bg);
   color: var(--sc2-rail-text);
+  /* PR-N audit P1-7 (2026-08-21, Kevin re-ruling Q1 withdrew the
+     history panel): footer links pull up under the form for every
+     service. No dead navy field between form and footer. Rail is
+     one scroll container; empty space (if any) sits below the
+     footer at the panel bottom, not between form and footer. */
+  overflow: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .scav-insp-scroll {
-  flex: 1;
-  overflow: auto;
+  flex: 0 0 auto;
   padding: var(--sc2-space-4);
 }
 .scav-fadein {
@@ -686,6 +786,9 @@
   gap: var(--sc2-space-4);
   flex-wrap: wrap;
   background: var(--sc2-rail-card-bg);
+  /* Sits directly under the scroll container, not pinned to panel
+     bottom. See .scav-insp comment. */
+  flex: 0 0 auto;
 }
 .scav-insp-foot button {
   background: none;
@@ -805,6 +908,27 @@
   max-width: 34ch;
   margin-left: auto;
   margin-right: auto;
+}
+/* PR-N audit P2-10 (2026-08-21): overview empty state gets the same
+   shape as the rail's empty state - icon + heading + one-line + tip. */
+.scav-cat-empty--overview {
+  padding: var(--sc2-space-7) var(--sc2-space-4);
+}
+.scav-cat-empty-ic {
+  width: 54px;
+  height: 54px;
+  border-radius: var(--sc2-radius-container);
+  background: var(--sc2-cmd-band-bg);
+  color: var(--sc2-cmd-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--sc2-space-3);
+}
+.scav-cat-empty .tip {
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-ink-muted);
+  margin-top: var(--sc2-space-3);
 }
 
 /* ────── Modals (add-service, add-group, archive-group, reactivate-group) ────── */

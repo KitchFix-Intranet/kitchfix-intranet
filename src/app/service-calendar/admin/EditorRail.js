@@ -905,9 +905,14 @@ function RailArchiveService({ accountKey, service, initialMode, onSaved, onCance
               placeholder="Who asked for this?" maxLength={280} />
           </div>
 
-          <button type="button" className="scav-save scav-save--danger"
+          {/* PR-N audit P1-4 (2026-08-21): archive-now is destructive-
+              red, not amber. Amber means scheduled/caution in this
+              product; red means destructive. Schedule (future/backdate)
+              stays amber-warn because scheduling is reversible. */}
+          <button type="button"
+            className={mode === "today" ? "scav-save scav-save--danger" : "scav-save scav-save--warn"}
             disabled={!canSave} onClick={handleSave}>
-            {saving ? <><span className="scav-spin" />Archiving...</> : "Archive service"}
+            {saving ? <><span className="scav-spin" />Archiving...</> : (mode === "today" ? "Archive now" : mode === "future" ? "Schedule archive" : "Save backdated archive")}
           </button>
         </div>
       </div>

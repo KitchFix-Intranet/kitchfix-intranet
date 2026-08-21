@@ -9,22 +9,13 @@
 // only, with no Price column at all (Kevin ruling #5).
 
 import { useMemo } from "react";
+// PR-N audit P2-18 (2026-08-21): shared formatters across admin
+// (was two identical implementations). One place to change format.
+import { fmtDateHuman as fmtDate, fmtPrice, localToday } from "./railFormHelpers";
 
 const BADGE_ACTIVE = "scav-badge scav-badge--ok";
 const BADGE_SCHED = "scav-badge scav-badge--sch";
 const BADGE_ARC = "scav-badge scav-badge--arc";
-
-function fmtPrice(n) { return "$" + Number(n).toFixed(2); }
-function fmtDate(iso) {
-  if (!iso) return "";
-  const [y, m, day] = String(iso).slice(0, 10).split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${months[Number(m) - 1]} ${Number(day)}, ${y}`;
-}
-function localToday() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 function archiveStatus(activeUntil, today) {
   if (!activeUntil) return { state: "active" };
   const date = String(activeUntil).slice(0, 10);
@@ -43,7 +34,9 @@ export default function CatalogPane({
   error,
   onRetry,
   search,
+  onSearchChange,     // PR-N audit P0-1: search input moved into this pane
   onClearSearch,
+  searchInputRef,     // exposed so "/" hotkey in AdminPanel can focus
   selectedServiceId,
   kbFocusServiceId,   // for the navy keyboard cursor
   onSelectService,    // (serviceId, { groupName, kb: bool }) => void
@@ -99,10 +92,24 @@ export default function CatalogPane({
         <span className="scav-cat-name">{accountName}</span>
         <span className="scav-cat-badge">{badge}</span>
       </div>
-      <div className="scav-cat-sub">
-        {totalActual} service{totalActual === 1 ? "" : "s"} in {grpCount} group{grpCount === 1 ? "" : "s"}
-        {scheduledCount > 0 && <> &middot; {scheduledCount} scheduled</>}
-        {q && <> &middot; filtered by &ldquo;{search}&rdquo;</>}
+      <div className="scav-cat-sub-row">
+        <div className="scav-cat-sub">
+          {totalActual} service{totalActual === 1 ? "" : "s"} in {grpCount} group{grpCount === 1 ? "" : "s"}
+          {scheduledCount > 0 && <> &middot; {scheduledCount} scheduled</>}
+          {q && <> &middot; filtered by &ldquo;{search}&rdquo;</>}
+        </div>
+        <div className="scav-cat-search">
+          <input
+            ref={searchInputRef}
+            id="scav-search-input"
+            type="search"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Find a service in this account"
+            aria-label="Find a service in this account's catalog"
+          />
+          <span className="k" aria-hidden="true">/</span>
+        </div>
       </div>
 
       {q && totalVisible === 0 ? (
@@ -134,40 +141,29 @@ export default function CatalogPane({
             const activeSvcCount = (servicesByGroup.get(g.id) || []).filter((s) => archiveStatus(s.activeUntil, today).state !== "archived").length;
             const gsch = svcs.filter((s) => s.upcomingPrice != null).length;
             return (
-              <div key={g.id} className="scav-group-card">
+              <div key={g.id} className={"scav-group-card" + (feeNoDollar ? " scav-group-card--nodollar" : "")}>
                 <div className="scav-group-hd">
                   <h3>{g.groupName}</h3>
                   <span className="b">{(accountLevel || "").toUpperCase() === "PDC" ? "PDC" : accountLevel}</span>
                   <span className="scav-grow" />
-                  {grpArchived ? (
-                    <button type="button" className="scav-ghost" onClick={() => onReactivateGroup(g)}>
-                      Reactivate group
-                    </button>
-                  ) : (
-                    <>
-                      <button type="button" className="scav-ghost" onClick={() => onAddService(g)}>Add service</button>
-                      <button
-                        type="button"
-                        className="scav-ghost scav-ghost--danger"
-                        onClick={() => onArchiveGroup(g)}
-                        disabled={activeSvcCount === 0}
-                        title={activeSvcCount === 0 ? "No active services to archive" : ""}
-                      >
-                        Archive group
-                      </button>
-                    </>
+                  {/* PR-N audit P1-3 + Kevin Q2 (2026-08-21):
+                      "Archive group" moved to the card FOOTER as a
+                      quiet destructive text link. Header carries only
+                      constructive actions. */}
+                  {!grpArchived && (
+                    <button type="button" className="scav-ghost" onClick={() => onAddService(g)}>Add service</button>
                   )}
                 </div>
                 <div className="scav-colhd">
                   <span>Service</span>
                   {!feeNoDollar && <span className="r">Price</span>}
-                  {feeNoDollar && <span className="r">&nbsp;</span>}
                   <span className="r">Effective</span>
                   <span className="r">Status</span>
                 </div>
                 {svcs.map((s) => {
                   const svcStatus = archiveStatus(s.activeUntil, today);
                   const svcArchived = svcStatus.state === "archived";
+                  const priceMissing = !feeNoDollar && (!s.price || Number(s.price) === 0);
                   const st = svcArchived
                     ? <span className={BADGE_ARC}>Archived</span>
                     : s.upcomingPrice != null
@@ -190,16 +186,41 @@ export default function CatalogPane({
                         {s.isTaxFree && <em>tax-free</em>}
                         {s.isNonRevenue && <em>non-rev</em>}
                       </span>
-                      {!feeNoDollar && <span className="scav-srow-pr">{fmtPrice(s.price)}</span>}
-                      {feeNoDollar && <span className="scav-srow-pr">&nbsp;</span>}
+                      {/* PR-N audit P2-11 + Kevin Q3 (2026-08-21): a
+                          $0.00 on an active per-meal service is an
+                          unpriced row, not a real price. Render as
+                          muted "Not priced" instead of a confident
+                          $0.00. Fee accounts drop the column entirely. */}
+                      {!feeNoDollar && (
+                        <span className={"scav-srow-pr" + (priceMissing ? " scav-srow-pr--missing" : "")}>
+                          {priceMissing ? "Not priced" : fmtPrice(s.price)}
+                        </span>
+                      )}
                       <span className="scav-srow-ef">{fmtDate(s.priceSinceDate || s.activeSince || "")}</span>
                       <span className="scav-srow-st">{st}</span>
                     </button>
                   );
                 })}
                 <div className="scav-group-ft">
-                  <span><b>{svcs.length}</b> service{svcs.length === 1 ? "" : "s"}</span>
-                  <span>{gsch > 0 && <><b>{gsch}</b> scheduled</>}</span>
+                  <span>
+                    <b>{svcs.length}</b> service{svcs.length === 1 ? "" : "s"}
+                    {gsch > 0 && <> &middot; <b>{gsch}</b> scheduled</>}
+                  </span>
+                  {grpArchived ? (
+                    <button type="button" className="scav-group-ft-reactivate" onClick={() => onReactivateGroup(g)}>
+                      Reactivate group
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="scav-group-ft-archive"
+                      onClick={() => onArchiveGroup(g)}
+                      disabled={activeSvcCount === 0}
+                      title={activeSvcCount === 0 ? "No active services to archive" : ""}
+                    >
+                      Archive group
+                    </button>
+                  )}
                 </div>
               </div>
             );
