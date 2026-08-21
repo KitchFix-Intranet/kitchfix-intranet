@@ -6,15 +6,17 @@
 .scav {
   --rail-w: 240px;
   --insp-w: 340px;
-  /* PR-N audit R3 item 2 (Kevin 2026-08-21): panes REACH the shell
-     edges. Was --sc2-space-3 padding on the shell adding a frame
-     nobody asked for. Panes fill the shell width; the gap between
-     them stays as the standard gutter. */
+  /* PR-N audit R3 item 2 + R4 item 1 (Kevin 2026-08-21): panes
+     reach the shell edges; no background between them and the
+     shell. Was `background: var(--sc2-canvas)` = grey layer
+     stacked over the sc-admin-body wrap (also grey, removed
+     separately). Now transparent so panes sit directly on the
+     shell surface with their gutter and nothing behind them. */
   display: grid;
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--insp-w);
   gap: var(--sc2-space-3);
   min-height: 660px;
-  background: var(--sc2-canvas);
+  background: transparent;
   font-family: var(--sc2-font-ui);
   font-variant-numeric: var(--num-tabular);
 }
@@ -149,12 +151,11 @@
    portfolio treatment). Two-line rows with accounts.name as the
    subtitle. Selected = filled navy card, not a tint. */
 .scav-accts {
-  background: var(--sc2-canvas);
+  /* PR-N R4 item 1 (Kevin 2026-08-21): removed grey background +
+     padding on the accounts pane. The inner PER-MEAL / FEE cards
+     ARE the pane content; no wrapping colour behind them. */
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border-radius: var(--sc2-radius-container);
-  padding: var(--sc2-space-3);
   gap: var(--sc2-space-3);
 }
 .scav-accts-scroll {
@@ -925,56 +926,64 @@
   color: var(--sc2-rail-text);
 }
 
-/* PR-N audit F (Kevin ruling 2026-08-21): backdate credit-decision
-   radio group. No preselection. AP notification is Track B (K-7). */
-.scav-credit-choice {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--sc2-radius-control);
-  padding: var(--sc2-space-3);
-  background: rgba(255, 255, 255, 0.04);
-}
-.scav-credit-options {
+/* PR-N R4 item 2 (Kevin 2026-08-21): credit-decision rebuilt.
+   No outer container box - the field's own label sits directly
+   on the rail (via .scav-f), the cards stack below.
+   Each option is a full-width click-card: transparent fill,
+   --rail-line2 border, radius 9px, radio at the left, sentence-
+   case label + one-line description in --rail-3ink stacked beside
+   it. Selected takes green border + 10% green fill + green radio.
+   Hover lifts the border. Arrow keys navigate (handled in JS). */
+.scav-credit-cards {
   display: flex;
   flex-direction: column;
   gap: var(--sc2-space-2);
 }
-.scav-credit-opt {
+.scav-credit-card {
   display: flex;
-  gap: var(--sc2-space-2);
   align-items: flex-start;
+  gap: var(--sc2-space-3);
   cursor: pointer;
-  padding: var(--sc2-space-2);
+  padding: var(--sc2-space-3);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--sc2-radius-control);
-  transition: background var(--motion-control);
+  transition: border-color var(--motion-control), background var(--motion-control);
 }
-.scav-credit-opt:hover { background: rgba(255, 255, 255, 0.06); }
-.scav-credit-opt input[type="radio"] {
-  margin-top: 3px;
+.scav-credit-card:hover { border-color: rgba(255, 255, 255, 0.32); }
+.scav-credit-card--on {
+  border-color: var(--sc2-accent-green);
+  background: rgba(79, 191, 133, 0.10);
+}
+.scav-credit-card input[type="radio"] {
+  margin-top: 2px;
   accent-color: var(--sc2-accent-green);
   cursor: pointer;
+  flex-shrink: 0;
 }
-.scav-credit-opt > span {
+.scav-credit-card-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+}
+.scav-credit-card-t {
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-semibold);
   color: var(--sc2-rail-text);
-  font-size: var(--sc2-size-body);
 }
-.scav-credit-opt strong {
-  font-weight: var(--sc2-wt-bold);
-}
-.scav-credit-hint {
-  color: var(--sc2-rail-text-subtle);
-  font-size: var(--sc2-size-body);
-  font-weight: var(--sc2-wt-regular);
-}
-.scav-credit-track-b {
-  margin-top: var(--sc2-space-3);
-  padding-top: var(--sc2-space-2);
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
-  color: var(--sc2-rail-text-subtle);
+.scav-credit-card-d {
   font-size: var(--sc2-size-caption);
-  font-style: italic;
+  font-weight: var(--sc2-wt-regular);
+  color: var(--sc2-rail-text-muted);
+}
+.scav-credit-note {
+  /* Track B footnote per Kevin: 11px, --rail-4ink (mapped to
+     --sc2-rail-text-subtle), NO italics. Footnote, not aside. */
+  margin: var(--sc2-space-2) 0 0;
+  font-size: var(--sc2-size-micro);
+  color: var(--sc2-rail-text-subtle);
+  font-style: normal;
 }
 .scav-spin {
   width: 14px;
@@ -1356,7 +1365,7 @@
   gap: 2px;
 }
 /* PR-N audit R3 item 6 (Kevin 2026-08-21): one-line hint under
-   each checkbox. Same treatment as .scav-credit-hint. */
+   each checkbox. Same shape as .scav-credit-card-d. */
 .scav-checkbox-hint {
   font-size: var(--sc2-size-caption);
   color: var(--sc2-ink-muted);

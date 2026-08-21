@@ -279,12 +279,10 @@
    AdminPanel handles its own internal structure (the AccountsOverview
    rows, the per-account editor, the inline edit panels). */
 .sc-admin-body {
-  padding: var(--space-4) var(--space-3) 28px;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-container);
-}
-@media (max-width: 640px) {
-  .sc-admin-body { padding: var(--space-3) var(--space-1) var(--space-6); }
+  /* PR-N R4 item 1 (Kevin 2026-08-21): no grey layer between the
+     shell and the panes. Removed surface-sunken bg + padding +
+     border-radius so panes sit directly on the shell surface with
+     their gutter and nothing behind them. */
 }
 
 .sc-fade-in { animation: scFadeIn 0.3s ease; }
