@@ -120,7 +120,7 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
         <HsHelpPop
           id="qRail"
           title="Season by homestand"
-          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. The purple dashed line on upcoming stands is the adjusted target - original budget plus your share of the bank.</>}
+          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand.</>}
         />
       </header>
       <div className="kpi-hs-rail">
