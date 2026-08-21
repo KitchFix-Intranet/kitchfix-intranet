@@ -83,15 +83,22 @@ export async function deriveAccountBaseRates(supa, accountKey, homestands, today
   }
   const windowStart = lowOt.map(h => h.window_start).sort()[0];
   const windowEnd   = lowOt.map(h => h.window_end).sort().slice(-1)[0];
+  // Base-rate derivation sums dollars_regular ONLY - explicitly NOT
+  // amount. Amount includes overtime + double-time + premium; folding
+  // those into a "day-game base rate" is the exact double-count the
+  // low-OT stand restriction (peak <= 4) exists to prevent. Owner
+  // ruling 2026-08-21 after PR #773 v1 shipped `amount` and inflated
+  // CIN - OH day base from $806.89 to $871.82 - the +$65 that
+  // compounded through HS 1's partial-week weighting.
   const dQ = await supa.from("labor_actuals_daily")
-    .select("work_date, amount")
+    .select("work_date, dollars_regular")
     .eq("account_key", accountKey)
     .gte("work_date", windowStart)
     .lte("work_date", windowEnd);
   if (dQ.error) throw new Error(`preFloorEstimator daily read (${accountKey}): ${dQ.error.message}`);
   const dailyByDate = new Map();
   for (const r of dQ.data || []) {
-    dailyByDate.set(r.work_date, (dailyByDate.get(r.work_date) || 0) + Number(r.amount || 0));
+    dailyByDate.set(r.work_date, (dailyByDate.get(r.work_date) || 0) + Number(r.dollars_regular || 0));
   }
   const sQ = await supa.from("sc_homestand_schedule")
     .select("service_date, day_type, day_night")
@@ -105,14 +112,24 @@ export async function deriveAccountBaseRates(supa, accountKey, homestands, today
   const prepDays = new Set();
   for (const h of homestands || []) prepDays.add(addDaysIso(h.game_start, -1));
 
+  // Owner ruling 2026-08-21 (PR #773 v2): exclude zero-amount days
+  // from the base-rate sample. A game day with $0 dollars_regular is
+  // not "a game day at the base rate" - it is a game day where the
+  // payroll data has not landed yet (Rippling can lag 24h, and this
+  // was surfaced by CIN - OH 2026-08-20 = HS 11 game_end day one day
+  // before today; sample of 12 day-games included that zero and
+  // dragged the day base from the spec's $806.89 / 11 down to
+  // $739.65 / 12). Owner spec matches when the zero-amount days are
+  // filtered - "average dollars_regular on game days" implicitly
+  // means game days with recorded labor.
   const bucket = { night: [], day: [], prep: [], other: [] };
   for (const h of lowOt) {
     for (let d = h.window_start; d <= h.window_end; d = addDaysIso(d, 1)) {
       const amt = dailyByDate.get(d) || 0;
       const dn = gameByDate.get(d);
-      if (dn === "night") bucket.night.push(amt);
-      else if (dn === "day") bucket.day.push(amt);
-      else if (prepDays.has(d)) bucket.prep.push(amt);
+      if (dn === "night") { if (amt > 0) bucket.night.push(amt); }
+      else if (dn === "day") { if (amt > 0) bucket.day.push(amt); }
+      else if (prepDays.has(d)) { if (amt > 0) bucket.prep.push(amt); }
       else bucket.other.push(amt);
     }
   }
