@@ -274,7 +274,17 @@ GRANT SELECT ON v_purchasing_actuals_billcom_named TO service_role;
 -- ORDER BY privilege_type;
 -- Expected: 3 rows - DELETE, INSERT, SELECT (all for service_role).
 --
--- V7. Coverage - after the sync runs at least once. Reports how many
+-- V7. billcom_ref_vendors is populated (POST-SYNC check, not post-
+--     migration). V1-V6 all pass while the table sits empty because
+--     they check structure, grants, and view row count (view rows =
+--     purchasing_actuals billcom rows regardless of ref population -
+--     LEFT JOIN preserves the left side even when every right side is
+--     NULL). Run this AFTER the first successful sync.
+--
+-- SELECT COUNT(*) AS vendor_count FROM billcom_ref_vendors;
+-- Expected: > 0.
+--
+-- V8. Coverage - after the sync runs at least once. Reports how many
 --     billcom rows resolve to a vendor name and how many do not.
 --
 -- SELECT
@@ -283,7 +293,7 @@ GRANT SELECT ON v_purchasing_actuals_billcom_named TO service_role;
 --   COUNT(*) FILTER (WHERE vendor_name IS NULL)  AS unresolved
 -- FROM v_purchasing_actuals_billcom_named;
 --
--- V8. Re-apply is a no-op. Run this file a second time in Studio.
+-- V9. Re-apply is a no-op. Run this file a second time in Studio.
 --     CREATE ... IF NOT EXISTS + CREATE OR REPLACE VIEW + GRANT
 --     (already-granted) + REVOKE (already-not-held) all no-op.
 
