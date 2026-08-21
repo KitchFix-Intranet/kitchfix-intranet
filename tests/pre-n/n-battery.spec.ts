@@ -450,6 +450,97 @@ test('R2-F: backdate requires credit-decision; Save disabled until picked; paylo
   expect(capturedPayload?.changes?.[0]?.creditDecision).toBe('none');
 });
 
+// ────────────────────────────────────────────────────────────────
+// R3 defects on the backdate path (Kevin 2026-08-21).
+// The credit-decision block and the preview block answer two
+// different questions. Two gates. The tests hold them apart so
+// they cannot drift back into each other.
+// ────────────────────────────────────────────────────────────────
+
+test('R3-1: credit-decision block renders whenever Backdate is active (Kevin defect 1)', async ({ page }) => {
+  await openAdmin(page);
+  await selectAccountAndFirstService(page);
+
+  // Switch to Backdate mode and pick a valid backdate date. Do NOT
+  // enter a new price - price stays at current. Do NOT enter reason.
+  // The credit-decision block MUST render regardless.
+  await page.locator('.scav-insp-scroll[data-rail-variant="service"] .scav-seg button', { hasText: 'Backdate' }).click();
+
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  const backdateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dateInput = page.locator('.scav-insp-scroll[data-rail-variant="service"] input[type="date"]').first();
+  await dateInput.fill(backdateStr);
+
+  await expect(page.locator('[data-credit-choice="1"]')).toBeVisible({ timeout: 3_000 });
+});
+
+test('R3-2: preview block is ABSENT when Backdate is active but price is unchanged (Kevin defect 2)', async ({ page }) => {
+  await openAdmin(page);
+  await selectAccountAndFirstService(page);
+
+  await page.locator('.scav-insp-scroll[data-rail-variant="service"] .scav-seg button', { hasText: 'Backdate' }).click();
+
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  const backdateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dateInput = page.locator('.scav-insp-scroll[data-rail-variant="service"] input[type="date"]').first();
+  await dateInput.fill(backdateStr);
+
+  // Price stays at current. Preview block MUST NOT render.
+  await page.waitForTimeout(400);
+  const previewCount = await page.locator('[data-preview="backdate-price"]').count();
+  expect(previewCount).toBe(0);
+});
+
+test('R3-3: hint names the first blocker only (Kevin defect 3)', async ({ page }) => {
+  await openAdmin(page);
+  await selectAccountAndFirstService(page);
+
+  const priceInput = page.locator('.scav-insp-scroll[data-rail-variant="service"] input[id^="np-"]').first();
+  const orig = await priceInput.inputValue();
+
+  // Backdate mode + valid date. No price change, no credit decision,
+  // no reason - three gates closed. Hint must name the FIRST only
+  // (price), not concatenate.
+  await page.locator('.scav-insp-scroll[data-rail-variant="service"] .scav-seg button', { hasText: 'Backdate' }).click();
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  const backdateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dateInput = page.locator('.scav-insp-scroll[data-rail-variant="service"] input[type="date"]').first();
+  await dateInput.fill(backdateStr);
+  // Nudge touched so hint appears (touched is required for canSave,
+  // but hintText renders whenever the label is visible - clicking a
+  // seg button already flipped touched=true).
+
+  const hint = page.locator('.scav-insp-scroll[data-rail-variant="service"] label .hint').first();
+  const hintText = await hint.innerText();
+  // First blocker = price (unchanged from $orig). Hint should say
+  // "Enter a price different from $X.XX" and NOTHING about credit
+  // or reason.
+  expect(hintText).toContain('Enter a price different from');
+  expect(hintText).not.toContain('credit');
+  expect(hintText).not.toContain('reason');
+
+  // Now change the price so priceChanged=true. Hint's first blocker
+  // shifts to credit decision.
+  const newPrice = (Number(orig) + 0.22).toFixed(2);
+  await priceInput.fill(newPrice);
+  await page.waitForTimeout(200);
+  const hintAfterPrice = await hint.innerText();
+  expect(hintAfterPrice).toContain('credit');
+  expect(hintAfterPrice).not.toContain('reason');
+  expect(hintAfterPrice).not.toContain('Enter a price');
+
+  // Now pick a credit decision. Hint's first blocker shifts to reason.
+  await page.locator('.scav-credit-opt input[type="radio"]').first().check();
+  await page.waitForTimeout(200);
+  const hintAfterCredit = await hint.innerText();
+  expect(hintAfterCredit).toContain('reason');
+  expect(hintAfterCredit).not.toContain('credit');
+  expect(hintAfterCredit).not.toContain('Enter a price');
+});
+
 test('N10: catalog error state reachable via forced fetch failure', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.route('**/api/service-calendar?action=sc-admin-account-config**', async (route) => {

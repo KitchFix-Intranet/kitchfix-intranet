@@ -259,12 +259,17 @@ function RailService({
   }, [currentPrice, touched]);
 
   // Reactive backdate preview - same pattern as the retired PriceEditPanel.
+  // PR-N R3 defect 2 (Kevin 2026-08-21): preview requires priceChanged
+  // too. Was showing "8 days recompute · +$0.00" and "weeks become
+  // $20.30" (the current price) when price was unchanged. No delta,
+  // no preview - the block should not render at all.
   const backdateReady =
     isBackdate &&
     /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) &&
     backdateDate >= BACKDATE_FLOOR &&
     backdateDate <= yesterday &&
-    priceValid;
+    priceValid &&
+    priceChanged;
 
   const [preview, setPreview] = useState({ state: "idle", result: null });
   useEffect(() => {
@@ -300,19 +305,18 @@ function RailService({
   const backdateSpanDays = isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate)
     ? daysBetweenInclusive(backdateDate, today) : 0;
 
-  // PR-N audit R2 E3 (Kevin ruling 2026-08-21): shortened to
-  // "Same as current" so NEW PRICE stops wrapping. The
-  // current-price block above supplies the number at 30px; the
-  // hint does not need to repeat it.
-  const hintText = !newPrice
-    ? "Enter a price"
-    : !priceValid
-      ? "Not a valid number"
-      : !priceChanged
-        ? "Same as current"
-        : !reasonReady
-          ? "Add a reason"
-          : "Ready to save";
+  // PR-N R3 defect 3 (Kevin 2026-08-21): hint is an INSTRUCTION
+  // that names the first unmet gate, not a fact. When more than
+  // one gate is unmet, ONLY the first is named - never
+  // concatenate. Order (Kevin): price -> credit decision -> reason.
+  // Guarded by test R3-3.
+  const hintText = (!newPrice || !priceValid || !priceChanged)
+    ? `Enter a price different from ${fmtPrice(currentPrice)}`
+    : (isBackdate && creditDecision == null)
+      ? "Choose whether to credit the client"
+      : !reasonReady
+        ? "Add a reason"
+        : "Ready to save";
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -456,8 +460,10 @@ function RailService({
                 style={{ marginTop: "var(--sc2-space-2)" }}
               />
             )}
-            {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
-              <div className="scav-warn" role="alert">
+            {/* PR-N R3 defect 2 (Kevin 2026-08-21): preview render
+                gate matches backdateReady. No delta = no preview. */}
+            {backdateReady && (
+              <div className="scav-warn" role="alert" data-preview="backdate-price">
                 <span>&#9888;</span>
                 <BackdatePriceCopy
                   preview={preview}
@@ -502,12 +508,18 @@ function RailService({
           </div>
 
           {/* F (Kevin ruling 2026-08-21): backdate save requires an
-              explicit credit-decision. Two options, neither
-              preselected. Save disabled until picked. AP notification
-              itself is Track B (K-7) and is NOT wired in this PR - the
-              choice is recorded, nobody is emailed until Track B ships. */}
-          {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && priceValid && priceChanged && (
-            <div className="scav-f scav-credit-choice">
+              explicit credit-decision. Two options, neither preselected.
+              Save disabled until picked. AP notification itself is
+              Track B (K-7) and is NOT wired in this PR.
+              PR-N R3 defect 1 (Kevin 2026-08-21): the credit-decision
+              block renders as soon as Backdate is active with a valid
+              date - "can they act" not "is there something to show."
+              The preview block ~line 464 is the "is there something to
+              show" gate and correctly requires priceChanged. Two gates,
+              two questions. Guarded by test R3-1 so it cannot drift
+              back into "hidden until price changes." */}
+          {isBackdate && /^\d{4}-\d{2}-\d{2}$/.test(backdateDate) && backdateDate >= BACKDATE_FLOOR && backdateDate <= yesterday && (
+            <div className="scav-f scav-credit-choice" data-credit-choice="1">
               <label>
                 Credit decision <span className="hint">required, no default</span>
               </label>
@@ -659,16 +671,14 @@ function RailFee({
 
   const isMlb = MLB_LABOR_BUDGET_ACCOUNTS.has(accountKey);
 
-  // PR-N audit R2 E3: shortened per RailService pattern.
-  const hintText = !newAmount
-    ? "Enter an amount"
-    : !amountValid
-      ? "Not a valid number"
-      : !amountChanged
-        ? "Same as current"
-        : !reasonReady
-          ? "Add a reason"
-          : "Ready to save";
+  // PR-N R3 defect 3 discipline applied to fee: actionable, names
+  // the first unmet gate only. Fees have no credit-decision (F was
+  // per-service prices only per Kevin's ruling on the R3 report).
+  const hintText = (!newAmount || !amountValid || !amountChanged)
+    ? `Enter an amount different from ${fmtAmount(currentAmount)}`
+    : !reasonReady
+      ? "Add a reason"
+      : "Ready to save";
 
   const handleSave = async () => {
     if (!canSave) return;
