@@ -6,16 +6,16 @@
 .scav {
   --rail-w: 240px;
   --insp-w: 340px;
-  /* PR-N audit R3 item 2 + R4 item 1 (Kevin 2026-08-21): panes
-     reach the shell edges; no background between them and the
-     shell. Was `background: var(--sc2-canvas)` = grey layer
-     stacked over the sc-admin-body wrap (also grey, removed
-     separately). Now transparent so panes sit directly on the
-     shell surface with their gutter and nothing behind them. */
+  /* PR-N R5 item 1 (Kevin 2026-08-21): pane container keeps its
+     padding on all four sides so panes sit inset from the shell
+     edge - breathing room preserved without the grey layer.
+     Removing a background was not meant to remove the padding
+     it carried. Background stays transparent (R4 item 1). */
   display: grid;
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--insp-w);
   gap: var(--sc2-space-3);
   min-height: 660px;
+  padding: var(--sc2-space-3);
   background: transparent;
   font-family: var(--sc2-font-ui);
   font-variant-numeric: var(--num-tabular);
@@ -939,27 +939,52 @@
   flex-direction: column;
   gap: var(--sc2-space-2);
 }
-.scav-credit-card {
-  display: flex;
-  align-items: flex-start;
+/* PR-N R5 item 2 (Kevin 2026-08-21): rebuilt as a 2-column grid.
+   Prior `display: flex` version inverted the columns - the radio
+   consumed all available width because `.scav-f label` sets
+   `display: flex; justify-content: space-between` with higher
+   specificity than the card's own class rule, so the radio got
+   pushed left + body got pushed right + neither had a defined
+   width. Grid + fixed radio column solves it structurally.
+
+   Also fixes the CAPS regression: `.scav-f label` sets
+   text-transform: uppercase + letter-spacing: 0.07em for the
+   eyebrow field label. The cards are ALSO <label> elements so
+   they inherited the treatment. Scoping the card selector as
+   `.scav-f .scav-credit-card` (specificity 0,2,0) beats
+   `.scav-f label` (specificity 0,1,1) - the class-then-class
+   chain has more classes so it wins the cascade. */
+.scav-f .scav-credit-card {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: start;
   gap: var(--sc2-space-3);
   cursor: pointer;
   padding: var(--sc2-space-3);
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--sc2-radius-control);
+  margin-bottom: 0;
+  color: var(--sc2-rail-text);
+  font-size: var(--sc2-size-body);
+  font-weight: var(--sc2-wt-regular);
+  text-transform: none;
+  letter-spacing: normal;
+  justify-content: start;
   transition: border-color var(--motion-control), background var(--motion-control);
 }
-.scav-credit-card:hover { border-color: rgba(255, 255, 255, 0.32); }
-.scav-credit-card--on {
+.scav-f .scav-credit-card:hover { border-color: rgba(255, 255, 255, 0.32); }
+.scav-f .scav-credit-card--on {
   border-color: var(--sc2-accent-green);
   background: rgba(79, 191, 133, 0.10);
 }
-.scav-credit-card input[type="radio"] {
-  margin-top: 2px;
+.scav-f .scav-credit-card input[type="radio"] {
+  margin: 2px 0 0 0;
   accent-color: var(--sc2-accent-green);
   cursor: pointer;
-  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  justify-self: start;
 }
 .scav-credit-card-body {
   display: flex;
@@ -971,11 +996,15 @@
   font-size: var(--sc2-size-body);
   font-weight: var(--sc2-wt-semibold);
   color: var(--sc2-rail-text);
+  text-transform: none;
+  letter-spacing: normal;
 }
 .scav-credit-card-d {
   font-size: var(--sc2-size-caption);
   font-weight: var(--sc2-wt-regular);
   color: var(--sc2-rail-text-muted);
+  text-transform: none;
+  letter-spacing: normal;
 }
 .scav-credit-note {
   /* Track B footnote per Kevin: 11px, --rail-4ink (mapped to
