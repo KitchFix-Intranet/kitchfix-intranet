@@ -234,13 +234,18 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
   }, [runOrGuard, onViewChange]);
 
   const handleSelectService = useCallback((serviceId, { service } = {}) => {
+    // PR-N audit P1-5 (2026-08-21): keyboard cursor and mouse
+    // selection are DISTINCT states per spec (green = what is open;
+    // navy = where the keyboard cursor is). Do NOT auto-move the
+    // kb cursor to the clicked row - that collapses the two states
+    // into one and the navy [data-kb] rule then masks the green
+    // [aria-current] rule via CSS cascade order. Keyboard cursor
+    // moves only via arrow keys.
     runOrGuard(`open ${service?.serviceName || "this service"}`, () => {
       setSelectedServiceId(serviceId);
       setLaborRailOpen(false);
-      const idx = visibleServiceIds.indexOf(serviceId);
-      if (idx >= 0) setKbFocusIdx(idx);
     });
-  }, [runOrGuard, visibleServiceIds]);
+  }, [runOrGuard]);
 
   const handleGuardBack = useCallback(() => {
     setGuardPending(null);
