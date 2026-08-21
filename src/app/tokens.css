@@ -152,6 +152,21 @@
      warning panel over dark navy - unreadable per Chat-Claude's
      G1 finding. Measured on the .scav-warn.bad panel background. */
   --sc2-accent-red-bright:#E8635A;
+  /* PR-N audit R2 E1 (Kevin ruling 2026-08-21): inputs get a fill
+     lighter than their surrounding panel plus a small inset shadow
+     so they read as recessed - the "type here" affordance. One
+     token across the product, applied to both dark-rail inputs
+     (SC admin) AND modal inputs on light surfaces. Disabled
+     controls DROP the inset entirely: flat means inert, recessed
+     means type here. */
+  --shadow-inset-input: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+  /* Amber fill/ink pair used by SC admin backdate save button.
+     Spec's amber (#E5A054) + dark cocoa text (#2B1A05) is the same
+     pairing used on the SC amber toast icon and measures well past
+     AA. Not tokens today because nothing outside SC admin uses
+     them; ready to promote if a second surface adopts them. */
+  --sc2-accent-amber-bright:#E5A054;
+  --sc2-accent-amber-ink:#2B1A05;
   --disabled-opacity:var(--opacity-disabled);
   /* density-aware semantic spacing (Comfortable defaults) */
   --space-stack:var(--space-6); --space-card-pad:var(--space-4); --space-inline:var(--space-3);

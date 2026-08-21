@@ -2975,15 +2975,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         </svg>
         Admin
       </span>
-      {adminView.mode !== "overview" && (
-        <button
-          type="button"
-          className="sc-admin-overview-back"
-          onClick={() => setAdminView({ mode: "overview" })}
-        >
-          ← Overview
-        </button>
-      )}
+      {/* PR-N audit R3 item 4 (Kevin 2026-08-21): "← Overview" link
+          removed. Was doing nothing because AdminPanel's
+          activeAccountKey did not sync to view.key changes (real
+          bug fix in AdminPanel.js: view.key -> setActiveAccountKey
+          via useEffect). Users have the shell's back arrow to exit
+          admin and the accounts rail to switch accounts within
+          admin - the ← Overview link was a broken third path. */}
     </div>
   ) : (
     <AccountDropdown

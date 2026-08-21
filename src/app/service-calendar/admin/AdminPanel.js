@@ -123,6 +123,21 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
   // Selection state.
   const [activeAccountKey, setActiveAccountKey] = useState(view?.key || null);
   const [selectedServiceId, setSelectedServiceId] = useState(null);
+
+  // PR-N audit R3 item 4 (Kevin 2026-08-21): sync activeAccountKey
+  // when the parent's view.key changes. Previously the useState
+  // initializer only ran once - the parent's view.mode transitions
+  // did not clear the account selection, so any "back to overview"
+  // affordance appeared to do nothing. Fixed by mirroring view.key
+  // into local state whenever the prop changes.
+  useEffect(() => {
+    const nextKey = view?.mode === "overview" ? null : (view?.key ?? null);
+    if (nextKey !== activeAccountKey) {
+      setActiveAccountKey(nextKey);
+      setSelectedServiceId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.key, view?.mode]);
   const [search, setSearch] = useState("");
   const [dirty, setDirty] = useState(false);
   const [guardPending, setGuardPending] = useState(null);   // { label, resume }
@@ -370,20 +385,20 @@ export default function AdminPanel({ view, onViewChange, showToast }) {
                 onClick={() => setBootReloadKey((k) => k + 1)}>Try again</button>
             </div>
           ) : (
-            /* PR-N audit P2-10 (2026-08-21): overview empty state
-               gets the same treatment as the rail's empty state -
-               icon + heading + one-line + tip. */
-            <div className="scav-cat-empty scav-cat-empty--overview">
-              <div className="scav-cat-empty-ic" aria-hidden="true">
+            /* PR-N audit R3 item 1 (Kevin 2026-08-21): dropped the
+               inner bordered box. The empty state renders directly
+               inside the catalog card (.scav-cat) so it is not a
+               card-in-a-card. */
+            <div className="scav-cat-overview">
+              <div className="scav-cat-overview-ic" aria-hidden="true">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="4" width="18" height="16" rx="2" />
                   <line x1="3" y1="10" x2="21" y2="10" />
                   <line x1="8" y1="4" x2="8" y2="20" />
                 </svg>
               </div>
-              <div className="t">Pick an account</div>
-              <div className="d">Choose an account on the left to view its catalog, edit prices, add or archive services.</div>
-              <div className="tip">{accounts.length} account{accounts.length === 1 ? "" : "s"} available</div>
+              <div className="scav-cat-overview-t">Pick an account</div>
+              <div className="scav-cat-overview-d">Choose an account on the left to view its catalog, edit prices, add or archive services.</div>
             </div>
           )}
         </div>
