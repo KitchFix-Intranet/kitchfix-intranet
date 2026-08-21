@@ -135,25 +135,48 @@ test.describe('KPI homestand season table expansion', () => {
     expect(empCents).toBe(actualCents);
   });
 
-  test('salary toggle is temporarily absent on the homestand view', async ({ page }) => {
-    // Owner ruling 2026-08-21 while the salary-on-homestand PR is
-    // pending: the toggle is hidden on this view so no user can flip
-    // it and see an on-screen contradiction (card hourly-only, card
-    // total < employee sum). Toggle stays live on the period view.
-    await expect(page.locator('.kpi-cmd-salary')).toHaveCount(0);
-
-    // Confirm it IS present on the period view for the same account.
-    await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}`);
-    await page.waitForSelector('.kpi-cmd', { timeout: 30_000 });
-    // Only assert if the user actually has salary permission - the
-    // toggle is absent regardless when permission is off.
-    // Give the period fetch a beat to settle.
-    await page.waitForLoadState('networkidle');
-    // If salary permission is present, .kpi-cmd-salary should render.
-    // If absent, this test is a no-op (skip via count check).
+  test('salary toggle renders on the homestand view (PR #274 unhide)', async ({ page }) => {
+    // PR #274 (owner ruling 2026-08-21): the toggle is unhidden on
+    // this view now that the server folds 3100.2 into stand.actual
+    // AND stand.budget together when include_salary=1. The sum
+    // invariant test below asserts the on-toggle path holds; this
+    // just asserts presence.
     const toggle = page.locator('.kpi-cmd-salary');
     if ((await toggle.count()) === 0) test.skip(true, 'no salary permission for this caller; both-views absence is expected');
     await expect(toggle).toBeVisible();
+
+    // Confirm it also renders on the period view (unchanged).
+    await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}`);
+    await page.waitForSelector('.kpi-cmd', { timeout: 30_000 });
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('.kpi-cmd-salary')).toBeVisible();
+  });
+
+  test('sum invariant holds on salary=on: sum(employee amounts) == stand.actual to the cent', async ({ page }) => {
+    // PR #274 extends the hourly-only invariant to the on-toggle
+    // basis. stand.actual on the card now folds in salary; actuals_range
+    // (the employee expansion source) includes salary rows when
+    // include_salary=1. Sum must equal to the cent on both bases.
+    const toggle = page.locator('.kpi-cmd-salary');
+    if ((await toggle.count()) === 0) test.skip(true, 'no salary permission');
+
+    // Flip the toggle ON.
+    await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}&view=homestand&salary=1`);
+    await page.waitForSelector('.kpi-hs-rail', { timeout: 30_000 });
+    await page.locator('.kpi-hs-rail-stand:not([disabled])').first().click();
+    await page.waitForSelector('[data-card="spend"]', { timeout: 15_000 });
+    await page.waitForSelector('.kpi-hs-table tbody tr[data-hs-row-expandable]', { timeout: 15_000 });
+
+    const selected = page.locator('.kpi-hs-tr-band.kpi-hs-tr-sel[data-hs-row-expandable]');
+    const gs = await selected.getAttribute('data-game-start');
+    await selected.click();
+    await expect(page.locator(`.kpi-hs-tr-emp[data-emp-row="${gs}"]`).first()).toBeVisible();
+
+    const actualText = await selected.locator('td').nth(7).innerText();
+    const actualCents = Math.round(Number(actualText.replace(/[$,]/g, '')) * 100);
+    const empTexts = await page.locator(`.kpi-hs-tr-emp[data-emp-row="${gs}"] [data-emp-amount]`).allInnerTexts();
+    const empCents = empTexts.reduce((s, t) => s + Math.round(Number(t.replace(/[$,]/g, '')) * 100), 0);
+    expect(empCents).toBe(actualCents);
   });
 
   test('clicking the qPeak ? trigger does NOT expand a table row', async ({ page }) => {

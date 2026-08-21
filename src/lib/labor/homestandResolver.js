@@ -86,6 +86,7 @@ const FY_BOUNDARIES = new Map([
 ]);
 
 const LINE_CODE = "3100.1";
+const LINE_CODE_SALARY = "3100.2";
 
 // ─── date helpers (UTC-anchored so DST cannot shift a boundary) ─────
 export function isoToDate(iso) { return new Date(`${iso}T00:00:00.000Z`); }
@@ -205,12 +206,24 @@ function classifyDN(v) {
  * that constant's own comment for the reasoning behind the list.
  * Returns [] if the fiscal year has no schedule rows or no budgets.
  *
+ * Salary integration (PR #274, owner ruling 2026-08-21): when
+ * `opts.includeSalary` is true, folds 3100.2 salary budgets into
+ * stand.budget on the same per-day pro-rate basis 3100.1 uses.
+ * stand.budget_hourly and stand.budget_salary are always emitted as
+ * breakout fields so a probe can crosscheck the sum, and so hourly-
+ * only figures never move when the toggle flips. Owner failure mode
+ * this exists to prevent: actual folding in salary while budget
+ * stayed hourly-only would make every stand read over budget the
+ * instant the toggle flipped; both sides must move together.
+ *
  * @param {SupabaseClient} supa
  * @param {string} accountKey
  * @param {number} fiscalYear (default 2026)
+ * @param {{ includeSalary?: boolean }} [opts]
  * @returns {Promise<Array>} ordered stands
  */
-export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
+export async function listHomestands(supa, accountKey, fiscalYear = 2026, opts = {}) {
+  const includeSalary = !!opts.includeSalary;
   // Owner ruling 2026-08-21 (final): the homestand view is available
   // on the four accounts in HOMESTAND_ACCOUNTS_FY2026 and nobody else
   // for this season. See the constant's own comment for why this is a
@@ -219,7 +232,7 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
   const fy = FY_BOUNDARIES.get(fiscalYear);
   if (!fy) return [];
 
-  const [sched, budgets] = await Promise.all([
+  const budgetFetches = [
     fetchAllRange(
       supa,
       "sc_homestand_schedule",
@@ -232,7 +245,19 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
       "period_no, amount",
       [["account_key", accountKey], ["line_code", LINE_CODE], ["fiscal_year", fiscalYear]],
     ),
-  ]);
+  ];
+  if (includeSalary) {
+    budgetFetches.push(fetchAllRange(
+      supa,
+      "kpi_budgets",
+      "period_no, amount",
+      [["account_key", accountKey], ["line_code", LINE_CODE_SALARY], ["fiscal_year", fiscalYear]],
+    ));
+  }
+  const results = await Promise.all(budgetFetches);
+  const sched = results[0];
+  const budgets = results[1];
+  const salaryBudgets = includeSalary ? (results[2] || []) : [];
 
   const games = sched
     .filter(r => r.day_type === "GAME"
@@ -245,6 +270,8 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
 
   const budgetByPeriod = new Map();
   for (const b of budgets) budgetByPeriod.set(Number(b.period_no), Math.round(Number(b.amount) * 100));
+  const salaryBudgetByPeriod = new Map();
+  for (const b of salaryBudgets) salaryBudgetByPeriod.set(Number(b.period_no), Math.round(Number(b.amount) * 100));
   const dailyFloorIso = await resolveDailyFloor(supa);
 
   const out = [];
@@ -291,9 +318,22 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
     // Budget: sum per-day mille-cents across the window, round to
     // cents at the field boundary. Absent on pre-floor stands per
     // owner ruling 2026-08-21.
-    const budgetCents = preFloor
+    //
+    // Salary integration: when includeSalary is on, we additionally
+    // sum 3100.2 per-day mille-cents over the same window and store
+    // it as budget_salary. stand.budget is the SUM (hourly + salary
+    // when includeSalary; hourly-only otherwise). The breakout
+    // fields (budget_hourly, budget_salary) let a probe crosscheck
+    // that hourly-only figures never move when the toggle flips.
+    const hourlyBudgetCents = preFloor
       ? null
       : Math.round(sumWindowMilleCents(budgetByPeriod, windowStart, windowEnd, fy.start) / 1000);
+    const salaryBudgetCents = (preFloor || !includeSalary)
+      ? null
+      : Math.round(sumWindowMilleCents(salaryBudgetByPeriod, windowStart, windowEnd, fy.start) / 1000);
+    const totalBudgetCents = hourlyBudgetCents == null
+      ? null
+      : hourlyBudgetCents + (salaryBudgetCents || 0);
 
     out.push({
       // Stored id (metadata only - H3 verifies our derived groups
@@ -307,7 +347,9 @@ export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
       peak_games_in_week: peakGamesInWeek(stand),
       window_days: daysBetween(windowStart, windowEnd) + 1,
       opponents,
-      budget: budgetCents == null ? null : budgetCents / 100,
+      budget: totalBudgetCents == null ? null : totalBudgetCents / 100,
+      budget_hourly: hourlyBudgetCents == null ? null : hourlyBudgetCents / 100,
+      budget_salary: salaryBudgetCents == null ? null : salaryBudgetCents / 100,
       pre_floor: preFloor,
       window_start_bounded_by: windowStart === dailyFloorIso
         ? "daily_floor"

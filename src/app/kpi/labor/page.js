@@ -1097,18 +1097,14 @@ export default function KpiLaborPage() {
              for anyone the gate would refuse (spec T-1). URL flag is
              the source of truth; the fetch effect above reads it and
              re-fires the request. */
-          /* Homestand PR-2 audit 2026-08-21 - salary toggle is TEMPORARILY
-             hidden on the homestand view. Owner ruling: the homestand
-             resolver ships hourly-only stand.actual and stand.budget
-             today; flipping the toggle would make the "sum of employee
-             rows == stand total" invariant break because actuals_range
-             starts including 3100.2 salary rows while stand.actual /
-             stand.budget stay 3100.1-only. That V40 class of contradiction
-             is worse than absence, so the toggle is off-screen on this
-             view until the salary-on-homestand PR (server: resolver folds
-             in 3100.2 for both actual + budget; client: unhide) lands.
-             Toggle stays live on the period view where it works today. */
-          salaryToggle={data?.salary_available === true && !inHomestandView ? {
+          /* Salary toggle now works on both the period and homestand
+             views. The homestand-view server path (PR #274) folds 3100.2
+             into stand.actual AND stand.budget together when
+             include_salary=1, so the sum-of-employee-rows == stand-total
+             invariant holds on both bases and the bank reconciles
+             correctly whichever way the toggle sits. The temporary
+             `!inHomestandView` gate that this line replaced is retired. */
+          salaryToggle={data?.salary_available === true ? {
             on: searchParams.get("salary") === "1",
             onChange: (next) => setParam("salary", next ? "1" : ""),
           } : null}

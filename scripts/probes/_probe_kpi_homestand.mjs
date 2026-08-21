@@ -310,6 +310,107 @@ console.log("[H7] CIN - OH verified fixtures");
   }
 }
 
+// ─── H8 salary integration: budget + actual + bank on both bases ────
+// PR #274 (owner ruling 2026-08-21): the salary toggle on the homestand
+// view is exposed only if include_salary=1 makes stand.budget AND
+// stand.actual (AND the bank) reconcile on the same basis. This block
+// proves both bases on the same account by calling listHomestands with
+// includeSalary=false vs true and reproducing the route-side salary
+// fold that produces stand.actual (per-stand salaryProRate over the
+// stand's window). Failure mode this guards: actual folds in salary
+// while budget stays hourly-only, and every stand reads over-budget the
+// instant someone flips the toggle.
+console.log("");
+console.log("[H8] salary integration: hourly-only unchanged; salary-on adds to both sides, bank reconciles on each basis");
+{
+  const { loadSalaryActuals } = await import("../../src/lib/labor/salaryBoard.js");
+  const { salaryProRate }     = await import("../../src/lib/labor/salaryProRate.js");
+  const acct = "CIN - OH";
+  const today = "2026-08-21";
+
+  // Hourly-only path (regression net - these are frozen H7 fixtures).
+  const hsHourly = await listHomestands(supa, acct, 2026, { includeSalary: false });
+  const daily    = dailyByAcct.get(acct);
+  const actMapH  = actualsByStand(hsHourly, daily);
+  const bankH    = computeHomestandBank(hsHourly, actMapH, today);
+  const hs11H    = hsHourly.find(h => h.game_start === "2026-08-14");
+  const near = (label, got, want, tol = 0.005) => {
+    if (Math.abs(got - want) < tol) ok(`${label}: ${got}`);
+    else fail(`${label}: got ${got}, want ${want}`);
+  };
+  near("hourly-only bank across 9 finished stands", bankH.bank, 4218.39);
+  near("hourly-only HS 11 budget", hs11H.budget, 8056.06);
+  const hs11Actual = Math.round((actMapH.get("2026-08-14") || 0) / 100) / 100;
+  near("hourly-only HS 11 actual", hs11Actual, 7732.47);
+  if (hs11H.budget_hourly === hs11H.budget) ok(`hourly-only: budget_hourly == budget ($${hs11H.budget})`);
+  else fail(`hourly-only: budget_hourly (${hs11H.budget_hourly}) != budget (${hs11H.budget})`);
+  if (hs11H.budget_salary === null) ok(`hourly-only: budget_salary is null (breakout absent when toggle off)`);
+  else fail(`hourly-only: budget_salary should be null, got ${hs11H.budget_salary}`);
+
+  // Salary-on path. Reproduces the server-side fold: listHomestands
+  // returns stand.budget = hourly + salary; the route adds pro-rated
+  // salary to actMap; bank reconciles on the salary-inclusive basis.
+  const hsSal   = await listHomestands(supa, acct, 2026, { includeSalary: true });
+  const actMapS = new Map(actualsByStand(hsSal, daily));
+  const salActQ = await loadSalaryActuals(supa, [acct], "2025-12-29", "2026-12-27");
+  if (salActQ.error) fail(`salary actuals load: ${salActQ.error}`);
+  for (const h of hsSal) {
+    if (h.pre_floor) continue;
+    const pr = salaryProRate({ startISO: h.window_start, endISO: h.window_end, salaryRows: salActQ.rows || [] });
+    const salX10000 = Math.round((pr.total || 0) * 10000);
+    actMapS.set(h.game_start, (actMapS.get(h.game_start) || 0) + salX10000);
+  }
+  const bankS  = computeHomestandBank(hsSal, actMapS, today);
+  const hs11S  = hsSal.find(h => h.game_start === "2026-08-14");
+
+  // 1. Breakout fields present with correct sum on both bases.
+  const budgetSum = (hs11S.budget_hourly || 0) + (hs11S.budget_salary || 0);
+  if (Math.abs(budgetSum - hs11S.budget) < 0.005) ok(`salary-on HS 11: budget_hourly + budget_salary == budget ($${hs11S.budget})`);
+  else fail(`salary-on HS 11: breakout sum ${budgetSum} != budget ${hs11S.budget}`);
+
+  // 2. Both sides move together. Salary contribution positive on CIN - OH.
+  if (hs11S.budget > hs11H.budget) ok(`salary-on HS 11: budget ($${hs11S.budget}) > hourly-only budget ($${hs11H.budget}) by $${(hs11S.budget - hs11H.budget).toFixed(2)}`);
+  else fail(`salary-on HS 11: budget did not increase over hourly-only`);
+  // Actual is what the route would produce; recompute here since
+  // listHomestands doesn't attach actual (route does).
+  const hs11SalX = actMapS.get("2026-08-14") || 0;
+  const hs11ActualSal = Math.round(hs11SalX / 100) / 100;
+  if (hs11ActualSal > hs11Actual) ok(`salary-on HS 11: actual ($${hs11ActualSal}) > hourly-only actual ($${hs11Actual}) by $${(hs11ActualSal - hs11Actual).toFixed(2)}`);
+  else fail(`salary-on HS 11: actual did not increase over hourly-only`);
+
+  // 3. Bank reconciles on salary-inclusive basis: bank == sum(finished
+  // stand budgets) - sum(finished stand actuals), same discipline as
+  // hourly-only.
+  let expectedBankCents = 0;
+  for (const h of hsSal) {
+    if (h.pre_floor || h.game_end >= today) continue;
+    const bC = Math.round((h.budget || 0) * 100);
+    const aC = Math.round((actMapS.get(h.game_start) || 0) / 100);
+    expectedBankCents += (bC - aC);
+  }
+  const gotBankCents = Math.round(bankS.bank * 100);
+  if (gotBankCents === expectedBankCents) ok(`salary-on bank reconciles: $${bankS.bank.toFixed(2)} == sum(budget) - sum(actual) EXACT`);
+  else fail(`salary-on bank drift: got $${bankS.bank.toFixed(2)}, computed $${(expectedBankCents/100).toFixed(2)}`);
+
+  // 4. Stands_finished / stands_remaining unchanged across bases -
+  // the discrimination is by game_end vs today, not by basis.
+  if (bankH.stands_finished === bankS.stands_finished && bankH.stands_remaining === bankS.stands_remaining) {
+    ok(`stands_finished + stands_remaining unchanged across bases (${bankH.stands_finished} / ${bankH.stands_remaining})`);
+  } else {
+    fail(`stands counts drifted: hourly=(${bankH.stands_finished}/${bankH.stands_remaining}) salary=(${bankS.stands_finished}/${bankS.stands_remaining})`);
+  }
+
+  // 5. Regression net: hourly-only path is byte-for-byte unchanged
+  // when re-run after the salary-on path (no shared state leak).
+  const hsHourlyAgain = await listHomestands(supa, acct, 2026, { includeSalary: false });
+  const hs11H2 = hsHourlyAgain.find(h => h.game_start === "2026-08-14");
+  if (hs11H2.budget === hs11H.budget && hs11H2.budget_hourly === hs11H.budget_hourly && hs11H2.budget_salary === null) {
+    ok(`hourly-only re-run: budget still $${hs11H2.budget}, budget_salary still null`);
+  } else {
+    fail(`hourly-only re-run drift: budget=${hs11H2.budget} budget_hourly=${hs11H2.budget_hourly} budget_salary=${hs11H2.budget_salary}`);
+  }
+}
+
 // ─── HSent sentinel ────────────────────────────────────────────────
 console.log("");
 console.log("[HSent] CIN - OH 06/29 weekly sentinel: 113.98 / 2.32 / 39.91 / $4,328.27");
