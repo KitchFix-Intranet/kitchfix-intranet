@@ -24,7 +24,7 @@
 //      stand selection. Only the .kpi-hs-sbar-mark navy outline
 //      moves.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { DayStripPlot, aggregatePerDay, isoRange } from "./DayStrip.js";
 
@@ -515,7 +515,19 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
 }
 
 // ─── Season table with employee expansion ──────────────────────────
-function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggleExpand, employeesByStand, workers, redact }) {
+// PR-2 audit 2026-08-21: row-click now selects AND expands. Prior
+// behavior called only onToggleExpand, but actuals_range is populated
+// only for the currently-selected stand, so expanding any other row
+// yielded an empty list ("cursor:pointer but clicking does nothing").
+// Fix: clicking a non-selected row fires onSelectStand (URL push -> new
+// fetch) AND onToggleExpand; a compact skeleton renders in the
+// expansion slot for the ~1s until data lands. Clicking an already-
+// selected + expanded row collapses (single onToggleExpand).
+function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggleExpand, onSelectStand, employeesByStand, workers, redact }) {
+  const handleRowClick = (gameStart) => {
+    if (gameStart !== selectedGameStart) onSelectStand?.(gameStart);
+    onToggleExpand?.(gameStart);
+  };
   return (
     <div className="kpi-hs-card kpi-hs-card-table" role="region" aria-label="Season table">
       <table className="kpi-hs-table">
@@ -575,13 +587,16 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
             }
             const bankAfter = (h.budget || 0) - (h.actual || 0);
             const bankAfterArr = arrow(bankAfter, true);
+            const employees = employeesByStand?.get(h.game_start);
+            const employeesPending = isOpen && (!employees || employees.length === 0);
             return (
-              <>
+              <React.Fragment key={h.game_start}>
                 <tr
-                  key={h.game_start}
                   className={`kpi-hs-tr-band ${isSel ? "kpi-hs-tr-sel" : ""} ${isOpen ? "kpi-hs-tr-open" : ""}`}
                   data-game-start={h.game_start}
-                  onClick={() => onToggleExpand(h.game_start)}
+                  data-hs-row-expandable
+                  aria-expanded={isOpen ? "true" : "false"}
+                  onClick={() => handleRowClick(h.game_start)}
                 >
                   <td>
                     <span className={`kpi-hs-chev ${isOpen ? "kpi-hs-chev-open" : ""}`}>›</span>
@@ -598,7 +613,17 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                     {bankAfterArr.glyph} {fmt$0(Math.abs(bankAfter))}
                   </td>
                 </tr>
-                {isOpen && (employeesByStand?.get(h.game_start) || []).map((e, i) => {
+                {employeesPending && (
+                  <tr className="kpi-hs-tr-emp-skel" data-hs-emp-skel={h.game_start}>
+                    <td colSpan="9">
+                      <span className="kpi-skel kpi-hs-emp-skel-bar" aria-hidden="true" />
+                      <span className="kpi-skel kpi-hs-emp-skel-bar" aria-hidden="true" />
+                      <span className="kpi-skel kpi-hs-emp-skel-bar" aria-hidden="true" />
+                      <span className="sr-only">Loading employees</span>
+                    </td>
+                  </tr>
+                )}
+                {isOpen && (employees || []).map((e, i) => {
                   const meta = workers?.[e.worker_id] || {};
                   const name = redact ? `#${e.worker_id.slice(-4)}` : (meta.name || `#${e.worker_id.slice(-4)}`);
                   const title = meta.title || "";
@@ -619,7 +644,7 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                     </tr>
                   );
                 })}
-              </>
+              </React.Fragment>
             );
           })}
         </tbody>
@@ -766,6 +791,7 @@ export function HomestandBoard({
         selectedGameStart={selectedGameStart}
         expandedGameStart={expandedGameStart}
         onToggleExpand={onToggleExpand}
+        onSelectStand={onSelectStand}
         employeesByStand={employeesByStand}
         workers={data?.workers}
         redact={redact}

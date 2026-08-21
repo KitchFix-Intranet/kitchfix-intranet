@@ -3561,6 +3561,23 @@
 }
 .kpi-hs-tr-emp-title { color: var(--n-500); font-weight: 400; }
 .kpi-hs-tr-emp-meta  { color: var(--n-500); }
+/* PR-2 audit 2026-08-21 - pending-state skeleton row that occupies
+   the expansion slot while a click-to-select fetch is in flight.
+   Three thin bars mirror the height of three typical employee rows so
+   the table body does not jump when real rows land. Reuses the
+   `.kpi-skel` shimmer + prefers-reduced-motion opt-out from V25-16. */
+.kpi-hs-tr-emp-skel td {
+  background: #fff;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--n-100);
+}
+.kpi-hs-emp-skel-bar {
+  display: block;
+  height: 18px;
+  margin: 4px 0 4px 26px;
+  border-radius: 4px;
+  border: 1px solid var(--n-200);
+}
 .kpi-hs-tr-prefloor td { opacity: 0.55; }
 .kpi-hs-tr-prefloor-note { text-align: right; font-style: italic; color: var(--n-500); }
 .kpi-hs-tr-future td { opacity: 0.75; }
