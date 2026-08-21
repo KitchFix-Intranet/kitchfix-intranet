@@ -32,14 +32,14 @@
 // Usage: node --env-file=.env.local scripts/_probe_daily_source_purity.mjs
 
 import { createClient } from "@supabase/supabase-js";
-import { resolveRangeSource } from "../src/lib/labor/rangeResolver.js";
-import { buildDailyRangeBody } from "../src/lib/labor/dailyRangeBody.js";
+import { resolveRangeSource } from "../../src/lib/labor/rangeResolver.js";
+import { buildDailyRangeBody } from "../../src/lib/labor/dailyRangeBody.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 
 let hardFail = 0;
 function ok(line)   { console.log(`  OK    ${line}`); }

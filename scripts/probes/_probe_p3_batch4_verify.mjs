@@ -21,7 +21,7 @@ import {
   resolveReviewQueueMatchSheets,
   undoReconcileSheets,
   undoMatchSheets,
-} from "../src/lib/dataStore/inventory.js";
+} from "../../src/lib/dataStore/inventory.js";
 
 const STAMP = new Date().toISOString().replace(/[:.]/g, "-");
 const SENTINEL = `PROBE_INV2_BATCH4_${STAMP}`;

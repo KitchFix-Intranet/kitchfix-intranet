@@ -58,7 +58,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { createClient } from "@supabase/supabase-js";
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 // ── Args ──
 const args = process.argv.slice(2);

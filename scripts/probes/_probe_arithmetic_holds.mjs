@@ -28,7 +28,7 @@
 //   Optional override: pass --n=20 to pull more than the default 15 rows.
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 // ── args ──
 const args = process.argv.slice(2);

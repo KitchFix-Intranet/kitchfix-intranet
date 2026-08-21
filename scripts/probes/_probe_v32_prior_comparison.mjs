@@ -9,8 +9,8 @@
 // No dollars or worker names in output. Reports counts + ratios only.
 
 import { createClient } from "@supabase/supabase-js";
-import { computePeriodMeasures } from "../src/app/kpi/labor/lib/board.js";
-import { periodStartISO, periodEndISO } from "../src/app/kpi/labor/lib/periods.js";
+import { computePeriodMeasures } from "../../src/app/kpi/labor/lib/board.js";
+import { periodStartISO, periodEndISO } from "../../src/app/kpi/labor/lib/periods.js";
 
 const supa = createClient(
   process.env.SUPABASE_URL,

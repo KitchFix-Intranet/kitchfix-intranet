@@ -10,7 +10,7 @@
 //        (for the lines the cron would test).
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 // Match cron index.js exactly. ai_line_items columns: 0..12 used by cron.
 const LI = { uuid: 0, account: 2, vendor: 3, invoiceNumber: 4, lineNum: 6, description: 7, quantity: 8, unit: 9, unitPrice: 10, extendedPrice: 11 };

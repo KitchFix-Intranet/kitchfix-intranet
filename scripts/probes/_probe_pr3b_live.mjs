@@ -42,7 +42,7 @@ import {
   isoRange,
   aggregatePerDay,
   chooseLabelDensity,
-} from "../src/lib/labor/dayRangeAggregate.js";
+} from "../../src/lib/labor/dayRangeAggregate.js";
 
 const PORT = process.env.PROBE_PORT || "3100";
 const BASE = `http://localhost:${PORT}`;

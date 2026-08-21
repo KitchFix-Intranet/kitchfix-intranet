@@ -1,6 +1,6 @@
 // Prove H1 fix: derive period_no client-side, group correctly.
 import { createClient } from "@supabase/supabase-js";
-import { periodOf, fiscalYearOf } from "../src/app/kpi/labor/lib/periods.js";
+import { periodOf, fiscalYearOf } from "../../src/app/kpi/labor/lib/periods.js";
 
 const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const r = await supa.from("labor_actuals_latest")

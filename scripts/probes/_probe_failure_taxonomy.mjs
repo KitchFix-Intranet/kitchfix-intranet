@@ -32,7 +32,7 @@
 //     --min=10       only include vendors with at least this many arithmetic_fail rows
 // ════════════════════════════════════════════════════════════════════════════
 
-import { safeRead, SHEET_IDS } from "../src/lib/sheets.js";
+import { safeRead, SHEET_IDS } from "../../src/lib/sheets.js";
 
 const args = process.argv.slice(2);
 function getArg(name, fallback) {

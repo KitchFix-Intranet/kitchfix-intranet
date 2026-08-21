@@ -16,7 +16,7 @@ import {
   undoSkipPostgres,
   resolveReviewQueueMatchPostgres,
   resolveReviewQueueCreatePostgres,
-} from "../src/lib/dataStore/inventory.js";
+} from "../../../src/lib/dataStore/inventory.js";
 
 const supa = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,

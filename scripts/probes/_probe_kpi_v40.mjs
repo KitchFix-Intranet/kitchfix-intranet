@@ -28,7 +28,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..");
+const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 
 let hardFail = 0;
 function log(line, ok = true) {

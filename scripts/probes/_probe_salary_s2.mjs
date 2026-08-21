@@ -17,9 +17,9 @@
 // Usage: node --env-file=.env.local scripts/_probe_salary_s2.mjs
 
 import { createClient } from "@supabase/supabase-js";
-import { loadSalaryGate } from "../src/lib/labor/salaryGate.js";
-import { load3100_2Budgets, loadSalaryActuals, mergeBudgetPeriods, withSalary } from "../src/lib/labor/salaryBoard.js";
-import { buildBoard } from "../src/app/kpi/labor/lib/board.js";
+import { loadSalaryGate } from "../../src/lib/labor/salaryGate.js";
+import { load3100_2Budgets, loadSalaryActuals, mergeBudgetPeriods, withSalary } from "../../src/lib/labor/salaryBoard.js";
+import { buildBoard } from "../../src/app/kpi/labor/lib/board.js";
 
 const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 

@@ -7,7 +7,7 @@
 // clean+heartbeat, real-drift, failure. The Slack post ONLY happens for
 // the drift shape (the shape that would actually alarm operators).
 
-import { formatSlackPayload, postSlack } from "../src/lib/scheduleDrift.js";
+import { formatSlackPayload, postSlack } from "../../src/lib/scheduleDrift.js";
 
 const URL = process.env.SLACK_SC_WEBHOOK_URL;
 

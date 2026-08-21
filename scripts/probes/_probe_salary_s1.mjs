@@ -10,7 +10,7 @@
 // Exit 0 on all PASS; 1 on any FAIL.
 
 import { createClient } from "@supabase/supabase-js";
-import { FY_START_ISO, FY_END_ISO } from "../src/app/kpi/labor/lib/periods.js";
+import { FY_START_ISO, FY_END_ISO } from "../../src/app/kpi/labor/lib/periods.js";
 
 const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
