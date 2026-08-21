@@ -134,16 +134,24 @@ export function AddServiceModal({ accountKey, group, feeNoDollar, onClose, onSav
             </div>
           </div>
         )}
-        {/* PR-N audit R2 D3 (2026-08-21): checkboxes at the same
-            indent, stacked. The prior `marginLeft: 16` on Non-revenue
-            implied a dependency on Tax-free - they are unrelated
-            flags. */}
+        {/* PR-N audit R2 D3 + R3 item 6 (Kevin 2026-08-21): same
+            indent, one-line hint under each. A checkbox that
+            decides whether something reaches an invoice earns a
+            sentence. */}
         <div className="sc-admin-field scav-checkbox-stack">
           <label className="scav-checkbox">
-            <input type="checkbox" checked={isTaxFree} disabled={saving} onChange={(e) => setIsTaxFree(e.target.checked)} /> Tax-free
+            <input type="checkbox" checked={isTaxFree} disabled={saving} onChange={(e) => setIsTaxFree(e.target.checked)} />
+            <span>
+              Tax-free
+              <span className="scav-checkbox-hint">No sales tax is applied to this service.</span>
+            </span>
           </label>
           <label className="scav-checkbox">
-            <input type="checkbox" checked={isNonRevenue} disabled={saving} onChange={(e) => setIsNonRevenue(e.target.checked)} /> Non-revenue
+            <input type="checkbox" checked={isNonRevenue} disabled={saving} onChange={(e) => setIsNonRevenue(e.target.checked)} />
+            <span>
+              Non-revenue
+              <span className="scav-checkbox-hint">Counted on the calendar but never billed to the client.</span>
+            </span>
           </label>
         </div>
         <div className="sc-admin-field">

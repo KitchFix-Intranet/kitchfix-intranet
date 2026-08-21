@@ -6,15 +6,14 @@
 .scav {
   --rail-w: 240px;
   --insp-w: 340px;
-  /* PR-N audit R2 A3 (2026-08-21): three panes as cards on page-grey
-     with consistent gutters. Was one shell card with flush children.
-     Grid gap gives the gutter; shell drops its container shadow +
-     border-radius so the three cards inside carry the elevation. */
+  /* PR-N audit R3 item 2 (Kevin 2026-08-21): panes REACH the shell
+     edges. Was --sc2-space-3 padding on the shell adding a frame
+     nobody asked for. Panes fill the shell width; the gap between
+     them stays as the standard gutter. */
   display: grid;
   grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--insp-w);
   gap: var(--sc2-space-3);
   min-height: 660px;
-  padding: var(--sc2-space-3);
   background: var(--sc2-canvas);
   font-family: var(--sc2-font-ui);
   font-variant-numeric: var(--num-tabular);
@@ -173,19 +172,22 @@
   box-shadow: var(--sc2-el-inset);
 }
 .scav-acct-card-hd {
+  /* R3 root cause: left-rail group headers become --n-50 with
+     --n-500 label text. Was --sc2-surface-sunken (warm cream tint)
+     which piled onto the cream elsewhere. */
   display: flex;
   align-items: center;
   gap: var(--sc2-space-2);
   padding: var(--sc2-space-2) var(--sc2-space-3);
   border-bottom: 1px solid var(--sc2-line);
-  background: var(--sc2-surface-sunken);
+  background: var(--n-50);
 }
 .scav-acct-card-name {
   font-size: var(--sc2-size-micro);
   font-weight: var(--sc2-wt-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--sc2-ink-muted);
+  color: var(--n-500);
   flex: 1;
 }
 .scav-acct-card-cnt {
@@ -631,18 +633,27 @@
 
 /* ────── Editor rail (right, dark) ──────
    PR-N audit R2 A3: dark card floating on page-grey with matching
-   gutters. Rail keeps its dark identity; stops being a flush slab. */
+   gutters. Rail keeps its dark identity; stops being a flush slab.
+   R3 item 3 (2026-08-21): footer pins to the PANE bottom, not to
+   the content bottom. All three panes stretch to the same height
+   via the grid's default align-items: stretch. */
 .scav-insp {
   background: var(--sc2-rail-bg);
   color: var(--sc2-rail-text);
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   border-radius: var(--sc2-radius-container);
   box-shadow: var(--sc2-el-inset);
 }
 .scav-insp-scroll {
-  flex: 0 0 auto;
+  /* R3 item 3 (2026-08-21): scroll takes the remaining flex space
+     so the footer pins to the pane bottom. Was `flex: 0 0 auto`
+     per R2 P1-7 (pull footer up under form); Kevin reversed with
+     the equal-height ruling in R3. Empty space now sits between
+     form and footer when content is short, not below the footer. */
+  flex: 1 1 auto;
+  overflow: auto;
   padding: var(--sc2-space-4);
 }
 .scav-fadein {
@@ -880,14 +891,18 @@
 .scav-save:hover:not(:disabled) { background: var(--sc2-accent-green); }
 .scav-save:active:not(:disabled) { transform: translateY(1px); }
 .scav-save:disabled {
-  /* PR-N audit R2 E2 (Kevin ruling 2026-08-21): disabled Save keeps
-     a readable label. Was navy-on-navy - functionally invisible.
-     Rail-text-muted (Lc 64.6, AA-strong) on 8% white reads clearly
-     on the navy panel; hint text above still explains WHY. */
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--sc2-rail-text-muted);
+  /* PR-N audit R3 item 9 (Kevin 2026-08-21): brought to at least
+     3:1 against its own panel background. R2 E2 (rail-text-muted
+     on 8% white) still measured borderline; R3 promotes label to
+     --sc2-rail-text (#e8edf3, primary rail label) on 14% white
+     with an outline so it reads as a real button that is not
+     currently pressable. Hint text above still explains WHY. */
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--sc2-rail-text);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   cursor: not-allowed;
   box-shadow: none;
+  opacity: 0.85;
 }
 .scav-save:focus-visible {
   outline: 2px solid var(--sc2-accent-green);
@@ -1122,12 +1137,15 @@
   margin-left: auto;
   margin-right: auto;
 }
-/* PR-N audit P2-10 (2026-08-21): overview empty state gets the same
-   shape as the rail's empty state - icon + heading + one-line + tip. */
-.scav-cat-empty--overview {
-  padding: var(--sc2-space-7) var(--sc2-space-4);
+/* PR-N audit R3 item 1 (Kevin 2026-08-21): overview empty state
+   renders DIRECTLY inside .scav-cat - no card-in-a-card. Icon +
+   heading + one-line, centred, generous vertical padding so the
+   pane doesn't look empty. */
+.scav-cat-overview {
+  padding: var(--sc2-space-8) var(--sc2-space-4);
+  text-align: center;
 }
-.scav-cat-empty-ic {
+.scav-cat-overview-ic {
   width: 54px;
   height: 54px;
   border-radius: var(--sc2-radius-container);
@@ -1138,10 +1156,18 @@
   justify-content: center;
   margin: 0 auto var(--sc2-space-3);
 }
-.scav-cat-empty .tip {
-  font-size: var(--sc2-size-micro);
+.scav-cat-overview-t {
+  font-size: var(--sc2-size-subhead);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--sc2-ink);
+}
+.scav-cat-overview-d {
+  font-size: var(--sc2-size-body);
   color: var(--sc2-ink-muted);
-  margin-top: var(--sc2-space-3);
+  margin-top: var(--sc2-space-2);
+  max-width: 40ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ────── Modals (add-service, add-group, archive-group, reactivate-group) ────── */
@@ -1170,9 +1196,12 @@
   overflow: auto;
 }
 .scav-modal-hd {
+  /* PR-N audit R3 root cause (2026-08-21): cream on group-card
+     header + footer bands ONLY. Modal header goes white with a
+     bottom border. */
   padding: var(--sc2-space-4) var(--sc2-space-5);
-  background: var(--sc2-band-cream-bg);
-  border-bottom: 1px solid var(--sc2-band-cream-bd);
+  background: var(--sc2-surface-card);
+  border-bottom: 1px solid var(--sc2-line);
   display: flex;
   align-items: center;
   gap: var(--sc2-space-3);
@@ -1217,14 +1246,82 @@
   border-radius: var(--sc2-radius-control);
   background: var(--sc2-surface-card);
   color: var(--sc2-ink);
+  /* R2 E1: same --shadow-inset-input on modal inputs. */
+  box-shadow: var(--shadow-inset-input);
   transition: border-color var(--motion-control), box-shadow var(--motion-control);
+}
+.scav-modal-body .sc-admin-text-input:disabled,
+.scav-modal-body .sc-admin-textarea:disabled,
+.scav-modal-body .sc-admin-price-input:disabled {
+  box-shadow: none;
+  background: var(--sc2-surface-sunken);
+  color: var(--sc2-ink-muted);
+}
+/* PR-N audit R3 item 7 (Kevin 2026-08-21): $ sits INSIDE the price
+   input as a prefix affordance - same fill and border, muted colour.
+   The wrap becomes the input's visual boundary; the input's own
+   border is off. */
+.scav-modal-body .sc-admin-price-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--sc2-surface-card);
+  border: 1px solid var(--n-300);
+  border-radius: var(--sc2-radius-control);
+  box-shadow: var(--shadow-inset-input);
+  padding: 0;
+  max-width: none;
+  transition: border-color var(--motion-control), box-shadow var(--motion-control);
+}
+.scav-modal-body .sc-admin-price-input-wrap:focus-within {
+  border-color: var(--sc2-accent-green);
+  box-shadow: var(--shadow-inset-input), 0 0 0 2px rgba(47, 125, 79, 0.20);
+}
+.scav-modal-body .sc-admin-price-input-dollar {
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-semibold);
+  font-size: var(--sc2-size-body);
+  padding: 0 var(--sc2-space-1) 0 var(--sc2-space-3);
+  line-height: 1;
+}
+.scav-modal-body .sc-admin-price-input {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: var(--sc2-space-2) var(--sc2-space-3) var(--sc2-space-2) var(--sc2-space-1);
+}
+.scav-modal-body .sc-admin-price-input:focus {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* PR-N audit R3 item 8 (Kevin 2026-08-21): disabled primary in
+   the modal footer keeps a legible label. Was --border-default
+   (nearly invisible when the button IS the border colour) - now
+   a real disabled treatment: greyed fill, muted label, visible. */
+.scav-modal-ft .sc-admin-btn--primary:disabled {
+  background: var(--n-200);
+  border-color: var(--n-300);
+  color: var(--n-500);
+  cursor: not-allowed;
+  opacity: 1;
 }
 .scav-modal-body .sc-admin-text-input:focus,
 .scav-modal-body .sc-admin-textarea:focus,
 .scav-modal-body .sc-admin-price-input:focus {
   outline: none;
+  /* PR-N audit R3 item 5 (Kevin 2026-08-21): focus must NEVER
+     change geometry - only ring, border colour, and fill. Explicit
+     border-radius rule defends against any inherited or cascading
+     rule that squares the corners on focus. */
+  border-radius: var(--sc2-radius-control);
   border-color: var(--sc2-accent-green);
   box-shadow: 0 0 0 2px rgba(47, 125, 79, 0.20);
+}
+.scav-modal-body .sc-admin-price-input-wrap:focus-within {
+  border-radius: var(--sc2-radius-control);
 }
 .scav-modal-body .sc-admin-textarea {
   resize: vertical;
@@ -1240,8 +1337,8 @@
   gap: var(--sc2-space-2);
 }
 .scav-checkbox {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   gap: var(--sc2-space-2);
   font-size: var(--sc2-size-body);
   color: var(--sc2-ink);
@@ -1250,11 +1347,27 @@
 .scav-checkbox input[type="checkbox"] {
   accent-color: var(--sc2-accent-green);
   cursor: pointer;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.scav-checkbox > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* PR-N audit R3 item 6 (Kevin 2026-08-21): one-line hint under
+   each checkbox. Same treatment as .scav-credit-hint. */
+.scav-checkbox-hint {
+  font-size: var(--sc2-size-caption);
+  color: var(--sc2-ink-muted);
+  font-weight: var(--sc2-wt-regular);
 }
 .scav-modal-ft {
+  /* R3 root cause: modal footer goes white with a top border, not
+     cream. Cream lives on the group-card bands only. */
   padding: var(--sc2-space-3) var(--sc2-space-5);
-  background: var(--sc2-band-cream-bg);
-  border-top: 1px solid var(--sc2-band-cream-bd);
+  background: var(--sc2-surface-card);
+  border-top: 1px solid var(--sc2-line);
   display: flex;
   justify-content: flex-end;
   gap: var(--sc2-space-2);
