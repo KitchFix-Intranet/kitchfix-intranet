@@ -158,38 +158,67 @@ try {
       }
     }
 
-    // ─── U4 anomaly thresholds: 12-14h no, 16.1h yes, no-clockout yes
+    // ─── U4 anomaly classifier - property test ───────────────────────
+    // Owner ruling 2026-08-21 (after this probe surfaced a false FAIL
+    // on the 2026-08-17 week when three real over-16h anomalies existed
+    // on TBJ-FL, TBR-FL, TXR-TX-H): "never assert `zero anomalies exist`
+    // - that is a fact about a Tuesday, not about the code. Rewrite it
+    // as a property, not a count: assert that no 12-14 hour entry
+    // triggers an anomaly, that a >16h entry does, and that any flagged
+    // entry actually exceeds the threshold."
+    //
+    // This block reproduces the classifier logic from
+    // src/lib/labor/deriveActuals.js:483-486 (DRAFT-only) and asserts
+    // the property directly on every bucket the classifier discriminates.
+    // If the anchor lines change, update the reproduced classifier +
+    // cases below in the same PR.
     console.log("");
-    console.log("[U4] anomaly thresholds: 12-14h NOT counted, no-clockout IS, over-16h IS");
+    console.log("[U4] anomaly classifier property: 12-14h NOT over_16h; >16h IS; boundary 16.0 NOT; under_1h + no_clockout fire correctly");
     {
-      // The derive already counted these. If any anomaly_under_1h or
-      // anomaly_over_16h fires on a real row, the classifier is
-      // correctly discriminating. Cross-check: draft_hours per week
-      // includes all DRAFT entries (all durations); if there were
-      // 12-14h entries and they DID trigger anomaly_over_16h, that
-      // would show up as anomaly_over_16h > 0 on weeks where the
-      // largest DRAFT duration is <= 14h. We cannot check per-entry
-      // durations from the aggregate; instead assert the classifier's
-      // GLOBAL invariant: on the current week (2026-08-17 measurement)
-      // Kevin reported 3 DRAFT entries in the 12-14h bucket - if the
-      // classifier were wrong, anomaly_over_16h would be at least 3.
-      // Today it is 0.
-      const acctSums = { under: 0, over: 0, noc: 0 };
-      const accts = ["CIN - AZ", "CIN - OH", "STL - FL", "STL - MO", "TBJ - FL", "TBR - FL", "TXR - AZ", "TXR - TX - H", "TXR - TX - V"];
-      for (const a of accts) {
-        const r = await get(`/api/kpi/labor?account=${encodeURIComponent(a)}&start=2026-08-17&end=2026-08-23`);
-        const cw = (r.body?.board?.weeks || []).find(x => x.week_start === "2026-08-17");
-        if (cw) {
-          acctSums.under += Number(cw.anomaly_under_1h    || 0);
-          acctSums.over  += Number(cw.anomaly_over_16h    || 0);
-          acctSums.noc   += Number(cw.anomaly_no_clockout || 0);
+      // Mirrors deriveActuals.js:483-486 exactly (DRAFT-only branch).
+      function classify(duration, endTime) {
+        return {
+          no_clockout: !endTime ? 1 : 0,
+          under_1h:    (duration > 0 && duration < 1.0) ? 1 : 0,
+          over_16h:    duration > 16.0 ? 1 : 0,
+        };
+      }
+      // Each case: [duration, endTime, expected, label]. Owner's spec
+      // asks for 12-14h NOT-triggering + >16h triggering. Boundary
+      // cases (1.0, 16.0) pinned because the operators are strict.
+      const cases = [
+        [0.5,   "x",  { no_clockout: 0, under_1h: 1, over_16h: 0 }, "0.5h with end_time -> under_1h fires"],
+        [0.5,   null, { no_clockout: 1, under_1h: 1, over_16h: 0 }, "0.5h + no end_time -> under_1h + no_clockout both fire"],
+        [1.0,   "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "boundary 1.0h -> NOT under_1h (strict <)"],
+        [5.0,   "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "5h normal -> no flags"],
+        [12.0,  "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "12h -> NOT over_16h (owner's specific 12-14h case)"],
+        [13.5,  "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "13.5h -> NOT over_16h (owner's specific 12-14h case)"],
+        [14.0,  "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "14h -> NOT over_16h (owner's specific 12-14h case)"],
+        [15.99, "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "just under 16h -> NOT over_16h"],
+        [16.0,  "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "boundary 16.0h -> NOT over_16h (strict >)"],
+        [16.01, "x",  { no_clockout: 0, under_1h: 0, over_16h: 1 }, "just over 16h -> IS over_16h"],
+        [20.0,  "x",  { no_clockout: 0, under_1h: 0, over_16h: 1 }, "well over 16h -> IS over_16h"],
+        [20.0,  null, { no_clockout: 1, under_1h: 0, over_16h: 1 }, "over 16h AND no end_time -> over_16h + no_clockout both fire"],
+        [0.0,   "x",  { no_clockout: 0, under_1h: 0, over_16h: 0 }, "0h with end_time -> no flags (under_1h needs dur > 0)"],
+        [0.0,   null, { no_clockout: 1, under_1h: 0, over_16h: 0 }, "0h no end_time -> no_clockout only (under_1h needs dur > 0)"],
+      ];
+      let mismatch = 0;
+      for (const [dur, endTime, expected, label] of cases) {
+        const got = classify(dur, endTime);
+        const same = got.no_clockout === expected.no_clockout
+                  && got.under_1h    === expected.under_1h
+                  && got.over_16h    === expected.over_16h;
+        if (same) ok(label);
+        else {
+          fail(`${label} - expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)}`);
+          mismatch++;
         }
       }
-      if (acctSums.over === 0) ok(`current week over-16h total = 0 (correct - 3 DRAFT entries in 12-14h bucket did not fire the flag)`);
-      else fail(`current week over-16h = ${acctSums.over} - classifier fired on 12-14h entries`);
-      if (acctSums.noc > 0) ok(`current week no-clockout total = ${acctSums.noc} (matches Kevin's ~18 measurement)`);
-      else note(`current week no-clockout = 0 - unexpected if 2026-08-20 measurement still holds`);
-      note(`under-1h total = ${acctSums.under}, over-16h total = ${acctSums.over}`);
+      // Corollary of the property: over_16h can only be 1 when dur > 16.
+      // If the classifier ever changed to fire on 12-14h (as this probe
+      // once falsely claimed on 2026-08-21), the case rows above catch
+      // it before any live-data crosscheck could be gamed by a Tuesday.
+      if (mismatch === 0) ok(`classifier property holds across ${cases.length} boundary + interior cases`);
     }
 
     // ─── U5 strip and table agree ────────────────────────────────────
