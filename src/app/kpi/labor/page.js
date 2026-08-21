@@ -906,20 +906,29 @@ export default function KpiLaborPage() {
         <StateLoading />
       ) : loadState === "ok" && data.account_state === "salaried_only" ? (
         <StateSalaried account={account} message={data.account_state_message} />
-      ) : loadState === "ok" && data?.refused === true ? (
+      ) : !inHomestandView && loadState === "ok" && data?.refused === true ? (
         /* PR-3b - pre-floor partial-week range. Server ships the
            owner-approved message on data.message; render it verbatim.
            Replaces the misroute to StateEmptyFirstRun ("pipeline
            never derived") that dropped the refusal message on the
-           floor when the picker guard came off. */
+           floor when the picker guard came off.
+           Homestand PR-2 audit 2026-08-21: gated with !inHomestandView
+           so a homestand-view refusal keeps rail + season card + tabs;
+           HomestandBoard shows the refusal in the stand region only. */
         <RefusalPanel message={data.message} />
-      ) : loadState === "ok" && data?.source === "daily" ? (
+      ) : !inHomestandView && loadState === "ok" && data?.source === "daily" ? (
         /* PR-3b - partial-week custom range routed to the daily
            branch. Renders the day strip subtree; the weekly board
            block above stayed unmounted because it gates on
            `data.actuals?.length` and daily responses ship actuals_range
            instead. Projection / pace / projected close / weekly
-           allowance are ABSENT in this subtree, not zeroed. */
+           allowance are ABSENT in this subtree, not zeroed.
+           Homestand PR-2 audit 2026-08-21: gated with !inHomestandView
+           so a homestand request (which also lands source='daily'
+           through the shared range resolver) does not double-render
+           this branch AS WELL AS the HomestandBoard. Kevin's audit
+           saw both subtrees stacking, second one stripped of
+           homestand context. */
         <DayStrip data={data} todayISO={today} />
       ) : loadState === "loading" && !hasEverRenderedRef.current ? (
         /* V25-16 - COLD skeleton mirrors the real layout so the shape
