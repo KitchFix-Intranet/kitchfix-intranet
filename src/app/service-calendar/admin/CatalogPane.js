@@ -211,12 +211,22 @@ export default function CatalogPane({
                       Reactivate group
                     </button>
                   ) : (
+                    /* PR-N audit R2 C3 (Kevin ruling 2026-08-21):
+                       archive-group affordance renders regardless of
+                       active-service count. An empty group is the
+                       safest thing to archive and creating one by
+                       mistake is the most likely reason to want to.
+                       The modal handles the empty case by auto-
+                       checking acknowledged with an explicit copy
+                       ("This group has no services. Nothing will be
+                       archived with it."). The server still requires
+                       the acknowledged flag; the checkbox stays a
+                       deliberate act wherever there is anything to
+                       lose. */
                     <button
                       type="button"
                       className="scav-group-ft-archive"
                       onClick={() => onArchiveGroup(g)}
-                      disabled={activeSvcCount === 0}
-                      title={activeSvcCount === 0 ? "No active services to archive" : ""}
                     >
                       Archive group
                     </button>
