@@ -25,7 +25,6 @@
 //      moves.
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { DayStripPlot, aggregatePerDay, isoRange } from "./DayStrip.js";
 
