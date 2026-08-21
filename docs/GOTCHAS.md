@@ -2,7 +2,7 @@
 
 > **Purpose:** Hard-won lessons from building this system. Every entry is a real bug or pitfall that has already cost time. Read before debugging anything that smells familiar.
 >
-> **Last verified:** 2026-05-05
+> **Last verified:** 2026-08-21
 > **How to add to this list:** When you spend more than an hour on a problem and the cause is non-obvious, add the lesson here. Date the entry and describe the symptom + fix.
 
 ---
@@ -168,6 +168,71 @@ Postgres does not confer any permission on a newly created table beyond the owne
 
 **Negative-space post-flight.** For append-only tables, don't just assert the positive grants - assert the negative. `has_table_privilege('service_role', 'my_table', 'UPDATE')` must return FALSE. A permission you did not grant is exactly the kind of thing a future migration can quietly add; asserting its absence turns "the docs say append-only" into an executable contract. `kpi-8a-rippling-raw.sql` post-flight is the pattern.
 
+### PostgREST caps `.select()` at 1000 silently - always paginate, always order
+
+PostgREST's default row cap is 1000. Ask for more and you get the first 1000 back with **no error, no warning, no header change that most clients surface** - the response looks successful and complete. Every consumer that trusted the return has been silently reading a truncated set.
+
+**Bit us in four places:**
+- `ref_accounts` map build - the account resolver was truncated to 1000 rows, so every lookup for an account outside the first page fell through to the default (fixed in commit `12a1f4b`).
+- S1h pay-segment scan - the segment enumerator returned the first 1000 pay periods and the derive silently under-counted.
+- Multiple in-script probe denominators - probes calling `.select("*", { count: "exact" })` for a total, then `.select()` for the rows, and reporting the small number without noticing the cap.
+- `_probe_salary_s2` - same shape.
+
+**The rule.** Never trust a single `.select()` to return "all rows." Two paired discipline steps:
+
+1. **Paginate every full-set read.** Loop `.range(from, to)` in 1000-row pages until either the returned page is short or `from` exceeds the exact count. `_g7_snapshot.mjs` and `scripts/probes/dump_seen_txns` (Section B) are the reference pattern.
+
+2. **`.order()` BEFORE `.range()`.** Without an explicit ORDER BY, PostgreSQL returns rows in whatever order the executor chose - which can differ page-to-page and retry-to-retry. `.range(0, 999)` followed by `.range(1000, 1999)` without an order can return overlapping or missing rows. Order by the primary key or any stable column; the ordering is what makes the pagination coherent.
+
+The count-exact HEAD probe is the safety belt: `select("*", { count: "exact", head: true })` returns the true row count without payload. Compare it against the sum of your paged responses; a mismatch means the pagination is wrong. Do not skip this check on any probe that reports a total.
+
+### A structural verify proves nothing FLOWS
+
+Five green structural checks preceded a 403 because no grant existed (INV-P8c / Ruling 4, 2026-08-20 - `rippling_report_seen_txns`). Later, six green checks passed while the table sat empty (G6 Phase 2, `billcom_ref_vendors`). "Table exists," "column exists," "constraint present," "grant present," "index present" - every one of those can hold while the pipeline that is supposed to fill the table has silently no-op'd.
+
+**The rule.** Any migration that creates a table needs three checks, not one:
+
+1. **Structural:** the DDL landed (existing pattern from the Postgres grant entry above).
+2. **`service_role` grant:** `role_table_grants` probe that asserts SELECT (and INSERT if written from an app) actually resolves for `service_role` on the new table. A negative-space assertion on privileges the table should NOT have (`UPDATE` / `DELETE` on append-only) is a bonus.
+3. **Post-sync row-count verify:** run the sync/ingest that populates the table, then assert `count > 0` (or matches a documented expected count). A green structural check on an empty table is the exact failure shape both incidents above shipped.
+
+Related: the "silent-success shape" this class shares with the Sheets-drift + dual-write-gap incidents is that a passing check on the wrong axis reads as validation, and the real axis - "did any actual row flow through this pipeline end to end" - never got tested. Structural is not flow.
+
+### A date rule must assert more than one distinct date before it runs
+
+`txn_date` was the sync date on every row (2026-08-19). A 5-day matching window on `abs(txnA.txn_date - txnB.txn_date) <= 5` matched everything in the fiscal year - the rule collapsed. Ruling 4 auth-pair arbitration got mis-applied on stale dates because the date column had a single value, so the "within 5 days" check was vacuous.
+
+**Realised on 2026-08-20 (INV-P8c).** Fix landed as `assertTxnDateHasMultipleValues` in the derive pre-flight: the assert scans the input set, counts distinct `txn_date` values, and refuses to run the date-dependent rule when the count is 1 (or below a configurable threshold).
+
+**The rule.** Before running any rule whose logic depends on date arithmetic (`same-day`, `within-N-days`, `before/after`, `latest/earliest`), assert that the input has more than one distinct date. A single-date input isn't "matching everything by coincidence" - it's "the date dimension is missing and the rule has no meaning." Fail loudly and force the caller to hydrate the date column before retrying.
+
+The general shape: any window/range comparator that reduces to `true` when the inputs collapse to a single value should assert against that collapse in a pre-flight. `assertTxnDateHasMultipleValues` is the pattern for date; the same shape applies to `assertAmountHasMultipleValues`, `assertVendorHasMultipleValues`, etc., wherever a comparator would degenerate.
+
+---
+
+## Purchasing engine (Rippling + BillCom)
+
+### Vendor date filters are silently ignored - Rippling drops `date_gte`/`date_lte`, bill.com v3 drops filters on `/bills`
+
+Both external systems the purchasing engine reads from will happily accept a filter query parameter and return the unfiltered result, with no header or error indicating the filter was dropped. This has bitten every ingest path that trusted the API contract.
+
+- **Rippling `/time-entries`** - `?date_gte=...&date_lte=...` are dropped. The endpoint returns the full time-entry history regardless.
+- **Rippling `/custom-objects/*/records`** - same shape. Filter params are ignored.
+- **bill.com v3 `/bills`** - date filters silently no-op. This is why `src/lib/billcom.js` has a `/bills/filtered` code path that explicitly routes to v2 for anything date-scoped.
+
+**The rule.** Assume a filter parameter does nothing until a row count proves otherwise. Two ways to prove it:
+
+1. Ingest twice with a tight and a loose date window; the row counts must differ by roughly the fraction of history in the tight window.
+2. Ingest with an explicitly bogus date range (e.g. 1900-01-01..1900-01-02); the result must be empty. If it isn't, the filter is being dropped.
+
+If neither approach is practical (rate-limited, one-shot cron), fall back to client-side filtering after the pull: pull all history, filter in the app, and record in the ingestor's log that this is happening. Silent trust of a vendor's filter is a recipe for a "we're pulling 6 months of history every 15 minutes" incident.
+
+### bill.com `/vendors` ignores `start=` - cursor-walk via `nextPage` only
+
+`GET /billcom/vendors?start=<n>` is silently ignored - the endpoint returns page 1 regardless of the offset. Pagination is `nextPage`-cursor only: the response body carries a `nextPage` token, and the next request must be `?nextPage=<token>`.
+
+Documented inline in `src/lib/billcom.js` vendorsUrl header. **The rule.** Any bill.com endpoint that returns a `nextPage` in the response uses cursor pagination, not offset. Never assume start= works because it was accepted; walk one page, read the cursor, walk again.
+
 ---
 
 ## Time & Dates
@@ -286,6 +351,16 @@ function Parent({ data }) {
   return content;
 }
 ```
+
+### Two things computing one idea from different inputs will disagree
+
+Four separate bugs, one shape. The pill number and the hero header and the chart didn't match, because each one derived its own value from its own call, and the calls sourced different projections. When one derive picked up a delta the others hadn't, the surface fractured - "the same number" showed up in three places with three values.
+
+**The rule.** If a UI shows the same idea in more than one place - a summary pill, a hero total, a chart tick, a row footer - the idea must be computed once and passed down to every render site. Every additional call site is a new opportunity for the sources to drift out of sync. See `docs/KPI_PURCHASING_MASTER.md §9B` for the enumerated case list and the "single derive, many renders" contract this rule codifies.
+
+Same class as the pay-segment inflation earlier this quarter: two consumers each running the same aggregation with slightly different filters, disagreeing on the total, both technically "correct" against their own filter. The fix in that case was to fold the aggregation into the derive step so the two consumers pulled the same pre-computed row.
+
+The failure mode to watch for: a code review that reads "pill: `useMemo(() => computePill(data))`; hero: `useMemo(() => computeHero(data))`; chart: `useMemo(() => computeChart(data))`" is a strong smell of this class, especially when `computePill` and `computeHero` both reduce to `data.filter(...).reduce(...)` with different filter predicates. Push the reduce up to one call that returns `{ pill, hero, chart }` and consume the fields, not the raw data.
 
 ### The SC toast is per-page, not the shared component
 
@@ -826,3 +901,4 @@ A static `grep` for `className="foo-bar"` will not find `` `foo-bar--${var}` ``,
 - **2026-06-16** - Phase A A7: SousAI Drive ingestion retired. A5 swapped `embedDocument` to read from resolved MDX (`extractMdx`) instead of the Drive Docs API; A7 deleted the now-orphaned Drive path (`src/lib/sousai/extract.js` + the Layer-2 dev rig `scripts/sousai-extract-and-chunk.mjs`). The `documents.readonly` and `drive.readonly` SA scopes leave the codebase with that delete. **Intentionally still present:** the `documents.source_drive_id`/`_es` columns and the reader's Drive iframe fallback in `SlideOverReader.js`/`route.js` - they back the reader until their own separate retirement (post-A7 doc-cleanup pass). The broad `drive` scope in `src/lib/sheets.js` and `src/lib/auth.js` is the standing scope-permissiveness finding, unrelated to A7.
 - **2026-06-17** - Two entries from the doc-format arc + the OPD Command engine scoping: (1) Print CSS strips document design unless `color: #000` is avoided on the print body and `print-color-adjust: exact` is set on the body + callout variants + table headers; Chrome's print header/footer cannot be reliably killed from CSS when the user has "Headers and footers" toggled on. (2) `documents.status` is NOT NULL with no schema default, which breaks the preserve-by-omission pattern that works for the other overlay fields - fix is conditional include via `mdxToDocRow(fm, existing)` so MDX seeds on insert and the existing PG row preserves on update.
 - **2026-06-24** - New Service Calendar section from the SC lens-vision investigation: (1) PDC phases are RECORDED in a "Camp Name" column for 3 of 5 PDCs - read it, do not infer (`SC_PDC_PHASES.md`). (2) Actuals use a per-account contracted discount (CIN-AZ 70%, TBR-FL MiLB 75%), not sticker price - matching the P&L requires applying the discount. (3) Flat-fee accounts (STL-FL, MLB flat-fees) drive revenue from the fee schedule / P&L allocation, not from per-meal math. (4) Role data lives in `contacts.role` (not the empty `users` table, not the hardcoded `SC_ADMIN_EMAILS`); intent-aware landing keys off that column.
+- **2026-08-21** - Six entries landed from the purchasing pre-build audit: (1) PostgREST 1000-row cap - paginate + order every full-set read; hit `ref_accounts`, S1h pay-segments, `_probe_salary_s2`, and multiple probes silently. (2) Both Rippling and bill.com v3 silently ignore date filters; assume dropped until row-count proves otherwise; bill.com v2 `/bills/filtered` exists for this reason. (3) bill.com `/vendors` ignores `start=`; cursor-walk via `nextPage` only. (4) A structural verify proves nothing FLOWS - INV-P8c/Ruling 4 and G6 Phase 2 both shipped green structural checks against empty tables; new tables need structural + grant + post-sync row-count checks. (5) A date rule ran on a single-date table (INV-P8c 2026-08-20 `rippling_report_seen_txns` sync-date collapse); date-window rules now assert `assertTxnDateHasMultipleValues` before running. (6) Two things computing one idea from different inputs - pill + hero + chart fractured four times in this quarter; §9B of `KPI_PURCHASING_MASTER` codifies "single derive, many renders."
