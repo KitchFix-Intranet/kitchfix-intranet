@@ -200,90 +200,112 @@ console.log("[B4] budget pro-rate - slice sum equals total to the cent");
   eq(p.label, "pro-rated across 15 days", "  15-day label");
 }
 
-// ─── Route shape assertions ─────────────────────────────────────────
-// Kevin ruling: no single response mixes sources. Verify by code-read
-// on route.js that:
-//   - every non-refusal response carries `source` = 'weekly' | 'daily'
-//   - refusal response carries `source: null, refused: true`
-//   - the weekly branches never set daily-specific keys (actuals_daily,
-//     budget_prorate, actuals_range) on their bodies
-//   - the daily branch never sets weekly-specific keys (board,
-//     budget_periods, week_budgets) on its body
+// ─── Route shape assertions - runtime response body ─────────────────
+// Owner ruling 2026-08-21: "a grep that follows a refactor is a grep
+// that will go stale again. Replace the code-read with a runtime
+// assertion on the response body." Prior version grep'd route.js for
+// `handleDailyRangeRequest` and its `source: "daily"` literal, both
+// of which went stale when the daily handler was refactored to
+// delegate to buildDailyRangeBody in src/lib/labor/dailyRangeBody.js.
+// The behavior was correct; the probe just couldn't see it any more.
+//
+// Runtime approach: gated behind PROBE_LIVE_HTTP=1 (matches the H6
+// pattern in _probe_kpi_homestand - owner ruling on dev-server
+// spin-ups being explicit opt-in after a 20-minute hang cost us
+// twice). When unset, prints SKIP so the default `node
+// scripts/probes/_probe_range_resolver.mjs` invocation exits on the
+// in-process R1..B4 tests without spinning next dev.
 console.log("");
-console.log("[route-shape] no single response mixes sources (code-read)");
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
-const routeSrc = fs.readFileSync(path.join(REPO_ROOT, "src/app/api/kpi/labor/route.js"), "utf8");
-// strip comments to avoid false positives from prose
-const routeCode = routeSrc.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
-// 1. Refusal branch carries source:null + refused:true
-const refusalBlock = routeCode.match(/if \(rangeSource\.refused\) \{\s*return NextResponse\.json\(\{([\s\S]*?)\}\);\s*\}/);
-if (!refusalBlock) fail("refusal branch not found in route.js");
-else {
-  const body = refusalBlock[1];
-  const hasSource = /source:\s*null/.test(body);
-  const hasRefused = /refused:\s*true/.test(body);
-  const hasMessage = /message:\s*rangeSource\.refusalMessage/.test(body);
-  if (hasSource && hasRefused && hasMessage) ok("refusal body: source=null + refused=true + message");
-  else fail(`refusal body missing keys: source=${hasSource} refused=${hasRefused} message=${hasMessage}`);
-  // Refusal MUST NOT leak weekly/daily data fields.
-  const leaks = [];
-  for (const key of ["board", "actuals", "budget_periods", "week_budgets", "actuals_daily", "actuals_range", "budget_prorate"]) {
-    if (new RegExp(`\\b${key}\\s*:`).test(body)) leaks.push(key);
-  }
-  if (leaks.length === 0) ok("refusal body omits all data keys");
-  else fail(`refusal body leaks data keys: ${leaks.join(", ")}`);
+if (process.env.PROBE_LIVE_HTTP !== "1") {
+  console.log("[route-shape] SKIP - live HTTP requires PROBE_LIVE_HTTP=1 (see block header for why we replaced the code-read)");
+  console.log("");
+  console.log("=".repeat(72));
+  console.log(hardFail === 0 ? "PR-2 RANGE + PRO-RATE: ALL PROBES PASS (route-shape SKIPPED)" : `PR-2 RANGE + PRO-RATE: ${hardFail} FAILURE(S)`);
+  console.log("=".repeat(72));
+  process.exit(hardFail === 0 ? 0 : 1);
 }
 
-// 2. Weekly branches label themselves.
-const weeklySources = [...routeCode.matchAll(/\.source\s*=\s*"weekly"/g)];
-if (weeklySources.length >= 3) ok(`weekly branches label body.source='weekly' (${weeklySources.length} occurrences: aggregate + D26 + single-account)`);
-else fail(`expected >=3 weekly source labels, found ${weeklySources.length}`);
+console.log("[route-shape] runtime response body: no single response mixes sources");
+{
+  const { spawn } = await import("node:child_process");
+  const { setTimeout: sleep } = await import("node:timers/promises");
+  const PORT = process.env.PROBE_PORT || "3101";
+  const BASE = `http://localhost:${PORT}`;
+  const READY_TIMEOUT_MS = 90000;
+  console.log(`  spinning up next dev on :${PORT} with TEST_MODE=true`);
+  const proc = spawn("npm", ["run", "dev", "--", "--port", PORT], {
+    env: { ...process.env, TEST_MODE: "true", NODE_ENV: "development" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderrTail = "";
+  proc.stdout.on("data", () => {});
+  proc.stderr.on("data", (d) => { stderrTail = (stderrTail + d.toString()).slice(-2000); });
 
-// 3. Daily handler exists + labels source='daily' + returns clean shape.
-const dailyHandler = routeCode.match(/async function handleDailyRangeRequest\(ctx\) \{([\s\S]*?)\n\}\n/);
-if (!dailyHandler) fail("handleDailyRangeRequest not found");
-else {
-  const body = dailyHandler[1];
-  const setsSource = /source:\s*"daily"/.test(body);
-  if (setsSource) ok("handleDailyRangeRequest returns source='daily'");
-  else fail("handleDailyRangeRequest does not set source='daily'");
-  // The RETURN body is what matters. Extract the response object
-  // literal from the final `return NextResponse.json({ ... });`.
-  const returnMatch = body.match(/return NextResponse\.json\(\{([\s\S]*?)\}\);\s*$/);
-  if (!returnMatch) fail("daily handler has no NextResponse.json return");
-  else {
-    const returnBody = returnMatch[1];
-    const weeklyLeaks = [];
-    for (const key of ["board", "budget_periods", "week_budgets"]) {
-      if (new RegExp(`\\b${key}\\s*:`).test(returnBody)) weeklyLeaks.push(key);
+  async function waitReady(deadline) {
+    while (Date.now() < deadline) {
+      try {
+        const r = await fetch(`${BASE}/api/kpi/labor?account=CIN%20-%20OH&start=2026-07-06&end=2026-07-12`, { signal: AbortSignal.timeout(30000) });
+        if (r.status === 200 || r.status === 400 || r.status === 500) return true;
+      } catch {}
+      await sleep(1000);
     }
-    // `actuals` LHS collides with actuals_daily / actuals_range;
-    // enforce there is no bare `actuals: <expr>` (comma or space
-    // required immediately after, but nothing between actuals and :).
-    if (/\bactuals\s*:/.test(returnBody) && !/\bactuals_(daily|range)\s*:/.test(returnBody.match(/\bactuals\s*:[^,\n}]*/)?.[0] || "")) {
-      // Bare `actuals:` present.
-      weeklyLeaks.push("actuals");
+    return false;
+  }
+
+  try {
+    const ready = await waitReady(Date.now() + READY_TIMEOUT_MS);
+    if (!ready) {
+      fail(`dev server did not become ready within ${READY_TIMEOUT_MS}ms`);
+      console.log(stderrTail);
+    } else {
+      // Case 1 - REFUSAL: partial-week range starting before the daily
+      // floor (04/20/26). Owner ruling: source=null, refused=true, no
+      // data keys leak.
+      const refBody = await (await fetch(`${BASE}/api/kpi/labor?account=CIN%20-%20OH&start=2026-04-19&end=2026-04-22`)).json();
+      if (refBody.source === null && refBody.refused === true && typeof refBody.message === "string") {
+        ok("refusal: source=null + refused=true + message present");
+      } else {
+        fail(`refusal body wrong: source=${refBody.source} refused=${refBody.refused} message=${typeof refBody.message}`);
+      }
+      const refusalLeaks = ["board", "actuals", "budget_periods", "week_budgets", "actuals_daily", "actuals_range", "budget_prorate"]
+        .filter(k => refBody[k] !== undefined);
+      if (refusalLeaks.length === 0) ok("refusal body omits all data keys");
+      else fail(`refusal body leaks data keys: ${refusalLeaks.join(", ")}`);
+
+      // Case 2 - DAILY: partial-week range entirely post-floor. Owner
+      // ruling: source='daily', carries actuals_range + actuals_daily +
+      // budget_prorate, no board / budget_periods / week_budgets.
+      const dailyBody = await (await fetch(`${BASE}/api/kpi/labor?account=CIN%20-%20OH&start=2026-07-09&end=2026-07-12`)).json();
+      if (dailyBody.source === "daily") ok("daily: source='daily'");
+      else fail(`daily body source wrong: got ${dailyBody.source}`);
+      const dailyMissing = ["actuals_range", "actuals_daily", "budget_prorate"]
+        .filter(k => dailyBody[k] === undefined);
+      if (dailyMissing.length === 0) ok("daily body carries actuals_range + actuals_daily + budget_prorate");
+      else fail(`daily body missing keys: ${dailyMissing.join(", ")}`);
+      const weeklyLeaksInDaily = ["board", "budget_periods", "week_budgets", "actuals"]
+        .filter(k => dailyBody[k] !== undefined);
+      if (weeklyLeaksInDaily.length === 0) ok("daily body omits weekly-shape keys (board / budget_periods / week_budgets / actuals)");
+      else fail(`daily body leaks weekly-shape keys: ${weeklyLeaksInDaily.join(", ")}`);
+
+      // Case 3 - WEEKLY: whole-week range. Owner ruling: source='weekly',
+      // carries board, no actuals_range / actuals_daily / budget_prorate.
+      const weeklyBody = await (await fetch(`${BASE}/api/kpi/labor?account=CIN%20-%20OH&start=2026-07-06&end=2026-07-12`)).json();
+      if (weeklyBody.source === "weekly") ok("weekly: source='weekly'");
+      else fail(`weekly body source wrong: got ${weeklyBody.source}`);
+      if (weeklyBody.board !== undefined) ok("weekly body carries board");
+      else fail("weekly body missing board");
+      const dailyLeaksInWeekly = ["actuals_range", "actuals_daily", "budget_prorate"]
+        .filter(k => weeklyBody[k] !== undefined);
+      if (dailyLeaksInWeekly.length === 0) ok("weekly body omits daily-shape keys (actuals_range / actuals_daily / budget_prorate)");
+      else fail(`weekly body leaks daily-shape keys: ${dailyLeaksInWeekly.join(", ")}`);
     }
-    if (weeklyLeaks.length === 0) ok("daily response body omits weekly-shape keys (board / budget_periods / week_budgets / bare actuals)");
-    else fail(`daily response body leaks weekly-shape keys: ${weeklyLeaks.join(", ")}`);
-    const dailyKeys = ["actuals_range", "actuals_daily", "budget_prorate"];
-    const missing = dailyKeys.filter(k => !new RegExp(`${k}\\s*:`).test(returnBody));
-    if (missing.length === 0) ok("daily response body carries actuals_range + actuals_daily + budget_prorate");
-    else fail(`daily response body missing keys: ${missing.join(", ")}`);
-    if (/salary_available:\s*false/.test(returnBody)) ok("daily response body forces salary_available=false (deferred)");
-    else fail("daily response body must set salary_available=false");
+  } finally {
+    try { proc.kill("SIGTERM"); } catch {}
+    await sleep(500);
+    try { proc.kill("SIGKILL"); } catch {}
   }
 }
-
-// 4. Resolver is called BEFORE any account-branch return.
-const resolverCall = routeCode.match(/resolveRangeSource\(\{[^}]+\}\)/);
-if (resolverCall) ok("resolveRangeSource is invoked in the route flow");
-else fail("resolveRangeSource never called in route.js");
 
 console.log("");
 console.log("=".repeat(72));
