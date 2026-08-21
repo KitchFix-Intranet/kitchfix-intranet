@@ -1,17 +1,24 @@
 // src/lib/labor/homestandResolver.js
 //
 // PR-1 of the homestand build. Derives ordered stands from the
-// sc_homestand_schedule table for the SIX MLB clubhouse accounts
-// that have game schedules; returns [] for every other account so
-// the client's homestand tab is ABSENT, not disabled.
+// sc_homestand_schedule table for the four MLB clubhouse accounts
+// in HOMESTAND_ACCOUNTS_FY2026; returns [] for every other account
+// so the client's homestand tab is ABSENT, not disabled. See the
+// constant's own comment for why the list is hardcoded rather than
+// derived from data (audit follow-up ruling 2026-08-21).
 //
-// One code path serves all six accounts. Four of them carry a stored
-// homestand_id; the two AAA clubs (CIN - KY, TBJ - NY) do not. We
-// derive stands the same way everywhere, and expose the stored id
-// as metadata only so a probe can verify the derivation matches
-// what the schedule loader wrote. Keying the URL or budget on a
-// stored id would reintroduce the exact split owner ruling
-// 2026-08-21 exists to eliminate.
+// One code path serves the four accounts. All four carry a stored
+// homestand_id. We derive stands from the raw GAME rows anyway and
+// expose the stored id as metadata only so a probe can verify the
+// derivation matches what the schedule loader wrote. Keying the URL
+// or budget on a stored id would reintroduce the exact split owner
+// ruling 2026-08-21 exists to eliminate.
+//
+// Stand counts are NOT uniform across accounts. Measured for FY2026:
+// CIN - OH 13, STL - MO 13, TXR - TX - H 12, TXR - TX - V 12. Anything
+// hardcoding 13 is wrong on two of the four active accounts. The
+// derivation runs on the actual GAME rows in the account's schedule;
+// no place downstream assumes a fixed count.
 //
 // Owner-approved attribution (forward-looking):
 //   window(H) = [ previous stand's last game day + 1 ... H's last game day ]
@@ -23,7 +30,9 @@
 //   actual is what inflated the design-pass bank from $6,009 to
 //   $10,783; we omit them explicitly here and in the bank rollup.
 //
-// Grouping rule (verified on CIN - OH, 13 stored -> 13 derived):
+// Grouping rule (verified on CIN - OH: 13 stored -> 13 derived; the
+// same shape holds on STL - MO 13/13, TXR - TX - H 12/12, TXR - TX - V
+// 12/12):
 //   sort GAME rows by service_date, break when
 //     next.service_date - prev.service_date > 2
 //   which allows one off-day inside a stand (mid-series rest day).
@@ -41,11 +50,30 @@
 const MS_PER_DAY = 86400000;
 const PERIOD_LENGTH_DAYS = 28;
 
-// The six accounts that get a homestand tab. Owner ruling 2026-08-21:
-// every other account gets an empty list -> tab absent, not disabled.
-export const MLB_HOMESTAND_ACCOUNTS = new Set([
+// The accounts that get a homestand tab this season. Owner ruling
+// 2026-08-21 (final), hardcoded and NOT derived from data. The name
+// carries FY2026 deliberately - this is a scope decision for this
+// season, revisited when 2027 schedules land.
+//
+// Why this is a constant list, not a `has schedule AND has hourly
+// labor` derivation:
+//   - CIN - KY and TBJ - NY have zero hourly labor - salaried staff
+//     only, verified against the P8 P&L. Both have a game schedule.
+//     A pure data gate would still exclude them today (labor count
+//     is zero), but the guardrail against a future season where they
+//     hire one hourly worker is a hardcoded list, not a threshold.
+//   - STL - FL and TBJ - FL are development complexes: 58% of their
+//     hourly labor falls on non-game days against 12% at CIN - OH,
+//     and they work 117 days against 57 game days. The homestand
+//     model assumes labor clusters around games; it does not hold
+//     there. A pure data gate would INCLUDE them (66 GAME rows +
+//     hundreds of labor rows + full 3100.1 budgets), rendering a
+//     view that misleads.
+//
+// Do not "fix" this into a derived rule. The next reader who thinks
+// this looks like a smell should read the audit trail on PR-2 first.
+export const HOMESTAND_ACCOUNTS_FY2026 = new Set([
   "CIN - OH", "STL - MO", "TXR - TX - H", "TXR - TX - V",
-  "CIN - KY", "TBJ - NY",
 ]);
 
 // Fiscal-year boundaries. Duplicated from deriveActuals.js (which
@@ -173,7 +201,8 @@ function classifyDN(v) {
 /**
  * List ordered homestands for an MLB account in a fiscal year.
  *
- * Returns [] for non-MLB accounts (client reads: no homestand tab).
+ * Returns [] for any account not in HOMESTAND_ACCOUNTS_FY2026 - see
+ * that constant's own comment for the reasoning behind the list.
  * Returns [] if the fiscal year has no schedule rows or no budgets.
  *
  * @param {SupabaseClient} supa
@@ -182,7 +211,11 @@ function classifyDN(v) {
  * @returns {Promise<Array>} ordered stands
  */
 export async function listHomestands(supa, accountKey, fiscalYear = 2026) {
-  if (!MLB_HOMESTAND_ACCOUNTS.has(accountKey)) return [];
+  // Owner ruling 2026-08-21 (final): the homestand view is available
+  // on the four accounts in HOMESTAND_ACCOUNTS_FY2026 and nobody else
+  // for this season. See the constant's own comment for why this is a
+  // hardcoded list, not a data-derived gate.
+  if (!HOMESTAND_ACCOUNTS_FY2026.has(accountKey)) return [];
   const fy = FY_BOUNDARIES.get(fiscalYear);
   if (!fy) return [];
 

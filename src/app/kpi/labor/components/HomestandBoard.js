@@ -2,9 +2,11 @@
 // src/app/kpi/labor/components/HomestandBoard.js
 //
 // PR-2 - the homestand view. Renders only when
-// data.homestands?.length > 0 (six MLB accounts today). Sits under
-// the command bar's "Homestand" tab; ?view=homestand keeps a shared
-// link on the right view.
+// data.homestands?.length > 0 (four MLB accounts today per owner
+// ruling 2026-08-21 - HOMESTAND_ACCOUNTS_FY2026 in homestandResolver
+// carries the list + reasoning). Sits under the command bar's
+// "Homestand" tab; ?view=homestand keeps a shared link on the right
+// view.
 //
 // Owner reminders 2026-08-21 baked in
 //   #1 salary gate works EXACTLY as period board. Client renders
@@ -25,7 +27,6 @@
 //      moves.
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { DayStripPlot, aggregatePerDay, isoRange } from "./DayStrip.js";
 

@@ -50,7 +50,6 @@ import { buildDailyRangeBody } from "@/lib/labor/dailyRangeBody.js";
 // its window, which passes through the existing range resolver
 // unchanged (no new source value). See src/lib/labor/homestandResolver.js.
 import {
-  MLB_HOMESTAND_ACCOUNTS,
   listHomestands,
   findHomestandByGameStart,
   computeSplitWithGameDates,
@@ -407,7 +406,8 @@ export async function GET(request) {
   const dailyFloorISO = floorQ.data?.week_start || "2026-04-20";
 
   // homestand PR-1 - MLB clubhouse selection. If `?homestand=<game_start ISO>`
-  // is set AND the account has a homestand tab (six MLB accounts),
+  // is set AND the account has a homestand tab (HOMESTAND_ACCOUNTS_FY2026
+  // - four hardcoded accounts per owner ruling 2026-08-21 audit follow-up),
   // resolve the stand to its window and override start/end BEFORE the
   // range resolver sees them. The window then routes to daily or
   // weekly by the existing rule; homestand introduces no new source.
@@ -415,23 +415,23 @@ export async function GET(request) {
   // regardless of branch. Non-MLB accounts always get an empty list
   // and no homestand fields - client reads the empty list as "no
   // homestand tab here" (absent, not disabled).
-  // homestand PR-2 - always fetch stands + FY daily actuals for MLB
-  // accounts, attach per-stand actual to each stand in the list, and
-  // compute season-to-date bank. The client's season rail card and
-  // season-to-date card need this on EVERY request, not only when a
-  // stand is selected. `homestand_split` still only fires when a
-  // stand is selected. Cost: one extra labor_actuals_daily read per
-  // request on the six MLB accounts.
+  // homestand PR-2 - always fetch stands + FY daily actuals for
+  // accounts that have BOTH a homestand schedule AND at least one
+  // row in labor_actuals_daily this fiscal year. Owner ruling
+  // 2026-08-21 (audit follow-up): the gate is data-driven, not a
+  // hardcoded MLB list. listHomestands returns [] when either
+  // condition fails, so the follow-on work is naturally skipped for
+  // non-schedule accounts (PDC, corp) AND for MLB accounts with no
+  // hourly labor (CIN - KY, TBJ - NY today). If either grows hourly
+  // staff, the tab appears with no code change.
   let homestandSplice = null;
   let allHomestands = null;
   let homestandBank = null;
-  let homestandGameDatesByStand = null;   // Map<game_start ISO, Set<GAME ISO dates>> - only for MLB
-  if (MLB_HOMESTAND_ACCOUNTS.has(account)) {
-    try { allHomestands = await listHomestands(supa, account, 2026); }
-    catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
-
-    if (allHomestands.length > 0) {
-      const [dailyQ, schedQ] = await Promise.all([
+  let homestandGameDatesByStand = null;   // Map<game_start ISO, Set<GAME ISO dates>>
+  try { allHomestands = await listHomestands(supa, account, 2026); }
+  catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
+  if (allHomestands && allHomestands.length > 0) {
+    const [dailyQ, schedQ] = await Promise.all([
         supa.from("labor_actuals_daily")
           .select("work_date, amount")
           .eq("account_key", account),
@@ -517,7 +517,6 @@ export async function GET(request) {
           homestand_split: computeSplitWithGameDates(dailyRows, found, gameDatesForFound),
         };
       }
-    }
   }
   const homestandsList = allHomestands || [];
 
