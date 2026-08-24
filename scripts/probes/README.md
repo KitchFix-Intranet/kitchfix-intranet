@@ -61,6 +61,44 @@ the probe's assertions still hold (stale grep patterns / stale data
 thresholds are a separate class - those show up when a probe is
 actually invoked).
 
+## Pin-vs-property test (owner ruling 2026-08-24)
+
+When you write a new assertion, ask one question about every numeric
+literal:
+
+  **Could tonight's sync legitimately change this number?**
+
+  - **Yes** -> it's a PROPERTY, not a pin. Assert the relationship,
+    not the value. Examples: bank == sum(finished budget) -
+    sum(finished actual); sum(employee rows) == stand.actual to the
+    cent; abs(bank_salary_on - bank_hourly_only) < $1.00.
+  - **No** -> a closed historical period, a fiscal calendar boundary,
+    a leadership-set budget in `kpi_budgets`, a config value in
+    `accounts` - **it stays pinned**. The pin IS the point: a change
+    means someone edited a number by hand and we want to know.
+
+Do NOT convert everything to properties. A property test that
+asserts `x == x` proves nothing. The `CIN - OH 06/29` weekly
+sentinel ($4,328.27) is the model: pinned precisely because it
+cannot move (closed June week, every shift approved months ago),
+which is what makes a change to it meaningful.
+
+The test came from live incidents:
+
+  - Homestand H7/H8 hardcoded `bank == $4,218.39` failed when
+    payroll approved overnight and moved it to $3,359.08 as
+    designed. Refreshed to `bank == sum(finished budget) -
+    sum(finished actual)` in PR #778.
+  - `_probe_v42_client` U4 hardcoded `over-16h count == 0` on a day
+    it happened to be 0. Failed when three real anomalies appeared
+    the next day. Refreshed to a 14-case property test on the
+    classifier's own logic in PR #768.
+
+The 188-file sweep in the same session found zero remaining unsafe
+pins. Every dollar/hour/count pin in this tree today is either a
+closed historical sentinel, a structural row count, or a leadership-
+set reference value.
+
 ## Writes (scripts/probes/writes/)
 
 These probes execute Postgres writes as part of their verification and

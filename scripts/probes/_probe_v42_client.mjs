@@ -131,7 +131,7 @@ try {
         const w = (r.body?.board?.weeks || []).find(x => Number(x.anomaly_total || 0) > 0);
         if (w) { found = { account: a, week: w }; break; }
       }
-      if (!found) skip("no anomaly rows across accounts in the probed range (expected 18 no-clock-outs total on the current week - increase the range if needed)");
+      if (!found) skip("no anomaly rows across accounts in the probed range - extend the range or check the current-week data if surprising");
       else {
         const w = found.week;
         ok(`${found.account} wk ${w.week_start}: anomaly_total=${w.anomaly_total} (no-clockout=${w.anomaly_no_clockout || 0}, under-1h=${w.anomaly_under_1h || 0}, over-16h=${w.anomaly_over_16h || 0})`);
