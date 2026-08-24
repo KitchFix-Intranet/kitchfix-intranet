@@ -5,22 +5,22 @@
 // (preset name), so both server and client must agree on how a
 // preset resolves at query time.
 //
-// The five presets:
+// The four presets (last_13wk retired 2026-08-24, Range PR-2):
 //   this_period, last_period    require an accountPeriods list from
 //                                sc_day_metadata (per-account fiscal
 //                                boundaries). If empty, return null.
-//   last_4wk, last_13wk, fytd   pure date math against today.
+//   last_4wk, fytd              pure date math against today.
 //
 // Returns { start, end } as ISO YYYY-MM-DD, or null when the preset
 // cannot be resolved (missing period data or unknown preset name).
 
 const FY_START = "2025-12-29";  // FY2026 opens
 
+// Range PR-2 2026-08-24: last_13wk retired (Joe's 2026-08-19 question).
 export const PRESET_LABELS = {
   this_period: "This period",
   last_period: "Last period",
   last_4wk:    "Last 4 wk",
-  last_13wk:   "Last 13 wk",
   fytd:        "FYTD",
 };
 
@@ -35,7 +35,6 @@ export function resolvePreset(preset, opts = {}) {
   const periods = opts.accountPeriods || [];
   switch (preset) {
     case "last_4wk":  return { start: addDaysISO(today, -27), end: today };
-    case "last_13wk": return { start: addDaysISO(today, -90), end: today };
     case "fytd":      return { start: FY_START,               end: today };
     case "this_period":
     case "last_period": {

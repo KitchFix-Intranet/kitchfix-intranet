@@ -16,7 +16,7 @@
 //   account_key  string, must be one of ACCOUNTS
 //   tab          "labor" (only tab supported today)
 //   date_mode    "preset" | "absolute"
-//   date_preset  one of this_period | last_period | last_4wk | last_13wk | fytd  (required when date_mode=preset)
+//   date_preset  one of this_period | last_period | last_4wk | fytd  (required when date_mode=preset)
 //   date_from    YYYY-MM-DD  (required when date_mode=absolute)
 //   date_to      YYYY-MM-DD  (required when date_mode=absolute; must be >= date_from)
 //   worker_ids   string[] | null  (null = all workers; empty array = no workers)
@@ -33,7 +33,12 @@ import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { getServiceClient } from "@/lib/supabase";
 
-const VALID_PRESETS = new Set(["this_period", "last_period", "last_4wk", "last_13wk", "fytd"]);
+// Range PR-2 2026-08-24: last_13wk retired. Migration
+// docs/migrations/pr-2-range-drop-last-13wk.sql tightens the CHECK
+// constraint on kpi_saved_views.date_preset to match. Zero rows used
+// the value (verified pre-PR), so the migration is a pure schema
+// change with no data migration step.
+const VALID_PRESETS = new Set(["this_period", "last_period", "last_4wk", "fytd"]);
 const VALID_TABS = new Set(["labor"]);
 
 function isYmd(s) {

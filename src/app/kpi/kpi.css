@@ -1084,6 +1084,23 @@
   border-color: var(--kpi-accent);
   color: var(--n-0);
 }
+/* Range PR-2 2026-08-24 - first click stages a start for multi-select.
+   Visual: outline-only tint (border colour + text colour, no fill) so
+   the staged state reads as PENDING, distinct from `.on` which is the
+   already-committed selection. Second click promotes to `.on` on
+   commit (or reveals a range if the user picked a different button). */
+.kpi-rmenu-gp.staged {
+  background: transparent;
+  border-color: var(--kpi-accent);
+  color: var(--kpi-accent-strong);
+  box-shadow: inset 0 0 0 1px var(--kpi-accent);
+}
+.kpi-rmenu-stagenote {
+  display: block;
+  margin-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta);
+  color: var(--text-subtle);
+}
 .kpi-rmenu-foot {
   grid-column: 1 / -1;
   border-top: 1px dashed var(--border-default);

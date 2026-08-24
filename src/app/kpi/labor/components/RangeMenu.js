@@ -38,15 +38,19 @@ import {
   startOfMonth,
   addMonths,
 } from "./CalendarPopover";
+import { validateLabel, formatSelection } from "../lib/rangeLabel";
 
+// Range PR-2 2026-08-24: `last_13wk` preset retired. Joe asked what
+// it was for in the 2026-08-19 review and neither he nor Kevin could
+// answer. Nothing stays on the board that nobody can justify.
 const PRESETS = [
   { key: "this_period", label: "This period" },
   { key: "last_period", label: "Last period" },
   { key: "last_4wk",    label: "Last 4 wk"   },
-  { key: "last_13wk",   label: "Last 13 wk"  },
   { key: "fytd",        label: "FYTD"        },
 ];
-const MONTH_LABELS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const MONTH_LONG = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 // Turn a preset key into a concrete range using the same rules
 // applyPreset() uses in page.js. Kept local to avoid a page.js
@@ -54,7 +58,6 @@ const MONTH_LABELS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT
 function resolvePreset(kind, { today, accountPeriods }) {
   if (kind === "fytd")      return { startISO: FY_START,             endISO: today };
   if (kind === "last_4wk")  return { startISO: addDaysISO(today, -27), endISO: today };
-  if (kind === "last_13wk") return { startISO: addDaysISO(today, -90), endISO: today };
   const past = (accountPeriods || [])
     .filter(p => p.start && p.end && p.start <= today)
     .sort((a, b) => a.start.localeCompare(b.start));
@@ -75,17 +78,31 @@ function resolvePreset(kind, { today, accountPeriods }) {
 //
 // Returns { primary, dates } so the caller can render the date tail
 // in its own span and let it ellipse first at narrow widths (S-10).
-function triggerLabel({ startISO, endISO, resolvedPreset, monthSelected, periodSelected }) {
+//
+// Range PR-2 2026-08-24: URL `?label` hint takes precedence when it
+// validates against the actual dates. Formats:
+//   P1 - P3       multi-period
+//   July 2026     single month (full name, was "JUL 2026")
+//   Jan - Apr 2026 / Nov 2026 - Feb 2027   multi-month
+// See lib/rangeLabel.js for parse/validate/format.
+function triggerLabel({ startISO, endISO, resolvedPreset, monthSelected, periodSelected, urlLabel }) {
   const dates = `${fmtDate(startISO)} – ${fmtDate(endISO)}`;
+  // URL label wins whenever it resolves back to the current dates.
+  // A label that lies (dates changed under it) falls through so the
+  // chip renders the date range instead of a stale name.
+  const validated = validateLabel(urlLabel, startISO, endISO);
+  if (validated) return { primary: formatSelection(validated), dates };
   if (resolvedPreset) {
     const preset = PRESETS.find(p => p.key === resolvedPreset);
     if (preset) return { primary: preset.label, dates };
   }
   // V33 item 4e - unify uppercase everywhere: table total prints
   // `TOTAL · PERIOD N` and the spend-card eyebrow prints `PERIOD N`;
-  // the range-menu trigger now matches.
+  // the range-menu trigger matches. Multi-selection goes through
+  // urlLabel above; the singletons here still read as before so
+  // pre-PR-2 links keep their existing chip vocabulary.
   if (periodSelected != null) return { primary: `PERIOD ${periodSelected}`, dates };
-  if (monthSelected) return { primary: `${MONTH_LABELS[monthSelected.monthIndex]} ${monthSelected.year}`, dates };
+  if (monthSelected) return { primary: `${MONTH_LONG[monthSelected.monthIndex]} ${monthSelected.year}`, dates };
   return { primary: "Custom", dates };
 }
 
@@ -98,8 +115,12 @@ export function RangeMenu({
   resolvedPreset,        // preset key inferred by page.js, may be null
   selectedPeriodNo,      // integer if the current range matches a period, else null
   selectedMonth,         // { year, monthIndex } if range matches a month, else null
+  urlLabel,              // string from ?label, may be null; validated against dates
   onCommit,              // (startISO, endISO, selection) => void
-                         // selection: { kind, value? }
+                         // selection.kind:
+                         //   preset  | period  | month     (singleton, unchanged)
+                         //   periods | months            (multi-select, PR-2)
+                         //   custom                        (custom drag)
   disabled,
 }) {
   const [open, setOpen] = useState(false);
@@ -107,7 +128,17 @@ export function RangeMenu({
   const [customPending, setCustomPending] = useState(null);   // Date | null
   const [customStaged, setCustomStaged] = useState(null);     // {start,end} | null
   const [customAnchor, setCustomAnchor] = useState(() => startOfMonth(parseISOLocal(startISO) || new Date()));
+  // Range PR-2 - staged start for multi-select. `periodStaged` is a
+  // period number (1..13); `monthStaged` is {year, monthIndex}. Only
+  // one may be non-null at a time (units do not mix per spec).
+  const [periodStaged, setPeriodStaged] = useState(null);
+  const [monthStaged, setMonthStaged] = useState(null);
   const rootRef = useRef(null);
+  // Clear staging whenever the menu closes so an abandoned first
+  // click does not persist to the next open.
+  useEffect(() => {
+    if (!open) { setPeriodStaged(null); setMonthStaged(null); }
+  }, [open]);
 
   // Outside-click closes menu AND discards Custom staging.
   useEffect(() => {
@@ -152,6 +183,7 @@ export function RangeMenu({
     startISO, endISO, resolvedPreset,
     monthSelected: selectedMonth,
     periodSelected: selectedPeriodNo,
+    urlLabel,
   });
 
   const canPickPreset = (k) => !((k === "this_period" || k === "last_period") && !hasPeriods);
@@ -232,43 +264,127 @@ export function RangeMenu({
           <div className="kpi-rmenu-col">
             <h5 className="kpi-rmenu-h">FISCAL PERIODS</h5>
             <div className="kpi-rmenu-grid">
-              {Array.from({ length: 13 }, (_, i) => i + 1).map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  className={`kpi-rmenu-gp ${selectedPeriodNo === p ? "on" : ""}`}
-                  onClick={() => {
-                    const r = rangeForPeriod(p);
-                    if (r) commit(r.startISO, r.endISO, { kind: "period", value: p });
-                  }}
-                >P{p}</button>
-              ))}
+              {Array.from({ length: 13 }, (_, i) => i + 1).map(p => {
+                const isSelected = selectedPeriodNo === p;
+                const isStaged = periodStaged === p;
+                // Between-range highlight: if the user has staged a
+                // start, indicate every period in [staged, p]  or
+                // [p, staged] on hover as pending inclusion. Static
+                // for now (no hover state); the staging class tags
+                // the clicked start.
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`kpi-rmenu-gp ${isSelected ? "on" : ""} ${isStaged ? "staged" : ""}`}
+                    aria-pressed={isSelected ? "true" : "false"}
+                    onClick={(e) => {
+                      // Range PR-2 multi-select:
+                      //   first click OR shift-click without staging
+                      //     -> stage as start (single unit selected
+                      //        if the user does not follow up)
+                      //   second click on a DIFFERENT period, or
+                      //   shift-click on any period, or click that
+                      //   matches the staged one
+                      //     -> commit as periods range (staged..this)
+                      // Clicking a month while a period is staged
+                      // (or vice versa) discards the cross-unit
+                      // staging - units do not mix per spec.
+                      setMonthStaged(null);
+                      if (periodStaged == null || e.shiftKey === false && periodStaged === p) {
+                        // Bare click with no staging OR clicking the
+                        // exact staged period again = commit single.
+                        if (periodStaged === p) {
+                          const r = rangeForPeriod(p);
+                          if (r) commit(r.startISO, r.endISO, { kind: "period", value: p });
+                          return;
+                        }
+                        setPeriodStaged(p);
+                        return;
+                      }
+                      // Second click with something staged: commit
+                      // the range. Order the endpoints so start <= end.
+                      const [start, end] = periodStaged <= p ? [periodStaged, p] : [p, periodStaged];
+                      const a = rangeForPeriod(start);
+                      const b = rangeForPeriod(end);
+                      if (a && b) {
+                        commit(a.startISO, b.endISO,
+                          start === end
+                            ? { kind: "period", value: start }
+                            : { kind: "periods", start, end });
+                      }
+                    }}
+                  >P{p}</button>
+                );
+              })}
             </div>
+            {periodStaged != null && (
+              <span className="kpi-rmenu-stagenote">click another period to set the end, or click P{periodStaged} again</span>
+            )}
           </div>
           <div className="kpi-rmenu-col">
             <h5 className="kpi-rmenu-h">MONTHS · 2026</h5>
             <div className="kpi-rmenu-grid">
               {months.filter(m => m.year === 2026).map(m => {
-                const on = selectedMonth && selectedMonth.year === m.year && selectedMonth.monthIndex === m.monthIndex;
+                const isSelected = selectedMonth && selectedMonth.year === m.year && selectedMonth.monthIndex === m.monthIndex;
+                const isStaged = monthStaged && monthStaged.year === m.year && monthStaged.monthIndex === m.monthIndex;
                 return (
                   <button
                     key={`${m.year}-${m.monthIndex}`}
                     type="button"
-                    className={`kpi-rmenu-gp ${on ? "on" : ""}`}
+                    className={`kpi-rmenu-gp ${isSelected ? "on" : ""} ${isStaged ? "staged" : ""}`}
+                    aria-pressed={isSelected ? "true" : "false"}
                     title={`${m.weekCount} fiscal ${m.weekCount === 1 ? "wk" : "wks"}`}
-                    onClick={() => {
-                      const r = rangeForFiscalMonth(m.year, m.monthIndex);
-                      if (r) commit(r.startISO, r.endISO, {
-                        kind: "month",
-                        value: { year: m.year, monthIndex: m.monthIndex },
-                      });
+                    onClick={(e) => {
+                      // Mirror the period logic. Discard any period
+                      // staging so a period click after a month click
+                      // starts fresh.
+                      setPeriodStaged(null);
+                      const same = monthStaged
+                        && monthStaged.year === m.year
+                        && monthStaged.monthIndex === m.monthIndex;
+                      if (!monthStaged || (e.shiftKey === false && same)) {
+                        if (same) {
+                          const r = rangeForFiscalMonth(m.year, m.monthIndex);
+                          if (r) commit(r.startISO, r.endISO, {
+                            kind: "month",
+                            value: { year: m.year, monthIndex: m.monthIndex },
+                          });
+                          return;
+                        }
+                        setMonthStaged({ year: m.year, monthIndex: m.monthIndex });
+                        return;
+                      }
+                      // Compare {year, monthIndex} to order start <= end.
+                      const other = monthStaged;
+                      const clicked = { year: m.year, monthIndex: m.monthIndex };
+                      const startFirst = (other.year < clicked.year)
+                        || (other.year === clicked.year && other.monthIndex <= clicked.monthIndex);
+                      const start = startFirst ? other : clicked;
+                      const end   = startFirst ? clicked : other;
+                      const a = rangeForFiscalMonth(start.year, start.monthIndex);
+                      const b = rangeForFiscalMonth(end.year, end.monthIndex);
+                      if (a && b) {
+                        const same = start.year === end.year && start.monthIndex === end.monthIndex;
+                        commit(a.startISO, b.endISO,
+                          same
+                            ? { kind: "month", value: start }
+                            : { kind: "months", start, end });
+                      }
                     }}
-                  >{MONTH_LABELS[m.monthIndex]}</button>
+                  >{MONTH_ABBR[m.monthIndex]}</button>
                 );
               })}
             </div>
+            {monthStaged && (
+              <span className="kpi-rmenu-stagenote">click another month to set the end, or click {MONTH_ABBR[monthStaged.monthIndex]} again</span>
+            )}
           </div>
           <div className="kpi-rmenu-foot">
+            {/* Range PR-2 2026-08-24: "expands below · Apply-gated"
+                hint retired. It described the mechanism rather than
+                the choice - the Custom range button already tells
+                the operator what they get. */}
             <button
               type="button"
               className="kpi-rmenu-custom-btn"
@@ -277,7 +393,6 @@ export function RangeMenu({
             >
               Custom range{customOpen ? " ▴" : " ▾"}
             </button>
-            <span className="kpi-rmenu-foot-hint">expands below · Apply-gated</span>
           </div>
           {customOpen && (
             <div className="kpi-rmenu-custom">

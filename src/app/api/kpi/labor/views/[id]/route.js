@@ -17,7 +17,9 @@ import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { getServiceClient } from "@/lib/supabase";
 
-const VALID_PRESETS = new Set(["this_period", "last_period", "last_4wk", "last_13wk", "fytd"]);
+// Range PR-2 2026-08-24: last_13wk retired. See sibling route.js
+// for the migration reference.
+const VALID_PRESETS = new Set(["this_period", "last_period", "last_4wk", "fytd"]);
 
 function isYmd(s) {
   return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);

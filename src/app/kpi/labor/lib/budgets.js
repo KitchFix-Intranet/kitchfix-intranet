@@ -105,7 +105,10 @@ export function presetSuffix(preset, startISO, endISO, currentPeriodNo) {
     case "this_period":  return currentPeriodNo != null ? ` · Period ${currentPeriodNo}` : " · this period";
     case "last_period":  return currentPeriodNo != null ? ` · Period ${currentPeriodNo - 1}` : " · last period";
     case "last_4wk":     return " · last 4 weeks";
-    case "last_13wk":    return " · last 13 weeks";
+    // Range PR-2 2026-08-24: last_13wk preset retired. Kept out of
+    // the switch so a stray call with the old key falls through to
+    // the default date-echo branch instead of naming a preset that
+    // no longer exists.
     default: {
       const mdY = (iso) => {
         if (!iso) return "";
