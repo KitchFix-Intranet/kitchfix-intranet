@@ -126,7 +126,16 @@ export default function HelpPop({ id, title, body }) {
           <b className="kpi-hs-pop-title">{title}</b>
           <div className="kpi-hs-pop-body">{body}</div>
         </div>,
-        document.body,
+        // HS FB1 PR-2 verify 2026-08-25: portal into .kpi-app not
+        // document.body so --kpi-* tokens resolve. tokens.css :root
+        // provides --rad-*/--card-shadow*, but --kpi-t-*, --kpi-sp-*,
+        // --kpi-card-*, --kpi-lane-*, and --kf-scale are scoped to
+        // .kpi-app - a body-level portal loses all of them, making the
+        // popover's width:min() invalid so left+right fall back and
+        // the box renders viewport-wide. .kpi-app has no position or
+        // z-index, so this portal target still escapes every card's
+        // stacking context (which was the point of the portal).
+        document.querySelector(".kpi-app") ?? document.body,
       )}
     </span>
   );

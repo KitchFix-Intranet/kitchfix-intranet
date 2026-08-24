@@ -3288,37 +3288,21 @@
    they must never use kpi-hs-good / kpi-hs-bad which encode STATE
    on the rail card. See DayStrip.js DayBar for the variant switch. */
 
-/* HS FB1 PR-2 2026-08-24 - Period | Homestand toggle joins .kpi-seg /
-   .kpi-ctl height so it matches Hourly / + Salary. Wrapper carries
-   --kpi-ctl height; each tab strips vertical padding so lane height
-   drives the box. Prompt 2c owner measurement: was 34.9px vs 25px. */
+/* HS FB1 PR-2 verify 2026-08-25 - Period | Homestand toggle now reuses
+   .kpi-seg wholesale for base geometry (guaranteed height parity with
+   the Hourly / + Salary toggle). Only the board-level margin and the
+   count badge remain HS-specific. The prior bespoke .kpi-hs-view-tab*
+   rules were replaced; the branch's merge-from-main reintroduced them
+   duplicated and dropped the closing brace on this block - that's what
+   was tripping the "Unclosed block at 3295" CI CSS error. */
 .kpi-hs-view-tabs {
-  display: inline-flex; gap: 0;
-  height: var(--kpi-ctl);
   margin: 0 var(--kpi-sp-1) var(--kpi-sp-4);
-  background: #fff;
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-tbar-rad);
-  overflow: hidden;
 }
-.kpi-hs-view-tab {
-  padding: 0 var(--kpi-sp-3);
-  font-size: var(--kpi-t-body);
-  font-weight: 700;
-  color: var(--text-subtle);
-  border: 0; background: none; cursor: pointer;
-  font-family: inherit;
-  display: inline-flex; align-items: center;
-  transition: background .12s, color .12s;
-}
-.kpi-hs-view-tab + .kpi-hs-view-tab { border-left: 1px solid var(--n-200); }
-.kpi-hs-view-tab:hover { color: var(--n-800); }
-.kpi-hs-view-tab.on { color: #fff; background: var(--n-900, #0A2548); }
 .kpi-hs-view-tab-cnt {
   font-size: var(--kpi-t-meta); font-weight: 500;
   color: var(--text-subtle); margin-left: var(--kpi-sp-1);
 }
-.kpi-hs-view-tab.on .kpi-hs-view-tab-cnt { color: #B9C6DA; }
+.kpi-seg button.on .kpi-hs-view-tab-cnt { color: #B9C6DA; }
 
 .kpi-hs-board {
   display: flex; flex-direction: column;
@@ -3602,11 +3586,30 @@
 @media (max-width: 640px) {
   .kpi-hs-signals { grid-template-columns: 1fr; }
 }
-.kpi-hs-signal { padding: var(--kpi-sp-4); }
+/* HS FB1 PR-2 owner ruling 2026-08-25 - signal-card lane stack must
+   consume the same rows the period board reserves so a chef switching
+   views doesn't see cards shrink. Cards had no lane reservation and
+   collapsed to natural content (~157px) against period's 197px.
+   Flex-column + per-lane min-heights + min-height composed from the
+   full lane stack (head + hero + sub + viz + gaps + card padding).
+   Facts pin to card foot via margin-top:auto. */
+.kpi-hs-signal {
+  padding: var(--kpi-sp-4);
+  display: flex;
+  flex-direction: column;
+  /* Composition: 2 * card-pad + lane-head + sp-3 + lane-hero + sp-1
+     + lane-sub + sp-3 + lane-viz + sp-3 + t-label + t-body. Flat calc
+     (no nested calc(), single line) - Turbopack CI failed to parse the
+     multi-line nested form even though local PostCSS accepted it. */
+  min-height: calc(var(--kpi-card-pad) + var(--kpi-card-pad) + var(--kpi-lane-head) + var(--kpi-sp-3) + var(--kpi-lane-hero) + var(--kpi-sp-1) + var(--kpi-lane-sub) + var(--kpi-sp-3) + var(--kpi-lane-viz) + var(--kpi-sp-3) + var(--kpi-t-label) + var(--kpi-t-body));
+}
 .kpi-hs-signal:before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
   border-radius: var(--rad-6) 0 0 var(--rad-6);
 }
+.kpi-hs-signal .kpi-hs-hero { min-height: var(--kpi-lane-hero); flex: none; }
+.kpi-hs-signal .kpi-hs-sub  { min-height: var(--kpi-lane-sub);  flex: none; }
+.kpi-hs-signal .kpi-hs-facts { margin-top: auto; }
 .kpi-hs-edge-good:before   { background: #22A45D; }
 .kpi-hs-edge-bad:before    { background: #DC5A5A; }
 .kpi-hs-edge-amber:before  { background: var(--amber-600, #B25800); }
@@ -3629,8 +3632,10 @@
 .kpi-hs-hero-sub {
   font-size: var(--kpi-t-body); font-weight: 500; color: var(--text-subtle);
 }
+/* HS FB1 PR-2 owner ruling 2026-08-25 - sub-line weight 500 (was 400).
+   Period .kpi-sig-sub-lane is 500; HS was rendering 400. */
 .kpi-hs-sub {
-  font-size: var(--kpi-t-meta); color: var(--n-600);
+  font-size: var(--kpi-t-meta); font-weight: 500; color: var(--n-600);
   margin-top: var(--kpi-sp-1); line-height: 1.45;
 }
 .kpi-hs-sub b { font-weight: 700; color: var(--n-900, #0A2548); }
@@ -3875,6 +3880,14 @@
    (e.g. a print stylesheet override) - it will still render as a
    card-anchored dropdown, just without the portal escape. z-index
    uses --z-popover so the stacking tier is named, not magic. */
+/* HS FB1 PR-2 owner ruling 2026-08-25 - popover cap needs BOTH portal
+   scope + width safety. Portal now targets .kpi-app (HelpPop.js) so
+   --kpi-* tokens resolve. `right: 0` removed so if `width` ever
+   invalidates for a future reason, browser cannot fall back to
+   left+right sizing (that was the 1257px-wide render Kevin saw at
+   1280px: token-scope broke `min(...)`, right:0 + inline left made
+   the box viewport-wide). max-width is the primary cap; width is the
+   ideal. */
 /* HS FB1 PR-2 - popover width now caps to viewport - 16px so narrow
    viewports (~375px) cannot render a 310px fixed box wider than the
    frame. Prompt 2f owner report: "text spans on one line past the
@@ -3885,6 +3898,8 @@
   position: absolute;
   z-index: var(--z-popover);
   top: calc(100% + var(--kpi-sp-1));
+  width: 310px;
+  max-width: calc(100vw - var(--kpi-sp-4));
   right: 0;
   width: min(310px, calc(100vw - var(--kpi-sp-4)));
   background: var(--surface-card);
