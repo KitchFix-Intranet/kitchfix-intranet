@@ -134,17 +134,30 @@ export function DayStrip({ data, todayISO }) {
   })();
 
   const spanDays = range?.span_days ?? days.length;
+  // Owner ruling 2026-08-24: on a future range (server flag
+  // `is_future_range`, true when start > today) the SPENT card
+  // suppresses the variance line + colour class. Reads
+  // `$0.00 · this range has not started` in muted grey. The pre-fix
+  // path rendered `$0.00 · Under pro-rated budget · $18,000` in
+  // green - reading as an accomplishment when nothing has happened.
+  // BUDGET card + day-strip empty bars unchanged; knowing the
+  // pro-rated budget before the range starts is useful for planning.
+  const isFutureRange = data?.is_future_range === true;
   const variance = spentTotal - budgetTotal;
-  const varianceCls = Math.abs(variance) < 0.5
-    ? "kpi-spend-cell-under"
-    : variance > 0
-      ? "kpi-spend-cell-over"
-      : "kpi-spend-cell-under";
-  const varianceLabel = Math.abs(variance) < 0.5
-    ? "On the pro-rated line"
-    : variance > 0
-      ? "Over pro-rated budget"
-      : "Under pro-rated budget";
+  const varianceCls = isFutureRange
+    ? "kpi-spend-cell-mute"
+    : Math.abs(variance) < 0.5
+      ? "kpi-spend-cell-under"
+      : variance > 0
+        ? "kpi-spend-cell-over"
+        : "kpi-spend-cell-under";
+  const varianceLabel = isFutureRange
+    ? "this range has not started"
+    : Math.abs(variance) < 0.5
+      ? "On the pro-rated line"
+      : variance > 0
+        ? "Over pro-rated budget"
+        : "Under pro-rated budget";
 
   return (
     <div className="kpi-day-range" role="region" aria-label="Custom range summary">
@@ -175,7 +188,12 @@ export function DayStrip({ data, todayISO }) {
           </div>
           <div className="kpi-day-range-card-figure">{fmt$(spentTotal)}</div>
           <div className={`kpi-day-range-card-sub ${varianceCls}`}>
-            {varianceLabel}{Math.abs(variance) >= 0.5 ? ` · ${fmt$(Math.abs(variance))}` : ""}
+            {varianceLabel}
+            {/* Amount only when there IS a variance to name. On a
+                future range the label is "this range has not started"
+                and no dollar figure follows - the label is the whole
+                message. */}
+            {!isFutureRange && Math.abs(variance) >= 0.5 ? ` · ${fmt$(Math.abs(variance))}` : ""}
           </div>
         </div>
       </div>

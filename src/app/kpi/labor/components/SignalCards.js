@@ -355,14 +355,26 @@ function PayrollDataCard({ board, freshness, salary }) {
   );
 }
 
-export function SignalCards({ board, freshness, salary }) {
+export function SignalCards({ board, freshness, salary, isFutureRange }) {
   if (!board || board.applies === false) return null;
+  // Owner ruling 2026-08-24: a future range (server flag
+  // `is_future_range`, true when start > today) hides Pace, Overtime,
+  // and Payroll Data - the premise of each fails on a range that
+  // hasn't started (no pace, no overtime hours, no payroll coverage
+  // yet). Same "if the premise doesn't hold, the card is absent"
+  // discipline PR-A applied to HoursLeftCard on fully-closed ranges.
+  //
+  // HoursLeftCard KEEPS its normal render on future ranges - its
+  // premise holds perfectly: the budget exists, zero hours are
+  // scheduled, every hour is available. That is genuinely the most
+  // useful card on a September board when the operator is planning
+  // ahead.
   return (
     <div className="kpi-sigs">
-      <PaceCard board={board} />
-      <OvertimeCard board={board} salary={salary} />
+      {!isFutureRange && <PaceCard board={board} />}
+      {!isFutureRange && <OvertimeCard board={board} salary={salary} />}
       <HoursLeftCard board={board} salary={salary} />
-      <PayrollDataCard board={board} freshness={freshness} salary={salary} />
+      {!isFutureRange && <PayrollDataCard board={board} freshness={freshness} salary={salary} />}
     </div>
   );
 }
