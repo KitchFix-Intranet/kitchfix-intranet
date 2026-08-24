@@ -3288,29 +3288,35 @@
    they must never use kpi-hs-good / kpi-hs-bad which encode STATE
    on the rail card. See DayStrip.js DayBar for the variant switch. */
 
+/* HS FB1 PR-2 2026-08-24 - Period | Homestand toggle joins .kpi-seg /
+   .kpi-ctl height so it matches Hourly / + Salary. Wrapper carries
+   --kpi-ctl height; each tab strips vertical padding so lane height
+   drives the box. Prompt 2c owner measurement: was 34.9px vs 25px. */
 .kpi-hs-view-tabs {
   display: inline-flex; gap: 0;
+  height: var(--kpi-ctl);
   margin: 0 var(--kpi-sp-1) var(--kpi-sp-4);
   background: #fff;
   border: 1px solid var(--n-300);
-  border-radius: 9px;
+  border-radius: var(--kpi-tbar-rad);
   overflow: hidden;
 }
 .kpi-hs-view-tab {
-  padding: 9px 20px;
+  padding: 0 var(--kpi-sp-3);
   font-size: var(--kpi-t-body);
   font-weight: 700;
   color: var(--text-subtle);
   border: 0; background: none; cursor: pointer;
   font-family: inherit;
+  display: inline-flex; align-items: center;
   transition: background .12s, color .12s;
 }
 .kpi-hs-view-tab + .kpi-hs-view-tab { border-left: 1px solid var(--n-200); }
 .kpi-hs-view-tab:hover { color: var(--n-800); }
 .kpi-hs-view-tab.on { color: #fff; background: var(--n-900, #0A2548); }
 .kpi-hs-view-tab-cnt {
-  font-size: var(--kpi-t-meta); font-weight: 800;
-  color: var(--text-subtle); margin-left: 5px;
+  font-size: var(--kpi-t-meta); font-weight: 500;
+  color: var(--text-subtle); margin-left: var(--kpi-sp-1);
 }
 .kpi-hs-view-tab.on .kpi-hs-view-tab-cnt { color: #B9C6DA; }
 
@@ -3319,13 +3325,20 @@
   gap: var(--kpi-sp-3);
   margin: 0 var(--kpi-sp-1);
 }
+/* HS FB1 PR-2 2026-08-24 - card skin joins the period canonical.
+   Prompt 2b owner ruling: HS cards were rad-6 (6px) with box-shadow: none;
+   period cards are --kpi-card-r (10.8) + --card-shadow. Padding aligns
+   to --kpi-card-pad (14.4) - same as .kpi-sig / .kpi-tbar canonical. */
 .kpi-hs-card {
   background: #fff;
   border: 1px solid var(--n-300);
-  border-radius: var(--rad-6);
-  padding: var(--kpi-sp-4);
+  border-radius: var(--kpi-card-r);
+  padding: var(--kpi-card-pad);
+  box-shadow: var(--card-shadow);
   position: relative;
+  transition: box-shadow 0.15s;
 }
+.kpi-hs-card:hover { box-shadow: var(--card-shadow-hover); }
 /* HS PR-C 2026-08-24: all five signal-card headers must measure the
    same height. Pre-fix three of five wrapped the `?` onto a second
    line (spend 45px, cost-per-game 48px, overtime 45px) while prep +
@@ -3342,21 +3355,23 @@
    corner ?; the pop-up itself is portalled (PR #790) so trigger
    position doesn't affect pop position. */
 .kpi-hs-card-hdr {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--kpi-sp-3);
   margin-bottom: var(--kpi-sp-3);
   flex-wrap: nowrap;
-  padding-right: 22px;
+  padding-right: var(--kpi-sp-6);
   min-width: 0;
   height: var(--kpi-lane-head);
 }
 .kpi-hs-card-hdr > .kpi-hs-qwrap {
   position: absolute;
-  top: var(--kpi-sp-4);
-  right: var(--kpi-sp-4);
+  top: var(--kpi-card-pad);
+  right: var(--kpi-card-pad);
 }
+/* HS FB1 PR-2 - eyebrow / title role: weight 700 (was 800). Matches
+   .kpi-sig-eyebrow (V34). */
 .kpi-hs-eyebrow {
   font-size: var(--kpi-t-label);
-  font-weight: 800; letter-spacing: 0.08em;
+  font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-subtle);
 }
@@ -3364,9 +3379,14 @@
   font-size: var(--kpi-t-meta); color: var(--text-subtle);
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
 }
+/* HS FB1 PR-2 - pill / chip role: --kpi-t-label / weight 700 / 0.06em,
+   height locked to --kpi-lane-head with 0 vertical padding. Matches
+   .kpi-sig-state L2417 (same lane, same type, same weight). */
 .kpi-hs-pill {
-  padding: 2px 9px; border-radius: 999px;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+  padding: 0 var(--kpi-sp-2); border-radius: var(--rad-pill);
+  font-size: var(--kpi-t-label); font-weight: 700; letter-spacing: 0.06em;
+  height: var(--kpi-lane-head);
+  display: inline-flex; align-items: center;
   border: 1px solid transparent; white-space: nowrap;
   margin-left: auto;
 }
@@ -3375,7 +3395,7 @@
    the verdict pill (Under / Over); .margin-left:auto on .kpi-hs-pill
    pushes the WHOLE group to the right so both pills stay together. */
 .kpi-hs-card-hdr-pills {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
   margin-left: auto;
 }
 .kpi-hs-card-hdr-pills .kpi-hs-pill { margin-left: 0; }
@@ -3392,20 +3412,23 @@
 .kpi-hs-blue { color: #2563EB; }
 .kpi-hs-purple { color: #7A3E9D; }
 .kpi-hs-amber  { color: #B25800; }
-.kpi-hs-amber-strong { color: #B25800; font-weight: 800; }
-.kpi-hs-strong { font-weight: 800; }
+/* HS FB1 PR-2 - "strong" table-cell helpers drop 800 -> 700. Per
+   handoff role table: fact value / table cell body role = 700. Only
+   .kpi-hs-hero and .kpi-hs-standhdr-title keep 800 (hero role). */
+.kpi-hs-amber-strong { color: #B25800; font-weight: 700; }
+.kpi-hs-strong { font-weight: 700; }
 
 /* Season rail card */
 .kpi-hs-rail {
-  display: flex; gap: 5px; align-items: flex-end;
+  display: flex; gap: var(--kpi-sp-1); align-items: flex-end;
   min-height: 130px;
 }
 .kpi-hs-rail-stand {
   flex: 1; min-width: 0;
   border: 0; background: none;
-  padding: 4px 2px 0;
+  padding: var(--kpi-sp-1) 0 0;
   font-family: inherit; text-align: center; cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--rad-6);
   transition: background .12s;
 }
 .kpi-hs-rail-stand:hover:not(:disabled) { background: var(--n-50); }
@@ -3448,22 +3471,26 @@
   filter: drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff);
   z-index: 2;
 }
+/* HS FB1 PR-2 - rail-amt is a per-stand value; role -> label token +
+   weight 700 (was 10px / 800). */
 .kpi-hs-rail-amt {
-  font-size: 10px; font-weight: 800;
+  font-size: var(--kpi-t-label); font-weight: 700;
   color: var(--n-800, #334155);
-  margin-top: 5px;
+  margin-top: var(--kpi-sp-1);
   font-variant-numeric: tabular-nums;
 }
 .kpi-hs-rail-nm {
-  font-size: 9px; font-weight: 700;
+  font-size: var(--kpi-t-label); font-weight: 700;
   color: var(--text-subtle);
   line-height: 1.22; margin-top: 1px;
 }
 .kpi-hs-rail-tag {
   /* 2026-08-24 contrast sweep: pre-floor "no detail" tag was --n-400
      (1.42:1). Bumped to --text-subtle so the tag reads as a labelled
-     state, not as a decorative wash the eye slides past. */
-  font-size: 8.5px; font-weight: 800; color: var(--text-subtle);
+     state, not as a decorative wash the eye slides past.
+     HS FB1 PR-2: 8.5px was 10*0.85 (not a distinct role); label token
+     + weight 700 (chip role). */
+  font-size: var(--kpi-t-label); font-weight: 700; color: var(--text-subtle);
   margin-top: 2px;
 }
 .kpi-hs-rail-tag-est {
@@ -3478,13 +3505,13 @@
 .kpi-hs-rail-stand.pre .kpi-hs-rail-nm { color: var(--n-400); }
 
 .kpi-hs-rail-key {
-  display: flex; gap: 14px; flex-wrap: wrap;
-  font-size: 10px; color: var(--text-subtle);
+  display: flex; gap: var(--kpi-sp-3); flex-wrap: wrap;
+  font-size: var(--kpi-t-label); color: var(--text-subtle);
   margin-top: var(--kpi-sp-3);
 }
 .kpi-hs-key-sw {
   width: 9px; height: 9px; border-radius: 2px;
-  display: inline-block; margin-right: 5px; vertical-align: -1px;
+  display: inline-block; margin-right: var(--kpi-sp-1); vertical-align: -1px;
 }
 .kpi-hs-key-under  { background: #22A45D; }
 .kpi-hs-key-over   { background: #DC5A5A; }
@@ -3505,7 +3532,7 @@
 .kpi-hs-sbar > span {
   height: 100%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 800;
+  font-size: var(--kpi-t-label); font-weight: 700;
   white-space: nowrap; overflow: hidden;
 }
 .kpi-hs-sbar-spent  { background: #1E4173; color: #fff; }
@@ -3518,29 +3545,29 @@
   pointer-events: none;
 }
 .kpi-hs-sbar-key {
-  display: flex; gap: 22px; flex-wrap: wrap;
-  font-size: 10.5px; color: var(--text-subtle);
+  display: flex; gap: var(--kpi-sp-5); flex-wrap: wrap;
+  font-size: var(--kpi-t-meta); color: var(--text-subtle);
   margin-top: var(--kpi-sp-2);
   font-variant-numeric: tabular-nums; align-items: baseline;
 }
 .kpi-hs-sbar-key span {
-  display: inline-flex; align-items: baseline; gap: 6px;
+  display: inline-flex; align-items: baseline; gap: var(--kpi-sp-1);
 }
 .kpi-hs-sbar-key b {
-  font-weight: 800; font-size: 16px;
+  font-weight: 700; font-size: var(--kpi-t-medium);
   letter-spacing: -0.01em; color: var(--n-900, #0A2548);
 }
 
 /* Stand header */
-.kpi-hs-card-standhdr { padding: 13px 16px; }
+.kpi-hs-card-standhdr { padding: var(--kpi-sp-3) var(--kpi-sp-4); }
 .kpi-hs-standhdr-row {
-  display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap;
+  display: flex; align-items: baseline; gap: var(--kpi-sp-3); flex-wrap: wrap;
 }
 .kpi-hs-standhdr-title {
   font-size: var(--kpi-t-value);
   font-weight: 800;
   color: var(--n-900, #0A2548);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
 }
 .kpi-hs-standhdr-dates {
   font-size: var(--kpi-t-body);
@@ -3556,7 +3583,7 @@
   display: inline-block;
   width: 11px; height: 11px;
   border-radius: 2px;
-  margin: 0 4px 0 8px;
+  margin: 0 var(--kpi-sp-1) 0 var(--kpi-sp-2);
   vertical-align: -1px;
 }
 
@@ -3582,37 +3609,44 @@
 .kpi-hs-edge-blue:before   { background: #2563EB; }
 .kpi-hs-edge-purple:before { background: #7A3E9D; }
 
+/* HS FB1 PR-2 - hero role. Handoff 2026-08-24 owner ruling: V35-1
+   dropped card heroes one type step (t-hero -> t-value) so the story
+   card's period budget stays the only tier-1 number on the page.
+   Homestand hero follows the period actual .kpi-sig-hero-val (L2443):
+   --kpi-t-value / weight 800 / -0.01em. Do NOT restore --kpi-t-hero. */
 .kpi-hs-hero {
-  font-size: 25.2px; font-weight: 800;
+  font-size: var(--kpi-t-value); font-weight: 800;
   color: var(--n-900, #0A2548);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   line-height: 1.08;
-  display: flex; align-items: baseline; gap: 6px;
+  display: flex; align-items: baseline; gap: var(--kpi-sp-1);
 }
 .kpi-hs-hero-sub {
-  font-size: 12px; font-weight: 600; color: var(--text-subtle);
+  font-size: var(--kpi-t-body); font-weight: 500; color: var(--text-subtle);
 }
 .kpi-hs-sub {
-  font-size: 11px; color: var(--n-600);
-  margin-top: 4px; line-height: 1.45;
+  font-size: var(--kpi-t-meta); color: var(--n-600);
+  margin-top: var(--kpi-sp-1); line-height: 1.45;
 }
-.kpi-hs-sub b { font-weight: 800; color: var(--n-900, #0A2548); }
+.kpi-hs-sub b { font-weight: 700; color: var(--n-900, #0A2548); }
 
 .kpi-hs-facts {
-  display: flex; gap: 16px;
-  margin-top: 11px; padding-top: 9px;
+  display: flex; gap: var(--kpi-sp-4);
+  margin-top: var(--kpi-sp-3); padding-top: var(--kpi-sp-3);
   border-top: 1px solid var(--n-100);
 }
 .kpi-hs-fact { min-width: 0; }
 .kpi-hs-fact-k {
-  font-size: 10px; font-weight: 600;
+  font-size: var(--kpi-t-label); font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--text-subtle);
   white-space: nowrap;
 }
+/* HS FB1 PR-2 - fact value role: --kpi-t-body / weight 700. Matches
+   .kpi-sig-fact-val L2500 (V34 dropped values from 800 to 700). */
 .kpi-hs-fact-v {
-  font-size: 12.5px; font-weight: 800;
+  font-size: var(--kpi-t-body); font-weight: 700;
   color: var(--n-900, #0A2548);
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
@@ -3621,7 +3655,7 @@
 
 /* OT gauge */
 .kpi-hs-gauge {
-  margin-top: 9px; height: 24px; position: relative;
+  margin-top: var(--kpi-sp-2); height: 24px; position: relative;
 }
 .kpi-hs-gauge-track {
   position: absolute; left: 0; right: 0; top: 8px;
@@ -3643,7 +3677,7 @@
 .kpi-hs-gauge-labels {
   position: absolute; left: 0; right: 0; top: 22px;
   display: flex; justify-content: space-between;
-  font-size: 9px; color: var(--text-subtle);
+  font-size: var(--kpi-t-label); color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3658,22 +3692,29 @@
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }
+/* HS FB1 PR-2 - .kpi-hs-table joins .kpi-tbl canonical geometry
+   (L2847). Header takes --kpi-thead-h; body takes --kpi-row. Vertical
+   padding drops to 0 so lane tokens (not padding) drive height. Header
+   type is the eyebrow / label role - weight 700 (period .kpi-sig-eyebrow
+   is 700; keeping .kpi-tbl thead's 800 would leave HS one step heavy). */
 .kpi-hs-table th {
-  font-size: 10px; font-weight: 800;
+  font-size: var(--kpi-t-label); font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-subtle);
   text-align: right;
-  padding: 9px 12px;
+  height: var(--kpi-thead-h);
+  padding: 0 var(--kpi-sp-3);
   background: var(--n-50);
   border-bottom: 1px solid var(--n-300);
   white-space: nowrap;
 }
 .kpi-hs-table th:first-child { text-align: left; }
 .kpi-hs-table td {
-  padding: 9px 12px;
+  height: var(--kpi-row);
+  padding: 0 var(--kpi-sp-3);
   text-align: left;
   border-bottom: 1px solid var(--n-100);
-  font-size: 12.5px;
+  font-size: var(--kpi-t-body);
   white-space: nowrap;
 }
 .kpi-hs-table td.num { text-align: right; }
@@ -3689,7 +3730,7 @@
   font-weight: 500;
   border-bottom: 1px solid var(--n-100);
 }
-.kpi-hs-tr-emp td:first-child { padding-left: 38px; position: relative; }
+.kpi-hs-tr-emp td:first-child { padding-left: calc(var(--kpi-sp-6) + var(--kpi-sp-3)); position: relative; }
 .kpi-hs-tr-emp td:first-child:before {
   content: ""; position: absolute;
   left: 22px; top: 0; bottom: 0; width: 1px;
@@ -3704,35 +3745,35 @@
    `.kpi-skel` shimmer + prefers-reduced-motion opt-out from V25-16. */
 .kpi-hs-tr-emp-skel td {
   background: #fff;
-  padding: 8px 12px;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
   border-bottom: 1px solid var(--n-100);
 }
 .kpi-hs-emp-skel-bar {
   display: block;
   height: 18px;
-  margin: 4px 0 4px 26px;
-  border-radius: 4px;
+  margin: var(--kpi-sp-1) 0 var(--kpi-sp-1) var(--kpi-sp-6);
+  border-radius: var(--rad-4);
   border: 1px solid var(--n-200);
 }
 .kpi-hs-tr-prefloor td { opacity: 0.55; }
 .kpi-hs-tr-prefloor-est td { opacity: 0.85; }
 .kpi-hs-tr-prefloor-est:hover td { background: var(--n-50); cursor: pointer; }
 .kpi-hs-tr-prefloor-note { text-align: right; font-style: italic; color: var(--text-subtle); }
-.kpi-hs-est-tag { color: #92580A; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; margin-left: 4px; }
+.kpi-hs-est-tag { color: #92580A; font-size: var(--kpi-t-label); font-weight: 700; letter-spacing: 0.06em; margin-left: var(--kpi-sp-1); }
 .kpi-hs-tr-future td { opacity: 0.75; }
 .kpi-hs-tr-future-note { text-align: right; font-style: italic; color: var(--text-subtle); }
 .kpi-hs-chev {
   display: inline-block; width: 13px;
   color: var(--n-400);
-  font-size: 10px; margin-right: 6px;
+  font-size: var(--kpi-t-label); margin-right: var(--kpi-sp-1);
   transition: transform .12s;
 }
 .kpi-hs-chev-open { transform: rotate(90deg); color: var(--n-700, #475569); }
 .kpi-hs-chip {
   display: inline-block;
-  padding: 1px 6px; border-radius: 4px;
-  font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
-  margin-left: 6px;
+  padding: 0 var(--kpi-sp-1); border-radius: var(--rad-4);
+  font-size: var(--kpi-t-label); font-weight: 700; letter-spacing: 0.06em;
+  margin-left: var(--kpi-sp-1);
 }
 .kpi-hs-chip-salary { background: #F3E8FA; color: #7A3E9D; }
 .kpi-hs-chip-amber  { background: var(--amber-100, #FEF3E2); color: #B25800; border: 1px solid #F0D9B5; }
@@ -3806,7 +3847,7 @@
   border: 1px solid var(--n-300);
   background: var(--surface-card);
   color: var(--text-subtle);
-  font-size: 10px; font-weight: 800;
+  font-size: var(--kpi-t-label); font-weight: 700;
   cursor: pointer;
   font-family: inherit;
   line-height: 1;
@@ -3830,24 +3871,31 @@
    (e.g. a print stylesheet override) - it will still render as a
    card-anchored dropdown, just without the portal escape. z-index
    uses --z-popover so the stacking tier is named, not magic. */
+/* HS FB1 PR-2 - popover width now caps to viewport - 16px so narrow
+   viewports (~375px) cannot render a 310px fixed box wider than the
+   frame. Prompt 2f owner report: "text spans on one line past the
+   webapp" below ~1280px. HelpPop.js already clamps x-position to keep
+   the box inside the viewport; the width cap prevents the box itself
+   from overshooting when the viewport is tighter than the pop. */
 .kpi-hs-pop {
   position: absolute;
   z-index: var(--z-popover);
-  top: calc(100% + 6px);
+  top: calc(100% + var(--kpi-sp-1));
   right: 0;
-  width: 310px;
+  width: min(310px, calc(100vw - var(--kpi-sp-4)));
   background: var(--surface-card);
   border: 1px solid var(--n-300);
-  border-radius: 10px;
-  box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
-  padding: 12px 14px;
-  font-size: 11.5px;
+  border-radius: var(--rad-10);
+  box-shadow: var(--card-shadow-hover);
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  font-size: var(--kpi-t-meta);
   line-height: 1.6;
   color: var(--n-700);
   text-align: left;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
+  overflow-wrap: anywhere;
 }
 /* PR-E portal refactor 2026-08-24: .kpi-hs-pop-flip retired.
    Flip is a computed coordinate in HelpPop.js, not a CSS variant.
@@ -3856,15 +3904,15 @@
 .kpi-hs-pop-title {
   display: block;
   color: var(--n-900, #0A2548);
-  font-weight: 800;
-  margin-bottom: 6px;
+  font-weight: 700;
+  margin-bottom: var(--kpi-sp-1);
 }
 .kpi-hs-pop-body { font-weight: 400; }
 .kpi-hs-pop-body b { color: var(--n-900); font-weight: 700; }
 .kpi-hs-pop-table {
   width: 100%;
-  margin-top: 9px;
-  font-size: 11px;
+  margin-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta);
   border-collapse: collapse;
 }
 .kpi-hs-pop-table td {
@@ -3884,8 +3932,8 @@
 }
 .kpi-hs-pop-foot {
   display: block;
-  margin-top: 6px;
-  font-size: 10.5px;
+  margin-top: var(--kpi-sp-1);
+  font-size: var(--kpi-t-label);
   color: var(--text-subtle);
 }
 /* PR-E portal refactor 2026-08-24: the following rules were deleted
@@ -3910,4 +3958,4 @@
    the `?` glyph on live inspect. Bumped to 8px for legible separation
    consistent with the other help affordances (Prep & off, Cost per
    game day, etc. each have >= 8px between the pill and the trigger). */
-.kpi-hs-th-help .kpi-hs-qwrap { margin-left: 8px; vertical-align: middle; }
+.kpi-hs-th-help .kpi-hs-qwrap { margin-left: var(--kpi-sp-2); vertical-align: middle; }
