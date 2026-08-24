@@ -221,11 +221,20 @@ export function WeekChart({
         const perUnitOrig = isPeriod ? Number(u.budget || 0) : Number(u.targetOrig || 0);
         const perUnitAdj  = isPeriod ? null
                              : (tier === "A" && !finished && u.targetAdj != null ? Number(u.targetAdj) : null);
-        // State pattern - over goes solid red (§7.1 owner ruling
-        // 2026-08-21). Running hatch is a DIFFERENT thing and stays.
+        // PR-2 R4 Part C - owner rulings 2026-08-21: bars are either
+        // green (under target) or red (over target). Identity color is
+        // NOT on the state bar (identity stays on card stripe + legend).
+        // Running-week hatch is a DIFFERENT thing and stays.
+        //   - running week      -> st-run (amber hatch)
+        //   - finished + over   -> st-over  (solid red)
+        //   - finished + under  -> st-under (solid green)
+        //   - finished, no target -> identity fallback (no verdict)
+        const hasTarget = perUnitOrig > 0;
         const stateClass = running
           ? "st-run"
-          : (finished && perUnitOrig > 0 && v > perUnitOrig ? "st-over" : "");
+          : (finished && hasTarget
+              ? (v > perUnitOrig ? "st-over" : "st-under")
+              : "");
         const heightPct = showBar
           ? Math.min(97, (Math.abs(v) / maxSample) * 100).toFixed(1)
           : 0;

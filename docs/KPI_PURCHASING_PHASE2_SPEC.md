@@ -258,17 +258,31 @@ the client approves and pays for the spend. The card exists so an outlier is vis
 
 ## 7. DESIGN LAW
 
-1. **Colour is identity. Bars are SOLID.** Food navy `#153968`, Packaging blue `#3E97D1`, Vehicle
-   purple `#7A3E9D`, Equipment `#0F766E`, Repair `#B45309`, Reimbursable `#7A3E9D`, period card steel
-   `#4A6076`.
+1. **Identity lives on the stripe, the legend, the bucket identity. STATE lives on the bar.** Owner
+   ruling 2026-08-21 (PR-2 R4 Part C): **"i do not like the red hatch, its either red or green."**
+   Follow-on ruling same day: **"It should match exactly how the labor views work."** Prior spec
+   copy that said "colour is identity" for bars is superseded - that language produced identity-
+   coloured state bars, which called a bucket under (navy) and over (red) using two disjoint
+   palettes and buried the verdict at 40px.
+
+   Bars are SOLID and read exactly like labor's week bars:
+
+   - **Finished bar, under target** -> solid green (`var(--green-500)` / `#16A34A`, same token as
+     `.kpi-wb-bar-under` and `.kpi-pcol-bar-under` in kpi.css)
+   - **Finished bar, over target** -> solid red (`#DC5A5A`, same literal as `.kpi-wb-bar-over` and
+     `.kpi-pcol-bar-over` in kpi.css)
+   - **Finished bar, no target** -> identity fallback (nothing to verdict against)
+   - **Running week** -> light amber in-progress hatch (this marks incomplete, NOT state) - the
+     hatch STAYS on running bars
+
+   Identity colours (Food navy `#153968`, Packaging blue `#3E97D1`, Vehicle purple `#7A3E9D`,
+   Equipment `#0F766E`, Repair `#B45309`, Reimbursable `#7A3E9D`, period card steel `#4A6076`)
+   still carry the bucket identity on the card's left-edge stripe, on the legend, and on any
+   identity swatch elsewhere on the card. They are NOT applied to a state bar.
 
    **There is no red diagonal hatch on a bucket bar. Owner ruling 2026-08-21: solid red or solid
-   green, never a hatch.** The hatch read as a barcode at 40px and buried the number it was meant to
-   qualify. **A running week keeps its light in-progress hatch** - that marks incomplete, not state.
-
-   On a **closed** period the bars keep their identity colour entirely; state lives in the pill, the
-   hero and the per-week caption. Colouring four bars one state shouts one bit four times and
-   destroys the shape reading the bars exist for.
+   green, never a hatch.** The hatch read as a barcode at 40px and buried the number it was meant
+   to qualify.
 2. **One hero per card.** Spent at `--t-hero`, Remaining at `--t-value`.
 3. **Bucket hero colour follows state** - green under or on pace, red over, neutral at zero.
 4. **Card titles** `--t-meta` / 800 / `--n-700`, matching labor's `.kpi-spend-h-title`.

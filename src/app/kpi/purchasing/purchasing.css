@@ -343,19 +343,30 @@
   width: 100%;
   border-radius: 3px 3px 0 0;
 }
-/* Identity fill - color is identity, pattern is state (§7 rule 1). */
+/* Identity fallback fill (§7 rule 1, PR-2 R4 revision): identity color
+   applies only to the running / no-target state where there is no
+   verdict to communicate. Finished bars with a target render green/red
+   per state (§7.1 v2.2, owner rulings 2026-08-21). Identity remains on
+   card stripe + legend + bucket-identity - NOT on a state bar. */
 .kpi-app .kpi-p-bar.i-food  { background: var(--kpi-p-food); }
 .kpi-app .kpi-p-bar.i-pkg   { background: var(--kpi-p-pkg); }
 .kpi-app .kpi-p-bar.i-veh   { background: var(--kpi-p-veh); }
 .kpi-app .kpi-p-bar.i-equip { background: var(--kpi-p-equip); }
 .kpi-app .kpi-p-bar.i-rm    { background: var(--kpi-p-rm); }
-/* Over-state fill - PR-2 R2 hatch removal per owner ruling 2026-08-21.
-   Spec §7.1 (v2.1): "Bars are SOLID... There is no red diagonal hatch
-   on a bucket bar." Bar fill flips to solid red-700; no repeating
-   gradient; no inset outline required. Running-week hatch below is
-   preserved - that marks incomplete, not state. */
+/* PR-2 R4 Part C state fill - exact match to labor's week bars.
+   Labor tokens (kpi.css .kpi-wb-bar-*, .kpi-pcol-bar-*):
+     under = var(--green-500)   = #16A34A
+     over  = #DC5A5A            (a lighter red than --red-700 = #970000)
+   Owner rulings 2026-08-21:
+     "i do not like the red hatch, its either red or green"
+     "It should match exactly how the labor views work"
+   Placed AFTER identity so the state class wins the cascade when both
+   are present on the same bar. */
+.kpi-app .kpi-p-bar.st-under {
+  background: var(--green-500);
+}
 .kpi-app .kpi-p-bar.st-over {
-  background: var(--red-700);
+  background: #DC5A5A;
 }
 /* Running (in-progress) week - light hatch stays. Marks incomplete,
    NOT state. Order matters: st-run wins over st-over so a running
