@@ -64,14 +64,24 @@ export function LedgerCard({
           </span>
         </div>
         <div className="kpi-p-stk">
-          <span className="kpi-p-label">{closed ? "Vs budget" : "Remaining"}</span>
+          {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is a
+              quantity, plain, no arrow, no colour. Over budget swaps
+              the label to `Over by` and the number carries variance
+              colour. Closed reads `Vs budget` unchanged. */}
+          <span className="kpi-p-label">
+            {closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining")}
+          </span>
           {closed ? (
             <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>
               {Number(budget || 0) === 0 ? "—" : moneyArrow(varz)}
             </span>
+          ) : rem < 0 ? (
+            <span className="kpi-p-value num r">
+              {Number(budget || 0) === 0 ? "—" : fmt$(-rem)}
+            </span>
           ) : (
-            <span className={`kpi-p-value num ${rem < 0 ? "r" : "b"}`}>
-              {Number(budget || 0) === 0 ? "—" : (rem < 0 ? moneyArrow(-rem) : fmt$(rem))}
+            <span className="kpi-p-value num">
+              {Number(budget || 0) === 0 ? "—" : fmt$(rem)}
             </span>
           )}
           <span className="kpi-p-subline">
@@ -86,8 +96,14 @@ export function LedgerCard({
       </div>
       <div className="kpi-p-ledger">
         {(ledgerRows || []).length === 0 ? (
+          /* PR-2 R2 Fix 4 - owner ruling: a non-zero hero above
+             "no purchases recorded" is a lie. When the hero total is
+             non-zero the line detail ships with the drill route (PR 4);
+             say so honestly. Zero spend keeps the original copy. */
           <div className="kpi-p-ledger-empty">
-            No purchases recorded in this range.
+            {Number(spent || 0) > 0
+              ? "Line detail lands with the drill route."
+              : "No purchases recorded in this range."}
           </div>
         ) : (
           (ledgerRows || []).map((r, i) => (

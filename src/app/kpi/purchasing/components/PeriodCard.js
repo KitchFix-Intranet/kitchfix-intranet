@@ -43,6 +43,9 @@ export function PeriodCard({
   runningWeekIdx,   // 0..3 running week index, null when closed
   original,
   adjusted,
+  budgetSpent,      // PR-2 R2 Fix 2: adjusted clamped upstream when
+                    //   budget - finishedSpend <= 0. Swap the target
+                    //   legend for "budget spent"; never negative.
   projectedClose,
 }) {
   // ONE stateOf call - pill / hero / chart / secondary all read from it.
@@ -112,13 +115,19 @@ export function PeriodCard({
             </span>
           </div>
           <div className="kpi-p-stk">
-            <span className="kpi-p-label">{closed ? "Vs budget" : "Remaining"}</span>
+            {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is a
+                quantity, no arrow, no colour. `Over by` takes over when
+                the number is a variance (may carry colour). Closed reads
+                `Vs budget` unchanged. */}
+            <span className="kpi-p-label">
+              {closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining")}
+            </span>
             {closed ? (
               <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+            ) : showOverArrow ? (
+              <span className="kpi-p-value num r">{fmt$(-rem)}</span>
             ) : (
-              <span className={`kpi-p-value num ${showOverArrow ? "r" : "b"}`}>
-                {showOverArrow ? moneyArrow(-rem) : fmt$(rem)}
-              </span>
+              <span className="kpi-p-value num">{fmt$(rem)}</span>
             )}
             <span className="kpi-p-subline">
               {closed ? "period closed" : "net of pending"}
@@ -190,11 +199,14 @@ export function PeriodCard({
                 target {fmt$(original)}
               </span>
             )}
-            {!closed && adjusted != null && (
+            {!closed && adjusted != null && !budgetSpent && (
               <span className="kpi-p-leg adj">
                 <span className="kpi-p-dash" aria-hidden="true" />
                 adjusted {fmt$(adjusted)}
               </span>
+            )}
+            {!closed && budgetSpent && (
+              <span className="kpi-p-leg adj">budget spent</span>
             )}
             <span
               className="kpi-p-cardmeta"

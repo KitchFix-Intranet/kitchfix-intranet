@@ -493,6 +493,36 @@ async function computeSentinel(supa) {
   };
 }
 
+// ─── Accounts directory ──────────────────────────────────────────────
+//
+// PR-2 R2 Fix 7 - owner ruling 2026-08-24: purchasing must ship
+// `accounts_directory` too. Previously the page passed
+// `accountsDirectory={undefined}` and the rail fell back to
+// STATIC_DIRECTORY, whose `team_name`/`city`/`state` are all null, so
+// 8 of 11 members rendered blank because `folioMemberDescription`
+// returns `line: null` when team_name is missing. Labor already
+// resolves this exact query - mirroring here (rule 4: never fork; but
+// the labor helper is not exported and the module boundary keeps the
+// two routes independent - this is a live query, not a fork of logic).
+async function loadAccountsDirectory(supa) {
+  const q = await supa.from("accounts")
+    .select("team_key, region, name, city, state")
+    .neq("team_key", "CORP")
+    .order("team_key");
+  if (q.error) return { error: q.error };
+  const salaried = new Set(["CIN - KY", "TBJ - NY"]);
+  return {
+    data: (q.data || []).map(r => ({
+      team_key: r.team_key,
+      region: r.region,
+      team_name: r.name || null,
+      city: r.city || null,
+      state: r.state || null,
+      salaried: salaried.has(r.team_key),
+    })),
+  };
+}
+
 // ─── Freshness read ──────────────────────────────────────────────────
 
 async function loadFreshness(supa) {
@@ -675,16 +705,18 @@ export async function GET(request) {
   // totals.card by source). Parallelising cuts wall-time on the
   // common ALL/FYTD path where the largest read (actuals ~ 12.7k
   // rows) would otherwise serialise behind the weekly read.
-  const [weeklyResp, pendingResp, actualsResp, coverage, freshness] = await Promise.all([
+  const [weeklyResp, pendingResp, actualsResp, coverage, freshness, dirResp] = await Promise.all([
     paginateWeekly(supa, { members, start, end }),
     loadPending(supa, { members, start, end }),
     paginateActuals(supa, { members, start, end, pageSize: pageSizeParam }),
     loadCoverage(supa, { members, start, end }),
     loadFreshness(supa),
+    loadAccountsDirectory(supa),   // PR-2 R2 Fix 7
   ]);
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
   if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
+  if (dirResp.error) return NextResponse.json(safeError("accounts_directory", dirResp.error), { status: 500 });
   const weekly = weeklyResp.data;
   const pending = pendingResp.data;
   const actuals = actualsResp.data;
@@ -1023,6 +1055,7 @@ export async function GET(request) {
     coverage,
     provisional,
     freshness,
+    accounts_directory: dirResp.data,   // PR-2 R2 Fix 7 - rail meta on 11/11
     sentinel: sentinelResp.error ? null : sentinelResp.data,
   };
   if (includeLines) payload.actuals = actuals;

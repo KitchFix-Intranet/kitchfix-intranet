@@ -186,7 +186,9 @@ export function Shell({
       <a className="kpi-sr" href="#kpi-main">Skip to KPI content</a>
       <div className="kpi-sr" id="kpi-live" role="status" aria-live="polite" />
       <div className="kpi-printhdr" id="kpi-printhdr">
-        <div><strong>KPI Labor · {account}</strong></div>
+        {/* PR-2 R2 Fix 8 - print header follows the active section so a
+            printed Purchasing sheet does not label itself Labor. */}
+        <div><strong>KPI {activeSection === "purchasing" ? "Purchasing" : "Labor"} · {account}</strong></div>
         {printScopeText && <div>{printScopeText}</div>}
         <div>Generated {new Date().toLocaleString()}</div>
       </div>

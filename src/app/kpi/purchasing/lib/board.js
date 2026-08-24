@@ -154,13 +154,22 @@ export function heroToneClass(state) {
 // only. Callers derive it from the weekly view - each week whose end
 // is before `today` counts; the running week does not.
 export function weeklyTargets({ budget, weeksInPeriod, finishedSpend, finishedWeeks }) {
-  if (!(weeksInPeriod > 0)) return { original: null, adjusted: null };
+  if (!(weeksInPeriod > 0)) return { original: null, adjusted: null, budgetSpent: false };
   const original = Math.round((Number(budget || 0) / weeksInPeriod) * 100) / 100;
   const notFinished = weeksInPeriod - Number(finishedWeeks || 0);
-  if (!(notFinished > 0)) return { original, adjusted: null };
+  if (!(notFinished > 0)) return { original, adjusted: null, budgetSpent: false };
   const remaining = Number(budget || 0) - Number(finishedSpend || 0);
+  // PR-2 R2 Fix 2 - owner ruling 2026-08-24: a negative weekly target is
+  // meaningless on screen. When the budget is spent (remaining <= 0),
+  // clamp `adjusted` to 0 and set `budgetSpent: true`. The consumer
+  // renders `$0.00` and a caption saying "budget spent"; the target
+  // dashed line does not render below the baseline (bar chart already
+  // clamps at `lineValue > 0`).
+  if (remaining <= 0) {
+    return { original, adjusted: 0, budgetSpent: true };
+  }
   const adjusted = Math.round((remaining / notFinished) * 100) / 100;
-  return { original, adjusted };
+  return { original, adjusted, budgetSpent: false };
 }
 
 // ─── Chart shape (§4.2 of the prompt / §9B rule 3) ───────────────────
