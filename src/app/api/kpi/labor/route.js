@@ -306,15 +306,20 @@ export async function GET(request) {
   // the window as if it had been requested directly.
   let start = searchParams.get("start") || "2025-12-29";  // FY2026 opens
   let end = searchParams.get("end") || today;
-  // Future-range flag (owner ruling 2026-08-24). True when the
-  // requested START is strictly after today - the range hasn't begun.
-  // Client uses this to suppress verdict pills and to hide the three
-  // signal cards whose premise doesn't hold on a future range (Pace,
-  // Overtime, Payroll Data). Hours available stays because its
-  // premise holds perfectly: budget exists, no hours scheduled, every
-  // hour is available. A straddling range (start <= today <= end)
-  // gets false - it's genuinely in progress, verdicts are honest.
-  const is_future_range = start > today;
+  // Future-range flag (owner ruling 2026-08-24, corrected HS PR-A).
+  // True when the requested RESOLVED range starts strictly after
+  // today. Homestand requests carry `?homestand=<game_start>` and
+  // NOT `?start`/`?end` - start falls back to the FY default until
+  // the resolver reassigns it to window_start below. So `let` here,
+  // recompute after the homestand branch reassigns start.
+  //
+  // Client uses this to suppress verdict pills + hide signal cards
+  // whose premise doesn't hold on a future range (Pace, Overtime,
+  // Payroll Data). Hours available stays because its premise holds
+  // perfectly: budget exists, no hours scheduled, every hour is
+  // available. Straddling ranges (start <= today <= end) get false -
+  // in progress, verdicts are honest.
+  let is_future_range = start > today;
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
   const includeSalaryReq = searchParams.get("include_salary") === "1";
   const homestandParam = searchParams.get("homestand");   // <game_start ISO>, e.g. 2026-08-14
@@ -578,6 +583,16 @@ export async function GET(request) {
         }
         start = found.window_start;
         end   = found.window_end;
+        // HS PR-A (owner ruling 2026-08-24): recompute is_future_range
+        // AFTER homestand resolution reassigns start. A homestand
+        // request lands start=FY_default; without this recompute the
+        // flag stays false forever on homestand view and #798's
+        // suppression never fires. Uses window_start, not game_start -
+        // Kevin's rule keys is_future_range off "resolved range starts
+        // in the future" (window_start > today); a stand whose window
+        // has opened for prep is NOT a future range even if games are
+        // still ahead. Plan mode is the game_start flag on the client.
+        is_future_range = start > today;
         const gameDatesForFound = homestandGameDatesByStand.get(found.game_start) || new Set();
         // For the identity day strip, also expose night-game dates.
         const nightDatesForFound = new Set(
@@ -586,12 +601,36 @@ export async function GET(request) {
                       && r.service_date >= found.game_start && r.service_date <= found.game_end)
             .map(r => r.service_date)
         );
+        // HS PR-A: homestand_split now takes todayIso so it can also
+        // compute stand-scoped spent_to_date - the field that surfaces
+        // on plan-mode PlanCards when the window has opened but games
+        // haven't (HS 12 case: $359.58 already on prep days).
+        // Absent when spent_to_date <= 0 per owner ruling ("if the
+        // fact's premise does not hold, it is absent, not $0").
         homestandSplice = {
           homestand: found,
           homestand_game_dates: [...gameDatesForFound].sort(),
           homestand_night_dates: [...nightDatesForFound].sort(),
-          homestand_split: computeSplitWithGameDates(dailyRows, found, gameDatesForFound),
+          homestand_split: computeSplitWithGameDates(dailyRows, found, gameDatesForFound, today),
         };
+        // HS PR-A: attach homestand_estimated on POST-FLOOR future
+        // stands too. Same shape the pre-floor early-return ships at
+        // line 559-577; PlanCards reads data.homestand_estimated and
+        // does not care which branch produced it. is_estimated was
+        // folded onto future stands by foldPreFloorEstimates when
+        // game_start > today.
+        if (found.is_estimated) {
+          homestandSplice.homestand_estimated = {
+            total:         found.actual_estimated,
+            per_day:       found.estimator_meta?.per_day || [],
+            base_rates:    found.estimator_meta?.base_rates || null,
+            source_stands: found.estimator_meta?.source_stands || 0,
+            method:        "game_day_weighted",
+            note:          found.pre_floor
+              ? "Estimated: this stand is before daily detail started (04/20/26). Each week's real total is distributed across days by what the schedule says happened (night game, day game, prep day). Derived from the account's own low-OT stands."
+              : "Estimated: this stand's games have not been played yet. Each day is priced at the account's base rate for that day type (night game, day game, prep day). Derived from the account's own low-OT played stands.",
+          };
+        }
       }
   }
   const homestandsList = allHomestands || [];

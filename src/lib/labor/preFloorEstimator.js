@@ -171,9 +171,26 @@ export function assertNoStraddlingStand(homestands, dailyFloorIso) {
  * @param {Map<string, number>} weekTotalsByMonday  labor_actuals_latest weekly amounts keyed by Monday ISO
  * @param {Map<string, string>} gameByDate          "night" | "day" per game date
  * @param {Set<string>} prepDays                    day-before-open ISO dates
+ * @param {string} [todayIso]                       today YYYY-MM-DD; enables the future-stand branch
+ *
+ * HS PR-A (owner ruling 2026-08-24): the estimator's guard was
+ * pre_floor-only. Future post-floor stands (game_start > today) also
+ * have no per-day actuals to plot the plan against, and the math -
+ * distribute the account's low-OT weekly totals by day-type weights -
+ * applies to any window whose games have not been played. The gate
+ * relaxes to `pre_floor OR game_start > today`, so the estimator ships
+ * on both classes. Two consumers, one function - a parallel copy is
+ * exactly the drift risk the audit was there to prevent.
+ *
+ * Callers:
+ *   - src/lib/labor/homestandResolver.js attachEstimatorToPreFloor
+ *   - src/lib/labor/homestandResolver.js attachEstimatorToFuture (PR-A)
  */
-export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, gameByDate, prepDays) {
-  if (!stand?.pre_floor) return { total: 0, per_day: [] };
+export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, gameByDate, prepDays, todayIso) {
+  if (!stand) return { total: 0, per_day: [] };
+  const isPreFloor = !!stand.pre_floor;
+  const isFuture   = !isPreFloor && todayIso != null && stand.game_start > todayIso;
+  if (!isPreFloor && !isFuture) return { total: 0, per_day: [] };
   const weeks = new Set();
   for (let d = stand.window_start; d <= stand.window_end; d = addDaysIso(d, 1)) {
     weeks.add(mondayOfIso(d));
@@ -198,6 +215,21 @@ export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, game
       else if (prepDays.has(d)) { w = baseRates.prep; dayType = "prep"; }
       dayWeights.push({ date: d, w, dayType });
       sumWeights += w;
+    }
+    // HS PR-A: future stands have no historical weekTotal to
+    // distribute. Fall back to base rates directly - each day
+    // contributes its own base rate ($/night, $/day, $/prep). This
+    // is the same account-average signal, just evaluated per-day
+    // instead of scaled to a historical week's actual. Pre-floor
+    // stands keep the historical-distribution path; the fallback
+    // fires only when weekTotal is zero AND we're on a future stand.
+    if (weekTotal === 0 && isFuture) {
+      for (const dw of dayWeights) {
+        if (dw.date < stand.window_start || dw.date > stand.window_end) continue;
+        totalX10000 += Math.round(dw.w * 10000);
+        perDay.push({ date: dw.date, amount: Math.round(dw.w * 100) / 100, day_type: dw.dayType });
+      }
+      continue;
     }
     for (const dw of dayWeights) {
       const slice = sumWeights > 0 ? (dw.w / sumWeights) * weekTotal : 0;
@@ -239,26 +271,33 @@ export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, game
  */
 export async function foldPreFloorEstimates(supa, accountKey, homestands, dailyFloorIso, todayIso) {
   assertNoStraddlingStand(homestands, dailyFloorIso);
-  const preFloor = (homestands || []).filter(h => h.pre_floor);
-  if (preFloor.length === 0) return homestands;
+  // HS PR-A (owner ruling 2026-08-24): fold estimates onto BOTH
+  // pre-floor stands AND post-floor future stands (game_start >
+  // today). Both classes render plan-mode PlanCards on the client,
+  // and both need the same estimator payload. Client gate is one
+  // derived boolean (`planMode`) so the two paths cannot drift.
+  const needsEstimate = (h) => h.pre_floor || (h.game_start > todayIso);
+  const targets = (homestands || []).filter(needsEstimate);
+  if (targets.length === 0) return homestands;
 
   const baseRates = await deriveAccountBaseRates(supa, accountKey, homestands, todayIso);
   if (baseRates.source_stands === 0) {
     // No low-OT stands played yet - estimator cannot run. Return the
-    // stands unchanged; pre-floor stays "no detail" on the client.
+    // stands unchanged; pre-floor + future stay "no detail" on client.
     return homestands;
   }
 
-  // Weekly totals for the pre-floor era (labor_actuals_latest, weekly
-  // grain). Bounded by the earliest pre-floor stand's overlapped week
-  // through the daily floor (exclusive of anything post-floor).
-  const preFloorWeeks = new Set();
-  for (const h of preFloor) {
+  // Weekly totals for every week any target stand touches. Pre-floor
+  // weeks have real labor_actuals_latest rows; future weeks return
+  // nothing and estimatePreFloorStand falls back to base rates (see
+  // its isFuture branch). The single query covers both.
+  const weeksTouched = new Set();
+  for (const h of targets) {
     for (let d = h.window_start; d <= h.window_end; d = addDaysIso(d, 1)) {
-      preFloorWeeks.add(mondayOfIso(d));
+      weeksTouched.add(mondayOfIso(d));
     }
   }
-  const wkStarts = [...preFloorWeeks].sort();
+  const wkStarts = [...weeksTouched].sort();
   const minWk = wkStarts[0];
   const maxWk = wkStarts[wkStarts.length - 1];
   const wQ = await supa.from("labor_actuals_latest")
@@ -285,8 +324,8 @@ export async function foldPreFloorEstimates(supa, accountKey, homestands, dailyF
   for (const h of homestands || []) prepDays.add(addDaysIso(h.game_start, -1));
 
   return (homestands || []).map(h => {
-    if (!h.pre_floor) return h;
-    const est = estimatePreFloorStand(h, baseRates, weekTotals, gameByDate, prepDays);
+    if (!needsEstimate(h)) return h;
+    const est = estimatePreFloorStand(h, baseRates, weekTotals, gameByDate, prepDays, todayIso);
     return {
       ...h,
       actual_estimated: est.total,

@@ -631,12 +631,20 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
 // left) mirror v11's plan-mode render. Each carries its own popover
 // (qPlan, qBank, qHrs, qOT, qSpread); this brings the total popover
 // count to 13 - the number owner's spec calls for.
-function PlanCards({ stand, estimate, bank, hourlyRate }) {
+function PlanCards({ stand, estimate, split, bank, hourlyRate }) {
   if (!stand || !estimate) return null;
   const budget = Number(stand.budget || 0);
   const plan   = Number(estimate.total || 0);
   const budgetVsPlan = budget - plan;
   const fits = budgetVsPlan >= 0;
+  // HS PR-A (owner ruling 2026-08-24): stand-scoped spent-to-date
+  // surfaces on plan mode when the window has opened but games have
+  // not (HS 12: window 08/21 past, games 08/31 future, $359.58 on
+  // prep). Absent when 0 - "if the fact's premise does not hold, it
+  // is absent, not $0. Seeing it means real money has already gone
+  // out before the games start, which is the signal worth surfacing."
+  const spentToDate = Number(split?.spent_to_date || 0);
+  const showSpentToDate = spentToDate > 0.005;
 
   // Working days = days in per_day with non-zero weight (game or prep).
   const workingDays = (estimate.per_day || []).filter(p => p.day_type !== "other").length;
@@ -684,6 +692,16 @@ function PlanCards({ stand, estimate, bank, hourlyRate }) {
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Plan costs</div><div className="kpi-hs-fact-v kpi-hs-blue" data-figure="plan">{fmt$0(plan)}</div></div>
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Vs budget</div><div className={`kpi-hs-fact-v ${fits ? "kpi-hs-good" : "kpi-hs-bad"}`}>{fits ? "▼ " : "▲ "}{fmt$0(Math.abs(budgetVsPlan))}</div></div>
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Working days</div><div className="kpi-hs-fact-v">{workingDays} of {stand.window_days}</div></div>
+          {/* HS PR-A: stand-scoped spent-to-date, absent when 0. On a
+              straddling plan-mode stand (HS 12: window open, games
+              ahead) this surfaces the real money already committed to
+              prep. Signal worth surfacing; not a card-bloating $0. */}
+          {showSpentToDate && (
+            <div className="kpi-hs-fact" data-fact="spent_to_date">
+              <div className="kpi-hs-fact-k">Spent to date</div>
+              <div className="kpi-hs-fact-v">{fmt$(spentToDate)}</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -894,39 +912,54 @@ export function HomestandBoard({
         <StandRegionSkeleton />
       ) : (
         <>
+          {/* HS PR-A (owner ruling 2026-08-24): plan mode keys off
+              game_start > today, NOT window_start > today. A window
+              opening a few prep days early does not make a stand
+              "in progress" - the games do. Chef opening HS 12 today
+              wants THE PLAN, not "$0 spent against budget · under".
+              One derived boolean gates PlanCards + SignalCards so
+              the two cannot drift. */}
           {stand && !settledRefusal && <StandHeader stand={stand} />}
-          {stand && !settledRefusal && data?.source !== "estimated" && (
-            <StandDayStrip
-              stand={stand}
-              actualsDaily={data.actuals_daily || []}
-              gameDates={gameDates}
-              nightGameDates={nightGameDates}
-              todayISO={todayISO}
-            />
-          )}
-          {/* PR #273 - pre-floor selection (source:"estimated") renders
-              the five plan-mode cards instead of the actuals SignalCards
-              + day strip. Pre-floor has no daily rows to plot and no per-
-              worker attribution; PlanCards works off homestand_estimated
-              + homestand_bank + stand.budget. */}
-          {stand && !settledRefusal && data?.source === "estimated" && (
-            <PlanCards
-              stand={stand}
-              estimate={data?.homestand_estimated}
-              bank={bank}
-              hourlyRate={hourlyRate}
-            />
-          )}
-          {stand && split && !settledRefusal && data?.source !== "estimated" && (
-            <SignalCards
-              stand={stand}
-              split={split}
-              employees={employeesByStand.get(stand.game_start) || []}
-              hourlyRate={hourlyRate}
-              salaryAvailable={salaryAvailable}
-              salaryOn={salaryOn}
-            />
-          )}
+          {(() => {
+            if (!stand || settledRefusal) return null;
+            const planMode = data?.source === "estimated"
+              || (stand?.game_start && todayISO && stand.game_start > todayISO);
+            return (
+              <>
+                {/* Day strip: absent on plan mode (pre-floor has no
+                    daily rows; future has none yet - either way the
+                    strip cannot render meaningfully). */}
+                {!planMode && (
+                  <StandDayStrip
+                    stand={stand}
+                    actualsDaily={data.actuals_daily || []}
+                    gameDates={gameDates}
+                    nightGameDates={nightGameDates}
+                    todayISO={todayISO}
+                  />
+                )}
+                {planMode && (
+                  <PlanCards
+                    stand={stand}
+                    estimate={data?.homestand_estimated}
+                    split={split}
+                    bank={bank}
+                    hourlyRate={hourlyRate}
+                  />
+                )}
+                {!planMode && split && (
+                  <SignalCards
+                    stand={stand}
+                    split={split}
+                    employees={employeesByStand.get(stand.game_start) || []}
+                    hourlyRate={hourlyRate}
+                    salaryAvailable={salaryAvailable}
+                    salaryOn={salaryOn}
+                  />
+                )}
+              </>
+            );
+          })()}
           {settledRefusal && (
             <div className="kpi-hs-card kpi-hs-card-refusal" role="alert" data-refusal>
               <div className="kpi-hs-eyebrow">Selected stand unavailable</div>
