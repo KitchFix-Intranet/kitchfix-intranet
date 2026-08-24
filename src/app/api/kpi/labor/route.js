@@ -560,11 +560,34 @@ export async function GET(request) {
       if (homestandParam) {
         const found = allHomestands.find(x => x.game_start === homestandParam);
         if (!found) {
+          // HS PR-C follow-up (owner ruling 2026-08-24): an
+          // unresolvable stand no longer 400s - navigation must
+          // survive an unresolvable selection. Reachable by
+          // switching accounts while a stand is selected; the
+          // prior 400 blanked the whole homestand view.
+          //
+          // Response shape mirrors the pre-floor refusal path
+          // below - refused: true + message + full rail / bank
+          // payload so the client renders:
+          //   * the tab (hasHomestandTab guards on homestands.length)
+          //   * the rail (from data.homestands)
+          //   * the season card (from data.homestand_bank)
+          //   * a refusal panel in the stand region (settledRefusal
+          //     branch in HomestandBoard already exists per PR-2
+          //     ruling: "a refusal must not destroy navigation")
           return NextResponse.json({
-            error: "homestand_not_found",
-            message: `No homestand for ${account} with game_start=${homestandParam}`,
-            account, homestand_param: homestandParam,
-          }, { status: 400 });
+            source: null,
+            refused: true,
+            message: `That homestand does not exist for ${account}. Pick a stand from the rail above.`,
+            homestand: null,
+            homestand_param: homestandParam,
+            homestands: allHomestands,
+            homestand_bank: homestandBank,
+            daily_floor: dailyFloorISO,
+            account, filters: { account, homestand: homestandParam },
+            landing_account, accounts_directory, regional_directors_display,
+            salary_available,
+          });
         }
         if (found.pre_floor) {
           // PR #273 - pre-floor stand ships an ESTIMATED response body

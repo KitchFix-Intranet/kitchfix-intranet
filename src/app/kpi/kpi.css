@@ -3329,18 +3329,25 @@
 /* HS PR-C 2026-08-24: all five signal-card headers must measure the
    same height. Pre-fix three of five wrapped the `?` onto a second
    line (spend 45px, cost-per-game 48px, overtime 45px) while prep +
-   payroll fit at 21px. Fix: absolute-position the HelpPop trigger
-   in the card's top-right corner (padding-aligned), and switch the
-   header row to nowrap so eyebrow + pills stay on one line. Right
-   padding reserves the corner space so long pill groups do not run
-   under the `?`. The pop-up itself is portalled (see PR #790), so
-   the trigger position does not affect the pop position. */
+   payroll fit at 21px.
+   Fix pass 1: absolute-position the HelpPop trigger in the card's
+   top-right corner (padding-aligned) so it never joins the wrap
+   chain. Fixed the wrapping but the pill group then set the height
+   (2 pills = 27, 1 pill = 21).
+   Fix pass 2 (2026-08-24 audit close): fixed row height via
+   --kpi-lane-head (20px), same lane token the period-board's signal
+   heads use at .kpi-sig-eyebrow / .kpi-sig-state. Pills centre
+   within the row rather than driving it, so 1-pill and 2-pill
+   headers measure identically. Right padding reserves space for the
+   corner ?; the pop-up itself is portalled (PR #790) so trigger
+   position doesn't affect pop position. */
 .kpi-hs-card-hdr {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: var(--kpi-sp-3);
   flex-wrap: nowrap;
   padding-right: 22px;
   min-width: 0;
+  height: var(--kpi-lane-head);
 }
 .kpi-hs-card-hdr > .kpi-hs-qwrap {
   position: absolute;
