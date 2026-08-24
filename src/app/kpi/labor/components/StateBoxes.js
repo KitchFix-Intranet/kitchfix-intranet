@@ -128,10 +128,20 @@ export function StateStale({ lastSynced }) {
     </StateBox>
   );
 }
-export function StateSalaried({ account, message }) {
+// PR-E - operator-facing empty state for CIN - KY / TBJ - NY per
+// kitchfix-help-copy.html "Empty state · salaried-only accounts". The
+// prior copy (`carries no hourly labor pipeline per D26. Salary books
+// to 3100.2 and comes from the P&L upload, not Rippling.`) reads as a
+// technical error; the new copy tells the operator what to do (turn
+// salary on). City is derived via folioMemberDescription so there is
+// one source of truth for account -> city and a future rename cannot
+// leave a hardcoded city string here.
+export function StateSalaried({ account, city }) {
+  const place = city || "This site";
   return (
-    <StateBox variant="salaried" title="Salaried-only account">
-      {message || `${account} carries no hourly labor pipeline per D26. Salary books to 3100.2 and comes from the P&L upload, not Rippling.`}
+    <StateBox variant="salaried" title="No hourly labor at this account">
+      {place} is run by salaried staff, so there are no hourly hours to track here.
+      Turn on <b>+ Salary</b> in the header to see this account&apos;s labor cost.
     </StateBox>
   );
 }

@@ -25,6 +25,7 @@ import { periodOf, periodStartISO, periodEndISO } from "../lib/periods.js";
 // PR-C - pure aggregate builder in a plain-JS module so the OT-chip
 // probe can synthesize actuals + assert without JSX compilation.
 import { buildMemberByWeekAndAcct } from "../lib/weekTableModels.js";
+import HelpPop from "./HelpPop.js";
 
 // PR-B (owner ruling 2026-08-24) - Comfortable | Dense toggle removed
 // entirely, dashboard-wide. Comfortable becomes the only mode; the
@@ -113,44 +114,25 @@ function WorkersFilter({ workerRoster, selectedWorkers, onWorkersChange }) {
   );
 }
 
-function HelpPop({ rateBasisHourlyOnly }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return (
-    <div className="kpi-help-anchor" ref={rootRef}>
-      <button
-        type="button"
-        className="kpi-help"
-        aria-haspopup="dialog"
-        aria-expanded={open ? "true" : "false"}
-        aria-label="About this table"
-        onClick={() => setOpen(o => !o)}
-      >?</button>
-      {open && (
-        <div className="kpi-help-pop kpi-help-pop-table" role="dialog">
-          <h5>ABOUT THIS TABLE</h5>
-          <p><b>Coverage</b> appears only when something is wrong - a clean row means every entry has priced hours.</p>
-          <p><b>vs budget</b> compares each row against its own budget: a week against the weekly budget, a period against the period budget. The tick is the budget line; the bar is what was spent.</p>
-          <p><b>{rateBasisHourlyOnly ? "Hourly rate" : "Rate"}</b>{rateBasisHourlyOnly
-            ? " is hourly dollars divided by hourly hours. Salaried people are not included in the denominator on this column; the total dollars figure below stays hourly + salary."
-            : " is blended - dollars divided by hours. Dollars come from Rippling pay segments, never hours × rate."}</p>
-          <p>Columns with no values anywhere in the range are hidden.</p>
-        </div>
-      )}
-    </div>
-  );
-}
+// PR-E - "The week table" popover copy per kitchfix-help-copy.html
+// (section "Period board · other regions"). Replaces the prior
+// rate-basis blurb that shipped as "ABOUT THIS TABLE". Body is a
+// ReactNode so the shared HelpPop can render it verbatim.
+const WEEK_TABLE_POP_BODY = (
+  <>
+    Every week in the period, with its own spend, hours and overtime. <b>Click a week to open it and see who worked.</b>
+    <br /><br />
+    <b>The amber chips mean different things:</b>
+    <table className="kpi-hs-pop-table">
+      <tbody>
+        <tr><td>&ldquo;N need attention&rdquo;</td><td>broken punches</td></tr>
+        <tr><td>&ldquo;awaiting approval&rdquo;</td><td>just needs a click</td></tr>
+        <tr><td>&ldquo;unpriced&rdquo;</td><td>dollars still coming</td></tr>
+      </tbody>
+    </table>
+    <b>Need attention is the only one that requires a fix</b> - somebody never clocked out, or a punch is under a minute. The others resolve on their own or with an approval.
+  </>
+);
 
 // V9-5 vs budget lockup: 58px bar + 72px delta. Tick at 80%.
 function VsBudget({ spent, budget, mode }) {
@@ -651,7 +633,7 @@ export function WeekTable({
         {/* PR-B - Comfortable | Dense toggle removed dashboard-wide.
             Comfortable is the only mode. */}
         <span className="kpi-tbar-rule" aria-hidden="true" />
-        <HelpPop rateBasisHourlyOnly={rateBasisHourlyOnly} />
+        <HelpPop id="qWeekTable" title="The week table" body={WEEK_TABLE_POP_BODY} />
       </div>
 
       {scopeNote && (
@@ -823,6 +805,13 @@ function FragmentRows({
             <span className="kpi-tbl-chev">{periodOpen ? "⌄" : "›"}</span>
             {band.label}
             <span className="kpi-tbl-bandsub">{band.subLabel}</span>
+            {/* PR-E - band-level OT chip. Completes the pattern PR-D
+                closed at the account level (chip beside the OT column
+                on account child rows). Same rule: if the band totals
+                cross the OT threshold, the chip appears beside the
+                label so the reader does not have to scan the OT
+                column for a signal that is already known. */}
+            <OTTag ot={band.totals.ot} />
             {band.exceptionWeekCount > 0 && (
               <span className="kpi-tbl-flag kpi-flag-warn">⚠ {band.exceptionWeekCount} week{band.exceptionWeekCount === 1 ? "" : "s"} unpriced</span>
             )}

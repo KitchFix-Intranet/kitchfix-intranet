@@ -13,6 +13,55 @@
 
 import { fmt$, fmtHrs } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
+import HelpPop from "./HelpPop.js";
+
+// PR-E - card-level help copy per kitchfix-help-copy.html.
+// One body per signal card, verbatim. Kept out-of-render so the
+// component bodies stay readable and Playwright can grep for the
+// verbatim text.
+const PACE_BODY = (
+  <>
+    Whether you are ahead or behind if the period&apos;s budget were spent evenly, day by day.
+    <br /><br />
+    <b>Down and green means behind the even line</b> - you have spent less than the calendar says you could have. Up and red means ahead of it.
+    <br /><br />
+    Being ahead is not automatically bad. A period with a heavy homestand early and a road trip after should run ahead in week one. What matters is whether the rest of the period has enough left in it.
+    <span className="kpi-hs-pop-foot"><b>Projected end</b> takes your pace so far and runs it to the end of the period. It assumes the rest looks like what you have done, which is why a homestand that has not happened yet can move it.</span>
+  </>
+);
+
+const OVERTIME_BODY = (
+  <>
+    Overtime hours as a share of all hours worked. <b>5.9% means about six of every hundred hours were paid at time and a half.</b>
+    <br /><br />
+    Overtime is not automatically a problem. The 40-hour clock resets every Monday, so a week with a lot of games packed into it carries overtime no matter how you schedule it - that is the calendar, not the crew.
+    <br /><br />
+    <b>Worth a look when</b> the same one or two people carry all of it, or when a light week still shows a high number.
+    <span className="kpi-hs-pop-foot"><b>Hrs to target</b> is how many overtime hours you would need to shed to land on the 8% line. <b>Peak OT week</b> names the worst single week so you know where to look.</span>
+  </>
+);
+
+const HOURS_LEFT_BODY = (
+  <>
+    How many more hours you can put on the schedule and still land on budget. <b>Budget left divided by your blended rate.</b>
+    <br /><br />
+    <b>Per week</b> spreads it evenly across the weeks remaining. <b>Per worker</b> divides that across your current crew - roughly what each person can still work.
+    <br /><br />
+    This is a ceiling, not a plan. It assumes your rate holds. If the weeks ahead carry overtime, those hours cost more and the real ceiling is lower.
+    <span className="kpi-hs-pop-foot"><b>Blended rate</b> is total dollars over total hours - your actual average cost per hour, overtime included, not anyone&apos;s base wage.</span>
+  </>
+);
+
+const PAYROLL_BODY = (
+  <>
+    How complete this period&apos;s numbers are. <b>10 of 10 means every person-week has pay data from Rippling</b> - nothing is missing.
+    <br /><br />
+    <b>Unapproved</b> is hours clocked but not yet approved by a manager. Rippling does not calculate pay until someone approves, so those hours carry no dollars yet and your spend will rise when they do.
+    <br /><br />
+    <b>Read this card first when a number looks too low.</b> Usually the answer is here.
+    <span className="kpi-hs-pop-foot"><b>Final</b> means the period is closed and everything is in. <b>Partial</b> means hours are still landing.</span>
+  </>
+);
 // PR-A - pure fact builders live in a plain-JS module so a Node probe
 // can construct synthetic board payloads and assert without JSX
 // compilation. The JSX render below consumes the same models; probe
@@ -26,11 +75,14 @@ import {
 // V34 - the pill and the card stripe come from ONE expression per card.
 // Each caller derives its `state`; Head renders the pill from the same
 // value so they can never disagree.
-function Head({ eyebrow, state, label }) {
+// PR-E - optional `help` slot renders a ? popover to the right of the
+// state pill. Wired for the four signal cards per kitchfix-help-copy.
+function Head({ eyebrow, state, label, help }) {
   return (
     <div className="kpi-sig-head">
       <span className="kpi-sig-eyebrow">{eyebrow}</span>
       <span className={`kpi-sig-state kpi-sig-state-${state}`}>{label}</span>
+      {help}
     </div>
   );
 }
@@ -94,7 +146,7 @@ function PaceCard({ board }) {
   const m = buildPaceCardModel(board);
   return (
     <SignalCard state={m.state}>
-      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} />
+      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} help={<HelpPop id="qPace" title="Spending pace" body={PACE_BODY} />} />
       <Hero>
         {m.heroMute ? <span className="kpi-sig-hero-mute">—</span> : <ArrowFigure v={m.heroV} size="hero" />}
       </Hero>
@@ -158,7 +210,7 @@ function OvertimeCard({ board, salary }) {
 
   return (
     <SignalCard state={state}>
-      <Head eyebrow="OVERTIME" state={state} label={label} />
+      <Head eyebrow="OVERTIME" state={state} label={label} help={<HelpPop id="qOvertime" title="Overtime" body={OVERTIME_BODY} />} />
       <Hero>
         <span className={`kpi-sig-hero-val num ${heroTone === "bad" ? "kpi-sig-hero-bad" : heroTone === "warn" ? "kpi-sig-hero-warn" : ""}`}>
           {pct.toFixed(1)}%
@@ -198,7 +250,7 @@ function HoursLeftCard({ board, salary }) {
       : <span className={`kpi-sig-hero-val num ${m.hero?.over ? "kpi-sig-hero-bad" : ""}`}>{m.hero?.value}</span>;
   return (
     <SignalCard state={m.state}>
-      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} />
+      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} help={<HelpPop id="qHoursLeft" title="Hours left to schedule" body={HOURS_LEFT_BODY} />} />
       <Hero>{hero}</Hero>
       <Sub>{m.subMute ? <span className="kpi-sig-sub-mute">{m.subMute}</span> : m.heroSub}</Sub>
       <Facts items={renderFacts(m.facts)} />
@@ -278,7 +330,7 @@ function PayrollDataCard({ board, freshness, salary }) {
 
   return (
     <SignalCard state={state}>
-      <Head eyebrow="PAYROLL DATA" state={state} label={label} />
+      <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
       <Hero>
         <span className="kpi-sig-hero-val num">{priced} of {total}</span>
       </Hero>

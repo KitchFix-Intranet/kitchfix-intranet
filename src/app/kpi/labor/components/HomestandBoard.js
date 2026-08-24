@@ -26,9 +26,10 @@
 //      stand selection. Only the .kpi-hs-sbar-mark navy outline
 //      moves.
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { DayStripPlot, aggregatePerDay, isoRange } from "./DayStrip.js";
+import HelpPop from "./HelpPop.js";
 
 function fmt$0(v) {
   return "$" + Math.round(Number(v || 0)).toLocaleString("en-US");
@@ -36,68 +37,6 @@ function fmt$0(v) {
 function arrow(v, goodWhenPositive = true) {
   const good = goodWhenPositive ? v >= 0 : v <= 0;
   return { glyph: v >= 0 ? "▼" : "▲", cls: good ? "kpi-hs-good" : "kpi-hs-bad" };
-}
-
-// PR-2 audit 2026-08-21 - v11 render carried a ? popover on every
-// card; the initial homestand build shipped zero. This restores them
-// with the v11 copy verbatim. Popover positions absolutely under the
-// button; flips up when the trigger sits near the bottom of the
-// viewport. Outside-click and Escape close. Card z-index lifts via
-// `.kpi-hs-card:has(.kpi-hs-qwrap.on)` so the popover paints above
-// its sibling cards.
-function HsHelpPop({ id, title, body }) {
-  const [open, setOpen] = useState(false);
-  const [flip, setFlip] = useState(false);
-  const rootRef = useRef(null);
-  const popRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  useLayoutEffect(() => {
-    if (!open || !popRef.current) return;
-    const r = popRef.current.getBoundingClientRect();
-    setFlip(r.bottom > window.innerHeight - 8);
-  }, [open]);
-
-  return (
-    <span className={`kpi-hs-qwrap ${open ? "on" : ""}`} ref={rootRef}>
-      <button
-        type="button"
-        className="kpi-hs-qbtn"
-        aria-haspopup="dialog"
-        aria-expanded={open ? "true" : "false"}
-        aria-label={`About: ${title}`}
-        data-hs-help={id}
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-      >?</button>
-      {open && (
-        <div
-          ref={popRef}
-          className={`kpi-hs-pop ${flip ? "kpi-hs-pop-flip" : ""}`}
-          role="dialog"
-          aria-label={title}
-          data-hs-pop
-        >
-          <b className="kpi-hs-pop-title">{title}</b>
-          <div className="kpi-hs-pop-body">{body}</div>
-        </div>
-      )}
-    </span>
-  );
 }
 
 // ─── Season rail card ───────────────────────────────────────────────
@@ -120,7 +59,7 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
       <header className="kpi-hs-card-hdr">
         <span className="kpi-hs-eyebrow">Season by homestand</span>
         <span className="kpi-hs-note">Click on a homestand to open it</span>
-        <HsHelpPop
+        <HelpPop
           id="qRail"
           title="Season by homestand"
           body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.</>}
@@ -248,7 +187,7 @@ function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
         <span className={`kpi-hs-pill ${bankVal >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`} data-bank-pill>
           Bank {bankVal >= 0 ? "▲" : "▼"} {fmt$0(bankAbs)}
         </span>
-        <HsHelpPop
+        <HelpPop
           id="qSeason"
           title="Season to date"
           body={<>The solid bar is what you have spent. The green hatch is the bank - budget you were given but did not use. The grey hatch is what is still budgeted for the stands you have left.<br /><br />The navy outline shows where the stand you are looking at sits in the season.</>}
@@ -403,7 +342,7 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
               >{salaryOn ? "+ SALARY" : "HOURLY ONLY"}</span>
             )}
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qSpend"
             title="What this stand cost"
             body={<>Every dollar of hourly labor on the days this homestand owns - the prep day before it, the games, and any other day worked before the next stand opens.<br /><br />The arrow compares it to the budget for those same days. Down and green means you came in under.</>}
@@ -428,7 +367,7 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
           <span className="kpi-hs-pill kpi-hs-pill-blue">
             {actual > 0 ? Math.round((split.off_day_dollars / actual) * 100) : 0}%
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qPrep"
             title="Prep and off days"
             body={<>Labor on days with no game - the prep day before the stand opens, plus anything worked while the team was away.<br /><br />This is the part of the stand you control. Game days are fixed by the schedule; these days are your call.</>}
@@ -449,7 +388,7 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">Cost per game day</span>
           <span className="kpi-hs-pill kpi-hs-pill-purple">{stand.game_days} games</span>
-          <HsHelpPop
+          <HelpPop
             id="qGame"
             title="Cost per game day"
             body={<>Game-day labor divided by the number of games. Prep days are left out so this is a clean per-game number.<br /><br />Night games cost more than day games because they run later and the crew size is typically the same. Per-account base rates land with the pre-floor estimator.</>}
@@ -471,7 +410,7 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
           <span className={`kpi-hs-pill ${otBand}`}>
             {otPct < norm[0] ? "Below normal" : otPct > norm[1] ? "Above normal" : "Typical"}
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qOT2"
             title="Why this stand carries overtime"
             body={<>
@@ -504,7 +443,7 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
           <span className={`kpi-hs-pill ${unapprovedHrs > 0 ? "kpi-hs-pill-amber" : "kpi-hs-pill-good"}`}>
             {unapprovedHrs > 0 ? "Needs attention" : "Complete"}
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qPay"
             title="Payroll data"
             body={<>Hours clocked in Rippling that nobody has approved yet. Rippling does not calculate pay until a manager approves, so these hours carry no dollars.<br /><br />Will rise is what this stand grows by once they are approved.</>}
@@ -552,7 +491,7 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
             <th className="num">Games</th>
             <th className="num kpi-hs-th-help">
               Peak
-              <HsHelpPop
+              <HelpPop
                 id="qPeak"
                 title="Busiest week"
                 body={<>The most game days that fall inside any single Monday-Sunday week during the stand. The 40-hour overtime clock resets Monday, so this number - not the total game count - is what drives overtime.</>}
@@ -731,7 +670,7 @@ function PlanCards({ stand, estimate, bank, hourlyRate }) {
             </span>
             <span className="kpi-hs-pill kpi-hs-pill-amber" data-est-pill>est.</span>
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qPlan"
             title="How the plan is priced"
             body={<>Your account's own averages this season, weighted by what the schedule says happened each day. Because daily detail starts 04/20/26, pre-floor stands are estimated - each week's real total is distributed across days by night/day/prep weights.<br /><br />The plan covers only what the schedule tells us: the prep day and the games. Off days show as $0 - the week's money is correctly sitting on the games at either end. Known limitation: the road-trip trickle (~$214 per stand, someone in while the team is away) has no schedule day to land on, so it gets absorbed into game days.</>}
@@ -758,7 +697,7 @@ function PlanCards({ stand, estimate, bank, hourlyRate }) {
               {bankVal >= 0 ? "Ahead" : "Behind"}
             </span>
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qBank"
             title="Your bank"
             body={<>Every finished stand came in under its target, which puts money in the bank, or over, which takes money out. This is the running total for the season.<br /><br />Money in the bank is room to spend. A bank in the red means the next stands have to run under target to get back to even.<br /><br />Estimated stands do not enter the bank - the bank stays a promise about money we can prove.</>}
@@ -783,7 +722,7 @@ function PlanCards({ stand, estimate, bank, hourlyRate }) {
           <span className="kpi-hs-card-hdr-pills">
             <span className="kpi-hs-pill kpi-hs-pill-mute">at ${rate.toFixed(2)}/hr avg</span>
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qHrs"
             title="Hours to schedule"
             body={<>Regular hours to put in Rippling for the prep day and the games. Overtime is shown separately because you do not schedule it - it happens when the week is packed.<br /><br />Against budget is what the budget alone buys. With your bank adds the money you have saved so far.</>}
@@ -809,7 +748,7 @@ function PlanCards({ stand, estimate, bank, hourlyRate }) {
               {stand.peak_games_in_week >= 6 ? "High" : "Low"}
             </span>
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qOT"
             title="Why this stand carries overtime"
             body={<>{stand.peak_games_in_week} game days land inside one Monday-Sunday week. The 40-hour clock resets every Monday, so a stand packed in before that reset carries overtime no matter how you schedule it. That is the calendar, not the crew.<br /><br />Typical overtime by shape: 3 games in a week ~2%, 6 games ~23%, 7 games ~38%. Measured across 36 homestands at 4 accounts this season.</>}
@@ -832,7 +771,7 @@ function PlanCards({ stand, estimate, bank, hourlyRate }) {
           <span className="kpi-hs-card-hdr-pills">
             <span className="kpi-hs-pill kpi-hs-pill-mute">{remaining} stands</span>
           </span>
-          <HsHelpPop
+          <HelpPop
             id="qSpread"
             title="Adjusted target"
             body={<>Your original budget for this stand, plus an even share of the bank.<br /><br />If you put the whole bank on the next stand there is nothing left for the one after. Spreading it means every remaining stand gets the same boost.<br /><br />Estimated stands are informational - the bank does not adjust based on them.</>}

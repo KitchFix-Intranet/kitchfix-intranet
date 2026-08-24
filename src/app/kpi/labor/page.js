@@ -18,7 +18,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 // V-role-gates - OPS_LEADERSHIP_EMAILS retired here; server decides.
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp, buildPrintScopeLine } from "./lib/formatting";
-import { ACCOUNTS, FY_START } from "./lib/accounts";
+import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
@@ -915,7 +915,16 @@ export default function KpiLaborPage() {
            navigates to keep the "empty range" flash off screen. */
         <StateLoading />
       ) : loadState === "ok" && data.account_state === "salaried_only" ? (
-        <StateSalaried account={account} message={data.account_state_message} />
+        /* PR-E - city derives via folioMemberDescription off the live
+           accounts_directory the folio rail already consumes; a
+           future account rename cannot leave the empty state saying
+           the wrong town. Falls back to a generic phrasing when the
+           directory has not landed yet. */
+        (() => {
+          const meta = (data?.accounts_directory || []).find(a => a.team_key === account);
+          const { city } = folioMemberDescription(account, meta);
+          return <StateSalaried account={account} city={city} />;
+        })()
       ) : !inHomestandView && loadState === "ok" && data?.refused === true ? (
         /* PR-3b - pre-floor partial-week range. Server ships the
            owner-approved message on data.message; render it verbatim.

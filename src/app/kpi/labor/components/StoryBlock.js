@@ -11,6 +11,32 @@
 import { useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
+import HelpPop from "./HelpPop.js";
+
+// PR-E - "Your budget for this period" and "Week by week" popovers
+// per kitchfix-help-copy.html (section "Period board · other regions").
+// Bodies kept out-of-render so the spend card + week header stay
+// readable.
+const BUDGET_CARD_BODY = (
+  <>
+    The hourly labor budget for these four weeks, from the FY2026 plan. <b>Spent so far</b> is what has actually been paid.
+    <br /><br />
+    <b>Left to spend</b> is the difference - the money still available for the weeks remaining.
+    <br /><br />
+    With the salary toggle on, this includes salaried staff. With it off, hourly only. The pill beside the status tells you which.
+  </>
+);
+
+const WEEK_BY_WEEK_BODY = (
+  <>
+    One bar per week. Bar height is what that week cost.
+    <br /><br />
+    <b>The amber dashed line is your original weekly target</b> - budget split evenly across four weeks. <b>The blue dashed line is adjusted</b> - it moves as the period goes. Come in under one week and the line rises for the weeks left; go over and it drops.
+    <br /><br />
+    <b>Hatched means the number will grow.</b> Hours are clocked but not yet priced by Rippling, so that bar is not final.
+    <span className="kpi-hs-pop-foot">A grey stub means nobody worked that day - genuinely zero, not missing.</span>
+  </>
+);
 
 // PR-B - MM/DD/YY from ISO for the "range closed through DATE"
 // suffix. Same convention signalCardModels.js uses.
@@ -160,6 +186,7 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable }) 
               data-scope-pill
             >{salary ? "+ SALARY" : "HOURLY ONLY"}</span>
           )}
+          <HelpPop id="qBudgetCard" title="Your budget for this period" body={BUDGET_CARD_BODY} />
         </div>
       </div>
 
@@ -646,6 +673,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
       <div className="kpi-story-right">
         <div className="kpi-wh">
           <span className="kpi-wh-t">{stripTitle}</span>
+          <HelpPop id="qWeekByWeek" title="Week by week" body={WEEK_BY_WEEK_BODY} />
           <span className="kpi-wh-sp" aria-hidden="true" />
           {showOriginalLabel && (
             <span className="kpi-wh-tgt">
