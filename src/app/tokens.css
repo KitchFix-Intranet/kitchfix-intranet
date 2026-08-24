@@ -67,7 +67,17 @@
   /* ---------- TIER 2: SEMANTIC (components consume these) ---------- */
   /* text */
   --text-heading:var(--n-900); --text-strong:var(--n-800); --text-default:var(--n-700); --text-muted:var(--n-600);
-  --text-subtle:var(--n-500); --text-inverse:var(--n-0); --text-link:var(--navy-700);
+  /* 2026-08-24 - --text-subtle retired as a distinct TEXT tier. It
+     previously pointed at --n-500 (#94A3B8), which measures 2.45:1
+     on white - invisible, not subtle. Fixing --n-500 in isolation
+     would push it darker than --n-600 (--text-muted at 4.76:1) and
+     invert the scale. Resolution: --text-subtle and --text-muted
+     share ONE text value (--n-600). We lose a tier, but that tier
+     was never usable at contrast. --n-500 stays available as a
+     PRIMITIVE for borders, dividers and icons, where contrast rules
+     differ. Any text consumer of --n-500 gets bumped to --text-subtle
+     (or --text-muted) as it surfaces in the contrast audit. */
+  --text-subtle:var(--n-600); --text-inverse:var(--n-0); --text-link:var(--navy-700);
   --text-success:var(--green-600); --text-danger:var(--red-500);
   /* surface */
   /* --surface-page flipped from --n-100 (#F4F2EC warm cream) to #edeff2

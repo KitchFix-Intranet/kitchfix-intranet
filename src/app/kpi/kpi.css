@@ -1023,7 +1023,10 @@
 .kpi-rmenu-label { font-weight: 600; font-variant-numeric: var(--num-tabular); }
 .kpi-rmenu-label-primary { flex: none; }
 .kpi-rmenu-label-dates {
-  color: #B9C6DA;
+  /* 2026-08-24 contrast sweep: hardcoded #B9C6DA measured 1.65:1 on
+     white. De-hardcoded to the shared subtle text token; a raw hex
+     in a themed system is how the next drift starts. */
+  color: var(--text-subtle);
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
@@ -1134,7 +1137,7 @@
 }
 .kpi-tbar-lbl {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.09em;
-  color: var(--n-500); text-transform: uppercase;
+  color: var(--text-subtle); text-transform: uppercase;
   white-space: nowrap;
   line-height: var(--kpi-ctl);
 }
@@ -1178,7 +1181,7 @@
   transition: border-color 0.12s, color 0.12s;
 }
 .kpi-tbar-btn:hover { border-color: var(--n-400); color: var(--n-800); }
-.kpi-tbar-btn .kpi-i { width: 12px; height: 12px; color: var(--n-500); }
+.kpi-tbar-btn .kpi-i { width: 12px; height: 12px; color: var(--text-subtle); }
 .kpi-tbar-btn-dd::after {
   content: "\25BE"; font-size: var(--kpi-t-label); color: var(--n-400);
   margin-left: 2px;
@@ -1190,7 +1193,7 @@
 }
 .kpi-empdisp-lab {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.09em;
-  color: var(--n-500); text-transform: uppercase;
+  color: var(--text-subtle); text-transform: uppercase;
   line-height: var(--kpi-ctl);
 }
 .kpi-seg {
@@ -1455,7 +1458,7 @@
   color: var(--n-900);
 }
 .kpi-folio-title-s {
-  font-size: var(--kpi-size-caption); color: var(--n-500);
+  font-size: var(--kpi-size-caption); color: var(--text-subtle);
 }
 /* Group card (page card skin). V31 item 2 - moves off raw --rad-10 to
    --kpi-card-r so it matches every other card at 10.8 rendered. */
@@ -1493,7 +1496,7 @@
   white-space: nowrap;
 }
 .kpi-ghead-sub {
-  font-size: var(--kpi-t-label); color: var(--n-500); letter-spacing: 0.04em;
+  font-size: var(--kpi-t-label); color: var(--text-subtle); letter-spacing: 0.04em;
   white-space: nowrap;
 }
 .kpi-ghead-cnt {
@@ -1554,7 +1557,7 @@
 }
 .kpi-acct.on .kpi-acct-key { color: var(--navy-700); }
 .kpi-acct-desc {
-  font-size: var(--kpi-size-caption); color: var(--n-500);
+  font-size: var(--kpi-size-caption); color: var(--text-subtle);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   /* V40 FIX 4 - reserve the desc line-box height so a member row is
      the same height with or without live team_name/city/state. Static
@@ -1811,7 +1814,7 @@
 .kpi-help {
   width: var(--kpi-sp-5); height: var(--kpi-sp-5); border-radius: 50%;
   border: 1px solid var(--n-300); background: var(--surface-card);
-  color: var(--n-500); font-size: var(--kpi-size-caption); font-weight: 800;
+  color: var(--text-subtle); font-size: var(--kpi-size-caption); font-weight: 800;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; flex: none;
 }
@@ -1830,7 +1833,7 @@
 }
 .kpi-help-pop h5 {
   margin: 0 0 var(--kpi-sp-2); font-size: var(--kpi-t-label); letter-spacing: 0.08em;
-  color: var(--n-500); font-weight: 800; text-transform: uppercase;
+  color: var(--text-subtle); font-weight: 800; text-transform: uppercase;
 }
 .kpi-help-pop b { color: var(--n-900); }
 .kpi-help-calc {
@@ -1919,7 +1922,7 @@
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
 }
 .kpi-spend-h-dates {
-  font-size: var(--kpi-t-meta); color: var(--n-500); white-space: nowrap;
+  font-size: var(--kpi-t-meta); color: var(--text-subtle); white-space: nowrap;
 }
 
 /* V29-6 - BUDGET LEADS. Hero-size period budget with a navy accent
@@ -2038,7 +2041,7 @@
 .kpi-spend-cell-over::before  { background: var(--red-500); }
 .kpi-spend-cell-nav .kpi-spend-cell-lab,
 .kpi-spend-cell-under .kpi-spend-cell-lab,
-.kpi-spend-cell-over .kpi-spend-cell-lab { color: var(--n-500); }
+.kpi-spend-cell-over .kpi-spend-cell-lab { color: var(--text-subtle); }
 .kpi-spend-cell-nav .kpi-spend-cell-val,
 .kpi-spend-cell-nav .kpi-spend-cell-sub   { color: var(--navy-700); }
 .kpi-spend-cell-under .kpi-spend-cell-val,
@@ -2046,8 +2049,12 @@
 .kpi-spend-cell-over .kpi-spend-cell-val,
 .kpi-spend-cell-over .kpi-spend-cell-sub  { color: var(--red-700); }
 
-.kpi-spend-cell-mute .kpi-spend-cell-val { color: var(--n-400); }
-.kpi-spend-cell-mute .kpi-spend-cell-lab { color: var(--n-500); }
+/* 2026-08-24 contrast sweep: placeholder value in a muted spend cell
+   was --n-400 (1.42:1). Bumped to --text-subtle so the em-dash is
+   distinguishable from an empty cell - missing / failed / zero must
+   render distinctly (standing owner rule). */
+.kpi-spend-cell-mute .kpi-spend-cell-val { color: var(--text-subtle); }
+.kpi-spend-cell-mute .kpi-spend-cell-lab { color: var(--text-subtle); }
 
 /* Week strip header (V8-11) */
 .kpi-wh { display: flex; align-items: center; gap: var(--kpi-sp-3); }
@@ -2167,7 +2174,7 @@
 }
 .kpi-wb-cap-roll { color: var(--navy-700); }
 .kpi-wb-dates {
-  display: block; font-size: var(--kpi-t-label); color: var(--n-500);
+  display: block; font-size: var(--kpi-t-label); color: var(--text-subtle);
   white-space: nowrap; margin-top: 1px;
 }
 .kpi-wb-d {
@@ -2238,7 +2245,7 @@
 }
 .kpi-axisB > span {
   flex: 1; text-align: center;
-  font-size: var(--kpi-t-label); color: var(--n-500);
+  font-size: var(--kpi-t-label); color: var(--text-subtle);
   white-space: nowrap; overflow: hidden;
 }
 .kpi-stripB-tip {
@@ -2371,7 +2378,7 @@
    fought the hero for the eye; hero is now the only 800 on the card. */
 .kpi-sig-eyebrow {
   font-size: var(--kpi-t-label); letter-spacing: 0.08em;
-  color: var(--n-500); font-weight: 700;
+  color: var(--text-subtle); font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -2407,7 +2414,10 @@
   white-space: nowrap; font-variant-numeric: var(--num-tabular);
   letter-spacing: -0.01em;
 }
-.kpi-sig-hero-mute { color: var(--n-400); font-size: var(--kpi-t-value); font-weight: 800; }
+/* 2026-08-24 contrast sweep: signal-card hero placeholder was --n-400
+   (1.42:1). Bumped to --text-subtle - the em-dash carries the
+   "no value here" signal and must not collapse into an empty cell. */
+.kpi-sig-hero-mute { color: var(--text-subtle); font-size: var(--kpi-t-value); font-weight: 800; }
 
 /* V34 - sub-line weight 500 (was 600). Supporting, not competing with
    the hero. */
@@ -2415,11 +2425,11 @@
   height: var(--kpi-lane-sub);
   margin-top: var(--kpi-sp-1);
   display: flex; align-items: center;
-  font-size: var(--kpi-t-meta); color: var(--n-500); font-weight: 500;
+  font-size: var(--kpi-t-meta); color: var(--text-subtle); font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   flex: none;
 }
-.kpi-sig-sub-mute { color: var(--n-500); }
+.kpi-sig-sub-mute { color: var(--text-subtle); }
 /* V32-10 - Payroll action sub-line calls out the required action in
    Rippling; amber tone signals the ask. V33 P0 - the action moves to
    its own line beneath the sub lane so it does not clip on a 294px
@@ -2450,7 +2460,7 @@
    weight; this is most of it. */
 .kpi-sig-fact-lab {
   font-size: var(--kpi-t-label); font-weight: 600; letter-spacing: 0.06em;
-  color: var(--n-500); text-transform: uppercase;
+  color: var(--text-subtle); text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* V34 - fact VALUES drop from medium/800/n-900 to body/700/n-800.
@@ -2468,7 +2478,7 @@
    500 so a bare dash reads absent rather than announced. */
 .kpi-sig-fact-val-mute { color: var(--n-300); font-weight: 500; }
 .kpi-sig-fact-sub {
-  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500;
+  font-size: var(--kpi-t-label); color: var(--text-subtle); font-weight: 500;
   letter-spacing: 0; text-transform: none;
   margin-top: var(--kpi-sp-1);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -2542,7 +2552,7 @@
 .kpi-cmp-item:last-child { border-right: 0; }
 /* V34 - item label weight 600, matches the fact-label tier. */
 .kpi-cmp-item-lab {
-  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 600;
+  font-size: var(--kpi-t-label); color: var(--text-subtle); font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -2562,7 +2572,7 @@
 .kpi-cmp-source {
   padding: 0 var(--kpi-sp-3);
   border-left: 1px solid var(--n-200);
-  font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500;
+  font-size: var(--kpi-t-label); color: var(--text-subtle); font-weight: 500;
   display: flex; align-items: center;
   white-space: nowrap;
   flex: none;
@@ -2578,7 +2588,7 @@
 .kpi-cmp-help {
   width: var(--kpi-h-lane); height: var(--kpi-h-lane);
   border-radius: 50%; border: 1px solid var(--n-300);
-  background: var(--surface-card); color: var(--n-500);
+  background: var(--surface-card); color: var(--text-subtle);
   font-size: var(--kpi-t-label); font-weight: 800;
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; flex: none;
@@ -2600,14 +2610,14 @@
 }
 .kpi-cmp-help-pop h5 {
   margin: 0 0 var(--kpi-sp-2); font-size: var(--kpi-t-label); letter-spacing: 0.08em;
-  color: var(--n-500); font-weight: 800; text-transform: uppercase;
+  color: var(--text-subtle); font-weight: 800; text-transform: uppercase;
 }
 .kpi-cmp-help-row { margin-bottom: var(--kpi-sp-2); }
 .kpi-cmp-help-row b { color: var(--n-900); font-weight: 700; }
 .kpi-cmp-help-foot {
   border-top: 1px dashed var(--border-subtle);
   padding-top: var(--kpi-sp-2);
-  color: var(--n-500);
+  color: var(--text-subtle);
 }
 
 @media (max-width: 1279px) {
@@ -2672,13 +2682,13 @@
   height: var(--kpi-h-lane);
   display: inline-flex; align-items: center;
 }
-.kpi-det-h-caret { color: var(--n-500); font-size: var(--kpi-t-body); }
+.kpi-det-h-caret { color: var(--text-subtle); font-size: var(--kpi-t-body); }
 .kpi-det-h-t {
   font-size: var(--kpi-t-meta); letter-spacing: 0.08em;
   color: var(--n-600); font-weight: 700;
 }
 .kpi-det-h-hint {
-  margin-left: auto; font-size: var(--kpi-t-meta); color: var(--n-500);
+  margin-left: auto; font-size: var(--kpi-t-meta); color: var(--text-subtle);
 }
 /* V21-13 - two labeled groups (BUDGET / CREW), four cells each,
    side-by-side. Group labels 9.5/800 tracking .09em uppercase n-500. */
@@ -2699,7 +2709,7 @@
 .kpi-det-grp + .kpi-det-grp { padding-left: calc(var(--kpi-card-pad) + var(--kpi-sp-6)); }
 .kpi-det-grp-h {
   font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.09em;
-  color: var(--n-500); text-transform: uppercase;
+  color: var(--text-subtle); text-transform: uppercase;
   margin-bottom: var(--kpi-sp-2);
 }
 .kpi-det-grp-cells {
@@ -2736,7 +2746,7 @@
    as a number to be interpreted. */
 .kpi-det-v-mute { color: var(--n-300); }
 .kpi-det-c {
-  font-size: var(--kpi-t-label); color: var(--n-500);
+  font-size: var(--kpi-t-label); color: var(--text-subtle);
   white-space: nowrap;
 }
 
@@ -2837,7 +2847,11 @@
   font-variant-numeric: var(--num-tabular);
 }
 .kpi-tbl tbody td:first-child { text-align: left; color: var(--n-900); }
-.kpi-tbl-nil { color: var(--n-300); }
+/* 2026-08-24 contrast sweep: --n-300 measured 1.22:1 on white -
+   indistinguishable from an empty cell. --text-subtle keeps the
+   em-dash visibly muted while preserving the missing/failed/zero
+   distinction the operator relies on. */
+.kpi-tbl-nil { color: var(--text-subtle); }
 .kpi-tbl-ot { color: var(--amber-600); font-weight: 700; }
 
 /* Period band (V9-8) - data row, sticky under header (V9-11).
@@ -2923,7 +2937,7 @@
 .kpi-tbl-weekbtn:hover { background: var(--n-100); color: var(--n-800); }
 .kpi-tbl-chev {
   display: inline-block; width: 15px;
-  color: var(--n-500); font-size: var(--kpi-size-caption);
+  color: var(--text-subtle); font-size: var(--kpi-size-caption);
 }
 
 /* V9-2 exception rendering - amber left edge + chip. V36 - warm
@@ -2945,7 +2959,7 @@
 }
 .kpi-flag-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
 .kpi-flag-bad  { background: var(--red-100); color: var(--red-700); border-color: #F5C6C6; }
-.kpi-flag-mute { background: var(--n-100); color: var(--n-500); border-color: var(--n-200); }
+.kpi-flag-mute { background: var(--n-100); color: var(--text-subtle); border-color: var(--n-200); }
 /* V42 REVISED (State 3a hygiene) - softer amber for a closed-week
    `awaiting approval` flag. Same amber family as kpi-flag-warn so
    the reader knows it is the same class of concern, but visibly
@@ -3011,8 +3025,8 @@
 /* V29-10 worker rows: three elements in descending weight. Name is
    the primary; #number and title are label-sized supporting text. */
 .kpi-tbl-wname   { font-weight: 700; color: var(--n-900); }
-.kpi-tbl-wnum    { font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 700; letter-spacing: 0.02em; }
-.kpi-tbl-wtitle  { font-size: var(--kpi-t-label); color: var(--n-500); font-weight: 500; }
+.kpi-tbl-wnum    { font-size: var(--kpi-t-label); color: var(--text-subtle); font-weight: 700; letter-spacing: 0.02em; }
+.kpi-tbl-wtitle  { font-size: var(--kpi-t-label); color: var(--text-subtle); font-weight: 500; }
 
 /* V25-6 - Share moves out of the Dollars cell into its own narrow
    column, so it stops reading as an underline. Cell is empty on
@@ -3223,7 +3237,7 @@
   padding: 9px 20px;
   font-size: var(--kpi-t-body);
   font-weight: 700;
-  color: var(--n-500);
+  color: var(--text-subtle);
   border: 0; background: none; cursor: pointer;
   font-family: inherit;
   transition: background .12s, color .12s;
@@ -3233,7 +3247,7 @@
 .kpi-hs-view-tab.on { color: #fff; background: var(--n-900, #0A2548); }
 .kpi-hs-view-tab-cnt {
   font-size: var(--kpi-t-meta); font-weight: 800;
-  color: var(--n-500); margin-left: 5px;
+  color: var(--text-subtle); margin-left: 5px;
 }
 .kpi-hs-view-tab.on .kpi-hs-view-tab-cnt { color: #B9C6DA; }
 
@@ -3258,10 +3272,10 @@
   font-size: var(--kpi-t-label);
   font-weight: 800; letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--text-subtle);
 }
 .kpi-hs-note {
-  font-size: var(--kpi-t-meta); color: var(--n-500);
+  font-size: var(--kpi-t-meta); color: var(--text-subtle);
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
 }
 .kpi-hs-pill {
@@ -3356,11 +3370,14 @@
 }
 .kpi-hs-rail-nm {
   font-size: 9px; font-weight: 700;
-  color: var(--n-500);
+  color: var(--text-subtle);
   line-height: 1.22; margin-top: 1px;
 }
 .kpi-hs-rail-tag {
-  font-size: 8.5px; font-weight: 800; color: var(--n-400);
+  /* 2026-08-24 contrast sweep: pre-floor "no detail" tag was --n-400
+     (1.42:1). Bumped to --text-subtle so the tag reads as a labelled
+     state, not as a decorative wash the eye slides past. */
+  font-size: 8.5px; font-weight: 800; color: var(--text-subtle);
   margin-top: 2px;
 }
 .kpi-hs-rail-tag-est {
@@ -3376,7 +3393,7 @@
 
 .kpi-hs-rail-key {
   display: flex; gap: 14px; flex-wrap: wrap;
-  font-size: 10px; color: var(--n-500);
+  font-size: 10px; color: var(--text-subtle);
   margin-top: var(--kpi-sp-3);
 }
 .kpi-hs-key-sw {
@@ -3416,7 +3433,7 @@
 }
 .kpi-hs-sbar-key {
   display: flex; gap: 22px; flex-wrap: wrap;
-  font-size: 10.5px; color: var(--n-500);
+  font-size: 10.5px; color: var(--text-subtle);
   margin-top: var(--kpi-sp-2);
   font-variant-numeric: tabular-nums; align-items: baseline;
 }
@@ -3488,7 +3505,7 @@
   display: flex; align-items: baseline; gap: 6px;
 }
 .kpi-hs-hero-sub {
-  font-size: 12px; font-weight: 600; color: var(--n-500);
+  font-size: 12px; font-weight: 600; color: var(--text-subtle);
 }
 .kpi-hs-sub {
   font-size: 11px; color: var(--n-600);
@@ -3505,7 +3522,7 @@
 .kpi-hs-fact-k {
   font-size: 10px; font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--text-subtle);
   white-space: nowrap;
 }
 .kpi-hs-fact-v {
@@ -3540,7 +3557,7 @@
 .kpi-hs-gauge-labels {
   position: absolute; left: 0; right: 0; top: 22px;
   display: flex; justify-content: space-between;
-  font-size: 9px; color: var(--n-500);
+  font-size: 9px; color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3559,7 +3576,7 @@
 .kpi-hs-table th {
   font-size: 10px; font-weight: 800;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--text-subtle);
   text-align: right;
   padding: 9px 12px;
   background: var(--n-50);
@@ -3593,8 +3610,8 @@
   left: 22px; top: 0; bottom: 0; width: 1px;
   background: var(--n-200);
 }
-.kpi-hs-tr-emp-title { color: var(--n-500); font-weight: 400; }
-.kpi-hs-tr-emp-meta  { color: var(--n-500); }
+.kpi-hs-tr-emp-title { color: var(--text-subtle); font-weight: 400; }
+.kpi-hs-tr-emp-meta  { color: var(--text-subtle); }
 /* PR-2 audit 2026-08-21 - pending-state skeleton row that occupies
    the expansion slot while a click-to-select fetch is in flight.
    Three thin bars mirror the height of three typical employee rows so
@@ -3615,10 +3632,10 @@
 .kpi-hs-tr-prefloor td { opacity: 0.55; }
 .kpi-hs-tr-prefloor-est td { opacity: 0.85; }
 .kpi-hs-tr-prefloor-est:hover td { background: var(--n-50); cursor: pointer; }
-.kpi-hs-tr-prefloor-note { text-align: right; font-style: italic; color: var(--n-500); }
+.kpi-hs-tr-prefloor-note { text-align: right; font-style: italic; color: var(--text-subtle); }
 .kpi-hs-est-tag { color: #92580A; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; margin-left: 4px; }
 .kpi-hs-tr-future td { opacity: 0.75; }
-.kpi-hs-tr-future-note { text-align: right; font-style: italic; color: var(--n-500); }
+.kpi-hs-tr-future-note { text-align: right; font-style: italic; color: var(--text-subtle); }
 .kpi-hs-chev {
   display: inline-block; width: 13px;
   color: var(--n-400);
@@ -3703,7 +3720,7 @@
   border-radius: 50%;
   border: 1px solid var(--n-300);
   background: var(--surface-card);
-  color: var(--n-500);
+  color: var(--text-subtle);
   font-size: 10px; font-weight: 800;
   cursor: pointer;
   font-family: inherit;
@@ -3713,7 +3730,7 @@
   transition: border-color 0.12s, color 0.12s;
 }
 .kpi-hs-qbtn:hover {
-  border-color: var(--n-500);
+  border-color: var(--text-subtle);
   color: var(--n-800);
 }
 .kpi-hs-qbtn:focus-visible {
@@ -3776,7 +3793,7 @@
   display: block;
   margin-top: 6px;
   font-size: 10.5px;
-  color: var(--n-500);
+  color: var(--text-subtle);
 }
 /* Lift the open card + its parent grid item so the popover paints
    above sibling cards. `:has()` is supported in every browser this
