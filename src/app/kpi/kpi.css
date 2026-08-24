@@ -3044,25 +3044,38 @@
 }
 .kpi-tbl-child:hover .kpi-tbl-share2 > i { opacity: 1; }
 
-/* 2026-08-24 contrast sweep + Kevin ruling post-portal PR: the
-   em-dash placeholder must render distinctly from real values -
-   standing rule that missing, failed and zero are not the same as a
-   number. Prior `.kpi-tbl-nil { color: var(--text-subtle) }` looked
-   right but lost at runtime: every row rule that sets td colour is
-   scoped as `.kpi-tbl-band > td` / `.kpi-tbl-week > td` / `.kpi-tbl
-   -child > td` (spec 0,1,1) or `.kpi-tbl-band.kpi-tbl-band-open > td`
-   (spec 0,2,1), and a bare class rule at 0,1,0 could never win.
-   Result on ALL / P8: the dash rendered at var(--navy-700) weight 800
-   - byte-identical to a real value.
+/* 2026-08-24 dash-placeholder specificity, second pass.
+   Prior fix `.kpi-tbl tbody td.kpi-tbl-nil` at 0,2,2 shipped and
+   worked on WEEK + CHILD rows but LOST on band-open rows - live
+   verify showed the band dash still at var(--navy-700) weight 800,
+   identical to a real value in the row.
 
-   Fix: `.kpi-tbl tbody td.kpi-tbl-nil` bumps to spec 0,2,1. Beats
-   band/week/child on specificity; ties `.kpi-tbl-band-open > td`
-   (0,2,1) and wins on source order (this rule sits AFTER it).
-   `.kpi-tbl tbody .kpi-tbl-total .kpi-tbl-nil { color: #FFFFFF }`
-   below stays higher (0,3,1) so the total row keeps its white dash.
-   font-weight: 400 drops the inherited 800 so the dash reads muted
-   at every row level. */
-.kpi-tbl tbody td.kpi-tbl-nil {
+   Missed rule: `.kpi-tbl-band:has(> td .kpi-tbl-bandbtn
+   [aria-expanded="true"]) > td { color: var(--navy-700) }` at
+   2882 - the defensive :has() twin that fires alongside the class
+   shim `.kpi-tbl-band-open`. Its specificity is 0,1,0 (outer
+   .kpi-tbl-band) + `:has()` contribution 0,2,1 (its most-specific
+   inner: `> td .kpi-tbl-bandbtn[aria-expanded="true"]`) + 0,0,1
+   (outer > td) = ~0,3,2. The 0,2,2 selector had no chance.
+
+   Fix: list all three winning selector shapes on ONE declaration.
+   The bare `.kpi-tbl tbody td.kpi-tbl-nil` still handles week / child
+   / non-open band. The two `.kpi-tbl-band...` variants explicitly
+   target the class-shim path AND the :has() defensive twin at
+   specificity ≥ the row rule they need to beat (both are ≥ 0,4,2).
+   Same declaration on every selector so the cell renders identically
+   regardless of which path won specificity. Total-row rule at 0,3,1
+   below stays higher than the base variant here, so total's white
+   dash is preserved.
+
+   Lesson: Kevin's second option - "drop the colour off the row rule
+   entirely and let cells own their own colour" - is the cleaner
+   structural fix (row sets structure, cell sets colour). Not taken
+   here because it ripples across every numeric cell in the table
+   and needs its own PR. Specificity boost is the surgical local fix. */
+.kpi-tbl tbody td.kpi-tbl-nil,
+.kpi-tbl-band.kpi-tbl-band-open > td.kpi-tbl-nil,
+.kpi-tbl-band:has(> td .kpi-tbl-bandbtn[aria-expanded="true"]) > td.kpi-tbl-nil {
   color: var(--text-subtle);
   font-weight: 400;
 }
