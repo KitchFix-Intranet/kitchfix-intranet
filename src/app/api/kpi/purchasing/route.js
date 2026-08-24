@@ -1315,11 +1315,15 @@ export async function GET(request) {
   // series is not range-scoped: the trend card is always full-year.
   const currentP = currentPeriodNo(today) || 1;
   const periods = [];
+  // PR 3 (mgmt-fee board): fyWeekly is also the source for the
+  // pass_through mgmt_fee.periods_trend + goal_fytd_spent. Lifted out
+  // of the periods{} block so the mgmt_fee computation below can reuse
+  // the same rows without a second FYTD fetch.
+  let fyWeekly;
   {
     // Fetch weekly view over the whole FYTD once (members-filtered).
     // Reuse `weekly` when the request range IS FYTD - saves a
     // duplicate round-trip on the most common query.
-    let fyWeekly;
     if (start === FY_START_ISO && end === today) {
       fyWeekly = weekly;
     } else {
@@ -1536,6 +1540,75 @@ export async function GET(request) {
       JSON.stringify(ledger_reconciliation));
   }
 
+  // ─── PR 3 - management-fee board data (pass_through only) ───────────
+  //
+  // For CIN - OH, STL - FL, STL - MO the operator is NOT held to a
+  // KPI on COGS - food, packaging, supplies are billed back to the
+  // client. The mgmt-fee board (spec §2, §6.7) surfaces:
+  //   goal_fytd_spent  - FYTD reimbursable spend across the 13xx
+  //                      family, independent of the requested range.
+  //                      The hero on the mgmt-fee card reads "$X of
+  //                      $goal annual goal" - annual metric, not
+  //                      range-scoped.
+  //   periods_trend    - per-period reimbursable spend (P1..currentP),
+  //                      feeds the 8-period bar strip.
+  //   fun_money        - STL - FL only. Owner ruling 2026-08-21 (spec
+  //                      §2.3): 3200.2 Resale Food ($25K annual budget)
+  //                      is the one genuinely at-risk figure at this
+  //                      account. It gets a real verdict, computed
+  //                      independent of the pass_through short-circuit
+  //                      that null-variances the rest.
+  //
+  // Goal figures live in src/lib/accountModels.js MANAGEMENT_FEE_GOALS
+  // (owner-supplied 2026-08-24 - annual client commitments, not
+  // period-scoped operating budgets, so they belong beside the cost
+  // model, not in kpi_budgets). The client reads that constant; the
+  // route does NOT ship goal amounts (they are static config).
+  let mgmt_fee = null;
+  if (isPassThroughAccount) {
+    let goalFytdSpent = 0;
+    const trendByPeriod = new Map();
+    for (const r of fyWeekly) {
+      if (r.gl_bucket !== "reimbursable") continue;
+      goalFytdSpent += Number(r.amount || 0);
+      const p = periodOf(r.week_start);
+      if (p == null) continue;
+      trendByPeriod.set(p, (trendByPeriod.get(p) || 0) + Number(r.amount || 0));
+    }
+    const periods_trend = [];
+    for (let p = 1; p <= currentP; p += 1) {
+      periods_trend.push({
+        period_no: p,
+        start:     periodStartISO(p),
+        end:       periodEndISO(p),
+        spent:     Math.round((trendByPeriod.get(p) || 0) * 100) / 100,
+      });
+    }
+    // Fun Money at STL - FL. spentForGl + budgetForRange are the same
+    // primitives the pass_through-suppressed categories[] loop reads
+    // above (lines ~1211-1247); the values are truthful, only the
+    // variance rendering was suppressed. Compute variance here so the
+    // FunMoneyCard reads a real verdict.
+    let fun_money = null;
+    if (account === "STL - FL") {
+      const fmSpent  = spentForGl("3200.2");
+      const fmBudget = budgetForRange({ byLine: budgetsByLine, glLineCode: "3200.2", members, start, end });
+      fun_money = {
+        gl_line_code: "3200.2",
+        label:        "Fun Money",
+        sub:          "Resale food · 3200.2",
+        budget:       Math.round(fmBudget * 100) / 100,
+        spent:        Math.round(fmSpent  * 100) / 100,
+        variance:     Math.round((fmSpent - fmBudget) * 100) / 100,
+      };
+    }
+    mgmt_fee = {
+      goal_fytd_spent: Math.round(goalFytdSpent * 100) / 100,
+      periods_trend,
+      fun_money,
+    };
+  }
+
   // PR 2 R8 - align with labor: `is_future_range` is true when the
   // requested START is strictly after today - the range has not begun.
   // Broader rule (Kevin ruling 2026-08-24): "no spend means no verdict"
@@ -1591,6 +1664,9 @@ export async function GET(request) {
     card_charges: cardChR.data,
     vendors:      vendorR.data,
     ledger_reconciliation,
+    // PR 3 - management-fee board data (pass_through accounts only).
+    // null at at_risk / aggregate. See mgmt_fee construction above.
+    mgmt_fee,
   };
   if (includeLines) payload.actuals = actuals;
 
