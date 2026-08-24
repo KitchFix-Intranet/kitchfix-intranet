@@ -569,6 +569,34 @@ export default function KpiPurchasingPage() {
   // Render body ────────────────────────────────────────────────────
   const isPassThrough = costModel === "pass_through";
 
+  // PR-2 R5 Part B - two freshness surfaces, one status split (owner
+  // rulings 2026-08-24). Labor's pattern: pill = STATUS ("Data
+  // current" / "Data slow" / "Data stale"), card = DETAIL ("LAST
+  // PULLED …"). Purchasing keeps the split but the pill reflects the
+  // WORST of the two sources - bills (last_derive_at) + cards
+  // (cards_through, anchored end-of-day) - so it never claims
+  // currency the board does not have. Rule 2 (no changes under
+  // labor/) is honoured: we compute the worst-case ISO here and pass
+  // it as Shell's `freshness.last_walk_at`; Shell's copy stays fixed.
+  // Never hardcoded - both timestamps come off route.freshness.
+  const cardsThroughISO = data?.freshness?.cards_through || null;
+  const cardsThroughLabel = cardsThroughISO
+    ? `${cardsThroughISO.slice(5, 7)}/${cardsThroughISO.slice(8, 10)}`
+    : null;
+  const cardsFreshAnchorISO = cardsThroughISO
+    ? `${cardsThroughISO}T23:59:59Z`
+    : null;
+  const lastDeriveISO = data?.freshness?.last_derive_at || null;
+  // Older ISO = older source = worst freshness (larger hoursSince).
+  let worstSourceISO = null;
+  if (lastDeriveISO && cardsFreshAnchorISO) {
+    worstSourceISO = lastDeriveISO < cardsFreshAnchorISO
+      ? lastDeriveISO
+      : cardsFreshAnchorISO;
+  } else {
+    worstSourceISO = lastDeriveISO || cardsFreshAnchorISO;
+  }
+
   const boardContent = (() => {
     if (loadState === "loading" || loadState === "idle") {
       return (
@@ -619,18 +647,11 @@ export default function KpiPurchasingPage() {
       return rangeLabel ? rangeLabel.toUpperCase() : "CUSTOM RANGE";
     })();
 
-    // PR-2 R4 Part E - freshness pill splits Bills current from
-    // cards through <date>. Card data is structurally ~8 days behind
-    // (ObjectID latency, R3 finding) - a single "Data current" label
-    // was lying. Owner ruling 2026-08-24: change the pill, not the
-    // board. Date derived from `route.freshness.cards_through`
-    // (route SELECT max(txn_date) on rippling_spend, excluded=false).
-    // Never hardcoded.
-    const cardsThroughISO = data?.freshness?.cards_through || null;
-    const cardsThroughLabel = cardsThroughISO
-      ? `${cardsThroughISO.slice(5, 7)}/${cardsThroughISO.slice(8, 10)}`
-      : null;
-    const freshnessPill = cardsThroughLabel
+    // PR-2 R5 Part B - sub-line detail (kpi-p-livenote): named
+    // detail complementing the status pill above. The worst-source
+    // anchor + pill label are computed at the outer scope so Shell
+    // reads the same freshness the note explains.
+    const freshnessDetail = cardsThroughLabel
       ? `Bills current · cards through ${cardsThroughLabel}`
       : "Bills current";
 
@@ -638,7 +659,7 @@ export default function KpiPurchasingPage() {
       <div className="kpi-p-board">
         <div className="kpi-p-livenote" role="status">
           <span className="kpi-p-livedot" aria-hidden="true" />
-          <span><b>{freshnessPill}</b></span>
+          <span><b>{freshnessDetail}</b></span>
         </div>
         <PeriodCard
           periodNo={rangePeriodNo}
@@ -720,7 +741,7 @@ export default function KpiPurchasingPage() {
         <Shell
           account={account || "…"}
           fiscal={fiscalCtx}
-          freshness={{ last_walk_at: data?.freshness?.last_derive_at }}
+          freshness={{ last_walk_at: worstSourceISO }}
           dataLoading={loadState === "loading" || loadState === "idle"}
           activeSection="purchasing"
           rangeProps={data ? {
