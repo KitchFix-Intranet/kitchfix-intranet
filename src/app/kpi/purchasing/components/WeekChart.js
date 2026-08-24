@@ -346,7 +346,12 @@ export function WeekChart({
               )}
             </div>
             <div className="kpi-p-cap">
-              <span className="kpi-p-v num">{cap.val}</span>
+              {/* PR 2 R8 - a caption value that starts with `—` is a
+                  nil marker (no spend / running / future). It MUST NOT
+                  render at the same weight and colour as real dollar
+                  captions. `.kpi-p-nil` down-weights + neutralises the
+                  colour. */}
+              <span className={`kpi-p-v num${typeof cap.val === "string" && cap.val.startsWith("—") ? " kpi-p-nil" : ""}`}>{cap.val}</span>
               <span className="kpi-p-d">{label}</span>
               {cap.note && typeof cap.note === "string" && (
                 <span className={`kpi-p-x ${cap.tone}`}>{cap.note}</span>

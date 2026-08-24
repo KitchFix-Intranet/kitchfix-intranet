@@ -574,16 +574,30 @@ export default function KpiPurchasingPage() {
     return null;
   }, [start, end, today, accountPeriods]);
 
+  // PR 2 R8 - align with labor. Server ships `is_future_range` true
+  // when the requested START is strictly after today (labor
+  // route.js:317, purchasing route addendum this PR). Broader Kevin
+  // rule 2026-08-24: no spend means no verdict. We suppress the
+  // projected-close row + swap the "% elapsed" header for "hasn't
+  // started" so a future range cannot render "would close $X under
+  // budget" - the false congratulation the labor brief predicted.
+  //
+  // Client-side does NOT recompute a parallel flag; the server flag is
+  // the single source (rule: "consume the same server flag; do not
+  // build a parallel one").
+  const isFutureRange = data?.is_future_range === true;
+
   // Projected close.
   const projClose = useMemo(() => {
     if (!board) return null;
     if (closed) return null;
+    if (isFutureRange) return null;
     return projectedCloseCalc({
       bills: board.billsApprox,
       pending: board.pending,
       elapsedFrac: board.elapsedFrac,
     });
-  }, [board, closed]);
+  }, [board, closed, isFutureRange]);
 
   // Render body ────────────────────────────────────────────────────
   const isPassThrough = costModel === "pass_through";
@@ -689,6 +703,7 @@ export default function KpiPurchasingPage() {
           elapsedFrac={board.elapsedFrac}
           closed={closed}
           provisional={provisional}
+          isFutureRange={isFutureRange}
           spent={board.kpiSpent}
           budget={board.kpiBud}
           bills={board.billsApprox}
@@ -718,6 +733,7 @@ export default function KpiPurchasingPage() {
             cardsCoded={b.cardsCoded}
             elapsedFrac={board.elapsedFrac}
             closed={closed}
+            isFutureRange={isFutureRange}
             tier={board.tier}
             units={b.units}
             original={b.targets.original}
@@ -738,6 +754,7 @@ export default function KpiPurchasingPage() {
               spent={l.spent}
               elapsedFrac={board.elapsedFrac}
               closed={closed}
+              isFutureRange={isFutureRange}
               ledgerRows={l.ledgerRows}
               totalCount={l.totalCount}
               totalAmount={l.totalAmount}
@@ -801,7 +818,14 @@ export default function KpiPurchasingPage() {
             selectedMonth: rangeSelectionEarly?.kind === "month" ? rangeSelectionEarly.value : null,
             onCommit: onRangeCommit,
           } : null}
-          exportHref={null}
+          // PR 2 R8 Gap 2 - Export what is on screen at the displayed
+          // grain. Server figures only - the export route fetches the
+          // same read route this page fetches and copies the payload
+          // into cells. Match labor's placement (Shell wires it into
+          // the top command bar).
+          exportHref={data && account
+            ? `/api/kpi/purchasing/export?account=${encodeURIComponent(account)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${resolvedPreset ? `&view_name=${encodeURIComponent(resolvedPreset)}&view_date_mode=preset` : ""}`
+            : null}
           folioRail={
             <FolioRail
               activeAccount={account}

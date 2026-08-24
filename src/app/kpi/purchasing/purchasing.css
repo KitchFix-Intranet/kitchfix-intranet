@@ -182,13 +182,13 @@
 .kpi-app .kpi-p-cardsub {
   font-size: var(--kpi-t-meta);
   font-weight: 500;
-  color: var(--n-500);
+  color: var(--n-600);
   margin-left: var(--kpi-sp-2);
 }
 .kpi-app .kpi-p-cardmeta {
   font-size: var(--kpi-t-meta);
   font-weight: 500;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 
 .kpi-app .kpi-p-pillrow {
@@ -242,7 +242,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 .kpi-app .kpi-p-hero {
   font-size: var(--kpi-t-hero);
@@ -265,9 +265,21 @@
 .kpi-app .kpi-p-value.g { color: var(--green-700); }
 .kpi-app .kpi-p-value.r { color: var(--red-700); }
 .kpi-app .kpi-p-value.b { color: var(--navy-700); }
+/* PR 2 R8 - nil-value glyph (—, no data / no budget / no spend).
+   Must render DISTINCT in weight AND colour from real values.
+   The labor board shipped this bug twice - a `—` at the same weight
+   and colour as real dollars reads as data. Overrides tone classes
+   (.g / .r / .b) too so the em-dash never inherits state colour. */
+.kpi-app .kpi-p-value.kpi-p-nil,
+.kpi-app .kpi-p-value.kpi-p-nil.g,
+.kpi-app .kpi-p-value.kpi-p-nil.r,
+.kpi-app .kpi-p-value.kpi-p-nil.b {
+  color: var(--n-600);
+  font-weight: 500;
+}
 .kpi-app .kpi-p-subline {
   font-size: var(--kpi-t-meta);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -306,7 +318,7 @@
 }
 .kpi-app .kpi-p-sub .kpi-p-k small {
   font-size: var(--kpi-t-label);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 500;
   margin-left: 5px;
 }
@@ -320,6 +332,14 @@
 .kpi-app .kpi-p-sub .kpi-p-v.g { color: var(--green-700); }
 .kpi-app .kpi-p-sub .kpi-p-v.r { color: var(--red-700); }
 .kpi-app .kpi-p-sub .kpi-p-v.a { color: var(--amber-600); }
+/* PR 2 R8 - nil-value glyph in a sub-line value cell. */
+.kpi-app .kpi-p-sub .kpi-p-v.kpi-p-nil,
+.kpi-app .kpi-p-sub .kpi-p-v.kpi-p-nil.g,
+.kpi-app .kpi-p-sub .kpi-p-v.kpi-p-nil.r,
+.kpi-app .kpi-p-sub .kpi-p-v.kpi-p-nil.a {
+  color: var(--n-600);
+  font-weight: 500;
+}
 .kpi-app .kpi-p-sub .kpi-p-x {
   font-size: var(--kpi-t-label);
   font-weight: 800;
@@ -461,9 +481,15 @@
   display: block;
   font-variant-numeric: tabular-nums;
 }
+/* PR 2 R8 - nil-value glyph in a chart caption. Same rule as
+   .kpi-p-value.kpi-p-nil above: `—` must not read like real dollars. */
+.kpi-app .kpi-p-cap .kpi-p-v.kpi-p-nil {
+  color: var(--n-600);
+  font-weight: 500;
+}
 .kpi-app .kpi-p-cap .kpi-p-d {
   font-size: var(--kpi-t-label);
-  color: var(--n-500);
+  color: var(--n-600);
   display: block;
 }
 .kpi-app .kpi-p-cap .kpi-p-x {
@@ -476,14 +502,14 @@
 .kpi-app .kpi-p-cap .kpi-p-x.r { color: var(--red-700); }
 .kpi-app .kpi-p-cap .kpi-p-x.b { color: var(--navy-700); }
 .kpi-app .kpi-p-cap .kpi-p-x.a { color: var(--amber-600); }
-.kpi-app .kpi-p-cap .kpi-p-x.n { color: var(--n-500); }
+.kpi-app .kpi-p-cap .kpi-p-x.n { color: var(--n-600); }
 
 /* Empty-bucket state (no budget and no spend). */
 .kpi-app .kpi-p-emptybucket {
   padding: var(--kpi-sp-5) 0;
   text-align: center;
   font-size: var(--kpi-t-body);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 600;
 }
 
@@ -501,7 +527,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 .kpi-app .kpi-p-ledger-head .kpi-p-k:last-child {
   margin-left: auto;
@@ -532,7 +558,7 @@
 .kpi-app .kpi-p-ledger .kpi-p-lr .kpi-p-k small {
   display: block;
   font-size: var(--kpi-t-label);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 600;
   margin-top: 1px;
 }
@@ -550,11 +576,23 @@
   white-space: nowrap;
   color: var(--n-900);
 }
+/* PR 2 R8 - `—` in a ledger row's amount cell reads as data at weight
+   800 / n-900. Distinct in weight and colour. */
+.kpi-app .kpi-p-ledger .kpi-p-lr .kpi-p-v.kpi-p-nil {
+  color: var(--n-600);
+  font-weight: 500;
+}
+/* Same treatment for a `—` in the row's key column - vendor missing. */
+.kpi-app .kpi-p-ledger .kpi-p-lr .kpi-p-k.kpi-p-nil,
+.kpi-app .kpi-p-vbrow .kpi-p-k.kpi-p-nil {
+  color: var(--n-600);
+  font-weight: 500;
+}
 .kpi-app .kpi-p-ledger-empty {
   padding: var(--kpi-sp-4) 0;
   text-align: center;
   font-size: var(--kpi-t-meta);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 500;
 }
 
@@ -576,7 +614,7 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
   display: block;
   margin-bottom: 2px;
 }
@@ -591,7 +629,7 @@
 .kpi-app .kpi-p-cpstat .kpi-p-n.a { color: var(--amber-600); }
 .kpi-app .kpi-p-cpstat .kpi-p-s {
   font-size: var(--kpi-t-meta);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 600;
   display: block;
   margin-top: 2px;
@@ -625,7 +663,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 .kpi-app .kpi-p-txnlist {
   max-height: 196px;
@@ -656,7 +694,7 @@
 }
 .kpi-app .kpi-p-txnlist .kpi-p-rw .kpi-p-k small {
   font-size: var(--kpi-t-label);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 500;
   margin-left: 5px;
 }
@@ -692,7 +730,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 .kpi-app .kpi-p-vbhead span:nth-child(3),
 .kpi-app .kpi-p-vbhead span:nth-child(4),
@@ -717,7 +755,7 @@
 .kpi-app .kpi-p-vbrow .kpi-p-k small {
   display: block;
   font-size: var(--kpi-t-label);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 600;
   margin-top: 1px;
 }
