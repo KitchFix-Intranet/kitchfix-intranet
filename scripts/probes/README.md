@@ -206,6 +206,8 @@ Rippling report reconciliation.
 - `_inv_p8b_dig3.mjs` - dig #3: does walkSpendLines return all history vs the FYTD custom-report window.
 - `_inv_p8b_dig4.mjs` - dig #4: characterise ours-only inside-window parents; sample raw payload.
 - `_inv_p8b_recon.mjs` - primary INV-P8b recon: card pipeline vs unfiltered Rippling report; Postgres + CSV only, no API calls.
+- `_probe_inv_p11_suspected_duplicates.mjs` - INV-P11: FYTD billcom same-account / same-cent / 7-day sweep + four-tier vendor-similarity scoring + recurrence context; xlsx workbook to Downloads, no Postgres writes.
+- `_probe_inv_p12_truncation_gap.mjs` - INV-P12 three-part: Part A truncation-blind vs baseline pair analysis on Ruling 4 with prefix/control rates + merchant-length spike detection; Part B Beau Davis + portfolio-wide bill.com-vs-rippling_spend cross-source count; Part C four flagged raw payloads + spend_transaction.id/rippling_id join mismatch measurement. Read-only Supabase + GET /billcom/payments; xlsx to Downloads.
 
 ### Purchasing engine / KPI probes (`_probe_kpi_*`, `_probe_labor_*`, `_probe_v*`, `_probe_H*`)
 

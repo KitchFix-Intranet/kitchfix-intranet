@@ -112,6 +112,30 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--kpi-sp-3);
 }
+/* PR 2 R7 Fix 5 - three-up layout: Equipment, R&M, Vendor breakdown on
+   one row. Below the R6 reflow breakpoint (1300px) the row still stacks
+   via the @media block at file foot - the base rule sets 1fr 1fr 1fr
+   only above that. */
+.kpi-app .kpi-p-flatrow-3up {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+/* Vendor breakdown lives inside a third-width card in this row. Its
+   default 4-column grid `1.5fr minmax(96px, 1.2fr) 96px 72px` requires
+   more inner width than a third-width card provides at 1600px viewport.
+   Tighten:
+     - Vendor: min 128px so a name like "Sysco JUP" (~74px) fits and a
+       long one like "Shamrock Foods Company REDS" (~198px) truncates
+       gracefully with ellipsis.
+     - Where it landed: min 64px - the split bar is a proportional
+       visualisation; four segments remain distinguishable at 64px.
+     - Spend: 80px - tabular seven-digit dollar figures still fit.
+     - vs prior: 56px - covers "▼ 88%" and the "no prior" copy.
+   Measured at 1600px viewport (per Fix 5 STOP-and-report clause). */
+.kpi-app .kpi-p-flatrow-3up .kpi-p-vbhead,
+.kpi-app .kpi-p-flatrow-3up .kpi-p-vbrow {
+  grid-template-columns: minmax(128px, 1.5fr) minmax(64px, 1fr) 80px 56px;
+  gap: 8px;
+}
 /* PR-2 R6 Part A - reflow, don't shrink (owner ruling 2026-08-24).
  *
  * Measured onset per failure (before this rule):
@@ -230,6 +254,12 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--kpi-sp-3);
   margin-top: var(--kpi-sp-1);
+}
+/* PR 2 R7 Fix 4 - zero-budget cards drop the second `Remaining` / `Over
+   by` stack entirely (no variance to declare when no target exists).
+   The remaining Spent stack owns the full row. */
+.kpi-app .kpi-p-nums.kpi-p-nums-solo {
+  grid-template-columns: 1fr;
 }
 .kpi-app .kpi-p-stk {
   display: flex;
@@ -697,6 +727,15 @@
   color: var(--n-600);
   font-weight: 500;
   margin-left: 5px;
+}
+/* PR 2 R7 Fix 3 - amber "no category" marker inside a card-purchase
+   detail line. Row already carries the amber left rail via .flagged;
+   the amber label inside the small copy reinforces "this needs a code"
+   at glance. Weight bumps to 600 so the token reads next to the plain
+   date + account_key text. */
+.kpi-app .kpi-p-txnlist .kpi-p-rw .kpi-p-k small .kpi-p-cat-amber {
+  color: var(--amber-600);
+  font-weight: 600;
 }
 .kpi-app .kpi-p-txnlist .kpi-p-rw .kpi-p-v {
   font-size: var(--kpi-t-body);

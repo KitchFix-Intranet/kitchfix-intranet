@@ -3294,6 +3294,28 @@
    count badge remain HS-specific. */
 .kpi-hs-view-tabs {
   margin: 0 var(--kpi-sp-1) var(--kpi-sp-4);
+/* HS FB1 PR-2 2026-08-24 - Period | Homestand toggle joins .kpi-seg /
+   .kpi-ctl height so it matches Hourly / + Salary. Wrapper carries
+   --kpi-ctl height; each tab strips vertical padding so lane height
+   drives the box. Prompt 2c owner measurement: was 34.9px vs 25px. */
+.kpi-hs-view-tabs {
+  display: inline-flex; gap: 0;
+  height: var(--kpi-ctl);
+  margin: 0 var(--kpi-sp-1) var(--kpi-sp-4);
+  background: #fff;
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-tbar-rad);
+  overflow: hidden;
+}
+.kpi-hs-view-tab {
+  padding: 0 var(--kpi-sp-3);
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--text-subtle);
+  border: 0; background: none; cursor: pointer;
+  font-family: inherit;
+  display: inline-flex; align-items: center;
+  transition: background .12s, color .12s;
 }
 .kpi-hs-view-tab-cnt {
   font-size: var(--kpi-t-meta); font-weight: 500;
@@ -3636,6 +3658,7 @@
    Period .kpi-sig-sub-lane is 500; HS was rendering 400. */
 .kpi-hs-sub {
   font-size: var(--kpi-t-meta); font-weight: 500; color: var(--n-600);
+  font-size: var(--kpi-t-meta); color: var(--n-600);
   margin-top: var(--kpi-sp-1); line-height: 1.45;
 }
 .kpi-hs-sub b { font-weight: 700; color: var(--n-900, #0A2548); }
@@ -3888,12 +3911,20 @@
    1280px: token-scope broke `min(...)`, right:0 + inline left made
    the box viewport-wide). max-width is the primary cap; width is the
    ideal. */
+/* HS FB1 PR-2 - popover width now caps to viewport - 16px so narrow
+   viewports (~375px) cannot render a 310px fixed box wider than the
+   frame. Prompt 2f owner report: "text spans on one line past the
+   webapp" below ~1280px. HelpPop.js already clamps x-position to keep
+   the box inside the viewport; the width cap prevents the box itself
+   from overshooting when the viewport is tighter than the pop. */
 .kpi-hs-pop {
   position: absolute;
   z-index: var(--z-popover);
   top: calc(100% + var(--kpi-sp-1));
   width: 310px;
   max-width: calc(100vw - var(--kpi-sp-4));
+  right: 0;
+  width: min(310px, calc(100vw - var(--kpi-sp-4)));
   background: var(--surface-card);
   border: 1px solid var(--n-300);
   border-radius: var(--rad-10);
