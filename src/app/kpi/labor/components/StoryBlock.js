@@ -37,6 +37,7 @@ const WEEK_BY_WEEK_BODY = (
     <span className="kpi-hs-pop-foot">A grey stub means nobody worked that day - genuinely zero, not missing.</span>
   </>
 );
+import { classifyTier } from "@/lib/kpi/classifyTier";
 
 // PR-B - MM/DD/YY from ISO for the "range closed through DATE"
 // suffix. Same convention signalCardModels.js uses.
@@ -638,11 +639,8 @@ function fmtCompact(v) {
 }
 
 // ── Story block main ───────────────────────────────────────────────
-function classifyTier(weekCount) {
-  if (weekCount <= 6) return "A";
-  if (weekCount <= 13) return "B";
-  return "C";
-}
+// classifyTier lifted to src/lib/kpi/classifyTier.js so purchasing can
+// import it too. PR 2 R3 Part B (2026-08-24).
 
 export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary, salaryAvailable }) {
   const eyebrowLabel = board?.kind === "single_period_in_progress" || board?.kind === "single_period_closed"

@@ -34,9 +34,12 @@ export function BucketCard({
   cardsCoded,
   elapsedFrac,
   closed,
-  weekAmounts,        // 4 bars, bills+coded per-week for this bucket
-  weekLabels,
-  runningWeekIdx,
+  // PR 2 R3 Part B - tier-aware strip. `tier`+`units` replace the old
+  // fixed-length weekAmounts/weekLabels. `units` is the full fiscal
+  // enumeration (weeks for A/B, periods for C); WeekChart asserts on
+  // rendered count == units.length so nothing gets silently dropped.
+  tier,               // 'A' | 'B' | 'C'
+  units,              // array of unit objects for WeekChart
   original,
   adjusted,
   budgetSpent,        // PR-2 R2 Fix 2: adjusted is clamped to 0 upstream
@@ -187,37 +190,41 @@ export function BucketCard({
         </div>
       </div>
 
-      {/* RIGHT */}
+      {/* RIGHT - strip title follows tier; §B3 owner ruling 2026-08-24. */}
       <div className="kpi-p-card">
         <div className="kpi-p-lh">
-          <span className="kpi-p-label">By week</span>
+          <span className="kpi-p-label">
+            {tier === "C"
+              ? "THE RANGE · PERIOD BY PERIOD"
+              : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK")}
+          </span>
           <span className="kpi-p-legs">
-            {original != null && (
+            {/* Weekly-target legend only in tiers A and B (spec §B4 -
+                a single weekly target across a period-spanning range is
+                meaningless, was the divisor that produced the negative
+                adjusted bug PR 2 R2 clamped). Tier C carries per-period
+                budget on each bar's line, no top-of-strip legend. */}
+            {tier !== "C" && original != null && (
               <span className="kpi-p-leg orig">
                 <span className="kpi-p-dash" aria-hidden="true" />
                 target {fmt$(original)}
               </span>
             )}
-            {!closed && adjusted != null && !budgetSpent && (
+            {tier === "A" && !closed && adjusted != null && !budgetSpent && (
               <span className="kpi-p-leg adj">
                 <span className="kpi-p-dash" aria-hidden="true" />
                 adjusted {fmt$(adjusted)}
               </span>
             )}
-            {!closed && budgetSpent && (
+            {tier === "A" && !closed && budgetSpent && (
               <span className="kpi-p-leg adj">budget spent</span>
             )}
           </span>
         </div>
         <WeekChart
-          weekAmounts={weekAmounts}
-          weekLabels={weekLabels}
-          original={original}
-          adjusted={adjusted}
+          tier={tier}
+          units={units}
           identity={identity}
-          state={cs.state}
-          closed={closed}
-          runningWeekIdx={runningWeekIdx}
           emptyMessage="No budget and no spend in this bucket at this account."
         />
       </div>

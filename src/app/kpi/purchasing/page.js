@@ -40,6 +40,7 @@ import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "@/app/kpi/labor/components/FolioRail";
 import { costModelFor, isKnownAccount } from "@/lib/accountModels";
+import { classifyTier } from "@/lib/kpi/classifyTier";
 
 import {
   BUCKET_DEFS,
@@ -234,40 +235,34 @@ export default function KpiPurchasingPage() {
     // already returns { original: null, adjusted: null } on !(weeksInPeriod > 0).
     const weeksInPeriod = Number(data?.fiscal?.weeks_in_range) || weeksInRange || 0;
 
-    // Chart render decision (single-source with the target math):
-    //   The CSS grid `.kpi-p-wks` is `repeat(4, ...)`, so the strip
-    //   renders exactly four columns. On a single-period range that IS
-    //   the four fiscal weeks. On a longer range we render the TRAILING
-    //   four weeks with the most recent week rightmost - the same
-    //   period the "adjusted" target and pace pill describe. Bars,
-    //   captions, running-week highlight and week labels all read from
-    //   this same window so there is no chance of the chart describing
-    //   weeks 1..4 while the pill describes weeks 32..35.
-    const CHART_SLOTS = 4;
-    const chartStartIdx = Math.max(0, weeks.length - CHART_SLOTS);
-    const chartWeeks = weeks.slice(chartStartIdx);
-    const weekLabels = chartWeeks.map(w => ({ date: isoToMMDD(w) }));
-    while (weekLabels.length < CHART_SLOTS) weekLabels.push({ date: "" });
+    // Chart render decision (PR 2 R3 Part B):
+    //   Tier A (<= 6 weeks)  -> one bar per fiscal WEEK in range
+    //   Tier B (7-13 weeks)  -> one bar per fiscal WEEK in range
+    //   Tier C (14+ weeks)   -> one bar per fiscal PERIOD in range
+    // No trailing-window truncation. WeekChart asserts rendered_units
+    // == weeks.length (or periods.length for Tier C) so silent drops
+    // cannot happen. Chart width still fits the card because the CSS
+    // grid is repeat(N, minmax(0, 1fr)).
+    const tier = classifyTier(weeksInRange);
 
-    // Running-week index inside the chart window (only when open).
-    let runningWeekIdx = null;
+    // Running-week index across the FULL weeks array (only when open).
+    let runningWeekIdxFull = null;
     if (!closed) {
       const MS = 86400000;
       const todayTime = new Date(today).getTime();
-      for (let i = 0; i < chartWeeks.length; i += 1) {
-        const wStart = new Date(chartWeeks[i]).getTime();
+      for (let i = 0; i < weeks.length; i += 1) {
+        const wStart = new Date(weeks[i]).getTime();
         const wEnd = wStart + 6 * MS;
-        if (todayTime >= wStart && todayTime <= wEnd) { runningWeekIdx = i; break; }
+        if (todayTime >= wStart && todayTime <= wEnd) { runningWeekIdxFull = i; break; }
       }
-      if (runningWeekIdx == null && chartWeeks.length > 0) {
-        // Range ends in the future but today already past the range start.
-        runningWeekIdx = 0;
-      }
+      if (runningWeekIdxFull == null && weeks.length > 0) runningWeekIdxFull = 0;
     }
+    const finishedWksAll = runningWeekIdxFull != null ? runningWeekIdxFull : weeks.length;
 
     // Period card KPI-line spend + budget.
     const kpiSpentPerWeek = periodWeeklySpend({ weekly, start, end });
-    const kpiSpent = kpiSpentPerWeek.reduce((s, w) => s + Number(w.amount || 0), 0);
+    const kpiSpentPerWeekAmounts = kpiSpentPerWeek.map(w => Number(w.amount || 0));
+    const kpiSpent = kpiSpentPerWeekAmounts.reduce((s, v) => s + v, 0);
     const kpiBud = kpiBudget({ byGlLineCode });
 
     // Bills-only for the KPI card sub-row (approximation - the route
@@ -289,42 +284,151 @@ export default function KpiPurchasingPage() {
     // math describes the whole range, the chart shows the trailing
     // four bars of that range.
     const finishedWks = finishedWeekCount({ start, end, todayISO: today });
-    const finishedKpiSpend = kpiSpentPerWeek
+    const finishedKpiSpend = kpiSpentPerWeekAmounts
       .slice(0, finishedWks)
-      .reduce((s, w) => s + Number(w.amount || 0), 0);
+      .reduce((s, v) => s + v, 0);
     const kpiTargets = weeklyTargets({
       budget: kpiBud,
       weeksInPeriod,
       finishedSpend: finishedKpiSpend,
       finishedWeeks: finishedWks,
     });
+    // Fiscal periods that intersect the requested range - Tier C
+    // strips consume this. `route.periods` (spec §6.4) is FYTD
+    // P1..currentP; filter to those with any overlap.
+    const routePeriods = Array.isArray(data?.periods) ? data.periods : [];
+    const rangePeriods = routePeriods.filter(p =>
+      p.end >= start && p.start <= end);
+    const decoratedPeriods = rangePeriods.map(p => {
+      const pEnd = new Date(p.end).getTime();
+      const pStart = new Date(p.start).getTime();
+      const now = new Date(today).getTime();
+      const finished = pEnd < now;
+      const running = !finished && pStart <= now && now <= pEnd;
+      return { ...p, finished, running };
+    });
+    // KPI-line units for the tier-aware strip.
+    const kpiUnits = (() => {
+      if (tier === "C") {
+        const perPeriodSpend = new Map();
+        for (let i = 0; i < weeks.length; i += 1) {
+          const wIso = weeks[i];
+          const pNo = periodOf(wIso);
+          if (pNo == null) continue;
+          perPeriodSpend.set(pNo, (perPeriodSpend.get(pNo) || 0) + Number(kpiSpentPerWeekAmounts[i] || 0));
+        }
+        return decoratedPeriods.map(p => {
+          const pWks = weekStartsInRange(p.start, p.end).length;
+          const perPeriodBudget = weeksInRange > 0
+            ? (Number(kpiBud || 0) / weeksInRange) * pWks
+            : 0;
+          return {
+            period_no: p.period_no,
+            start: p.start,
+            end: p.end,
+            spent: perPeriodSpend.get(p.period_no) || 0,
+            budget: Math.round(perPeriodBudget * 100) / 100,
+            finished: p.finished,
+            running: p.running,
+          };
+        });
+      }
+      return weeks.map((wIso, i) => {
+        const finished = runningWeekIdxFull != null
+          ? i < runningWeekIdxFull
+          : true;
+        const running = runningWeekIdxFull === i && !closed;
+        return {
+          start: wIso,
+          spent: Number(kpiSpentPerWeekAmounts[i] || 0),
+          targetOrig: kpiTargets.original,
+          targetAdj: tier === "A" ? kpiTargets.adjusted : null,
+          finished,
+          running,
+        };
+      });
+    })();
 
-    // Bucket data - budget, spent, per-week bars.
-    //   weekAmounts renders the CHART WINDOW (trailing four weeks) so
-    //   bar height and caption resolve from the same slice.
-    //   `spent` and `finishedSpend` sum the WHOLE range so the hero
-    //   number + target math describe the same period the pill does.
-    //   Chart and hero deliberately answer different questions - hero
-    //   totals the range, chart shows the trailing window - but each
-    //   answer resolves from ONE source, per §9B.
+    // Per-bucket unit builder. Same weekly aggregation feeds each
+    // tier: Tier A/B loops weeks; Tier C loops periods and sums weekly
+    // spend into each period.
+    function buildUnitsForBucket(perWeekArr, budget, finishedSpendVal) {
+      if (tier === "C") {
+        // Aggregate weeks -> periods.
+        const perPeriodSpend = new Map();
+        for (let i = 0; i < weeks.length; i += 1) {
+          const wIso = weeks[i];
+          const pNo = periodOf(wIso);
+          if (pNo == null) continue;
+          perPeriodSpend.set(pNo, (perPeriodSpend.get(pNo) || 0) + Number(perWeekArr[i] || 0));
+        }
+        return decoratedPeriods.map(p => {
+          // Per-period BUCKET budget: budgetForRange scoped to the
+          // period's dates. Route ships period-total budget on
+          // `periods[].budget` (all lines), but here we need per-bucket
+          // slice. Sum bucket lines by ratio: this bucket's share of
+          // the period's total budget = (bucketRangeBudget /
+          // totalRangeBudget) applied to period-scoped totals... but
+          // that requires per-line-per-period breakdowns. Simpler and
+          // more faithful: divide the bucket's WHOLE-RANGE budget by
+          // weeks_in_range * weeks_in_period(p).
+          const pWks = weekStartsInRange(p.start, p.end).length;
+          const perPeriodBudget = weeksInRange > 0
+            ? (Number(budget || 0) / weeksInRange) * pWks
+            : 0;
+          return {
+            period_no: p.period_no,
+            start: p.start,
+            end: p.end,
+            spent: perPeriodSpend.get(p.period_no) || 0,
+            budget: Math.round(perPeriodBudget * 100) / 100,
+            finished: p.finished,
+            running: p.running,
+          };
+        });
+      }
+      // Tier A/B - one unit per fiscal week.
+      const targets = weeklyTargets({
+        budget,
+        weeksInPeriod,
+        finishedSpend: finishedSpendVal,
+        finishedWeeks: finishedWksAll,
+      });
+      return weeks.map((wIso, i) => {
+        const finished = runningWeekIdxFull != null
+          ? i < runningWeekIdxFull
+          : true;
+        const running = runningWeekIdxFull === i && !closed;
+        return {
+          start: wIso,
+          spent: Number(perWeekArr[i] || 0),
+          targetOrig: targets.original,
+          // Adjusted only meaningful in Tier A (spec §B4).
+          targetAdj: tier === "A" ? targets.adjusted : null,
+          finished,
+          running,
+        };
+      });
+    }
+
+    // Bucket data - budget, spent, tier-aware units. `spent` and
+    // `finishedSpend` sum the WHOLE range so the hero number + target
+    // math describe the same period the pill does.
     const buckets = BUCKET_DEFS.map(def => {
       const bud = bucketBudget({ byGlLineCode, bucketKey: def.key });
       const perWeekAll = bucketWeeklySpend({ weekly, bucketKey: def.key, start, end })
         .map(w => Number(w.amount || 0));
       const spent = perWeekAll.reduce((s, v) => s + v, 0);
-      const finishedSpend = perWeekAll.slice(0, finishedWks).reduce((s, v) => s + v, 0);
-      const weekAmounts = perWeekAll.slice(chartStartIdx);
-      while (weekAmounts.length < CHART_SLOTS) weekAmounts.push(0);
+      const finishedSpend = perWeekAll.slice(0, finishedWksAll).reduce((s, v) => s + v, 0);
+      const units = buildUnitsForBucket(perWeekAll, bud, finishedSpend);
       const targets = weeklyTargets({
         budget: bud,
         weeksInPeriod,
         finishedSpend,
-        finishedWeeks: finishedWks,
+        finishedWeeks: finishedWksAll,
       });
-      // For bucket state we need bills-only; route reports categories[]
-      // with total spent (bills+coded). Approximate: card_coded_in_bucket
-      // is small (route.buckets uses billsOnlySpentForGl). Route ships
-      // buckets[] with bills-only in `spent`. Use that value directly.
+      // Bills-only for bucket state - route ships buckets[] with
+      // bills-only in `spent`.
       const routeBucket = (data?.buckets || []).find(b => b.bucket === def.key);
       const billsForBucket = routeBucket ? Number(routeBucket.spent || 0) : spent;
       const cardsCoded = Math.max(0, spent - billsForBucket);
@@ -334,7 +438,7 @@ export default function KpiPurchasingPage() {
         spent,
         bills: billsForBucket,
         cardsCoded,
-        weekAmounts,
+        units,
         targets,
       };
     });
@@ -354,14 +458,6 @@ export default function KpiPurchasingPage() {
       return { ...def, budget: bud, spent, ledgerRows };
     });
 
-    // KPI chart bars for the period card - trailing CHART_SLOTS from
-    // the full kpiSpentPerWeek series. Same slice window bar height +
-    // caption + running-week highlight all read from.
-    const kpiWeekAmounts = kpiSpentPerWeek
-      .slice(chartStartIdx)
-      .map(w => Number(w.amount || 0));
-    while (kpiWeekAmounts.length < CHART_SLOTS) kpiWeekAmounts.push(0);
-
     return {
       byGlLineCode,
       weekly,
@@ -371,17 +467,18 @@ export default function KpiPurchasingPage() {
       weeks,
       weeksInRange,
       weeksInPeriod,
-      weekLabels,
-      runningWeekIdx,
+      tier,
+      runningWeekIdxFull,
       kpiSpent,
       kpiSpentPerWeek,
-      kpiWeekAmounts,
+      kpiUnits,
       kpiBud,
       kpiTargets,
       buckets,
       ledgers,
       billsApprox,
       cardCodedInSpend,
+      decoratedPeriods,
     };
   }, [data, closed, start, end, today]);
 
@@ -482,15 +579,27 @@ export default function KpiPurchasingPage() {
       );
     }
 
-    const runningWeekIdx = board.runningWeekIdx;
-    const weekLabels = board.weekLabels;
-    // "week X of N" for the period header. Compute across the FULL
-    // range (not the trailing chart window) so a 35-week range reads
-    // "week 22 of 35", not "week 1 of 4". runningWeekIdx is the index
-    // inside the chart window; add the window's offset back on.
-    const chartOffset = Math.max(0, board.weeks.length - board.kpiWeekAmounts.length);
-    const wop = runningWeekIdx != null ? chartOffset + runningWeekIdx + 1 : null;
+    // "week X of N" for the period header. runningWeekIdxFull is the
+    // index inside the FULL weeks array so no chart-window offset is
+    // needed - the header reads "week 35 of 35" on a 35-week range.
+    const wop = board.runningWeekIdxFull != null ? board.runningWeekIdxFull + 1 : null;
     const weeksInPeriodDenom = board.weeksInPeriod || board.weeksInRange || null;
+
+    // Card title follows the range PRESET like labor's card title.
+    // §B3 owner ruling 2026-08-24: "PERIOD -" with a blank number on
+    // every multi-period range was a UX regression. "PERIOD n" is only
+    // correct when the range EQUALS a single fiscal period.
+    const cardTitle = (() => {
+      if (resolvedPreset === "fytd") return "FISCAL YEAR TO DATE";
+      if (resolvedPreset === "last_4wk") return "THE LAST 4 WEEKS";
+      if (resolvedPreset === "last_13wk") return "THE LAST 13 WEEKS";
+      if (resolvedPreset === "this_period" || resolvedPreset === "last_period" || rangePeriodNo != null) {
+        return `PERIOD ${rangePeriodNo}`;
+      }
+      // Custom range - use the date range as the title so nothing
+      // shows a blank number.
+      return rangeLabel ? rangeLabel.toUpperCase() : "CUSTOM RANGE";
+    })();
 
     return (
       <div className="kpi-p-board">
@@ -507,13 +616,13 @@ export default function KpiPurchasingPage() {
           bills={board.billsApprox}
           cards={board.cardCodedInSpend}
           pending={board.pending}
-          weekAmounts={board.kpiWeekAmounts}
-          weekLabels={weekLabels}
-          runningWeekIdx={runningWeekIdx}
+          tier={board.tier}
+          units={board.kpiUnits}
           original={board.kpiTargets.original}
           adjusted={board.kpiTargets.adjusted}
           budgetSpent={board.kpiTargets.budgetSpent}
           projectedClose={projClose}
+          cardTitle={cardTitle}
         />
 
         {board.buckets.map(b => (
@@ -530,9 +639,8 @@ export default function KpiPurchasingPage() {
             cardsCoded={b.cardsCoded}
             elapsedFrac={board.elapsedFrac}
             closed={closed}
-            weekAmounts={b.weekAmounts}
-            weekLabels={weekLabels}
-            runningWeekIdx={runningWeekIdx}
+            tier={board.tier}
+            units={b.units}
             original={b.targets.original}
             adjusted={b.targets.adjusted}
             budgetSpent={b.targets.budgetSpent}
