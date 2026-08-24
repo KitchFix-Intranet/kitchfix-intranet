@@ -153,7 +153,13 @@ export function BucketCard({
           </div>
         </div>
 
-        <div className="kpi-p-nums">
+        {/* PR 2 R7 Fix 4 - zero-budget cards drop the entire second
+            stack. Prior state rendered `Over by —` or `Remaining —` on
+            zero-budget buckets - a label that claims a verdict against
+            a value that is nil. The `no budget` subline on the hero
+            already carries the state; a second stack MUST NOT appear.
+            Future range keeps a plain `Budget` presenter. */}
+        <div className={`kpi-p-nums${!isFutureRange && Number(budget || 0) === 0 ? " kpi-p-nums-solo" : ""}`}>
           <div className="kpi-p-stk">
             <span className="kpi-p-label">Spent</span>
             {/* PR 2 R8 - hero drops state colour on a future range. */}
@@ -168,54 +174,40 @@ export function BucketCard({
               {Number(budget || 0) === 0 && (<><span aria-hidden="true"> · </span><b>no budget</b></>)}
             </span>
           </div>
-          <div className="kpi-p-stk">
-            {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is a
-                quantity, plain, no arrow, no colour. When over budget the
-                label CHANGES to `Over by` and the number is a variance,
-                which may carry colour. "Remaining ▲" is a contradiction
-                in terms and has been removed.
-                Closed periods keep the existing `Vs budget` variance.
-                PR 2 R8 - future range: plain `Budget` + amount, no
-                Remaining, no variance. */}
-            <span className="kpi-p-label">
-              {isFutureRange ? "Budget" : (closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining"))}
-            </span>
-            {/* PR 2 R8 - `—` (no budget) must render distinct in weight
-                and colour from real dollars. `.kpi-p-nil` overrides state
-                tone AND weight; without it the em-dash inherits `.g` /
-                `.r` colour and 800 weight - the labor "shipped twice" bug.
-                Future range: plain budget number, no verdict. */}
-            {isFutureRange ? (
+          {isFutureRange ? (
+            <div className="kpi-p-stk">
+              <span className="kpi-p-label">Budget</span>
               <span className="kpi-p-value num">{fmt$(budget)}</span>
-            ) : closed ? (
-              Number(budget || 0) === 0 ? (
-                <span className="kpi-p-value num kpi-p-nil">—</span>
-              ) : (
+              <span className="kpi-p-subline">this range has not started</span>
+            </div>
+          ) : Number(budget || 0) === 0 ? (
+            null
+          ) : (
+            <div className="kpi-p-stk">
+              {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is a
+                  quantity, plain, no arrow, no colour. When over budget
+                  the label CHANGES to `Over by` and the number is a
+                  variance, which may carry colour. Closed periods keep
+                  the existing `Vs budget` variance. */}
+              <span className="kpi-p-label">
+                {closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining")}
+              </span>
+              {closed ? (
                 <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
-              )
-            ) : rem < 0 ? (
-              Number(budget || 0) === 0 ? (
-                <span className="kpi-p-value num kpi-p-nil">—</span>
-              ) : (
+              ) : rem < 0 ? (
                 <span className="kpi-p-value num r">{fmt$(-rem)}</span>
-              )
-            ) : (
-              Number(budget || 0) === 0 ? (
-                <span className="kpi-p-value num kpi-p-nil">—</span>
               ) : (
                 <span className="kpi-p-value num">{fmt$(rem)}</span>
-              )
-            )}
-            <span className="kpi-p-subline">
-              {isFutureRange
-                ? "this range has not started"
-                : (closed
-                    ? "period closed"
-                    : (budgetSpent
-                        ? "budget spent"
-                        : (adjusted != null ? `aim for ${fmt$(adjusted)} / wk` : "no target this range")))}
-            </span>
-          </div>
+              )}
+              <span className="kpi-p-subline">
+                {closed
+                  ? "period closed"
+                  : (budgetSpent
+                      ? "budget spent"
+                      : (adjusted != null ? `aim for ${fmt$(adjusted)} / wk` : "no target this range"))}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* PR 2 R8 - future range has no bills, no cards. Suppress the

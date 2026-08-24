@@ -70,6 +70,14 @@ export function VendorBreakdown({
   cap,
   unresolvedCount,    // count of unresolved billcom vendor_ids (never invented)
   fragmentation,      // { distinct_names, suppliers_if_suffix_stripped, collapsed[] }
+  // PR 2 R7 Fix 2 - the route's answer to "did the prior window contain
+  // any billcom data at all". When false (FYTD on FY2026, our first
+  // year), no vendor has a prior period to compare against and the
+  // column reads `no prior period` for every row - never a false `new`.
+  // When true, the per-row logic still fires ("new" when prior=0 on that
+  // specific vendor, "▲/▼ %" otherwise).
+  priorHasData,       // boolean | undefined
+  priorRange,         // { start, end } | undefined - echoed for auditability
   isAggregate,
 }) {
   const hasRows = Array.isArray(rows) && rows.length > 0;
@@ -97,7 +105,13 @@ export function VendorBreakdown({
             const movementPct = prior > 0
               ? ((cur - prior) / prior)
               : null;
-            const isNewSpender = prior === 0 && cur > 0;
+            // PR 2 R7 Fix 2 - `isNewSpender` is a claim, and it MUST be
+            // true only when a prior window actually exists to compare
+            // against. `priorHasData` gates the claim at the block level;
+            // when the compared window has NO billcom data (FYTD on the
+            // first year of data), no vendor is "new" - the column reads
+            // `no prior period` for every row instead.
+            const isNewSpender = priorHasData === true && prior === 0 && cur > 0;
             const displayName = r.resolved
               ? (r.name || "—")
               : (r.vendor_id ? `Unresolved vendor` : "Unresolved");
@@ -113,7 +127,17 @@ export function VendorBreakdown({
                 </span>
                 <SplitBar split={r.gl_split} spend={r.spend} />
                 <span className="kpi-p-v num">{fmt$(r.spend)}</span>
-                {isNewSpender ? (
+                {priorHasData === false ? (
+                  /* PR 2 R7 Fix 2 - no prior window has data; render
+                     `no prior` on every row (never a false `new`). */
+                  <span
+                    className="kpi-p-ch kpi-p-nil"
+                    style={{ color: "var(--n-600)", fontWeight: 600 }}
+                    title="no prior period on record"
+                  >
+                    no prior
+                  </span>
+                ) : isNewSpender ? (
                   <span className="kpi-p-ch" style={{ color: "var(--n-600)" }}>new</span>
                 ) : movementPct == null ? (
                   <span className="kpi-p-ch kpi-p-nil" style={{ color: "var(--n-600)" }}>—</span>
