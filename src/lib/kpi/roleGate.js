@@ -81,10 +81,18 @@ export const KPI_PREVIEW_ALLOWLIST = ["k.fietek@kitchfix.com"];
  * }>}
  */
 export async function loadRoleGate(supa) {
-  const [rolesQ, accountsQ] = await Promise.all([
-    supa.from("kpi_roles").select("email, role, scope"),
-    supa.from("accounts").select("team_key, region"),
-  ]);
+  // role-gates-2 - can_see_salary carried on the caller object.
+  // Default TRUE if the column is absent (pre-migration read or a
+  // schema-drift edge) so a stale read fails OPEN on view and
+  // CLOSED on nothing. Suppression is a positive assertion
+  // (`= false`), not an absence. The two-step try/fallback pattern
+  // means the probe + route keep working across the migration
+  // boundary without a deploy ordering dependency.
+  let rolesQ = await supa.from("kpi_roles").select("email, role, scope, can_see_salary");
+  if (rolesQ.error && /can_see_salary.*does not exist/i.test(rolesQ.error.message || "")) {
+    rolesQ = await supa.from("kpi_roles").select("email, role, scope");
+  }
+  const accountsQ = await supa.from("accounts").select("team_key, region");
   if (rolesQ.error)    return errorGate(`kpi_roles: ${rolesQ.error.message}`);
   if (accountsQ.error) return errorGate(`accounts: ${accountsQ.error.message}`);
 
@@ -96,7 +104,11 @@ export async function loadRoleGate(supa) {
     // superseded by people. Ignore any residual rows before the
     // cleanup migration runs so a stale row cannot leak site access.
     if (r.role !== "corporate" && r.role !== "rdo") continue;
-    rolesByEmail.set(email, { role: r.role, scope: r.scope || null });
+    // role-gates-2 - canSeeSalary defaults TRUE when the column is
+    // undefined (pre-migration read or a null slipping through).
+    // Only an explicit `false` suppresses.
+    const canSeeSalary = r.can_see_salary === false ? false : true;
+    rolesByEmail.set(email, { role: r.role, scope: r.scope || null, can_see_salary: canSeeSalary });
   }
   const regionByAccount = new Map();
   for (const a of accountsQ.data || []) {
@@ -120,9 +132,16 @@ export async function loadRoleGate(supa) {
     if (cache.has(e)) return cache.get(e);
 
     // Rules 1 + 2: kpi_roles.
+    // role-gates-2 - propagate can_see_salary onto the caller for
+    // corporate + rdo. Site roles come from `people` (rules 3 + 4)
+    // and have no per-person suppression column today; canSeeSalary
+    // treats undefined as TRUE and lets the existing site rules
+    // decide (site_manager is already false by role; site_leader is
+    // already scoped to their own account). Suppression on a site
+    // leader would be a separate decision with its own migration.
     const kr = rolesByEmail.get(e);
-    if (kr?.role === "corporate") { const v = { role: "corporate", scope: null }; cache.set(e, v); return v; }
-    if (kr?.role === "rdo")       { const v = { role: "rdo", scope: kr.scope };   cache.set(e, v); return v; }
+    if (kr?.role === "corporate") { const v = { role: "corporate", scope: null, can_see_salary: kr.can_see_salary }; cache.set(e, v); return v; }
+    if (kr?.role === "rdo")       { const v = { role: "rdo", scope: kr.scope, can_see_salary: kr.can_see_salary };   cache.set(e, v); return v; }
 
     // Rule 3: site_leader. Match on is_site_leader alone; do NOT
     // add a worker_class check - the leader flag is owner-set and
@@ -194,6 +213,13 @@ export async function loadRoleGate(supa) {
 
   function canSeeSalary(caller, requestedAccount) {
     if (!caller || !requestedAccount) return false;
+    // role-gates-2 salary suppression - one early return in front of
+    // every role branch. A suppression, not a new branch: the
+    // existing corporate / rdo / site_leader / site_manager logic
+    // underneath is untouched. canViewAccount and landingAccount are
+    // NOT affected - a suppressed corporate keeps full view and
+    // still lands on ALL.
+    if (caller?.can_see_salary === false) return false;
     const { role, scope } = caller;
     if (role === "corporate") return true;
     if (role === "rdo") return true;
