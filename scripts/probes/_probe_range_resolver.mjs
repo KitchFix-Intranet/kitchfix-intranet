@@ -12,7 +12,9 @@
 //   R3 partial week AND start < 2026-04-20 -> REFUSAL with the
 //      "Daily detail starts 04/20/26. Pick a range on or after that
 //       date, or use whole weeks." copy.
-//   R4 span > 21 days -> WEEKLY regardless of alignment (spec limit).
+//   R4 span > MAX_DAILY_SPAN_DAYS (31 as of 2026-08-24) -> WEEKLY.
+//   M1-M5 calendar-month cap change (raised 21 -> 31 on 2026-08-24):
+//      calendar months now land inside the daily path.
 //
 // Budget pro-rate:
 //   B1 single-week partial: label = "pro-rated, N of 7 days of wk MM/DD"
@@ -123,13 +125,74 @@ console.log("[R3] partial week + starts pre-floor -> refusal");
   eq(r.refused, true,           "  refused=true");
 }
 
-// ─── R4 span > 21 days -> weekly ────────────────────────────────────
+// ─── R4 span > MAX_DAILY_SPAN_DAYS -> weekly ─────────────────────────
 console.log("");
-console.log("[R4] span > 21 days -> weekly (spec limit)");
+console.log(`[R4] span > MAX_DAILY_SPAN_DAYS (${MAX_DAILY_SPAN_DAYS}) -> weekly (spec cap)`);
 {
-  // 22-day partial range (Mon start, not aligned).
-  const r = resolveRangeSource({ startISO: "2026-07-06", endISO: "2026-07-27", dailyFloorISO: FLOOR });
-  eq(r.source, "weekly",        "22-day range -> weekly (span cap)");
+  // Just over the cap: 32-day partial (Mon 07/06 through Wed 08/05 =
+  // 31 days -> daily; +1 day = 32 -> weekly). New cap boundary since
+  // the 2026-08-24 raise from 21 to 31.
+  const r = resolveRangeSource({ startISO: "2026-07-06", endISO: "2026-08-06", dailyFloorISO: FLOOR });
+  eq(r.source, "weekly",        "32-day range -> weekly (over 31-day cap)");
+  eq(r.reason, "span_exceeds_daily_max", "  reason cites span cap");
+}
+{
+  // At the cap: 31-day partial routes to daily (this is the whole
+  // point of the raise - calendar months land inside daily now).
+  // 2026-07-01 Wed through 2026-07-31 Fri = 31 days.
+  const r = resolveRangeSource({ startISO: "2026-07-01", endISO: "2026-07-31", dailyFloorISO: FLOOR });
+  eq(r.source, "daily",         "31-day range (calendar month July) -> daily");
+  eq(r.spanDays, 31,            "  spanDays=31");
+  eq(r.reason, "partial_week_post_floor", "  reason daily-path");
+}
+
+// ─── M1-M5 calendar-month routing (post 2026-08-24 cap raise) ───────
+// M1 is the probe that matters per Kevin: July on CIN - OH must be
+// $18,714.03. The routing check here is pure - the arithmetic check
+// runs in _probe_month_daily_arithmetic.mjs against Supabase.
+// M5 is the guard - whole-week ranges (including 28-day fiscal
+// periods) must still route to weekly.
+console.log("");
+console.log("[M1-M5] calendar-month routing after MAX_DAILY_SPAN_DAYS=31");
+{
+  // M1 - July (calendar): 07/01 Wed - 07/31 Fri, 31 days.
+  const r = resolveRangeSource({ startISO: "2026-07-01", endISO: "2026-07-31", dailyFloorISO: FLOOR });
+  eq(r.source, "daily",         "M1 July calendar month -> daily");
+}
+{
+  // M2 - June (calendar): 06/01 Mon - 06/30 Tue, 30 days.
+  const r = resolveRangeSource({ startISO: "2026-06-01", endISO: "2026-06-30", dailyFloorISO: FLOOR });
+  eq(r.source, "daily",         "M2 June calendar month -> daily");
+  eq(r.spanDays, 30,            "  spanDays=30");
+}
+{
+  // M3 - August (calendar): 08/01 Sat - 08/31 Mon, 31 days. Both
+  // ends partial. Post-floor, sits at the cap. Feb picked initially
+  // but Feb 2026 is entirely pre-floor -> refusal, wrong shape for
+  // this test.
+  const r = resolveRangeSource({ startISO: "2026-08-01", endISO: "2026-08-31", dailyFloorISO: FLOOR });
+  eq(r.source, "daily",         "M3 Aug calendar month (partial both ends) -> daily");
+  eq(r.spanDays, 31,            "  spanDays=31");
+}
+{
+  // M4 - Two calendar months (June + July, 61 days) -> weekly.
+  // Calendar months are supported at daily grain; multi-month is not.
+  const r = resolveRangeSource({ startISO: "2026-06-01", endISO: "2026-07-31", dailyFloorISO: FLOOR });
+  eq(r.source, "weekly",        "M4 two-month span -> weekly (over cap)");
+}
+{
+  // M5a - 28-day whole-week range (four fiscal periods aligned).
+  // 2026-07-06 Mon - 2026-08-02 Sun = 28 days, four whole weeks.
+  // isWholeWeeks catches this first - MUST still route to weekly
+  // regardless of the cap raise. Guard against silent path shift.
+  const r = resolveRangeSource({ startISO: "2026-07-06", endISO: "2026-08-02", dailyFloorISO: FLOOR });
+  eq(r.source, "weekly",        "M5a 28-day whole-week fiscal period -> weekly (unchanged)");
+  eq(r.reason, "whole_weeks",   "  reason cites whole-week alignment, NOT the span cap");
+}
+{
+  // M5b - 14-day whole-week range: same guard, tighter.
+  const r = resolveRangeSource({ startISO: "2026-07-06", endISO: "2026-07-19", dailyFloorISO: FLOOR });
+  eq(r.source, "weekly",        "M5b 14-day whole-week range -> weekly (unchanged)");
 }
 
 // ─── Refusal message shape ──────────────────────────────────────────

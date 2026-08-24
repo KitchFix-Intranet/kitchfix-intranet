@@ -45,12 +45,27 @@ function daysBetween(startISO, endISO) {
   return Math.round((e - s) / 86400000) + 1;   // inclusive
 }
 
-// Per spec: 1-21 day span is legal for daily grain. Longer ranges
+// Per spec: 1-31 day span is legal for daily grain. Longer ranges
 // keep the existing week-grain board even if they include a partial
 // week - matches the spec's "keep the existing week-grain board" cut
 // for multi-period requests. We route those to weekly regardless of
 // alignment.
-export const MAX_DAILY_SPAN_DAYS = 21;
+//
+// 2026-08-24: raised from 21 to 31. The original 21 came from an
+// early "1 day to 3 weeks" spec, before calendar months were a
+// requirement. A calendar month is 28-31 days, so at 21 every month
+// silently widened to the whole-week board that STRADDLED it. Live
+// symptom: July on CIN - OH returned $21,555.27 (weekly widening
+// 06/29 - 08/02) when July actually cost $18,714.03. 15% overstate,
+// with nothing on screen naming that the range moved.
+//
+// At 31, calendar months land inside the daily path and inherit
+// exact per-day actuals + the pro-rated budget label + the
+// width-derived day-strip density already built for the daily
+// surface. Whole-week ranges keep routing to weekly (isWholeWeeks
+// runs first at line 89), so nothing that already routed to weekly
+// shifts paths.
+export const MAX_DAILY_SPAN_DAYS = 31;
 
 // User-facing refusal copy (kevin owner ruling 2026-08-20). The
 // client renders this verbatim in the refusal state box.
