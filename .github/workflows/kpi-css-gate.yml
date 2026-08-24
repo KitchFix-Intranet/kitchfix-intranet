@@ -1,0 +1,34 @@
+name: KPI CSS gate
+
+# HS FB1 PR-1 wiring (owner ruling 2026-08-24). The V30-5 static gate
+# existed since KPI V30-5 spec but was never invoked - 68 raw px
+# violations shipped inside .kpi-hs-* undetected. This workflow runs
+# the gate on every PR that touches src/app/kpi/kpi.css and blocks
+# merge if a fresh violation lands.
+#
+# The gate is pure static CSS parse - no browser, no dev server, no
+# secrets. Fast enough to run on every touch.
+
+on:
+  pull_request:
+    paths:
+      - "src/app/kpi/kpi.css"
+      - "scripts/probes/_probe_kpi_css_token_gate.mjs"
+      - ".github/workflows/kpi-css-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/app/kpi/kpi.css"
+      - "scripts/probes/_probe_kpi_css_token_gate.mjs"
+
+jobs:
+  gate:
+    name: V30-5 static gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run V30-5 static gate
+        run: npm run audit:kpi-scale
