@@ -258,16 +258,11 @@
    2026-08-21 moved this to the right side of the command bar,
    adjacent to Export. Renders only when the route ships
    salary_available=true; absent (not disabled) for callers without
-   permission. Reuses the shared .kpi-seg pattern; no raw px literals. */
-.kpi-cmd-salary {
-  display: inline-flex; align-items: center;
-  gap: var(--kpi-sp-2);
-  flex: none;
-}
-.kpi-cmd-salary .kpi-ctl-k {
-  color: #B9C6DA; font-size: var(--kpi-size-caption);
-  letter-spacing: 0.06em; text-transform: uppercase;
-}
+   permission.
+   HS FB1 PR-2 verify 2026-08-25: dropped .kpi-cmd-salary wrapper +
+   "Include" label per owner ruling - salary toggle now applies .kpi-seg
+   directly, matching the Period | Homestand toggle geometry via the
+   shared control component. Rules kept dead-free. */
 .kpi-cmd-spacer { flex: 1 1 auto; min-width: 0; }
 
 /* Shared control skin - every bar control uses this. */
@@ -3597,11 +3592,16 @@
   padding: var(--kpi-sp-4);
   display: flex;
   flex-direction: column;
-  /* Composition: 2 * card-pad + lane-head + sp-3 + lane-hero + sp-1
-     + lane-sub + sp-3 + lane-viz + sp-3 + t-label + t-body. Flat calc
-     (no nested calc(), single line) - Turbopack CI failed to parse the
-     multi-line nested form even though local PostCSS accepted it. */
-  min-height: calc(var(--kpi-card-pad) + var(--kpi-card-pad) + var(--kpi-lane-head) + var(--kpi-sp-3) + var(--kpi-lane-hero) + var(--kpi-sp-1) + var(--kpi-lane-sub) + var(--kpi-sp-3) + var(--kpi-lane-viz) + var(--kpi-sp-3) + var(--kpi-t-label) + var(--kpi-t-body));
+  /* Composition: 2 * card-pad + lane-head + sp-3 (head->hero margin-top)
+     + lane-hero + sp-1 (hero->sub margin-top) + lane-sub
+     + lane-viz (viz reservation via facts margin-top:auto - period has
+       NO explicit gap here; sub->facts space IS the viz lane)
+     + sp-3 (facts padding-top border spacer) + t-label + t-body.
+     HS FB1 PR-2 verify 2026-08-25: removed the extra sp-3 that used to
+     sit between lane-sub and lane-viz; that was the 7px over-reserve
+     Kevin flagged (204 vs period 197 - the sub->viz gap was counted,
+     but period expresses that spacing implicitly via margin-top:auto). */
+  min-height: calc(var(--kpi-card-pad) + var(--kpi-card-pad) + var(--kpi-lane-head) + var(--kpi-sp-3) + var(--kpi-lane-hero) + var(--kpi-sp-1) + var(--kpi-lane-sub) + var(--kpi-lane-viz) + var(--kpi-sp-3) + var(--kpi-t-label) + var(--kpi-t-body));
 }
 .kpi-hs-signal:before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
