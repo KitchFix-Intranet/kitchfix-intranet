@@ -57,6 +57,7 @@ import {
   computeSplitWithGameDates,
   computeHomestandBank,
   actualsByStand,
+  foldPerStandSplits,
 } from "@/lib/labor/homestandResolver.js";
 import { foldPreFloorEstimates } from "@/lib/labor/preFloorEstimator.js";
 
@@ -529,6 +530,19 @@ export async function GET(request) {
         return NextResponse.json(safeError("pre_floor_estimator", e), { status: 500 });
       }
 
+      // HS PR-B (owner ruling 2026-08-24): fold per-stand split onto
+      // every non-pre-floor stand so the season table renders Prep &
+      // off on each row. Pre-PR-B split was computed only for the
+      // SELECTED stand and the table column was `–` on every row -
+      // a value the payload could compute but did not. The selected
+      // -stand homestand_split on homestandSplice now reads from the
+      // same folded data instead of a parallel computation.
+      try {
+        allHomestands = await foldPerStandSplits(supa, account, allHomestands, schedRows, today);
+      } catch (e) {
+        return NextResponse.json(safeError("per_stand_splits", e), { status: 500 });
+      }
+
       // GAME date sets per stand, keyed by game_start. Client uses
       // these for the identity-variant day strip fill rules; also
       // used below for split computation on the selected stand.
@@ -601,17 +615,17 @@ export async function GET(request) {
                       && r.service_date >= found.game_start && r.service_date <= found.game_end)
             .map(r => r.service_date)
         );
-        // HS PR-A: homestand_split now takes todayIso so it can also
-        // compute stand-scoped spent_to_date - the field that surfaces
-        // on plan-mode PlanCards when the window has opened but games
-        // haven't (HS 12 case: $359.58 already on prep days).
-        // Absent when spent_to_date <= 0 per owner ruling ("if the
-        // fact's premise does not hold, it is absent, not $0").
+        // HS PR-B (owner ruling 2026-08-24): homestand_split reads
+        // from the FOLDED per-stand data (foldPerStandSplits above)
+        // rather than a parallel computation here. Same source the
+        // season table renders from - one source, one answer. The
+        // per-stand split was computed with today so spent_to_date
+        // is already present when the window has opened.
         homestandSplice = {
           homestand: found,
           homestand_game_dates: [...gameDatesForFound].sort(),
           homestand_night_dates: [...nightDatesForFound].sort(),
-          homestand_split: computeSplitWithGameDates(dailyRows, found, gameDatesForFound, today),
+          homestand_split: found.split || null,
         };
         // HS PR-A: attach homestand_estimated on POST-FLOOR future
         // stands too. Same shape the pre-floor early-return ships at
