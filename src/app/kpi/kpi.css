@@ -1885,7 +1885,16 @@
   min-width: 0;
   display: flex; flex-direction: column;
 }
-.kpi-story-left  { gap: var(--kpi-sp-3); align-self: start; }
+/* Audit close 2026-08-24: `align-self: start` opted the left card
+   out of the grid's default stretch, leaving the two story cards
+   with 44px of bottom drift on FYTD (measured: left 366, right 410).
+   Flip to stretch so both cards share the row height; distribute
+   the extra height via `flex: 1 1 auto` on .kpi-spend-pair below
+   (mirrors the pattern .kpi-story-right uses via .kpi-wbars). The
+   pair's cells absorb the height naturally - framed rectangles that
+   scale without looking broken. Confirmed shape across FYTD, last
+   period, this period, last 4 weeks. */
+.kpi-story-left  { gap: var(--kpi-sp-3); }
 .kpi-story-right { gap: var(--kpi-sp-1); }
 /* V31 item 6 - the strip container (Tier A/B/C) fills the remaining
    height of story-right so spare height sits ABOVE the bars, not below
@@ -1984,10 +1993,16 @@
 }
 
 /* V29-6 paired secondary cells. Spent so far on the left; Left to
-   spend / Under budget / Over budget on the right per state. */
+   spend / Under budget / Over budget on the right per state.
+   Audit close 2026-08-24: `flex: 1 1 auto` distributes the extra
+   height (~44px on FYTD after .kpi-story-left stretched) into the
+   pair. Cells scale as framed rectangles; the pair naturally becomes
+   the pole that anchors the card's bottom edge alongside the right
+   card's bar plot. */
 .kpi-spend-pair {
   display: grid; grid-template-columns: 1fr 1fr;
   gap: var(--kpi-sp-3);
+  flex: 1 1 auto;
 }
 /* V30-3 - spend inner cells at --kpi-card-pad (14.4), same as signal
    cards beneath (was --kpi-sp-3 = 10.8). Nested cards share the skin. */

@@ -48,6 +48,18 @@ function fmtMMDDYY(iso) {
   return `${m}/${d}/${y.slice(2)}`;
 }
 
+// Audit close 2026-08-24 - subtract one UTC day from an ISO date.
+// Used to derive "last closed week's end" (Sunday) from an
+// in-progress week's start (Monday). Never render bare "range
+// closed" - always name the through date.
+function isoMinusDay(iso) {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // V8-7 verdict label + variant. One source of truth for the pill in
 // the spend card header (was in the retired sentence card's helper).
 function verdictDisplay(verdict) {
@@ -145,16 +157,24 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
     } else if (isPeriod) {
       core = `${prefix} · period closed`;
     } else {
-      // multi_period: append "through MM/DD/YY" when the range is
-      // fully closed. If a running week is in the range, fall back to
-      // the plain "range closed" (owner spec was for the closed case).
+      // multi_period: always name a date. Owner ruling 2026-08-24
+      // (audit close): FYTD shipped bare "range closed" because a
+      // running week is present and the fully-closed branch didn't
+      // fire. The bare string surfaced on prod - owner rule "never
+      // render a bare range closed". Fix: when a running week is in
+      // the range, the "through" date is the last CLOSED week's end
+      // (Sunday before the in-progress Monday). Otherwise (range is
+      // fully closed) it's range_end_iso as before. "Closed" already
+      // means "up to here", so the date makes it MORE informative
+      // rather than less accurate.
       const inProgressWeekStart = board?.in_progress_week_start;
       const rangeEnd = board?.range_end_iso;
-      if (!inProgressWeekStart && rangeEnd) {
-        core = `${prefix} · range closed through ${fmtMMDDYY(rangeEnd)}`;
-      } else {
-        core = `${prefix} · range closed`;
-      }
+      const throughISO = inProgressWeekStart
+        ? isoMinusDay(inProgressWeekStart)
+        : rangeEnd;
+      core = throughISO
+        ? `${prefix} · range closed through ${fmtMMDDYY(throughISO)}`
+        : `${prefix} · range closed`;
     }
     // Salary PR 3 C2 - when salary is on, the sub-line names the
     // combined basis so the reader knows the budget hero includes
