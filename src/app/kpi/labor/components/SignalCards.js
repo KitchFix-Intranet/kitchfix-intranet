@@ -243,8 +243,13 @@ function PayrollDataCard({ board, freshness, salary }) {
   const willRiseTitle = willRise != null
     ? `Estimate. ${fmtHrs(unpricedHrs)} unapproved hrs x $${rate.toFixed(2)} ${rateLabelInTitle}. Unapproved hours skew to whoever has not been processed, so their true rate may differ from the ${rateBasisHourlyOnly ? "hourly average" : "blend"}.`
     : "";
+  // PR-B - "Last pulled Aug 24" gets time-of-day suffix per owner
+  // ruling 2026-08-24. Reads like "Aug 24 · 7:36 AM" so an operator
+  // knows how fresh the read is at a glance.
   const lastPulled = freshness?.last_walk_at
     ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      + " · "
+      + new Date(freshness.last_walk_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     : "—";
 
   // V35-3 - the fact set SWAPS between "there is an ask" and
@@ -254,7 +259,11 @@ function PayrollDataCard({ board, freshness, salary }) {
   const facts = hasUnapproved
     ? [
         { label: "Unapproved hrs", value: fmtHrs(unpricedHrs), tone: "warn" },
-        { label: <span className="kpi-sig-fact-est" title={willRiseTitle}>Will rise</span>,
+        // PR-B - Will rise no longer carries a dotted-underline `?`
+        // affordance. Verified live 2026-08-24: the tooltip renders
+        // nothing, so the affordance was a promise the UI did not
+        // keep. Figure stays; the label is plain text now.
+        { label: "Will rise",
           value: willRise != null ? `~ ${fmt$(willRise)}` : "—", tone: "warn" },
         { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
         { label: "Last pulled", value: lastPulled },
@@ -273,7 +282,12 @@ function PayrollDataCard({ board, freshness, salary }) {
       <Hero>
         <span className="kpi-sig-hero-val num">{priced} of {total}</span>
       </Hero>
-      <Sub>worker-weeks with pay data in</Sub>
+      {/* PR-B - "worker-weeks with pay data in" -> "pending approval"
+          per owner ruling 2026-08-24. Reads as "N of M · pending
+          approval" where N is priced (i.e. NOT pending). Kept because
+          the sub-line is context for the hero ("N of M"), and the
+          reason a row is not counted is precisely: pending approval. */}
+      <Sub>pending approval</Sub>
       {hasUnapproved && (
         <div className="kpi-sig-action-line">
           {fmtHrs(unpricedHrs)} hrs need approval in Rippling

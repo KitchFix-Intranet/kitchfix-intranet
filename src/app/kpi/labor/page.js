@@ -25,7 +25,6 @@ import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
 import { StoryBlock } from "./components/StoryBlock";
 import { SignalCards } from "./components/SignalCards";
 import { ComparisonStrip } from "./components/ComparisonStrip";
-import { DetailsStrip } from "./components/DetailsStrip";
 import { WeekTable } from "./components/WeekTable";
 import { DayStrip } from "./components/DayStrip";
 import { HomestandBoard } from "./components/HomestandBoard";
@@ -889,13 +888,10 @@ export default function KpiLaborPage() {
                 prior_period_comparison={data.prior_period_comparison}
                 salaryIncluded={data?.salary_included === true}
               />
-              <DetailsStrip
-                board={data.board}
-                salary={data?.salary_included ? {
-                  rate_basis: data.rate_basis,
-                  blended_rate_hourly: data.blended_rate_hourly,
-                } : null}
-              />
+              {/* PR-B (owner ruling 2026-08-24) - DetailsStrip "ALL THE
+                  NUMBERS" folio removed entirely, dashboard-wide.
+                  Every card above already carries the relevant figure;
+                  the redundant flat list did not earn its space. */}
             </>
           )}
         </div>
@@ -997,19 +993,25 @@ export default function KpiLaborPage() {
           cold start (no data) omits it (skeleton is above). */}
       {!inHomestandView && !isSalaried && (data?.actuals?.length || 0) > 0 && filteredActuals.length > 0 && (
         <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
+        {/* PR-B (owner ruling 2026-08-24) - on portfolio views (ALL /
+            EAST / WEST), hide the worker filter and the Names | Numbers
+            toggle. Both are per-site controls; on an aggregate they
+            span thousands of worker-weeks across 11 accounts and mean
+            nothing useful. Passing null / undefined for onWorkersChange
+            + onToggleRedact makes WeekTable omit those chrome blocks. */}
         <WeekTable
           account={account}
           grouped={grouped}
           grandTotal={grand}
           workers={data.workers}
           redact={redact}
-          onToggleRedact={(next) => {
+          onToggleRedact={PSEUDO_KEYS.has(account) ? undefined : (next) => {
             setParam("redact", next ? "1" : "");
             setLiveMsg(next ? "Names hidden on screen and in export." : "Names shown.");
           }}
-          workerRoster={workerRoster}
+          workerRoster={PSEUDO_KEYS.has(account) ? [] : workerRoster}
           selectedWorkers={selectedWorkers}
-          onWorkersChange={workersOnChangeSet}
+          onWorkersChange={PSEUDO_KEYS.has(account) ? undefined : workersOnChangeSet}
           expandedPeriods={expandedPeriods}
           onTogglePeriod={(p) => {
             setExpandedPeriods(prev => {

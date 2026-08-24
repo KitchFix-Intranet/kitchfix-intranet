@@ -12,6 +12,15 @@ import { useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 
+// PR-B - MM/DD/YY from ISO for the "range closed through DATE"
+// suffix. Same convention signalCardModels.js uses.
+function fmtMMDDYY(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return "";
+  return `${m}/${d}/${y.slice(2)}`;
+}
+
 // V8-7 verdict label + variant. One source of truth for the pill in
 // the spend card header (was in the retired sentence card's helper).
 function verdictDisplay(verdict) {
@@ -80,19 +89,40 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable }) 
 
   // V29-6 budget-card sub line. V29-14: `period closed` becomes `range
   // closed` on non-period ranges. V37-4 - append `· envelope` or
-  // `· pnl` when board.budget_basis names one; multi-period ranges
-  // where periods disagree ship budget_basis=null and the word drops.
+  // `· pnl` when board.budget_basis names one.
+  //
+  // PR-B (owner ruling 2026-08-24) - two edits on the in-progress /
+  // closed-range branches:
+  //   1. "43% of period gone" flips to "57% of period remains"
+  //      COMPUTED as (100 - elapsedPct), not the same number with a
+  //      new label. Owner's specific warning: "That is the kind of
+  //      change that looks done and is wrong."
+  //   2. "range closed" (multi_period fully closed) gains "through
+  //      MM/DD/YY" using board.range_end_iso. Multi_period with a
+  //      running week keeps the current "range closed" for now
+  //      (owner did not address it in this pass; will surface if
+  //      wrong on prod).
   const budgetSub = (() => {
     if (noBudget) return "no budget for this range";
     const prefix = isPeriod ? "FY2026 budget" : "FY2026 range budget";
     let core;
     if (kind === "single_period_in_progress") {
       const p = board?.elapsed_pct;
-      core = `${prefix} · ${p != null ? `${Math.round(p)}% of period gone` : ""}`;
+      const remaining = p != null ? Math.max(0, Math.round(100 - p)) : null;
+      core = `${prefix} · ${remaining != null ? `${remaining}% of period remains` : ""}`;
     } else if (isPeriod) {
       core = `${prefix} · period closed`;
     } else {
-      core = `${prefix} · range closed`;
+      // multi_period: append "through MM/DD/YY" when the range is
+      // fully closed. If a running week is in the range, fall back to
+      // the plain "range closed" (owner spec was for the closed case).
+      const inProgressWeekStart = board?.in_progress_week_start;
+      const rangeEnd = board?.range_end_iso;
+      if (!inProgressWeekStart && rangeEnd) {
+        core = `${prefix} · range closed through ${fmtMMDDYY(rangeEnd)}`;
+      } else {
+        core = `${prefix} · range closed`;
+      }
     }
     // Salary PR 3 C2 - when salary is on, the sub-line names the
     // combined basis so the reader knows the budget hero includes
@@ -149,10 +179,17 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable }) 
         );
       })()}
 
-      {/* V29-6 paired secondary cells: Spent so far | (Left / Under / Over). */}
+      {/* PR-B (owner ruling 2026-08-24) - "Spent so far" gets a
+          kind-aware label so the copy names what the figure IS:
+            - single_period_in_progress / single_period_closed
+              -> "Spent in Period"
+            - multi_period (FYTD / Last-4-Weeks / custom range)
+              -> "Spend to date"
+          Same figure (board.spent_to_date), different noun for the
+          scope it summarises. */}
       <div className="kpi-spend-pair">
         <div className="kpi-spend-cell">
-          <div className="kpi-spend-cell-lab">Spent so far</div>
+          <div className="kpi-spend-cell-lab">{isPeriod ? "Spent in Period" : "Spend to date"}</div>
           <div className="kpi-spend-cell-val num">{fmt$(spent)}</div>
           <div className="kpi-spend-cell-sub">{spentPct != null ? `${spentPct}% of budget` : ""}</div>
         </div>

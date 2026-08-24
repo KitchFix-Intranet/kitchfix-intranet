@@ -188,7 +188,9 @@ function partB() {
   const css = fs.readFileSync(CSS_SRC, "utf8");
 
   console.log("  V35-2 hours card wiring");
-  const hoursEyebrowFlip = /eyebrow\s*=\s*closed\s*\?\s*"HOURS VS BUDGET"\s*:\s*"HOURS LEFT TO SCHEDULE"/.test(stripComments);
+  // PR-B - "HOURS LEFT TO SCHEDULE" renamed to "HOURS AVAILABLE TO
+  // SCHEDULE" per owner ruling 2026-08-24.
+  const hoursEyebrowFlip = /eyebrow\s*=\s*closed\s*\?\s*"HOURS VS BUDGET"\s*:\s*"HOURS AVAILABLE TO SCHEDULE"/.test(stripComments);
   log(`HoursLeftCard eyebrow flips on closed`, hoursEyebrowFlip);
   const hoursFactFlip = /facts\s*=\s*closed\s*\?/.test(stripComments);
   log(`HoursLeftCard fact set flips on closed`, hoursFactFlip);

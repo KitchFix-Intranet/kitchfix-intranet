@@ -193,8 +193,8 @@ console.log("[P4] HoursLeftCard multi + running: Per week + Per worker + Budget 
   const perWeek = m.facts.find(f => f.label === "Per week");
   const perWorker = m.facts.find(f => f.label === "Per worker");
   const budgetLeft = m.facts.find(f => f.label === "Budget left");
-  if (m.eyebrow === "HOURS LEFT TO SCHEDULE") ok(`eyebrow = "HOURS LEFT TO SCHEDULE" (in-progress shape on multi + running)`);
-  else fail(`eyebrow = "${m.eyebrow}", expected "HOURS LEFT TO SCHEDULE"`);
+  if (m.eyebrow === "HOURS AVAILABLE TO SCHEDULE") ok(`eyebrow = "HOURS AVAILABLE TO SCHEDULE" (in-progress shape on multi + running)`);
+  else fail(`eyebrow = "${m.eyebrow}", expected "HOURS AVAILABLE TO SCHEDULE"`);
   if (perWeek && !isBareDash(perWeek.value)) ok(`Per week = ${perWeek.value}`);
   else fail(`Per week rendered — or missing`);
   if (perWorker && !isBareDash(perWorker.value)) ok(`Per worker = ${perWorker.value}`);
