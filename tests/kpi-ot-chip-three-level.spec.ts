@@ -100,4 +100,56 @@ test.describe('KPI portfolio OT chip - three-level DOM assertion', () => {
     await expect(anyOtChip).toHaveText('OT');
     await expect(anyOtChip).toHaveAttribute('aria-label', /overtime/i);
   });
+
+  test('an open HelpPop paints ABOVE the table (portal escapes card stacking context)', async ({ page }) => {
+    // Owner ruling 2026-08-24: the popover-behind-sticky-column bug
+    // was traced to `.kpi-sig { z-index: 20; position: relative }`
+    // creating a stacking context that scoped the popover's z-index
+    // inside it - the table's sticky first column at z-index 20 then
+    // won on DOM order. Fix: render the popover in a portal at
+    // document.body so it lives outside every card's stacking context.
+    //
+    // This test asserts what the eye sees rather than what the CSS
+    // says: document.elementFromPoint at the popover's centre must
+    // return an element INSIDE the popover, not a table cell hiding
+    // it. Choose a popover whose bounding box overlaps the table -
+    // qPayrollData sits low in the signal-card row and overhangs the
+    // week table on standard viewport heights.
+    const trigger = page.locator('[data-hs-help="qPayrollData"]').first();
+    // The signal cards are gated on non-portfolio views having a real
+    // period board; use a single account so the cards mount reliably.
+    await page.goto(`/kpi/labor?account=${encodeURIComponent('CIN - OH')}`);
+    await page.waitForSelector('.kpi-sigs .kpi-sig', { timeout: 30_000 });
+    await page.waitForSelector('.kpi-tbl', { timeout: 30_000 });
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+    const pop = page.locator('[data-hs-pop][data-hs-help-for="qPayrollData"]');
+    await expect(pop).toBeVisible();
+    const popBox = await pop.boundingBox();
+    expect(popBox, 'popover must have a measurable bounding box').toBeTruthy();
+    const centre = { x: popBox!.x + popBox!.width / 2, y: popBox!.y + popBox!.height / 2 };
+    // Sanity: pick a point where the popover overlaps the table below
+    // it. If it doesn't overlap on this viewport, the test still
+    // asserts the popover-at-its-own-centre invariant (weaker but
+    // still catches a regression to non-portal placement).
+    const top = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return {
+        tag: el?.tagName,
+        classes: el?.className ?? '',
+        insidePop: !!el?.closest('[data-hs-pop]'),
+        insideTable: !!el?.closest('.kpi-tbl'),
+        insideSig: !!el?.closest('.kpi-sig'),
+      };
+    }, centre);
+    expect(
+      top.insidePop,
+      `topmost element at popover centre must be inside the popover, not a card/table underneath. saw: tag=${top.tag} classes="${top.classes}" insideTable=${top.insideTable} insideSig=${top.insideSig}`,
+    ).toBe(true);
+    // Direct check the portal placement worked: the popover DOM node
+    // is a direct child of body, not nested inside a card. If a
+    // future refactor drops createPortal, this fails first.
+    const isBodyChild = await pop.evaluate(el => el.parentElement === document.body);
+    expect(isBodyChild, 'popover must be portalled to document.body').toBe(true);
+  });
 });

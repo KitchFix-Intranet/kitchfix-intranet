@@ -3562,12 +3562,11 @@
 }
 
 /* Season table */
-/* PR-2 audit 2026-08-21 - overflow:visible so the qPeak popover on
-   the "Peak" column header does not clip against the card edge or
-   the table body. Table itself still clips at the border-radius via
-   its own inherited chrome; nothing bleeds past the card border under
-   normal render. */
-.kpi-hs-card-table { padding: 0; overflow: visible; }
+/* PR-E portal refactor 2026-08-24: `overflow: visible` was authored
+   for the qPeak popover escape; portal placement makes it unnecessary.
+   `padding: 0` stays - it collapses the card's default padding so the
+   season table can span the card edge to edge. */
+.kpi-hs-card-table { padding: 0; }
 .kpi-hs-table {
   width: 100%;
   border-collapse: collapse;
@@ -3737,9 +3736,17 @@
   outline: 2px solid var(--navy-700);
   outline-offset: 2px;
 }
+/* PR-E portal refactor 2026-08-24: the popover renders in a portal
+   at document.body. Position becomes inline-computed (position: fixed
+   + top/left) via HelpPop.js; the rules below (position: absolute,
+   top/right anchor) are overridden by inline style. Left declared so
+   the popover has a sensible fallback if inline style is stripped
+   (e.g. a print stylesheet override) - it will still render as a
+   card-anchored dropdown, just without the portal escape. z-index
+   uses --z-popover so the stacking tier is named, not magic. */
 .kpi-hs-pop {
   position: absolute;
-  z-index: 500;
+  z-index: var(--z-popover);
   top: calc(100% + 6px);
   right: 0;
   width: 310px;
@@ -3756,10 +3763,10 @@
   letter-spacing: 0;
   text-transform: none;
 }
-.kpi-hs-pop-flip {
-  top: auto;
-  bottom: calc(100% + 6px);
-}
+/* PR-E portal refactor 2026-08-24: .kpi-hs-pop-flip retired.
+   Flip is a computed coordinate in HelpPop.js, not a CSS variant.
+   The portalled popover positions with inline top/left directly,
+   so a class-based auto/bottom swap is no longer meaningful. */
 .kpi-hs-pop-title {
   display: block;
   color: var(--n-900, #0A2548);
@@ -3795,27 +3802,22 @@
   font-size: 10.5px;
   color: var(--text-subtle);
 }
-/* Lift the open card + its parent grid item so the popover paints
-   above sibling cards. `:has()` is supported in every browser this
-   app targets. */
-.kpi-hs-card:has(.kpi-hs-qwrap.on) { z-index: 20; }
-/* PR-E - the shared HelpPop now lives on non-homestand cards too.
-   `.kpi-sig` sets overflow: hidden which clips the popover against
-   the card edge; flip it to visible + lift z-index above sibling
-   cards while the popover is open. Same pattern the homestand
-   rule above uses; mirrored for the four signal cards, the story
-   spend card, the custom-range cards, and the table toolbar. */
-.kpi-sig:has(.kpi-hs-qwrap.on) { overflow: visible; z-index: 20; }
-.kpi-spend:has(.kpi-hs-qwrap.on),
-.kpi-day-range-card:has(.kpi-hs-qwrap.on),
-.kpi-tbar:has(.kpi-hs-qwrap.on) { z-index: 20; }
-/* Peak column header - `?` sits inline to the right of "Peak". The
-   header cell needs position:relative so the popover's absolute
-   positioning anchors correctly, and overflow:visible so the popover
-   is not clipped by the table cell chrome. */
-.kpi-hs-th-help {
-  position: relative;
-  overflow: visible;
-  white-space: nowrap;
-}
+/* PR-E portal refactor 2026-08-24: the following rules were deleted
+   as dead popover scaffolding. All existed only to lift the popover
+   above sibling cards / sticky columns / table chrome by widening
+   a stacking context:
+     .kpi-hs-card:has(.kpi-hs-qwrap.on) { z-index: 20 }
+     .kpi-sig:has(.kpi-hs-qwrap.on)     { overflow: visible; z-index: 20 }
+     .kpi-spend:has(.kpi-hs-qwrap.on),
+     .kpi-day-range-card:has(.kpi-hs-qwrap.on),
+     .kpi-tbar:has(.kpi-hs-qwrap.on)    { z-index: 20 }
+     .kpi-hs-th-help { position: relative; overflow: visible }
+   Portal placement makes them all no-ops - the popover renders at
+   document.body and cannot be trapped by an ancestor's stacking
+   context. An unexplained z-index number is what the next person
+   raises to 4000 when something else overlaps; leaving them here as
+   dead scaffolding invites that. The `.kpi-sig { overflow: hidden }`
+   base rule remains in force; the popover no longer needs an escape.
+   Peak-column trigger keeps its layout adjacency (below). */
+.kpi-hs-th-help { white-space: nowrap; }
 .kpi-hs-th-help .kpi-hs-qwrap { margin-left: 4px; vertical-align: middle; }
