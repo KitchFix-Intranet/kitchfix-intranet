@@ -448,6 +448,65 @@ export function computeSplitWithGameDates(actualsDaily, stand, gameDates, todayI
 }
 
 /**
+ * HS PR-B (owner ruling 2026-08-24): fold per-stand `split` onto every
+ * non-pre-floor stand in the list so the season table can render
+ * Prep & off on each row. Pre-PR-B the split was computed only for
+ * the SELECTED stand, so the table column was `–` on every row - a
+ * value the payload could compute but did not.
+ *
+ * Owner ruling additionally: the selected-stand `homestand_split` on
+ * the top-level body reads from the same folded per-stand data now,
+ * not a parallel computation - one source of truth.
+ *
+ * Reads labor_actuals_daily once for the FY window; computes each
+ * stand's split via computeSplitWithGameDates. Pre-floor stands stay
+ * split-less (no per-day actuals to walk before the floor).
+ *
+ * @param {SupabaseClient} supa
+ * @param {string} accountKey
+ * @param {Array} homestands
+ * @param {Array<{service_date, day_type, day_night}>} schedRows
+ * @param {string} todayIso
+ */
+export async function foldPerStandSplits(supa, accountKey, homestands, schedRows, todayIso) {
+  if (!homestands || homestands.length === 0) return homestands;
+  const targets = homestands.filter(h => !h.pre_floor);
+  if (targets.length === 0) return homestands;
+
+  const windowStart = targets.reduce((min, h) => h.window_start < min ? h.window_start : min, targets[0].window_start);
+  const windowEnd   = targets.reduce((max, h) => h.window_end   > max ? h.window_end   : max, targets[0].window_end);
+
+  const dQ = await supa.from("labor_actuals_daily")
+    .select("account_key, work_date, amount")
+    .eq("account_key", accountKey)
+    .gte("work_date", windowStart)
+    .lte("work_date", windowEnd);
+  if (dQ.error) throw new Error(`foldPerStandSplits daily read (${accountKey}): ${dQ.error.message}`);
+  const dailyRows = dQ.data || [];
+
+  // GAME date sets per stand, keyed by game_start. Same shape the
+  // route already builds for the selected stand; folding across every
+  // stand here lets the season table read from one source.
+  const gameDatesByStand = new Map();
+  for (const h of targets) {
+    const dates = new Set(
+      (schedRows || [])
+        .filter(r => r.day_type === "GAME" && r.service_date >= h.game_start && r.service_date <= h.game_end)
+        .map(r => r.service_date)
+    );
+    gameDatesByStand.set(h.game_start, dates);
+  }
+
+  return homestands.map(h => {
+    if (h.pre_floor) return h;
+    const split = computeSplitWithGameDates(
+      dailyRows, h, gameDatesByStand.get(h.game_start) || new Set(), todayIso,
+    );
+    return split ? { ...h, split } : h;
+  });
+}
+
+/**
  * Season bank. Sums FINISHED stands (game_end < todayIso) that are
  * NOT pre-floor. Owner ruling 2026-08-21: pre-floor stands have
  * budget but no attributable actual - counting one without the other

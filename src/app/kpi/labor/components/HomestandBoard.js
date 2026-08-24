@@ -524,11 +524,18 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                   style={isEst ? { cursor: "pointer" } : undefined}
                 >
                   <td>HS {h.index} · {h.opponents?.[0] || "(no opp)"}</td>
-                  <td className="num">{fmtDate(h.game_start)} – {fmtDate(h.game_end)}</td>
+                  {/* HS PR-B: Window column shows WINDOW dates. The
+                      forward-looking window is what owns the labor;
+                      the game-only span was contradicting the Days
+                      column (e.g. HS 3 game span 04/24-04/30 = 7d
+                      beside Days column reading 11). */}
+                  <td className="num">{fmtDate(h.window_start)} – {fmtDate(h.window_end)}</td>
                   <td className="num">{h.window_days}</td>
                   <td className="num">{h.game_days}</td>
                   <td className="num">{h.peak_games_in_week}</td>
                   <td className="num">{h.budget != null ? fmt$0(h.budget) : "–"}</td>
+                  {/* Pre-floor stands have no per-day actuals to split,
+                      so Prep & off stays `–` here. */}
                   <td className="num">–</td>
                   <td className="num kpi-hs-strong">
                     {isEst ? <>~{fmt$0(h.actual_estimated)}<span className="kpi-hs-est-tag"> est.</span></> : "–"}
@@ -545,7 +552,8 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                   data-game-start={h.game_start}
                 >
                   <td>HS {h.index} · {h.opponents?.join(" / ") || "(no opp)"}</td>
-                  <td className="num">{fmtDate(h.game_start)} – {fmtDate(h.game_end)}</td>
+                  {/* HS PR-B: Window column shows WINDOW dates. */}
+                  <td className="num">{fmtDate(h.window_start)} – {fmtDate(h.window_end)}</td>
                   <td className="num">{h.window_days}</td>
                   <td className="num">{h.game_days}</td>
                   <td className="num">{h.peak_games_in_week}</td>
@@ -571,12 +579,23 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                     <span className={`kpi-hs-chev ${isOpen ? "kpi-hs-chev-open" : ""}`}>›</span>
                     HS {h.index} · {h.opponents?.join(" / ") || "(no opp)"}
                   </td>
-                  <td className="num">{fmtDate(h.game_start)} – {fmtDate(h.game_end)}</td>
+                  {/* HS PR-B: Window column shows WINDOW dates. */}
+                  <td className="num">{fmtDate(h.window_start)} – {fmtDate(h.window_end)}</td>
                   <td className="num">{h.window_days}</td>
                   <td className="num">{h.game_days}</td>
                   <td className={`num ${h.peak_games_in_week >= 6 ? "kpi-hs-amber-strong" : ""}`}>{h.peak_games_in_week}</td>
                   <td className="num">{fmt$0(h.budget || 0)}</td>
-                  <td className="num">–</td>
+                  {/* HS PR-B: Prep & off now populates on every played
+                      row. Reads from h.split, the folded per-stand
+                      data foldPerStandSplits attaches server-side.
+                      Absent when the split is missing or zero -
+                      standing rule: a value the payload can compute
+                      renders; a value that does not apply is `–`. */}
+                  <td className="num">
+                    {h.split && h.split.off_day_dollars > 0.005
+                      ? fmt$0(h.split.off_day_dollars)
+                      : "–"}
+                  </td>
                   <td className="num kpi-hs-strong">{fmt$0(h.actual || 0)}</td>
                   <td className={`num ${bankAfterArr.cls} kpi-hs-strong`}>
                     {bankAfterArr.glyph} {fmt$0(Math.abs(bankAfter))}
