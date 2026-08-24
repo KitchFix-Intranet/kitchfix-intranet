@@ -1514,12 +1514,24 @@ export async function GET(request) {
       JSON.stringify(ledger_reconciliation));
   }
 
+  // PR 2 R8 - align with labor: `is_future_range` is true when the
+  // requested START is strictly after today - the range has not begun.
+  // Broader rule (Kevin ruling 2026-08-24): "no spend means no verdict"
+  // covers a future period, an off-season site, and an account that
+  // genuinely bought nothing. Client uses this flag to suppress the
+  // projected-close row + the % elapsed header on the period card, both
+  // of which currently render a "would close $X under budget" arrow on
+  // a range that has not begun. See labor's route.js:317 for the
+  // parallel derivation.
+  const is_future_range = startDate > todayDate;
+
   const payload = {
     ok: true,
     filters: { account, start, end, drill: includeLines ? "lines" : null },
     is_aggregate: isAggregate,
     members,
     range: { start, end },
+    is_future_range,
     cost_model,
     billed_back_reachable,
     fiscal: {

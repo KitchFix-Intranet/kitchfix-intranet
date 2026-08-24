@@ -20,6 +20,10 @@
 // is an owner decision, not a client-side heuristic.
 
 import { fmt$ } from "../lib/board";
+// PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
+// escapes the card's stacking context.
+import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
+import { VENDOR_BODY } from "./PurchasingHelpPops";
 
 function SplitBar({ split, spend }) {
   const total = Number(spend || 0);
@@ -72,7 +76,10 @@ export function VendorBreakdown({
   return (
     <div className="kpi-p-card" data-card="vendor-breakdown">
       <div className="kpi-p-lh">
-        <span className="kpi-p-cardtitle">Vendor breakdown</span>
+        <span className="kpi-p-cardtitle">
+          Vendor breakdown
+          {" "}<HelpPop id="qPurchVendor" title="Vendor breakdown" body={VENDOR_BODY} />
+        </span>
         <span className="kpi-p-cardsub">where each vendor's spend landed</span>
       </div>
 
@@ -94,9 +101,10 @@ export function VendorBreakdown({
             const displayName = r.resolved
               ? (r.name || "—")
               : (r.vendor_id ? `Unresolved vendor` : "Unresolved");
+            const nameIsNil = r.resolved && !r.name;
             return (
               <div key={`${r.vendor_id || "u"}-${i}`} className="kpi-p-vbrow">
-                <span className="kpi-p-k">
+                <span className={`kpi-p-k${nameIsNil ? " kpi-p-nil" : ""}`}>
                   {displayName}
                   <small>
                     {r.line_count || 0} lines
@@ -106,9 +114,9 @@ export function VendorBreakdown({
                 <SplitBar split={r.gl_split} spend={r.spend} />
                 <span className="kpi-p-v num">{fmt$(r.spend)}</span>
                 {isNewSpender ? (
-                  <span className="kpi-p-ch" style={{ color: "var(--n-500)" }}>new</span>
+                  <span className="kpi-p-ch" style={{ color: "var(--n-600)" }}>new</span>
                 ) : movementPct == null ? (
-                  <span className="kpi-p-ch" style={{ color: "var(--n-500)" }}>—</span>
+                  <span className="kpi-p-ch kpi-p-nil" style={{ color: "var(--n-600)" }}>—</span>
                 ) : (
                   <span className={`kpi-p-ch ${movementPct > 0 ? "r" : "g"}`}>
                     {movementPct > 0 ? "▲ " : "▼ "}
@@ -129,7 +137,7 @@ export function VendorBreakdown({
               padding: "var(--kpi-sp-2) 0 0",
               textAlign: "right",
               fontSize: "var(--kpi-t-meta)",
-              color: "var(--n-500)",
+              color: "var(--n-600)",
               fontWeight: 500,
             }}>
               {totalCount > (cap || 0)
@@ -139,7 +147,7 @@ export function VendorBreakdown({
                 <> · <span style={{ color: "var(--amber-600)" }}>{unresolvedCount} unresolved id{unresolvedCount === 1 ? "" : "s"}</span></>
               )}
               {fragmentation && isAggregate && fragmentation.distinct_names > fragmentation.suppliers_if_suffix_stripped && (
-                <div style={{ marginTop: 2, fontSize: "var(--kpi-t-label)", color: "var(--n-500)" }}>
+                <div style={{ marginTop: 2, fontSize: "var(--kpi-t-label)", color: "var(--n-600)" }}>
                   Fragmented: {fragmentation.distinct_names} names would collapse
                   to {fragmentation.suppliers_if_suffix_stripped} suppliers if the
                   site suffix were stripped. Un-rolled-up here by design.

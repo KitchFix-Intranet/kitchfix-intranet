@@ -20,6 +20,16 @@
 import { Pill } from "./Pill";
 import { WeekChart } from "./WeekChart";
 import { fmt$, fmtPct, moneyArrow, resolveCardState, stateOf } from "../lib/board";
+// PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
+// escapes the card's `position: relative` stacking context.
+import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
+import { FOOD_BODY, PACKAGING_BODY, VEHICLE_BODY, WEEK_STRIP_BODY } from "./PurchasingHelpPops";
+
+const BUCKET_HELP = {
+  food:      { id: "qPurchFood",      title: "Food",                 body: FOOD_BODY      },
+  packaging: { id: "qPurchPackaging", title: "Packaging & supplies", body: PACKAGING_BODY },
+  vehicle:   { id: "qPurchVehicle",   title: "Vehicle",              body: VEHICLE_BODY   },
+};
 
 export function BucketCard({
   bucketKey,          // 'food' | 'packaging' | 'vehicle'
@@ -34,6 +44,10 @@ export function BucketCard({
   cardsCoded,
   elapsedFrac,
   closed,
+  // PR 2 R8 - server `is_future_range` flag. When true, suppress the
+  // pill, hero state colour, and Remaining / Over-by verdict - no spend
+  // means no verdict.
+  isFutureRange = false,
   // PR 2 R3 Part B - tier-aware strip. `tier`+`units` replace the old
   // fixed-length weekAmounts/weekLabels. `units` is the full fiscal
   // enumeration (weeks for A/B, periods for C); WeekChart asserts on
@@ -125,21 +139,28 @@ export function BucketCard({
       <div className={`kpi-p-card ${strokeClass}`}>
         <div className="kpi-p-head">
           <div className="kpi-p-head-body">
-            <span className="kpi-p-cardtitle">{label}</span>
+            <span className="kpi-p-cardtitle">
+              {label}
+              {BUCKET_HELP[bucketKey] && (
+                <>{" "}<HelpPop {...BUCKET_HELP[bucketKey]} /></>
+              )}
+            </span>
             <span className="kpi-p-cardsub">{sub}</span>
           </div>
           <div className="kpi-p-pillrow">
-            <Pill tone={cs.pillTone} label={cs.pillLabel} />
+            {/* PR 2 R8 - no verdict pill on a future range. */}
+            {!isFutureRange && <Pill tone={cs.pillTone} label={cs.pillLabel} />}
           </div>
         </div>
 
         <div className="kpi-p-nums">
           <div className="kpi-p-stk">
             <span className="kpi-p-label">Spent</span>
-            <span className={`kpi-p-hero num ${cs.heroClass}`}>{fmt$(heroSpent)}</span>
+            {/* PR 2 R8 - hero drops state colour on a future range. */}
+            <span className={`kpi-p-hero num ${isFutureRange ? "" : cs.heroClass}`}>{fmt$(heroSpent)}</span>
             <span className="kpi-p-subline">
               of <b>{fmt$(budget)}</b>
-              {usedPct != null && (
+              {!isFutureRange && usedPct != null && (
                 <>
                   {" "}· <b>{fmtPct(usedPct)}</b> used
                 </>
@@ -153,33 +174,53 @@ export function BucketCard({
                 label CHANGES to `Over by` and the number is a variance,
                 which may carry colour. "Remaining ▲" is a contradiction
                 in terms and has been removed.
-                Closed periods keep the existing `Vs budget` variance. */}
+                Closed periods keep the existing `Vs budget` variance.
+                PR 2 R8 - future range: plain `Budget` + amount, no
+                Remaining, no variance. */}
             <span className="kpi-p-label">
-              {closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining")}
+              {isFutureRange ? "Budget" : (closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining"))}
             </span>
-            {closed ? (
-              <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>
-                {Number(budget || 0) === 0 ? "—" : moneyArrow(varz)}
-              </span>
+            {/* PR 2 R8 - `—` (no budget) must render distinct in weight
+                and colour from real dollars. `.kpi-p-nil` overrides state
+                tone AND weight; without it the em-dash inherits `.g` /
+                `.r` colour and 800 weight - the labor "shipped twice" bug.
+                Future range: plain budget number, no verdict. */}
+            {isFutureRange ? (
+              <span className="kpi-p-value num">{fmt$(budget)}</span>
+            ) : closed ? (
+              Number(budget || 0) === 0 ? (
+                <span className="kpi-p-value num kpi-p-nil">—</span>
+              ) : (
+                <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+              )
             ) : rem < 0 ? (
-              <span className="kpi-p-value num r">
-                {Number(budget || 0) === 0 ? "—" : fmt$(-rem)}
-              </span>
+              Number(budget || 0) === 0 ? (
+                <span className="kpi-p-value num kpi-p-nil">—</span>
+              ) : (
+                <span className="kpi-p-value num r">{fmt$(-rem)}</span>
+              )
             ) : (
-              <span className="kpi-p-value num">
-                {Number(budget || 0) === 0 ? "—" : fmt$(rem)}
-              </span>
+              Number(budget || 0) === 0 ? (
+                <span className="kpi-p-value num kpi-p-nil">—</span>
+              ) : (
+                <span className="kpi-p-value num">{fmt$(rem)}</span>
+              )
             )}
             <span className="kpi-p-subline">
-              {closed
-                ? "period closed"
-                : (budgetSpent
-                    ? "budget spent"
-                    : (adjusted != null ? `aim for ${fmt$(adjusted)} / wk` : "—"))}
+              {isFutureRange
+                ? "this range has not started"
+                : (closed
+                    ? "period closed"
+                    : (budgetSpent
+                        ? "budget spent"
+                        : (adjusted != null ? `aim for ${fmt$(adjusted)} / wk` : "no target this range")))}
             </span>
           </div>
         </div>
 
+        {/* PR 2 R8 - future range has no bills, no cards. Suppress the
+            split rather than render four $0.00 lines. */}
+        {!isFutureRange && (
         <div className="kpi-p-subs">
           {closed ? (
             <>
@@ -209,6 +250,7 @@ export function BucketCard({
             </>
           )}
         </div>
+        )}
       </div>
 
       {/* RIGHT - strip title follows tier; §B3 owner ruling 2026-08-24. */}
@@ -218,6 +260,7 @@ export function BucketCard({
             {tier === "C"
               ? "THE RANGE · PERIOD BY PERIOD"
               : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK")}
+            {" "}<HelpPop id={`qPurchStrip-${bucketKey}`} title="Each week strip" body={WEEK_STRIP_BODY} />
           </span>
           <span className="kpi-p-legs">
             {/* Weekly-target legend only in tiers A and B (spec §B4 -

@@ -22,6 +22,11 @@
 import { Pill, FinalPill, ProvisionalPill } from "./Pill";
 import { WeekChart } from "./WeekChart";
 import { fmt$, fmtPct, moneyArrow, resolveCardState } from "../lib/board";
+// PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
+// escapes every card's `position: relative` stacking context. Import
+// only, never fork.
+import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
+import { PERIOD_BODY, WEEK_STRIP_BODY } from "./PurchasingHelpPops";
 
 export function PeriodCard({
   periodNo,
@@ -31,6 +36,12 @@ export function PeriodCard({
   elapsedFrac,      // 0..1
   closed,
   provisional,
+  // PR 2 R8 - server flag from /api/kpi/purchasing?...&start=<future>.
+  // True when the range has not begun. Suppresses the verdict pill,
+  // hero state colour, remaining / over-by variance, projected close
+  // row, and swaps the "% elapsed" header for "hasn't started". Budget
+  // still shows (it is a fact).
+  isFutureRange = false,
   // Money
   spent,            // KPI-line spent (bills + coded cards)
   budget,           // KPI-line budget
@@ -104,6 +115,7 @@ export function PeriodCard({
           <div className="kpi-p-head-body">
             <span className="kpi-p-cardtitle">
               {cardTitle || (periodNo != null ? `PERIOD ${periodNo}` : "PERIOD -")}
+              {" "}<HelpPop id="qPurchPeriod" title="Period summary" body={PERIOD_BODY} />
             </span>
             {rangeLabel && <span className="kpi-p-cardsub">{rangeLabel}</span>}
             <div>
@@ -113,6 +125,7 @@ export function PeriodCard({
                   // for a longer range. Fall back to 4 when unknown so the
                   // header does not break on partial payloads.
                   const denom = Number(weeksInPeriod) > 0 ? Number(weeksInPeriod) : 4;
+                  if (isFutureRange) return `${denom} weeks · `;
                   if (closed) return `${denom} of ${denom} weeks · `;
                   return weekOfPeriod ? `week ${weekOfPeriod} of ${denom} · ` : "";
                 })()}
@@ -124,14 +137,21 @@ export function PeriodCard({
                   color: "var(--navy-700)",
                 }}
               >
-                {closed
-                  ? "closed"
-                  : (elapsedFrac != null ? `${(elapsedFrac * 100).toFixed(0)}% elapsed` : "in progress")}
+                {/* PR 2 R8 - "% elapsed" on a future range is a lie
+                    (the range hasn't started). "hasn't started" is
+                    the labor equivalent copy. */}
+                {isFutureRange
+                  ? "hasn't started"
+                  : (closed
+                      ? "closed"
+                      : (elapsedFrac != null ? `${(elapsedFrac * 100).toFixed(0)}% elapsed` : "in progress"))}
               </span>
             </div>
           </div>
           <div className="kpi-p-pillrow">
-            <Pill tone={cs.pillTone} label={cs.pillLabel} />
+            {/* PR 2 R8 - no verdict pill on a future range. Broader
+                rule: no spend means no verdict. */}
+            {!isFutureRange && <Pill tone={cs.pillTone} label={cs.pillLabel} />}
             {closed ? <FinalPill label="Final" /> : (provisional ? <ProvisionalPill /> : null)}
           </div>
         </div>
@@ -139,10 +159,12 @@ export function PeriodCard({
         <div className="kpi-p-nums">
           <div className="kpi-p-stk">
             <span className="kpi-p-label">Spent</span>
-            <span className={`kpi-p-hero num ${cs.heroClass}`}>{fmt$(spent)}</span>
+            {/* PR 2 R8 - hero drops state colour on a future range. `$0.00`
+                on a range that hasn't started is a fact, not a verdict. */}
+            <span className={`kpi-p-hero num ${isFutureRange ? "" : cs.heroClass}`}>{fmt$(spent)}</span>
             <span className="kpi-p-subline">
               of <b>{fmt$(budget)}</b>
-              {spentUsed != null && (
+              {!isFutureRange && spentUsed != null && (
                 <>
                   {" "}· <b>{fmtPct(spentUsed)}</b> used
                 </>
@@ -153,11 +175,15 @@ export function PeriodCard({
             {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is a
                 quantity, no arrow, no colour. `Over by` takes over when
                 the number is a variance (may carry colour). Closed reads
-                `Vs budget` unchanged. */}
+                `Vs budget` unchanged.
+                PR 2 R8 - on a future range the second stack is the plain
+                budget number - no over/under, no variance. */}
             <span className="kpi-p-label">
-              {closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining")}
+              {isFutureRange ? "Budget" : (closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining"))}
             </span>
-            {closed ? (
+            {isFutureRange ? (
+              <span className="kpi-p-value num">{fmt$(budget)}</span>
+            ) : closed ? (
               <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
             ) : showOverArrow ? (
               <span className="kpi-p-value num r">{fmt$(-rem)}</span>
@@ -165,11 +191,18 @@ export function PeriodCard({
               <span className="kpi-p-value num">{fmt$(rem)}</span>
             )}
             <span className="kpi-p-subline">
-              {closed ? "period closed" : "net of pending"}
+              {isFutureRange
+                ? "this range has not started"
+                : (closed ? "period closed" : "net of pending")}
             </span>
           </div>
         </div>
 
+        {/* PR 2 R8 - a future range has no bills, no cards, no pending,
+            no projection. Rendering four $0.00 rows and a projected-close
+            arrow on a range that hasn't started is exactly the false
+            verdict the labor brief predicted. Drop the block entirely. */}
+        {!isFutureRange && (
         <div className="kpi-p-subs">
           {closed ? (
             <>
@@ -227,6 +260,7 @@ export function PeriodCard({
             </>
           )}
         </div>
+        )}
       </div>
 
       {/* RIGHT - tier-aware strip. §B3 owner ruling 2026-08-24. */}
@@ -236,6 +270,7 @@ export function PeriodCard({
             {tier === "C"
               ? "THE RANGE · PERIOD BY PERIOD"
               : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK")}
+            {" "}<HelpPop id="qPurchWeekStrip" title="Each week strip" body={WEEK_STRIP_BODY} />
           </span>
           <span className="kpi-p-legs">
             {tier !== "C" && original != null && (

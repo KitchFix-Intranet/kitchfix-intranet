@@ -17,6 +17,16 @@
 
 import { Pill } from "./Pill";
 import { fmt$, fmtPct, moneyArrow, resolveCardState } from "../lib/board";
+// PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
+// escapes the card + the ledger scroll container's stacking context.
+import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
+import { EQUIPMENT_BODY, REPAIR_BODY, REIMBURSABLE_BODY } from "./PurchasingHelpPops";
+
+const LEDGER_HELP = {
+  equip: { id: "qPurchEquip", title: "Equipment",            body: EQUIPMENT_BODY    },
+  rm:    { id: "qPurchRepair", title: "Repair & maintenance", body: REPAIR_BODY       },
+  reimb: { id: "qPurchReimb",  title: "Reimbursable",         body: REIMBURSABLE_BODY },
+};
 
 export function LedgerCard({
   bucketKey,          // 'equip' | 'rm' | 'reimb'
@@ -27,6 +37,9 @@ export function LedgerCard({
   spent,
   elapsedFrac,
   closed,
+  // PR 2 R8 - server `is_future_range` flag. When true, suppress the
+  // pill, hero state colour, and Remaining / Over-by verdict.
+  isFutureRange = false,
   ledgerRows,         // [{ vendor, description?, amount, account_key?, gl_line_code?, txn_date? }]
   // PR-2 R6 Part B - capped list metadata. `total_count` reveals a
   // "showing N of M" footer when the cap is hit; a capped list that
@@ -70,21 +83,28 @@ export function LedgerCard({
     <div className={`kpi-p-card ${strokeClass}`} data-card={`ledger-${bucketKey}`}>
       <div className="kpi-p-head">
         <div className="kpi-p-head-body">
-          <span className="kpi-p-cardtitle">{label}</span>
+          <span className="kpi-p-cardtitle">
+            {label}
+            {LEDGER_HELP[bucketKey] && (
+              <>{" "}<HelpPop {...LEDGER_HELP[bucketKey]} /></>
+            )}
+          </span>
           <span className="kpi-p-cardsub">{sub}</span>
         </div>
         <div className="kpi-p-pillrow">
-          <Pill tone={cs.pillTone} label={cs.pillLabel} />
+          {/* PR 2 R8 - no verdict pill on a future range. */}
+          {!isFutureRange && <Pill tone={cs.pillTone} label={cs.pillLabel} />}
         </div>
       </div>
 
       <div className="kpi-p-nums">
         <div className="kpi-p-stk">
           <span className="kpi-p-label">Spent</span>
-          <span className={`kpi-p-hero num ${cs.heroClass}`}>{fmt$(spent)}</span>
+          {/* PR 2 R8 - hero drops state colour on a future range. */}
+          <span className={`kpi-p-hero num ${isFutureRange ? "" : cs.heroClass}`}>{fmt$(spent)}</span>
           <span className="kpi-p-subline">
             of <b>{fmt$(budget)}</b>
-            {usedPct != null && (<>{" "}· <b>{fmtPct(usedPct)}</b> used</>)}
+            {!isFutureRange && usedPct != null && (<>{" "}· <b>{fmtPct(usedPct)}</b> used</>)}
             {Number(budget || 0) === 0 && (<><span aria-hidden="true"> · </span><b>no budget</b></>)}
           </span>
         </div>
@@ -92,25 +112,39 @@ export function LedgerCard({
           {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is a
               quantity, plain, no arrow, no colour. Over budget swaps
               the label to `Over by` and the number carries variance
-              colour. Closed reads `Vs budget` unchanged. */}
+              colour. Closed reads `Vs budget` unchanged.
+              PR 2 R8 - future range: plain `Budget` + amount. */}
           <span className="kpi-p-label">
-            {closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining")}
+            {isFutureRange ? "Budget" : (closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining"))}
           </span>
-          {closed ? (
-            <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>
-              {Number(budget || 0) === 0 ? "—" : moneyArrow(varz)}
-            </span>
+          {/* PR 2 R8 - see BucketCard note. `.kpi-p-nil` gates weight
+              and colour so `—` never masquerades as data. Future range:
+              plain budget number, no verdict. */}
+          {isFutureRange ? (
+            <span className="kpi-p-value num">{fmt$(budget)}</span>
+          ) : closed ? (
+            Number(budget || 0) === 0 ? (
+              <span className="kpi-p-value num kpi-p-nil">—</span>
+            ) : (
+              <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+            )
           ) : rem < 0 ? (
-            <span className="kpi-p-value num r">
-              {Number(budget || 0) === 0 ? "—" : fmt$(-rem)}
-            </span>
+            Number(budget || 0) === 0 ? (
+              <span className="kpi-p-value num kpi-p-nil">—</span>
+            ) : (
+              <span className="kpi-p-value num r">{fmt$(-rem)}</span>
+            )
           ) : (
-            <span className="kpi-p-value num">
-              {Number(budget || 0) === 0 ? "—" : fmt$(rem)}
-            </span>
+            Number(budget || 0) === 0 ? (
+              <span className="kpi-p-value num kpi-p-nil">—</span>
+            ) : (
+              <span className="kpi-p-value num">{fmt$(rem)}</span>
+            )
           )}
           <span className="kpi-p-subline">
-            {closed ? "period closed" : "every purchase below"}
+            {isFutureRange
+              ? "this range has not started"
+              : (closed ? "period closed" : "every purchase below")}
           </span>
         </div>
       </div>
@@ -133,7 +167,7 @@ export function LedgerCard({
         ) : (
           (ledgerRows || []).map((r, i) => (
             <div key={`${r.vendor || "?"}-${i}`} className="kpi-p-lr">
-              <span className="kpi-p-k">
+              <span className={`kpi-p-k${r.vendor ? "" : " kpi-p-nil"}`}>
                 {r.vendor || "—"}
                 <small>
                   {isAggregate && r.account_key && (

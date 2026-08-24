@@ -15,6 +15,10 @@
 // says what is missing beats a card that invents.
 
 import { fmt$ } from "../lib/board";
+// PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
+// escapes the card and the txn-list scroll container's stacking context.
+import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
+import { CARD_PURCHASES_BODY } from "./PurchasingHelpPops";
 
 export function CardPurchases({
   pendingAmount,          // number - summary total
@@ -35,7 +39,10 @@ export function CardPurchases({
     <div className="kpi-p-card kpi-p-cp" data-card="card-purchases">
       <div className="kpi-p-cpstats">
         <div>
-          <span className="kpi-p-cardtitle">Card purchases</span>
+          <span className="kpi-p-cardtitle">
+            Card purchases
+            {" "}<HelpPop id="qPurchCardCharges" title="Card purchases" body={CARD_PURCHASES_BODY} />
+          </span>
           <span className="kpi-p-cardsub">card charges not yet coded to a P&amp;L line</span>
         </div>
         <div className="kpi-p-cpstat">
@@ -71,7 +78,7 @@ export function CardPurchases({
               padding: "var(--kpi-sp-4) 0",
               textAlign: "center",
               fontSize: "var(--kpi-t-meta)",
-              color: "var(--n-500)",
+              color: "var(--n-600)",
               fontWeight: 500,
             }}>
               {n === 0
@@ -111,7 +118,7 @@ export function CardPurchases({
             padding: "5px 0 0",
             textAlign: "right",
             fontSize: "var(--kpi-t-meta)",
-            color: "var(--n-500)",
+            color: "var(--n-600)",
             fontWeight: 500,
           }}>
             {totalCount > (cap || 0)
