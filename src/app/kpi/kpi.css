@@ -3328,7 +3328,10 @@
 /* HS FB1 PR-2 2026-08-24 - card skin joins the period canonical.
    Prompt 2b owner ruling: HS cards were rad-6 (6px) with box-shadow: none;
    period cards are --kpi-card-r (10.8) + --card-shadow. Padding aligns
-   to --kpi-card-pad (14.4) - same as .kpi-sig / .kpi-tbar canonical. */
+   to --kpi-card-pad (14.4) - same as .kpi-sig / .kpi-tbar canonical.
+   NO hover shadow: .kpi-sig has no :hover rule; a lift on a season-
+   table shell / sbar reads clickable when it is not. Owner ruling
+   2026-08-24 (post-report). */
 .kpi-hs-card {
   background: #fff;
   border: 1px solid var(--n-300);
@@ -3336,9 +3339,7 @@
   padding: var(--kpi-card-pad);
   box-shadow: var(--card-shadow);
   position: relative;
-  transition: box-shadow 0.15s;
 }
-.kpi-hs-card:hover { box-shadow: var(--card-shadow-hover); }
 /* HS PR-C 2026-08-24: all five signal-card headers must measure the
    same height. Pre-fix three of five wrapped the `?` onto a second
    line (spend 45px, cost-per-game 48px, overtime 45px) while prep +
@@ -3379,13 +3380,16 @@
   font-size: var(--kpi-t-meta); color: var(--text-subtle);
   display: inline-flex; align-items: center; gap: var(--kpi-sp-2);
 }
-/* HS FB1 PR-2 - pill / chip role: --kpi-t-label / weight 700 / 0.06em,
-   height locked to --kpi-lane-head with 0 vertical padding. Matches
-   .kpi-sig-state L2417 (same lane, same type, same weight). */
+/* HS FB1 PR-2 - Over / Under on the HS spend card is a VERDICT pill,
+   direct analogue of ON TARGET / WATCH on the period board. Match
+   .kpi-vpill L1815 full shape: --kpi-h-lane height, --kpi-sp-3 padding,
+   --rad-pill radius, weight 800, --kpi-t-label size, 0.06em tracking.
+   Owner ruling 2026-08-24 (post-report): the handoff's .kpi-sig-state
+   anchor picked the wrong component. */
 .kpi-hs-pill {
-  padding: 0 var(--kpi-sp-2); border-radius: var(--rad-pill);
-  font-size: var(--kpi-t-label); font-weight: 700; letter-spacing: 0.06em;
-  height: var(--kpi-lane-head);
+  padding: 0 var(--kpi-sp-3); border-radius: var(--rad-pill);
+  font-size: var(--kpi-t-label); font-weight: 800; letter-spacing: 0.06em;
+  height: var(--kpi-h-lane);
   display: inline-flex; align-items: center;
   border: 1px solid transparent; white-space: nowrap;
   margin-left: auto;
