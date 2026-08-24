@@ -454,11 +454,18 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
         </div>
         <div className="kpi-hs-sub">{unapprovedHrs > 0 ? "unapproved in Rippling" : "every shift approved"}</div>
         <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Will rise</div>
-            <div className={`kpi-hs-fact-v ${unapprovedHrs > 0 ? "kpi-hs-amber" : ""}`}>
-              {unapprovedHrs > 0 && hourlyRate > 0 ? `~${fmt$0(unapprovedHrs * hourlyRate)}` : "–"}
+          {/* HS PR-C 2026-08-24: Will rise is absent when there are
+              no unapproved hours to price - the sub already reads
+              "every shift approved" and the hero reads "All in", so
+              the dashed fact added nothing. Standing rule: if a
+              fact's premise does not hold, it is absent, not `–`. */}
+          {unapprovedHrs > 0 && hourlyRate > 0 && (
+            <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Will rise</div>
+              <div className="kpi-hs-fact-v kpi-hs-amber">
+                ~{fmt$0(unapprovedHrs * hourlyRate)}
+              </div>
             </div>
-          </div>
+          )}
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Crew</div><div className="kpi-hs-fact-v">{crewSize}</div></div>
         </div>
       </div>

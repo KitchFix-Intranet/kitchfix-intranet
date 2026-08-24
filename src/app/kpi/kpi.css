@@ -3326,10 +3326,26 @@
   padding: var(--kpi-sp-4);
   position: relative;
 }
+/* HS PR-C 2026-08-24: all five signal-card headers must measure the
+   same height. Pre-fix three of five wrapped the `?` onto a second
+   line (spend 45px, cost-per-game 48px, overtime 45px) while prep +
+   payroll fit at 21px. Fix: absolute-position the HelpPop trigger
+   in the card's top-right corner (padding-aligned), and switch the
+   header row to nowrap so eyebrow + pills stay on one line. Right
+   padding reserves the corner space so long pill groups do not run
+   under the `?`. The pop-up itself is portalled (see PR #790), so
+   the trigger position does not affect the pop position. */
 .kpi-hs-card-hdr {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: var(--kpi-sp-3);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  padding-right: 22px;
+  min-width: 0;
+}
+.kpi-hs-card-hdr > .kpi-hs-qwrap {
+  position: absolute;
+  top: var(--kpi-sp-4);
+  right: var(--kpi-sp-4);
 }
 .kpi-hs-eyebrow {
   font-size: var(--kpi-t-label);
@@ -3883,4 +3899,8 @@
    base rule remains in force; the popover no longer needs an escape.
    Peak-column trigger keeps its layout adjacency (below). */
 .kpi-hs-th-help { white-space: nowrap; }
-.kpi-hs-th-help .kpi-hs-qwrap { margin-left: 4px; vertical-align: middle; }
+/* HS PR-C 2026-08-24: 4px was reading as no gap between "Peak" and
+   the `?` glyph on live inspect. Bumped to 8px for legible separation
+   consistent with the other help affordances (Prep & off, Cost per
+   game day, etc. each have >= 8px between the pill and the trigger). */
+.kpi-hs-th-help .kpi-hs-qwrap { margin-left: 8px; vertical-align: middle; }

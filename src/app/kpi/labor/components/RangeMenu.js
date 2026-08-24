@@ -87,8 +87,20 @@ function resolvePreset(kind, { today, accountPeriods }) {
 //   July 2026     single month (full name, was "JUL 2026")
 //   Jan - Apr 2026 / Nov 2026 - Feb 2027   multi-month
 // See lib/rangeLabel.js for parse/validate/format.
-function triggerLabel({ startISO, endISO, resolvedPreset, monthSelected, periodSelected, urlLabel }) {
+function triggerLabel({ startISO, endISO, resolvedPreset, monthSelected, periodSelected, urlLabel, chipOverride }) {
   const dates = `${fmtDate(startISO)} – ${fmtDate(endISO)}`;
+  // HS PR-C 2026-08-24: `chipOverride` wins ahead of every other
+  // path. Homestand view passes { primary: "HS 11 · MIA / STL",
+  // dates: "08/13 – 08/20" } so the chip names the selected stand
+  // instead of reading FYTD 12/29 - 08/24. Range chip must follow
+  // the selection the same way it does after PR-2 (P1 - P3, July
+  // 2026); homestand is one more selection shape.
+  if (chipOverride && chipOverride.primary) {
+    return {
+      primary: chipOverride.primary,
+      dates: chipOverride.dates || dates,
+    };
+  }
   // URL label wins whenever it resolves back to the current dates.
   // A label that lies (dates changed under it) falls through so the
   // chip renders the date range instead of a stale name.
@@ -118,6 +130,8 @@ export function RangeMenu({
   selectedPeriodNo,      // integer if the current range matches a period, else null
   selectedMonth,         // { year, monthIndex } if range matches a month, else null
   urlLabel,              // string from ?label, may be null; validated against dates
+  chipOverride,          // HS PR-C: { primary, dates } to override the trigger label
+                         //   (homestand view names the stand: "HS 11 · MIA / STL")
   onCommit,              // (startISO, endISO, selection) => void
                          // selection.kind:
                          //   preset  | period  | month     (singleton, unchanged)
@@ -186,6 +200,7 @@ export function RangeMenu({
     monthSelected: selectedMonth,
     periodSelected: selectedPeriodNo,
     urlLabel,
+    chipOverride,
   });
 
   const canPickPreset = (k) => !((k === "this_period" || k === "last_period") && !hasPeriods);

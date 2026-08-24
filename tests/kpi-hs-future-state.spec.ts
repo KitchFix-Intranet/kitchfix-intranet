@@ -179,3 +179,52 @@ test.describe('KPI homestand season table (HS PR-B)', () => {
     expect(withDollar.length, `expected at least one played row to render Prep & off as a dollar figure, saw: ${prepValues.join(' | ')}`).toBeGreaterThan(0);
   });
 });
+
+// HS PR-C - card headers + range chip + copy items. Same file so
+// Chat-Claude runs one spec for the full HS surface.
+test.describe('KPI homestand headers + chip + copy (HS PR-C)', () => {
+  test('all five signal-card headers measure the same height', async ({ page }) => {
+    // Played stand renders the actuals SignalCards (5 cards). Header
+    // heights must all be equal - pre-fix three of five wrapped the
+    // ? to a second row (45-48px) while prep + payroll fit at 21px.
+    await openStand(page, '2026-08-14');
+    const heights = await page.$$eval('.kpi-hs-signals .kpi-hs-card-hdr', hdrs => {
+      return hdrs.map(h => Math.round((h as HTMLElement).getBoundingClientRect().height));
+    });
+    expect(heights.length, 'expected 5 signal-card headers').toBe(5);
+    const unique = [...new Set(heights)];
+    expect(unique.length, `all five header heights must match, saw: ${heights.join(', ')}`).toBe(1);
+  });
+
+  test('range chip on homestand view names the selected stand', async ({ page }) => {
+    await openStand(page, '2026-08-14');
+    // The chip primary text is in .kpi-rmenu-label-primary. On
+    // homestand view it reads "HS N · <opponents>" instead of the
+    // FYTD default.
+    const chip = page.locator('.kpi-rmenu-trigger .kpi-rmenu-label-primary').first();
+    await expect(chip).toBeVisible();
+    await expect(chip).toContainText(/^HS \d+ · /);
+  });
+
+  test('Payroll data card omits Will rise when no unapproved hours', async ({ page }) => {
+    // 08/14 is closed and typically fully approved - "All in · every
+    // shift approved". Will rise fact must be absent, not `–`.
+    await openStand(page, '2026-08-14');
+    const payroll = page.locator('[data-card="payroll"]');
+    await expect(payroll).toBeVisible();
+    // Sub reads "every shift approved" on the fully-approved path.
+    await expect(payroll).toContainText(/every shift approved/);
+    // Facts must NOT include "Will rise" at all when approved.
+    await expect(payroll.locator('.kpi-hs-fact', { hasText: 'Will rise' })).toHaveCount(0);
+  });
+
+  test('Peak header has visible space before the ? trigger', async ({ page }) => {
+    await openStand(page, '2026-08-14');
+    // Structural: the qwrap has margin-left applied. Read computed
+    // style and assert >= 6px so text + trigger do not collide.
+    const marginLeftPx = await page.$eval('.kpi-hs-th-help .kpi-hs-qwrap', el => {
+      return parseFloat(window.getComputedStyle(el).marginLeft);
+    });
+    expect(marginLeftPx, `Peak header trigger needs visible left margin, saw ${marginLeftPx}px`).toBeGreaterThanOrEqual(6);
+  });
+});

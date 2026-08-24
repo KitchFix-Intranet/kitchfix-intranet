@@ -17,7 +17,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 // V-role-gates - OPS_LEADERSHIP_EMAILS retired here; server decides.
 import { addDaysISO } from "@/lib/kpi/dateResolve";
-import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp, buildPrintScopeLine } from "./lib/formatting";
+import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine } from "./lib/formatting";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
@@ -1155,6 +1155,16 @@ export default function KpiLaborPage() {
             selectedPeriodNo,
             selectedMonth,
             urlLabel,
+            /* HS PR-C 2026-08-24: on homestand view the range chip
+               names the selected stand instead of reading FYTD
+               defaults. Same principle PR-2 shipped for periods and
+               months - chip names the SELECTION, not the resolved
+               dates. `data.homestand` is the server's selected-stand
+               payload (index + opponents + window_*). */
+            chipOverride: (inHomestandView && data?.homestand) ? {
+              primary: `HS ${data.homestand.index} · ${data.homestand.opponents?.join(" / ") || "(no opp)"}`,
+              dates: `${fmtDate(data.homestand.window_start)} – ${fmtDate(data.homestand.window_end)}`,
+            } : null,
             onCommit: onRangeCommit,
           } : null}
           exportHref={data && data?.account_state !== "salaried_only" ? exportHref() : null}
