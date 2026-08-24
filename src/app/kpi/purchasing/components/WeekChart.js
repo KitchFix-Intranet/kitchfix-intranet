@@ -147,15 +147,24 @@ export function WeekChart({
     );
   }
 
-  // Single y-scale so bars + target lines share one axis.
-  const perUnitTargets = (units || []).map(u =>
-    isPeriod ? Number(u.budget || 0)
-             : Math.max(Number(u.targetOrig || 0), Number(u.targetAdj || 0)));
-  const maxSample = Math.max(
-    ...perUnitTargets,
-    ...(units || []).map(u => Math.abs(Number(u.spent || 0)) * 1.15),
-    1,
-  );
+  // Single y-scale so bars + target lines share one axis. PR-2 R5 Part A
+  // (owner ruling 2026-08-24): scaleMax = max(spent_all, target_all).
+  // The target line is an INDEPENDENT mark on this shared scale - never
+  // derived from the bar. A 5% top-of-plot headroom (SCALE_HEADROOM_FRAC)
+  // divides both marks identically so the arithmetic ratio linePos /
+  // barHeight == target / spent is preserved. Prior state multiplied
+  // spent by 1.15 asymmetrically AND clamped both marks at 97%; the
+  // clamp fired every time a target equalled scaleMax (the common
+  // case) and pushed the drawn ratio off the arithmetic ratio.
+  const perUnitTargetsAll = (units || []).flatMap(u => (
+    isPeriod
+      ? [Number(u.budget || 0)]
+      : [Number(u.targetOrig || 0), Number(u.targetAdj || 0)]
+  )).filter(v => Number.isFinite(v) && v > 0);
+  const perUnitSpendAll = (units || []).map(u => Math.abs(Number(u.spent || 0)));
+  const rawMax = Math.max(...perUnitTargetsAll, ...perUnitSpendAll, 1);
+  const SCALE_HEADROOM_FRAC = 1.05;   // 5% headroom above tallest mark
+  const maxSample = rawMax * SCALE_HEADROOM_FRAC;
 
   // Precompute per-unit slots so bar height + caption value read from
   // the SAME object. Any drift is impossible at the JSX layer.
@@ -202,6 +211,41 @@ export function WeekChart({
         throw new Error(`WeekChart §9B: caption without bar at unit ${i + 1}`);
       }
     }
+    // ── CHECK 2 (PR-2 R5 Part A) ───────────────────────────────────
+    // For every rendered unit that has BOTH a bar and a target line,
+    // the drawn ratio linePos / barHeight must equal target / spent
+    // within tolerance. This is the geometry gate - the third
+    // geometry-vs-data bug on this chart was invisible to every earlier
+    // arithmetic check because every earlier check measured NUMBERS,
+    // not what was DRAWN. This assertion measures what will be drawn.
+    // Tolerance is 0.5% of the arithmetic ratio (or 0.005 absolute,
+    // whichever is looser) to absorb 2-decimal toFixed rounding.
+    for (let i = 0; i < slots.length; i += 1) {
+      const s = slots[i];
+      if (s.value == null || Math.abs(Number(s.value)) <= 0.005) continue;
+      const u = units[i];
+      const spent = Math.abs(Number(s.value));
+      const target = isPeriod
+        ? Number(u.budget || 0)
+        : Number(u.targetOrig || 0);
+      if (!(target > 0)) continue;
+      const drawnBar  = (spent  / maxSample) * 100;
+      const drawnLine = (target / maxSample) * 100;
+      const drawnRatio = drawnLine / drawnBar;
+      const arithRatio = target / spent;
+      const tol = Math.max(0.005, Math.abs(arithRatio) * 0.005);
+      if (Math.abs(drawnRatio - arithRatio) > tol) {
+        // eslint-disable-next-line no-console
+        console.error("[WeekChart CHECK 2]", {
+          unit: i + 1, spent, target, drawnBar, drawnLine,
+          drawnRatio, arithRatio, tol,
+        });
+        throw new Error(
+          `WeekChart CHECK 2: geometry mismatch at unit ${i + 1} - ` +
+          `drawn ${drawnRatio.toFixed(4)} vs arith ${arithRatio.toFixed(4)} (tol ${tol.toFixed(4)})`
+        );
+      }
+    }
   }
 
   // Grid width - one column per unit, minmax(0, 1fr).
@@ -235,15 +279,23 @@ export function WeekChart({
           : (finished && hasTarget
               ? (v > perUnitOrig ? "st-over" : "st-under")
               : "");
+        // PR-2 R5 Part A (owner ruling 2026-08-24): no 97% ceiling on
+        // bar or line. Both marks divide by the same `maxSample` (which
+        // already includes 5% headroom above the tallest target/spend)
+        // so the ratio linePos / barHeight equals target / spent
+        // exactly. The prior Math.min(97, ...) ceiling fired every time
+        // a target equalled scaleMax, silently pushing the line to 97%
+        // and misrepresenting the ratio (e.g. FYTD ALL Food P3: line
+        // clamped 100% -> 97% distorted a 1.238 ratio to 1.200).
         const heightPct = showBar
-          ? Math.min(97, (Math.abs(v) / maxSample) * 100).toFixed(1)
+          ? ((Math.abs(v) / maxSample) * 100).toFixed(2)
           : 0;
         // Target line PER BAR - not one dashed line spanning the chart.
         const orLine = perUnitOrig > 0
-          ? Math.min(97, (perUnitOrig / maxSample) * 100).toFixed(1)
+          ? ((perUnitOrig / maxSample) * 100).toFixed(2)
           : null;
         const adjLine = perUnitAdj != null && perUnitAdj > 0
-          ? Math.min(97, (perUnitAdj / maxSample) * 100).toFixed(1)
+          ? ((perUnitAdj / maxSample) * 100).toFixed(2)
           : null;
         // Caption label:
         //   A/B: real week range MM/DD - MM/DD (spec §B2)
