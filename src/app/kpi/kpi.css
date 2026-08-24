@@ -2125,6 +2125,14 @@
 .kpi-wb-bar-prog {
   background: var(--amber-600);
 }
+/* PR-C (owner ruling 2026-08-24) - when a bar carries an unpriced-hours
+   cap, remove the bar's rounded top so bar + cap merge cleanly. Prior
+   state left a triangular gap at the top corners because both elements
+   carried `border-radius: 4px 4px 0 0`. The cap keeps its rounded top;
+   the bar becomes flat where it meets the cap. */
+.kpi-wb-bar-capped {
+  border-radius: 0;
+}
 .kpi-wb-basel {
   width: 100%; height: var(--kpi-sp-2); border-radius: 3px;
   background: var(--n-200);
@@ -2169,6 +2177,11 @@
 .kpi-wb-d-good { color: var(--green-700); }
 .kpi-wb-d-bad  { color: var(--red-700); }
 .kpi-wb-d-mute { color: var(--n-400); }
+/* PR-C (owner ruling 2026-08-24) - running-week caption reads amber
+   so it matches the amber .kpi-wb-bar-prog above. Prior state used
+   .kpi-wb-d-mute which read as "not-started" tone and conflicted with
+   the running-week identity. */
+.kpi-wb-d-warn { color: var(--amber-600); }
 .kpi-wb-warn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-1);
   font-size: var(--kpi-t-label); font-weight: 700; color: #92580A;
@@ -2791,10 +2804,8 @@
   --hdr: var(--kpi-thead-h);
 }
 /* PR-B (owner ruling 2026-08-24) - Comfortable | Dense toggle removed
-   dashboard-wide. `.kpi-tbl-dense` path deleted here to keep the CSS
-   honest; --kpi-row-h-dense variable is orphaned but harmless (any
-   future re-introduction of a density mode should re-declare it in
-   context, not fish it out of a stale reference). */
+   dashboard-wide. `.kpi-tbl-dense` path and the --kpi-row-h-dense
+   token both deleted with it; no orphans. */
 .kpi-tbl thead th {
   position: sticky; top: 0; z-index: 20;
   height: var(--hdr);

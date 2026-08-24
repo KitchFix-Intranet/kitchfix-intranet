@@ -22,12 +22,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { periodOf, periodStartISO, periodEndISO } from "../lib/periods.js";
+// PR-C - pure aggregate builder in a plain-JS module so the OT-chip
+// probe can synthesize actuals + assert without JSX compilation.
+import { buildMemberByWeekAndAcct } from "../lib/weekTableModels.js";
 
 // PR-B (owner ruling 2026-08-24) - Comfortable | Dense toggle removed
 // entirely, dashboard-wide. Comfortable becomes the only mode; the
 // dense CSS path is deleted with it (see kpi.css .kpi-tbl-dense rules
-// removed in the same PR). DENSITY_KEY localStorage record retained
-// in this comment for the migration note; nothing writes it anymore.
+// removed in the same PR). No orphaned localStorage key or CSS token.
 const WEEKS_PER_PERIOD = 4;
 
 function workerLabel(meta, worker_id, redact) {
@@ -404,6 +406,7 @@ export function WeekTable({
   aggregateMode,
   budgetPeriods,         // [{ period_no, amount }]
   weekBudgets,           // [{ week_start, amount, per_member? }]
+  actuals,               // PR-C: raw actuals rows - source for aggregate child rows
   onPickAccount,         // (accountKey) => void   only for aggregate
   rangeSelection,        // { kind, value } from client
   resolvedPreset,
@@ -448,31 +451,21 @@ export function WeekTable({
   const mode = aggregateMode ? "aggregate" : "single";
   const columns = useMemo(() => computeVisibleColumns({ grouped, mode }), [grouped, mode]);
 
-  // Aggregate-mode child pre-aggregation: for every week, group actuals
-  // by account_key. Server ships raw actuals rows; each row still has
-  // account_key. This is a group-by, not a money computation.
-  const memberByWeekAndAcct = useMemo(() => {
-    const out = new Map();
-    if (mode !== "aggregate") return out;
-    for (const g of grouped) {
-      for (const w of g.weeks) {
-        const per = new Map();
-        for (const r of w.worker_rows || []) {
-          const key = r.account_key;
-          const cur = per.get(key) || { amount: 0, hours: 0, ot: 0, hol: 0, unpriced: 0, states: [] };
-          cur.amount += Number(r.amount || 0);
-          cur.hours += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
-          cur.ot += Number(r.hours_overtime || 0);
-          cur.hol += Number(r.hours_double_time || 0);
-          cur.unpriced += Number(r.hours_without_dollars || 0);
-          cur.states.push(r.coverage_state);
-          per.set(key, cur);
-        }
-        out.set(w.week_start, per);
-      }
-    }
-    return out;
-  }, [grouped, mode]);
+  // PR-C (owner ruling 2026-08-24 live browser trace) - aggregate
+  // child rows are built directly from raw actuals grouped by
+  // (week_start, account_key). Prior code iterated `w.worker_rows`
+  // which was silently absent on portfolio views, so the aggregate
+  // map yielded zero entries and week rows expanded to zero children.
+  // Same silent field-name class as the client-aggregate bug in #745
+  // (also referenced in PR-A's SignalCards fix).
+  //
+  // Extracted as a pure function so the OT-chip probe can synthesize
+  // actuals + assert account children carry hours_ot > 0 without
+  // needing a live DOM.
+  const memberByWeekAndAcct = useMemo(
+    () => buildMemberByWeekAndAcct(actuals, mode),
+    [actuals, mode],
+  );
 
   // Weekly budget lookup by week_start.
   const weekBudgetsByWeekStart = useMemo(() => {

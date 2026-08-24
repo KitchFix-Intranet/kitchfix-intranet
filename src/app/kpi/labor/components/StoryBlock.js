@@ -268,6 +268,13 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   const capPct = capDollars != null
     ? Math.max(0.5, Math.min(capHeadroom, capPctRaw))
     : 0;
+  // PR-C hatch gap fix (owner ruling 2026-08-24). When a cap is
+  // present, remove the bar's rounded top so bar + cap merge cleanly.
+  // Prior state: both elements carried `border-radius: 4px 4px 0 0`;
+  // the bar's rounded top curved down at the corners while the cap's
+  // flat bottom left a triangular gap. `.kpi-wb-bar-capped` overrides
+  // border-radius to 0 so the pair reads as one column.
+  const barClsFinal = (barCls && capPct > 0) ? `${barCls} kpi-wb-bar-capped` : barCls;
   // V29-7 per-week target line. Amber for closed/in-progress at the
   // week's ORIGINAL weekly target; light blue for not-started at the
   // ADJUSTED target (weekly allowance). Omitted for zero-spend weeks
@@ -291,18 +298,29 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     statusLine = <span className={`kpi-wb-d ${cls}`}>{arrow} {fmt$(Math.abs(w.delta_vs_original))} {w.delta_sign}</span>;
   } else if (isInProgress) {
     // V42 REVISED (State 1 informational) - current week with drafts
-    // reads "running · N hrs not yet approved" at neutral tone. The
-    // hatched cap above already carries the money signal visually;
-    // this line is the operator's approval prompt. Falls through to
-    // the existing allowance line when there are no drafts.
+    // reads "running · N hrs not yet approved". PR-C (owner ruling
+    // 2026-08-24): the running-week caption now reads AMBER
+    // (kpi-wb-d-warn) so it matches the amber solid bar above; the
+    // muted grey used previously read as "not-started" which conflicts
+    // with the state.
+    //
+    // PR-C multi_period fix: when weekly_allowance is null (multi_period
+    // does not compute an allowance, that's a single-period concept),
+    // fall back to w.original_target so the running week on FYTD shows
+    // its own per-week budget instead of just "running" with nothing to
+    // compare. Caption reads "running · $X budget" on multi to name the
+    // basis distinctly from single-period's "allowance".
     const allow = w.weekly_allowance ?? weeklyAllowance;
+    const perWeekBudget = w.original_target ?? weeklyOriginal;
     const draftHrs = Number(w.draft_hours || 0);
     if (draftHrs > 0.004) {
-      statusLine = <span className="kpi-wb-d kpi-wb-d-mute">running · <b>{fmtHrs(draftHrs)}</b>{" "}hrs not yet approved</span>;
+      statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running · <b>{fmtHrs(draftHrs)}</b>{" "}hrs not yet approved</span>;
     } else if (allow != null) {
-      statusLine = <span className="kpi-wb-d kpi-wb-d-mute">running · <b>{fmt$(allow)}</b>{" "}allowance</span>;
+      statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running · <b>{fmt$(allow)}</b>{" "}allowance</span>;
+    } else if (perWeekBudget != null) {
+      statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running · <b>{fmt$(perWeekBudget)}</b>{" "}budget</span>;
     } else {
-      statusLine = <span className="kpi-wb-d kpi-wb-d-mute">running</span>;
+      statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running</span>;
     }
   } else if (isNotStarted) {
     statusLine = <span className="kpi-wb-d kpi-wb-d-mute">to stay on budget</span>;
@@ -317,7 +335,7 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
         {isNotStarted || isZero ? (
           <div className="kpi-wb-basel" />
         ) : (
-          <div className={barCls} style={{ height: `${Math.max(barPct, 2)}%` }} />
+          <div className={barClsFinal} style={{ height: `${Math.max(barPct, 2)}%` }} />
         )}
         {/* V42 REVISED - hatched cap. Sits ON TOP of the solid bar,
             visually stacked via `bottom` position. Hatch is unique
@@ -498,6 +516,22 @@ function TierBTip({ tip }) {
 }
 
 // ── TIER C: > 13 weeks, one bar per fiscal period (untouched V21-10) ─
+// PR-C - target-line legend for Tier C. Owner ruling 2026-08-24: the
+// dashed target on Tier C has no key. Uses the same .kpi-wh-tgt shape
+// Tier A already renders so the visual treatment is consistent across
+// tiers.
+function TierCHeader() {
+  return (
+    <div className="kpi-wh kpi-wh-c">
+      <span className="kpi-wh-sp" aria-hidden="true" />
+      <span className="kpi-wh-tgt">
+        <span className="kpi-wh-tgt-dash" aria-hidden="true" />
+        Target
+      </span>
+    </div>
+  );
+}
+
 function TierCStrip({ board, budgetPeriods }) {
   const weeks = board?.weeks || [];
   const budgetByPeriod = new Map((budgetPeriods || []).map(b => [b.period_no, Number(b.amount)]));
@@ -648,7 +682,12 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
 
         {tier === "A" && <TierAStrip board={board} salary={salary} />}
         {tier === "B" && <TierBStrip board={board} />}
-        {tier === "C" && <TierCStrip board={board} budgetPeriods={budgetPeriods} todayISO={todayISO} />}
+        {tier === "C" && (
+          <>
+            <TierCHeader />
+            <TierCStrip board={board} budgetPeriods={budgetPeriods} todayISO={todayISO} />
+          </>
+        )}
       </div>
     </div>
   );
