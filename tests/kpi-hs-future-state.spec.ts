@@ -227,4 +227,24 @@ test.describe('KPI homestand headers + chip + copy (HS PR-C)', () => {
     });
     expect(marginLeftPx, `Peak header trigger needs visible left margin, saw ${marginLeftPx}px`).toBeGreaterThanOrEqual(6);
   });
+
+  test('unresolvable stand keeps rail + shows refusal panel (not blank)', async ({ page }) => {
+    // Reachable by switching account with a stand selected: 08/14 is
+    // a CIN - OH game start, not a Texas one. Owner ruling 2026-08-24:
+    // "navigation must survive an unresolvable selection. A blank page
+    // with no way back is the one outcome to avoid." Same rule as the
+    // refusal handling from #754.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/kpi/labor?account=${encodeURIComponent('TXR - TX - H')}&view=homestand&homestand=2026-08-14`);
+    await page.waitForSelector('.kpi-hs-board', { timeout: 30_000 });
+    // Rail renders (with TXR's own stands, not CIN's).
+    await expect(page.locator('.kpi-hs-rail')).toBeVisible();
+    // Season card renders.
+    await expect(page.locator('[data-hs-help="qSeason"]').first()).toBeVisible();
+    // Refusal panel replaces the stand region.
+    await expect(page.locator('[data-refusal]')).toBeVisible();
+    // No plan/actuals cards for a stand that doesn't belong to the account.
+    await expect(page.locator('[data-card="plan"]')).toHaveCount(0);
+    await expect(page.locator('[data-card="spend"]')).toHaveCount(0);
+  });
 });
