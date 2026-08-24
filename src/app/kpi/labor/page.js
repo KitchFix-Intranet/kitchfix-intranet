@@ -1141,7 +1141,7 @@ export default function KpiLaborPage() {
             setLiveMsg(redact ? "Export downloading with names redacted." : "Export downloading.");
           }}
           exportRedact={redact}
-          exportDisabledReason={PSEUDO_KEYS.has(account) ? "Per-account export for portfolio views ships next update." : null}
+          exportDisabledReason={null}
           freshnessPop={freshnessPop}
           folioRail={
             <FolioRail

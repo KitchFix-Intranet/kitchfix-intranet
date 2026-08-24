@@ -27,6 +27,7 @@ import { auth } from "@/lib/auth";
 // site_manager). A caller who resolves to null gets 403.
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta";
+import { resolvePortfolioMembers } from "@/lib/kpi/portfolioMembers";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
@@ -646,24 +647,11 @@ export async function GET(request) {
   // excluded universally per D17. Single-account requests fall
   // through to the byte-identical existing path below.
   if (V6_PSEUDO_KEYS.has(account)) {
-    // 1. Resolve members from live accounts.region.
-    let memberQ;
-    if (account === "ALL") {
-      memberQ = await supa.from("accounts")
-        .select("team_key")
-        .neq("team_key", "CORP")
-        .order("team_key");
-    } else {
-      // Region values in PG are capitalized ('East' / 'West').
-      const regionValue = account === "EAST" ? "East" : "West";
-      memberQ = await supa.from("accounts")
-        .select("team_key")
-        .neq("team_key", "CORP")
-        .eq("region", regionValue)
-        .order("team_key");
-    }
+    // 1. Resolve members from live accounts.region via the shared helper
+    //    so the export route sees byte-identical membership.
+    const memberQ = await resolvePortfolioMembers(supa, account);
     if (memberQ.error) return NextResponse.json(safeError("v6_members", memberQ.error), { status: 500 });
-    const members = (memberQ.data || []).map(r => r.team_key);
+    const members = memberQ.data.map(r => r.team_key);
     if (members.length === 0) {
       return NextResponse.json({ error: "no_members_in_region", account }, { status: 400 });
     }
