@@ -319,8 +319,11 @@
 .kpi-app .kpi-p-leg.adj  { color: #3E97D1; }
 
 .kpi-app .kpi-p-wks {
+  /* PR 2 R3 Part B - grid-template-columns is set inline per unit count
+     (tier A/B: weeks_in_range; tier C: periods_in_range). Repeating 4 in
+     CSS was the silent-truncation bug source; the strip now always
+     renders exactly units.length columns and asserts on the render. */
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--kpi-sp-3);
   margin-top: auto;
   padding-top: var(--kpi-sp-3);
