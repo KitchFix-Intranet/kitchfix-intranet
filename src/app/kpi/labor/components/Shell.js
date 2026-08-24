@@ -253,22 +253,29 @@ export function Shell({
             rather than the left-side identity block. Same rendering
             rules: absent when the caller cannot see salary. */}
         {salaryToggle && (
-          <span className="kpi-cmd-salary" role="group" aria-label="Include salary">
-            <span className="kpi-ctl-k">Include</span>
-            <span className={"kpi-seg" + (salaryToggle.on ? " kpi-seg-salary-on" : "")}>
-              <button
-                type="button"
-                className={!salaryToggle.on ? "on" : ""}
-                onClick={() => salaryToggle.on && salaryToggle.onChange(false)}
-                aria-pressed={!salaryToggle.on}
-              >Hourly</button>
-              <button
-                type="button"
-                className={salaryToggle.on ? "on" : ""}
-                onClick={() => !salaryToggle.on && salaryToggle.onChange(true)}
-                aria-pressed={salaryToggle.on}
-              >+ Salary</button>
-            </span>
+          /* HS FB1 PR-2 verify 2026-08-25: salary toggle joins .kpi-seg
+             wholesale (no .kpi-cmd-salary wrapper, no "Include" label).
+             Kevin ruling post-verify: both toggles are segmented
+             controls and should be one component - the earlier ".kpi-seg
+             is 27, salary is 25" split traces to salary being wrapped
+             in .kpi-cmd-salary which was the off-token structure. */
+          <span
+            className={"kpi-seg" + (salaryToggle.on ? " kpi-seg-salary-on" : "")}
+            role="group"
+            aria-label="Include salary"
+          >
+            <button
+              type="button"
+              className={!salaryToggle.on ? "on" : ""}
+              onClick={() => salaryToggle.on && salaryToggle.onChange(false)}
+              aria-pressed={!salaryToggle.on}
+            >Hourly</button>
+            <button
+              type="button"
+              className={salaryToggle.on ? "on" : ""}
+              onClick={() => !salaryToggle.on && salaryToggle.onChange(true)}
+              aria-pressed={salaryToggle.on}
+            >+ Salary</button>
           </span>
         )}
 
