@@ -729,12 +729,18 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
               adjusted <b>{fmt$(board.weekly_allowance)}</b>
             </span>
           )}
-          {/* Salary PR 3 C2 - name the basis on the legend when
-              salary is on so the target reads as combined not
-              hourly-only. */}
-          {salary && showOriginalLabel && (
-            <span className="kpi-wh-tgt-basis">· hourly + salary</span>
-          )}
+          {/* Audit close 2026-08-24: the "· hourly + salary" span
+              was #718's Salary PR 3 C2. The className kpi-wh-tgt-basis
+              had ZERO rules in kpi.css so the span inherited body
+              defaults, rendered at full body scale inside a legend of
+              small-caps labels, and wrapped onto two lines. Only
+              surfaced with salary on, which is why it slipped past
+              live verify. Deleted per owner ruling: the basis is
+              already stated twice on the same screen - the budget
+              card sub-line reads "· hourly + salary" (SpendCard) and
+              the scope pill on the first card reads "+ SALARY". A
+              third statement inside a legend that names the target
+              lines is the wrong place; that legend names the lines. */}
           {/* V42 REVISED (C2 legend) - name the hatched cap that
               stacks on top of any bar with unpriced hours. Standing
               rule: every tracker screen carries a visible state key;
