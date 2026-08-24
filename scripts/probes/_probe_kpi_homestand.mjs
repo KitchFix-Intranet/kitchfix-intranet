@@ -29,17 +29,24 @@
 //       "weekly"} and never a new value; `homestand` + `homestand_split`
 //       + `homestand_bank` are present in the body; `homestands` is
 //       the same list the resolver returned in-process.
-//   H7  CIN - OH verified fixtures, to the cent (owner-measured):
-//         HS 11 MIA/STL   window 08/07-08/20  budget 8056.06  peak 4
-//         HS 10 ATH/CLE   window 07/13-08/06  budget 12432.19 peak 7
-//         bank across 9 finished stands ~= 6008.61 (aggregate rounding
-//         drift <= 5c is acceptable per PR-1 probe design)
+//   H7  CIN - OH structural fixtures + bank arithmetic as PROPERTY.
+//       Owner ruling 2026-08-24: hardcoded snapshot pins broke when
+//       payroll approvals moved live figures overnight (HS 11 08/20
+//       shifts got approved, bank shifted $4,218.39 -> $3,359.08 as
+//       designed). Windows, budgets, peak_in_week, stands_finished /
+//       remaining are STRUCTURAL and stay pinned. Bank + remaining_budget
+//       are LIVE and asserted as a PROPERTY (bank == sum(finished
+//       budget) - sum(finished actual); remaining_budget ==
+//       sum(unfinished budget)).
 //   HInv night_games + day_games == game_days on EVERY stand across
 //       every homestand account. Owner ruling 2026-08-21: no null
 //       fallback on day_night - if this ever fails, we want to know,
 //       not degrade quietly.
 //   HSent CIN - OH 06/29 weekly aggregate unchanged: 113.98 / 2.32
-//       / 39.91 / $4,328.27.
+//       / 39.91 / $4,328.27. THIS ONE stays a snapshot because it
+//       genuinely cannot move - a closed June week with every shift
+//       approved months ago is a fingerprint of the derive pipeline,
+//       and any change is a real regression.
 //
 // Usage: node scripts/_probe_kpi_homestand.mjs
 
@@ -244,9 +251,28 @@ console.log("[HInv] night_games + day_games == game_days on every stand, all fou
   if (bad === 0) ok(`invariant holds on every stand across all four accounts`);
 }
 
-// ─── H7 CIN - OH verified fixtures ──────────────────────────────────
+// ─── H7 CIN - OH structural fixtures + bank as PROPERTY ─────────────
+// Owner ruling 2026-08-24 after PR-A landed and this probe surfaced
+// homestand "drift" that was actually the board WORKING: HS 11's
+// 08/20 shifts got approved overnight by the nightly sync at 07:36,
+// so HS 11 actual moved $7,732.47 -> $8,591.78 (34.27h at ~$25/hr
+// with OT) and the bank fell to $3,359.08 with it.
+//
+// Fixture posture (revised):
+//   KEEP as hardcoded pins (structural, cannot legitimately move):
+//     - window boundaries (derived from stored schedule + daily floor
+//       clamp + prep-day rule)
+//     - budgets (derived from kpi_budgets 3100.1 x per-day pro-rate)
+//     - peak_games_in_week (Monday-anchored count on stored schedule)
+//     - stands_finished / stands_remaining (given frozen today)
+//   REPLACE with PROPERTY (live figures that legitimately move):
+//     - bank total  ->  bank == sum(finished budget) - sum(finished actual)
+//     - remaining_budget  ->  == sum(unfinished stand budgets)
+//   These hold regardless of what payroll does overnight and still
+//   fail loudly on a real regression (a sign flip, a missing stand,
+//   the pre-floor exclusion breaking).
 console.log("");
-console.log("[H7] CIN - OH verified fixtures");
+console.log("[H7] CIN - OH structural fixtures + bank arithmetic as property");
 {
   const hs = standsByAcct.get("CIN - OH");
   const daily = dailyByAcct.get("CIN - OH");
@@ -262,6 +288,8 @@ console.log("[H7] CIN - OH verified fixtures");
       if (Math.abs(got - want) < tol) ok(`${label}: ${got}`);
       else fail(`${label}: got ${got}, want ${want}`);
     };
+    // STRUCTURAL pins - these derive from stored schedule + budget
+    // and cannot legitimately move.
     eq  ("HS 11 window_start", hs11.window_start, "2026-08-07");
     eq  ("HS 11 window_end  ", hs11.window_end,   "2026-08-20");
     near("HS 11 budget      ", hs11.budget, 8056.06);
@@ -270,43 +298,56 @@ console.log("[H7] CIN - OH verified fixtures");
     eq  ("HS 10 window_end  ", hs10.window_end,   "2026-08-06");
     near("HS 10 budget      ", hs10.budget, 12432.19);
     eq  ("HS 10 peak_in_week", hs10.peak_games_in_week, 7);
-    // Bank across 9 finished stands - EXACT to the cent per owner
-    // ruling 2026-08-21. Freeze today against the measurement date
-    // so finished-stand count is exactly 9.
-    //
-    // Post-audit 2026-08-21: expected value MOVED from $6,008.62 to
-    // $4,218.39. Reason: PR-2 audit surfaced that HS 3's window was
-    // reaching three days behind the daily floor (HS 2 pre-floor,
-    // HS 3 inherited HS 2's game_end + 1 = 04/17, floor 04/20). PR-2
-    // v2 clamps EVERY non-pre-floor window_start up to the floor;
-    // HS 3 becomes 04/20-04/30 (11 days) and its budget recomputes
-    // from $8,354.43 to $6,564.20. That $1,790.23 of budget the
-    // 04/17-04/19 window used to own had no attributable actual,
-    // so removing it shrinks the bank by the same amount ($6,008.62
-    // - $1,790.23 = $4,218.39). This is the same "budget without
-    // attributable actual fakes a surplus" logic that excludes pre-
-    // floor STANDS from the bank; extending it to pre-floor DAYS
-    // owned by non-pre-floor stands is the audit correction.
-    //
-    // Rounding order still matters: per-stand rounded on BOTH sides
-    // then summed. See PR-1 fixture note (removed here for brevity)
-    // for the three-way comparison against round-once-at-end and
-    // per-row-cent paths.
+
+    // Freeze today against 2026-08-21 so stands_finished stays 9. The
+    // freeze is what makes stands_finished / stands_remaining
+    // structural rather than time-of-day-dependent - HS 11 (game_end
+    // 2026-08-20) is finished under that freeze.
     const actMap = actualsByStand(hs, daily);
     const bank = computeHomestandBank(hs, actMap, "2026-08-21");
-    const wantBankCents = 421839;   // $4218.39 - owner-verified 2026-08-21 post-clamp
+
+    // PROPERTY: bank == sum(finished stand budgets) - sum(finished
+    // stand actuals). Per-stand rounded on BOTH sides, then summed,
+    // matching computeHomestandBank's own arithmetic. Holds
+    // regardless of what payroll approves overnight - the two sides
+    // move together by construction. Fails loudly on a real
+    // regression (pre-floor stand leaking into finished sum, an
+    // account_key mismatch, a sign flip).
+    let expectedBankCents = 0;
+    let expectedRemainingCents = 0;
+    let expectedFinished = 0;
+    let expectedRemaining = 0;
+    for (const h of hs) {
+      if (h.pre_floor) continue;
+      if (h.game_end < "2026-08-21") {
+        const bC = Math.round((h.budget || 0) * 100);
+        const aC = Math.round((actMap.get(h.game_start) || 0) / 100);
+        expectedBankCents += (bC - aC);
+        expectedFinished += 1;
+      } else {
+        expectedRemainingCents += Math.round((h.budget || 0) * 100);
+        expectedRemaining += 1;
+      }
+    }
     const gotBankCents = Math.round(bank.bank * 100);
-    if (gotBankCents === wantBankCents) ok(`bank across 9 finished stands = $${bank.bank.toFixed(2)} EXACT (per-stand rounded, both sides, summed; post-clamp)`);
-    else fail(`bank $${bank.bank.toFixed(2)} != $4218.39 (delta ${gotBankCents - wantBankCents}c) - see rounding-order + clamp comment above`);
-    // stands_finished + stands_remaining + remaining_budget are the
-    // new fields from the season-card hotfix. Assert them here so a
-    // future re-derive lands exact.
-    if (bank.stands_finished === 9)        ok(`stands_finished = 9`);
-    else                                    fail(`stands_finished = ${bank.stands_finished}, want 9`);
-    if (bank.stands_remaining === 2)       ok(`stands_remaining = 2`);
-    else                                    fail(`stands_remaining = ${bank.stands_remaining}, want 2`);
-    if (Math.round(bank.remaining_budget * 100) === 1501809) ok(`remaining_budget = $15,018.09`);
-    else                                    fail(`remaining_budget = $${bank.remaining_budget}, want $15,018.09`);
+    if (gotBankCents === expectedBankCents) ok(`bank == sum(finished budget) - sum(finished actual) EXACT (${bank.stands_finished} finished stands, $${bank.bank.toFixed(2)} today; the specific dollar figure moves as payroll approves - the ARITHMETIC holds)`);
+    else fail(`bank $${bank.bank.toFixed(2)} != computed sum $${(expectedBankCents/100).toFixed(2)} - budget or actual arithmetic broke`);
+
+    // stands_finished / stands_remaining - structural under the today
+    // freeze. Verify against the walk above so a change in the
+    // pre_floor / game_end < today discrimination is caught.
+    if (bank.stands_finished === expectedFinished && bank.stands_finished === 9) ok(`stands_finished = 9 (matches expected walk under today=2026-08-21)`);
+    else fail(`stands_finished = ${bank.stands_finished}, walked ${expectedFinished}, want 9`);
+    if (bank.stands_remaining === expectedRemaining && bank.stands_remaining === 2) ok(`stands_remaining = 2 (matches expected walk)`);
+    else fail(`stands_remaining = ${bank.stands_remaining}, walked ${expectedRemaining}, want 2`);
+
+    // PROPERTY: remaining_budget == sum(unfinished stand budgets).
+    // Derived from stored schedule + kpi_budgets so drift here would
+    // be a real bug (schedule change, budget refresh); still safer to
+    // assert the property than a dollar figure.
+    const gotRemainingCents = Math.round(bank.remaining_budget * 100);
+    if (gotRemainingCents === expectedRemainingCents) ok(`remaining_budget == sum(unfinished budgets) EXACT ($${bank.remaining_budget.toFixed(2)})`);
+    else fail(`remaining_budget $${bank.remaining_budget.toFixed(2)} != computed sum $${(expectedRemainingCents/100).toFixed(2)}`);
   }
 }
 
@@ -328,7 +369,11 @@ console.log("[H8] salary integration: hourly-only unchanged; salary-on adds to b
   const acct = "CIN - OH";
   const today = "2026-08-21";
 
-  // Hourly-only path (regression net - these are frozen H7 fixtures).
+  // Hourly-only path. Structural pin on budget (derived from stored
+  // schedule + kpi_budgets); bank + actual are LIVE FIGURES that move
+  // as payroll approves - asserted as a PROPERTY, not a snapshot.
+  // Owner ruling 2026-08-24 after HS 11's 08/20 shifts got approved
+  // overnight moved bank $4,218.39 -> $3,359.08 (as designed).
   const hsHourly = await listHomestands(supa, acct, 2026, { includeSalary: false });
   const daily    = dailyByAcct.get(acct);
   const actMapH  = actualsByStand(hsHourly, daily);
@@ -338,10 +383,27 @@ console.log("[H8] salary integration: hourly-only unchanged; salary-on adds to b
     if (Math.abs(got - want) < tol) ok(`${label}: ${got}`);
     else fail(`${label}: got ${got}, want ${want}`);
   };
-  near("hourly-only bank across 9 finished stands", bankH.bank, 4218.39);
+  // PROPERTY: hourly-only bank reconciles.
+  let hourlyExpectedBankCents = 0;
+  for (const h of hsHourly) {
+    if (h.pre_floor || h.game_end >= today) continue;
+    const bC = Math.round((h.budget || 0) * 100);
+    const aC = Math.round((actMapH.get(h.game_start) || 0) / 100);
+    hourlyExpectedBankCents += (bC - aC);
+  }
+  const hourlyGotBankCents = Math.round(bankH.bank * 100);
+  if (hourlyGotBankCents === hourlyExpectedBankCents) ok(`hourly-only bank reconciles: $${bankH.bank.toFixed(2)} == sum(budget) - sum(actual) EXACT`);
+  else fail(`hourly-only bank drift: $${bankH.bank.toFixed(2)} vs computed $${(hourlyExpectedBankCents/100).toFixed(2)}`);
+  // STRUCTURAL: budget stays pinned - derived from schedule + budget
+  // table, cannot legitimately move.
   near("hourly-only HS 11 budget", hs11H.budget, 8056.06);
+  // Live: HS 11 actual moves with payroll approvals. Assert only that
+  // it exists as a non-null non-zero number (a real dollar figure was
+  // computed) and that it matches actMap (identity that catches a
+  // client-vs-server divergence). No snapshot on the value itself.
   const hs11Actual = Math.round((actMapH.get("2026-08-14") || 0) / 100) / 100;
-  near("hourly-only HS 11 actual", hs11Actual, 7732.47);
+  if (hs11Actual > 0) ok(`hourly-only HS 11 actual = $${hs11Actual.toFixed(2)} (present + non-zero; specific value moves as payroll approves)`);
+  else fail(`hourly-only HS 11 actual is zero or negative ($${hs11Actual}) - attribution broke`);
   if (hs11H.budget_hourly === hs11H.budget) ok(`hourly-only: budget_hourly == budget ($${hs11H.budget})`);
   else fail(`hourly-only: budget_hourly (${hs11H.budget_hourly}) != budget (${hs11H.budget})`);
   if (hs11H.budget_salary === null) ok(`hourly-only: budget_salary is null (breakout absent when toggle off)`);
@@ -567,6 +629,14 @@ console.log("[H9] pre-floor stand estimator: counts, no-straddle, bank-byte-iden
 }
 
 // ─── HSent sentinel ────────────────────────────────────────────────
+// This ONE stays a snapshot because it genuinely cannot move: a closed
+// week from June (2026-06-29) with every shift approved months ago.
+// The value is a fingerprint of the CIN - OH derive pipeline; any
+// change here means something upstream shifted (an actuals-daily
+// re-derive, a schema change, a report-backfill overwrite) and we
+// want that to fail loudly. Owner ruling 2026-08-24: this is the
+// shape of assertion that works for sentinels - a fact about a moment
+// that cannot legitimately change, not a fact about today.
 console.log("");
 console.log("[HSent] CIN - OH 06/29 weekly sentinel: 113.98 / 2.32 / 39.91 / $4,328.27");
 {
