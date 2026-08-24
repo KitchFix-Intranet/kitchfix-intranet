@@ -37,16 +37,23 @@ export function PeriodCard({
   bills,            // KPI-line bills only
   cards,            // KPI-line coded card spend
   pending,          // whole-range pending (no bucket split)
-  // Chart
-  weekAmounts,      // [w1, w2, w3, w4] KPI-line spend per fiscal week
-  weekLabels,       // [{date}, ...]
-  runningWeekIdx,   // 0..3 running week index, null when closed
+  // Chart - tier-aware (PR 2 R3 Part B). `tier`+`units` replace the
+  // old fixed-length weekAmounts/weekLabels; WeekChart asserts
+  // rendered_units == units.length so silent truncation is caught.
+  tier,             // 'A' | 'B' | 'C'
+  units,            // array of unit objects (weeks for A/B, periods for C)
   original,
   adjusted,
   budgetSpent,      // PR-2 R2 Fix 2: adjusted clamped upstream when
                     //   budget - finishedSpend <= 0. Swap the target
                     //   legend for "budget spent"; never negative.
   projectedClose,
+  // Card title (PR 2 R3 Part B, §B3): follows the RANGE preset like
+  // labor's does - "PERIOD 9", "THE LAST 4 WEEKS", "THE LAST 13
+  // WEEKS", "FISCAL YEAR TO DATE", or a MM/DD - MM/DD range for a
+  // custom pick. Purchasing was rendering "PERIOD -" with a blank
+  // where the number goes on every multi-period range.
+  cardTitle,
 }) {
   // ONE stateOf call - pill / hero / chart / secondary all read from it.
   const cs = resolveCardState({
@@ -69,7 +76,9 @@ export function PeriodCard({
       <div className="kpi-p-card kpi-p-b-per">
         <div className="kpi-p-head">
           <div className="kpi-p-head-body">
-            <span className="kpi-p-cardtitle">Period {periodNo != null ? periodNo : "-"}</span>
+            <span className="kpi-p-cardtitle">
+              {cardTitle || (periodNo != null ? `PERIOD ${periodNo}` : "PERIOD -")}
+            </span>
             {rangeLabel && <span className="kpi-p-cardsub">{rangeLabel}</span>}
             <div>
               <span className="kpi-p-cardmeta">
@@ -188,24 +197,28 @@ export function PeriodCard({
         </div>
       </div>
 
-      {/* RIGHT */}
+      {/* RIGHT - tier-aware strip. §B3 owner ruling 2026-08-24. */}
       <div className="kpi-p-card">
         <div className="kpi-p-lh">
-          <span className="kpi-p-label">By week</span>
+          <span className="kpi-p-label">
+            {tier === "C"
+              ? "THE RANGE · PERIOD BY PERIOD"
+              : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK")}
+          </span>
           <span className="kpi-p-legs">
-            {original != null && (
+            {tier !== "C" && original != null && (
               <span className="kpi-p-leg orig">
                 <span className="kpi-p-dash" aria-hidden="true" />
                 target {fmt$(original)}
               </span>
             )}
-            {!closed && adjusted != null && !budgetSpent && (
+            {tier === "A" && !closed && adjusted != null && !budgetSpent && (
               <span className="kpi-p-leg adj">
                 <span className="kpi-p-dash" aria-hidden="true" />
                 adjusted {fmt$(adjusted)}
               </span>
             )}
-            {!closed && budgetSpent && (
+            {tier === "A" && !closed && budgetSpent && (
               <span className="kpi-p-leg adj">budget spent</span>
             )}
             <span
@@ -217,14 +230,9 @@ export function PeriodCard({
           </span>
         </div>
         <WeekChart
-          weekAmounts={weekAmounts}
-          weekLabels={weekLabels}
-          original={original}
-          adjusted={adjusted}
+          tier={tier}
+          units={units}
           identity="food"
-          state={cs.state}
-          closed={closed}
-          runningWeekIdx={runningWeekIdx}
         />
       </div>
     </div>
