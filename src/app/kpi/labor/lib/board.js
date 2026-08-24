@@ -386,12 +386,25 @@ export function buildBoard({
   let spent_closed = null;
   let spent_in_progress = null;
 
+  // PR-A - week-state counters (closed_weeks_count, in_progress_week_start,
+  // not_started_weeks_count) fire for BOTH single_period_in_progress AND
+  // multi_period. Owner ruling 2026-08-24: SignalCards on multi_period
+  // needs these to compute "Of budget used", "Left unspent", per-week /
+  // per-worker hours facts, and the "N of M weeks closed" sub-line.
+  // The prior single_period_in_progress-only guard was the root cause of
+  // five separate "shows a dash" complaints on FYTD + Last-4-Weeks.
+  if (kind === "single_period_in_progress" || kind === "multi_period") {
+    for (const w of weeksOut) {
+      if (w.state === "closed") closed_weeks_count += 1;
+      if (w.state === "in_progress") in_progress_week_start = w.week_start;
+      if (w.state === "not_started") not_started_weeks_count += 1;
+    }
+  }
   if (kind === "single_period_in_progress") {
     elapsed_weeks = computeElapsedWeeks(weeksOut, today);
     for (const w of weeksOut) {
-      if (w.state === "closed") { closed_weeks_count += 1; spent_closed = (spent_closed || 0) + w.spent; }
-      if (w.state === "in_progress") { in_progress_week_start = w.week_start; spent_in_progress = w.spent; }
-      if (w.state === "not_started") not_started_weeks_count += 1;
+      if (w.state === "closed") spent_closed = (spent_closed || 0) + w.spent;
+      if (w.state === "in_progress") spent_in_progress = w.spent;
     }
     spent_closed = spent_closed != null ? r2(spent_closed) : 0;
     spent_in_progress = spent_in_progress != null ? r2(spent_in_progress) : 0;
@@ -491,6 +504,17 @@ export function buildBoard({
     period_start: isSinglePeriod ? periodStartISO(selection.value) : null,
     period_end: isSinglePeriod ? periodEndISO(selection.value) : null,
     weeks_in_period: isSinglePeriod ? WEEKS_PER_PERIOD : null,
+    // PR-A - total weeks in the requested range (multi_period gets a
+    // denominator so "N of M weeks closed" can render on FYTD /
+    // Last-4-Weeks / any multi-period selection). single_period ranges
+    // still key their "N of M" off weeks_in_period per the existing
+    // contract; both fields coexist.
+    weeks_in_range: weeksOut.length,
+    // PR-A - range boundaries as ISO strings so multi_period pace-card
+    // sub-line can render "range closed through MM/DD/YY" when the
+    // range is fully closed.
+    range_start_iso: start,
+    range_end_iso: end,
     // Money
     period_budget: isSinglePeriod ? budget : null,
     range_budget: budget,

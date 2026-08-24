@@ -13,6 +13,15 @@
 
 import { fmt$, fmtHrs } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
+// PR-A - pure fact builders live in a plain-JS module so a Node probe
+// can construct synthetic board payloads and assert without JSX
+// compilation. The JSX render below consumes the same models; probe
+// green implies the client would render green on the same inputs.
+import {
+  buildPaceCardModel,
+  buildHoursLeftModel,
+  pillFor as _pillForShared,
+} from "../lib/signalCardModels.js";
 
 // V34 - the pill and the card stripe come from ONE expression per card.
 // Each caller derives its `state`; Head renders the pill from the same
@@ -69,107 +78,37 @@ function Facts({ items }) {
 }
 
 // ── Pace / Final vs budget ────────────────────────────────────────
-// V32-1..V32-4. State-dependent because the underlying figure changes
-// definition between in-progress and closed periods.
-function PaceCard({ board }) {
-  const budget = board?.period_budget || board?.range_budget;
-  const spent = board?.spent_to_date;
-  const v = board?.variance;
-  const verdict = board?.verdict;
-  const kind = board?.kind;
-  const elapsedPct = board?.elapsed_pct;
-  const closedWeeks = board?.closed_weeks_count || 0;
-  const projectedEnd = board?.projected_period_end;
-  const inProgress = kind === "single_period_in_progress";
-  const closed = kind === "single_period_closed";
-
-  if (v == null || !budget) {
-    return (
-      <SignalCard state="neutral">
-        <Head eyebrow={inProgress ? "SPENDING PACE" : "FINAL VS BUDGET"} state="neutral" label="—" />
-        <Hero><span className="kpi-sig-hero-mute">—</span></Hero>
-        <Sub><span className="kpi-sig-sub-mute">no budget in range</span></Sub>
-        <Facts items={[
-          { label: "Spent", value: spent != null ? fmt$(spent) : "—" },
-          { label: "Budget", value: "—" },
-        ]} />
-      </SignalCard>
-    );
+// V32-1..V32-4. State-dependent. PR-A: multi_period is a third state
+// (see signalCardModels.js for the model). This component is a thin
+// JSX render over the model.
+function renderFactValue(value) {
+  if (value && typeof value === "object" && value.shape === "arrow") {
+    return <ArrowFigure v={value.v} size={value.size} fmt={value.fmt === "hrs" ? fmtHrs : fmt$} />;
   }
-
-  const under = v < 0;
-
-  // V34 - state comes from the SAME expression the pill was already
-  // using. verdict is the single source of truth for card colour.
-  const { state, label } = pillFor(verdict);
-  const eyebrow = inProgress ? "SPENDING PACE" : "FINAL VS BUDGET";
-
-  // V32-2 + V33 P0 sub-line follows the SIGN of the variance.
-  const subLine = inProgress
-    ? (Math.abs(v) < 0.5
-        ? `on an even burn, ${elapsedPct != null ? Math.round(elapsedPct) : "—"}% into the period`
-        : `${under ? "behind" : "ahead of"} an even burn, ${elapsedPct != null ? Math.round(elapsedPct) : "—"}% into the period`)
-    : "period closed";
-
-  // V32-3 in-progress: Spent · Should be at · Projected end · Left to spend
-  //       closed:      Spent · Budget · Of budget used · Left unspent / Overrun
-  const shouldBeAt = inProgress
-    ? (spent != null && v != null ? spent - v : null)
-    : null;
-  const projectedFact = inProgress
-    ? (closedWeeks < 1
-        ? { value: "—", sub: "needs a closed week", muted: true }
-        : (projectedEnd != null
-            ? { value: <ArrowFigure v={projectedEnd - budget} size="value" /> }
-            : { value: "—", muted: true }))
-    : null;
-  const leftToSpend = inProgress && spent != null ? Math.max(0, budget - spent) : null;
-  const ofBudgetUsedPct = closed && budget > 0 && spent != null ? (spent / budget) * 100 : null;
-  const leftUnspent = closed && spent != null ? budget - spent : null;
-
-  // V34 - signed facts carry the tone that matches their sign so the
-  // colour language on the card is unified. `Of budget used` is signed
-  // in meaning: <=100% good, >100% bad.
-  const facts = inProgress
-    ? [
-        { label: "Spent",        value: spent != null ? fmt$(spent) : "—" },
-        { label: "Should be at", value: shouldBeAt != null ? fmt$(shouldBeAt) : "—" },
-        { label: "Projected end", value: projectedFact.value, sub: projectedFact.sub, muted: projectedFact.muted },
-        { label: "Left to spend", value: leftToSpend != null ? fmt$(leftToSpend) : "—" },
-      ]
-    : [
-        { label: "Spent",  value: spent != null ? fmt$(spent) : "—" },
-        { label: "Budget", value: fmt$(budget) },
-        { label: "Of budget used",
-          value: ofBudgetUsedPct != null ? `${ofBudgetUsedPct.toFixed(1)}%` : "—",
-          tone: ofBudgetUsedPct == null ? undefined : ofBudgetUsedPct > 100 ? "bad" : "good" },
-        leftUnspent != null && leftUnspent >= 0
-          ? { label: "Left unspent", value: fmt$(leftUnspent), tone: "good" }
-          : { label: "Overrun", value: leftUnspent != null ? fmt$(Math.abs(leftUnspent)) : "—", tone: "bad" },
-      ];
-
+  return value;
+}
+function renderFacts(items) {
+  return items.map(it => ({ ...it, value: renderFactValue(it.value) }));
+}
+function PaceCard({ board }) {
+  const m = buildPaceCardModel(board);
   return (
-    <SignalCard state={state}>
-      <Head eyebrow={eyebrow} state={state} label={label} />
+    <SignalCard state={m.state}>
+      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} />
       <Hero>
-        <ArrowFigure v={v} size="hero" />
+        {m.heroMute ? <span className="kpi-sig-hero-mute">—</span> : <ArrowFigure v={m.heroV} size="hero" />}
       </Hero>
-      <Sub>{subLine}</Sub>
-      <Facts items={facts} />
+      <Sub>
+        {m.subMute ? <span className="kpi-sig-sub-mute">{m.subMute}</span> : m.subLine}
+      </Sub>
+      <Facts items={renderFacts(m.facts)} />
     </SignalCard>
   );
 }
 
-// V29-17 - pill vocabulary is the same across the row. V34 - pill tone
-// IS the card state. Overtime and Payroll compute their own state
-// directly (they do not go through verdict) so this helper stays a
-// thin verdict-to-tone map for cards that DO run off verdict.
-function pillFor(verdict) {
-  if (verdict === "on_track") return { state: "good", label: "ON TARGET" };
-  if (verdict === "watch")    return { state: "warn", label: "WATCH" };
-  if (verdict === "over")     return { state: "bad",  label: "OVER" };
-  return { state: "neutral", label: "—" };
-}
+// PR-A - pillFor moved into signalCardModels.js so the pure model
+// path uses it too; keep a local alias for any legacy callers here.
+const pillFor = _pillForShared;
 
 // ── Overtime ──────────────────────────────────────────────────────
 // V32-5..V32-7. Thresholds come from server config (never hardcoded).
@@ -245,102 +184,24 @@ function OvertimeCard({ board, salary }) {
 //     (arrow + colour), facts = Budgeted / Used / Unused-or-Overrun
 //     / Blended rate. The fact set swaps between shapes - it does
 //     not dash out a fact that never applied.
+// PR-A - HoursLeftCard is a thin JSX render over buildHoursLeftModel
+// (signalCardModels.js). multi_period + running week uses the in-progress
+// shape; multi_period fully closed returns { hidden: true } and this
+// component returns null (card absent, not zeroed).
 function HoursLeftCard({ board, salary }) {
-  const budget = board?.period_budget || board?.range_budget;
-  const spent = board?.spent_to_date ?? 0;
-  // Salary PR 3 C2 - when salary is on, the merged board's avg_rate
-  // recomputes as (hourly + salary $) / (hourly hours only) and is
-  // semantically wrong (PR 2 flagged this). Read the explicit
-  // blended_rate_hourly the route ships instead; the rate stays
-  // hourly-basis and the card labels it below.
-  const rate = salary?.blended_rate_hourly ?? board?.avg_rate;
-  const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
-  const hoursBasisHourlyOnly = salary?.hours_basis === "hourly_only";
-  const rateLabel = rateBasisHourlyOnly ? "Hourly rate" : "Blended rate";
-  const workers = board?.distinct_workers ?? 0;
-  const kind = board?.kind;
-  const inProgress = kind === "single_period_in_progress";
-  const closed = kind === "single_period_closed";
-  const notStarted = board?.not_started_weeks_count || 0;
-  const weeksRemaining = inProgress ? (board?.in_progress_week_start ? 1 : 0) + notStarted : 0;
-  const dollarsLeft = budget != null && budget > 0 ? budget - spent : null;
-  const hoursLeft = (rate != null && rate > 0 && dollarsLeft != null)
-    ? Math.max(0, dollarsLeft / rate)
-    : null;
-  const isOver = dollarsLeft != null && dollarsLeft < 0;
-  const hoursOver = isOver && rate != null && rate > 0
-    ? Math.abs(dollarsLeft) / rate
-    : 0;
-
-  if (budget == null || rate == null || rate <= 0) {
-    return (
-      <SignalCard state="neutral">
-        <Head eyebrow="HOURS LEFT TO SCHEDULE" state="neutral" label="—" />
-        <Hero><span className="kpi-sig-hero-mute">—</span></Hero>
-        <Sub><span className="kpi-sig-sub-mute">no budget to compare</span></Sub>
-        <Facts items={[
-          { label: "Per week",     value: "—", muted: true },
-          { label: "Per worker",   value: "—", muted: true },
-          { label: "Budget left",  value: "—" },
-          { label: rateLabel, value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
-        ]} />
-      </SignalCard>
-    );
-  }
-
-  // V34 - in-progress -> info (blue); closed under -> good; closed
-  // over -> bad. All three drive stripe + pill class from this one
-  // expression.
-  const state = inProgress ? "info" : (closed && isOver ? "bad" : "good");
-  const label = closed && isOver ? "OVER" : "ON TARGET";
-  const eyebrow = closed ? "HOURS VS BUDGET" : "HOURS LEFT TO SCHEDULE";
-
-  const perWeek = (inProgress && weeksRemaining > 0 && hoursLeft != null)
-    ? hoursLeft / weeksRemaining
-    : null;
-  const perWorkerPerWeek = (perWeek != null && workers > 0) ? perWeek / workers : null;
-
-  const budgetedHours = rate > 0 ? budget / rate : null;
-  const usedHours = board?.hours_vs_budget?.worked ?? null;
-
-  const heroNode = closed
-    ? <ArrowFigure v={isOver ? hoursOver : -(hoursLeft ?? 0)} size="hero" fmt={fmtHrs} />
-    : <span className={`kpi-sig-hero-val num ${isOver ? "kpi-sig-hero-bad" : ""}`}>{fmtHrs(isOver ? hoursOver : (hoursLeft ?? 0))}</span>;
-
-  const heroSub = closed
-    ? (isOver ? "beyond what the budget covered" : "under what the budget covered")
-    : (isOver ? "beyond what the budget covers" : "you can still schedule this period");
-
-  const facts = closed
-    ? [
-        { label: "Budgeted", value: budgetedHours != null ? fmtHrs(budgetedHours) : "—" },
-        { label: "Used",     value: usedHours != null ? fmtHrs(usedHours) : "—" },
-        isOver
-          ? { label: "Overrun",     value: fmtHrs(hoursOver), tone: "bad" }
-          : { label: "Unused",      value: fmtHrs(hoursLeft ?? 0), tone: "good" },
-        { label: rateLabel, value: `$${rate.toFixed(2)}/hr` },
-      ]
-    : [
-        { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
-        // Salary PR 3 C2 - salaried people are not scheduled and
-        // carry zero hours by construction. When hours_basis is
-        // hourly_only, the per-worker fact reads 'hourly only'
-        // rather than a number that would silently exclude them.
-        { label: "Per worker",
-          value: hoursBasisHourlyOnly ? "hourly only" : (perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—"),
-          muted: hoursBasisHourlyOnly ? false : (perWorkerPerWeek == null) },
-        { label: "Budget left",
-          value: isOver ? <ArrowFigure v={Math.abs(dollarsLeft)} size="value" /> : fmt$(dollarsLeft ?? 0),
-          tone: isOver ? "bad" : "good" },
-        { label: rateLabel, value: `$${rate.toFixed(2)}/hr` },
-      ];
-
+  const m = buildHoursLeftModel(board, salary);
+  if (m.hidden) return null;
+  const hero = m.heroMute
+    ? <span className="kpi-sig-hero-mute">—</span>
+    : m.hero?.shape === "arrow"
+      ? <ArrowFigure v={m.hero.v} size={m.hero.size} fmt={m.hero.fmt === "hrs" ? fmtHrs : fmt$} />
+      : <span className={`kpi-sig-hero-val num ${m.hero?.over ? "kpi-sig-hero-bad" : ""}`}>{m.hero?.value}</span>;
   return (
-    <SignalCard state={state}>
-      <Head eyebrow={eyebrow} state={state} label={label} />
-      <Hero>{heroNode}</Hero>
-      <Sub>{heroSub}</Sub>
-      <Facts items={facts} />
+    <SignalCard state={m.state}>
+      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} />
+      <Hero>{hero}</Hero>
+      <Sub>{m.subMute ? <span className="kpi-sig-sub-mute">{m.subMute}</span> : m.heroSub}</Sub>
+      <Facts items={renderFacts(m.facts)} />
     </SignalCard>
   );
 }
@@ -365,7 +226,11 @@ function PayrollDataCard({ board, freshness, salary }) {
   const rate = salary?.blended_rate_hourly ?? board?.avg_rate;
   const workers = board?.distinct_workers ?? 0;
   const closedWeeks = board?.closed_weeks_count ?? 0;
-  const weeksInPeriod = board?.weeks_in_period;
+  // PR-A - weeks denominator: single_period uses weeks_in_period (4);
+  // multi_period uses weeks_in_range (total in the range - e.g. 35 for
+  // FYTD). Both fields ship on every board response; whichever is
+  // populated for this kind is what we read.
+  const weeksInPeriod = board?.weeks_in_period ?? board?.weeks_in_range;
   const hasUnapproved = unpricedHrs > 0.004;
   const state = total === 0 ? "neutral" : hasUnapproved ? "warn" : "good";
   const label = total === 0 ? "—" : hasUnapproved ? "PARTIAL" : "FINAL";
