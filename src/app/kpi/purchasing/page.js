@@ -27,6 +27,7 @@ import "./purchasing.css";
 
 import {
   FY_START_ISO,
+  FY_END_ISO,
   periodOf,
   periodStartISO,
   periodEndISO,
@@ -39,7 +40,7 @@ import {
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "@/app/kpi/labor/components/FolioRail";
-import { costModelFor, isKnownAccount } from "@/lib/accountModels";
+import { costModelFor, isKnownAccount, goalFor } from "@/lib/accountModels";
 import { classifyTier } from "@/lib/kpi/classifyTier";
 
 import {
@@ -61,7 +62,11 @@ import { BucketCard } from "./components/BucketCard";
 import { LedgerCard } from "./components/LedgerCard";
 import { CardPurchases } from "./components/CardPurchases";
 import { VendorBreakdown } from "./components/VendorBreakdown";
-import { PassThroughPlaceholder } from "./components/PassThroughPlaceholder";
+// PR 3 - management-fee board components. Renders instead of the
+// at-risk cards for CIN - OH, STL - FL, STL - MO.
+import { ManagementFeeCard } from "./components/ManagementFeeCard";
+import { ReimbursableRow } from "./components/ReimbursableRow";
+import { FunMoneyCard } from "./components/FunMoneyCard";
 
 // Format ISO date -> "MM/DD" for chart week captions.
 function isoToMMDD(iso) {
@@ -650,10 +655,156 @@ export default function KpiPurchasingPage() {
     if (!data || !board) return null;
 
     if (isPassThrough) {
-      const acctMeta = (data?.members || [])[0];
+      // PR 3 - management-fee board (spec §2, §6.7).
+      // Layout, top to bottom (Kevin ruling 2026-08-24 + v22 render):
+      //   1. ManagementFeeCard           - annual goal, progress, 8-period trend
+      //   2. PeriodCard (passthru state) - same shape, no verdict
+      //   3. FunMoneyCard                - STL - FL only, real verdict on 3200.2
+      //   4. ReimbursableRow             - full width, category split + ledger
+      //   5. Equipment + R&M + Vendor    - three-up flatrow (reused from at-risk)
+      //   6. CardPurchases               - full width (reused from at-risk)
+      // COGS bucket cards are absent (§2 - would render as zeros).
+      const acctMeta = (data?.accounts_directory || []).find(a => a.team_key === account);
+      const clientLabel = acctMeta?.team_name || account;
+      let goalRow = null;
+      try { goalRow = goalFor(account); } catch { goalRow = null; }
+
+      // Calendar-year fraction elapsed vs FY2026 window. Stable across
+      // the day; used as the marker on the mgmt-fee progress bar.
+      const fyStartMs = new Date(FY_START_ISO + "T00:00:00Z").getTime();
+      const fyEndMs   = new Date(FY_END_ISO   + "T23:59:59Z").getTime();
+      const todayMs   = new Date(today       + "T12:00:00Z").getTime();
+      const yearElapsedFrac = fyEndMs > fyStartMs
+        ? Math.max(0, Math.min(1, (todayMs - fyStartMs) / (fyEndMs - fyStartMs)))
+        : 0;
+
+      // Reimbursable stuff, all from route.
+      const mgmt = data?.mgmt_fee || null;
+      const reimbTotal = Number(data?.totals?.reimbursable?.spent || 0);
+      const cats13 = (data?.categories || [])
+        .filter(c => String(c.gl_line_code || "").startsWith("13"));
+
+      // Card title matches at-risk logic.
+      const wop = board.runningWeekIdxFull != null ? board.runningWeekIdxFull + 1 : null;
+      const weeksInPeriodDenom = board.weeksInPeriod || board.weeksInRange || null;
+      const cardTitle = (() => {
+        if (resolvedPreset === "fytd") return "FISCAL YEAR TO DATE";
+        if (resolvedPreset === "last_4wk") return "THE LAST 4 WEEKS";
+        if (resolvedPreset === "this_period" || resolvedPreset === "last_period" || rangePeriodNo != null) {
+          return `PERIOD ${rangePeriodNo}`;
+        }
+        return rangeLabel ? rangeLabel.toUpperCase() : "CUSTOM RANGE";
+      })();
+
       return (
         <div className="kpi-p-board">
-          <PassThroughPlaceholder account={account} client={acctMeta || account} />
+          <div className="kpi-p-livenote" role="status">
+            <span className="kpi-p-livedot" aria-hidden="true" />
+            <span><b>Food, packaging and supplies are billed back to {clientLabel}. No verdict on this board - the reimbursable line is not a KitchFix cost.</b></span>
+          </div>
+
+          <ManagementFeeCard
+            account={account}
+            client={clientLabel}
+            goal={goalRow}
+            goalFytdSpent={mgmt?.goal_fytd_spent}
+            periodsTrend={mgmt?.periods_trend || []}
+            yearElapsedFrac={yearElapsedFrac}
+          />
+
+          <PeriodCard
+            periodNo={rangePeriodNo}
+            rangeLabel={rangeLabel}
+            weekOfPeriod={wop}
+            weeksInPeriod={weeksInPeriodDenom}
+            elapsedFrac={board.elapsedFrac}
+            closed={closed}
+            provisional={provisional}
+            isFutureRange={isFutureRange}
+            spent={board.kpiSpent}
+            budget={board.kpiBud}
+            bills={board.billsApprox}
+            cards={board.cardCodedInSpend}
+            cardsThroughLabel={cardsThroughLabel}
+            pending={board.pending}
+            tier={board.tier}
+            units={board.kpiUnits}
+            original={board.kpiTargets.original}
+            adjusted={board.kpiTargets.adjusted}
+            budgetSpent={board.kpiTargets.budgetSpent}
+            projectedClose={null}
+            cardTitle={cardTitle}
+            isPassThrough
+          />
+
+          {mgmt?.fun_money && (
+            <FunMoneyCard
+              funMoney={mgmt.fun_money}
+              elapsedFrac={board.elapsedFrac}
+              closed={closed}
+              isFutureRange={isFutureRange}
+            />
+          )}
+
+          <ReimbursableRow
+            account={account}
+            client={clientLabel}
+            spent={reimbTotal}
+            annualGoal={goalRow?.annual}
+            categories={cats13}
+            ledgerRows={data?.ledgers?.reimbursable?.rows}
+            ledgerTotalCount={data?.ledgers?.reimbursable?.total_count}
+            ledgerTotalAmount={data?.ledgers?.reimbursable?.total_amount}
+            ledgerCap={data?.ledgers?.reimbursable?.cap}
+            isAggregate={false}
+          />
+
+          <div className="kpi-p-flatrow kpi-p-flatrow-3up">
+            {board.ledgers
+              .filter(l => l.key === "equip" || l.key === "rm")
+              .map(l => (
+                <LedgerCard
+                  key={l.key}
+                  bucketKey={l.key}
+                  label={l.label}
+                  sub={l.sub}
+                  strokeClass={l.strokeClass}
+                  budget={l.budget}
+                  spent={l.spent}
+                  elapsedFrac={board.elapsedFrac}
+                  closed={closed}
+                  isFutureRange={isFutureRange}
+                  ledgerRows={l.ledgerRows}
+                  totalCount={l.totalCount}
+                  totalAmount={l.totalAmount}
+                  cap={l.cap}
+                  isAggregate={isAggregate}
+                />
+              ))}
+            <VendorBreakdown
+              account={account}
+              rows={data?.vendors?.rows}
+              totalCount={data?.vendors?.total_count}
+              totalAmount={data?.vendors?.total_amount}
+              cap={data?.vendors?.cap}
+              unresolvedCount={data?.vendors?.unresolved_count}
+              fragmentation={data?.vendors?.fragmentation}
+              priorHasData={data?.vendors?.prior_has_data}
+              priorRange={data?.vendors?.prior_range}
+              isAggregate={isAggregate}
+            />
+          </div>
+
+          <CardPurchases
+            pendingAmount={board.pending}
+            pendingLineCount={board.pendingLineCount}
+            closed={closed}
+            rows={data?.card_charges?.rows}
+            totalCount={data?.card_charges?.total_count}
+            totalAmount={data?.card_charges?.total_amount}
+            cap={data?.card_charges?.cap}
+            isAggregate={isAggregate}
+          />
         </div>
       );
     }

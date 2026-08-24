@@ -69,6 +69,11 @@ export function PeriodCard({
   // custom pick. Purchasing was rendering "PERIOD -" with a blank
   // where the number goes on every multi-period range.
   cardTitle,
+  // PR 3 (spec §2) - pass-through accounts short-circuit stateOf to
+  // 'passthru' (pill reads "Billed to client"). Additive prop, default
+  // false; at-risk callers unchanged. Threads into the ONE stateOf
+  // call so pill / hero / chart all agree, per §9B one-source rule.
+  isPassThrough = false,
 }) {
   // ONE stateOf call - pill / hero / chart / secondary all read from it.
   const cs = resolveCardState({
@@ -77,6 +82,7 @@ export function PeriodCard({
     elapsedFrac,
     hasBills: Number(spent || 0) + Number(pending || 0) > 0,
     closed,
+    isPassThrough,
   });
 
   // PR-2 R4 Part A: period-card hero MUST equal Bills + Cards for the

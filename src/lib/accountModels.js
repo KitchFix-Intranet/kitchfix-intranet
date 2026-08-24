@@ -167,3 +167,82 @@ export function isKnownAccount(accountKey) {
 export function isPassThrough(accountKey) {
   return PASS_THROUGH_ACCOUNTS.has(accountKey);
 }
+
+// ─── MANAGEMENT-FEE ANNUAL GOALS ────────────────────────────────────
+//
+// Annual stewardship goals for the three pass_through accounts, used by
+// the management-fee board (PR 3). Owner-supplied 2026-08-24 - not from
+// `kpi_budgets` because these are ANNUAL commitments the client and
+// KitchFix agree on for the season, not period-scoped operating budgets.
+//
+// The board renders them as `spent FYTD of $goal annual goal, X% used`
+// with a progress bar and marker at fraction-of-year-elapsed. No
+// verdict, no red/green - the card exists so an outlier is visible
+// early, not so someone is graded (spec §6.7 + PR 3 prompt).
+//
+// STL - MO breakdown, so future-you does not have to reconstruct it:
+//   base    = $281,345.95
+//   water   = $50,000.00      (added on top per Sebastian)
+//   ─────────────────────
+//   goal    = $331,345.95     (BEFORE Missouri sales tax)
+//
+// STL - MO carries `salesTaxApplied: false`. The board surfaces an
+// amber caution below the goal because Missouri sales tax has not yet
+// been applied - the rate is still outstanding from Sebastian. **Do
+// NOT hard-code a rate. Do NOT estimate.** When Sebastian rules, the
+// value here and the `salesTaxApplied` flag flip together, in the same
+// PR. Until then the caution is the honest surface.
+//
+// Adding a new pass_through account: extend PASS_THROUGH_ACCOUNTS above
+// AND add a row here. `goalFor()` throws on an unknown pass_through key
+// so a silent miss cannot happen.
+export const MANAGEMENT_FEE_GOALS = {
+  "CIN - OH": {
+    annual: 227391.02,
+    salesTaxApplied: true,
+    breakdown: null,
+  },
+  "STL - FL": {
+    annual: 1060000.00,
+    salesTaxApplied: true,
+    breakdown: null,
+  },
+  "STL - MO": {
+    annual: 331345.95,
+    salesTaxApplied: false,
+    breakdown: {
+      base: 281345.95,
+      water: 50000.00,
+      note: "before Missouri sales tax - rate outstanding from Sebastian",
+    },
+  },
+};
+
+/**
+ * Resolve the annual management-fee goal for a pass_through account.
+ *
+ * Returns { annual, salesTaxApplied, breakdown } for the three
+ * pass_through accounts. Returns null for at_risk / revenue_flex
+ * accounts (they have no annual goal to render).
+ *
+ * THROWS on an unknown key - same discipline as costModelFor. THROWS if
+ * called with a pass_through key that has no goal row (contract error:
+ * PASS_THROUGH_ACCOUNTS and MANAGEMENT_FEE_GOALS must stay in sync).
+ *
+ * @param {string} accountKey
+ * @returns {{ annual: number, salesTaxApplied: boolean, breakdown: object|null } | null}
+ */
+export function goalFor(accountKey) {
+  if (typeof accountKey !== "string" || accountKey.length === 0) {
+    throw new Error(`goalFor: invalid accountKey ${JSON.stringify(accountKey)}`);
+  }
+  if (!KNOWN_ACCOUNTS.has(accountKey)) {
+    throw new Error(`goalFor: unknown accountKey ${JSON.stringify(accountKey)} - add to accountModels.js`);
+  }
+  if (!PASS_THROUGH_ACCOUNTS.has(accountKey)) return null;
+  const row = MANAGEMENT_FEE_GOALS[accountKey];
+  if (!row) {
+    throw new Error(`goalFor: pass_through ${JSON.stringify(accountKey)} missing from MANAGEMENT_FEE_GOALS - keep the two sets in sync`);
+  }
+  return row;
+}
