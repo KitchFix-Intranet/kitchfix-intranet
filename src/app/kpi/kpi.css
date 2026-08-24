@@ -3291,31 +3291,12 @@
 /* HS FB1 PR-2 verify 2026-08-25 - Period | Homestand toggle now reuses
    .kpi-seg wholesale for base geometry (guaranteed height parity with
    the Hourly / + Salary toggle). Only the board-level margin and the
-   count badge remain HS-specific. */
+   count badge remain HS-specific. The prior bespoke .kpi-hs-view-tab*
+   rules were replaced; the branch's merge-from-main reintroduced them
+   duplicated and dropped the closing brace on this block - that's what
+   was tripping the "Unclosed block at 3295" CI CSS error. */
 .kpi-hs-view-tabs {
   margin: 0 var(--kpi-sp-1) var(--kpi-sp-4);
-/* HS FB1 PR-2 2026-08-24 - Period | Homestand toggle joins .kpi-seg /
-   .kpi-ctl height so it matches Hourly / + Salary. Wrapper carries
-   --kpi-ctl height; each tab strips vertical padding so lane height
-   drives the box. Prompt 2c owner measurement: was 34.9px vs 25px. */
-.kpi-hs-view-tabs {
-  display: inline-flex; gap: 0;
-  height: var(--kpi-ctl);
-  margin: 0 var(--kpi-sp-1) var(--kpi-sp-4);
-  background: #fff;
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-tbar-rad);
-  overflow: hidden;
-}
-.kpi-hs-view-tab {
-  padding: 0 var(--kpi-sp-3);
-  font-size: var(--kpi-t-body);
-  font-weight: 700;
-  color: var(--text-subtle);
-  border: 0; background: none; cursor: pointer;
-  font-family: inherit;
-  display: inline-flex; align-items: center;
-  transition: background .12s, color .12s;
 }
 .kpi-hs-view-tab-cnt {
   font-size: var(--kpi-t-meta); font-weight: 500;
@@ -3655,7 +3636,6 @@
    Period .kpi-sig-sub-lane is 500; HS was rendering 400. */
 .kpi-hs-sub {
   font-size: var(--kpi-t-meta); font-weight: 500; color: var(--n-600);
-  font-size: var(--kpi-t-meta); color: var(--n-600);
   margin-top: var(--kpi-sp-1); line-height: 1.45;
 }
 .kpi-hs-sub b { font-weight: 700; color: var(--n-900, #0A2548); }
