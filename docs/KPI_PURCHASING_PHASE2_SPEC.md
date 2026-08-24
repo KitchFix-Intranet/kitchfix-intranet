@@ -165,8 +165,14 @@ no bills at all -> none      no budget -> nobud      pass_through -> passthru
 Pill, bar pattern, hero colour and every variance readout call the **same** `stateOf()`. Three
 elements disagreeing about one bucket is a P0.
 
-- **Period state** uses bills + pending. **Bucket state** uses bills only. They legitimately differ -
-  the period reading over while buckets read under is the point of the board.
+- **Bucket state uses bills + coded cards** - everything on that GL line, whatever the source.
+  **CORRECTED 2026-08-24.** This rule previously read "bills only", written when every card
+  transaction was uncoded and sat in Pending, so no card spend reached a bucket. **G3 changed that** -
+  card spend now maps to `3200.x`, `3400.x`, `3500.x` and is real spend against those budgets. A food
+  bucket that excludes food bought on a card understates it. The `From bills` and `From cards`
+  sub-rows show the split; the hero and the pill show the total.
+- **Period state uses bills + coded cards + pending.** Pending has no GL line so it cannot sit in a
+  bucket, but it is money already spent and it belongs in the period verdict.
 
 ### 5.3 Pending
 ```

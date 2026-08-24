@@ -28,12 +28,13 @@ export function BucketCard({
   strokeClass,        // 'kpi-p-b-food' etc.
   identity,           // WeekChart identity: 'food' | 'pkg' | 'veh'
   budget,
-  spent,              // bills-only for state; bills + coded cards for hero total? per §3.4 bills only
+  spent,              // bills + coded cards - the fuller number, single source
+                      // for hero, %-used, pill state, and bar/chart state.
   bills,
   cardsCoded,
   elapsedFrac,
   closed,
-  weekAmounts,        // 4 bars, bills-only per-week for this bucket
+  weekAmounts,        // 4 bars, bills+coded per-week for this bucket
   weekLabels,
   runningWeekIdx,
   original,
@@ -43,36 +44,39 @@ export function BucketCard({
                       //   swaps the "aim for $X / wk" caption for the
                       //   "budget spent" wording. Never negative on screen.
 }) {
-  // §9B ONE-SOURCE (PR-2 R2 Fix 1): hero, %-used, pill state, and
-  // bar/chart state ALL resolve from the SAME `spent` number.
+  // §9B ONE-SOURCE (PR-2 R2 Fix 1 revision, owner ruling 2026-08-24):
+  // hero, %-used, pill state, and bar/chart state ALL resolve from the
+  // SAME `spent` number - which is bills + coded cards.
   //
-  // Owner ruling 2026-08-24 (R2): "Bind them to one value." Prior state
-  // fed `bills` to the state resolver and `bills + cardsCoded` to the
-  // hero, producing a green pill above an over-budget hero on Food FYTD
-  // ALL. Spec §3.4 mandates bills-only for bucket state; that same
-  // bills-only figure now drives the hero and the % used. `cardsCoded`
-  // remains visible in the "From cards" sub-row - it is NOT dropped, it
-  // is separated from the state-driving figure.
-  const heroSpent = Number(bills || 0);
+  // Prior state (R1) fed bills-only into both the hero and the pill
+  // citing §3.4. §3.4 was written BEFORE G3 mapped card spend to real
+  // buckets; taking the hero to bills-only dropped $141,550.30 of food
+  // card spend off the food card. Owner ruling 2026-08-24: hero and
+  // pill BOTH come from bills + coded cards (one source, the fuller
+  // number). The "From bills" and "From cards" sub-rows keep showing
+  // the split for auditability. The assertion below still fires on any
+  // future drift.
+  const heroSpent = Number(spent || 0);
   const cs = resolveCardState({
-    spent: heroSpent,              // §3.4: bills-only, and hero same source
+    spent: heroSpent,              // bills + coded cards; hero same source
     budget: Number(budget || 0),
     elapsedFrac,
-    hasBills: heroSpent > 0,
+    hasBills: Number(bills || 0) > 0,
     closed,
   });
 
-  // Dev-only assertion (§9B, R2 Fix 1): hero and pill MUST resolve from
-  // the same `spent`. Any future edit that reintroduces two sources
-  // trips this in development. `stateOf` on the hero-driving `heroSpent`
-  // must match `cs.state`; if not, the resolver is being called with
-  // a different input somewhere and the card is lying.
+  // Dev-only assertion (§9B, R2 Fix 1 revision): hero and pill MUST
+  // resolve from the same `spent`. Any future edit that reintroduces
+  // two sources trips this in development. `stateOf` on the hero-driving
+  // `heroSpent` (bills + coded) must match `cs.state`; if not, the
+  // resolver is being called with a different input somewhere and the
+  // card is lying.
   if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
     const heroDerivedState = stateOf({
       spent: heroSpent,
       budget: Number(budget || 0),
       elapsedFrac,
-      hasBills: heroSpent > 0,
+      hasBills: Number(bills || 0) > 0,
       closed,
     });
     if (heroDerivedState !== cs.state) {
