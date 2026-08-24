@@ -461,19 +461,35 @@ export default function KpiPurchasingPage() {
       };
     });
 
-    // Ledger cards - equipment + R&M via categories[].
+    // Ledger cards - equipment + R&M + reimbursable via categories[]
+    // and the PR-2 R6 Part B capped `ledgers.*` block from the route.
     const ledgers = LEDGER_DEFS.map(def => {
-      const cat = categoryFor(data?.categories, def.glLineCode);
-      const bud = cat ? Number(cat.budget || 0) : 0;
-      const spent = cat ? Number(cat.spent || 0) : 0;
-      // Ledger rows: PR 2 has only the aggregate; per-purchase lands
-      // with PR 4 drill. Placeholder shows the roll-up figure. The
-      // empty-state copy inside LedgerCard is now conditional on
-      // `spent > 0` per PR-2 R2 Fix 4 - a non-zero hero above
-      // "no purchases recorded" is a lie, so the copy switches to
-      // "Line detail lands with the drill route." when there IS spend.
-      const ledgerRows = [];
-      return { ...def, budget: bud, spent, ledgerRows };
+      // Hero sums categories[] for a single gl line code OR a family.
+      let cat = null;
+      let bud = 0;
+      let spent = 0;
+      if (def.glLineCode) {
+        cat = categoryFor(data?.categories, def.glLineCode);
+        bud = cat ? Number(cat.budget || 0) : 0;
+        spent = cat ? Number(cat.spent || 0) : 0;
+      } else if (def.glLikePrefix) {
+        // Family bucket (e.g. reimbursable 13xx) - sum every matching
+        // category's { budget, spent }. Same source of truth the route
+        // uses to compute `ledger_reconciliation.reimbursable.hero`.
+        const matches = (data?.categories || []).filter(c =>
+          String(c.gl_line_code || "").startsWith(def.glLikePrefix));
+        bud = matches.reduce((s, c) => s + Number(c.budget || 0), 0);
+        spent = matches.reduce((s, c) => s + Number(c.spent || 0), 0);
+      }
+      // Per-card capped ledger rows from the route's PR-2 R6 payload.
+      // Missing block -> empty (LedgerCard renders "line detail lands
+      // with the drill route" when hero > 0, or "no purchases" when 0).
+      const ledgerData = data?.ledgers?.[def.payloadKey] || null;
+      const ledgerRows = ledgerData?.rows || [];
+      const totalCount = ledgerData?.total_count ?? null;
+      const totalAmount = ledgerData?.total_amount ?? null;
+      const cap = ledgerData?.cap ?? null;
+      return { ...def, budget: bud, spent, ledgerRows, totalCount, totalAmount, cap };
     });
 
     return {
@@ -723,6 +739,10 @@ export default function KpiPurchasingPage() {
               elapsedFrac={board.elapsedFrac}
               closed={closed}
               ledgerRows={l.ledgerRows}
+              totalCount={l.totalCount}
+              totalAmount={l.totalAmount}
+              cap={l.cap}
+              isAggregate={isAggregate}
             />
           ))}
         </div>
@@ -732,8 +752,26 @@ export default function KpiPurchasingPage() {
             pendingAmount={board.pending}
             pendingLineCount={board.pendingLineCount}
             closed={closed}
+            /* PR-2 R6 Part B - per-charge rows from the route
+               (uncoded rippling_spend, capped at 50). */
+            rows={data?.card_charges?.rows}
+            totalCount={data?.card_charges?.total_count}
+            totalAmount={data?.card_charges?.total_amount}
+            cap={data?.card_charges?.cap}
+            isAggregate={isAggregate}
           />
-          <VendorBreakdown account={account} rows={null} />
+          <VendorBreakdown
+            account={account}
+            /* PR-2 R6 Part B - per-vendor rollup from the route
+               (billcom_ref_vendors resolution, capped at 25). */
+            rows={data?.vendors?.rows}
+            totalCount={data?.vendors?.total_count}
+            totalAmount={data?.vendors?.total_amount}
+            cap={data?.vendors?.cap}
+            unresolvedCount={data?.vendors?.unresolved_count}
+            fragmentation={data?.vendors?.fragmentation}
+            isAggregate={isAggregate}
+          />
         </div>
       </div>
     );

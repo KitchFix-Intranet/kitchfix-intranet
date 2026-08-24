@@ -112,14 +112,55 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--kpi-sp-3);
 }
-/* Floor-first (§7 rule 11): collapse two-up shapes on narrow. */
-@media (max-width: 780px) {
-  .kpi-app .kpi-p-row,
-  .kpi-app .kpi-p-pairrow,
-  .kpi-app .kpi-p-flatrow {
-    grid-template-columns: 1fr;
-  }
-}
+/* PR-2 R6 Part A - reflow, don't shrink (owner ruling 2026-08-24).
+ *
+ * Measured onset per failure (before this rule):
+ *   F1 period hero overflows its 1fr column: 1275px
+ *      cause: .kpi-p-nums is `1fr 1fr` at every width, but the period
+ *      card sits in the .kpi-p-row 0.82fr left half. Below 1275 the
+ *      left-half is <= 350px, giving each hero <= 170px - not enough
+ *      to hold `$2,380,257.84` (~177px), and `white-space: nowrap`
+ *      makes it paint past its cell into the neighbor hero's cell.
+ *   F2 subline `of $X · Y% used` truncates: 1250px
+ *      cause: same column shrink - the subline lives in the same 1fr
+ *      cell and text-overflows with ellipsis mid-percentage.
+ *   F3 chart caption $ values overflow: 1600px (data-density)
+ *      cause: .kpi-p-wks packs N units into repeat(N, 1fr). At tier-C
+ *      FYTD N=34 periods; each caption is ~72px, container 1fr <
+ *      72px at every measured width. Silent truncation.
+ *   F4 folio horizontal scroll: 1000px
+ *      cause: labor's rail behaviour - .kpi-cols already collapses at
+ *      max-width 1023px in kpi.css. This is labor's chosen behaviour
+ *      (rule 2 + Check 4 - match labor, do not invent a third pattern).
+ *   F5 card title `FISCAL YEAR TO DATE` wraps to two lines: 1050px
+ *      cause: the .kpi-p-cardtitle sits inside the 0.82fr left half
+ *      whose width < the wrapped-title's word width once the range
+ *      subtitle joins the same row.
+ *
+ * Rule: below the breakpoint, the .kpi-p-row STACKS. The number card
+ * gets full main-column width, the chart card sits below at full width.
+ * .kpi-p-nums goes single column so each hero owns its own row. The
+ * chart card lets its .kpi-p-wks scroll horizontally at narrow widths
+ * so a caption never has to fit into < 72px (silent truncation is the
+ * failure mode this board has three times over).
+ *
+ * Type roles unchanged - no shrunk numbers (spec rule).
+ *
+ * Two breakpoints:
+ *   1100px - .kpi-p-row stacks + .kpi-p-nums stacks + .kpi-p-cp stacks +
+ *            .kpi-p-flatrow / .kpi-p-pairrow stack (they were 780px).
+ *            Fixes F1, F2, F5 by giving each hero a full-width row.
+ *   780px  - keeps the floor-first collapse of any residual 2-up shape.
+ *            (Now folded into the 1100px block; retaining the 780
+ *            step for absolute-floor devices via a nested rule below.)
+ *
+ * Folio (F4) stays at labor's 1023px break in kpi.css - Check 4
+ * requires matching labor's rail behaviour, not inventing a third
+ * pattern.
+ */
+/* Media query lives at the end of this file (after every base rule)
+ * so it overrides later same-specificity base declarations without
+ * needing added weight. See @media (max-width: 1300px) block below. */
 
 /* ═══ CARD HEAD (title + pill) ════════════════════════════════════ */
 .kpi-app .kpi-p-head {
@@ -325,8 +366,27 @@
      renders exactly units.length columns and asserts on the render. */
   display: grid;
   gap: var(--kpi-sp-3);
-  margin-top: auto;
   padding-top: var(--kpi-sp-3);
+}
+/* PR-2 R6 Part A - the strip's outer scroll container.
+ *
+ * Chart geometry rule (Part A owner ruling): a caption never has to fit
+ * into less than its own type width. The inline gridTemplateColumns
+ * uses `minmax(72px, 1fr)` per column so 7-digit dollar figures like
+ * `$132,634.76` render without silent truncation. When the container
+ * is wider than N * 72px (the common case) the `1fr` side wins and
+ * columns share space equally. When it is not (narrow viewport + tier
+ * C 34 units), this wrapper provides an honest horizontal scroll strip
+ * (`overflow-x: auto` reveals a native scroll thumb - the visible
+ * marker the spec asks for). Never silent.
+ */
+.kpi-app .kpi-p-wks-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-top: auto;
+  /* Preserve the plot's vertical breathing room inside the scroll strip.
+     Native scroll thumb reveals when content exceeds width - the visible
+     marker (spec: "never silent"). */
 }
 .kpi-app .kpi-p-wc {
   display: flex;
@@ -615,7 +675,11 @@
 .kpi-app .kpi-p-vbhead,
 .kpi-app .kpi-p-vbrow {
   display: grid;
-  grid-template-columns: 1.5fr auto 96px 72px;
+  /* PR-2 R6 Part B - the "Where it landed" column now carries a
+     split bar (SVG-like inline flex) instead of being an auto-sized
+     placeholder. Give it a min-width of 96px so segments are
+     distinguishable at narrow widths. */
+  grid-template-columns: 1.5fr minmax(96px, 1.2fr) 96px 72px;
   gap: var(--kpi-sp-3);
   align-items: center;
 }
@@ -630,7 +694,8 @@
   text-transform: uppercase;
   color: var(--n-500);
 }
-.kpi-app .kpi-p-vbhead span:not(:first-child),
+.kpi-app .kpi-p-vbhead span:nth-child(3),
+.kpi-app .kpi-p-vbhead span:nth-child(4),
 .kpi-app .kpi-p-vbrow .kpi-p-v,
 .kpi-app .kpi-p-vbrow .kpi-p-ch {
   text-align: right;
@@ -731,4 +796,31 @@
 /* ═══ ACCESSIBILITY ═══════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
   .kpi-app .kpi-p-card { transition: none; }
+}
+
+/* ═══ REFLOW BREAKPOINT (PR-2 R6 Part A) ══════════════════════════
+ * Placed at end-of-file so it overrides later same-specificity base
+ * rules without added weight (cascade order: later wins).
+ * See the doc block near the top of this file (search "PR-2 R6 Part A")
+ * for the per-failure onset measurements and the reflow rule.
+ */
+@media (max-width: 1300px) {
+  .kpi-app .kpi-p-row,
+  .kpi-app .kpi-p-pairrow,
+  .kpi-app .kpi-p-flatrow {
+    grid-template-columns: 1fr;
+  }
+  .kpi-app .kpi-p-nums {
+    grid-template-columns: 1fr;
+  }
+  .kpi-app .kpi-p-cp {
+    grid-template-columns: 1fr;
+    gap: var(--kpi-sp-3);
+  }
+  .kpi-app .kpi-p-cplist {
+    border-left: 0;
+    padding-left: 0;
+    padding-top: var(--kpi-sp-3);
+    border-top: 1px solid var(--n-200);
+  }
 }

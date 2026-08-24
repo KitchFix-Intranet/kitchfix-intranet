@@ -248,10 +248,19 @@ export function WeekChart({
     }
   }
 
-  // Grid width - one column per unit, minmax(0, 1fr).
-  const gridStyle = { gridTemplateColumns: `repeat(${slots.length || 1}, minmax(0, 1fr))` };
+  // Grid width. PR-2 R6 Part A - each column gets a minimum readable
+  // width equal to the caption $-figure width (~72px covers 7-digit
+  // amounts like $132,634.76). When the container is wide enough the
+  // `1fr` side wins and columns share the row equally; when it is not
+  // (narrow viewport + tier C 34 units), the row exceeds container
+  // width and the outer scroll container `.kpi-p-wks-scroll` provides
+  // a horizontal scroll strip instead of silently truncating captions
+  // (the failure mode this bar was hitting at 1600px on tier-C FYTD).
+  const MIN_COL_PX = 72;
+  const gridStyle = { gridTemplateColumns: `repeat(${slots.length || 1}, minmax(${MIN_COL_PX}px, 1fr))` };
 
   return (
+    <div className="kpi-p-wks-scroll">
     <div className="kpi-p-wks" style={gridStyle}>
       {slots.map((slot, i) => {
         const u = units[i];
@@ -349,6 +358,7 @@ export function WeekChart({
           </div>
         );
       })}
+    </div>
     </div>
   );
 }
