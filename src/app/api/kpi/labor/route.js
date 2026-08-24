@@ -306,6 +306,15 @@ export async function GET(request) {
   // the window as if it had been requested directly.
   let start = searchParams.get("start") || "2025-12-29";  // FY2026 opens
   let end = searchParams.get("end") || today;
+  // Future-range flag (owner ruling 2026-08-24). True when the
+  // requested START is strictly after today - the range hasn't begun.
+  // Client uses this to suppress verdict pills and to hide the three
+  // signal cards whose premise doesn't hold on a future range (Pace,
+  // Overtime, Payroll Data). Hours available stays because its
+  // premise holds perfectly: budget exists, no hours scheduled, every
+  // hour is available. A straddling range (start <= today <= end)
+  // gets false - it's genuinely in progress, verdicts are honest.
+  const is_future_range = start > today;
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
   const includeSalaryReq = searchParams.get("include_salary") === "1";
   const homestandParam = searchParams.get("homestand");   // <game_start ISO>, e.g. 2026-08-14
@@ -635,6 +644,7 @@ export async function GET(request) {
       dailyFloorISO,
       salary_available, includeSalary,
       resolveWorkerMeta,
+      is_future_range,
       // homestand PR-1/2 - wrapper splices these into the daily body.
       homestandSplice, homestandsList, homestandBank,
     });
@@ -827,6 +837,7 @@ export async function GET(request) {
     body.salary_available = salary_available;
     body.landing_account = landing_account;
     body.source = "weekly";
+    body.is_future_range = is_future_range;
     return NextResponse.json(body);
   }
 
@@ -884,6 +895,7 @@ export async function GET(request) {
     bodyD26.salary_available = salary_available;
     bodyD26.landing_account = landing_account;
     bodyD26.source = "weekly";
+    bodyD26.is_future_range = is_future_range;
     return NextResponse.json(bodyD26);
   }
 
@@ -1106,6 +1118,7 @@ export async function GET(request) {
   bodySingle.homestands = homestandsList;
   if (homestandBank) bodySingle.homestand_bank = homestandBank;
   if (homestandSplice) Object.assign(bodySingle, homestandSplice);
+  bodySingle.is_future_range = is_future_range;
   return NextResponse.json(bodySingle);
 }
 
@@ -1125,5 +1138,6 @@ export async function handleDailyRangeRequest(ctx) {
   if (ctx.homestandsList) body.homestands = ctx.homestandsList;
   if (ctx.homestandBank)  body.homestand_bank = ctx.homestandBank;
   if (ctx.homestandSplice) Object.assign(body, ctx.homestandSplice);
+  if (typeof ctx.is_future_range === "boolean") body.is_future_range = ctx.is_future_range;
   return NextResponse.json(body);
 }

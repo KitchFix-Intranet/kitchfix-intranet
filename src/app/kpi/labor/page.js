@@ -888,6 +888,7 @@ export default function KpiLaborPage() {
                   blended_rate_hourly: data.blended_rate_hourly,
                 } : null}
                 salaryAvailable={data?.salary_available === true}
+                isFutureRange={data?.is_future_range === true}
               />
               <SignalCards
                 board={data.board}
@@ -897,6 +898,7 @@ export default function KpiLaborPage() {
                   rate_basis: data.rate_basis,
                   blended_rate_hourly: data.blended_rate_hourly,
                 } : null}
+                isFutureRange={data?.is_future_range === true}
               />
               <ComparisonStrip
                 prior_period_comparison={data.prior_period_comparison}

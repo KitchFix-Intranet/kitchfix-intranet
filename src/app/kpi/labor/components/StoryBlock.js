@@ -62,7 +62,7 @@ function verdictDisplay(verdict) {
 // (Spent so far | Left to spend). Budget is the dominant figure; spent
 // and left are secondary. Closed periods keep the under/over treatment
 // on the right cell of the pair.
-function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable }) {
+function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, isFutureRange }) {
   const budget = board?.period_budget || board?.range_budget || null;
   const spent = board?.spent_to_date ?? 0;
   const variance = board?.variance ?? null;
@@ -70,12 +70,17 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable }) 
   const noBudget = !budget || kind === "no_budget";
   const isPeriod = kind === "single_period_in_progress" || kind === "single_period_closed";
 
-  // V29-5 verdict pill: STATE WORD ONLY. The dollar figure was in the
-  // pill text under V21-5; V29-5 removes it - the money is already on
-  // the Over/Under signal card and the budget card sub-line.
-  const vd = verdictDisplay(board?.verdict);
+  // V29-5 verdict pill: STATE WORD ONLY. Owner ruling 2026-08-24: a
+  // future range (`isFutureRange`, server flag `is_future_range` at
+  // start > today) suppresses the verdict pill entirely - there is
+  // no verdict on a range that hasn't happened. Straddling ranges
+  // (start <= today <= end) keep their pill because they ARE in
+  // progress and the verdict is honest.
+  const vd = isFutureRange ? null : verdictDisplay(board?.verdict);
 
-  // Left-cell (Spent so far) sub. Always the % of budget.
+  // Left-cell (Spent so far) sub. Always the % of budget. On a
+  // future range the sub reads "this range has not started" in muted
+  // grey so 0% of budget does not read as an achievement.
   const spentPct = budget > 0 ? Math.round((spent / budget) * 100) : null;
 
   // Right-cell state (V29-6). In-progress -> Left to spend (navy tint);
@@ -219,13 +224,29 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable }) 
         <div className="kpi-spend-cell">
           <div className="kpi-spend-cell-lab">{isPeriod ? "Spent in Period" : "Spend to date"}</div>
           <div className="kpi-spend-cell-val num">{fmt$(spent)}</div>
-          <div className="kpi-spend-cell-sub">{spentPct != null ? `${spentPct}% of budget` : ""}</div>
+          {isFutureRange ? (
+            <div className="kpi-spend-cell-sub kpi-spend-cell-mute">this range has not started</div>
+          ) : (
+            <div className="kpi-spend-cell-sub">{spentPct != null ? `${spentPct}% of budget` : ""}</div>
+          )}
         </div>
-        <div className={`kpi-spend-cell ${right.variantCls}`}>
-          <div className="kpi-spend-cell-lab">{right.label}</div>
-          <div className="kpi-spend-cell-val num">{right.value}</div>
-          <div className="kpi-spend-cell-sub">{right.sub}</div>
-        </div>
+        {isFutureRange ? (
+          /* Owner ruling 2026-08-24: no variance line, no colour on a
+             future range. Right cell renders a muted em-dash so the
+             two-column layout does not shift; the SPENT cell's sub
+             carries the "not started" note. */
+          <div className="kpi-spend-cell kpi-spend-cell-mute">
+            <div className="kpi-spend-cell-lab">vs budget</div>
+            <div className="kpi-spend-cell-val num">–</div>
+            <div className="kpi-spend-cell-sub"></div>
+          </div>
+        ) : (
+          <div className={`kpi-spend-cell ${right.variantCls}`}>
+            <div className="kpi-spend-cell-lab">{right.label}</div>
+            <div className="kpi-spend-cell-val num">{right.value}</div>
+            <div className="kpi-spend-cell-sub">{right.sub}</div>
+          </div>
+        )}
       </div>
 
       {/* Salary PR 3 C3 - salary vacancy line. States the arithmetic;
@@ -642,7 +663,7 @@ function fmtCompact(v) {
 // classifyTier lifted to src/lib/kpi/classifyTier.js so purchasing can
 // import it too. PR 2 R3 Part B (2026-08-24).
 
-export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary, salaryAvailable }) {
+export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO, salary, salaryAvailable, isFutureRange }) {
   const eyebrowLabel = board?.kind === "single_period_in_progress" || board?.kind === "single_period_closed"
     ? `PERIOD ${board.period_no}`
     : (rangeLabel || "").toUpperCase();
@@ -665,7 +686,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
   return (
     <div className="kpi-story">
       <div className="kpi-story-left">
-        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} salary={salary} salaryAvailable={salaryAvailable} />
+        <SpendCard board={board} eyebrowLabel={eyebrowLabel} dateRange={dateRange} salary={salary} salaryAvailable={salaryAvailable} isFutureRange={isFutureRange} />
       </div>
 
       <div className="kpi-story-right">
