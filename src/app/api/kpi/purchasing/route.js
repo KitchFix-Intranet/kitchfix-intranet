@@ -526,7 +526,13 @@ async function loadAccountsDirectory(supa) {
 // ─── Freshness read ──────────────────────────────────────────────────
 
 async function loadFreshness(supa) {
-  const [bc, rp] = await Promise.all([
+  // PR-2 R4 Part E: freshness pill splits `Bills current` from
+  // `cards through <date>`. `cards_through` = the newest txn_date on
+  // any rippling_spend row (excluded=false). Cards land in the derive
+  // ~8 days after they post to the card (ObjectID latency finding from
+  // PR-2 R3), so the pill must be honest about that boundary. Derived
+  // date, never hardcoded.
+  const [bc, rp, cardMaxTxn] = await Promise.all([
     supa.from("purchasing_derive_runs")
       .select("completed_at, bills_touched, lines_written")
       .eq("source", "billcom").eq("status", "success")
@@ -535,14 +541,19 @@ async function loadFreshness(supa) {
       .select("completed_at, lines_written")
       .eq("source", "rippling_spend").eq("status", "success")
       .order("completed_at", { ascending: false }).limit(1).maybeSingle(),
+    supa.from("purchasing_actuals")
+      .select("txn_date")
+      .eq("source", "rippling_spend").eq("excluded", false)
+      .order("txn_date", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const latestDerive = (bc.data?.completed_at && rp.data?.completed_at)
     ? (bc.data.completed_at > rp.data.completed_at ? bc.data.completed_at : rp.data.completed_at)
     : (bc.data?.completed_at || rp.data?.completed_at || null);
   return {
-    last_billcom_sync: bc.data?.completed_at || null,
+    last_billcom_sync:  bc.data?.completed_at || null,
     last_rippling_sync: rp.data?.completed_at || null,
-    last_derive_at: latestDerive,
+    last_derive_at:     latestDerive,
+    cards_through:      cardMaxTxn.data?.txn_date || null,   // PR-2 R4 Part E
   };
 }
 
@@ -814,21 +825,38 @@ export async function GET(request) {
   const periodNo = rangeSelection?.kind === "period" ? rangeSelection.value : null;
   const weeks = weekStartsInRange(start, end);
   const weeksInRange = weeks.length;
-  // Elapsed frac: for closed range (end < today), 1.0. For in-progress,
-  // (days from start to today) / (days from start to end + 1).
-  let elapsedFrac = 1.0;
   const todayDate = new Date(today);
   const endDate = new Date(end);
   const startDate = new Date(start);
-  if (endDate > todayDate) {
-    const totalDays = Math.max(1, Math.floor((endDate - startDate) / 86400000) + 1);
-    const doneDays = Math.max(0, Math.floor((todayDate - startDate) / 86400000) + 1);
-    elapsedFrac = Math.min(1.0, doneDays / totalDays);
-  }
   const closedWeeksInRange = weeks.filter(w => {
     const wEnd = new Date(new Date(w).getTime() + 6 * 86400000);
     return wEnd < todayDate;
   }).length;
+  // PR-2 R4 Part D: elapsed frac is **week-native**, not day-based.
+  // Formula (owner ruling 2026-08-24):
+  //   elapsed = (closed_weeks_in_range + fraction_of_running_week) / weeks_in_range
+  // The running week's fraction is (days into that week including today) / 7,
+  // e.g. Monday = 1/7, Sunday = 7/7. Gate is `>=` so a range ENDING today
+  // still enters the fractional branch - a closed-yesterday range keeps
+  // elapsed = 1.0, but a range whose final week is IN PROGRESS never lies
+  // that it is 100% elapsed. Prior day-based formula:
+  //   (days_from_start_to_today) / (days_from_start_to_end + 1)
+  // returned 1.0 on every range ending today because todayDate <= endDate
+  // failed the strict `>` gate. That fed pace = spent / (budget * 1.0)
+  // across every card, understating pace on every in-progress range by
+  // (weeks_in_range / weeks_elapsed).
+  let elapsedFrac = 1.0;
+  if (endDate >= todayDate && weeksInRange > 0) {
+    // Running week's Monday - the fiscal week that contains today.
+    // Fiscal week floor = FY_START + floor((today - FY_START) / 7) * 7,
+    // matching the view's week_start floor. Simpler: today's Monday
+    // via ISO weekday math (day-of-week Mon=1..Sun=7 in UTC).
+    const dow = todayDate.getUTCDay(); // Sun=0..Sat=6
+    const daysToMon = (dow + 6) % 7;   // Mon=0, Sun=6
+    // Fraction of running week already lived. Mon => 1/7, Sun => 7/7.
+    const runFrac = Math.min(1, (daysToMon + 1) / 7);
+    elapsedFrac = Math.min(1.0, (closedWeeksInRange + runFrac) / weeksInRange);
+  }
 
   // PASS_THROUGH single-account short-circuit (Kevin ruling 2026-08-20):
   //   For a single pass_through account (CIN - OH, STL - FL, STL - MO)
@@ -974,10 +1002,24 @@ export async function GET(request) {
     }
     // Bucket weekly rows by period.
     const spentByPeriod = new Map();
+    // PR-2 R4 Part B: per-bucket per-period spent, sourced from the
+    // weekly view's gl_bucket + week_start. Tier C bars need per-bucket
+    // per-period figures so the target line reflects THAT period's
+    // budget, not a flat range average. Without this, TBR - FL Food
+    // P1 ($4,264 budget) vs P3 ($164,897 budget) rendered identical
+    // flat targets - calling P1 catastrophically under and P3
+    // catastrophically over when both may be on plan.
+    const spentByPeriodByBucket = new Map(); // periodNo -> { food, packaging, vehicle }
     for (const r of fyWeekly) {
       const p = periodOf(r.week_start);
       if (p == null) continue;
       spentByPeriod.set(p, (spentByPeriod.get(p) || 0) + Number(r.amount || 0));
+      const bk = bucketForGl(r.gl_line_code);
+      if (!bk) continue;
+      if (!spentByPeriodByBucket.has(p)) {
+        spentByPeriodByBucket.set(p, { food: 0, packaging: 0, vehicle: 0 });
+      }
+      spentByPeriodByBucket.get(p)[bk] += Number(r.amount || 0);
     }
     for (let p = 1; p <= currentP; p += 1) {
       const pStart = periodStartISO(p);
@@ -985,10 +1027,15 @@ export async function GET(request) {
       // Budget for period: sum kpi_budgets over members for this
       // period_no (envelope-excluded).
       let budgetP = 0;
+      const bucketBudgetP = { food: 0, packaging: 0, vehicle: 0 };
       for (const gl of budgetsByLine.keys()) {
-        budgetP += budgetForPeriod({ byLine: budgetsByLine, glLineCode: gl, members, periodNo: p });
+        const glB = budgetForPeriod({ byLine: budgetsByLine, glLineCode: gl, members, periodNo: p });
+        budgetP += glB;
+        const bk = bucketForGl(gl);
+        if (bk) bucketBudgetP[bk] += glB;
       }
       const spentP = Math.round((spentByPeriod.get(p) || 0) * 100) / 100;
+      const bucketSpentP = spentByPeriodByBucket.get(p) || { food: 0, packaging: 0, vehicle: 0 };
       // Was this period closed on the date the request ran?
       const closed = new Date(pEnd) < todayDate;
       periods.push({
@@ -998,6 +1045,14 @@ export async function GET(request) {
         spent:     spentP,
         budget:    Math.round(budgetP * 100) / 100,
         closed,
+        // PR-2 R4 Part B: per-bucket per-period rollup. Client tier C
+        // strip reads these directly - each bar's target line == THAT
+        // period's bucket budget, from kpi_budgets, envelope-excluded.
+        by_bucket: {
+          food:      { spent: Math.round(bucketSpentP.food      * 100) / 100, budget: Math.round(bucketBudgetP.food      * 100) / 100 },
+          packaging: { spent: Math.round(bucketSpentP.packaging * 100) / 100, budget: Math.round(bucketBudgetP.packaging * 100) / 100 },
+          vehicle:   { spent: Math.round(bucketSpentP.vehicle   * 100) / 100, budget: Math.round(bucketBudgetP.vehicle   * 100) / 100 },
+        },
       });
     }
   }

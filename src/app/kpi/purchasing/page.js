@@ -324,17 +324,25 @@ export default function KpiPurchasingPage() {
           if (pNo == null) continue;
           perPeriodSpend.set(pNo, (perPeriodSpend.get(pNo) || 0) + Number(kpiSpentPerWeekAmounts[i] || 0));
         }
+        // PR-2 R4 Part B - owner ruling 2026-08-24: per-period target
+        // is THAT PERIOD's budget, not a flat range average. Sum
+        // by_bucket food+packaging+vehicle from route.periods[] so
+        // the KPI line matches the "food + packaging + vehicle"
+        // hero. Route ships the per-bucket per-period rollup at
+        // `route.periods[].by_bucket.{food,packaging,vehicle}.budget`
+        // (envelope-excluded, from kpi_budgets).
         return decoratedPeriods.map(p => {
-          const pWks = weekStartsInRange(p.start, p.end).length;
-          const perPeriodBudget = weeksInRange > 0
-            ? (Number(kpiBud || 0) / weeksInRange) * pWks
-            : 0;
+          const bb = p.by_bucket || {};
+          const kpiPeriodBudget =
+            Number(bb?.food?.budget || 0) +
+            Number(bb?.packaging?.budget || 0) +
+            Number(bb?.vehicle?.budget || 0);
           return {
             period_no: p.period_no,
             start: p.start,
             end: p.end,
             spent: perPeriodSpend.get(p.period_no) || 0,
-            budget: Math.round(perPeriodBudget * 100) / 100,
+            budget: Math.round(kpiPeriodBudget * 100) / 100,
             finished: p.finished,
             running: p.running,
           };
@@ -357,9 +365,10 @@ export default function KpiPurchasingPage() {
     })();
 
     // Per-bucket unit builder. Same weekly aggregation feeds each
-    // tier: Tier A/B loops weeks; Tier C loops periods and sums weekly
-    // spend into each period.
-    function buildUnitsForBucket(perWeekArr, budget, finishedSpendVal) {
+    // tier: Tier A/B loops weeks; Tier C loops periods and reads
+    // per-bucket per-period budget from route.periods[].by_bucket
+    // (PR-2 R4 Part B).
+    function buildUnitsForBucket(perWeekArr, budget, finishedSpendVal, bucketKey) {
       if (tier === "C") {
         // Aggregate weeks -> periods.
         const perPeriodSpend = new Map();
@@ -370,19 +379,16 @@ export default function KpiPurchasingPage() {
           perPeriodSpend.set(pNo, (perPeriodSpend.get(pNo) || 0) + Number(perWeekArr[i] || 0));
         }
         return decoratedPeriods.map(p => {
-          // Per-period BUCKET budget: budgetForRange scoped to the
-          // period's dates. Route ships period-total budget on
-          // `periods[].budget` (all lines), but here we need per-bucket
-          // slice. Sum bucket lines by ratio: this bucket's share of
-          // the period's total budget = (bucketRangeBudget /
-          // totalRangeBudget) applied to period-scoped totals... but
-          // that requires per-line-per-period breakdowns. Simpler and
-          // more faithful: divide the bucket's WHOLE-RANGE budget by
-          // weeks_in_range * weeks_in_period(p).
-          const pWks = weekStartsInRange(p.start, p.end).length;
-          const perPeriodBudget = weeksInRange > 0
-            ? (Number(budget || 0) / weeksInRange) * pWks
-            : 0;
+          // PR-2 R4 Part B - owner ruling 2026-08-24: per-period
+          // per-bucket budget from kpi_budgets, envelope-excluded,
+          // shipped as route.periods[].by_bucket.{food|packaging|
+          // vehicle}.budget. Prior state divided the bucket's WHOLE-
+          // RANGE budget by weeks_in_range * weeks_in_period(p) -
+          // that flat-average target called P1 catastrophically under
+          // and P3 catastrophically over on TBR - FL Food (P1 budget
+          // $4,264 vs P3 budget $164,897).
+          const bb = p.by_bucket || {};
+          const perPeriodBudget = Number(bb?.[bucketKey]?.budget || 0);
           return {
             period_no: p.period_no,
             start: p.start,
@@ -434,7 +440,7 @@ export default function KpiPurchasingPage() {
         .map(w => Number(w.amount || 0));
       const spent = perWeekAll.reduce((s, v) => s + v, 0);
       const finishedSpend = perWeekAll.slice(0, finishedWksAll).reduce((s, v) => s + v, 0);
-      const units = buildUnitsForBucket(perWeekAll, bud, finishedSpend);
+      const units = buildUnitsForBucket(perWeekAll, bud, finishedSpend, def.key);
       const targets = weeklyTargets({
         budget: bud,
         weeksInPeriod,
@@ -613,8 +619,27 @@ export default function KpiPurchasingPage() {
       return rangeLabel ? rangeLabel.toUpperCase() : "CUSTOM RANGE";
     })();
 
+    // PR-2 R4 Part E - freshness pill splits Bills current from
+    // cards through <date>. Card data is structurally ~8 days behind
+    // (ObjectID latency, R3 finding) - a single "Data current" label
+    // was lying. Owner ruling 2026-08-24: change the pill, not the
+    // board. Date derived from `route.freshness.cards_through`
+    // (route SELECT max(txn_date) on rippling_spend, excluded=false).
+    // Never hardcoded.
+    const cardsThroughISO = data?.freshness?.cards_through || null;
+    const cardsThroughLabel = cardsThroughISO
+      ? `${cardsThroughISO.slice(5, 7)}/${cardsThroughISO.slice(8, 10)}`
+      : null;
+    const freshnessPill = cardsThroughLabel
+      ? `Bills current · cards through ${cardsThroughLabel}`
+      : "Bills current";
+
     return (
       <div className="kpi-p-board">
+        <div className="kpi-p-livenote" role="status">
+          <span className="kpi-p-livedot" aria-hidden="true" />
+          <span><b>{freshnessPill}</b></span>
+        </div>
         <PeriodCard
           periodNo={rangePeriodNo}
           rangeLabel={rangeLabel}
@@ -627,6 +652,7 @@ export default function KpiPurchasingPage() {
           budget={board.kpiBud}
           bills={board.billsApprox}
           cards={board.cardCodedInSpend}
+          cardsThroughLabel={cardsThroughLabel}
           pending={board.pending}
           tier={board.tier}
           units={board.kpiUnits}

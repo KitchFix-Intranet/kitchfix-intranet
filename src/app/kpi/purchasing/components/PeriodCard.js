@@ -36,6 +36,10 @@ export function PeriodCard({
   budget,           // KPI-line budget
   bills,            // KPI-line bills only
   cards,            // KPI-line coded card spend
+  cardsThroughLabel,// PR-2 R4 Part E - MM/DD of max(txn_date) on
+                    //   rippling_spend; rendered on the Cards subrow
+                    //   so the header pill and the row that carries
+                    //   the figure agree.
   pending,          // whole-range pending (no bucket split)
   // Chart - tier-aware (PR 2 R3 Part B). `tier`+`units` replace the
   // old fixed-length weekAmounts/weekLabels; WeekChart asserts
@@ -193,7 +197,13 @@ export function PeriodCard({
                 <span className="kpi-p-x">at least</span>
               </div>
               <div className="kpi-p-sub">
-                <span className="kpi-p-k">Cards<small>coded to a P&amp;L line</small></span>
+                <span className="kpi-p-k">
+                  Cards
+                  <small>
+                    coded to a P&amp;L line
+                    {cardsThroughLabel ? ` · through ${cardsThroughLabel}` : ""}
+                  </small>
+                </span>
                 <span className="kpi-p-v num">{fmt$(cards)}</span>
                 <span className="kpi-p-x" aria-hidden="true" />
               </div>
