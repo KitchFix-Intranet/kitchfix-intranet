@@ -34,7 +34,9 @@ import {
   weekOfPeriod,
   inferRangeSelection,
   weekStartsInRange,
+  rangeForPeriod,
 } from "@/app/kpi/labor/lib/periods";
+import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "@/app/kpi/labor/components/FolioRail";
 import { costModelFor, isKnownAccount } from "@/lib/accountModels";
@@ -343,7 +345,11 @@ export default function KpiPurchasingPage() {
       const bud = cat ? Number(cat.budget || 0) : 0;
       const spent = cat ? Number(cat.spent || 0) : 0;
       // Ledger rows: PR 2 has only the aggregate; per-purchase lands
-      // with PR 4 drill. Placeholder shows the roll-up figure.
+      // with PR 4 drill. Placeholder shows the roll-up figure. The
+      // empty-state copy inside LedgerCard is now conditional on
+      // `spent > 0` per PR-2 R2 Fix 4 - a non-zero hero above
+      // "no purchases recorded" is a lie, so the copy switches to
+      // "Line detail lands with the drill route." when there IS spend.
       const ledgerRows = [];
       return { ...def, budget: bud, spent, ledgerRows };
     });
@@ -383,8 +389,11 @@ export default function KpiPurchasingPage() {
   const fiscalCtx = useMemo(() => {
     const p = rangePeriodNo || (data?.fiscal?.period_no ?? null);
     const w = start ? weekOfPeriod(today) : null;
+    // PR-2 R2 Fix 9 - Shell renders `Today <b>{fiscal.today}</b>`. Labor
+    // ships MM/DD; purchasing was shipping raw ISO ("2026-08-24"). Match
+    // labor's convention exactly.
     return {
-      today,
+      today: today.slice(5).replace("-", "/"),
       period: p,
       week: w,
     };
@@ -395,6 +404,41 @@ export default function KpiPurchasingPage() {
     if (!start || !end) return "";
     return `${isoToMMDDYY(start)} - ${isoToMMDDYY(end)}`;
   }, [start, end]);
+
+  // PR-2 R2 Fix 5 - derive account_periods client-side from the fiscal
+  // calendar so `This period` and `Last period` presets fire. Prior state
+  // passed `accountPeriods: []` with `hasPeriods: true` - a lie the
+  // RangeMenu's `resolvePreset` believed, filtered the empty array,
+  // returned null, and the commit never fired. Every past+current period
+  // has known bounds via `rangeForPeriod`; use them.
+  const accountPeriods = useMemo(() => {
+    const curP = currentPeriodNo(today) || 1;
+    const out = [];
+    for (let p = 1; p <= curP; p += 1) {
+      const r = rangeForPeriod(p);
+      if (r) out.push({ fiscal_year: 2026, period_no: p, start: r.startISO, end: r.endISO });
+    }
+    return out;
+  }, [today]);
+
+  // PR-2 R2 Fix 6 - infer preset so the range trigger reads `FYTD`
+  // (or `This period`, `Last period`, ...) instead of `Custom
+  // 12/29/25 - 08/24/26`. Mirrors labor's inference exactly.
+  const resolvedPreset = useMemo(() => {
+    if (start === FY_START_ISO && end === today) return "fytd";
+    if (start === addDaysISO(today, -27) && end === today) return "last_4wk";
+    if (start === addDaysISO(today, -90) && end === today) return "last_13wk";
+    if (accountPeriods.length) {
+      const past = [...accountPeriods]
+        .filter(p => p.start && p.end && p.start <= today)
+        .sort((a, b) => a.start.localeCompare(b.start));
+      const cur = past[past.length - 1];
+      const prev = past[past.length - 2];
+      if (cur && start === cur.start && end === cur.end) return "this_period";
+      if (prev && start === prev.start && end === prev.end) return "last_period";
+    }
+    return null;
+  }, [start, end, today, accountPeriods]);
 
   // Projected close.
   const projClose = useMemo(() => {
@@ -468,6 +512,7 @@ export default function KpiPurchasingPage() {
           runningWeekIdx={runningWeekIdx}
           original={board.kpiTargets.original}
           adjusted={board.kpiTargets.adjusted}
+          budgetSpent={board.kpiTargets.budgetSpent}
           projectedClose={projClose}
         />
 
@@ -490,6 +535,7 @@ export default function KpiPurchasingPage() {
             runningWeekIdx={runningWeekIdx}
             original={b.targets.original}
             adjusted={b.targets.adjusted}
+            budgetSpent={b.targets.budgetSpent}
           />
         ))}
 
@@ -535,9 +581,13 @@ export default function KpiPurchasingPage() {
             startISO: start,
             endISO: end,
             todayISO: today,
-            hasPeriods: true,
-            accountPeriods: [],
-            resolvedPreset: null,
+            // PR-2 R2 Fix 5 / Fix 6: reflect reality. `hasPeriods` is
+            // true only when we actually shipped periods; `accountPeriods`
+            // carries them; `resolvedPreset` names the current preset so
+            // the trigger reads `FYTD` etc instead of `Custom ...`.
+            hasPeriods: accountPeriods.length > 0,
+            accountPeriods,
+            resolvedPreset,
             selectedPeriodNo: rangeSelectionEarly?.kind === "period" ? rangeSelectionEarly.value : null,
             selectedMonth: rangeSelectionEarly?.kind === "month" ? rangeSelectionEarly.value : null,
             onCommit: onRangeCommit,
@@ -547,7 +597,10 @@ export default function KpiPurchasingPage() {
             <FolioRail
               activeAccount={account}
               onPickAccount={onPickAccount}
-              accountsDirectory={undefined}
+              /* PR-2 R2 Fix 7: pass the live directory the route now ships.
+                 Prior undefined forced STATIC_DIRECTORY (team_name null on
+                 every row), leaving 8/11 rail rows blank. */
+              accountsDirectory={data?.accounts_directory}
               regionalDirectorsDisplay={undefined}
               folioFoot={null}
             />

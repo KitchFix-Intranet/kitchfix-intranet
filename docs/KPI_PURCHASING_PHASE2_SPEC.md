@@ -165,8 +165,14 @@ no bills at all -> none      no budget -> nobud      pass_through -> passthru
 Pill, bar pattern, hero colour and every variance readout call the **same** `stateOf()`. Three
 elements disagreeing about one bucket is a P0.
 
-- **Period state** uses bills + pending. **Bucket state** uses bills only. They legitimately differ -
-  the period reading over while buckets read under is the point of the board.
+- **Bucket state uses bills + coded cards** - everything on that GL line, whatever the source.
+  **CORRECTED 2026-08-24.** This rule previously read "bills only", written when every card
+  transaction was uncoded and sat in Pending, so no card spend reached a bucket. **G3 changed that** -
+  card spend now maps to `3200.x`, `3400.x`, `3500.x` and is real spend against those budgets. A food
+  bucket that excludes food bought on a card understates it. The `From bills` and `From cards`
+  sub-rows show the split; the hero and the pill show the total.
+- **Period state uses bills + coded cards + pending.** Pending has no GL line so it cannot sit in a
+  bucket, but it is money already spent and it belongs in the period verdict.
 
 ### 5.3 Pending
 ```
@@ -252,9 +258,17 @@ the client approves and pays for the spend. The card exists so an outlier is vis
 
 ## 7. DESIGN LAW
 
-1. **Colour is identity. Pattern is state.** Food navy `#153968`, Packaging blue `#3E97D1`, Vehicle
-   purple `#7A3E9D`, Pending amber hatch, period card neutral steel `#4A6076`. Over-budget adds a red
-   diagonal overlay and inset outline. In-progress adds a light hatch. **State is never hue alone.**
+1. **Colour is identity. Bars are SOLID.** Food navy `#153968`, Packaging blue `#3E97D1`, Vehicle
+   purple `#7A3E9D`, Equipment `#0F766E`, Repair `#B45309`, Reimbursable `#7A3E9D`, period card steel
+   `#4A6076`.
+
+   **There is no red diagonal hatch on a bucket bar. Owner ruling 2026-08-21: solid red or solid
+   green, never a hatch.** The hatch read as a barcode at 40px and buried the number it was meant to
+   qualify. **A running week keeps its light in-progress hatch** - that marks incomplete, not state.
+
+   On a **closed** period the bars keep their identity colour entirely; state lives in the pill, the
+   hero and the per-week caption. Colouring four bars one state shouts one bit four times and
+   destroys the shape reading the bars exist for.
 2. **One hero per card.** Spent at `--t-hero`, Remaining at `--t-value`.
 3. **Bucket hero colour follows state** - green under or on pace, red over, neutral at zero.
 4. **Card titles** `--t-meta` / 800 / `--n-700`, matching labor's `.kpi-spend-h-title`.
