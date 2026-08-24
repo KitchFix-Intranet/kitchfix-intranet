@@ -151,3 +151,16 @@ unchanged.
 - V8-25 Color weight. Over-budget bars use the lighter red (#DC5A5A family), not the darkest
         red. At Tier C a run of over periods reads as information, not as an alarm wall.
         Green, red and hatched-navy remain the only three bar states.
+
+## I. Supersede note - LABOR ONLY
+
+The three-bar-state rule in V8-12 + V8-25 (green under / red over / hatched navy in progress) is
+**BINDING FOR LABOR ONLY**. Owner ruling 2026-08-21 **retired this rule for purchasing** - see
+`docs/KPI_PURCHASING_PHASE2_SPEC.md` §7 rule 1. Purchasing bucket bars are solid green / solid
+red with no identity colour on the bar itself (identity moves to the card's left-edge stripe +
+legend swatch). The purchasing running-week bar keeps a light amber in-progress hatch; there is
+no red diagonal hatch on a purchasing bucket bar.
+
+Do not propagate the labor rule back to purchasing components. A labor-track change that touches
+`.kpi-p-*` classes or reads this section as authority for a purchasing bar treatment is a bounce.
+Purchasing follows the purchasing spec; labor follows this one.

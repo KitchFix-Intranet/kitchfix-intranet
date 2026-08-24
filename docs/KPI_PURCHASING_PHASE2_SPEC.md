@@ -325,6 +325,10 @@ seeded and real corpus.
 | 7 | **bill.com vendor sync** in flight. | §6.4 |
 | 8 | **52 new category ids** from the unfiltered report, unlabelled. | routing |
 | 9 | **#729** labor cent fix, gate failed at 12 rows / $0.18 against limits of 8 / $0.08. Recommend raising and applying. | labor, not this board |
+| 10 | **Vendor rollup ruling.** Whether to collapse `Sysco JUP` / `Sysco TBJ` / `Sysco TBR` (and equivalent multi-warehouse vendors) into a single `Sysco` for the vendor breakdown card + VS PRIOR comparison. Raised on R6. | vendor breakdown card readability (§6.5); prior-window comparison accuracy for multi-warehouse vendors |
+| 11 | **R&M duplicate adjudication.** INV-P11 / P12 established Beau Davis Electric is one payment (not two) - the $6,600 rippling card charge is a second RECORD of a job invoiced + paid once via bill.com. SOUTHWEST pair on CIN - AZ also flagged. Kevin + Sebastian rule on the exclusion pattern. | R&M ledger card accuracy at TBR - FL + CIN - AZ (§6.3); portfolio R&M totals |
+| 12 | **Ruling 4 truncation-blind disposition.** INV-P12 Part A - Rippling truncates merchant names inconsistently (spike at len=25, 7.0x neighbour median), so auth/settlement pairs that Ruling 4 catches on exact match escape when one side truncates. Additional catch after recurrence filter: **45 pairs / $35,626.81** on the prefix side vs a control of 73 pairs / $9,462.68 on unrelated names - same pair count, prefix dollars ~4x concentrated. A blanket truncation-blind rule matches noise at parity; a targeted rule keyed on the len=21/22/25 spike would recover most of the concentrated dollars. Kevin's ruling. Evidence in `scripts/probes/_probe_inv_p12_truncation_gap.mjs` + workbook. | rippling exclusion completeness on auth/settlement pairs; card figures on any account with an affected merchant |
+| 13 | **Card-staleness UI treatment.** R4 Part E shipped a freshness pill split by source; explicit UI treatment for stale card data beyond that pill (in-card indicator, table row muting, tooltip) is not built. | Card purchases card (§6.4), compliance card (PR 6); operator's ability to trust a card figure at a glance |
 
 ### Watch items - observed once, cause unknown
 
@@ -374,7 +378,9 @@ before it renders. A disagreement is a defect, not a display choice. This is in 
 
 ## 10. ACCEPTANCE
 
-- **Sentinel:** `TBR - FL` P8 `3200.1` billcom = **$39,373.74**. Any PR that moves it stops.
+- **Outside-data gates - both stop any PR that moves them.** These are the only two purchasing figures verified against sources outside the system. Every purchasing PR's acceptance table carries both as unmoved-gate rows.
+  - **Sentinel (single line):** `TBR - FL` P8 `3200.1` billcom = **$39,373.74**. Provenance: hand-computed from the raw P8 bill.com bills for TBR - FL against GL `3200.1`. Fired via `scripts/probes/_pr2r2r_sentinel.mjs` + inline in the pr2r3 / pr2r5 acceptance probes.
+  - **Sentinel (portfolio):** ALL ACCOUNTS P9 kpi-line budget total = **$231,132.99**. Provenance: independent extraction of the eleven FY2026 P&L workbooks - sum of the P9 seasonally-distributed food + packaging + vehicle budget across the eight at-risk accounts plus the pass-through internal budgets where present. Fired via the API on `/api/kpi/purchasing?account=ALL&start=2026-08-10&end=2026-09-06` reading `totals.pl_cogs.budget`.
 - **Adjusted-target direction check** printed every build. A RISES on an overspent week is a hard fail.
 - **Orphan-selector scan.** Renaming a CSS class silently killed seven rules during design and broke
   the type scale. Any PR touching class names greps compiled CSS for dead scopes.
