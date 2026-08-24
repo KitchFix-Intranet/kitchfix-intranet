@@ -692,6 +692,42 @@ export async function GET(request) {
 
   const isAggregate = V6_PSEUDO_KEYS.has(account);
 
+  // ── PR-2 R4 Part A: partial-week accounting rule (owner ruling
+  // 2026-08-24) ──────────────────────────────────────────────────────
+  //
+  // Labor's `paginateActuals` at labor/route.js:137-138 uses OVERLAP
+  // semantics on labor_actuals_latest:
+  //     .lte("week_start", end).gte("week_end", start)
+  // so ANY fiscal week that overlaps the user's range is counted at
+  // week-grain. Purchasing was using start-only semantics
+  //     .gte("week_start", start).lte("week_start", end)
+  // which silently drops a fiscal week whose week_start is 1..6 days
+  // BEFORE rangeStart - the classic 07/28 case where week_start=07/27
+  // gets dropped from the view read while purchasing_actuals still
+  // counts the 07/28..08/02 partial-week bills via `txn_date >= start`.
+  // That produced the three-figures-don't-agree bug on TBR-FL 07/28-08/24
+  // ($18,171.25 hero vs $26,614.47 From bills vs "no spend" week bar).
+  //
+  // Chosen rule: **include the whole fiscal week when it overlaps the
+  // range** (Kevin's Option 2). Matches labor's overlap semantics.
+  // Every read below (weekly view, purchasing_actuals, pending,
+  // coverage) uses the SAME [effStart, effEnd] pair so hero, bills,
+  // cards, bars all describe the same fiscal-week footprint. URL /
+  // rangeLabel keep the user's start/end untouched - the chart bar
+  // caption already prints the real MM/DD - MM/DD fiscal-week label
+  // via `weekRangeLabel` (WeekChart.js:64), so the widening is honest
+  // on screen without dishonest range copy.
+  const fiscalWeeks = weekStartsInRange(start, end);
+  const effStart = fiscalWeeks.length > 0 ? fiscalWeeks[0] : start;
+  const effEnd = fiscalWeeks.length > 0
+    ? (() => {
+        const last = fiscalWeeks[fiscalWeeks.length - 1];
+        const d = new Date(last + "T00:00:00.000Z");
+        d.setUTCDate(d.getUTCDate() + 6);
+        return d.toISOString().slice(0, 10);
+      })()
+    : end;
+
   // Budgets for members (needed by budget block, categories, buckets,
   // periods).
   const fyForRange = 2026;   // FY2026 hard-coded; matches labor's convention
@@ -705,11 +741,14 @@ export async function GET(request) {
   // totals.card by source). Parallelising cuts wall-time on the
   // common ALL/FYTD path where the largest read (actuals ~ 12.7k
   // rows) would otherwise serialise behind the weekly read.
+  //
+  // PR-2 R4 Part A: pass [effStart, effEnd] so weekly view, actuals,
+  // pending and coverage all describe the same fiscal-week footprint.
   const [weeklyResp, pendingResp, actualsResp, coverage, freshness, dirResp] = await Promise.all([
-    paginateWeekly(supa, { members, start, end }),
-    loadPending(supa, { members, start, end }),
-    paginateActuals(supa, { members, start, end, pageSize: pageSizeParam }),
-    loadCoverage(supa, { members, start, end }),
+    paginateWeekly(supa, { members, start: effStart, end: effEnd }),
+    loadPending(supa, { members, start: effStart, end: effEnd }),
+    paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam }),
+    loadCoverage(supa, { members, start: effStart, end: effEnd }),
     loadFreshness(supa),
     loadAccountsDirectory(supa),   // PR-2 R2 Fix 7
   ]);
@@ -751,6 +790,21 @@ export async function GET(request) {
     for (const r of actuals) {
       if (r.gl_line_code !== gl) continue;
       if (r.source !== "billcom") continue;
+      s += Number(r.amount || 0);
+    }
+    return Math.round(s * 100) / 100;
+  }
+  // PR-2 R4 Part A: coded-card spend by gl_line_code (rippling_spend
+  // rows whose gl_line_code is set + within the effective fiscal-week
+  // window). Shipping this per-bucket lets the client render the
+  // "From cards" split as a real source-of-truth number instead of the
+  // R2-vintage `max(0, hero - bills)` clamp that could mask a
+  // three-figures-don't-agree mismatch (the Part A P0).
+  function codedCardSpentForGl(gl) {
+    let s = 0;
+    for (const r of actuals) {
+      if (r.gl_line_code !== gl) continue;
+      if (r.source !== "rippling_spend") continue;
       s += Number(r.amount || 0);
     }
     return Math.round(s * 100) / 100;
@@ -843,15 +897,18 @@ export async function GET(request) {
   const buckets = BUCKETS.map(({ key, gl_prefix, label }) => {
     let budget = 0;
     let spent = 0;
+    let cardsCoded = 0;
     const line_codes = [];
     for (const gl of orderedGl) {
       if (bucketForGl(gl) !== key) continue;
       line_codes.push(gl);
       budget += budgetForRange({ byLine: budgetsByLine, glLineCode: gl, members, start, end });
       spent  += billsOnlySpentForGl(gl);
+      cardsCoded += codedCardSpentForGl(gl);
     }
     const budgetR = Math.round(budget * 100) / 100;
     const spentR  = Math.round(spent  * 100) / 100;
+    const cardsCodedR = Math.round(cardsCoded * 100) / 100;
     // Pass-through short-circuit: null variance + null pace, state
     // resolves to 'passthru'. Budget and spent still return as
     // context.
@@ -862,6 +919,7 @@ export async function GET(request) {
         gl_prefix,
         budget:       budgetR,
         spent:        spentR,
+        cards_coded:  cardsCodedR,   // PR-2 R4 Part A
         variance:     null,
         pace_pct:     null,
         state:        stateOf({ isPassThrough: true }),
@@ -886,7 +944,8 @@ export async function GET(request) {
       label,
       gl_prefix,
       budget:       budgetR,
-      spent:        spentR,
+      spent:        spentR,       // bills-only (§3.4 - bucket STATE uses bills only)
+      cards_coded:  cardsCodedR,  // PR-2 R4 Part A - coded card spend, per bucket
       variance:     varianceR,
       pace_pct,
       state,

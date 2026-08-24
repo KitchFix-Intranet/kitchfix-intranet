@@ -92,6 +92,27 @@ export function BucketCard({
         `BucketCard §9B: hero (${heroDerivedState}) and pill (${cs.state}) resolved from different spent`,
       );
     }
+    // PR-2 R4 Part A: bucket hero MUST equal bills + coded cards for the
+    // same range. Two ways to fail: (a) the two are read from different
+    // range-filter conventions - the 07/28 case that produced this fix -
+    // or (b) a future edit lets one of the three drift. Either trips the
+    // assertion in development. Tolerance is 1c to absorb per-line cent
+    // rounding across bill.com aggregation. The assertion is skipped for
+    // pass-through accounts (variance disabled by definition).
+    const billsN = Number(bills || 0);
+    const cardsN = Number(cardsCoded || 0);
+    const sourcesSum = Math.round((billsN + cardsN) * 100) / 100;
+    const heroR = Math.round(heroSpent * 100) / 100;
+    if (Math.abs(heroR - sourcesSum) > 0.01) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[BucketCard Part A] hero != bills + cards for same range:",
+        { bucketKey, heroR, billsN, cardsN, sourcesSum, delta: heroR - sourcesSum },
+      );
+      throw new Error(
+        `BucketCard Part A: hero ${fmt$(heroR)} != bills ${fmt$(billsN)} + cards ${fmt$(cardsN)} (delta ${fmt$(heroR - sourcesSum)})`,
+      );
+    }
   }
 
   const rem = Number(budget || 0) - heroSpent;

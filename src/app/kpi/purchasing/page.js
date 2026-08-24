@@ -265,15 +265,22 @@ export default function KpiPurchasingPage() {
     const kpiSpent = kpiSpentPerWeekAmounts.reduce((s, v) => s + v, 0);
     const kpiBud = kpiBudget({ byGlLineCode });
 
-    // Bills-only for the KPI card sub-row (approximation - the route
-    // does not split weekly by source, so we treat weekly as bills+coded
-    // and back out from totals. For UI honesty in PR 2 we show
-    // bills = totals.pl_cogs.spent - card.spent (coded only if
-    // available); if card totals are absent we fall back to total.
-    // The period card's TOTAL still uses kpiSpent for accuracy.
-    const totalCogsSpent = Number(data?.totals?.pl_cogs?.spent || 0);
-    const cardCodedInSpend = Math.max(0, Number(data?.totals?.card?.spent || 0) - pending);
-    const billsApprox = Math.max(0, totalCogsSpent - cardCodedInSpend);
+    // PR-2 R4 Part A: derive period-card Bills + Cards by SUMMING the
+    // route.buckets[] rows so the period card equals the sum of its
+    // buckets by construction. Prior code computed
+    //   billsApprox = totals.pl_cogs.spent - card.spent + pending
+    // which subtracted ALL coded card spend from pl_cogs.spent even
+    // though card-coded spend on 5002.x (equipment/R&M) and 13xx
+    // (reimbursable) does not sit in pl_cogs.spent, so period Bills
+    // was structurally understated by that non-pl_cogs coded card
+    // spend. Gate check 2 (bucket bills sum == period card Bills) fires
+    // on the mismatch.
+    const kpiBucketRows = (data?.buckets || []).filter(b =>
+      ['food', 'packaging', 'vehicle'].includes(b.bucket));
+    const kpiBills = kpiBucketRows.reduce((s, b) => s + Number(b.spent || 0), 0);
+    const kpiCardsCoded = kpiBucketRows.reduce((s, b) => s + Number(b.cards_coded || 0), 0);
+    const billsApprox = Math.round(kpiBills * 100) / 100;
+    const cardCodedInSpend = Math.round(kpiCardsCoded * 100) / 100;
 
     // Weekly targets for the KPI card (finishedSpend uses KPI-line
     // spend across FINISHED weeks only, per §5.1). weeksInPeriod IS
@@ -414,6 +421,13 @@ export default function KpiPurchasingPage() {
     // Bucket data - budget, spent, tier-aware units. `spent` and
     // `finishedSpend` sum the WHOLE range so the hero number + target
     // math describe the same period the pill does.
+    //
+    // PR-2 R4 Part A: route.buckets[] now ships `cards_coded` per
+    // bucket alongside `spent` (bills-only). Client `spent` (from the
+    // weekly view) MUST equal bills + cards for the same fiscal-week
+    // footprint - the BucketCard §Part A assertion enforces it.
+    // Previously `cardsCoded = max(0, spent - bills)` clamped any
+    // mismatch to 0 and hid the three-figures-don't-agree bug.
     const buckets = BUCKET_DEFS.map(def => {
       const bud = bucketBudget({ byGlLineCode, bucketKey: def.key });
       const perWeekAll = bucketWeeklySpend({ weekly, bucketKey: def.key, start, end })
@@ -427,11 +441,9 @@ export default function KpiPurchasingPage() {
         finishedSpend,
         finishedWeeks: finishedWksAll,
       });
-      // Bills-only for bucket state - route ships buckets[] with
-      // bills-only in `spent`.
       const routeBucket = (data?.buckets || []).find(b => b.bucket === def.key);
       const billsForBucket = routeBucket ? Number(routeBucket.spent || 0) : spent;
-      const cardsCoded = Math.max(0, spent - billsForBucket);
+      const cardsCoded = routeBucket ? Number(routeBucket.cards_coded || 0) : 0;
       return {
         ...def,
         budget: bud,

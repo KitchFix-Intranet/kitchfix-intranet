@@ -64,6 +64,28 @@ export function PeriodCard({
     closed,
   });
 
+  // PR-2 R4 Part A: period-card hero MUST equal Bills + Cards for the
+  // same fiscal-week footprint. Same failure mode as BucketCard - if the
+  // three values come from different date conventions, the card lies.
+  // Assertion trips in development on any future drift. Skipped when
+  // both source values are absent (loading / partial payload).
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    const heroR = Math.round(Number(spent || 0) * 100) / 100;
+    const billsN = Number(bills || 0);
+    const cardsN = Number(cards || 0);
+    const sourcesSum = Math.round((billsN + cardsN) * 100) / 100;
+    if ((billsN > 0 || cardsN > 0) && Math.abs(heroR - sourcesSum) > 0.01) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[PeriodCard Part A] hero != bills + cards for same range:",
+        { heroR, billsN, cardsN, sourcesSum, delta: heroR - sourcesSum },
+      );
+      throw new Error(
+        `PeriodCard Part A: hero $${heroR.toFixed(2)} != bills + cards $${sourcesSum.toFixed(2)} (delta $${(heroR - sourcesSum).toFixed(2)})`,
+      );
+    }
+  }
+
   const rem = Number(budget || 0) - Number(spent || 0) - Number(pending || 0);
   const showOverArrow = rem < 0;
   const varz = Number(spent || 0) - Number(budget || 0);   // closed variance
