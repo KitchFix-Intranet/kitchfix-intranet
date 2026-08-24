@@ -662,7 +662,16 @@ export default function KpiLaborPage() {
   // server aggregate). For D2 the roster is the ACCOUNTS constant.
   // B10: announce switch + focus-to-hero for keyboard users.
   const onPickAccount = (a) => {
-    setParams({ account: a, workers: "", view: "" });
+    // HS FB1 PR-1 (owner ruling 2026-08-24, defect 1c): drop
+    // `homestand` on any account switch. A game_start date belongs
+    // to exactly one account, so a dangling `homestand=<date>` from
+    // the prior account can never resolve on the next one - it
+    // either 400s (before #805) or lands on the fallback range which
+    // triggered a 15-second labor request timeout in the reproducer
+    // (STL - MO homestand -> TXR - AZ). Dropping `view` alone was
+    // not enough; the server reads `homestand` independent of
+    // `view`.
+    setParams({ account: a, workers: "", view: "", homestand: "" });
     setLiveMsg(`Switched to ${a}.`);
     // Let the render complete before we grab focus.
     setTimeout(focusBoard, 60);
@@ -1105,7 +1114,7 @@ export default function KpiLaborPage() {
             rate_basis: data.rate_basis,
             blended_rate_hourly: data.blended_rate_hourly,
           } : null}
-          onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "" }) : null}
+          onPickAccount={PSEUDO_KEYS.has(account) ? (k) => setParams({ account: k, workers: "", view: "", homestand: "" }) : null}
           rangeSelection={rangeSelectionEarly}
           resolvedPreset={resolvedPreset}
           rolledUpMembers={data?.rolled_up_members || []}

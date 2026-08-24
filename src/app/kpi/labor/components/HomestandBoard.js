@@ -924,15 +924,17 @@ export function HomestandBoard({
 
   return (
     <div className="kpi-hs-board" data-view="homestand">
-      <SeasonRailCard
-        homestands={homestands}
-        selectedGameStart={selectedGameStart}
-        onSelect={onSelectStand}
-      />
+      {/* HS FB1 PR-1 (owner ruling 2026-08-24, defect 1d): season
+          summary reads first, then the per-stand rail. */}
       <SeasonToDateCard
         bank={bank}
         homestands={homestands}
         selectedGameStart={selectedGameStart}
+      />
+      <SeasonRailCard
+        homestands={homestands}
+        selectedGameStart={selectedGameStart}
+        onSelect={onSelectStand}
       />
       {standIsPending ? (
         <StandRegionSkeleton />

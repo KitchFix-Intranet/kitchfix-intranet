@@ -672,7 +672,31 @@ export async function GET(request) {
   }
   const homestandsList = allHomestands || [];
 
-  const rangeSource = resolveRangeSource({ startISO: start, endISO: end, dailyFloorISO });
+  let rangeSource = resolveRangeSource({ startISO: start, endISO: end, dailyFloorISO });
+
+  // HS FB1 PR-1 (owner ruling 2026-08-24, defect 1b): the homestand
+  // view ALWAYS needs day-level data - the day strip is the point.
+  // The generic resolver was routing whole-week HS windows (e.g.
+  // HS 9 STL - MO: 06/29 - 07/12 = 2 fiscal weeks) to `weekly`,
+  // which ships zero daily rows and blanks the strip. Same fix as
+  // the workers-map empty case (1a): forcing daily on any post-floor
+  // homestand window pulls per-day actuals via labor_actuals_daily,
+  // and dailyRangeBody ships `workers: workerMeta` (line 193) as a
+  // side effect - so employee names resolve too.
+  //
+  // Only fires when homestandParam is set AND start >= dailyFloor -
+  // pre-floor selections take the source: "estimated" early return
+  // at line 559 and never reach here.
+  if (homestandParam && start >= dailyFloorISO && rangeSource.source !== "daily") {
+    rangeSource = {
+      source: "daily",
+      reason: "homestand_view_forces_daily",
+      isWholeWeeks: rangeSource.isWholeWeeks,
+      isPartialWeek: rangeSource.isPartialWeek,
+      spanDays: rangeSource.spanDays,
+      refused: false,
+    };
+  }
 
   // Refusal: partial-week range starting before the floor. Cannot be
   // answered - underlying segments were retention-purged before the
