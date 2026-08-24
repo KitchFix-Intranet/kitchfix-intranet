@@ -897,6 +897,18 @@ async function loadVendorRollup(supa, { members, start, end, priorStart, priorEn
   }
   const curMap = rollup(cur.rows);
   const priorMap = rollup(prior.rows);
+  // PR 2 R7 Fix 2 - "does the prior window contain any billcom data".
+  // Root cause of the "every vendor reads `new`" bug: on FYTD (FY2026)
+  // the mirrored prior window (~2025-05-03 -> 2025-12-28) falls entirely
+  // before purchasing data begins (FY2026 is the first year on this
+  // schema), so every vendor gets prior_spend=0 and the client's
+  // `isNewSpender = (prior === 0)` fires for every row - a claim ("new")
+  // that is false for Sysco JUP's 368 lines. Fix: expose whether the
+  // prior window has any data at all. When false, the client renders an
+  // absent-prior marker for every row; when true, the client keeps the
+  // per-row "new" / "▲/▼ %" logic (a genuinely new vendor still shows
+  // `new` correctly).
+  const priorHasData = (prior.rows || []).length > 0;
 
   const enriched = [...curMap.values()].map(v => {
     const p = priorMap.get(v.vendor_id || "__UNRESOLVED__");
@@ -949,6 +961,16 @@ async function loadVendorRollup(supa, { members, start, end, priorStart, priorEn
       total_count: totalCount,
       total_amount: Math.round(totalAmount * 100) / 100,
       unresolved_count: unresolved,
+      // PR 2 R7 Fix 2 - prior-window transparency. `prior_has_data` says
+      // whether the mirrored window before `start` contains any billcom
+      // rows for any vendor in this account; the client uses it to gate
+      // the "new" / "no prior period" split. `prior_range` echoes the
+      // window we compared against so the payload is auditable.
+      prior_range: {
+        start: priorStart || null,
+        end: priorEnd || null,
+      },
+      prior_has_data: priorHasData,
       fragmentation: {
         distinct_names: names.length,
         suppliers_if_suffix_stripped: suppliersIfCollapsed,

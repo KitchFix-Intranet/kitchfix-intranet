@@ -742,8 +742,63 @@ export default function KpiPurchasingPage() {
           />
         ))}
 
-        <div className="kpi-p-flatrow">
-          {board.ledgers.map(l => (
+        {/* PR 2 R7 Fix 5 - three-up: [Equipment] [R&M] [Vendor breakdown]
+            on one flatrow, then Reimbursable (full width), then Card
+            purchases (full width). Kevin's ruling 2026-08-24:
+              [ Equipment ] [ Repair & maintenance ] [ Vendor breakdown ]
+              [ Card purchases ................................ ]
+            Reimbursable isn't shown in Kevin's diagram; it stays as a
+            full-width row above Card purchases so no card is dropped.
+            Measured at 1600px viewport - Vendor breakdown lands at
+            ~382px card width; its grid rebalances to fit four columns
+            (see .kpi-p-flatrow-3up .kpi-p-vbrow rule). */}
+        <div className="kpi-p-flatrow kpi-p-flatrow-3up">
+          {board.ledgers
+            .filter(l => l.key === "equip" || l.key === "rm")
+            .map(l => (
+              <LedgerCard
+                key={l.key}
+                bucketKey={l.key}
+                label={l.label}
+                sub={l.sub}
+                strokeClass={l.strokeClass}
+                budget={l.budget}
+                spent={l.spent}
+                elapsedFrac={board.elapsedFrac}
+                closed={closed}
+                isFutureRange={isFutureRange}
+                ledgerRows={l.ledgerRows}
+                totalCount={l.totalCount}
+                totalAmount={l.totalAmount}
+                cap={l.cap}
+                isAggregate={isAggregate}
+              />
+            ))}
+          <VendorBreakdown
+            account={account}
+            /* PR-2 R6 Part B - per-vendor rollup from the route
+               (billcom_ref_vendors resolution, capped at 25). */
+            rows={data?.vendors?.rows}
+            totalCount={data?.vendors?.total_count}
+            totalAmount={data?.vendors?.total_amount}
+            cap={data?.vendors?.cap}
+            unresolvedCount={data?.vendors?.unresolved_count}
+            fragmentation={data?.vendors?.fragmentation}
+            /* PR 2 R7 Fix 2 - gate the "new" / "no prior period" split
+               on whether the compared window has data at all. */
+            priorHasData={data?.vendors?.prior_has_data}
+            priorRange={data?.vendors?.prior_range}
+            isAggregate={isAggregate}
+          />
+        </div>
+
+        {/* Reimbursable - full width. Not shown in Kevin's 3-up diagram,
+            but the card exists on the board (Fix 4 target); placing it
+            here keeps every card visible without cramming a fourth
+            column into the three-up row. */}
+        {board.ledgers
+          .filter(l => l.key === "reimb")
+          .map(l => (
             <LedgerCard
               key={l.key}
               bucketKey={l.key}
@@ -762,34 +817,20 @@ export default function KpiPurchasingPage() {
               isAggregate={isAggregate}
             />
           ))}
-        </div>
 
-        <div className="kpi-p-pairrow">
-          <CardPurchases
-            pendingAmount={board.pending}
-            pendingLineCount={board.pendingLineCount}
-            closed={closed}
-            /* PR-2 R6 Part B - per-charge rows from the route
-               (uncoded rippling_spend, capped at 50). */
-            rows={data?.card_charges?.rows}
-            totalCount={data?.card_charges?.total_count}
-            totalAmount={data?.card_charges?.total_amount}
-            cap={data?.card_charges?.cap}
-            isAggregate={isAggregate}
-          />
-          <VendorBreakdown
-            account={account}
-            /* PR-2 R6 Part B - per-vendor rollup from the route
-               (billcom_ref_vendors resolution, capped at 25). */
-            rows={data?.vendors?.rows}
-            totalCount={data?.vendors?.total_count}
-            totalAmount={data?.vendors?.total_amount}
-            cap={data?.vendors?.cap}
-            unresolvedCount={data?.vendors?.unresolved_count}
-            fragmentation={data?.vendors?.fragmentation}
-            isAggregate={isAggregate}
-          />
-        </div>
+        {/* Card purchases - full width per Kevin's diagram. */}
+        <CardPurchases
+          pendingAmount={board.pending}
+          pendingLineCount={board.pendingLineCount}
+          closed={closed}
+          /* PR-2 R6 Part B - per-charge rows from the route
+             (uncoded rippling_spend, capped at 50). */
+          rows={data?.card_charges?.rows}
+          totalCount={data?.card_charges?.total_count}
+          totalAmount={data?.card_charges?.total_amount}
+          cap={data?.card_charges?.cap}
+          isAggregate={isAggregate}
+        />
       </div>
     );
   })();

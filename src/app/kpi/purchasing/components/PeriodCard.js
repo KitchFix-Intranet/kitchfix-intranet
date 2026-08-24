@@ -156,7 +156,11 @@ export function PeriodCard({
           </div>
         </div>
 
-        <div className="kpi-p-nums">
+        {/* PR 2 R7 Fix 4 - zero-budget sweep. A period card sitting on
+            a range with no budget suppresses the second stack too - the
+            hero + `no budget` subline carry the state; there's nothing
+            for `Vs budget` / `Over by` / `Remaining` to declare against. */}
+        <div className={`kpi-p-nums${!isFutureRange && Number(budget || 0) === 0 ? " kpi-p-nums-solo" : ""}`}>
           <div className="kpi-p-stk">
             <span className="kpi-p-label">Spent</span>
             {/* PR 2 R8 - hero drops state colour on a future range. `$0.00`
@@ -169,33 +173,39 @@ export function PeriodCard({
                   {" "}· <b>{fmtPct(spentUsed)}</b> used
                 </>
               )}
+              {!isFutureRange && Number(budget || 0) === 0 && (
+                <><span aria-hidden="true"> · </span><b>no budget</b></>
+              )}
             </span>
           </div>
-          <div className="kpi-p-stk">
-            {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is a
-                quantity, no arrow, no colour. `Over by` takes over when
-                the number is a variance (may carry colour). Closed reads
-                `Vs budget` unchanged.
-                PR 2 R8 - on a future range the second stack is the plain
-                budget number - no over/under, no variance. */}
-            <span className="kpi-p-label">
-              {isFutureRange ? "Budget" : (closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining"))}
-            </span>
-            {isFutureRange ? (
+          {isFutureRange ? (
+            <div className="kpi-p-stk">
+              <span className="kpi-p-label">Budget</span>
               <span className="kpi-p-value num">{fmt$(budget)}</span>
-            ) : closed ? (
-              <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
-            ) : showOverArrow ? (
-              <span className="kpi-p-value num r">{fmt$(-rem)}</span>
-            ) : (
-              <span className="kpi-p-value num">{fmt$(rem)}</span>
-            )}
-            <span className="kpi-p-subline">
-              {isFutureRange
-                ? "this range has not started"
-                : (closed ? "period closed" : "net of pending")}
-            </span>
-          </div>
+              <span className="kpi-p-subline">this range has not started</span>
+            </div>
+          ) : Number(budget || 0) === 0 ? (
+            null
+          ) : (
+            <div className="kpi-p-stk">
+              {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is
+                  a quantity, no arrow, no colour. `Over by` takes over
+                  when the number is a variance. Closed reads `Vs budget`. */}
+              <span className="kpi-p-label">
+                {closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining")}
+              </span>
+              {closed ? (
+                <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+              ) : showOverArrow ? (
+                <span className="kpi-p-value num r">{fmt$(-rem)}</span>
+              ) : (
+                <span className="kpi-p-value num">{fmt$(rem)}</span>
+              )}
+              <span className="kpi-p-subline">
+                {closed ? "period closed" : "net of pending"}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* PR 2 R8 - a future range has no bills, no cards, no pending,

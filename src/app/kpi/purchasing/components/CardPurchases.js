@@ -20,6 +20,20 @@ import { fmt$ } from "../lib/board";
 import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
 import { CARD_PURCHASES_BODY } from "./PurchasingHelpPops";
 
+// PR 2 R7 Fix 3 - the operator's Rippling default "**Please Select A
+// Category**" was landing raw in the row detail line, then getting
+// mid-word truncated by CSS ellipsis to "**Please Sel..." - the single
+// most important thing that row could tell you ("nobody chose one")
+// squashed to gibberish. Owner ruling: shorten deliberately to
+// "no category" in amber; never render the raw sentinel.
+const NO_CATEGORY_SENTINEL = /^\**\s*please\s+select\s+a\s+category\s*\**$/i;
+function normaliseCategory(raw) {
+  const s = (raw || "").trim();
+  if (!s) return { label: "no category", missing: true };
+  if (NO_CATEGORY_SENTINEL.test(s)) return { label: "no category", missing: true };
+  return { label: s, missing: false };
+}
+
 export function CardPurchases({
   pendingAmount,          // number - summary total
   pendingLineCount,       // integer - total count (may exceed cap)
@@ -88,11 +102,17 @@ export function CardPurchases({
           ) : (
             <>
               {list.map((r, i) => {
+                // PR 2 R7 Fix 3 - normalise the operator category BEFORE
+                // deciding "needs attention". Rippling's raw
+                // "**Please Select A Category**" sentinel counts as
+                // missing (nobody chose one) - same defect class as an
+                // absent category and the same amber affordance.
+                const cat = normaliseCategory(r.category);
                 // A charge is flagged when it lacks a category label
                 // (the operator picked something that has not been
                 // mapped) OR the merchant/description would be blank.
                 // Both are conditions the amber affordance calls out.
-                const needsAttention = !r.category || !r.merchant;
+                const needsAttention = cat.missing || !r.merchant;
                 return (
                   <div
                     key={`${r.merchant || "?"}-${r.txn_date || i}-${i}`}
@@ -103,7 +123,12 @@ export function CardPurchases({
                       <small>
                         {isAggregate && r.account_key ? `${r.account_key} · ` : ""}
                         {r.txn_date || ""}
-                        {r.category ? ` · ${r.category}` : " · uncategorised"}
+                        {" · "}
+                        {cat.missing ? (
+                          <span className="kpi-p-cat-amber">{cat.label}</span>
+                        ) : (
+                          cat.label
+                        )}
                       </small>
                     </span>
                     <span className="kpi-p-v num">{fmt$(r.amount)}</span>

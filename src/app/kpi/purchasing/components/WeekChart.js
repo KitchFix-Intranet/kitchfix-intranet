@@ -40,6 +40,7 @@
 // A unit with zero spend renders a baseline + "no spend" caption (§7
 // rule 8). Never a green under-arrow at zero.
 
+import { useLayoutEffect, useRef } from "react";
 import { fmt$ } from "../lib/board";
 
 function ArrowNote({ amount, tone }) {
@@ -259,8 +260,32 @@ export function WeekChart({
   const MIN_COL_PX = 72;
   const gridStyle = { gridTemplateColumns: `repeat(${slots.length || 1}, minmax(${MIN_COL_PX}px, 1fr))` };
 
+  // PR 2 R7 Fix 1 - anchor initial scroll position at the RIGHT edge so
+  // the most recent unit (P9 on tier-C FYTD, the last week on tier-A/B)
+  // is visible on first paint. Prior state opened scrolled to the LEFT,
+  // hiding the period anyone cares about behind the right edge. The
+  // owner's ruling: cannot do this AFTER paint (visible jump). The
+  // approach used here:
+  //   - `useLayoutEffect` runs synchronously between DOM commit and the
+  //     browser's next paint, so setting `scrollLeft` here has no visual
+  //     effect during any painted frame. React guarantees this ordering.
+  //   - Re-anchors when the caller passes a new `units` array (range
+  //     change) so switching from FYTD -> P8 -> FYTD keeps the same
+  //     right-edge anchor rule on every render.
+  // Only fires when the container actually overflows (scrollWidth >
+  // clientWidth) so we do not clobber legitimate user scroll positions
+  // on ranges that fit without scrolling.
+  const scrollRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollWidth > el.clientWidth) {
+      el.scrollLeft = el.scrollWidth - el.clientWidth;
+    }
+  }, [slots.length, tier]);
+
   return (
-    <div className="kpi-p-wks-scroll">
+    <div className="kpi-p-wks-scroll" ref={scrollRef}>
     <div className="kpi-p-wks" style={gridStyle}>
       {slots.map((slot, i) => {
         const u = units[i];
