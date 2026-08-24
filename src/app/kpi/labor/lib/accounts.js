@@ -63,22 +63,27 @@ export const FY_START = "2025-12-29";  // FY2026 opens
 //   TXR - TX - V -> Rangers · Visitor · Arlington, TX
 // Every other key uses `<accounts.name> · <city>, <state>`. If any
 // required metadata field is missing, callers render the key alone
-// and log the gap in the PR body. Returns { line, missing } where
-// `missing` is a list of the field names that were absent.
+// and log the gap in the PR body.
+//
+// Returns { line, city, missing }. `city` mirrors the display city
+// (special-cased for the three override keys, meta.city otherwise)
+// so callers that just want the town name have one source of truth
+// - PR-E's salaried-only empty state derives "Louisville" / "Buffalo"
+// from here rather than adding a parallel account -> city map.
 export function folioMemberDescription(teamKey, meta) {
   if (teamKey === "TBJ - NY") {
-    return { line: "Buffalo Bisons · Buffalo, NY", missing: [] };
+    return { line: "Buffalo Bisons · Buffalo, NY", city: "Buffalo", missing: [] };
   }
   if (teamKey === "TXR - TX - H") {
-    return { line: "Rangers · Home · Arlington, TX", missing: [] };
+    return { line: "Rangers · Home · Arlington, TX", city: "Arlington", missing: [] };
   }
   if (teamKey === "TXR - TX - V") {
-    return { line: "Rangers · Visitor · Arlington, TX", missing: [] };
+    return { line: "Rangers · Visitor · Arlington, TX", city: "Arlington", missing: [] };
   }
   const missing = [];
   if (!meta?.team_name) missing.push("team_name");
   if (!meta?.city) missing.push("city");
   if (!meta?.state) missing.push("state");
-  if (missing.length > 0) return { line: null, missing };
-  return { line: `${meta.team_name} · ${meta.city}, ${meta.state}`, missing: [] };
+  if (missing.length > 0) return { line: null, city: meta?.city ?? null, missing };
+  return { line: `${meta.team_name} · ${meta.city}, ${meta.state}`, city: meta.city, missing: [] };
 }

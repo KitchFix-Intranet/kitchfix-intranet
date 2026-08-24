@@ -3776,6 +3776,16 @@
    above sibling cards. `:has()` is supported in every browser this
    app targets. */
 .kpi-hs-card:has(.kpi-hs-qwrap.on) { z-index: 20; }
+/* PR-E - the shared HelpPop now lives on non-homestand cards too.
+   `.kpi-sig` sets overflow: hidden which clips the popover against
+   the card edge; flip it to visible + lift z-index above sibling
+   cards while the popover is open. Same pattern the homestand
+   rule above uses; mirrored for the four signal cards, the story
+   spend card, the custom-range cards, and the table toolbar. */
+.kpi-sig:has(.kpi-hs-qwrap.on) { overflow: visible; z-index: 20; }
+.kpi-spend:has(.kpi-hs-qwrap.on),
+.kpi-day-range-card:has(.kpi-hs-qwrap.on),
+.kpi-tbar:has(.kpi-hs-qwrap.on) { z-index: 20; }
 /* Peak column header - `?` sits inline to the right of "Peak". The
    header cell needs position:relative so the popover's absolute
    positioning anchors correctly, and overflow:visible so the popover

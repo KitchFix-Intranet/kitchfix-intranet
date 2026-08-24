@@ -16,8 +16,23 @@
 //
 // V32-15 - renders NOTHING when there is no comparable prior period.
 
-import { useEffect, useRef, useState } from "react";
 import { fmt$ } from "../lib/formatting.js";
+import HelpPop from "./HelpPop.js";
+
+// PR-E - "Compared to last period" popover copy per kitchfix-help-copy
+// (section "Period board · other regions"). Verbatim; replaces the
+// prior per-measure explanation block, which was accurate but read as
+// reference documentation rather than the "how to read this" voice
+// the doc adopted.
+const VS_PREV_BODY = (
+  <>
+    How this period is running against the last <b>closed</b> one - only complete periods, so you are never comparing a half-finished period to a whole one.
+    <br /><br />
+    <b>Down and green is better on every measure here.</b> A lower blended rate, less overtime, less spend per week.
+    <br /><br />
+    <b>Spend per week and hours per week are the honest comparison</b> when the periods are different lengths. Totals are not.
+  </>
+);
 
 const MEASURE_META = {
   blended_rate:    { label: "Blended rate",   unit: "delta$",  betterDown: true  },
@@ -32,15 +47,6 @@ const MEASURE_ORDER = [
   "blended_rate", "overtime_pct", "crew_size",
   "spend_per_week", "hours_per_week", "cost_per_worker",
 ];
-
-const DEF_LINES = {
-  blended_rate:    "Blended rate = spend / hours ($/hr). Cheaper is greener.",
-  overtime_pct:    "Overtime = OT hours / total hours worked (percentage points). Less is greener.",
-  crew_size:       "Crew size = distinct workers with paid hours in the range. No direction; context only.",
-  spend_per_week:  "Spend / week = spend / elapsed weeks. Percentage change vs prior. Less is greener.",
-  hours_per_week:  "Hours / week = hours / elapsed weeks. Percentage change vs prior. Less is greener.",
-  cost_per_worker: "Cost / worker = spend / elapsed weeks / distinct workers ($/person/week). Percentage change vs prior. Less is greener.",
-};
 
 // V33 P0 - every strip value renders ABSOLUTE; the arrow carries
 // direction (V29-18). Prior fmt for delta$ passed a "-" sign alongside
@@ -75,58 +81,6 @@ function toneFor(delta, betterDown) {
   return (betterDown ? down : !down) ? "good" : "bad";
 }
 
-function HelpButton({ salaryIncluded }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return (
-    <span className="kpi-cmp-help-anchor" ref={rootRef}>
-      <button
-        type="button"
-        className="kpi-cmp-help"
-        aria-haspopup="dialog"
-        aria-expanded={open ? "true" : "false"}
-        aria-label="About the comparison strip"
-        onClick={() => setOpen(o => !o)}
-      >?</button>
-      {open && (
-        <div className="kpi-cmp-help-pop" role="dialog">
-          <h5>COMPARISON · SAME MEASURES, SCALE-FREE</h5>
-          {MEASURE_ORDER.map(k => (
-            <div key={k} className="kpi-cmp-help-row">
-              <b>{MEASURE_META[k].label}</b>{" "}{DEF_LINES[k]}
-            </div>
-          ))}
-          <div className="kpi-cmp-help-foot">
-            Only rates and ratios appear here because the current period is part-run. Raw totals are not comparable until both periods are closed.
-          </div>
-          {/* Salary PR 3 - reconciliation caveat. Base-only salary
-              is what the derive produces; anyone reconciling against
-              the P&L (which totals base + bonuses + one-time
-              payments) would otherwise wonder where the gap is.
-              Renders only when salary is on so hourly-only mode
-              stays clean. */}
-          {salaryIncluded && (
-            <div className="kpi-cmp-help-foot">
-              Salary figures are base only; bonuses and one-time payments are not included.
-            </div>
-          )}
-        </div>
-      )}
-    </span>
-  );
-}
-
 export function ComparisonStrip({ prior_period_comparison, salaryIncluded }) {
   const pp = prior_period_comparison;
   if (!pp || !pp.applies) return null;
@@ -155,7 +109,15 @@ export function ComparisonStrip({ prior_period_comparison, salaryIncluded }) {
         ))}
       </div>
       <div className="kpi-cmp-source">PERIOD {pp.prior_period_no} · 4 wks closed</div>
-      <div className="kpi-cmp-help-wrap"><HelpButton salaryIncluded={salaryIncluded} /></div>
+      <div className="kpi-cmp-help-wrap">
+        <HelpPop
+          id="qVsPrev"
+          title="Compared to last period"
+          body={salaryIncluded
+            ? (<>{VS_PREV_BODY}<span className="kpi-hs-pop-foot">Salary figures are base only; bonuses and one-time payments are not included.</span></>)
+            : VS_PREV_BODY}
+        />
+      </div>
     </div>
   );
 }

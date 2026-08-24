@@ -19,6 +19,31 @@ import {
   aggregatePerDay,
   chooseLabelDensity,
 } from "@/lib/labor/dayRangeAggregate";
+import HelpPop from "./HelpPop.js";
+
+// PR-E - custom-range card popovers per kitchfix-help-copy.html
+// (section "Custom range · the two cards that exist TODAY"). Verbatim.
+// BUDGET side explains the pro-rate slicing; SPENT side underlines that
+// the dollars are exact even though the yardstick is arithmetic.
+const CUSTOM_BUDGET_BODY = (
+  <>
+    <b>Budgets are set by period, not by day.</b> So for a range that does not land on whole weeks, this takes that week&apos;s share of the days you picked.
+    <br /><br />
+    The label tells you exactly which slice - <b>&ldquo;4 of 7 days of wk 08/03&rdquo;</b> means four sevenths of that week&apos;s target.
+    <br /><br />
+    It is the right yardstick for a short range, but nobody set it as a goal. Your spend beside it is exact; this side is arithmetic.
+    <span className="kpi-hs-pop-foot">Pick a range that starts on a Monday and ends on a Sunday and no slicing happens - you get the real weekly budget.</span>
+  </>
+);
+
+const CUSTOM_SPENT_BODY = (
+  <>
+    <b>Every dollar here is real</b> - actual hourly labor on the exact days you picked, down to the day.
+    <br /><br />
+    The comparison underneath is against the pro-rated budget, so read it as a rough check rather than a verdict. <b>The spend is precise; the yardstick is a slice.</b>
+    <span className="kpi-hs-pop-foot">Days with no bar are days nobody worked - a genuine zero, not missing data.</span>
+  </>
+);
 
 // Compact date "MM/DD". fmtDate returns "MM/DD/YY" which is fine at
 // wide bars but collides at narrow ones. Dropping the year is safe
@@ -134,14 +159,20 @@ export function DayStrip({ data, todayISO }) {
 
       <div className="kpi-day-range-cards">
         <div className="kpi-day-range-card">
-          <div className="kpi-day-range-card-eyebrow">BUDGET</div>
+          <div className="kpi-day-range-card-eyebrow">
+            BUDGET
+            <HelpPop id="qCustomBudget" title="Budget for these days" body={CUSTOM_BUDGET_BODY} />
+          </div>
           <div className="kpi-day-range-card-figure">{fmt$(budgetTotal)}</div>
           {budget_prorate?.label && (
             <div className="kpi-day-range-card-sub">{budget_prorate.label}</div>
           )}
         </div>
         <div className="kpi-day-range-card">
-          <div className="kpi-day-range-card-eyebrow">SPENT</div>
+          <div className="kpi-day-range-card-eyebrow">
+            SPENT
+            <HelpPop id="qCustomSpent" title="What these days cost" body={CUSTOM_SPENT_BODY} />
+          </div>
           <div className="kpi-day-range-card-figure">{fmt$(spentTotal)}</div>
           <div className={`kpi-day-range-card-sub ${varianceCls}`}>
             {varianceLabel}{Math.abs(variance) >= 0.5 ? ` · ${fmt$(Math.abs(variance))}` : ""}
