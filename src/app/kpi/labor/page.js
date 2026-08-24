@@ -811,13 +811,19 @@ export default function KpiLaborPage() {
       {/* homestand PR-2 - view tabs. Rendered only for MLB accounts
           (data.homestands is non-empty). Absent, not disabled, on
           non-MLB accounts per owner ruling 2026-08-21. */}
+      {/* HS FB1 PR-2 verify 2026-08-25: reuse .kpi-seg so the
+          Period | Homestand toggle sits on the SAME control skin
+          as Hourly / + Salary. Prior bespoke .kpi-hs-view-tabs
+          rendered 27px against salary's 25px because it wasn't
+          actually sharing the control geometry - only the token.
+          Now they share the class, so parity is mechanical. */}
       {hasHomestandTab && (
-        <div className="kpi-hs-view-tabs" role="tablist" aria-label="Board view">
+        <span className="kpi-seg kpi-hs-view-tabs" role="tablist" aria-label="Board view">
           <button
             type="button"
             role="tab"
             aria-selected={!inHomestandView}
-            className={`kpi-hs-view-tab ${!inHomestandView ? "on" : ""}`}
+            className={!inHomestandView ? "on" : ""}
             onClick={() => setView("period")}
             data-view-tab="period"
           >
@@ -827,14 +833,14 @@ export default function KpiLaborPage() {
             type="button"
             role="tab"
             aria-selected={inHomestandView}
-            className={`kpi-hs-view-tab ${inHomestandView ? "on" : ""}`}
+            className={inHomestandView ? "on" : ""}
             onClick={() => setView("homestand")}
             data-view-tab="homestand"
           >
             Homestand
             <span className="kpi-hs-view-tab-cnt">{data.homestands.length} stands</span>
           </button>
-        </div>
+        </span>
       )}
       {/* homestand PR-2 - homestand render branch. Preempts the
           entire period board when active. Same salary/gate posture:
