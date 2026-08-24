@@ -26,7 +26,8 @@ import { fmt$, fmtPct, moneyArrow, resolveCardState } from "../lib/board";
 export function PeriodCard({
   periodNo,
   rangeLabel,       // "07/13/26 - 08/09/26"
-  weekOfPeriod,     // 1..4 (null when the range is closed or multi-period)
+  weekOfPeriod,     // 1..N week ordinal inside the range (null when closed)
+  weeksInPeriod,    // range denominator (4 for single-period, weeks_in_range for FYTD/custom)
   elapsedFrac,      // 0..1
   closed,
   provisional,
@@ -69,9 +70,14 @@ export function PeriodCard({
             {rangeLabel && <span className="kpi-p-cardsub">{rangeLabel}</span>}
             <div>
               <span className="kpi-p-cardmeta">
-                {closed
-                  ? "4 of 4 weeks · "
-                  : (weekOfPeriod ? `week ${weekOfPeriod} of 4 · ` : "")}
+                {(() => {
+                  // Denominator: 4 for a single-period range, weeks_in_range
+                  // for a longer range. Fall back to 4 when unknown so the
+                  // header does not break on partial payloads.
+                  const denom = Number(weeksInPeriod) > 0 ? Number(weeksInPeriod) : 4;
+                  if (closed) return `${denom} of ${denom} weeks · `;
+                  return weekOfPeriod ? `week ${weekOfPeriod} of ${denom} · ` : "";
+                })()}
               </span>
               <span
                 style={{

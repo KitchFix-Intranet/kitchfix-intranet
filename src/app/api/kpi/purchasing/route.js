@@ -384,21 +384,42 @@ async function fetchMembers(supa, account) {
 // map: gl_line_code -> Map(account_key -> Map(period_no -> amount)).
 // Purchasing lines are all COGS + reimbursable + SG&A lines except
 // 3100.1 (labor - handled by /api/kpi/labor).
+//
+// Paginates the .in() over accounts AND the row window. FY2026 ALL
+// membership is ~24 lines x 11 accounts x 13 periods = ~3,400 rows,
+// well over PostgREST's silent 1000-row cap. Mirrors the pagination
+// pattern the other three .select() calls in this file already use
+// (paginateActuals, paginateWeekly, loadPending): .order() BEFORE
+// .range(), chunk members through IN_CHUNK, walk pages until a short
+// page returns.
 async function loadPurchasingBudgets(supa, accounts, fiscalYear) {
-  const q = await supa.from("kpi_budgets")
-    .select("account_key, line_code, period_no, amount")
-    .eq("fiscal_year", fiscalYear)
-    .in("account_key", accounts)
-    .neq("line_code", "3100.1")     // labor lives in labor route
-    .neq("line_code", "3100.2");    // salaried; not in scope for purchasing v1
-  if (q.error) return { error: q.error };
   const byLine = new Map();
-  for (const r of q.data || []) {
-    const gl = String(r.line_code);
-    const acct = String(r.account_key);
-    if (!byLine.has(gl)) byLine.set(gl, new Map());
-    if (!byLine.get(gl).has(acct)) byLine.get(gl).set(acct, new Map());
-    byLine.get(gl).get(acct).set(Number(r.period_no), Number(r.amount));
+  const PS = V6_PAGE_DEFAULT;
+  for (const memberChunk of chunk(accounts, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const q = await supa.from("kpi_budgets")
+        .select("account_key, line_code, period_no, amount")
+        .eq("fiscal_year", fiscalYear)
+        .in("account_key", memberChunk)
+        .neq("line_code", "3100.1")     // labor lives in labor route
+        .neq("line_code", "3100.2")     // salaried; not in scope for purchasing v1
+        .order("account_key", { ascending: true })
+        .order("line_code", { ascending: true })
+        .order("period_no", { ascending: true })
+        .range(from, from + PS - 1);
+      if (q.error) return { error: q.error };
+      const rows = q.data || [];
+      for (const r of rows) {
+        const gl = String(r.line_code);
+        const acct = String(r.account_key);
+        if (!byLine.has(gl)) byLine.set(gl, new Map());
+        if (!byLine.get(gl).has(acct)) byLine.get(gl).set(acct, new Map());
+        byLine.get(gl).get(acct).set(Number(r.period_no), Number(r.amount));
+      }
+      if (rows.length < PS) break;
+      from += PS;
+    }
   }
   return { data: byLine };
 }

@@ -217,25 +217,47 @@ export default function KpiPurchasingPage() {
     const weeks = weekStartsInRange(start, end);
     const weeksInRange = weeks.length;
 
-    // Week labels for the 4-column period card chart. When the range
-    // is exactly one period the labels are the 4 week starts. When it
-    // is not a single period (custom / month / FYTD), we still show
-    // up to the first 4 weeks + counts; PR 2 focuses on single-period
-    // display so the labels default to those.
-    const weekLabels = weeks.slice(0, 4).map(w => ({ date: isoToMMDD(w) }));
-    while (weekLabels.length < 4) weekLabels.push({ date: "" });
+    // Period length for the target math. §5.1: original = budget /
+    // weeksInPeriod, adjusted = (budget - finishedSpend) / (weeksInPeriod
+    // - finishedWeeks). Read from fiscal.weeks_in_range - the route
+    // already ships it (labor board follows the same convention). Never
+    // hardcode: on a 35-week FYTD range 4 turns adjusted into a divide
+    // by (4 - 35) = negative denom, blanking the caption while the bar
+    // still draws spend.
+    //
+    // Guard degenerate ranges: fiscal.weeks_in_range should never be
+    // <= 0 (the API resolves it from weekStartsInRange), but if the
+    // fetch fails or the payload is malformed we fall back to the
+    // client-side enumeration; if that is also zero, weeklyTargets
+    // already returns { original: null, adjusted: null } on !(weeksInPeriod > 0).
+    const weeksInPeriod = Number(data?.fiscal?.weeks_in_range) || weeksInRange || 0;
 
-    // Running-week index inside the range (only when open).
+    // Chart render decision (single-source with the target math):
+    //   The CSS grid `.kpi-p-wks` is `repeat(4, ...)`, so the strip
+    //   renders exactly four columns. On a single-period range that IS
+    //   the four fiscal weeks. On a longer range we render the TRAILING
+    //   four weeks with the most recent week rightmost - the same
+    //   period the "adjusted" target and pace pill describe. Bars,
+    //   captions, running-week highlight and week labels all read from
+    //   this same window so there is no chance of the chart describing
+    //   weeks 1..4 while the pill describes weeks 32..35.
+    const CHART_SLOTS = 4;
+    const chartStartIdx = Math.max(0, weeks.length - CHART_SLOTS);
+    const chartWeeks = weeks.slice(chartStartIdx);
+    const weekLabels = chartWeeks.map(w => ({ date: isoToMMDD(w) }));
+    while (weekLabels.length < CHART_SLOTS) weekLabels.push({ date: "" });
+
+    // Running-week index inside the chart window (only when open).
     let runningWeekIdx = null;
     if (!closed) {
       const MS = 86400000;
       const todayTime = new Date(today).getTime();
-      for (let i = 0; i < Math.min(4, weeks.length); i += 1) {
-        const wStart = new Date(weeks[i]).getTime();
+      for (let i = 0; i < chartWeeks.length; i += 1) {
+        const wStart = new Date(chartWeeks[i]).getTime();
         const wEnd = wStart + 6 * MS;
         if (todayTime >= wStart && todayTime <= wEnd) { runningWeekIdx = i; break; }
       }
-      if (runningWeekIdx == null && weeks.length > 0) {
+      if (runningWeekIdx == null && chartWeeks.length > 0) {
         // Range ends in the future but today already past the range start.
         runningWeekIdx = 0;
       }
@@ -257,30 +279,43 @@ export default function KpiPurchasingPage() {
     const billsApprox = Math.max(0, totalCogsSpent - cardCodedInSpend);
 
     // Weekly targets for the KPI card (finishedSpend uses KPI-line
-    // spend across FINISHED weeks only, per §5.1).
+    // spend across FINISHED weeks only, per §5.1). weeksInPeriod IS
+    // fiscal.weeks_in_range so the divisor tracks the actual range,
+    // not the hardcoded 4 that turned adjusted null on multi-period
+    // ranges. finishedSpend is summed across ALL finished weeks in
+    // the range (not just the four in the chart window) - the target
+    // math describes the whole range, the chart shows the trailing
+    // four bars of that range.
     const finishedWks = finishedWeekCount({ start, end, todayISO: today });
     const finishedKpiSpend = kpiSpentPerWeek
       .slice(0, finishedWks)
       .reduce((s, w) => s + Number(w.amount || 0), 0);
     const kpiTargets = weeklyTargets({
       budget: kpiBud,
-      weeksInPeriod: 4,
+      weeksInPeriod,
       finishedSpend: finishedKpiSpend,
       finishedWeeks: finishedWks,
     });
 
     // Bucket data - budget, spent, per-week bars.
+    //   weekAmounts renders the CHART WINDOW (trailing four weeks) so
+    //   bar height and caption resolve from the same slice.
+    //   `spent` and `finishedSpend` sum the WHOLE range so the hero
+    //   number + target math describe the same period the pill does.
+    //   Chart and hero deliberately answer different questions - hero
+    //   totals the range, chart shows the trailing window - but each
+    //   answer resolves from ONE source, per §9B.
     const buckets = BUCKET_DEFS.map(def => {
       const bud = bucketBudget({ byGlLineCode, bucketKey: def.key });
-      const weekAmounts = bucketWeeklySpend({ weekly, bucketKey: def.key, start, end })
-        .slice(0, 4)
+      const perWeekAll = bucketWeeklySpend({ weekly, bucketKey: def.key, start, end })
         .map(w => Number(w.amount || 0));
-      while (weekAmounts.length < 4) weekAmounts.push(0);
-      const spent = weekAmounts.reduce((s, v) => s + v, 0);
-      const finishedSpend = weekAmounts.slice(0, finishedWks).reduce((s, v) => s + v, 0);
+      const spent = perWeekAll.reduce((s, v) => s + v, 0);
+      const finishedSpend = perWeekAll.slice(0, finishedWks).reduce((s, v) => s + v, 0);
+      const weekAmounts = perWeekAll.slice(chartStartIdx);
+      while (weekAmounts.length < CHART_SLOTS) weekAmounts.push(0);
       const targets = weeklyTargets({
         budget: bud,
-        weeksInPeriod: 4,
+        weeksInPeriod,
         finishedSpend,
         finishedWeeks: finishedWks,
       });
@@ -313,6 +348,14 @@ export default function KpiPurchasingPage() {
       return { ...def, budget: bud, spent, ledgerRows };
     });
 
+    // KPI chart bars for the period card - trailing CHART_SLOTS from
+    // the full kpiSpentPerWeek series. Same slice window bar height +
+    // caption + running-week highlight all read from.
+    const kpiWeekAmounts = kpiSpentPerWeek
+      .slice(chartStartIdx)
+      .map(w => Number(w.amount || 0));
+    while (kpiWeekAmounts.length < CHART_SLOTS) kpiWeekAmounts.push(0);
+
     return {
       byGlLineCode,
       weekly,
@@ -321,10 +364,12 @@ export default function KpiPurchasingPage() {
       elapsedFrac,
       weeks,
       weeksInRange,
+      weeksInPeriod,
       weekLabels,
       runningWeekIdx,
       kpiSpent,
       kpiSpentPerWeek,
+      kpiWeekAmounts,
       kpiBud,
       kpiTargets,
       buckets,
@@ -395,7 +440,13 @@ export default function KpiPurchasingPage() {
 
     const runningWeekIdx = board.runningWeekIdx;
     const weekLabels = board.weekLabels;
-    const wop = runningWeekIdx != null ? runningWeekIdx + 1 : null;
+    // "week X of N" for the period header. Compute across the FULL
+    // range (not the trailing chart window) so a 35-week range reads
+    // "week 22 of 35", not "week 1 of 4". runningWeekIdx is the index
+    // inside the chart window; add the window's offset back on.
+    const chartOffset = Math.max(0, board.weeks.length - board.kpiWeekAmounts.length);
+    const wop = runningWeekIdx != null ? chartOffset + runningWeekIdx + 1 : null;
+    const weeksInPeriodDenom = board.weeksInPeriod || board.weeksInRange || null;
 
     return (
       <div className="kpi-p-board">
@@ -403,6 +454,7 @@ export default function KpiPurchasingPage() {
           periodNo={rangePeriodNo}
           rangeLabel={rangeLabel}
           weekOfPeriod={wop}
+          weeksInPeriod={weeksInPeriodDenom}
           elapsedFrac={board.elapsedFrac}
           closed={closed}
           provisional={provisional}
@@ -411,7 +463,7 @@ export default function KpiPurchasingPage() {
           bills={board.billsApprox}
           cards={board.cardCodedInSpend}
           pending={board.pending}
-          weekAmounts={board.kpiSpentPerWeek.slice(0, 4).map(w => Number(w.amount || 0))}
+          weekAmounts={board.kpiWeekAmounts}
           weekLabels={weekLabels}
           runningWeekIdx={runningWeekIdx}
           original={board.kpiTargets.original}
