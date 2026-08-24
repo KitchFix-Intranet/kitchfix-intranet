@@ -39,14 +39,16 @@ export const STATIC_RDO_DISPLAY = { East: "S. Lynch", West: "R. Moore" };
 
 // V7-3 - Sections are the command-bar dropdown that replaces the v6
 // tabs row. K5 preserved: non-Labor items ghosted with a SOON tag.
+// Enabled sections carry a `path`; disabled sections do NOT - a path
+// on a SOON item invites someone to make it clickable without thinking.
 export const SECTIONS = [
-  { key: "overview",   label: "Overview",   enabled: false },
-  { key: "labor",      label: "Labor",      enabled: true  },
-  { key: "purchasing", label: "Purchasing", enabled: true  },
-  { key: "food",       label: "Food",       enabled: false },
-  { key: "other",      label: "Other COGS", enabled: false },
-  { key: "revenue",    label: "Revenue",    enabled: false },
-  { key: "pnl",        label: "P&L",        enabled: false },
+  { key: "overview",   label: "Overview",   enabled: false                          },
+  { key: "labor",      label: "Labor",      enabled: true,  path: "/kpi/labor"      },
+  { key: "purchasing", label: "Purchasing", enabled: true,  path: "/kpi/purchasing" },
+  { key: "food",       label: "Food",       enabled: false                          },
+  { key: "other",      label: "Other COGS", enabled: false                          },
+  { key: "revenue",    label: "Revenue",    enabled: false                          },
+  { key: "pnl",        label: "P&L",        enabled: false                          },
 ];
 
 // Preset date keys (client-resolvable). Same values the loader's
