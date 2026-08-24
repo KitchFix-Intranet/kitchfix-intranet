@@ -409,10 +409,10 @@ export function findHomestandByGameStart(homestands, gameStartIso) {
  * @param {Set<string>} gameDates  ISO dates of every GAME in the stand
  * @returns {Object|null}
  */
-export function computeSplitWithGameDates(actualsDaily, stand, gameDates) {
+export function computeSplitWithGameDates(actualsDaily, stand, gameDates, todayIso) {
   if (!stand || stand.pre_floor) return null;
   const prepIso = addDaysIso(stand.game_start, -1);
-  let gameX10000 = 0, offX10000 = 0, prepX10000 = 0;
+  let gameX10000 = 0, offX10000 = 0, prepX10000 = 0, todateX10000 = 0;
   const offDays = new Set();
   for (const r of actualsDaily || []) {
     if (r.work_date < stand.window_start || r.work_date > stand.window_end) continue;
@@ -424,12 +424,26 @@ export function computeSplitWithGameDates(actualsDaily, stand, gameDates) {
       offDays.add(r.work_date);
       if (r.work_date === prepIso) prepX10000 += x;
     }
+    // HS PR-A: stand-scoped spent_to_date lives on the split (which
+    // already walks these rows) instead of on homestand_estimated
+    // next to bank.spent_to_date (season-scoped) - two spent_to_date
+    // fields with different scopes is exactly the naming collision
+    // that produces a wrong number later. Walks the same rows the
+    // split already visits; the only new work is the up-to-today
+    // filter and the accumulator.
+    if (todayIso && r.work_date <= todayIso) {
+      todateX10000 += x;
+    }
   }
+  const spent_to_date = todayIso
+    ? Math.round(todateX10000 / 100) / 100
+    : null;
   return {
     game_day_dollars: Math.round(gameX10000 / 100) / 100,
     off_day_dollars:  Math.round(offX10000  / 100) / 100,
     off_day_count:    offDays.size,
     prep_day_dollars: Math.round(prepX10000 / 100) / 100,
+    spent_to_date,
   };
 }
 
