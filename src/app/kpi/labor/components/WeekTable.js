@@ -23,7 +23,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { periodOf, periodStartISO, periodEndISO } from "../lib/periods.js";
 
-const DENSITY_KEY = "kpi:table:density";
+// PR-B (owner ruling 2026-08-24) - Comfortable | Dense toggle removed
+// entirely, dashboard-wide. Comfortable becomes the only mode; the
+// dense CSS path is deleted with it (see kpi.css .kpi-tbl-dense rules
+// removed in the same PR). DENSITY_KEY localStorage record retained
+// in this comment for the migration note; nothing writes it anymore.
 const WEEKS_PER_PERIOD = 4;
 
 function workerLabel(meta, worker_id, redact) {
@@ -423,15 +427,7 @@ export function WeekTable({
   const excludedSet = useMemo(() => new Set(aggregateExcludedMembers), [aggregateExcludedMembers]);
   const rolledUpCount = rolledUpMembers.length;
   const wrapRef = useRef(null);
-  const [dense, setDense] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try { const v = localStorage.getItem(DENSITY_KEY); if (v === "1") setDense(true); } catch {}
-  }, []);
-  const commitDense = (v) => {
-    setDense(v);
-    try { localStorage.setItem(DENSITY_KEY, v ? "1" : "0"); } catch {}
-  };
+  // PR-B - dense state removed with the Comfortable | Dense toggle.
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape" && expandedWeeks.size > 0) onEscape?.(); };
@@ -659,15 +655,8 @@ export function WeekTable({
             </div>
           </>
         )}
-        <span className="kpi-tbar-rule" aria-hidden="true" />
-        <div className="kpi-empdisp">
-          {/* V25-12 - `Density` relabelled `Rows` (what it actually controls). */}
-          <span className="kpi-empdisp-lab">Rows</span>
-          <span className="kpi-seg" role="group" aria-label="Row density">
-            <button type="button" className={!dense ? "on" : ""} onClick={() => commitDense(false)} aria-pressed={!dense}>Comfortable</button>
-            <button type="button" className={dense ? "on" : ""} onClick={() => commitDense(true)} aria-pressed={dense}>Dense</button>
-          </span>
-        </div>
+        {/* PR-B - Comfortable | Dense toggle removed dashboard-wide.
+            Comfortable is the only mode. */}
         <span className="kpi-tbar-rule" aria-hidden="true" />
         <HelpPop rateBasisHourlyOnly={rateBasisHourlyOnly} />
       </div>
@@ -675,7 +664,7 @@ export function WeekTable({
       {scopeNote && (
         <div className="kpi-tbl-scope" role="note">{scopeNote}</div>
       )}
-      <div className={`kpi-tbl-wrap ${dense ? "kpi-tbl-dense" : ""}`} ref={wrapRef}>
+      <div className="kpi-tbl-wrap" ref={wrapRef}>
         <div className="kpi-tbl-scroll">
           <table className="kpi-tbl">
             <thead>

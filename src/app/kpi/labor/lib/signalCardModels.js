@@ -163,7 +163,7 @@ export function buildHoursLeftModel(board, salary) {
     return {
       state: "neutral",
       label: "—",
-      eyebrow: "HOURS LEFT TO SCHEDULE",
+      eyebrow: "HOURS AVAILABLE TO SCHEDULE",
       heroMute: true,
       subMute: "no budget to compare",
       facts: [
@@ -179,7 +179,7 @@ export function buildHoursLeftModel(board, salary) {
   const useInProgressShape = inProgress || (isMulti && weeksRemaining > 0);
   const state = useInProgressShape ? "info" : (closed && isOver ? "bad" : "good");
   const label = closed && isOver ? "OVER" : "ON TARGET";
-  const eyebrow = closed ? "HOURS VS BUDGET" : "HOURS LEFT TO SCHEDULE";
+  const eyebrow = closed ? "HOURS VS BUDGET" : "HOURS AVAILABLE TO SCHEDULE";
 
   const perWeek = (useInProgressShape && weeksRemaining > 0 && hoursLeft != null)
     ? hoursLeft / weeksRemaining
@@ -196,7 +196,7 @@ export function buildHoursLeftModel(board, salary) {
 
   const heroSub = closed
     ? (isOver ? "beyond what the budget covered" : "under what the budget covered")
-    : (isOver ? "beyond what the budget covers" : "you can still schedule this period");
+    : (isOver ? "beyond what the budget covers" : "available hours this period");
 
   const facts = closed
     ? [

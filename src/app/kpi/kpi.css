@@ -148,7 +148,6 @@
   --kpi-ctl-h:        var(--kpi-ctl);
   --kpi-cmd-h:        calc(60px   * var(--kf-scale));
   --kpi-row-h:        var(--kpi-row);
-  --kpi-row-h-dense:  var(--kpi-ctl);
   --kpi-thead-h:      var(--kpi-ctl);
   --kpi-band-h:       calc(52px   * var(--kf-scale));
   --kpi-wk-item-h:    var(--kpi-ctl);
@@ -2455,12 +2454,10 @@
   margin-top: var(--kpi-sp-1);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* V32-11 - `Dollars will rise` label carries a dotted-underline so the
-   reader knows the figure is an estimate; hover reveals the derivation. */
-.kpi-sig-fact-est {
-  border-bottom: 1px dotted currentColor;
-  cursor: help;
-}
+/* PR-B (owner ruling 2026-08-24) - `.kpi-sig-fact-est` dotted-underline
+   removed with the `Will rise` `?` affordance. The tooltip rendered
+   nothing on this browser path, so the affordance was a promise the
+   UI did not keep. Figure stays; the label is plain text now. */
 
 /* V33 P0 - the comparison strip joins the card family. White ground,
    card border, card shadow, --kpi-card-r radius, a 4px purple left
@@ -2793,8 +2790,11 @@
   --row: var(--kpi-row-h);
   --hdr: var(--kpi-thead-h);
 }
-.kpi-tbl-dense .kpi-tbl { --row: var(--kpi-row-h-dense); }
-.kpi-tbl-dense .kpi-tbl td { font-size: var(--kpi-t-body); }
+/* PR-B (owner ruling 2026-08-24) - Comfortable | Dense toggle removed
+   dashboard-wide. `.kpi-tbl-dense` path deleted here to keep the CSS
+   honest; --kpi-row-h-dense variable is orphaned but harmless (any
+   future re-introduction of a density mode should re-declare it in
+   context, not fish it out of a stale reference). */
 .kpi-tbl thead th {
   position: sticky; top: 0; z-index: 20;
   height: var(--hdr);
