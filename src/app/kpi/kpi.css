@@ -2176,7 +2176,13 @@
 }
 .kpi-wb-d-good { color: var(--green-700); }
 .kpi-wb-d-bad  { color: var(--red-700); }
-.kpi-wb-d-mute { color: var(--n-400); }
+/* PR-E polish (owner verify 2026-08-24): --n-400 (#CBD5E1) on white
+   fails AA for body text (contrast ~1.9:1). Bumped to --text-muted -
+   the token every other muted description on the KPI board uses
+   (statebox body, coming-soon copy, state description). Same tone
+   change across every kpi-wb-d-mute callsite: closed-week neutral
+   delta, "to stay on budget" caption, Tier B/C axis captions. */
+.kpi-wb-d-mute { color: var(--text-muted); }
 /* PR-C (owner ruling 2026-08-24) - running-week caption reads amber
    so it matches the amber .kpi-wb-bar-prog above. Prior state used
    .kpi-wb-d-mute which read as "not-started" tone and conflicted with

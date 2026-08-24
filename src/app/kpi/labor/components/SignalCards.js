@@ -230,8 +230,13 @@ function OvertimeCard({ board, salary }) {
 // ── Hours vs budget / Hours left to schedule ─────────────────────
 // V32-8/V32-9. V34 - state is CONTEXTUAL. V35-2 - the card takes
 // TWO shapes:
-//   in progress: eyebrow HOURS LEFT TO SCHEDULE, hero = hours you
-//     can still schedule, facts = per-week burn view.
+//   in progress: eyebrow HOURS AVAILABLE, hero = hours you can
+//     still schedule, facts = per-week burn view. PR-E polish:
+//     eyebrow shortened from HOURS AVAILABLE TO SCHEDULE (169px
+//     text into a 158px slot truncated as "HOURS AVAILABLE TO
+//     SCHED..."). Sub-line already says "available hours this
+//     period", so the eyebrow does not need to repeat "to
+//     schedule". Type scale unchanged (shared across all four).
 //   closed:      eyebrow HOURS VS BUDGET, hero = signed delta hrs
 //     (arrow + colour), facts = Budgeted / Used / Unused-or-Overrun
 //     / Blended rate. The fact set swaps between shapes - it does

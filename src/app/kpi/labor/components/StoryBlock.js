@@ -332,19 +332,19 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     // muted grey used previously read as "not-started" which conflicts
     // with the state.
     //
-    // PR-C multi_period fix: when weekly_allowance is null (multi_period
-    // does not compute an allowance, that's a single-period concept),
-    // fall back to w.original_target so the running week on FYTD shows
-    // its own per-week budget instead of just "running" with nothing to
-    // compare. Caption reads "running · $X budget" on multi to name the
-    // basis distinctly from single-period's "allowance".
-    const allow = w.weekly_allowance ?? weeklyAllowance;
+    // PR-E polish (owner verify 2026-08-24 caught this): PR-C's
+    // "$X budget" phrasing was gated behind `allow == null`, so it
+    // only fired on multi_period (no allowance) and single-period
+    // stayed on "$X allowance". Kevin's item was "running week should
+    // show budget" full stop. Fix: drop the allowance branch. The
+    // per-week ORIGINAL target (w.original_target ?? weeklyOriginal)
+    // is also the amber dashed line above the bar, so the caption and
+    // legend tie to the same reference. Adjusted allowance continues
+    // to name itself as ADJUSTED in the legend.
     const perWeekBudget = w.original_target ?? weeklyOriginal;
     const draftHrs = Number(w.draft_hours || 0);
     if (draftHrs > 0.004) {
       statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running · <b>{fmtHrs(draftHrs)}</b>{" "}hrs not yet approved</span>;
-    } else if (allow != null) {
-      statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running · <b>{fmt$(allow)}</b>{" "}allowance</span>;
     } else if (perWeekBudget != null) {
       statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running · <b>{fmt$(perWeekBudget)}</b>{" "}budget</span>;
     } else {
