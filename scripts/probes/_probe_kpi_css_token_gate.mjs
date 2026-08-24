@@ -35,10 +35,11 @@ const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
 const CSS_PATH = path.join(REPO_ROOT, "src/app/kpi/kpi.css");
 
-// HS FB1 PR-1 baseline. Drop to 0 in the HS FB1 PR-2 that removes
-// all HS-block literals. Do NOT bump this to accommodate a new
-// violation - fix the violation instead.
-const BASELINE_D1 = 68;
+// HS FB1 PR-2 (2026-08-24) drove d1 from 68 to 0 and locks the floor
+// here. Do NOT bump this to accommodate a new violation - fix the
+// violation instead. Every new declaration in .kpi-hs-* (or anywhere
+// outside the .kpi-app token block) must author against a token.
+const BASELINE_D1 = 0;
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, "");
