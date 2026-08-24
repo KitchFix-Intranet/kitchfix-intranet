@@ -620,7 +620,7 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                 )}
                 {isOpen && (employees || []).map((e, i) => {
                   const meta = workers?.[e.worker_id] || {};
-                  const name = redact ? `#${e.worker_id.slice(-4)}` : (meta.name || `#${e.worker_id.slice(-4)}`);
+                  const name = redact ? `#${e.worker_id.slice(-4)}` : (meta.display_name || `#${e.worker_id.slice(-4)}`);
                   const title = meta.title || "";
                   const hrs = (e.hours_regular || 0) + (e.hours_overtime || 0) + (e.hours_double_time || 0);
                   return (
