@@ -103,12 +103,13 @@ function HsHelpPop({ id, title, body }) {
 // ─── Season rail card ───────────────────────────────────────────────
 function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
   const rail = useMemo(() => {
-    // Scale by max spend across played stands. Pre-floor + future stands
-    // render at a floor height so the rail never disappears at the tails.
+    // Scale by max spend across played stands. Pre-floor stands with
+    // an estimator amount contribute; future stands still render at a
+    // floor height.
     let max = 1;
     for (const h of homestands) {
-      const v = h.actual != null ? h.actual : 0;
-      if (v > max) max = v;
+      const disp = h.actual != null ? h.actual : (h.is_estimated ? (h.actual_estimated || 0) : 0);
+      if (disp > max) max = disp;
       if (h.budget && h.budget > max) max = h.budget;
     }
     return { scale: max * 1.10 };
@@ -122,21 +123,24 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
         <HsHelpPop
           id="qRail"
           title="Season by homestand"
-          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand.</>}
+          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.</>}
         />
       </header>
       <div className="kpi-hs-rail">
         {homestands.map(h => {
           const isSel = h.game_start === selectedGameStart;
           const isFuture = !h.pre_floor && h.actual == null;
-          const val = h.actual != null ? h.actual : 0;
-          const barPct = h.pre_floor
+          const isEstimated = h.pre_floor && h.is_estimated;
+          const displayVal = h.actual != null
+            ? h.actual
+            : (isEstimated ? (h.actual_estimated || 0) : 0);
+          const barPct = (h.pre_floor && !isEstimated)
             ? 0
-            : (isFuture ? 0 : Math.min(100, (val / rail.scale) * 100));
+            : (isFuture ? 0 : Math.min(100, (displayVal / rail.scale) * 100));
           const tickPct = h.budget != null ? Math.min(100, (h.budget / rail.scale) * 100) : null;
           const over = h.actual != null && h.budget != null && h.actual > h.budget;
           const barCls = h.pre_floor
-            ? "kpi-hs-rail-bar kpi-hs-rail-bar-pre"
+            ? (isEstimated ? "kpi-hs-rail-bar kpi-hs-rail-bar-est" : "kpi-hs-rail-bar kpi-hs-rail-bar-pre")
             : isFuture
               ? "kpi-hs-rail-bar kpi-hs-rail-bar-future"
               : over
@@ -148,17 +152,23 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
             isSel ? "on" : "",
             isFuture ? "fut" : "",
             h.pre_floor ? "pre" : "",
+            isEstimated ? "est" : "",
           ].filter(Boolean).join(" ");
+          // Pre-floor stands with an estimate are now SELECTABLE - clicking
+          // opens the plan-mode cards. Only pre-floor stands WITHOUT an
+          // estimate (e.g. no low-OT stands played yet) stay disabled.
+          const isDisabled = h.pre_floor && !isEstimated;
           return (
             <button
               key={h.game_start}
               type="button"
               className={cls}
-              onClick={() => !h.pre_floor && onSelect(h.game_start)}
-              disabled={h.pre_floor}
+              onClick={() => !isDisabled && onSelect(h.game_start)}
+              disabled={isDisabled}
               data-game-start={h.game_start}
               data-pre-floor={h.pre_floor ? "true" : "false"}
-              title={h.pre_floor ? "Before daily detail starts (04/20/26)" : `${h.game_start} - ${h.game_end}`}
+              data-estimated={isEstimated ? "true" : "false"}
+              title={isDisabled ? "Before daily detail starts (04/20/26) - no estimate yet" : `${h.game_start} - ${h.game_end}${isEstimated ? " (est.)" : ""}`}
             >
               <div className="kpi-hs-rail-plot">
                 {tickPct != null && !h.pre_floor && (
@@ -167,12 +177,13 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
                 <span className={barCls} style={{ height: `${Math.max(barPct, 3)}%` }} />
               </div>
               <div className="kpi-hs-rail-amt">
-                {h.pre_floor ? "–" : (h.actual != null ? fmt$0(h.actual) : "~ plan")}
+                {isDisabled ? "–" : (isEstimated ? `~${fmt$0(displayVal)}` : (h.actual != null ? fmt$0(h.actual) : "~ plan"))}
               </div>
               <div className="kpi-hs-rail-nm">
                 {opp0}<br />{fmtDate(h.game_start).slice(0, 5)}
               </div>
-              {h.pre_floor && <div className="kpi-hs-rail-tag">no detail</div>}
+              {isDisabled && <div className="kpi-hs-rail-tag">no detail</div>}
+              {isEstimated && <div className="kpi-hs-rail-tag kpi-hs-rail-tag-est">est.</div>}
             </button>
           );
         })}
@@ -180,7 +191,7 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
       <div className="kpi-hs-rail-key">
         <span><i className="kpi-hs-key-sw kpi-hs-key-under" /> under target</span>
         <span><i className="kpi-hs-key-sw kpi-hs-key-over" /> over target</span>
-        <span><i className="kpi-hs-key-sw kpi-hs-key-pre" /> before daily detail (04/20)</span>
+        <span><i className="kpi-hs-key-sw kpi-hs-key-est" /> estimated (before 04/20)</span>
         <span><i className="kpi-hs-key-sw kpi-hs-key-future" /> not played yet</span>
         <span className="kpi-hs-key-line">– – – original target</span>
       </div>
@@ -559,14 +570,31 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
             const isOpen = h.game_start === expandedGameStart;
             const isFuture = !h.pre_floor && h.actual == null;
             if (h.pre_floor) {
+              // PR #273 - pre-floor rows now render the estimator's total
+              // when is_estimated. They stay excluded from the bank
+              // (bank_after column reads "-") but the row is now click-
+              // to-select so operators can open the plan-mode cards.
+              const isEst = h.is_estimated;
               return (
-                <tr key={h.game_start} className="kpi-hs-tr-prefloor">
+                <tr
+                  key={h.game_start}
+                  className={`kpi-hs-tr-prefloor ${isEst ? "kpi-hs-tr-prefloor-est" : ""} ${isSel ? "kpi-hs-tr-sel" : ""}`}
+                  data-game-start={h.game_start}
+                  data-estimated={isEst ? "true" : "false"}
+                  onClick={isEst ? () => handleRowClick(h.game_start) : undefined}
+                  style={isEst ? { cursor: "pointer" } : undefined}
+                >
                   <td>HS {h.index} · {h.opponents?.[0] || "(no opp)"}</td>
                   <td className="num">{fmtDate(h.game_start)} – {fmtDate(h.game_end)}</td>
                   <td className="num">{h.window_days}</td>
                   <td className="num">{h.game_days}</td>
                   <td className="num">{h.peak_games_in_week}</td>
-                  <td colSpan="4" className="kpi-hs-tr-prefloor-note">before daily detail starts 04/20/26</td>
+                  <td className="num">{h.budget != null ? fmt$0(h.budget) : "–"}</td>
+                  <td className="num">–</td>
+                  <td className="num kpi-hs-strong">
+                    {isEst ? <>~{fmt$0(h.actual_estimated)}<span className="kpi-hs-est-tag"> est.</span></> : "–"}
+                  </td>
+                  <td className="num">–</td>
                 </tr>
               );
             }
@@ -651,6 +679,174 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ─── Plan cards for pre-floor (estimated) stand selection ──────────
+// PR #273 - when a pre-floor stand is selected the server ships
+// source:"estimated" instead of the earlier refusal, and populates
+// homestand_estimated with the game-day-weighted total + per_day
+// breakdown + base_rates. The five cards below (HS X budget, Your
+// bank, Hours to schedule, Expected overtime, Spread across what is
+// left) mirror v11's plan-mode render. Each carries its own popover
+// (qPlan, qBank, qHrs, qOT, qSpread); this brings the total popover
+// count to 13 - the number owner's spec calls for.
+function PlanCards({ stand, estimate, bank, hourlyRate }) {
+  if (!stand || !estimate) return null;
+  const budget = Number(stand.budget || 0);
+  const plan   = Number(estimate.total || 0);
+  const budgetVsPlan = budget - plan;
+  const fits = budgetVsPlan >= 0;
+
+  // Working days = days in per_day with non-zero weight (game or prep).
+  const workingDays = (estimate.per_day || []).filter(p => p.day_type !== "other").length;
+
+  // Peak-informed OT expectation. Uses same OT_NORMS table the actuals
+  // OT card reads so the plan and actual views agree on what "typical"
+  // means for this shape.
+  const norm = OT_NORMS[Math.min(stand.peak_games_in_week, 10)] || OT_NORMS[3];
+  const otPct = norm[2];
+  const rate = Number(hourlyRate) || 22.79;   // account's own blended rate; falls back to owner-published avg
+  // Regular hrs approximated from the plan-total minus expected OT dollars.
+  const otShare = otPct / 100 * 0.5;
+  const regHrs = Math.round(plan * (1 - otShare) / rate);
+  const otHrs  = Math.round(plan * otShare / (rate * 1.5));
+
+  const bankVal = Number(bank?.bank || 0);
+  const remaining = Number(bank?.stands_remaining || 0);
+  const bankShare = Number(bank?.bank_share || 0);
+  const adjustedTarget = budget + bankShare;
+  const planVsAdjusted = adjustedTarget - plan;
+
+  return (
+    <div className="kpi-hs-signals" role="region" aria-label="Plan cards (pre-floor estimated stand)">
+      {/* Card 1 - HS X budget (qPlan popover) */}
+      <div className={`kpi-hs-card kpi-hs-signal ${fits ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="plan">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">HS {stand.index} budget</span>
+          <span className="kpi-hs-card-hdr-pills">
+            <span className={`kpi-hs-pill ${fits ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
+              {fits ? "Plan fits" : "Plan is over"}
+            </span>
+            <span className="kpi-hs-pill kpi-hs-pill-amber" data-est-pill>est.</span>
+          </span>
+          <HsHelpPop
+            id="qPlan"
+            title="How the plan is priced"
+            body={<>Your account's own averages this season, weighted by what the schedule says happened each day. Because daily detail starts 04/20/26, pre-floor stands are estimated - each week's real total is distributed across days by night/day/prep weights.<br /><br />The plan covers only what the schedule tells us: the prep day and the games. Off days show as $0 - the week's money is correctly sitting on the games at either end. Known limitation: the road-trip trickle (~$214 per stand, someone in while the team is away) has no schedule day to land on, so it gets absorbed into game days.</>}
+          />
+        </header>
+        <div className="kpi-hs-hero" data-figure="budget">
+          {budget > 0 ? fmt$(budget) : "–"}
+        </div>
+        <div className="kpi-hs-sub">covers {stand.window_days} days · the plan works {workingDays} of them</div>
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Plan costs</div><div className="kpi-hs-fact-v kpi-hs-blue" data-figure="plan">{fmt$0(plan)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Vs budget</div><div className={`kpi-hs-fact-v ${fits ? "kpi-hs-good" : "kpi-hs-bad"}`}>{fits ? "▼ " : "▲ "}{fmt$0(Math.abs(budgetVsPlan))}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Working days</div><div className="kpi-hs-fact-v">{workingDays} of {stand.window_days}</div></div>
+        </div>
+      </div>
+
+      {/* Card 2 - Your bank (qBank popover). Season-fixed truth per
+          owner reminder #3; reads directly off homestand_bank. */}
+      <div className={`kpi-hs-card kpi-hs-signal ${bankVal >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="bank">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">Your bank</span>
+          <span className="kpi-hs-card-hdr-pills">
+            <span className={`kpi-hs-pill ${bankVal >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
+              {bankVal >= 0 ? "Ahead" : "Behind"}
+            </span>
+          </span>
+          <HsHelpPop
+            id="qBank"
+            title="Your bank"
+            body={<>Every finished stand came in under its target, which puts money in the bank, or over, which takes money out. This is the running total for the season.<br /><br />Money in the bank is room to spend. A bank in the red means the next stands have to run under target to get back to even.<br /><br />Estimated stands do not enter the bank - the bank stays a promise about money we can prove.</>}
+          />
+        </header>
+        <div className={`kpi-hs-hero ${bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>
+          {bankVal >= 0 ? "▼ " : "▲ "}{fmt$0(Math.abs(bankVal))}
+        </div>
+        <div className="kpi-hs-sub">
+          {bankVal >= 0 ? "saved across " : "to recover across "}{bank?.stands_finished || 0} finished stands
+        </div>
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Spent so far</div><div className="kpi-hs-fact-v">{fmt$0(bank?.spent_to_date || 0)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Budget so far</div><div className="kpi-hs-fact-v">{fmt$0(bank?.budget_to_date || 0)}</div></div>
+        </div>
+      </div>
+
+      {/* Card 3 - Hours to schedule (qHrs popover) */}
+      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-purple" data-card="hrs">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">Hours to schedule</span>
+          <span className="kpi-hs-card-hdr-pills">
+            <span className="kpi-hs-pill kpi-hs-pill-mute">at ${rate.toFixed(2)}/hr avg</span>
+          </span>
+          <HsHelpPop
+            id="qHrs"
+            title="Hours to schedule"
+            body={<>Regular hours to put in Rippling for the prep day and the games. Overtime is shown separately because you do not schedule it - it happens when the week is packed.<br /><br />Against budget is what the budget alone buys. With your bank adds the money you have saved so far.</>}
+          />
+        </header>
+        <div className="kpi-hs-hero kpi-hs-purple">{regHrs}</div>
+        <div className="kpi-hs-sub">
+          regular hours to put in Rippling<br />
+          expect about <b>{otHrs}</b> overtime hours on top
+        </div>
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Against budget</div><div className="kpi-hs-fact-v">{budget > 0 ? Math.round(budget / rate) + " hrs" : "–"}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">With your bank</div><div className="kpi-hs-fact-v kpi-hs-good">{Math.round((budget + bankVal) / rate)} hrs</div></div>
+        </div>
+      </div>
+
+      {/* Card 4 - Expected overtime (qOT popover) */}
+      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-amber" data-card="ot-plan">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">Expected overtime</span>
+          <span className="kpi-hs-card-hdr-pills">
+            <span className={`kpi-hs-pill ${stand.peak_games_in_week >= 6 ? "kpi-hs-pill-amber" : "kpi-hs-pill-good"}`}>
+              {stand.peak_games_in_week >= 6 ? "High" : "Low"}
+            </span>
+          </span>
+          <HsHelpPop
+            id="qOT"
+            title="Why this stand carries overtime"
+            body={<>{stand.peak_games_in_week} game days land inside one Monday-Sunday week. The 40-hour clock resets every Monday, so a stand packed in before that reset carries overtime no matter how you schedule it. That is the calendar, not the crew.<br /><br />Typical overtime by shape: 3 games in a week ~2%, 6 games ~23%, 7 games ~38%. Measured across 36 homestands at 4 accounts this season.</>}
+          />
+        </header>
+        <div className={`kpi-hs-hero ${otPct > 20 ? "kpi-hs-bad" : otPct > 5 ? "kpi-hs-mid" : "kpi-hs-good"}`}>
+          ~{otPct.toFixed(0)}%
+        </div>
+        <div className="kpi-hs-sub">
+          <b>{stand.peak_games_in_week}</b> game days fall in one week before the Monday reset<br />
+          stands like this usually run <b>{norm[0].toFixed(1)}%–{norm[1].toFixed(0)}%</b>
+        </div>
+        <GaugeBar ot={otPct} band={norm} />
+      </div>
+
+      {/* Card 5 - Spread across what is left (qSpread popover) */}
+      <div className={`kpi-hs-card kpi-hs-signal ${bankVal >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="spread">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">Spread across what is left</span>
+          <span className="kpi-hs-card-hdr-pills">
+            <span className="kpi-hs-pill kpi-hs-pill-mute">{remaining} stands</span>
+          </span>
+          <HsHelpPop
+            id="qSpread"
+            title="Adjusted target"
+            body={<>Your original budget for this stand, plus an even share of the bank.<br /><br />If you put the whole bank on the next stand there is nothing left for the one after. Spreading it means every remaining stand gets the same boost.<br /><br />Estimated stands are informational - the bank does not adjust based on them.</>}
+          />
+        </header>
+        <div className={`kpi-hs-hero ${bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>
+          {bankVal >= 0 ? "▼ " : "▲ "}{fmt$0(Math.abs(bankShare))}
+        </div>
+        <div className="kpi-hs-sub">extra per stand if you spread the bank evenly</div>
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Adjusted target</div><div className="kpi-hs-fact-v kpi-hs-good">{fmt$0(adjustedTarget)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Plan vs adjusted</div><div className={`kpi-hs-fact-v ${planVsAdjusted >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>{planVsAdjusted >= 0 ? "▼ " : "▲ "}{fmt$0(Math.abs(planVsAdjusted))}</div></div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -760,7 +956,7 @@ export function HomestandBoard({
       ) : (
         <>
           {stand && !settledRefusal && <StandHeader stand={stand} />}
-          {stand && !settledRefusal && (
+          {stand && !settledRefusal && data?.source !== "estimated" && (
             <StandDayStrip
               stand={stand}
               actualsDaily={data.actuals_daily || []}
@@ -769,7 +965,20 @@ export function HomestandBoard({
               todayISO={todayISO}
             />
           )}
-          {stand && split && !settledRefusal && (
+          {/* PR #273 - pre-floor selection (source:"estimated") renders
+              the five plan-mode cards instead of the actuals SignalCards
+              + day strip. Pre-floor has no daily rows to plot and no per-
+              worker attribution; PlanCards works off homestand_estimated
+              + homestand_bank + stand.budget. */}
+          {stand && !settledRefusal && data?.source === "estimated" && (
+            <PlanCards
+              stand={stand}
+              estimate={data?.homestand_estimated}
+              bank={bank}
+              hourlyRate={hourlyRate}
+            />
+          )}
+          {stand && split && !settledRefusal && data?.source !== "estimated" && (
             <SignalCards
               stand={stand}
               split={split}

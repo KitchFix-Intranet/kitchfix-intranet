@@ -435,6 +435,137 @@ console.log("[H8] salary integration: hourly-only unchanged; salary-on adds to b
   }
 }
 
+// ─── H9 pre-floor stand estimator - PR #273 ─────────────────────────
+// Owner spec 2026-08-21: pre-floor stands (HS 1, HS 2 on 03/26-open
+// accounts; HS 1 on 04/03-open accounts) get a game-day-weighted
+// estimate derived from each account's own low-OT stand history.
+// Non-negotiables:
+//   1. Pre-floor count per account is measured, never assumed: 2 for
+//      CIN - OH + STL - MO; 1 for TXR - TX - H + TXR - TX - V.
+//   2. Zero stands may straddle the daily floor. Method refuses.
+//   3. Bank is BYTE-IDENTICAL with the estimator on and off. The
+//      bank is the number operators make decisions on; estimates
+//      never enter it. This is the load-bearing assertion.
+//   4. CIN - OH sanity: 03/27 (Friday, no game, no prep-day-of-any-
+//      stand) = $0. 04/02..04/08 (road trip - team away) = $0.
+console.log("");
+console.log("[H9] pre-floor stand estimator: counts, no-straddle, bank-byte-identical, CIN - OH sanity");
+{
+  const { foldPreFloorEstimates, assertNoStraddlingStand } = await import("../../src/lib/labor/preFloorEstimator.js");
+  const today = "2026-08-21";
+  const dailyFloor = "2026-04-20";
+  const EXPECTED_PRE_FLOOR = {
+    "CIN - OH": 2, "STL - MO": 2, "TXR - TX - H": 1, "TXR - TX - V": 1,
+  };
+
+  // 1. Per-account pre-floor counts + no straddle.
+  for (const acct of MLB) {
+    const hs = standsByAcct.get(acct);
+    const preFloor = hs.filter(h => h.pre_floor);
+    const want = EXPECTED_PRE_FLOOR[acct];
+    if (preFloor.length === want) ok(`${acct}: ${want} pre-floor stand(s)`);
+    else fail(`${acct}: got ${preFloor.length} pre-floor, expected ${want}`);
+    try {
+      assertNoStraddlingStand(hs, dailyFloor);
+      ok(`${acct}: no stand straddles the daily floor`);
+    } catch (e) {
+      fail(`${acct}: ${e.message}`);
+    }
+  }
+
+  // 2. Bank byte-identical with estimator on and off. LOAD-BEARING.
+  // Owner rule: "the bank is a promise about money and must remain
+  // provable. Assert the bank is unchanged by the estimator."
+  for (const acct of MLB) {
+    const hs = standsByAcct.get(acct);
+    const daily = dailyByAcct.get(acct);
+    const actMap = actualsByStand(hs, daily);
+    const bankBefore = computeHomestandBank(hs, actMap, today);
+    const hsWithEstimates = await foldPreFloorEstimates(supa, acct, hs, dailyFloor, today);
+    const actMapAfter = actualsByStand(hsWithEstimates, daily);
+    const bankAfter = computeHomestandBank(hsWithEstimates, actMapAfter, today);
+    const bankSame = bankBefore.bank === bankAfter.bank
+                  && bankBefore.spent_to_date === bankAfter.spent_to_date
+                  && bankBefore.budget_to_date === bankAfter.budget_to_date
+                  && bankBefore.stands_finished === bankAfter.stands_finished
+                  && bankBefore.stands_remaining === bankAfter.stands_remaining
+                  && bankBefore.remaining_budget === bankAfter.remaining_budget;
+    if (bankSame) ok(`${acct}: bank byte-identical with estimator on and off ($${bankBefore.bank.toFixed(2)})`);
+    else fail(`${acct}: bank drifted with estimator - before=${JSON.stringify(bankBefore)} after=${JSON.stringify(bankAfter)} - ESTIMATES LEAKED INTO BANK, this is exactly what PR #273 was built to prevent`);
+  }
+
+  // 3. CIN - OH sanity per owner spec.
+  {
+    const hs = standsByAcct.get("CIN - OH");
+    const hsWithEst = await foldPreFloorEstimates(supa, "CIN - OH", hs, dailyFloor, today);
+    const hs1 = hsWithEst.find(h => h.index === 1);
+    const hs2 = hsWithEst.find(h => h.index === 2);
+    if (hs1?.is_estimated) ok(`CIN - OH HS 1 marked is_estimated: $${hs1.actual_estimated?.toFixed(2)}`);
+    else fail(`CIN - OH HS 1 not marked is_estimated`);
+    if (hs2?.is_estimated) ok(`CIN - OH HS 2 marked is_estimated: $${hs2.actual_estimated?.toFixed(2)}`);
+    else fail(`CIN - OH HS 2 not marked is_estimated`);
+
+    // Owner's per-day sanity checks (day types + zero-amount expected).
+    const perDayHs1 = hs1?.estimator_meta?.per_day || [];
+    const perDayHs2 = hs2?.estimator_meta?.per_day || [];
+    const check = (label, list, date, wantAmount) => {
+      const e = list.find(p => p.date === date);
+      if (!e) { fail(`${label}: ${date} not in per_day breakdown`); return; }
+      if (Math.abs(e.amount - wantAmount) < 0.005) ok(`${label}: ${date} = $${e.amount.toFixed(2)} (${e.day_type})`);
+      else fail(`${label}: ${date} = $${e.amount.toFixed(2)}, expected $${wantAmount.toFixed(2)}`);
+    };
+    // 03/27 is a Friday off day in HS 1's window (03/26 Thu opener,
+    // 03/27 Fri off, 03/28-04/01 games). Owner: 03/27 lands at $0.
+    check("CIN - OH HS 1 sanity", perDayHs1, "2026-03-27", 0);
+    // HS 2's WINDOW is 04/02-04/16 (owner-approved attribution: HS 1's
+    // last game 04/01 + 1 = 04/02, through HS 2's last game 04/16).
+    // The road-trip stretch 04/02-04/08 is IN window but the team is
+    // away, so the schedule has no game and no prep. Owner: "each of
+    // those days lands at $0, with that week's money correctly sitting
+    // on the games at either end." Assert both PRESENCE (they're in
+    // the breakdown) and $0 amount (no schedule weight to attract a
+    // slice) - the alternative of absence would mask a bug that
+    // reassigned road-trip dates to a neighbor stand.
+    const roadTripDates = ["2026-04-02", "2026-04-03", "2026-04-04", "2026-04-05", "2026-04-06", "2026-04-07", "2026-04-08"];
+    for (const d of roadTripDates) check("CIN - OH HS 2 road-trip sanity", perDayHs2, d, 0);
+
+    // Pin to the value the corrected derivation produces (owner rule
+    // 2026-08-21). Three fixes now applied:
+    //
+    //   1. dollars_regular (not amount) for base-rate derivation -
+    //      excludes OT/DT/premium that the low-OT restriction was
+    //      already supposed to keep out.
+    //   2. Exclude zero-amount days from the sample - CIN - OH
+    //      2026-08-20 (HS 11 game_end, one day before todayIso) was
+    //      $0 from Rippling lag and dragged the day base sample from
+    //      11 games to 12 games, $806.89 down to $739.65.
+    //   3. HS 1's window starts at its PREP DAY (game_start - 1)
+    //      instead of game_start. Owner ruling after PR #773 v3
+    //      surfaced the walk: every other stand owns the prep day
+    //      before it (because window_start = prev.game_end + 1),
+    //      but HS 1 had no predecessor and its prep day fell into
+    //      no stand at all. That put ~$1,276 (CIN - OH week 03/23-
+    //      03/29 prep-day slice) into a gap. First-stand window
+    //      now consistent with every other stand.
+    //
+    // Base rates BYTE-IDENTICAL to spec:
+    //   night $1,136.15 / 25 games
+    //   day   $806.89   / 11 games
+    //
+    // HS 1 = $8,966.72 (added $1,276.37 prep-day slice on top of the
+    // previous $7,690.35 - matches the walk in PR #773's comment
+    // thread that predicted this delta byte-for-byte).
+    // HS 2 = $7,325.83 (unchanged; HS 2's window already spanned its
+    // own prep day 04/09 under the old rule).
+    const near = (label, got, want, tol = 0.50) => {
+      if (Math.abs(got - want) < tol) ok(`${label}: $${got.toFixed(2)}`);
+      else fail(`${label}: got $${got.toFixed(2)}, want $${want.toFixed(2)} (delta $${(got - want).toFixed(2)})`);
+    };
+    near("CIN - OH HS 1 estimate (window extended to prep day per owner ruling)", hs1?.actual_estimated, 8966.72);
+    near("CIN - OH HS 2 estimate (unchanged - already spanned own prep day)", hs2?.actual_estimated, 7325.83);
+  }
+}
+
 // ─── HSent sentinel ────────────────────────────────────────────────
 console.log("");
 console.log("[HSent] CIN - OH 06/29 weekly sentinel: 113.98 / 2.32 / 39.91 / $4,328.27");
