@@ -3616,14 +3616,11 @@
   padding: var(--kpi-sp-4);
   display: flex;
   flex-direction: column;
-  min-height: calc(
-    calc(var(--kpi-card-pad) * 2)
-    + var(--kpi-lane-head) + var(--kpi-sp-3)
-    + var(--kpi-lane-hero) + var(--kpi-sp-1)
-    + var(--kpi-lane-sub)  + var(--kpi-sp-3)
-    + var(--kpi-lane-viz)  + var(--kpi-sp-3)
-    + var(--kpi-t-label)   + var(--kpi-t-body)
-  );
+  /* Composition: 2 * card-pad + lane-head + sp-3 + lane-hero + sp-1
+     + lane-sub + sp-3 + lane-viz + sp-3 + t-label + t-body. Flat calc
+     (no nested calc(), single line) - Turbopack CI failed to parse the
+     multi-line nested form even though local PostCSS accepted it. */
+  min-height: calc(var(--kpi-card-pad) + var(--kpi-card-pad) + var(--kpi-lane-head) + var(--kpi-sp-3) + var(--kpi-lane-hero) + var(--kpi-sp-1) + var(--kpi-lane-sub) + var(--kpi-sp-3) + var(--kpi-lane-viz) + var(--kpi-sp-3) + var(--kpi-t-label) + var(--kpi-t-body));
 }
 .kpi-hs-signal:before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
