@@ -1004,6 +1004,13 @@ export default function KpiLaborPage() {
           grouped={grouped}
           grandTotal={grand}
           workers={data.workers}
+          /* PR-C - raw actuals thread so WeekTable's aggregate-child
+             pre-aggregation can group by (week_start, account_key)
+             directly. Prior code relied on w.worker_rows which was
+             silently absent in aggregate mode; result was zero
+             account-child rows on portfolio views, verified live
+             2026-08-24. */
+          actuals={data.actuals || []}
           redact={redact}
           onToggleRedact={PSEUDO_KEYS.has(account) ? undefined : (next) => {
             setParam("redact", next ? "1" : "");

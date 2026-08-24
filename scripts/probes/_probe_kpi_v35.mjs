@@ -34,8 +34,16 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
-const CARDS_SRC = path.join(REPO_ROOT, "src/app/kpi/labor/components/SignalCards.js");
-const CSS_SRC   = path.join(REPO_ROOT, "src/app/kpi/kpi.css");
+// PR-C (owner ruling 2026-08-24) - repointed at signalCardModels.js.
+// PR-A extracted the pure fact-builders (buildPaceCardModel,
+// buildHoursLeftModel + the eyebrow / fact ternaries) out of the JSX
+// component into a plain-JS module; the grep patterns below live there
+// now, so this probe was silently unable to match after PR-A. A probe
+// that cannot match is a probe that cannot fail - exact class the
+// README pin-vs-property rule warns against.
+const CARDS_SRC  = path.join(REPO_ROOT, "src/app/kpi/labor/components/SignalCards.js");
+const MODELS_SRC = path.join(REPO_ROOT, "src/app/kpi/labor/lib/signalCardModels.js");
+const CSS_SRC    = path.join(REPO_ROOT, "src/app/kpi/kpi.css");
 const BASE = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3001";
 const URL = `${BASE}/kpi/labor?account=ALL`;
 
@@ -183,8 +191,15 @@ async function partA(page) {
 
 function partB() {
   console.log("\n[PART B - static code read + CSS rule verification]\n");
-  const src = fs.readFileSync(CARDS_SRC, "utf8");
-  const stripComments = src.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  // PR-C - concat BOTH files. PR-A moved the pure fact-builders into
+  // signalCardModels.js; PayrollDataCard stayed in SignalCards.js.
+  // A single concat means the greps don't care which file each pattern
+  // lives in, so a future extraction moving another card into the
+  // models file won't silently invalidate the probe again.
+  const cardsSrc  = fs.readFileSync(CARDS_SRC,  "utf8");
+  const modelsSrc = fs.readFileSync(MODELS_SRC, "utf8");
+  const combined = cardsSrc + "\n" + modelsSrc;
+  const stripComments = combined.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
   const css = fs.readFileSync(CSS_SRC, "utf8");
 
   console.log("  V35-2 hours card wiring");
