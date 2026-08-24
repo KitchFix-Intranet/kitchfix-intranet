@@ -75,6 +75,25 @@ These files have outsized blast radius. Edit only with explicit user approval an
 - `docs/migrations/*.sql` - migrations don't auto-apply. New migration files require manual Studio paste + a verify probe before the dependent code ships. See [`docs/MIGRATION_PROJECT_CLOSEOUT.md`](docs/MIGRATION_PROJECT_CLOSEOUT.md) §E for the 2026-06-12 silent-gap incident this rule comes from.
 - Anything matching `.env*` - **never read, never write, never echo contents to terminal or chat.** If you need to know what an env var contains, ask Kevin.
 
+## Env rule (`.env*`) - USE vs SEE
+
+Owner ruling 2026-08-24. This rule supersedes prior strict `.env*` guidance for the specific case of passing env into a script - the `.env*` Danger Zone entry above still applies to everything else. If you cannot answer "am I using or seeing?" in one sentence, treat it as SEE and stop.
+
+**USE is allowed. SEE is not.**
+
+- **USE** - passing `--env-file=.env.local` to a Node process you executed (`node --env-file=.env.local scripts/my_probe.mjs`). Node loads the file, the script consumes values via `process.env`, and CC never observes the contents. This is the only supported way to run a probe against Supabase / bill.com / Rippling.
+- **SEE** - `cat`, `head`, `tail`, `sed`, `awk`, `grep`, `source`, opening the file in Read, echoing values, or piping any `.env*` content into a tool CC can read. **Prohibited, even for a presence check.**
+
+**Presence checks report `PRESENT` or `ABSENT` only, from inside the executed script.**
+
+```js
+console.log(`SUPABASE_URL: ${process.env.SUPABASE_URL ? "PRESENT" : "ABSENT"}`);
+```
+
+Never print the value. Never print a truncated, masked, length, or hashed form. `process.env.SUPABASE_URL?.slice(0, 8)` is SEE, not USE.
+
+If a probe needs a key and it is ABSENT, exit non-zero with a named-block error naming which key is missing - do not try to locate the value. Kevin restores it.
+
 ## Standing findings (post-migration-project)
 
 These are real issues in the codebase. Several items from the May 2026 calibration were resolved during the migration project; the surviving items below are what's still live.
@@ -118,6 +137,21 @@ Commit messages are terse and lowercase. Examples from the repo's history: "new 
 ## Side project isolation (HARD RULE)
 
 The maintainer has a separate game project. It lives at `~/Holtburg/holtburg-hollow/`. The two projects must never know about each other. You are working only in the current intranet checkout (either `~/dev/kf-cell-states/` or `~/dev/kitchfix-intranet/` on this machine - both are worktrees of the same intranet repo). Do not reference the game project. Do not search for files outside the intranet working directory. If the maintainer mentions the game in conversation, redirect back to the intranet - those should stay in their own session.
+
+## Working environments (audit clone + off-limits directories)
+
+Purchasing + INV-family investigation work runs from the **audit clone at `~/dev/li-audit-2026-08-17/kitchfix-intranet/`**, which is a full clone with its own `.git`, own worktrees, and a `.env.local` **symlinked** to the primary worktree. Add per-branch worktrees off the audit clone (e.g. `~/dev/kf-r7-rebase/`, `~/dev/kf-handoff-rebase/`) so a rebase or acceptance run never disturbs the audit sandbox itself.
+
+**Off-limits directories on this machine** - do not `ls`, `cd`, `find`, `grep`, or write into them, and do not search for files whose paths begin with them:
+
+- `~/dev/kitchfix-intranet/` - Kevin's primary worktree. **Off-limits beyond following the `.env.local` symlink**; never edit files, never create branches, never run tools inside this tree from a CC session working in the audit clone.
+- `~/Documents/GitHub/KAD/` - separate project. Off-limits.
+- `~/dev/purchase-discovery-2026-08-12/` - historical purchasing exploration clone. Off-limits; investigations run in the audit clone above.
+- `~/Holtburg/` - see § Side project isolation.
+
+Related local artifacts that are read-only outputs of probes (writeable by CC only as the destination for probe workbooks):
+
+- `~/Downloads/` - probe workbooks land here (`inv_p*_*.xlsx`, `suspected_duplicates_*.xlsx`, etc.). Kevin reads them from there. Do not curate the directory - only write new artifacts named per their probe.
 
 ## Session start checklist
 
