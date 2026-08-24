@@ -3,26 +3,34 @@
 //
 // Row 6a of the at-risk board (spec §6.4).
 //
-// Two columns. Stats left - past deadline, due Friday, total pending,
-// `Open Rippling`. Every charge right, scrolling.
+// Two columns. Stats left - total pending + `Open Rippling`. Every
+// charge right, scrolling.
 //
-// Card charge detail (per-charge vendor/date/category) is NOT in this
-// route's default response - the route only ships `pending.amount` and
-// `pending.line_count` (§3.5: "A dollar sum, never a count"). Per-line
-// charge listing arrives with PR 4 via the /items route or the drill
-// param. Until then this card renders the summary stats and a summary
-// "N charges pending" line rather than a fabricated list. Nothing
-// behind a disclosure - the summary is the honest surface.
+// PR-2 R6 Part B - per-charge rows now populate from the route's
+// `card_charges` block (uncoded rippling_spend, capped at 50 by amount
+// desc). Each row shows merchant, txn date, operator category (from
+// spend_category_map), amount. Rows needing a location or category
+// keep the amber flag (per-row .flagged class) - the v22 render kept
+// this affordance and the PR-2 R2 owner ruling is that a card that
+// says what is missing beats a card that invents.
 
 import { fmt$ } from "../lib/board";
 
 export function CardPurchases({
-  pendingAmount,          // number
-  pendingLineCount,       // integer
+  pendingAmount,          // number - summary total
+  pendingLineCount,       // integer - total count (may exceed cap)
   closed,                 // hide entirely when the period is closed (no action to take)
+  // PR-2 R6 Part B - capped list. Each row:
+  //   { account_key, txn_date, amount, merchant, category, gl_line_code? }
+  rows,
+  totalCount,
+  totalAmount,
+  cap,
+  isAggregate,
 }) {
   if (closed) return null;
   const n = Number(pendingLineCount || 0);
+  const list = Array.isArray(rows) ? rows : [];
   return (
     <div className="kpi-p-card kpi-p-cp" data-card="card-purchases">
       <div className="kpi-p-cpstats">
@@ -54,19 +62,63 @@ export function CardPurchases({
           <span style={{ flex: 1 }} aria-hidden="true" />
           <span className="kpi-p-k">amount</span>
         </div>
-        <div className="kpi-p-txnlist" role="status">
+        <div className="kpi-p-txnlist">
+          {list.length === 0 ? (
+            /* Honest empty state per Kevin's PR-2 R2 ruling. Two
+               distinct cases: zero pending (nothing awaiting a code)
+               vs. the route did not ship rows (older payload / error). */
+            <div style={{
+              padding: "var(--kpi-sp-4) 0",
+              textAlign: "center",
+              fontSize: "var(--kpi-t-meta)",
+              color: "var(--n-500)",
+              fontWeight: 500,
+            }}>
+              {n === 0
+                ? "No charges pending a code."
+                : `Per-charge detail did not load. Route reports ${fmt$(pendingAmount)} across ${n} line${n === 1 ? "" : "s"}.`}
+            </div>
+          ) : (
+            <>
+              {list.map((r, i) => {
+                // A charge is flagged when it lacks a category label
+                // (the operator picked something that has not been
+                // mapped) OR the merchant/description would be blank.
+                // Both are conditions the amber affordance calls out.
+                const needsAttention = !r.category || !r.merchant;
+                return (
+                  <div
+                    key={`${r.merchant || "?"}-${r.txn_date || i}-${i}`}
+                    className={`kpi-p-rw${needsAttention ? " flagged" : ""}`}
+                  >
+                    <span className="kpi-p-k">
+                      {r.merchant || "unknown merchant"}
+                      <small>
+                        {isAggregate && r.account_key ? `${r.account_key} · ` : ""}
+                        {r.txn_date || ""}
+                        {r.category ? ` · ${r.category}` : " · uncategorised"}
+                      </small>
+                    </span>
+                    <span className="kpi-p-v num">{fmt$(r.amount)}</span>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+        {list.length > 0 && totalCount != null && (
           <div style={{
-            padding: "var(--kpi-sp-4) 0",
-            textAlign: "center",
+            padding: "5px 0 0",
+            textAlign: "right",
             fontSize: "var(--kpi-t-meta)",
             color: "var(--n-500)",
             fontWeight: 500,
           }}>
-            Per-charge detail lands with PR 4 (drill route). The route
-            currently reports total pending {fmt$(pendingAmount)} across
-            {" "}{n} line{n === 1 ? "" : "s"}.
+            {totalCount > (cap || 0)
+              ? `Showing ${cap} of ${totalCount} charges · ${fmt$(totalAmount)} total`
+              : `${totalCount} charge${totalCount === 1 ? "" : "s"} · ${fmt$(totalAmount)} total`}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
