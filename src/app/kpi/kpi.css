@@ -2847,11 +2847,6 @@
   font-variant-numeric: var(--num-tabular);
 }
 .kpi-tbl tbody td:first-child { text-align: left; color: var(--n-900); }
-/* 2026-08-24 contrast sweep: --n-300 measured 1.22:1 on white -
-   indistinguishable from an empty cell. --text-subtle keeps the
-   em-dash visibly muted while preserving the missing/failed/zero
-   distinction the operator relies on. */
-.kpi-tbl-nil { color: var(--text-subtle); }
 .kpi-tbl-ot { color: var(--amber-600); font-weight: 700; }
 
 /* Period band (V9-8) - data row, sticky under header (V9-11).
@@ -3048,6 +3043,29 @@
   transition: opacity 0.12s;
 }
 .kpi-tbl-child:hover .kpi-tbl-share2 > i { opacity: 1; }
+
+/* 2026-08-24 contrast sweep + Kevin ruling post-portal PR: the
+   em-dash placeholder must render distinctly from real values -
+   standing rule that missing, failed and zero are not the same as a
+   number. Prior `.kpi-tbl-nil { color: var(--text-subtle) }` looked
+   right but lost at runtime: every row rule that sets td colour is
+   scoped as `.kpi-tbl-band > td` / `.kpi-tbl-week > td` / `.kpi-tbl
+   -child > td` (spec 0,1,1) or `.kpi-tbl-band.kpi-tbl-band-open > td`
+   (spec 0,2,1), and a bare class rule at 0,1,0 could never win.
+   Result on ALL / P8: the dash rendered at var(--navy-700) weight 800
+   - byte-identical to a real value.
+
+   Fix: `.kpi-tbl tbody td.kpi-tbl-nil` bumps to spec 0,2,1. Beats
+   band/week/child on specificity; ties `.kpi-tbl-band-open > td`
+   (0,2,1) and wins on source order (this rule sits AFTER it).
+   `.kpi-tbl tbody .kpi-tbl-total .kpi-tbl-nil { color: #FFFFFF }`
+   below stays higher (0,3,1) so the total row keeps its white dash.
+   font-weight: 400 drops the inherited 800 so the dash reads muted
+   at every row level. */
+.kpi-tbl tbody td.kpi-tbl-nil {
+  color: var(--text-subtle);
+  font-weight: 400;
+}
 
 /* V25-8 total row - navy-900 sticky bottom. Every numeric cell + the
    label render #FFFFFF weight 800 (the total is the most legible row
