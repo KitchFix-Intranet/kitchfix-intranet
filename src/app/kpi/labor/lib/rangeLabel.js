@@ -30,7 +30,12 @@
 //                                          hypothetical - FY starts
 //                                          2025-12-29)
 
-import { rangeForPeriod, rangeForFiscalMonth } from "./periods.js";
+// Range PR-2 follow-up 2026-08-24: month labels resolve to CALENDAR
+// month (rangeForCalendarMonth) not fiscal month. Aligns the label
+// semantics with PR-1's "calendar months are exact" promise so a
+// picker click AND a hand-crafted URL both round-trip through
+// validateLabel. See rangeForCalendarMonth for the FY clamp.
+import { rangeForPeriod, rangeForCalendarMonth } from "./periods.js";
 
 const MONTH_LONG = [
   "January", "February", "March", "April", "May", "June",
@@ -111,11 +116,11 @@ export function labelToRange(parsed) {
     return { startISO: a.startISO, endISO: b.endISO };
   }
   if (parsed.kind === "month") {
-    return rangeForFiscalMonth(parsed.value.year, parsed.value.monthIndex);
+    return rangeForCalendarMonth(parsed.value.year, parsed.value.monthIndex);
   }
   if (parsed.kind === "months") {
-    const a = rangeForFiscalMonth(parsed.start.year, parsed.start.monthIndex);
-    const b = rangeForFiscalMonth(parsed.end.year, parsed.end.monthIndex);
+    const a = rangeForCalendarMonth(parsed.start.year, parsed.start.monthIndex);
+    const b = rangeForCalendarMonth(parsed.end.year, parsed.end.monthIndex);
     if (!a || !b) return null;
     return { startISO: a.startISO, endISO: b.endISO };
   }
