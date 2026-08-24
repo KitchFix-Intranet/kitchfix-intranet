@@ -980,6 +980,7 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFro
         {mode === "account" && onPickAccount ? (
           <button type="button" className="kpi-tbl-accountbtn" onClick={() => onPickAccount?.(child.account_key)}>
             <span className="kpi-tbl-cchild-key">{child.account_key}</span>
+            <OTTag ot={child.hours_ot} />
             {showExceptionChip && <ExceptionChip severity={sev} />}
           </button>
         ) : mode === "worker" ? (
