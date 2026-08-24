@@ -161,7 +161,7 @@ export function Shell({
   dataLoading,    // boolean
   activeSection = "labor", // V7-3
   // Range (V7-4) - Range menu inputs, wired straight through.
-  rangeProps,     // { startISO, endISO, todayISO, hasPeriods, accountPeriods, resolvedPreset, selectedPeriodNo, selectedMonth, onCommit }
+  rangeProps,     // { startISO, endISO, todayISO, hasPeriods, accountPeriods, resolvedPreset, selectedPeriodNo, selectedMonth, urlLabel, onCommit }
   // Export (V7-7)
   exportHref,     // string or null
   onExport,
@@ -225,6 +225,7 @@ export function Shell({
             resolvedPreset={rangeProps.resolvedPreset}
             selectedPeriodNo={rangeProps.selectedPeriodNo}
             selectedMonth={rangeProps.selectedMonth}
+            urlLabel={rangeProps.urlLabel}
             onCommit={rangeProps.onCommit}
           />
         )}

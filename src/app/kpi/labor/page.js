@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, hoursSinceISO, fmtTimestamp, buildPrintScopeLine } from "./lib/formatting";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
+import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
@@ -108,6 +109,11 @@ export default function KpiLaborPage() {
   const urlEnd = searchParams.get("end");
   const start = urlStart || FY_START;
   const end = urlEnd || today;
+  // Range PR-2 2026-08-24: optional display hint for the range chip.
+  // Read raw; RangeMenu validates against actual (start, end) via
+  // lib/rangeLabel.js and falls back to the date range if the label
+  // does not match the dates it names.
+  const urlLabel = searchParams.get("label");
   const redact = searchParams.get("redact") === "1";
   // homestand PR-2 - view + homestand params. `?view=homestand`
   // switches the render subtree; default is period. `?homestand=<game_start>`
@@ -515,7 +521,8 @@ export default function KpiLaborPage() {
     if (autoOpenAccountRef.current === account) return;
     autoOpenAccountRef.current = account;
     // V25-18 - only single-period ranges auto-open; multi-period
-    // ranges (FYTD, month, custom, last_4wk, last_13wk) land collapsed.
+    // ranges (FYTD, month, custom, last_4wk, PR-2 multi-select)
+    // land collapsed.
     if (rangeSelectionEarly?.kind !== "period") {
       setExpandedPeriods(new Set());
       return;
@@ -558,7 +565,10 @@ export default function KpiLaborPage() {
     if (lastPreset) return lastPreset; // user clicked one this session
     if (start === FY_START && end === today) return "fytd";
     if (start === addDaysISO(today, -27)  && end === today) return "last_4wk";
-    if (start === addDaysISO(today, -90)  && end === today) return "last_13wk";
+    // Range PR-2 2026-08-24: last_13wk preset retired. The inference
+    // for start === today-90 dropped with it - a hand-crafted URL
+    // that lands on those exact dates now reads as a custom range,
+    // not as a preset that no longer exists in the picker.
     // this_period / last_period rely on account_periods bounds
     const periods = data?.account_periods || [];
     if (periods.length) {
@@ -576,7 +586,6 @@ export default function KpiLaborPage() {
     const t = today;
     setLastPreset(kind);
     if (kind === "last_4wk")  return setParams({ start: addDaysISO(t, -27), end: t });
-    if (kind === "last_13wk") return setParams({ start: addDaysISO(t, -90), end: t });
     if (kind === "fytd")      return setParams({ start: FY_START,           end: t });
     const periods = data?.account_periods || [];
     if (!periods.length) return;
@@ -592,11 +601,12 @@ export default function KpiLaborPage() {
   }
 
   // V6-3/V6-8 - RangeMenu commit path. selection: { kind, value? }
-  //   preset -> setLastPreset(value); rely on inferred label
-  //   period -> setLastPreset(null); the URL start/end resolves to
-  //             "PERIOD n" via inferRangeSelection
-  //   month  -> setLastPreset(null); resolves to "<MONTH> <year>"
-  //   custom -> setLastPreset(null); no inference match -> "custom"
+  //   preset  -> setLastPreset(value); rely on inferred label
+  //   period  -> "PERIOD n" via inferRangeSelection + PR-2 URL label
+  //   month   -> "<MONTH> <year>" via inferRangeSelection + label
+  //   periods -> PR-2 multi-select, label "P1 - P3"
+  //   months  -> PR-2 multi-select, label "Jan - Apr 2026"
+  //   custom  -> no label, chip falls back to the date range
   // Also writes { startISO, endISO } to localStorage (kpi.range).
   function onRangeCommit(startISO, endISO, selection) {
     if (selection?.kind === "preset" && selection.value) {
@@ -604,7 +614,12 @@ export default function KpiLaborPage() {
     } else {
       setLastPreset(null);
     }
-    setParams({ start: startISO, end: endISO });
+    // Range PR-2 - serialize non-preset selections to ?label so the
+    // chip can name what the operator picked, not the resolved dates.
+    // Preset + custom clear the label so a preset chip stays and a
+    // custom drag reads its dates.
+    const nextLabel = serializeSelection(selection);
+    setParams({ start: startISO, end: endISO, label: nextLabel });
     try {
       if (typeof window !== "undefined") {
         localStorage.setItem(LAST_RANGE_KEY, JSON.stringify({ startISO, endISO }));
@@ -746,7 +761,6 @@ export default function KpiLaborPage() {
     }
     if (resolvedPreset === "fytd") return "fiscal year to date";
     if (resolvedPreset === "last_4wk") return "the last 4 weeks";
-    if (resolvedPreset === "last_13wk") return "the last 13 weeks";
     if (resolvedPreset === "this_period" || resolvedPreset === "last_period") return `Period ${data?.board?.period_no ?? ""}`.trim();
     return `${start} to ${end}`;
   })();
@@ -1138,6 +1152,7 @@ export default function KpiLaborPage() {
             resolvedPreset,
             selectedPeriodNo,
             selectedMonth,
+            urlLabel,
             onCommit: onRangeCommit,
           } : null}
           exportHref={data && data?.account_state !== "salaried_only" ? exportHref() : null}

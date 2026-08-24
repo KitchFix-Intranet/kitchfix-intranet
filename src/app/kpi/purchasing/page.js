@@ -542,7 +542,10 @@ export default function KpiPurchasingPage() {
   const resolvedPreset = useMemo(() => {
     if (start === FY_START_ISO && end === today) return "fytd";
     if (start === addDaysISO(today, -27) && end === today) return "last_4wk";
-    if (start === addDaysISO(today, -90) && end === today) return "last_13wk";
+    // Range PR-2 2026-08-24: last_13wk inference retired alongside
+    // the labor picker sweep. A hand-crafted URL landing on the exact
+    // today-90..today window now infers as a custom range, matching
+    // what the picker itself can produce.
     if (accountPeriods.length) {
       const past = [...accountPeriods]
         .filter(p => p.start && p.end && p.start <= today)
@@ -638,7 +641,8 @@ export default function KpiPurchasingPage() {
     const cardTitle = (() => {
       if (resolvedPreset === "fytd") return "FISCAL YEAR TO DATE";
       if (resolvedPreset === "last_4wk") return "THE LAST 4 WEEKS";
-      if (resolvedPreset === "last_13wk") return "THE LAST 13 WEEKS";
+      // Range PR-2 2026-08-24: last_13wk band label retired alongside
+      // the inference above and the preset itself.
       if (resolvedPreset === "this_period" || resolvedPreset === "last_period" || rangePeriodNo != null) {
         return `PERIOD ${rangePeriodNo}`;
       }

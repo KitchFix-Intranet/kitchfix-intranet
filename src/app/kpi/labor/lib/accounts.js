@@ -51,7 +51,10 @@ export const SECTIONS = [
 
 // Preset date keys (client-resolvable). Same values the loader's
 // validation CHECK accepts on kpi_saved_views.date_preset.
-export const PRESET_KEYS = ["this_period", "last_period", "last_4wk", "last_13wk", "fytd"];
+// Range PR-2 2026-08-24: last_13wk retired. Kevin ruling per Joe's
+// 2026-08-19 review question - the preset could not be justified,
+// so it does not stay on the board.
+export const PRESET_KEYS = ["this_period", "last_period", "last_4wk", "fytd"];
 
 export const FY_START = "2025-12-29";  // FY2026 opens
 
