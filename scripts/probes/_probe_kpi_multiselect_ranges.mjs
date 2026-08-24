@@ -21,7 +21,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { resolveRangeSource } from "../../src/lib/labor/rangeResolver.js";
-import { rangeForPeriod, rangeForFiscalMonth } from "../../src/app/kpi/labor/lib/periods.js";
+import {
+  rangeForPeriod,
+  rangeForCalendarMonth,
+  FY_START_ISO,
+  FY_END_ISO,
+} from "../../src/app/kpi/labor/lib/periods.js";
 import {
   parseLabel,
   labelToRange,
@@ -71,11 +76,16 @@ console.log("[S2] Jan-Apr routes correctly + chip labels 'Jan - Apr 2026'");
   eq(parsed?.kind, "months", "  parses as months range");
   eq(parsed?.start, { year: 2026, monthIndex: 0 }, "  start=Jan 2026");
   eq(parsed?.end,   { year: 2026, monthIndex: 3 }, "  end=Apr 2026");
-  const a = rangeForFiscalMonth(2026, 0);
-  const b = rangeForFiscalMonth(2026, 3);
+  // PR-2 follow-up 2026-08-24: labelToRange now resolves month labels
+  // to CALENDAR months (rangeForCalendarMonth), FY-clamped. Jan-Apr
+  // 2026 sits fully within FY -> 01/01 - 04/30.
+  const a = rangeForCalendarMonth(2026, 0);
+  const b = rangeForCalendarMonth(2026, 3);
   const range = labelToRange(parsed);
-  eq(range.startISO, a.startISO, "  startISO == rangeForFiscalMonth(Jan)");
-  eq(range.endISO,   b.endISO,   "  endISO   == rangeForFiscalMonth(Apr)");
+  eq(range.startISO, a.startISO, "  startISO == rangeForCalendarMonth(Jan)");
+  eq(range.endISO,   b.endISO,   "  endISO   == rangeForCalendarMonth(Apr)");
+  eq(range.startISO, "2026-01-01", "  startISO literally 2026-01-01");
+  eq(range.endISO,   "2026-04-30", "  endISO literally 2026-04-30");
   eq(formatSelection(parsed), "Jan - Apr 2026", "  chip label");
 }
 // Cross-year edge (FY2026 starts 2025-12-29 - straddles calendar years).
@@ -150,31 +160,97 @@ console.log("[S5] non-contiguous selection is unreachable via the label vocabula
   eq(parseLabel("2026-01-2026-04"), null, "  hyphen between months rejected (unambiguous serialization)");
 }
 
-// ─── S6 URL label that disagrees with dates falls back to date range ─
+// ─── S6 URL label validated BOTH ways: accept truthful, reject lying ─
+// Owner ruling 2026-08-24 after live verify caught the calendar-month
+// gap: "assert both directions in the probe, not just rejection: a
+// truthful month label must be ACCEPTED and rendered. S6 currently
+// proves a bad label is rejected; nothing proves a good one survives."
 console.log("");
-console.log("[S6] label validated against dates - a label that lies renders the date range");
+console.log("[S6] label validated against dates - accept truthful AND reject lying");
 {
   const a = rangeForPeriod(1);
   const c = rangeForPeriod(3);
-  // Truthful: label P1-P3 with dates that match P1 start .. P3 end.
-  const truthful = validateLabel("P1-P3", a.startISO, c.endISO);
-  if (truthful && truthful.kind === "periods" && truthful.start === 1 && truthful.end === 3) {
-    ok("  label matches dates -> validated selection returned");
-  } else {
-    fail(`  truthful label validation failed: ${JSON.stringify(truthful)}`);
-  }
-  // Lying: label P1-P3 with dates that resolve to a different range.
+
+  // ACCEPT: truthful single period
+  const okP = validateLabel("P3", a.startISO, a.endISO); // dummy dates
+  // Better: use P3's own dates.
+  const p3 = rangeForPeriod(3);
+  const okP3 = validateLabel("P3", p3.startISO, p3.endISO);
+  if (okP3 && okP3.kind === "period" && okP3.value === 3) ok("  accept: 'P3' + P3 dates -> validated single period");
+  else fail(`  accept-P3 failed: ${JSON.stringify(okP3)}`);
+
+  // ACCEPT: truthful multi-period
+  const okPP = validateLabel("P1-P3", a.startISO, c.endISO);
+  if (okPP && okPP.kind === "periods" && okPP.start === 1 && okPP.end === 3) ok("  accept: 'P1-P3' + P1..P3 dates -> validated periods range");
+  else fail(`  accept-P1-P3 failed: ${JSON.stringify(okPP)}`);
+
+  // ACCEPT: truthful single CALENDAR month (this is the defect Kevin caught).
+  const july = rangeForCalendarMonth(2026, 6);
+  const okM = validateLabel("2026-07", july.startISO, july.endISO);
+  if (okM && okM.kind === "month" && okM.value.year === 2026 && okM.value.monthIndex === 6) ok("  accept: '2026-07' + calendar July dates -> validated single month");
+  else fail(`  accept-2026-07 failed: ${JSON.stringify(okM)}   july=${JSON.stringify(july)}`);
+
+  // ACCEPT: truthful multi-month (calendar Jan through Apr)
+  const jan = rangeForCalendarMonth(2026, 0);
+  const apr = rangeForCalendarMonth(2026, 3);
+  const okMM = validateLabel("2026-01_2026-04", jan.startISO, apr.endISO);
+  if (okMM && okMM.kind === "months") ok("  accept: '2026-01_2026-04' + calendar Jan..Apr dates -> validated months range");
+  else fail(`  accept-Jan-Apr failed: ${JSON.stringify(okMM)}`);
+
+  // ACCEPT: clamped month round-trips. December 2025 sits partly
+  // outside FY - only 12/29-12/31 exists. validateLabel('2025-12',
+  // '2025-12-29', '2025-12-31') MUST accept.
+  const dec25 = rangeForCalendarMonth(2025, 11);
+  eq(dec25.startISO, "2025-12-29", "  Dec 2025 clamped start = FY start");
+  eq(dec25.endISO,   "2025-12-31", "  Dec 2025 clamped end = 12/31");
+  const okClamp = validateLabel("2025-12", "2025-12-29", "2025-12-31");
+  if (okClamp && okClamp.kind === "month" && okClamp.value.year === 2025 && okClamp.value.monthIndex === 11) ok("  accept: '2025-12' + clamped Dec 2025 dates -> validated");
+  else fail(`  accept-clamped-Dec failed: ${JSON.stringify(okClamp)}`);
+
+  // REJECT: label lies about periods
   const b = rangeForPeriod(2);
-  const lying = validateLabel("P1-P3", a.startISO, b.endISO);
-  eq(lying, null, "  label 'P1-P3' + dates that resolve to P1-P2 -> null (fallback to dates)");
-  // Lying month: single month label with wrong dates.
-  const may = rangeForFiscalMonth(2026, 4);
-  const lyingMonth = validateLabel("2026-07", may.startISO, may.endISO);
-  eq(lyingMonth, null, "  label '2026-07' + May dates -> null");
-  // Garbage label falls back.
-  eq(validateLabel("garbage", a.startISO, c.endISO), null, "  unparseable label -> null");
-  eq(validateLabel("",         a.startISO, c.endISO), null, "  empty label -> null");
-  eq(validateLabel(null,       a.startISO, c.endISO), null, "  null label -> null");
+  eq(validateLabel("P1-P3", a.startISO, b.endISO), null, "  reject: 'P1-P3' + P1..P2 dates -> null");
+  // REJECT: label lies about month
+  const may = rangeForCalendarMonth(2026, 4);
+  eq(validateLabel("2026-07", may.startISO, may.endISO), null, "  reject: '2026-07' + May dates -> null");
+  // REJECT: label claims fiscal-month dates (the pre-fix behaviour would
+  // have accepted these; post-fix they must reject).
+  eq(validateLabel("2026-07", "2026-07-06", "2026-08-02"), null,
+     "  reject: '2026-07' + fiscal-July dates (07/06 - 08/02) -> null (calendar-month semantics)");
+  // REJECT: garbage / empty / null
+  eq(validateLabel("garbage",  a.startISO, c.endISO), null, "  reject: unparseable label -> null");
+  eq(validateLabel("",         a.startISO, c.endISO), null, "  reject: empty label -> null");
+  eq(validateLabel(null,       a.startISO, c.endISO), null, "  reject: null label -> null");
+}
+
+// ─── FY-clamp sanity: rangeForCalendarMonth never leaks outside FY ──
+// Owner probe ask: "assert rangeForCalendarMonth never returns a date
+// outside the fiscal year on any of the 12 months."
+console.log("");
+console.log("[FY-clamp] all months resolve inside FY_START..FY_END");
+{
+  // Walk every year the picker could plausibly show. FY2026 uses
+  // year 2025 for December (Dec 2025 is the first calendar month
+  // touching the FY) and year 2026 for Jan through Dec.
+  const cases = [];
+  for (let m = 0; m < 12; m++) cases.push({ year: 2025, monthIndex: m });
+  for (let m = 0; m < 12; m++) cases.push({ year: 2026, monthIndex: m });
+  for (let m = 0; m < 12; m++) cases.push({ year: 2027, monthIndex: m });
+  let leaked = 0;
+  for (const { year, monthIndex } of cases) {
+    const r = rangeForCalendarMonth(year, monthIndex);
+    if (r == null) continue; // month entirely outside FY - allowed
+    if (r.startISO < FY_START_ISO) { fail(`  ${year}-${String(monthIndex + 1).padStart(2, "0")} startISO ${r.startISO} < FY_START ${FY_START_ISO}`); leaked++; }
+    if (r.endISO   > FY_END_ISO)   { fail(`  ${year}-${String(monthIndex + 1).padStart(2, "0")} endISO   ${r.endISO}   > FY_END   ${FY_END_ISO}`);   leaked++; }
+    if (r.startISO > r.endISO)     { fail(`  ${year}-${String(monthIndex + 1).padStart(2, "0")} start > end`); leaked++; }
+  }
+  if (leaked === 0) ok(`  36 (year, month) combinations checked, no date leaks outside [${FY_START_ISO} .. ${FY_END_ISO}]`);
+  // Explicit spot-checks on the two edges.
+  eq(rangeForCalendarMonth(2025, 11), { startISO: "2025-12-29", endISO: "2025-12-31", spanDays: 3 }, "  Dec 2025 exactly");
+  eq(rangeForCalendarMonth(2026, 11), { startISO: "2026-12-01", endISO: "2026-12-27", spanDays: 27 }, "  Dec 2026 clamped to FY end");
+  // Months fully outside FY.
+  eq(rangeForCalendarMonth(2025, 10), null, "  Nov 2025 -> null (before FY)");
+  eq(rangeForCalendarMonth(2027, 0),  null, "  Jan 2027 -> null (after FY)");
 }
 
 // ─── Round-trip sanity ──────────────────────────────────────────────

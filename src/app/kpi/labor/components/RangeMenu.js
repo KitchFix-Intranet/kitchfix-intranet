@@ -11,8 +11,10 @@
 //   preset -> existing relative resolution (this/last period, last
 //             4/13 wk, FYTD)
 //   period -> that period's exact dates (rangeForPeriod)
-//   month  -> every fiscal week whose Monday falls in that calendar
-//             month; date echo appends "· N fiscal wks"
+//   month  -> the CALENDAR month clamped to FY bounds. Post PR-2
+//             follow-up 2026-08-24: was fiscal-week-based via
+//             rangeForFiscalMonth, which broke PR-1's calendar-month
+//             promise. See rangeForCalendarMonth for the clamp.
 //   custom -> arbitrary dates via the inline calendar, Apply-gated
 //
 // Custom-expansion rules: staged endpoints live in local state;
@@ -26,7 +28,7 @@ import { fmtDate } from "../lib/formatting";
 import {
   FY_START_ISO,
   fiscalMonthsWithWeeks,
-  rangeForFiscalMonth,
+  rangeForCalendarMonth,
   rangeForPeriod,
 } from "../lib/periods";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
@@ -328,13 +330,26 @@ export function RangeMenu({
               {months.filter(m => m.year === 2026).map(m => {
                 const isSelected = selectedMonth && selectedMonth.year === m.year && selectedMonth.monthIndex === m.monthIndex;
                 const isStaged = monthStaged && monthStaged.year === m.year && monthStaged.monthIndex === m.monthIndex;
+                // Range PR-2 follow-up 2026-08-24: calendar-month ranges,
+                // FY-clamped. Tooltip reports span in days so an operator
+                // reading "DEC" sees "3 days · clamped to fiscal year" -
+                // Dec 2025 is 12/29-12/31, the only three FY days in
+                // that calendar month.
+                const r = rangeForCalendarMonth(m.year, m.monthIndex);
+                const spanDays = r?.spanDays ?? 0;
+                const daysInMonth = new Date(Date.UTC(m.year, m.monthIndex + 1, 0)).getUTCDate();
+                const clamped = spanDays < daysInMonth;
+                const title = r
+                  ? `${spanDays} day${spanDays === 1 ? "" : "s"}${clamped ? " · clamped to fiscal year" : ""}`
+                  : "outside fiscal year";
                 return (
                   <button
                     key={`${m.year}-${m.monthIndex}`}
                     type="button"
                     className={`kpi-rmenu-gp ${isSelected ? "on" : ""} ${isStaged ? "staged" : ""}`}
                     aria-pressed={isSelected ? "true" : "false"}
-                    title={`${m.weekCount} fiscal ${m.weekCount === 1 ? "wk" : "wks"}`}
+                    title={title}
+                    disabled={!r}
                     onClick={(e) => {
                       // Mirror the period logic. Discard any period
                       // staging so a period click after a month click
@@ -345,8 +360,8 @@ export function RangeMenu({
                         && monthStaged.monthIndex === m.monthIndex;
                       if (!monthStaged || (e.shiftKey === false && same)) {
                         if (same) {
-                          const r = rangeForFiscalMonth(m.year, m.monthIndex);
-                          if (r) commit(r.startISO, r.endISO, {
+                          const rr = rangeForCalendarMonth(m.year, m.monthIndex);
+                          if (rr) commit(rr.startISO, rr.endISO, {
                             kind: "month",
                             value: { year: m.year, monthIndex: m.monthIndex },
                           });
@@ -362,12 +377,12 @@ export function RangeMenu({
                         || (other.year === clicked.year && other.monthIndex <= clicked.monthIndex);
                       const start = startFirst ? other : clicked;
                       const end   = startFirst ? clicked : other;
-                      const a = rangeForFiscalMonth(start.year, start.monthIndex);
-                      const b = rangeForFiscalMonth(end.year, end.monthIndex);
+                      const a = rangeForCalendarMonth(start.year, start.monthIndex);
+                      const b = rangeForCalendarMonth(end.year, end.monthIndex);
                       if (a && b) {
-                        const same = start.year === end.year && start.monthIndex === end.monthIndex;
+                        const isSame = start.year === end.year && start.monthIndex === end.monthIndex;
                         commit(a.startISO, b.endISO,
-                          same
+                          isSame
                             ? { kind: "month", value: start }
                             : { kind: "months", start, end });
                       }

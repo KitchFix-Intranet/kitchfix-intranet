@@ -148,6 +148,52 @@ export function rangeForFiscalMonth(year, monthIndex) {
   return { startISO: m.firstMonday, endISO, weekCount: m.weekCount };
 }
 
+// Range PR-2 follow-up 2026-08-24. Owner ruling after live verify:
+// Range PR-1 promised calendar months are exact ($18,714.03 on
+// CIN - OH July, not the $21,555.27 weekly widening returned before
+// the cap raise). The picker's month button still handed back
+// fiscal-week ranges (rangeForFiscalMonth returns 07/06 - 08/02 for
+// July, 28 days on weekly grain), and the `?label=2026-07` URL hint
+// serialized by that button then failed its own validator when
+// validateLabel resolved it to the CALENDAR range the operator
+// intuits from the word "July". Two paths, two answers.
+//
+// This helper aligns the picker + label to calendar months, which
+// then route to daily via PR-1's raised cap. Clamped to the fiscal-
+// year bounds: December 2025 collapses to 12/29 - 12/31 (only 3 days
+// of that calendar month sit inside FY2026); every other month lands
+// unclamped because it sits fully within FY2026.
+//
+// Returns null when the calendar month is entirely outside FY. The
+// picker's month list is derived from fiscalMonthsWithWeeks() which
+// already filters out months with no fiscal week - so a null return
+// here is defensive, not user-reachable.
+export function rangeForCalendarMonth(year, monthIndex) {
+  const fyStart = parseISO(FY_START_ISO);
+  const fyEnd   = parseISO(FY_END_ISO);
+  if (!fyStart || !fyEnd) return null;
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex)) return null;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+
+  // Calendar month bounds in UTC. Day 0 of next month == last day of
+  // this month; Date.UTC handles overflow for us.
+  const monthStart = new Date(Date.UTC(year, monthIndex, 1));
+  const monthEnd   = new Date(Date.UTC(year, monthIndex + 1, 0));
+
+  const clampedStart = monthStart < fyStart ? fyStart : monthStart;
+  const clampedEnd   = monthEnd   > fyEnd   ? fyEnd   : monthEnd;
+
+  // Entirely outside FY: month ends before FY starts, or begins after
+  // FY ends. Returns null so the caller can no-op the click.
+  if (clampedEnd < fyStart || clampedStart > fyEnd) return null;
+  if (clampedStart > clampedEnd) return null;
+
+  const startISO = clampedStart.toISOString().slice(0, 10);
+  const endISO   = clampedEnd.toISOString().slice(0, 10);
+  const spanDays = Math.round((clampedEnd.getTime() - clampedStart.getTime()) / MS_PER_DAY) + 1;
+  return { startISO, endISO, spanDays };
+}
+
 // V6-3 - resolve a period selection into a { startISO, endISO } range.
 export function rangeForPeriod(period_no) {
   const s = periodStartISO(period_no);
