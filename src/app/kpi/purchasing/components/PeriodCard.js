@@ -75,12 +75,25 @@ export function PeriodCard({
   // call so pill / hero / chart all agree, per §9B one-source rule.
   isPassThrough = false,
 }) {
-  // ONE stateOf call - pill / hero / chart / secondary all read from it.
+  // R10 (owner ruling 2026-08-25) - pending contributes to the pill /
+  // hero verdict ONLY on a live period. On a closed period the money
+  // has either landed or it has not; the Pending sub-row is hidden;
+  // counting money the row does not show is where three cards on ALL
+  // P8 wore the wrong colour.
+  //
+  // ONE stateOf call - pill / hero / chart / VS BUDGET all read from
+  // this `cs` object (spec §9B one-source rule; §5.2 closed-period
+  // rule tightened here).
+  const resolverSpent = Number(spent || 0) + (closed ? 0 : Number(pending || 0));
   const cs = resolveCardState({
-    spent: Number(spent || 0) + Number(pending || 0),
+    spent: resolverSpent,
     budget: Number(budget || 0),
     elapsedFrac,
-    hasBills: Number(spent || 0) + Number(pending || 0) > 0,
+    // R10 - hasBills MUST mirror the resolver's `spent` source. Prior
+    // state passed the same combined value but as its own expression;
+    // a future edit touching one and not the other would have re-
+    // introduced this exact drift class.
+    hasBills: resolverSpent > 0,
     closed,
     isPassThrough,
   });
@@ -109,7 +122,35 @@ export function PeriodCard({
 
   const rem = Number(budget || 0) - Number(spent || 0) - Number(pending || 0);
   const showOverArrow = rem < 0;
-  const varz = Number(spent || 0) - Number(budget || 0);   // closed variance
+  // R10 - closed variance now reads from cs. Was independently computed
+  // (spent - budget) which drifted from the resolver's spent when
+  // pending was folded in above. Bound to cs so any future change to
+  // one source updates both.
+  const varz = cs.variance;
+
+  // R10 dev-only assertion (§9B, R10 owner ruling 2026-08-25). The
+  // drift class this fix caught is `hero says under while VS BUDGET
+  // says over` (or vice versa). Fire only on a genuine contradiction:
+  // both classes non-empty AND opposed. A card with variance ~0
+  // legitimately shows hero='g' (state=under) with signClass='' (no
+  // colour) - not a contradiction.
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    if (closed && Number(budget || 0) > 0 && !isPassThrough && !isFutureRange) {
+      const heroC = cs.heroClass;
+      const vsC   = cs.signClass;
+      const contradicts = (heroC === "r" && vsC === "g") || (heroC === "g" && vsC === "r");
+      if (contradicts) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[PeriodCard §R10] hero/VS BUDGET colour contradiction:",
+          { spent, pending, budget, resolverSpent, state: cs.state, heroClass: heroC, signClass: vsC, variance: cs.variance },
+        );
+        throw new Error(
+          `PeriodCard R10: hero '${heroC}' contradicts VS BUDGET '${vsC}' (state=${cs.state}, variance=${cs.variance})`,
+        );
+      }
+    }
+  }
 
   const spentUsed = Number(budget || 0) > 0 ? Number(spent || 0) / Number(budget || 0) : null;
 
@@ -201,7 +242,10 @@ export function PeriodCard({
                 {closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining")}
               </span>
               {closed ? (
-                <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+                /* R10 - VS BUDGET colour reads from cs.signClass so it
+                   binds to the same spent/budget the pill and hero
+                   already consumed. No independent recompute. */
+                <span className={`kpi-p-value num ${cs.signClass || (varz > 0 ? "r" : "g")}`}>{moneyArrow(varz)}</span>
               ) : showOverArrow ? (
                 <span className="kpi-p-value num r">{fmt$(-rem)}</span>
               ) : (
