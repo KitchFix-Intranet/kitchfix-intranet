@@ -315,7 +315,10 @@ export default function KpiPurchasingPage() {
     // == weeks.length (or periods.length for Tier C) so silent drops
     // cannot happen. Chart width still fits the card because the CSS
     // grid is repeat(N, minmax(0, 1fr)).
-    const tier = classifyTier(weeksInRange);
+    // PR-2 R11 item 6b - purchasing tier B upper bound drops from 13 to
+    // 9. Labor's default (13) stays untouched via classifyTier's
+    // optional second argument.
+    const tier = classifyTier(weeksInRange, 9);
 
     // Running-week index across the FULL weeks array (only when open).
     let runningWeekIdxFull = null;
@@ -1024,45 +1027,59 @@ export default function KpiPurchasingPage() {
           />
         </div>
 
-        {/* Reimbursable - full width. Not shown in Kevin's 3-up diagram,
-            but the card exists on the board (Fix 4 target); placing it
-            here keeps every card visible without cramming a fourth
-            column into the three-up row. */}
-        {board.ledgers
-          .filter(l => l.key === "reimb")
-          .map(l => (
+        {/* PR-2 R11 item 3 - Reimbursable + Card purchases side-by-side
+            on a live period, full-width fallback on a closed period.
+            Owner ruling 2026-08-25 supersedes spec §6.6's "full-width"
+            phrasing for the live case:
+              - LIVE  : pair inside .kpi-p-pairrow (1fr 1fr).
+              - CLOSED: CardPurchases returns null (no pending),
+                        Reimbursable takes the full row.
+            Prior state left Reimbursable stretched full-width even
+            when Card purchases sat below it, which is the "stretch"
+            defect this fix retires. Reimbursable may not render at
+            accounts with no reimb data - then Card purchases takes
+            the row alone on live, or nothing renders on closed. */}
+        {(() => {
+          const reimbLedger = board.ledgers.find(l => l.key === "reimb");
+          const cardPurchasesActive = !closed;   // CardPurchases returns null when closed
+          const reimbNode = reimbLedger ? (
             <LedgerCard
-              key={l.key}
-              bucketKey={l.key}
-              label={l.label}
-              sub={l.sub}
-              strokeClass={l.strokeClass}
-              budget={l.budget}
-              spent={l.spent}
+              key={reimbLedger.key}
+              bucketKey={reimbLedger.key}
+              label={reimbLedger.label}
+              sub={reimbLedger.sub}
+              strokeClass={reimbLedger.strokeClass}
+              budget={reimbLedger.budget}
+              spent={reimbLedger.spent}
               elapsedFrac={board.elapsedFrac}
               closed={closed}
               isFutureRange={isFutureRange}
-              ledgerRows={l.ledgerRows}
-              totalCount={l.totalCount}
-              totalAmount={l.totalAmount}
-              cap={l.cap}
+              ledgerRows={reimbLedger.ledgerRows}
+              totalCount={reimbLedger.totalCount}
+              totalAmount={reimbLedger.totalAmount}
+              cap={reimbLedger.cap}
               isAggregate={isAggregate}
             />
-          ))}
-
-        {/* Card purchases - full width per Kevin's diagram. */}
-        <CardPurchases
-          pendingAmount={board.pending}
-          pendingLineCount={board.pendingLineCount}
-          closed={closed}
-          /* PR-2 R6 Part B - per-charge rows from the route
-             (uncoded rippling_spend, capped at 50). */
-          rows={data?.card_charges?.rows}
-          totalCount={data?.card_charges?.total_count}
-          totalAmount={data?.card_charges?.total_amount}
-          cap={data?.card_charges?.cap}
-          isAggregate={isAggregate}
-        />
+          ) : null;
+          const cardPurchNode = cardPurchasesActive ? (
+            <CardPurchases
+              pendingAmount={board.pending}
+              pendingLineCount={board.pendingLineCount}
+              closed={closed}
+              /* PR-2 R6 Part B - per-charge rows from the route
+                 (uncoded rippling_spend, capped at 50). */
+              rows={data?.card_charges?.rows}
+              totalCount={data?.card_charges?.total_count}
+              totalAmount={data?.card_charges?.total_amount}
+              cap={data?.card_charges?.cap}
+              isAggregate={isAggregate}
+            />
+          ) : null;
+          if (reimbNode && cardPurchNode) {
+            return <div className="kpi-p-pairrow">{reimbNode}{cardPurchNode}</div>;
+          }
+          return <>{reimbNode}{cardPurchNode}</>;
+        })()}
 
         {/* PR 4 - drill-down table. Sits below Card purchases on the
             at-risk board. Bill rows load on expand via scoped GET;

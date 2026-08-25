@@ -120,6 +120,14 @@ export function VendorBreakdown({
             <span>Spend</span>
             <span>vs prior</span>
           </div>
+          {/* PR-2 R11 item 1 - bounded scroll region matching the
+              ledger cards' 220px max-height (purchasing.css:592).
+              Prior state let the card grow to 1500+px at ALL FYTD
+              (25 rows) while Equipment beside it capped at ~440px.
+              Head, legend and footer stay OUTSIDE this scroll so
+              the honest "Showing N of M · $X total" line always
+              remains visible below the fold. */}
+          <div className="kpi-p-vbrows">
           {rows.map((r, i) => {
             const priorRaw = Number(r.prior_spend || 0);
             const cur = Number(r.spend || 0);
@@ -187,6 +195,7 @@ export function VendorBreakdown({
               </div>
             );
           })}
+          </div>
           <div className="kpi-p-vblegend">
             <span><i style={{ background: "var(--kpi-p-food)" }} />Food</span>
             <span><i style={{ background: "var(--kpi-p-pkg)" }} />Packaging</span>

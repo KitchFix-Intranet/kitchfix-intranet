@@ -264,7 +264,7 @@ async function paginateActuals(supa, { members, start, end, pageSize }) {
     while (true) {
       const q = await supa
         .from("purchasing_actuals")
-        .select("id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at")
+        .select("id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at, vendor_or_merchant")
         .in("account_key", memberChunk)
         .eq("excluded", false)
         .gte("txn_date", start)
@@ -1748,7 +1748,45 @@ export async function GET(request) {
     // Cards switch).
     weekly_by_source,
   };
-  if (includeLines) payload.actuals = actuals;
+  if (includeLines) {
+    // PR-2 R11 item 4 - drill-table vendor column was rendering `—` on
+    // 100% of rows because paginateActuals didn't SELECT
+    // vendor_or_merchant, so PurchasingTable.js:166 read an undefined
+    // field. Now that the field IS selected, resolve billcom vendor
+    // ids to names before shipping so PurchasingTable renders a name
+    // instead of an opaque id. Same pattern as loadLedgerRows lines
+    // 711-745 in this file - one shared resolve mechanism, no second
+    // path.
+    const billcomVendorIds = [
+      ...new Set(actuals.filter(r => r.source === "billcom" && r.vendor_or_merchant).map(r => r.vendor_or_merchant)),
+    ];
+    const vendorNameMap = new Map();
+    if (billcomVendorIds.length > 0) {
+      for (const idChunk of chunk(billcomVendorIds, IN_CHUNK)) {
+        const vr = await supa.from("billcom_ref_vendors").select("id, name").in("id", idChunk);
+        if (vr.error) return NextResponse.json(safeError("billcom_ref_vendors", vr.error), { status: 500 });
+        for (const v of vr.data || []) vendorNameMap.set(v.id, v.name || null);
+      }
+    }
+    // Attach `vendor` per row: resolved name for billcom, raw merchant
+    // string for rippling, null when unresolvable. PurchasingTable
+    // decides the display copy (name / "unresolved vendor" / "—") from
+    // r.vendor + r.source. Ship only the resolved field: the raw
+    // vendor_or_merchant id is opaque to the frontend and dropping it
+    // saves ~30-40 bytes/row on the drill=lines wire.
+    payload.actuals = actuals.map(r => {
+      let vendor = null;
+      if (r.source === "billcom") {
+        if (r.vendor_or_merchant && vendorNameMap.has(r.vendor_or_merchant)) {
+          vendor = vendorNameMap.get(r.vendor_or_merchant);
+        }
+      } else {
+        vendor = r.vendor_or_merchant || null;
+      }
+      const { vendor_or_merchant: _drop, ...rest } = r;
+      return { ...rest, vendor };
+    });
+  }
 
   return NextResponse.json(payload);
 }
