@@ -67,6 +67,10 @@ import { VendorBreakdown } from "./components/VendorBreakdown";
 import { ManagementFeeCard } from "./components/ManagementFeeCard";
 import { ReimbursableRow } from "./components/ReimbursableRow";
 import { FunMoneyCard } from "./components/FunMoneyCard";
+// PR 4 - drill-down table. Sits below Card purchases on the at-risk
+// board. Pass-through boards skip the table (§2 - no COGS distinction
+// to check; the ReimbursableRow already carries the 13xx ledger).
+import { PurchasingTable } from "./components/PurchasingTable";
 
 // Format ISO date -> "MM/DD" for chart week captions.
 function isoToMMDD(iso) {
@@ -981,6 +985,29 @@ export default function KpiPurchasingPage() {
           totalAmount={data?.card_charges?.total_amount}
           cap={data?.card_charges?.cap}
           isAggregate={isAggregate}
+        />
+
+        {/* PR 4 - drill-down table. Sits below Card purchases on the
+            at-risk board. Bill rows load on expand via scoped GET;
+            the mount payload is unchanged. Footer totals asserted to
+            equal bucket card heroes (§9B one-source rule, Check 1). */}
+        <PurchasingTable
+          account={account}
+          start={start}
+          end={end}
+          tier={board.tier}
+          weeks={board.weeks}
+          decoratedPeriods={board.decoratedPeriods}
+          weekly={board.weekly}
+          heroTotals={{
+            food:      board.buckets.find(b => b.key === "food")?.spent      || 0,
+            packaging: board.buckets.find(b => b.key === "packaging")?.spent || 0,
+            vehicle:   board.buckets.find(b => b.key === "vehicle")?.spent   || 0,
+            equipment: board.ledgers.find(l => l.key === "equip")?.spent     || 0,
+            repair:    board.ledgers.find(l => l.key === "rm")?.spent        || 0,
+          }}
+          isAggregate={isAggregate}
+          weeksInRange={board.weeksInRange}
         />
       </div>
     );

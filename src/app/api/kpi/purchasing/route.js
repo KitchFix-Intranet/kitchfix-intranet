@@ -1011,6 +1011,13 @@ export async function GET(request) {
   const end = searchParams.get("end") || today;
   const drill = (searchParams.get("drill") || "").trim().toLowerCase();
   const includeLines = drill === "lines";
+  // PR 4 - drill-down table. Lazy source-split aggregate for the SHOW
+  // filter (All / Bills only / Cards only). Off by default so the
+  // mount payload is unchanged. The drill-table client fetches with
+  // `?table=1` on the FIRST switch to Bills or Cards, caches, then
+  // reads from that data. Payload delta is measured in the return
+  // (see mgmt_fee for the shape of an additive block).
+  const includeTable = (searchParams.get("table") || "").trim() === "1";
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
 
   if (!account) {
@@ -1609,6 +1616,70 @@ export async function GET(request) {
     };
   }
 
+  // ─── PR 4 - source-split weekly aggregate for the drill-down table ──
+  //
+  // Only computed when `?table=1` is passed. Lazy path: the table's
+  // SHOW filter fires this on the FIRST switch to Bills or Cards.
+  // Payload is small - N weeks × 5 columns × 2 sources = ~340 rows
+  // max at ALL FYTD, most zero and dropped. Ships as a flat array to
+  // stay consistent with the shape of `weekly`.
+  //
+  // Column mapping (matches PurchasingTable's columns):
+  //   food, packaging, vehicle   - by gl_bucket on the actual
+  //   equipment                  - gl_line_code = '5002.5'
+  //   repair                     - gl_line_code = '5002.1'
+  // Other rows (SGA lines other than 5002.5/5002.1, reimbursable 13xx,
+  // uncoded card charges) do NOT contribute to the table columns and
+  // are dropped from this aggregate - they render elsewhere on the
+  // board.
+  let weekly_by_source = null;
+  if (includeTable) {
+    function weekStartFromTxnDate(txnDate) {
+      const t = new Date(txnDate + "T00:00:00Z").getTime();
+      const fs = new Date(FY_START_ISO + "T00:00:00Z").getTime();
+      if (!Number.isFinite(t) || t < fs) return null;
+      const wks = Math.floor((t - fs) / (7 * 86400000));
+      return new Date(fs + wks * 7 * 86400000).toISOString().slice(0, 10);
+    }
+    function columnFor(r) {
+      if (r.gl_line_code === "5002.5") return "equipment";
+      if (r.gl_line_code === "5002.1") return "repair";
+      // Food / Packaging / Vehicle keyed by gl_line_code prefix
+      // (bucketForGl above). `r.gl_bucket` on purchasing_actuals is
+      // the broader family (pl_cogs / sga / reimbursable / card),
+      // NOT the per-column bucket the table wants - do not read it.
+      return bucketForGl(r.gl_line_code);
+    }
+    // Map: week_start -> column -> source -> cents (avoid float drift)
+    const acc = new Map();
+    for (const r of actuals) {
+      const col = columnFor(r);
+      if (!col) continue;
+      const src = r.source === "rippling_spend" ? "rippling_spend" : "billcom";
+      const ws = weekStartFromTxnDate(r.txn_date);
+      if (!ws) continue;
+      if (!acc.has(ws)) acc.set(ws, {});
+      const wk = acc.get(ws);
+      if (!wk[col]) wk[col] = { billcom: 0, rippling_spend: 0 };
+      wk[col][src] += Math.round(Number(r.amount || 0) * 100);
+    }
+    const rows = [];
+    for (const [ws, cols] of acc) {
+      for (const [col, sources] of Object.entries(cols)) {
+        for (const [src, cents] of Object.entries(sources)) {
+          if (cents === 0) continue;
+          rows.push({
+            week_start: ws,
+            column:     col,
+            source:     src,
+            amount:     Math.round(cents) / 100,
+          });
+        }
+      }
+    }
+    weekly_by_source = rows;
+  }
+
   // PR 2 R8 - align with labor: `is_future_range` is true when the
   // requested START is strictly after today - the range has not begun.
   // Broader rule (Kevin ruling 2026-08-24): "no spend means no verdict"
@@ -1667,6 +1738,10 @@ export async function GET(request) {
     // PR 3 - management-fee board data (pass_through accounts only).
     // null at at_risk / aggregate. See mgmt_fee construction above.
     mgmt_fee,
+    // PR 4 - source-split weekly aggregate for the drill-down table's
+    // SHOW filter. null unless ?table=1 (lazy fetch on first Bills /
+    // Cards switch).
+    weekly_by_source,
   };
   if (includeLines) payload.actuals = actuals;
 

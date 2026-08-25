@@ -1,0 +1,540 @@
+"use client";
+// src/app/kpi/purchasing/components/PurchasingTable.js
+//
+// PR 4 - drill-down table.
+//
+// Sits below Card purchases on the at-risk board. Same tier ladder as
+// the week strip via `classifyTier`:
+//
+//   Tier A (<=6 weeks)  - week rows, expand -> bill rows
+//   Tier B (7-13 weeks) - week rows, expand -> bill rows
+//   Tier C (>13 weeks)  - period bands (collapsed by default),
+//                         expand -> weeks, expand -> bill rows
+//
+// Tier C collapsed by default is the point: an ALL / FYTD range is
+// nine band rows, not thirty-five week rows.
+//
+// Columns (spec + prompt): Food · Packaging & supplies · Vehicle ·
+// Equipment · Repair & maintenance · Total.
+//
+// Data flow:
+//   - Aggregate cells come from `weekly` (already in the mount payload
+//     - never fetches anything on mount)
+//   - Bill rows load ON EXPAND via a scoped GET
+//     `/api/kpi/purchasing?account=&start=&end=&drill=lines` where
+//     (start, end) is the band's or week's own bounds. Cached by key.
+//   - SHOW filter (All / Bills only / Cards only) at the aggregate
+//     level requires source-split data - fires a LAZY fetch with
+//     `?table=1` on the first switch to Bills or Cards, cached.
+//     Aggregate cells then read from `weekly_by_source` filtered by
+//     the selected source. Bill drill rows filter directly on
+//     `source`. `All` uses the mount payload untouched.
+//
+// **Footer totals equal bucket card heroes** (check 1 - the gate).
+// Assert in dev; log in prod. Same defect class as R4 Part A + Check
+// 9 - hero-vs-detail drift has now shown up seven times on this
+// project. Bind them.
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fmt$, fmtPct } from "../lib/board";
+import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
+
+const COLUMNS = [
+  { key: "food",      label: "Food",                 sub: "3200" },
+  { key: "packaging", label: "Packaging & supplies", sub: "3400" },
+  { key: "vehicle",   label: "Vehicle",              sub: "3500" },
+  { key: "equipment", label: "Equipment",            sub: "5002.5" },
+  { key: "repair",    label: "R&M",                  sub: "5002.1" },
+];
+
+// Column derivation - matches server-side `columnFor` in the route.
+function columnForRow(r) {
+  if (r.gl_line_code === "5002.5") return "equipment";
+  if (r.gl_line_code === "5002.1") return "repair";
+  const s = String(r.gl_line_code || "");
+  if (s.startsWith("3200")) return "food";
+  if (s.startsWith("3400")) return "packaging";
+  if (s.startsWith("3500")) return "vehicle";
+  return null;
+}
+
+// A cell display: em-dash when null (missing), $0.00 when genuinely
+// zero, formatted currency otherwise. `—` renders in muted color +
+// normal weight; $0.00 in normal color + normal weight; a real value
+// in normal color + tabular; distinct across all three per rule
+// (`— for missing, $0.00 for genuinely zero, distinct in weight and
+// colour`).
+function Cell({ value, isFooter }) {
+  if (value == null) {
+    return <td className="kpi-p-tbl-cell kpi-p-tbl-dash" aria-label="no data">—</td>;
+  }
+  const zero = Math.abs(value) < 0.005;
+  return (
+    <td
+      className={`kpi-p-tbl-cell num${zero ? " kpi-p-tbl-zero" : ""}${isFooter ? " kpi-p-tbl-footcell" : ""}`}
+    >
+      {fmt$(value)}
+    </td>
+  );
+}
+
+// Aggregate weekly rows into per-week per-column cells. Rows without
+// a column mapping (uncoded card charges, reimbursable, SGA lines
+// other than 5002.5/5002.1) drop out of the table but the raw amount
+// stays visible on other cards; the table is a P&L-columns view.
+function buildWeeklyCells({ weekly, weekly_by_source, showFilter, weeks }) {
+  // Base source: `weekly` (combined) for SHOW=All, `weekly_by_source`
+  // otherwise. Both share (week_start, column, amount) once mapped.
+  const cellsByWeek = new Map();
+  for (const iso of weeks) {
+    cellsByWeek.set(iso, { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 });
+  }
+  if (showFilter === "all") {
+    for (const r of weekly || []) {
+      const col = columnForRow(r);
+      if (!col) continue;
+      const cell = cellsByWeek.get(r.week_start);
+      if (!cell) continue;
+      const amt = Number(r.amount || 0);
+      cell[col] += amt;
+      cell.total += amt;
+    }
+  } else if (Array.isArray(weekly_by_source)) {
+    const wantSource = showFilter === "bills" ? "billcom" : "rippling_spend";
+    for (const r of weekly_by_source) {
+      if (r.source !== wantSource) continue;
+      const cell = cellsByWeek.get(r.week_start);
+      if (!cell) continue;
+      const amt = Number(r.amount || 0);
+      cell[r.column] += amt;
+      cell.total += amt;
+    }
+  }
+  return cellsByWeek;
+}
+
+// Sum week cells into period bands from decoratedPeriods bounds.
+function buildPeriodBands({ decoratedPeriods, cellsByWeek, weeks }) {
+  return decoratedPeriods.map(p => {
+    const bandCell = { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+    const weeksIn = weeks.filter(w => w >= p.start && w <= p.end);
+    for (const w of weeksIn) {
+      const c = cellsByWeek.get(w);
+      if (!c) continue;
+      for (const col of ["food", "packaging", "vehicle", "equipment", "repair", "total"]) {
+        bandCell[col] += c[col];
+      }
+    }
+    return { period: p, weeks: weeksIn, cell: bandCell };
+  });
+}
+
+function BillRows({ scopeKey, drillState, isAggregate, showFilter }) {
+  const state = drillState.get(scopeKey);
+  if (!state || state.status === "loading") {
+    return (
+      <tr className="kpi-p-tbl-billload"><td colSpan={7}>Loading bills&hellip;</td></tr>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <tr className="kpi-p-tbl-billload"><td colSpan={7}>Could not load bills: {state.error || "unknown error"}</td></tr>
+    );
+  }
+  const rows = state.rows || [];
+  // Filter by SHOW at the row level (works even without weekly_by_source
+  // because each actual row carries its own source).
+  const filtered = showFilter === "all"
+    ? rows
+    : rows.filter(r => r.source === (showFilter === "bills" ? "billcom" : "rippling_spend"));
+  if (filtered.length === 0) {
+    return (
+      <tr className="kpi-p-tbl-billload"><td colSpan={7}>
+        {showFilter === "all"
+          ? "No bills or card charges recorded in this range."
+          : `No ${showFilter === "bills" ? "bills" : "card charges"} in this range.`}
+      </td></tr>
+    );
+  }
+  return filtered.slice(0, 100).map((r, i) => {
+    const col = columnForRow(r);
+    const amt = Number(r.amount || 0);
+    return (
+      <tr key={`${r.id || r.source_line_id || i}`} className="kpi-p-tbl-bill">
+        <td className="kpi-p-tbl-billlbl">
+          <span className="kpi-p-tbl-billsrc">{r.source === "rippling_spend" ? "card" : "bill.com"}</span>
+          <span className="kpi-p-tbl-billv">{r.vendor_or_merchant || "—"}</span>
+          <span className="kpi-p-tbl-billmeta">
+            {r.gl_line_code || "—"}{r.txn_date ? ` · ${r.txn_date.slice(5).replace("-", "/")}` : ""}
+            {isAggregate && r.account_key ? ` · ${r.account_key}` : ""}
+          </span>
+        </td>
+        {COLUMNS.map(c => (
+          <Cell key={c.key} value={c.key === col ? amt : null} />
+        ))}
+        <td className="kpi-p-tbl-cell num kpi-p-tbl-footcell">{fmt$(amt)}</td>
+      </tr>
+    );
+  });
+}
+
+export function PurchasingTable({
+  account,
+  start,
+  end,
+  tier,
+  weeks,               // ISO[] fiscal-week starts in range
+  decoratedPeriods,    // [{period_no, start, end, running, finished, ...}]
+  weekly,              // route.weekly - always present on mount
+  heroTotals,          // { food, packaging, vehicle, equipment, repair, total } from page.js board
+  isAggregate,
+  weeksInRange,
+}) {
+  const [showFilter, setShowFilter] = useState("all");            // 'all' | 'bills' | 'cards'
+  const [expandedPeriods, setExpandedPeriods] = useState(new Set());
+  const [expandedWeeks, setExpandedWeeks] = useState(new Set());
+  // Lazy-fetched source-split aggregate for SHOW=Bills/Cards.
+  const [sourceSplit, setSourceSplit] = useState(null);           // null | { status, rows?, error? }
+  // Per-scope drill cache: key = `${start}|${end}` -> { status, rows?, error? }
+  const [drillState, setDrillState] = useState(() => new Map());
+  const drillStateRef = useRef(drillState);
+  drillStateRef.current = drillState;
+
+  // Lazy fetch of source-split aggregate on first switch to Bills/Cards.
+  useEffect(() => {
+    if (showFilter === "all") return;
+    if (sourceSplit && sourceSplit.status === "ok") return;
+    if (sourceSplit && sourceSplit.status === "loading") return;
+    let cancelled = false;
+    setSourceSplit({ status: "loading" });
+    const params = new URLSearchParams({ account, start, end, table: "1" });
+    fetch(`/api/kpi/purchasing?${params.toString()}`, { credentials: "include" })
+      .then(async (r) => {
+        if (cancelled) return;
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setSourceSplit({ status: "error", error: body?.error || `HTTP ${r.status}` });
+          return;
+        }
+        setSourceSplit({ status: "ok", rows: body.weekly_by_source || [] });
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setSourceSplit({ status: "error", error: String(e?.message || e) });
+      });
+    return () => { cancelled = true; };
+  }, [showFilter, account, start, end, sourceSplit]);
+
+  // Reset caches when the range/account changes.
+  useEffect(() => {
+    setExpandedPeriods(new Set());
+    setExpandedWeeks(new Set());
+    setSourceSplit(null);
+    setDrillState(new Map());
+  }, [account, start, end]);
+
+  const cellsByWeek = useMemo(
+    () => buildWeeklyCells({
+      weekly,
+      weekly_by_source: sourceSplit?.rows,
+      showFilter,
+      weeks,
+    }),
+    [weekly, sourceSplit, showFilter, weeks],
+  );
+
+  const bands = useMemo(
+    () => tier === "C" ? buildPeriodBands({ decoratedPeriods, cellsByWeek, weeks }) : [],
+    [tier, decoratedPeriods, cellsByWeek, weeks],
+  );
+
+  // Footer totals - sum of aggregate cells.
+  const footTotals = useMemo(() => {
+    const t = { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+    for (const c of cellsByWeek.values()) {
+      for (const col of Object.keys(t)) t[col] += c[col];
+    }
+    return t;
+  }, [cellsByWeek]);
+
+  // Check 1 - THE GATE. Aggregate cells (footer) MUST equal the bucket
+  // card heroes above. Dev throws on mismatch; prod warns. Same one-
+  // source discipline the LedgerCard Check 9 gate uses. Skipped when
+  // SHOW is filtered (heroes reflect ALL bills+cards; filtered footer
+  // legitimately differs).
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production" && showFilter === "all" && heroTotals) {
+    const CENTS_TOLERANCE = 0.02;
+    for (const col of ["food", "packaging", "vehicle"]) {
+      const foot = Math.round(footTotals[col] * 100) / 100;
+      const hero = Math.round(Number(heroTotals[col] || 0) * 100) / 100;
+      if (Math.abs(foot - hero) > CENTS_TOLERANCE) {
+        // eslint-disable-next-line no-console
+        console.error(`[PurchasingTable Check 1] ${col} footer $${foot.toFixed(2)} != hero $${hero.toFixed(2)}`);
+        throw new Error(
+          `PurchasingTable Check 1: ${col} footer $${foot.toFixed(2)} != hero $${hero.toFixed(2)} (delta $${(foot - hero).toFixed(2)})`,
+        );
+      }
+    }
+  }
+
+  const fetchDrillFor = useCallback((sliceStart, sliceEnd) => {
+    const key = `${sliceStart}|${sliceEnd}`;
+    if (drillStateRef.current.has(key)) return;
+    setDrillState(prev => {
+      const next = new Map(prev);
+      next.set(key, { status: "loading" });
+      return next;
+    });
+    const params = new URLSearchParams({ account, start: sliceStart, end: sliceEnd, drill: "lines" });
+    fetch(`/api/kpi/purchasing?${params.toString()}`, { credentials: "include" })
+      .then(async (r) => {
+        const body = await r.json().catch(() => ({}));
+        setDrillState(prev => {
+          const next = new Map(prev);
+          if (!r.ok) {
+            next.set(key, { status: "error", error: body?.error || `HTTP ${r.status}` });
+          } else {
+            next.set(key, { status: "ok", rows: body.actuals || [] });
+          }
+          return next;
+        });
+      })
+      .catch(e => {
+        setDrillState(prev => {
+          const next = new Map(prev);
+          next.set(key, { status: "error", error: String(e?.message || e) });
+          return next;
+        });
+      });
+  }, [account]);
+
+  const togglePeriod = (periodNo, sliceStart, sliceEnd) => {
+    setExpandedPeriods(prev => {
+      const next = new Set(prev);
+      if (next.has(periodNo)) next.delete(periodNo);
+      else next.add(periodNo);
+      return next;
+    });
+    // No drill fetch on period band expand - weeks nest inside; bill
+    // drill fires when a week inside the band is expanded.
+  };
+  const toggleWeek = (weekStart, weekEnd) => {
+    setExpandedWeeks(prev => {
+      const next = new Set(prev);
+      if (next.has(weekStart)) next.delete(weekStart);
+      else next.add(weekStart);
+      return next;
+    });
+    fetchDrillFor(weekStart, weekEnd);
+  };
+  const expandAll = () => {
+    if (tier !== "C") return;
+    setExpandedPeriods(new Set(decoratedPeriods.map(p => p.period_no)));
+  };
+  const collapseAll = () => {
+    if (tier !== "C") return;
+    setExpandedPeriods(new Set());
+    setExpandedWeeks(new Set());
+  };
+
+  const showFilterActive = showFilter !== "all";
+  const sourceSplitPending = showFilterActive && sourceSplit?.status !== "ok";
+
+  const renderWeekRow = (weekStart, weekEnd, cell) => {
+    const open = expandedWeeks.has(weekStart);
+    const key = `${weekStart}|${weekEnd}`;
+    return (
+      <tr key={`w-${weekStart}`} className={`kpi-p-tbl-week ${open ? "kpi-p-tbl-week-open" : ""}`}>
+        <td>
+          <button
+            type="button"
+            className="kpi-p-tbl-weekbtn"
+            onClick={() => toggleWeek(weekStart, weekEnd)}
+            aria-expanded={open ? "true" : "false"}
+          >
+            <span className="kpi-p-tbl-chev">{open ? "⌄" : "›"}</span>
+            {weekStart.slice(5).replace("-", "/")}
+            <span className="kpi-p-tbl-weeksub">week starting</span>
+          </button>
+        </td>
+        {COLUMNS.map(c => (<Cell key={c.key} value={cell[c.key]} />))}
+        <Cell value={cell.total} isFooter />
+      </tr>
+    );
+  };
+
+  return (
+    <div className="kpi-p-card kpi-p-tbl-container" data-card="drill-table">
+      <div className="kpi-p-tbl-toolbar">
+        <div className="kpi-p-tbl-tbg">
+          <span className="kpi-p-cardtitle">By P&amp;L line</span>
+          {" "}<HelpPop id="qDrillTable" title="The drill-down table" body={
+            <>
+              Every fiscal week in the range, split across the five P&amp;L
+              columns bill.com and coded card charges land on.
+              <br /><br />
+              <b>Expand a week to see the individual bills and card
+              charges</b> that make up its numbers - loaded on demand,
+              scoped to the range you clicked.
+              <span className="kpi-hs-pop-foot">
+                The footer row sums the columns and must match the bucket
+                cards above. Any drift trips a build-time assert.
+              </span>
+            </>
+          } />
+        </div>
+        {tier === "C" && (
+          <div className="kpi-p-tbl-tbg">
+            <button type="button" className="kpi-p-tbl-tbbtn" onClick={expandAll}>Expand all</button>
+            <button type="button" className="kpi-p-tbl-tbbtn" onClick={collapseAll}>Collapse all</button>
+          </div>
+        )}
+        <span className="kpi-p-tbl-tbspacer" aria-hidden="true" />
+        <div className="kpi-p-tbl-tbg" role="group" aria-label="Show filter">
+          <span className="kpi-p-tbl-tblab">Show</span>
+          <span className="kpi-p-tbl-seg">
+            <button type="button" className={showFilter === "all" ? "on" : ""} onClick={() => setShowFilter("all")} aria-pressed={showFilter === "all"}>All</button>
+            <button type="button" className={showFilter === "bills" ? "on" : ""} onClick={() => setShowFilter("bills")} aria-pressed={showFilter === "bills"}>Bills only</button>
+            <button type="button" className={showFilter === "cards" ? "on" : ""} onClick={() => setShowFilter("cards")} aria-pressed={showFilter === "cards"}>Cards only</button>
+          </span>
+        </div>
+      </div>
+
+      {sourceSplitPending && (
+        <div className="kpi-p-tbl-notice" role="status">Loading source-split data&hellip;</div>
+      )}
+
+      <div className="kpi-p-tbl-scroll">
+        <table className="kpi-p-tbl">
+          <thead>
+            <tr>
+              <th className="kpi-p-tbl-lcol">{tier === "C" ? "Period" : "Week"}</th>
+              {COLUMNS.map(c => (
+                <th key={c.key}>{c.label}<span className="kpi-p-tbl-hsub">{c.sub}</span></th>
+              ))}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tier === "C" ? (
+              bands.map(({ period, weeks: bandWeeks, cell }) => {
+                const open = expandedPeriods.has(period.period_no);
+                return (
+                  <FragmentBand
+                    key={`p-${period.period_no}`}
+                    period={period}
+                    bandCell={cell}
+                    bandWeeks={bandWeeks}
+                    open={open}
+                    onToggle={() => togglePeriod(period.period_no, period.start, period.end)}
+                    expandedWeeks={expandedWeeks}
+                    cellsByWeek={cellsByWeek}
+                    renderWeekRow={renderWeekRow}
+                    drillState={drillState}
+                    isAggregate={isAggregate}
+                    showFilter={showFilter}
+                  />
+                );
+              })
+            ) : (
+              weeks.map((wIso, i) => {
+                const cell = cellsByWeek.get(wIso) || { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+                const weekEnd = weeks[i + 1] ? isoMinus1(weeks[i + 1]) : end;
+                const open = expandedWeeks.has(wIso);
+                const key = `${wIso}|${weekEnd}`;
+                return (
+                  <>
+                    {renderWeekRow(wIso, weekEnd, cell)}
+                    {open && (
+                      <BillRows
+                        scopeKey={key}
+                        drillState={drillState}
+                        isAggregate={isAggregate}
+                        showFilter={showFilter}
+                      />
+                    )}
+                  </>
+                );
+              })
+            )}
+          </tbody>
+          <tfoot>
+            <tr className="kpi-p-tbl-total">
+              <td>
+                Range total
+                {showFilterActive && (
+                  <span className="kpi-p-tbl-weeksub">
+                    {showFilter === "bills" ? "bill.com only" : "cards only"}
+                  </span>
+                )}
+              </td>
+              {COLUMNS.map(c => (<Cell key={c.key} value={footTotals[c.key]} isFooter />))}
+              <Cell value={footTotals.total} isFooter />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function FragmentBand({
+  period,
+  bandCell,
+  bandWeeks,
+  open,
+  onToggle,
+  expandedWeeks,
+  cellsByWeek,
+  renderWeekRow,
+  drillState,
+  isAggregate,
+  showFilter,
+}) {
+  const runFlag = period.running ? "in progress" : period.finished ? "closed" : "not started";
+  return (
+    <>
+      <tr className={`kpi-p-tbl-band ${open ? "kpi-p-tbl-band-open" : ""}`}>
+        <td>
+          <button
+            type="button"
+            className="kpi-p-tbl-bandbtn"
+            onClick={onToggle}
+            aria-expanded={open ? "true" : "false"}
+          >
+            <span className="kpi-p-tbl-chev">{open ? "⌄" : "›"}</span>
+            <span className="kpi-p-tbl-bandlbl">{`PERIOD ${period.period_no}`}</span>
+            <span className="kpi-p-tbl-bandsub">{`${bandWeeks.length} wk${bandWeeks.length === 1 ? "" : "s"} · ${runFlag}`}</span>
+          </button>
+        </td>
+        {COLUMNS.map(c => (<Cell key={c.key} value={bandCell[c.key]} />))}
+        <Cell value={bandCell.total} isFooter />
+      </tr>
+      {open && bandWeeks.map((wIso, i) => {
+        const cell = cellsByWeek.get(wIso) || { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+        const weekEnd = bandWeeks[i + 1] ? isoMinus1(bandWeeks[i + 1]) : period.end;
+        const open2 = expandedWeeks.has(wIso);
+        const key = `${wIso}|${weekEnd}`;
+        return (
+          <>
+            {renderWeekRow(wIso, weekEnd, cell)}
+            {open2 && (
+              <BillRows
+                key={`bills-${key}`}
+                scopeKey={key}
+                drillState={drillState}
+                isAggregate={isAggregate}
+                showFilter={showFilter}
+              />
+            )}
+          </>
+        );
+      })}
+    </>
+  );
+}
+
+function isoMinus1(iso) {
+  const t = new Date(iso + "T00:00:00Z").getTime();
+  return new Date(t - 86400000).toISOString().slice(0, 10);
+}
