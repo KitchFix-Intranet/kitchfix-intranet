@@ -3620,13 +3620,21 @@
   vertical-align: -1px;
 }
 
-/* Five signal cards */
+/* Five signal cards - HS FB1 hotfix 2026-08-25: minmax(0, 1fr) forces
+   equal columns regardless of intrinsic content width. Plain `1fr`
+   still respects each child's min-content, and plan-mode titles
+   ("Spread across what is left", "Hours to schedule", "Expected
+   overtime") are longer than the actuals titles - measured on CIN-OH
+   HS 12 the 5th column overflowed the container by 59px at 1556px
+   viewport. Actuals happened to fit today, one long label away from
+   the same defect. Same minmax pattern the period board uses at
+   .kpi-tbr grids (L2363, L2743). */
 .kpi-hs-signals {
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--kpi-sp-3);
 }
 @media (max-width: 1024px) {
-  .kpi-hs-signals { grid-template-columns: repeat(2, 1fr); }
+  .kpi-hs-signals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
   .kpi-hs-signals { grid-template-columns: 1fr; }
@@ -3898,12 +3906,12 @@
 .kpi-hs-skel-header { height: 46px; }
 .kpi-hs-skel-strip  { height: 160px; }
 .kpi-hs-skel-sigs {
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--kpi-sp-3);
 }
 .kpi-hs-skel-sig { height: 180px; }
 @media (max-width: 1024px) {
-  .kpi-hs-skel-sigs { grid-template-columns: repeat(2, 1fr); }
+  .kpi-hs-skel-sigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
   .kpi-hs-skel-sigs { grid-template-columns: 1fr; }
