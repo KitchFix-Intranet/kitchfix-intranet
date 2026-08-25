@@ -118,6 +118,12 @@
    only above that. */
 .kpi-app .kpi-p-flatrow-3up {
   grid-template-columns: 1fr 1fr 1fr;
+  /* PR 2 R9 P2-2 - `align-items: start` so empty ledger cards
+     ("No purchases recorded in this range" - Equipment / Repair on
+     a low-activity range) size to their content instead of stretching
+     to match the taller Vendor breakdown card. Two nearly-blank cards
+     taller than the card with content is the defect this fixes. */
+  align-items: start;
 }
 /* Vendor breakdown lives inside a third-width card in this row. Its
    default 4-column grid `1.5fr minmax(96px, 1.2fr) 96px 72px` requires
@@ -133,8 +139,23 @@
    Measured at 1600px viewport (per Fix 5 STOP-and-report clause). */
 .kpi-app .kpi-p-flatrow-3up .kpi-p-vbhead,
 .kpi-app .kpi-p-flatrow-3up .kpi-p-vbrow {
-  grid-template-columns: minmax(128px, 1.5fr) minmax(64px, 1fr) 80px 56px;
+  /* PR 2 R9 P2-4 - the "Where it landed" HEADER cell wraps to two
+     lines at third-width because the header column was 96px min but
+     the string is ~92px at label weight. Vendor names like
+     "Auto-Chlor Services ..." also truncate at 128px min. Give
+     "Where it landed" a 90px min (fits the header on one line) and
+     let Vendor breathe up to 140px min so a few more short names
+     stay whole. Widths still sum comfortably inside a third-width
+     card (~395px measured 1600px viewport). */
+  grid-template-columns: minmax(140px, 1.5fr) minmax(90px, 1fr) 80px 56px;
   gap: 8px;
+}
+/* PR 2 R9 P2-4 - explicit one-line rule on the header cells inside
+   the three-up (`Where it landed` was wrapping to two lines at the
+   third-width column width). Header cells are single labels; a wrap
+   is a defect. */
+.kpi-app .kpi-p-flatrow-3up .kpi-p-vbhead > span {
+  white-space: nowrap;
 }
 /* PR-2 R6 Part A - reflow, don't shrink (owner ruling 2026-08-24).
  *
@@ -1029,8 +1050,16 @@
   background: var(--kpi-p-steel);
   border-radius: 2px 2px 0 0;
 }
+/* PR 2 R9 P3-10 - the outlier accent on the management-fee trend
+ * was amber-600. Amber is the attention colour everywhere else on
+ * the board; using it on a card explicitly designed to carry no
+ * verdict (owner ruling: "I dont want to use red or green for any
+ * of the graphs... the idea behind this is quite different than
+ * how we judge the other account types") is a verdict by another
+ * name. Neutral emphasis via a darker navy: bar reads distinctly
+ * from the steel baseline but does not carry an attention meaning. */
 .kpi-app .kpi-p-mfbars-c i.kpi-p-mfbars-hi {
-  background: var(--amber-600);
+  background: var(--navy-700);
 }
 .kpi-app .kpi-p-mflab {
   display: flex;
@@ -1399,4 +1428,37 @@
   font-weight: 800;
   border-top: 2px solid var(--n-400);
   border-bottom: 0;
+}
+
+/* PR 2 R9 P3-8 - empty week rows (no drill possible) render the
+ * date as plain text with a muted colour so they look distinct
+ * from a real interactive row. */
+.kpi-app .kpi-p-tbl-week-empty > td {
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-tbl-weeklab {
+  display: inline-block;
+  padding-left: calc(1em + var(--kpi-sp-2));
+  color: var(--n-600);
+}
+
+/* PR 2 R9 P1-3 - left-edge fade indicator on scrolled chart. When
+ * the scroll container has content to the left, a soft white-to-
+ * transparent gradient overlays the leftmost ~24px so a truncated
+ * digit at the edge is visually softened and the message "more
+ * content to the left" is communicated by the gradient itself.
+ * pointer-events: none so it does not eat scroll/wheel events. */
+.kpi-app .kpi-p-wks-scroll {
+  position: relative;
+}
+.kpi-app .kpi-p-wks-scroll-clipL::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  background: linear-gradient(to right, #fff 0%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
+  z-index: 2;
 }

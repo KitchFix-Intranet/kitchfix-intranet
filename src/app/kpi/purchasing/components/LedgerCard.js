@@ -154,10 +154,16 @@ export function LedgerCard({
         )}
       </div>
 
-      <div className="kpi-p-ledger-head">
-        <span className="kpi-p-k">Every purchase</span>
-        <span className="kpi-p-k">amount</span>
-      </div>
+      {/* PR 2 R9 P2-5 - suppress the ledger header ("Every purchase /
+          amount") when there are no rows. A table header above "no
+          purchases recorded" reads as a broken render. Only shown
+          when rows are present. */}
+      {(ledgerRows || []).length > 0 && (
+        <div className="kpi-p-ledger-head">
+          <span className="kpi-p-k">Every purchase</span>
+          <span className="kpi-p-k">amount</span>
+        </div>
+      )}
       <div className="kpi-p-ledger">
         {(ledgerRows || []).length === 0 ? (
           /* PR-2 R2 Fix 4 - owner ruling: a non-zero hero above

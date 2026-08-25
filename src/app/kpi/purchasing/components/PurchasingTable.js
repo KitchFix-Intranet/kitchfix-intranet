@@ -343,19 +343,32 @@ export function PurchasingTable({
   const renderWeekRow = (weekStart, weekEnd, cell) => {
     const open = expandedWeeks.has(weekStart);
     const key = `${weekStart}|${weekEnd}`;
+    // PR 2 R9 P3-8 - a row summing to $0.00 has nothing to drill into
+    // (a chevron that opens nothing is broken affordance). Render the
+    // date as plain text; no chevron, no click, no aria-expanded.
+    // Aggregate total is the observable signal - a row with real
+    // netted-out activity (e.g. $100 - $100) is rare and would still
+    // read $0.00, but the drill fetches nothing meaningful there
+    // either.
+    const isEmpty = !cell || Math.abs(Number(cell.total || 0)) < 0.005;
     return (
-      <tr key={`w-${weekStart}`} className={`kpi-p-tbl-week ${open ? "kpi-p-tbl-week-open" : ""}`}>
+      <tr key={`w-${weekStart}`} className={`kpi-p-tbl-week ${open ? "kpi-p-tbl-week-open" : ""}${isEmpty ? " kpi-p-tbl-week-empty" : ""}`}>
         <td>
-          <button
-            type="button"
-            className="kpi-p-tbl-weekbtn"
-            onClick={() => toggleWeek(weekStart, weekEnd)}
-            aria-expanded={open ? "true" : "false"}
-          >
-            <span className="kpi-p-tbl-chev">{open ? "⌄" : "›"}</span>
-            {weekStart.slice(5).replace("-", "/")}
-            <span className="kpi-p-tbl-weeksub">week starting</span>
-          </button>
+          {isEmpty ? (
+            <span className="kpi-p-tbl-weeklab">
+              {weekStart.slice(5).replace("-", "/")}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="kpi-p-tbl-weekbtn"
+              onClick={() => toggleWeek(weekStart, weekEnd)}
+              aria-expanded={open ? "true" : "false"}
+            >
+              <span className="kpi-p-tbl-chev">{open ? "⌄" : "›"}</span>
+              {weekStart.slice(5).replace("-", "/")}
+            </button>
+          )}
         </td>
         {COLUMNS.map(c => (<Cell key={c.key} value={cell[c.key]} />))}
         <Cell value={cell.total} isFooter />
@@ -408,7 +421,7 @@ export function PurchasingTable({
         <table className="kpi-p-tbl">
           <thead>
             <tr>
-              <th className="kpi-p-tbl-lcol">{tier === "C" ? "Period" : "Week"}</th>
+              <th className="kpi-p-tbl-lcol">{tier === "C" ? "Period" : "Week starting"}</th>
               {COLUMNS.map(c => (
                 <th key={c.key}>{c.label}<span className="kpi-p-tbl-hsub">{c.sub}</span></th>
               ))}

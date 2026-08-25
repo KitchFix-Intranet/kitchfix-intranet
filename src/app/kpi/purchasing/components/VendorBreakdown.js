@@ -29,10 +29,15 @@ function SplitBar({ split, spend }) {
   const total = Number(spend || 0);
   if (!(total > 0)) return null;
   const segments = [
-    { key: "food",      value: Number(split?.food || 0),      color: "var(--kpi-p-food)" },
-    { key: "packaging", value: Number(split?.packaging || 0), color: "var(--kpi-p-pkg)"  },
-    { key: "vehicle",   value: Number(split?.vehicle || 0),   color: "var(--kpi-p-veh)"  },
-    { key: "other",     value: Number(split?.other || 0),     color: "var(--n-300)"      },
+    { key: "food",         value: Number(split?.food || 0),         color: "var(--kpi-p-food)" },
+    { key: "packaging",    value: Number(split?.packaging || 0),    color: "var(--kpi-p-pkg)"  },
+    { key: "vehicle",      value: Number(split?.vehicle || 0),      color: "var(--kpi-p-veh)"  },
+    // PR 2 R9 P2-3 - reimbursable as its own segment. Prior state
+    // dumped 13xx into "other" (grey), which at pass-through
+    // accounts (STL - FL / STL - MO / CIN - OH) coloured every
+    // vendor row's WHERE IT LANDED column all-grey - a dead column.
+    { key: "reimbursable", value: Number(split?.reimbursable || 0), color: "var(--kpi-p-veh)"  },
+    { key: "other",        value: Number(split?.other || 0),        color: "var(--n-300)"      },
   ].filter(s => s.value > 0);
   return (
     <span
@@ -79,6 +84,22 @@ export function VendorBreakdown({
   priorHasData,       // boolean | undefined
   priorRange,         // { start, end } | undefined - echoed for auditability
   isAggregate,
+  // PR 2 R9 P1-1 - LIKE-FOR-LIKE mid-period comparison.
+  //
+  // When the request range is a SINGLE IN-PROGRESS period, `prior_spend`
+  // covers a FULL prior period. Comparing part-current vs whole-prior
+  // structurally guarantees a large negative percentage on every
+  // vendor - at STL - FL P9 (57% elapsed) every row read ▼80..97%.
+  // Scaling `prior_spend` by the elapsed fraction restores a meaningful
+  // comparison (approximation: assumes uniform daily spend in the prior
+  // period, which is not always true - a big-day-near-period-end vendor
+  // can still shift the number by a few points, but the mid-period
+  // catastrophic-decrease artefact is gone).
+  //
+  // NULL when the range is closed, multi-period, or not a period at all
+  // - the fallback in every non-mid-period case is the unscaled prior,
+  // which is already like-for-like. Never applied to FYTD or LAST 4 wk.
+  midPeriodElapsedFrac,  // number | null
 }) {
   const hasRows = Array.isArray(rows) && rows.length > 0;
   return (
@@ -100,8 +121,17 @@ export function VendorBreakdown({
             <span>vs prior</span>
           </div>
           {rows.map((r, i) => {
-            const prior = Number(r.prior_spend || 0);
+            const priorRaw = Number(r.prior_spend || 0);
             const cur = Number(r.spend || 0);
+            // PR 2 R9 P1-1 - like-for-like scaling. When we're mid a
+            // single in-progress period, scale prior_spend to the same
+            // fraction of the prior period that has elapsed here.
+            // Otherwise, prior stays raw (already a full-vs-full compare
+            // for FYTD, LAST 4 wk, and closed single-periods).
+            const scale = Number(midPeriodElapsedFrac);
+            const prior = Number.isFinite(scale) && scale > 0 && scale < 1
+              ? priorRaw * scale
+              : priorRaw;
             const movementPct = prior > 0
               ? ((cur - prior) / prior)
               : null;
@@ -111,7 +141,7 @@ export function VendorBreakdown({
             // when the compared window has NO billcom data (FYTD on the
             // first year of data), no vendor is "new" - the column reads
             // `no prior period` for every row instead.
-            const isNewSpender = priorHasData === true && prior === 0 && cur > 0;
+            const isNewSpender = priorHasData === true && priorRaw === 0 && cur > 0;
             const displayName = r.resolved
               ? (r.name || "—")
               : (r.vendor_id ? `Unresolved vendor` : "Unresolved");
@@ -141,6 +171,13 @@ export function VendorBreakdown({
                   <span className="kpi-p-ch" style={{ color: "var(--n-600)" }}>new</span>
                 ) : movementPct == null ? (
                   <span className="kpi-p-ch kpi-p-nil" style={{ color: "var(--n-600)" }}>—</span>
+                ) : Math.abs(movementPct) < 0.005 ? (
+                  /* PR 2 R9 P1-1 - "no change" is NEUTRAL, not an
+                     improvement. Rounds movements smaller than half a
+                     percent to `no change` and renders in the muted
+                     tone; no arrow, no green/red. Prior code showed
+                     `▼ 0%` in green for exact zeros. */
+                  <span className="kpi-p-ch kpi-p-nil" style={{ color: "var(--n-600)", fontWeight: 600 }}>no change</span>
                 ) : (
                   <span className={`kpi-p-ch ${movementPct > 0 ? "r" : "g"}`}>
                     {movementPct > 0 ? "▲ " : "▼ "}
@@ -153,7 +190,7 @@ export function VendorBreakdown({
           <div className="kpi-p-vblegend">
             <span><i style={{ background: "var(--kpi-p-food)" }} />Food</span>
             <span><i style={{ background: "var(--kpi-p-pkg)" }} />Packaging</span>
-            <span><i style={{ background: "var(--kpi-p-veh)" }} />Vehicle</span>
+            <span><i style={{ background: "var(--kpi-p-veh)" }} />Vehicle · Reimbursable</span>
             <span><i style={{ background: "var(--n-300)" }} />Other</span>
           </div>
           {totalCount != null && (
