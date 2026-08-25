@@ -3348,12 +3348,21 @@
   right: var(--kpi-card-pad);
 }
 /* HS FB1 PR-2 - eyebrow / title role: weight 700 (was 800). Matches
-   .kpi-sig-eyebrow (V34). */
+   .kpi-sig-eyebrow (V34).
+   HS FB1 final polish item 9 2026-08-25: nowrap + overflow ellipsis
+   so eyebrows lock to ONE line even if content is tight. Before
+   items 1 + 5 + 6 landed, three signal-card headers ("HS 11 spend",
+   "AVG cost per game", "Overtime for this shape") wrapped to two
+   lines while others rendered on one, making the header row look
+   ragged. Items 1/5/6 shortened content + removed pills; this rule
+   is the belt-and-suspenders that keeps a future eyebrow from
+   silently wrapping again. Parity with .kpi-sig-eyebrow L2415. */
 .kpi-hs-eyebrow {
   font-size: var(--kpi-t-label);
   font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-subtle);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .kpi-hs-note {
   font-size: var(--kpi-t-meta); color: var(--text-subtle);
@@ -3382,6 +3391,16 @@
   margin-left: auto;
 }
 .kpi-hs-card-hdr-pills .kpi-hs-pill { margin-left: 0; }
+/* HS FB1 final polish items 1 + 2 2026-08-25: right-cluster wrapper
+   for the season rail header - carries the shared auto-margin so pill
+   + toggle sit as one cluster right of the eyebrow. Toggle ends up
+   immediately left of the ? popover; scope pill left of the toggle. */
+.kpi-hs-card-hdr-right {
+  display: inline-flex; align-items: center;
+  gap: var(--kpi-sp-2);
+  margin-left: auto;
+}
+.kpi-hs-card-hdr-right > .kpi-hs-pill { margin-left: 0; }
 .kpi-hs-pill-good  { background: #E8F5EC; color: #15803D; border-color: #BCE0C8; }
 .kpi-hs-pill-bad   { background: #FDECEC; color: #B91C1C; border-color: #F5C3C3; }
 .kpi-hs-pill-amber { background: var(--amber-100, #FEF3E2); color: #92580A; border-color: #F0D9B5; }
@@ -3423,9 +3442,17 @@
   display: flex; flex-direction: column; justify-content: flex-end;
   position: relative;
 }
+/* HS FB1 final polish item 11 2026-08-25: box-sizing border-box so the
+   1px dashed border on .kpi-hs-rail-bar-est + .kpi-hs-rail-bar-future
+   eats INTO the bar height instead of adding to it. Pre-fix, those two
+   variants rendered 1px taller than played bars at identical scaled
+   heights and broke the baseline the rest of the rail shares - Kevin's
+   "sit proud" complaint. Same axis mathematically was already true (all
+   variants use rail.scale); this closes the visual overshoot. */
 .kpi-hs-rail-bar {
   border-radius: 4px 4px 0 0;
   width: 100%;
+  box-sizing: border-box;
 }
 .kpi-hs-rail-bar-under { background: #22A45D; }
 .kpi-hs-rail-bar-over  { background: #DC5A5A; }
@@ -3538,10 +3565,14 @@
   letter-spacing: -0.01em; color: var(--n-900, #0A2548);
 }
 
-/* Stand header */
-.kpi-hs-card-standhdr { padding: var(--kpi-sp-3) var(--kpi-sp-4); }
+/* Stand header - HS FB1 final polish item 12 2026-08-25:
+   .kpi-hs-card-standhdr retired with the standalone StandHeader card.
+   Identity row (.kpi-hs-standhdr-row + title + dates) now renders
+   inside .kpi-hs-card-strip as its title line; margin-bottom pulls the
+   Day-by-day eyebrow beneath. */
 .kpi-hs-standhdr-row {
   display: flex; align-items: baseline; gap: var(--kpi-sp-3); flex-wrap: wrap;
+  margin-bottom: var(--kpi-sp-3);
 }
 .kpi-hs-standhdr-title {
   font-size: var(--kpi-t-value);
@@ -3552,6 +3583,20 @@
 .kpi-hs-standhdr-dates {
   font-size: var(--kpi-t-body);
   color: var(--n-600);
+}
+/* HS FB1 final polish item 13 2026-08-25: on the day-strip card only,
+   the eyebrow + legend row wraps so the legend can drop to its own
+   line when the container narrows. Base .kpi-hs-card-hdr has fixed
+   .kpi-lane-head height + flex-wrap:nowrap so signal cards stay one
+   line; the strip card has more room and needs the legend legible. */
+.kpi-hs-card-hdr-strip {
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: var(--kpi-sp-1);
+}
+.kpi-hs-note-legend {
+  flex-basis: 100%;
+  margin-top: var(--kpi-sp-1);
 }
 
 /* Day strip (identity variant) - see DayStrip.js DayBar */
@@ -3658,10 +3703,21 @@
    class carries the same weight without the color override. */
 .kpi-hs-sub .kpi-hs-sub-fig { font-weight: 700; }
 
+/* HS FB1 final polish items 7 + 8 2026-08-25:
+   - 2-across grid, wraps to a second row (item 8). 4-fact card => 2x2,
+     3-fact card => 2+1, 2-fact card => one row. Never more than 2 per
+     row on any card in either mode. Plan cards were forcing a 4-across
+     row while their neighbours ran 2-across; consistent 2-across grid
+     lets every card render at the same fact-row rhythm.
+   - Hairline divider promoted from --n-100 to --n-200 so it reads as
+     SEPARATION between the hero block and the fact block, not as a
+     border fading into the card (item 7). */
 .kpi-hs-facts {
-  display: flex; gap: var(--kpi-sp-4);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
   margin-top: var(--kpi-sp-3); padding-top: var(--kpi-sp-3);
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--n-200);
 }
 .kpi-hs-fact { min-width: 0; }
 .kpi-hs-fact-k {
@@ -3684,6 +3740,9 @@
 .kpi-hs-gauge {
   margin-top: var(--kpi-sp-2); height: 24px; position: relative;
 }
+/* HS FB1 final polish item 6 2026-08-25: --kpi-sp-3 gap between the
+   gauge and the sentence below it. Pre-fix, the two collided. */
+.kpi-hs-sub-below-gauge { margin-top: var(--kpi-sp-3); }
 .kpi-hs-gauge-track {
   position: absolute; left: 0; right: 0; top: 8px;
   height: 7px; border-radius: 4px;

@@ -49,7 +49,7 @@ function arrow(v, goodWhenPositive = true) {
 // component (same skin as Hourly | + Salary and Period | Homestand)
 // so all three segmented controls share one component per Kevin's
 // PR-2-verify unification.
-function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onViewModeChange, actualsAvailable }) {
+function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onViewModeChange, actualsAvailable, salaryAvailable, salaryOn }) {
   const rail = useMemo(() => {
     // Scale by max spend across played stands. Pre-floor stands with
     // an estimator amount contribute; future stands still render at a
@@ -65,34 +65,47 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onV
 
   return (
     <div className="kpi-hs-card kpi-hs-card-rail" role="region" aria-label="Season by homestand">
+      {/* HS FB1 final polish items 1 + 2 2026-08-25:
+          - "Click on a homestand to open it" helper text dropped
+            (item 2) - the bars are obviously clickable, the line was
+            filler.
+          - .kpi-hs-card-hdr-right wraps pill + toggle so both sit as
+            one right cluster with a shared auto-margin; toggle sits
+            immediately left of the ? (item 2).
+          - Scope pill (HOURLY ONLY / + SALARY) moves in from the HS
+            spend card (item 1) - the scope applies to the whole
+            board, not one stand, so its honest home is here. Left of
+            the toggle. Print header keeps its own scope line (V41). */}
       <header className="kpi-hs-card-hdr">
         <span className="kpi-hs-eyebrow">Season by homestand</span>
-        <span className="kpi-hs-note">Click on a homestand to open it</span>
-        {/* HS FB1 PR-4 2026-08-25: Actuals | Plan segmented control.
-            Actuals is disabled when the selected stand has no actuals
-            (pre-floor / future / not-yet-played) - the button stays
-            visible so the split is legible but cannot be selected
-            when there is nothing to compare against. .kpi-seg gives
-            geometry parity with the other three segmented controls. */}
-        {viewMode && onViewModeChange && (
-          <span className="kpi-seg kpi-hs-view-mode" role="group" aria-label="Compare actuals to plan">
-            <button
-              type="button"
-              className={viewMode === "actuals" ? "on" : ""}
-              onClick={() => actualsAvailable && onViewModeChange("actuals")}
-              disabled={!actualsAvailable}
-              aria-pressed={viewMode === "actuals"}
-              data-view-mode="actuals"
-            >Actuals</button>
-            <button
-              type="button"
-              className={viewMode === "plan" ? "on" : ""}
-              onClick={() => onViewModeChange("plan")}
-              aria-pressed={viewMode === "plan"}
-              data-view-mode="plan"
-            >Plan</button>
-          </span>
-        )}
+        <span className="kpi-hs-card-hdr-right">
+          {salaryAvailable && (
+            <span
+              className={"kpi-hs-pill " + (salaryOn ? "kpi-hs-pill-amber" : "kpi-hs-pill-mute")}
+              aria-label={salaryOn ? "Salary included" : "Hourly labor only"}
+              data-scope-pill
+            >{salaryOn ? "+ SALARY" : "HOURLY ONLY"}</span>
+          )}
+          {viewMode && onViewModeChange && (
+            <span className="kpi-seg kpi-hs-view-mode" role="group" aria-label="Compare actuals to plan">
+              <button
+                type="button"
+                className={viewMode === "actuals" ? "on" : ""}
+                onClick={() => actualsAvailable && onViewModeChange("actuals")}
+                disabled={!actualsAvailable}
+                aria-pressed={viewMode === "actuals"}
+                data-view-mode="actuals"
+              >Actuals</button>
+              <button
+                type="button"
+                className={viewMode === "plan" ? "on" : ""}
+                onClick={() => onViewModeChange("plan")}
+                aria-pressed={viewMode === "plan"}
+                data-view-mode="plan"
+              >Plan</button>
+            </span>
+          )}
+        </span>
         <HelpPop
           id="qRail"
           title="Season by homestand"
@@ -211,9 +224,10 @@ function SeasonToDateCard({ bank }) {
         <span className="kpi-hs-note" data-season-rn>
           {finishedCount} stand{finishedCount === 1 ? "" : "s"} finished · {remainingCount} remaining
         </span>
-        <span className={`kpi-hs-pill ${bankVal >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`} data-bank-pill>
-          Bank {fmt$0(bankAbs)}
-        </span>
+        {/* HS FB1 final polish item 10 2026-08-25: bank pill dropped.
+            The number appeared twice on the same card (header pill +
+            key row), ~40px apart. Key row wins - PR-3 already shaped
+            its wording ("in the bank" / "budget deficit"). */}
         <HelpPop
           id="qSeason"
           title="Season to date"
@@ -246,38 +260,66 @@ function SeasonToDateCard({ bank }) {
   );
 }
 
-// ─── Stand header ──────────────────────────────────────────────────
-function StandHeader({ stand }) {
-  if (!stand) return null;
-  const opp = stand.opponents?.join(" / ") || "(no opponents)";
-  return (
-    <div className="kpi-hs-card kpi-hs-card-standhdr" role="region" aria-label="Selected stand">
-      <div className="kpi-hs-standhdr-row">
-        <span className="kpi-hs-standhdr-title">Homestand {stand.index} · {opp}</span>
-        <span className="kpi-hs-standhdr-dates">
-          {fmtDate(stand.game_start)} - {fmtDate(stand.game_end)} · {stand.window_days} days · {stand.game_days} games
-        </span>
-      </div>
-    </div>
-  );
-}
-
 // ─── Day strip - identity variant per reminder #2 ──────────────────
+// HS FB1 final polish items 3 + 12 + 13 2026-08-25:
+//   12) Absorbs the former StandHeader card (Homestand N · MIA/STL ·
+//       dates · window · games) as its title line. Prior render used a
+//       whole card of vertical space for one text line; merging into
+//       this card puts the stand name next to the days it describes.
+//   13) Legend gets its own row under the title (was competing on the
+//       eyebrow row alongside stand name + dates).
+//    3) Leading zero-days are trimmed from the visual strip. Interior
+//       and trailing zero-days stay - a dark day between games is
+//       real information; leading zero-days before any labor lands
+//       carry none. WINDOW IS UNCHANGED - the stand still owns those
+//       days, per-stand totals still include them; this is a display
+//       trim only. Card totals must be identical before/after.
 function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayISO }) {
   const days = useMemo(
     () => isoRange(stand.window_start, stand.window_end),
     [stand.window_start, stand.window_end],
   );
   const { perDay } = aggregatePerDay(actualsDaily, days);
+  // Trim leading zero-days ONLY. Interior + trailing zero-days stay.
+  // Reduce runs from index 0 until the first day with amount > 0 (or
+  // a future day - future zeros are "not yet", also worth keeping so
+  // an in-progress stand shows the days that have not happened yet).
+  const trimmedPerDay = useMemo(() => {
+    if (!perDay || perDay.length === 0) return perDay;
+    let firstIdx = 0;
+    while (firstIdx < perDay.length) {
+      const d = perDay[firstIdx];
+      const amt = (d.amountX10000 || 0) / 10000;
+      const isFuture = d.workDate > todayISO;
+      if (amt > 0.5 || isFuture) break;
+      firstIdx++;
+    }
+    // All-zero past strip (edge case) - render the tail so the user
+    // sees something rather than an empty card. Should not happen in
+    // practice because the stand would have no signal to render.
+    if (firstIdx >= perDay.length) return perDay;
+    return firstIdx === 0 ? perDay : perDay.slice(firstIdx);
+  }, [perDay, todayISO]);
+  const opp = stand.opponents?.join(" / ") || "(no opponents)";
   return (
     <div className="kpi-hs-card kpi-hs-card-strip" role="region" aria-label="Day by day">
-      <header className="kpi-hs-card-hdr">
+      {/* Stand identity line (was its own card, merged here per item 12). */}
+      <div className="kpi-hs-standhdr-row">
+        <span className="kpi-hs-standhdr-title">Homestand {stand.index} · {opp}</span>
+        <span className="kpi-hs-standhdr-dates">
+          {fmtDate(stand.game_start)} - {fmtDate(stand.game_end)} · {stand.window_days} days · {stand.game_days} games
+        </span>
+      </div>
+      <header className="kpi-hs-card-hdr kpi-hs-card-hdr-strip">
         <span className="kpi-hs-eyebrow">Day by day</span>
         {/* HS FB1 PR-3 3c 2026-08-25: legend splits prep from off-day
             per Kevin ruling - hatch is reserved for pending, prep is
             confirmed spend, so prep gets its own solid identity. Four
-            entries: night game, day game, prep day, off day. */}
-        <span className="kpi-hs-note">
+            entries: night game, day game, prep day, off day.
+            HS FB1 final polish item 13 2026-08-25: legend now lives on
+            its own row via .kpi-hs-card-hdr-strip layout rules (was
+            cramped alongside the stand identity line + eyebrow). */}
+        <span className="kpi-hs-note kpi-hs-note-legend">
           <span className="kpi-hs-legend-sw kpi-hs-day-night" /> night game
           <span className="kpi-hs-legend-sw kpi-hs-day-day" /> day game
           <span className="kpi-hs-legend-sw kpi-hs-day-prep" /> prep day
@@ -285,7 +327,7 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
         </span>
       </header>
       <DayStripPlot
-        perDay={perDay}
+        perDay={trimmedPerDay}
         todayISO={todayISO}
         variant="identity"
         gameDates={gameDates}
@@ -368,6 +410,16 @@ function SignalCards({
   const totalHrs = employees.reduce((s, e) => s + (e.hours_regular || 0) + (e.hours_overtime || 0) + (e.hours_double_time || 0), 0);
   const crewSize = employees.length;
   const unapprovedHrs = employees.reduce((s, e) => s + (e.anomaly_no_clockout || 0) + (Math.max(0, (e.hours_without_dollars || 0))), 0);
+  // HS FB1 final polish item 14 2026-08-25: distinct payroll weeks the
+  // stand touches. Uses employees[].week_start (already in the payload
+  // per route.js labor query) rather than deriving from window - the
+  // payroll pipeline is what a Rippling operator thinks in weeks about,
+  // and this matches the "N stands, M weeks" phrasing on the season row.
+  const weeksSpanned = (() => {
+    const s = new Set();
+    for (const e of employees) if (e.week_start) s.add(e.week_start);
+    return s.size;
+  })();
 
   return (
     <div className="kpi-hs-signals" role="region" aria-label="Stand signal cards">
@@ -380,17 +432,15 @@ function SignalCards({
       <div className={`kpi-hs-card kpi-hs-signal ${variance >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="spend">
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">HS {stand.index} spend</span>
-          <span className="kpi-hs-card-hdr-pills">
-            <span className={`kpi-hs-pill ${variance >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
-              {variance >= 0 ? "Under" : "Over"}
-            </span>
-            {salaryAvailable && (
-              <span
-                className={"kpi-hs-pill " + (salaryOn ? "kpi-hs-pill-amber" : "kpi-hs-pill-mute")}
-                aria-label={salaryOn ? "Salary included" : "Hourly labor only"}
-                data-scope-pill
-              >{salaryOn ? "+ SALARY" : "HOURLY ONLY"}</span>
-            )}
+          {/* HS FB1 final polish item 1 2026-08-25: scope pill moved off
+              this card and onto Season by homestand. Two pills on this
+              header crowded the eyebrow into two lines; the scope
+              applies to the whole board, not one stand, so the season
+              card is its honest home. Print header keeps its own scope
+              line (V41 - a printed board always states what it counted,
+              independent of the on-screen pill). */}
+          <span className={`kpi-hs-pill ${variance >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
+            {variance >= 0 ? "Under" : "Over"}
           </span>
           <HelpPop
             id="qSpend"
@@ -418,13 +468,13 @@ function SignalCards({
         </div>
       </div>
 
-      {/* Prep & off days */}
+      {/* Prep & off days - HS FB1 final polish item 4 2026-08-25:
+          "14%" pill moves out of the header (headers cleaner without
+          the pill; scope pill lives on the season card now) and
+          becomes a third fact reading "Share". */}
       <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-blue" data-card="prep">
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">Prep &amp; off days</span>
-          <span className="kpi-hs-pill kpi-hs-pill-blue">
-            {actual > 0 ? Math.round((split.off_day_dollars / actual) * 100) : 0}%
-          </span>
           <HelpPop
             id="qPrep"
             title="Prep and off days"
@@ -438,6 +488,7 @@ function SignalCards({
         <div className="kpi-hs-facts">
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Per off day</div><div className="kpi-hs-fact-v kpi-hs-blue">{fmt$0(perOffDay)}</div></div>
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Game days</div><div className="kpi-hs-fact-v">{fmt$0(split.game_day_dollars)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Share</div><div className="kpi-hs-fact-v kpi-hs-blue">{actual > 0 ? Math.round((split.off_day_dollars / actual) * 100) : 0}%</div></div>
         </div>
       </div>
 
@@ -448,9 +499,12 @@ function SignalCards({
           same date sets the day-strip receives - the server-supplied
           split.game_day_dollars is a single total. */}
       <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-purple" data-card="game">
+        {/* HS FB1 final polish item 5 2026-08-25: "7 games" pill moves
+            into facts as "Games" - the count belongs with the other
+            per-game metrics, and dropping the pill lets the eyebrow
+            stay on one line. */}
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">AVG cost per game</span>
-          <span className="kpi-hs-pill kpi-hs-pill-purple">{stand.game_days} games</span>
           <HelpPop
             id="qGame"
             title="Average cost per game"
@@ -462,13 +516,18 @@ function SignalCards({
         <div className="kpi-hs-facts">
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Day avg</div><div className="kpi-hs-fact-v" data-figure="day-avg">{fmt$0(dayAvg)}</div></div>
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Night avg</div><div className="kpi-hs-fact-v" data-figure="night-avg">{fmt$0(nightAvg)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Games</div><div className="kpi-hs-fact-v">{stand.game_days}</div></div>
         </div>
       </div>
 
-      {/* Overtime for this shape */}
+      {/* Overtime - HS FB1 final polish item 6 2026-08-25: title trimmed
+          from "Overtime for this shape" to "Overtime". The eyebrow was
+          wrapping to two lines at 1280px; shorter title + no pill on
+          this card (moved to facts) keeps the header row at one line
+          alongside every other signal card. */}
       <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-amber" data-card="ot">
         <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Overtime for this shape</span>
+          <span className="kpi-hs-eyebrow">Overtime</span>
           <span className={`kpi-hs-pill ${otBand}`}>
             {otPct < norm[0] ? "Below normal" : otPct > norm[1] ? "Above normal" : "Typical"}
           </span>
@@ -499,6 +558,9 @@ function SignalCards({
           <b>{stand.peak_games_in_week}</b> day{stand.peak_games_in_week === 1 ? "" : "s"} one week before Monday OT reset
         </div>
         <GaugeBar ot={otPct} band={norm} />
+        {/* HS FB1 final polish item 6 2026-08-25: --kpi-sp-3 margin
+            between gauge and the sentence below. Prior render had the
+            two colliding. */}
         <div className="kpi-hs-sub kpi-hs-sub-below-gauge">
           Homestands similar usually run <b>{norm[0].toFixed(1)}–{norm[1].toFixed(0)}%</b>
         </div>
@@ -521,6 +583,11 @@ function SignalCards({
           {unapprovedHrs > 0 ? `${unapprovedHrs.toFixed(1)} hrs` : "All in"}
         </div>
         <div className="kpi-hs-sub">{unapprovedHrs > 0 ? "unapproved in Rippling" : "every shift approved"}</div>
+        {/* HS FB1 final polish item 14 2026-08-25: Weeks fact added
+            alongside Crew. After item 7's two-row layout a single
+            "Crew" fact reads stranded; Weeks is the second useful
+            metric next to "every shift approved" and is already in
+            the payload (employees[].week_start). */}
         <div className="kpi-hs-facts">
           {/* HS PR-C 2026-08-24: Will rise is absent when there are
               no unapproved hours to price - the sub already reads
@@ -535,6 +602,7 @@ function SignalCards({
             </div>
           )}
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Crew</div><div className="kpi-hs-fact-v">{crewSize}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Weeks</div><div className="kpi-hs-fact-v">{weeksSpanned}</div></div>
         </div>
       </div>
     </div>
@@ -1025,6 +1093,8 @@ export function HomestandBoard({
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         actualsAvailable={actualsAvailable}
+        salaryAvailable={salaryAvailable}
+        salaryOn={salaryOn}
       />
       {standIsPending ? (
         <StandRegionSkeleton />
@@ -1037,7 +1107,16 @@ export function HomestandBoard({
               wants THE PLAN, not "$0 spent against budget · under".
               One derived boolean gates PlanCards + SignalCards so
               the two cannot drift. */}
-          {stand && !settledRefusal && <StandHeader stand={stand} />}
+          {/* HS FB1 final polish item 12 2026-08-25: <StandHeader />
+              deleted - its content (stand identity line: opponents +
+              dates + window + game count) merged into StandDayStrip.
+              Plan mode does not render the day strip, so it does not
+              get the identity line; Plan mode's plan-1 eyebrow reads
+              "HS N budget" and already carries stand index as
+              context - full opponents / dates / games are implicit
+              since the plan runs per-stand. If Plan mode also wants
+              the identity line, add it inside PlanCards as a parallel
+              merge (not done here). */}
           {(() => {
             if (!stand || settledRefusal) return null;
             // HS FB1 PR-4 2026-08-25: view-mode key gates the stand
