@@ -3476,9 +3476,8 @@
   font-size: var(--kpi-t-label); font-weight: 700; color: var(--text-subtle);
   margin-top: 2px;
 }
-.kpi-hs-rail-tag-est {
-  color: #92580A;
-}
+/* HS FB1 PR-3 3a 2026-08-25: .kpi-hs-rail-tag-est retired with the
+   est. tag itself (HomestandBoard SeasonRailCard no longer renders it). */
 .kpi-hs-rail-stand.est .kpi-hs-rail-amt { color: #92580A; }
 .kpi-hs-rail-stand.est .kpi-hs-rail-nm  { color: var(--n-700); }
 .kpi-hs-rail-stand.est { cursor: pointer; }
@@ -3522,11 +3521,9 @@
 .kpi-hs-sbar-bank   { background: repeating-linear-gradient(45deg, #CFE6D8 0 6px, #E8F5EC 6px 12px); color: #15803D; }
 .kpi-hs-sbar-bank.kpi-hs-sbar-over { background: repeating-linear-gradient(45deg, #F5CFCF 0 6px, #FDECEC 6px 12px); color: #B91C1C; }
 .kpi-hs-sbar-remain { background: repeating-linear-gradient(45deg, var(--n-300) 0 6px, var(--n-100) 6px 12px); color: var(--n-600); }
-.kpi-hs-sbar-mark {
-  position: absolute; top: -3px; bottom: -3px;
-  border: 2px solid #153968; border-radius: 5px;
-  pointer-events: none;
-}
+/* HS FB1 PR-3 3b 2026-08-25: .kpi-hs-sbar-mark selected-stand outline
+   deleted per owner ruling - Chat-Claude specced it, owner does not
+   want the black-outlined box moving along the SPENT bar. */
 .kpi-hs-sbar-key {
   display: flex; gap: var(--kpi-sp-5); flex-wrap: wrap;
   font-size: var(--kpi-t-meta); color: var(--text-subtle);
@@ -3560,8 +3557,16 @@
 /* Day strip (identity variant) - see DayStrip.js DayBar */
 .kpi-hs-day-night { background: #1E4173; }
 .kpi-hs-day-day   { background: #8FB4E8; }
-.kpi-hs-day-prep  { background: repeating-linear-gradient(45deg, #94A3B8 0 4px, #CBD5E1 4px 8px); }
+/* HS FB1 PR-3 3c 2026-08-25: prep day is a SOLID identity, not a
+   hatch. Hatch is reserved for pending / unconfirmed spend; a prep-day
+   dollar is confirmed labor. Solid amber-tan reads distinct from navy
+   night, blue day, and grey off-day - four identities on the strip. */
+.kpi-hs-day-prep  { background: #C69C6D; }
 .kpi-hs-day-zero  { background: var(--n-200); height: 3px !important; min-height: 3px !important; }
+/* HS FB1 PR-3 3c 2026-08-25: off-day legend swatch. .kpi-hs-day-zero
+   forces a 3px stub which is right for a bar but wrong for a legend
+   square. .kpi-hs-day-off is the legend-only solid grey. */
+.kpi-hs-day-off   { background: var(--n-300); }
 .kpi-hs-legend-sw {
   display: inline-block;
   width: 11px; height: 11px;
@@ -3647,6 +3652,11 @@
   margin-top: var(--kpi-sp-1); line-height: 1.45;
 }
 .kpi-hs-sub b { font-weight: 700; color: var(--n-900, #0A2548); }
+/* HS FB1 PR-3 3d 2026-08-25: variance figure inside .kpi-hs-sub gets
+   weight + colorable via .kpi-hs-good / .kpi-hs-bad. `.kpi-hs-sub b`
+   forces --n-900 which would swallow the color state; this sibling
+   class carries the same weight without the color override. */
+.kpi-hs-sub .kpi-hs-sub-fig { font-weight: 700; }
 
 .kpi-hs-facts {
   display: flex; gap: var(--kpi-sp-4);
