@@ -288,11 +288,14 @@ export function BucketCard({
             {/* PR 2 R9 P3-7 - THE PERIOD · WEEK BY WEEK repeated four
                 times on one page (once per bucket) added noise, since
                 the bucket card's own title already names the bucket
-                and orients the reader. Keep just the HelpPop `?` so
-                the explanation is still one click away. Period card's
-                chart still carries the tier label since it is the
+                and orients the reader. R9 stripped the label; PR 2 R11
+                item 5 restores a short `Each week` label because the
+                bare `?` floating alone on every bucket card is worse
+                than a repeated-but-short label. Period card's chart
+                still carries the fuller tier label since it is the
                 only one there. */}
-            <HelpPop id={`qPurchStrip-${bucketKey}`} title="Each week strip" body={WEEK_STRIP_BODY} />
+            Each week
+            {" "}<HelpPop id={`qPurchStrip-${bucketKey}`} title="Each week strip" body={WEEK_STRIP_BODY} />
           </span>
           <span className="kpi-p-legs">
             {/* Weekly-target legend only in tiers A and B (spec §B4 -

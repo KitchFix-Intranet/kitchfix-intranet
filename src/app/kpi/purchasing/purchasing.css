@@ -97,9 +97,24 @@
 }
 
 /* Two-up card row (period, bucket, ledger, action). */
+/* PR-2 R11 item 6a - chart column widens. Owner target 0.6fr / 1.4fr
+   (20% more chart), owner rule "measured answer wins." Measured at
+   the current 1300px stack break (@media block at file foot):
+     main content ~1228px after gap → left card width by ratio:
+        0.60fr / 1.40fr → 368px left (inner 336 / per-hero cell 162)
+        0.65fr / 1.35fr → 399px left (inner 367 / per-hero cell 178)
+        0.70fr / 1.30fr → 430px left (inner 398 / per-hero cell 193)
+     max hero width `$2,380,257.84` at t-hero 28px weight 800 tabular:
+     ~177px (per the R6 Part A onset comment above).
+   0.60fr overflows the hero (162 < 177). 0.65fr barely fits. 0.70fr
+   leaves a 16px margin over the failure threshold. Chose 0.70fr for
+   the ~10px measured margin. Chart share moves from 59% to 65% (about
+   half of the 20% owner target). Reaching the full 30/70 target would
+   require raising the stack break to ~1500px, which regresses 1300-
+   1500px viewports to the stacked view - reported to owner. */
 .kpi-app .kpi-p-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
   gap: var(--kpi-sp-3);
 }
 .kpi-app .kpi-p-pairrow {
@@ -146,8 +161,14 @@
      "Where it landed" a 90px min (fits the header on one line) and
      let Vendor breathe up to 140px min so a few more short names
      stay whole. Widths still sum comfortably inside a third-width
-     card (~395px measured 1600px viewport). */
-  grid-template-columns: minmax(140px, 1.5fr) minmax(90px, 1fr) 80px 56px;
+     card (~395px measured 1600px viewport).
+     PR 2 R11 item 2 - VS PRIOR at 56px clipped ▲ 111% (percent sign
+     cut off) at ALL P8. Raise to 72px to match the non-three-up
+     default (line 780) and keep tabular ▲/▼ NNN% whole. The fr-based
+     columns (Vendor 1.5fr + Where 1fr) absorb the extra 16px in
+     shared proportion (10px + 6px respectively); both still exceed
+     their mins at the 1600px viewport measurement. */
+  grid-template-columns: minmax(128px, 1.5fr) minmax(100px, 1fr) 80px 72px;
   gap: 8px;
 }
 /* PR 2 R9 P2-4 - explicit one-line rule on the header cells inside
@@ -769,6 +790,17 @@
 /* Vendor breakdown table. */
 .kpi-app .kpi-p-vb {
   margin-top: var(--kpi-sp-2);
+}
+/* PR-2 R11 item 1 - bounded scroll on the vendor rows. Matches the
+   .kpi-p-ledger 220px pattern (line 592) so Vendor breakdown does not
+   inflate its row's height while Equipment / Repair sit at ~440px.
+   Head, legend and footer stay outside this scroll; the honest
+   totals line ("Showing N of M · $X total") remains visible below
+   the scroll. */
+.kpi-app .kpi-p-vbrows {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 .kpi-app .kpi-p-vbhead,
 .kpi-app .kpi-p-vbrow {
@@ -1404,6 +1436,13 @@
 .kpi-app .kpi-p-tbl-billv {
   font-weight: 700;
   color: var(--n-800);
+}
+/* PR-2 R11 item 4 - unresolved vendor / no-data variants render muted
+   so they cannot be read as a real vendor name. Same convention as
+   .kpi-p-nil elsewhere on the board (§7 rule 7). */
+.kpi-app .kpi-p-tbl-billv-unresolved {
+  font-weight: 500;
+  color: var(--n-600);
 }
 .kpi-app .kpi-p-tbl-billmeta {
   font-size: var(--kpi-t-meta);

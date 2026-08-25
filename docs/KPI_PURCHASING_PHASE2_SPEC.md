@@ -239,10 +239,25 @@ The two cards it replaces sat on different time bases and different sources and 
 question asked in a period review.
 
 ### 6.6 Reimbursable
-Full-width row: numbers and category split left, **ledger** right, headed `Reimbursable ledger` with
-`Reimbursable` in the reimbursable purple so it pairs with its partner card.
 
 Renders **only where the account has reimbursable spend.**
+
+**Pass-through accounts** (spec §2 - `CIN - OH`, `STL - FL`, `STL - MO`): the dedicated
+`ReimbursableRow` component. Full-width row, numbers and category split left, **ledger** right, headed
+`Reimbursable ledger` with `Reimbursable` in the reimbursable purple so it pairs with its partner
+card. This component's internal two-column layout is designed for full-width; it stays full-width in
+both live and closed cases.
+
+**At-risk accounts**: Reimbursable appears as a `LedgerCard` (`bucketKey='reimb'`) alongside
+`CardPurchases`. **Owner ruling 2026-08-25 (PR-2 R11 item 3)** supersedes the prior "full width"
+phrasing for this pairing:
+
+- **Live period:** Reimbursable + Card purchases side-by-side inside `.kpi-p-pairrow` (1fr / 1fr).
+- **Closed period:** `CardPurchases` returns `null` (no pending concept on a closed period), so
+  Reimbursable falls back to full width.
+
+The prior state left Reimbursable stretched full-width even when Card purchases sat below it, which
+is the "stretch" defect this rule retires.
 
 ### 6.7 Management fee card
 Hero and progress bar on one line, eight-period trend spanning the card beneath.

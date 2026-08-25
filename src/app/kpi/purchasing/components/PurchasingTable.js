@@ -163,7 +163,11 @@ function BillRows({ scopeKey, drillState, isAggregate, showFilter }) {
       <tr key={`${r.id || r.source_line_id || i}`} className="kpi-p-tbl-bill">
         <td className="kpi-p-tbl-billlbl">
           <span className="kpi-p-tbl-billsrc">{r.source === "rippling_spend" ? "card" : "bill.com"}</span>
-          <span className="kpi-p-tbl-billv">{r.vendor_or_merchant || "—"}</span>
+          <span className={`kpi-p-tbl-billv${r.vendor ? "" : " kpi-p-tbl-billv-unresolved"}`}>
+            {r.vendor
+              ? r.vendor
+              : (r.source === "billcom" ? "unresolved vendor" : "—")}
+          </span>
           <span className="kpi-p-tbl-billmeta">
             {r.gl_line_code || "—"}{r.txn_date ? ` · ${r.txn_date.slice(5).replace("-", "/")}` : ""}
             {isAggregate && r.account_key ? ` · ${r.account_key}` : ""}
