@@ -25,17 +25,24 @@
  * aggregate week-table drill-down. Same shape aggregateChildrenForWeek
  * consumes.
  *
+ * HS FB1 hotfix 2026-08-25: adds `draft_hours` alongside `unpriced` so
+ * the aggregate table's "Unapproved" column can drive off draft_hours
+ * (approval status - a priced draft is still unapproved). unpriced
+ * stays because the bar-cap / money-signal path still needs it (V42
+ * correct). Two questions, two accumulators.
+ *
  * @param {Array<{
  *   account_key: string,
  *   week_start: string,
  *   hours_regular?: number, hours_overtime?: number,
  *   hours_double_time?: number, hours_without_dollars?: number,
+ *   draft_hours?: number, draft_entry_count?: number,
  *   amount?: number, coverage_state?: string,
  * }>} actuals
  * @param {"aggregate"|"single"} mode  // single-mode returns empty (path unused)
  * @returns {Map<string, Map<string, {
  *   amount: number, hours: number, ot: number, hol: number,
- *   unpriced: number, states: string[],
+ *   unpriced: number, draft_hours: number, states: string[],
  * }>>}
  */
 export function buildMemberByWeekAndAcct(actuals, mode) {
@@ -49,12 +56,13 @@ export function buildMemberByWeekAndAcct(actuals, mode) {
     if (!per) { per = new Map(); out.set(wk, per); }
     const key = r.account_key;
     if (!key) continue;
-    const cur = per.get(key) || { amount: 0, hours: 0, ot: 0, hol: 0, unpriced: 0, states: [] };
+    const cur = per.get(key) || { amount: 0, hours: 0, ot: 0, hol: 0, unpriced: 0, draft_hours: 0, states: [] };
     cur.amount += Number(r.amount || 0);
     cur.hours += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
     cur.ot += Number(r.hours_overtime || 0);
     cur.hol += Number(r.hours_double_time || 0);
     cur.unpriced += Number(r.hours_without_dollars || 0);
+    cur.draft_hours += Number(r.draft_hours || 0);
     cur.states.push(r.coverage_state);
     per.set(key, cur);
   }

@@ -202,10 +202,24 @@ function flagForSeverity(s) {
 //   State 2 actionable  - any anomaly > 0 (any week)
 //   State 3b money      - closed week AND unpriced_hrs > 0
 //   State 3a hygiene    - closed week AND drafts, dollars complete
-//   State 1 info        - no flag (bar carries the visual only)
+//   State 1 info        - in-progress week WITH drafts: quiet
+//                         neutral chip; bar carries the hatched cap
 // Copy per owner ruling: `awaiting approval` (not `not approved`) -
 // states a condition, not a verdict on the operator. Popover on hover
 // carries the reassurance for 3a: dollars are complete, click missing.
+//
+// HS FB1 hotfix 2026-08-25 - State 1 was `return null`, which meant
+// the table showed nothing for an in-progress week with drafts (Kevin
+// fixture: CIN - AZ 08/24 with 28.09 draft hours). The bar carries
+// its hatched cap on the chart, but the WeekTable has no bar - so
+// State 1 rendered as absence. Now State 1 gets a MUTED neutral chip
+// ("N hrs pending approval") - factual, no ⚠, no amber. Anomalies
+// still take precedence.
+//
+// Also this fn now READS draft_hours (float) alongside draft_entry_
+// count (int) so the chip can print the hour count Kevin's spec asks
+// for. draft_entry_count > 0 gates the state; the hour figure is
+// the display value.
 function flagForV42State(w, isClosed) {
   // Sum anomaly parts directly - server-side board weeks carry a
   // pre-summed anomaly_total, client-side weekAggregates in page.js
@@ -220,6 +234,7 @@ function flagForV42State(w, isClosed) {
   // correctly.
   const unpriced = Number(w.unpriced_hrs ?? w.hours_without_dollars ?? 0);
   const drafts   = Number(w.draft_entry_count || 0);
+  const draftHrs = Number(w.draft_hours || 0);
   if (anomalies > 0) {
     const detail = [];
     if (nc  > 0) detail.push(`${nc} never clocked out`);
@@ -230,6 +245,7 @@ function flagForV42State(w, isClosed) {
       label: `${anomalies} need${anomalies === 1 ? "s" : ""} attention - ${detail.join(", ")}`,
       cls: "kpi-flag-warn",
       tooltip: "These time entries can't be approved as-is - a human has to fix them in Rippling.",
+      glyph: "⚠",
     };
   }
   if (isClosed && unpriced > 0.004) {
@@ -238,17 +254,31 @@ function flagForV42State(w, isClosed) {
       label: `closed week understated - ${unpriced.toFixed(1)} hrs missing pay data`,
       cls: "kpi-flag-bad",
       tooltip: "This closed week's dollar total is incomplete. Pay-segments for the missing hours have not landed yet.",
+      glyph: "⚠",
     };
   }
   if (isClosed && drafts > 0) {
     return {
       state: "s3a",
-      label: "closed week awaiting approval",
+      label: `closed week awaiting approval${draftHrs > 0.004 ? ` - ${draftHrs.toFixed(1)} hrs` : ""}`,
       cls: "kpi-flag-warn kpi-flag-warn-soft",
       tooltip: "Dollars for this week are complete. The entries have not been formally approved in Rippling.",
+      glyph: "⚠",
     };
   }
-  return null;   // State 1: bar carries the informational signal
+  // HS FB1 hotfix 2026-08-25 - State 1: in-progress week with drafts.
+  // Muted neutral chip; not a warning. States a fact, does not raise
+  // an alarm. No glyph so it reads distinct from the ⚠ chips above.
+  if (!isClosed && drafts > 0) {
+    return {
+      state: "s1",
+      label: `${draftHrs > 0.004 ? draftHrs.toFixed(1) : drafts} hrs pending approval`,
+      cls: "kpi-flag-mute",
+      tooltip: "Time entries clocked but not yet approved in Rippling. Approving them will not change the dollar total.",
+      glyph: null,
+    };
+  }
+  return null;   // truly no signal (no drafts, no anomalies, no unpriced)
 }
 
 function weekSeverity(week) {
@@ -256,21 +286,24 @@ function weekSeverity(week) {
 }
 
 // V9-17 adaptive columns
+// HS FB1 hotfix 2026-08-25: the "Unapproved" column now keys off
+// draft_hours (approval-status signal) not hours_without_dollars
+// (money-cap signal). Same class as the SignalCards card fix in #825.
 function computeVisibleColumns({ grouped, mode }) {
   let anyHoliday = false;
-  let anyUnpriced = false;
+  let anyUnapproved = false;
   let anyOT = false;
   for (const g of grouped) {
     for (const w of g.weeks) {
       if ((w.hours_double_time || 0) > 0.004) anyHoliday = true;
-      if ((w.hours_without_dollars || 0) > 0.004) anyUnpriced = true;
+      if ((w.draft_hours || 0) > 0.004) anyUnapproved = true;
       if ((w.hours_overtime || 0) > 0.004) anyOT = true;
     }
   }
   return {
     holiday: anyHoliday,
-    // Unpriced default: on in aggregate view, adaptive in single.
-    unpriced: mode === "aggregate" ? true : anyUnpriced,
+    // Unapproved default: on in aggregate view, adaptive in single.
+    unpriced: mode === "aggregate" ? true : anyUnapproved,
     // OT column always renders per V9-17 spec (single = Rate + Dollars,
     // aggregate = Unpriced + Rate + Dollars, both include OT).
     ot: true,
@@ -304,13 +337,17 @@ function ExceptionChip({ severity, week, todayISO }) {
     const isClosed = todayISO != null && week.week_end < todayISO;
     const v42 = flagForV42State(week, isClosed);
     if (v42) {
+      // HS FB1 hotfix 2026-08-25: glyph is now per-state. State 1
+      // (in-progress pending approval) prints no ⚠ - the muted class
+      // + factual copy is signal enough; ⚠ would over-index it as
+      // an alarm when it is not.
       return (
         <span
           className={`kpi-tbl-flag ${v42.cls}`}
           title={v42.tooltip}
           data-v42-state={v42.state}
           data-wk={week.week_start}
-        >⚠ {v42.label}</span>
+        >{v42.glyph ? `${v42.glyph} ` : ""}{v42.label}</span>
       );
     }
   }
@@ -336,7 +373,10 @@ function aggregateChildrenForWeek(week, weekBudgetsByWeekStart, memberByWeekAndA
       hours: agg.hours,
       hours_ot: agg.ot,
       hours_holiday: agg.hol,
-      hours_unpriced: agg.unpriced,
+      // HS FB1 hotfix 2026-08-25: hours_unpriced now carries draft_hours
+      // (approval-status). Field name kept for minimum-diff churn; the
+      // rendering path (ChildRow -> Unapproved column) reads this key.
+      hours_unpriced: agg.draft_hours,
       amount: agg.amount,
       coverage_state: worstSeverity(agg.states),
       week_budget: perMemberBudget[account_key] ?? null,
@@ -360,7 +400,10 @@ function workerChildrenForWeek(week, workers) {
       hours: Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0),
       hours_ot: Number(r.hours_overtime || 0),
       hours_holiday: Number(r.hours_double_time || 0),
-      hours_unpriced: Number(r.hours_without_dollars || 0),
+      // HS FB1 hotfix 2026-08-25: worker-row Unapproved column now
+      // shows draft_hours (approval-status) not hours_without_dollars
+      // (money-cap). Same class as #825 SignalCards.
+      hours_unpriced: Number(r.draft_hours || 0),
       amount: Number(r.amount || 0),
       coverage_state: r.coverage_state,
     }));
@@ -474,7 +517,9 @@ export function WeekTable({
       t.hours += (w.hours_regular || 0) + (w.hours_overtime || 0) + (w.hours_double_time || 0);
       t.ot += w.hours_overtime || 0;
       t.hol += w.hours_double_time || 0;
-      t.unpriced += w.hours_without_dollars || 0;
+      // HS FB1 hotfix 2026-08-25: band-total Unapproved column shows
+      // draft_hours (approval-status) not hours_without_dollars.
+      t.unpriced += w.draft_hours || 0;
       t.amount += w.amount || 0;
       states.push(w.coverage_state);
       weeksInBand += 1;
@@ -750,8 +795,11 @@ export function WeekTable({
                 {showHoliday && (
                   <td className="num">{(grandTotal?.hours_double_time || 0) > 0.004 ? fmtHrs(grandTotal.hours_double_time) : "–"}</td>
                 )}
+                {/* HS FB1 hotfix 2026-08-25: grand-total Unapproved
+                    column reads draft_hours (approval-status). Same
+                    switch as the band / week / child rows. */}
                 {showUnpriced && (
-                  <td className="num">{(grandTotal?.hours_without_dollars || 0) > 0.004 ? fmtHrs(grandTotal.hours_without_dollars) : "–"}</td>
+                  <td className="num">{(grandTotal?.draft_hours || 0) > 0.004 ? fmtHrs(grandTotal.draft_hours) : "–"}</td>
                 )}
                 {showRate && (
                   <td className="num">{(() => {
@@ -874,7 +922,16 @@ function FragmentRows({
                   <span className="kpi-tbl-chev">{weekOpen ? "⌄" : "›"}</span>
                   {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
                   <OTTag ot={w.hours_overtime} />
-                  {mode === "single" && <ExceptionChip severity={sev} week={w} todayISO={todayISO} />}
+                  {/* HS FB1 hotfix 2026-08-25: ExceptionChip now fires
+                      on BOTH single and aggregate modes. Pre-fix it
+                      was gated on mode === "single" and the aggregate
+                      weeks (which carry draft_hours summed across
+                      members per page.js:359) never got a V42 chip.
+                      Kevin fixture: ALL view week 08/17 has 196.39
+                      draft hours + closed - now flags state 3a. The
+                      site-count "N sites unpriced" chip stays on
+                      aggregate as an additional coverage signal. */}
+                  <ExceptionChip severity={sev} week={w} todayISO={todayISO} />
                   {mode === "aggregate" && exceptionMemberCount > 0 && (
                     <span className="kpi-tbl-flag kpi-flag-warn">⚠ {exceptionMemberCount} site{exceptionMemberCount === 1 ? "" : "s"} unpriced</span>
                   )}
@@ -885,7 +942,12 @@ function FragmentRows({
               <td className="num">{fmtHrs(hrs)}</td>
               <td className={`num ${w.hours_overtime > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_overtime > 0.004 ? fmtHrs(w.hours_overtime) : "–"}</td>
               {showHoliday && <td className={`num ${w.hours_double_time > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_double_time > 0.004 ? fmtHrs(w.hours_double_time) : "–"}</td>}
-              {showUnpriced && <td className={`num ${w.hours_without_dollars > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{w.hours_without_dollars > 0.004 ? fmtHrs(w.hours_without_dollars) : "–"}</td>}
+              {/* HS FB1 hotfix 2026-08-25: week-row Unapproved column
+                  reads draft_hours (approval-status). Pre-fix, closed
+                  weeks with 196.39 draft hours rendered "–" because
+                  the cell was reading hours_without_dollars which is
+                  0 when drafts are already priced. */}
+              {showUnpriced && <td className={`num ${(w.draft_hours || 0) > 0.004 ? "kpi-tbl-ot" : "kpi-tbl-nil"}`}>{(w.draft_hours || 0) > 0.004 ? fmtHrs(w.draft_hours) : "–"}</td>}
               {showRate && <td className="num">{rate != null ? `$${rate.toFixed(2)}` : "–"}</td>}
               <td className="num">{fmt$(w.amount)}</td>
             </tr>
