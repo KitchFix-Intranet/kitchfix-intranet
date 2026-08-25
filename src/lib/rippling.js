@@ -15,8 +15,30 @@
 //   - Rows live at body.results / body.data / body.records (varies by
 //     endpoint) - extractRows() normalizes.
 //   - The API silently ignores date, worker_id, and sort filters on
-//     /time-entries and /custom-objects/*/records. Only `limit` and
-//     `cursor` are honored. Full walk mandatory.
+//     /time-entries AND on /custom-objects/*/records. INV-P14
+//     (2026-08-25) claimed updated_at_gte was honoured on
+//     spend_transaction_line_item_zo; direct re-measurement on the
+//     same day (see kf-rippling-walk/scripts/probes/_probe_filter_*.mjs)
+//     showed the endpoint returns identical first-page rows for a
+//     far-future filter value, a 1-day-ago value, and no filter,
+//     across ten parameter-name shapes (updated_at_gte,
+//     updated_at__gte, updated_at[gte], updated_at.gte,
+//     filter[updated_at][gte], mongo_updated_at_gte,
+//     system_updated_at_gte, and three others). INV-P14 does not
+//     reproduce. The filter is silently ignored.
+//     Additionally: updated_at itself on this endpoint was bulk-
+//     rewritten across every line item on 2026-08-07, so a delta
+//     filter on it could not catch edits to old transactions even
+//     if the filter were honoured.
+//     When adding an incremental walk on a new custom-object
+//     endpoint, always compare the filtered row count against an
+//     unfiltered probe BEFORE relying on the filter - a filter that
+//     is silently ignored returns everything and looks like it
+//     worked.
+//   - `cursor` on custom-objects is the SERVER-EMITTED `next_link`,
+//     not a caller-constructed id. INV-P14 tried `cursor=<uuid>`
+//     manually and got HTTP 500 - Rippling's cursors are signed and
+//     the format is opaque to us.
 //   - Measured mean latency: 8.08s/page across ~200 pages on
 //     /time-entries. Pay segments similar shape, faster (~1.5s/page).
 //   - Nested objects carry `display_value` (denormalized name),

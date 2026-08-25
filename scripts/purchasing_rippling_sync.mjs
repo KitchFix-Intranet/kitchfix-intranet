@@ -59,7 +59,18 @@ import { createHash } from "node:crypto";
 
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
 const PAGE_SIZE = 100;
-const MAX_PAGES_HARD = 500;
+// Walk-completeness rules (owner ruling 2026-08-25 after INV-P14's
+// silent-truncation finding):
+//   - MAX_PAGES_HARD is a runaway ceiling, not a soft cap. A run that
+//     hits this cap without exhausting the cursor is a FAILURE, not
+//     a success (walkSpendLines returns ok:false and the summary
+//     line reports HIT_CAP).
+//   - The endpoint has ~12,131 line items today. At limit=100 that is
+//     122 pages of natural pagination. 1000 pages gives 8x headroom
+//     for growth before the cap becomes load-bearing; if we ever hit
+//     it, that is a signal to raise it deliberately, not to swallow
+//     the truncation.
+const MAX_PAGES_HARD = 1000;
 
 // ─── Label fallback for excluded work_location ids ───────────────────
 //
@@ -83,12 +94,65 @@ const EXCLUDED_LABEL_FALLBACK = new Set([
 ]);
 
 function parseArgs(argv) {
-  const args = { source: null, dryRun: false, deriveOnly: false };
+  // Owner ruling 2026-08-25 - --incremental PARKED, unused.
+  //
+  // Direct probe on 2026-08-25 (scripts/probes/_probe_filter_honoured.mjs
+  // and _probe_filter_names.mjs) showed the endpoint returns identical
+  // page-1 rows for a far-future filter, current-day filter, and no
+  // filter across every parameter shape tried (updated_at_gte,
+  // updated_at__gte, updated_at[gte], filter[updated_at][gte],
+  // mongo_updated_at_gte, system_updated_at_gte, and four others).
+  // The filter is silently ignored. INV-P14's finding does not
+  // reproduce.
+  //
+  // Even IF a filter were honoured on some future endpoint version,
+  // updated_at itself is not trustworthy on spend_transaction_line_item_zo:
+  // every line-item's updated_at was bulk-rewritten on 2026-08-07 to
+  // a single value, so a delta filter on it cannot catch edits to
+  // old transactions and may not reliably catch new ones either.
+  //
+  // The --incremental / --overlap-hours flags are kept in the parser
+  // as a placeholder so a future rebuild has a naming anchor, but
+  // both are IGNORED (no-op with a warning). Do not remove them
+  // silently - a fresh eye should see they exist and read this
+  // comment before rebuilding an incremental path. The walk is
+  // always full; MAX_PAGES_HARD (1000) + the completeness gate
+  // (Fix 1 in this PR) is what protects us from silent truncation.
+  //
+  //   --full         (no-op today: always on). Keep the flag as
+  //                  future-proofing; a run that specifies it
+  //                  behaves identically to one that does not.
+  //   --incremental  PARKED. If passed, prints a warning and
+  //                  falls back to a full walk.
+  //   --overlap-hours=N  PARKED. Ignored.
+  //   --max-pages-override=N  raise MAX_PAGES_HARD for a specific
+  //                  run without editing the constant. If a walk
+  //                  hits this cap without exhausting the cursor
+  //                  it still fails; the override raises the
+  //                  ceiling, not the truncation policy.
+  const args = {
+    source: null,
+    dryRun: false,
+    deriveOnly: false,
+    full: false,
+    incremental: false,
+    overlapHours: 48,
+    maxPagesOverride: null,
+  };
   for (const a of argv.slice(2)) {
     if (a.startsWith("--source=")) args.source = a.slice("--source=".length);
     else if (a === "--dry-run") args.dryRun = true;
     else if (a === "--derive-only") args.deriveOnly = true;
+    else if (a === "--full") args.full = true;
+    else if (a === "--incremental") args.incremental = true;
+    else if (a.startsWith("--overlap-hours=")) args.overlapHours = Math.max(0, parseInt(a.slice("--overlap-hours=".length), 10) || 0);
+    else if (a.startsWith("--max-pages-override=")) args.maxPagesOverride = Math.max(1, parseInt(a.slice("--max-pages-override=".length), 10) || 0);
     else { console.error("unknown arg: " + a); process.exit(1); }
+  }
+  if (args.incremental) {
+    console.warn("[warn] --incremental is PARKED (see parseArgs comment). Falling back to full walk.");
+    args.incremental = false;
+    args.full = true;
   }
   return args;
 }
@@ -336,14 +400,31 @@ function normalizeSpendLine(row) {
 
 async function walkSpendLines() {
   const t0 = Date.now();
+  // Always a full walk. The endpoint's updated_at_gte filter was
+  // measured on 2026-08-25 (probes in scripts/probes/_probe_filter_*.mjs)
+  // and returns identical results across every parameter shape tried
+  // for a far-future value, a 1-day-ago value, and no filter - the
+  // filter is silently ignored. Even if a future Rippling release
+  // honoured it, updated_at itself was bulk-rewritten across every
+  // line item on 2026-08-07, so a delta filter on it would miss
+  // late edits to old transactions. See parseArgs() comment on the
+  // parked --incremental flag.
+  console.log("[spend_lines] full walk");
   let url = firstPageUrl("custom-objects/spend_transaction_line_item_zo/records", PAGE_SIZE);
+
+  const pageCap = args.maxPagesOverride ?? MAX_PAGES_HARD;
   let pageNo = 0;
   let examined = 0;
   let inserted = 0;
   const categoryCandidates = new Map();   // category_id -> { label, merchant_sample }
   const rippling_ids = new Set();
+  // R10 - track completeness explicitly. `cursorExhausted` flips
+  // TRUE only when the endpoint returns no next_link (or returns an
+  // empty page). Any exit path that leaves this FALSE while pageNo
+  // reached the cap is a silent truncation - handled below.
+  let cursorExhausted = false;
 
-  while (pageNo < MAX_PAGES_HARD) {
+  while (pageNo < pageCap) {
     const res = await fetchPage(url, KEY);
     if (!res.ok) {
       console.error(`[spend_lines] page ${pageNo + 1} FAILED status=${res.status} error=${res.error} raw=${(res.raw || "").slice(0, 200)}`);
@@ -419,16 +500,33 @@ async function walkSpendLines() {
     }
 
     process.stderr.write(`[spend_lines] page ${pageNo}  rows=${rows.length}  examined=${examined}  inserted=${inserted}  categories=${categoryCandidates.size}  elapsed=${Math.round((Date.now() - t0) / 1000)}s\r`);
-    if (rows.length === 0) break;
+    if (rows.length === 0) {
+      // Empty page ends the walk cleanly.
+      cursorExhausted = true;
+      break;
+    }
     const next = res.body?.next_link;
-    if (!next) break;
+    if (!next) {
+      // No next_link is the cursor exhausting.
+      cursorExhausted = true;
+      break;
+    }
     url = next.startsWith("http") ? next : BASE + next;
   }
   process.stderr.write("\n");
 
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`[spend_lines] walk done: pages=${pageNo} examined=${examined} inserted=${inserted} category_candidates=${categoryCandidates.size} duration=${dur}s`);
-  return { ok: true, pageNo, examined, inserted, categoryCandidates, rippling_ids };
+  // Completeness gate. If the loop exited because we hit pageCap
+  // without the cursor exhausting, we truncated silently and the run
+  // is a FAILURE, not a success. Fail loud - the derive that follows
+  // would otherwise apply against a partial set and the sync line
+  // would report success.
+  if (!cursorExhausted) {
+    console.error(`[spend_lines] HIT_CAP: walked ${pageNo} pages (cap ${pageCap}) without exhausting the cursor - silent truncation prevented, run fails`);
+    return { ok: false, pageNo, examined, inserted, categoryCandidates, rippling_ids, error: `HIT_CAP: cap=${pageCap}, cursor not exhausted, examined=${examined}` };
+  }
+  console.log(`[spend_lines] walk done: pages=${pageNo} examined=${examined} inserted=${inserted} cursor_exhausted=${cursorExhausted} category_candidates=${categoryCandidates.size} duration=${dur}s`);
+  return { ok: true, pageNo, examined, inserted, categoryCandidates, rippling_ids, cursorExhausted, mode: "full" };
 }
 
 // ─── Populate candidate maps (write-once, never overwrite label) ─────
@@ -1373,7 +1471,7 @@ const totalSec = ((finishedAt - startedAt) / 1000).toFixed(1);
 
 console.log("");
 console.log("purchasing_rippling_sync summary:");
-if (walkResult) console.log(`  spend_lines:   ${walkResult.ok ? "ok" : "FAIL"}  pages=${walkResult.pageNo} examined=${walkResult.examined} inserted=${walkResult.inserted}`);
+if (walkResult) console.log(`  spend_lines:   ${walkResult.ok ? "ok" : "FAIL"}  pages=${walkResult.pageNo} examined=${walkResult.examined} inserted=${walkResult.inserted} cursor_exhausted=${walkResult.cursorExhausted ?? "n/a"} mode=${walkResult.mode || "n/a"}${walkResult.error ? " error=" + walkResult.error : ""}`);
 if (catCandResult) console.log(`  category_map:  ${catCandResult.ok ? "ok" : "FAIL"}  upserted=${catCandResult.upserted}`);
 if (deriveResult) console.log(`  derive:        ${deriveResult.ok ? "ok" : "FAIL"}  lines_derived=${deriveResult.linesDerived} unattributed=${deriveResult.unattributed} uncoded=${deriveResult.uncoded} label_fallback_inserted=${deriveResult.labelFallbackInserted ?? 0}`);
 if (probesResult) console.log(`  probes:        ${probesResult.allPass ? "ALL PASS" : "FAIL"}  ${probesResult.probes.map(p => `${p.id}=${p.pass ? "P" : "F"}`).join(" ")}`);
