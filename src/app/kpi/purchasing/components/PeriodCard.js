@@ -21,7 +21,7 @@
 
 import { Pill, FinalPill, ProvisionalPill } from "./Pill";
 import { WeekChart } from "./WeekChart";
-import { fmt$, fmtPct, moneyArrow, resolveCardState } from "../lib/board";
+import { fmt$, fmtPct, moneyArrow, resolveCardState, chartUnit } from "../lib/board";
 // PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
 // escapes every card's `position: relative` stacking context. Import
 // only, never fork.
@@ -327,9 +327,14 @@ export function PeriodCard({
       <div className="kpi-p-card">
         <div className="kpi-p-lh">
           <span className="kpi-p-label">
-            {tier === "C"
-              ? "THE RANGE · PERIOD BY PERIOD"
-              : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK")}
+            {/* R12 item 1 - cadence axis pulled from chartUnit() so
+                BucketCard and PeriodCard cannot disagree. Scope axis
+                (`THE PERIOD` vs `THE RANGE`) is period-card-only. */}
+            {(() => {
+              const unit = chartUnit(tier);
+              const cadence = `${unit.toUpperCase()} BY ${unit.toUpperCase()}`;
+              return `THE ${tier === "A" ? "PERIOD" : "RANGE"} · ${cadence}`;
+            })()}
             {" "}<HelpPop id="qPurchWeekStrip" title="Each week strip" body={WEEK_STRIP_BODY} />
           </span>
           <span className="kpi-p-legs">

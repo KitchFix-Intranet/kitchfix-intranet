@@ -36,7 +36,16 @@ function SplitBar({ split, spend }) {
     // dumped 13xx into "other" (grey), which at pass-through
     // accounts (STL - FL / STL - MO / CIN - OH) coloured every
     // vendor row's WHERE IT LANDED column all-grey - a dead column.
-    { key: "reimbursable", value: Number(split?.reimbursable || 0), color: "var(--kpi-p-veh)"  },
+    //
+    // PR 2 R12 item 5 - reimbursable no longer shares Vehicle's purple.
+    // Spec §7 named both purple; Kevin flagged the palette collision
+    // at v19 and it never resolved. Steel (--kpi-p-steel, an existing
+    // token used only by the period card stripe) makes the two
+    // identities visibly distinct without adding a new token or
+    // colliding with any COGS bucket. Card stripes elsewhere for
+    // reimbursable stay purple - only the SplitBar / vendor breakdown
+    // legend disambiguates here.
+    { key: "reimbursable", value: Number(split?.reimbursable || 0), color: "var(--kpi-p-steel)" },
     { key: "other",        value: Number(split?.other || 0),        color: "var(--n-300)"      },
   ].filter(s => s.value > 0);
   return (
@@ -199,7 +208,10 @@ export function VendorBreakdown({
           <div className="kpi-p-vblegend">
             <span><i style={{ background: "var(--kpi-p-food)" }} />Food</span>
             <span><i style={{ background: "var(--kpi-p-pkg)" }} />Packaging</span>
-            <span><i style={{ background: "var(--kpi-p-veh)" }} />Vehicle · Reimbursable</span>
+            <span><i style={{ background: "var(--kpi-p-veh)" }} />Vehicle</span>
+            {/* PR 2 R12 item 5 - reimbursable split out with steel,
+                its own identity in this bar. */}
+            <span><i style={{ background: "var(--kpi-p-steel)" }} />Reimbursable</span>
             <span><i style={{ background: "var(--n-300)" }} />Other</span>
           </div>
           {totalCount != null && (

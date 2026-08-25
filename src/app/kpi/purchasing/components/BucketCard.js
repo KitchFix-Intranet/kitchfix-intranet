@@ -19,7 +19,7 @@
 
 import { Pill } from "./Pill";
 import { WeekChart } from "./WeekChart";
-import { fmt$, fmtPct, moneyArrow, resolveCardState, stateOf } from "../lib/board";
+import { fmt$, fmtPct, moneyArrow, resolveCardState, stateOf, chartUnit } from "../lib/board";
 // PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
 // escapes the card's `position: relative` stacking context.
 import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
@@ -288,14 +288,14 @@ export function BucketCard({
             {/* PR 2 R9 P3-7 - THE PERIOD · WEEK BY WEEK repeated four
                 times on one page (once per bucket) added noise, since
                 the bucket card's own title already names the bucket
-                and orients the reader. R9 stripped the label; PR 2 R11
-                item 5 restores a short `Each week` label because the
-                bare `?` floating alone on every bucket card is worse
-                than a repeated-but-short label. Period card's chart
-                still carries the fuller tier label since it is the
-                only one there. */}
-            Each week
-            {" "}<HelpPop id={`qPurchStrip-${bucketKey}`} title="Each week strip" body={WEEK_STRIP_BODY} />
+                and orients the reader. R9 stripped the label; R11
+                restored it as `Each week` (static); R12 item 1 makes
+                it tier-aware via `chartUnit(tier)` so a tier-C range
+                (period bars) reads `Each period`, not `EACH WEEK`.
+                Same `chartUnit()` fuels PeriodCard's fuller label -
+                one source for tier ↔ cadence per §9B. */}
+            {`Each ${chartUnit(tier)}`}
+            {" "}<HelpPop id={`qPurchStrip-${bucketKey}`} title={`Each ${chartUnit(tier)} strip`} body={WEEK_STRIP_BODY} />
           </span>
           <span className="kpi-p-legs">
             {/* Weekly-target legend only in tiers A and B (spec §B4 -

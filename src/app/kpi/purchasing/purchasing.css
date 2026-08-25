@@ -154,22 +154,34 @@
    Measured at 1600px viewport (per Fix 5 STOP-and-report clause). */
 .kpi-app .kpi-p-flatrow-3up .kpi-p-vbhead,
 .kpi-app .kpi-p-flatrow-3up .kpi-p-vbrow {
-  /* PR 2 R9 P2-4 - the "Where it landed" HEADER cell wraps to two
-     lines at third-width because the header column was 96px min but
-     the string is ~92px at label weight. Vendor names like
-     "Auto-Chlor Services ..." also truncate at 128px min. Give
-     "Where it landed" a 90px min (fits the header on one line) and
-     let Vendor breathe up to 140px min so a few more short names
-     stay whole. Widths still sum comfortably inside a third-width
-     card (~395px measured 1600px viewport).
-     PR 2 R11 item 2 - VS PRIOR at 56px clipped ▲ 111% (percent sign
-     cut off) at ALL P8. Raise to 72px to match the non-three-up
-     default (line 780) and keep tabular ▲/▼ NNN% whole. The fr-based
-     columns (Vendor 1.5fr + Where 1fr) absorb the extra 16px in
-     shared proportion (10px + 6px respectively); both still exceed
-     their mins at the 1600px viewport measurement. */
-  grid-template-columns: minmax(128px, 1.5fr) minmax(100px, 1fr) 80px 72px;
+  /* PR 2 R12 item 2 - drop the split-bar column at three-up.
+     R11's 128 / 100 / 80 / 72 grid sums to 380px + 24 gaps = 404px
+     which exceeds the vendor-breakdown card at every three-up
+     viewport measured (374 at 1456, 395 at 1680), so `VS PRIOR`
+     clipped to `VS P` and the values column disappeared. Rather
+     than shave every column further (each one already at spec's
+     minimum), the split-bar column drops entirely at three-up -
+     WHERE IT LANDED header goes with it. Reader loses the identity-
+     split visualisation only in the cramped third-width case; the
+     full-width vendor breakdown (below the 1300px stack break, and
+     everywhere it renders solo) keeps all four columns. Grid mins
+     become 128 + 80 + 72 = 280 + 16 gaps = 296px, well inside the
+     narrowest measured card. */
+  grid-template-columns: minmax(128px, 1.5fr) 80px 72px;
   gap: 8px;
+}
+/* Hide the WHERE IT LANDED header cell (2nd span) and the SplitBar
+   row cell at three-up. `display: none` removes them from the grid
+   flow so the remaining 3 children (Vendor / Spend / vs prior) fill
+   the 3 columns above. */
+.kpi-app .kpi-p-flatrow-3up .kpi-p-vbhead > span:nth-child(2),
+.kpi-app .kpi-p-flatrow-3up .kpi-p-vbrow .kpi-p-vbsplit {
+  display: none;
+}
+/* Hide the reimbursable + vehicle line in the legend at three-up
+   too - no split bar means the legend below is orphan copy. */
+.kpi-app .kpi-p-flatrow-3up .kpi-p-vblegend {
+  display: none;
 }
 /* PR 2 R9 P2-4 - explicit one-line rule on the header cells inside
    the three-up (`Where it landed` was wrapping to two lines at the
@@ -796,11 +808,24 @@
    inflate its row's height while Equipment / Repair sit at ~440px.
    Head, legend and footer stay outside this scroll; the honest
    totals line ("Showing N of M · $X total") remains visible below
-   the scroll. */
+   the scroll.
+   PR-2 R12 item 4 - `max-height` now snaps to a whole-row multiple
+   via the shared `--kpi-row-2l` (48px) token instead of the raw
+   220px literal. Rows carry `min-height: var(--kpi-row-2l)` so each
+   row occupies exactly 48px and `calc(5 * --kpi-row-2l)` = 240px
+   shows five whole rows. `scroll-snap` mandates row-aligned scroll
+   positions so a user drag can never land mid-row. Prior state left
+   the last visible row sliced by ~36px, which read as a rendering
+   fault. */
 .kpi-app .kpi-p-vbrows {
-  max-height: 220px;
+  max-height: calc(5 * var(--kpi-row-2l));
   overflow-y: auto;
   padding-right: 2px;
+  scroll-snap-type: y mandatory;
+}
+.kpi-app .kpi-p-vbrow {
+  min-height: var(--kpi-row-2l);
+  scroll-snap-align: start;
 }
 .kpi-app .kpi-p-vbhead,
 .kpi-app .kpi-p-vbrow {
