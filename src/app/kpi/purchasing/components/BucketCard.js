@@ -78,7 +78,13 @@ export function BucketCard({
     spent: heroSpent,              // bills + coded cards; hero same source
     budget: Number(budget || 0),
     elapsedFrac,
-    hasBills: Number(bills || 0) > 0,
+    // R10 (owner ruling 2026-08-25) - hasBills MUST mirror the hero's
+    // `spent` source. Prior state read bills-only which mismatched the
+    // combined hero for every bucket with card spend but no bill spend
+    // (Vehicle at ALL / STL - FL / TBJ - FL / TBR - FL / TXR - TX - H
+    // / TXR - TX - V on closed P8 all rendered "No spend" pills over
+    // real hero dollars). Bind to the same source the hero uses.
+    hasBills: heroSpent > 0,
     closed,
   });
 
@@ -130,8 +136,36 @@ export function BucketCard({
   }
 
   const rem = Number(budget || 0) - heroSpent;
-  const varz = heroSpent - Number(budget || 0);   // closed variance
+  // R10 - closed variance now reads from cs. Same source as pill and
+  // hero. Prior state computed heroSpent - budget independently which
+  // was fine when hasBills matched (heroSpent>0 = budget-nonzero
+  // pill-firing case) but is bound explicitly here to prevent the
+  // exact drift class this round fixed.
+  const varz = cs.variance;
   const usedPct = Number(budget || 0) > 0 ? heroSpent / Number(budget || 0) : null;
+
+  // R10 dev-only assertion. Fires only on genuine contradiction -
+  // hero=green while VS BUDGET=red (or the mirror). Neutral vs
+  // coloured (variance ~0) is not a contradiction; the closed
+  // resolver returns 'under' on spent==budget which colours the
+  // hero green while the VS BUDGET row legitimately has no colour.
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    if (closed && Number(budget || 0) > 0 && !isFutureRange) {
+      const heroC = cs.heroClass;
+      const vsC   = cs.signClass;
+      const contradicts = (heroC === "r" && vsC === "g") || (heroC === "g" && vsC === "r");
+      if (contradicts) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[BucketCard §R10] hero/VS BUDGET colour contradiction:",
+          { bucketKey, heroSpent, budget, state: cs.state, heroClass: heroC, signClass: vsC, variance: cs.variance },
+        );
+        throw new Error(
+          `BucketCard R10 (${bucketKey}): hero '${heroC}' contradicts VS BUDGET '${vsC}' (state=${cs.state}, variance=${cs.variance})`,
+        );
+      }
+    }
+  }
 
   return (
     <div className="kpi-p-row" data-card={`bucket-${bucketKey}`}>
@@ -193,7 +227,9 @@ export function BucketCard({
                 {closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining")}
               </span>
               {closed ? (
-                <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+                /* R10 - VS BUDGET colour reads from cs.signClass. One
+                   source shared with the pill and hero above. */
+                <span className={`kpi-p-value num ${cs.signClass || (varz > 0 ? "r" : "g")}`}>{moneyArrow(varz)}</span>
               ) : rem < 0 ? (
                 <span className="kpi-p-value num r">{fmt$(-rem)}</span>
               ) : (
@@ -218,7 +254,7 @@ export function BucketCard({
             <>
               <div className="kpi-p-sub">
                 <span className="kpi-p-k">Actual<small>as closed on the P&amp;L</small></span>
-                <span className={`kpi-p-v num ${varz > 0 ? "r" : "g"}`}>{fmt$(heroSpent)}</span>
+                <span className={`kpi-p-v num ${cs.signClass || (varz > 0 ? "r" : "g")}`}>{fmt$(heroSpent)}</span>
                 <span className="kpi-p-x" aria-hidden="true" />
               </div>
               <div className="kpi-p-sub">

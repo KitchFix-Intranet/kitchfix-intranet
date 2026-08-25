@@ -86,7 +86,8 @@ export function FunMoneyCard({
               {closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining")}
             </span>
             {closed ? (
-              <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+              /* R10 - VS BUDGET colour reads from cs.signClass. */
+              <span className={`kpi-p-value num ${cs.signClass || (varz > 0 ? "r" : "g")}`}>{moneyArrow(varz)}</span>
             ) : rem < 0 ? (
               <span className="kpi-p-value num r">{fmt$(-rem)}</span>
             ) : (

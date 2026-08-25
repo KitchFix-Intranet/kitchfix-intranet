@@ -76,8 +76,27 @@ export function LedgerCard({
   });
 
   const rem = Number(budget || 0) - Number(spent || 0);
-  const varz = Number(spent || 0) - Number(budget || 0);
+  // R10 - bind VS BUDGET variance + colour to the resolver so no
+  // independent recompute can drift from the pill/hero.
+  const varz = cs.variance;
   const usedPct = Number(budget || 0) > 0 ? Number(spent || 0) / Number(budget || 0) : null;
+
+  // R10 dev-only assertion. Fires only on genuine contradiction.
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    if (closed && Number(budget || 0) > 0 && !isFutureRange) {
+      const heroC = cs.heroClass;
+      const vsC   = cs.signClass;
+      const contradicts = (heroC === "r" && vsC === "g") || (heroC === "g" && vsC === "r");
+      if (contradicts) {
+        // eslint-disable-next-line no-console
+        console.error("[LedgerCard §R10] hero/VS BUDGET colour contradiction:",
+          { bucketKey, spent, budget, state: cs.state, heroClass: heroC, signClass: vsC, variance: cs.variance });
+        throw new Error(
+          `LedgerCard R10 (${bucketKey}): hero '${heroC}' contradicts VS BUDGET '${vsC}' (state=${cs.state}, variance=${cs.variance})`,
+        );
+      }
+    }
+  }
 
   return (
     <div className={`kpi-p-card ${strokeClass}`} data-card={`ledger-${bucketKey}`}>
@@ -141,7 +160,7 @@ export function LedgerCard({
               {closed ? "Vs budget" : (rem < 0 ? "Over by" : "Remaining")}
             </span>
             {closed ? (
-              <span className={`kpi-p-value num ${varz > 0 ? "r" : "g"}`}>{moneyArrow(varz)}</span>
+              <span className={`kpi-p-value num ${cs.signClass || (varz > 0 ? "r" : "g")}`}>{moneyArrow(varz)}</span>
             ) : rem < 0 ? (
               <span className="kpi-p-value num r">{fmt$(-rem)}</span>
             ) : (

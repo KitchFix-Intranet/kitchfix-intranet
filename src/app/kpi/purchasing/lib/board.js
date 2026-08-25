@@ -85,10 +85,21 @@ export function fmtPct(x) {
 // directly on closed exactness so the color / pill / chart never
 // disagree.
 //
-// `hasBills` semantics per §5.2:
-//   Period card:  bills + coded cards drive it
-//   Bucket card:  that bucket's bills drive it
-// The caller passes whichever total gates 'none' at that card.
+// `hasBills` semantics (R10 correction, owner ruling 2026-08-25):
+//   The gate MUST mirror the hero's `spent` source. If the hero shows
+//   $X.YY, then hasBills = (spent > 0). Any caller that passes a
+//   different source (bills-only when the hero is bills + coded cards,
+//   spent without pending when the resolver added pending, etc.) is
+//   the drift class this round fixed. Both PeriodCard and BucketCard
+//   used to violate this - see the R10 sweep for the 10 cards it
+//   caught.
+//
+// **Closed period, no tolerance band, no hasBills gate.** (R10, owner
+// ruling 2026-08-25.) The `hasBills` check moves BELOW the `closed`
+// check because a closed period with zero spend against a real budget
+// is under by 100%, not "no verdict". Live periods keep the hasBills
+// gate - early-period zero spend legitimately has no verdict yet.
+// Exact comparison inherits from R4 (no 3% band).
 export function stateOf({
   spent,
   budget,
@@ -99,10 +110,10 @@ export function stateOf({
 } = {}) {
   if (isPassThrough) return "passthru";
   if (!(budget > 0)) return "nobud";
+  // R10 - closed periods short-circuit BEFORE hasBills. Exact
+  // comparison; zero spend renders "under" against a real budget.
+  if (closed) return spent > budget ? "over" : "under";
   if (!hasBills) return "none";
-  if (closed) {
-    return spent > budget ? "over" : "under";
-  }
   if (!(elapsedFrac > 0)) return "none";
   const pace = spent / (budget * elapsedFrac);
   if (pace > 1.03) return "over";
@@ -332,18 +343,46 @@ export function remaining({ budget, bills, pending }) {
 // that is a design decision that must alter this function - not each
 // consumer.
 //
-// Callers destructure { state, pillTone, pillLabel, heroClass } and
-// pass state straight through to the chart's state-carrying prop.
-// Charts also need `closed` (a period lifecycle marker, not a state
-// value) - passed through separately to avoid folding it into `state`.
+// Callers destructure { state, pillTone, pillLabel, heroClass,
+// variance, sign, signClass } and pass state straight through to the
+// chart's state-carrying prop. Charts also need `closed` (a period
+// lifecycle marker, not a state value) - passed through separately to
+// avoid folding it into `state`.
+//
+// R10 additions (owner ruling 2026-08-25): `variance`, `sign` and
+// `signClass` are here so `VS BUDGET` / `Over by` / `Remaining`
+// consumers do NOT recompute `spent - budget` on their own with a
+// different `spent`. Every state-bearing element on the card reads
+// from ONE object. `signClass` is the same "" | "g" | "r" token the
+// components apply to `.kpi-p-value` on a `Vs budget` row.
+//
+// Rounding: `variance` is cents-rounded to absorb per-line float drift
+// (matches the .toFixed(2) the render then applies). `sign` uses a
+// half-cent deadband so a $0.005 float rounding does not flip the
+// verdict from "on target" (variance = 0) to "over" (variance = 0.005).
 export function resolveCardState(args) {
   const state = stateOf(args);
   const pill = PILL_COPY[state] || PILL_COPY.none;
+  const spent = Number(args?.spent || 0);
+  const budget = Number(args?.budget || 0);
+  const varianceRaw = spent - budget;
+  const variance = Math.round(varianceRaw * 100) / 100;
+  let sign = 0;
+  if (variance > 0.005) sign = 1;
+  else if (variance < -0.005) sign = -1;
+  let signClass = "";
+  if (sign > 0) signClass = "r";
+  else if (sign < 0) signClass = "g";
   return {
     state,
     pillTone: pill.tone,
     pillLabel: pill.label,
     heroClass: heroToneClass(state),
+    variance,
+    sign,
+    signClass,
+    spent,
+    budget,
     closed: !!args?.closed,
   };
 }
