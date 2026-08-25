@@ -273,6 +273,14 @@ function PayrollDataCard({ board, freshness, salary }) {
   const priced = pd?.priced_ww ?? 0;
   const total = pd?.total_ww ?? 0;
   const unpricedHrs = pd?.unpriced_hours ?? 0;
+  // HS FB1 hotfix 2026-08-25: approval status keys off draft_hours,
+  // not unpriced_hours. TBR - FL fixture: draft_hours 122.98 across
+  // 10 draft entries, all PRICED so unpriced_hours = 0. Pre-fix the
+  // card read "FINAL · Unapproved: none" against truly-unapproved
+  // labor. Server surfaces draft_hours on payroll_data (board.js
+  // hotfix). unpricedHrs stays for the "Will rise" cap - V42 correct
+  // there since a priced draft will not grow the figure.
+  const draftHrs = pd?.draft_hours ?? 0;
   const unapprovedWeeks = pd?.unapproved_weeks ?? 0;
   // Salary PR 3 - Will rise = unapproved HOURS * rate. Rate MUST be
   // the hourly-only rate, not the merged board's avg_rate (which is
@@ -288,7 +296,10 @@ function PayrollDataCard({ board, freshness, salary }) {
   // FYTD). Both fields ship on every board response; whichever is
   // populated for this kind is what we read.
   const weeksInPeriod = board?.weeks_in_period ?? board?.weeks_in_range;
-  const hasUnapproved = unpricedHrs > 0.004;
+  // HS FB1 hotfix 2026-08-25: hasUnapproved keys off draftHrs (not
+  // unpricedHrs) - a priced draft is still unapproved.
+  const hasUnapproved = draftHrs > 0.004;
+  const hasWillRise = unpricedHrs > 0.004;
   const state = total === 0 ? "neutral" : hasUnapproved ? "warn" : "good";
   const label = total === 0 ? "—" : hasUnapproved ? "PARTIAL" : "FINAL";
   // V42 REVISED (C2) - route through the shared estimator so the
@@ -312,16 +323,29 @@ function PayrollDataCard({ board, freshness, salary }) {
   // V35-3 - the fact set SWAPS between "there is an ask" and
   // "everything is in". Complete periods report the crew + week
   // coverage; incomplete periods report the ask that has to be
-  // resolved. Same rule as Hours: swap the set, do not dash it out.
+  // resolved.
+  //
+  // HS FB1 hotfix 2026-08-25:
+  //   * "Unapproved hrs" reads draftHrs (approval count in Rippling,
+  //     independent of pricing status).
+  //   * "Will rise" is ABSENT when unpricedHrs == 0. Priced drafts
+  //     are already in the amount total; approving them will not add
+  //     money. Showing ~$0 would lie about the impact.
   const facts = hasUnapproved
     ? [
-        { label: "Unapproved hrs", value: fmtHrs(unpricedHrs), tone: "warn" },
+        { label: "Unapproved hrs", value: fmtHrs(draftHrs), tone: "warn" },
         // PR-B - Will rise no longer carries a dotted-underline `?`
         // affordance. Verified live 2026-08-24: the tooltip renders
         // nothing, so the affordance was a promise the UI did not
         // keep. Figure stays; the label is plain text now.
-        { label: "Will rise",
-          value: willRise != null ? `~ ${fmt$(willRise)}` : "—", tone: "warn" },
+        // HS FB1 hotfix 2026-08-25: absent when unpriced == 0 - a
+        // priced draft will not grow the number, so the "Will rise"
+        // ask does not apply.
+        ...(hasWillRise ? [{
+          label: "Will rise",
+          value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
+          tone: "warn",
+        }] : []),
         { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
         { label: "Last pulled", value: lastPulled },
       ]
@@ -339,15 +363,16 @@ function PayrollDataCard({ board, freshness, salary }) {
       <Hero>
         <span className="kpi-sig-hero-val num">{priced} of {total}</span>
       </Hero>
-      {/* PR-B - "worker-weeks with pay data in" -> "pending approval"
-          per owner ruling 2026-08-24. Reads as "N of M · pending
-          approval" where N is priced (i.e. NOT pending). Kept because
-          the sub-line is context for the hero ("N of M"), and the
-          reason a row is not counted is precisely: pending approval. */}
-      <Sub>pending approval</Sub>
+      {/* HS FB1 hotfix 2026-08-25: sub reverted to "with pay data in".
+          PR-B renamed this to "pending approval" but the N of M hero
+          is COVERAGE (worker-weeks priced), not pending approvals -
+          Kevin's rename mislabelled a coverage figure as an approval
+          one. Draft-hours (the actual approval signal) surface in the
+          action line + "Unapproved hrs" fact below when > 0. */}
+      <Sub>with pay data in</Sub>
       {hasUnapproved && (
         <div className="kpi-sig-action-line">
-          {fmtHrs(unpricedHrs)} hrs need approval in Rippling
+          {fmtHrs(draftHrs)} hrs need approval in Rippling
         </div>
       )}
       <Facts items={facts} />
