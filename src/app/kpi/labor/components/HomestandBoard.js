@@ -122,7 +122,10 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
                 {opp0}<br />{fmtDate(h.game_start).slice(0, 5)}
               </div>
               {isDisabled && <div className="kpi-hs-rail-tag">no detail</div>}
-              {isEstimated && <div className="kpi-hs-rail-tag kpi-hs-rail-tag-est">est.</div>}
+              {/* HS FB1 PR-3 3a 2026-08-25: est. tag removed. Hatched bar +
+                  `~` prefix on the amount already signal "estimated"; the
+                  extra tag pushed pre-floor bars one visual step above
+                  the played ones. */}
             </button>
           );
         })}
@@ -149,7 +152,12 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
 // were correct - only the counts and remaining-budget were wrong.
 // Fix: read stands_finished, stands_remaining, and remaining_budget
 // directly off bank. Server owns the discrimination.
-function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
+//
+// HS FB1 PR-3 3b 2026-08-25: selected-stand outline removed (Kevin
+// ruling - Chat-Claude specced it, owner does not want it), bank arrow
+// dropped, bank fact reads "in the bank" (green) / "budget deficit"
+// (red), and "budgeted for" -> "budget for" on the remaining line.
+function SeasonToDateCard({ bank }) {
   if (!bank) return null;
   const finishedCount   = Number(bank.stands_finished || 0);
   const remainingCount  = Number(bank.stands_remaining || 0);
@@ -162,21 +170,6 @@ function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
   const spent = Number(bank.spent_to_date || 0);
   const bankAbs = Math.abs(bankVal);
 
-  // Selected-stand outline anchor: where the selected stand's actual
-  // dollars sit along the "spent" bar. Only the OUTLINE moves per
-  // reminder #3; every dollar figure below stays fixed.
-  let outline = null;
-  if (selectedGameStart) {
-    let before = 0;
-    for (const h of homestands) {
-      if (h.game_start === selectedGameStart) {
-        if (h.actual != null) outline = { left: pct(before), width: pct(h.actual) };
-        break;
-      }
-      if (h.actual != null) before += h.actual;
-    }
-  }
-
   return (
     <div className="kpi-hs-card kpi-hs-card-season" role="region" aria-label="Season to date">
       <header className="kpi-hs-card-hdr">
@@ -185,12 +178,12 @@ function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
           {finishedCount} stand{finishedCount === 1 ? "" : "s"} finished · {remainingCount} remaining
         </span>
         <span className={`kpi-hs-pill ${bankVal >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`} data-bank-pill>
-          Bank {bankVal >= 0 ? "▲" : "▼"} {fmt$0(bankAbs)}
+          Bank {fmt$0(bankAbs)}
         </span>
         <HelpPop
           id="qSeason"
           title="Season to date"
-          body={<>The solid bar is what you have spent. The green hatch is the bank - budget you were given but did not use. The grey hatch is what is still budgeted for the stands you have left.<br /><br />The navy outline shows where the stand you are looking at sits in the season.</>}
+          body={<>The solid bar is what you have spent. The green hatch is the bank - budget you were given but did not use. The grey hatch is what is still budgeted for the stands you have left.</>}
         />
       </header>
       <div className="kpi-hs-sbar" data-season-sbar>
@@ -206,21 +199,14 @@ function SeasonToDateCard({ bank, homestands, selectedGameStart }) {
         <span className="kpi-hs-sbar-remain" style={{ width: `${pct(remainingBudget)}%` }}>
           {pct(remainingBudget) > 6 ? `${fmt$0(remainingBudget)} remaining` : ""}
         </span>
-        {outline && (
-          <span
-            className="kpi-hs-sbar-mark"
-            style={{ left: `${outline.left}%`, width: `${outline.width}%` }}
-            data-selected-outline
-          />
-        )}
       </div>
       <div className="kpi-hs-sbar-key">
         <span><b data-key-season-budget>{fmt$0(seasonBudget)}</b> season budget</span>
         <span><b data-key-spent>{fmt$0(spent)}</b> spent · {finishedCount} stand{finishedCount === 1 ? "" : "s"}</span>
         <span className={bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"} data-key-bank>
-          <b>{bankVal >= 0 ? "▲ " : "▼ "}{fmt$0(bankAbs)}</b> in the bank
+          <b>{fmt$0(bankAbs)}</b> {bankVal >= 0 ? "in the bank" : "budget deficit"}
         </span>
-        <span><b data-key-remaining>{fmt$0(remainingBudget)}</b> budgeted for the {remainingCount} remaining stand{remainingCount === 1 ? "" : "s"}</span>
+        <span><b data-key-remaining>{fmt$0(remainingBudget)}</b> budget for the {remainingCount} remaining stand{remainingCount === 1 ? "" : "s"}</span>
       </div>
     </div>
   );
@@ -253,10 +239,15 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
     <div className="kpi-hs-card kpi-hs-card-strip" role="region" aria-label="Day by day">
       <header className="kpi-hs-card-hdr">
         <span className="kpi-hs-eyebrow">Day by day</span>
+        {/* HS FB1 PR-3 3c 2026-08-25: legend splits prep from off-day
+            per Kevin ruling - hatch is reserved for pending, prep is
+            confirmed spend, so prep gets its own solid identity. Four
+            entries: night game, day game, prep day, off day. */}
         <span className="kpi-hs-note">
           <span className="kpi-hs-legend-sw kpi-hs-day-night" /> night game
           <span className="kpi-hs-legend-sw kpi-hs-day-day" /> day game
-          <span className="kpi-hs-legend-sw kpi-hs-day-prep" /> prep or off day
+          <span className="kpi-hs-legend-sw kpi-hs-day-prep" /> prep day
+          <span className="kpi-hs-legend-sw kpi-hs-day-off" /> off day
         </span>
       </header>
       <DayStripPlot
@@ -304,7 +295,17 @@ const OT_NORMS = {
   10: [26.0, 43.2, 34.4],
 };
 
-function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = false, salaryOn = false }) {
+function SignalCards({
+  stand,
+  split,
+  employees,
+  hourlyRate,
+  salaryAvailable = false,
+  salaryOn = false,
+  actualsDaily = [],
+  gameDates,
+  nightGameDates,
+}) {
   if (!stand || !split) return null;
   const budget = stand.budget || 0;
   const actual = stand.actual || 0;
@@ -312,6 +313,21 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
   const arr = arrow(variance, true);
   const perGame = stand.game_days > 0 ? split.game_day_dollars / stand.game_days : 0;
   const perOffDay = split.off_day_count > 0 ? split.off_day_dollars / split.off_day_count : 0;
+  // HS FB1 PR-3 3e 2026-08-25: night-game and day-game averages for
+  // the AVG COST PER GAME facts. Aggregates actualsDaily filtered by
+  // the game-date sets - server does not split game_day_dollars by
+  // night vs day, so the client sums the daily rows using the same
+  // date sets the day-strip already receives.
+  const nightGameDollars = actualsDaily.reduce(
+    (s, r) => s + (nightGameDates?.has(r.work_date) ? Number(r.amount || 0) : 0),
+    0,
+  );
+  const dayGameDollars = actualsDaily.reduce(
+    (s, r) => (gameDates?.has(r.work_date) && !nightGameDates?.has(r.work_date) ? s + Number(r.amount || 0) : s),
+    0,
+  );
+  const nightAvg = stand.night_games > 0 ? nightGameDollars / stand.night_games : 0;
+  const dayAvg   = stand.day_games   > 0 ? dayGameDollars   / stand.day_games   : 0;
   const norm = OT_NORMS[Math.min(stand.peak_games_in_week, 10)] || OT_NORMS[3];
   const otPct = employees.reduce((s, e) => s + (e.hours_regular > 0 ? (e.hours_overtime / e.hours_regular) * 100 : 0), 0) / Math.max(employees.length, 1);
   const otBand = otPct < norm[0] ? "kpi-hs-pill-good" : otPct > norm[1] ? "kpi-hs-pill-bad" : "kpi-hs-pill-amber";
@@ -348,11 +364,19 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
             body={<>Every dollar of hourly labor on the days this homestand owns - the prep day before it, the games, and any other day worked before the next stand opens.<br /><br />The arrow compares it to the budget for those same days. Down and green means you came in under.</>}
           />
         </header>
-        <div className={`kpi-hs-hero ${arr.cls}`} data-figure="variance">
-          {arr.glyph} {fmt$(Math.abs(variance))}
-          <span className="kpi-hs-hero-sub">{variance >= 0 ? "under" : "over"}</span>
+        {/* HS FB1 PR-3 3d 2026-08-25: spend is the hero, variance is the
+            sub. Prior: variance $2,150.89 hero / "$7,372.92 spent
+            against budget" sub. Now: $7,372.92 spent hero / ▼ $2,150.89
+            under budget sub. Variance color: GREEN under, RED over -
+            .kpi-hs-good/bad on a <span> inside .kpi-hs-sub with higher
+            specificity so the sub-line color rule does not swallow it
+            (Kevin flagged prior render as navy). */}
+        <div className="kpi-hs-hero" data-figure="actual">
+          {fmt$(actual)} <span className="kpi-hs-hero-sub">spent</span>
         </div>
-        <div className="kpi-hs-sub"><b data-figure="actual">{fmt$(actual)}</b> spent against budget</div>
+        <div className="kpi-hs-sub" data-figure="variance">
+          <span className={`kpi-hs-sub-fig ${arr.cls}`}>{arr.glyph} {fmt$(Math.abs(variance))}</span> {variance >= 0 ? "under budget" : "over budget"}
+        </div>
         <div className="kpi-hs-facts">
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Budget</div><div className="kpi-hs-fact-v" data-figure="budget">{fmt$(budget)}</div></div>
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Days</div><div className="kpi-hs-fact-v">{stand.window_days}</div></div>
@@ -383,23 +407,27 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
         </div>
       </div>
 
-      {/* Cost per game day */}
+      {/* AVG COST PER GAME - HS FB1 PR-3 3e 2026-08-25: renamed from
+          "Cost per game day"; facts drop Crew and become Day avg / Night
+          avg (per-game averages split by game type). Night-vs-day dollar
+          split is aggregated client-side from actualsDaily using the
+          same date sets the day-strip receives - the server-supplied
+          split.game_day_dollars is a single total. */}
       <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-purple" data-card="game">
         <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Cost per game day</span>
+          <span className="kpi-hs-eyebrow">AVG cost per game</span>
           <span className="kpi-hs-pill kpi-hs-pill-purple">{stand.game_days} games</span>
           <HelpPop
             id="qGame"
-            title="Cost per game day"
+            title="Average cost per game"
             body={<>Game-day labor divided by the number of games. Prep days are left out so this is a clean per-game number.<br /><br />Night games cost more than day games because they run later and the crew size is typically the same. Per-account base rates land with the pre-floor estimator.</>}
           />
         </header>
         <div className="kpi-hs-hero kpi-hs-purple" data-figure="per-game">{fmt$(perGame)}</div>
         <div className="kpi-hs-sub">across {stand.night_games} night + {stand.day_games} day game{stand.game_days === 1 ? "" : "s"}</div>
         <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Night</div><div className="kpi-hs-fact-v">{stand.night_games}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Day</div><div className="kpi-hs-fact-v">{stand.day_games}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Crew</div><div className="kpi-hs-fact-v">{crewSize}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Day avg</div><div className="kpi-hs-fact-v" data-figure="day-avg">{fmt$0(dayAvg)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Night avg</div><div className="kpi-hs-fact-v" data-figure="night-avg">{fmt$0(nightAvg)}</div></div>
         </div>
       </div>
 
@@ -429,11 +457,17 @@ function SignalCards({ stand, split, employees, hourlyRate, salaryAvailable = fa
         <div className={`kpi-hs-hero ${otPct < norm[0] ? "kpi-hs-good" : otPct > norm[1] ? "kpi-hs-bad" : "kpi-hs-mid"}`}>
           {otPct.toFixed(1)}%
         </div>
+        {/* HS FB1 PR-3 3f 2026-08-25: split the sub copy above and
+            below the gauge. Above: what happened this stand. Below:
+            what similar stands typically run - the comparative band
+            reads with the gauge, not stacked over it. */}
         <div className="kpi-hs-sub">
-          <b>{stand.peak_games_in_week}</b> game days fell in one week before the Monday reset<br />
-          stands like this usually run <b>{norm[0].toFixed(1)}–{norm[1].toFixed(0)}%</b>
+          <b>{stand.peak_games_in_week}</b> day{stand.peak_games_in_week === 1 ? "" : "s"} one week before Monday OT reset
         </div>
         <GaugeBar ot={otPct} band={norm} />
+        <div className="kpi-hs-sub kpi-hs-sub-below-gauge">
+          Homestands similar usually run <b>{norm[0].toFixed(1)}–{norm[1].toFixed(0)}%</b>
+        </div>
       </div>
 
       {/* Payroll data */}
@@ -926,11 +960,7 @@ export function HomestandBoard({
     <div className="kpi-hs-board" data-view="homestand">
       {/* HS FB1 PR-1 (owner ruling 2026-08-24, defect 1d): season
           summary reads first, then the per-stand rail. */}
-      <SeasonToDateCard
-        bank={bank}
-        homestands={homestands}
-        selectedGameStart={selectedGameStart}
-      />
+      <SeasonToDateCard bank={bank} />
       <SeasonRailCard
         homestands={homestands}
         selectedGameStart={selectedGameStart}
@@ -983,6 +1013,9 @@ export function HomestandBoard({
                     hourlyRate={hourlyRate}
                     salaryAvailable={salaryAvailable}
                     salaryOn={salaryOn}
+                    actualsDaily={data.actuals_daily || []}
+                    gameDates={gameDates}
+                    nightGameDates={nightGameDates}
                   />
                 )}
               </>
