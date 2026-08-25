@@ -31,18 +31,32 @@
  * stays because the bar-cap / money-signal path still needs it (V42
  * correct). Two questions, two accumulators.
  *
+ * HS FB1 breadcrumb 2026-08-26: anomaly counts per (week, account) so
+ * ChildRow can render a ⚠ breadcrumb chip on the account row when
+ * that account has anomalies this week. Glyph-only, no label - the
+ * week-row chip already carries the full sentence; the breadcrumb
+ * says "keep going, it's down here." Drafts deliberately excluded -
+ * every in-progress week has drafts and a ⚠ on every worker every
+ * week would be exactly the crying-wolf problem V42 was built to
+ * avoid.
+ *
  * @param {Array<{
  *   account_key: string,
  *   week_start: string,
  *   hours_regular?: number, hours_overtime?: number,
  *   hours_double_time?: number, hours_without_dollars?: number,
  *   draft_hours?: number, draft_entry_count?: number,
+ *   anomaly_no_clockout?: number, anomaly_under_1h?: number,
+ *   anomaly_over_16h?: number,
  *   amount?: number, coverage_state?: string,
  * }>} actuals
  * @param {"aggregate"|"single"} mode  // single-mode returns empty (path unused)
  * @returns {Map<string, Map<string, {
  *   amount: number, hours: number, ot: number, hol: number,
- *   unpriced: number, draft_hours: number, states: string[],
+ *   unpriced: number, draft_hours: number,
+ *   anomaly_no_clockout: number, anomaly_under_1h: number,
+ *   anomaly_over_16h: number,
+ *   states: string[],
  * }>>}
  */
 export function buildMemberByWeekAndAcct(actuals, mode) {
@@ -56,13 +70,21 @@ export function buildMemberByWeekAndAcct(actuals, mode) {
     if (!per) { per = new Map(); out.set(wk, per); }
     const key = r.account_key;
     if (!key) continue;
-    const cur = per.get(key) || { amount: 0, hours: 0, ot: 0, hol: 0, unpriced: 0, draft_hours: 0, states: [] };
+    const cur = per.get(key) || {
+      amount: 0, hours: 0, ot: 0, hol: 0,
+      unpriced: 0, draft_hours: 0,
+      anomaly_no_clockout: 0, anomaly_under_1h: 0, anomaly_over_16h: 0,
+      states: [],
+    };
     cur.amount += Number(r.amount || 0);
     cur.hours += Number(r.hours_regular || 0) + Number(r.hours_overtime || 0) + Number(r.hours_double_time || 0);
     cur.ot += Number(r.hours_overtime || 0);
     cur.hol += Number(r.hours_double_time || 0);
     cur.unpriced += Number(r.hours_without_dollars || 0);
     cur.draft_hours += Number(r.draft_hours || 0);
+    cur.anomaly_no_clockout += Number(r.anomaly_no_clockout || 0);
+    cur.anomaly_under_1h    += Number(r.anomaly_under_1h    || 0);
+    cur.anomaly_over_16h    += Number(r.anomaly_over_16h    || 0);
     cur.states.push(r.coverage_state);
     per.set(key, cur);
   }
