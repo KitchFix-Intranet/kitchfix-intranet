@@ -67,6 +67,11 @@ import { VendorBreakdown } from "./components/VendorBreakdown";
 import { ManagementFeeCard } from "./components/ManagementFeeCard";
 import { ReimbursableRow } from "./components/ReimbursableRow";
 import { FunMoneyCard } from "./components/FunMoneyCard";
+// PR 2 R9 P0 - dedicated period card for pass-through accounts.
+// The shared PeriodCard is only fed KPI-line spend (food + packaging
+// + vehicle) which is essentially Fun Money at these sites and left
+// the card reading $0.00 while $11k+ moved through reimbursable.
+import { PassThroughPeriodCard } from "./components/PassThroughPeriodCard";
 // PR 4 - drill-down table. Sits below Card purchases on the at-risk
 // board. Pass-through boards skip the table (§2 - no COGS distinction
 // to check; the ReimbursableRow already carries the 13xx ledger).
@@ -216,6 +221,20 @@ export default function KpiPurchasingPage() {
   const rangePeriodNo = rangeSelectionEarly?.kind === "period" ? rangeSelectionEarly.value : null;
   const closed = new Date(end) < new Date(today);
   const provisional = !!data?.provisional;
+
+  // PR 2 R9 P1-1 - like-for-like vs-prior scale. When the range is a
+  // SINGLE IN-PROGRESS PERIOD, `prior_spend` covers a FULL prior
+  // period; comparing part-current vs whole-prior guarantees a large
+  // negative percentage on every vendor. Scale prior by elapsedFrac
+  // so a 57%-through-P9 view compares vs 57% of P8. Null in every
+  // other case - FYTD, LAST 4 wk, closed single-periods already
+  // compare like-for-like.
+  const midPeriodElapsedFrac = (
+    rangePeriodNo != null
+    && !closed
+    && !(data?.is_future_range)
+    && Number.isFinite(Number(data?.fiscal?.elapsed_frac))
+  ) ? Number(data.fiscal.elapsed_frac) : null;
 
   // Chart / KPI figures
   const board = useMemo(() => {
@@ -716,8 +735,15 @@ export default function KpiPurchasingPage() {
             yearElapsedFrac={yearElapsedFrac}
           />
 
-          <PeriodCard
-            periodNo={rangePeriodNo}
+          {/* PR 2 R9 P0 - pass-through period card shows TOTAL activity
+              (reimbursable + Fun Money), not the KPI-line-only view the
+              shared PeriodCard produces. That view left $0.00 next to
+              $11k+ of client-billed activity at STL - FL P9 and
+              duplicated the Fun Money card immediately below. Fun Money
+              still gets its own card as the VERDICT surface (real
+              state on 3200.2). */}
+          <PassThroughPeriodCard
+            cardTitle={cardTitle}
             rangeLabel={rangeLabel}
             weekOfPeriod={wop}
             weeksInPeriod={weeksInPeriodDenom}
@@ -725,20 +751,11 @@ export default function KpiPurchasingPage() {
             closed={closed}
             provisional={provisional}
             isFutureRange={isFutureRange}
-            spent={board.kpiSpent}
-            budget={board.kpiBud}
-            bills={board.billsApprox}
-            cards={board.cardCodedInSpend}
-            cardsThroughLabel={cardsThroughLabel}
+            reimbursableSpent={reimbTotal}
+            funMoneySpent={mgmt?.fun_money?.spent}
+            funMoneyBudget={mgmt?.fun_money?.budget}
             pending={board.pending}
-            tier={board.tier}
-            units={board.kpiUnits}
-            original={board.kpiTargets.original}
-            adjusted={board.kpiTargets.adjusted}
-            budgetSpent={board.kpiTargets.budgetSpent}
-            projectedClose={null}
-            cardTitle={cardTitle}
-            isPassThrough
+            cardsThroughLabel={cardsThroughLabel}
           />
 
           {mgmt?.fun_money && (
@@ -795,6 +812,7 @@ export default function KpiPurchasingPage() {
               fragmentation={data?.vendors?.fragmentation}
               priorHasData={data?.vendors?.prior_has_data}
               priorRange={data?.vendors?.prior_range}
+              midPeriodElapsedFrac={midPeriodElapsedFrac}
               isAggregate={isAggregate}
             />
           </div>
@@ -943,6 +961,9 @@ export default function KpiPurchasingPage() {
                on whether the compared window has data at all. */
             priorHasData={data?.vendors?.prior_has_data}
             priorRange={data?.vendors?.prior_range}
+            /* PR 2 R9 P1-1 - scale prior by elapsed fraction on
+               single in-progress periods so vs-prior is like-for-like. */
+            midPeriodElapsedFrac={midPeriodElapsedFrac}
             isAggregate={isAggregate}
           />
         </div>

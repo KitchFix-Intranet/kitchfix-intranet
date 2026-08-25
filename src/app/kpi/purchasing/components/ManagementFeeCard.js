@@ -166,6 +166,11 @@ export function ManagementFeeCard({
 
       <div className="kpi-p-mftrend">
         <span className="kpi-p-label">Spend by period</span>
+        {/* PR 2 R9 P2-1 - explicit space between the label and the meta
+            so the two adjacent spans do not collide as `SPEND BY
+            PERIODrelative to this site's average` at render time. JSX
+            collapses whitespace between elements. */}
+        {" "}
         <span className="kpi-p-cardmeta">
           relative to this site&rsquo;s average
         </span>

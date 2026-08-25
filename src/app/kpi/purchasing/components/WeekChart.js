@@ -40,7 +40,7 @@
 // A unit with zero spend renders a baseline + "no spend" caption (§7
 // rule 8). Never a green under-arrow at zero.
 
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fmt$ } from "../lib/board";
 
 function ArrowNote({ amount, tone }) {
@@ -149,23 +149,48 @@ export function WeekChart({
   }
 
   // Single y-scale so bars + target lines share one axis. PR-2 R5 Part A
-  // (owner ruling 2026-08-24): scaleMax = max(spent_all, target_all).
-  // The target line is an INDEPENDENT mark on this shared scale - never
-  // derived from the bar. A 5% top-of-plot headroom (SCALE_HEADROOM_FRAC)
-  // divides both marks identically so the arithmetic ratio linePos /
-  // barHeight == target / spent is preserved. Prior state multiplied
-  // spent by 1.15 asymmetrically AND clamped both marks at 97%; the
-  // clamp fired every time a target equalled scaleMax (the common
-  // case) and pushed the drawn ratio off the arithmetic ratio.
+  // (owner ruling 2026-08-24): scaleMax = max(spent_all, target_all)
+  // times a headroom fraction. The target line is an INDEPENDENT mark on
+  // this shared scale - never derived from the bar.
+  //
+  // PR 2 R9 P1-2 - BAR-READABILITY CAP.
+  //
+  // On ALL FYTD Kevin measured P3 (spend $497k) rendering at only 1.4x
+  // P8 ($244k) - dollar ratio is 2.0x. The visual compression came from
+  // the tallest TARGET (a bucket with an outsized period budget) sitting
+  // well above the tallest bar. `scaleMax = max(spend, target) * 1.05`
+  // then forced every bar into the lower portion of the plot; the
+  // absolute ratio was preserved but the visible dynamic range was gone.
+  //
+  // Fix: allow the target to raise scaleMax up to a bounded multiple of
+  // the tallest bar. Beyond that cap the target line renders at the top
+  // of the plot (clipped by overflow) and the caption still carries the
+  // numeric target for readers who need it. R5 assertion survives because
+  // it measures the arithmetic ratio (target / spent), which equals
+  // drawn ratio (linePos / barHeight) regardless of scaleMax choice -
+  // both marks divide by the same scaleMax.
+  //
+  //   BAR_HEADROOM     = 1.15   -> 15% empty above the tallest bar
+  //   TARGET_CAP_MULT  = 1.5    -> scaleMax never exceeds 1.5x tallest bar
+  //
+  // Behaviour:
+  //   maxTarget <=  maxSpent      -> scaleMax = maxSpent * 1.15
+  //   maxTarget <= 1.5 maxSpent   -> scaleMax = max(maxSpent * 1.15, maxTarget * 1.02)
+  //   maxTarget >  1.5 maxSpent   -> scaleMax = maxSpent * 1.5 (target clips at top)
   const perUnitTargetsAll = (units || []).flatMap(u => (
     isPeriod
       ? [Number(u.budget || 0)]
       : [Number(u.targetOrig || 0), Number(u.targetAdj || 0)]
   )).filter(v => Number.isFinite(v) && v > 0);
   const perUnitSpendAll = (units || []).map(u => Math.abs(Number(u.spent || 0)));
-  const rawMax = Math.max(...perUnitTargetsAll, ...perUnitSpendAll, 1);
-  const SCALE_HEADROOM_FRAC = 1.05;   // 5% headroom above tallest mark
-  const maxSample = rawMax * SCALE_HEADROOM_FRAC;
+  const maxTargetAll = perUnitTargetsAll.length > 0 ? Math.max(...perUnitTargetsAll) : 0;
+  const maxSpentAll  = Math.max(...perUnitSpendAll, 1);
+  const BAR_HEADROOM     = 1.15;
+  const TARGET_CAP_MULT  = 1.5;
+  const barScale     = maxSpentAll * BAR_HEADROOM;
+  const targetCapped = Math.min(maxTargetAll * 1.02, maxSpentAll * TARGET_CAP_MULT);
+  const maxSample = Math.max(barScale, targetCapped);
+  const targetClipped = maxTargetAll > 0 && maxTargetAll > maxSample;
 
   // Precompute per-unit slots so bar height + caption value read from
   // the SAME object. Any drift is impossible at the JSX layer.
@@ -276,16 +301,38 @@ export function WeekChart({
   // clientWidth) so we do not clobber legitimate user scroll positions
   // on ranges that fit without scrolling.
   const scrollRef = useRef(null);
+  // PR 2 R9 P1-3 - left-edge fade indicator. When the plot overflows
+  // the scroll container we anchor right (PR 7 fix), but the left edge
+  // clips mid-digit and reads as a rendering fault. Track whether the
+  // container is scrolled off the left; render a fade overlay when it
+  // is so the message "there's more content to the left" is visual.
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [scrolledOffLeft, setScrolledOffLeft] = useState(false);
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (el.scrollWidth > el.clientWidth) {
       el.scrollLeft = el.scrollWidth - el.clientWidth;
+      setHasOverflow(true);
+      setScrolledOffLeft(el.scrollLeft > 2);
+    } else {
+      setHasOverflow(false);
+      setScrolledOffLeft(false);
     }
   }, [slots.length, tier]);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => setScrolledOffLeft(el.scrollLeft > 2);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <div className="kpi-p-wks-scroll" ref={scrollRef}>
+    <div
+      className={`kpi-p-wks-scroll${hasOverflow && scrolledOffLeft ? " kpi-p-wks-scroll-clipL" : ""}`}
+      ref={scrollRef}
+    >
     <div className="kpi-p-wks" style={gridStyle}>
       {slots.map((slot, i) => {
         const u = units[i];

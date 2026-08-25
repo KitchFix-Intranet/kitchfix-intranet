@@ -880,7 +880,7 @@ async function loadVendorRollup(supa, { members, start, end, priorStart, priorEn
           resolved: !!r.vendor_resolved,
           spend: 0,
           line_count: 0,
-          gl_split: { food: 0, packaging: 0, vehicle: 0, other: 0 },
+          gl_split: { food: 0, packaging: 0, vehicle: 0, reimbursable: 0, other: 0 },
         });
       }
       const v = byVendor.get(key);
@@ -891,6 +891,10 @@ async function loadVendorRollup(supa, { members, start, end, priorStart, priorEn
       if (gl.startsWith("3200")) v.gl_split.food += amt;
       else if (gl.startsWith("3400")) v.gl_split.packaging += amt;
       else if (gl.startsWith("3500")) v.gl_split.vehicle += amt;
+      // PR 2 R9 P2-3 - 13xx as its own segment. At pass-through accounts
+      // the reimbursable family drove every vendor row's WHERE IT LANDED
+      // column into all-grey ("other") - a dead column at those sites.
+      else if (gl.startsWith("13")) v.gl_split.reimbursable += amt;
       else v.gl_split.other += amt;
     }
     return byVendor;
@@ -923,6 +927,7 @@ async function loadVendorRollup(supa, { members, start, end, priorStart, priorEn
         food: Math.round(v.gl_split.food * 100) / 100,
         packaging: Math.round(v.gl_split.packaging * 100) / 100,
         vehicle: Math.round(v.gl_split.vehicle * 100) / 100,
+        reimbursable: Math.round(v.gl_split.reimbursable * 100) / 100,
         other: Math.round(v.gl_split.other * 100) / 100,
       },
       prior_spend: priorSpend,
