@@ -361,6 +361,39 @@ function ParentExceptionChip({ count, unit }) {
   return <span className="kpi-tbl-flag kpi-flag-warn">⚠ {count} {unit}{count === 1 ? "" : "s"} unapproved</span>;
 }
 
+// HS FB1 breadcrumb 2026-08-26 - anomaly-only ⚠ chip for account +
+// worker child rows. Glyph only; the label lives on the week-row
+// chip above. The breadcrumb says "keep going, it's down here."
+//
+// Drafts deliberately excluded. Every in-progress week has drafts;
+// marking every worker every week would be exactly the crying-wolf
+// problem V42 was built to avoid. Anomalies only: no clock-out,
+// under 1h, over 16h. Those need a human.
+//
+// The title enumerates the specific anomaly types so someone can
+// tell what to fix without expanding further (or, on a worker row,
+// tell WHY that person needs the punch cleaned up).
+function AnomalyBreadcrumb({ row }) {
+  const nc  = Number(row?.anomaly_no_clockout || 0);
+  const u1  = Number(row?.anomaly_under_1h    || 0);
+  const o16 = Number(row?.anomaly_over_16h    || 0);
+  const total = nc + u1 + o16;
+  if (total <= 0) return null;
+  const parts = [];
+  if (nc  > 0) parts.push(`${nc} never clocked out`);
+  if (u1  > 0) parts.push(`${u1} under 1h`);
+  if (o16 > 0) parts.push(`${o16} over 16h`);
+  const title = parts.join(", ");
+  return (
+    <span
+      className="kpi-tbl-flag kpi-flag-warn kpi-tbl-flag-crumb"
+      title={title}
+      aria-label={`Anomaly: ${title}`}
+      data-anomaly-crumb
+    >⚠</span>
+  );
+}
+
 // Aggregate child rows: group actuals by account_key per week.
 function aggregateChildrenForWeek(week, weekBudgetsByWeekStart, memberByWeekAndAcct) {
   const byAcct = memberByWeekAndAcct.get(week.week_start) || new Map();
@@ -380,6 +413,12 @@ function aggregateChildrenForWeek(week, weekBudgetsByWeekStart, memberByWeekAndA
       amount: agg.amount,
       coverage_state: worstSeverity(agg.states),
       week_budget: perMemberBudget[account_key] ?? null,
+      // HS FB1 breadcrumb 2026-08-26: anomaly counts carried onto the
+      // child row so ChildRow can decide whether to draw a ⚠ chip.
+      // Glyph-only breadcrumb; label lives on the week row above.
+      anomaly_no_clockout: agg.anomaly_no_clockout || 0,
+      anomaly_under_1h:    agg.anomaly_under_1h    || 0,
+      anomaly_over_16h:    agg.anomaly_over_16h    || 0,
     });
   }
   rows.sort((a, b) => b.amount - a.amount);
@@ -406,6 +445,12 @@ function workerChildrenForWeek(week, workers) {
       hours_unpriced: Number(r.draft_hours || 0),
       amount: Number(r.amount || 0),
       coverage_state: r.coverage_state,
+      // HS FB1 breadcrumb 2026-08-26: worker-level anomaly counts.
+      // The raw actuals row is per (worker, week), so these are the
+      // truth for whether THIS worker is the one who broke the punch.
+      anomaly_no_clockout: Number(r.anomaly_no_clockout || 0),
+      anomaly_under_1h:    Number(r.anomaly_under_1h    || 0),
+      anomaly_over_16h:    Number(r.anomaly_over_16h    || 0),
     }));
 }
 
@@ -1032,6 +1077,7 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFro
           <button type="button" className="kpi-tbl-accountbtn" onClick={() => onPickAccount?.(child.account_key)}>
             <span className="kpi-tbl-cchild-key">{child.account_key}</span>
             <OTTag ot={child.hours_ot} />
+            <AnomalyBreadcrumb row={child} />
             {showExceptionChip && <ExceptionChip severity={sev} />}
           </button>
         ) : mode === "worker" ? (
@@ -1044,12 +1090,14 @@ function ChildRow({ child, weekAmount, mode, columns, onPickAccount, excludedFro
               <span className="kpi-tbl-wtitle">{workerLabelParts.title}</span>
             )}
             <OTTag ot={child.hours_ot} />
+            <AnomalyBreadcrumb row={child} />
             {showExceptionChip && <ExceptionChip severity={sev} />}
           </span>
         ) : (
           <span className="kpi-tbl-cchild-label">
             {child.account_key}
             <OTTag ot={child.hours_ot} />
+            <AnomalyBreadcrumb row={child} />
             {showExceptionChip && <ExceptionChip severity={sev} />}
           </span>
         )}

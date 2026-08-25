@@ -2993,6 +2993,16 @@
   color: #92580A;
   border-color: #F7E5C4;
 }
+/* HS FB1 breadcrumb 2026-08-26 - compact glyph-only anomaly chip on
+   account + worker child rows. Same amber as kpi-flag-warn (same
+   class of concern as the week chip) but tighter padding since
+   there is no label - just ⚠. Kevin's "breadcrumb" pattern - says
+   "keep going, it is down here." Full anomaly detail is in the
+   title attribute for hover. */
+.kpi-tbl-flag.kpi-tbl-flag-crumb {
+  padding: 0 var(--kpi-sp-1);
+  letter-spacing: 0;
+}
 
 /* V9-16 OT tag on a row containing OT. */
 .kpi-tbl-otflag {
