@@ -475,6 +475,23 @@ export function PurchasingTable({
             <tr className="kpi-p-tbl-total">
               <td>
                 Range total
+                {" "}<HelpPop id="qDrillTableFooter" title="Range total" body={
+                  <>
+                    Always the full range total, even when the SHOW
+                    filter above narrows to bills only or cards only.
+                    <br /><br />
+                    <b>The footer must equal the bucket card heroes</b>
+                    on the same range, and those heroes always count
+                    bill.com and coded cards together. Filtering
+                    changes which rows show; it does NOT re-scope this
+                    total.
+                    <span className="kpi-hs-pop-foot">
+                      A filtered footer that changed with the filter
+                      would break the one-source rule (§9B) and let
+                      the table quietly disagree with the cards above.
+                    </span>
+                  </>
+                } />
                 {showFilterActive && (
                   <span className="kpi-p-tbl-weeksub">
                     {showFilter === "bills" ? "bill.com only" : "cards only"}

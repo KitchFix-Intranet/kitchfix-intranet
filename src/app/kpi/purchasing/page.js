@@ -76,6 +76,9 @@ import { PassThroughPeriodCard } from "./components/PassThroughPeriodCard";
 // board. Pass-through boards skip the table (§2 - no COGS distinction
 // to check; the ReimbursableRow already carries the 13xx ledger).
 import { PurchasingTable } from "./components/PurchasingTable";
+// PR 5 - loading skeleton + failure card.
+import { SkeletonBoard } from "./components/SkeletonBoard";
+import { FailureCard } from "./components/FailureCard";
 
 // Format ISO date -> "MM/DD" for chart week captions.
 function isoToMMDD(iso) {
@@ -149,12 +152,30 @@ export default function KpiPurchasingPage() {
   const [data, setData] = useState(null);
   const [loadState, setLoadState] = useState("idle");
   const [errorMsg, setErrorMsg] = useState(null);
+  // PR 5 - keep the last-known freshness across a failed fetch so
+  // the FailureCard can report `when it last worked` from real
+  // timestamps. `freshness` is stored on `data`, but a failure sets
+  // data = null; without a separate copy, "last worked" would be
+  // "unknown" every time. Updated whenever a successful fetch lands.
+  const [lastFreshness, setLastFreshness] = useState(null);
+  // PR 5 - retry counter. FailureCard's Try-again button bumps this;
+  // the fetch effect re-runs when the counter changes.
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (status === "loading") return;
     if (!account) return;
     const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(new Error("timeout_15s")), 15000);
+    // PR 5 - timeout FIRES the abort with a NAMED reason we can
+    // detect in the catch block. Prior code called `ctrl.abort()`
+    // and returned early on AbortError, which left loadState stuck
+    // on 'loading' forever. Now the abort carries a `timeout_15s`
+    // flag we surface as an error.
+    let timedOut = false;
+    const to = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, 15000);
     setLoadState("loading");
     setErrorMsg(null);
     const params = new URLSearchParams({ account, start, end });
@@ -172,20 +193,43 @@ export default function KpiPurchasingPage() {
           return;
         }
         setData(body);
+        if (body?.freshness) setLastFreshness(body.freshness);
         setLoadState("ok");
       })
       .catch((e) => {
         clearTimeout(to);
-        if (e?.name === "AbortError") return;
+        // PR 5 - timeout aborts surface as failure now (Check 6 - a
+        // timeout that silently stays in `loading` is the failure
+        // mode that looks like nothing happened). A NON-timeout
+        // AbortError is still an intentional teardown (e.g. account
+        // switched mid-flight) and should bail without surfacing.
+        if (e?.name === "AbortError" && !timedOut) return;
         setLoadState("error");
-        setErrorMsg(String(e?.message || e));
+        setErrorMsg(timedOut ? "request timed out after 15 seconds" : String(e?.message || e));
         setData(null);
       });
     return () => {
       clearTimeout(to);
       ctrl.abort();
     };
-  }, [account, start, end, status]);
+  }, [account, start, end, status, retryCount]);
+
+  // PR 5 - skeleton show-delay. Delay showing the skeleton so a
+  // fast fetch does not flash a skeleton for 80ms then disappear.
+  // Measured warm P50 for /api/kpi/purchasing at ~2.5s (cold ~7s);
+  // 150ms hides the flash on browser-cache hits without hiding the
+  // skeleton on real fetches. The idle -> loading transition also
+  // waits (rendering "Loading ..." with nothing visible for 150ms
+  // is still better than a flashing skeleton).
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  useEffect(() => {
+    if (loadState !== "loading" && loadState !== "idle") {
+      setShowSkeleton(false);
+      return;
+    }
+    const t = setTimeout(() => setShowSkeleton(true), 150);
+    return () => clearTimeout(t);
+  }, [loadState]);
 
   const setParam = useCallback((key, value) => {
     const p = new URLSearchParams(searchParams.toString());
@@ -660,19 +704,31 @@ export default function KpiPurchasingPage() {
 
   const boardContent = (() => {
     if (loadState === "loading" || loadState === "idle") {
-      return (
+      // PR 5 - skeleton the actual layout after a 150ms delay to
+      // avoid a flash on very fast fetches. Pre-150ms: an accessible
+      // status row (screen-reader hears "Loading purchasing board")
+      // with no visual, which is quieter than the old "Loading ..."
+      // placeholder.
+      return showSkeleton ? (
+        <SkeletonBoard />
+      ) : (
         <div className="kpi-p-board" role="status" aria-live="polite" aria-busy="true">
           <span className="sr-only">Loading purchasing board</span>
-          <div className="kpi-p-emptybucket">Loading …</div>
         </div>
       );
     }
     if (loadState === "error") {
+      // PR 5 - Check 6 gate. FailureCard uses REAL freshness (from
+      // the last successful load on this page). If we have never
+      // loaded successfully on this session, lastFreshness is null
+      // and the card says "unknown" for each timestamp - never a
+      // fabricated one.
       return (
-        <div className="kpi-p-placeholder" role="alert">
-          <h2>Board did not load</h2>
-          <p>{errorMsg || "Unknown error"}</p>
-        </div>
+        <FailureCard
+          errorMsg={errorMsg}
+          freshness={lastFreshness}
+          onRetry={() => setRetryCount(c => c + 1)}
+        />
       );
     }
     if (!data || !board) return null;

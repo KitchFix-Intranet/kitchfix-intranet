@@ -1462,3 +1462,181 @@
   pointer-events: none;
   z-index: 2;
 }
+
+/* ═══ PR 5 - SKELETON (loading state) ══════════════════════════════
+ * Grey blocks at the layout's real sizes. Pulse via CSS animation.
+ * prefers-reduced-motion disables the pulse.
+ */
+.kpi-app .kpi-p-skel-card {
+  padding: var(--kpi-card-pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-skel-livenote {
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-skel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-3);
+  margin-bottom: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-skel-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kpi-sp-4);
+}
+.kpi-app .kpi-p-skel-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-skel-bar {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--n-200);
+}
+.kpi-app .kpi-p-skel-hero {
+  height: 32px;
+}
+.kpi-app .kpi-p-skel-w10 { width: 10%; }
+.kpi-app .kpi-p-skel-w20 { width: 20%; }
+.kpi-app .kpi-p-skel-w30 { width: 30%; }
+.kpi-app .kpi-p-skel-w40 { width: 40%; }
+.kpi-app .kpi-p-skel-w60 { width: 60%; }
+.kpi-app .kpi-p-skel-plot {
+  display: block;
+  height: var(--kpi-h-plot);
+  border-radius: var(--kpi-ctl-r);
+  background: var(--n-200);
+  margin-top: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-skel-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-skel-lrow {
+  display: block;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--n-200);
+}
+.kpi-app .kpi-p-skel-tbl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-1);
+  border: 1px solid var(--n-200);
+  border-radius: var(--kpi-card-r);
+  padding: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-skel-toolbar {
+  display: flex;
+  gap: var(--kpi-sp-3);
+  padding-bottom: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-skel-tall {
+  min-height: calc(var(--kpi-h-plot) * 1.4);
+}
+@keyframes kpi-p-skel-pulse-kf {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+.kpi-app .kpi-p-skel-pulse {
+  animation: kpi-p-skel-pulse-kf 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-app .kpi-p-skel-pulse {
+    animation: none;
+  }
+}
+
+/* ═══ PR 5 - FAILURE CARD (Check 6 gate) ═══════════════════════════
+ * Warm amber stripe on white. Distinct from every other card - never
+ * mistakable for a real number.
+ */
+.kpi-app .kpi-p-fail.kpi-p-card:before {
+  background: var(--amber-600);
+}
+.kpi-app .kpi-p-ct-fail {
+  color: var(--amber-700);
+}
+.kpi-app .kpi-p-fail {
+  background: var(--amber-50);
+  border-color: var(--amber-200);
+}
+.kpi-app .kpi-p-fail-body {
+  font-size: var(--kpi-t-body);
+  line-height: 1.6;
+  color: var(--n-800);
+  margin-top: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-fail-body b {
+  color: var(--amber-700);
+}
+.kpi-app .kpi-p-fail-when {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: var(--kpi-sp-4);
+  row-gap: var(--kpi-sp-2);
+  padding: var(--kpi-sp-3);
+  background: #fff;
+  border: 1px solid var(--amber-200);
+  border-radius: var(--kpi-ctl-r);
+  margin-top: var(--kpi-sp-3);
+  font-size: var(--kpi-t-body);
+}
+.kpi-app .kpi-p-fail-when dt {
+  color: var(--n-600);
+  font-weight: 700;
+}
+.kpi-app .kpi-p-fail-when dd {
+  color: var(--n-800);
+  font-weight: 700;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-p-fail-tech {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  margin-top: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-fail-code {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--n-100);
+  color: var(--n-800);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: var(--kpi-sp-2);
+  font-size: 0.9em;
+}
+.kpi-app .kpi-p-fail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--kpi-sp-4);
+}
+.kpi-app .kpi-p-fail-retry {
+  height: var(--kpi-ctl-h);
+  padding: 0 var(--kpi-sp-4);
+  border-radius: var(--kpi-ctl-r);
+  border: 1px solid var(--amber-600);
+  background: var(--amber-600);
+  color: #fff;
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.kpi-app .kpi-p-fail-retry:hover {
+  background: var(--amber-700);
+  border-color: var(--amber-700);
+}
+.kpi-app .kpi-p-fail-retry:focus-visible {
+  outline: 2px solid var(--navy-500);
+  outline-offset: 2px;
+}
