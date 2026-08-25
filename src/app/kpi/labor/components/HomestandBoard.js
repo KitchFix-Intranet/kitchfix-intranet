@@ -26,7 +26,7 @@
 //      stand selection. Only the .kpi-hs-sbar-mark navy outline
 //      moves.
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { DayStripPlot, aggregatePerDay, isoRange } from "./DayStrip.js";
 import HelpPop from "./HelpPop.js";
@@ -40,7 +40,16 @@ function arrow(v, goodWhenPositive = true) {
 }
 
 // ─── Season rail card ───────────────────────────────────────────────
-function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
+// HS FB1 PR-4 2026-08-25: takes an Actuals | Plan toggle. viewMode +
+// setViewMode are lifted to HomestandBoard so the toggle's choice
+// drives which cards render below. actualsAvailable disables the
+// Actuals button on unplayed stands (pre-floor / future / not-yet-
+// played) where no actual dollars exist to compare against - Plan is
+// the only meaningful view there. Toggle sits on the .kpi-seg
+// component (same skin as Hourly | + Salary and Period | Homestand)
+// so all three segmented controls share one component per Kevin's
+// PR-2-verify unification.
+function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onViewModeChange, actualsAvailable }) {
   const rail = useMemo(() => {
     // Scale by max spend across played stands. Pre-floor stands with
     // an estimator amount contribute; future stands still render at a
@@ -59,10 +68,35 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect }) {
       <header className="kpi-hs-card-hdr">
         <span className="kpi-hs-eyebrow">Season by homestand</span>
         <span className="kpi-hs-note">Click on a homestand to open it</span>
+        {/* HS FB1 PR-4 2026-08-25: Actuals | Plan segmented control.
+            Actuals is disabled when the selected stand has no actuals
+            (pre-floor / future / not-yet-played) - the button stays
+            visible so the split is legible but cannot be selected
+            when there is nothing to compare against. .kpi-seg gives
+            geometry parity with the other three segmented controls. */}
+        {viewMode && onViewModeChange && (
+          <span className="kpi-seg kpi-hs-view-mode" role="group" aria-label="Compare actuals to plan">
+            <button
+              type="button"
+              className={viewMode === "actuals" ? "on" : ""}
+              onClick={() => actualsAvailable && onViewModeChange("actuals")}
+              disabled={!actualsAvailable}
+              aria-pressed={viewMode === "actuals"}
+              data-view-mode="actuals"
+            >Actuals</button>
+            <button
+              type="button"
+              className={viewMode === "plan" ? "on" : ""}
+              onClick={() => onViewModeChange("plan")}
+              aria-pressed={viewMode === "plan"}
+              data-view-mode="plan"
+            >Plan</button>
+          </span>
+        )}
         <HelpPop
           id="qRail"
           title="Season by homestand"
-          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.</>}
+          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.<br /><br /><b>Actuals | Plan</b> lets you see the plan the model would have made against the stand's real spend. On stands that have not been played yet, only Plan is meaningful.</>}
         />
       </header>
       <div className="kpi-hs-rail">
@@ -956,6 +990,29 @@ export function HomestandBoard({
     return m;
   }, [stand?.game_start, data?.actuals_range]);
 
+  // HS FB1 PR-4 2026-08-25: Actuals | Plan view mode. Derives the
+  // NATURAL default per Kevin's spec ("Default: Actuals on played
+  // stands, Plan on unplayed") from the same signal the pre-toggle
+  // planMode used. actualsAvailable is the same predicate flipped -
+  // true on played stands, false on pre-floor / future / not-yet-
+  // played. When the selected stand changes, the mode SNAPS to that
+  // stand's natural default (an operator picking an unplayed stand
+  // gets Plan even if they were on Actuals for the previous one).
+  const derivedPlanMode = data?.source === "estimated"
+    || (stand?.game_start && todayISO && stand.game_start > todayISO);
+  const actualsAvailable = !derivedPlanMode;
+  const [viewMode, setViewMode] = useState(derivedPlanMode ? "plan" : "actuals");
+  useEffect(() => {
+    setViewMode(derivedPlanMode ? "plan" : "actuals");
+  }, [stand?.game_start, derivedPlanMode]);
+  // Active mode: what the toggle currently says. Falls back to the
+  // natural default if the operator has not overridden (or has been
+  // snapped to it by a stand change). The RENDER key: when viewMode
+  // is "plan" we render PlanCards regardless of whether the stand is
+  // played; when "actuals" we render SignalCards + StandDayStrip.
+  const activeMode = viewMode;
+  const planActive = activeMode === "plan";
+
   return (
     <div className="kpi-hs-board" data-view="homestand">
       {/* HS FB1 PR-1 (owner ruling 2026-08-24, defect 1d): season
@@ -965,6 +1022,9 @@ export function HomestandBoard({
         homestands={homestands}
         selectedGameStart={selectedGameStart}
         onSelect={onSelectStand}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        actualsAvailable={actualsAvailable}
       />
       {standIsPending ? (
         <StandRegionSkeleton />
@@ -980,14 +1040,18 @@ export function HomestandBoard({
           {stand && !settledRefusal && <StandHeader stand={stand} />}
           {(() => {
             if (!stand || settledRefusal) return null;
-            const planMode = data?.source === "estimated"
-              || (stand?.game_start && todayISO && stand.game_start > todayISO);
+            // HS FB1 PR-4 2026-08-25: view-mode key gates the stand
+            // region. planActive === true renders PlanCards (with the
+            // day strip hidden - Plan mode answers "what should this
+            // cost", and an actuals strip under plan cards would be
+            // the same category error as a green "under budget" on an
+            // unplayed stand; per-day plan values are a real feature
+            // we have not designed - do not invent one here).
+            // planActive === false renders SignalCards + StandDayStrip
+            // exactly as before.
             return (
               <>
-                {/* Day strip: absent on plan mode (pre-floor has no
-                    daily rows; future has none yet - either way the
-                    strip cannot render meaningfully). */}
-                {!planMode && (
+                {!planActive && (
                   <StandDayStrip
                     stand={stand}
                     actualsDaily={data.actuals_daily || []}
@@ -996,7 +1060,7 @@ export function HomestandBoard({
                     todayISO={todayISO}
                   />
                 )}
-                {planMode && (
+                {planActive && (
                   <PlanCards
                     stand={stand}
                     estimate={data?.homestand_estimated}
@@ -1005,7 +1069,7 @@ export function HomestandBoard({
                     hourlyRate={hourlyRate}
                   />
                 )}
-                {!planMode && split && (
+                {!planActive && split && (
                   <SignalCards
                     stand={stand}
                     split={split}

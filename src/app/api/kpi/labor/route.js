@@ -656,7 +656,17 @@ export async function GET(request) {
         // does not care which branch produced it. is_estimated was
         // folded onto future stands by foldPreFloorEstimates when
         // game_start > today.
-        if (found.is_estimated) {
+        //
+        // HS FB1 PR-4 (owner ruling 2026-08-25): gate widens from
+        // `found.is_estimated` to `found.actual_estimated != null` so
+        // homestand_estimated ships on PLAYED stands too. The Actuals
+        // | Plan toggle in the season rail card reads this payload to
+        // render the retrospective plan alongside the played actual.
+        // is_estimated stays false on played stands (rail hatch
+        // semantics unchanged); the toggle is a client-side view
+        // switch, not a substitution.
+        if (found.actual_estimated != null) {
+          const isPlayed = !found.is_estimated;
           homestandSplice.homestand_estimated = {
             total:         found.actual_estimated,
             per_day:       found.estimator_meta?.per_day || [],
@@ -665,7 +675,9 @@ export async function GET(request) {
             method:        "game_day_weighted",
             note:          found.pre_floor
               ? "Estimated: this stand is before daily detail started (04/20/26). Each week's real total is distributed across days by what the schedule says happened (night game, day game, prep day). Derived from the account's own low-OT stands."
-              : "Estimated: this stand's games have not been played yet. Each day is priced at the account's base rate for that day type (night game, day game, prep day). Derived from the account's own low-OT played stands.",
+              : isPlayed
+                ? "Retrospective plan: the account's low-OT weekly totals distributed across this stand's days by night/day/prep weights. Compares what the plan would have said against what the stand actually cost."
+                : "Estimated: this stand's games have not been played yet. Each day is priced at the account's base rate for that day type (night game, day game, prep day). Derived from the account's own low-OT played stands.",
           };
         }
       }

@@ -556,6 +556,48 @@ console.log("[H9] pre-floor stand estimator: counts, no-straddle, bank-byte-iden
     else fail(`${acct}: bank drifted with estimator - before=${JSON.stringify(bankBefore)} after=${JSON.stringify(bankAfter)} - ESTIMATES LEAKED INTO BANK, this is exactly what PR #273 was built to prevent`);
   }
 
+  // 2b. HS FB1 PR-4 (owner ruling 2026-08-25): estimator now folds onto
+  // PLAYED stands too (retrospective plan for the Actuals | Plan
+  // toggle). Bank must STILL be byte-identical - played stands carry
+  // actual_estimated as a comparison value, is_estimated stays FALSE
+  // so no client display gate confuses actual with plan. Baseline
+  // captured on origin/main before the PR-4 fold change (2026-08-25):
+  //   CIN - OH      $3,359.08
+  //   STL - MO      $8,377.39
+  //   TXR - TX - H  $38,157.32
+  //   TXR - TX - V  -$3,601.96
+  // These are the numbers the bank invariant is anchored to; if they
+  // move, the fold leaked into the bank.
+  const PR4_BANK_BASELINE = {
+    "CIN - OH": 3359.08,
+    "STL - MO": 8377.39,
+    "TXR - TX - H": 38157.32,
+    "TXR - TX - V": -3601.96,
+  };
+  for (const acct of MLB) {
+    const hs = standsByAcct.get(acct);
+    const hsWithEstimates = await foldPreFloorEstimates(supa, acct, hs, dailyFloor, today);
+    const daily = dailyByAcct.get(acct);
+    const actMap = actualsByStand(hsWithEstimates, daily);
+    const bankAfter = computeHomestandBank(hsWithEstimates, actMap, today);
+    const want = PR4_BANK_BASELINE[acct];
+    if (Math.abs(bankAfter.bank - want) < 0.005) {
+      ok(`${acct}: bank byte-identical with PR-4 played-stand fold ($${bankAfter.bank.toFixed(2)} matches baseline)`);
+    } else {
+      fail(`${acct}: bank drifted from baseline - want $${want.toFixed(2)}, got $${bankAfter.bank.toFixed(2)} (delta $${(bankAfter.bank - want).toFixed(2)}) - PLAYED-STAND FOLD LEAKED INTO BANK`);
+    }
+    // Every played stand carries actual_estimated with is_estimated: false.
+    // Pre-floor + future stands keep is_estimated: true (rail hatch
+    // semantics apply only there).
+    const playedStands = hsWithEstimates.filter(h => !h.pre_floor && h.game_end < today);
+    const badPlayed = playedStands.filter(h => h.actual_estimated == null || h.is_estimated === true);
+    if (badPlayed.length === 0) {
+      ok(`${acct}: all ${playedStands.length} played stand(s) carry actual_estimated with is_estimated: false`);
+    } else {
+      fail(`${acct}: ${badPlayed.length} played stand(s) missing actual_estimated or wrongly marked is_estimated: ${badPlayed.map(h => h.game_start).join(", ")}`);
+    }
+  }
+
   // 3. CIN - OH sanity per owner spec.
   {
     const hs = standsByAcct.get("CIN - OH");
