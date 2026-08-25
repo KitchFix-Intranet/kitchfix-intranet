@@ -63,6 +63,28 @@ export function fmtPct(x) {
   return (Number(x || 0) * 100).toFixed(1) + "%";
 }
 
+// ─── Chart cadence label (§9B one-source) ────────────────────────────
+//
+// Both PeriodCard and BucketCard label the chart strip above their
+// week / period bars. PR 2 R11 item 5 restored a static "Each week"
+// label to BucketCard - correct at tier A, wrong at tier B (which
+// still shows week bars over a range) and wrong at tier C (period
+// bars). R12 item 1 makes both callers derive the label from a single
+// source so tier ↔ cadence can never disagree between the two cards on
+// one page.
+//
+// `chartUnit(tier)` returns the unit the chart's bars represent:
+//   'A' → 'week'      (period, week by week)
+//   'B' → 'week'      (range, week by week)
+//   'C' → 'period'    (range, period by period)
+//
+// Callers assemble their own copy from this primitive so PeriodCard
+// can keep its fuller "THE PERIOD/RANGE · WEEK/PERIOD BY WEEK/PERIOD"
+// while BucketCard uses the short "Each week / Each period".
+export function chartUnit(tier) {
+  return tier === "C" ? "period" : "week";
+}
+
 // ─── State resolver - THE ONE (§5.2, §9B) ────────────────────────────
 //
 // One function. Every card's pill, hero colour class, and chart state
@@ -398,7 +420,7 @@ export function resolveCardState(args) {
 export const BUCKET_DEFS = [
   { key: "food",      label: "Food",                     sub: "general + resale · 3200",
     strokeClass: "kpi-p-b-food",     legend: "#153968" },
-  { key: "packaging", label: "Packaging & supplies",     sub: "packaging + supplies + linen · 3400",
+  { key: "packaging", label: "Packaging & supplies",     sub: "supplies + linen · 3400",
     strokeClass: "kpi-p-b-pkg",      legend: "#3E97D1" },
   { key: "vehicle",   label: "Vehicle",                  sub: "lease + fuel + insurance + R&M · 3500",
     strokeClass: "kpi-p-b-veh",      legend: "#7A3E9D" },
