@@ -424,7 +424,11 @@ export default function KpiLaborPage() {
       }
     }
     for (const g of groups) {
-      const s = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0, amount: 0, hours_without_dollars: 0 };
+      // HS FB1 hotfix 2026-08-25: subtotal now carries draft_hours so
+      // the WeekTable grand-total Unapproved column reads it (via the
+      // grand fold below). Same pattern as the WeekTable band/week
+      // switch from hours_without_dollars -> draft_hours.
+      const s = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0 };
       for (const w of g.weeks) {
         s.hours_regular       += w.hours_regular;
         s.hours_overtime      += w.hours_overtime;
@@ -432,6 +436,7 @@ export default function KpiLaborPage() {
         s.hours_premium_other += w.hours_premium_other;
         s.amount              += w.amount;
         s.hours_without_dollars += w.hours_without_dollars;
+        s.draft_hours           += w.draft_hours || 0;
       }
       g.subtotal = s;
     }
@@ -472,13 +477,14 @@ export default function KpiLaborPage() {
 
   const grand = useMemo(() => {
     if (!grouped.length) return null;
-    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0 };
+    const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0 };
     for (const period of grouped) {
       g.hours_regular       += period.subtotal.hours_regular;
       g.hours_overtime      += period.subtotal.hours_overtime;
       g.hours_double_time   += period.subtotal.hours_double_time;
       g.amount              += period.subtotal.amount;
       g.hours_without_dollars += period.subtotal.hours_without_dollars;
+      g.draft_hours           += period.subtotal.draft_hours || 0;
     }
     return g;
   }, [grouped]);
