@@ -1114,3 +1114,289 @@
     border-top: 1px solid var(--n-200);
   }
 }
+
+/* ═══ PR 4 - drill-down table ══════════════════════════════════════
+ * By-P&L-line table on the at-risk board. Sits below Card purchases.
+ * All rules use existing tokens; no new custom properties. Border
+ * widths + radii literal per file-header rule.
+ */
+.kpi-app .kpi-p-tbl-container {
+  padding: var(--kpi-card-pad);
+}
+.kpi-app .kpi-p-tbl-container.kpi-p-card:before {
+  background: var(--kpi-p-steel);
+}
+.kpi-app .kpi-p-tbl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-tbl-tbg {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-tbl-tbspacer {
+  flex: 1 1 auto;
+}
+.kpi-app .kpi-p-tbl-tblab {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-tbl-tbbtn {
+  height: var(--kpi-ctl-h);
+  padding: 0 var(--kpi-sp-3);
+  border-radius: var(--kpi-ctl-r);
+  border: 1px solid var(--n-300);
+  background: #fff;
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-700);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.kpi-app .kpi-p-tbl-tbbtn:hover {
+  background: var(--n-100);
+  color: var(--n-800);
+}
+.kpi-app .kpi-p-tbl-tbbtn:focus-visible {
+  outline: 2px solid var(--navy-500);
+  outline-offset: 2px;
+}
+.kpi-app .kpi-p-tbl-seg {
+  display: inline-flex;
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-ctl-r);
+  overflow: hidden;
+}
+.kpi-app .kpi-p-tbl-seg button {
+  height: var(--kpi-ctl-h);
+  padding: 0 var(--kpi-sp-3);
+  border: 0;
+  background: #fff;
+  color: var(--n-700);
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  cursor: pointer;
+  border-right: 1px solid var(--n-300);
+}
+.kpi-app .kpi-p-tbl-seg button:last-child {
+  border-right: 0;
+}
+.kpi-app .kpi-p-tbl-seg button:hover {
+  background: var(--n-100);
+  color: var(--n-800);
+}
+.kpi-app .kpi-p-tbl-seg button.on {
+  background: var(--navy-500);
+  color: #fff;
+}
+.kpi-app .kpi-p-tbl-seg button:focus-visible {
+  outline: 2px solid var(--navy-500);
+  outline-offset: 2px;
+}
+.kpi-app .kpi-p-tbl-notice {
+  font-size: var(--kpi-t-body);
+  color: var(--n-600);
+  padding: var(--kpi-sp-2) 0 var(--kpi-sp-3);
+}
+
+.kpi-app .kpi-p-tbl-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid var(--n-200);
+  border-radius: var(--kpi-card-r);
+}
+.kpi-app .kpi-p-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--kpi-t-body);
+}
+.kpi-app .kpi-p-tbl thead th {
+  position: sticky;
+  top: 0;
+  background: var(--n-100);
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  text-align: right;
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--n-700);
+  border-bottom: 2px solid var(--n-300);
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-tbl thead th:first-child {
+  text-align: left;
+}
+.kpi-app .kpi-p-tbl-hsub {
+  display: block;
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--n-600);
+  text-transform: none;
+}
+.kpi-app .kpi-p-tbl-lcol {
+  width: 24%;
+}
+.kpi-app .kpi-p-tbl tbody td {
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  border-bottom: 1px solid var(--n-200);
+  color: var(--n-700);
+  vertical-align: middle;
+}
+.kpi-app .kpi-p-tbl-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-p-tbl-dash {
+  color: var(--n-400);
+  font-weight: 400;
+}
+.kpi-app .kpi-p-tbl-zero {
+  color: var(--n-600);
+  font-weight: 400;
+}
+.kpi-app .kpi-p-tbl-footcell {
+  font-weight: 700;
+  color: var(--n-800);
+}
+
+/* Period band row. Cool navy tint when open. */
+.kpi-app .kpi-p-tbl-band > td {
+  background: var(--n-50);
+  font-weight: 700;
+}
+.kpi-app .kpi-p-tbl-band:hover > td {
+  background: var(--n-100);
+}
+.kpi-app .kpi-p-tbl-band-open > td {
+  background: var(--navy-50);
+  color: var(--navy-800);
+}
+.kpi-app .kpi-p-tbl-band-open:hover > td {
+  background: var(--navy-100);
+}
+.kpi-app .kpi-p-tbl-bandbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.kpi-app .kpi-p-tbl-bandbtn:focus-visible {
+  outline: 2px solid var(--navy-500);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.kpi-app .kpi-p-tbl-bandlbl {
+  font-weight: 800;
+  color: var(--n-800);
+}
+.kpi-app .kpi-p-tbl-bandsub {
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-tbl-chev {
+  font-size: var(--kpi-t-medium);
+  color: var(--n-600);
+  width: 1em;
+  display: inline-block;
+  text-align: center;
+}
+
+/* Week row */
+.kpi-app .kpi-p-tbl-week > td {
+  background: #fff;
+}
+.kpi-app .kpi-p-tbl-week:hover > td {
+  background: var(--n-50);
+}
+.kpi-app .kpi-p-tbl-week-open > td:first-child {
+  background: var(--n-50);
+}
+.kpi-app .kpi-p-tbl-weekbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.kpi-app .kpi-p-tbl-weekbtn:focus-visible {
+  outline: 2px solid var(--navy-500);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.kpi-app .kpi-p-tbl-weeksub {
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  color: var(--n-600);
+  margin-left: var(--kpi-sp-2);
+}
+
+/* Bill (drill) row - lighter tint, subtle indent via padding */
+.kpi-app .kpi-p-tbl-bill > td {
+  background: var(--n-50);
+  color: var(--n-700);
+  font-size: var(--kpi-t-meta);
+}
+.kpi-app .kpi-p-tbl-bill td:first-child {
+  padding-left: var(--kpi-sp-5);
+}
+.kpi-app .kpi-p-tbl-billlbl {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.kpi-app .kpi-p-tbl-billsrc {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-tbl-billv {
+  font-weight: 700;
+  color: var(--n-800);
+}
+.kpi-app .kpi-p-tbl-billmeta {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+}
+.kpi-app .kpi-p-tbl-billload > td {
+  background: var(--n-50);
+  color: var(--n-600);
+  text-align: center;
+  padding: var(--kpi-sp-3);
+  font-size: var(--kpi-t-body);
+}
+.kpi-app .kpi-p-tbl-billload td:first-child {
+  padding-left: var(--kpi-sp-5);
+}
+
+/* Footer total row - pinned by border weight, not by sticky (that
+ * introduces its own stacking-context bugs on scrolled tables). */
+.kpi-app .kpi-p-tbl-total > td {
+  background: var(--n-100);
+  color: var(--n-800);
+  font-weight: 800;
+  border-top: 2px solid var(--n-400);
+  border-bottom: 0;
+}
