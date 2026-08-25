@@ -182,15 +182,30 @@ export function assertNoStraddlingStand(homestands, dailyFloorIso) {
  * on both classes. Two consumers, one function - a parallel copy is
  * exactly the drift risk the audit was there to prevent.
  *
+ * HS FB1 PR-4 (owner ruling 2026-08-25): the gate relaxes further to
+ * "run on any stand". Owner is adding an Actuals | Plan toggle to the
+ * homestand view - Plan mode compares the retrospective plan against
+ * the played stand's actual, so an operator can see whether the model
+ * predicted the spend. The math is identical: distribute the account's
+ * weekly totals by day-type weights over the stand's window. On a
+ * played stand the "weekly totals" are just what actually landed that
+ * week, so the estimator is measuring the plan against known truth.
+ * Bank invariant is preserved architecturally by computeHomestandBank
+ * (homestandResolver.js:529) - it consumes actuals via a Map interface,
+ * never reads actual_estimated. See H9 in _probe_kpi_homestand.mjs.
+ *
  * Callers:
  *   - src/lib/labor/homestandResolver.js attachEstimatorToPreFloor
  *   - src/lib/labor/homestandResolver.js attachEstimatorToFuture (PR-A)
+ *   - Also folded onto played stands via foldPreFloorEstimates (PR-4)
  */
 export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, gameByDate, prepDays, todayIso) {
   if (!stand) return { total: 0, per_day: [] };
-  const isPreFloor = !!stand.pre_floor;
-  const isFuture   = !isPreFloor && todayIso != null && stand.game_start > todayIso;
-  if (!isPreFloor && !isFuture) return { total: 0, per_day: [] };
+  // HS FB1 PR-4: `isFuture` still gates the base-rate fallback (line
+  // ~236) because a played stand's zero-week is a real zero (no labor
+  // that week), not a "we haven't seen the numbers yet" fallback case.
+  // Fallback fires only on future stands where weekTotal is unknown.
+  const isFuture = todayIso != null && stand.game_start > todayIso && !stand.pre_floor;
   const weeks = new Set();
   for (let d = stand.window_start; d <= stand.window_end; d = addDaysIso(d, 1)) {
     weeks.add(mondayOfIso(d));
@@ -276,21 +291,33 @@ export async function foldPreFloorEstimates(supa, accountKey, homestands, dailyF
   // today). Both classes render plan-mode PlanCards on the client,
   // and both need the same estimator payload. Client gate is one
   // derived boolean (`planMode`) so the two paths cannot drift.
-  const needsEstimate = (h) => h.pre_floor || (h.game_start > todayIso);
-  const targets = (homestands || []).filter(needsEstimate);
+  //
+  // HS FB1 PR-4 (owner ruling 2026-08-25): fold onto PLAYED stands
+  // too so an Actuals | Plan toggle can compare the retrospective
+  // plan against the played actual. The is_estimated flag stays TRUE
+  // only on pre-floor / future stands - the rail's hatch semantics
+  // are "no actual to show, using the estimate instead", which does
+  // not apply to a played stand. Played stands carry actual_estimated
+  // + estimator_meta with is_estimated: false so all existing client
+  // reads (SeasonRailCard scale calc, rail bar display, season table
+  // row) gate correctly and keep showing the real actual. Bank
+  // invariant is architectural: computeHomestandBank never reads
+  // actual_estimated (H9 in _probe_kpi_homestand.mjs asserts).
+  const targets = homestands || [];
   if (targets.length === 0) return homestands;
 
   const baseRates = await deriveAccountBaseRates(supa, accountKey, homestands, todayIso);
   if (baseRates.source_stands === 0) {
     // No low-OT stands played yet - estimator cannot run. Return the
-    // stands unchanged; pre-floor + future stay "no detail" on client.
+    // stands unchanged; pre-floor + future stay "no detail" on client
+    // and played stands stay without a plan comparison.
     return homestands;
   }
 
-  // Weekly totals for every week any target stand touches. Pre-floor
-  // weeks have real labor_actuals_latest rows; future weeks return
-  // nothing and estimatePreFloorStand falls back to base rates (see
-  // its isFuture branch). The single query covers both.
+  // Weekly totals for every week any stand touches. Pre-floor and
+  // played weeks have real labor_actuals_latest rows; future weeks
+  // return nothing and estimatePreFloorStand falls back to base rates
+  // (see its isFuture branch). The single query covers all three.
   const weeksTouched = new Set();
   for (const h of targets) {
     for (let d = h.window_start; d <= h.window_end; d = addDaysIso(d, 1)) {
@@ -324,12 +351,15 @@ export async function foldPreFloorEstimates(supa, accountKey, homestands, dailyF
   for (const h of homestands || []) prepDays.add(addDaysIso(h.game_start, -1));
 
   return (homestands || []).map(h => {
-    if (!needsEstimate(h)) return h;
     const est = estimatePreFloorStand(h, baseRates, weekTotals, gameByDate, prepDays, todayIso);
+    // is_estimated stays TRUE only on pre-floor / future (the "no
+    // actual to show, use estimate instead" case). Played stands
+    // carry the estimate as a Plan comparison, is_estimated: false.
+    const isPreFloorOrFuture = h.pre_floor || (h.game_start > todayIso);
     return {
       ...h,
       actual_estimated: est.total,
-      is_estimated: true,
+      is_estimated: isPreFloorOrFuture,
       estimator_meta: {
         source_stands: baseRates.source_stands,
         base_rates: baseRates,
