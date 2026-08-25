@@ -280,16 +280,26 @@ export function buildBoard({
   // Weekly aggregates across the whole range.
   const weekAggs = buildWeekAggregates(actuals, weeksInRange);
   // Range totals from weekly aggregates (avoids double-counting).
+  // HS FB1 hotfix 2026-08-25: draft_hours added alongside unpriced.
+  // Two distinct approval questions per Kevin's V42-clarified ruling:
+  //   "how much will this number grow?"  -> unpriced (bar cap)
+  //   "is everything approved?"          -> draft_hours (status pill,
+  //                                                      Payroll card)
+  // TBR - FL week 08/17 fixture: draft_hours 122.98 across 10 draft
+  // entries, all PRICED so unpriced_hrs = 0. Pre-fix, the Payroll Data
+  // card read "FINAL · Unapproved: none" - a priced draft is still
+  // unapproved, and this range total surface owed the client the truth.
   const rangeTotals = weekAggs.reduce((acc, w) => {
     acc.amount += w.amount;
     acc.hours += w.hours;
     acc.ot += w.ot_hours;
     acc.unpriced += w.unpriced_hrs;
+    acc.draft_hours += Number(w.draft_hours || 0);
     acc.complete += w.complete_ww;
     acc.total += w.total_ww;
     for (const id of w.worker_count ? [] : []) {} // placeholder
     return acc;
-  }, { amount: 0, hours: 0, ot: 0, unpriced: 0, complete: 0, total: 0 });
+  }, { amount: 0, hours: 0, ot: 0, unpriced: 0, draft_hours: 0, complete: 0, total: 0 });
   // Distinct worker count across the range (V8-9: people, not worker-weeks).
   const distinctWorkers = new Set(actuals.map(r => r.worker_id)).size;
 
@@ -328,11 +338,26 @@ export function buildBoard({
 
   const weeksOut = weekAggs.map(w => {
     const state = weekState(w.week_start, w.week_end, today);
+    // HS FB1 hotfix 2026-08-25: approval keys off draft_hours, NOT
+    // unpriced_hrs. Reproducer: TBR - FL week 08/17 with 122.98 draft
+    // hours across 10 draft entries, all PRICED so unpriced_hrs = 0 -
+    // pre-fix, this flag stayed FALSE and the Payroll Data card read
+    // "FINAL · Unapproved: none" against a truly-unapproved week.
+    //
+    // V42's "always key off hours_without_dollars, never draft_hours"
+    // ruling was for the BAR CAP question ("how much will this number
+    // grow?") - a priced draft won't grow the figure, so unpriced is
+    // right there. Wrong for approval status - a priced draft is
+    // still unapproved. Two questions, two signals.
+    //
+    // Also DROPPED the state !== "closed" gate. Approval status does
+    // not expire when a week closes; a closed week with drafts is
+    // still unapproved and the card owes the operator that signal.
     let unapproved_flag = false;
     let unapproved_hours = 0;
-    if (state !== "closed" && (w.unpriced_hrs > 0 || w.coverage_states.some(s => s === "partial" || s === "hours_only"))) {
+    if (w.draft_hours > 0) {
       unapproved_flag = true;
-      unapproved_hours = r2(w.unpriced_hrs);
+      unapproved_hours = r2(w.draft_hours);
     }
     // Per-week original target: for multi-period, use each week's own
     // period budget / 4; for single-period, weekly_original_target.
@@ -485,9 +510,12 @@ export function buildBoard({
   if (longest_ot_week && longest_ot_week.hours < 0.004) longest_ot_week = null;
 
   // V32-10 - payroll data. Weeks affected = count of weeks with any
-  // unpriced hours (someone's timesheet hasn't been approved yet).
+  // unapproved hours (drafts in Rippling, priced or not).
+  // HS FB1 hotfix 2026-08-25: keys off draft_hours per the same ruling
+  // that fixed the per-week flag above. Priced drafts still count -
+  // approval status is independent of pricing status.
   let unapproved_weeks = 0;
-  for (const w of weekAggs) if ((w.unpriced_hrs || 0) > 0.004) unapproved_weeks += 1;
+  for (const w of weekAggs) if ((w.draft_hours || 0) > 0.004) unapproved_weeks += 1;
 
   // Budgeted hours - derive from budget and observed avg rate. Only
   // meaningful when we have both a budget and a rate observation.
@@ -577,8 +605,15 @@ export function buildBoard({
       priced_ww: rangeTotals.complete,
       total_ww: rangeTotals.total,
       unpriced_hours: r2(rangeTotals.unpriced),
+      // HS FB1 hotfix 2026-08-25: draft_hours is the approval-status
+      // signal, distinct from unpriced_hours (the money-cap signal).
+      // Client's Payroll Data card reads draft_hours for hasUnapproved
+      // + the "Unapproved hrs" fact; unpriced_hours stays for the
+      // "Will rise" cap (V42 correct - a priced draft won't grow the
+      // number).
+      draft_hours: r2(rangeTotals.draft_hours),
       // V32-10 - how many weeks have any unapproved hours (drives
-      // action-card "Weeks affected" fact).
+      // action-card "Weeks affected" fact). Now keys off draft_hours.
       unapproved_weeks,
     },
     // Per-week
