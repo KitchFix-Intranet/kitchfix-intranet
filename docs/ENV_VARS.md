@@ -194,6 +194,13 @@ This is a discipline aid, not a CI check. Do not automate it.
 | `BILLCOM_PROXY_BASE` | Prefix of Josh's bill.com proxy: origin + `/billcom`. Same ngrok-tunnel host pattern as `QBO_PROXY_BASE`. The proxy holds bill.com OAuth server-side and exposes `GET /bills/filtered?invoiceDateStart&invoiceDateEnd&start&max`, `GET /chartofaccounts`, `GET /classes`, `GET /departments`. Endpoints return the v2 envelope (`response_data: []`, numeric status codes as strings). Read by `src/lib/billcom.js` and `scripts/purchasing_billcom_sync.mjs`. | Local `.env.local` (dev + probe scripts); GitHub Actions secrets (purchasing-sync workflow) | The nightly bill.com sync throws `billcom: BILLCOM_PROXY_BASE required` before the first network call and exits 1. |
 | `BILLCOM_PROXY_KEY` | Static `X-API-Key` header value for the bill.com proxy. Same shape as `QBO_PROXY_KEY`; the proxy scopes it to READ-ONLY. Read by `src/lib/billcom.js` on every proxy call. NEVER echoed to stdout. | Local `.env.local`; GitHub Actions secrets | Sync throws `billcom: BILLCOM_PROXY_KEY required (never echoed)` and exits 1. |
 
+### Rippling report ingest (INV-P20 - scheduled email)
+
+| Variable | Description | Scope | If missing |
+|---|---|---|---|
+| `RIPPLING_REPORT_MAILBOX_ADDRESS` | Mailbox address the service account impersonates via domain-wide delegation (`gmail.readonly` scope) to read Rippling's scheduled report email. Kevin creates the mailbox and adds it to the SA's DWD list. Read by `src/lib/gmailReadReport.js`. NEVER hardcoded. | GitHub Actions secrets (purchasing-report-ingest workflow); local `.env.local` for dry-run testing | Orchestrator exits 1 with `CONFIG_MISSING: env RIPPLING_REPORT_MAILBOX_ADDRESS not set` before any Gmail call. |
+| `RIPPLING_REPORT_SUBJECT_FILTER` | Gmail search query fragment identifying today's Rippling report (e.g. `subject:"KitchFix Corporate Cards"`). Concatenated with `has:attachment -in:trash -in:spam`. Read by `src/lib/gmailReadReport.js`. | GitHub Actions secrets; local `.env.local` for dry-run | Orchestrator exits 1 with `CONFIG_MISSING: env RIPPLING_REPORT_SUBJECT_FILTER not set`. |
+
 ### Testing / feature flags
 
 | Variable | Description | Scope | If missing |

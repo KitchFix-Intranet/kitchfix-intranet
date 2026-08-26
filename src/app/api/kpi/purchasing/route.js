@@ -532,7 +532,15 @@ async function loadFreshness(supa) {
   // ~8 days after they post to the card (ObjectID latency finding from
   // PR-2 R3), so the pill must be honest about that boundary. Derived
   // date, never hardcoded.
-  const [bc, rp, cardMaxTxn] = await Promise.all([
+  //
+  // INV-P20 report-ingest lane: `source='rippling_report'` is the
+  // scheduled email ingestion (purchasing_report_ingest.mjs); its
+  // completed_at drives the third staleness gate. If the newest
+  // successful ingest is > 36h old, the pill flips red - "Report feed
+  // stale, last ingest Nh ago". The 36h boundary tolerates one missed
+  // night: schedule runs at 06:00 UTC daily, so 36h means "we missed
+  // last night entirely" before we page an operator.
+  const [bc, rp, rr, cardMaxTxn] = await Promise.all([
     supa.from("purchasing_derive_runs")
       .select("completed_at, bills_touched, lines_written")
       .eq("source", "billcom").eq("status", "success")
@@ -540,6 +548,10 @@ async function loadFreshness(supa) {
     supa.from("purchasing_derive_runs")
       .select("completed_at, lines_written")
       .eq("source", "rippling_spend").eq("status", "success")
+      .order("completed_at", { ascending: false }).limit(1).maybeSingle(),
+    supa.from("purchasing_derive_runs")
+      .select("completed_at, lines_written")
+      .eq("source", "rippling_report").eq("status", "success")
       .order("completed_at", { ascending: false }).limit(1).maybeSingle(),
     supa.from("purchasing_actuals")
       .select("txn_date")
@@ -549,11 +561,22 @@ async function loadFreshness(supa) {
   const latestDerive = (bc.data?.completed_at && rp.data?.completed_at)
     ? (bc.data.completed_at > rp.data.completed_at ? bc.data.completed_at : rp.data.completed_at)
     : (bc.data?.completed_at || rp.data?.completed_at || null);
+  const reportAt = rr.data?.completed_at || null;
+  const reportAgeHours = reportAt
+    ? Math.round((Date.now() - new Date(reportAt).getTime()) / 3600000)
+    : null;
+  const REPORT_STALE_LIMIT_H = 36;
+  const reportStale = reportAgeHours == null ? true : reportAgeHours > REPORT_STALE_LIMIT_H;
   return {
-    last_billcom_sync:  bc.data?.completed_at || null,
-    last_rippling_sync: rp.data?.completed_at || null,
-    last_derive_at:     latestDerive,
-    cards_through:      cardMaxTxn.data?.txn_date || null,   // PR-2 R4 Part E
+    last_billcom_sync:      bc.data?.completed_at || null,
+    last_rippling_sync:     rp.data?.completed_at || null,
+    last_derive_at:         latestDerive,
+    cards_through:          cardMaxTxn.data?.txn_date || null,   // PR-2 R4 Part E
+    last_report_ingest_at:  reportAt,                            // INV-P20
+    report_row_count:       rr.data?.lines_written ?? null,      // INV-P20
+    report_age_hours:       reportAgeHours,                      // INV-P20
+    report_stale:           reportStale,                         // INV-P20
+    report_stale_limit_h:   REPORT_STALE_LIMIT_H,                // INV-P20
   };
 }
 
