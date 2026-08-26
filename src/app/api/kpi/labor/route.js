@@ -458,7 +458,14 @@ export async function GET(request) {
   if (allHomestands && allHomestands.length > 0) {
     const [dailyQ, schedQ] = await Promise.all([
         supa.from("labor_actuals_daily")
-          .select("work_date, amount")
+          // homestand-redesign 2026-08-26: extend the daily select to
+          // include per-worker OT hours so the played-day captions on
+          // the day-strip can render the regular/OT split
+          // (`06/26 Fri · vs MIA · $1,560 · 91% OT`). Client aggregates
+          // by work_date to compute the per-day OT %. Adds three
+          // fields to the payload; the existing per-day amount
+          // aggregation (aggregatePerDay) already ignores extras.
+          .select("work_date, amount, hours_regular, hours_overtime, dollars_overtime")
           .eq("account_key", account),
         supa.from("sc_homestand_schedule")
           // homestand-redesign 2026-08-26: fetch game_time + opponent

@@ -3717,12 +3717,65 @@
    forces a 3px stub which is right for a bar but wrong for a legend
    square. .kpi-hs-day-off is the legend-only solid grey. */
 .kpi-hs-day-off   { background: var(--n-300); }
+/* 2026-08-26 homestand redesign - ghost bar variants for upcoming
+   game days on the strip. Owner ruling: colour encodes identity,
+   pattern encodes state. Ghost is the state; the identity colour
+   stays (a ghosted night reads as ghosted-navy). Dashed border
+   distinguishes ghost from prep-day hatch (which is confirmed spend);
+   hatched fill at low opacity keeps the identity readable without
+   the bar looking like a committed dollar. */
+.kpi-hs-day-ghost-night {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(30, 65, 115, 0.28),
+    rgba(30, 65, 115, 0.28) 3px,
+    transparent 3px,
+    transparent 7px
+  );
+  border: 1px dashed #1E4173;
+  border-radius: 2px;
+}
+.kpi-hs-day-ghost-day {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(143, 180, 232, 0.32),
+    rgba(143, 180, 232, 0.32) 3px,
+    transparent 3px,
+    transparent 7px
+  );
+  border: 1px dashed #8FB4E8;
+  border-radius: 2px;
+}
+/* Ghost bar's "~$—" value line - muted so a chef doesn't read the
+   placeholder as a real number. Stays visible so the row heights
+   don't shift when the ghost lands. */
+.kpi-hs-day-ghost-value {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
 .kpi-hs-legend-sw {
   display: inline-block;
   width: 11px; height: 11px;
   border-radius: 2px;
   margin: 0 var(--kpi-sp-1) 0 var(--kpi-sp-2);
   vertical-align: -1px;
+}
+/* 2026-08-26 - caption extra line ("vs OPP · 6:45p" on ghosts,
+   "vs OPP · 91% OT" on played, "prep"/"off" on non-game days).
+   Sits under the primary date caption. Density picker in DayStripPlot
+   hides the primary caption on compact/minimal; extras are only
+   populated on "full" density so this rule doesn't need its own
+   media guard. */
+.kpi-wb-dates-extra {
+  display: block;
+  font-size: 11px;
+  line-height: 1.15;
+  color: var(--text-subtle);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Five signal cards - HS FB1 hotfix 2026-08-25: minmax(0, 1fr) forces

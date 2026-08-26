@@ -93,7 +93,7 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect, salaryAvailab
         <HelpPop
           id="qRail"
           title="Season by homestand"
-          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.<br /><br /><b>Actuals | Plan</b> lets you see the plan the model would have made against the stand's real spend. On stands that have not been played yet, only Plan is meaningful.</>}
+          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.<br /><br />Click a stand to open its detail below. The cards there change depending on whether the stand is upcoming or already played.</>}
         />
       </header>
       <div className="kpi-hs-rail">
@@ -292,7 +292,7 @@ function SeasonToDateCard({ bank, homestands }) {
 //       carry none. WINDOW IS UNCHANGED - the stand still owns those
 //       days, per-stand totals still include them; this is a display
 //       trim only. Card totals must be identical before/after.
-function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayISO }) {
+function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayISO, scheduleByDate, accountTimezone, otByDate }) {
   const days = useMemo(
     () => isoRange(stand.window_start, stand.window_end),
     [stand.window_start, stand.window_end],
@@ -350,6 +350,13 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
           <span className="kpi-hs-legend-sw kpi-hs-day-day" /> day game
           <span className="kpi-hs-legend-sw kpi-hs-day-prep" /> prep day
           <span className="kpi-hs-legend-sw kpi-hs-day-off" /> off day
+          {/* 2026-08-26 homestand redesign - "still to come" swatch
+              added for ghost bars on upcoming stands (round-2 item 6).
+              Uses the ghost-day variant (hatched fill on the day-game
+              identity colour) so the legend chip visually matches the
+              bar. Ghosts appear only on upcoming or part-played stands;
+              the swatch stays visible on all stands for legend stability. */}
+          <span className="kpi-hs-legend-sw kpi-hs-day-ghost-day" /> still to come
         </span>
       </header>
       <DayStripPlot
@@ -358,6 +365,9 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
         variant="identity"
         gameDates={gameDates}
         nightGameDates={nightGameDates}
+        scheduleByDate={scheduleByDate}
+        accountTimezone={accountTimezone}
+        otByDate={otByDate}
         ariaLabel={`Homestand ${stand.index} day strip`}
       />
     </div>
@@ -938,6 +948,40 @@ export function HomestandBoard({
   );
   const gameDates = useMemo(() => new Set(data?.homestand_game_dates || []), [data?.homestand_game_dates]);
   const nightGameDates = useMemo(() => new Set(data?.homestand_night_dates || []), [data?.homestand_night_dates]);
+  // 2026-08-26 homestand redesign - per-day schedule map for the
+  // strip captions (opponent + first pitch on upcoming days; opponent
+  // + OT % on played days). data.homestand_schedule is scoped to the
+  // selected stand's window and only carries GAME days (day_type
+  // === "GAME"); prep/off days are absent.
+  const scheduleByDate = useMemo(() => {
+    const m = new Map();
+    for (const r of (data?.homestand_schedule || [])) m.set(r.date, r);
+    return m;
+  }, [data?.homestand_schedule]);
+  // Account timezone: NO fallback to UTC. Owner ruling 2026-08-26 -
+  // "a wrong first pitch is worse than no first pitch"; if timezone is
+  // null the caption drops the time and shows opponent only.
+  const accountTimezone = useMemo(() => {
+    const acct = (data?.accounts_directory || []).find(a => a.team_key === data?.account);
+    return acct?.timezone || null;
+  }, [data?.accounts_directory, data?.account]);
+  // Per-day OT hours aggregate so the played-day caption can render
+  // `91% OT`. Sum-over-sum, not mean-of-means - matches PlayedCards.
+  // hours_regular + hours_overtime are per-worker per-day; sum both
+  // over each work_date and take hours_ot / hours_all as the day's OT %.
+  const otByDate = useMemo(() => {
+    const m = new Map();
+    for (const r of (data?.actuals_daily || [])) {
+      const key = r.work_date;
+      const cur = m.get(key) || { hours_ot: 0, hours_all: 0 };
+      const reg = Number(r.hours_regular || 0);
+      const ot  = Number(r.hours_overtime || 0);
+      cur.hours_ot  += ot;
+      cur.hours_all += reg + ot;
+      m.set(key, cur);
+    }
+    return m;
+  }, [data?.actuals_daily]);
 
   // Employees for the selected stand come from data.actuals_range
   // (per-worker aggregates the server already produced for the
@@ -1018,6 +1062,9 @@ export function HomestandBoard({
                   gameDates={gameDates}
                   nightGameDates={nightGameDates}
                   todayISO={todayISO}
+                  scheduleByDate={scheduleByDate}
+                  accountTimezone={accountTimezone}
+                  otByDate={otByDate}
                 />
                 {showPlayed ? (
                   <PlayedCards
