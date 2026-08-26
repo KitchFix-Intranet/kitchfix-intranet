@@ -212,18 +212,30 @@ function SeasonToDateCard({ bank, homestands }) {
   if (!bank) return null;
   const finishedCount   = Number(bank.stands_finished || 0);
   const remainingCount  = Number(bank.stands_remaining || 0);
-  // homestand-fixes round 2 item 8 (2026-08-26): season count now
-  // accounts for estimated stands so the total matches the tab count.
-  // Prior "9 finished · 2 remaining" left the 2 estimated stands
-  // uncounted on a season with 13 total, sending operators hunting
-  // for the missing rows. is_estimated is already on every homestand
-  // entry from the server (per _probe_stlmo_actual_estimated_wire
-  // 2026-08-26 confirmation) so this is a client-side pure derivation.
-  const estimatedCount = (homestands || []).filter(h => h?.is_estimated === true).length;
-  // The bank.stands_remaining server figure counts POST-FLOOR future
-  // stands (window > today); estimated stands (pre-floor or future-
-  // with-estimate) are its own bucket. Total = finished + remaining +
-  // estimated should equal the tab count.
+  // homestand-fixes round 2 item 8 (2026-08-26) + partition fix
+  // 2026-08-26 (post-verify): filter to PRE-FLOOR AND is_estimated.
+  //
+  // Prior implementation filtered is_estimated alone and returned 3
+  // on STL - MO (HS 1, HS 2 pre-floor + HS 13 future). But HS 13 is
+  // also counted in bank.stands_remaining (any future stand carries
+  // is_estimated per HS PR-A ruling because plan-mode surfaces the
+  // forecast), so "to come" and "estimated" overlapped and the sum
+  // read 14 against 13 total stands.
+  //
+  // Owner ruling: the three buckets answer "where is each stand in
+  // its life," and life-state has to partition. Estimated is a
+  // genuine state distinct from "not yet played":
+  //
+  //   finished    played, actuals landed
+  //   to come     not yet started (may carry a forecast in plan mode)
+  //   estimated   pre-floor - will NEVER have actuals, the estimate
+  //               is permanent (daily detail does not go back that
+  //               far, so no amount of waiting fixes them)
+  //
+  // A future stand's forecast is NOT a category; it is what "to
+  // come" means. Filter to pre-floor so estimated names the
+  // permanent-estimate state cleanly.
+  const estimatedCount = (homestands || []).filter(h => h?.pre_floor === true && h?.is_estimated === true).length;
   const remainingBudget = Number(bank.remaining_budget || 0);
   const budgetToDate    = Number(bank.budget_to_date || 0);
   const seasonBudget    = budgetToDate + remainingBudget;
@@ -253,7 +265,7 @@ function SeasonToDateCard({ bank, homestands }) {
         <HelpPop
           id="qSeason"
           title="Season to date"
-          body={<>The solid bar is what you have spent. The green hatch is budget you have not spent - the amount you are under target so far. The grey hatch is what is still budgeted for the stands you have left.</>}
+          body={<>The solid bar is what you have spent. The green hatch is budget you have not spent - the amount you are under target so far. The grey hatch is what is still budgeted for the stands you have left.<br /><br /><b>Estimated</b> stands are before our daily detail starts, so these are worked out from the weeks around them.</>}
         />
       </header>
       <div className="kpi-hs-sbar" data-season-sbar>
