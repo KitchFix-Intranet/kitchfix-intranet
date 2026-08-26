@@ -56,6 +56,7 @@
 // assertions against live labor_actuals rows post-derive.
 
 import { buildBoard, buildWeekBudgets } from "../../src/app/kpi/labor/lib/board.js";
+import { approvalsPill } from "../../src/app/kpi/labor/lib/signalCardModels.js";
 
 const account = "STL - FL";
 const start = "2026-08-10";
@@ -183,11 +184,75 @@ assert(
   zeroBoard.payroll_data.approval_people === 0,
 );
 
+// ─── Pill classifier: draft_hours > 0 CANNOT return ALL CLEAR ────
+// Owner ruling 2026-08-26 (post-scope-review): the round-2 materiality
+// threshold is DROPPED. A pill reading ALL CLEAR beside 116.75 hrs
+// pending approval reads as a flat claim of completion. The
+// classifier's contract now: ALL CLEAR fires only at genuinely zero
+// drafts, so it can be trusted. This probe is the assertion that
+// stops the materiality trap recurring - if a future change reintroduces
+// a threshold that lets ALL CLEAR fire with unapproved hours present,
+// this assertion catches it before it ships.
+console.log("\napprovalsPill classifier - ALL CLEAR fires ONLY at genuinely zero drafts:");
+const pillScenarios = [
+  // Zero drafts baseline - ALL CLEAR is the ONLY correct output.
+  { name: "zero drafts",                    pin: { draft_hours: 0,     oldest_draft_date: null },        expect: { state: "good", label: "ALL CLEAR" } },
+  // Non-zero drafts - ALL CLEAR must NOT appear. Age-band drives label.
+  { name: "1 hr from today",                pin: { draft_hours: 1,     oldest_draft_date: isoDaysAgo(0) },  expect: { state: "warn", label: "THIS WEEK" } },
+  { name: "1000 hrs from today (former immaterial-neg / material)",
+                                            pin: { draft_hours: 1000,  oldest_draft_date: isoDaysAgo(0) },  expect: { state: "warn", label: "THIS WEEK" } },
+  { name: "0.01 hr from today (residual)",  pin: { draft_hours: 0.01,  oldest_draft_date: isoDaysAgo(0) },  expect: { state: "warn", label: "THIS WEEK" } },
+  { name: "116.75 hrs from 3 days ago (kevin's fixture)",
+                                            pin: { draft_hours: 116.75,oldest_draft_date: isoDaysAgo(3) },  expect: { state: "warn", label: "THIS WEEK" } },
+  { name: "100 hrs from 7 days ago (boundary - THIS WEEK)",
+                                            pin: { draft_hours: 100,   oldest_draft_date: isoDaysAgo(7) },  expect: { state: "warn", label: "THIS WEEK" } },
+  { name: "100 hrs from 8 days ago (boundary - N DAYS OLD amber)",
+                                            pin: { draft_hours: 100,   oldest_draft_date: isoDaysAgo(8) },  expect: { state: "warn", label: "8 DAYS OLD" } },
+  { name: "100 hrs from 14 days ago (boundary - N DAYS OLD amber)",
+                                            pin: { draft_hours: 100,   oldest_draft_date: isoDaysAgo(14) }, expect: { state: "warn", label: "14 DAYS OLD" } },
+  { name: "100 hrs from 15 days ago (boundary - N DAYS OLD red)",
+                                            pin: { draft_hours: 100,   oldest_draft_date: isoDaysAgo(15) }, expect: { state: "bad",  label: "15 DAYS OLD" } },
+  { name: "100 hrs from 29 days ago (STL - FL Jul 28 shape)",
+                                            pin: { draft_hours: 100,   oldest_draft_date: isoDaysAgo(29) }, expect: { state: "bad",  label: "29 DAYS OLD" } },
+  { name: "drafts but oldest_draft_date NULL (post-migrate, pre-derive)",
+                                            pin: { draft_hours: 50,    oldest_draft_date: null },        expect: { state: "warn", label: "PENDING" } },
+];
+for (const sc of pillScenarios) {
+  const got = approvalsPill(sc.pin);
+  assert(
+    `${sc.name}: pill=${JSON.stringify(got)}`,
+    got.state === sc.expect.state && got.label === sc.expect.label,
+    `  expected: ${JSON.stringify(sc.expect)}`,
+  );
+}
+// The invariant that matters most - walk every non-zero-draft
+// scenario and assert the pill NEVER lands on ALL CLEAR. This is the
+// class-of-defect assertion Kevin asked for: "assert no fixture with
+// draft_hours > 0 can produce ALL CLEAR."
+console.log("\ninvariant sweep: any draft_hours > 0 must NOT return ALL CLEAR");
+for (const sc of pillScenarios) {
+  if (sc.pin.draft_hours <= 0.004) continue;
+  const got = approvalsPill(sc.pin);
+  const isAllClear = got.state === "good" && got.label === "ALL CLEAR";
+  assert(
+    `${sc.name} (${sc.pin.draft_hours} hrs) - pill is NOT ALL CLEAR`,
+    !isAllClear,
+    `  got: ${JSON.stringify(got)}`,
+  );
+}
+
 if (failures > 0) {
   console.log(`\n${failures} failure(s) - the four-state model is broken; the Approvals card is decoration on top.`);
   process.exit(1);
 }
 console.log("\nall assertions pass.");
+
+function isoDaysAgo(n) {
+  const now = new Date();
+  const utc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const then = new Date(utc - n * 86400000);
+  return then.toISOString().slice(0, 10);
+}
 
 function mkRow(workerId, weekStart, { approved, draft, still_costing, oldest }) {
   const weekEnd = addDays(weekStart, 6);

@@ -81,6 +81,7 @@ import {
   buildPaceCardModel,
   buildHoursLeftModel,
   buildCoversLine,
+  approvalsPill,
   pillFor as _pillForShared,
 } from "../lib/signalCardModels.js";
 
@@ -306,100 +307,53 @@ function HoursLeftCard({ board, hoursAvailableHourly }) {
 // approvalsHourly unconditionally (round 1 pinning discipline; the
 // salary toggle cannot reach this card by construction).
 //
-// Pill logic - reflects the AGE of the oldest draft, not just its
-// existence. Owner ruling 2026-08-26 after finding a 29-day-old
-// unapproved shift on STL - FL in a closed period - a real
-// operational miss that no volume-based signal would have caught.
-// Age is the signal, not volume.
+// Pill logic lives in signalCardModels.approvalsPill so a Node probe
+// can assert the invariant "draft_hours > 0 CANNOT return ALL CLEAR".
+// Owner ruling 2026-08-26 post-scope-review: the round-2 materiality
+// threshold is DROPPED. A pill reading ALL CLEAR beside 116.75 hrs
+// pending approval reads as a flat claim of completion while 116
+// hours need a signature. Kevin: "ALL CLEAR fires only at genuinely
+// zero, so it can be trusted. One unapproved hour still gets an
+// honest pill."
 //
-//   nothing unapproved                 -> "ALL CLEAR"     green
-//   immaterial (< 1% of hours)         -> "ALL CLEAR"     green
-//                                          (round 2 materiality rule)
-//   oldest draft <= 7 days             -> "THIS WEEK"     amber
-//   oldest draft > 7  and <= 14 days   -> "N DAYS OLD"    amber
-//   oldest draft > 14 days             -> "N DAYS OLD"    red
-//   oldest_draft_date NULL with drafts -> "N DAYS OLD" state cannot
-//                                          be computed; treat as
-//                                          amber "PENDING" - the
-//                                          absent-on-premise-fail
-//                                          rule bites the Oldest
-//                                          shift fact, not the pill.
-//                                          (In practice: drafts + no
-//                                          date only happens when
-//                                          the derive has not run
-//                                          since v43-1 apply.)
-//
-// Layout - three paths keyed on materiality:
-//   1. NO DRAFTS       -> ALL CLEAR pill, "All in" hero, "every
-//                         shift approved" sub, Approved + Coverage
-//                         facts.
-//   2. IMMATERIAL      -> ALL CLEAR pill, hero shows the residual
-//                         hours (nothing is hidden), sub calls it
-//                         out honestly.
-//   3. MATERIAL        -> age-based amber/red pill, hero = drafts,
-//                         sub = "need your approval · across N people".
-//                         Facts: Approved so far (green), Oldest
-//                         shift (date only - NO days suffix; pill
-//                         carries the age, no duplication), Still
-//                         costing (muted), Weeks affected.
+// Two paths only:
+//   NO DRAFTS      -> ALL CLEAR pill, "All in" hero, "every shift
+//                     approved" sub, Approved + Coverage facts.
+//   ANY DRAFTS     -> age-based amber/red pill via approvalsPill(),
+//                     hero = draft_hours with hrs unit, sub = "need
+//                     your approval · across N people". Facts:
+//                     Approved so far (green), Oldest shift (date
+//                     ONLY - no days suffix; pill carries the age,
+//                     no duplication), Still costing (muted, absent
+//                     when zero), Weeks affected.
 //
 // V42 distinction preserved: Will rise still reads unpriced_hours;
 // the pending hero still reads draft_hours. Approved so far reads
-// approved_hours (v43-1, new).
+// approved_hours (v43-1).
 function ApprovalsCard({ board, freshness, approvalsHourly, hoursAvailableHourly }) {
   const priced = approvalsHourly?.priced_ww ?? 0;
   const total = approvalsHourly?.total_ww ?? 0;
-  const unpricedHrs = approvalsHourly?.unpriced_hours ?? 0;
   const draftHrs = approvalsHourly?.draft_hours ?? 0;
-  const totalHours = approvalsHourly?.total_hours ?? 0;
   const unapprovedWeeks = approvalsHourly?.unapproved_weeks ?? 0;
   const approvedHours = approvalsHourly?.approved_hours ?? 0;
   const stillCostingHours = approvalsHourly?.still_costing_hours ?? 0;
   const oldestDraftDate = approvalsHourly?.oldest_draft_date ?? null;
   const approvalPeople = approvalsHourly?.approval_people ?? 0;
-  const rate = hoursAvailableHourly?.avg_rate ?? board?.avg_rate;
-  const workers = hoursAvailableHourly?.distinct_workers ?? 0;
-  const closedWeeks = board?.closed_weeks_count ?? 0;
-  const weeksInPeriod = board?.weeks_in_period ?? board?.weeks_in_range;
   const hasUnapproved = draftHrs > 0.004;
-  const hasWillRise = unpricedHrs > 0.004;
-  // Materiality (round 2): draft_hours / total_hours. Strict < 1%
-  // (owner ruling: warn when in doubt, so exactly 1% reads material).
-  const materialityFrac = totalHours > 0 ? draftHrs / totalHours : 0;
-  const isMaterial = hasUnapproved && materialityFrac >= 0.01;
-  const isImmaterial = hasUnapproved && !isMaterial;
-  const scopeWord = board?.kind === "multi_period" ? "in range" : "this period";
-  const willRise = estimateUnpricedDollars(unpricedHrs, rate);
   const covers = buildCoversLine(board, "payroll_data");
-
-  // Age-based pill (only bites on MATERIAL). Owner directive: dedup
-  // pill and Oldest shift fact - pill carries the age, fact carries
-  // the date. Drop "· N days" from the fact so the two do not restate
-  // each other (same lesson as the bank figure).
-  const pillFromAge = (() => {
-    if (!hasUnapproved || !isMaterial) return { state: "good", label: "ALL CLEAR" };
-    if (!oldestDraftDate) return { state: "warn", label: "PENDING" };  // NULL - do not claim an age
-    const oldestDays = daysSince(oldestDraftDate);
-    if (oldestDays > 14) return { state: "bad",  label: `${oldestDays} DAYS OLD` };
-    if (oldestDays > 7)  return { state: "warn", label: `${oldestDays} DAYS OLD` };
-    return { state: "warn", label: "THIS WEEK" };
-  })();
-  const oldestDaysForFact = oldestDraftDate ? daysSince(oldestDraftDate) : null;
+  const pill = approvalsPill(approvalsHourly);
   // Oldest shift fact tone tracks pill severity so red-pill + red-fact
   // read as one signal. Absent when oldestDraftDate NULL (owner rule:
   // NULL means "we do not know", not "nothing is old" and not green).
-  const oldestFactTone = pillFromAge.state === "bad" ? "bad"
-                       : pillFromAge.state === "warn" ? "warn"
+  const oldestFactTone = pill.state === "bad" ? "bad"
+                       : pill.state === "warn" ? "warn"
                        : null;
 
-  // Paths 1 + 2: no material drafts -> ALL CLEAR pill.
-  // Path 1 (no drafts at all) keeps the current coverage-hero shape.
-  // Path 2 (immaterial residual) shows the residual as hero so nothing
-  // is hidden, but the pill softens.
+  // Path 1: zero drafts - ALL CLEAR is genuinely true.
   if (!hasUnapproved) {
     return (
-      <SignalCard state={pillFromAge.state}>
-        <Head eyebrow="APPROVALS" state={pillFromAge.state} label={pillFromAge.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
+      <SignalCard state={pill.state}>
+        <Head eyebrow="APPROVALS" state={pill.state} label={pill.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
         <Hero>
           <span className="kpi-sig-hero-val num">All in</span>
         </Hero>
@@ -412,31 +366,13 @@ function ApprovalsCard({ board, freshness, approvalsHourly, hoursAvailableHourly
       </SignalCard>
     );
   }
-  if (isImmaterial) {
-    return (
-      <SignalCard state={pillFromAge.state}>
-        <Head eyebrow="APPROVALS" state={pillFromAge.state} label={pillFromAge.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
-        <Hero>
-          <span className="kpi-sig-hero-val num">
-            {fmtHrs(draftHrs)}<span className="kpi-sig-hero-unit">hrs</span>
-          </span>
-        </Hero>
-        <Sub>need approval · under 1% of hours {scopeWord}</Sub>
-        <Facts items={[
-          { label: "Weeks affected", value: `${unapprovedWeeks}` },
-          { label: "Coverage", value: total > 0 ? `${priced} of ${total}` : "—" },
-        ]} />
-        <Covers text={covers} />
-      </SignalCard>
-    );
-  }
 
-  // Path 3: MATERIAL. Age-based pill (already computed above).
+  // Path 2: any drafts - age-based pill via approvalsPill.
   return (
-    <SignalCard state={pillFromAge.state}>
-      <Head eyebrow="APPROVALS" state={pillFromAge.state} label={pillFromAge.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
+    <SignalCard state={pill.state}>
+      <Head eyebrow="APPROVALS" state={pill.state} label={pill.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
       <Hero>
-        <span className={`kpi-sig-hero-val num ${pillFromAge.state === "bad" ? "kpi-sig-hero-bad" : "kpi-sig-hero-warn"}`}>
+        <span className={`kpi-sig-hero-val num ${pill.state === "bad" ? "kpi-sig-hero-bad" : "kpi-sig-hero-warn"}`}>
           {fmtHrs(draftHrs)}<span className="kpi-sig-hero-unit">hrs</span>
         </span>
       </Hero>
@@ -466,15 +402,6 @@ function ApprovalsCard({ board, freshness, approvalsHourly, hoursAvailableHourly
   );
 }
 
-// Whole-day integer offset between an ISO date (YYYY-MM-DD) and today,
-// UTC-based to match the derive's date arithmetic (start_time is UTC
-// ISO from Rippling). Returns 0 for same day, positive for past dates.
-function daysSince(iso) {
-  const then = new Date(`${iso}T00:00:00.000Z`);
-  const now = new Date();
-  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.max(0, Math.floor((nowUtc - then.getTime()) / 86400000));
-}
 function fmtShortDate(iso) {
   const d = new Date(`${iso}T00:00:00.000Z`);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

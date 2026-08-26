@@ -34,6 +34,48 @@ export function pillFor(verdict) {
   return { state: "neutral", label: "—" };
 }
 
+// 2026-08-26 v43-1 - Approvals card pill classification. Reports
+// AGE and never claims completion unless it is genuinely true.
+//
+// Owner ruling 2026-08-26 (post-scope-review): the materiality
+// threshold from polish round 2 is DROPPED for this card - a pill
+// reading ALL CLEAR beside 116.75 hrs pending approval reads as a
+// flat claim of completion while 116 hours need a signature. Kevin's
+// words: "ALL CLEAR fires only at genuinely zero, so it can be
+// trusted. One unapproved hour still gets an honest pill." CIN - OH's
+// 1.38 hrs from yesterday now reads THIS WEEK - accurate and calm
+// without pretending it is done.
+//
+// Two paths only (down from round 2's three):
+//   zero drafts                        -> ALL CLEAR green
+//   any drafts                         -> age-based amber/red pill
+//
+// Age bands (only bite when there are drafts to age):
+//   oldest <= 7 days                   -> THIS WEEK   amber
+//   oldest 8-14 days                   -> N DAYS OLD  amber
+//   oldest > 14 days                   -> N DAYS OLD  red
+//   oldest_draft_date NULL but drafts  -> PENDING     amber
+//     (transient state - drafts exist but derive has not repopulated
+//      oldest_draft_date since v43-1 apply; renders a claim-less pill
+//      until the next derive fills the date)
+//
+// Extracted from the JSX layer so a probe can assert the invariant
+// that this classifier CANNOT return ALL CLEAR when draft_hours > 0.
+// That is the assertion that stops the materiality trap recurring.
+export function approvalsPill(approvalsHourly) {
+  const draftHrs = approvalsHourly?.draft_hours ?? 0;
+  const oldestDraftDate = approvalsHourly?.oldest_draft_date ?? null;
+  if (draftHrs <= 0.004) return { state: "good", label: "ALL CLEAR" };
+  if (!oldestDraftDate) return { state: "warn", label: "PENDING" };
+  const then = new Date(`${oldestDraftDate}T00:00:00.000Z`);
+  const now = new Date();
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const days = Math.max(0, Math.floor((nowUtc - then.getTime()) / 86400000));
+  if (days > 14) return { state: "bad",  label: `${days} DAYS OLD` };
+  if (days > 7)  return { state: "warn", label: `${days} DAYS OLD` };
+  return { state: "warn", label: "THIS WEEK" };
+}
+
 // 2026-08-26 polish round 2 item 6 - canonical period list for a
 // board's range. `board.weeks[]` is populated by buildBoard for
 // EVERY calendar week in [start, end], including zero-labor weeks
