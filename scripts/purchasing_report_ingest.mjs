@@ -97,19 +97,18 @@ async function safeDelete(p) {
   try { await fs.unlink(p); return true; } catch (e) { return false; }
 }
 
-function runLoader(csvPath) {
+function runLoader(csvPath, loaderScript) {
   return new Promise((resolve) => {
-    // Loader script sits at scripts/purchasing_report_load.mjs;
-    // resolve against this script's own directory so the workflow
-    // does not need to cd anywhere first.
+    // Loaders sit alongside this file; resolve relative so the
+    // workflow does not need to cd anywhere first.
     const here = path.dirname(fileURLToPath(import.meta.url));
-    const loaderPath = path.join(here, "purchasing_report_load.mjs");
+    const loaderPath = path.join(here, loaderScript);
     const child = spawn(process.execPath, [loaderPath, `--csv=${csvPath}`], {
       stdio: ["ignore", "inherit", "inherit"],
       env: process.env,
     });
     child.on("close", (code) => resolve(code));
-    child.on("error", (err) => { console.error(`spawn failed: ${err.message}`); resolve(255); });
+    child.on("error", (err) => { console.error(`spawn failed ${loaderScript}: ${err.message}`); resolve(255); });
   });
 }
 
@@ -151,10 +150,26 @@ async function main() {
     process.exit(0);
   }
 
-  const loaderCode = await runLoader(args.dest);
-  if (loaderCode !== 0) {
-    console.error(`LOADER exited ${loaderCode}`);
-    await writeDeriveRun({ status: "failed", linesWritten: null, errorMessage: `loader exit ${loaderCode}` });
+  // Loader 1: the existing ID-only loader.  Unchanged from PR #834.
+  // Feeds Ruling 4 arbitration via `rippling_report_seen_txns`.
+  const idsLoaderCode = await runLoader(args.dest, "purchasing_report_load.mjs");
+  if (idsLoaderCode !== 0) {
+    console.error(`IDS LOADER exited ${idsLoaderCode}`);
+    await writeDeriveRun({ status: "failed", linesWritten: null, errorMessage: `ids loader exit ${idsLoaderCode}` });
+    await cleanup();
+    process.exit(3);
+  }
+
+  // Loader 2 (phase two): full-payload loader.  Populates
+  // `rippling_report_txns` with 24 projected columns + raw JSONB.
+  // If this fails after loader 1 succeeded, the run is a partial
+  // success: seen_txns is fresh (Ruling 4 has what it needs), but
+  // the full-payload table is stale.  Fail loud so the workflow
+  // reports red and Kevin knows.
+  const txnsLoaderCode = await runLoader(args.dest, "purchasing_report_txns_load.mjs");
+  if (txnsLoaderCode !== 0) {
+    console.error(`TXNS LOADER exited ${txnsLoaderCode}`);
+    await writeDeriveRun({ status: "failed", linesWritten: null, errorMessage: `txns loader exit ${txnsLoaderCode}` });
     await cleanup();
     process.exit(3);
   }
