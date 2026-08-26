@@ -260,3 +260,26 @@ Dry-run (mailbox access + download but no loader or derive-runs write; still del
 ```
 gh workflow run purchasing-report-ingest.yml -f dry_run=true
 ```
+
+### Phase two - full-payload table (new, PR feat/report-ingest-phase-two)
+
+The nightly ingest now runs TWO loaders sequentially on the same downloaded CSV:
+
+1. `scripts/purchasing_report_load.mjs` - unchanged since PR #834. Populates `rippling_report_seen_txns` with parent transaction IDs for Ruling 4 arbitration.
+2. `scripts/purchasing_report_txns_load.mjs` - new. Populates `rippling_report_txns` with 24 projected columns plus the raw row as JSONB. Idempotent via UNIQUE (parent_txn_id, content_hash).
+
+If loader 1 succeeds and loader 2 fails, the workflow exits 3 and writes a `status='failed'` derive-runs row. Ruling 4 has fresh data in that case (loader 1 already committed) but the new table is stale until the next run.
+
+Verify migration + first ingest via:
+
+```
+node --env-file=.env.local scripts/probes/_probe_report_txns_verify.mjs
+```
+
+Post-ingest re-measurement of Ruling 1 calibration (report `purchased_at` vs derived `txn_date`):
+
+```
+node --env-file=.env.local scripts/probes/_probe_report_purchased_at_vs_txn_date.mjs
+```
+
+Any week-cross > 0 in the second probe stops any merge PR - the calibration would have drifted.
