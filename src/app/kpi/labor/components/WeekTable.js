@@ -630,12 +630,21 @@ export function WeekTable({
         return `TOTAL · ${g.groupLabel}${acctSuffix}`;
       }
     }
-    // 2026-08-26 polish round 2 item 6 - a zero-labor period contains
-    // 4 fiscal weeks even though its `weeks` array is empty (no
-    // actuals rows landed for it). Use weeks_in_period on those groups
-    // so the total reads "9 PERIODS · 35 WEEKS" instead of the
-    // pre-fix "7 PERIODS · 23 WEEKS" on CIN - OH FYTD.
-    const totalWeeks = grouped.reduce((n, g) => n + (g.zero_labor ? (g.weeks_in_period || 0) : g.weeks.length), 0);
+    // 2026-08-26 polish round 2 item 6 - total week count derives from
+    // the SAME source as the period count: weeks_in_period is pinned
+    // on every period group in page.js from periodsInBoardWeeks(board).
+    //
+    // Post-verify fix: prior calc summed g.weeks.length (weeks-with-
+    // actuals) for present groups and g.weeks_in_period only for
+    // zero-labor groups. On CIN - OH FYTD the period count picked up
+    // both zero-labor periods (9) but the week count picked up only
+    // one - P3-P9 each had zero-labor weeks WITHIN them - total read
+    // 9 PERIODS · 31 WEEKS instead of 35. Same defect the item was
+    // meant to fix, one level down; fix at the source. Both counts
+    // now derive from the shared helper so they cannot disagree.
+    // Month grouping still sums g.weeks.length - months come from a
+    // different derivation and weeks_in_period is not populated there.
+    const totalWeeks = grouped.reduce((n, g) => n + (g.groupHint?.kind === "period" ? (g.weeks_in_period ?? g.weeks.length) : g.weeks.length), 0);
     const isMonth = grouped[0]?.groupHint?.kind === "month";
     return `TOTAL · ${grouped.length} ${isMonth ? "MONTH" : "PERIOD"}${grouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}${acctSuffix}`;
   })();

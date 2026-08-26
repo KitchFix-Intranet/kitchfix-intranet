@@ -181,6 +181,35 @@ assert("single_period_closed still shows Left unspent or Overrun (owner: not a d
 assert("single_period_closed does NOT show Avg per week (multi-period only)",
   !singleClosedLabels.includes("Avg per week"));
 
+// ── 6. Shared source invariant (2026-08-26 post-verify defect class)
+// The WeekTable "N PERIODS · M WEEKS" total must derive from the
+// SAME source as periodsInBoardWeeks so period-count and week-count
+// cannot disagree. This asserts the source's own invariant: sum of
+// weeks_in_period across periods === count of period-tagged rows in
+// board.weeks[]. Anywhere in the client that reads periodsInBoardWeeks
+// inherits this correctness. Prior defect: WeekTable summed
+// g.weeks.length for present groups (weeks-with-actuals) alongside
+// g.weeks_in_period for zero-labor placeholders - the period count
+// picked up both fixes, the week count only one. CIN - OH FYTD
+// showed 9 PERIODS · 31 WEEKS instead of 9 PERIODS · 35 WEEKS.
+console.log("\nshared-source invariant (item 6 post-verify - sum of weeks_in_period == board.weeks count):");
+const multiPerList = periodsInBoardWeeks(boardMulti);
+const multiSumWeeks = multiPerList.reduce((n, p) => n + p.weeks_in_period, 0);
+const multiBoardWeeksCount = (boardMulti.weeks || []).filter(w => w.period_no != null).length;
+console.log(`  boardMulti periods: ${multiPerList.map(p => `P${p.period_no}(${p.weeks_in_period}w)`).join(", ")}`);
+console.log(`  sum(weeks_in_period): ${multiSumWeeks} · board.weeks[period_no!=null].length: ${multiBoardWeeksCount}`);
+assert("sum of weeks_in_period matches board.weeks[] period-tagged count",
+  multiSumWeeks === multiBoardWeeksCount,
+  `  sum: ${multiSumWeeks}, board: ${multiBoardWeeksCount}`);
+// Same assertion on the in-progress single-period board (defensive -
+// even a single-period range should satisfy the invariant).
+const inProgPerList = periodsInBoardWeeks(boardInProgress);
+const inProgSumWeeks = inProgPerList.reduce((n, p) => n + p.weeks_in_period, 0);
+const inProgBoardWeeksCount = (boardInProgress.weeks || []).filter(w => w.period_no != null).length;
+assert("sum of weeks_in_period matches board.weeks[] on single_period_in_progress",
+  inProgSumWeeks === inProgBoardWeeksCount,
+  `  sum: ${inProgSumWeeks}, board: ${inProgBoardWeeksCount}`);
+
 if (failures > 0) {
   console.log(`\n${failures} failure(s).`);
   process.exit(1);

@@ -36,3 +36,9 @@ Design questions to resolve before starting:
 - OT card label matches owner's homestand wording
 - Homestand Hours available / Payroll data cards read hourly-only regardless of the salary toggle (same rule as the period board, applied here)
 - Header heights stay equal across all five homestand cards (as they now do across the four period cards)
+
+## Card-height parity between the two boards (added 2026-08-26 post-polish-round-2)
+
+Owner verify: period-board signal cards now render **240px** while homestand signal cards stay at **197px**. Expected given the round-2 additions (new "Not yet priced" fact on Payroll data, `Covers` dashed line on all four period cards). The gap is not a defect - it is the price of the extra information those cards now carry.
+
+The two boards should eventually match again. Whether that means the homestand cards grow to match (they add `Covers` + payroll flip + hourly-only pinning per the acceptance above and naturally reach 240px), or the period cards shrink (a redesign that folds the new content into fewer lines), is a design call for the follow-up PR. Log this note so the divergence is not silently accepted as the new normal.
