@@ -381,6 +381,17 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
         anomaly_no_clockout: 0,   // DRAFT + end_time missing/empty (18 today, ZERO ever approved)
         anomaly_under_1h:    0,   // DRAFT + duration < 1.0h (double-punch class)
         anomaly_over_16h:    0,   // DRAFT + duration > 16.0h (deliberately above 15.32h approved max)
+        // v43-1 approvals - the other half of the two-dimensional model
+        // v42 opened. draft_hours + approved_hours == total hours on
+        // in-scope time entries per the invariant probe. still_costing
+        // is the subset of APPROVED entries whose te -> zo -> segment
+        // hop returns empty (approved but Rippling has not costed it).
+        // oldest_draft_start is a Date object we min-fold over DRAFT
+        // entries; emit as ISO date (YYYY-MM-DD) or NULL if no drafts.
+        approved_entry_count:      0,
+        approved_hours:            0,
+        still_costing_hours:       0,
+        oldest_draft_start:        null,   // Date or null; null == no DRAFT entries in bucket
       };
       bucketRows.set(k, b);
     }
@@ -484,6 +495,28 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
       if (!p.end_time) bucket.anomaly_no_clockout++;
       if (dur > 0 && dur < 1.0) bucket.anomaly_under_1h++;
       if (dur > 16.0) bucket.anomaly_over_16h++;
+      // v43-1 - min-fold start_time across DRAFT entries in the
+      // bucket. String compare on ISO datetimes is lexicographic-
+      // safe. Emitted as YYYY-MM-DD (start_time is ISO datetime,
+      // slice(0,10)) after the min. NULL when the bucket has no
+      // DRAFT entries - "we do not know an oldest", the correct
+      // absent state per owner ruling ("NULL means we do not know,
+      // not nothing is old").
+      const startIso = p.start_time || null;
+      if (startIso && (bucket.oldest_draft_start === null || startIso < bucket.oldest_draft_start)) {
+        bucket.oldest_draft_start = startIso;
+      }
+    } else if (p.status === "APPROVED") {
+      const dur = Number(p.time_entry_summary?.duration || 0);
+      bucket.approved_entry_count++;
+      bucket.approved_hours += dur;
+      // still_costing = APPROVED entries where the te -> zo -> segment
+      // hop returned nothing (approved but Rippling has not costed it
+      // yet). `covered` from the coverage check above uses the same
+      // hop; a DRAFT entry can also be uncovered ("still on the
+      // clock") but that box is not what this card is about - it
+      // rolls into draft_hours.
+      if (!covered) bucket.still_costing_hours += dur;
     }
   }
 
@@ -595,6 +628,15 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
       anomaly_no_clockout: b.anomaly_no_clockout,
       anomaly_under_1h:    b.anomaly_under_1h,
       anomaly_over_16h:    b.anomaly_over_16h,
+      // v43-1 approvals - per v43-1-approvals-derive.sql. approved
+      // hours + still-costing hours emit as rounded numbers (zero
+      // when no APPROVED entries in the bucket). oldest_draft_date
+      // emits as YYYY-MM-DD (from start_time.slice(0,10)) or null
+      // when no DRAFT entries - the correct "we do not know an
+      // oldest" state, not a bare "—" and not green ALL CLEAR.
+      approved_hours:      round2(b.approved_hours),
+      still_costing_hours: round2(b.still_costing_hours),
+      oldest_draft_date:   b.oldest_draft_start ? b.oldest_draft_start.slice(0, 10) : null,
     };
 
     if (!perAccount.has(b.account_key)) perAccount.set(b.account_key, []);

@@ -983,7 +983,7 @@ export default function KpiLaborPage() {
                 } : null}
                 isFutureRange={data?.is_future_range === true}
                 hoursAvailableHourly={data?.hours_available_hourly}
-                payrollCoverageHourly={data?.payroll_coverage_hourly}
+                approvalsHourly={data?.approvals_hourly}
               />
               <ComparisonStrip
                 prior_period_comparison={data.prior_period_comparison}

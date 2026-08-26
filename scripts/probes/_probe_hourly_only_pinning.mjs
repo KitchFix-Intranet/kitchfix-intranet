@@ -1,4 +1,4 @@
-// Probe: hours_available_hourly + payroll_coverage_hourly are
+// Probe: hours_available_hourly + approvals_hourly are
 // byte-identical on a response with or without include_salary=1.
 //
 // Owner assertion, 2026-08-26: the pinning is proven by the identity
@@ -14,7 +14,7 @@
 //      pinHourlyOnly(body.board)) - same as route.js
 //   3. Call withSalary() with canned salary inputs to produce the
 //      salary-on body
-//   4. Compare hours_available_hourly + payroll_coverage_hourly on
+//   4. Compare hours_available_hourly + approvals_hourly on
 //      the two bodies; assert deep-equal
 //
 // If this fails, the salary merge is silently overriding one of the
@@ -44,7 +44,13 @@ const hourlyActuals = [
     amount: 860, hours_without_dollars: 0,
     segment_count: 5, entry_count: 5,
     coverage_state: "complete",
+    // v43-1 - fully approved week, all costed. approved_hours = 42
+    // (reg + ot), draft_hours = 0, still_costing_hours = 0, no
+    // oldest_draft. The "done" quadrant.
     draft_hours: 0,
+    approved_hours: 42,
+    still_costing_hours: 0,
+    oldest_draft_date: null,
   },
   {
     account_key: account, worker_id: "w2",
@@ -57,7 +63,12 @@ const hourlyActuals = [
     amount: 700, hours_without_dollars: 0,
     segment_count: 5, entry_count: 5,
     coverage_state: "complete",
+    // v43-1 - mixed: 35 approved-and-costed, 12.5 draft-and-costed.
+    // Oldest draft is 2026-08-20 (a Thursday of this week).
     draft_hours: 12.5,
+    approved_hours: 35,
+    still_costing_hours: 0,
+    oldest_draft_date: "2026-08-20",
   },
   {
     account_key: account, worker_id: "w3",
@@ -70,7 +81,14 @@ const hourlyActuals = [
     amount: 400, hours_without_dollars: 5,
     segment_count: 3, entry_count: 3,
     coverage_state: "partial",
+    // v43-1 - the interesting one: 20 approved-and-costed, 5 approved-
+    // but-still-costing (approved_hours = 25, still_costing = 5), plus
+    // 8 draft-hours (some draft/costed and some draft/uncosted split
+    // rolls up into draft_hours). Oldest draft this week 2026-08-27.
     draft_hours: 8,
+    approved_hours: 25,
+    still_costing_hours: 5,
+    oldest_draft_date: "2026-08-27",
   },
 ];
 
@@ -134,9 +152,9 @@ console.log("=== hourly-only pinning probe ===\n");
 
 console.log("presence:");
 assert("bodyHourly has hours_available_hourly",  !!bodyHourly.hours_available_hourly);
-assert("bodyHourly has payroll_coverage_hourly", !!bodyHourly.payroll_coverage_hourly);
+assert("bodyHourly has approvals_hourly", !!bodyHourly.approvals_hourly);
 assert("bodySalary has hours_available_hourly",  !!bodySalary.hours_available_hourly);
-assert("bodySalary has payroll_coverage_hourly", !!bodySalary.payroll_coverage_hourly);
+assert("bodySalary has approvals_hourly", !!bodySalary.approvals_hourly);
 
 console.log("\nsalary path is different from hourly path (sanity - if identical, we haven't proven anything):");
 assert(
@@ -156,11 +174,11 @@ assert(
   ok1,
   ok1 ? null : `\n--- hourly ---\n${json(bodyHourly.hours_available_hourly)}\n--- salary ---\n${json(bodySalary.hours_available_hourly)}`,
 );
-const ok2 = deepEqual(bodyHourly.payroll_coverage_hourly, bodySalary.payroll_coverage_hourly);
+const ok2 = deepEqual(bodyHourly.approvals_hourly, bodySalary.approvals_hourly);
 assert(
-  "payroll_coverage_hourly is byte-identical across include_salary toggle",
+  "approvals_hourly is byte-identical across include_salary toggle",
   ok2,
-  ok2 ? null : `\n--- hourly ---\n${json(bodyHourly.payroll_coverage_hourly)}\n--- salary ---\n${json(bodySalary.payroll_coverage_hourly)}`,
+  ok2 ? null : `\n--- hourly ---\n${json(bodyHourly.approvals_hourly)}\n--- salary ---\n${json(bodySalary.approvals_hourly)}`,
 );
 
 // Polish round 2 item 1 - explicit assertion on the materiality
@@ -172,20 +190,66 @@ assert(
 // accepting salary dilution and the FINAL/PARTIAL boundary becomes
 // unreliable.
 assert(
-  "payroll_coverage_hourly.total_hours is byte-identical across the toggle",
-  bodyHourly.payroll_coverage_hourly.total_hours === bodySalary.payroll_coverage_hourly.total_hours,
-  `  hourly: ${bodyHourly.payroll_coverage_hourly.total_hours}, salary: ${bodySalary.payroll_coverage_hourly.total_hours}`,
+  "approvals_hourly.total_hours is byte-identical across the toggle",
+  bodyHourly.approvals_hourly.total_hours === bodySalary.approvals_hourly.total_hours,
+  `  hourly: ${bodyHourly.approvals_hourly.total_hours}, salary: ${bodySalary.approvals_hourly.total_hours}`,
 );
 assert(
-  "payroll_coverage_hourly.total_hours matches board.hours on hourly body (sanity)",
-  bodyHourly.payroll_coverage_hourly.total_hours === bodyHourly.board.hours,
+  "approvals_hourly.total_hours matches board.hours on hourly body (sanity)",
+  bodyHourly.approvals_hourly.total_hours === bodyHourly.board.hours,
+);
+
+// v43-1 approvals fields - explicit byte-identity across the toggle
+// for each new field. Same reason as total_hours: a future change
+// that accidentally makes any of these salary-touchable silently
+// breaks the card. Also asserts the oldest_draft_date NULL contract
+// carries through the pin unchanged (NULL in, NULL out).
+console.log("\nv43-1 approvals fields (individual byte-identity across toggle):");
+for (const key of ["approved_hours", "still_costing_hours", "oldest_draft_date", "approval_people"]) {
+  const h = bodyHourly.approvals_hourly[key];
+  const s = bodySalary.approvals_hourly[key];
+  assert(
+    `approvals_hourly.${key} is byte-identical across the toggle`,
+    h === s || (h === null && s === null),
+    `  hourly: ${JSON.stringify(h)}, salary: ${JSON.stringify(s)}`,
+  );
+}
+// Sanity: fixture-derived aggregates match. Row w1 = 42 approved,
+// w2 = 35 approved + 12.5 draft (oldest 08-20), w3 = 25 approved +
+// 8 draft + 5 still-costing (oldest 08-27). Range totals: 102
+// approved, 20.5 draft, 5 still-costing, 2 people with drafts, MIN
+// oldest = 08-20.
+assert(
+  "oldest_draft_date is MIN across rows (2026-08-20)",
+  bodyHourly.approvals_hourly.oldest_draft_date === "2026-08-20",
+  `  got: ${bodyHourly.approvals_hourly.oldest_draft_date}`,
+);
+assert(
+  "approved_hours matches fixture sum (102)",
+  Math.abs(bodyHourly.approvals_hourly.approved_hours - 102) < 0.01,
+  `  got: ${bodyHourly.approvals_hourly.approved_hours}`,
+);
+assert(
+  "draft_hours matches fixture sum (20.5)",
+  Math.abs(bodyHourly.approvals_hourly.draft_hours - 20.5) < 0.01,
+  `  got: ${bodyHourly.approvals_hourly.draft_hours}`,
+);
+assert(
+  "still_costing_hours matches fixture sum (5)",
+  Math.abs(bodyHourly.approvals_hourly.still_costing_hours - 5) < 0.01,
+  `  got: ${bodyHourly.approvals_hourly.still_costing_hours}`,
+);
+assert(
+  "approval_people counts distinct workers with drafts (w2 + w3 = 2)",
+  bodyHourly.approvals_hourly.approval_people === 2,
+  `  got: ${bodyHourly.approvals_hourly.approval_people}`,
 );
 
 console.log("\ncontent snapshot (the pinned inputs the two cards read):");
 console.log("  hours_available_hourly:");
 console.log(json(bodyHourly.hours_available_hourly).split("\n").map(l => "    " + l).join("\n"));
-console.log("  payroll_coverage_hourly:");
-console.log(json(bodyHourly.payroll_coverage_hourly).split("\n").map(l => "    " + l).join("\n"));
+console.log("  approvals_hourly:");
+console.log(json(bodyHourly.approvals_hourly).split("\n").map(l => "    " + l).join("\n"));
 
 // ─── Closed-period contract: hours_available_hourly.applies must
 // be false on any kind other than single_period_in_progress. Owner
@@ -211,9 +275,9 @@ assert(
   `  got: ${bodyClosed.hours_available_hourly.applies}`,
 );
 assert(
-  "payroll_coverage_hourly.applies stays TRUE on closed period (card renders on every kind)",
-  bodyClosed.payroll_coverage_hourly.applies === true,
-  `  got: ${bodyClosed.payroll_coverage_hourly.applies}`,
+  "approvals_hourly.applies stays TRUE on closed period (card renders on every kind)",
+  bodyClosed.approvals_hourly.applies === true,
+  `  got: ${bodyClosed.approvals_hourly.applies}`,
 );
 assert(
   "hours_available_hourly.applies is TRUE on the in-progress body (baseline)",

@@ -138,6 +138,16 @@ function sumRows(rows) {
   // uses it for the current-week informational render only.
   let draft_entries = 0, draft_hours = 0;
   let anomaly_no_clockout = 0, anomaly_under_1h = 0, anomaly_over_16h = 0;
+  // v43-1 approvals - completes the two-dimensional model V42 opened.
+  // approved_hours + draft_hours == total in-scope time entry hours
+  // (probe: _probe_approvals_four_state.mjs asserts this and the
+  // still_costing <= approved_hours subset invariant). oldest_draft
+  // is MIN across rows (a bucket-level MIN of DRAFT start_times),
+  // NOT a sum. approval_workers is distinct workers with any draft
+  // in range - the "N people" figure the card's sub-line uses.
+  let approved_hours = 0, still_costing_hours = 0;
+  let oldest_draft_date = null;   // ISO date string or null
+  const approvalWorkerIds = new Set();
   const workerIds = new Set();
   for (const r of rows) {
     total += 1;
@@ -150,6 +160,16 @@ function sumRows(rows) {
     anomaly_no_clockout += Number(r.anomaly_no_clockout || 0);
     anomaly_under_1h    += Number(r.anomaly_under_1h    || 0);
     anomaly_over_16h    += Number(r.anomaly_over_16h    || 0);
+    approved_hours      += Number(r.approved_hours      || 0);
+    still_costing_hours += Number(r.still_costing_hours || 0);
+    // MIN-fold oldest_draft_date across rows. NULL on a row means
+    // "no drafts in this row" - skip; do NOT treat NULL as "0" or
+    // "all clear" (that would be the exact defect owner flagged for
+    // the client absent-on-premise-fail rule, one layer up).
+    if (r.oldest_draft_date && (oldest_draft_date === null || r.oldest_draft_date < oldest_draft_date)) {
+      oldest_draft_date = r.oldest_draft_date;
+    }
+    if (Number(r.draft_hours || 0) > 0.004 && r.worker_id) approvalWorkerIds.add(r.worker_id);
     if (r.coverage_state === "complete") complete += 1;
     if (r.worker_id) workerIds.add(r.worker_id);
   }
@@ -159,6 +179,10 @@ function sumRows(rows) {
     draft_entry_count: draft_entries,
     draft_hours: r2(draft_hours),
     anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h,
+    approved_hours: r2(approved_hours),
+    still_costing_hours: r2(still_costing_hours),
+    oldest_draft_date,   // pass-through - MIN across rows, null when no drafts
+    approval_people: approvalWorkerIds.size,
   };
 }
 
@@ -193,6 +217,15 @@ function buildWeekAggregates(actuals, weekStarts) {
       anomaly_under_1h:    s.anomaly_under_1h,
       anomaly_over_16h:    s.anomaly_over_16h,
       anomaly_total:       s.anomaly_no_clockout + s.anomaly_under_1h + s.anomaly_over_16h,
+      // v43-1 approvals - propagate through so rangeTotals can fold
+      // and the pinned block sees them at range level. oldest_draft_date
+      // and approval_people are aggregates, not row-level per-week
+      // splits (a week can carry drafts from multiple people; both
+      // fields describe the week as a unit).
+      approved_hours:      s.approved_hours,
+      still_costing_hours: s.still_costing_hours,
+      oldest_draft_date:   s.oldest_draft_date,
+      approval_people:     s.approval_people,
     });
   }
   return out;
@@ -300,6 +333,16 @@ export function buildBoard({
     for (const id of w.worker_count ? [] : []) {} // placeholder
     return acc;
   }, { amount: 0, hours: 0, ot: 0, unpriced: 0, draft_hours: 0, complete: 0, total: 0 });
+  // v43-1 approvals - range-level fold uses sumRows(actuals) directly
+  // rather than reducing from weekAggs. Reasons: (1) approval_people
+  // is a DISTINCT-worker count and per-week values do not sum (a
+  // worker with drafts in two weeks counts once at range level, twice
+  // by naive sum); (2) oldest_draft_date is MIN across all rows, not
+  // a summation. sumRows already carries the correct semantics for
+  // both. approved_hours + still_costing_hours DO sum row-wise, so
+  // sumRows on the full actuals gives the same answer as a per-week
+  // reduce - one call kept for consistency of the source.
+  const rangeApprovals = sumRows(actuals);
   // Distinct worker count across the range (V8-9: people, not worker-weeks).
   const distinctWorkers = new Set(actuals.map(r => r.worker_id)).size;
 
@@ -615,6 +658,20 @@ export function buildBoard({
       // V32-10 - how many weeks have any unapproved hours (drives
       // action-card "Weeks affected" fact). Now keys off draft_hours.
       unapproved_weeks,
+      // v43-1 approvals - the other three fields the Approvals card
+      // reads (owner ruling 2026-08-26). oldest_draft_date is a MIN
+      // across in-scope actuals rows and CAN BE NULL when no drafts -
+      // client's absent-on-premise-fail rule renders the Oldest shift
+      // fact absent (not "—", not green ALL CLEAR). approval_people
+      // is distinct workers with any draft in range - client uses in
+      // sub-line "across N people". still_costing_hours is APPROVED
+      // entries whose Rippling cost-hop returned empty - resolves on
+      // its own, shown as a muted fact so operators know where the
+      // hours are without acting on them.
+      approved_hours:      rangeApprovals.approved_hours,
+      still_costing_hours: rangeApprovals.still_costing_hours,
+      oldest_draft_date:   rangeApprovals.oldest_draft_date,
+      approval_people:     rangeApprovals.approval_people,
     },
     // Per-week
     weeks: weeksOut,

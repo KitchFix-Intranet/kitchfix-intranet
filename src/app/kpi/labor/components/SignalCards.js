@@ -55,14 +55,22 @@ const HOURS_LEFT_BODY = (
   </>
 );
 
-const PAYROLL_BODY = (
+// 2026-08-26 approvals card - rewrite from CC_PROMPT_APPROVALS_CARD.md.
+// The card renamed from "Payroll data" to "Approvals" - that is the
+// job an operator does in Rippling and the card hands it to them.
+// Popover copy verbatim from the spec's five-paragraph body.
+const APPROVALS_BODY = (
   <>
-    Hours clocked in Rippling that a manager has not approved yet.
+    Hours your crew has worked that nobody has approved yet.
     <br /><br />
-    <b>Rippling calculates the pay as soon as hours are clocked, but approval is a separate step.</b> So the money can be complete and the hours still be waiting on a signature. <b>Will rise</b> is what this period grows by once they are approved.
+    Two separate things happen to every hour. Rippling works out what it costs on its own, as soon as someone clocks out. A manager approving it is a second step, and it often happens days later.
     <br /><br />
-    <b>Read this card first when a number looks too low.</b> Usually the answer is here.
-    <span className="kpi-hs-pop-foot"><b>Coverage</b> is how many worker-weeks have pay data at all - a different question from approval.<br /><br /><b>Hourly only, always.</b> Salaried staff do not clock in, so the salary toggle does not change this card.</span>
+    This card is the second step - the part that needs a person.
+    <br /><br />
+    <b>Oldest shift</b> is the one to watch. A shift sitting a month is a shift that may have missed its payroll.
+    <br /><br />
+    <b>Still costing</b> means approved but the money has not posted yet. It resolves on its own.
+    <span className="kpi-hs-pop-foot"><b>Hourly only, always</b> - salaried staff do not clock in.</span>
   </>
 );
 // PR-A - pure fact builders live in a plain-JS module so a Node probe
@@ -155,14 +163,14 @@ function renderFactValue(value) {
 function renderFacts(items) {
   return items.map(it => ({ ...it, value: renderFactValue(it.value) }));
 }
-function PaceCard({ board, payrollCoverageHourly }) {
+function PaceCard({ board, approvalsHourly }) {
   const m = buildPaceCardModel(board);
   // 2026-08-26 - draft hours annotation on Covers comes from the
   // hourly-only pinned source. Salaried staff never clock in, so this
   // is technically hourly by construction, but reading from the pinned
   // field enforces the discipline structurally.
   const covers = buildCoversLine(board, "pace", {
-    draftHoursHourly: payrollCoverageHourly?.draft_hours ?? 0,
+    draftHoursHourly: approvalsHourly?.draft_hours ?? 0,
   });
   return (
     <SignalCard state={m.state}>
@@ -292,101 +300,128 @@ function HoursLeftCard({ board, hoursAvailableHourly }) {
   );
 }
 
-// ── Payroll data (action card) ────────────────────────────────────
-// Reads from payrollCoverageHourly unconditionally (round 1 pinning).
+// ── Approvals (action card) ───────────────────────────────────────
+// Renamed 2026-08-26 from Payroll data. That is the job an operator
+// does in Rippling and the card hands it to them. Reads from
+// approvalsHourly unconditionally (round 1 pinning discipline; the
+// salary toggle cannot reach this card by construction).
 //
-// 2026-08-26 polish round 2 - three paths now, keyed on MATERIALITY
-// not existence (item 1). CIN - OH FYTD had a PARTIAL pill on 1.38
-// hours out of 3,818 (0.04%) - the pill sent a site leader looking
-// for a problem that did not exist. The pill now flips to FINAL when
-// the residual is under 1% of the range's hourly hours; the residual
-// hours stay in the hero either way.
+// Pill logic - reflects the AGE of the oldest draft, not just its
+// existence. Owner ruling 2026-08-26 after finding a 29-day-old
+// unapproved shift on STL - FL in a closed period - a real
+// operational miss that no volume-based signal would have caught.
+// Age is the signal, not volume.
 //
-//   1. NO DRAFTS      -> FINAL, hero = coverage (N of N)
-//   2. IMMATERIAL     -> FINAL, hero = draft_hours (with hrs unit),
-//                        sub calls the residual out explicitly
-//   3. MATERIAL       -> PARTIAL, hero = draft_hours (with hrs unit),
-//                        sub adds "· N% of hours in period/range";
-//                        new "Not yet priced" fact = unpriced_hours
-//                        so the operator can see why Will rise
-//                        (dollars) is small compared to the hero
-//                        (hours) - most of those hours are already
-//                        priced. V42 distinction preserved:
-//                        Will rise still reads unpriced_hours, the
-//                        pending hero still reads draft_hours.
-function PayrollDataCard({ board, freshness, payrollCoverageHourly, hoursAvailableHourly }) {
-  const priced = payrollCoverageHourly?.priced_ww ?? 0;
-  const total = payrollCoverageHourly?.total_ww ?? 0;
-  const unpricedHrs = payrollCoverageHourly?.unpriced_hours ?? 0;
-  const draftHrs = payrollCoverageHourly?.draft_hours ?? 0;
-  const totalHours = payrollCoverageHourly?.total_hours ?? 0;
-  const unapprovedWeeks = payrollCoverageHourly?.unapproved_weeks ?? 0;
+//   nothing unapproved                 -> "ALL CLEAR"     green
+//   immaterial (< 1% of hours)         -> "ALL CLEAR"     green
+//                                          (round 2 materiality rule)
+//   oldest draft <= 7 days             -> "THIS WEEK"     amber
+//   oldest draft > 7  and <= 14 days   -> "N DAYS OLD"    amber
+//   oldest draft > 14 days             -> "N DAYS OLD"    red
+//   oldest_draft_date NULL with drafts -> "N DAYS OLD" state cannot
+//                                          be computed; treat as
+//                                          amber "PENDING" - the
+//                                          absent-on-premise-fail
+//                                          rule bites the Oldest
+//                                          shift fact, not the pill.
+//                                          (In practice: drafts + no
+//                                          date only happens when
+//                                          the derive has not run
+//                                          since v43-1 apply.)
+//
+// Layout - three paths keyed on materiality:
+//   1. NO DRAFTS       -> ALL CLEAR pill, "All in" hero, "every
+//                         shift approved" sub, Approved + Coverage
+//                         facts.
+//   2. IMMATERIAL      -> ALL CLEAR pill, hero shows the residual
+//                         hours (nothing is hidden), sub calls it
+//                         out honestly.
+//   3. MATERIAL        -> age-based amber/red pill, hero = drafts,
+//                         sub = "need your approval · across N people".
+//                         Facts: Approved so far (green), Oldest
+//                         shift (date only - NO days suffix; pill
+//                         carries the age, no duplication), Still
+//                         costing (muted), Weeks affected.
+//
+// V42 distinction preserved: Will rise still reads unpriced_hours;
+// the pending hero still reads draft_hours. Approved so far reads
+// approved_hours (v43-1, new).
+function ApprovalsCard({ board, freshness, approvalsHourly, hoursAvailableHourly }) {
+  const priced = approvalsHourly?.priced_ww ?? 0;
+  const total = approvalsHourly?.total_ww ?? 0;
+  const unpricedHrs = approvalsHourly?.unpriced_hours ?? 0;
+  const draftHrs = approvalsHourly?.draft_hours ?? 0;
+  const totalHours = approvalsHourly?.total_hours ?? 0;
+  const unapprovedWeeks = approvalsHourly?.unapproved_weeks ?? 0;
+  const approvedHours = approvalsHourly?.approved_hours ?? 0;
+  const stillCostingHours = approvalsHourly?.still_costing_hours ?? 0;
+  const oldestDraftDate = approvalsHourly?.oldest_draft_date ?? null;
+  const approvalPeople = approvalsHourly?.approval_people ?? 0;
   const rate = hoursAvailableHourly?.avg_rate ?? board?.avg_rate;
   const workers = hoursAvailableHourly?.distinct_workers ?? 0;
   const closedWeeks = board?.closed_weeks_count ?? 0;
   const weeksInPeriod = board?.weeks_in_period ?? board?.weeks_in_range;
   const hasUnapproved = draftHrs > 0.004;
   const hasWillRise = unpricedHrs > 0.004;
-  // Materiality: draft_hours / total_hours. Strict < 1% (owner
-  // ruling: warn when in doubt, so exactly 1% reads PARTIAL).
+  // Materiality (round 2): draft_hours / total_hours. Strict < 1%
+  // (owner ruling: warn when in doubt, so exactly 1% reads material).
   const materialityFrac = totalHours > 0 ? draftHrs / totalHours : 0;
   const isMaterial = hasUnapproved && materialityFrac >= 0.01;
   const isImmaterial = hasUnapproved && !isMaterial;
-  // Multi-period reads "in range"; single reads "this period". Same
-  // substitution the covers derivation uses.
   const scopeWord = board?.kind === "multi_period" ? "in range" : "this period";
   const willRise = estimateUnpricedDollars(unpricedHrs, rate);
-  const lastPulled = freshness?.last_walk_at
-    ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-      + " · "
-      + new Date(freshness.last_walk_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-    : "—";
   const covers = buildCoversLine(board, "payroll_data");
 
-  const state = total === 0 ? "neutral" : isMaterial ? "warn" : "good";
-  const label = total === 0 ? "—" : isMaterial ? "PARTIAL" : "FINAL";
+  // Age-based pill (only bites on MATERIAL). Owner directive: dedup
+  // pill and Oldest shift fact - pill carries the age, fact carries
+  // the date. Drop "· N days" from the fact so the two do not restate
+  // each other (same lesson as the bank figure).
+  const pillFromAge = (() => {
+    if (!hasUnapproved || !isMaterial) return { state: "good", label: "ALL CLEAR" };
+    if (!oldestDraftDate) return { state: "warn", label: "PENDING" };  // NULL - do not claim an age
+    const oldestDays = daysSince(oldestDraftDate);
+    if (oldestDays > 14) return { state: "bad",  label: `${oldestDays} DAYS OLD` };
+    if (oldestDays > 7)  return { state: "warn", label: `${oldestDays} DAYS OLD` };
+    return { state: "warn", label: "THIS WEEK" };
+  })();
+  const oldestDaysForFact = oldestDraftDate ? daysSince(oldestDraftDate) : null;
+  // Oldest shift fact tone tracks pill severity so red-pill + red-fact
+  // read as one signal. Absent when oldestDraftDate NULL (owner rule:
+  // NULL means "we do not know", not "nothing is old" and not green).
+  const oldestFactTone = pillFromAge.state === "bad" ? "bad"
+                       : pillFromAge.state === "warn" ? "warn"
+                       : null;
 
-  // Path 3: MATERIAL (>=1% of hours) - PARTIAL, hero flip.
-  if (isMaterial) {
-    const pctOfHours = Math.round(materialityFrac * 100);
+  // Paths 1 + 2: no material drafts -> ALL CLEAR pill.
+  // Path 1 (no drafts at all) keeps the current coverage-hero shape.
+  // Path 2 (immaterial residual) shows the residual as hero so nothing
+  // is hidden, but the pill softens.
+  if (!hasUnapproved) {
     return (
-      <SignalCard state={state}>
-        <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
+      <SignalCard state={pillFromAge.state}>
+        <Head eyebrow="APPROVALS" state={pillFromAge.state} label={pillFromAge.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
         <Hero>
-          <span className="kpi-sig-hero-val num kpi-sig-hero-warn">
-            {fmtHrs(draftHrs)}<span className="kpi-sig-hero-unit">hrs</span>
-          </span>
+          <span className="kpi-sig-hero-val num">All in</span>
         </Hero>
-        <Sub>pending approval in Rippling · {pctOfHours}% of hours {scopeWord}</Sub>
+        <Sub>every shift approved</Sub>
         <Facts items={[
-          { label: "Not yet priced", value: `${fmtHrs(unpricedHrs)} hrs`, tone: "warn", muted: !hasWillRise },
-          ...(hasWillRise ? [{
-            label: "Will rise",
-            value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
-            tone: "warn",
-          }] : []),
-          { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
+          { label: "Approved", value: `${fmtHrs(approvedHours)} hrs`, tone: "good" },
           { label: "Coverage", value: total > 0 ? `${priced} of ${total}` : "—" },
         ]} />
         <Covers text={covers} />
       </SignalCard>
     );
   }
-
-  // Path 2: IMMATERIAL residual - FINAL pill but hero still shows the
-  // residual hours. Sub-line calls out the small share so the pill's
-  // FINAL claim is honest ("nothing is hidden"). Facts pared to the
-  // two operators actually need: Weeks affected + Coverage.
   if (isImmaterial) {
     return (
-      <SignalCard state={state}>
-        <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
+      <SignalCard state={pillFromAge.state}>
+        <Head eyebrow="APPROVALS" state={pillFromAge.state} label={pillFromAge.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
         <Hero>
           <span className="kpi-sig-hero-val num">
             {fmtHrs(draftHrs)}<span className="kpi-sig-hero-unit">hrs</span>
           </span>
         </Hero>
-        <Sub>pending approval · under 1% of hours {scopeWord}</Sub>
+        <Sub>need approval · under 1% of hours {scopeWord}</Sub>
         <Facts items={[
           { label: "Weeks affected", value: `${unapprovedWeeks}` },
           { label: "Coverage", value: total > 0 ? `${priced} of ${total}` : "—" },
@@ -396,51 +431,80 @@ function PayrollDataCard({ board, freshness, payrollCoverageHourly, hoursAvailab
     );
   }
 
-  // Path 1: NO DRAFTS - existing coverage-hero path stands.
+  // Path 3: MATERIAL. Age-based pill (already computed above).
   return (
-    <SignalCard state={state}>
-      <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
+    <SignalCard state={pillFromAge.state}>
+      <Head eyebrow="APPROVALS" state={pillFromAge.state} label={pillFromAge.label} help={<HelpPop id="qApprovals" title="Approvals" body={APPROVALS_BODY} />} />
       <Hero>
-        <span className="kpi-sig-hero-val num">{priced} of {total}</span>
+        <span className={`kpi-sig-hero-val num ${pillFromAge.state === "bad" ? "kpi-sig-hero-bad" : "kpi-sig-hero-warn"}`}>
+          {fmtHrs(draftHrs)}<span className="kpi-sig-hero-unit">hrs</span>
+        </span>
       </Hero>
-      <Sub>with pay data in</Sub>
+      <Sub>need your approval · across <b>{approvalPeople} {approvalPeople === 1 ? "person" : "people"}</b></Sub>
       <Facts items={[
-        { label: "Unapproved", value: "none", tone: "good" },
-        { label: "Workers", value: workers > 0 ? `${workers}` : "—" },
-        { label: "Weeks",
-          value: weeksInPeriod ? `${closedWeeks} of ${weeksInPeriod}` : (closedWeeks > 0 ? `${closedWeeks}` : "—") },
-        { label: "Last pulled", value: lastPulled },
+        { label: "Approved so far", value: `${fmtHrs(approvedHours)} hrs`, tone: "good" },
+        // Oldest shift - date only. Pill above carries the age. Owner
+        // directive: dedup - pill and fact must not restate each other.
+        // Absent (not "—", not green) when oldestDraftDate NULL.
+        ...(oldestDraftDate ? [{
+          label: "Oldest shift",
+          value: fmtShortDate(oldestDraftDate),
+          tone: oldestFactTone,
+        }] : []),
+        // Still costing - the fourth box, muted. Resolves on its own;
+        // no operator action. Absent when zero (standing rule: a fact
+        // whose premise does not hold is gone, not dashed).
+        ...(stillCostingHours > 0.004 ? [{
+          label: "Still costing",
+          value: `${fmtHrs(stillCostingHours)} hrs`,
+          muted: true,
+        }] : []),
+        { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
       ]} />
       <Covers text={covers} />
     </SignalCard>
   );
 }
 
+// Whole-day integer offset between an ISO date (YYYY-MM-DD) and today,
+// UTC-based to match the derive's date arithmetic (start_time is UTC
+// ISO from Rippling). Returns 0 for same day, positive for past dates.
+function daysSince(iso) {
+  const then = new Date(`${iso}T00:00:00.000Z`);
+  const now = new Date();
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.max(0, Math.floor((nowUtc - then.getTime()) / 86400000));
+}
+function fmtShortDate(iso) {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 // 2026-08-26 signal card revisions - `hoursAvailableHourly` and
-// `payrollCoverageHourly` are server-pinned hourly-only inputs (see
+// `approvalsHourly` are server-pinned hourly-only inputs (see
 // salaryBoard.js `pinHourlyOnly`). Passed unconditionally; the two
 // hourly-only cards NEVER read salary-inflated numbers regardless of
 // the salary prop. Owner ruling: "if the read is unconditional, the
 // toggle cannot reach these two cards by construction."
 //
-// The salary prop stays wired ONLY for the Overtime card's sub-line
-// copy - a share-of-hourly-cost label rather than a percentage
-// interpretation - which is not a numeric change.
-export function SignalCards({ board, freshness, salary, isFutureRange, hoursAvailableHourly, payrollCoverageHourly }) {
+// v43-1 (2026-08-26): PayrollDataCard renamed to ApprovalsCard; prop
+// renamed from payrollCoverageHourly to approvalsHourly. Card name and
+// field name now match. The salary prop stays wired ONLY for the
+// Overtime card's sub-line copy (a share-of-hourly-cost label).
+export function SignalCards({ board, freshness, salary, isFutureRange, hoursAvailableHourly, approvalsHourly }) {
   if (!board || board.applies === false) return null;
   // Owner ruling 2026-08-24: a future range (server flag
   // `is_future_range`, true when start > today) hides Pace, Overtime,
-  // and Payroll Data - the premise of each fails on a range that
-  // hasn't started (no pace, no overtime hours, no payroll coverage
-  // yet). HoursLeftCard now itself hides on any range other than
-  // single_period_in_progress, so its future-range behaviour comes
-  // from the model rather than a wrapper guard.
+  // and Approvals - the premise of each fails on a range that hasn't
+  // started (no pace, no overtime hours, no approvals to work). Hours
+  // available hides itself on any range other than
+  // single_period_in_progress.
   return (
     <div className="kpi-sigs">
-      {!isFutureRange && <PaceCard board={board} payrollCoverageHourly={payrollCoverageHourly} />}
+      {!isFutureRange && <PaceCard board={board} approvalsHourly={approvalsHourly} />}
       {!isFutureRange && <OvertimeCard board={board} salary={salary} />}
       <HoursLeftCard board={board} hoursAvailableHourly={hoursAvailableHourly} />
-      {!isFutureRange && <PayrollDataCard board={board} freshness={freshness} payrollCoverageHourly={payrollCoverageHourly} hoursAvailableHourly={hoursAvailableHourly} />}
+      {!isFutureRange && <ApprovalsCard board={board} freshness={freshness} approvalsHourly={approvalsHourly} hoursAvailableHourly={hoursAvailableHourly} />}
     </div>
   );
 }

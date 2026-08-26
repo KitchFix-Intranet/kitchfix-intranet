@@ -318,10 +318,10 @@ export function pinHourlyOnly(board) {
   // to schedule in Period M" - cannot be written for a closed period,
   // FYTD or last-4-weeks). Reporting applies:true on those ranges
   // would lie to a future consumer that trusts the flag and render a
-  // card we deliberately suppress. Payroll data renders on every
-  // kind so its applies still follows the board.
+  // card we deliberately suppress. Approvals renders on every kind
+  // so its applies still follows the board.
   const hoursAvailableApplies = b.applies !== false && b.kind === "single_period_in_progress";
-  const payrollCoverageApplies = b.applies !== false;
+  const approvalsApplies = b.applies !== false;
   return {
     hours_available_hourly: {
       applies: hoursAvailableApplies,
@@ -336,8 +336,29 @@ export function pinHourlyOnly(board) {
       hours_worked: b.hours_vs_budget?.worked ?? null,
       distinct_workers: b.distinct_workers ?? 0,
     },
-    payroll_coverage_hourly: {
-      applies: payrollCoverageApplies,
+    // 2026-08-26 approvals card - renamed from payroll_coverage_hourly.
+    // Card name (Approvals) and field name (approvals_hourly) now
+    // aligned. Owner ruling: a stale payroll_coverage_hourly feeding
+    // a card called Approvals is exactly the kind of drift that costs
+    // an hour to untangle in six months. All coverage + approval fields
+    // consolidated into ONE pinned block.
+    //
+    // Field lineage:
+    //   priced_ww / total_ww / unpriced_hours   - existing coverage (V32-10)
+    //   draft_hours / unapproved_weeks          - existing approval-status (V42)
+    //   total_hours                             - polish round 2 materiality
+    //   approved_hours / oldest_draft_date /
+    //     still_costing_hours / approval_people - v43-1 (this file)
+    //
+    // NULL semantics (critical for the Approvals card):
+    //   oldest_draft_date NULL means "we do not know, no drafts in
+    //   range" - the client MUST render the Oldest shift fact absent,
+    //   not "—" and not green ALL CLEAR. Owner ruling 2026-08-26.
+    //   Every other numeric field defaults to 0 - a valid zero state
+    //   (zero drafts, zero costed) has real meaning; a missing date
+    //   does not.
+    approvals_hourly: {
+      applies: approvalsApplies,
       priced_ww: b.payroll_data?.priced_ww ?? 0,
       total_ww: b.payroll_data?.total_ww ?? 0,
       draft_hours: b.payroll_data?.draft_hours ?? 0,
@@ -355,6 +376,15 @@ export function pinHourlyOnly(board) {
       // makes the pin trivially correct today, and a downstream change
       // to that contract would silently poison the ratio.
       total_hours: b.hours ?? 0,
+      // v43-1 approvals fields. All derive from payroll_data which
+      // buildBoard populates from labor_actuals per the two-dimensional
+      // model (draft/approved x costed/uncosted). approved_hours can
+      // be 0 legitimately on a range with zero approvals; oldest_draft_date
+      // uses NULL for "we do not know" per above.
+      approved_hours:      b.payroll_data?.approved_hours ?? 0,
+      still_costing_hours: b.payroll_data?.still_costing_hours ?? 0,
+      oldest_draft_date:   b.payroll_data?.oldest_draft_date ?? null,
+      approval_people:     b.payroll_data?.approval_people ?? 0,
     },
   };
 }
