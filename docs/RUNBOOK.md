@@ -226,3 +226,37 @@ Any PR adding a file under `docs/migrations/*.sql` opens with a **red `Migration
 - **Job B (`preview-smoke`)**: runs on `deployment_status`. Reads the PR's own Vercel preview URL from the event payload + runs a dependency-free smoke check. Accepts `2xx / 3xx / 401` as "serving" (Vercel Preview Protection returns 302 SSO).
 
 Prior state (test against a hardcoded prod URL) is retired - `grep 'kitchfix-intranet.vercel.app' .github/workflows/e2e.yml` returns zero hits.
+
+## Purchasing report ingest (INV-P20)
+
+`.github/workflows/purchasing-report-ingest.yml` runs daily at **06:00 UTC** (00:00 CST / 01:00 CDT) and closes the gap between Rippling's stale line-item API (~15-day lag) and the operator-facing dashboard.
+
+**End-to-end sequence:**
+
+1. Rippling sends the custom-report email to the KitchFix mailbox at some point overnight (Kevin configures the schedule in Rippling admin; recommend delivery by 05:30 UTC).
+2. Workflow wakes at 06:00 UTC, boots Node 22, runs `_probe_report_ingest_staleness.mjs` to prove the 26-hour gate still fires (regression guard), then invokes `scripts/purchasing_report_ingest.mjs`.
+3. Orchestrator impersonates `RIPPLING_REPORT_MAILBOX_ADDRESS` via SA domain-wide delegation (scope: `gmail.readonly`), searches with the `RIPPLING_REPORT_SUBJECT_FILTER` query, verifies the newest match is < 26h old, downloads the CSV attachment to `/tmp/rippling_report.csv`.
+4. Orchestrator spawns `scripts/purchasing_report_load.mjs --csv=/tmp/rippling_report.csv` (unchanged loader; idempotent upsert on `parent_txn_id`).
+5. Orchestrator writes a `purchasing_derive_runs` row (`source='rippling_report'`, `completed_at`, row count, status) so the board's freshness pill picks up the ingest state.
+6. Orchestrator deletes the CSV on every exit path (success, failure, unhandled). The CSV carries employee names and must never persist on the runner or land in the repo.
+7. The existing purchasing sync at 07:30 UTC runs the derive with the fresh `rippling_report_seen_txns` seed in place.
+
+**Failure modes and what an operator sees on the board:**
+
+- `REPORT_STALE` (newest matching email > 26h old) → workflow exits 2, orchestrator writes `status='failed'` derive-runs row. Board's freshness pill flips red: `Report feed stale · last ingest Nh ago`.
+- `NO_MATCH` / `NO_ATTACHMENT` / `NO_CSV_ATTACHMENT` → same pattern, same red pill.
+- Loader exit non-zero (header mismatch, DB error) → orchestrator exits 3, same red pill.
+- SA delegation not yet granted → Google throws before we list messages; landed as `read unknown` in the derive-runs row.
+- First-ever state (never run) → pill shows `Report feed not started` in the same red style until the first successful ingest.
+
+**Manual trigger:**
+
+```
+gh workflow run purchasing-report-ingest.yml
+```
+
+Dry-run (mailbox access + download but no loader or derive-runs write; still deletes CSV):
+
+```
+gh workflow run purchasing-report-ingest.yml -f dry_run=true
+```

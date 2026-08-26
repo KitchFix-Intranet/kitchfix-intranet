@@ -95,6 +95,18 @@
   flex: none;
   margin-top: 4px;
 }
+/* INV-P20 - report-feed staleness variant. When the ingest lane has
+   not written a successful `purchasing_derive_runs` row in the last
+   36 hours, the livenote flips to a red-tinted background with a red
+   dot. Uses existing --red-* tokens; no new colours. */
+.kpi-app .kpi-p-livenote.kpi-p-livenote-stale {
+  background: var(--red-100);
+  color: var(--red-700);
+}
+.kpi-app .kpi-p-livenote.kpi-p-livenote-stale b { color: var(--red-700); }
+.kpi-app .kpi-p-livenote.kpi-p-livenote-stale .kpi-p-livedot {
+  background: var(--red-700);
+}
 
 /* Two-up card row (period, bucket, ledger, action). */
 /* PR-2 R11 item 6a - chart column widens. Owner target 0.6fr / 1.4fr

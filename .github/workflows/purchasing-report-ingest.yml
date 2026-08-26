@@ -1,0 +1,87 @@
+name: purchasing report ingest (Rippling scheduled email)
+
+# Read Kevin's scheduled Rippling custom-report email, download the CSV
+# attachment, and feed its Transaction IDs into `rippling_report_seen_txns`
+# via the existing `purchasing_report_load.mjs`.
+#
+# Sits 90 minutes ahead of the derive at 07:30 UTC so a slow report or a
+# delayed email has room.  Owner window: midnight to 2am Central; 06:00
+# UTC is 00:00 CST / 01:00 CDT and lands inside that.
+#
+# Failure surface:
+#   exit 2 = mailbox read failed (REPORT_STALE, NO_MATCH, NO_ATTACHMENT,
+#            NO_CSV_ATTACHMENT, or the SA delegation is not granted yet)
+#   exit 3 = loader script exited non-zero
+#   exit 4 = derive_runs write failed (very rare, service_role missing?)
+#   exit 5 = unhandled exception
+# Every non-zero fails the job.  The orchestrator writes a
+# `purchasing_derive_runs` row with `status='failed'` before exiting so
+# the board's freshness pill sees the failure regardless of the workflow's
+# own visibility.
+#
+# Read-only against Gmail: the SA delegation scope is `gmail.readonly`
+# and no code path in `src/lib/gmailReadReport.js` imports send/modify/
+# delete/trash/markAsRead.  See file header for the discipline.
+#
+# The downloaded CSV lands at /tmp/rippling_report.csv on the runner and
+# is deleted by the orchestrator on every exit path (success, failure,
+# or unhandled).  It carries employee names and must not persist on the
+# runner and must never be committed to the repo.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC = 00:00 CST / 01:00 CDT (midnight-to-2am window)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If "true", read the mailbox and prove the download, but skip the loader + derive_runs write.'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: purchasing-report-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: report ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      GOOGLE_SERVICE_ACCOUNT_EMAIL:     ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
+      GOOGLE_PRIVATE_KEY:               ${{ secrets.GOOGLE_PRIVATE_KEY }}
+      RIPPLING_REPORT_MAILBOX_ADDRESS:  ${{ secrets.RIPPLING_REPORT_MAILBOX_ADDRESS }}
+      RIPPLING_REPORT_SUBJECT_FILTER:   ${{ secrets.RIPPLING_REPORT_SUBJECT_FILTER }}
+      SUPABASE_URL:                     ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY:        ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prove staleness gate (unit)
+        # Runs the pure-function acceptance check every time.  If the
+        # 26-hour gate regresses the workflow fails before touching
+        # Gmail.  Zero cost.
+        run: node scripts/probes/_probe_report_ingest_staleness.mjs
+
+      - name: Ingest scheduled report
+        run: |
+          DRY_RUN="${{ inputs.dry_run || 'false' }}"
+          ARGS=""
+          if [ "${DRY_RUN}" = "true" ]; then
+            ARGS="--dry-run"
+          fi
+          node scripts/purchasing_report_ingest.mjs ${ARGS}

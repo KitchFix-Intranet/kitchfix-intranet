@@ -917,13 +917,26 @@ export default function KpiPurchasingPage() {
     // detail complementing the status pill above. The worst-source
     // anchor + pill label are computed at the outer scope so Shell
     // reads the same freshness the note explains.
-    const freshnessDetail = cardsThroughLabel
-      ? `Bills current · cards through ${cardsThroughLabel}`
-      : "Bills current";
+    // INV-P20 third freshness source. When the report-ingest lane is
+    // stale (> 36h since last successful ingest, or has never run)
+    // the pill replaces the reassuring "Bills current" copy with a
+    // plain-language stale-report note so an operator can't miss it.
+    // Owner-facing wording: "Report feed stale - last ingest Nh ago"
+    // or "Report feed not started". Never a code or a stack trace.
+    const reportStale = data?.freshness?.report_stale === true;
+    const reportAgeH = data?.freshness?.report_age_hours;
+    const reportEverRan = data?.freshness?.last_report_ingest_at != null;
+    const freshnessDetail = reportStale
+      ? (reportEverRan
+          ? `Report feed stale · last ingest ${reportAgeH}h ago`
+          : `Report feed not started`)
+      : (cardsThroughLabel
+          ? `Bills current · cards through ${cardsThroughLabel}`
+          : "Bills current");
 
     return (
       <div className="kpi-p-board">
-        <div className="kpi-p-livenote" role="status">
+        <div className={`kpi-p-livenote${reportStale ? " kpi-p-livenote-stale" : ""}`} role="status">
           <span className="kpi-p-livedot" aria-hidden="true" />
           <span><b>{freshnessDetail}</b></span>
         </div>
