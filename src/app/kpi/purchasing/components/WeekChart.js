@@ -84,7 +84,14 @@ function buildWeekSlot({ spent, orig, adj, isPassThrough, running, finished }) {
   }
   if (finished) {
     if (!hasSpend) {
-      return { value: null, caption: { val: "—", note: "no spend", tone: "n" } };
+      // INV-P21 Part B2 item 1 - spec §7.7 / §7.8: `$0.00` means
+      // nothing was bought (a fact); `—` means no data.  On a
+      // finished (fully-elapsed) week, zero spend is a fact, so the
+      // caption reads `$0.00`.  Previous state rendered `— · no
+      // spend` on every closed-period zero, which looked like a
+      // missing render.  The bar still draws a baseline via
+      // `value: null` because there is no height to plot.
+      return { value: null, caption: { val: fmt$(0), note: null, tone: "n" } };
     }
     if (!(orig > 0)) {
       return { value: v, caption: { val: fmt$(v), note: null, tone: "n" } };
@@ -113,7 +120,9 @@ function buildPeriodSlot({ spent, budget, running, finished }) {
   }
   if (finished) {
     if (!hasSpend) {
-      return { value: null, caption: { val: "—", note: "no spend", tone: "n" } };
+      // INV-P21 Part B2 item 1 - closed-period zero renders `$0.00`
+      // per spec §7.7 / §7.8, same rule as the week slot above.
+      return { value: null, caption: { val: fmt$(0), note: null, tone: "n" } };
     }
     if (!(target > 0)) {
       return { value: v, caption: { val: fmt$(v), note: null, tone: "n" } };

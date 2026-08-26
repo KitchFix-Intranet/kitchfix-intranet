@@ -409,6 +409,211 @@ export function resolveCardState(args) {
   };
 }
 
+// ─── Resolver-owned card display (§9B, INV-P21 structural fix) ───────
+//
+// Every element that a card renders - hero value, sub-line, variance
+// label, variance value, variance colour, variance caption, projected-
+// close row, tier-aware weekly-target caption - is computed HERE and
+// returned as a formatted string or a colour class.  The component
+// consumes those fields and cannot compute anything itself.
+//
+// INV-P21 caught nine separate defects that all had one shape: two
+// elements on the same card computing the same idea from different
+// subsets of pending.  R10's assertion compared outputs; on WEST FYTD
+// the outputs looked plausible while the inputs disagreed, and the
+// assertion passed on a broken card.  Removing arithmetic from the
+// component removes the shape entirely.
+//
+// Owner ruling 2026-08-26 (Option 2):
+//   - Pending stays in the period-card verdict on LIVE ranges and
+//     stays OUT of CLOSED verdicts.
+//   - Hero stays coded-only in this PR (rule 2 - no figure changes).
+//     Follow-up (Option 3, deferred): move hero to spent+pending on
+//     live to close the class properly.
+//   - Variance caption sign-gated:
+//       under budget on live -> "net of pending"
+//       over  budget on live -> "includes uncoded pending"
+//       closed period        -> "period closed"
+//
+// Tier ruling (INV-P21 Part B2 item 2):
+//   - `aim for $X / wk` renders only on tier A or B.  Tier C
+//     (FYTD or >bWeekMax weeks) suppresses the caption entirely;
+//     BucketCard used to show it despite the period-card chart legend
+//     dropping it.  One rule, one caller.
+//
+// `cardKind` values: 'period' | 'bucket' | 'ledger'.
+//
+// The `__inputSignature` field is a deterministic hash of the inputs.
+// The matrix probe asserts that every rendered element on a card
+// resolved from the SAME signature - not that outputs agree, but that
+// inputs match - which is the exact case R5/R6/R10 could not catch.
+export function resolveCardDisplay(args) {
+  const kind = args?.cardKind || "period";
+  const spent = Number(args?.spent || 0);
+  const budget = Number(args?.budget || 0);
+  const pending = Number(args?.pending || 0);
+  const closed = !!args?.closed;
+  const isFutureRange = !!args?.isFutureRange;
+  const isPassThrough = !!args?.isPassThrough;
+  const tier = args?.tier || null;
+  const original = args?.original;
+  const adjusted = args?.adjusted;
+  const budgetSpent = !!args?.budgetSpent;
+
+  // Base state resolution.  For the PERIOD card on a live range the
+  // resolver-spent includes pending (owner ruling).  For CLOSED it does
+  // not.  For BUCKET / LEDGER cards pending never enters (structural -
+  // pending has no gl_line_code and can't be attributed).
+  const includePendingInVerdict = kind === "period" && !closed;
+  const resolverSpent = spent + (includePendingInVerdict ? pending : 0);
+  const cs = resolveCardState({
+    ...args,
+    spent: resolverSpent,
+    hasBills: resolverSpent > 0,
+  });
+
+  // Hero
+  const heroValueText = fmt$(spent);   // rule 2 - hero stays coded-only
+  const heroClassEffective = isFutureRange ? "" : cs.heroClass;
+
+  // Sub-line under hero
+  const subLineOfBudgetText = fmt$(budget);
+  const spentUsedFrac = budget > 0 ? (spent / budget) : null;
+  const subLinePctText = (!isFutureRange && spentUsedFrac != null) ? fmtPct(spentUsedFrac) : "";
+  const subLineNoBudgetText = (budget === 0 && !isFutureRange) ? "no budget" : "";
+
+  // Remaining / Over by / Vs budget block.
+  //
+  // `rem` computed here is the ONLY variance arithmetic.  Every downstream
+  // display string reads from this one number.  Pending enters the live-
+  // range rem so the label and the pill agree on which side of budget
+  // the card is on; on closed it doesn't (per ruling).
+  const remRaw = budget - spent - (includePendingInVerdict ? pending : 0);
+  const rem = Math.round(remRaw * 100) / 100;
+  const showOverArrow = rem < 0;
+  const showRemainingBlock = !isFutureRange && budget !== 0;
+  const showFutureBudgetBlock = isFutureRange;
+
+  let remainingLabel = "";
+  let remainingValueText = "";
+  let remainingClass = "";
+  let remainingCaption = "";
+
+  if (kind === "ledger") {
+    // Ledger: no pending concept.  Caption unchanged from prior behaviour.
+    remainingLabel = closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining");
+    remainingValueText = closed
+      ? moneyArrow(cs.variance)
+      : (showOverArrow ? fmt$(-rem) : fmt$(rem));
+    remainingClass = closed
+      ? (cs.signClass || (cs.variance > 0 ? "r" : "g"))
+      : (showOverArrow ? "r" : "");
+    remainingCaption = closed ? "period closed" : "every purchase below";
+  } else if (kind === "bucket") {
+    // Bucket: pending never enters, but the caption is tier + state gated.
+    remainingLabel = closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining");
+    remainingValueText = closed
+      ? moneyArrow(cs.variance)
+      : (showOverArrow ? fmt$(-rem) : fmt$(rem));
+    remainingClass = closed
+      ? (cs.signClass || (cs.variance > 0 ? "r" : "g"))
+      : (showOverArrow ? "r" : "");
+    if (closed) {
+      remainingCaption = "period closed";
+    } else if (budgetSpent) {
+      remainingCaption = "budget spent";
+    } else if (tier === "C") {
+      // INV-P21 Part B2 item 2 - tier-C suppresses the weekly target.
+      // Period card already suppressed it (BucketCard.js:306 vs
+      // PeriodCard.js:336 disagreed).  Resolver decides once.
+      remainingCaption = "no target this range";
+    } else if (adjusted != null) {
+      remainingCaption = `aim for ${fmt$(adjusted)} / wk`;
+    } else {
+      remainingCaption = "no target this range";
+    }
+  } else {
+    // Period card - the sign-gated captions Kevin ruled on.
+    remainingLabel = closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining");
+    remainingValueText = closed
+      ? moneyArrow(cs.variance)
+      : (showOverArrow ? fmt$(-rem) : fmt$(rem));
+    remainingClass = closed
+      ? (cs.signClass || (cs.variance > 0 ? "r" : "g"))
+      : (showOverArrow ? "r" : "");
+    remainingCaption = closed
+      ? "period closed"
+      : (showOverArrow ? "includes uncoded pending" : "net of pending");
+  }
+
+  // Projected close (period card only).
+  const projectedClose = args?.projectedClose;
+  const showProjectedClose = kind === "period"
+    && !isFutureRange && !closed
+    && projectedClose != null;
+  const pcOverBudget = showProjectedClose && Number(projectedClose) > budget;
+  const projectedCloseValueText = showProjectedClose ? fmt$(Number(projectedClose)) : "";
+  const projectedCloseValueClass = pcOverBudget ? "r" : "";
+  const projectedCloseArrow = showProjectedClose ? (pcOverBudget ? "▲ " : "▼ ") : "";
+  const projectedCloseDeltaText = showProjectedClose ? fmt$(Math.abs(Number(projectedClose) - budget)) : "";
+  const projectedCloseAnnotationClass = pcOverBudget ? "r" : "g";
+
+  // Input signature - deterministic hash of the exact numeric inputs +
+  // range-flags that could change any element's value.  Two calls with
+  // the same signature must return byte-identical display fields; the
+  // matrix probe verifies that inputs match across every element on a
+  // card - the check R5/R6/R10 couldn't perform.
+  const __inputSignature = [
+    `k=${kind}`,
+    `s=${spent.toFixed(4)}`,
+    `b=${budget.toFixed(4)}`,
+    `p=${pending.toFixed(4)}`,
+    `c=${closed ? 1 : 0}`,
+    `f=${isFutureRange ? 1 : 0}`,
+    `pt=${isPassThrough ? 1 : 0}`,
+    `t=${tier || "?"}`,
+    `pc=${projectedClose != null ? Number(projectedClose).toFixed(4) : "n"}`,
+    `bs=${budgetSpent ? 1 : 0}`,
+    `ef=${(Number(args?.elapsedFrac || 0)).toFixed(4)}`,
+  ].join("|");
+
+  return {
+    // Pill (unchanged shape, feeds off resolverSpent)
+    pillTone: cs.pillTone,
+    pillLabel: cs.pillLabel,
+    // Hero
+    heroValueText,
+    heroClass: heroClassEffective,
+    // Sub-line under hero
+    subLineOfBudgetText,
+    subLinePctText,
+    subLineNoBudgetText,
+    // Variance / Remaining block
+    showRemainingBlock,
+    showFutureBudgetBlock,
+    remainingLabel,
+    remainingValueText,
+    remainingClass,
+    remainingCaption,
+    // Projected close (period card only; false for others)
+    showProjectedClose,
+    projectedCloseValueText,
+    projectedCloseValueClass,
+    projectedCloseArrow,
+    projectedCloseDeltaText,
+    projectedCloseAnnotationClass,
+    // Chart cadence label (chartUnit) - resolver-owned so components
+    // can't disagree.
+    weekStripLabel: tier ? `Each ${chartUnit(tier)}` : "",
+    // For the input-comparison assertion (INV-P21 Part D).
+    __inputSignature,
+    // Passthrough of nested cs for legacy inspection during the
+    // migration.  Do NOT read cs.variance directly on the component;
+    // use remainingValueText.
+    __cs: cs,
+  };
+}
+
 // ─── Bucket definitions - client canonical ordering ──────────────────
 //
 // Route ships buckets[] for {food, packaging, vehicle} only. Equipment
