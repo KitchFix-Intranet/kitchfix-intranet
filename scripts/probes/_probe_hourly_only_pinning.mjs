@@ -163,6 +163,24 @@ assert(
   ok2 ? null : `\n--- hourly ---\n${json(bodyHourly.payroll_coverage_hourly)}\n--- salary ---\n${json(bodySalary.payroll_coverage_hourly)}`,
 );
 
+// Polish round 2 item 1 - explicit assertion on the materiality
+// denominator. Named separately from the deep-equal above so a
+// future collaborator can grep for it and see the contract stated
+// explicitly. Salary rows carry hours_regular = 0 (shapeSalaryRow),
+// so total_hours is hourly-only by construction on both bodies. If
+// this ever diverges, the pill's materiality ratio is silently
+// accepting salary dilution and the FINAL/PARTIAL boundary becomes
+// unreliable.
+assert(
+  "payroll_coverage_hourly.total_hours is byte-identical across the toggle",
+  bodyHourly.payroll_coverage_hourly.total_hours === bodySalary.payroll_coverage_hourly.total_hours,
+  `  hourly: ${bodyHourly.payroll_coverage_hourly.total_hours}, salary: ${bodySalary.payroll_coverage_hourly.total_hours}`,
+);
+assert(
+  "payroll_coverage_hourly.total_hours matches board.hours on hourly body (sanity)",
+  bodyHourly.payroll_coverage_hourly.total_hours === bodyHourly.board.hours,
+);
+
 console.log("\ncontent snapshot (the pinned inputs the two cards read):");
 console.log("  hours_available_hourly:");
 console.log(json(bodyHourly.hours_available_hourly).split("\n").map(l => "    " + l).join("\n"));

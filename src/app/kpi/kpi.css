@@ -2454,6 +2454,18 @@
    (1.42:1). Bumped to --text-subtle - the em-dash carries the
    "no value here" signal and must not collapse into an empty cell. */
 .kpi-sig-hero-mute { color: var(--text-subtle); font-size: var(--kpi-t-value); font-weight: 800; }
+/* 2026-08-26 polish round 2 item 2 - payroll hero carries a `hrs`
+   unit so `48.93` and `1.38` do not read as bare numbers with
+   ambiguous scale. Small-caps weight/size sub-value that pairs
+   with the number, muted so the number stays dominant. */
+.kpi-sig-hero-unit {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--text-subtle);
+  margin-left: var(--kpi-sp-1);
+  letter-spacing: 0;
+  text-transform: none;
+}
 
 /* V34 - sub-line weight 500 (was 600). Supporting, not competing with
    the hero. */
@@ -2923,6 +2935,22 @@
   position: sticky; top: var(--hdr); z-index: 10;
   transition: background 0.12s;
 }
+/* 2026-08-26 polish round 2 item 6 - zero-labor period row. Single
+   muted row rather than a full expandable band with subtotals; the
+   period IS in the range but has no labor rows to break down.
+   Italic + subtle to read as "state of the data" rather than "the
+   number is zero" (a zero band would be a stronger claim than the
+   data supports). Same treatment pre-floor homestands already get. */
+.kpi-tbl-zero-period > td {
+  background: var(--surface-card);
+  border-top: 1px solid var(--n-300);
+  border-bottom: 1px solid var(--n-100);
+  font-weight: 500;
+  font-size: var(--kpi-t-body);
+  color: var(--text-subtle);
+  font-style: italic;
+}
+.kpi-tbl-zero-period-msg { color: var(--text-subtle); }
 .kpi-tbl-band:hover > td { background: var(--n-100); }
 /* V36 - the open band is the only tinted row. The class rule is
    the primary trigger (WeekTable.js toggles .kpi-tbl-band-open

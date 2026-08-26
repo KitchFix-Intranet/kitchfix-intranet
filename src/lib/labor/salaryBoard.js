@@ -343,6 +343,18 @@ export function pinHourlyOnly(board) {
       draft_hours: b.payroll_data?.draft_hours ?? 0,
       unpriced_hours: b.payroll_data?.unpriced_hours ?? 0,
       unapproved_weeks: b.payroll_data?.unapproved_weeks ?? 0,
+      // 2026-08-26 polish round 2 item 1 - materiality denominator for
+      // the payroll pill (draft_hours / total_hours < 1% -> FINAL). The
+      // ratio must not pick up salary-inflated hours or it stops
+      // being materiality and becomes salary-dilution. Pin-and-expose
+      // rather than derive: board.hours on the pre-merge board is
+      // already hourly-only by construction because salary rows carry
+      // hours_regular = 0 (see shapeSalaryRow above), so this is a
+      // rename, not a computation. DO NOT "fix" this into a client-side
+      // derived value later - salary's zero-hours contract is what
+      // makes the pin trivially correct today, and a downstream change
+      // to that contract would silently poison the ratio.
+      total_hours: b.hours ?? 0,
     },
   };
 }

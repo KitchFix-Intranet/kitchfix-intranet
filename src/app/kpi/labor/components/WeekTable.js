@@ -630,7 +630,12 @@ export function WeekTable({
         return `TOTAL · ${g.groupLabel}${acctSuffix}`;
       }
     }
-    const totalWeeks = grouped.reduce((n, g) => n + g.weeks.length, 0);
+    // 2026-08-26 polish round 2 item 6 - a zero-labor period contains
+    // 4 fiscal weeks even though its `weeks` array is empty (no
+    // actuals rows landed for it). Use weeks_in_period on those groups
+    // so the total reads "9 PERIODS · 35 WEEKS" instead of the
+    // pre-fix "7 PERIODS · 23 WEEKS" on CIN - OH FYTD.
+    const totalWeeks = grouped.reduce((n, g) => n + (g.zero_labor ? (g.weeks_in_period || 0) : g.weeks.length), 0);
     const isMonth = grouped[0]?.groupHint?.kind === "month";
     return `TOTAL · ${grouped.length} ${isMonth ? "MONTH" : "PERIOD"}${grouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}${acctSuffix}`;
   })();
@@ -761,6 +766,23 @@ export function WeekTable({
             </thead>
             <tbody>
               {periodTotals.map(({ g, totals, states, periodBudget, weeksInBand }) => {
+                // 2026-08-26 polish round 2 item 6 - zero-labor period
+                // (no actuals rows in the range) renders as a single
+                // muted row so the table's period list matches
+                // TierCStrip's chart. "no labor recorded" states a
+                // fact about the data without implying why (season
+                // hadn't started / facility closure / etc.) - the
+                // board does not know why a period is empty and
+                // should not claim.
+                if (g.zero_labor) {
+                  const cols = 5 + (showShare ? 1 : 0) + (showHoliday ? 1 : 0) + (showUnpriced ? 1 : 0) + (showRate ? 1 : 0);
+                  return (
+                    <tr key={g.key} className="kpi-tbl-zero-period">
+                      <td>FY{g.fiscal_year} · PERIOD {g.period_no}</td>
+                      <td colSpan={cols - 1} className="kpi-tbl-zero-period-msg">no labor recorded</td>
+                    </tr>
+                  );
+                }
                 const inProgress = isPeriodInProgress(g, todayISO);
                 const isMonth = g.groupHint?.kind === "month";
                 const periodOpen = expandedPeriods.has(isMonth ? g.groupHint.monthIndex : g.period_no);

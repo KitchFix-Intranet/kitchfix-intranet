@@ -34,6 +34,39 @@ export function pillFor(verdict) {
   return { state: "neutral", label: "—" };
 }
 
+// 2026-08-26 polish round 2 item 6 - canonical period list for a
+// board's range. `board.weeks[]` is populated by buildBoard for
+// EVERY calendar week in [start, end], including zero-labor weeks
+// where no rows exist in the underlying actuals table. That is the
+// authoritative source for "what periods does this range touch."
+//
+// TierCStrip (per-period bar chart in StoryBlock.js) and the
+// WeekTable grouping in page.js MUST derive their period list from
+// this helper. The defect this fixes: prior to 2026-08-26 the chart
+// counted from board.weeks[] (correct - 9 periods for CIN - OH
+// FYTD) while the table counted from actuals-derived groupings
+// (7 periods, because P1 and P2 had zero labor). Two components
+// counting periods independently WILL diverge again the next time
+// either changes - the shared derivation is the guard.
+//
+// Returns [{ period_no, fiscal_year, weeks_in_period }] sorted by
+// period_no ascending. `weeks_in_period` = count of week rows for
+// that period in board.weeks[]. Empty when board is missing or
+// carries no weeks.
+export function periodsInBoardWeeks(board) {
+  const byPeriod = new Map();
+  for (const w of board?.weeks || []) {
+    if (w.period_no == null) continue;
+    let cur = byPeriod.get(w.period_no);
+    if (!cur) {
+      cur = { period_no: w.period_no, fiscal_year: w.fiscal_year ?? 2026, weeks_in_period: 0 };
+      byPeriod.set(w.period_no, cur);
+    }
+    cur.weeks_in_period += 1;
+  }
+  return [...byPeriod.values()].sort((a, b) => a.period_no - b.period_no);
+}
+
 // 2026-08-26 signal card revisions - Covers dashed line per card.
 // Derived from board.weeks[] counters (closed_weeks_count,
 // in_progress_week_start, not_started_weeks_count) which the server
@@ -218,6 +251,20 @@ export function buildPaceCardModel(board) {
   // Closed-shape facts (fire on closed AND multi_period)
   const ofBudgetUsedPct = closedShape && budget > 0 && spent != null ? (spent / budget) * 100 : null;
   const leftUnspent = closedShape && spent != null ? budget - spent : null;
+  // 2026-08-26 polish round 2 item 5 - on multi_period the hero is
+  // already the signed variance and "Of budget used" is a percentage
+  // expression of the same relationship, so "Left unspent" is a third
+  // repetition of the same number. Replace with "Avg per week" =
+  // spent / closed_weeks_count on multi_period only. Genuinely new
+  // information - the figure a site leader uses to sanity-check a
+  // year at a glance. single_period_closed keeps Left unspent (it is
+  // NOT a duplicate of the hero there: the closed-period pace hero
+  // is the arrow-signed variance, so the plain-money "Left unspent"
+  // adds absolute-scale context).
+  const closedWeeksForAvg = board?.closed_weeks_count || 0;
+  const avgPerWeek = isMulti && closedWeeksForAvg > 0 && spent != null
+    ? spent / closedWeeksForAvg
+    : null;
 
   const facts = inProgress
     ? [
@@ -232,9 +279,11 @@ export function buildPaceCardModel(board) {
         { label: "Of budget used",
           value: ofBudgetUsedPct != null ? `${ofBudgetUsedPct.toFixed(1)}%` : "—",
           tone: ofBudgetUsedPct == null ? undefined : ofBudgetUsedPct > 100 ? "bad" : "good" },
-        leftUnspent != null && leftUnspent >= 0
-          ? { label: "Left unspent", value: fmt$(leftUnspent), tone: "good" }
-          : { label: "Overrun", value: leftUnspent != null ? fmt$(Math.abs(leftUnspent)) : "—", tone: "bad" },
+        isMulti
+          ? { label: "Avg per week", value: avgPerWeek != null ? fmt$(avgPerWeek) : "—", muted: avgPerWeek == null }
+          : (leftUnspent != null && leftUnspent >= 0
+              ? { label: "Left unspent", value: fmt$(leftUnspent), tone: "good" }
+              : { label: "Overrun", value: leftUnspent != null ? fmt$(Math.abs(leftUnspent)) : "—", tone: "bad" }),
       ];
 
   return { state, label, eyebrow, subLine, heroV: v, facts };
