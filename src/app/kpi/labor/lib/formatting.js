@@ -65,3 +65,26 @@ export function buildPrintScopeLine({
   if (salaryIncluded === null || salaryIncluded === undefined) return base;
   return `${base} · ${salaryIncluded ? "hourly + salary" : "hourly only"}`;
 }
+
+// 2026-08-26 homestand-fixes round 2 item 3 - the ONE source for how
+// a stand's window renders. Header, table row and command chip must
+// all call this helper so they cannot drift apart again.
+//
+// Prior defect: HomestandBoard.js:310 rendered
+//   `${fmtDate(stand.game_start)} - ${fmtDate(stand.game_end)}` (7 days)
+// while the table cells + command chip already read window_start /
+// window_end (11 days). Same failure class as the periodsInBoardWeeks
+// drift owner fixed in polish round 2: three surfaces computing the
+// same thing independently WILL diverge the next time one changes.
+//
+// Returns { start, end, days } as ISO strings + a number. Callers
+// format for display via fmtDate + straight concatenation - the
+// helper deliberately does not format so each caller can pick its
+// own separator (` - `, ` – `, etc.) and the shape stays declarative.
+export function standWindow(stand) {
+  return {
+    start: stand?.window_start ?? null,
+    end:   stand?.window_end   ?? null,
+    days:  stand?.window_days  ?? null,
+  };
+}
