@@ -687,7 +687,12 @@ export default function KpiPurchasingPage() {
   // labor/) is honoured: we compute the worst-case ISO here and pass
   // it as Shell's `freshness.last_walk_at`; Shell's copy stays fixed.
   // Never hardcoded - both timestamps come off route.freshness.
-  const cardsThroughISO = data?.freshness?.cards_through || null;
+  // cards_through_effective covers report-only rows too (INV-P22 owner
+  // ruling 2026-08-26 Part D).  Fall back to cards_through if the
+  // effective field is absent (older payloads / pre-migration route).
+  const cardsThroughISO = data?.freshness?.cards_through_effective
+    || data?.freshness?.cards_through
+    || null;
   const cardsThroughLabel = cardsThroughISO
     ? `${cardsThroughISO.slice(5, 7)}/${cardsThroughISO.slice(8, 10)}`
     : null;
