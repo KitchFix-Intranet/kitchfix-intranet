@@ -288,3 +288,50 @@ function enumeratePeriods(first, last) {
   for (let p = first; p <= last; p += 1) out.push(p);
   return out;
 }
+
+/**
+ * Pin the hourly-only inputs the Hours available + Payroll data cards
+ * read, into named fields that survive the salary merge. Contract:
+ * these fields are byte-identical on a response with or without
+ * include_salary=1 for the same account/range. Owner ruling
+ * 2026-08-26: salary must not touch either card, and the assertion
+ * that proves the pinning is the identity of these fields across the
+ * toggle - not a visual render check.
+ *
+ * Two named objects rather than one generic _alt so the scope is
+ * legible from the name. A prior collision (spent_to_date at two
+ * scopes on the same board) is why generic aliases are refused.
+ *
+ * Callers must invoke BEFORE withSalary. The salary merge spreads
+ * body first and only overrides its explicit outputs (actuals,
+ * budget_periods, week_budgets, board, salary_*, budget_total,
+ * hours_basis, rate_basis, blended_rate_hourly) - hours_available_hourly
+ * and payroll_coverage_hourly are not in that override set, so they
+ * survive intact.
+ */
+export function pinHourlyOnly(board) {
+  const b = board || {};
+  return {
+    hours_available_hourly: {
+      applies: b.applies !== false,
+      kind: b.kind ?? null,
+      range_budget: b.range_budget ?? null,
+      period_budget: b.period_budget ?? null,
+      spent_to_date: b.spent_to_date ?? null,
+      avg_rate: b.avg_rate ?? null,
+      weekly_allowance: b.weekly_allowance ?? null,
+      not_started_weeks_count: b.not_started_weeks_count ?? 0,
+      in_progress_week_start: b.in_progress_week_start ?? null,
+      hours_worked: b.hours_vs_budget?.worked ?? null,
+      distinct_workers: b.distinct_workers ?? 0,
+    },
+    payroll_coverage_hourly: {
+      applies: b.applies !== false,
+      priced_ww: b.payroll_data?.priced_ww ?? 0,
+      total_ww: b.payroll_data?.total_ww ?? 0,
+      draft_hours: b.payroll_data?.draft_hours ?? 0,
+      unpriced_hours: b.payroll_data?.unpriced_hours ?? 0,
+      unapproved_weeks: b.payroll_data?.unapproved_weeks ?? 0,
+    },
+  };
+}

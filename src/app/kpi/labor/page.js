@@ -920,6 +920,8 @@ export default function KpiLaborPage() {
                   blended_rate_hourly: data.blended_rate_hourly,
                 } : null}
                 isFutureRange={data?.is_future_range === true}
+                hoursAvailableHourly={data?.hours_available_hourly}
+                payrollCoverageHourly={data?.payroll_coverage_hourly}
               />
               <ComparisonStrip
                 prior_period_comparison={data.prior_period_comparison}
