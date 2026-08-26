@@ -169,6 +169,39 @@ console.log(json(bodyHourly.hours_available_hourly).split("\n").map(l => "    " 
 console.log("  payroll_coverage_hourly:");
 console.log(json(bodyHourly.payroll_coverage_hourly).split("\n").map(l => "    " + l).join("\n"));
 
+// ─── Closed-period contract: hours_available_hourly.applies must
+// be false on any kind other than single_period_in_progress. Owner
+// tightening 2026-08-26 - the card is client-side gated on kind, but
+// the server field must not lie about it, or a future consumer
+// trusting the flag will render a card we deliberately suppress.
+// Payroll data renders on every kind so its applies still tracks
+// the board.
+const closedToday = "2026-09-30";
+const boardClosed = buildBoard({ account, start, end, today: closedToday, actuals: hourlyActuals, budget_periods: budgetPeriods, account_state: "hourly_ok" });
+const bodyClosed = { actuals: hourlyActuals, budget_periods: budgetPeriods, board: boardClosed };
+Object.assign(bodyClosed, pinHourlyOnly(bodyClosed.board));
+
+console.log("\nclosed-period applies contract:");
+assert(
+  "boardClosed.kind is single_period_closed (setup sanity)",
+  boardClosed.kind === "single_period_closed",
+  `  got: ${boardClosed.kind}`,
+);
+assert(
+  "hours_available_hourly.applies is FALSE on closed period",
+  bodyClosed.hours_available_hourly.applies === false,
+  `  got: ${bodyClosed.hours_available_hourly.applies}`,
+);
+assert(
+  "payroll_coverage_hourly.applies stays TRUE on closed period (card renders on every kind)",
+  bodyClosed.payroll_coverage_hourly.applies === true,
+  `  got: ${bodyClosed.payroll_coverage_hourly.applies}`,
+);
+assert(
+  "hours_available_hourly.applies is TRUE on the in-progress body (baseline)",
+  bodyHourly.hours_available_hourly.applies === true,
+);
+
 if (failures > 0) {
   console.log(`\n${failures} failure(s) - pinning is broken.`);
   process.exit(1);
