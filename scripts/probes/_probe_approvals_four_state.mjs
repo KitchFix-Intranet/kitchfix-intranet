@@ -215,7 +215,7 @@ const pillScenarios = [
   { name: "100 hrs from 29 days ago (STL - FL Jul 28 shape)",
                                             pin: { draft_hours: 100,   oldest_draft_date: isoDaysAgo(29) }, expect: { state: "bad",  label: "29 DAYS OLD" } },
   { name: "drafts but oldest_draft_date NULL (post-migrate, pre-derive)",
-                                            pin: { draft_hours: 50,    oldest_draft_date: null },        expect: { state: "warn", label: "PENDING" } },
+                                            pin: { draft_hours: 50,    oldest_draft_date: null },        expect: { state: "warn", label: "NEEDS APPROVAL" } },
 ];
 for (const sc of pillScenarios) {
   const got = approvalsPill(sc.pin);

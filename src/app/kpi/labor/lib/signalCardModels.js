@@ -54,10 +54,15 @@ export function pillFor(verdict) {
 //   oldest <= 7 days                   -> THIS WEEK   amber
 //   oldest 8-14 days                   -> N DAYS OLD  amber
 //   oldest > 14 days                   -> N DAYS OLD  red
-//   oldest_draft_date NULL but drafts  -> PENDING     amber
+//   oldest_draft_date NULL but drafts  -> NEEDS APPROVAL  amber
 //     (transient state - drafts exist but derive has not repopulated
 //      oldest_draft_date since v43-1 apply; renders a claim-less pill
-//      until the next derive fills the date)
+//      until the next derive fills the date.
+//      Owner ruling 2026-08-26 (pre-attest): the earlier PENDING
+//      label was the exact word we banned as ambiguous between
+//      approved and costed - the whole reason for the Approvals card
+//      rewrite. NEEDS APPROVAL names the action, matches the sub-
+//      line's language, and cannot be misread as a cost-status.)
 //
 // Extracted from the JSX layer so a probe can assert the invariant
 // that this classifier CANNOT return ALL CLEAR when draft_hours > 0.
@@ -66,7 +71,7 @@ export function approvalsPill(approvalsHourly) {
   const draftHrs = approvalsHourly?.draft_hours ?? 0;
   const oldestDraftDate = approvalsHourly?.oldest_draft_date ?? null;
   if (draftHrs <= 0.004) return { state: "good", label: "ALL CLEAR" };
-  if (!oldestDraftDate) return { state: "warn", label: "PENDING" };
+  if (!oldestDraftDate) return { state: "warn", label: "NEEDS APPROVAL" };
   const then = new Date(`${oldestDraftDate}T00:00:00.000Z`);
   const now = new Date();
   const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
