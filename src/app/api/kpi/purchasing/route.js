@@ -130,6 +130,13 @@ import {
   PURCHASING_ENVELOPE_EXCLUSIONS,
   costModelFor,
 } from "@/lib/accountModels";
+// Precedence: API over report between sources, newest over older
+// within report.  loadReportOnlyPending reads the migration-8 view;
+// mergePending combines the two sources under the precedence rule.
+import {
+  loadReportOnlyPending,
+  mergePending,
+} from "@/app/kpi/purchasing/lib/precedence.js";
 
 const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -1119,9 +1126,10 @@ export async function GET(request) {
   //
   // PR-2 R4 Part A: pass [effStart, effEnd] so weekly view, actuals,
   // pending and coverage all describe the same fiscal-week footprint.
-  const [weeklyResp, pendingResp, actualsResp, coverage, freshness, dirResp] = await Promise.all([
+  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, coverage, freshness, dirResp] = await Promise.all([
     paginateWeekly(supa, { members, start: effStart, end: effEnd }),
     loadPending(supa, { members, start: effStart, end: effEnd }),
+    loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
     paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam }),
     loadCoverage(supa, { members, start: effStart, end: effEnd }),
     loadFreshness(supa),
@@ -1129,11 +1137,30 @@ export async function GET(request) {
   ]);
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
+  if (reportPendingResp.error) return NextResponse.json(safeError("rippling_report_only_pending_v1", reportPendingResp.error), { status: 500 });
   if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
   if (dirResp.error) return NextResponse.json(safeError("accounts_directory", dirResp.error), { status: 500 });
   const weekly = weeklyResp.data;
-  const pending = pendingResp.data;
+  // Precedence merge: API pending + report-only pending (no double
+  // count - API rows are structurally excluded from the report-only
+  // view; newest content_hash wins within the report via _latest).
+  const pending = mergePending(pendingResp.data, reportPendingResp.data);
   const actuals = actualsResp.data;
+
+  // Freshness pill extension.  cards_through was the newest txn_date on
+  // rippling_spend (API); report-only pending now covers dates the API
+  // has not seen.  cards_through_effective = max of the two, so the
+  // pill reflects the picture the operator is actually looking at.
+  // Owner ruling 2026-08-26 (Part D).  cards_through unchanged to keep
+  // probes and other consumers stable.
+  {
+    const apiThrough = freshness.cards_through;
+    const reportThrough = pending.report_only.max_purchased_at;
+    freshness.cards_through_effective =
+      apiThrough && reportThrough
+        ? (apiThrough > reportThrough ? apiThrough : reportThrough)
+        : (apiThrough || reportThrough || null);
+  }
 
   // Adaptive categories: union of every gl_line_code with actual > 0
   // in range OR budget > 0 in range. Actual side sourced from the
