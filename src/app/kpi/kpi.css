@@ -3848,6 +3848,45 @@
   margin-top: 2px;
   white-space: nowrap;
 }
+/* 2026-08-26 homestand redesign tokens */
+/* hero unit - small "hrs" or "people" suffix beside a big numeric
+   hero. Mirrors .kpi-sig-hero-unit on the period board. */
+.kpi-hs-hero-unit {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--text-subtle);
+  margin-left: var(--kpi-sp-1);
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* action line - "N people still need approval (~$X)" note on the
+   What-it-cost played card when unapproved hours exist. Amber to
+   read as an ask, not a warning. Mirrors .kpi-sig-action-line. */
+.kpi-hs-action-line {
+  font-size: var(--kpi-t-label);
+  color: #92580A;
+  font-weight: 700;
+  margin-top: var(--kpi-sp-1);
+  line-height: 1.35;
+}
+/* covers line - "At $22.79/hr, your blended rate this season" style
+   footer on cards that carry a per-card contextual note. Mirrors
+   .kpi-sig-covers dashed-top pattern. */
+.kpi-hs-covers {
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px dashed var(--n-300);
+  font-size: var(--kpi-t-label);
+  color: var(--text-subtle);
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kpi-hs-covers b {
+  color: var(--n-700);
+  font-weight: 700;
+}
 
 /* OT gauge */
 .kpi-hs-gauge {
