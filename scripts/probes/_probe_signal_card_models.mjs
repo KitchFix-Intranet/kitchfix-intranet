@@ -12,7 +12,7 @@
 
 import { buildBoard, buildWeekBudgets } from "../../src/app/kpi/labor/lib/board.js";
 import { withSalary, pinHourlyOnly } from "../../src/lib/labor/salaryBoard.js";
-import { buildPaceCardModel, buildHoursLeftModel, buildCoversLine } from "../../src/app/kpi/labor/lib/signalCardModels.js";
+import { buildPaceCardModel, buildHoursLeftModel, buildCoversLine, periodsInBoardWeeks } from "../../src/app/kpi/labor/lib/signalCardModels.js";
 
 const account = "STL - FL";
 const start = "2026-08-10";
@@ -129,6 +129,57 @@ if (projFact && vsBudgetFact) {
 }
 assert("Left to spend is NO LONGER a fact (retired in favour of Vs budget)",
   !facts.find(f => f.label === "Left to spend"));
+
+// ── 4. periodsInBoardWeeks - shared source for TierCStrip + WeekTable
+console.log("\nperiodsInBoardWeeks (item 6 - shared period-list source):");
+const perList = periodsInBoardWeeks(boardInProgress);
+console.log(`  found periods: ${perList.map(p => `P${p.period_no}(${p.weeks_in_period}w)`).join(", ")}`);
+assert("returns an array of period entries", Array.isArray(perList) && perList.length > 0);
+assert("each entry carries period_no, fiscal_year, weeks_in_period",
+  perList.every(p => p.period_no != null && p.fiscal_year != null && p.weeks_in_period > 0));
+assert("periods are sorted ascending by period_no",
+  perList.every((p, i, arr) => i === 0 || arr[i - 1].period_no < p.period_no));
+// Multi-period boardClosed spans P9 only in our fixture; test that the
+// helper is invariant to same board on hourly vs salary bodies (both
+// pull from the same board.weeks[]).
+const perListSalary = periodsInBoardWeeks(bodySalary.board);
+assert("periodsInBoardWeeks byte-identical across salary toggle",
+  JSON.stringify(perList) === JSON.stringify(perListSalary));
+
+// ── 5. Pace multi_period fact swap (item 5 - Avg per week not Left unspent)
+console.log("\nPace card facts on multi_period (item 5):");
+// Synthesize a multi_period fixture. Reuse the existing rows with
+// today past P9 end so buildBoard reports kind='multi_period' when
+// the range spans across periods. Simpler test: build a range from
+// 2026-07-06 (start of P8) through 2026-08-30 (mid P9) which crosses
+// period 8/9 boundary.
+const multiStart = "2026-07-06";
+const multiEnd = "2026-08-30";
+const multiToday = "2026-09-15";
+const multiBudget = [
+  { period_no: 8, amount: 22000, source: "pnl", basis: "pnl", superseded: false },
+  { period_no: 9, amount: 21761.40, source: "pnl", basis: "pnl", superseded: false },
+];
+const boardMulti = buildBoard({ account, start: multiStart, end: multiEnd, today: multiToday, actuals: hourlyActuals, budget_periods: multiBudget, account_state: "hourly_ok" });
+const mPaceMulti = buildPaceCardModel(boardMulti);
+const factLabels = mPaceMulti.facts.map(f => f.label);
+console.log(`  multi_period pace fact labels: ${factLabels.join(", ")}`);
+assert("multi_period pace kind detected", boardMulti.kind === "multi_period",
+  `  got: ${boardMulti.kind}`);
+assert("multi_period pace has 'Avg per week' fact", factLabels.includes("Avg per week"));
+assert("multi_period pace does NOT have 'Left unspent' fact", !factLabels.includes("Left unspent"));
+
+// single_period_closed keeps Left unspent / Overrun (owner: not a
+// duplicate there because the hero is the arrow-signed variance).
+const boardSingleClosed = buildBoard({ account, start, end, today: "2026-09-30", actuals: hourlyActuals, budget_periods: budgetPeriods, account_state: "hourly_ok" });
+const mPaceSingleClosed = buildPaceCardModel(boardSingleClosed);
+const singleClosedLabels = mPaceSingleClosed.facts.map(f => f.label);
+assert("single_period_closed kind detected", boardSingleClosed.kind === "single_period_closed");
+assert("single_period_closed still shows Left unspent or Overrun (owner: not a duplicate there)",
+  singleClosedLabels.includes("Left unspent") || singleClosedLabels.includes("Overrun"),
+  `  got: ${singleClosedLabels.join(", ")}`);
+assert("single_period_closed does NOT show Avg per week (multi-period only)",
+  !singleClosedLabels.includes("Avg per week"));
 
 if (failures > 0) {
   console.log(`\n${failures} failure(s).`);

@@ -24,6 +24,7 @@ const BUDGET_CARD_BODY = (
     <b>Left to spend</b> is the difference - the money still available for the weeks remaining.
     <br /><br />
     With the salary toggle on, this includes salaried staff. With it off, hourly only. The pill beside the status tells you which.
+    <span className="kpi-hs-pop-foot">Most periods&apos; budgets come from the P&amp;L; a few use an envelope allocation set at the region level. The number is the same shape either way, but the source can matter if you are comparing figures with finance.</span>
   </>
 );
 
@@ -38,6 +39,7 @@ const WEEK_BY_WEEK_BODY = (
   </>
 );
 import { classifyTier } from "@/lib/kpi/classifyTier";
+import { periodsInBoardWeeks } from "../lib/signalCardModels.js";
 
 // PR-B - MM/DD/YY from ISO for the "range closed through DATE"
 // suffix. Same convention signalCardModels.js uses.
@@ -181,7 +183,13 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
     // 3100.2 not just 3100.1. Overrides the envelope/pnl basis word
     // - a merged budget is neither; the basis is the composition.
     if (salary) return `${core} · hourly + salary`;
-    return board?.budget_basis ? `${core} · ${board.budget_basis}` : core;
+    // 2026-08-26 polish round 2 item 4 - the bare "· pnl" token was
+    // opaque as a first read (owner: "a bare lowercase token on the
+    // first card an operator reads"). Moved into the budget card's ?
+    // popover; a real distinction but not first-card real estate. The
+    // salary sub-line above still names its own composition because
+    // that IS a first-read concern.
+    return core;
   })();
 
   return (
@@ -605,15 +613,23 @@ function TierCStrip({ board, budgetPeriods }) {
   const weeks = board?.weeks || [];
   const budgetByPeriod = new Map((budgetPeriods || []).map(b => [b.period_no, Number(b.amount)]));
 
-  const perPeriod = new Map();
+  // 2026-08-26 polish round 2 item 6 - period list comes from
+  // periodsInBoardWeeks(board), the SAME helper the WeekTable
+  // grouping in page.js reads. Prior inline derivation would have
+  // drifted from the table's grouping the next time either changed;
+  // the shared helper is the guard against that. Aggregation of
+  // spend/hours per period stays inline because the shape here (bar
+  // heights) is chart-specific.
+  const canonicalPeriods = periodsInBoardWeeks(board);
+  const perPeriod = new Map(canonicalPeriods.map(p => [p.period_no, { period_no: p.period_no, spent: 0, hours: 0, weeks: [] }]));
   for (const w of weeks) {
     const p = w.period_no;
     if (p == null) continue;
-    const cur = perPeriod.get(p) || { period_no: p, spent: 0, hours: 0, weeks: [] };
+    const cur = perPeriod.get(p);
+    if (!cur) continue;
     cur.spent += w.spent || 0;
     cur.hours += w.hours || 0;
     cur.weeks.push(w);
-    perPeriod.set(p, cur);
   }
   const periods = [...perPeriod.values()].sort((a, b) => a.period_no - b.period_no);
   for (const pp of periods) {

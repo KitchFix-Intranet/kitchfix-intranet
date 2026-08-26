@@ -209,25 +209,30 @@ function OvertimeCard({ board, salary }) {
   const allowed = (alarm != null && workedHours > 0) ? (workedHours * alarm / 100) : null;
   const remaining = (allowed != null) ? allowed - (ot?.hours ?? 0) : null;
   const overTarget = remaining != null && remaining < 0;
-  // V34 - signed fact: colour follows the state. Under target with
-  // headroom = good; under but close (state=watch) = warn; past target
-  // = bad (label flips to "Hrs over target").
+  // 2026-08-26 polish round 2 item 3 - "Hrs to target 27.83" at 0% OT
+  // reads like a goal to reach; an operator does not want to reach an
+  // overtime target. Label swap: "Headroom" when under, "Hrs over
+  // target" when over (unchanged - already correct on CIN-OH at
+  // 9.6%). Watch band still tones warn because the operator IS
+  // approaching the ceiling; only the label changed.
   const hoursFact = remaining == null
-    ? { label: "Hrs to target", value: "—" }
+    ? { label: "Headroom", value: "—", muted: true }
     : overTarget
       ? { label: "Hrs over target", value: fmtHrs(Math.abs(remaining)), tone: "bad" }
-      : { label: "Hrs to target",  value: fmtHrs(remaining), tone: state === "warn" ? "warn" : "good" };
+      : { label: "Headroom", value: `${fmtHrs(remaining)} hrs`, tone: state === "warn" ? "warn" : "good" };
 
   // V34 sub-line copy. Salary PR 3 C2 - when salary is on, OT % is
-  // a share of HOURLY cost (spec explicit: putting salary into that
-  // denominator would silently improve OT from 13% to 8% with
-  // nobody doing anything). Sub-line labels the basis so the reader
-  // sees the number and knows what it is a share of.
+  // a share of HOURLY cost. 2026-08-26 polish round 2 item 3 - at
+  // exactly 0% OT the "watch above 0%" copy implies an active watch
+  // state that is not active; substitute a plain "no overtime"
+  // statement so the sub-line matches the ON TARGET pill.
   const boundsCopy = salary
     ? "share of hourly cost"
-    : (watch != null && alarm != null
-      ? `watch above ${watch}% · off target above ${alarm}%`
-      : "of hours worked");
+    : pct === 0 && watch != null && alarm != null
+      ? `no overtime ${board?.kind === "multi_period" ? "in range" : "this period"} · off target above ${alarm}%`
+      : (watch != null && alarm != null
+        ? `watch above ${watch}% · off target above ${alarm}%`
+        : "of hours worked");
 
   // 2026-08-26 - "OT workers" -> "Week workers OT" per owner. Same
   // figure (N with any OT / total distinct workers), clearer label.
@@ -245,7 +250,11 @@ function OvertimeCard({ board, salary }) {
         { label: "OT cost", value: otCost != null ? fmt$(otCost) : "—" },
         hoursFact,
         { label: "Week workers OT", value: workersTotal > 0 ? `${otWorkers} of ${workersTotal}` : "—" },
-        { label: "Peak OT week", value: longest ? `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` : "—", muted: !longest },
+        // 2026-08-26 polish round 2 item 3 - Peak OT week ABSENT (not
+        // dashed) when there is no OT. Standing rule: a fact whose
+        // premise does not hold is gone, not "—". Wrap in conditional
+        // spread so an empty pill collapses out of the grid.
+        ...(longest ? [{ label: "Peak OT week", value: `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` }] : []),
       ]} />
       <Covers text={covers} />
     </SignalCard>
@@ -284,34 +293,48 @@ function HoursLeftCard({ board, hoursAvailableHourly }) {
 }
 
 // ── Payroll data (action card) ────────────────────────────────────
-// 2026-08-26 signal card revisions:
-//   * READS from payrollCoverageHourly unconditionally. Never branch
-//     on the salary prop. Structural pinning: if salary is on, this
-//     card must still say the 25 hourly-only worker-weeks and 49.1
-//     hourly-only draft hours - not the salary-inflated denominators.
-//   * HERO FLIP when hasUnapproved: pending-approval hours become the
-//     hero (it is the number someone acts on); coverage drops to a
-//     fact. Owner read `2406 of 2406` as an approval figure when it
-//     is coverage - the flip fixes that misread. When nothing is
-//     pending, the existing "N of N / with pay data in" path stands.
+// Reads from payrollCoverageHourly unconditionally (round 1 pinning).
+//
+// 2026-08-26 polish round 2 - three paths now, keyed on MATERIALITY
+// not existence (item 1). CIN - OH FYTD had a PARTIAL pill on 1.38
+// hours out of 3,818 (0.04%) - the pill sent a site leader looking
+// for a problem that did not exist. The pill now flips to FINAL when
+// the residual is under 1% of the range's hourly hours; the residual
+// hours stay in the hero either way.
+//
+//   1. NO DRAFTS      -> FINAL, hero = coverage (N of N)
+//   2. IMMATERIAL     -> FINAL, hero = draft_hours (with hrs unit),
+//                        sub calls the residual out explicitly
+//   3. MATERIAL       -> PARTIAL, hero = draft_hours (with hrs unit),
+//                        sub adds "· N% of hours in period/range";
+//                        new "Not yet priced" fact = unpriced_hours
+//                        so the operator can see why Will rise
+//                        (dollars) is small compared to the hero
+//                        (hours) - most of those hours are already
+//                        priced. V42 distinction preserved:
+//                        Will rise still reads unpriced_hours, the
+//                        pending hero still reads draft_hours.
 function PayrollDataCard({ board, freshness, payrollCoverageHourly, hoursAvailableHourly }) {
   const priced = payrollCoverageHourly?.priced_ww ?? 0;
   const total = payrollCoverageHourly?.total_ww ?? 0;
   const unpricedHrs = payrollCoverageHourly?.unpriced_hours ?? 0;
   const draftHrs = payrollCoverageHourly?.draft_hours ?? 0;
+  const totalHours = payrollCoverageHourly?.total_hours ?? 0;
   const unapprovedWeeks = payrollCoverageHourly?.unapproved_weeks ?? 0;
-  // Will-rise estimator needs the hourly rate. The hourly rate is
-  // pinned on hoursAvailableHourly.avg_rate (same server helper).
-  // Unapproved hours are hourly by construction (salaried never
-  // clock in), so multiplication by the hourly rate is correct.
   const rate = hoursAvailableHourly?.avg_rate ?? board?.avg_rate;
   const workers = hoursAvailableHourly?.distinct_workers ?? 0;
   const closedWeeks = board?.closed_weeks_count ?? 0;
   const weeksInPeriod = board?.weeks_in_period ?? board?.weeks_in_range;
   const hasUnapproved = draftHrs > 0.004;
   const hasWillRise = unpricedHrs > 0.004;
-  const state = total === 0 ? "neutral" : hasUnapproved ? "warn" : "good";
-  const label = total === 0 ? "—" : hasUnapproved ? "PARTIAL" : "FINAL";
+  // Materiality: draft_hours / total_hours. Strict < 1% (owner
+  // ruling: warn when in doubt, so exactly 1% reads PARTIAL).
+  const materialityFrac = totalHours > 0 ? draftHrs / totalHours : 0;
+  const isMaterial = hasUnapproved && materialityFrac >= 0.01;
+  const isImmaterial = hasUnapproved && !isMaterial;
+  // Multi-period reads "in range"; single reads "this period". Same
+  // substitution the covers derivation uses.
+  const scopeWord = board?.kind === "multi_period" ? "in range" : "this period";
   const willRise = estimateUnpricedDollars(unpricedHrs, rate);
   const lastPulled = freshness?.last_walk_at
     ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
@@ -320,18 +343,23 @@ function PayrollDataCard({ board, freshness, payrollCoverageHourly, hoursAvailab
     : "—";
   const covers = buildCoversLine(board, "payroll_data");
 
-  // Hero flip: on hasUnapproved, hero is the pending-approval hrs;
-  // coverage moves to a fact. On no-unapproved, the existing
-  // "N of N / with pay data in" hero stands.
-  if (hasUnapproved) {
+  const state = total === 0 ? "neutral" : isMaterial ? "warn" : "good";
+  const label = total === 0 ? "—" : isMaterial ? "PARTIAL" : "FINAL";
+
+  // Path 3: MATERIAL (>=1% of hours) - PARTIAL, hero flip.
+  if (isMaterial) {
+    const pctOfHours = Math.round(materialityFrac * 100);
     return (
       <SignalCard state={state}>
         <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
         <Hero>
-          <span className="kpi-sig-hero-val num kpi-sig-hero-warn">{fmtHrs(draftHrs)}</span>
+          <span className="kpi-sig-hero-val num kpi-sig-hero-warn">
+            {fmtHrs(draftHrs)}<span className="kpi-sig-hero-unit">hrs</span>
+          </span>
         </Hero>
-        <Sub>pending approval in Rippling</Sub>
+        <Sub>pending approval in Rippling · {pctOfHours}% of hours {scopeWord}</Sub>
         <Facts items={[
+          { label: "Not yet priced", value: `${fmtHrs(unpricedHrs)} hrs`, tone: "warn", muted: !hasWillRise },
           ...(hasWillRise ? [{
             label: "Will rise",
             value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
@@ -339,14 +367,36 @@ function PayrollDataCard({ board, freshness, payrollCoverageHourly, hoursAvailab
           }] : []),
           { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
           { label: "Coverage", value: total > 0 ? `${priced} of ${total}` : "—" },
-          { label: "Last pulled", value: lastPulled },
         ]} />
         <Covers text={covers} />
       </SignalCard>
     );
   }
 
-  // No unapproved: existing coverage-hero path stands.
+  // Path 2: IMMATERIAL residual - FINAL pill but hero still shows the
+  // residual hours. Sub-line calls out the small share so the pill's
+  // FINAL claim is honest ("nothing is hidden"). Facts pared to the
+  // two operators actually need: Weeks affected + Coverage.
+  if (isImmaterial) {
+    return (
+      <SignalCard state={state}>
+        <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
+        <Hero>
+          <span className="kpi-sig-hero-val num">
+            {fmtHrs(draftHrs)}<span className="kpi-sig-hero-unit">hrs</span>
+          </span>
+        </Hero>
+        <Sub>pending approval · under 1% of hours {scopeWord}</Sub>
+        <Facts items={[
+          { label: "Weeks affected", value: `${unapprovedWeeks}` },
+          { label: "Coverage", value: total > 0 ? `${priced} of ${total}` : "—" },
+        ]} />
+        <Covers text={covers} />
+      </SignalCard>
+    );
+  }
+
+  // Path 1: NO DRAFTS - existing coverage-hero path stands.
   return (
     <SignalCard state={state}>
       <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />

@@ -21,6 +21,7 @@ import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
+import { periodsInBoardWeeks } from "./lib/signalCardModels";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
 import { StoryBlock } from "./components/StoryBlock";
@@ -440,8 +441,44 @@ export default function KpiLaborPage() {
       }
       g.subtotal = s;
     }
+    // 2026-08-26 polish round 2 item 6 - the table and TierCStrip must
+    // count from the SAME period list. weekAggregates drops zero-labor
+    // weeks (they never had actuals rows), so periods with no labor
+    // in the range dropped from the table entirely - the chart showed
+    // 9 bars while the table showed 7 for CIN - OH FYTD. Fix by walking
+    // periodsInBoardWeeks(board) - the canonical range period list -
+    // and appending a zero-labor placeholder group for any period not
+    // already covered. TierCStrip reads from the same helper; both
+    // components now count independently CAN'T diverge because they
+    // share the derivation. Month grouping is unaffected (a month is
+    // not a period, and no zero-labor month is currently rendered).
+    if (!groupByMonth && data?.board) {
+      const seenPeriods = new Set(groups.filter(g => g.groupHint?.kind === "period").map(g => g.period_no));
+      for (const p of periodsInBoardWeeks(data.board)) {
+        if (seenPeriods.has(p.period_no)) continue;
+        const key = `P-${p.fiscal_year}|${p.period_no}`;
+        groups.push({
+          key,
+          fiscal_year: p.fiscal_year,
+          period_no: p.period_no,
+          weeks: [],
+          subtotal: { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, hours_premium_other: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0 },
+          groupLabel: undefined,
+          groupHint: { kind: "period", period_no: p.period_no, fiscal_year: p.fiscal_year },
+          sortKey: -(p.fiscal_year * 100 + p.period_no),
+          // Marker for WeekTable render: no per-week rows for this
+          // group; render as a single muted row explaining the state
+          // as "no labor recorded". The board does not know WHY (season
+          // hadn't started, facility closure, etc.) and does not claim.
+          zero_labor: true,
+          weeks_in_period: p.weeks_in_period,
+        });
+      }
+      // Re-sort with the new groups included (existing convention).
+      groups.sort((a, b) => a.sortKey - b.sortKey);
+    }
     return groups;
-  }, [weekAggregates, rangeSelectionEarly]);
+  }, [weekAggregates, rangeSelectionEarly, data?.board]);
 
   const totals = useMemo(() => {
     const t = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0 };
