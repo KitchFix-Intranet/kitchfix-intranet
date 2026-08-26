@@ -42,3 +42,23 @@ Design questions to resolve before starting:
 Owner verify: period-board signal cards now render **240px** while homestand signal cards stay at **197px**. Expected given the round-2 additions (new "Not yet priced" fact on Payroll data, `Covers` dashed line on all four period cards). The gap is not a defect - it is the price of the extra information those cards now carry.
 
 The two boards should eventually match again. Whether that means the homestand cards grow to match (they add `Covers` + payroll flip + hourly-only pinning per the acceptance above and naturally reach 240px), or the period cards shrink (a redesign that folds the new content into fewer lines), is a design call for the follow-up PR. Log this note so the divergence is not silently accepted as the new normal.
+
+## Season-count partition probe: fold in `foldPerStandSplits` (added 2026-08-26 post-PR #848)
+
+**The probe `_probe_season_count_partition.mjs` shipped in #848 has a gap owner named on merge:** it runs `computeHomestandBank` without first attaching per-stand actuals via `foldPerStandSplits`, so `bank.stands_finished === 0` on every account. The partition invariant currently proves `0 + N + M === total`, which catches the overlap the PR was fixing - but it would ALSO pass if `stands_finished` were broken, because zero plus the other two still sums.
+
+**Same class as the guards this week:** a check that passes for a reason other than the one intended. Fourth silent-truncation-family instance (RPC insert list, view SELECT list, route SELECT list, contrast parser) — this makes five — and this one is the assertion itself producing a partition-holds outcome via an unintended path.
+
+**Fix scope:** extend the probe to call `foldPerStandSplits` in the same order the live route does, so `stands_finished` reflects realistic counts. On STL - MO it should read `9 + 2 + 2 = 13`, not `0 + 4 + 2 = 6` (or `0 + 11 + 2 = 13`) reaching the same partition-holds conclusion by a different route.
+
+Sketch:
+```js
+// After foldPreFloorEstimates, before computeHomestandBank:
+const actualsByStand = actualsByStandFromDaily(supa, account, homestands, ...);
+const withSplits = foldPerStandSplits(homestands, actualsByStand);
+const bank = computeHomestandBank(withSplits, TODAY);
+// bank.stands_finished now reflects played stands with actuals landed;
+// the sum invariant proves the intended thing.
+```
+
+**Owner ruling 2026-08-26 (post-merge):** not urgent; fold into the redesign PR so it doesn't sit in a PR-body note. Redesign already carries items 5 + 6 (from `CC_PROMPT_HOMESTAND_REDESIGN.md`) and the card-height parity note above; this is the third item for that PR to close.
