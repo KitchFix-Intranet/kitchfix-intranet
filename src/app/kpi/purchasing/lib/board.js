@@ -461,9 +461,18 @@ export function resolveCardDisplay(args) {
   const budgetSpent = !!args?.budgetSpent;
 
   // Base state resolution.  For the PERIOD card on a live range the
-  // resolver-spent includes pending (owner ruling).  For CLOSED it does
-  // not.  For BUCKET / LEDGER cards pending never enters (structural -
-  // pending has no gl_line_code and can't be attributed).
+  // resolver-spent includes pending (owner ruling 2026-08-26).  For
+  // CLOSED it does not.  For BUCKET / LEDGER cards pending never
+  // enters (structural - pending has no gl_line_code and can't be
+  // attributed).
+  //
+  // Option 3 landed 2026-08-26 (this PR): on a live period the HERO,
+  // sub-line %-used, and projected-close row all render against
+  // `resolverSpent` (spent + pending) instead of coded-only.  Closed
+  // periods are unaffected - `includePendingInVerdict` is false when
+  // `closed`.  The three previously-diverging elements (hero excludes,
+  // variance includes, pill includes) now agree.  #839 owned the
+  // captioning contract; this PR owns the number.
   const includePendingInVerdict = kind === "period" && !closed;
   const resolverSpent = spent + (includePendingInVerdict ? pending : 0);
   const cs = resolveCardState({
@@ -472,13 +481,23 @@ export function resolveCardDisplay(args) {
     hasBills: resolverSpent > 0,
   });
 
-  // Hero
-  const heroValueText = fmt$(spent);   // rule 2 - hero stays coded-only
-  const heroClassEffective = isFutureRange ? "" : cs.heroClass;
+  // Hero.  On live period the hero shows the same number the pill and
+  // variance already resolve against - spent + pending.  On closed
+  // (and on bucket/ledger cards) it stays coded-only.
+  const heroValue = resolverSpent;
+  const heroValueText = fmt$(heroValue);
+  // Hero colour matches the variance colour so a `red $X` hero never
+  // sits next to a `green Over by` (WEST FYTD's exact defect - state
+  // said 'onpace' via the 3% pace band while the raw variance said
+  // over).  On live an over hero + red variance both come from the
+  // same `rem < 0` test.  On closed the two agree by construction
+  // (state = spent > budget ? 'over' : 'under').
 
-  // Sub-line under hero
+  // Sub-line under hero.  `%-used` reads off the hero, so a card
+  // showing `SPENT $X of $Y` cannot compute Y% from a different
+  // numerator than the hero.  #839's exact defect closed structurally.
   const subLineOfBudgetText = fmt$(budget);
-  const spentUsedFrac = budget > 0 ? (spent / budget) : null;
+  const spentUsedFrac = budget > 0 ? (heroValue / budget) : null;
   const subLinePctText = (!isFutureRange && spentUsedFrac != null) ? fmtPct(spentUsedFrac) : "";
   const subLineNoBudgetText = (budget === 0 && !isFutureRange) ? "no budget" : "";
 
@@ -493,6 +512,12 @@ export function resolveCardDisplay(args) {
   const showOverArrow = rem < 0;
   const showRemainingBlock = !isFutureRange && budget !== 0;
   const showFutureBudgetBlock = isFutureRange;
+
+  // Hero colour bound to variance sign (Option 3 owner ruling).  Over
+  // -> red no matter what the pace band said.  Otherwise fall back to
+  // state-derived heroClass so `under`/`onpace`/`none`/`nobud` still
+  // render as they did before (green / green / neutral / neutral).
+  const heroClassEffective = isFutureRange ? "" : (showOverArrow ? "r" : cs.heroClass);
 
   let remainingLabel = "";
   let remainingValueText = "";
@@ -533,7 +558,15 @@ export function resolveCardDisplay(args) {
       remainingCaption = "no target this range";
     }
   } else {
-    // Period card - the sign-gated captions Kevin ruled on.
+    // Period card.
+    //
+    // Option 3 caption change (owner ruling 2026-08-26): with the hero
+    // now including pending on live, `net of pending` and `includes
+    // uncoded pending` both restate what the hero already shows.  The
+    // three numbers on the card (hero, sub-line %, variance) all read
+    // against the same `resolverSpent`, so the reader has nothing to
+    // reconstruct.  Caption is empty on live.  Closed still reads
+    // `period closed` (a lifecycle marker, not a math annotation).
     remainingLabel = closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining");
     remainingValueText = closed
       ? moneyArrow(cs.variance)
@@ -541,21 +574,32 @@ export function resolveCardDisplay(args) {
     remainingClass = closed
       ? (cs.signClass || (cs.variance > 0 ? "r" : "g"))
       : (showOverArrow ? "r" : "");
-    remainingCaption = closed
-      ? "period closed"
-      : (showOverArrow ? "includes uncoded pending" : "net of pending");
+    remainingCaption = closed ? "period closed" : "";
   }
 
   // Projected close (period card only).
-  const projectedClose = args?.projectedClose;
+  //
+  // Option 3 (owner ruling 2026-08-26): on a live range the hero
+  // includes pending, so the projected-close forecast projects the
+  // SAME base forward.  Server ships `projectedClose = spent /
+  // elapsed_frac`; the resolver adjusts to `(spent + pending) /
+  // elapsed_frac` on live so the "if this pace holds" row stays
+  // coherent with the hero.  Closed period doesn't render this row
+  // anyway (`!closed` gate below).
+  const serverProjectedClose = args?.projectedClose;
+  const elapsedFrac = Number(args?.elapsedFrac || 0);
+  const displayedProjectedClose = (kind === "period" && !closed
+      && elapsedFrac > 0 && (spent + pending) > 0)
+    ? Math.round(((spent + pending) / elapsedFrac) * 100) / 100
+    : (serverProjectedClose != null ? Number(serverProjectedClose) : null);
   const showProjectedClose = kind === "period"
     && !isFutureRange && !closed
-    && projectedClose != null;
-  const pcOverBudget = showProjectedClose && Number(projectedClose) > budget;
-  const projectedCloseValueText = showProjectedClose ? fmt$(Number(projectedClose)) : "";
+    && displayedProjectedClose != null;
+  const pcOverBudget = showProjectedClose && displayedProjectedClose > budget;
+  const projectedCloseValueText = showProjectedClose ? fmt$(displayedProjectedClose) : "";
   const projectedCloseValueClass = pcOverBudget ? "r" : "";
   const projectedCloseArrow = showProjectedClose ? (pcOverBudget ? "▲ " : "▼ ") : "";
-  const projectedCloseDeltaText = showProjectedClose ? fmt$(Math.abs(Number(projectedClose) - budget)) : "";
+  const projectedCloseDeltaText = showProjectedClose ? fmt$(Math.abs(displayedProjectedClose - budget)) : "";
   const projectedCloseAnnotationClass = pcOverBudget ? "r" : "g";
 
   // Input signature - deterministic hash of the exact numeric inputs +
