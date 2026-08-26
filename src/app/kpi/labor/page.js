@@ -452,9 +452,34 @@ export default function KpiLaborPage() {
     // components now count independently CAN'T diverge because they
     // share the derivation. Month grouping is unaffected (a month is
     // not a period, and no zero-labor month is currently rendered).
+    //
+    // 2026-08-26 fix (post-verify) - attach weeks_in_period from the
+    // shared helper to EVERY period group, not only the zero-labor
+    // placeholders. Prior fix left a partial-period defect: the
+    // "N PERIODS · M WEEKS" total in WeekTable summed g.weeks.length
+    // for present groups, which counts weeks-with-actuals, not
+    // weeks-in-period. On CIN - OH FYTD (P3-P9 each had zero-labor
+    // weeks inside them), the total read 9 PERIODS · 31 WEEKS instead
+    // of 35. Same defect the item was meant to fix, one level down -
+    // fix at the source. Pin weeks_in_period on every group; WeekTable
+    // sums that field.
     if (!groupByMonth && data?.board) {
+      const canonicalPeriods = periodsInBoardWeeks(data.board);
+      const canonicalByPeriod = new Map(canonicalPeriods.map(p => [p.period_no, p]));
+      // Attach weeks_in_period from the shared source to every period
+      // group. Groups built from weekAggregates get the canonical
+      // count; if a period is missing from canonical (data drift),
+      // fall back to the group's own weeks.length so the number stays
+      // defined.
+      for (const g of groups) {
+        if (g.groupHint?.kind !== "period") continue;
+        const canonical = canonicalByPeriod.get(g.period_no);
+        g.weeks_in_period = canonical ? canonical.weeks_in_period : g.weeks.length;
+      }
+      // Append zero-labor placeholder groups for periods missing from
+      // the actuals-derived groups.
       const seenPeriods = new Set(groups.filter(g => g.groupHint?.kind === "period").map(g => g.period_no));
-      for (const p of periodsInBoardWeeks(data.board)) {
+      for (const p of canonicalPeriods) {
         if (seenPeriods.has(p.period_no)) continue;
         const key = `P-${p.fiscal_year}|${p.period_no}`;
         groups.push({
