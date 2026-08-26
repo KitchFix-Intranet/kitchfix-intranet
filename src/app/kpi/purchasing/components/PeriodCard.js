@@ -26,7 +26,7 @@ import { fmt$, resolveCardDisplay, chartUnit } from "../lib/board";
 // escapes every card's `position: relative` stacking context. Import
 // only, never fork.
 import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
-import { PERIOD_BODY, WEEK_STRIP_BODY } from "./PurchasingHelpPops";
+import { PERIOD_BODY } from "./PurchasingHelpPops";
 
 export function PeriodCard({
   periodNo,
@@ -74,6 +74,10 @@ export function PeriodCard({
   // false; at-risk callers unchanged. Threads into the ONE stateOf
   // call so pill / hero / chart all agree, per §9B one-source rule.
   isPassThrough = false,
+  // R13 P0-1 - closed-card comparison payload from route.period_history.
+  //   { prior: { period_no, spent, label }, sparkline: [{period_no,spent}] }
+  // null on any non-closed-single-period range.
+  periodHistory = null,
 }) {
   // INV-P21 structural fix (owner ruling 2026-08-26).  Resolver owns
   // every displayed value + every caption.  The component reads
@@ -102,6 +106,14 @@ export function PeriodCard({
     isFutureRange,
     projectedClose,
     tier,
+    // R13 P0-1: comparison block inputs.  Resolver formats; component
+    // renders what it's told.
+    periodNo,
+    priorPeriod: periodHistory?.prior || null,
+    sparkline:   periodHistory?.sparkline || null,
+    // R13 P2-8: chart header names its bucket.  Period card carries
+    // food + packaging + vehicle (the aggregate identity).
+    identityLabel: "food + packaging + vehicle",
   });
 
   // PR-2 R4 Part A: bill / card source consistency check.  Bills and
@@ -202,76 +214,106 @@ export function PeriodCard({
             <div className="kpi-p-stk">
               <span className="kpi-p-label">{d.remainingLabel}</span>
               <span className={`kpi-p-value num ${d.remainingClass}`}>{d.remainingValueText}</span>
-              <span className="kpi-p-subline">{d.remainingCaption}</span>
+              {/* R13 P1-2 - the right column earns its sub-line on live
+                  over cases: `<b>4.5%</b> of the range budget`.  Closed
+                  uses `remainingCaption` = "as closed on the P&L".
+                  Only one of the two is non-empty. */}
+              <span className="kpi-p-subline">
+                {d.remainingSubLineText ? (
+                  <><b>{d.remainingSubLineText}</b> of the range budget</>
+                ) : d.remainingCaption}
+              </span>
             </div>
           ) : null}
         </div>
 
-        {/* PR 2 R8 - a future range has no bills, no cards, no pending,
-            no projection.  Sub-row values come directly from props
-            (bills/cards/pending are raw display, not computed values)
-            except the closed-Variance colour + label and Projected
-            close arrow / delta, which are resolver-owned via `d`. */}
-        {!isFutureRange && (
-        <div className="kpi-p-subs">
-          {closed ? (
-            <>
-              <div className="kpi-p-sub">
-                <span className="kpi-p-k">Actual<small>as closed on the P&amp;L</small></span>
-                <span className="kpi-p-v num">{fmt$(spent)}</span>
-                <span className="kpi-p-x" aria-hidden="true" />
-              </div>
-              <div className="kpi-p-sub">
-                <span className="kpi-p-k">Budget<small>FY2026 plan</small></span>
-                <span className="kpi-p-v num">{d.subLineOfBudgetText}</span>
-                <span className="kpi-p-x" aria-hidden="true" />
-              </div>
-              <div className="kpi-p-sub">
-                <span className="kpi-p-k">Variance<small>actual less budget</small></span>
-                {/* Same sign class + wording feed the value and its
-                    right-column annotation, from the resolver. */}
-                <span className={`kpi-p-v num ${d.remainingClass}`}>{d.remainingValueText}</span>
-                <span className={`kpi-p-x ${d.remainingClass}`}>{d.remainingClass === "r" ? "over" : "under"}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="kpi-p-sub">
-                <span className="kpi-p-k">Bills<small>entered in bill.com</small></span>
-                <span className="kpi-p-v num">{fmt$(bills)}</span>
-                <span className="kpi-p-x">at least</span>
-              </div>
-              <div className="kpi-p-sub">
+        {/* R13 P0-1 - closed period comparison block replaces the old
+            Actual / Budget / Variance sub-block.  The old block was
+            tautological: three values, each printed twice, with two
+            different labels for the same number.  Prior-period tells
+            an operator what the top of the card cannot: whether the
+            period was normal.  Rendered on closed only.
+
+            R13 P1-1 - live sub-rows: Bills / Cards / Pending have an
+            empty third column (they're components that sum to the
+            hero, no qualifier needed).  Projected close is promoted
+            below a rule into its own row - it's a forecast, not a
+            component. */}
+        {!isFutureRange && (closed ? (
+          d.showPriorPeriodBlock ? (
+            <div className="kpi-p-per-cmp">
+              <div className="kpi-p-per-cmp-row">
                 <span className="kpi-p-k">
-                  Cards
-                  <small>
-                    coded to a P&amp;L line
-                    {cardsThroughLabel ? ` · through ${cardsThroughLabel}` : ""}
-                  </small>
+                  {d.priorPeriodLabelText}
+                  <small>{d.priorPeriodDescription}</small>
                 </span>
-                <span className="kpi-p-v num">{fmt$(cards)}</span>
-                <span className="kpi-p-x" aria-hidden="true" />
+                <span className="kpi-p-v num">{d.priorPeriodValueText}</span>
+                <span className={`kpi-p-x ${d.priorPeriodDeltaClass}`}>
+                  {d.priorPeriodDeltaArrow}
+                  {d.priorPeriodDeltaText}
+                </span>
               </div>
-              <div className="kpi-p-sub">
-                <span className="kpi-p-k">Pending<small>card · not yet coded</small></span>
-                <span className="kpi-p-v num a">{fmt$(pending)}</span>
-                <span className="kpi-p-x a">not on a P&amp;L line</span>
-              </div>
-              {d.showProjectedClose && (
-                <div className="kpi-p-sub">
-                  <span className="kpi-p-k">Projected close<small>if this pace holds</small></span>
-                  <span className={`kpi-p-v num ${d.projectedCloseValueClass}`}>
-                    {d.projectedCloseValueText}
+              {d.sparklineHeights.length > 0 && (
+                <>
+                  <div className="kpi-p-spark" aria-hidden="true">
+                    {d.sparklineHeights.map((h, i) => (
+                      <i
+                        key={i}
+                        className={i === d.sparklineCurrentIdx ? "now" : ""}
+                        style={{ height: `${(h * 100).toFixed(0)}%` }}
+                      />
+                    ))}
+                  </div>
+                  <span className="kpi-p-cardmeta">
+                    {d.sparklineNote}
+                    {isPassThrough || (periodNo == null) ? "" : " · this rollup"}
                   </span>
-                  <span className={`kpi-p-x ${d.projectedCloseAnnotationClass}`}>
-                    {d.projectedCloseArrow}
-                    {d.projectedCloseDeltaText}
-                  </span>
-                </div>
+                </>
               )}
-            </>
-          )}
-        </div>
+            </div>
+          ) : null
+        ) : (
+          <div className="kpi-p-subs">
+            <div className="kpi-p-sub">
+              <span className="kpi-p-k">Bills<small>entered in bill.com</small></span>
+              <span className="kpi-p-v num">{fmt$(bills)}</span>
+              <span className="kpi-p-x" aria-hidden="true" />
+            </div>
+            <div className="kpi-p-sub">
+              <span className="kpi-p-k">
+                Cards
+                <small>
+                  coded to a P&amp;L line
+                  {cardsThroughLabel ? ` · through ${cardsThroughLabel}` : ""}
+                </small>
+              </span>
+              <span className="kpi-p-v num">{fmt$(cards)}</span>
+              <span className="kpi-p-x" aria-hidden="true" />
+            </div>
+            <div className="kpi-p-sub">
+              <span className="kpi-p-k">Pending<small>card · not yet coded</small></span>
+              <span className="kpi-p-v num a">{fmt$(pending)}</span>
+              <span className="kpi-p-x" aria-hidden="true" />
+            </div>
+          </div>
+        ))}
+
+        {/* R13 P1-1 - projected close promoted out of the sub-rows into
+            its own row with its own variance.  It's a forecast, not a
+            component of hero-spend; its variance is often bigger than
+            the hero variance itself, and it belongs at its own
+            weight.  Rendered on live period cards only. */}
+        {!isFutureRange && !closed && d.showProjectedClose && (
+          <div className="kpi-p-per-proj">
+            <span className="kpi-p-k">Projected close<small>if this pace holds</small></span>
+            <span className={`kpi-p-v num ${d.projectedCloseValueClass}`}>
+              {d.projectedCloseValueText}
+            </span>
+            <span className={`kpi-p-x ${d.projectedCloseAnnotationClass}`}>
+              {d.projectedCloseArrow}
+              {d.projectedCloseDeltaText}
+            </span>
+          </div>
         )}
       </div>
 
@@ -280,14 +322,18 @@ export function PeriodCard({
         <div className="kpi-p-lh">
           <span className="kpi-p-label">
             {/* R12 item 1 - cadence axis pulled from chartUnit() so
-                BucketCard and PeriodCard cannot disagree. Scope axis
-                (`THE PERIOD` vs `THE RANGE`) is period-card-only. */}
+                BucketCard and PeriodCard cannot disagree.  Scope axis
+                (`THE PERIOD` vs `THE RANGE`) is period-card-only.
+                R13 P2-6 - the ? that used to live here (and on every
+                bucket chart) is removed.  ONE trigger per screen -
+                the `qPurchPeriod` at the card title above, whose body
+                (PERIOD_BODY) now covers the weekly mechanic + Bills-
+                is-a-floor + Pending + sub-rows in a single popover. */}
             {(() => {
               const unit = chartUnit(tier);
               const cadence = `${unit.toUpperCase()} BY ${unit.toUpperCase()}`;
               return `THE ${tier === "A" ? "PERIOD" : "RANGE"} · ${cadence}`;
             })()}
-            {" "}<HelpPop id="qPurchWeekStrip" title="Each week strip" body={WEEK_STRIP_BODY} />
           </span>
           <span className="kpi-p-legs">
             {tier !== "C" && original != null && (

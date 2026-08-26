@@ -81,6 +81,18 @@ import { SkeletonBoard } from "./components/SkeletonBoard";
 import { FailureCard } from "./components/FailureCard";
 
 // Format ISO date -> "MM/DD" for chart week captions.
+// R13 P0-2 - per-unit elapsed fraction for a running WEEK.  Days
+// since week_start (inclusive of today) divided by 7.  Only meaningful
+// when called against the running week; the running-unit projection
+// gate in WeekChart uses this to decide whether to draw the dashed
+// extension.
+function weekElapsedFrac(weekStartISO, todayISO) {
+  const startMs = new Date(weekStartISO + "T00:00:00Z").getTime();
+  const todayMs = new Date(todayISO + "T00:00:00Z").getTime();
+  const days = Math.floor((todayMs - startMs) / 86400000) + 1;
+  return Math.max(0, Math.min(1, days / 7));
+}
+
 function isoToMMDD(iso) {
   if (!iso) return "";
   const parts = String(iso).slice(0, 10).split("-");
@@ -387,7 +399,16 @@ export default function KpiPurchasingPage() {
       const now = new Date(today).getTime();
       const finished = pEnd < now;
       const running = !finished && pStart <= now && now <= pEnd;
-      return { ...p, finished, running };
+      // R13 P0-2 - per-unit elapsed fraction so WeekChart can render
+      // the running-unit projection.  Only meaningful on the running
+      // unit (finished units are fully elapsed; future units haven't
+      // started).  For period bars this is (days since period start)
+      // / (period days), matching the elapsedFrac formula in
+      // route.js at the range scope.
+      const periodDaysMs = pEnd - pStart + 86400000;   // inclusive end
+      const elapsedDaysMs = Math.max(0, Math.min(periodDaysMs, now - pStart + 86400000));
+      const elapsedFrac = running ? (elapsedDaysMs / periodDaysMs) : (finished ? 1.0 : 0);
+      return { ...p, finished, running, elapsedFrac };
     });
     // KPI-line units for the tier-aware strip.
     const kpiUnits = (() => {
@@ -435,6 +456,9 @@ export default function KpiPurchasingPage() {
           targetAdj: tier === "A" ? kpiTargets.adjusted : null,
           finished,
           running,
+          // R13 P0-2 - per-unit elapsed fraction for the running-week
+          // projection.  Weekly = (days since week start) / 7.
+          elapsedFrac: running ? weekElapsedFrac(wIso, today) : (finished ? 1.0 : 0),
         };
       });
     })();
@@ -472,6 +496,7 @@ export default function KpiPurchasingPage() {
             budget: Math.round(perPeriodBudget * 100) / 100,
             finished: p.finished,
             running: p.running,
+            elapsedFrac: p.elapsedFrac,
           };
         });
       }
@@ -491,6 +516,8 @@ export default function KpiPurchasingPage() {
           start: wIso,
           spent: Number(perWeekArr[i] || 0),
           targetOrig: targets.original,
+          // R13 P0-2 - per-unit elapsed fraction for the running week.
+          elapsedFrac: running ? weekElapsedFrac(wIso, today) : (finished ? 1.0 : 0),
           // Adjusted only meaningful in Tier A (spec §B4).
           targetAdj: tier === "A" ? targets.adjusted : null,
           finished,
@@ -967,6 +994,10 @@ export default function KpiPurchasingPage() {
           budgetSpent={board.kpiTargets.budgetSpent}
           projectedClose={projClose}
           cardTitle={cardTitle}
+          // R13 P0-1 - closed-card comparison block payload.  Null on
+          // any range that isn't a closed single period; component
+          // suppresses the block when null.
+          periodHistory={data?.period_history || null}
         />
 
         {board.buckets.map(b => (

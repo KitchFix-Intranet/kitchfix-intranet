@@ -329,6 +329,80 @@ async function paginateWeekly(supa, { members, start, end }) {
   return { data: out };
 }
 
+// R13 P0-1: prior-period + last-8-periods spend history for the
+// closed-card comparison block.  Rolled up across the members set so
+// aggregate scopes (ALL / EAST / WEST) return the portfolio shape
+// rather than one site's (INV-P21 axis).  Reads the SQL-aggregated
+// weekly view - a single call for the P(N-7)..P(N-0) window rolled
+// client-side to periods.  Probe 2026-08-26 measured wall-time at
+// 74ms (single-account) to 250ms (ALL) for the 8-period window; the
+// call runs in parallel with the other loaders so it doesn't add
+// serial cost.
+async function loadPriorPeriodHistory(supa, { members, periodNo }) {
+  if (!periodNo || periodNo < 2) return { data: null };   // no prior period exists for P1
+  const firstPeriod = Math.max(1, periodNo - 7);          // last 8 periods ending at current
+  const startISO = periodStartISO(firstPeriod);
+  const endISO   = periodEndISO(periodNo);
+  const IN_CHUNK_LOCAL = 100;
+  const PS = 1000;
+  const byWeek = new Map();
+  for (let i = 0; i < members.length; i += IN_CHUNK_LOCAL) {
+    const chunk = members.slice(i, i + IN_CHUNK_LOCAL);
+    let from = 0;
+    while (true) {
+      // R13 P0-1: sparkline must compare like-to-like with the hero,
+      // which is the KPI line only (food + packaging + vehicle).  Pull
+      // gl_line_code and filter client-side to lines beginning with
+      // 3200 / 3400 / 3500 - same predicate as kpiBudget in
+      // src/app/kpi/purchasing/lib/board.js.  Without this filter the
+      // prior-period value included reimbursable + SG&A and read as a
+      // different base than the hero it was compared against.
+      const q = await supa.from("v_purchasing_by_site_week")
+        .select("week_start, amount, gl_line_code")
+        .in("account_key", chunk)
+        .gte("week_start", startISO)
+        .lte("week_start", endISO)
+        .order("week_start", { ascending: true })
+        .range(from, from + PS - 1);
+      if (q.error) return { error: q.error };
+      const rows = q.data || [];
+      for (const r of rows) {
+        const gl = String(r.gl_line_code || "");
+        if (!(gl.startsWith("3200") || gl.startsWith("3400") || gl.startsWith("3500"))) continue;
+        const wk = r.week_start;
+        byWeek.set(wk, (byWeek.get(wk) || 0) + Number(r.amount || 0));
+      }
+      if (rows.length < PS) break;
+      from += PS;
+    }
+  }
+  const byPeriod = new Map();
+  for (const [wk, amt] of byWeek) {
+    const p = periodOf(wk);
+    if (p >= firstPeriod && p <= periodNo) {
+      byPeriod.set(p, (byPeriod.get(p) || 0) + amt);
+    }
+  }
+  const sparkline = [];
+  for (let p = firstPeriod; p <= periodNo; p++) {
+    sparkline.push({
+      period_no: p,
+      spent: Math.round((byPeriod.get(p) || 0) * 100) / 100,
+    });
+  }
+  const priorSpent = Math.round((byPeriod.get(periodNo - 1) || 0) * 100) / 100;
+  return {
+    data: {
+      prior: {
+        period_no: periodNo - 1,
+        spent: priorSpent,
+        label: `Period ${periodNo - 1}`,
+      },
+      sparkline,   // P(N-7) .. P(N), inclusive
+    },
+  };
+}
+
 // Pending: SUM(amount) + line count of rippling_spend rows in range
 // whose gl_line_code IS NULL. Members-filtered so ALL/EAST/WEST return
 // the aggregate. excluded=false always. §3.5: a dollar sum, never
@@ -1117,6 +1191,18 @@ export async function GET(request) {
   if (budgetsResp.error) return NextResponse.json(safeError("kpi_budgets", budgetsResp.error), { status: 500 });
   const budgetsByLine = budgetsResp.data;
 
+  // R13 P0-1: detect the closed single-period case so we can fetch
+  // prior-period + 8-period sparkline history in parallel with the
+  // other loaders.  Guard: only fires when the range EQUALS a single
+  // fiscal period AND the period is closed (end date before today).
+  // Aggregate scopes roll up across members inside the loader.
+  const rangeSelectionEarly = inferRangeSelection(start, end);
+  const isSinglePeriodRange = rangeSelectionEarly?.kind === "period" && rangeSelectionEarly.value != null;
+  const singlePeriodNo = isSinglePeriodRange ? Number(rangeSelectionEarly.value) : null;
+  const rangeEndDate = new Date(end + "T23:59:59Z");
+  const todayDateEarly = new Date(today + "T00:00:00Z");
+  const isClosedSinglePeriod = isSinglePeriodRange && rangeEndDate < todayDateEarly;
+
   // Fetch weekly / pending / raw actuals / coverage / freshness in
   // parallel. Weekly reads the SQL-aggregated view; raw actuals are
   // still needed for source-level splits (bills-only bucket state,
@@ -1126,7 +1212,7 @@ export async function GET(request) {
   //
   // PR-2 R4 Part A: pass [effStart, effEnd] so weekly view, actuals,
   // pending and coverage all describe the same fiscal-week footprint.
-  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, coverage, freshness, dirResp] = await Promise.all([
+  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, coverage, freshness, dirResp, priorHistoryResp] = await Promise.all([
     paginateWeekly(supa, { members, start: effStart, end: effEnd }),
     loadPending(supa, { members, start: effStart, end: effEnd }),
     loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
@@ -1134,12 +1220,18 @@ export async function GET(request) {
     loadCoverage(supa, { members, start: effStart, end: effEnd }),
     loadFreshness(supa),
     loadAccountsDirectory(supa),   // PR-2 R2 Fix 7
+    // R13 P0-1 - history for closed period card only.  Loader returns
+    // { data: null } instantly if the range isn't a closed period.
+    isClosedSinglePeriod
+      ? loadPriorPeriodHistory(supa, { members, periodNo: singlePeriodNo })
+      : Promise.resolve({ data: null }),
   ]);
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
   if (reportPendingResp.error) return NextResponse.json(safeError("rippling_report_only_pending_v1", reportPendingResp.error), { status: 500 });
   if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
   if (dirResp.error) return NextResponse.json(safeError("accounts_directory", dirResp.error), { status: 500 });
+  if (priorHistoryResp.error) return NextResponse.json(safeError("prior_period_history", priorHistoryResp.error), { status: 500 });
   const weekly = weeklyResp.data;
   // Precedence merge: API pending + report-only pending (no double
   // count - API rows are structurally excluded from the report-only
@@ -1772,6 +1864,10 @@ export async function GET(request) {
     pending,
     buckets,
     periods,
+    // R13 P0-1 - closed-card comparison block payload.  null on any
+    // range that isn't a closed single fiscal period, so the client
+    // shape is `data.period_history?.prior` etc.
+    period_history: priorHistoryResp.data,
     categories,
     totals,
     coverage,
