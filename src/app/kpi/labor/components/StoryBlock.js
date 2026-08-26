@@ -418,13 +418,17 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
             visually stacked via `bottom` position. Hatch is unique
             to this element after the PR-B render fix; the in-progress
             bar itself is now solid amber, so the legend reads true:
-            hatched means exactly one thing (pay data pending). */}
+            hatched means exactly one thing (not costed yet).
+            v43-1 language sweep: "pending" replaced with "not costed
+            yet" - owner ruling 2026-08-26, "pending" was doing double
+            duty for both approval-state and cost-state and that
+            ambiguity produced the entire Approvals-card investigation. */}
         {capPct > 0 && (
           <div
             className="kpi-wb-bar kpi-wb-cap-est"
             style={{ height: `${capPct}%`, bottom: `${barPct}%` }}
-            title={capDollars != null ? `Estimated ~${fmt$(capDollars)} pending pay data` : undefined}
-            aria-label="pay data pending, estimated"
+            title={capDollars != null ? `Estimated ~${fmt$(capDollars)} not costed yet` : undefined}
+            aria-label="not costed yet, estimated"
           />
         )}
       </div>
@@ -764,7 +768,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
           {tier === "A" && (
             <span className="kpi-wh-tgt kpi-wh-tgt-cap">
               <span className="kpi-wh-cap-swatch" aria-hidden="true" />
-              hatched = pay data pending, estimated
+              hatched = not costed yet
             </span>
           )}
         </div>
