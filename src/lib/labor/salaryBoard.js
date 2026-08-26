@@ -311,9 +311,20 @@ function enumeratePeriods(first, last) {
  */
 export function pinHourlyOnly(board) {
   const b = board || {};
+  // `applies` on each pinned block encodes the card's renderability
+  // contract, not just "any hourly data exists on the board." The
+  // Hours available card renders ONLY on single_period_in_progress
+  // (owner ruling 2026-08-26: its one honest sentence - "N hrs left
+  // to schedule in Period M" - cannot be written for a closed period,
+  // FYTD or last-4-weeks). Reporting applies:true on those ranges
+  // would lie to a future consumer that trusts the flag and render a
+  // card we deliberately suppress. Payroll data renders on every
+  // kind so its applies still follows the board.
+  const hoursAvailableApplies = b.applies !== false && b.kind === "single_period_in_progress";
+  const payrollCoverageApplies = b.applies !== false;
   return {
     hours_available_hourly: {
-      applies: b.applies !== false,
+      applies: hoursAvailableApplies,
       kind: b.kind ?? null,
       range_budget: b.range_budget ?? null,
       period_budget: b.period_budget ?? null,
@@ -326,7 +337,7 @@ export function pinHourlyOnly(board) {
       distinct_workers: b.distinct_workers ?? 0,
     },
     payroll_coverage_hourly: {
-      applies: b.applies !== false,
+      applies: payrollCoverageApplies,
       priced_ww: b.payroll_data?.priced_ww ?? 0,
       total_ww: b.payroll_data?.total_ww ?? 0,
       draft_hours: b.payroll_data?.draft_hours ?? 0,
