@@ -19,11 +19,11 @@
 
 import { Pill } from "./Pill";
 import { WeekChart } from "./WeekChart";
-import { fmt$, resolveCardDisplay, stateOf, chartUnit } from "../lib/board";
+import { fmt$, resolveCardDisplay, stateOf, chartUnit, BUCKET_DEFS } from "../lib/board";
 // PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
 // escapes the card's `position: relative` stacking context.
 import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
-import { FOOD_BODY, PACKAGING_BODY, VEHICLE_BODY, WEEK_STRIP_BODY } from "./PurchasingHelpPops";
+import { FOOD_BODY, PACKAGING_BODY, VEHICLE_BODY } from "./PurchasingHelpPops";
 
 const BUCKET_HELP = {
   food:      { id: "qPurchFood",      title: "Food",                 body: FOOD_BODY      },
@@ -82,6 +82,9 @@ export function BucketCard({
     original,
     adjusted,
     budgetSpent,
+    // R13 P2-8 - chart header names its bucket ("Each week · food").
+    // Sourced from BUCKET_DEFS so a rename in one place propagates.
+    identityLabel: (BUCKET_DEFS.find(b => b.key === bucketKey)?.label || "").toLowerCase(),
   });
 
   // Bills / coded-cards source consistency check (Part A).  Inputs to
@@ -198,8 +201,15 @@ export function BucketCard({
                 (period bars) reads `Each period`, not `EACH WEEK`.
                 Same `chartUnit()` fuels PeriodCard's fuller label -
                 one source for tier ↔ cadence per §9B. */}
-            {`Each ${chartUnit(tier)}`}
-            {" "}<HelpPop id={`qPurchStrip-${bucketKey}`} title={`Each ${chartUnit(tier)} strip`} body={WEEK_STRIP_BODY} />
+            {/* R13 P2-8 - chart header names its bucket so it stops
+                reading as "Each week" on four cards in a row.  Bucket
+                label sourced from BUCKET_DEFS via the resolver's
+                weekStripLabel field. */}
+            {d.weekStripLabel || `Each ${chartUnit(tier)}`}
+            {/* R13 P2-6 - the ? that used to live here is removed.
+                ONE trigger per screen - qPurchPeriod on the period
+                card, whose body (PERIOD_BODY) covers the weekly
+                mechanic in a single popover. */}
           </span>
           <span className="kpi-p-legs">
             {/* Weekly-target legend only in tiers A and B (spec §B4 -

@@ -71,16 +71,50 @@ function weekRangeLabel(startISO) {
   return `${fmtDateShort(startISO)} - ${fmtDateShort(endISO)}`;
 }
 
+// R13 P0-2 - running-unit rendering (owner ruling 2026-08-26).
+//   - Filled bar draws to actual-spent height (identity colour, no
+//     amber hatch).
+//   - IF the unit is at least 25% elapsed AND has real spend, a
+//     dashed outline extends from the bar top to the projection
+//     height `spent / elapsedFrac`, and a tag reads `on pace for $X`.
+//   - IF elapsed < 25%, the projection is suppressed (probe
+//     2026-08-26 showed ratios of 0.60-1.72 below that threshold;
+//     the projection would tower over real bars and lie about
+//     eventual total).
+//   - Caption reads `<value> · N% through` - not `≥ $X · running`.
+//     `N% through` is the honest reading of a partial measurement.
+const PROJECTION_MIN_ELAPSED = 0.25;
+function runningCaption({ v, elapsedFrac }) {
+  const pctText = elapsedFrac > 0
+    ? `${Math.round(elapsedFrac * 100)}% through`
+    : "in progress";
+  return { val: fmt$(v), note: pctText, tone: "a" };
+}
+
 // Build the per-unit render slot. ONE object per unit - bar height and
 // caption value derive from `slot.value` so they cannot disagree.
-function buildWeekSlot({ spent, orig, adj, isPassThrough, running, finished }) {
+function buildWeekSlot({ spent, orig, adj, isPassThrough, running, finished, elapsedFrac }) {
   const v = Number(spent || 0);
   const hasSpend = Math.abs(v) > 0.005;
   if (running) {
     if (!hasSpend) {
-      return { value: null, caption: { val: "—", note: "running", tone: "a" } };
+      const pctText = elapsedFrac > 0
+        ? `${Math.round(elapsedFrac * 100)}% through`
+        : "not started";
+      return { value: null, caption: { val: "—", note: pctText, tone: "a" } };
     }
-    return { value: v, caption: { val: "≥ " + fmt$(v), note: "running", tone: "a" } };
+    // R13 P0-2 - filled bar reads at actual spent height; if projection
+    // is stable enough (>= 25% elapsed), draw the projection overlay.
+    const projectionStable = (elapsedFrac || 0) >= PROJECTION_MIN_ELAPSED;
+    const projValue = projectionStable && (elapsedFrac || 0) > 0
+      ? v / elapsedFrac
+      : null;
+    return {
+      value: v,
+      isRunning: true,
+      projValue,
+      caption: runningCaption({ v, elapsedFrac }),
+    };
   }
   if (finished) {
     if (!hasSpend) {
@@ -91,6 +125,13 @@ function buildWeekSlot({ spent, orig, adj, isPassThrough, running, finished }) {
       // spend` on every closed-period zero, which looked like a
       // missing render.  The bar still draws a baseline via
       // `value: null` because there is no height to plot.
+      // R13 P2-5 - a zero week always states its variance so the
+      // caption block heights match a spending week's.  Zero spend
+      // vs any target = under by the whole target; the delta feeds
+      // ArrowNote for the "▼ $X under" line.
+      if (orig > 0) {
+        return { value: null, caption: { val: fmt$(0), delta: -orig, tone: "g" } };
+      }
       return { value: null, caption: { val: fmt$(0), note: null, tone: "n" } };
     }
     if (!(orig > 0)) {
@@ -108,20 +149,34 @@ function buildWeekSlot({ spent, orig, adj, isPassThrough, running, finished }) {
   }
   return { value: null, caption: { val: "—", note: null, tone: "n" } };
 }
-function buildPeriodSlot({ spent, budget, running, finished }) {
+function buildPeriodSlot({ spent, budget, running, finished, elapsedFrac }) {
   const v = Number(spent || 0);
   const hasSpend = Math.abs(v) > 0.005;
   const target = Number(budget || 0);
   if (running) {
     if (!hasSpend) {
-      return { value: null, caption: { val: "—", note: "running", tone: "a" } };
+      const pctText = elapsedFrac > 0
+        ? `${Math.round(elapsedFrac * 100)}% through`
+        : "not started";
+      return { value: null, caption: { val: "—", note: pctText, tone: "a" } };
     }
-    return { value: v, caption: { val: "≥ " + fmt$(v), note: "running", tone: "a" } };
+    const projectionStable = (elapsedFrac || 0) >= PROJECTION_MIN_ELAPSED;
+    const projValue = projectionStable && (elapsedFrac || 0) > 0
+      ? v / elapsedFrac
+      : null;
+    return {
+      value: v,
+      isRunning: true,
+      projValue,
+      caption: runningCaption({ v, elapsedFrac }),
+    };
   }
   if (finished) {
     if (!hasSpend) {
-      // INV-P21 Part B2 item 1 - closed-period zero renders `$0.00`
-      // per spec §7.7 / §7.8, same rule as the week slot above.
+      // R13 P2-5 - closed-period zero always states its variance.
+      if (target > 0) {
+        return { value: null, caption: { val: fmt$(0), delta: -target, tone: "g" } };
+      }
       return { value: null, caption: { val: fmt$(0), note: null, tone: "n" } };
     }
     if (!(target > 0)) {
@@ -208,6 +263,11 @@ export function WeekChart({
       return buildPeriodSlot({
         spent: u.spent, budget: u.budget,
         running: !!u.running, finished: !!u.finished,
+        // R13 P0-2 - running-unit needs elapsed fraction of its own
+        // unit to compute the projection.  Provided by caller per-
+        // unit (upstream extension); falls back to 0 if absent so
+        // the projection is suppressed rather than lying.
+        elapsedFrac: Number(u.elapsedFrac || 0),
       });
     }
     return buildWeekSlot({
@@ -216,6 +276,7 @@ export function WeekChart({
       adj:   u.targetAdj != null ? Number(u.targetAdj) : null,
       isPassThrough,
       running: !!u.running, finished: !!u.finished,
+      elapsedFrac: Number(u.elapsedFrac || 0),
     });
   });
 
@@ -230,17 +291,23 @@ export function WeekChart({
       throw new Error(`WeekChart CHECK 7: rendered ${slots.length} units, range has ${(units || []).length}`);
     }
     // §9B: for every unit, bar-drawing decision matches caption $-figure.
+    // R13 P2-5 exception: a finished zero-spend unit renders `$0.00`
+    // in the caption with `value: null` (nothing to plot) - a fact,
+    // not a defect.  The assertion accepts a $ caption with no bar
+    // ONLY when the value is exactly $0.00.  Any other $-caption
+    // without a bar still throws.
     for (let i = 0; i < slots.length; i += 1) {
       const s = slots[i];
       const hasBar = s.value != null && Math.abs(Number(s.value)) > 0.005;
       const capV = s.caption && typeof s.caption.val === "string" ? s.caption.val : "";
       const captionHasDollar = capV.includes("$");
+      const captionIsZero = capV === "$0.00";
       if (hasBar && !captionHasDollar) {
         // eslint-disable-next-line no-console
         console.error("[WeekChart §9B] unit", i, "has a bar but caption has no $ value:", s);
         throw new Error(`WeekChart §9B: bar without caption value at unit ${i + 1}`);
       }
-      if (!hasBar && captionHasDollar) {
+      if (!hasBar && captionHasDollar && !captionIsZero) {
         // eslint-disable-next-line no-console
         console.error("[WeekChart §9B] unit", i, "caption shows a $ value but no bar:", s);
         throw new Error(`WeekChart §9B: caption without bar at unit ${i + 1}`);
@@ -358,17 +425,34 @@ export function WeekChart({
         // PR-2 R4 Part C - owner rulings 2026-08-21: bars are either
         // green (under target) or red (over target). Identity color is
         // NOT on the state bar (identity stays on card stripe + legend).
-        // Running-week hatch is a DIFFERENT thing and stays.
-        //   - running week      -> st-run (amber hatch)
         //   - finished + over   -> st-over  (solid red)
         //   - finished + under  -> st-under (solid green)
         //   - finished, no target -> identity fallback (no verdict)
+        //
+        // R13 P0-2 (owner ruling 2026-08-26) - running bar CHANGE:
+        // dropped `st-run` (amber hatch).  The running bar now reads
+        // at its filled spent height, wearing the identity colour of
+        // the chart it lives in.  A projection extension draws above
+        // it as a dashed outline; the "N% through" caption states
+        // incompleteness numerically.  Hatch was reading as a
+        // texture, not as a state.
         const hasTarget = perUnitOrig > 0;
         const stateClass = running
-          ? "st-run"
+          ? ""   // R13 P0-2 - no state class on running; identity colour only
           : (finished && hasTarget
               ? (v > perUnitOrig ? "st-over" : "st-under")
               : "");
+        // R13 P0-2 - projection extension for a running unit that has
+        // real spend AND is at least 25% elapsed (measured threshold,
+        // probe 2026-08-26).  Rendered as a dashed outline reaching
+        // from the top of the filled bar to the projection height.
+        const projValue = running && slot.projValue != null ? slot.projValue : null;
+        const projHeightPct = projValue != null
+          ? ((projValue / maxSample) * 100).toFixed(2)
+          : null;
+        const projExtensionPct = projHeightPct != null
+          ? Math.max(0, Number(projHeightPct) - Number(heightPct)).toFixed(2)
+          : null;
         // PR-2 R5 Part A (owner ruling 2026-08-24): no 97% ceiling on
         // bar or line. Both marks divide by the same `maxSample` (which
         // already includes 5% headroom above the tallest target/spend)
@@ -418,12 +502,24 @@ export function WeekChart({
               )}
               {showBar ? (
                 <div
-                  className={`kpi-p-bar i-${identity} ${stateClass}`}
+                  className={`kpi-p-bar i-${identity} ${stateClass}${running ? " st-running" : ""}`}
                   style={{ height: `${heightPct}%` }}
                   aria-hidden="true"
                 />
               ) : (
                 <span className="kpi-p-base" aria-hidden="true" />
+              )}
+              {/* R13 P0-2 - projection extension for a running unit
+                  that has real spend AND >= 25% elapsed.  Rendered as
+                  a dashed outline above the filled bar reaching to the
+                  on-pace height.  Suppressed below the elapsed
+                  threshold (probe 2026-08-26). */}
+              {projExtensionPct != null && Number(projExtensionPct) > 0 && (
+                <span
+                  className="kpi-p-proj"
+                  style={{ bottom: `${heightPct}%`, height: `${projExtensionPct}%` }}
+                  aria-hidden="true"
+                />
               )}
             </div>
             <div className="kpi-p-cap">

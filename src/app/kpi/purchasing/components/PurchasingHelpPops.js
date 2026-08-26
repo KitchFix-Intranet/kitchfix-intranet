@@ -23,15 +23,37 @@
 // Reused across the period card + at least one bucket. Kept as
 // components so we can share the copy without duplicating strings.
 
+// R13 P2-6 - one help trigger per screen (owner ruling 2026-08-26).
+// PERIOD_BODY is now the single explainer for the whole board: it
+// covers the card sub-rows (Bills is a floor; Cards; Pending), the
+// weekly / period chart mechanic (target lines, adjusted line, the
+// running unit), and the eight-day Rippling lag.  The `?` triggers
+// on each bucket chart + the period chart legend were removed in
+// the same PR - reader intent is that ONE popover explains the
+// entire card family, not four.
 export const PERIOD_BODY = (
   <>
     Everything the P&amp;L saw for this range, plus the card charges
-    that already got coded to a P&amp;L line.
+    already coded to a P&amp;L line.
     <br /><br />
-    <b>Pending is card spend nobody has coded yet.</b> It sits at
-    the card level and does not land in any bucket. Coding it in
-    Rippling moves it from Pending to Cards on the right P&amp;L
-    line.
+    <b>Bills is at least.</b> Sebastian is still entering invoices
+    for the current week or two, so the bill total is a floor - it
+    only goes up as more bills land.
+    <br /><br />
+    <b>Cards</b> below Bills are card charges already coded to a
+    P&amp;L line. <b>Pending is card spend nobody has coded yet</b> -
+    it sits at the card level and does not land in a bucket. Coding
+    in Rippling moves a charge from Pending onto Cards on the right
+    P&amp;L line.
+    <br /><br />
+    <b>The weekly / period chart</b> on the right: each bar is what
+    got spent in that unit; the <b>dashed line</b> is what an even
+    pace would put there. The adjusted line (blue) divides the money
+    that is left across the weeks that are left, so a week that ran
+    hot raises the target on every week after it. Green bars are
+    under target; red bars are over. The running unit fills to what
+    was spent so far; if the period is at least a quarter through,
+    a dashed outline extends to the on-pace projection.
     <span className="kpi-hs-pop-foot"><b>Cards run roughly 8 days behind.</b> Rippling does not
       expose a card line item until its parent charge is about 8
       days old, so the current period will always look light for

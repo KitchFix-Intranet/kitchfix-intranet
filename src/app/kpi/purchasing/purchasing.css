@@ -448,6 +448,111 @@
 .kpi-app .kpi-p-sub .kpi-p-x.a { color: var(--amber-600); }
 .kpi-app .kpi-p-sub .kpi-p-x.b { color: var(--navy-700); }
 
+/* R13 P0-1 - closed period comparison block.  Replaces the old
+   Actual / Budget / Variance sub-block on closed cards.  Reads
+   as a single row (prior period label, value, delta) plus an
+   eight-period sparkline underneath. */
+.kpi-app .kpi-p-per-cmp {
+  margin-top: auto;
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+}
+.kpi-app .kpi-p-per-cmp-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--kpi-sp-2);
+  align-items: baseline;
+}
+.kpi-app .kpi-p-per-cmp-row .kpi-p-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-app .kpi-p-per-cmp-row .kpi-p-k small {
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  font-weight: 500;
+  margin-left: 5px;
+}
+.kpi-app .kpi-p-per-cmp-row .kpi-p-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-per-cmp-row .kpi-p-x {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  min-width: 66px;
+  text-align: right;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-per-cmp-row .kpi-p-x.g { color: var(--green-700); }
+.kpi-app .kpi-p-per-cmp-row .kpi-p-x.r { color: var(--red-700); }
+.kpi-app .kpi-p-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 22px;
+  margin-top: 6px;
+}
+.kpi-app .kpi-p-spark i {
+  flex: 1;
+  background: var(--n-200);
+  border-radius: 1px;
+  min-height: 2px;
+}
+.kpi-app .kpi-p-spark i.now {
+  background: var(--n-500);
+}
+
+/* R13 P1-1 - projected close promoted below the sub-rows as its own
+   row.  It's a forecast, not a component of hero-spend; its variance
+   is often bigger than the hero variance, and putting it here gives
+   it its own weight.  Rendered on live period cards only. */
+.kpi-app .kpi-p-per-proj {
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--kpi-sp-2);
+  align-items: baseline;
+}
+.kpi-app .kpi-p-per-proj .kpi-p-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-800);
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-per-proj .kpi-p-k small {
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  font-weight: 500;
+  margin-left: 5px;
+}
+.kpi-app .kpi-p-per-proj .kpi-p-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-per-proj .kpi-p-v.r { color: var(--red-700); }
+.kpi-app .kpi-p-per-proj .kpi-p-x {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  min-width: 66px;
+  text-align: right;
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-per-proj .kpi-p-x.g { color: var(--green-700); }
+.kpi-app .kpi-p-per-proj .kpi-p-x.r { color: var(--red-700); }
+
 /* ═══ WEEK CHART (right half of period + bucket cards) ═══════════ */
 .kpi-app .kpi-p-lh {
   display: flex;
@@ -544,12 +649,37 @@
 .kpi-app .kpi-p-bar.st-over {
   background: #DC5A5A;
 }
-/* Running (in-progress) week - light hatch stays. Marks incomplete,
-   NOT state. Order matters: st-run wins over st-over so a running
-   over-budget week reads incomplete first. */
-.kpi-app .kpi-p-bar.st-run {
-  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.5) 0 5px, transparent 5px 10px);
-  box-shadow: inset 0 0 0 1.5px var(--amber-600);
+/* Running (in-progress) unit - R13 P0-2 owner ruling 2026-08-26.
+   Prior state used an amber hatch on the bar that read as a texture
+   (or "the smallest bar on the chart") not as incompleteness.  The
+   running bar now fills at the actual spent height, wearing the
+   bucket identity colour of the chart it lives in (the identity
+   fallback rules above already apply via `i-<identity>` when no
+   state class is set).  Incompleteness is signalled by:
+     - the dashed projection outline that extends above the fill
+       (kpi-p-proj below), when elapsed >= 25%
+     - the caption `N% through` (stated numerically, not textured)
+   `st-running` remains as a hook if we ever need running-specific
+   treatment - currently identity fills through. */
+.kpi-app .kpi-p-bar.st-running {
+  /* Reserved for future running-specific treatment.  No override -
+     identity colour renders through so a running Food bar reads
+     as Food. */
+}
+
+/* R13 P0-2 - projection extension above a running bar.  Dashed
+   outline, no fill, drawn from the top of the filled bar up to the
+   projection height.  Uses the identity colour of the running bar so
+   `Food + projection` reads as one visual unit. */
+.kpi-app .kpi-p-proj {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border: 1.5px dashed var(--n-500);
+  border-bottom: none;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  pointer-events: none;
 }
 .kpi-app .kpi-p-base {
   width: 100%;

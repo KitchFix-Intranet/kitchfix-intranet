@@ -565,17 +565,38 @@ export function resolveCardDisplay(args) {
     // uncoded pending` both restate what the hero already shows.  The
     // three numbers on the card (hero, sub-line %, variance) all read
     // against the same `resolverSpent`, so the reader has nothing to
-    // reconstruct.  Caption is empty on live.  Closed still reads
-    // `period closed` (a lifecycle marker, not a math annotation).
-    remainingLabel = closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining");
-    remainingValueText = closed
-      ? moneyArrow(cs.variance)
-      : (showOverArrow ? fmt$(-rem) : fmt$(rem));
-    remainingClass = closed
-      ? (cs.signClass || (cs.variance > 0 ? "r" : "g"))
-      : (showOverArrow ? "r" : "");
-    remainingCaption = closed ? "period closed" : "";
+    // reconstruct.  Caption is empty on live.
+    //
+    // R13 P0-1 (owner ruling 2026-08-26): on a closed card the label
+    // is a single word matching the sign - "Over budget" or "Under
+    // budget", not "Vs budget".  One label per number.  The Actual /
+    // Budget / Variance sub-block is dropped; the closed hero already
+    // owns the number and the sub-line owns "of $X · Y% used".  The
+    // caption below the variance reads "as closed on the P&L" (the
+    // lifecycle note) instead of "period closed".
+    //
+    // R13 P1-2 (owner ruling 2026-08-26): on live over cases the
+    // "Over by" column earns a sub-line - `X.X% of the range budget`
+    // - matching the "Spent · of $X · Y% used" sub-line on the left.
+    if (closed) {
+      remainingLabel = showOverArrow ? "Over budget" : "Under budget";
+      // Bare value (no ▲/▼ glyph) - the label already carries the sign.
+      remainingValueText = showOverArrow ? fmt$(-rem) : fmt$(rem);
+      remainingClass = showOverArrow ? "r" : "g";
+      remainingCaption = "as closed on the P&L";
+    } else {
+      remainingLabel = showOverArrow ? "Over by" : "Remaining";
+      remainingValueText = showOverArrow ? fmt$(-rem) : fmt$(rem);
+      remainingClass = showOverArrow ? "r" : "";
+      remainingCaption = "";
+    }
   }
+  // R13 P1-2 - over-by sub-line "X.X% of the range budget".  Only
+  // shows on live over cases where a budget exists; closed uses the
+  // "as closed on the P&L" caption above and would double-annotate.
+  const remainingSubLineText = (kind === "period" && !closed && showOverArrow && budget > 0)
+    ? fmtPct(Math.abs(rem) / budget)
+    : "";
 
   // Projected close (period card only).
   //
@@ -621,6 +642,81 @@ export function resolveCardDisplay(args) {
     `ef=${(Number(args?.elapsedFrac || 0)).toFixed(4)}`,
   ].join("|");
 
+  // R13 P2-8 - chart cadence header names its bucket (or "food +
+  // packaging + vehicle" for the period card).  identityLabel comes in
+  // from the caller; when absent (legacy call site) the header falls
+  // back to the cadence-only shape.
+  const identityLabel = args?.identityLabel || null;
+  const cadence = tier ? `Each ${chartUnit(tier)}` : "";
+  const weekStripLabel = cadence
+    ? (identityLabel ? `${cadence} · ${identityLabel}` : cadence)
+    : "";
+
+  // R13 P0-1 - prior-period comparison block (closed period cards).
+  // The caller passes `priorPeriod` = { period_no, spent, label } for
+  // the fiscal period immediately before this one, and `sparkline` =
+  // [{ period_no, spent }] for the last 8 periods leading up to this
+  // one.  Both are already rolled up across the current members
+  // (route.js owns the aggregation - so ALL/EAST/WEST show the
+  // portfolio shape, not one site's).  Resolver formats them for
+  // display; component renders what it's told.
+  const priorPeriod = args?.priorPeriod || null;
+  const sparkline   = Array.isArray(args?.sparkline) ? args.sparkline : null;
+  const showPriorPeriodBlock = kind === "period" && closed
+    && priorPeriod && Number.isFinite(Number(priorPeriod.spent))
+    && Number(priorPeriod.spent) > 0;
+  let priorPeriodValueText   = "";
+  let priorPeriodDeltaText   = "";
+  let priorPeriodDeltaClass  = "";
+  let priorPeriodDeltaArrow  = "";
+  let priorPeriodLabelText   = "";
+  let priorPeriodDescription = "";
+  let sparklineHeights       = [];
+  let sparklineCurrentIdx    = -1;
+  let sparklineNote          = "";
+  if (showPriorPeriodBlock) {
+    const priorSpent = Number(priorPeriod.spent || 0);
+    const currentClosedSpent = spent;   // closed hero = coded-only
+    priorPeriodValueText   = fmt$(priorSpent);
+    priorPeriodLabelText   = priorPeriod.label || `Period ${priorPeriod.period_no}`;
+    priorPeriodDescription = "the period before";
+    if (priorSpent > 0) {
+      const pct = (currentClosedSpent - priorSpent) / priorSpent;
+      const up = pct > 0;
+      priorPeriodDeltaArrow = up ? "▲ " : "▼ ";
+      priorPeriodDeltaText  = fmtPct(Math.abs(pct));
+      priorPeriodDeltaClass = up ? "r" : "g";
+    }
+    if (sparkline && sparkline.length > 0) {
+      const maxSpent = Math.max(1, ...sparkline.map(s => Number(s.spent || 0)));
+      sparklineHeights = sparkline.map(s => Math.max(0.04, Number(s.spent || 0) / maxSpent));
+      const cur = args?.periodNo != null ? args.periodNo : null;
+      sparklineCurrentIdx = cur != null
+        ? sparkline.findIndex(s => Number(s.period_no) === Number(cur))
+        : -1;
+      const first = sparkline[0]?.period_no;
+      const last  = sparkline[sparkline.length - 1]?.period_no;
+      sparklineNote = first != null && last != null ? `P${first} through P${last}` : "";
+    }
+  }
+
+  // R13 P0-2 - running-unit projection threshold.  Below 25% elapsed
+  // the projection swings wildly (probe 2026-08-26: ratios 0.60-1.72
+  // on real periods, 1.88-2.17 on real weeks).  Above 25%, aggregate
+  // scopes land within ±7%.  Resolver returns whether the projection
+  // is stable enough to render; component draws the dashed extension
+  // + `on pace for $X` tag only when true, otherwise renders the bar
+  // alone with the `N% through` caption.  Applies to both running
+  // week (elapsed = days/7) and running period (elapsed = days/28).
+  const PROJECTION_MIN_ELAPSED = 0.25;
+  const runningProjectionStable = elapsedFrac >= PROJECTION_MIN_ELAPSED;
+  const runningProjectionValue  = (elapsedFrac > 0 && (spent + pending) > 0)
+    ? (spent + pending) / elapsedFrac
+    : 0;
+  const runningElapsedPctText   = elapsedFrac > 0
+    ? Math.round(elapsedFrac * 100) + "% through"
+    : "";
+
   return {
     // Pill (unchanged shape, feeds off resolverSpent)
     pillTone: cs.pillTone,
@@ -639,6 +735,8 @@ export function resolveCardDisplay(args) {
     remainingValueText,
     remainingClass,
     remainingCaption,
+    // R13 P1-2 - over-by sub-line "X.X% of the range budget"
+    remainingSubLineText,
     // Projected close (period card only; false for others)
     showProjectedClose,
     projectedCloseValueText,
@@ -646,9 +744,27 @@ export function resolveCardDisplay(args) {
     projectedCloseArrow,
     projectedCloseDeltaText,
     projectedCloseAnnotationClass,
-    // Chart cadence label (chartUnit) - resolver-owned so components
-    // can't disagree.
-    weekStripLabel: tier ? `Each ${chartUnit(tier)}` : "",
+    // R13 P2-8 - chart cadence label; now includes bucket name when
+    // identityLabel is provided.  Format: "Each week · food".
+    weekStripLabel,
+    // R13 P0-1 - prior-period comparison block on closed period cards.
+    showPriorPeriodBlock,
+    priorPeriodLabelText,
+    priorPeriodDescription,
+    priorPeriodValueText,
+    priorPeriodDeltaText,
+    priorPeriodDeltaClass,
+    priorPeriodDeltaArrow,
+    sparklineHeights,
+    sparklineCurrentIdx,
+    sparklineNote,
+    // R13 P0-2 - running-unit projection stability.  Component uses
+    // `runningProjectionStable` as the gate for whether to draw the
+    // dashed extension + tag; `runningElapsedPctText` is the caption
+    // regardless (always states how far through).
+    runningProjectionStable,
+    runningProjectionValue,
+    runningElapsedPctText,
     // For the input-comparison assertion (INV-P21 Part D).
     __inputSignature,
     // Passthrough of nested cs for legacy inspection during the
@@ -666,12 +782,15 @@ export function resolveCardDisplay(args) {
 //
 // Colors match §7 rule 1. Every card that carries an identity stripe
 // picks its stripe class from this table - never inline.
+// R13 P2-1 ruling 2026-08-26: subtitle = GL code only.  Uniform width
+// across all three cards; the category name in the title conveys scope;
+// the GL code is what an operator cross-references against the P&L.
 export const BUCKET_DEFS = [
-  { key: "food",      label: "Food",                     sub: "general + resale · 3200",
+  { key: "food",      label: "Food",                     sub: "3200",
     strokeClass: "kpi-p-b-food",     legend: "#153968" },
-  { key: "packaging", label: "Packaging & supplies",     sub: "supplies + linen · 3400",
+  { key: "packaging", label: "Packaging & supplies",     sub: "3400",
     strokeClass: "kpi-p-b-pkg",      legend: "#3E97D1" },
-  { key: "vehicle",   label: "Vehicle",                  sub: "lease + fuel + insurance + R&M · 3500",
+  { key: "vehicle",   label: "Vehicle",                  sub: "3500",
     strokeClass: "kpi-p-b-veh",      legend: "#7A3E9D" },
 ];
 
