@@ -77,8 +77,42 @@ function parseCSV(text) {
 }
 
 // ─── Column map: CSV header -> projected column + parser ────────────
-// Every projected field is optional at the CSV level; a missing header
-// lands as NULL in the projection but still lives inside `raw`.
+//
+// Header matching is normalised against a stable primary form.  Rippling
+// appends a grouping-label suffix to columns the report is grouped by:
+//   `Amount (by category) (None)`  <- Amount, no grouping
+//   `Amount (by category) (Category Name)`  <- grouped by category
+// The suffix drifts every time the report is regrouped.  The
+// normaliser strips a TRAILING ` (…)` group and lower-cases the rest
+// so a regroup doesn't silently NULL a column.  Case wobble (e.g.
+// `Department Name` vs `Department name`, both observed in the same
+// file) is absorbed at the same layer.
+//
+// See `_probe_report_txns_mapping.mjs` for the sweep + edge cases.
+//
+// Matching is two-pass:
+//   1. Exact normalised (trim + lowercase) match against every spec.
+//      Catches `Amount (by category)`, `Purchased at`, etc. in their
+//      bare (ungrouped) form.
+//   2. If step 1 misses, strip a TRAILING ` (…)` grouping-label group
+//      and retry.  Catches `Amount (by category) (None)` →
+//      strip → `Amount (by category)` → maps to amount.  Also catches
+//      `Purchased at (None)` → strip → `Purchased at` → maps to
+//      purchased_at.
+//
+// A naive "always strip" pass mishandles the bare `Amount (by category)`
+// because the intrinsic parens get stripped too.  Two-pass avoids that.
+function normalise(h) {
+  return String(h || "").trim().toLowerCase();
+}
+function stripTrailingParenGroup(h) {
+  return String(h || "").trim().replace(/\s+\([^()]*\)\s*$/, "").trim();
+}
+
+// Every projected field is optional at the CSV level UNLESS listed in
+// REQUIRED_COLUMNS below.  A missing OPTIONAL column lands as NULL in
+// the projection but still lives inside `raw`.  A missing REQUIRED
+// column exits the loader non-zero before any DB write.
 function parseBool(v) {
   if (v == null) return null;
   const s = String(v).trim().toLowerCase();
@@ -114,32 +148,61 @@ function parseAmount(v) {
 }
 function trim(v) { if (v == null) return null; const s = String(v).trim(); return s === "" ? null : s; }
 
+// Every entry's `csv` is the primary shape we EXPECT.  Matching goes
+// through `normaliseHeader()` on BOTH sides so case + trailing-paren
+// suffixes drift without breaking the mapping.
 const COL_SPEC = [
-  { csv: "Transaction ID",   col: "parent_txn_id",   parse: trim,          required: true  },
-  { csv: "Purchased at",     col: "purchased_at",    parse: parseDate },
-  { csv: "Posted Date",      col: "posted_date",     parse: parseDate },
-  { csv: "Submission Date",  col: "submission_date", parse: parseDate },
-  { csv: "Approved At",      col: "approved_at",     parse: parseTimestamp },
-  { csv: "Approval State",   col: "approval_state",  parse: trim },
-  { csv: "Has Receipt",      col: "has_receipt",     parse: parseBool },
-  { csv: "Amount (by category)", col: "amount",      parse: parseAmount },
-  { csv: "Currency",         col: "currency",        parse: trim },
-  { csv: "Vendor name",      col: "vendor_name",     parse: trim },
-  { csv: "Vendor",           col: "vendor",          parse: trim },
-  { csv: "Category",         col: "category",        parse: trim },
-  { csv: "Category Name",    col: "category_name",   parse: trim },
-  { csv: "Department Name",  col: "department_name", parse: trim },
-  { csv: "Work location",    col: "work_location",   parse: trim },
-  { csv: "Employee",         col: "employee",        parse: trim },   // PII - never log
-  { csv: "Employee - ID",    col: "employee_id",     parse: trim },   // PII - never log
-  { csv: "Memo",             col: "memo",            parse: trim },
-  { csv: "Line item memo",   col: "line_item_memo",  parse: trim },
-  { csv: "GL Sync Status",   col: "gl_sync_status",  parse: trim },
-  { csv: "GL Vendor Name",   col: "gl_vendor_name",  parse: trim },
-  { csv: "Is Manually Paid", col: "is_manually_paid",parse: parseBool },
-  { csv: "Repayment Status", col: "repayment_status",parse: trim },
-  { csv: "Is user edited",   col: "is_user_edited",  parse: parseBool },
+  { csv: "Transaction ID",       col: "parent_txn_id",   parse: trim },
+  { csv: "Purchased at",         col: "purchased_at",    parse: parseDate },
+  { csv: "Posted Date",          col: "posted_date",     parse: parseDate },
+  { csv: "Submission Date",      col: "submission_date", parse: parseDate },
+  { csv: "Approved At",          col: "approved_at",     parse: parseTimestamp },
+  { csv: "Approval State",       col: "approval_state",  parse: trim },
+  { csv: "Has Receipt",          col: "has_receipt",     parse: parseBool },
+  { csv: "Amount (by category)", col: "amount",          parse: parseAmount },
+  { csv: "Currency",             col: "currency",        parse: trim },
+  { csv: "Vendor name",          col: "vendor_name",     parse: trim },
+  { csv: "Vendor",               col: "vendor",          parse: trim },
+  { csv: "Category",             col: "category",        parse: trim },
+  { csv: "Category Name",        col: "category_name",   parse: trim },
+  { csv: "Department Name",      col: "department_name", parse: trim },
+  { csv: "Work location",        col: "work_location",   parse: trim },
+  { csv: "Employee",             col: "employee",        parse: trim },   // PII - never log
+  { csv: "Employee - ID",        col: "employee_id",     parse: trim },   // PII - never log
+  { csv: "Memo",                 col: "memo",            parse: trim },
+  { csv: "Line item memo",       col: "line_item_memo",  parse: trim },
+  { csv: "GL Sync Status",       col: "gl_sync_status",  parse: trim },
+  { csv: "GL Vendor Name",       col: "gl_vendor_name",  parse: trim },
+  { csv: "Is Manually Paid",     col: "is_manually_paid",parse: parseBool },
+  { csv: "Repayment Status",     col: "repayment_status",parse: trim },
+  { csv: "Is user edited",       col: "is_user_edited",  parse: parseBool },
 ];
+
+// Proposed required columns (owner rules).  A missing REQUIRED column
+// exits the loader non-zero BEFORE any DB write, printing which
+// column and what CSV headers were present (redacted to their
+// normalised form).  Optional columns land as NULL in the projection.
+//
+// Rationale for the initial six:
+//   - parent_txn_id  : the primary key; the loader already required it
+//   - purchased_at   : the raison d'être of the phase-two loader
+//                       (closes the 16-day API lag)
+//   - amount         : the money.  Every downstream card that uses
+//                       this table needs it.
+//   - currency       : needed to interpret amount honestly across
+//                       future non-USD transactions
+//   - work_location  : the attribution axis the board already uses
+//   - approval_state : compliance signal, PR-6 dependency
+//
+// Owner ruling from this list before it hardens.
+const REQUIRED_COLUMNS = new Set([
+  "parent_txn_id",
+  "purchased_at",
+  "amount",
+  "currency",
+  "work_location",
+  "approval_state",
+]);
 
 function contentHash(projected, rawRow) {
   // Deterministic - sorted keys.  Uses projected values (parsed) so
@@ -156,21 +219,67 @@ const rows = parseCSV(raw);
 if (rows.length < 2) { console.error("csv is empty or header-only"); process.exit(2); }
 
 const header = rows[0].map(h => h.trim());
-// Index each CSV header we care about
-const idxByCsv = new Map();
-for (let i = 0; i < header.length; i++) idxByCsv.set(header[i], i);
 
-// Fail loudly if `Transaction ID` is missing (same discipline as
-// existing loader at scripts/purchasing_report_load.mjs:110).
-if (!idxByCsv.has("Transaction ID")) {
-  console.error(`csv missing 'Transaction ID' column; got: ${header.slice(0, 8).join(",")} ...`);
-  process.exit(2);
+// Build the spec index once, keyed by the spec's own normalised form.
+const specByKey = new Map();
+for (const s of COL_SPEC) specByKey.set(normalise(s.csv), s);
+
+// Two-pass CSV header index: try exact-normalised first, then strip
+// the trailing grouping paren and retry.
+const specToCsvIdx = new Map();          // table_col -> header index
+const csvIdxToSpec = new Map();          // header index -> spec (for logging)
+const collisions = [];
+for (let i = 0; i < header.length; i++) {
+  const raw = header[i];
+  if (!raw) continue;
+  const keyA = normalise(raw);
+  let spec = specByKey.get(keyA);
+  if (!spec) {
+    const stripped = normalise(stripTrailingParenGroup(raw));
+    if (stripped !== keyA) spec = specByKey.get(stripped);
+  }
+  if (!spec) continue;
+  if (specToCsvIdx.has(spec.col)) {
+    // Two CSV headers both map to the same spec column (e.g.
+    // `Department Name` and `Department name`).  Keep the first;
+    // log the collision so an operator can spot the duplication.
+    collisions.push({ col: spec.col, kept: header[specToCsvIdx.get(spec.col)], skipped: raw });
+    continue;
+  }
+  specToCsvIdx.set(spec.col, i);
+  csvIdxToSpec.set(i, spec);
 }
-// Report which projected columns are missing from the header - not
-// fatal (missing CSV columns land as NULL in the projection).
-const missingCols = COL_SPEC.filter(s => !idxByCsv.has(s.csv)).map(s => s.csv);
-console.log(`header cols=${header.length}  projected cols mapped=${COL_SPEC.length - missingCols.length}  missing=${missingCols.length}`);
-if (missingCols.length > 0) console.log(`  missing from CSV (will be NULL): ${missingCols.join(", ")}`);
+
+const mapped = [];
+const missing = [];
+for (const spec of COL_SPEC) {
+  const idx = specToCsvIdx.get(spec.col);
+  if (idx == null) missing.push(spec);
+  else mapped.push({ spec, idx, actualHeader: header[idx] });
+}
+console.log(`header cols=${header.length}  spec cols=${COL_SPEC.length}  mapped=${mapped.length}  missing=${missing.length}`);
+if (collisions.length > 0) {
+  console.log(`  header collisions (mapped to same table col; kept the first):`);
+  for (const c of collisions) console.log(`    "${c.kept}" and "${c.skipped}" both -> ${c.col}`);
+}
+if (missing.length > 0) {
+  const requiredMissing = missing.filter(s => REQUIRED_COLUMNS.has(s.col));
+  const optionalMissing = missing.filter(s => !REQUIRED_COLUMNS.has(s.col));
+  if (optionalMissing.length > 0) {
+    console.log(`  missing OPTIONAL columns (will be NULL): ${optionalMissing.map(s => `${s.col} (expected "${s.csv}")`).join(", ")}`);
+  }
+  if (requiredMissing.length > 0) {
+    console.error("");
+    console.error("REQUIRED column(s) missing from the CSV. Loader will not proceed.");
+    for (const s of requiredMissing) {
+      console.error(`  - table column '${s.col}' (expected "${s.csv}", normalised "${normalise(s.csv)}")`);
+    }
+    console.error(`\nCSV had ${header.length} headers; normalised set:`);
+    const normSet = [...new Set(header.map(normalise).filter(Boolean))].sort();
+    for (const n of normSet) console.error(`  "${n}"`);
+    process.exit(2);
+  }
+}
 
 const toInsert = [];
 let skippedNoTxnId = 0;
@@ -179,7 +288,7 @@ for (let i = 1; i < rows.length; i++) {
   const projected = {};
   const rawObj = {};
   for (const spec of COL_SPEC) {
-    const csvIdx = idxByCsv.get(spec.csv);
+    const csvIdx = specToCsvIdx.get(spec.col);
     const cellRaw = csvIdx != null ? rowArr[csvIdx] : null;
     projected[spec.col] = spec.parse(cellRaw);
   }
