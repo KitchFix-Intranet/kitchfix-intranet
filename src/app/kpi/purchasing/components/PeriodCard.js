@@ -21,7 +21,7 @@
 
 import { Pill, FinalPill, ProvisionalPill } from "./Pill";
 import { WeekChart } from "./WeekChart";
-import { fmt$, fmtPct, moneyArrow, resolveCardState, chartUnit } from "../lib/board";
+import { fmt$, resolveCardDisplay, chartUnit } from "../lib/board";
 // PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
 // escapes every card's `position: relative` stacking context. Import
 // only, never fork.
@@ -75,34 +75,40 @@ export function PeriodCard({
   // call so pill / hero / chart all agree, per §9B one-source rule.
   isPassThrough = false,
 }) {
-  // R10 (owner ruling 2026-08-25) - pending contributes to the pill /
-  // hero verdict ONLY on a live period. On a closed period the money
-  // has either landed or it has not; the Pending sub-row is hidden;
-  // counting money the row does not show is where three cards on ALL
-  // P8 wore the wrong colour.
+  // INV-P21 structural fix (owner ruling 2026-08-26).  Resolver owns
+  // every displayed value + every caption.  The component reads
+  // formatted strings and colour classes off `d`; it cannot compute
+  // anything.  ESLint gate `no-purchasing-arithmetic` enforces this.
   //
-  // ONE stateOf call - pill / hero / chart / VS BUDGET all read from
-  // this `cs` object (spec §9B one-source rule; §5.2 closed-period
-  // rule tightened here).
-  const resolverSpent = Number(spent || 0) + (closed ? 0 : Number(pending || 0));
-  const cs = resolveCardState({
-    spent: resolverSpent,
+  // Owner ruling on pending (2026-08-26, Option 2):
+  //   - Pending stays in the LIVE verdict (pill + variance).
+  //   - Pending stays out of CLOSED verdicts.
+  //   - Hero stays coded-only in this PR - rule 2 (no figure changes).
+  //     Follow-up (Option 3, deferred): move hero to spent+pending on
+  //     live to close the class properly.
+  //
+  // Sign-gated caption below the variance:
+  //   under (Remaining)      -> "net of pending"
+  //   over  (Over by)        -> "includes uncoded pending"
+  //   closed                 -> "period closed"
+  const d = resolveCardDisplay({
+    cardKind: "period",
+    spent: Number(spent || 0),
     budget: Number(budget || 0),
+    pending: Number(pending || 0),
     elapsedFrac,
-    // R10 - hasBills MUST mirror the resolver's `spent` source. Prior
-    // state passed the same combined value but as its own expression;
-    // a future edit touching one and not the other would have re-
-    // introduced this exact drift class.
-    hasBills: resolverSpent > 0,
     closed,
     isPassThrough,
+    isFutureRange,
+    projectedClose,
+    tier,
   });
 
-  // PR-2 R4 Part A: period-card hero MUST equal Bills + Cards for the
-  // same fiscal-week footprint. Same failure mode as BucketCard - if the
-  // three values come from different date conventions, the card lies.
-  // Assertion trips in development on any future drift. Skipped when
-  // both source values are absent (loading / partial payload).
+  // PR-2 R4 Part A: bill / card source consistency check.  Bills and
+  // cards are input signatures (not resolver outputs), so this stays
+  // alongside the resolver call - it verifies the props passed in
+  // match the derive path.  No arithmetic on `spent`/`budget` at
+  // render time.
   if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
     const heroR = Math.round(Number(spent || 0) * 100) / 100;
     const billsN = Number(bills || 0);
@@ -119,40 +125,6 @@ export function PeriodCard({
       );
     }
   }
-
-  const rem = Number(budget || 0) - Number(spent || 0) - Number(pending || 0);
-  const showOverArrow = rem < 0;
-  // R10 - closed variance now reads from cs. Was independently computed
-  // (spent - budget) which drifted from the resolver's spent when
-  // pending was folded in above. Bound to cs so any future change to
-  // one source updates both.
-  const varz = cs.variance;
-
-  // R10 dev-only assertion (§9B, R10 owner ruling 2026-08-25). The
-  // drift class this fix caught is `hero says under while VS BUDGET
-  // says over` (or vice versa). Fire only on a genuine contradiction:
-  // both classes non-empty AND opposed. A card with variance ~0
-  // legitimately shows hero='g' (state=under) with signClass='' (no
-  // colour) - not a contradiction.
-  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
-    if (closed && Number(budget || 0) > 0 && !isPassThrough && !isFutureRange) {
-      const heroC = cs.heroClass;
-      const vsC   = cs.signClass;
-      const contradicts = (heroC === "r" && vsC === "g") || (heroC === "g" && vsC === "r");
-      if (contradicts) {
-        // eslint-disable-next-line no-console
-        console.error(
-          "[PeriodCard §R10] hero/VS BUDGET colour contradiction:",
-          { spent, pending, budget, resolverSpent, state: cs.state, heroClass: heroC, signClass: vsC, variance: cs.variance },
-        );
-        throw new Error(
-          `PeriodCard R10: hero '${heroC}' contradicts VS BUDGET '${vsC}' (state=${cs.state}, variance=${cs.variance})`,
-        );
-      }
-    }
-  }
-
-  const spentUsed = Number(budget || 0) > 0 ? Number(spent || 0) / Number(budget || 0) : null;
 
   return (
     <div className="kpi-p-row" data-card="period">
@@ -196,72 +168,50 @@ export function PeriodCard({
             </div>
           </div>
           <div className="kpi-p-pillrow">
-            {/* PR 2 R8 - no verdict pill on a future range. Broader
-                rule: no spend means no verdict. */}
-            {!isFutureRange && <Pill tone={cs.pillTone} label={cs.pillLabel} />}
+            {/* PR 2 R8 - no verdict pill on a future range. */}
+            {!isFutureRange && <Pill tone={d.pillTone} label={d.pillLabel} />}
             {closed ? <FinalPill label="Final" /> : (provisional ? <ProvisionalPill /> : null)}
           </div>
         </div>
 
-        {/* PR 2 R7 Fix 4 - zero-budget sweep. A period card sitting on
-            a range with no budget suppresses the second stack too - the
-            hero + `no budget` subline carry the state; there's nothing
-            for `Vs budget` / `Over by` / `Remaining` to declare against. */}
-        <div className={`kpi-p-nums${!isFutureRange && Number(budget || 0) === 0 ? " kpi-p-nums-solo" : ""}`}>
+        {/* Numbers block.  Every value + caption below comes from `d`
+            (resolveCardDisplay) so hero, sub-line, remaining label,
+            remaining value, remaining colour, and remaining caption
+            cannot be computed from different subsets of pending. */}
+        <div className={`kpi-p-nums${!d.showRemainingBlock && !isFutureRange ? " kpi-p-nums-solo" : ""}`}>
           <div className="kpi-p-stk">
             <span className="kpi-p-label">Spent</span>
-            {/* PR 2 R8 - hero drops state colour on a future range. `$0.00`
-                on a range that hasn't started is a fact, not a verdict. */}
-            <span className={`kpi-p-hero num ${isFutureRange ? "" : cs.heroClass}`}>{fmt$(spent)}</span>
+            <span className={`kpi-p-hero num ${d.heroClass}`}>{d.heroValueText}</span>
             <span className="kpi-p-subline">
-              of <b>{fmt$(budget)}</b>
-              {!isFutureRange && spentUsed != null && (
-                <>
-                  {" "}· <b>{fmtPct(spentUsed)}</b> used
-                </>
+              of <b>{d.subLineOfBudgetText}</b>
+              {d.subLinePctText && (
+                <>{" "}· <b>{d.subLinePctText}</b> used</>
               )}
-              {!isFutureRange && Number(budget || 0) === 0 && (
-                <><span aria-hidden="true"> · </span><b>no budget</b></>
+              {d.subLineNoBudgetText && (
+                <><span aria-hidden="true"> · </span><b>{d.subLineNoBudgetText}</b></>
               )}
             </span>
           </div>
-          {isFutureRange ? (
+          {d.showFutureBudgetBlock ? (
             <div className="kpi-p-stk">
               <span className="kpi-p-label">Budget</span>
-              <span className="kpi-p-value num">{fmt$(budget)}</span>
+              <span className="kpi-p-value num">{d.subLineOfBudgetText}</span>
               <span className="kpi-p-subline">this range has not started</span>
             </div>
-          ) : Number(budget || 0) === 0 ? (
-            null
-          ) : (
+          ) : d.showRemainingBlock ? (
             <div className="kpi-p-stk">
-              {/* PR-2 R2 Fix 3 - owner ruling 2026-08-21: `Remaining` is
-                  a quantity, no arrow, no colour. `Over by` takes over
-                  when the number is a variance. Closed reads `Vs budget`. */}
-              <span className="kpi-p-label">
-                {closed ? "Vs budget" : (showOverArrow ? "Over by" : "Remaining")}
-              </span>
-              {closed ? (
-                /* R10 - VS BUDGET colour reads from cs.signClass so it
-                   binds to the same spent/budget the pill and hero
-                   already consumed. No independent recompute. */
-                <span className={`kpi-p-value num ${cs.signClass || (varz > 0 ? "r" : "g")}`}>{moneyArrow(varz)}</span>
-              ) : showOverArrow ? (
-                <span className="kpi-p-value num r">{fmt$(-rem)}</span>
-              ) : (
-                <span className="kpi-p-value num">{fmt$(rem)}</span>
-              )}
-              <span className="kpi-p-subline">
-                {closed ? "period closed" : "net of pending"}
-              </span>
+              <span className="kpi-p-label">{d.remainingLabel}</span>
+              <span className={`kpi-p-value num ${d.remainingClass}`}>{d.remainingValueText}</span>
+              <span className="kpi-p-subline">{d.remainingCaption}</span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* PR 2 R8 - a future range has no bills, no cards, no pending,
-            no projection. Rendering four $0.00 rows and a projected-close
-            arrow on a range that hasn't started is exactly the false
-            verdict the labor brief predicted. Drop the block entirely. */}
+            no projection.  Sub-row values come directly from props
+            (bills/cards/pending are raw display, not computed values)
+            except the closed-Variance colour + label and Projected
+            close arrow / delta, which are resolver-owned via `d`. */}
         {!isFutureRange && (
         <div className="kpi-p-subs">
           {closed ? (
@@ -273,13 +223,15 @@ export function PeriodCard({
               </div>
               <div className="kpi-p-sub">
                 <span className="kpi-p-k">Budget<small>FY2026 plan</small></span>
-                <span className="kpi-p-v num">{fmt$(budget)}</span>
+                <span className="kpi-p-v num">{d.subLineOfBudgetText}</span>
                 <span className="kpi-p-x" aria-hidden="true" />
               </div>
               <div className="kpi-p-sub">
                 <span className="kpi-p-k">Variance<small>actual less budget</small></span>
-                <span className={`kpi-p-v num ${varz > 0 ? "r" : "g"}`}>{fmt$(Math.abs(varz))}</span>
-                <span className={`kpi-p-x ${varz > 0 ? "r" : "g"}`}>{varz > 0 ? "over" : "under"}</span>
+                {/* Same sign class + wording feed the value and its
+                    right-column annotation, from the resolver. */}
+                <span className={`kpi-p-v num ${d.remainingClass}`}>{d.remainingValueText}</span>
+                <span className={`kpi-p-x ${d.remainingClass}`}>{d.remainingClass === "r" ? "over" : "under"}</span>
               </div>
             </>
           ) : (
@@ -305,15 +257,15 @@ export function PeriodCard({
                 <span className="kpi-p-v num a">{fmt$(pending)}</span>
                 <span className="kpi-p-x a">not on a P&amp;L line</span>
               </div>
-              {projectedClose != null && (
+              {d.showProjectedClose && (
                 <div className="kpi-p-sub">
                   <span className="kpi-p-k">Projected close<small>if this pace holds</small></span>
-                  <span className={`kpi-p-v num ${projectedClose > Number(budget || 0) ? "r" : ""}`}>
-                    {fmt$(projectedClose)}
+                  <span className={`kpi-p-v num ${d.projectedCloseValueClass}`}>
+                    {d.projectedCloseValueText}
                   </span>
-                  <span className={`kpi-p-x ${projectedClose > Number(budget || 0) ? "r" : "g"}`}>
-                    {projectedClose > Number(budget || 0) ? "▲ " : "▼ "}
-                    {fmt$(Math.abs(projectedClose - Number(budget || 0)))}
+                  <span className={`kpi-p-x ${d.projectedCloseAnnotationClass}`}>
+                    {d.projectedCloseArrow}
+                    {d.projectedCloseDeltaText}
                   </span>
                 </div>
               )}
