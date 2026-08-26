@@ -73,7 +73,7 @@ Two accounts, same period, same line, opposite direction, sum $0.01 apart. That'
 
 ### 4.2 It's the only exact offset-pair on the full matrix
 
-`scripts/_probe_reclass_pairs.mjs` sweeps every (period, kind) combination in the 88-account-period matrix for pairs where both sides have `|delta| >= $100` AND `|sum| < $1`. **This is the only pair that qualifies across all 8 periods and both hourly + salary.** No other reclass-shaped offset exists in the audited data.
+`scripts/probes/_probe_reclass_pairs.mjs` sweeps every (period, kind) combination in the 88-account-period matrix for pairs where both sides have `|delta| >= $100` AND `|sum| < $1`. **This is the only pair that qualifies across all 8 periods and both hourly + salary.** No other reclass-shaped offset exists in the audited data.
 
 ### 4.3 What it means
 
@@ -152,8 +152,8 @@ For TXR - TX - H specifically, all 8 periods have DB budget agreement with finan
 
 ## 8. Data provenance
 
-- **DB pull:** `scripts/_probe_pnl_recon_db_v2.mjs` (v2, uses `periodOf(week_start)` for hourly; see parent audit §0/§14 for why v1 was wrong).
-- **Finance pull:** `scripts/_probe_txr_h_extract.mjs` - pulls TXR-HOME sheet from both file A and file B, confirms no drift.
-- **Salary headcount:** `scripts/_probe_txr_h_deep.mjs` - counts distinct workers with weekly salary rows in each period, flags full-period vs partial.
-- **Reclass sweep:** `scripts/_probe_reclass_pairs.mjs` - confirms CIN-AZ/TXR-TX-H P5 is the sole exact-offset pair in the 88-row matrix.
+- **DB pull:** `scripts/probes/_probe_pnl_recon_db_v2.mjs` (v2, uses `periodOf(week_start)` for hourly; see parent audit §0/§14 for why v1 was wrong).
+- **Finance pull:** `scripts/probes/_probe_txr_h_extract.mjs` - pulls TXR-HOME sheet from both file A and file B, confirms no drift.
+- **Salary headcount:** `scripts/probes/_probe_txr_h_deep.mjs` - counts distinct workers with weekly salary rows in each period, flags full-period vs partial.
+- **Reclass sweep:** `scripts/probes/_probe_reclass_pairs.mjs` - confirms CIN-AZ/TXR-TX-H P5 is the sole exact-offset pair in the 88-row matrix.
 - **Snapshots:** `/tmp/txr_h_finance.json`, `/tmp/txr_h_db.json`, `/tmp/pnl_matrix_v2.json`.
