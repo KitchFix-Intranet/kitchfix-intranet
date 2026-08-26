@@ -1938,6 +1938,18 @@
   color: #92580A;
   border-color: #F3D9AE;
 }
+/* homestand-fixes round 2 item 9 (2026-08-26): quiet variant of the
+   scope pill - transparent background, muted outline, dropped weight.
+   Verdict pill stays the loud one; scope becomes context. Applies
+   to both boards (kpi-vpill-scope-quiet on period, kpi-hs-pill-quiet
+   on homestand - separate rules, same visual language). */
+.kpi-vpill-scope-quiet.kpi-vpill-scope-off,
+.kpi-vpill-scope-quiet.kpi-vpill-scope-on {
+  background: transparent;
+  color: var(--n-600);
+  border-color: var(--n-300);
+  font-weight: 600;
+}
 .kpi-spend-h-title {
   font-size: var(--kpi-t-meta); font-weight: 800; letter-spacing: 0.08em;
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
@@ -2524,7 +2536,17 @@
 .kpi-sig-fact-val-bad  { color: var(--red-700); }
 /* V34 - muted values keep --n-300 (V33 item 4d) and drop weight to
    500 so a bare dash reads absent rather than announced. */
-.kpi-sig-fact-val-mute { color: var(--n-300); font-weight: 500; }
+/* homestand-fixes round 2 addendum (2026-08-26): muted fact values
+   were rendering at var(--n-300) (a BORDER token) with weight 500,
+   contrast 1.27:1 on white - effectively invisible. Owner ruling:
+   the value stays visually recessive through WORDING (e.g. "still
+   costing" already says the fact needs no action), not through being
+   unreadable. Now var(--text-subtle) + weight 700, matching the
+   sibling values' weight. The border-token-as-text guard added to
+   _probe_kpi_contrast.mjs asserts no future regression to this
+   class - it flags any color: var(--n-100..-400) as FAIL regardless
+   of computed contrast, because border tokens should never be text. */
+.kpi-sig-fact-val-mute { color: var(--text-subtle); font-weight: 700; }
 .kpi-sig-fact-sub {
   font-size: var(--kpi-t-label); color: var(--text-subtle); font-weight: 500;
   letter-spacing: 0; text-transform: none;
@@ -3478,6 +3500,18 @@
 .kpi-hs-pill-blue  { background: #EAF0FA; color: #2563EB; border-color: #C3D5F5; }
 .kpi-hs-pill-purple{ background: #F3E8FA; color: #7A3E9D; border-color: #DCC3EC; }
 .kpi-hs-pill-mute  { background: var(--n-100); color: var(--n-600); border-color: var(--n-300); }
+/* homestand-fixes round 2 item 9 (2026-08-26): quiet scope pill on
+   the homestand. Transparent + muted outline + dropped weight so it
+   sits as context beside a loud verdict pill rather than competing
+   with it. Two variants track salary on/off but read visually the
+   same; the copy tells the state (`HOURLY` vs `+ SALARY`). */
+.kpi-hs-pill-quiet.kpi-hs-pill-scope-on,
+.kpi-hs-pill-quiet.kpi-hs-pill-scope-off {
+  background: transparent;
+  color: var(--n-600);
+  border-color: var(--n-300);
+  font-weight: 600;
+}
 
 .kpi-hs-good { color: #15803D; }
 .kpi-hs-bad  { color: #B91C1C; }

@@ -27,7 +27,7 @@
 //      moves.
 
 import React, { useMemo, useState, useEffect } from "react";
-import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
+import { fmt$, fmtHrs, fmtDate, standWindow } from "../lib/formatting.js";
 import { DayStripPlot, aggregatePerDay, isoRange } from "./DayStrip.js";
 import HelpPop from "./HelpPop.js";
 
@@ -80,11 +80,15 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onV
         <span className="kpi-hs-eyebrow">Season by homestand</span>
         <span className="kpi-hs-card-hdr-right">
           {salaryAvailable && (
+            // homestand-fixes round 2 item 9 (2026-08-26): "HOURLY
+            // ONLY" -> "HOURLY", muted outline (kpi-hs-pill-quiet)
+            // rather than filled amber/mute. Applies to both boards -
+            // period-board copy mirrors this in StoryBlock.js.
             <span
-              className={"kpi-hs-pill " + (salaryOn ? "kpi-hs-pill-amber" : "kpi-hs-pill-mute")}
+              className={"kpi-hs-pill kpi-hs-pill-quiet " + (salaryOn ? "kpi-hs-pill-scope-on" : "kpi-hs-pill-scope-off")}
               aria-label={salaryOn ? "Salary included" : "Hourly labor only"}
               data-scope-pill
-            >{salaryOn ? "+ SALARY" : "HOURLY ONLY"}</span>
+            >{salaryOn ? "+ SALARY" : "HOURLY"}</span>
           )}
           {viewMode && onViewModeChange && (
             <span className="kpi-seg kpi-hs-view-mode" role="group" aria-label="Compare actuals to plan">
@@ -204,10 +208,22 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onV
 // ruling - Chat-Claude specced it, owner does not want it), bank arrow
 // dropped, bank fact reads "in the bank" (green) / "budget deficit"
 // (red), and "budgeted for" -> "budget for" on the remaining line.
-function SeasonToDateCard({ bank }) {
+function SeasonToDateCard({ bank, homestands }) {
   if (!bank) return null;
   const finishedCount   = Number(bank.stands_finished || 0);
   const remainingCount  = Number(bank.stands_remaining || 0);
+  // homestand-fixes round 2 item 8 (2026-08-26): season count now
+  // accounts for estimated stands so the total matches the tab count.
+  // Prior "9 finished · 2 remaining" left the 2 estimated stands
+  // uncounted on a season with 13 total, sending operators hunting
+  // for the missing rows. is_estimated is already on every homestand
+  // entry from the server (per _probe_stlmo_actual_estimated_wire
+  // 2026-08-26 confirmation) so this is a client-side pure derivation.
+  const estimatedCount = (homestands || []).filter(h => h?.is_estimated === true).length;
+  // The bank.stands_remaining server figure counts POST-FLOOR future
+  // stands (window > today); estimated stands (pre-floor or future-
+  // with-estimate) are its own bucket. Total = finished + remaining +
+  // estimated should equal the tab count.
   const remainingBudget = Number(bank.remaining_budget || 0);
   const budgetToDate    = Number(bank.budget_to_date || 0);
   const seasonBudget    = budgetToDate + remainingBudget;
@@ -222,16 +238,22 @@ function SeasonToDateCard({ bank }) {
       <header className="kpi-hs-card-hdr">
         <span className="kpi-hs-eyebrow">Season to date</span>
         <span className="kpi-hs-note" data-season-rn>
-          {finishedCount} stand{finishedCount === 1 ? "" : "s"} finished · {remainingCount} remaining
+          {/* item 8 - three-part count: N finished · N to come · N
+              estimated. Estimated bucket is skipped when zero to
+              keep the note tight on accounts without pre-floor
+              stands or future estimates. */}
+          {finishedCount} finished · {remainingCount} to come{estimatedCount > 0 ? ` · ${estimatedCount} estimated` : ""}
         </span>
-        {/* HS FB1 final polish item 10 2026-08-25: bank pill dropped.
-            The number appeared twice on the same card (header pill +
-            key row), ~40px apart. Key row wins - PR-3 already shaped
-            its wording ("in the bank" / "budget deficit"). */}
+        {/* homestand-fixes round 2 item 4 (2026-08-26): "bank"
+            language dropped from every surface. Owner ruling: "bank"
+            tells an operator they have money to spend; they do not,
+            it is cumulative variance against target. Popover copy
+            rewritten to "budget you have not spent" (plainer, and
+            names what the hatch actually is). */}
         <HelpPop
           id="qSeason"
           title="Season to date"
-          body={<>The solid bar is what you have spent. The green hatch is the bank - budget you were given but did not use. The grey hatch is what is still budgeted for the stands you have left.</>}
+          body={<>The solid bar is what you have spent. The green hatch is budget you have not spent - the amount you are under target so far. The grey hatch is what is still budgeted for the stands you have left.</>}
         />
       </header>
       <div className="kpi-hs-sbar" data-season-sbar>
@@ -242,7 +264,8 @@ function SeasonToDateCard({ bank }) {
           className={`kpi-hs-sbar-bank ${bankVal >= 0 ? "" : "kpi-hs-sbar-over"}`}
           style={{ width: `${pct(bankAbs)}%` }}
         >
-          {pct(bankAbs) > 8 ? `${bankVal >= 0 ? "BANK " : "OVER "}${fmt$0(bankAbs)}` : ""}
+          {/* item 4 - bar label: "UNDER" / "OVER" replaces "BANK". */}
+          {pct(bankAbs) > 8 ? `${bankVal >= 0 ? "UNDER " : "OVER "}${fmt$0(bankAbs)}` : ""}
         </span>
         <span className="kpi-hs-sbar-remain" style={{ width: `${pct(remainingBudget)}%` }}>
           {pct(remainingBudget) > 6 ? `${fmt$0(remainingBudget)} remaining` : ""}
@@ -252,7 +275,10 @@ function SeasonToDateCard({ bank }) {
         <span><b data-key-season-budget>{fmt$0(seasonBudget)}</b> season budget</span>
         <span><b data-key-spent>{fmt$0(spent)}</b> spent · {finishedCount} stand{finishedCount === 1 ? "" : "s"}</span>
         <span className={bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"} data-key-bank>
-          <b>{fmt$0(bankAbs)}</b> {bankVal >= 0 ? "in the bank" : "budget deficit"}
+          {/* item 4 - "under target so far" / "over target" replaces
+              "in the bank" / "budget deficit". "over target" reads
+              red per Kevin's ruling. */}
+          <b>{fmt$0(bankAbs)}</b> {bankVal >= 0 ? "under target so far" : "over target"}
         </span>
         <span><b data-key-remaining>{fmt$0(remainingBudget)}</b> budget for the {remainingCount} remaining stand{remainingCount === 1 ? "" : "s"}</span>
       </div>
@@ -306,8 +332,16 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
       {/* Stand identity line (was its own card, merged here per item 12). */}
       <div className="kpi-hs-standhdr-row">
         <span className="kpi-hs-standhdr-title">Homestand {stand.index} · {opp}</span>
+        {/* homestand-fixes round 2 item 3 (2026-08-26): header renders
+            the WINDOW dates (from standWindow helper), not the game
+            dates. Prior state showed game_start-game_end (7 days on
+            HS 8) alongside window_days (11) - internally inconsistent,
+            and contradicted the command chip above (which reads
+            window_start-window_end correctly). The standWindow helper
+            is now the ONE source; table cells + command chip call it
+            too so all three surfaces cannot drift apart again. */}
         <span className="kpi-hs-standhdr-dates">
-          {fmtDate(stand.game_start)} - {fmtDate(stand.game_end)} · {stand.window_days} days · {stand.game_days} games
+          {(() => { const w = standWindow(stand); return `${fmtDate(w.start)} - ${fmtDate(w.end)} · ${w.days} days · ${stand.game_days} games`; })()}
         </span>
       </div>
       <header className="kpi-hs-card-hdr kpi-hs-card-hdr-strip">
@@ -340,12 +374,20 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
 
 // ─── Five signal cards ─────────────────────────────────────────────
 function GaugeBar({ ot, band }) {
-  // band = [lo, hi, mid]. Position mark on 0-50% axis, band as
+  // band = [lo, hi, mid]. Position mark on 0-75% axis, band as
   // amber region, mark as navy stub.
-  const clamp = v => Math.max(0, Math.min(50, v));
-  const bandStart = (clamp(band[0]) / 50) * 100;
-  const bandWidth = ((clamp(band[1]) - clamp(band[0])) / 50) * 100;
-  const markPos = (clamp(ot) / 50) * 100;
+  //
+  // Owner ruling 2026-08-26 (homestand-fixes round 2, P0-1): axis
+  // extended from 50% to 75%. The prior 50% ceiling meant a real
+  // reading like 41% (STL - MO HS 8) or 72% (the misclassified
+  // per-worker-avg reading) had nowhere to sit. Every OT norm
+  // through 8+ games peaks at 43% (see OT_NORMS below), and a real
+  // outlier stand can push above 50% - 75% gives the mark somewhere
+  // to point on any realistic reading.
+  const clamp = v => Math.max(0, Math.min(75, v));
+  const bandStart = (clamp(band[0]) / 75) * 100;
+  const bandWidth = ((clamp(band[1]) - clamp(band[0])) / 75) * 100;
+  const markPos = (clamp(ot) / 75) * 100;
   const color = ot < band[0] ? "kpi-hs-good" : ot > band[1] ? "kpi-hs-bad" : "kpi-hs-mid";
   return (
     <div className="kpi-hs-gauge">
@@ -353,7 +395,7 @@ function GaugeBar({ ot, band }) {
       <div className="kpi-hs-gauge-band" style={{ left: `${bandStart}%`, width: `${Math.max(bandWidth, 2)}%` }} />
       <div className={`kpi-hs-gauge-mark ${color}`} style={{ left: `${markPos}%` }} />
       <div className="kpi-hs-gauge-labels">
-        <span>0%</span><span>25%</span><span>50%</span>
+        <span>0%</span><span>25%</span><span>50%</span><span>75%</span>
       </div>
     </div>
   );
@@ -405,9 +447,21 @@ function SignalCards({
   const nightAvg = stand.night_games > 0 ? nightGameDollars / stand.night_games : 0;
   const dayAvg   = stand.day_games   > 0 ? dayGameDollars   / stand.day_games   : 0;
   const norm = OT_NORMS[Math.min(stand.peak_games_in_week, 10)] || OT_NORMS[3];
-  const otPct = employees.reduce((s, e) => s + (e.hours_regular > 0 ? (e.hours_overtime / e.hours_regular) * 100 : 0), 0) / Math.max(employees.length, 1);
+  // Owner ruling 2026-08-26 (homestand-fixes round 2, P0-1): OT %
+  // must be sum(OT hours) / sum(all hours), NOT avg(per-worker OT
+  // ratios). The avg-of-ratios formula inflates whenever a subset of
+  // the crew carries the overtime - on STL - MO HS 8, three of five
+  // workers carry OT and the avg-of-ratios formula returned 72% for
+  // an actual 41% (144 of 351 hours). Sum-over-sum is the honest
+  // metric - it weights by hours worked, not by worker count.
+  const totalOtHrs  = employees.reduce((s, e) => s + Number(e.hours_overtime || 0), 0);
+  const totalAllHrs = employees.reduce(
+    (s, e) => s + Number(e.hours_regular || 0) + Number(e.hours_overtime || 0) + Number(e.hours_double_time || 0),
+    0,
+  );
+  const otPct = totalAllHrs > 0 ? (totalOtHrs / totalAllHrs) * 100 : 0;
   const otBand = otPct < norm[0] ? "kpi-hs-pill-good" : otPct > norm[1] ? "kpi-hs-pill-bad" : "kpi-hs-pill-amber";
-  const totalHrs = employees.reduce((s, e) => s + (e.hours_regular || 0) + (e.hours_overtime || 0) + (e.hours_double_time || 0), 0);
+  const totalHrs = totalAllHrs;
   const crewSize = employees.length;
   const unapprovedHrs = employees.reduce((s, e) => s + (e.anomaly_no_clockout || 0) + (Math.max(0, (e.hours_without_dollars || 0))), 0);
   // HS FB1 final polish item 14 2026-08-25: distinct payroll weeks the
@@ -553,9 +607,15 @@ function SignalCards({
         {/* HS FB1 PR-3 3f 2026-08-25: split the sub copy above and
             below the gauge. Above: what happened this stand. Below:
             what similar stands typically run - the comparative band
-            reads with the gauge, not stacked over it. */}
+            reads with the gauge, not stacked over it.
+            homestand-fixes round 2 P0-1 (2026-08-26): sub-line now
+            states the arithmetic - "N.N of M.M hours at time and a
+            half" - so an operator can check the percentage without
+            leaving the card. The peak-days framing moves into the ?
+            popover where it belongs (it's causal context, not what
+            happened this stand). */}
         <div className="kpi-hs-sub">
-          <b>{stand.peak_games_in_week}</b> day{stand.peak_games_in_week === 1 ? "" : "s"} one week before Monday OT reset
+          <b>{totalOtHrs.toFixed(1)}</b> of <b>{totalAllHrs.toFixed(1)}</b> hours at time and a half
         </div>
         <GaugeBar ot={otPct} band={norm} />
         {/* HS FB1 final polish item 6 2026-08-25: --kpi-sp-3 margin
@@ -643,7 +703,11 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
             <th className="num">Target</th>
             <th className="num">Prep &amp; off</th>
             <th className="num">Actual</th>
-            <th className="num">Bank after</th>
+            {/* item 4 - "VS TARGET" replaces "Bank after". The
+                column carries per-stand variance, not a running
+                balance - "bank" implied you could add the column up,
+                which the numbers do not support. */}
+            <th className="num">Vs target</th>
           </tr>
         </thead>
         <tbody>
@@ -672,7 +736,7 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                       the game-only span was contradicting the Days
                       column (e.g. HS 3 game span 04/24-04/30 = 7d
                       beside Days column reading 11). */}
-                  <td className="num">{fmtDate(h.window_start)} – {fmtDate(h.window_end)}</td>
+                  <td className="num">{(() => { const w = standWindow(h); return `${fmtDate(w.start)} – ${fmtDate(w.end)}`; })()}</td>
                   <td className="num">{h.window_days}</td>
                   <td className="num">{h.game_days}</td>
                   <td className="num">{h.peak_games_in_week}</td>
@@ -681,7 +745,13 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                       so Prep & off stays `–` here. */}
                   <td className="num">–</td>
                   <td className="num kpi-hs-strong">
-                    {isEst ? <>~{fmt$0(h.actual_estimated)}<span className="kpi-hs-est-tag"> est.</span></> : "–"}
+                    {/* homestand-fixes round 2 item 2 (2026-08-26):
+                        est. suffix removed. The ~ prefix + amber tone
+                        already carry the estimated state; the extra
+                        tag was redundant. Wire is positive on every
+                        stand (verified via _probe_stlmo_actual_estimated_wire),
+                        so the render is `~$N` positive. */}
+                    {isEst ? `~${fmt$0(h.actual_estimated)}` : "–"}
                   </td>
                   <td className="num">–</td>
                 </tr>
@@ -696,7 +766,7 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                 >
                   <td>HS {h.index} · {h.opponents?.join(" / ") || "(no opp)"}</td>
                   {/* HS PR-B: Window column shows WINDOW dates. */}
-                  <td className="num">{fmtDate(h.window_start)} – {fmtDate(h.window_end)}</td>
+                  <td className="num">{(() => { const w = standWindow(h); return `${fmtDate(w.start)} – ${fmtDate(w.end)}`; })()}</td>
                   <td className="num">{h.window_days}</td>
                   <td className="num">{h.game_days}</td>
                   <td className="num">{h.peak_games_in_week}</td>
@@ -723,7 +793,7 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                     HS {h.index} · {h.opponents?.join(" / ") || "(no opp)"}
                   </td>
                   {/* HS PR-B: Window column shows WINDOW dates. */}
-                  <td className="num">{fmtDate(h.window_start)} – {fmtDate(h.window_end)}</td>
+                  <td className="num">{(() => { const w = standWindow(h); return `${fmtDate(w.start)} – ${fmtDate(w.end)}`; })()}</td>
                   <td className="num">{h.window_days}</td>
                   <td className="num">{h.game_days}</td>
                   <td className={`num ${h.peak_games_in_week >= 6 ? "kpi-hs-amber-strong" : ""}`}>{h.peak_games_in_week}</td>
@@ -867,11 +937,17 @@ function PlanCards({ stand, estimate, split, bank, hourlyRate }) {
         </div>
       </div>
 
-      {/* Card 2 - Your bank (qBank popover). Season-fixed truth per
-          owner reminder #3; reads directly off homestand_bank. */}
+      {/* homestand-fixes round 2 item 4 (2026-08-26): "Your bank" ->
+          "Under target so far". Owner ruling: "bank" tells an operator
+          they have money to spend, but this is cumulative variance
+          against target, not spendable money. Popover fully rewritten
+          to remove every "bank" sentence per Kevin's ruling that the
+          concept-explaining copy needs rewriting too, not just the
+          label. Season-fixed truth per owner reminder #3; reads
+          directly off homestand_bank. */}
       <div className={`kpi-hs-card kpi-hs-signal ${bankVal >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="bank">
         <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Your bank</span>
+          <span className="kpi-hs-eyebrow">{bankVal >= 0 ? "Under target so far" : "Over target so far"}</span>
           <span className="kpi-hs-card-hdr-pills">
             <span className={`kpi-hs-pill ${bankVal >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
               {bankVal >= 0 ? "Ahead" : "Behind"}
@@ -879,15 +955,15 @@ function PlanCards({ stand, estimate, split, bank, hourlyRate }) {
           </span>
           <HelpPop
             id="qBank"
-            title="Your bank"
-            body={<>Every finished stand came in under its target, which puts money in the bank, or over, which takes money out. This is the running total for the season.<br /><br />Money in the bank is room to spend. A bank in the red means the next stands have to run under target to get back to even.<br /><br />Estimated stands do not enter the bank - the bank stays a promise about money we can prove.</>}
+            title="Under target so far"
+            body={<>Every finished stand either came in under its target - budget you have not spent - or over. This is the running total for the season.<br /><br />Under target is budget still available; over target means the next stands have to run under to get back to even.<br /><br />Estimated stands do not enter this total - it stays a claim about money we can prove.</>}
           />
         </header>
         <div className={`kpi-hs-hero ${bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>
           {bankVal >= 0 ? "▼ " : "▲ "}{fmt$0(Math.abs(bankVal))}
         </div>
         <div className="kpi-hs-sub">
-          {bankVal >= 0 ? "saved across " : "to recover across "}{bank?.stands_finished || 0} finished stands
+          {bankVal >= 0 ? "under target across " : "over target across "}{bank?.stands_finished || 0} finished stands
         </div>
         <div className="kpi-hs-facts">
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Spent so far</div><div className="kpi-hs-fact-v">{fmt$0(bank?.spent_to_date || 0)}</div></div>
@@ -1085,7 +1161,7 @@ export function HomestandBoard({
     <div className="kpi-hs-board" data-view="homestand">
       {/* HS FB1 PR-1 (owner ruling 2026-08-24, defect 1d): season
           summary reads first, then the per-stand rail. */}
-      <SeasonToDateCard bank={bank} />
+      <SeasonToDateCard bank={bank} homestands={homestands} />
       <SeasonRailCard
         homestands={homestands}
         selectedGameStart={selectedGameStart}

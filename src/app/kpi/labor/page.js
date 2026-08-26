@@ -17,7 +17,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 // V-role-gates - OPS_LEADERSHIP_EMAILS retired here; server decides.
 import { addDaysISO } from "@/lib/kpi/dateResolve";
-import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine } from "./lib/formatting";
+import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine, standWindow } from "./lib/formatting";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
@@ -1248,7 +1248,7 @@ export default function KpiLaborPage() {
                payload (index + opponents + window_*). */
             chipOverride: (inHomestandView && data?.homestand) ? {
               primary: `HS ${data.homestand.index} · ${data.homestand.opponents?.join(" / ") || "(no opp)"}`,
-              dates: `${fmtDate(data.homestand.window_start)} – ${fmtDate(data.homestand.window_end)}`,
+              dates: (() => { const w = standWindow(data.homestand); return `${fmtDate(w.start)} – ${fmtDate(w.end)}`; })(),
             } : null,
             onCommit: onRangeCommit,
           } : null}

@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { periodOf, periodStartISO, periodEndISO } from "../lib/periods.js";
+import { flagForV42State } from "../lib/weekFlag.js";
 // PR-C - pure aggregate builder in a plain-JS module so the OT-chip
 // probe can synthesize actuals + assert without JSX compilation.
 import { buildMemberByWeekAndAcct } from "../lib/weekTableModels.js";
@@ -220,66 +221,10 @@ function flagForSeverity(s) {
 // count (int) so the chip can print the hour count Kevin's spec asks
 // for. draft_entry_count > 0 gates the state; the hour figure is
 // the display value.
-function flagForV42State(w, isClosed) {
-  // Sum anomaly parts directly - server-side board weeks carry a
-  // pre-summed anomaly_total, client-side weekAggregates in page.js
-  // does not. Reading parts always agrees.
-  const nc  = Number(w.anomaly_no_clockout || 0);
-  const u1  = Number(w.anomaly_under_1h    || 0);
-  const o16 = Number(w.anomaly_over_16h    || 0);
-  const anomalies = nc + u1 + o16;
-  // Aggregated week rows in page.js expose the raw column name
-  // `hours_without_dollars`; server-side board weeks expose the
-  // renamed `unpriced_hrs`. Read either so both callers land here
-  // correctly.
-  const unpriced = Number(w.unpriced_hrs ?? w.hours_without_dollars ?? 0);
-  const drafts   = Number(w.draft_entry_count || 0);
-  const draftHrs = Number(w.draft_hours || 0);
-  if (anomalies > 0) {
-    const detail = [];
-    if (nc  > 0) detail.push(`${nc} never clocked out`);
-    if (u1  > 0) detail.push(`${u1} under 1h`);
-    if (o16 > 0) detail.push(`${o16} over 16h`);
-    return {
-      state: "s2",
-      label: `${anomalies} need${anomalies === 1 ? "s" : ""} attention - ${detail.join(", ")}`,
-      cls: "kpi-flag-warn",
-      tooltip: "These time entries can't be approved as-is - a human has to fix them in Rippling.",
-      glyph: "⚠",
-    };
-  }
-  if (isClosed && unpriced > 0.004) {
-    return {
-      state: "s3b",
-      label: `closed week understated - ${unpriced.toFixed(1)} hrs missing pay data`,
-      cls: "kpi-flag-bad",
-      tooltip: "This closed week's dollar total is incomplete. Pay-segments for the missing hours have not landed yet.",
-      glyph: "⚠",
-    };
-  }
-  if (isClosed && drafts > 0) {
-    return {
-      state: "s3a",
-      label: `closed week awaiting approval${draftHrs > 0.004 ? ` - ${draftHrs.toFixed(1)} hrs` : ""}`,
-      cls: "kpi-flag-warn kpi-flag-warn-soft",
-      tooltip: "Dollars for this week are complete. The entries have not been formally approved in Rippling.",
-      glyph: "⚠",
-    };
-  }
-  // HS FB1 hotfix 2026-08-25 - State 1: in-progress week with drafts.
-  // Muted neutral chip; not a warning. States a fact, does not raise
-  // an alarm. No glyph so it reads distinct from the ⚠ chips above.
-  if (!isClosed && drafts > 0) {
-    return {
-      state: "s1",
-      label: `${draftHrs > 0.004 ? draftHrs.toFixed(1) : drafts} hrs pending approval`,
-      cls: "kpi-flag-mute",
-      tooltip: "Time entries clocked but not yet approved in Rippling. Approving them will not change the dollar total.",
-      glyph: null,
-    };
-  }
-  return null;   // truly no signal (no drafts, no anomalies, no unpriced)
-}
+// flagForV42State moved to ../lib/weekFlag.js on 2026-08-26 so a Node
+// probe can assert its label/tooltip contract without JSX compilation.
+// Same one-source-of-truth pattern as signalCardModels.js. Import
+// added at the top of this file alongside other lib imports.
 
 function weekSeverity(week) {
   return worstSeverity(week.coverage_states || [week.coverage_state]);

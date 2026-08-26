@@ -214,11 +214,19 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
             </span>
           )}
           {salaryAvailable && (
+            // homestand-fixes round 2 item 9 (2026-08-26): "HOURLY
+            // ONLY" -> "HOURLY" (shorter, less crowding beside the
+            // date). Scope pill also switches to a MUTED OUTLINE
+            // (kpi-vpill-scope-quiet) rather than a filled bordered
+            // pill - verdict pill stays loud, scope becomes context.
+            // Measured before: HOURLY ONLY was 93px against a 97px
+            // date, and two filled pills competed for attention.
+            // Applies to both boards - homestand copy mirrors this.
             <span
-              className={"kpi-vpill kpi-vpill-scope " + (salary ? "kpi-vpill-scope-on" : "kpi-vpill-scope-off")}
+              className={"kpi-vpill kpi-vpill-scope kpi-vpill-scope-quiet " + (salary ? "kpi-vpill-scope-on" : "kpi-vpill-scope-off")}
               aria-label={salary ? "Salary included" : "Hourly labor only"}
               data-scope-pill
-            >{salary ? "+ SALARY" : "HOURLY ONLY"}</span>
+            >{salary ? "+ SALARY" : "HOURLY"}</span>
           )}
           <HelpPop id="qBudgetCard" title="Your budget for this period" body={BUDGET_CARD_BODY} />
         </div>

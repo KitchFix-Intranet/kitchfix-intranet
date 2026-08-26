@@ -34,7 +34,19 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kpiCssPath = join(__dirname, "..", "..", "src", "app", "kpi", "kpi.css");
-const cssText = readFileSync(kpiCssPath, "utf8");
+// homestand-fixes round 2 addendum (2026-08-26): strip /* ... */
+// comments from the input text before parsing. Prior parser only
+// skipped comments at the exact position of `i`; a comment header
+// preceding a rule was absorbed into the selector string, and the
+// `isLightSurfaceSelector` prefix check silently rejected the rule.
+// This missed .kpi-sig-fact-val-mute (color: var(--n-300), 1.27:1
+// on white - a border token used as text) plus .kpi-det-v-mute and
+// .kpi-vb-d-mute. Third silent-truncation-at-a-boundary this week;
+// the pattern is guards that scan one shape while the defect lives
+// on another. Comment stripping normalises the input so every rule
+// presents its real selector to the surface check.
+const cssRaw = readFileSync(kpiCssPath, "utf8");
+const cssText = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
 
 // ─── Palette (resolved values) ────────────────────────────────────────
 // tokens.css declares the base scale; kpi.css re-declares --n-50..-400
@@ -212,6 +224,18 @@ while (i < cssText.length) {
 // ─── Score each light-surface color declaration against white ─────────
 const WHITE = "#FFFFFF";
 const NEAR_WHITE = "#F8FAFC"; // --n-50 in kpi scope
+// Border tokens - these carry a divider / outline visual weight and
+// must NEVER be used as text color. --n-100 through --n-400 are the
+// border scale; using any of them for `color:` produces < 3:1 on
+// white (usually < 2:1) and is invisible. Third guard added
+// 2026-08-26 after the .kpi-sig-fact-val-mute defect landed with
+// color: var(--n-300) (1.27:1) that WCAG-scoring alone catches but
+// the "why" is clearer when named: border token used as text.
+const BORDER_TOKENS = new Set(["--n-100", "--n-200", "--n-300", "--n-400"]);
+function borderTokenName(raw) {
+  const m = raw.match(/^var\((--n-[1234]00)(?:,|\))/);
+  return m ? m[1] : null;
+}
 const findings = [];
 for (const { sel, raw } of rules) {
   if (!isLightSurfaceSelector(sel)) continue;
@@ -221,12 +245,15 @@ for (const { sel, raw } of rules) {
   const cNear = contrast(hex, NEAR_WHITE);
   const worst = Math.min(cWhite, cNear);
   const waived = WAIVERS.has(sel);
+  const borderToken = borderTokenName(raw);
   let tier;
+  let reason = null;
   if (waived) tier = "WAIVER";
+  else if (borderToken) { tier = "FAIL"; reason = `border token ${borderToken} used as text (never valid regardless of contrast)`; }
   else if (worst < 4.5) tier = "FAIL";
   else if (worst < 5.0) tier = "BORDERLINE";
   else tier = "PASS";
-  findings.push({ sel, raw, hex, cWhite, cNear, worst, tier });
+  findings.push({ sel, raw, hex, cWhite, cNear, worst, tier, reason });
 }
 
 // ─── Report ───────────────────────────────────────────────────────────
@@ -246,12 +273,13 @@ console.log("-".repeat(78));
 const grouped = new Map();
 for (const f of fails) {
   const key = `${f.raw} → ${f.hex}`;
-  const g = grouped.get(key) || { raw: f.raw, hex: f.hex, worst: f.worst, sels: new Set() };
+  const g = grouped.get(key) || { raw: f.raw, hex: f.hex, worst: f.worst, reason: f.reason, sels: new Set() };
   g.sels.add(f.sel);
   grouped.set(key, g);
 }
 for (const [key, g] of [...grouped.entries()].sort((a, b) => a[1].worst - b[1].worst)) {
-  console.log(`  ${key}   contrast ${g.worst.toFixed(2)}:1   (${g.sels.size} selectors)`);
+  const reasonNote = g.reason ? `   [${g.reason}]` : "";
+  console.log(`  ${key}   contrast ${g.worst.toFixed(2)}:1   (${g.sels.size} selectors)${reasonNote}`);
   const sample = [...g.sels].sort().slice(0, 6);
   for (const s of sample) console.log(`      ${s}`);
   if (g.sels.size > sample.length) console.log(`      ...+${g.sels.size - sample.length} more`);
