@@ -15,51 +15,54 @@ import { fmt$, fmtHrs } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 import HelpPop from "./HelpPop.js";
 
-// PR-E - card-level help copy per kitchfix-help-copy.html.
-// One body per signal card, verbatim. Kept out-of-render so the
-// component bodies stay readable and Playwright can grep for the
-// verbatim text.
+// PR-E - card-level help copy per kitchfix-help-copy.html; 2026-08-26
+// rewritten from kitchfix-card-revisions.html. One body per signal
+// card, verbatim from the owner-approved render. Kept out-of-render
+// so the component bodies stay readable and Playwright can grep for
+// the verbatim text. The thing that changed in all four: each now
+// states what the card does NOT count, not just what it does - that
+// omission is what caused the confusion.
 const PACE_BODY = (
   <>
     Whether you are ahead or behind if the period&apos;s budget were spent evenly, day by day.
     <br /><br />
     <b>Down and green means behind the even line</b> - you have spent less than the calendar says you could have. Up and red means ahead of it.
     <br /><br />
-    Being ahead is not automatically bad. A period with a heavy homestand early and a road trip after should run ahead in week one. What matters is whether the rest of the period has enough left in it.
-    <span className="kpi-hs-pop-foot"><b>Projected end</b> takes your pace so far and runs it to the end of the period. It assumes the rest looks like what you have done, which is why a homestand that has not happened yet can move it.</span>
+    Being ahead is not automatically bad. A period with a heavy homestand early should run ahead in week one. What matters is whether the rest of the period has enough left in it.
+    <span className="kpi-hs-pop-foot"><b>Projected end</b> is where you finish if the rest of the period looks like what you have done so far. <b>Vs budget</b> is how far that lands over or under.<br /><br /><b>Covers</b> tells you which weeks are in these figures - a week still running is included at whatever has been clocked so far.</span>
   </>
 );
 
 const OVERTIME_BODY = (
   <>
-    Overtime hours as a share of all hours worked. <b>5.9% means about six of every hundred hours were paid at time and a half.</b>
+    Overtime hours as a share of all hours worked. <b>5.3% means about five of every hundred hours were paid at time and a half.</b>
     <br /><br />
     Overtime is not automatically a problem. The 40-hour clock resets every Monday, so a week with a lot of games packed into it carries overtime no matter how you schedule it - that is the calendar, not the crew.
     <br /><br />
     <b>Worth a look when</b> the same one or two people carry all of it, or when a light week still shows a high number.
-    <span className="kpi-hs-pop-foot"><b>Hrs to target</b> is how many overtime hours you would need to shed to land on the 8% line. <b>Peak OT week</b> names the worst single week so you know where to look.</span>
+    <span className="kpi-hs-pop-foot"><b>Week workers OT</b> is how many of the crew had any overtime. <b>Peak OT week</b> names the worst single week so you know where to look.<br /><br /><b>Covers</b> tells you which weeks are in these figures.</span>
   </>
 );
 
 const HOURS_LEFT_BODY = (
   <>
-    How many more hours you can put on the schedule and still land on budget. <b>Budget left divided by your blended rate.</b>
+    How many more hours you can put on the schedule and still land on budget for this period. <b>Budget left divided by your blended rate.</b>
     <br /><br />
-    <b>Per week</b> spreads it evenly across the weeks remaining. <b>Per worker</b> divides that across your current crew - roughly what each person can still work.
+    <b>Per week</b> spreads it across the weeks remaining, so it is the number to build next week&apos;s schedule against.
     <br /><br />
-    This is a ceiling, not a plan. It assumes your rate holds. If the weeks ahead carry overtime, those hours cost more and the real ceiling is lower.
-    <span className="kpi-hs-pop-foot"><b>Blended rate</b> is total dollars over total hours - your actual average cost per hour, overtime included, not anyone&apos;s base wage.</span>
+    This is a ceiling, not a plan. It assumes your rate holds - if the weeks ahead carry overtime, those hours cost more and the real ceiling is lower.
+    <span className="kpi-hs-pop-foot"><b>Hourly only, always.</b> Salaried staff are not scheduled by the hour, so the salary toggle does not change this card.<br /><br />The card only appears on a period that is still running. On a finished period there are no hours left to schedule.</span>
   </>
 );
 
 const PAYROLL_BODY = (
   <>
-    How complete this period&apos;s numbers are. <b>10 of 10 means every person-week has pay data from Rippling</b> - nothing is missing.
+    Hours clocked in Rippling that a manager has not approved yet.
     <br /><br />
-    <b>Unapproved</b> is hours clocked but not yet approved by a manager. Rippling does not calculate pay until someone approves, so those hours carry no dollars yet and your spend will rise when they do.
+    <b>Rippling calculates the pay as soon as hours are clocked, but approval is a separate step.</b> So the money can be complete and the hours still be waiting on a signature. <b>Will rise</b> is what this period grows by once they are approved.
     <br /><br />
     <b>Read this card first when a number looks too low.</b> Usually the answer is here.
-    <span className="kpi-hs-pop-foot"><b>Final</b> means the period is closed and everything is in. <b>Partial</b> means hours are still landing.</span>
+    <span className="kpi-hs-pop-foot"><b>Coverage</b> is how many worker-weeks have pay data at all - a different question from approval.<br /><br /><b>Hourly only, always.</b> Salaried staff do not clock in, so the salary toggle does not change this card.</span>
   </>
 );
 // PR-A - pure fact builders live in a plain-JS module so a Node probe
@@ -69,6 +72,7 @@ const PAYROLL_BODY = (
 import {
   buildPaceCardModel,
   buildHoursLeftModel,
+  buildCoversLine,
   pillFor as _pillForShared,
 } from "../lib/signalCardModels.js";
 
@@ -129,6 +133,15 @@ function Facts({ items }) {
   );
 }
 
+// 2026-08-26 signal card revisions - Covers dashed line pinned to the
+// card foot below the facts. `text` is derived by buildCoversLine in
+// signalCardModels.js from `board.weeks[]` counters; null means the
+// card kind has no meaningful coverage answer and no line renders.
+function Covers({ text }) {
+  if (!text) return null;
+  return <div className="kpi-sig-covers"><b>Covers</b>{" "}{text.replace(/^Covers\s+/, "")}</div>;
+}
+
 // ── Pace / Final vs budget ────────────────────────────────────────
 // V32-1..V32-4. State-dependent. PR-A: multi_period is a third state
 // (see signalCardModels.js for the model). This component is a thin
@@ -142,8 +155,15 @@ function renderFactValue(value) {
 function renderFacts(items) {
   return items.map(it => ({ ...it, value: renderFactValue(it.value) }));
 }
-function PaceCard({ board }) {
+function PaceCard({ board, payrollCoverageHourly }) {
   const m = buildPaceCardModel(board);
+  // 2026-08-26 - draft hours annotation on Covers comes from the
+  // hourly-only pinned source. Salaried staff never clock in, so this
+  // is technically hourly by construction, but reading from the pinned
+  // field enforces the discipline structurally.
+  const covers = buildCoversLine(board, "pace", {
+    draftHoursHourly: payrollCoverageHourly?.draft_hours ?? 0,
+  });
   return (
     <SignalCard state={m.state}>
       <Head eyebrow={m.eyebrow} state={m.state} label={m.label} help={<HelpPop id="qPace" title="Spending pace" body={PACE_BODY} />} />
@@ -154,6 +174,7 @@ function PaceCard({ board }) {
         {m.subMute ? <span className="kpi-sig-sub-mute">{m.subMute}</span> : m.subLine}
       </Sub>
       <Facts items={renderFacts(m.facts)} />
+      <Covers text={covers} />
     </SignalCard>
   );
 }
@@ -208,6 +229,9 @@ function OvertimeCard({ board, salary }) {
       ? `watch above ${watch}% · off target above ${alarm}%`
       : "of hours worked");
 
+  // 2026-08-26 - "OT workers" -> "Week workers OT" per owner. Same
+  // figure (N with any OT / total distinct workers), clearer label.
+  const covers = buildCoversLine(board, "overtime");
   return (
     <SignalCard state={state}>
       <Head eyebrow="OVERTIME" state={state} label={label} help={<HelpPop id="qOvertime" title="Overtime" body={OVERTIME_BODY} />} />
@@ -220,186 +244,153 @@ function OvertimeCard({ board, salary }) {
       <Facts items={[
         { label: "OT cost", value: otCost != null ? fmt$(otCost) : "—" },
         hoursFact,
-        { label: "OT workers", value: workersTotal > 0 ? `${otWorkers} of ${workersTotal}` : "—" },
+        { label: "Week workers OT", value: workersTotal > 0 ? `${otWorkers} of ${workersTotal}` : "—" },
         { label: "Peak OT week", value: longest ? `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` : "—", muted: !longest },
       ]} />
+      <Covers text={covers} />
     </SignalCard>
   );
 }
 
-// ── Hours vs budget / Hours left to schedule ─────────────────────
-// V32-8/V32-9. V34 - state is CONTEXTUAL. V35-2 - the card takes
-// TWO shapes:
-//   in progress: eyebrow HOURS AVAILABLE, hero = hours you can
-//     still schedule, facts = per-week burn view. PR-E polish:
-//     eyebrow shortened from HOURS AVAILABLE TO SCHEDULE (169px
-//     text into a 158px slot truncated as "HOURS AVAILABLE TO
-//     SCHED..."). Sub-line already says "available hours this
-//     period", so the eyebrow does not need to repeat "to
-//     schedule". Type scale unchanged (shared across all four).
-//   closed:      eyebrow HOURS VS BUDGET, hero = signed delta hrs
-//     (arrow + colour), facts = Budgeted / Used / Unused-or-Overrun
-//     / Blended rate. The fact set swaps between shapes - it does
-//     not dash out a fact that never applied.
-// PR-A - HoursLeftCard is a thin JSX render over buildHoursLeftModel
-// (signalCardModels.js). multi_period + running week uses the in-progress
-// shape; multi_period fully closed returns { hidden: true } and this
-// component returns null (card absent, not zeroed).
-function HoursLeftCard({ board, salary }) {
-  const m = buildHoursLeftModel(board, salary);
+// ── Hours available ──────────────────────────────────────────────
+// 2026-08-26 signal card revisions - three folded-in rulings:
+//   1. Renders ONLY on single_period_in_progress (see model). Absent
+//      on closed periods, FYTD, last-4-weeks and any multi-period
+//      range.
+//   2. Reads from `hoursAvailableHourly` (server-pinned in
+//      salaryBoard.js pinHourlyOnly). Unconditional - never branches
+//      on the salary prop. That is what makes the toggle unable to
+//      reach this card by construction.
+//   3. Drops `Per worker` (a fiction: assumed everyone works
+//      equally), adds `Weeks left`, sub-line names the period.
+function HoursLeftCard({ board, hoursAvailableHourly }) {
+  const m = buildHoursLeftModel(board, hoursAvailableHourly);
   if (m.hidden) return null;
   const hero = m.heroMute
     ? <span className="kpi-sig-hero-mute">—</span>
     : m.hero?.shape === "arrow"
       ? <ArrowFigure v={m.hero.v} size={m.hero.size} fmt={m.hero.fmt === "hrs" ? fmtHrs : fmt$} />
       : <span className={`kpi-sig-hero-val num ${m.hero?.over ? "kpi-sig-hero-bad" : ""}`}>{m.hero?.value}</span>;
+  const covers = buildCoversLine(board, "hours_available");
   return (
     <SignalCard state={m.state}>
-      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} help={<HelpPop id="qHoursLeft" title="Hours left to schedule" body={HOURS_LEFT_BODY} />} />
+      <Head eyebrow={m.eyebrow} state={m.state} label={m.label} help={<HelpPop id="qHoursLeft" title="Hours available" body={HOURS_LEFT_BODY} />} />
       <Hero>{hero}</Hero>
       <Sub>{m.subMute ? <span className="kpi-sig-sub-mute">{m.subMute}</span> : m.heroSub}</Sub>
       <Facts items={renderFacts(m.facts)} />
+      <Covers text={covers} />
     </SignalCard>
   );
 }
 
 // ── Payroll data (action card) ────────────────────────────────────
-// V32-10/V32-11. V34 - unapproved > 0 -> warn; complete -> good;
-// no worker-weeks yet -> neutral. Unapproved hrs and Will rise carry
-// the same tone the card carries; complete periods render `none` at
-// good tone (not an em-dash).
-function PayrollDataCard({ board, freshness, salary }) {
-  const pd = board?.payroll_data;
-  const priced = pd?.priced_ww ?? 0;
-  const total = pd?.total_ww ?? 0;
-  const unpricedHrs = pd?.unpriced_hours ?? 0;
-  // HS FB1 hotfix 2026-08-25: approval status keys off draft_hours,
-  // not unpriced_hours. TBR - FL fixture: draft_hours 122.98 across
-  // 10 draft entries, all PRICED so unpriced_hours = 0. Pre-fix the
-  // card read "FINAL · Unapproved: none" against truly-unapproved
-  // labor. Server surfaces draft_hours on payroll_data (board.js
-  // hotfix). unpricedHrs stays for the "Will rise" cap - V42 correct
-  // there since a priced draft will not grow the figure.
-  const draftHrs = pd?.draft_hours ?? 0;
-  const unapprovedWeeks = pd?.unapproved_weeks ?? 0;
-  // Salary PR 3 - Will rise = unapproved HOURS * rate. Rate MUST be
-  // the hourly-only rate, not the merged board's avg_rate (which is
-  // mixed dollars over hourly hours). Unapproved hours are hourly
-  // hours by construction (salaried people do not clock in - S1h
-  // proves it), so multiplying by blended_rate_hourly is correct.
-  const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
-  const rate = salary?.blended_rate_hourly ?? board?.avg_rate;
-  const workers = board?.distinct_workers ?? 0;
+// 2026-08-26 signal card revisions:
+//   * READS from payrollCoverageHourly unconditionally. Never branch
+//     on the salary prop. Structural pinning: if salary is on, this
+//     card must still say the 25 hourly-only worker-weeks and 49.1
+//     hourly-only draft hours - not the salary-inflated denominators.
+//   * HERO FLIP when hasUnapproved: pending-approval hours become the
+//     hero (it is the number someone acts on); coverage drops to a
+//     fact. Owner read `2406 of 2406` as an approval figure when it
+//     is coverage - the flip fixes that misread. When nothing is
+//     pending, the existing "N of N / with pay data in" path stands.
+function PayrollDataCard({ board, freshness, payrollCoverageHourly, hoursAvailableHourly }) {
+  const priced = payrollCoverageHourly?.priced_ww ?? 0;
+  const total = payrollCoverageHourly?.total_ww ?? 0;
+  const unpricedHrs = payrollCoverageHourly?.unpriced_hours ?? 0;
+  const draftHrs = payrollCoverageHourly?.draft_hours ?? 0;
+  const unapprovedWeeks = payrollCoverageHourly?.unapproved_weeks ?? 0;
+  // Will-rise estimator needs the hourly rate. The hourly rate is
+  // pinned on hoursAvailableHourly.avg_rate (same server helper).
+  // Unapproved hours are hourly by construction (salaried never
+  // clock in), so multiplication by the hourly rate is correct.
+  const rate = hoursAvailableHourly?.avg_rate ?? board?.avg_rate;
+  const workers = hoursAvailableHourly?.distinct_workers ?? 0;
   const closedWeeks = board?.closed_weeks_count ?? 0;
-  // PR-A - weeks denominator: single_period uses weeks_in_period (4);
-  // multi_period uses weeks_in_range (total in the range - e.g. 35 for
-  // FYTD). Both fields ship on every board response; whichever is
-  // populated for this kind is what we read.
   const weeksInPeriod = board?.weeks_in_period ?? board?.weeks_in_range;
-  // HS FB1 hotfix 2026-08-25: hasUnapproved keys off draftHrs (not
-  // unpricedHrs) - a priced draft is still unapproved.
   const hasUnapproved = draftHrs > 0.004;
   const hasWillRise = unpricedHrs > 0.004;
   const state = total === 0 ? "neutral" : hasUnapproved ? "warn" : "good";
   const label = total === 0 ? "—" : hasUnapproved ? "PARTIAL" : "FINAL";
-  // V42 REVISED (C2) - route through the shared estimator so the
-  // week-bar hatched cap and this "Will rise" figure can never
-  // disagree to the cent. See src/lib/labor/estimateUnpricedDollars.js
-  // for the signal-source rationale (unpriced_hrs, not draft_hours).
   const willRise = estimateUnpricedDollars(unpricedHrs, rate);
-  const rateLabelInTitle = rateBasisHourlyOnly ? "hourly rate" : "blended rate";
-  const willRiseTitle = willRise != null
-    ? `Estimate. ${fmtHrs(unpricedHrs)} unapproved hrs x $${rate.toFixed(2)} ${rateLabelInTitle}. Unapproved hours skew to whoever has not been processed, so their true rate may differ from the ${rateBasisHourlyOnly ? "hourly average" : "blend"}.`
-    : "";
-  // PR-B - "Last pulled Aug 24" gets time-of-day suffix per owner
-  // ruling 2026-08-24. Reads like "Aug 24 · 7:36 AM" so an operator
-  // knows how fresh the read is at a glance.
   const lastPulled = freshness?.last_walk_at
     ? new Date(freshness.last_walk_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
       + " · "
       + new Date(freshness.last_walk_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     : "—";
+  const covers = buildCoversLine(board, "payroll_data");
 
-  // V35-3 - the fact set SWAPS between "there is an ask" and
-  // "everything is in". Complete periods report the crew + week
-  // coverage; incomplete periods report the ask that has to be
-  // resolved.
-  //
-  // HS FB1 hotfix 2026-08-25:
-  //   * "Unapproved hrs" reads draftHrs (approval count in Rippling,
-  //     independent of pricing status).
-  //   * "Will rise" is ABSENT when unpricedHrs == 0. Priced drafts
-  //     are already in the amount total; approving them will not add
-  //     money. Showing ~$0 would lie about the impact.
-  const facts = hasUnapproved
-    ? [
-        { label: "Unapproved hrs", value: fmtHrs(draftHrs), tone: "warn" },
-        // PR-B - Will rise no longer carries a dotted-underline `?`
-        // affordance. Verified live 2026-08-24: the tooltip renders
-        // nothing, so the affordance was a promise the UI did not
-        // keep. Figure stays; the label is plain text now.
-        // HS FB1 hotfix 2026-08-25: absent when unpriced == 0 - a
-        // priced draft will not grow the number, so the "Will rise"
-        // ask does not apply.
-        ...(hasWillRise ? [{
-          label: "Will rise",
-          value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
-          tone: "warn",
-        }] : []),
-        { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
-        { label: "Last pulled", value: lastPulled },
-      ]
-    : [
-        { label: "Unapproved", value: "none", tone: "good" },
-        { label: "Workers", value: workers > 0 ? `${workers}` : "—" },
-        { label: "Weeks",
-          value: weeksInPeriod ? `${closedWeeks} of ${weeksInPeriod}` : (closedWeeks > 0 ? `${closedWeeks}` : "—") },
-        { label: "Last pulled", value: lastPulled },
-      ];
+  // Hero flip: on hasUnapproved, hero is the pending-approval hrs;
+  // coverage moves to a fact. On no-unapproved, the existing
+  // "N of N / with pay data in" hero stands.
+  if (hasUnapproved) {
+    return (
+      <SignalCard state={state}>
+        <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
+        <Hero>
+          <span className="kpi-sig-hero-val num kpi-sig-hero-warn">{fmtHrs(draftHrs)}</span>
+        </Hero>
+        <Sub>pending approval in Rippling</Sub>
+        <Facts items={[
+          ...(hasWillRise ? [{
+            label: "Will rise",
+            value: willRise != null ? `~ ${fmt$(willRise)}` : "—",
+            tone: "warn",
+          }] : []),
+          { label: "Weeks affected", value: `${unapprovedWeeks}`, tone: "warn" },
+          { label: "Coverage", value: total > 0 ? `${priced} of ${total}` : "—" },
+          { label: "Last pulled", value: lastPulled },
+        ]} />
+        <Covers text={covers} />
+      </SignalCard>
+    );
+  }
 
+  // No unapproved: existing coverage-hero path stands.
   return (
     <SignalCard state={state}>
       <Head eyebrow="PAYROLL DATA" state={state} label={label} help={<HelpPop id="qPayrollData" title="Payroll data" body={PAYROLL_BODY} />} />
       <Hero>
         <span className="kpi-sig-hero-val num">{priced} of {total}</span>
       </Hero>
-      {/* HS FB1 hotfix 2026-08-25: sub reverted to "with pay data in".
-          PR-B renamed this to "pending approval" but the N of M hero
-          is COVERAGE (worker-weeks priced), not pending approvals -
-          Kevin's rename mislabelled a coverage figure as an approval
-          one. Draft-hours (the actual approval signal) surface in the
-          action line + "Unapproved hrs" fact below when > 0. */}
       <Sub>with pay data in</Sub>
-      {hasUnapproved && (
-        <div className="kpi-sig-action-line">
-          {fmtHrs(draftHrs)} hrs need approval in Rippling
-        </div>
-      )}
-      <Facts items={facts} />
+      <Facts items={[
+        { label: "Unapproved", value: "none", tone: "good" },
+        { label: "Workers", value: workers > 0 ? `${workers}` : "—" },
+        { label: "Weeks",
+          value: weeksInPeriod ? `${closedWeeks} of ${weeksInPeriod}` : (closedWeeks > 0 ? `${closedWeeks}` : "—") },
+        { label: "Last pulled", value: lastPulled },
+      ]} />
+      <Covers text={covers} />
     </SignalCard>
   );
 }
 
-export function SignalCards({ board, freshness, salary, isFutureRange }) {
+// 2026-08-26 signal card revisions - `hoursAvailableHourly` and
+// `payrollCoverageHourly` are server-pinned hourly-only inputs (see
+// salaryBoard.js `pinHourlyOnly`). Passed unconditionally; the two
+// hourly-only cards NEVER read salary-inflated numbers regardless of
+// the salary prop. Owner ruling: "if the read is unconditional, the
+// toggle cannot reach these two cards by construction."
+//
+// The salary prop stays wired ONLY for the Overtime card's sub-line
+// copy - a share-of-hourly-cost label rather than a percentage
+// interpretation - which is not a numeric change.
+export function SignalCards({ board, freshness, salary, isFutureRange, hoursAvailableHourly, payrollCoverageHourly }) {
   if (!board || board.applies === false) return null;
   // Owner ruling 2026-08-24: a future range (server flag
   // `is_future_range`, true when start > today) hides Pace, Overtime,
   // and Payroll Data - the premise of each fails on a range that
   // hasn't started (no pace, no overtime hours, no payroll coverage
-  // yet). Same "if the premise doesn't hold, the card is absent"
-  // discipline PR-A applied to HoursLeftCard on fully-closed ranges.
-  //
-  // HoursLeftCard KEEPS its normal render on future ranges - its
-  // premise holds perfectly: the budget exists, zero hours are
-  // scheduled, every hour is available. That is genuinely the most
-  // useful card on a September board when the operator is planning
-  // ahead.
+  // yet). HoursLeftCard now itself hides on any range other than
+  // single_period_in_progress, so its future-range behaviour comes
+  // from the model rather than a wrapper guard.
   return (
     <div className="kpi-sigs">
-      {!isFutureRange && <PaceCard board={board} />}
+      {!isFutureRange && <PaceCard board={board} payrollCoverageHourly={payrollCoverageHourly} />}
       {!isFutureRange && <OvertimeCard board={board} salary={salary} />}
-      <HoursLeftCard board={board} salary={salary} />
-      {!isFutureRange && <PayrollDataCard board={board} freshness={freshness} salary={salary} />}
+      <HoursLeftCard board={board} hoursAvailableHourly={hoursAvailableHourly} />
+      {!isFutureRange && <PayrollDataCard board={board} freshness={freshness} payrollCoverageHourly={payrollCoverageHourly} hoursAvailableHourly={hoursAvailableHourly} />}
     </div>
   );
 }

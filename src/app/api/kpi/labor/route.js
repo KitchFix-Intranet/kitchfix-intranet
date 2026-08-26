@@ -32,7 +32,7 @@ import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
 import { loadRoleGate } from "@/lib/kpi/roleGate.js";
-import { load3100_2Budgets, loadSalaryActuals, withSalary as withSalaryMerge } from "@/lib/labor/salaryBoard.js";
+import { load3100_2Budgets, loadSalaryActuals, withSalary as withSalaryMerge, pinHourlyOnly } from "@/lib/labor/salaryBoard.js";
 import { salaryProRate } from "@/lib/labor/salaryProRate.js";
 // PR-2 - range resolver + budget pro-rate. Three-way routing (grain
 // first, era second): whole weeks -> weekly, partial post-floor ->
@@ -923,6 +923,7 @@ export async function GET(request) {
             : "some_workers_lack_user_id_or_canonical_name",
       },
     };
+    Object.assign(body, pinHourlyOnly(body.board));
     if (includeSalary) {
       const [budQ, actQ] = await Promise.all([
         load3100_2Budgets(supa, members),
@@ -976,6 +977,7 @@ export async function GET(request) {
       }),
       week_budgets: [],
     };
+    Object.assign(bodyD26, pinHourlyOnly(bodyD26.board));
     if (includeSalary) {
       // D26 accounts on the salary path get a real board. Override
       // account_state to hourly_ok so buildBoard emits the full shape;
@@ -1197,6 +1199,7 @@ export async function GET(request) {
           : "some_workers_lack_user_id_or_canonical_name",
     },
   };
+  Object.assign(bodySingle, pinHourlyOnly(bodySingle.board));
   if (includeSalary) {
     const [budQ, actQ] = await Promise.all([
       load3100_2Budgets(supa, [account]),

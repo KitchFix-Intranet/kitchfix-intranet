@@ -34,6 +34,115 @@ export function pillFor(verdict) {
   return { state: "neutral", label: "—" };
 }
 
+// 2026-08-26 signal card revisions - Covers dashed line per card.
+// Derived from board.weeks[] counters (closed_weeks_count,
+// in_progress_week_start, not_started_weeks_count) which the server
+// computes for both single_period_in_progress and multi_period ranges.
+// Card-specific because coverage genuinely differs per card - one
+// global string would not do. Owner ruling 2026-08-26: on Hours
+// available + Payroll data, any figure inside the Covers line
+// describes the hourly-only picture (already true for these copies -
+// weeks are weeks - and we do not introduce worker-week counts here).
+function ordinalWeekPos(closed, notStarted) {
+  return (Number(closed) || 0) + 1;
+}
+function pluralWeeks(n) { return n === 1 ? "week" : "weeks"; }
+function periodPart(board) {
+  const wp = board?.weeks_in_period;
+  const wr = board?.weeks_in_range;
+  return wp != null ? `${wp} ${pluralWeeks(wp)} of the period`
+       : wr != null ? `${wr} ${pluralWeeks(wr)} in the range`
+       : "the period";
+}
+function coversInProgress(board, { withDraftHours } = {}) {
+  const closed = board?.closed_weeks_count || 0;
+  const notStarted = board?.not_started_weeks_count || 0;
+  const inProgIdx = ordinalWeekPos(closed, notStarted);
+  const inProg = board?.in_progress_week_start;
+  const parts = [];
+  if (closed > 0) parts.push(`${closed} closed ${pluralWeeks(closed)}`);
+  if (inProg) parts.push(`week ${inProgIdx} in progress`);
+  if (notStarted > 0 && parts.length === 0) parts.push(`${notStarted} ${pluralWeeks(notStarted)} not started`);
+  let s = parts.length > 0 ? `Covers ${parts.join(" + ")}` : "Covers this period";
+  if (withDraftHours) {
+    const draft = withDraftHours;
+    if (draft > 0.004) s += ` · ${draft.toFixed(1)} hrs not yet approved`;
+  }
+  return s;
+}
+function coversAllPeriod(board) {
+  return `Covers all ${periodPart(board)}`;
+}
+function coversMultiInProgress(board) {
+  const closed = board?.closed_weeks_count || 0;
+  const total = board?.weeks_in_range || 0;
+  return total > 0 ? `Covers ${closed} of ${total} weeks closed` : "Covers the range";
+}
+function coversWeeksRemaining(board) {
+  const notStarted = board?.not_started_weeks_count || 0;
+  const inProg = board?.in_progress_week_start ? 1 : 0;
+  const remaining = notStarted + inProg;
+  return `Covers the ${remaining} ${pluralWeeks(remaining)} remaining in this period`;
+}
+
+/**
+ * Build a card-appropriate Covers string.
+ * @param {object} board
+ * @param {"pace"|"overtime"|"hours_available"|"payroll_data"} kindCard
+ * @param {object} [opts]
+ * @param {number} [opts.draftHoursHourly] - hourly-only draft hours for
+ *   the Spending pace annotation. Salaried people do not clock in, so
+ *   any draft hours are hourly by construction, but we require callers
+ *   to pass the value they read from the pinned source so the Covers
+ *   line and the pinned figure can never disagree.
+ */
+export function buildCoversLine(board, kindCard, opts = {}) {
+  if (!board || board.applies === false) return null;
+  const kind = board.kind;
+  const hourlyTail = (kindCard === "hours_available" || kindCard === "payroll_data")
+    ? " · Hourly only"
+    : "";
+
+  if (kindCard === "hours_available") {
+    // Card only renders on single_period_in_progress; this string
+    // only makes sense there. Return null anywhere else so the
+    // caller does not attach a Covers line to a card that will
+    // itself return null.
+    if (kind !== "single_period_in_progress") return null;
+    return `${coversWeeksRemaining(board)}${hourlyTail}`;
+  }
+
+  if (kindCard === "payroll_data") {
+    if (kind === "single_period_in_progress" || kind === "single_period_closed") {
+      return `${coversAllPeriod(board)}${hourlyTail}`;
+    }
+    if (kind === "multi_period") {
+      // Multi-period: report the range shape rather than "all weeks
+      // of the period" which would misdescribe a many-period range.
+      const wr = board?.weeks_in_range;
+      const s = wr != null ? `Covers all ${wr} ${pluralWeeks(wr)} in the range` : "Covers the range";
+      return `${s}${hourlyTail}`;
+    }
+    return null;
+  }
+
+  // pace + overtime share the same in-progress / closed / multi
+  // vocabulary; pace optionally appends draft-hours annotation.
+  if (kind === "single_period_in_progress") {
+    const draft = kindCard === "pace" ? (opts.draftHoursHourly ?? 0) : 0;
+    return coversInProgress(board, kindCard === "pace" ? { withDraftHours: draft } : {});
+  }
+  if (kind === "single_period_closed") {
+    return coversAllPeriod(board);
+  }
+  if (kind === "multi_period") {
+    return board?.in_progress_week_start
+      ? coversMultiInProgress(board)
+      : (board?.weeks_in_range != null ? `Covers all ${board.weeks_in_range} ${pluralWeeks(board.weeks_in_range)} in the range` : "Covers the range");
+  }
+  return null;
+}
+
 // ─── Pace / Final vs budget model ─────────────────────────────────
 // multi_period reads the closed-shape facts (Spent · Budget · Of
 // budget used · Left unspent / Overrun) because variance is defined
@@ -88,15 +197,24 @@ export function buildPaceCardModel(board) {
   const shouldBeAt = inProgress
     ? (spent != null && v != null ? spent - v : null)
     : null;
-  // Projected end: arrow descriptor for JSX; probe reads value !== "—"
-  const projectedFact = inProgress
+  // 2026-08-26 label swap: Projected end now shows WHERE YOU LAND (the
+  // end figure); the overage / underage moves to its own fact called
+  // "Vs budget" (arrow), which matches how every other card names a
+  // variance. Arithmetic is unchanged; only the label carrying each
+  // number changed. Owner ruling: the prior "Projected end ▲$6,873.99"
+  // reads at a glance as the end number, which was the confusion.
+  const projectedEndFact = inProgress
     ? (closedWeeks < 1
-        ? { value: "—", sub: "needs a closed week", muted: true }
+        ? { label: "Projected end", value: "—", sub: "needs a closed week", muted: true }
         : (projectedEnd != null
-            ? { value: { shape: "arrow", v: projectedEnd - budget, size: "value" } }
-            : { value: "—", muted: true }))
+            ? { label: "Projected end", value: fmt$(projectedEnd) }
+            : { label: "Projected end", value: "—", muted: true }))
     : null;
-  const leftToSpend = inProgress && spent != null ? Math.max(0, budget - spent) : null;
+  const vsBudgetFact = inProgress
+    ? (closedWeeks < 1 || projectedEnd == null
+        ? { label: "Vs budget", value: "—", muted: true }
+        : { label: "Vs budget", value: { shape: "arrow", v: projectedEnd - budget, size: "value" } })
+    : null;
   // Closed-shape facts (fire on closed AND multi_period)
   const ofBudgetUsedPct = closedShape && budget > 0 && spent != null ? (spent / budget) * 100 : null;
   const leftUnspent = closedShape && spent != null ? budget - spent : null;
@@ -105,8 +223,8 @@ export function buildPaceCardModel(board) {
     ? [
         { label: "Spent",        value: spent != null ? fmt$(spent) : "—" },
         { label: "Should be at", value: shouldBeAt != null ? fmt$(shouldBeAt) : "—" },
-        { label: "Projected end", value: projectedFact.value, sub: projectedFact.sub, muted: projectedFact.muted },
-        { label: "Left to spend", value: leftToSpend != null ? fmt$(leftToSpend) : "—" },
+        projectedEndFact,
+        vsBudgetFact,
       ]
     : [
         { label: "Spent",  value: spent != null ? fmt$(spent) : "—" },
@@ -123,26 +241,38 @@ export function buildPaceCardModel(board) {
 }
 
 // ─── HoursLeftCard model ──────────────────────────────────────────
-// multi_period with running week uses in-progress shape; multi_period
-// fully closed returns { hidden: true } so the parent renders null.
-// Owner ruling 2026-08-24: "a card whose premise does not hold is
-// absent, not zeroed."
-export function buildHoursLeftModel(board, salary) {
-  const budget = board?.period_budget || board?.range_budget;
-  const spent = board?.spent_to_date ?? 0;
-  const rate = salary?.blended_rate_hourly ?? board?.avg_rate;
-  const rateBasisHourlyOnly = salary?.rate_basis === "hourly_only";
-  const hoursBasisHourlyOnly = salary?.hours_basis === "hourly_only";
-  const rateLabel = rateBasisHourlyOnly ? "Hourly rate" : "Blended rate";
-  const workers = board?.distinct_workers ?? 0;
+// 2026-08-26 signal card revisions - three owner rulings folded in:
+//   1. RENDER ONLY when kind === "single_period_in_progress". Absent
+//      on closed periods, FYTD, last-4-weeks and any multi-period
+//      range. The card's one honest sentence ("N hrs left to schedule
+//      in Period M - about K a week for the R weeks remaining") only
+//      works there. Prior code rendered a "HOURS VS BUDGET" variant
+//      on closed periods and a hidden-only path for multi-period-
+//      fully-closed; both retired.
+//   2. READ from `pinnedHours` unconditionally. Never branch on the
+//      salary prop. The pinning contract is enforced by the server
+//      (see salaryBoard.js `pinHourlyOnly`); reading unconditionally
+//      is what makes the toggle unable to reach this card by
+//      construction. A conditional read is a bug waiting for someone
+//      to change the condition.
+//   3. Sub-line names the period ("left to schedule in Period 9",
+//      not "available hours this period"). Drop `Per worker` -
+//      9.86 hrs each assumes everyone works equally and no chef
+//      schedules that way. Add `Weeks left` - what makes `Per week`
+//      legible. Keep `Per week`, `Budget left`, `Blended rate`.
+export function buildHoursLeftModel(board, pinnedHours) {
   const kind = board?.kind;
-  const inProgress = kind === "single_period_in_progress";
-  const closed = kind === "single_period_closed";
-  const isMulti = kind === "multi_period";
-  const notStarted = board?.not_started_weeks_count || 0;
-  const weeksRemaining = (inProgress || isMulti)
-    ? (board?.in_progress_week_start ? 1 : 0) + notStarted
-    : 0;
+  // Ruling 1: render only on single_period_in_progress.
+  if (kind !== "single_period_in_progress") return { hidden: true };
+  if (!pinnedHours || pinnedHours.applies === false) return { hidden: true };
+
+  const budget = pinnedHours.period_budget ?? pinnedHours.range_budget;
+  const spent = pinnedHours.spent_to_date ?? 0;
+  const rate = pinnedHours.avg_rate;
+  const periodNo = board?.period_no;
+  const notStarted = pinnedHours.not_started_weeks_count || 0;
+  const inProgressWeek = pinnedHours.in_progress_week_start ? 1 : 0;
+  const weeksRemaining = notStarted + inProgressWeek;
   const dollarsLeft = budget != null && budget > 0 ? budget - spent : null;
   const hoursLeft = (rate != null && rate > 0 && dollarsLeft != null)
     ? Math.max(0, dollarsLeft / rate)
@@ -151,13 +281,6 @@ export function buildHoursLeftModel(board, salary) {
   const hoursOver = isOver && rate != null && rate > 0
     ? Math.abs(dollarsLeft) / rate
     : 0;
-
-  // Multi-period range with ZERO weeks remaining (fully closed):
-  // hide entirely per owner ruling. Do not render zeros for a card
-  // whose premise no longer holds.
-  if (isMulti && weeksRemaining === 0) {
-    return { hidden: true };
-  }
 
   if (budget == null || rate == null || rate <= 0) {
     return {
@@ -168,57 +291,34 @@ export function buildHoursLeftModel(board, salary) {
       subMute: "no budget to compare",
       facts: [
         { label: "Per week",     value: "—", muted: true },
-        { label: "Per worker",   value: "—", muted: true },
+        { label: "Weeks left",   value: `${weeksRemaining}` },
         { label: "Budget left",  value: "—" },
-        { label: rateLabel, value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
+        { label: "Blended rate", value: rate != null ? `$${rate.toFixed(2)}/hr` : "—" },
       ],
     };
   }
 
-  // Shape selection: multi with running week uses in-progress shape.
-  const useInProgressShape = inProgress || (isMulti && weeksRemaining > 0);
-  const state = useInProgressShape ? "info" : (closed && isOver ? "bad" : "good");
-  const label = closed && isOver ? "OVER" : "ON TARGET";
-  const eyebrow = closed ? "HOURS VS BUDGET" : "HOURS AVAILABLE";
+  const state = "info";
+  const label = "ON TARGET";
+  const eyebrow = "HOURS AVAILABLE";
+  const perWeek = weeksRemaining > 0 && hoursLeft != null ? hoursLeft / weeksRemaining : null;
 
-  const perWeek = (useInProgressShape && weeksRemaining > 0 && hoursLeft != null)
-    ? hoursLeft / weeksRemaining
-    : null;
-  const perWorkerPerWeek = (perWeek != null && workers > 0) ? perWeek / workers : null;
+  const hero = { shape: "hrs", value: fmtHrs(isOver ? hoursOver : (hoursLeft ?? 0)), over: isOver };
+  const periodName = periodNo != null ? `Period ${periodNo}` : "this period";
+  const heroSub = isOver
+    ? `beyond what the budget covers this period`
+    : `left to schedule in ${periodName}`;
 
-  const budgetedHours = rate > 0 ? budget / rate : null;
-  const usedHours = board?.hours_vs_budget?.worked ?? null;
-
-  // Hero: descriptor for JSX; probe reads value !== "—"
-  const hero = closed
-    ? { shape: "arrow", v: isOver ? hoursOver : -(hoursLeft ?? 0), size: "hero", fmt: "hrs" }
-    : { shape: "hrs", value: fmtHrs(isOver ? hoursOver : (hoursLeft ?? 0)), over: isOver };
-
-  const heroSub = closed
-    ? (isOver ? "beyond what the budget covered" : "under what the budget covered")
-    : (isOver ? "beyond what the budget covers" : "available hours this period");
-
-  const facts = closed
-    ? [
-        { label: "Budgeted", value: budgetedHours != null ? fmtHrs(budgetedHours) : "—" },
-        { label: "Used",     value: usedHours != null ? fmtHrs(usedHours) : "—" },
-        isOver
-          ? { label: "Overrun",     value: fmtHrs(hoursOver), tone: "bad" }
-          : { label: "Unused",      value: fmtHrs(hoursLeft ?? 0), tone: "good" },
-        { label: rateLabel, value: `$${rate.toFixed(2)}/hr` },
-      ]
-    : [
-        { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
-        { label: "Per worker",
-          value: hoursBasisHourlyOnly ? "hourly only" : (perWorkerPerWeek != null ? fmtHrs(perWorkerPerWeek) : "—"),
-          muted: hoursBasisHourlyOnly ? false : (perWorkerPerWeek == null) },
-        { label: "Budget left",
-          value: isOver
-            ? { shape: "arrow", v: Math.abs(dollarsLeft), size: "value" }
-            : fmt$(dollarsLeft ?? 0),
-          tone: isOver ? "bad" : "good" },
-        { label: rateLabel, value: `$${rate.toFixed(2)}/hr` },
-      ];
+  const facts = [
+    { label: "Per week",     value: perWeek != null ? fmtHrs(perWeek) : "—", muted: perWeek == null },
+    { label: "Weeks left",   value: `${weeksRemaining}` },
+    { label: "Budget left",
+      value: isOver
+        ? { shape: "arrow", v: Math.abs(dollarsLeft), size: "value" }
+        : fmt$(dollarsLeft ?? 0),
+      tone: isOver ? "bad" : "good" },
+    { label: "Blended rate", value: `$${rate.toFixed(2)}/hr` },
+  ];
 
   return { state, label, eyebrow, hero, heroSub, facts };
 }

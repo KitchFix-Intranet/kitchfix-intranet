@@ -2394,20 +2394,29 @@
 .kpi-sig-st-neutral::before { background: var(--n-300); }
 
 /* V29-19 shared lanes - fixed heights so the computed `top` of each
-   lane is identical across every card in the row. */
+   lane is identical across every card in the row.
+   2026-08-26 - eyebrow gets margin-right: auto so the state pill sits
+   IMMEDIATELY LEFT of the ? popover trigger rather than centred in the
+   header. Prior justify-content: space-between distributed three
+   children evenly - eyebrow at start, pill floated to middle, ? at
+   end - which read as an orphan pill. Owner ruling: eyebrow - pill -
+   ? shape, matches the homestand header (.kpi-hs-pill margin-left
+   auto + .kpi-hs-qwrap absolute) so both boards share one shape. */
 .kpi-sig-head {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; align-items: center;
   gap: var(--kpi-sp-2);
   height: var(--kpi-lane-head);
   flex: none;
 }
 /* V34 - card title weight 700 (was 800). Half the board was 800 and
-   fought the hero for the eye; hero is now the only 800 on the card. */
+   fought the hero for the eye; hero is now the only 800 on the card.
+   2026-08-26 - margin-right: auto to push pill + ? to the right. */
 .kpi-sig-eyebrow {
   font-size: var(--kpi-t-label); letter-spacing: 0.08em;
   color: var(--text-subtle); font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-right: auto;
 }
 .kpi-sig-state {
   font-size: var(--kpi-t-label); font-weight: 700;
@@ -2509,6 +2518,30 @@
   letter-spacing: 0; text-transform: none;
   margin-top: var(--kpi-sp-1);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* 2026-08-26 signal card revisions - Covers dashed line, one per card,
+   named at card foot below the facts. Named the counted window so
+   "spending pace" / "overtime" / "payroll data" / "hours available"
+   each state which weeks are in the figures - the owner spec had
+   operators reading each card without knowing whether it was 2 weeks
+   or 3. Derived by buildCoversLine (signalCardModels.js); the card
+   passes text through so probes and Playwright can grep for the
+   verbatim string. */
+.kpi-sig-covers {
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px dashed var(--n-300);
+  font-size: var(--kpi-t-label);
+  color: var(--text-subtle);
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kpi-sig-covers b {
+  color: var(--n-700);
+  font-weight: 700;
 }
 /* PR-B (owner ruling 2026-08-24) - `.kpi-sig-fact-est` dotted-underline
    removed with the `Will rise` `?` affordance. The tooltip rendered
