@@ -14,6 +14,7 @@
 import { fmt$, fmtHrs } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 import HelpPop from "./HelpPop.js";
+import Arrow from "./Arrow.js";
 import { APPROVAL_TRACKING_START_DISPLAY } from "@/lib/labor/approvalsTracking";
 
 // PR-E - card-level help copy per kitchfix-help-copy.html; 2026-08-26
@@ -104,16 +105,17 @@ function Head({ eyebrow, state, label, help }) {
 }
 
 // V29-18 arrow-first signed figure. `▼` under (green), `▲` over (red).
+// 2026-08-27 polish sweep - now composes the shared Arrow component
+// so hero and fact spacing match across the board.
 function ArrowFigure({ v, size = "hero", fmt = fmt$ }) {
   if (v == null) return <span className={`kpi-sig-arrfig kpi-sig-arrfig-${size}`}>—</span>;
   const abs = Math.abs(v);
   if (abs < 0.5) return <span className={`kpi-sig-arrfig kpi-sig-arrfig-${size}`}>{fmt(0)}</span>;
   const under = v < 0;
   const cls = under ? "kpi-sig-arrfig-good" : "kpi-sig-arrfig-bad";
-  const arrow = under ? "▼" : "▲";
   return (
     <span className={`kpi-sig-arrfig kpi-sig-arrfig-${size} ${cls}`}>
-      <span className="kpi-sig-arrfig-arrow" aria-hidden="true">{arrow}</span>
+      <Arrow dir={under ? "down" : "up"} />
       {fmt(abs)}
     </span>
   );
@@ -234,17 +236,18 @@ function OvertimeCard({ board, salary }) {
       : { label: "Headroom", value: `${fmtHrs(remaining)} hrs`, tone: state === "warn" ? "warn" : "good" };
 
   // V34 sub-line copy. Salary PR 3 C2 - when salary is on, OT % is
-  // a share of HOURLY cost. 2026-08-26 polish round 2 item 3 - at
-  // exactly 0% OT the "watch above 0%" copy implies an active watch
-  // state that is not active; substitute a plain "no overtime"
-  // statement so the sub-line matches the ON TARGET pill.
+  // a share of HOURLY cost. 2026-08-27 polish sweep defect 3 - the
+  // prior "watch above 0% · off target above 8%" read as "zero
+  // overtime is the goal", which contradicts the homestand board's
+  // framing ("40-hour clock resets Monday - a packed week carries OT
+  // whatever you do"). Two surfaces on the same board disagreeing
+  // about whether OT is a failure. New line drops the "watch above X%"
+  // clause and states the framing directly.
   const boundsCopy = salary
     ? "share of hourly cost"
-    : pct === 0 && watch != null && alarm != null
-      ? `no overtime ${board?.kind === "multi_period" ? "in range" : "this period"} · off target above ${alarm}%`
-      : (watch != null && alarm != null
-        ? `watch above ${watch}% · off target above ${alarm}%`
-        : "of hours worked");
+    : alarm != null
+      ? `off target above ${alarm}% · some overtime is normal`
+      : "of hours worked";
 
   // 2026-08-26 - "OT workers" -> "Week workers OT" per owner. Same
   // figure (N with any OT / total distinct workers), clearer label.

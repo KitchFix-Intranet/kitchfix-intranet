@@ -18,6 +18,7 @@
 
 import { fmt$ } from "../lib/formatting.js";
 import HelpPop from "./HelpPop.js";
+import Arrow from "./Arrow.js";
 
 // PR-E - "Compared to last period" popover copy per kitchfix-help-copy
 // (section "Period board · other regions"). Verbatim; replaces the
@@ -51,27 +52,29 @@ const MEASURE_ORDER = [
 // V33 P0 - every strip value renders ABSOLUTE; the arrow carries
 // direction (V29-18). Prior fmt for delta$ passed a "-" sign alongside
 // the arrow, producing `▼ -$1.21` (double negative).
+// 2026-08-27 polish sweep - now returns `dir` ("down" | "up" | null)
+// for the shared Arrow component. Text side unchanged.
 function fmtDelta(now, prior, unit) {
-  if (now == null || prior == null) return { text: "—", arrow: null };
+  if (now == null || prior == null) return { text: "—", dir: null };
   if (unit === "delta$") {
     const d = now - prior;
-    if (Math.abs(d) < 0.005) return { text: `$${now.toFixed(2)}`, arrow: null };
-    return { text: `$${Math.abs(d).toFixed(2)}`, delta: d, arrow: d < 0 ? "▼" : "▲" };
+    if (Math.abs(d) < 0.005) return { text: `$${now.toFixed(2)}`, dir: null };
+    return { text: `$${Math.abs(d).toFixed(2)}`, delta: d, dir: d < 0 ? "down" : "up" };
   }
   if (unit === "points") {
     const d = now - prior;
-    if (Math.abs(d) < 0.05) return { text: `${Math.abs(d).toFixed(1)} pts`, arrow: null };
-    return { text: `${Math.abs(d).toFixed(1)} pts`, delta: d, arrow: d < 0 ? "▼" : "▲" };
+    if (Math.abs(d) < 0.05) return { text: `${Math.abs(d).toFixed(1)} pts`, dir: null };
+    return { text: `${Math.abs(d).toFixed(1)} pts`, delta: d, dir: d < 0 ? "down" : "up" };
   }
   if (unit === "workers") {
     const d = now - prior;
-    if (d === 0) return { text: "0", arrow: null };
-    return { text: `${Math.abs(d)}`, delta: d, arrow: d < 0 ? "▼" : "▲" };
+    if (d === 0) return { text: "0", dir: null };
+    return { text: `${Math.abs(d)}`, delta: d, dir: d < 0 ? "down" : "up" };
   }
   const base = prior === 0 ? 1 : prior;
   const dPct = ((now - prior) / base) * 100;
-  if (Math.abs(dPct) < 0.05) return { text: `${Math.abs(dPct).toFixed(1)}%`, arrow: null };
-  return { text: `${Math.abs(dPct).toFixed(1)}%`, delta: dPct, arrow: dPct < 0 ? "▼" : "▲" };
+  if (Math.abs(dPct) < 0.05) return { text: `${Math.abs(dPct).toFixed(1)}%`, dir: null };
+  return { text: `${Math.abs(dPct).toFixed(1)}%`, delta: dPct, dir: dPct < 0 ? "down" : "up" };
 }
 
 function toneFor(delta, betterDown) {
@@ -102,7 +105,7 @@ export function ComparisonStrip({ prior_period_comparison, salaryIncluded }) {
           <div key={it.key} className="kpi-cmp-item">
             <div className="kpi-cmp-item-lab">{it.label}</div>
             <div className={`kpi-cmp-item-val ${it.tone ? `kpi-cmp-item-val-${it.tone}` : ""}`}>
-              {it.delta.arrow && <span className="kpi-cmp-arr" aria-hidden="true">{it.delta.arrow}</span>}
+              <Arrow dir={it.delta.dir} className="kpi-cmp-arr" />
               {it.delta.text}
             </div>
           </div>

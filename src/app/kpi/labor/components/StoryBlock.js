@@ -12,6 +12,7 @@ import { useRef, useState } from "react";
 import { fmt$, fmtHrs, fmtDate } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 import HelpPop from "./HelpPop.js";
+import Arrow from "./Arrow.js";
 
 // PR-E - "Your budget for this period" and "Week by week" popovers
 // per kitchfix-help-copy.html (section "Period board · other regions").
@@ -378,9 +379,9 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   const captionValue = hasUnpriced ? `≥ ${fmt$(value)}` : fmt$(value);
   let statusLine;
   if (isClosed && w.delta_vs_original != null) {
-    const arrow = w.delta_sign === "under" ? "▼" : w.delta_sign === "over" ? "▲" : "•";
+    const dir = w.delta_sign === "under" ? "down" : w.delta_sign === "over" ? "up" : "flat";
     const cls = w.delta_sign === "under" ? "kpi-wb-d-good" : w.delta_sign === "over" ? "kpi-wb-d-bad" : "kpi-wb-d-mute";
-    statusLine = <span className={`kpi-wb-d ${cls}`}>{arrow} {fmt$(Math.abs(w.delta_vs_original))} {w.delta_sign}</span>;
+    statusLine = <span className={`kpi-wb-d ${cls}`}><Arrow dir={dir} />{fmt$(Math.abs(w.delta_vs_original))} {w.delta_sign}</span>;
   } else if (isInProgress) {
     // V42 REVISED (State 1 informational) - current week with drafts
     // reads "running · N hrs not yet approved". PR-C (owner ruling
@@ -587,7 +588,7 @@ function TierBTip({ tip }) {
   const isClosed = week.state === "closed";
   const isProg = week.state === "in_progress";
   const delta = budget ? actual - budget : null;
-  const arrow = delta == null ? "" : delta < 0 ? "▼" : "▲";
+  const dir = delta == null ? null : delta < 0 ? "down" : "up";
   const cls = delta == null ? "" : delta < 0 ? "kpi-wb-d-good" : "kpi-wb-d-bad";
   return (
     <div className="kpi-stripB-tip" style={{ left: `${tip.left}px`, top: `${tip.top}px` }}>
@@ -598,7 +599,7 @@ function TierBTip({ tip }) {
       )}
       {isProg && <span className="kpi-wb-d-mute">in progress</span>}
       {isClosed && delta != null && (
-        <span className={cls}>{arrow} {fmt$(Math.abs(delta))} {delta < 0 ? "under" : "over"}</span>
+        <span className={cls}><Arrow dir={dir} />{fmt$(Math.abs(delta))} {delta < 0 ? "under" : "over"}</span>
       )}
     </div>
   );
@@ -679,7 +680,7 @@ function TierCStrip({ board, budgetPeriods }) {
       <div className="kpi-axisC" aria-hidden="true">
         {periods.map(p => {
           const delta = p.budget != null && !p.in_progress ? p.spent - p.budget : null;
-          const arrow = delta == null ? null : delta < 0 ? "▼" : "▲";
+          const dir = delta == null ? null : delta < 0 ? "down" : "up";
           const dCls = delta == null ? "" : delta < 0 ? "kpi-wb-d-good" : "kpi-wb-d-bad";
           return (
             <div key={p.period_no} className="kpi-axisC-cell">
@@ -688,7 +689,7 @@ function TierCStrip({ board, budgetPeriods }) {
               {p.in_progress ? (
                 <div className="kpi-axisC-d kpi-wb-d-mute">in progress</div>
               ) : delta != null ? (
-                <div className={`kpi-axisC-d ${dCls}`}>{arrow} {fmtCompact(Math.abs(delta))}</div>
+                <div className={`kpi-axisC-d ${dCls}`}><Arrow dir={dir} />{fmtCompact(Math.abs(delta))}</div>
               ) : (
                 <div className="kpi-axisC-d kpi-wb-d-mute">no budget</div>
               )}

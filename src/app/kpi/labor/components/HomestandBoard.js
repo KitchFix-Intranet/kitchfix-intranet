@@ -27,16 +27,16 @@
 //      moves.
 
 import React, { useMemo, useState, useEffect } from "react";
-import { fmt$, fmtHrs, fmtDate, standWindow } from "../lib/formatting.js";
+import { fmt$, fmt$0, fmtHrs, fmtDate, standWindow } from "../lib/formatting.js";
 import { DayStripPlot, aggregatePerDay, isoRange } from "./DayStrip.js";
 import HelpPop from "./HelpPop.js";
-
-function fmt$0(v) {
-  return "$" + Math.round(Number(v || 0)).toLocaleString("en-US");
-}
+import Arrow from "./Arrow.js";
+// 2026-08-27 polish sweep - returns `dir` for the shared Arrow
+// component (see components/Arrow.js). Glyph + trailing space are the
+// component's concern; this helper just picks direction + tone.
 function arrow(v, goodWhenPositive = true) {
   const good = goodWhenPositive ? v >= 0 : v <= 0;
-  return { glyph: v >= 0 ? "▼" : "▲", cls: good ? "kpi-hs-good" : "kpi-hs-bad" };
+  return { dir: v >= 0 ? "down" : "up", cls: good ? "kpi-hs-good" : "kpi-hs-bad" };
 }
 
 // ─── Season rail card ───────────────────────────────────────────────
@@ -549,7 +549,7 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
                   </td>
                   <td className="num kpi-hs-strong">{fmt$0(h.actual || 0)}</td>
                   <td className={`num ${bankAfterArr.cls} kpi-hs-strong`}>
-                    {bankAfterArr.glyph} {fmt$0(Math.abs(bankAfter))}
+                    <Arrow dir={bankAfterArr.dir} />{fmt$0(Math.abs(bankAfter))}
                   </td>
                 </tr>
                 {employeesPending && (
@@ -714,7 +714,7 @@ function UpcomingCards({ stand, estimate, split, hourlyRate }) {
           {stand.night_games > 0 && <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">{stand.night_games} night game{stand.night_games === 1 ? "" : "s"}</div><div className="kpi-hs-fact-v">{fmt$0(nightTotal)}</div></div>}
           {stand.day_games > 0 && <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">{stand.day_games} day game{stand.day_games === 1 ? "" : "s"}</div><div className="kpi-hs-fact-v">{fmt$0(dayTotal)}</div></div>}
           {prepTotal > 0.5 && <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Prep day{workingDays - stand.game_days === 1 ? "" : "s"}</div><div className="kpi-hs-fact-v">{fmt$0(prepTotal)}</div></div>}
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Vs budget</div><div className={`kpi-hs-fact-v ${vsArr.cls}`}>{vsArr.glyph} {fmt$0(Math.abs(vsBudget))} {vsBudget >= 0 ? "under" : "over"}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Vs budget</div><div className={`kpi-hs-fact-v ${vsArr.cls}`}><Arrow dir={vsArr.dir} />{fmt$0(Math.abs(vsBudget))} {vsBudget >= 0 ? "under" : "over"}</div></div>
         </div>
         <div className="kpi-hs-covers"><b>Your own averages</b> this season, applied to the games on the calendar</div>
       </div>
@@ -819,7 +819,7 @@ function PlayedCards({ stand, split, employees, estimate, hourlyRate }) {
         </header>
         <div className={`kpi-hs-hero ${variance < 0 ? "kpi-hs-bad" : ""}`}>{hasUnapproved ? `≥ ${fmt$0(actual)}` : fmt$0(actual)}</div>
         <div className={`kpi-hs-sub ${variance >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>
-          <b>{vArr.glyph} {fmt$0(Math.abs(variance))} {variance >= 0 ? "under" : "over"} budget</b>
+          <b><Arrow dir={vArr.dir} />{fmt$0(Math.abs(variance))} {variance >= 0 ? "under" : "over"} budget</b>
         </div>
         {hasUnapproved && (
           <div className="kpi-hs-action-line" data-approvals-note>
