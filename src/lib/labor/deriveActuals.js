@@ -13,6 +13,7 @@
 
 import { DOLLAR_COVERAGE_FLOOR } from "../kpi/floors.js";
 import { dedupePaySegments } from "./paySegmentDedupe.js";
+import { APPROVAL_TRACKING_START } from "./approvalsTracking.js";
 //
 // Design decisions this file encodes (playbook v0.7):
 //
@@ -491,20 +492,35 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
     if (p.status === "DRAFT") {
       const dur = Number(p.time_entry_summary?.duration || 0);
       bucket.draft_entry_count++;
-      bucket.draft_hours += dur;
+      // Anomalies stay unfiltered - a broken punch on any date is
+      // still a broken punch. See approvalsTracking.js for the WHY:
+      // "this punch is broken" and "go approve it" are different asks,
+      // so a pre-cutoff week can show an anomaly chip while the
+      // Approvals card reads clean. Do not "fix" this inconsistency.
       if (!p.end_time) bucket.anomaly_no_clockout++;
       if (dur > 0 && dur < 1.0) bucket.anomaly_under_1h++;
       if (dur > 16.0) bucket.anomaly_over_16h++;
-      // v43-1 - min-fold start_time across DRAFT entries in the
-      // bucket. String compare on ISO datetimes is lexicographic-
-      // safe. Emitted as YYYY-MM-DD (start_time is ISO datetime,
-      // slice(0,10)) after the min. NULL when the bucket has no
-      // DRAFT entries - "we do not know an oldest", the correct
-      // absent state per owner ruling ("NULL means we do not know,
-      // not nothing is old").
+      // 2026-08-27 approval-tracking cutoff. Owner ruling: approval
+      // tracking began on APPROVAL_TRACKING_START; pre-cutoff DRAFT
+      // entries do not contribute to draft_hours or oldest_draft_start.
+      // Narrow filter - draft_entry_count and anomalies above are
+      // unaffected. slice(0,10) on ISO start_time lets us compare to
+      // the ISO date constant lexicographically (both are YYYY-MM-DD
+      // prefixes).
       const startIso = p.start_time || null;
-      if (startIso && (bucket.oldest_draft_start === null || startIso < bucket.oldest_draft_start)) {
-        bucket.oldest_draft_start = startIso;
+      const inTrackingWindow = startIso && startIso.slice(0, 10) >= APPROVAL_TRACKING_START;
+      if (inTrackingWindow) {
+        bucket.draft_hours += dur;
+        // v43-1 - min-fold start_time across DRAFT entries in the
+        // bucket. String compare on ISO datetimes is lexicographic-
+        // safe. Emitted as YYYY-MM-DD (start_time is ISO datetime,
+        // slice(0,10)) after the min. NULL when the bucket has no
+        // DRAFT entries - "we do not know an oldest", the correct
+        // absent state per owner ruling ("NULL means we do not know,
+        // not nothing is old").
+        if (bucket.oldest_draft_start === null || startIso < bucket.oldest_draft_start) {
+          bucket.oldest_draft_start = startIso;
+        }
       }
     } else if (p.status === "APPROVED") {
       const dur = Number(p.time_entry_summary?.duration || 0);

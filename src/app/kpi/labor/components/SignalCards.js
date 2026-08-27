@@ -14,6 +14,7 @@
 import { fmt$, fmtHrs } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 import HelpPop from "./HelpPop.js";
+import { APPROVAL_TRACKING_START_DISPLAY } from "@/lib/labor/approvalsTracking";
 
 // PR-E - card-level help copy per kitchfix-help-copy.html; 2026-08-26
 // rewritten from kitchfix-card-revisions.html. One body per signal
@@ -70,6 +71,8 @@ const APPROVALS_BODY = (
     <b>Oldest shift</b> is the one to watch. A shift sitting a month is a shift that may have missed its payroll.
     <br /><br />
     <b>Still costing</b> means approved but the money has not posted yet. It resolves on its own.
+    <br /><br />
+    We started tracking approvals on {APPROVAL_TRACKING_START_DISPLAY}. Anything before that is not counted here.
     <span className="kpi-hs-pop-foot"><b>Hourly only, always</b> - salaried staff do not clock in.</span>
   </>
 );
