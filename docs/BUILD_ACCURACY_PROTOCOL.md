@@ -39,15 +39,49 @@ A5 PROBE CANON: settle-frames after interactions; elementFromPoint = paint truth
 ## Shared
 S1 Every PR body records "gate findings: N" - the number both sides are working to
    drive toward zero on first pass.
-S2 STANDING RULE (added 2026-08-27, R14): every screenshot sweep runs BOTH URL shapes -
-   preset (`?preset=fytd`, `?preset=this_period`, `?preset=last_period`) AND explicit-dates
-   (`?start=YYYY-MM-DD&end=YYYY-MM-DD`). The two hydrate on different timing paths and
-   they diverge. On 2026-08-27 a TDZ ReferenceError in WeekChart (#847 -> #856) fired
-   100% on explicit-dates URLs and 0% on preset URLs; R13's acceptance sweep landed 9
-   preset screenshots that captured what they captured but proved nothing about
-   explicit-dates renders. Same P0 was live in production for a day, discovered while
-   smoke-testing R14. A companion finding surfaced the same day: R13's projection-outline
-   feature only renders on explicit-dates URLs - preset-URL users never see it - because
-   the same hydration difference short-circuits the projection code path on preset. The
-   rule is simple: preset and explicit-dates are two paint surfaces, sweep both, or
-   acceptance is one-surface only.
+
+**Pattern law (five instances and counting).** Something is measured in one context and
+assumed to hold in another. The check passes, the thing is broken, and the passing check
+is what stops anyone looking. Five instances on this project so far:
+
+  1. **PostgREST 1000-row cap.** Measured one page, extrapolated to all. Every full-set
+     read that didn't paginate silently truncated at 1000 rows for months.
+  2. **Four-slot chart truncation.** Measured one range width, extrapolated to all. Wider
+     ranges silently dropped units past slot four.
+  3. **Rippling walk at 16.5%.** Measured one filter value, extrapolated to all. Every
+     other filter shape was silently ignored by the endpoint.
+  4. **The report-only-pending view.** Measured in aggregate (~250ms), extrapolated to
+     filter-shape reads. Under the route's WHERE clause the same view ran 12,507ms and
+     500'd on ALL FYTD.
+  5. **`?preset=` in the URL.** Measured on the picker path (which writes explicit dates),
+     assumed to apply to preset URLs (which the page silently ignored). Preset URLs
+     rendered the current period regardless of what preset was specified; R14's 66
+     acceptance screenshots proved this by taking half of them of the wrong range and
+     confidently.
+
+The next instance is not far away. Before writing an acceptance check that measures
+context X, ask what OTHER contexts the same code has to hold under. If the check doesn't
+sweep those, either extend it or name what's untested. A check that only measures the
+happy path is a check that is measuring nothing.
+
+S2 STANDING RULE (added 2026-08-27, R14; corrected 2026-08-27 same day): every screenshot
+   sweep runs BOTH URL shapes - preset AND explicit-dates - AND **asserts they resolve to
+   the same range before comparing anything**. The two URL shapes are only comparable
+   if they hit the same fiscal range; a sweep that compares two different ranges is
+   worse than a sweep that tests one, because it produces confident evidence of nothing.
+
+   The R14 sweep as originally written caught features that render on one URL shape and
+   not the other (that alone found #856's TDZ). It completely missed the case where the
+   two shapes render entirely different ranges (which is what actually happened in R14 -
+   `?preset=fytd` was silently ignored and rendered P9 instead of FYTD). Half of R14's
+   66 screenshots were of the wrong range and nobody noticed until the projection-outline
+   follow-up (this PR) probed the underlying cause.
+
+   Procedure (both CC probe and Chat-Claude visual battery):
+     1. Resolve BOTH URL shapes.
+     2. Assert the API `range.start` / `range.end` returned for each match, byte for byte.
+     3. If they differ, stop and report the divergence; do NOT compare visual output.
+     4. Only if the two ranges match may the visual comparison be considered evidence.
+
+   References: 5th instance of the pattern law above. #856 (TDZ), R14 (#857), the
+   `?preset=` silent-ignore case that this PR closes.

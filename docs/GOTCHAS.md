@@ -905,6 +905,17 @@ The third amend added `WITH label_to_account AS MATERIALIZED` - a Postgres 12+ h
 
 **Fourth instance of the measurement half of this lesson** on this project: PostgREST 1000-row cap (measured one page, extrapolated to all), four-slot chart (measured one range, extrapolated to all), walk at 16.5% (measured one filter value, extrapolated to all), and now this - measured a view in aggregate, extrapolated to filter-shape reads. The pattern: measure ONE context, assume ANOTHER. The plan-reordering lesson is new, but it belongs to the same family: fixing one part in isolation and assuming the rest holds.
 
+### A URL parameter that looks like it works and is silently ignored
+`src/app/kpi/purchasing/page.js` read `account`, `start`, and `end` from the URL search params, and nothing else. When `?preset=<kind>` was in the URL with no explicit `start`/`end`, the `preset` parameter was completely ignored, and the code fell back to `defaultStart` / `defaultEnd` - which are the CURRENT PERIOD's dates. So `?preset=fytd` rendered P9 data. `?preset=last_4wk` rendered P9 data. Every preset URL rendered the current period regardless of what the URL asked for.
+
+This was invisible for months for one reason: **the `RangeMenu` picker resolves the preset client-side and calls `router.replace` with `?start=X&end=Y`, not `?preset=X`.** No real user navigating via the picker ever landed on a preset URL. The URL parameter was a leftover pattern that only external agents (bookmarks, hand-crafted URLs, probe sweeps) actually exercised - and the ones that did got the current period silently instead of an error.
+
+The gap surfaced during the R13 -> R14 arc when an S2-mandated dual-URL screenshot sweep captured `?preset=fytd` screenshots that showed P9 data while `?start=<FYTD>&end=<today>` screenshots showed FYTD data. **R14's PR body had 66 screenshots as evidence; half of them were of the wrong range**, and the acceptance battery signed off on all of them.
+
+**Rule:** every URL parameter the page reads has a schema; every parameter it does NOT read should either 404, warn, or be canonicalized on mount (`router.replace` to the shape the page actually understands). Silent fallback to a default is what makes a broken URL look like a working one. The fix landed 2026-08-27 in the same PR that added S2's dual-URL sanity check.
+
+Related: the SSR hydration mismatch on every preset URL (`Hydration failed because the server rendered text didn't match the client`) is a separate defect - `today = new Date()` differs SSR vs CSR - and was NOT resolved by the preset canonicalization. Independent.
+
 ---
 
 ## Captain's log
