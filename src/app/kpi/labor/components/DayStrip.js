@@ -13,7 +13,7 @@
 // verbatim; the client never restates or reformats it (spec).
 
 import { useEffect, useRef, useState } from "react";
-import { fmt$, fmtDate } from "../lib/formatting.js";
+import { fmt$, fmt$0, fmtDate } from "../lib/formatting.js";
 import {
   isoRange,
   aggregatePerDay,
@@ -206,12 +206,18 @@ function DayBar({
       <div className="kpi-wb-cap">
         <b className={`kpi-wb-cap-value ${isFutureGame ? "kpi-hs-day-ghost-value" : ""}`}>
           {(() => {
+            // 2026-08-27 polish sweep - whole-dollar formatter on the
+            // day strip. Owner ruling: day-level precision to the
+            // cent is not a decision an operator makes, and $1,508.65
+            // (55px) overflowed 14-day columns (39.4px) while $1,509
+            // fits. STL - MO has 21-day stands; whole dollars remove
+            // the class rather than reacting to width.
             if (isFutureGame) {
               const est = estimateByDate?.get(day.workDate);
-              return est != null && est > 0 ? `~${fmt$(est)}` : "~$-";
+              return est != null && est > 0 ? `~${fmt$0(est)}` : "~$-";
             }
             if (isFuture) return "-";
-            return fmt$(amount);
+            return fmt$0(amount);
           })()}
         </b>
         {caption != null && (

@@ -8,9 +8,26 @@ export function fmt$(v) {
   return "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// 2026-08-27 polish sweep - whole-dollar formatter. Promoted from the
+// local helper in HomestandBoard.js so DayStrip.js + any future caller
+// can drop cents at narrow densities. Round before formatting so
+// negative zero displays as "$0" not "-$0". Also used in the day
+// strip caption per owner ruling: day-level precision to the cent is
+// not a decision an operator makes, and whole dollars fits in 39px
+// where "$1,508.65" (55px) overflowed a 14-day stand's column.
+export function fmt$0(v) {
+  if (v == null) return "—";
+  return "$" + Math.round(Number(v)).toLocaleString("en-US");
+}
+
+// 2026-08-27 polish sweep - hours formatter now carries a thousands
+// separator so 2643.70 renders "2,643.70". Prior state used
+// .toFixed(2) alone, so hours read differently from dollars on the
+// same board. toLocaleString with min/max=2 matches fmt$'s decimal
+// contract.
 export function fmtHrs(v) {
   if (v == null) return "—";
-  return Number(v).toFixed(2);
+  return Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // B11: data dates render MM/DD/YY

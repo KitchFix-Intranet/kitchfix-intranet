@@ -1833,7 +1833,7 @@
   border-radius: 6px;
   padding: var(--kpi-sp-2) var(--kpi-sp-3);
   margin-bottom: var(--kpi-sp-2);
-  font-size: 13px;
+  font-size: var(--kpi-t-body);
   line-height: 1.4;
 }
 
@@ -2752,6 +2752,14 @@
 /* V30-1 R3 - arrow is text inside a number; inherits the number's size
    and weight. */
 .kpi-sig-arrfig-arrow { font-size: 1em; }
+
+/* 2026-08-27 polish sweep - every arrow across the labor board
+   renders through <Arrow /> (components/Arrow.js). The component
+   applies .kpi-arr plus a caller-supplied class (e.g. .kpi-cmp-arr).
+   Trailing space is a literal space character inside the span so
+   line-wrap keeps the arrow with its number. No margin here - the
+   inline space is what carries the gap. */
+.kpi-arr { display: inline; }
 .kpi-sig-arrfig-good  { color: var(--green-700); }
 .kpi-sig-arrfig-bad   { color: var(--red-700); }
 
@@ -3784,7 +3792,7 @@
    media guard. */
 .kpi-wb-dates-extra {
   display: block;
-  font-size: 11px;
+  font-size: var(--kpi-t-meta);
   line-height: 1.15;
   color: var(--text-subtle);
   margin-top: 1px;

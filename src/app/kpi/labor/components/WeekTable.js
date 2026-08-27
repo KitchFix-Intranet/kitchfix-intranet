@@ -27,6 +27,7 @@ import { flagForV42State } from "../lib/weekFlag.js";
 // probe can synthesize actuals + assert without JSX compilation.
 import { buildMemberByWeekAndAcct } from "../lib/weekTableModels.js";
 import HelpPop from "./HelpPop.js";
+import Arrow from "./Arrow.js";
 
 // PR-B (owner ruling 2026-08-24) - Comfortable | Dense toggle removed
 // entirely, dashboard-wide. Comfortable becomes the only mode; the
@@ -164,7 +165,7 @@ function VsBudget({ spent, budget, mode }) {
   // still shows the true dollar figure.
   const overPct = over ? Math.min(20, (overageDollars / budgetOr1) * 80) : 0;
   const delta = Math.round(spent - budget);
-  const sign = delta < 0 ? "▼" : delta > 0 ? "▲" : "—";
+  const dir = delta < 0 ? "down" : delta > 0 ? "up" : "dash";
   const dCls = delta < 0 ? "kpi-vb-d-good" : delta > 0 ? "kpi-vb-d-bad" : "kpi-vb-d-neut";
   return (
     <span className="kpi-vb">
@@ -173,7 +174,7 @@ function VsBudget({ spent, budget, mode }) {
         {over && <i className="kpi-vb-over" style={{ left: "80%", width: `${overPct}%` }} />}
         <span className="kpi-vb-tick" />
       </span>
-      <span className={`kpi-vb-d ${dCls}`}>{sign} ${Math.abs(delta).toLocaleString("en-US")}</span>
+      <span className={`kpi-vb-d ${dCls}`}><Arrow dir={dir} />${Math.abs(delta).toLocaleString("en-US")}</span>
     </span>
   );
 }
