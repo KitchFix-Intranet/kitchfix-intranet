@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 test('clicking a vendor card opens detail view', async ({ page }) => {
   await page.goto('/ops');
+  await assertBoardLoaded(page, 'button:has-text("Vendors")', { context: 'ops hub vendors tab' });
 
   // Navigate into the Vendor Portal and pick the first account (same setup as
   // list-loads.spec.ts — class selectors required for the dynamic-name elements).

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 /**
  * SC homestand-detail render smoke (M-4a rider #1).
@@ -187,6 +188,7 @@ test('homestand detail surface mounts without hook-order error', async ({ page }
     waitUntil: 'networkidle',
     timeout: 15_000,
   });
+  await assertBoardLoaded(page, '.sc-closeout', { context: `SC homestand ${TEST_HS_KEY} on ${ACCOUNT}` });
 
   const bodyText = await page.evaluate(() => document.body.innerText);
   const html = await page.content();

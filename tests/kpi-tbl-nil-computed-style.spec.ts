@@ -23,6 +23,7 @@
 // the total row, rgb(255,255,255) weight 800.
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 const PORTFOLIO_ACCOUNT = 'ALL';
 const RANGE_START = '2025-12-29';
@@ -36,7 +37,7 @@ const EXPECTED_TOTAL_RGB = 'rgb(255, 255, 255)';
 async function openPortfolioBoard(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/kpi/labor?account=${encodeURIComponent(PORTFOLIO_ACCOUNT)}&start=${RANGE_START}&end=${RANGE_END}`);
-  await page.waitForSelector('.kpi-tbl', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-tbl', { context: `portfolio table on ${PORTFOLIO_ACCOUNT}` });
 }
 
 test.setTimeout(90_000);

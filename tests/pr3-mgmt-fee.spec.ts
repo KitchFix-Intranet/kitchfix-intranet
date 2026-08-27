@@ -22,6 +22,7 @@
 
 import { test, expect } from "@playwright/test";
 import path from "node:path";
+import { assertBoardLoaded } from "./lib/board-loaded";
 
 const OUT = path.resolve(__dirname, "..", "playwright-report", "pr3-mgmt-fee");
 test.use({ baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3226" });
@@ -35,6 +36,7 @@ const AT_RISK_REGRESSION = ["TBR - FL", "CIN - KY"];
 async function loadBoard(page, account) {
   const q = `?account=${encodeURIComponent(account)}&start=${FYTD_START}&end=${FYTD_END}`;
   await page.goto(`/kpi/purchasing${q}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator(".kpi-p-card").first()).toBeVisible();
   await page.waitForTimeout(400);

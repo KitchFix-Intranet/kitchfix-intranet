@@ -11,6 +11,7 @@
 // client to read sc_service_prices before and after the failure.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 import { createClient } from '@supabase/supabase-js';
 import { config as loadEnv } from 'dotenv';
 import { existsSync } from 'node:fs';
@@ -30,7 +31,7 @@ const ACCOUNT = 'TXR - AZ';
 async function openAdmin(page: any, width = 1440) {
   await page.setViewportSize({ width, height: 1080 });
   await page.goto('/service-calendar?view=admin');
-  await page.waitForSelector('.scav', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.scav', { context: 'sc admin' });
   await page.waitForTimeout(400);
 }
 

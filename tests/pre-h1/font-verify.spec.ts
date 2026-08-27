@@ -13,11 +13,12 @@
 // a week that is both unfinalized AND complete.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const TXR = 'TXR - AZ';
 
 async function clickInteractive(page: any) {
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(400);
   const tiles = page.locator('.sc-workspace-grid-cell .sc-daysq--interactive');
@@ -40,7 +41,7 @@ test.setTimeout(120_000);
 test('rail numeric fields all resolve Inter, no mono', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForTimeout(1200);
 
   const opened = await clickInteractive(page);
@@ -65,7 +66,7 @@ test('rail numeric fields all resolve Inter, no mono', async ({ page }) => {
 test('finalize overlay Pre-tax total resolves Inter, no mono', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForTimeout(1200);
 
   // CSS-only probe: inject a span with the FinalizeOverlay's numeric
@@ -112,7 +113,7 @@ test('finalize overlay Pre-tax total resolves Inter, no mono', async ({ page }) 
 test('row-amount right-edges align to a single pixel', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForTimeout(1200);
   const opened = await clickInteractive(page);
   test.skip(!opened, 'could not open a day modal');
@@ -134,7 +135,7 @@ test('row-amount right-edges align to a single pixel', async ({ page }) => {
 test('screenshot the finalize overlay in place for side-by-side', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForTimeout(1200);
   // Inject the whole overlay body into the live SC page so a
   // screenshot captures the actual rendered .sc-finalize-num next to

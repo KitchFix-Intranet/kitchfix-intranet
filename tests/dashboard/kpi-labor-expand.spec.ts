@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 // V40 hotfix coverage. PR #720 shipped a ReferenceError: displayRate
 // is not defined that white-screened the page whenever a band expanded
@@ -23,6 +24,7 @@ test('kpi/labor: expanding a band and a week does not crash', async ({ page }) =
   const acct = 'CIN - AZ';
   const url = `/kpi/labor?account=${encodeURIComponent(acct)}&start=2026-07-13&end=2026-08-09`;
   await page.goto(url);
+  await assertBoardLoaded(page, 'button.kpi-tbl-bandbtn', { context: `kpi labor on ${acct}`, timeoutMs: 20_000 });
 
   // Board renders when at least one band button is present. .kpi-tbl-bandbtn
   // is the FragmentRows band-header button (WeekTable.js:755).

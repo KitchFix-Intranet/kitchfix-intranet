@@ -13,6 +13,7 @@
 // Any other combo defaults to scope=year (no finalize row rendered).
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 // 2026-08-14 falls in Period 9 Week 1 for every per-meal + fee + MLB
 // account (verified via sc_day_metadata probe). Aug 2026 straddles two
@@ -55,7 +56,7 @@ for (const ctx of CONTEXTS) {
         await page.goto(accountUrl(scope, ctx.account));
         // Wait for the workspace grid to hydrate. The grid is the
         // scope-agnostic container for both period + month workspaces.
-        await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+        await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
         await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
         // Extra beat for the sc-finalize-states hydration effect.
         await page.waitForTimeout(1500);
@@ -85,7 +86,7 @@ test('E4: overlap tag renders with correct count in month view (Jul + Sep)', asy
   //   Row 6: Mon Aug 31 - Sun Sep 6  -> 6 days in September
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`/service-calendar?account=${encodeURIComponent('TXR - AZ')}&month=${BOUNDARY_MONTH}`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(1500);
 
@@ -108,7 +109,7 @@ test('E3: ghost + other-month + no-service + needs-entry cell classes render', a
   // service state.
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`/service-calendar?account=${encodeURIComponent('TXR - AZ')}&month=${BOUNDARY_MONTH}`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(1500);
 

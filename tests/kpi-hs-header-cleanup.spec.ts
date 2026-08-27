@@ -17,6 +17,7 @@
 // it counted. Verified separately in the print block.
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 const ACCOUNT_MLB = 'CIN - OH';    // has homestand view
 const ACCOUNT_PDC = 'CIN - AZ';    // period-only, no homestand tab (kept as belt-and-suspenders)
@@ -25,9 +26,10 @@ async function openLabor(page: Page, extraParams: Record<string, string> = {}) {
   await page.setViewportSize({ width: 1440, height: 900 });
   const params = new URLSearchParams({ account: ACCOUNT_MLB, ...extraParams });
   await page.goto(`/kpi/labor?${params}`);
-  await page.waitForSelector('.kpi-cmd', { timeout: 30_000 });
-  // Wait for either the period board or the homestand board to be present.
-  await page.waitForSelector('.kpi-board, .kpi-hs-board', { timeout: 30_000 });
+  // Board root - either period board or homestand board. Same
+  // OR-selector pattern kpi-future-range-state.spec.ts uses;
+  // assertBoardLoaded races auth-failure markers first.
+  await assertBoardLoaded(page, '.kpi-board, .kpi-hs-board', { context: `labor on ${ACCOUNT_MLB}` });
 }
 
 test.setTimeout(90_000);
