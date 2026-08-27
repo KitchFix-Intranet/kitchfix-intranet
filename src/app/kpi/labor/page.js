@@ -525,6 +525,23 @@ export default function KpiLaborPage() {
 
   const freshness = data?.derive_freshness;
   const freshnessH = hoursSinceISO(freshness?.last_walk_at);
+  // 2026-08-27 staleness banner. Server ships table-wide max(derived_at)
+  // for labor_actuals (weekly) + labor_actuals_daily (daily). If either
+  // is > 30h old the banner fires, naming the stale table + timestamp.
+  // 30h clears a normal nightly cadence without flagging a late-running
+  // job (owner ruling). The chef reading the board is a different
+  // audience from whoever watches the Slack channel; both surfaces
+  // land in the same PR because a nightly job that fails silently
+  // misled Kevin for six days on the current incident.
+  const staleness = useMemo(() => {
+    const STALE_H = 30;
+    const w = hoursSinceISO(freshness?.last_weekly_derive_at);
+    const d = hoursSinceISO(freshness?.last_daily_derive_at);
+    const stale = [];
+    if (w != null && w >= STALE_H) stale.push({ table: "labor_actuals",       hoursOld: w, at: freshness.last_weekly_derive_at });
+    if (d != null && d >= STALE_H) stale.push({ table: "labor_actuals_daily", hoursOld: d, at: freshness.last_daily_derive_at });
+    return stale.length > 0 ? stale : null;
+  }, [freshness?.last_weekly_derive_at, freshness?.last_daily_derive_at]);
 
   const workerRoster = useMemo(() => {
     if (!data?.actuals) return [];
@@ -876,6 +893,24 @@ export default function KpiLaborPage() {
   // ── Middle content: board (sentence + story) then WeekTable + 9 states ──
   const mainContent = (
     <>
+      {/* 2026-08-27 staleness banner. Fires when either the weekly or
+          daily derive is > 30h stale, naming the stale table + last
+          derive time. Amber tone matches other warn surfaces on this
+          page. This is the "am I looking at fresh data" surface; the
+          rippling-sync workflow's Slack webhook is the "did the
+          pipeline run" surface. A chef making a staffing call on stale
+          data is the real risk this catches. */}
+      {staleness && (
+        <div className="kpi-stale-banner" role="status" aria-live="polite" data-stale-banner>
+          <b>Numbers may be stale.</b>{" "}
+          {staleness.map((s, i) => (
+            <span key={s.table}>
+              {i > 0 && " · "}
+              {s.table} last rebuilt {fmtTimestamp(s.at)} ({Math.round(s.hoursOld)}h ago)
+            </span>
+          ))}
+        </div>
+      )}
       {/* homestand PR-2 - view tabs. Rendered only for MLB accounts
           (data.homestands is non-empty). Absent, not disabled, on
           non-MLB accounts per owner ruling 2026-08-21. */}
