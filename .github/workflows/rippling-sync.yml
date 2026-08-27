@@ -157,14 +157,26 @@ jobs:
           node scripts/derive_salary_actuals.mjs --source=${SOURCE} --window=trailing8
 
       # People roster is one clean nightly snapshot derived from the
-      # workers + users walks the sync step just landed. Explicit
-      # `if: success()` per the same silent-gap posture as labor.
+      # workers + users walks the sync step just landed.
+      #
+      # 2026-08-27 decoupling (owner ruling): gate on
+      # `steps.sync.outcome == 'success'` NOT `success()`. Prior state:
+      # `if: success()` chained People-derive behind every labor
+      # derive. When labor derive hit a Postgres statement timeout on
+      # Aug 22, People derive stopped running - directory went stale
+      # for six days because a labor query got slow. The two concerns
+      # are unrelated: People derive reads workers + users walks only,
+      # never labor tables. The coupling was the design flaw; the
+      # timeout just exposed it. Keep this even after the timeout is
+      # fixed - a directory should not go stale because an unrelated
+      # derive is broken.
+      #
       # Owner columns (is_site_leader / site_leader_note) are
       # preserved by the derive's explicit upsert column list; probe
       # P3 gates that contract on every run.
       - name: Derive people
         id: derive_people
-        if: success() && (inputs.dry_run || 'false') != 'true'
+        if: steps.sync.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
           echo "derive_people --source=${SOURCE}"
@@ -173,9 +185,12 @@ jobs:
       # P1..P6 acceptance. FAIL fails the job. The probe itself runs
       # the derive a second time (P3 dynamic + P6 idempotency); the
       # earlier Derive people step is the first run.
+      #
+      # 2026-08-27: also gated on sync only, matches Derive people.
+      # Probe should run whenever the derive it validates ran.
       - name: People probes
         id: probe_people
-        if: success() && (inputs.dry_run || 'false') != 'true'
+        if: steps.derive_people.outcome == 'success' && (inputs.dry_run || 'false') != 'true'
         run: |
           echo "probe_people"
           node scripts/probes/_probe_people.mjs
