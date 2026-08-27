@@ -745,7 +745,7 @@ function UpcomingCards({ stand, estimate, split, hourlyRate }) {
         <div className="kpi-hs-sub">{stand.peak_games_in_week} game{stand.peak_games_in_week === 1 ? "" : "s"} fall in one Mon-Sun week</div>
         <div className="kpi-hs-facts">
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Roughly</div><div className={`kpi-hs-fact-v ${expectedOtPct > 20 ? "kpi-hs-bad" : expectedOtPct > 5 ? "kpi-hs-mid" : ""}`}>{fmt$0(expectedOtDollars)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Stands like this</div><div className="kpi-hs-fact-v">{norm[0].toFixed(0)} – {norm[1].toFixed(0)}%</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Similar stands</div><div className="kpi-hs-fact-v">{norm[0].toFixed(0)} – {norm[1].toFixed(0)}%</div></div>
         </div>
         <div className="kpi-hs-covers"><b>The 40-hour clock resets Monday</b> - a packed week carries OT whatever you do</div>
       </div>
@@ -875,7 +875,7 @@ function PlayedCards({ stand, split, employees, estimate, hourlyRate }) {
         </div>
         <div className="kpi-hs-facts">
           <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">OT cost</div><div className={`kpi-hs-fact-v ${actualOtPct > 20 ? "kpi-hs-bad" : actualOtPct > 5 ? "kpi-hs-mid" : ""}`}>{fmt$0(otCost)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Stands like this</div><div className="kpi-hs-fact-v">{norm[0].toFixed(0)} – {norm[1].toFixed(0)}%</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Similar stands</div><div className="kpi-hs-fact-v">{norm[0].toFixed(0)} – {norm[1].toFixed(0)}%</div></div>
         </div>
       </div>
     </div>

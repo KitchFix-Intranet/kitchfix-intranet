@@ -245,11 +245,15 @@
   overflow: hidden;
 }
 .kpi-cmd-title-brand { flex: 0 0 auto; white-space: nowrap; }
+/* 2026-08-27 1280 floor sweep - account name is IDENTITY on a
+   multi-account board; a clipped "CIN - OH" is not a UI defect but
+   a real risk of reading the wrong site's numbers. Owner ruling:
+   never truncate. flex-shrink dropped so sibling elements yield
+   space instead; longest MLB key (TXR - TX - H, 12 chars) fits at
+   1280 with headroom. */
 .kpi-cmd-title-acct {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .kpi-cmd-dot { color: #5C769A; margin: 0 var(--kpi-sp-2); font-weight: 400; flex: none; }
@@ -1020,12 +1024,15 @@
 .kpi-rmenu-label-dates {
   /* 2026-08-24 contrast sweep: hardcoded #B9C6DA measured 1.65:1 on
      white. De-hardcoded to the shared subtle text token; a raw hex
-     in a themed system is how the next drift starts. */
+     in a themed system is how the next drift starts.
+     2026-08-27 1280 floor sweep - range chip is the second identity
+     on the command bar ("07/13/26 - 08/06/26" 116px into 91px at
+     1280). Owner ruling: never truncate. Same treatment as the
+     account name - flex-shrink dropped, ellipsis dropped; the chip
+     takes its natural width and sibling elements yield room. */
   color: var(--text-subtle);
   min-width: 0;
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 .kpi-rmenu-pop {
@@ -2228,9 +2235,16 @@
   white-space: nowrap; font-weight: 700;
 }
 .kpi-wb-cap-roll { color: var(--navy-700); }
+/* 2026-08-27 1280 floor sweep - week-strip caption may wrap. The
+   "week range + state" line ("08/03/26 - 09/28/26 · in progress")
+   overflowed 135px containers at 1280 by 10px; nowrap made every
+   text-overflow: clip cut characters. Wrap to two lines instead so
+   the state suffix stays legible. Day-strip caption keeps its own
+   nowrap rule at .kpi-day-range-strip .kpi-wb-dates (higher-specificity
+   override further down this file). */
 .kpi-wb-dates {
   display: block; font-size: var(--kpi-t-label); color: var(--text-subtle);
-  white-space: nowrap; margin-top: 1px;
+  margin-top: 1px;
 }
 .kpi-wb-d {
   display: flex; justify-content: center; align-items: center;
@@ -2534,10 +2548,17 @@
 .kpi-sig-fact { min-width: 0; display: flex; flex-direction: column; }
 /* V34 - fact LABELS drop from 800 to 600. Half the board was 800
    weight; this is most of it. */
+/* 2026-08-27 1280 floor sweep - fact labels wrap to a second line
+   rather than clip. "Week workers OT" (97px) overflowed the 94px
+   column at 1280; every card label is short enough that two lines
+   is the ceiling. Parent .kpi-sig-facts is a 2-col grid inside a
+   card that shares a row with four siblings on .kpi-hs-signals -
+   the grid's default align-items: stretch keeps card heights equal
+   when one card grows a line. Parity holds without an explicit
+   min-height reservation. */
 .kpi-sig-fact-lab {
   font-size: var(--kpi-t-label); font-weight: 600; letter-spacing: 0.06em;
   color: var(--text-subtle); text-transform: uppercase;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* V34 - fact VALUES drop from medium/800/n-900 to body/700/n-800.
    Tier 2 = body size. Signed values switch on -good / -warn / -bad. */
@@ -2651,20 +2672,26 @@
 /* V34 - each item lays label + value out on ONE line, centred. Prior
    `align-items: baseline` still stacked in reality because the two
    children were separate rows underneath a wider flex-column. */
+/* 2026-08-27 1280 floor sweep - overflow: hidden removed so wrapped
+   labels are visible; parent grid clips columns on its own. */
 .kpi-cmp-item {
   min-width: 0;
   padding: 0 var(--kpi-sp-3);
   border-right: 1px solid var(--n-200);
   display: flex; align-items: center; gap: var(--kpi-sp-2);
   height: 100%;
-  overflow: hidden;
 }
 .kpi-cmp-item:last-child { border-right: 0; }
-/* V34 - item label weight 600, matches the fact-label tier. */
+/* V34 - item label weight 600, matches the fact-label tier.
+   2026-08-27 1280 floor sweep - 5 of 6 comparison labels clipped
+   at 1280 ("Cost / worker" 80px into 55px). Owner ruling: fix the
+   container, not the strings. Labels wrap to a second line; parent
+   .kpi-cmp-items grid centers items so the row height grows to the
+   tallest and other items stay vertically centered - visual parity
+   without an explicit min-height reservation. */
 .kpi-cmp-item-lab {
   font-size: var(--kpi-t-label); color: var(--text-subtle); font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* V34 - value matches fact-value tier: body / 700 / n-800. Tone
    classes below switch to green / red when signed. */
@@ -3922,11 +3949,15 @@
   border-top: 1px solid var(--n-200);
 }
 .kpi-hs-fact { min-width: 0; }
+/* 2026-08-27 1280 floor sweep - homestand-card fact labels wrap
+   rather than clip. Similar treatment to .kpi-sig-fact-lab; parent
+   .kpi-hs-facts is a 2-col grid inside a card that shares a row
+   with siblings on .kpi-hs-signals (grid, align-items: stretch).
+   Card heights match to the tallest even when one label wraps. */
 .kpi-hs-fact-k {
   font-size: var(--kpi-t-label); font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--text-subtle);
-  white-space: nowrap;
 }
 /* HS FB1 PR-2 - fact value role: --kpi-t-body / weight 700. Matches
    .kpi-sig-fact-val L2500 (V34 dropped values from 800 to 700). */
