@@ -129,6 +129,7 @@ import {
   PASS_THROUGH_ACCOUNTS,
   PURCHASING_ENVELOPE_EXCLUSIONS,
   costModelFor,
+  MANAGEMENT_FEE_GOALS,
 } from "@/lib/accountModels";
 // Precedence: API over report between sources, newest over older
 // within report.  loadReportOnlyPending reads the migration-8 view;
@@ -1738,28 +1739,78 @@ export async function GET(request) {
         spent:     Math.round((trendByPeriod.get(p) || 0) * 100) / 100,
       });
     }
-    // Fun Money at STL - FL. spentForGl + budgetForRange are the same
-    // primitives the pass_through-suppressed categories[] loop reads
-    // above (lines ~1211-1247); the values are truthful, only the
-    // variance rendering was suppressed. Compute variance here so the
-    // FunMoneyCard reads a real verdict.
-    let fun_money = null;
-    if (account === "STL - FL") {
-      const fmSpent  = spentForGl("3200.2");
-      const fmBudget = budgetForRange({ byLine: budgetsByLine, glLineCode: "3200.2", members, start, end });
-      fun_money = {
-        gl_line_code: "3200.2",
-        label:        "Fun Money",
-        sub:          "Resale food · 3200.2",
-        budget:       Math.round(fmBudget * 100) / 100,
-        spent:        Math.round(fmSpent  * 100) / 100,
-        variance:     Math.round((fmSpent - fmBudget) * 100) / 100,
-      };
+    // R14 - fun money for all three pass-through accounts (was STL-FL
+    // only per Kevin ruling 2026-08-21).  The R14 combined card puts
+    // fun money on the same statement as reimbursable when spend > 0,
+    // so the hero label can adapt.  All three accounts read $0 today
+    // at 3200.2; the synthetic-value probe covers the label-swap
+    // behaviour without waiting for real spend to appear.
+    const fmSpent  = spentForGl("3200.2");
+    const fmBudget = budgetForRange({ byLine: budgetsByLine, glLineCode: "3200.2", members, start, end });
+    const fun_money = {
+      gl_line_code: "3200.2",
+      label:        "Fun Money",
+      sub:          "Resale food · 3200.2",
+      budget:       Math.round(fmBudget * 100) / 100,
+      spent:        Math.round(fmSpent  * 100) / 100,
+      variance:     Math.round((fmSpent - fmBudget) * 100) / 100,
+    };
+    // R14 - reimbursable category breakdown for the RANGE (not FYTD).
+    // Each row carries name + gl_line_code + spent.  Names come from
+    // billcom_ref_accounts (chart of accounts snapshot, 1,072 rows).
+    // A 13xx code missing from ref_accounts (unlikely) will render as
+    // the code alone - resolver rule, not a route decision.
+    //
+    // Fetch only the 13xx codes that actually appear in this range's
+    // categories[].  For an ALL FYTD read this is at most ~20 codes,
+    // one small in-list query.
+    const reimb_categories_raw = [];
+    for (const gl of orderedGl) {
+      if (!String(gl).startsWith("13")) continue;
+      const spent = spentForGl(gl);
+      if (spent <= 0.005) continue;   // don't ship zero rows
+      reimb_categories_raw.push({ gl_line_code: gl, spent: Math.round(spent * 100) / 100 });
+    }
+    const glCodesToName = reimb_categories_raw.map(r => r.gl_line_code);
+    let namesByCode = new Map();
+    if (glCodesToName.length > 0) {
+      const nq = await supa.from("billcom_ref_accounts")
+        .select("account_number, name")
+        .in("account_number", glCodesToName);
+      if (nq.error) return NextResponse.json(safeError("billcom_ref_accounts", nq.error), { status: 500 });
+      for (const r of nq.data || []) namesByCode.set(String(r.account_number), r.name || null);
+    }
+    const reimb_categories = reimb_categories_raw.map(r => ({
+      gl_line_code: r.gl_line_code,
+      name:         namesByCode.get(r.gl_line_code) || null,
+      spent:        r.spent,
+    }));
+    // R14 - crossed-period: the first period in periods_trend where
+    // cumulative reimbursable spend exceeded the annual goal.  Null
+    // when the account has not crossed yet (STL - FL currently).
+    // Goals live in accountModels.js client-side; the route ships the
+    // trend + FYTD sum so the client resolver can compute crossing.
+    // We compute crossing here too so the sentence has one source.
+    const goalRow = MANAGEMENT_FEE_GOALS[account] || null;
+    let crossed_period_no = null;
+    if (goalRow && goalRow.annual > 0) {
+      let cum = 0;
+      for (const t of periods_trend) {
+        cum += Number(t.spent || 0);
+        if (cum >= goalRow.annual) { crossed_period_no = t.period_no; break; }
+      }
     }
     mgmt_fee = {
       goal_fytd_spent: Math.round(goalFytdSpent * 100) / 100,
       periods_trend,
       fun_money,
+      // R14 additions - client_label + tax_caveat_state read off
+      // accountModels.js so a single source of truth drives the
+      // hero label + tax caveat.
+      client_label:      goalRow?.clientLabel || account,
+      tax_caveat_state:  goalRow?.taxCaveatState || null,
+      reimb_categories,
+      crossed_period_no,
     };
   }
 
