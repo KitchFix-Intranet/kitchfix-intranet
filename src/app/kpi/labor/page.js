@@ -18,6 +18,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 // V-role-gates - OPS_LEADERSHIP_EMAILS retired here; server decides.
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine, standWindow } from "./lib/formatting";
+import { computeStaleness } from "@/lib/labor/staleness";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
@@ -525,23 +526,15 @@ export default function KpiLaborPage() {
 
   const freshness = data?.derive_freshness;
   const freshnessH = hoursSinceISO(freshness?.last_walk_at);
-  // 2026-08-27 staleness banner. Server ships table-wide max(derived_at)
-  // for labor_actuals (weekly) + labor_actuals_daily (daily). If either
-  // is > 30h old the banner fires, naming the stale table + timestamp.
-  // 30h clears a normal nightly cadence without flagging a late-running
-  // job (owner ruling). The chef reading the board is a different
-  // audience from whoever watches the Slack channel; both surfaces
-  // land in the same PR because a nightly job that fails silently
-  // misled Kevin for six days on the current incident.
-  const staleness = useMemo(() => {
-    const STALE_H = 30;
-    const w = hoursSinceISO(freshness?.last_weekly_derive_at);
-    const d = hoursSinceISO(freshness?.last_daily_derive_at);
-    const stale = [];
-    if (w != null && w >= STALE_H) stale.push({ table: "labor_actuals",       hoursOld: w, at: freshness.last_weekly_derive_at });
-    if (d != null && d >= STALE_H) stale.push({ table: "labor_actuals_daily", hoursOld: d, at: freshness.last_daily_derive_at });
-    return stale.length > 0 ? stale : null;
-  }, [freshness?.last_weekly_derive_at, freshness?.last_daily_derive_at]);
+  // 2026-08-27 staleness banner. See src/lib/labor/staleness.js for the
+  // pure function; kept out of this file so probes can call it with
+  // fixtures. Field names on derive_freshness (server + client agree):
+  //   last_weekly_derive_at  MAX(labor_actuals.derived_at)
+  //   last_daily_derive_at   MAX(labor_actuals_daily.derived_at)
+  const staleness = useMemo(
+    () => computeStaleness(freshness),
+    [freshness?.last_weekly_derive_at, freshness?.last_daily_derive_at],
+  );
 
   const workerRoster = useMemo(() => {
     if (!data?.actuals) return [];
