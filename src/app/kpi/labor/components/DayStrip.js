@@ -13,7 +13,7 @@
 // verbatim; the client never restates or reformats it (spec).
 
 import { useEffect, useRef, useState } from "react";
-import { fmt$, fmt$0, fmtDate } from "../lib/formatting.js";
+import { fmt$, fmt$0, fmtDate, fmtCompactDollars, pickStripBand } from "../lib/formatting.js";
 import {
   isoRange,
   aggregatePerDay,
@@ -90,6 +90,14 @@ function DayBar({
   // played-day OT% suffix. All optional; DayBar falls back to today's
   // simple caption if missing.
   scheduleByDate, accountTimezone, otByDate,
+  // 2026-08-27 abbreviation - `stripBand` is picked ONCE by
+  // DayStripPlot via pickStripBand() over every value on the strip
+  // (both spent + estimated). DayBar formats its own value in that
+  // band regardless of the value's own magnitude - the uniformity
+  // rule per owner ruling ("no $856 beside $1.5k beside $1,509 on
+  // the same strip"). Title attribute carries the exact whole-dollar
+  // figure so an operator can hover for precision.
+  stripBand,
   // #850 follow-up 2026-08-27: `estimateByDate` maps ISO -> base-rate
   // dollar amount from homestand_estimated.per_day. Ghost bars render
   // this value as their hero (e.g. `~$1,063`) rather than a placeholder
@@ -204,22 +212,39 @@ function DayBar({
         )}
       </div>
       <div className="kpi-wb-cap">
-        <b className={`kpi-wb-cap-value ${isFutureGame ? "kpi-hs-day-ghost-value" : ""}`}>
-          {(() => {
-            // 2026-08-27 polish sweep - whole-dollar formatter on the
-            // day strip. Owner ruling: day-level precision to the
-            // cent is not a decision an operator makes, and $1,508.65
-            // (55px) overflowed 14-day columns (39.4px) while $1,509
-            // fits. STL - MO has 21-day stands; whole dollars remove
-            // the class rather than reacting to width.
-            if (isFutureGame) {
-              const est = estimateByDate?.get(day.workDate);
-              return est != null && est > 0 ? `~${fmt$0(est)}` : "~$-";
+        {(() => {
+          // 2026-08-27 abbreviation - fmtCompactDollars picks band A/B/C
+          // per stripBand (see DayStripPlot for the picker). Title
+          // attribute carries the un-abbreviated whole-dollar figure so
+          // an operator hovers for precision - same pattern the date
+          // caption already uses (title={day.workDate}). Ghost + future
+          // + waiting states preserve their prefix/placeholder markers.
+          let visible, exact;
+          if (isFutureGame) {
+            const est = estimateByDate?.get(day.workDate);
+            if (est != null && est > 0) {
+              visible = `~${fmtCompactDollars(est, stripBand)}`;
+              exact = `~${fmt$0(est)}`;
+            } else {
+              visible = "~$-";
+              exact = "estimate unavailable";
             }
-            if (isFuture) return "-";
-            return fmt$0(amount);
-          })()}
-        </b>
+          } else if (isFuture) {
+            visible = "-";
+            exact = "";
+          } else {
+            visible = fmtCompactDollars(amount, stripBand);
+            exact = fmt$0(amount);
+          }
+          return (
+            <b
+              className={`kpi-wb-cap-value ${isFutureGame ? "kpi-hs-day-ghost-value" : ""}`}
+              title={exact || undefined}
+            >
+              {visible}
+            </b>
+          );
+        })()}
         {caption != null && (
           <span className="kpi-wb-dates" title={day.workDate}>{caption}</span>
         )}
@@ -373,6 +398,23 @@ export function DayStripPlot({
     return max * 1.10;
   })();
 
+  // 2026-08-27 abbreviation - one band picked over EVERY value the
+  // strip will show, so every caption uses the same format. Owner
+  // rule: no `$856` beside `$1.5k` beside `$1,509` on the same
+  // strip. Consumers are:
+  //   - actual spend per day (perDay.amountX10000)
+  //   - estimated per day for ghost bars on upcoming stands
+  //     (estimateByDate)
+  // Both feed the max so a future ghost bar of $1,063 pulls a
+  // played-only strip into Band B even if its own spend maxes at
+  // $856.
+  const stripValues = [];
+  for (const d of perDay || []) stripValues.push(d.amountX10000 / 10000);
+  if (estimateByDate) {
+    for (const v of estimateByDate.values()) stripValues.push(v);
+  }
+  const stripBand = pickStripBand(stripValues);
+
   return (
     <div
       ref={stripRef}
@@ -397,6 +439,7 @@ export function DayStripPlot({
           accountTimezone={accountTimezone}
           otByDate={otByDate}
           estimateByDate={estimateByDate}
+          stripBand={stripBand}
         />
       ))}
     </div>

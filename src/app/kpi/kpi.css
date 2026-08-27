@@ -2230,9 +2230,20 @@
 .kpi-wb-cap {
   margin-top: var(--kpi-sp-3); text-align: center; line-height: 1.35;
 }
+/* 2026-08-27 abbreviation fallback - overflow: hidden + text-overflow:
+   ellipsis so if fmtCompactDollars ever produces a string that
+   exceeds its column (edge case: a stripBand that fmtCompactDollars
+   picks doesn't account for, or a future prefix addition), the
+   caption clips cleanly rather than colliding with its neighbour.
+   Owner ruling: overlapping numbers are the worst outcome; a clipped
+   `$1,5…` reads as truncation, adjacent `$1,509 $1,509` reads as a
+   layout bug. The band picker + probe together should keep this from
+   ever firing, but the CSS is the safety net. */
 .kpi-wb-cap-value {
   display: block; font-size: var(--kpi-t-body); color: var(--n-900);
   white-space: nowrap; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
 }
 .kpi-wb-cap-roll { color: var(--navy-700); }
 /* 2026-08-27 1280 floor sweep - week-strip caption may wrap. The
