@@ -136,10 +136,50 @@ export default function KpiPurchasingPage() {
 
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
-  const start = urlStart || defaultStart;
-  const end = urlEnd || defaultEnd;
+  // R15 2026-08-27: `?preset=<kind>` in the URL was silently ignored
+  // before this - page.js only read start/end, so any preset URL fell
+  // back to the current period.  A URL parameter that looked like it
+  // worked and was ignored.  The picker writes explicit dates so no
+  // real user hits it via navigation; hand-crafted URLs, bookmarks,
+  // and probe sweeps did.  Resolves the preset here so the URL means
+  // what it says.  Canonicalization to ?start=X&end=Y happens in the
+  // effect below.
+  const urlPreset = searchParams.get("preset");
+  const presetResolved = (() => {
+    if (!urlPreset || urlStart || urlEnd) return null;
+    if (urlPreset === "fytd")     return { startISO: FY_START_ISO,          endISO: today };
+    if (urlPreset === "last_4wk") return { startISO: addDaysISO(today, -27), endISO: today };
+    if (urlPreset === "this_period") {
+      const r = rangeForPeriod(curPeriod);
+      return r ? { startISO: r.startISO, endISO: r.endISO } : null;
+    }
+    if (urlPreset === "last_period" && curPeriod > 1) {
+      const r = rangeForPeriod(curPeriod - 1);
+      return r ? { startISO: r.startISO, endISO: r.endISO } : null;
+    }
+    return null;
+  })();
+  const start = urlStart || presetResolved?.startISO || defaultStart;
+  const end   = urlEnd   || presetResolved?.endISO   || defaultEnd;
 
   const rangeSelectionEarly = useMemo(() => inferRangeSelection(start, end), [start, end]);
+
+  // R15 - canonicalize a resolved preset URL to ?start=X&end=Y so the
+  // shape one arrives at (bookmark, share, screenshot) matches the
+  // shape the picker writes.  Runs after mount because router.replace
+  // is a client-only effect.  Note: this does NOT resolve the SSR
+  // hydration mismatch that fires on every preset URL - that comes
+  // from `today = new Date()` differing between server render and
+  // client hydration, unrelated to this canonicalization.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!urlPreset || urlStart || urlEnd || !presetResolved) return;
+    const p = new URLSearchParams(searchParams.toString());
+    p.delete("preset");
+    p.set("start", presetResolved.startISO);
+    p.set("end",   presetResolved.endISO);
+    router.replace(`/kpi/purchasing?${p.toString()}`);
+  }, [urlPreset, urlStart, urlEnd, presetResolved, router, searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -439,6 +479,11 @@ export default function KpiPurchasingPage() {
             budget: Math.round(kpiPeriodBudget * 100) / 100,
             finished: p.finished,
             running: p.running,
+            // R15 - R13 P0-2 added elapsedFrac to buildUnitsForBucket
+            // (line ~497) but missed the parallel spot here.  So the
+            // period-card chart never rendered the running-period
+            // projection outline while the bucket-card charts did.
+            elapsedFrac: p.elapsedFrac,
           };
         });
       }
