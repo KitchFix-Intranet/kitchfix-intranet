@@ -58,11 +58,14 @@ COMMENT ON TABLE user_accounts_manual IS
   'Owner-level access overlay for emails without a Rippling worker record. Every row must carry a reason column. Any row that duplicates an ACTIVE people.work_email is silently ignored by user_accounts_derived - the Rippling row wins.';
 
 -- Seed the three known owner-level emails. INSERT ... ON CONFLICT
--- DO NOTHING so re-applying this migration is idempotent.
+-- DO NOTHING so re-applying this migration is idempotent. The
+-- reason column is populated on every row so someone in a year
+-- sees why the three are hand-held without having to ask (owner
+-- rule 2026-08-27).
 INSERT INTO user_accounts_manual (email, account, reason, added_by) VALUES
-  ('joe@kitchfix.com',      'CORP', 'owner - not in Rippling worker roster', 'kevin@migration'),
-  ('k.fietek@kitchfix.com', 'CORP', 'director of operations - not in Rippling worker roster', 'kevin@migration'),
-  ('m.chavez@kitchfix.com', 'CORP', 'owner - not in Rippling worker roster', 'kevin@migration')
+  ('joe@kitchfix.com',      'CORP', 'owner-level access, no Rippling worker record', 'kevin@migration'),
+  ('k.fietek@kitchfix.com', 'CORP', 'founder, no Rippling worker record',             'kevin@migration'),
+  ('m.chavez@kitchfix.com', 'CORP', 'owner-level access, no Rippling worker record', 'kevin@migration')
 ON CONFLICT (email) DO NOTHING;
 
 -- The derived view. Two sources:
@@ -75,6 +78,12 @@ ON CONFLICT (email) DO NOTHING;
 --      manual row for `k.fietek@kitchfix.com` is correctly shadowed
 --      by an ACTIVE `K.Fietek@kitchfix.com` if Rippling ever adds
 --      the person.
+--
+-- UNION (not UNION ALL) - dedupes by (email, account). Rehires
+-- processed before their prior spell is terminated in Rippling
+-- would otherwise produce two ACTIVE rows for one email; the read
+-- site's ilike behaviour on two rows is unknown. Cost is nothing
+-- at ~35 rows.
 CREATE OR REPLACE VIEW user_accounts_derived AS
   SELECT
     work_email AS email,
@@ -83,7 +92,7 @@ CREATE OR REPLACE VIEW user_accounts_derived AS
   WHERE status = 'ACTIVE'
     AND work_email IS NOT NULL
     AND account_key IS NOT NULL
-  UNION ALL
+  UNION
   SELECT
     m.email,
     m.account
@@ -98,9 +107,28 @@ CREATE OR REPLACE VIEW user_accounts_derived AS
 COMMENT ON VIEW user_accounts_derived IS
   'Derived access surface. UNION of ACTIVE people (work_email + account_key) and user_accounts_manual (owner-level overlay). Replaces the hand-maintained user_accounts table. Read via ilike("email", $input) to preserve case-insensitive matching (unchanged from current call site at src/app/api/service-calendar/route.js:408).';
 
+-- ─── Grants ─────────────────────────────────────────────────────────
+-- The Next.js API layer connects as service_role. Without these
+-- grants, every read after the migration would fail with permission
+-- denied. Every comparable object in this schema (user_accounts,
+-- labor_actuals_latest, v_purchasing_actuals_billcom_named) carries
+-- the equivalent; matching that convention is what keeps the app
+-- from breaking silently at deploy time.
+GRANT SELECT ON public.user_accounts_derived TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_accounts_manual TO service_role;
+
 -- ─── Post-flight ────────────────────────────────────────────────────
--- Runs after every apply. Fails the migration loud if the view or
--- manual table is missing, or if the seed rows did not land.
+-- Runs after every apply. Fails the migration loud if:
+--   - the view or manual table is missing
+--   - seed rows did not land
+--   - service_role cannot read the view or manage the manual table
+--
+-- The grant checks are the important half. Object-existence checks
+-- confirm the objects were created; they do NOT confirm anything
+-- can read them. A guard that passes while the thing it guards is
+-- broken is exactly the class of defect we have hit repeatedly
+-- this week (Rippling-sync path fix's dropped grant analogue,
+-- guards-need-coverage etc). Belt AND suspenders.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_accounts_manual') THEN
@@ -111,5 +139,20 @@ BEGIN
   END IF;
   IF (SELECT COUNT(*) FROM user_accounts_manual) < 3 THEN
     RAISE EXCEPTION 'post-flight: user_accounts_manual has fewer than 3 seed rows';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.user_accounts_derived', 'SELECT') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing SELECT on user_accounts_derived';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.user_accounts_manual', 'SELECT') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing SELECT on user_accounts_manual';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.user_accounts_manual', 'INSERT') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing INSERT on user_accounts_manual';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.user_accounts_manual', 'UPDATE') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing UPDATE on user_accounts_manual';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.user_accounts_manual', 'DELETE') THEN
+    RAISE EXCEPTION 'post-flight: service_role missing DELETE on user_accounts_manual';
   END IF;
 END $$;
