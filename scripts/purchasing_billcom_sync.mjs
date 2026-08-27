@@ -67,12 +67,44 @@ const PAGE_SIZE     = 500;
 const FY_START_ISO  = "2025-12-29";
 const FY_END_ISO    = "2026-12-27";
 
+// Walk-completeness policy (mirrors purchasing_rippling_sync.mjs post-#829).
+// Each paginated walk in this script has its own HARD_PAGE_LIMIT_* below.
+// The limits are runaway ceilings, not soft caps.  A walk that hits its
+// ceiling without exhausting the cursor is a FAILURE, not a success -
+// the walk returns { ok: false, error: 'HIT_CAP: ...' } and the summary
+// line reports it.  Silent truncation is what let 16.5% of the Rippling
+// spend line-items sit undelivered for weeks before #829.
+//
+// Each walk has its own ceiling.  Per-walk override flags so the HIT_CAP
+// branch on any one walk can be exercised in test without short-circuiting
+// the others (bills is gated behind refs succeeding, so a single global
+// override would never let the bills walk be independently proven).
+//   --max-pages-override-accounts=N
+//   --max-pages-override-vendors=N
+//   --max-pages-override-bills=N
+const HARD_PAGE_LIMIT_ACCOUNTS = 10;    // 10 * 999 = 9,990 accounts ceiling
+const HARD_PAGE_LIMIT_VENDORS  = 1000;  // 1000 * 100 = 100k vendors ceiling
+const HARD_PAGE_LIMIT_BILLS    = 40;    // 40 * 500 = 20k bills / window ceiling
+
 function parseArgs(argv) {
-  const args = { source: null, dryRun: false, period: null };
+  const args = {
+    source: null, dryRun: false, period: null,
+    maxPagesOverrideAccounts: null,
+    maxPagesOverrideVendors:  null,
+    maxPagesOverrideBills:    null,
+  };
+  function parseCap(flag, rest) {
+    const v = parseInt(rest, 10);
+    if (!Number.isFinite(v) || v < 1) { console.error(`${flag} must be a positive integer`); process.exit(1); }
+    return v;
+  }
   for (const a of argv.slice(2)) {
     if (a.startsWith("--source=")) args.source = a.slice("--source=".length);
     else if (a.startsWith("--period=")) args.period = parseInt(a.slice("--period=".length), 10);
     else if (a === "--dry-run") args.dryRun = true;
+    else if (a.startsWith("--max-pages-override-accounts=")) args.maxPagesOverrideAccounts = parseCap("--max-pages-override-accounts", a.slice("--max-pages-override-accounts=".length));
+    else if (a.startsWith("--max-pages-override-vendors="))  args.maxPagesOverrideVendors  = parseCap("--max-pages-override-vendors",  a.slice("--max-pages-override-vendors=".length));
+    else if (a.startsWith("--max-pages-override-bills="))    args.maxPagesOverrideBills    = parseCap("--max-pages-override-bills",    a.slice("--max-pages-override-bills=".length));
     else { console.error("unknown arg: " + a); process.exit(1); }
   }
   return args;
@@ -202,26 +234,36 @@ async function refreshChartOfAccounts() {
   let start = 0;
   let pageNo = 0;
   const MAX = 999;
-  const HARD_PAGE_LIMIT = 10;
-  while (pageNo < HARD_PAGE_LIMIT) {
+  const pageCap = args.maxPagesOverrideAccounts ?? HARD_PAGE_LIMIT_ACCOUNTS;
+  // Completeness gate mirrors purchasing_rippling_sync #829.  Flips
+  // TRUE only when the endpoint returned a short page (< MAX).  Any
+  // exit that leaves this FALSE while pageNo reached the cap is
+  // silent truncation.
+  let cursorExhausted = false;
+  while (pageNo < pageCap) {
     const url = chartOfAccountsUrl({ start, max: MAX });
     const res = await fetchJson(url);
     if (!res.ok) {
       console.error(`[ref_accounts] page ${pageNo + 1} FAILED status=${res.status} error=${res.error}`);
-      return { ok: false, count: rows.length, error: res.error };
+      return { ok: false, count: rows.length, pageNo, cursorExhausted, error: res.error };
     }
     const pageRows = extractRowsV2(res.body);
     rows = rows.concat(pageRows);
     pageNo++;
     process.stderr.write(`[ref_accounts] page ${pageNo} rows=${pageRows.length} cumulative=${rows.length}\r`);
-    if (pageRows.length < MAX) break;
+    if (pageRows.length < MAX) { cursorExhausted = true; break; }
     start += MAX;
   }
   process.stderr.write("\n");
 
+  if (!cursorExhausted) {
+    console.error(`[ref_accounts] HIT_CAP: walked ${pageNo} pages (cap ${pageCap}) with a full last page - silent truncation prevented, run fails`);
+    return { ok: false, count: rows.length, pageNo, cursorExhausted, error: `HIT_CAP: cap=${pageCap}, cursor not exhausted, examined=${rows.length}` };
+  }
+
   if (args.dryRun) {
-    console.log(`[ref_accounts] dry-run - would refresh ${rows.length} rows`);
-    return { ok: true, count: rows.length, dryRun: true };
+    console.log(`[ref_accounts] dry-run - would refresh ${rows.length} rows (pages=${pageNo} cursor_exhausted=${cursorExhausted})`);
+    return { ok: true, count: rows.length, pageNo, cursorExhausted, dryRun: true };
   }
 
   // Full replace: DELETE then INSERT. TRUNCATE not available to
@@ -255,8 +297,8 @@ async function refreshChartOfAccounts() {
   }
 
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`[ref_accounts] refreshed ${rows.length} rows in ${dur}s`);
-  return { ok: true, count: rows.length };
+  console.log(`[ref_accounts] walk done: pages=${pageNo} examined=${rows.length} cursor_exhausted=${cursorExhausted} duration=${dur}s`);
+  return { ok: true, count: rows.length, pageNo, cursorExhausted };
 }
 
 async function refreshClasses() {
@@ -304,16 +346,21 @@ async function refreshVendors() {
   console.log("[ref_vendors] refresh (full replace, v3 envelope, page-cursor pagination)");
   const t0 = Date.now();
   const MAX = 100;                // proxy caps /vendors at max=100 (verified 2026-08-20)
-  const HARD_PAGE_LIMIT = 1000;   // 1000 * 100 = 100k vendors ceiling
+  const pageCap = args.maxPagesOverrideVendors ?? HARD_PAGE_LIMIT_VENDORS;
   let pageCursor = null;
   let pageNo = 0;
   let rows = [];
-  while (pageNo < HARD_PAGE_LIMIT) {
+  // Completeness gate.  Flips TRUE on the definitive "no more data"
+  // signals: empty page, short page (< MAX), or missing nextPage cursor.
+  // If the cap is reached with a full last page AND a live nextPage,
+  // we truncated silently.
+  let cursorExhausted = false;
+  while (pageNo < pageCap) {
     const url = vendorsUrl({ pageCursor, max: MAX });
     const res = await fetchJson(url);
     if (!res.ok) {
       console.error(`[ref_vendors] page ${pageNo + 1} FAILED status=${res.status} error=${res.error}`);
-      return { ok: false, count: rows.length, error: res.error };
+      return { ok: false, count: rows.length, pageNo, cursorExhausted, error: res.error };
     }
     const pageRows = extractRowsV3(res.body);
     rows = rows.concat(pageRows);
@@ -324,14 +371,19 @@ async function refreshVendors() {
     // Missing nextPage is the definitive "no more data" signal on
     // this v3 endpoint. `start=` is IGNORED (see vendorsUrl header) -
     // do NOT fall back to offset pagination.
-    if (pageRows.length === 0 || pageRows.length < MAX || !nextPage) break;
+    if (pageRows.length === 0 || pageRows.length < MAX || !nextPage) { cursorExhausted = true; break; }
     pageCursor = nextPage;
   }
   process.stderr.write("\n");
 
+  if (!cursorExhausted) {
+    console.error(`[ref_vendors] HIT_CAP: walked ${pageNo} pages (cap ${pageCap}) with a full last page + live nextPage - silent truncation prevented, run fails`);
+    return { ok: false, count: rows.length, pageNo, cursorExhausted, error: `HIT_CAP: cap=${pageCap}, cursor not exhausted, examined=${rows.length}` };
+  }
+
   if (args.dryRun) {
-    console.log(`[ref_vendors] dry-run - would refresh ${rows.length} rows`);
-    return { ok: true, count: rows.length, dryRun: true };
+    console.log(`[ref_vendors] dry-run - would refresh ${rows.length} rows (pages=${pageNo} cursor_exhausted=${cursorExhausted})`);
+    return { ok: true, count: rows.length, pageNo, cursorExhausted, dryRun: true };
   }
 
   // Full replace: DELETE then INSERT. TRUNCATE not available to
@@ -381,8 +433,8 @@ async function refreshVendors() {
   const dedupeNote = rowsToInsert.length !== rows.length
     ? ` (deduped ${rows.length - rowsToInsert.length} duplicate ids)`
     : "";
-  console.log(`[ref_vendors] refreshed ${rowsToInsert.length} rows in ${dur}s${dedupeNote}`);
-  return { ok: true, count: rowsToInsert.length, rawCount: rows.length };
+  console.log(`[ref_vendors] walk done: pages=${pageNo} examined=${rows.length} inserted=${rowsToInsert.length} cursor_exhausted=${cursorExhausted} duration=${dur}s${dedupeNote}`);
+  return { ok: true, count: rowsToInsert.length, rawCount: rows.length, pageNo, cursorExhausted };
 }
 
 // ─── Step b: bills window ────────────────────────────────────────────
@@ -400,14 +452,19 @@ async function walkBillsWindow({ invoiceDateStart, invoiceDateEnd, fetchSource }
   let linesExamined = 0;
   let linesInserted = 0;
   const touchedBillIds = new Set();
-  const HARD_PAGE_LIMIT = 40;   // 40 * 500 = 20k bills / window; well above real load
+  const pageCap = args.maxPagesOverrideBills ?? HARD_PAGE_LIMIT_BILLS;
+  // Completeness gate.  v2 offset endpoint has no cursor token; the
+  // definitive "no more data" signal is a short page (rows.length <
+  // PAGE_SIZE) or an empty page.  If pageNo reaches the cap while the
+  // last page came back full, we truncated silently.
+  let cursorExhausted = false;
 
-  while (pageNo < HARD_PAGE_LIMIT) {
+  while (pageNo < pageCap) {
     const url = billsFilteredUrl({ invoiceDateStart, invoiceDateEnd, start, max: PAGE_SIZE });
     const res = await fetchJson(url);
     if (!res.ok) {
       console.error(`[bills] page ${pageNo + 1} FAILED status=${res.status} error=${res.error}`);
-      return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, error: res.error };
+      return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, pageNo, cursorExhausted, error: res.error };
     }
     const rows = extractRowsV2(res.body);
     pageNo++;
@@ -452,7 +509,7 @@ async function walkBillsWindow({ invoiceDateStart, invoiceDateEnd, fetchSource }
         .in("bill_id", ids);
       if (error) {
         console.error(`[bills] page ${pageNo} latest-hash lookup FAILED: ${error.message}`);
-        return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, error: error.message };
+        return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, pageNo, cursorExhausted, error: error.message };
       }
       const currentByBill = new Map();
       for (const r of data || []) currentByBill.set(r.bill_id, r.content_hash);
@@ -463,7 +520,7 @@ async function walkBillsWindow({ invoiceDateStart, invoiceDateEnd, fetchSource }
         const insResp = await supa.from("billcom_raw_bills").insert(insertPayload);
         if (insResp.error) {
           console.error(`[bills] page ${pageNo} header insert FAILED: ${insResp.error.message}`);
-          return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, error: insResp.error.message };
+          return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, pageNo, cursorExhausted, error: insResp.error.message };
         }
         billsInserted += insertPayload.length;
       }
@@ -505,7 +562,7 @@ async function walkBillsWindow({ invoiceDateStart, invoiceDateEnd, fetchSource }
           .in("line_id", chunk);
         if (error) {
           console.error(`[bills] page ${pageNo} line latest-hash lookup FAILED: ${error.message}`);
-          return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, error: error.message };
+          return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, pageNo, cursorExhausted, error: error.message };
         }
         for (const r of data || []) currentLineHashes.set(r.line_id, r.content_hash);
       }
@@ -516,7 +573,7 @@ async function walkBillsWindow({ invoiceDateStart, invoiceDateEnd, fetchSource }
           const insResp = await supa.from("billcom_raw_bill_lines").insert(batch);
           if (insResp.error) {
             console.error(`[bills] page ${pageNo} line insert FAILED: ${insResp.error.message}`);
-            return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, error: insResp.error.message };
+            return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, pageNo, cursorExhausted, error: insResp.error.message };
           }
           linesInserted += batch.length;
         }
@@ -526,14 +583,19 @@ async function walkBillsWindow({ invoiceDateStart, invoiceDateEnd, fetchSource }
     }
 
     process.stderr.write(`[bills] page ${pageNo}  rows=${rows.length}  bills_examined=${billsExamined}  bills_inserted=${billsInserted}  lines_examined=${linesExamined}  lines_inserted=${linesInserted}  elapsed=${Math.round((Date.now() - t0) / 1000)}s\r`);
-    if (rows.length < PAGE_SIZE) break;
+    if (rows.length < PAGE_SIZE) { cursorExhausted = true; break; }
     start += PAGE_SIZE;
   }
   process.stderr.write("\n");
 
+  if (!cursorExhausted) {
+    console.error(`[bills] HIT_CAP: walked ${pageNo} pages (cap ${pageCap}) with a full last page - silent truncation prevented, run fails`);
+    return { ok: false, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, pageNo, cursorExhausted, error: `HIT_CAP: cap=${pageCap}, cursor not exhausted, bills_examined=${billsExamined}` };
+  }
+
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`[bills] window done: bills_examined=${billsExamined} bills_inserted=${billsInserted} lines_examined=${linesExamined} lines_inserted=${linesInserted} duration=${dur}s`);
-  return { ok: true, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds };
+  console.log(`[bills] window done: pages=${pageNo} bills_examined=${billsExamined} bills_inserted=${billsInserted} lines_examined=${linesExamined} lines_inserted=${linesInserted} cursor_exhausted=${cursorExhausted} duration=${dur}s`);
+  return { ok: true, billsExamined, billsInserted, linesExamined, linesInserted, touchedBillIds, pageNo, cursorExhausted };
 }
 
 // ─── Step c: derive purchasing_actuals for touched bills ─────────────
@@ -1021,11 +1083,11 @@ const totalSec = ((finishedAt - startedAt) / 1000).toFixed(1);
 
 console.log("");
 console.log("purchasing_billcom_sync summary:");
-console.log(`  ref_accounts:  ${refAccountsResult?.ok ? "ok" : "FAIL"}  count=${refAccountsResult?.count}`);
+console.log(`  ref_accounts:  ${refAccountsResult?.ok ? "ok" : "FAIL"}  count=${refAccountsResult?.count} pages=${refAccountsResult?.pageNo ?? "n/a"} cursor_exhausted=${refAccountsResult?.cursorExhausted ?? "n/a"}${refAccountsResult?.error ? " error=" + refAccountsResult.error : ""}`);
 console.log(`  ref_classes:   ${refClassesResult?.ok ? "ok" : "FAIL"}  count=${refClassesResult?.count}`);
-console.log(`  ref_vendors:   ${refVendorsResult?.ok ? "ok" : "FAIL"}  count=${refVendorsResult?.count}`);
+console.log(`  ref_vendors:   ${refVendorsResult?.ok ? "ok" : "FAIL"}  count=${refVendorsResult?.count} pages=${refVendorsResult?.pageNo ?? "n/a"} cursor_exhausted=${refVendorsResult?.cursorExhausted ?? "n/a"}${refVendorsResult?.error ? " error=" + refVendorsResult.error : ""}`);
 if (billsResult) {
-  console.log(`  bills:         ${billsResult.ok ? "ok" : "FAIL"}  bills_examined=${billsResult.billsExamined} bills_inserted=${billsResult.billsInserted} lines_examined=${billsResult.linesExamined} lines_inserted=${billsResult.linesInserted}`);
+  console.log(`  bills:         ${billsResult.ok ? "ok" : "FAIL"}  bills_examined=${billsResult.billsExamined} bills_inserted=${billsResult.billsInserted} lines_examined=${billsResult.linesExamined} lines_inserted=${billsResult.linesInserted} pages=${billsResult.pageNo ?? "n/a"} cursor_exhausted=${billsResult.cursorExhausted ?? "n/a"}${billsResult.error ? " error=" + billsResult.error : ""}`);
 }
 if (deriveResult) {
   console.log(`  derive:        ${deriveResult.ok ? "ok" : "FAIL"}  bills_derived=${deriveResult.billsDerived} rows_written=${deriveResult.rowsWritten} per_bill_failures=${deriveResult.perBillFailures?.length ?? 0}`);
