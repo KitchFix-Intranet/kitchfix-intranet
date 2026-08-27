@@ -29,13 +29,14 @@
 // via stopPropagation on the HsHelpPop button.
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 const ACCOUNT = 'CIN - OH';
 
 async function openStandView(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}&view=homestand`);
-  await page.waitForSelector('.kpi-hs-rail', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-hs-rail', { context: `homestand rail on ${ACCOUNT}` });
   // Click first non-pre-floor rail button so a stand is selected + the
   // spend card + season table are rendered.
   await page.locator('.kpi-hs-rail-stand:not([disabled])').first().click();
@@ -147,7 +148,7 @@ test.describe('KPI homestand season table expansion', () => {
 
     // Confirm it also renders on the period view (unchanged).
     await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}`);
-    await page.waitForSelector('.kpi-cmd', { timeout: 30_000 });
+    await assertBoardLoaded(page, '.kpi-cmd', { context: `period cmd bar on ${ACCOUNT}` });
     await page.waitForLoadState('networkidle');
     await expect(page.locator('.kpi-cmd-salary')).toBeVisible();
   });
@@ -162,7 +163,7 @@ test.describe('KPI homestand season table expansion', () => {
 
     // Flip the toggle ON.
     await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}&view=homestand&salary=1`);
-    await page.waitForSelector('.kpi-hs-rail', { timeout: 30_000 });
+    await assertBoardLoaded(page, '.kpi-hs-rail', { context: `homestand rail on ${ACCOUNT} (salary on)` });
     await page.locator('.kpi-hs-rail-stand:not([disabled])').first().click();
     await page.waitForSelector('[data-card="spend"]', { timeout: 15_000 });
     await page.waitForSelector('.kpi-hs-table tbody tr[data-hs-row-expandable]', { timeout: 15_000 });

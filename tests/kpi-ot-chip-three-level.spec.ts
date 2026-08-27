@@ -21,6 +21,7 @@
 // this week is present even if period boundaries shift.
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 const PORTFOLIO_ACCOUNT = 'ALL';
 const RANGE_START = '2026-07-13';
@@ -33,7 +34,7 @@ async function openPortfolioBoard(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   const url = `/kpi/labor?account=${encodeURIComponent(PORTFOLIO_ACCOUNT)}&start=${RANGE_START}&end=${RANGE_END}`;
   await page.goto(url);
-  await page.waitForSelector('.kpi-tbl', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-tbl', { context: `portfolio table on ${PORTFOLIO_ACCOUNT}` });
 }
 
 test.setTimeout(90_000);
@@ -119,7 +120,7 @@ test.describe('KPI portfolio OT chip - three-level DOM assertion', () => {
     // The signal cards are gated on non-portfolio views having a real
     // period board; use a single account so the cards mount reliably.
     await page.goto(`/kpi/labor?account=${encodeURIComponent('CIN - OH')}`);
-    await page.waitForSelector('.kpi-sigs .kpi-sig', { timeout: 30_000 });
+    await assertBoardLoaded(page, '.kpi-sigs .kpi-sig', { context: 'single-account signals on CIN - OH' });
     await page.waitForSelector('.kpi-tbl', { timeout: 30_000 });
     await expect(trigger).toBeVisible();
     await trigger.click();

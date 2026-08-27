@@ -19,6 +19,7 @@
 //   2026-03-26  pre-floor       plan mode, estimated basis
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 const ACCOUNT = 'CIN - OH';
 
@@ -72,7 +73,7 @@ async function spendPerformanceClaims(page: Page, scope = '.kpi-hs-board') {
 async function openStand(page: Page, gameStart: string) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}&view=homestand&homestand=${gameStart}`);
-  await page.waitForSelector('.kpi-hs-board', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-hs-board', { context: `homestand ${gameStart} on ${ACCOUNT}` });
 }
 
 test.setTimeout(90_000);
@@ -236,7 +237,7 @@ test.describe('KPI homestand headers + chip + copy (HS PR-C)', () => {
     // refusal handling from #754.
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/kpi/labor?account=${encodeURIComponent('TXR - TX - H')}&view=homestand&homestand=2026-08-14`);
-    await page.waitForSelector('.kpi-hs-board', { timeout: 30_000 });
+    await assertBoardLoaded(page, '.kpi-hs-board', { context: 'homestand 2026-08-14 on TXR - TX - H' });
     // Rail renders (with TXR's own stands, not CIN's).
     await expect(page.locator('.kpi-hs-rail')).toBeVisible();
     // Season card renders.

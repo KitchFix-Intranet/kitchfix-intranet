@@ -17,6 +17,7 @@
 // qSpread) land with the pre-floor estimator PR alongside their cards.
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 const ACCOUNT = 'CIN - OH';
 
@@ -34,7 +35,7 @@ const POPOVERS_ON_SCREEN = [
 async function openStandView(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/kpi/labor?account=${encodeURIComponent(ACCOUNT)}&view=homestand`);
-  await page.waitForSelector('.kpi-hs-rail', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-hs-rail', { context: `homestand rail on ${ACCOUNT}` });
   const stand = page.locator('.kpi-hs-rail-stand:not([disabled])').first();
   await stand.click();
   await page.waitForSelector('[data-card="spend"]', { timeout: 15_000 });

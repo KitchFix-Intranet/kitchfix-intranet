@@ -22,6 +22,7 @@
 // kpi-sig-hero-bad/warn.
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 // A month starting in the future. Adjust if the deploy target's
 // clock passes this date - Sep 2026 was future as of 2026-08-24.
@@ -57,8 +58,11 @@ async function open(page: Page, { account, start, end }: { account: string; star
   const url = `/kpi/labor?account=${encodeURIComponent(account)}&start=${start}&end=${end}`;
   await page.goto(url);
   // Board root - either day-strip (daily path) or story-block (weekly
-  // path) must render. Wait for either.
-  await page.waitForSelector('.kpi-day-range, .kpi-story', { timeout: 30_000 });
+  // path) must render. The OR-selector was the vector that let
+  // #858's viewport-clip spec silently pass on the session-expired
+  // state box; assertBoardLoaded catches auth-failure markers before
+  // the OR can absorb them.
+  await assertBoardLoaded(page, '.kpi-day-range, .kpi-story', { context: `future range on ${account}` });
 }
 
 test.setTimeout(90_000);

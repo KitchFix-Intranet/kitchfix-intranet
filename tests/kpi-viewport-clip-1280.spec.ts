@@ -27,6 +27,7 @@
 //   1440 x 900  the desk-default
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 const MLB = ['STL - MO', 'CIN - OH', 'TXR - TX - H', 'TXR - TX - V'];
 const VIEWPORTS = [
@@ -107,31 +108,9 @@ async function findParityBreaks(page: Page, rowSelector: string, cardSelector: s
   );
 }
 
-// Reject vacuous green from unauthenticated / not-authorised state
-// boxes. If the auth state file is stale the app renders
-// StateSessionExpired inside .kpi-app - a container that happens to
-// have no clipping - and every clip assertion passes without ever
-// looking at the real board. Require the concrete board selector,
-// and fail loud with a message when we land on a state box instead.
-async function assertBoardLoaded(page: Page, expected: string, context: string) {
-  const board = page.locator(expected).first();
-  const stateBox = page.locator('.kpi-statebox').first();
-  const winner = await Promise.race([
-    board.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'board'),
-    stateBox.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'statebox'),
-  ]).catch(() => 'timeout');
-  if (winner === 'board') return;
-  if (winner === 'statebox') {
-    const title = (await stateBox.locator('h3, .kpi-statebox-title').first().textContent().catch(() => '')) || '(untitled)';
-    throw new Error(`${context}: expected board (${expected}) but rendered a state box: "${title.trim()}". Auth state may be stale; refresh tests/.auth/user.json.`);
-  }
-  throw new Error(`${context}: timed out waiting for ${expected}`);
-}
-
 async function loadPeriod(page: Page, account: string) {
   await page.goto(`/kpi/labor?account=${encodeURIComponent(account)}`);
-  await page.waitForSelector('.kpi-app', { timeout: 30_000 });
-  await assertBoardLoaded(page, '.kpi-sig', `period on ${account}`);
+  await assertBoardLoaded(page, '.kpi-sig', { context: `period on ${account}` });
 }
 
 async function loadHomestand(page: Page, account: string, gameStart?: string) {
@@ -139,13 +118,12 @@ async function loadHomestand(page: Page, account: string, gameStart?: string) {
     ? `account=${encodeURIComponent(account)}&view=homestand&homestand=${gameStart}`
     : `account=${encodeURIComponent(account)}&view=homestand`;
   await page.goto(`/kpi/labor?${q}`);
-  await page.waitForSelector('.kpi-app', { timeout: 30_000 });
-  await assertBoardLoaded(page, '.kpi-hs-rail', `homestand on ${account}`);
+  await assertBoardLoaded(page, '.kpi-hs-rail', { context: `homestand on ${account}` });
   if (!gameStart) {
     const stand = page.locator('.kpi-hs-rail-stand:not([disabled])').first();
     await stand.click();
   }
-  await assertBoardLoaded(page, '.kpi-hs-signals', `homestand cards on ${account}`);
+  await assertBoardLoaded(page, '.kpi-hs-signals', { context: `homestand cards on ${account}` });
 }
 
 for (const vp of VIEWPORTS) {
