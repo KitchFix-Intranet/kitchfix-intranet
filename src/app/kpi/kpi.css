@@ -3388,6 +3388,18 @@
   display: block;
   overflow: hidden; text-overflow: clip; white-space: nowrap;
 }
+/* 2026-08-27 polish sweep followup - defect 1 tail. At minimal
+   density (bars < 44px per chooseLabelDensity) the whole-dollar
+   caption at var(--kpi-t-body) still overflows on the widest MLB
+   stands - CIN - OH's 22-day HS 8 window compresses to 34px columns
+   and $1,509 at 12.5px needs 38px. Owner ruling: drop the caption
+   one step on the type scale at minimal density; caption is
+   secondary information and the only thing in the column, so no
+   collision with anything else. --kpi-t-body -> --kpi-t-meta
+   (12.5px -> 11px, ~12% narrower) - $1,509 fits in 34px. */
+.kpi-day-range-strip[data-density="minimal"] .kpi-wb-cap-value {
+  font-size: var(--kpi-t-meta);
+}
 @media (max-width: 767px) {
   .kpi-day-range-cards { grid-template-columns: 1fr; }
 }
