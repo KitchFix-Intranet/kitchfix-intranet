@@ -961,10 +961,18 @@ export function HomestandBoard({
   // Account timezone: NO fallback to UTC. Owner ruling 2026-08-26 -
   // "a wrong first pitch is worse than no first pitch"; if timezone is
   // null the caption drops the time and shows opponent only.
+  //
+  // #850 review 2026-08-27: the current account key lives on
+  // `data.filters.account`, not `data.account` (top-level `account` is
+  // not on the response shape). Missing lookup returned null and every
+  // caption dropped the time even though STL / CIN / TXR all have
+  // timezone populated. Fix reads through filters.
   const accountTimezone = useMemo(() => {
-    const acct = (data?.accounts_directory || []).find(a => a.team_key === data?.account);
+    const key = data?.filters?.account;
+    if (!key) return null;
+    const acct = (data?.accounts_directory || []).find(a => a.team_key === key);
     return acct?.timezone || null;
-  }, [data?.accounts_directory, data?.account]);
+  }, [data?.accounts_directory, data?.filters?.account]);
   // Per-day OT hours aggregate so the played-day caption can render
   // `91% OT`. Sum-over-sum, not mean-of-means - matches PlayedCards.
   // hours_regular + hours_overtime are per-worker per-day; sum both

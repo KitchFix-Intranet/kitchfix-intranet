@@ -126,22 +126,26 @@ function DayBar({
     : null;
 
   // 2026-08-26 redesign - captions now carry state-specific detail:
-  //   played game day  -> `MM/DD DoW · vs OPP · $N · N% OT`
-  //   ghost game day   -> `MM/DD DoW · vs OPP · 6:45p`
-  //   prep day         -> `MM/DD DoW · prep`
-  //   off day          -> `MM/DD DoW · off`
-  //   custom-range     -> `MM/DD · DoW` (unchanged; caller passes no
-  //                       schedule/otByDate so we fall through)
-  // Caption degrades at compact/minimal density (narrow bars) so the
-  // strip stays readable on mobile.
+  //   played game day  -> `MM/DD DoW` + `vs OPP · N% OT`
+  //   ghost game day   -> `MM/DD DoW` + `vs OPP · 6:45p`
+  //   prep day         -> `MM/DD DoW` + `prep`
+  //   off day          -> `MM/DD DoW` + `off`
+  //   custom-range     -> `MM/DD · DoW` (caller passes no schedule/
+  //                       otByDate so the extra line stays null)
+  //
+  // #850 review 2026-08-27: captionExtra now renders at compact
+  // density too (previously full-only). Kevin's HS 12 review saw
+  // 14 bars land at ~83px per bar (compact by chooseLabelDensity),
+  // so opponent + first pitch never appeared. Compact primary caption
+  // now includes DoW when room; minimal density keeps value-only.
   const dateStr = fmtDayLabel(day.workDate);
   const dow = dowShort(day.workDate);
   const isGameDay = !!sched || (variant === "identity" && (gameDates?.has(day.workDate) || nightGameDates?.has(day.workDate)));
   const isPrepDay = variant === "identity" && !isGameDay && !isZero && !isFuture && !sched;
   let caption = null;
-  let captionExtra = null;   // second-line detail on full density
-  if (density === "full") {
-    caption = `${dateStr} · ${dow}`;
+  let captionExtra = null;
+  if (density === "full" || density === "compact") {
+    caption = density === "full" ? `${dateStr} · ${dow}` : dateStr;
     if (variant === "identity") {
       if (isFutureGame && sched) {
         // upcoming game: opponent + first pitch
@@ -164,8 +168,6 @@ function DayBar({
         captionExtra = "off";
       }
     }
-  } else if (density === "compact") {
-    caption = dateStr;
   } else {
     caption = null;   // minimal: no date caption, value only
   }
