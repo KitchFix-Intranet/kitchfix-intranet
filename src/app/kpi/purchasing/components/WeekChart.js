@@ -442,6 +442,24 @@ export function WeekChart({
           : (finished && hasTarget
               ? (v > perUnitOrig ? "st-over" : "st-under")
               : "");
+        // PR-2 R5 Part A (owner ruling 2026-08-24): no 97% ceiling on
+        // bar or line. Both marks divide by the same `maxSample` (which
+        // already includes 5% headroom above the tallest target/spend)
+        // so the ratio linePos / barHeight equals target / spent
+        // exactly. The prior Math.min(97, ...) ceiling fired every time
+        // a target equalled scaleMax, silently pushing the line to 97%
+        // and misrepresenting the ratio (e.g. FYTD ALL Food P3: line
+        // clamped 100% -> 97% distorted a 1.238 ratio to 1.200).
+        //
+        // TDZ FIX 2026-08-27: this const declaration MUST stay above
+        // the projection block below - `projExtensionPct` references
+        // `heightPct` and the two were swapped in R13, which shipped
+        // a temporal-dead-zone ReferenceError on every WeekChart render
+        // where the running unit had projValue != null.  Broke
+        // hydration on any URL that passed explicit start/end params.
+        const heightPct = showBar
+          ? ((Math.abs(v) / maxSample) * 100).toFixed(2)
+          : 0;
         // R13 P0-2 - projection extension for a running unit that has
         // real spend AND is at least 25% elapsed (measured threshold,
         // probe 2026-08-26).  Rendered as a dashed outline reaching
@@ -453,17 +471,6 @@ export function WeekChart({
         const projExtensionPct = projHeightPct != null
           ? Math.max(0, Number(projHeightPct) - Number(heightPct)).toFixed(2)
           : null;
-        // PR-2 R5 Part A (owner ruling 2026-08-24): no 97% ceiling on
-        // bar or line. Both marks divide by the same `maxSample` (which
-        // already includes 5% headroom above the tallest target/spend)
-        // so the ratio linePos / barHeight equals target / spent
-        // exactly. The prior Math.min(97, ...) ceiling fired every time
-        // a target equalled scaleMax, silently pushing the line to 97%
-        // and misrepresenting the ratio (e.g. FYTD ALL Food P3: line
-        // clamped 100% -> 97% distorted a 1.238 ratio to 1.200).
-        const heightPct = showBar
-          ? ((Math.abs(v) / maxSample) * 100).toFixed(2)
-          : 0;
         // Target line PER BAR - not one dashed line spanning the chart.
         const orLine = perUnitOrig > 0
           ? ((perUnitOrig / maxSample) * 100).toFixed(2)
