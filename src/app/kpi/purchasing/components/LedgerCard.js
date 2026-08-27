@@ -29,7 +29,7 @@ const LEDGER_HELP = {
 };
 
 export function LedgerCard({
-  bucketKey,          // 'equip' | 'rm' | 'reimb'
+  bucketKey,          // 'veh' | 'equip' | 'rm' | 'reimb'
   label,
   sub,
   strokeClass,
@@ -40,7 +40,7 @@ export function LedgerCard({
   // PR 2 R8 - server `is_future_range` flag. When true, suppress the
   // pill, hero state colour, and Remaining / Over-by verdict.
   isFutureRange = false,
-  ledgerRows,         // [{ vendor, description?, amount, account_key?, gl_line_code?, txn_date? }]
+  ledgerRows,         // [{ vendor, description?, amount, account_key?, gl_line_code?, txn_date?, flag? }]
   // PR-2 R6 Part B - capped list metadata. `total_count` reveals a
   // "showing N of M" footer when the cap is hit; a capped list that
   // does not say it is capped is silent truncation.
@@ -48,6 +48,10 @@ export function LedgerCard({
   totalAmount,
   cap,
   isAggregate,
+  // R15 C - at-risk Reimbursable: it's a receivable, not a cost.  No
+  // budget line, no % used, no Remaining/Over-by.  Caption reads
+  // "recovered in full · billed back" so the card explains itself.
+  noBudget = false,
 }) {
   // PR-2 R6 Part B - Check 9 client gate. Compare the uncapped
   // total_amount with the hero (`spent`); refuse to render if the
@@ -102,24 +106,33 @@ export function LedgerCard({
         </div>
       </div>
 
-      {/* Numbers block - resolver-owned. */}
-      <div className={`kpi-p-nums${!d.showRemainingBlock && !isFutureRange ? " kpi-p-nums-solo" : ""}`}>
+      {/* Numbers block - resolver-owned.
+          R15 C - noBudget mode: at-risk Reimbursable and the "billed
+          back" reads: hero alone, "recovered in full · billed back"
+          caption.  Kevin ruling 2026-08-27: it's a receivable, not a
+          cost; comparing it to $0.00 with a "no budget" note falsely
+          implies a comparison worth making. */}
+      <div className={`kpi-p-nums${(noBudget || (!d.showRemainingBlock && !isFutureRange)) ? " kpi-p-nums-solo" : ""}`}>
         <div className="kpi-p-stk">
           <span className="kpi-p-label">Spent</span>
-          <span className={`kpi-p-hero num ${d.heroClass}`}>{d.heroValueText}</span>
-          <span className="kpi-p-subline">
-            of <b>{d.subLineOfBudgetText}</b>
-            {d.subLinePctText && (<>{" "}· <b>{d.subLinePctText}</b> used</>)}
-            {d.subLineNoBudgetText && (<><span aria-hidden="true"> · </span><b>{d.subLineNoBudgetText}</b></>)}
-          </span>
+          <span className={`kpi-p-hero num ${noBudget ? "" : d.heroClass}`}>{d.heroValueText}</span>
+          {noBudget ? (
+            <span className="kpi-p-subline">recovered in full · billed back</span>
+          ) : (
+            <span className="kpi-p-subline">
+              of <b>{d.subLineOfBudgetText}</b>
+              {d.subLinePctText && (<>{" "}· <b>{d.subLinePctText}</b> used</>)}
+              {d.subLineNoBudgetText && (<><span aria-hidden="true"> · </span><b>{d.subLineNoBudgetText}</b></>)}
+            </span>
+          )}
         </div>
-        {d.showFutureBudgetBlock ? (
+        {!noBudget && d.showFutureBudgetBlock ? (
           <div className="kpi-p-stk">
             <span className="kpi-p-label">Budget</span>
             <span className="kpi-p-value num">{d.subLineOfBudgetText}</span>
             <span className="kpi-p-subline">this range has not started</span>
           </div>
-        ) : d.showRemainingBlock ? (
+        ) : !noBudget && d.showRemainingBlock ? (
           <div className="kpi-p-stk">
             <span className="kpi-p-label">{d.remainingLabel}</span>
             <span className={`kpi-p-value num ${d.remainingClass}`}>{d.remainingValueText}</span>
@@ -151,7 +164,7 @@ export function LedgerCard({
           </div>
         ) : (
           (ledgerRows || []).map((r, i) => (
-            <div key={`${r.vendor || "?"}-${i}`} className="kpi-p-lr">
+            <div key={`${r.vendor || "?"}-${i}`} className={`kpi-p-lr${r.flag ? " kpi-p-lr-flag" : ""}`}>
               <span className={`kpi-p-k${r.vendor ? "" : " kpi-p-nil"}`}>
                 {r.vendor || "—"}
                 <small>
@@ -159,9 +172,11 @@ export function LedgerCard({
                     <span className="kpi-p-acct">{r.account_key}</span>
                   )}
                   {/* description first if present, otherwise show the
-                     gl code + date so the row explains itself. */}
-                  {r.description || r.gl_line_code || ""}
-                  {r.txn_date && !r.description ? ` · ${r.txn_date}` : ""}
+                     gl code + date so the row explains itself.
+                     R15 B - flag reason (if any) replaces the date so
+                     the row explains why it's flagged. */}
+                  {r.flag ? r.flag.reason : (r.description || r.gl_line_code || "")}
+                  {r.txn_date && !r.description && !r.flag ? ` · ${r.txn_date}` : ""}
                 </small>
               </span>
               <span className={`kpi-p-v num ${Number(r.amount || 0) < 0 ? "g" : ""}`}>

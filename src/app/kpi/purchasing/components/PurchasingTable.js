@@ -35,7 +35,7 @@
 // 9 - hero-vs-detail drift has now shown up seven times on this
 // project. Bind them.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmt$, fmtPct } from "../lib/board";
 import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
 
@@ -193,8 +193,16 @@ export function PurchasingTable({
   heroTotals,          // { food, packaging, vehicle, equipment, repair, total } from page.js board
   isAggregate,
   weeksInRange,
+  // R15 F - per-vendor rollup for the By vendor row mode; when absent
+  // the mode toggle is hidden and only P&L rows render.  Shape:
+  //   { rows: [{ vendor_id, name, resolved, spend, line_count, gl_split }],
+  //     total_count, total_amount }
+  vendorRollup,
+  // R15 F - default row mode. Pass "vendor" from pass-through boards.
+  defaultRowMode = "pnl",
 }) {
   const [showFilter, setShowFilter] = useState("all");            // 'all' | 'bills' | 'cards'
+  const [rowMode, setRowMode] = useState(defaultRowMode);         // 'pnl' | 'vendor'
   const [expandedPeriods, setExpandedPeriods] = useState(new Set());
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
   // Lazy-fetched source-split aggregate for SHOW=Bills/Cards.
@@ -261,12 +269,31 @@ export function PurchasingTable({
     return t;
   }, [cellsByWeek]);
 
+  // R15 F - vendor-mode footer totals from vendor_rollup.gl_split.
+  // Card charges + reimbursable rows are not vendor-keyed, so vendor
+  // mode legitimately differs from P&L mode.  Kept separate to avoid
+  // asserting Check 1 against a partial dataset.
+  const vendorFootTotals = useMemo(() => {
+    const t = { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+    for (const v of (vendorRollup?.rows || [])) {
+      const g = v.gl_split || {};
+      t.food      += Number(g.food || 0);
+      t.packaging += Number(g.packaging || 0);
+      t.vehicle   += Number(g.vehicle || 0);
+      t.equipment += Number(g.equipment || 0);
+      t.repair    += Number(g.repair || 0);
+      t.total     += Number(v.spend || 0);
+    }
+    return t;
+  }, [vendorRollup]);
+
   // Check 1 - THE GATE. Aggregate cells (footer) MUST equal the bucket
   // card heroes above. Dev throws on mismatch; prod warns. Same one-
   // source discipline the LedgerCard Check 9 gate uses. Skipped when
   // SHOW is filtered (heroes reflect ALL bills+cards; filtered footer
-  // legitimately differs).
-  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production" && showFilter === "all" && heroTotals) {
+  // legitimately differs) or when in By vendor row mode (vendor mode
+  // shows bill.com-keyed rows only; card-side rows have no vendor id).
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production" && rowMode === "pnl" && showFilter === "all" && heroTotals) {
     const CENTS_TOLERANCE = 0.02;
     for (const col of ["food", "packaging", "vehicle"]) {
       const foot = Math.round(footTotals[col] * 100) / 100;
@@ -384,7 +411,7 @@ export function PurchasingTable({
     <div className="kpi-p-card kpi-p-tbl-container" data-card="drill-table">
       <div className="kpi-p-tbl-toolbar">
         <div className="kpi-p-tbl-tbg">
-          <span className="kpi-p-cardtitle">By P&amp;L line</span>
+          <span className="kpi-p-cardtitle">{rowMode === "vendor" ? "By vendor" : "By P&L line"}</span>
           {" "}<HelpPop id="qDrillTable" title="The drill-down table" body={
             <>
               Every fiscal week in the range, split across the five P&amp;L
@@ -400,21 +427,33 @@ export function PurchasingTable({
             </>
           } />
         </div>
-        {tier === "C" && (
+        {rowMode === "pnl" && tier === "C" && (
           <div className="kpi-p-tbl-tbg">
             <button type="button" className="kpi-p-tbl-tbbtn" onClick={expandAll}>Expand all</button>
             <button type="button" className="kpi-p-tbl-tbbtn" onClick={collapseAll}>Collapse all</button>
           </div>
         )}
         <span className="kpi-p-tbl-tbspacer" aria-hidden="true" />
-        <div className="kpi-p-tbl-tbg" role="group" aria-label="Show filter">
-          <span className="kpi-p-tbl-tblab">Show</span>
-          <span className="kpi-p-tbl-seg">
-            <button type="button" className={showFilter === "all" ? "on" : ""} onClick={() => setShowFilter("all")} aria-pressed={showFilter === "all"}>All</button>
-            <button type="button" className={showFilter === "bills" ? "on" : ""} onClick={() => setShowFilter("bills")} aria-pressed={showFilter === "bills"}>Bills only</button>
-            <button type="button" className={showFilter === "cards" ? "on" : ""} onClick={() => setShowFilter("cards")} aria-pressed={showFilter === "cards"}>Cards only</button>
-          </span>
-        </div>
+        {/* R15 F - rows toggle (only when vendor rollup is present). */}
+        {vendorRollup?.rows && (
+          <div className="kpi-p-tbl-tbg" role="group" aria-label="Row mode">
+            <span className="kpi-p-tbl-tblab">Rows</span>
+            <span className="kpi-p-tbl-seg">
+              <button type="button" className={rowMode === "pnl" ? "on" : ""} onClick={() => setRowMode("pnl")} aria-pressed={rowMode === "pnl"}>By P&amp;L line</button>
+              <button type="button" className={rowMode === "vendor" ? "on" : ""} onClick={() => setRowMode("vendor")} aria-pressed={rowMode === "vendor"}>By vendor</button>
+            </span>
+          </div>
+        )}
+        {rowMode === "pnl" && (
+          <div className="kpi-p-tbl-tbg" role="group" aria-label="Show filter">
+            <span className="kpi-p-tbl-tblab">Show</span>
+            <span className="kpi-p-tbl-seg">
+              <button type="button" className={showFilter === "all" ? "on" : ""} onClick={() => setShowFilter("all")} aria-pressed={showFilter === "all"}>All</button>
+              <button type="button" className={showFilter === "bills" ? "on" : ""} onClick={() => setShowFilter("bills")} aria-pressed={showFilter === "bills"}>Bills only</button>
+              <button type="button" className={showFilter === "cards" ? "on" : ""} onClick={() => setShowFilter("cards")} aria-pressed={showFilter === "cards"}>Cards only</button>
+            </span>
+          </div>
+        )}
       </div>
 
       {sourceSplitPending && (
@@ -425,7 +464,9 @@ export function PurchasingTable({
         <table className="kpi-p-tbl">
           <thead>
             <tr>
-              <th className="kpi-p-tbl-lcol">{tier === "C" ? "Period" : "Week starting"}</th>
+              <th className="kpi-p-tbl-lcol">
+                {rowMode === "vendor" ? "Vendor" : (tier === "C" ? "Period" : "Week starting")}
+              </th>
               {COLUMNS.map(c => (
                 <th key={c.key}>{c.label}<span className="kpi-p-tbl-hsub">{c.sub}</span></th>
               ))}
@@ -433,7 +474,14 @@ export function PurchasingTable({
             </tr>
           </thead>
           <tbody>
-            {tier === "C" ? (
+            {/* R15 F - By vendor rows: one row per vendor, columns are
+                the same five P&L splits.  Card charges are not vendor-
+                keyed (no vendor_id on rippling_spend), so vendor mode
+                shows only bill.com spend - the mode note in the header
+                already sets that expectation. */}
+            {rowMode === "vendor" ? (
+              <VendorRows rows={vendorRollup?.rows || []} isAggregate={isAggregate} />
+            ) : tier === "C" ? (
               bands.map(({ period, weeks: bandWeeks, cell }) => {
                 const open = expandedPeriods.has(period.period_no);
                 return (
@@ -460,7 +508,7 @@ export function PurchasingTable({
                 const open = expandedWeeks.has(wIso);
                 const key = `${wIso}|${weekEnd}`;
                 return (
-                  <>
+                  <Fragment key={`wk-${wIso}`}>
                     {renderWeekRow(wIso, weekEnd, cell)}
                     {open && (
                       <BillRows
@@ -470,7 +518,7 @@ export function PurchasingTable({
                         showFilter={showFilter}
                       />
                     )}
-                  </>
+                  </Fragment>
                 );
               })
             )}
@@ -496,14 +544,19 @@ export function PurchasingTable({
                     </span>
                   </>
                 } />
-                {showFilterActive && (
+                {showFilterActive && rowMode === "pnl" && (
                   <span className="kpi-p-tbl-weeksub">
                     {showFilter === "bills" ? "bill.com only" : "cards only"}
                   </span>
                 )}
+                {rowMode === "vendor" && (
+                  <span className="kpi-p-tbl-weeksub">bill.com only · card charges excluded</span>
+                )}
               </td>
-              {COLUMNS.map(c => (<Cell key={c.key} value={footTotals[c.key]} isFooter />))}
-              <Cell value={footTotals.total} isFooter />
+              {COLUMNS.map(c => (
+                <Cell key={c.key} value={(rowMode === "vendor" ? vendorFootTotals : footTotals)[c.key]} isFooter />
+              ))}
+              <Cell value={(rowMode === "vendor" ? vendorFootTotals : footTotals).total} isFooter />
             </tr>
           </tfoot>
         </table>
@@ -550,18 +603,17 @@ function FragmentBand({
         const open2 = expandedWeeks.has(wIso);
         const key = `${wIso}|${weekEnd}`;
         return (
-          <>
+          <Fragment key={`bwk-${wIso}`}>
             {renderWeekRow(wIso, weekEnd, cell)}
             {open2 && (
               <BillRows
-                key={`bills-${key}`}
                 scopeKey={key}
                 drillState={drillState}
                 isAggregate={isAggregate}
                 showFilter={showFilter}
               />
             )}
-          </>
+          </Fragment>
         );
       })}
     </>
@@ -571,4 +623,40 @@ function FragmentBand({
 function isoMinus1(iso) {
   const t = new Date(iso + "T00:00:00Z").getTime();
   return new Date(t - 86400000).toISOString().slice(0, 10);
+}
+
+// R15 F - By vendor row body.  One row per vendor, sorted server-side
+// by |spend| desc.  Same five P&L columns as the P&L row mode; the
+// footer sums vendor gl_split for a per-column total.  Unresolved
+// vendor ids (rare after the resolve view) render as an em-dash label.
+function VendorRows({ rows, isAggregate }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <tr>
+        <td colSpan={7} className="kpi-p-tbl-notice">
+          No vendor bills in this range.
+        </td>
+      </tr>
+    );
+  }
+  return rows.map((v, i) => {
+    const g = v.gl_split || {};
+    return (
+      <tr key={v.vendor_id || `unresolved-${i}`} className="kpi-p-tbl-vendorrow">
+        <td>
+          <span className="kpi-p-tbl-vendorname">{v.name || "—"}</span>
+          <span className="kpi-p-tbl-weeksub">
+            {v.line_count} line{v.line_count === 1 ? "" : "s"}
+            {v.resolved ? "" : " · unresolved id"}
+          </span>
+        </td>
+        <Cell value={g.food} />
+        <Cell value={g.packaging} />
+        <Cell value={g.vehicle} />
+        <Cell value={g.equipment} />
+        <Cell value={g.repair} />
+        <Cell value={v.spend} isFooter />
+      </tr>
+    );
+  });
 }

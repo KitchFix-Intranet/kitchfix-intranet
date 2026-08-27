@@ -1080,6 +1080,14 @@ export const BUCKET_DEFS = [
 ];
 
 export const LEDGER_DEFS = [
+  // R15 - Vehicle joins the matched-ledgers row.  Was a BucketCard with
+  // 9 period bars for a category moving ~$2k a period; the chart carried
+  // no signal (98.6% of Vehicle spend is on cards ALL FYTD, structurally
+  // unlike Food/Packaging).  Now: same LedgerCard shape as Equipment
+  // and R&M.  `glLikePrefix: "3500"` mirrors reimb's 13xx pattern.
+  { key: "veh",   label: "Vehicle",                sub: "3500",   glLikePrefix: "3500",
+    strokeClass: "kpi-p-b-veh",    legend: "#7A3E9D",
+    payloadKey: "vehicle" },
   { key: "equip", label: "Equipment",              sub: "5002.5", glLineCode: "5002.5",
     strokeClass: "kpi-p-b-equip",  legend: "#0F766E",
     payloadKey: "equipment" },
