@@ -702,7 +702,7 @@ function UpcomingCards({ stand, estimate, split, hourlyRate }) {
       <div className="kpi-hs-card kpi-hs-signal" data-card="plan-cost">
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">What it should cost</span>
-          <HelpPop id="qUpPlan" title="What it should cost" body={<>Your own averages this season - night game / day game / prep day - applied to the games on this homestand's calendar. Compares against the budget above.</>} />
+          <HelpPop id="qUpPlan" title="What it should cost" body={<>What a typical low-OT stand of this shape costs - night game / day game / prep day rates from this account's own history, applied to the games on this homestand's calendar. Not a forecast we made at the time; a benchmark that lets us compare what the stand actually cost against what a typical one does.</>} />
         </header>
         <div className="kpi-hs-hero">{fmt$0(planTotal)}</div>
         <div className="kpi-hs-sub">
@@ -836,7 +836,7 @@ function PlayedCards({ stand, split, employees, estimate, hourlyRate }) {
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">Vs the plan</span>
           {accuracyPct != null && <span className={`kpi-hs-pill ${accuracyPct >= 90 ? "kpi-hs-pill-good" : accuracyPct >= 75 ? "kpi-hs-pill-amber" : "kpi-hs-pill-bad"}`}>{accuracyPct >= 90 ? "Close" : accuracyPct >= 75 ? "Off" : "Way off"}</span>}
-          <HelpPop id="qPlVs" title="Vs the plan" body={<>Game-day spend against what the plan predicted for those same games. <b>Accuracy</b> is 100 percent minus the absolute error divided by the actual - the higher the better. Direction is stated in words (low or high) rather than as a signed number.</>} />
+          <HelpPop id="qPlVs" title="Vs the plan" body={<>Game-day spend against what a typical low-OT stand of this shape costs, using this account's own night / day / prep rates. Not what we forecast at the time - a benchmark. When they differ, that gap is signal: HS 8's 41% OT against an expected 21% is the model telling you something true about six-game weeks. <b>Accuracy</b> is 100 percent minus the absolute error divided by the actual. Direction is stated in words (low or high), never as a signed number.</>} />
         </header>
         <div className="kpi-hs-hero">{fmt$0(gameDayActual)}</div>
         <div className="kpi-hs-sub">the plan said <b>{fmt$0(gameDayPlan)}</b></div>
