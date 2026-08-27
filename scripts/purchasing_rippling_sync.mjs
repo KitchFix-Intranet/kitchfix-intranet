@@ -741,6 +741,32 @@ async function deriveSpendLines({ rippling_ids }) {
     }
   }
 
+  // ─── INV-P12 truncation-pair rulings (stored decision) ─────────────
+  //
+  // Owner ruling 2026-08-27. Prefix-tolerant pair detection is not a live
+  // rule - the 45 pairs measured on 2026-08-27 were reviewed individually
+  // by Kevin.  Ruled parents live in `purchasing_truncation_pair_rulings`;
+  // the derive reads the table on each pass and excludes those parents'
+  // lines with reason='truncation_pair'.  A fresh candidate pair does NOT
+  // auto-exclude - it is surfaced by
+  //     scripts/purchasing_detect_truncation_pairs.mjs
+  // for a new ruling.  Same discipline as the report-only precedence rule.
+  //
+  // Loaded first so precedence (below) can pre-empt Ruling 4 when both
+  // fire on the same parent.
+  const truncationPairRuledParents = new Set();
+  {
+    const { data, error } = await supa
+      .from("purchasing_truncation_pair_rulings")
+      .select("parent_txn_id");
+    if (error) {
+      console.error(`[trunc-pair] load rulings FAILED: ${error.message}`);
+      return { ok: false, error: `truncation_pair_rulings: ${error.message}` };
+    }
+    for (const r of data || []) truncationPairRuledParents.add(r.parent_txn_id);
+    console.log(`[trunc-pair] rulings loaded: ${truncationPairRuledParents.size} parents`);
+  }
+
   // ─── Ruling 4 pre-scan: same-merchant same-amount pair detection ────
   //
   // Owner ruling 2026-08-20. Where two parents share the same merchant
@@ -886,6 +912,9 @@ async function deriveSpendLines({ rippling_ids }) {
   let authPairExcludedLines = 0;
   let authPairExcludedUsdCents = 0;
   let zeroAmountExcludedLines = 0;
+  // INV-P12 truncation-pair (stored ruling) counters
+  let truncationPairExcludedLines    = 0;
+  let truncationPairExcludedUsdCents = 0;
   // Label-fallback self-heal (owner ruling 2026-08-19, PR #713 flag 1
   // hardening): when a work_location_id misses the map and its label is
   // one of the three EXCLUDED_LABEL_FALLBACK literals, we stage an
@@ -952,18 +981,24 @@ async function deriveSpendLines({ rippling_ids }) {
     const authPairEarlierHit  = parent ? authPairEarlierParents.has(parent) : false;
     const authPairLaterHit    = parent ? authPairLaterParentExcluded.has(parent) : false;
     const zeroAmountHit       = parent ? zeroAmountParents.has(parent) : false;
+    // INV-P12 truncation-pair stored ruling (Kevin 2026-08-27).
+    const truncationPairHit   = parent ? truncationPairRuledParents.has(parent) : false;
 
     // Reason precedence for the recorded reason column. First hit wins.
     // The order below matches the exclusion causality:
-    //   1. map_excluded    - work_location owner-seeded excluded=TRUE
-    //   2. label_fallback  - one of three EXCLUDED_LABEL_FALLBACK literals
-    //   3. dup_split       - Ruling 2 duplicate-split parent
-    //   4. non_usd         - Ruling 3
-    //   5. auth_pair       - Ruling 4 (earlier of pair; or later when earlier-in-report)
-    //   6. zero_amount     - Ruling 5
+    //   1. map_excluded      - work_location owner-seeded excluded=TRUE
+    //   2. label_fallback    - one of three EXCLUDED_LABEL_FALLBACK literals
+    //   3. truncation_pair   - INV-P12 stored ruling (Kevin 2026-08-27).  Pre-empts
+    //                          the live auth_pair rule so a hand-ruled parent stays
+    //                          labeled with the specific decision that put it here.
+    //   4. dup_split         - Ruling 2 duplicate-split parent
+    //   5. non_usd           - Ruling 3
+    //   6. auth_pair         - Ruling 4 (earlier of pair; or later when earlier-in-report)
+    //   7. zero_amount       - Ruling 5
     let reason = null;
     if (wlRow?.excluded === true) reason = "map_excluded";
     else if (labelFallbackHit)    reason = "label_fallback";
+    else if (truncationPairHit)   reason = "truncation_pair";
     else if (dupSplitHit)         reason = "dup_split";
     else if (currencyHit)         reason = "non_usd";
     else if (authPairEarlierHit || authPairLaterHit) reason = "auth_pair";
@@ -994,6 +1029,10 @@ async function deriveSpendLines({ rippling_ids }) {
     }
     if (reason === "zero_amount") {
       zeroAmountExcludedLines++;
+    }
+    if (reason === "truncation_pair") {
+      truncationPairExcludedLines++;
+      if (ccy === "USD" && r.amount != null) truncationPairExcludedUsdCents += Math.round(Number(r.amount) * 100);
     }
 
     // ─── INV-P8c Ruling 1: txn_date from parent ObjectID timestamp ──
@@ -1044,6 +1083,8 @@ async function deriveSpendLines({ rippling_ids }) {
   const apDollars = (authPairExcludedUsdCents / 100).toFixed(2);
   console.log(`[ruling-4] auth-pair line exclusion: lines=${authPairExcludedLines} usd_amount=$${apDollars} parent_earlier=${authPairEarlierParents.size} parent_later_excluded_via_report=${authPairLaterParentExcluded.size} both_in_report_kept=${authPairKeptEarlierParents.size}`);
   console.log(`[ruling-5] zero-amount line exclusion: lines=${zeroAmountExcludedLines} parents=${zeroAmountParents.size}`);
+  const tpDollars = (truncationPairExcludedUsdCents / 100).toFixed(2);
+  console.log(`[trunc-pair] stored-ruling line exclusion: lines=${truncationPairExcludedLines} usd_amount=$${tpDollars} parents_ruled=${truncationPairRuledParents.size}`);
 
   // ─── Sanity asserts (INV-P8b Part E + Ruling 4) - PRE-WRITE gate ──
   // These are deterministic-from-payload checks that catch bug shapes:
