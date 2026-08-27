@@ -201,11 +201,27 @@ export function assertNoStraddlingStand(homestands, dailyFloorIso) {
  */
 export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, gameByDate, prepDays, todayIso) {
   if (!stand) return { total: 0, per_day: [] };
-  // HS FB1 PR-4: `isFuture` still gates the base-rate fallback (line
-  // ~236) because a played stand's zero-week is a real zero (no labor
-  // that week), not a "we haven't seen the numbers yet" fallback case.
-  // Fallback fires only on future stands where weekTotal is unknown.
-  const isFuture = todayIso != null && stand.game_start > todayIso && !stand.pre_floor;
+  // #850 defect 1 (owner ruling 2026-08-27): base rates fire on every
+  // stand still being played, not just future stands.
+  //
+  // Prior state: `isFuture` = future-only, and the base-rate branch
+  // was gated by `weekTotal === 0`. On an in-progress stand the week
+  // total is non-zero (partial-week actual) so the historical branch
+  // ran and redistributed that partial actual across weighted days.
+  // Result: "what it should cost" numerically equals "what has been
+  // spent so far" - a plan that agrees with the actual no matter
+  // what happens. Vs the plan would report 100% accuracy forever.
+  //
+  // Correct model per owner ruling:
+  //   games not started    -> base rates
+  //   part played          -> base rates
+  //   all games played     -> historical distribution (real retrospective plan)
+  //   pre-floor            -> historical distribution (weeks ARE complete)
+  //
+  // Gate becomes: not pre-floor AND game_end has not passed today.
+  // Boundary: on the last game day itself, treat as still-in-progress
+  // (labor for that day is only fully realized after payroll).
+  const isNotFullyPlayed = todayIso != null && !stand.pre_floor && stand.game_end >= todayIso;
   const weeks = new Set();
   for (let d = stand.window_start; d <= stand.window_end; d = addDaysIso(d, 1)) {
     weeks.add(mondayOfIso(d));
@@ -231,14 +247,13 @@ export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, game
       dayWeights.push({ date: d, w, dayType });
       sumWeights += w;
     }
-    // HS PR-A: future stands have no historical weekTotal to
-    // distribute. Fall back to base rates directly - each day
-    // contributes its own base rate ($/night, $/day, $/prep). This
-    // is the same account-average signal, just evaluated per-day
-    // instead of scaled to a historical week's actual. Pre-floor
-    // stands keep the historical-distribution path; the fallback
-    // fires only when weekTotal is zero AND we're on a future stand.
-    if (weekTotal === 0 && isFuture) {
+    // #850 defect 1: base rates fire on every not-fully-played stand,
+    // not just when weekTotal is zero. Partial-week weekTotal on an
+    // in-progress stand is contamination, not signal - redistributing
+    // it makes the plan equal the actual by construction. See
+    // isNotFullyPlayed comment above. Fully-played stands + pre-floor
+    // stands stay on the historical-distribution branch below.
+    if (isNotFullyPlayed) {
       for (const dw of dayWeights) {
         if (dw.date < stand.window_start || dw.date > stand.window_end) continue;
         totalX10000 += Math.round(dw.w * 10000);
