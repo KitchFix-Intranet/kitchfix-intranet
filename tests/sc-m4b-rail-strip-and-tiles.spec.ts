@@ -17,6 +17,12 @@
 // no audit trail entry is created.
 
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
+
+// SC page's real-board markers - one of these is present whenever
+// the authed service-calendar view mounts. Unauthenticated state
+// renders a bare "Please sign in" panel with none of these.
+const SC_BOARD = '.sc-season-grid, .sc-ribbon, .sc-chrome-bar';
 
 const ACCOUNTS = [
   { key: 'CIN - OH',      category: 'MLB',  hasHomestandSchedule: true,  billingModel: 'flat_fee' },
@@ -163,6 +169,7 @@ test.describe('MLB rail (rev3 - past · now · future)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     await expect(page.locator('.sc-season-grid')).toBeVisible();
 
     // Pinned in-progress card renders with HS9.
@@ -192,6 +199,7 @@ test.describe('MLB rail (rev3 - past · now · future)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
 
     // Expand each group and open one row per state; assert button variant.
     const closedGroup = page.locator('.sc-rail-mlb-group').filter({ hasText: 'Closed out' });
@@ -220,6 +228,7 @@ test.describe('MLB rail (rev3 - past · now · future)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     const closedGroup = page.locator('.sc-rail-mlb-group').filter({ hasText: 'Closed out' });
     await closedGroup.locator('.sc-rail-mlb-group-header').click();
     // HS1 closed at $12,900 vs $13,053 budget - row must show spend.
@@ -232,6 +241,7 @@ test.describe('MLB rail (rev3 - past · now · future)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
 
     const closedGroup = page.locator('.sc-rail-mlb-group').filter({ hasText: 'Closed out' });
     const dueGroup    = page.locator('.sc-rail-mlb-group').filter({ hasText: 'Actuals due' });
@@ -251,6 +261,7 @@ test.describe('MLB rail (rev3 - past · now · future)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'STL - MO', STL_MO_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('STL - MO')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     // Actuals due + Upcoming present; NO Closed out group.
     await expect(page.locator('.sc-rail-mlb-group').filter({ hasText: 'Closed out' })).toHaveCount(0);
     await expect(page.locator('.sc-rail-mlb-group').filter({ hasText: 'Actuals due' })).toHaveCount(1);
@@ -261,6 +272,7 @@ test.describe('MLB rail (rev3 - past · now · future)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'TXR - TX - H', TXR_TX_H_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('TXR - TX - H')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     await expect(page.locator('.sc-rail-mlb-pinned')).toHaveCount(0);
     // Upcoming group still renders (has blocks).
     await expect(page.locator('.sc-rail-mlb-group').filter({ hasText: 'Upcoming' })).toHaveCount(1);
@@ -272,6 +284,7 @@ test.describe('Season strip (slim tracker with drained palette)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     const labels = page.locator('.sc-stepper-bar-segment-label');
     await expect(labels).toHaveCount(CIN_OH_SEED.length);
     for (const t of await labels.allTextContents()) {
@@ -291,6 +304,7 @@ test.describe('Season strip (slim tracker with drained palette)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     const current = page.locator('.sc-stepper-bar-segment--current .sc-stepper-bar-segment-button').first();
     const style = await current.evaluate((el) => {
       const cs = getComputedStyle(el);
@@ -318,6 +332,7 @@ test.describe('Tile navigation (step 6)', () => {
     page.on('dialog', () => modalOpens.count += 1);
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     // Click a Jul 3 GAME tile (HS9 first game).
     const july = page.locator('.sc-season-grid [role="gridcell"]').nth(6);
     const tile = july.locator('[aria-label*="2026-07-03"]').first();
@@ -337,6 +352,7 @@ test.describe('Tile navigation (step 6)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     // Jul 2 is AWAY (leading pre-day for HS9). Not interactive.
     const july = page.locator('.sc-season-grid [role="gridcell"]').nth(6);
     const awayTile = july.locator('[aria-label*="2026-07-02"]').first();
@@ -349,6 +365,7 @@ test.describe('Tile navigation (step 6)', () => {
       await page.setViewportSize({ width: 1440, height: 1000 });
       await stub(page, key, null);
       await page.goto(`/service-calendar?account=${encodeURIComponent(key)}`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
       await expect(page.locator('.sc-season-grid')).toBeVisible();
       await expect(page.locator('.sc-season-grid .sc-daysq--interactive'), `${key} tiles`).toHaveCount(0);
     }
@@ -360,6 +377,7 @@ test.describe('Payroll-week divider (rider)', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}&homestand=2026-07-27`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     const strip = page.locator('.sc-daystrip');
     await expect(strip).toBeVisible();
     const weekbreaks = strip.locator('.sc-daystrip-weekbreak');
@@ -377,6 +395,7 @@ test.describe('Payroll-week divider (rider)', () => {
     // Monday seam inside the strip domain.
     await stub(page, 'CIN - OH', CIN_OH_SEED);
     await page.goto(`/service-calendar?account=${encodeURIComponent('CIN - OH')}&homestand=2026-05-22`, { waitUntil: 'networkidle' });
+    await assertBoardLoaded(page, SC_BOARD, { context: 'service-calendar' });
     const strip = page.locator('.sc-daystrip');
     await expect(strip).toBeVisible();
     await expect(strip.locator('.sc-daystrip-weekbreak')).toHaveCount(0);

@@ -15,6 +15,7 @@
 // AND the retired inline banner does not render.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const TXR = 'TXR - AZ';
 
@@ -24,7 +25,7 @@ async function openWorkspace(page: any) {
   // of height so the toast body itself sits inside the fold).
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(600);
 }

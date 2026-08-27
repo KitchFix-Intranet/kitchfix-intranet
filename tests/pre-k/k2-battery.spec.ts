@@ -21,13 +21,14 @@
 // the captured args (day/entries/opts for save+reset, batchNote for bulk).
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const TXR = 'TXR - AZ';
 
 async function openWorkspace(page: any) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForTimeout(400);
 }
 

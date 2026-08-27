@@ -22,6 +22,7 @@
 
 import { test, expect } from "@playwright/test";
 import path from "node:path";
+import { assertBoardLoaded } from "./lib/board-loaded";
 
 const OUT = path.resolve(__dirname, "..", "playwright-report", "pr4-drill-table");
 test.use({ baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3229" });
@@ -35,6 +36,7 @@ const P8_END     = "2026-08-23";
 async function loadBoard(page, account, start, end) {
   const q = `?account=${encodeURIComponent(account)}&start=${start}&end=${end}`;
   await page.goto(`/kpi/purchasing${q}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator(".kpi-p-card").first()).toBeVisible();
   await page.waitForTimeout(400);

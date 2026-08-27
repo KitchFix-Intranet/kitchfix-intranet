@@ -25,6 +25,7 @@
 
 import { test, expect } from "@playwright/test";
 import path from "node:path";
+import { assertBoardLoaded } from "./lib/board-loaded";
 
 const OUT = path.resolve(__dirname, "..", "playwright-report", "pr2-r7");
 test.use({ baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3226" });
@@ -36,6 +37,7 @@ const P8 = "?account=ALL&start=2026-07-27&end=2026-08-23";
 test("fix5 layout measurement + screenshot at 1600px", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1600 });
   await page.goto(`/kpi/purchasing${FYTD}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   await page.waitForTimeout(500);
@@ -66,6 +68,7 @@ test("fix5 layout measurement + screenshot at 1600px", async ({ page }) => {
 test("fix1 chart opens at right edge (P9-side visible) at narrow viewport", async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 1400 });
   await page.goto(`/kpi/purchasing${FYTD}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   await page.waitForTimeout(500);
@@ -94,7 +97,8 @@ test("fix1 scroll onset per viewport", async ({ page }) => {
   for (const w of widths) {
     await page.setViewportSize({ width: w, height: 1200 });
     await page.goto(`/kpi/purchasing${FYTD}`);
-    await page.waitForLoadState("networkidle");
+    await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
+  await page.waitForLoadState("networkidle");
     await expect(page.locator('.kpi-p-card').first()).toBeVisible();
     await page.waitForTimeout(300);
     const scrolls = await page.locator('.kpi-p-wks-scroll').all();
@@ -112,6 +116,7 @@ test("fix1 scroll onset per viewport", async ({ page }) => {
 test("fix2 vendor prior column - FYTD (no prior on every row)", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   await page.goto(`/kpi/purchasing${FYTD}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   const chips = await page.locator('.kpi-p-vbrow .kpi-p-ch').all();
@@ -129,6 +134,7 @@ test("fix2 vendor prior column - FYTD (no prior on every row)", async ({ page })
 test("fix2 vendor prior column - P8 (movement)", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   await page.goto(`/kpi/purchasing${P8}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   const chips = await page.locator('.kpi-p-vbrow .kpi-p-ch').all();
@@ -146,6 +152,7 @@ test("fix2 vendor prior column - P8 (movement)", async ({ page }) => {
 test("fix3 card-purchases category never mid-word truncation", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   await page.goto("/kpi/purchasing?account=ALL");
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   const rows = await page.locator('.kpi-p-cplist .kpi-p-rw').all();
@@ -160,6 +167,7 @@ test("fix3 card-purchases category never mid-word truncation", async ({ page }) 
 test("fix4 zero-budget cards render no variance block", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1600 });
   await page.goto("/kpi/purchasing?account=ALL");
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   // Reimbursable (13xx) has no budget at ALL.
@@ -189,6 +197,7 @@ test("acceptance: portfolio P9 kpi budget = $231,132.99", async ({ page }) => {
 test("screenshot: 1600 P8 (movement)", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1600 });
   await page.goto(`/kpi/purchasing${P8}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   await page.waitForTimeout(500);
@@ -198,6 +207,7 @@ test("screenshot: 1600 P8 (movement)", async ({ page }) => {
 test("screenshot: 900 stack (FYTD)", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 1600 });
   await page.goto(`/kpi/purchasing${FYTD}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   await page.waitForTimeout(500);
