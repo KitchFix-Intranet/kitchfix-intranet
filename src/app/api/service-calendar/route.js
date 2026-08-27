@@ -387,7 +387,9 @@ export async function GET(request) {
     //
     // Also returns:
     //   defaultAccount: the account_key the requesting user is mapped
-    //     to in user_accounts (seeded from contacts via sc-3). The
+    //     to in user_accounts_derived. See docs/migrations/user-accounts-
+    //     derived.sql for the shape: ACTIVE people (work_email +
+    //     account_key) UNION user_accounts_manual owner-overlay. The
     //     frontend auto-selects this on mount, fallback CIN-AZ.
     //   roles: the requesting user's role strings from contacts.role.
     //     A user can have multiple contacts rows (one per role/account
@@ -395,6 +397,16 @@ export async function GET(request) {
     //     client apply the floor-wins tiebreaker via computeInitialView
     //     for intent-aware landing (Stage 4 seam, activated here).
     //     Empty array when no contacts row matches the email.
+    //
+    // 2026-08-27 cutover from user_accounts (hand-maintained) to
+    // user_accounts_derived (view over `people` + owner overlay).
+    // ilike preserved - view returns emails in whatever case
+    // `people` stores them, ilike matches any case on either side.
+    // Migration applied + probe verified before this change landed
+    // (see PR #866 and scripts/probes/_probe_user_accounts_derived.mjs).
+    // The old user_accounts table stays in place for a few days
+    // before the third PR drops it - an orphaned table is
+    // recoverable, a dropped one is not.
     if (action === "sc-accounts") {
       const accounts = await loadAccountList();
       let defaultAccount = null;
@@ -405,7 +417,7 @@ export async function GET(request) {
           // Both queries use the same email match the route already
           // applies for the SC's user identification - no new auth path.
           const [acctRes, rolesRes] = await Promise.all([
-            supa.from("user_accounts").select("account").ilike("email", email).limit(1),
+            supa.from("user_accounts_derived").select("account").ilike("email", email).limit(1),
             supa.from("contacts").select("role").ilike("email", email),
           ]);
           if (!acctRes.error && acctRes.data?.[0]?.account) {
