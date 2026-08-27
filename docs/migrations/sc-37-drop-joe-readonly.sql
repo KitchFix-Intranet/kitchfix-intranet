@@ -1,0 +1,142 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- sc-37-drop-joe-readonly.sql
+-- 2026-08-27
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Drops the dormant `joe_readonly` login role.  Standing flag from sc-34 §57
+-- ("joe_readonly SELECT default"): every table born under `postgres` in the
+-- public schema inherited a silent SELECT grant to a role that nobody was
+-- using.  Item 3 audit 2026-08-27 confirmed dormancy:
+--   - live sessions:                     0
+--   - pg_stat_statements distinct_queries: 0
+--   - cumulative total_calls:            0
+--   - reach today: SELECT on 118 tables in public (every money-adjacent
+--                  and PII-adjacent surface this project has landed)
+-- Owner ruling 2026-08-27: dead end from an earlier attempt at giving
+-- Joe access.  He was added through Supabase team membership by email
+-- instead.  Drop the role entirely.
+--
+-- ─── ORDER MATTERS ────────────────────────────────────────────────────────
+--
+-- ALTER DEFAULT PRIVILEGES revokes must come BEFORE the DROP ROLE.  Postgres
+-- refuses to drop a role while it still owns grants (including default
+-- privileges).  The sequence below satisfies that constraint:
+--   1. Stop the leak: default privilege records for tables + sequences.
+--   2. Clean current grants: on all existing tables + sequences in public.
+--   3. Drop the role itself.
+--
+-- Not retroactive: sc-34's precedent applies - ALTER DEFAULT PRIVILEGES
+-- REVOKE affects only objects created after the statement runs.  Existing
+-- grants (the 118 tables that already carry joe_readonly=r) are cleaned by
+-- Statement 3 below, not by the ALTER DEFAULT PRIVILEGES.
+--
+-- Re-apply safety: each REVOKE is a no-op if the privilege isn't present;
+-- DROP ROLE IF EXISTS is idempotent.  Running this file a second time in
+-- Studio changes zero rows and produces no error.
+--
+-- ─── DDL STATEMENTS - APPLY ONE AT A TIME IN STUDIO ──────────────────────
+
+-- Statement 1: stop future SELECT grants on new tables.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE SELECT ON TABLES FROM joe_readonly;
+
+-- Statement 2: stop future USAGE + SELECT grants on new sequences.
+-- The default_acl entry showed `joe_readonly=r/postgres` on sequences too
+-- (sc-34 §B3 verify row).  Sequence access is nearly inert on its own but
+-- goes with the role; strip it in the same pass.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE SELECT, USAGE ON SEQUENCES FROM joe_readonly;
+
+-- Statement 3: revoke ALL on every existing table in public.  This is the
+-- retroactive sweep of the 118 tables joe_readonly currently holds SELECT
+-- on.  REVOKE ALL is safe: joe_readonly's only grant across the schema is
+-- SELECT (per Item 3 audit), so revoking ALL clears its full footprint
+-- without touching any other grantee's privileges.
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM joe_readonly;
+
+-- Statement 4: same sweep for sequences.
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM joe_readonly;
+
+-- Statement 5: drop the role.
+-- IF EXISTS so a re-apply after the first successful run is a no-op.
+DROP ROLE IF EXISTS joe_readonly;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+--   V E R I F Y   B L O C K   -   R E A D - O N L Y
+--
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- V1. Role is gone.  Expect zero rows.
+--
+-- SELECT rolname
+--   FROM pg_roles
+--  WHERE rolname = 'joe_readonly';
+--
+--
+-- V2. No table in public still grants anything to joe_readonly.  Expect zero.
+--
+-- SELECT COUNT(*) AS remaining_grants
+--   FROM information_schema.role_table_grants
+--  WHERE grantee = 'joe_readonly';
+--
+--
+-- V3. Default-privilege record no longer references joe_readonly.  Expect zero.
+--
+-- SELECT COUNT(*) AS default_acl_references
+--   FROM pg_default_acl d
+--  WHERE d.defaclacl::text LIKE '%joe_readonly%';
+--
+--
+-- V4. THE CHECK KEVIN CARES ABOUT: a newly created table in public grants
+-- nothing to joe_readonly.  This proves the RULE is actually off, not just
+-- that existing grants were cleared.  Same pattern as sc-34 V2.
+--
+-- The probe creates a throwaway table inside a transaction, reads its grants,
+-- then rolls back so no state persists.  Filter to any grantee row that
+-- mentions joe_readonly; expect zero rows.  (anon + authenticated will still
+-- appear with REFERENCES + TRIGGER per sc-34's rationale; postgres +
+-- service_role appear with their standard defaults - none of those touch
+-- joe_readonly.)
+--
+-- BEGIN;
+-- CREATE TABLE public.sc37_probe_default_priv_check (id int);
+-- SELECT grantee, privilege_type
+--   FROM information_schema.role_table_grants
+--  WHERE table_schema = 'public'
+--    AND table_name = 'sc37_probe_default_priv_check'
+--    AND grantee = 'joe_readonly';
+-- -- Expected: 0 rows.
+-- --
+-- -- For reference (not the assertion): the full grant set on the probe
+-- -- table should now be postgres + service_role (all standard privileges),
+-- -- plus anon + authenticated with REFERENCES + TRIGGER only.
+-- SELECT grantee, privilege_type
+--   FROM information_schema.role_table_grants
+--  WHERE table_schema = 'public'
+--    AND table_name = 'sc37_probe_default_priv_check'
+--  ORDER BY grantee, privilege_type;
+-- ROLLBACK;
+--
+--
+-- V5. Pre-flight (RUN BEFORE APPLYING).  Confirms the audit's snapshot is
+-- still current.  If any of these numbers moved since 2026-08-27, stop and
+-- re-audit - something may have started using the role between the audit
+-- and the apply.
+--
+-- SELECT (SELECT COUNT(*) FROM pg_stat_activity WHERE usename = 'joe_readonly') AS live_sessions,
+--        (SELECT COUNT(*) FROM information_schema.role_table_grants
+--          WHERE grantee = 'joe_readonly' AND privilege_type = 'SELECT')          AS current_table_grants,
+--        (SELECT COALESCE(SUM(calls), 0) FROM pg_stat_statements s
+--            JOIN pg_roles r ON r.oid = s.userid WHERE r.rolname = 'joe_readonly') AS cumulative_calls;
+--
+-- Expected on 2026-08-27:
+--   live_sessions        = 0
+--   current_table_grants = 118
+--   cumulative_calls     = 0
+--
+-- ─── OWNER ATTESTATION ───────────────────────────────────────────────────
+-- applied in Studio: <fill-in-when-applied>
+--   head SHA: <fill-in-when-applied>
