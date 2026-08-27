@@ -202,26 +202,26 @@ export function assertNoStraddlingStand(homestands, dailyFloorIso) {
 export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, gameByDate, prepDays, todayIso) {
   if (!stand) return { total: 0, per_day: [] };
   // #850 defect 1 (owner ruling 2026-08-27): base rates fire on every
-  // stand still being played, not just future stands.
+  // non-pre-floor stand. Pre-floor keeps the historical distribution
+  // because no daily actuals exist for those dates and the weekly
+  // total is genuinely all we have; accuracy is never claimed on those.
   //
-  // Prior state: `isFuture` = future-only, and the base-rate branch
-  // was gated by `weekTotal === 0`. On an in-progress stand the week
-  // total is non-zero (partial-week actual) so the historical branch
-  // ran and redistributed that partial actual across weighted days.
-  // Result: "what it should cost" numerically equals "what has been
-  // spent so far" - a plan that agrees with the actual no matter
-  // what happens. Vs the plan would report 100% accuracy forever.
+  // Prior state ran historical distribution on played + in-progress
+  // stands too. On any stand whose window cleanly contains all its
+  // weighted days, the redistribution deterministically returned the
+  // week's own actual - so plan == actual to the cent, and Vs the plan
+  // reported ~100% accuracy on 15/36 played stands permanently. See
+  // _probe_estimator_model_gate.mjs A2 for the failing list.
   //
-  // Correct model per owner ruling:
-  //   games not started    -> base rates
-  //   part played          -> base rates
-  //   all games played     -> historical distribution (real retrospective plan)
-  //   pre-floor            -> historical distribution (weeks ARE complete)
+  // A' model per owner ruling: base rates answer "what would a typical
+  // low-OT stand of this shape cost", not "what did we forecast at
+  // the time". That framing is what makes the accuracy figure mean
+  // something - the plan is independent of the actual it's compared
+  // against, so a real gap between them is signal.
   //
-  // Gate becomes: not pre-floor AND game_end has not passed today.
-  // Boundary: on the last game day itself, treat as still-in-progress
-  // (labor for that day is only fully realized after payroll).
-  const isNotFullyPlayed = todayIso != null && !stand.pre_floor && stand.game_end >= todayIso;
+  //   pre-floor            -> historical distribution
+  //   every other stand    -> base rates
+  const useBaseRates = !stand.pre_floor;
   const weeks = new Set();
   for (let d = stand.window_start; d <= stand.window_end; d = addDaysIso(d, 1)) {
     weeks.add(mondayOfIso(d));
@@ -247,13 +247,12 @@ export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, game
       dayWeights.push({ date: d, w, dayType });
       sumWeights += w;
     }
-    // #850 defect 1: base rates fire on every not-fully-played stand,
-    // not just when weekTotal is zero. Partial-week weekTotal on an
-    // in-progress stand is contamination, not signal - redistributing
-    // it makes the plan equal the actual by construction. See
-    // isNotFullyPlayed comment above. Fully-played stands + pre-floor
-    // stands stay on the historical-distribution branch below.
-    if (isNotFullyPlayed) {
+    // #850 defect 1 A': base rates fire on every non-pre-floor stand.
+    // The plan answers "what would a typical low-OT stand of this
+    // shape cost" - a figure independent of the actual it's compared
+    // against, so the accuracy comparison is honest. See useBaseRates
+    // comment above.
+    if (useBaseRates) {
       for (const dw of dayWeights) {
         if (dw.date < stand.window_start || dw.date > stand.window_end) continue;
         totalX10000 += Math.round(dw.w * 10000);
