@@ -14,6 +14,7 @@
 import { DOLLAR_COVERAGE_FLOOR } from "../kpi/floors.js";
 import { dedupePaySegments } from "./paySegmentDedupe.js";
 import { APPROVAL_TRACKING_START } from "./approvalsTracking.js";
+import { fetchAllOffset, fetchAllKeyset } from "../rippling/paginate.js";
 //
 // Design decisions this file encodes (playbook v0.7):
 //
@@ -90,22 +91,13 @@ function isoWeekBounds(dateStr) {
   };
 }
 
-async function fetchAll(supa, tableOrView, columns = "*", filters = []) {
-  const all = [];
-  const PAGE = 1000;
-  let from = 0;
-  while (true) {
-    let q = supa.from(tableOrView).select(columns).range(from, from + PAGE - 1);
-    for (const f of filters) q = f(q);
-    const { data, error } = await q;
-    if (error) throw new Error(`${tableOrView}: ${error.message}`);
-    if (!data?.length) break;
-    all.push(...data);
-    if (data.length < PAGE) break;
-    from += PAGE;
-  }
-  return all;
-}
+// 2026-08-27 - local fetchAll retired. Base-table reads use
+// fetchAllOffset (behaviourally identical); _latest DISTINCT ON view
+// reads use fetchAllKeyset (owner-mandated after the Aug 22-27
+// rippling_raw_time_entries_latest statement timeout). Both live in
+// src/lib/rippling/paginate.js so a future derive script sees the
+// distinction from one place.
+const fetchAll = fetchAllOffset;
 
 /**
  * Derive labor_actuals + labor_unattributed rows.
@@ -202,8 +194,12 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   const earningMap = new Map(emRows.map(m => [m.merged_earning_type_name, m]));
 
   // ── 3. Raw data ──────────────────────────────────────────────
+  // 2026-08-27 - `_latest` DISTINCT ON views now paginated via keyset
+  // on rippling_id. See src/lib/rippling/paginate.js for the incident
+  // rationale (time_entries_latest deep-page OFFSET crossed 60s
+  // statement timeout on Aug 22-27).
   log("loading workers...");
-  const workers = await fetchAll(supa, "rippling_raw_workers_latest", "payload");
+  const workers = await fetchAllKeyset(supa, "rippling_raw_workers_latest", "rippling_id, payload");
   const workerToDept = new Map();
   for (const w of workers) {
     const wid = w.payload?.id;
@@ -223,10 +219,10 @@ export async function deriveLaborActuals({ supa, sourceRun, log = () => {}, forc
   log(`  external_id dedup: ${liveInPresence} -> ${paySegs.length} (${dedupDropped} rippling_id re-issues collapsed; ${noExtId} segments carry no external_id and pass through)`);
 
   log("loading time_entries...");
-  const teRows = await fetchAll(supa, "rippling_raw_time_entries_latest", "rippling_id, payload");
+  const teRows = await fetchAllKeyset(supa, "rippling_raw_time_entries_latest", "rippling_id, payload");
 
   log("loading time_entry_zo...");
-  const zoRows = await fetchAll(supa, "rippling_raw_time_entry_zo_latest", "rippling_id, payload");
+  const zoRows = await fetchAllKeyset(supa, "rippling_raw_time_entry_zo_latest", "rippling_id, payload");
 
   // ── 4. Indexes ───────────────────────────────────────────────
   // zo by external_id (= REST te.rippling_id): te -> zo hop

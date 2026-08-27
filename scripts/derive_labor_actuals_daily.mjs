@@ -34,6 +34,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { FY_START_ISO } from "../src/app/kpi/labor/lib/periods.js";
 import { dedupePaySegments } from "../src/lib/labor/paySegmentDedupe.js";
+import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -76,19 +77,11 @@ const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const r4 = (v) => Math.round((Number(v) || 0) * 10000) / 10000;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-async function fetchAll(table, sel) {
-  const PS = 1000;
-  const out = [];
-  let from = 0;
-  while (true) {
-    const r = await supa.from(table).select(sel).range(from, from + PS - 1);
-    if (r.error) throw new Error(`${table}: ${r.error.message}`);
-    for (const row of r.data || []) out.push(row);
-    if ((r.data || []).length < PS) break;
-    from += PS;
-  }
-  return out;
-}
+// 2026-08-27 - local fetchAll retired for the same reason as
+// deriveActuals.js. Base-table reads use fetchAllOffset; `_latest`
+// DISTINCT ON view reads use fetchAllKeyset. See
+// src/lib/rippling/paginate.js for the incident rationale.
+const fetchAll = (table, sel) => fetchAllOffset(supa, table, sel);
 function toDate(iso) { return new Date(`${iso}T00:00:00.000Z`); }
 function toISO(d)    { return d.toISOString().slice(0, 10); }
 function addDaysISO(iso, days) {
@@ -141,7 +134,9 @@ const writeFloorISO = dailyFloorISO;
 console.log("loading earning_type_map, workers, department_map");
 const [emRows, workers, deptMap] = await Promise.all([
   fetchAll("earning_type_map",              "merged_earning_type_name, multiplier, bucket"),
-  fetchAll("rippling_raw_workers_latest",   "rippling_id, payload"),
+  // 2026-08-27 - keyset on rippling_id for _latest views. See
+  // src/lib/rippling/paginate.js for the incident rationale.
+  fetchAllKeyset(supa, "rippling_raw_workers_latest", "rippling_id, payload"),
   fetchAll("rippling_department_map",       "department_id, account_key, is_container, pnl_line"),
 ]);
 const earningMap = new Map(emRows.map(m => [m.merged_earning_type_name, m]));
