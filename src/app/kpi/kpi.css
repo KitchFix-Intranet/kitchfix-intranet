@@ -1821,6 +1821,22 @@
 .kpi-vpill-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
 .kpi-vpill-bad  { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
 
+/* 2026-08-27 staleness banner - fires when max(labor_actuals.derived_at)
+   or max(labor_actuals_daily.derived_at) is > 30h old. Amber tone
+   consistent with .kpi-vpill-warn. Wide row above the view tabs; not
+   dismissible - the point is that a chef reading the board learns the
+   numbers are stale before making a staffing call on them. */
+.kpi-stale-banner {
+  background: var(--amber-100);
+  color: #92580A;
+  border: 1px solid #F3D9AE;
+  border-radius: 6px;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  margin-bottom: var(--kpi-sp-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 /* Help control - one pattern across the board (V8-18) */
 .kpi-help-anchor { position: relative; display: inline-block; }
 .kpi-help {

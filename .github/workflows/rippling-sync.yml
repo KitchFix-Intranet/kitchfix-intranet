@@ -71,6 +71,13 @@ jobs:
       RIPPLING_API_KEY: ${{ secrets.RIPPLING_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Failure surface (2026-08-27). Reuses the SC webhook already
+      # wired to schedule-drift + price-change-nightly; no new secret.
+      # This job failed silently six nights in a row before Kevin
+      # noticed in the Actions UI - a nightly job whose failure
+      # produces no signal is the same class as the guard defects
+      # this week. One message per failed night, step name + run URL.
+      SLACK_SC_WEBHOOK_URL: ${{ secrets.SLACK_SC_WEBHOOK_URL }}
 
     steps:
       - name: Checkout repository
@@ -105,6 +112,7 @@ jobs:
       # fail-open guard produced confidently wrong numbers. Dry-run of
       # sync skips derive (nothing to derive against a preview).
       - name: Derive labor actuals
+        id: derive_weekly
         if: success() && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
@@ -118,6 +126,7 @@ jobs:
       # manual-only. Same shared dedupe helper as the weekly so a
       # tripled-Tuesday cannot happen without also tripling the week.
       - name: Derive labor actuals daily
+        id: derive_daily
         if: success() && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
@@ -126,10 +135,11 @@ jobs:
           node scripts/derive_labor_actuals_daily.mjs --source=${SOURCE} --window=trailing8
 
       - name: Daily grain probes
+        id: probe_grain
         if: success() && (inputs.dry_run || 'false') != 'true'
         run: |
           echo "probe_daily_grain"
-          node scripts/_probe_daily_grain.mjs
+          node scripts/probes/_probe_daily_grain.mjs
 
       # Salary derive rebuilds the trailing 8 fiscal weeks of
       # labor_salary_actuals so a late-entered raise or a backdated
@@ -138,6 +148,7 @@ jobs:
       # log makes plain that HOURLY already wrote successfully and
       # only SALARY is stale. --window=fytd stays manual-only.
       - name: Derive salary actuals
+        id: derive_salary
         if: success() && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
@@ -152,6 +163,7 @@ jobs:
       # preserved by the derive's explicit upsert column list; probe
       # P3 gates that contract on every run.
       - name: Derive people
+        id: derive_people
         if: success() && (inputs.dry_run || 'false') != 'true'
         run: |
           SOURCE="${{ inputs.source || 'nightly' }}"
@@ -162,7 +174,55 @@ jobs:
       # the derive a second time (P3 dynamic + P6 idempotency); the
       # earlier Derive people step is the first run.
       - name: People probes
+        id: probe_people
         if: success() && (inputs.dry_run || 'false') != 'true'
         run: |
           echo "probe_people"
-          node scripts/_probe_people.mjs
+          node scripts/probes/_probe_people.mjs
+
+      # Failure surface (2026-08-27). Fires on ANY prior step failure.
+      # Posts one compact message to the SC channel with the failed
+      # step name and a run URL. Does not fire on dry-run. If the
+      # webhook itself is missing or fails, the workflow already
+      # failed - we don't want to mask that; `continue-on-error: true`
+      # so a webhook error does not turn a real failure into a
+      # different-looking failure.
+      #
+      # This is the "did the pipeline run" surface. The board's
+      # derived_at staleness banner is the "am I looking at fresh
+      # data" surface - both landing in the same PR because a nightly
+      # job that fails silently misled Kevin for six days on this
+      # exact defect.
+      - name: Post failure to Slack
+        if: failure() && (inputs.dry_run || 'false') != 'true'
+        continue-on-error: true
+        env:
+          SYNC:          ${{ steps.sync.outcome }}
+          DERIVE_WEEKLY: ${{ steps.derive_weekly.outcome }}
+          DERIVE_DAILY:  ${{ steps.derive_daily.outcome }}
+          PROBE_GRAIN:   ${{ steps.probe_grain.outcome }}
+          DERIVE_SALARY: ${{ steps.derive_salary.outcome }}
+          DERIVE_PEOPLE: ${{ steps.derive_people.outcome }}
+          PROBE_PEOPLE:  ${{ steps.probe_people.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if [ -z "${SLACK_SC_WEBHOOK_URL}" ]; then
+            echo "SLACK_SC_WEBHOOK_URL absent - skipping post"
+            exit 0
+          fi
+          # First failed step wins. Order matches the pipeline sequence,
+          # so the name reported is the earliest failure (later steps
+          # never ran because of `if: success()`).
+          if   [ "${SYNC}"          = "failure" ]; then FAILED_STEP="Run rippling sync"
+          elif [ "${DERIVE_WEEKLY}" = "failure" ]; then FAILED_STEP="Derive labor actuals"
+          elif [ "${DERIVE_DAILY}"  = "failure" ]; then FAILED_STEP="Derive labor actuals daily"
+          elif [ "${PROBE_GRAIN}"   = "failure" ]; then FAILED_STEP="Daily grain probes"
+          elif [ "${DERIVE_SALARY}" = "failure" ]; then FAILED_STEP="Derive salary actuals"
+          elif [ "${DERIVE_PEOPLE}" = "failure" ]; then FAILED_STEP="Derive people"
+          elif [ "${PROBE_PEOPLE}"  = "failure" ]; then FAILED_STEP="People probes"
+          else FAILED_STEP="unknown step"
+          fi
+          PAYLOAD=$(printf '{"text":"rippling sync failed at *%s*\\n<%s|Run #%s>"}' \
+            "${FAILED_STEP}" "${RUN_URL}" "${RUN_NUMBER}")
+          curl -sS -X POST -H 'Content-Type: application/json' -d "${PAYLOAD}" "${SLACK_SC_WEBHOOK_URL}" || true

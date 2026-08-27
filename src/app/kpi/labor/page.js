@@ -18,6 +18,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 // V-role-gates - OPS_LEADERSHIP_EMAILS retired here; server decides.
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine, standWindow } from "./lib/formatting";
+import { computeStaleness } from "@/lib/labor/staleness";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
@@ -525,6 +526,15 @@ export default function KpiLaborPage() {
 
   const freshness = data?.derive_freshness;
   const freshnessH = hoursSinceISO(freshness?.last_walk_at);
+  // 2026-08-27 staleness banner. See src/lib/labor/staleness.js for the
+  // pure function; kept out of this file so probes can call it with
+  // fixtures. Field names on derive_freshness (server + client agree):
+  //   last_weekly_derive_at  MAX(labor_actuals.derived_at)
+  //   last_daily_derive_at   MAX(labor_actuals_daily.derived_at)
+  const staleness = useMemo(
+    () => computeStaleness(freshness),
+    [freshness?.last_weekly_derive_at, freshness?.last_daily_derive_at],
+  );
 
   const workerRoster = useMemo(() => {
     if (!data?.actuals) return [];
@@ -876,6 +886,24 @@ export default function KpiLaborPage() {
   // ── Middle content: board (sentence + story) then WeekTable + 9 states ──
   const mainContent = (
     <>
+      {/* 2026-08-27 staleness banner. Fires when either the weekly or
+          daily derive is > 30h stale, naming the stale table + last
+          derive time. Amber tone matches other warn surfaces on this
+          page. This is the "am I looking at fresh data" surface; the
+          rippling-sync workflow's Slack webhook is the "did the
+          pipeline run" surface. A chef making a staffing call on stale
+          data is the real risk this catches. */}
+      {staleness && (
+        <div className="kpi-stale-banner" role="status" aria-live="polite" data-stale-banner>
+          <b>Numbers may be stale.</b>{" "}
+          {staleness.map((s, i) => (
+            <span key={s.table}>
+              {i > 0 && " · "}
+              {s.table} last rebuilt {fmtTimestamp(s.at)} ({Math.round(s.hoursOld)}h ago)
+            </span>
+          ))}
+        </div>
+      )}
       {/* homestand PR-2 - view tabs. Rendered only for MLB accounts
           (data.homestands is non-empty). Absent, not disabled, on
           non-MLB accounts per owner ruling 2026-08-21. */}

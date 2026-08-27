@@ -401,10 +401,32 @@ export async function GET(request) {
     .order("completed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  // 2026-08-27 staleness banner: table-wide max(derived_at) on both
+  // labor_actuals and labor_actuals_daily. The client's banner checks
+  // these against a 30h threshold and renders amber if either is stale,
+  // naming the stale table + timestamp. This is the "am I looking at
+  // fresh data" surface - orthogonal to the Slack webhook on the
+  // rippling-sync workflow, which answers "did the pipeline run". The
+  // labor board opened cleanly every day for six days while the sync
+  // was silently failing, until Kevin checked Actions by hand; the
+  // banner is meant to stop that from happening again. Single-row
+  // scalar reads via order+limit+maybeSingle; no wide scan.
+  const [weeklyMaxQ, dailyMaxQ] = await Promise.all([
+    supa.from("labor_actuals").select("derived_at")
+      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
+    supa.from("labor_actuals_daily").select("derived_at")
+      .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
   const freshness = {
     last_walk_at: psWalkGlobal.data?.completed_at || null,
     last_walk_ids_seen: psWalkGlobal.data?.ids_seen || null,
     last_derive_at: null,
+    // 2026-08-27 - table-wide maxes for the staleness banner. Distinct
+    // from `last_derive_at` above which is in-scope-max (used by the
+    // existing freshness pill) - a stale pipeline shows here even if
+    // the currently-selected account has no in-scope rows.
+    last_weekly_derive_at: weeklyMaxQ.data?.derived_at || null,
+    last_daily_derive_at:  dailyMaxQ.data?.derived_at  || null,
   };
 
   // V-role-gates - salary_available now comes from the same resolver
@@ -933,6 +955,8 @@ export async function GET(request) {
           (max, r) => (r.derived_at && (!max || r.derived_at > max) ? r.derived_at : max),
           null
         ),
+        last_weekly_derive_at: freshness.last_weekly_derive_at,
+        last_daily_derive_at:  freshness.last_daily_derive_at,
       },
       unmapped_names: unmapped.data || [],
       account_periods,
@@ -1115,6 +1139,8 @@ export async function GET(request) {
       (max, r) => (r.derived_at && (!max || r.derived_at > max) ? r.derived_at : max),
       null
     ),
+    last_weekly_derive_at: freshness.last_weekly_derive_at,
+    last_daily_derive_at:  freshness.last_daily_derive_at,
   };
 
   const unmapped = await supa
