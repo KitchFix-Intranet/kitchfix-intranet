@@ -27,6 +27,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { isSalariedWorker } from "../src/lib/labor/salariedPredicate.js";
+import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -56,19 +57,11 @@ const runStartISO = new Date().toISOString();
 console.log(`derive_people source=${args.source} dryRun=${args.dryRun} started=${runStartISO}`);
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-async function fetchAll(table, sel) {
-  const PS = 1000;
-  const out = [];
-  let from = 0;
-  while (true) {
-    const r = await supa.from(table).select(sel).range(from, from + PS - 1);
-    if (r.error) throw new Error(`${table}: ${r.error.message}`);
-    for (const row of r.data || []) out.push(row);
-    if ((r.data || []).length < PS) break;
-    from += PS;
-  }
-  return out;
-}
+// 2026-08-27 - local fetchAll retired for the same reason as
+// deriveActuals.js. Base-table reads use fetchAllOffset; `_latest`
+// DISTINCT ON view reads use fetchAllKeyset. See
+// src/lib/rippling/paginate.js for the incident rationale.
+const fetchAll = (table, sel) => fetchAllOffset(supa, table, sel);
 
 // ─── 1. Load raw + existing owner-marked worker_class ───────────────
 // Pre-fetch (worker_id, worker_class, worker_class_source) from
@@ -91,8 +84,10 @@ async function fetchAllTolerant(table, sel) {
   }
 }
 const [workers, users, deptMap, existingClass] = await Promise.all([
-  fetchAll("rippling_raw_workers_latest", "payload"),
-  fetchAll("rippling_raw_users_latest",   "rippling_id, payload"),
+  // 2026-08-27 - keyset on rippling_id for _latest views. See
+  // src/lib/rippling/paginate.js for the incident rationale.
+  fetchAllKeyset(supa, "rippling_raw_workers_latest", "rippling_id, payload"),
+  fetchAllKeyset(supa, "rippling_raw_users_latest",   "rippling_id, payload"),
   fetchAll("rippling_department_map",     "department_id, account_key, is_container"),
   fetchAllTolerant("people",              "worker_id, worker_class, worker_class_source"),
 ]);

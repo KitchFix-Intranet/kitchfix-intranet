@@ -29,6 +29,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { FY_START_ISO, periodOf } from "../src/app/kpi/labor/lib/periods.js";
 import { SALARIED_OT_EXEMPTION, isSalariedWorker } from "../src/lib/labor/salariedPredicate.js";
+import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -92,19 +93,11 @@ const runStartISO = new Date().toISOString();
 console.log(`derive_salary_actuals source=${args.source} dryRun=${args.dryRun} window=${args.window} started=${runStartISO}`);
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-async function fetchAll(table, sel) {
-  const PS = 1000;
-  const out = [];
-  let from = 0;
-  while (true) {
-    const r = await supa.from(table).select(sel).range(from, from + PS - 1);
-    if (r.error) throw new Error(`${table}: ${r.error.message}`);
-    for (const row of r.data || []) out.push(row);
-    if ((r.data || []).length < PS) break;
-    from += PS;
-  }
-  return out;
-}
+// 2026-08-27 - local fetchAll retired for the same reason as
+// deriveActuals.js. Base-table reads use fetchAllOffset; `_latest`
+// DISTINCT ON view reads use fetchAllKeyset. See
+// src/lib/rippling/paginate.js for the incident rationale.
+const fetchAll = (table, sel) => fetchAllOffset(supa, table, sel);
 function toDate(iso) { return new Date(`${iso}T00:00:00.000Z`); }
 function toISO(d) { return d.toISOString().slice(0, 10); }
 function addDaysISO(iso, days) {
@@ -147,9 +140,11 @@ console.log(`  window: ${windowStartISO} .. ${windowEndISO}  weeks=${weeks.lengt
 // ─── 1. Load inputs ──────────────────────────────────────────────────
 console.log("  loading workers + compensations + department map...");
 const [workers, comps, deptMap] = await Promise.all([
-  fetchAll("rippling_raw_workers_latest",       "rippling_id, payload"),
-  fetchAll("rippling_raw_compensations_latest",  "rippling_id, worker_id, payment_type, annual_value, salary_effective_date, currency"),
-  fetchAll("rippling_department_map",            "department_id, account_key, is_container"),
+  // 2026-08-27 - keyset on rippling_id for _latest views. See
+  // src/lib/rippling/paginate.js for the incident rationale.
+  fetchAllKeyset(supa, "rippling_raw_workers_latest",      "rippling_id, payload"),
+  fetchAllKeyset(supa, "rippling_raw_compensations_latest", "rippling_id, worker_id, payment_type, annual_value, salary_effective_date, currency"),
+  fetchAll("rippling_department_map",           "department_id, account_key, is_container"),
 ]);
 console.log(`    workers=${workers.length}  compensations=${comps.length}  dept_map=${deptMap.length}`);
 
