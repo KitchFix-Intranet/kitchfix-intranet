@@ -292,7 +292,7 @@ function SeasonToDateCard({ bank, homestands }) {
 //       carry none. WINDOW IS UNCHANGED - the stand still owns those
 //       days, per-stand totals still include them; this is a display
 //       trim only. Card totals must be identical before/after.
-function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayISO, scheduleByDate, accountTimezone, otByDate }) {
+function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayISO, scheduleByDate, accountTimezone, otByDate, estimateByDate }) {
   const days = useMemo(
     () => isoRange(stand.window_start, stand.window_end),
     [stand.window_start, stand.window_end],
@@ -368,6 +368,7 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
         scheduleByDate={scheduleByDate}
         accountTimezone={accountTimezone}
         otByDate={otByDate}
+        estimateByDate={estimateByDate}
         ariaLabel={`Homestand ${stand.index} day strip`}
       />
     </div>
@@ -702,7 +703,7 @@ function UpcomingCards({ stand, estimate, split, hourlyRate }) {
       <div className="kpi-hs-card kpi-hs-signal" data-card="plan-cost">
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">What it should cost</span>
-          <HelpPop id="qUpPlan" title="What it should cost" body={<>Your own averages this season - night game / day game / prep day - applied to the games on this homestand's calendar. Compares against the budget above.</>} />
+          <HelpPop id="qUpPlan" title="What it should cost" body={<>What a typical low-OT stand of this shape costs - night game / day game / prep day rates from this account's own history, applied to the games on this homestand's calendar. Not a forecast we made at the time; a benchmark that lets us compare what the stand actually cost against what a typical one does.</>} />
         </header>
         <div className="kpi-hs-hero">{fmt$0(planTotal)}</div>
         <div className="kpi-hs-sub">
@@ -836,7 +837,7 @@ function PlayedCards({ stand, split, employees, estimate, hourlyRate }) {
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">Vs the plan</span>
           {accuracyPct != null && <span className={`kpi-hs-pill ${accuracyPct >= 90 ? "kpi-hs-pill-good" : accuracyPct >= 75 ? "kpi-hs-pill-amber" : "kpi-hs-pill-bad"}`}>{accuracyPct >= 90 ? "Close" : accuracyPct >= 75 ? "Off" : "Way off"}</span>}
-          <HelpPop id="qPlVs" title="Vs the plan" body={<>Game-day spend against what the plan predicted for those same games. <b>Accuracy</b> is 100 percent minus the absolute error divided by the actual - the higher the better. Direction is stated in words (low or high) rather than as a signed number.</>} />
+          <HelpPop id="qPlVs" title="Vs the plan" body={<>Game-day spend against what a typical low-OT stand of this shape costs, using this account's own night / day / prep rates. Not what we forecast at the time - a benchmark. When they differ, that gap is signal: HS 8's 41% OT against an expected 21% is the model telling you something true about six-game weeks. <b>Accuracy</b> is 100 percent minus the absolute error divided by the actual. Direction is stated in words (low or high), never as a signed number.</>} />
         </header>
         <div className="kpi-hs-hero">{fmt$0(gameDayActual)}</div>
         <div className="kpi-hs-sub">the plan said <b>{fmt$0(gameDayPlan)}</b></div>
@@ -961,10 +962,18 @@ export function HomestandBoard({
   // Account timezone: NO fallback to UTC. Owner ruling 2026-08-26 -
   // "a wrong first pitch is worse than no first pitch"; if timezone is
   // null the caption drops the time and shows opponent only.
+  //
+  // #850 review 2026-08-27: the current account key lives on
+  // `data.filters.account`, not `data.account` (top-level `account` is
+  // not on the response shape). Missing lookup returned null and every
+  // caption dropped the time even though STL / CIN / TXR all have
+  // timezone populated. Fix reads through filters.
   const accountTimezone = useMemo(() => {
-    const acct = (data?.accounts_directory || []).find(a => a.team_key === data?.account);
+    const key = data?.filters?.account;
+    if (!key) return null;
+    const acct = (data?.accounts_directory || []).find(a => a.team_key === key);
     return acct?.timezone || null;
-  }, [data?.accounts_directory, data?.account]);
+  }, [data?.accounts_directory, data?.filters?.account]);
   // Per-day OT hours aggregate so the played-day caption can render
   // `91% OT`. Sum-over-sum, not mean-of-means - matches PlayedCards.
   // hours_regular + hours_overtime are per-worker per-day; sum both
@@ -982,6 +991,21 @@ export function HomestandBoard({
     }
     return m;
   }, [data?.actuals_daily]);
+  // #850 follow-up 2026-08-27: per-day base-rate estimate for ghost
+  // bars. The estimator's per_day payload carries the same night /
+  // day / prep amount that "What it should cost" totals up, keyed by
+  // date. Ghost bars render `~$N` from this map. Absent -> ghost falls
+  // back to a small placeholder ("~$-") and a fixed-height bar; the
+  // fallback should be rare now that A' uses base rates on every non-
+  // pre-floor stand and every future/in-progress stand has a real
+  // homestand_estimated payload.
+  const estimateByDate = useMemo(() => {
+    const m = new Map();
+    for (const p of (data?.homestand_estimated?.per_day || [])) {
+      if (p?.date && p.amount != null) m.set(p.date, Number(p.amount));
+    }
+    return m;
+  }, [data?.homestand_estimated]);
 
   // Employees for the selected stand come from data.actuals_range
   // (per-worker aggregates the server already produced for the
@@ -1065,6 +1089,7 @@ export function HomestandBoard({
                   scheduleByDate={scheduleByDate}
                   accountTimezone={accountTimezone}
                   otByDate={otByDate}
+                  estimateByDate={estimateByDate}
                 />
                 {showPlayed ? (
                   <PlayedCards

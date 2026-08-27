@@ -201,11 +201,27 @@ export function assertNoStraddlingStand(homestands, dailyFloorIso) {
  */
 export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, gameByDate, prepDays, todayIso) {
   if (!stand) return { total: 0, per_day: [] };
-  // HS FB1 PR-4: `isFuture` still gates the base-rate fallback (line
-  // ~236) because a played stand's zero-week is a real zero (no labor
-  // that week), not a "we haven't seen the numbers yet" fallback case.
-  // Fallback fires only on future stands where weekTotal is unknown.
-  const isFuture = todayIso != null && stand.game_start > todayIso && !stand.pre_floor;
+  // #850 defect 1 (owner ruling 2026-08-27): base rates fire on every
+  // non-pre-floor stand. Pre-floor keeps the historical distribution
+  // because no daily actuals exist for those dates and the weekly
+  // total is genuinely all we have; accuracy is never claimed on those.
+  //
+  // Prior state ran historical distribution on played + in-progress
+  // stands too. On any stand whose window cleanly contains all its
+  // weighted days, the redistribution deterministically returned the
+  // week's own actual - so plan == actual to the cent, and Vs the plan
+  // reported ~100% accuracy on 15/36 played stands permanently. See
+  // _probe_estimator_model_gate.mjs A2 for the failing list.
+  //
+  // A' model per owner ruling: base rates answer "what would a typical
+  // low-OT stand of this shape cost", not "what did we forecast at
+  // the time". That framing is what makes the accuracy figure mean
+  // something - the plan is independent of the actual it's compared
+  // against, so a real gap between them is signal.
+  //
+  //   pre-floor            -> historical distribution
+  //   every other stand    -> base rates
+  const useBaseRates = !stand.pre_floor;
   const weeks = new Set();
   for (let d = stand.window_start; d <= stand.window_end; d = addDaysIso(d, 1)) {
     weeks.add(mondayOfIso(d));
@@ -231,14 +247,12 @@ export function estimatePreFloorStand(stand, baseRates, weekTotalsByMonday, game
       dayWeights.push({ date: d, w, dayType });
       sumWeights += w;
     }
-    // HS PR-A: future stands have no historical weekTotal to
-    // distribute. Fall back to base rates directly - each day
-    // contributes its own base rate ($/night, $/day, $/prep). This
-    // is the same account-average signal, just evaluated per-day
-    // instead of scaled to a historical week's actual. Pre-floor
-    // stands keep the historical-distribution path; the fallback
-    // fires only when weekTotal is zero AND we're on a future stand.
-    if (weekTotal === 0 && isFuture) {
+    // #850 defect 1 A': base rates fire on every non-pre-floor stand.
+    // The plan answers "what would a typical low-OT stand of this
+    // shape cost" - a figure independent of the actual it's compared
+    // against, so the accuracy comparison is honest. See useBaseRates
+    // comment above.
+    if (useBaseRates) {
       for (const dw of dayWeights) {
         if (dw.date < stand.window_start || dw.date > stand.window_end) continue;
         totalX10000 += Math.round(dw.w * 10000);
