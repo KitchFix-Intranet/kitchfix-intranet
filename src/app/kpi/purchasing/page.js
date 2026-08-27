@@ -61,7 +61,9 @@ import { PeriodCard } from "./components/PeriodCard";
 import { BucketCard } from "./components/BucketCard";
 import { LedgerCard } from "./components/LedgerCard";
 import { CardPurchases } from "./components/CardPurchases";
-import { VendorBreakdown } from "./components/VendorBreakdown";
+// R15 E - VendorBreakdown deleted.  It carried a `vs prior` column and a
+// fragmentation footer; both were ruled not-delivering-value.  The three
+// matched ledger cards + the drill table cover the vendor view now.
 // PR 3 - management-fee board components. Renders instead of the
 // at-risk cards for CIN - OH, STL - FL, STL - MO.
 import { ManagementFeeCard } from "./components/ManagementFeeCard";
@@ -886,42 +888,44 @@ export default function KpiPurchasingPage() {
               (Kevin ruling 2026-08-27).  Value colour is r/over or
               b/under matching the right-pane hero grammar. */}
 
-          <div className="kpi-p-flatrow kpi-p-flatrow-3up">
-            {board.ledgers
-              .filter(l => l.key === "equip" || l.key === "rm")
-              .map(l => (
-                <LedgerCard
-                  key={l.key}
-                  bucketKey={l.key}
-                  label={l.label}
-                  sub={l.sub}
-                  strokeClass={l.strokeClass}
-                  budget={l.budget}
-                  spent={l.spent}
-                  elapsedFrac={board.elapsedFrac}
-                  closed={closed}
-                  isFutureRange={isFutureRange}
-                  ledgerRows={l.ledgerRows}
-                  totalCount={l.totalCount}
-                  totalAmount={l.totalAmount}
-                  cap={l.cap}
-                  isAggregate={isAggregate}
-                />
-              ))}
-            <VendorBreakdown
-              account={account}
-              rows={data?.vendors?.rows}
-              totalCount={data?.vendors?.total_count}
-              totalAmount={data?.vendors?.total_amount}
-              cap={data?.vendors?.cap}
-              unresolvedCount={data?.vendors?.unresolved_count}
-              fragmentation={data?.vendors?.fragmentation}
-              priorHasData={data?.vendors?.prior_has_data}
-              priorRange={data?.vendors?.prior_range}
-              midPeriodElapsedFrac={midPeriodElapsedFrac}
-              isAggregate={isAggregate}
-            />
-          </div>
+          {/* R15 A/B/G - pass-through board: same three matched ledgers as
+              at-risk (Vehicle + Equipment + R&M).  VendorBreakdown removed.
+              Empty cards suppress; whole-empty row -> meta line. */}
+          {(() => {
+            const three = ["veh", "equip", "rm"]
+              .map(k => board.ledgers.find(l => l.key === k))
+              .filter(l => l && (Number(l.spent || 0) > 0.005 || (l.ledgerRows || []).length > 0));
+            if (three.length === 0) {
+              return (
+                <div className="kpi-p-mf-empty-row" role="status">
+                  No vehicle, equipment or repair spend in this range.
+                </div>
+              );
+            }
+            return (
+              <div className="kpi-p-flatrow kpi-p-flatrow-3up kpi-p-flatrow-ledgers">
+                {three.map(l => (
+                  <LedgerCard
+                    key={l.key}
+                    bucketKey={l.key}
+                    label={l.label}
+                    sub={l.sub}
+                    strokeClass={l.strokeClass}
+                    budget={l.budget}
+                    spent={l.spent}
+                    elapsedFrac={board.elapsedFrac}
+                    closed={closed}
+                    isFutureRange={isFutureRange}
+                    ledgerRows={l.ledgerRows}
+                    totalCount={l.totalCount}
+                    totalAmount={l.totalAmount}
+                    cap={l.cap}
+                    isAggregate={isAggregate}
+                  />
+                ))}
+              </div>
+            );
+          })()}
 
           <CardPurchases
             pendingAmount={board.pending}
@@ -1015,14 +1019,19 @@ export default function KpiPurchasingPage() {
           periodHistory={data?.period_history || null}
         />
 
-        {board.buckets.map(b => (
+        {/* R15 A - Vehicle bucket card removed; Vehicle joins the
+            matched-ledgers row below.  Only Food + Packaging render as
+            bucket cards now (with charts). */}
+        {board.buckets
+          .filter(b => b.key !== "vehicle")
+          .map(b => (
           <BucketCard
             key={b.key}
             bucketKey={b.key}
             label={b.label}
             sub={b.sub}
             strokeClass={b.strokeClass}
-            identity={b.key === "packaging" ? "pkg" : (b.key === "vehicle" ? "veh" : "food")}
+            identity={b.key === "packaging" ? "pkg" : "food"}
             budget={b.budget}
             spent={b.spent}
             bills={b.bills}
@@ -1038,58 +1047,45 @@ export default function KpiPurchasingPage() {
           />
         ))}
 
-        {/* PR 2 R7 Fix 5 - three-up: [Equipment] [R&M] [Vendor breakdown]
-            on one flatrow, then Reimbursable (full width), then Card
-            purchases (full width). Kevin's ruling 2026-08-24:
-              [ Equipment ] [ Repair & maintenance ] [ Vendor breakdown ]
-              [ Card purchases ................................ ]
-            Reimbursable isn't shown in Kevin's diagram; it stays as a
-            full-width row above Card purchases so no card is dropped.
-            Measured at 1600px viewport - Vendor breakdown lands at
-            ~382px card width; its grid rebalances to fit four columns
-            (see .kpi-p-flatrow-3up .kpi-p-vbrow rule). */}
-        <div className="kpi-p-flatrow kpi-p-flatrow-3up">
-          {board.ledgers
-            .filter(l => l.key === "equip" || l.key === "rm")
-            .map(l => (
-              <LedgerCard
-                key={l.key}
-                bucketKey={l.key}
-                label={l.label}
-                sub={l.sub}
-                strokeClass={l.strokeClass}
-                budget={l.budget}
-                spent={l.spent}
-                elapsedFrac={board.elapsedFrac}
-                closed={closed}
-                isFutureRange={isFutureRange}
-                ledgerRows={l.ledgerRows}
-                totalCount={l.totalCount}
-                totalAmount={l.totalAmount}
-                cap={l.cap}
-                isAggregate={isAggregate}
-              />
-            ))}
-          <VendorBreakdown
-            account={account}
-            /* PR-2 R6 Part B - per-vendor rollup from the route
-               (billcom_ref_vendors resolution, capped at 25). */
-            rows={data?.vendors?.rows}
-            totalCount={data?.vendors?.total_count}
-            totalAmount={data?.vendors?.total_amount}
-            cap={data?.vendors?.cap}
-            unresolvedCount={data?.vendors?.unresolved_count}
-            fragmentation={data?.vendors?.fragmentation}
-            /* PR 2 R7 Fix 2 - gate the "new" / "no prior period" split
-               on whether the compared window has data at all. */
-            priorHasData={data?.vendors?.prior_has_data}
-            priorRange={data?.vendors?.prior_range}
-            /* PR 2 R9 P1-1 - scale prior by elapsed fraction on
-               single in-progress periods so vs-prior is like-for-like. */
-            midPeriodElapsedFrac={midPeriodElapsedFrac}
-            isAggregate={isAggregate}
-          />
-        </div>
+        {/* R15 B/G - three matched ledgers: Vehicle, Equipment, R&M.
+            One shape, equal height (CSS: .kpi-p-flatrow-3up stretches
+            children).  Empty cards suppress themselves; if all three are
+            empty, one meta line replaces the row. */}
+        {(() => {
+          const three = ["veh", "equip", "rm"]
+            .map(k => board.ledgers.find(l => l.key === k))
+            .filter(l => l && (Number(l.spent || 0) > 0.005 || (l.ledgerRows || []).length > 0));
+          if (three.length === 0) {
+            return (
+              <div className="kpi-p-mf-empty-row" role="status">
+                No vehicle, equipment or repair spend in this range.
+              </div>
+            );
+          }
+          return (
+            <div className="kpi-p-flatrow kpi-p-flatrow-3up kpi-p-flatrow-ledgers">
+              {three.map(l => (
+                <LedgerCard
+                  key={l.key}
+                  bucketKey={l.key}
+                  label={l.label}
+                  sub={l.sub}
+                  strokeClass={l.strokeClass}
+                  budget={l.budget}
+                  spent={l.spent}
+                  elapsedFrac={board.elapsedFrac}
+                  closed={closed}
+                  isFutureRange={isFutureRange}
+                  ledgerRows={l.ledgerRows}
+                  totalCount={l.totalCount}
+                  totalAmount={l.totalAmount}
+                  cap={l.cap}
+                  isAggregate={isAggregate}
+                />
+              ))}
+            </div>
+          );
+        })()}
 
         {/* PR-2 R11 item 3 - Reimbursable + Card purchases side-by-side
             on a live period, full-width fallback on a closed period.
@@ -1106,7 +1102,11 @@ export default function KpiPurchasingPage() {
         {(() => {
           const reimbLedger = board.ledgers.find(l => l.key === "reimb");
           const cardPurchasesActive = !closed;   // CardPurchases returns null when closed
-          const reimbNode = reimbLedger ? (
+          {/* R15 C - Reimbursable on the at-risk board is a receivable
+              (billed back), not a cost.  noBudget hides the budget line,
+              % used, Remaining/Over-by, and swaps the subline to
+              "recovered in full · billed back". */}
+          const reimbNode = reimbLedger && (Number(reimbLedger.spent || 0) > 0.005 || (reimbLedger.ledgerRows || []).length > 0) ? (
             <LedgerCard
               key={reimbLedger.key}
               bucketKey={reimbLedger.key}
@@ -1123,6 +1123,7 @@ export default function KpiPurchasingPage() {
               totalAmount={reimbLedger.totalAmount}
               cap={reimbLedger.cap}
               isAggregate={isAggregate}
+              noBudget={true}
             />
           ) : null;
           const cardPurchNode = cardPurchasesActive ? (
@@ -1148,25 +1149,30 @@ export default function KpiPurchasingPage() {
         {/* PR 4 - drill-down table. Sits below Card purchases on the
             at-risk board. Bill rows load on expand via scoped GET;
             the mount payload is unchanged. Footer totals asserted to
-            equal bucket card heroes (§9B one-source rule, Check 1). */}
-        <PurchasingTable
-          account={account}
-          start={start}
-          end={end}
-          tier={board.tier}
-          weeks={board.weeks}
-          decoratedPeriods={board.decoratedPeriods}
-          weekly={board.weekly}
-          heroTotals={{
-            food:      board.buckets.find(b => b.key === "food")?.spent      || 0,
-            packaging: board.buckets.find(b => b.key === "packaging")?.spent || 0,
-            vehicle:   board.buckets.find(b => b.key === "vehicle")?.spent   || 0,
-            equipment: board.ledgers.find(l => l.key === "equip")?.spent     || 0,
-            repair:    board.ledgers.find(l => l.key === "rm")?.spent        || 0,
-          }}
-          isAggregate={isAggregate}
-          weeksInRange={board.weeksInRange}
-        />
+            equal bucket card heroes (§9B one-source rule, Check 1).
+            R15 F - wrapped in a flush wrapper (no card frame), with the
+            vendor rollup passed for the By vendor row mode. */}
+        <div className="kpi-p-tablewrap kpi-p-tablewrap-flush">
+          <PurchasingTable
+            account={account}
+            start={start}
+            end={end}
+            tier={board.tier}
+            weeks={board.weeks}
+            decoratedPeriods={board.decoratedPeriods}
+            weekly={board.weekly}
+            heroTotals={{
+              food:      board.buckets.find(b => b.key === "food")?.spent      || 0,
+              packaging: board.buckets.find(b => b.key === "packaging")?.spent || 0,
+              vehicle:   board.buckets.find(b => b.key === "vehicle")?.spent   || 0,
+              equipment: board.ledgers.find(l => l.key === "equip")?.spent     || 0,
+              repair:    board.ledgers.find(l => l.key === "rm")?.spent        || 0,
+            }}
+            isAggregate={isAggregate}
+            weeksInRange={board.weeksInRange}
+            vendorRollup={data?.vendor_rollup}
+          />
+        </div>
       </div>
     );
   })();

@@ -51,7 +51,10 @@ export function CardPurchases({
   const list = Array.isArray(rows) ? rows : [];
   return (
     <div className="kpi-p-card kpi-p-cp" data-card="card-purchases">
-      <div className="kpi-p-cpstats">
+      {/* R15 D - two-column header (was three).  The Open Rippling
+          button is now a text link inline with the pending subline;
+          card matches the ledger cards' two-stat grammar. */}
+      <div className="kpi-p-cpstats kpi-p-cpstats-2col">
         <div>
           <span className="kpi-p-cardtitle">
             Card purchases
@@ -65,17 +68,21 @@ export function CardPurchases({
           <span className="kpi-p-s">
             {n === 0
               ? "no charges awaiting a code"
-              : `${n} charge${n === 1 ? "" : "s"} · need a P&L line or location`}
+              : (
+                <>
+                  {`${n} charge${n === 1 ? "" : "s"} · need a P&L line or location · `}
+                  <a
+                    className="kpi-p-cplink"
+                    href="https://app.rippling.com/expenses"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    open Rippling
+                  </a>
+                </>
+              )}
           </span>
         </div>
-        <a
-          className="kpi-p-cpact"
-          href="https://app.rippling.com/expenses"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Open Rippling
-        </a>
       </div>
       <div className="kpi-p-cplist">
         <div className="kpi-p-txnhead">

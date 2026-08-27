@@ -1979,3 +1979,94 @@
   outline: 2px solid var(--navy-500);
   outline-offset: 2px;
 }
+
+/* ═══ R15 - matched ledgers, flags, flush table, empty meta ══════════ */
+
+/* R15 B - matched-shape ledgers (Vehicle + Equipment + R&M).  Override
+   the pre-R15 `.kpi-p-flatrow-3up` `align-items: start` (that rule was
+   there so VendorBreakdown could be taller than empty ledgers) with
+   equal-height stretch, then make the ledger card itself a flex column
+   so its scrolling ledger area soaks up the extra height. */
+.kpi-app .kpi-p-flatrow-3up.kpi-p-flatrow-ledgers {
+  align-items: stretch;
+}
+.kpi-app .kpi-p-flatrow-ledgers > .kpi-p-card {
+  display: flex;
+  flex-direction: column;
+}
+.kpi-app .kpi-p-flatrow-ledgers > .kpi-p-card .kpi-p-ledger {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* R15 B - flag treatment on ledger rows (Rule 2 vehicle-in-R&M).
+   Amber wash + a left-edge marker; reason string carries the "why"
+   in the LedgerCard render. */
+.kpi-app .kpi-p-ledger .kpi-p-lr.kpi-p-lr-flag {
+  background: color-mix(in oklab, var(--amber-600) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--amber-600);
+}
+.kpi-app .kpi-p-ledger .kpi-p-lr.kpi-p-lr-flag .kpi-p-k small {
+  color: var(--amber-700, #b45309);
+  font-weight: 700;
+}
+
+/* R15 D - Card purchases: two-column header (was three; Open Rippling
+   moved to an inline text link inside the pending subline). */
+.kpi-app .kpi-p-cpstats.kpi-p-cpstats-2col {
+  /* the .kpi-p-cp grid already lays out .kpi-p-cpstats + .kpi-p-cplist
+     as 0.9fr / 1.1fr; .kpi-p-cpstats itself is a vertical stack.  No
+     grid override needed here beyond keeping the stack tight when the
+     third-column button is gone. */
+  padding-right: 0;
+}
+.kpi-app .kpi-p-cplink {
+  color: var(--kpi-p-rm, var(--amber-700));
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.kpi-app .kpi-p-cplink:hover {
+  color: var(--amber-800, #92400e);
+}
+
+/* R15 F - drill table flush wrapper: no card frame, no border-left,
+   inherits background from the board.  Table's own toolbar stays.
+   The card's colored left-stroke is drawn by a ::before pseudo, so
+   the flush override also hides that. */
+.kpi-app .kpi-p-tablewrap.kpi-p-tablewrap-flush > .kpi-p-tbl-container {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+.kpi-app .kpi-p-tablewrap.kpi-p-tablewrap-flush > .kpi-p-tbl-container:before {
+  display: none;
+}
+
+/* R15 F - vendor row in By vendor mode. */
+.kpi-app .kpi-p-tbl-vendorrow > td {
+  padding: 8px 10px;
+  border-top: 1px solid var(--n-200);
+}
+.kpi-app .kpi-p-tbl-vendorname {
+  font-weight: 700;
+  color: var(--n-800);
+  display: block;
+}
+
+/* R15 G - empty ledger row meta line (whole Vehicle/Equip/R&M row
+   empty).  Same visual weight as the mgmt-fee empty meta line so both
+   read as intentional "nothing to show here" instead of a broken card. */
+.kpi-app .kpi-p-mf-empty-row {
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  color: var(--n-600);
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  text-align: center;
+  border: 1px dashed var(--n-200);
+  border-radius: var(--kpi-card-r);
+  background: transparent;
+}

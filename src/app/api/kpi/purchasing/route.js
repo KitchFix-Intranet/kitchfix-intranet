@@ -938,154 +938,81 @@ async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
   };
 }
 
-async function loadVendorRollup(supa, { members, start, end, priorStart, priorEnd, cap = 25 }) {
-  // Per-vendor rollup for billcom rows (rippling_spend rows do not
-  // carry a vendor_id; merchant strings are per-charge, not per-vendor).
-  // Un-rolled-up (Kevin ruling): `Sysco JUP` / `Sysco TBJ` / `Sysco TBR`
-  // stay three rows. Fragmentation is reported separately, not fixed.
-  //
-  // Uses the named view so vendor_name lands in a single scan; the
-  // unresolved id path just carries vendor_id null on the row.
-  async function paginateNamed(startISO, endISO) {
-    const rows = [];
-    const PS = V6_PAGE_DEFAULT;
-    for (const memberChunk of chunk(members, IN_CHUNK)) {
-      let from = 0;
-      while (true) {
-        const r = await supa.from("v_purchasing_actuals_billcom_named")
-          .select("account_key, gl_line_code, amount, vendor_id, vendor_name, vendor_resolved")
-          .in("account_key", memberChunk)
-          .eq("excluded", false)
-          .gte("txn_date", startISO)
-          .lte("txn_date", endISO)
-          .order("id", { ascending: true })
-          .range(from, from + PS - 1);
-        if (r.error) return { error: r.error };
-        const data = r.data || [];
-        for (const row of data) rows.push(row);
-        if (data.length < PS) break;
-        from += PS;
-      }
+// R15 F - per-vendor rollup for PurchasingTable's "By vendor" row mode.
+// Slimmed from the pre-R15 loadVendorRollup: prior-range compare and
+// fragmentation report dropped (they were VendorBreakdown-specific and
+// ruled not-value-delivering).  Ships one row per vendor id with total
+// spend + gl split, sorted by |spend| desc.  Uncapped - the table's
+// own scroll owns the row count.
+async function loadVendorRollup(supa, { members, start, end }) {
+  const rows = [];
+  const PS = V6_PAGE_DEFAULT;
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const r = await supa.from("v_purchasing_actuals_billcom_named")
+        .select("account_key, gl_line_code, amount, vendor_id, vendor_name, vendor_resolved")
+        .in("account_key", memberChunk)
+        .eq("excluded", false)
+        .gte("txn_date", start)
+        .lte("txn_date", end)
+        .order("id", { ascending: true })
+        .range(from, from + PS - 1);
+      if (r.error) return { error: r.error };
+      const data = r.data || [];
+      for (const row of data) rows.push(row);
+      if (data.length < PS) break;
+      from += PS;
     }
-    return { rows };
   }
-  const cur = await paginateNamed(start, end);
-  if (cur.error) return { error: cur.error };
-  const prior = priorStart && priorEnd ? await paginateNamed(priorStart, priorEnd) : { rows: [] };
-  if (prior.error) return { error: prior.error };
-
-  function rollup(rows) {
-    const byVendor = new Map();
-    for (const r of rows) {
-      const key = r.vendor_id || "__UNRESOLVED__";
-      if (!byVendor.has(key)) {
-        byVendor.set(key, {
-          vendor_id: r.vendor_id,
-          name: r.vendor_name,
-          resolved: !!r.vendor_resolved,
-          spend: 0,
-          line_count: 0,
-          gl_split: { food: 0, packaging: 0, vehicle: 0, reimbursable: 0, other: 0 },
-        });
-      }
-      const v = byVendor.get(key);
-      v.spend += Number(r.amount || 0);
-      v.line_count += 1;
-      const gl = String(r.gl_line_code || "");
-      const amt = Number(r.amount || 0);
-      if (gl.startsWith("3200")) v.gl_split.food += amt;
-      else if (gl.startsWith("3400")) v.gl_split.packaging += amt;
-      else if (gl.startsWith("3500")) v.gl_split.vehicle += amt;
-      // PR 2 R9 P2-3 - 13xx as its own segment. At pass-through accounts
-      // the reimbursable family drove every vendor row's WHERE IT LANDED
-      // column into all-grey ("other") - a dead column at those sites.
-      else if (gl.startsWith("13")) v.gl_split.reimbursable += amt;
-      else v.gl_split.other += amt;
+  const byVendor = new Map();
+  for (const r of rows) {
+    const key = r.vendor_id || "__UNRESOLVED__";
+    if (!byVendor.has(key)) {
+      byVendor.set(key, {
+        vendor_id: r.vendor_id,
+        name: r.vendor_name,
+        resolved: !!r.vendor_resolved,
+        spend: 0,
+        line_count: 0,
+        gl_split: { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, reimbursable: 0, other: 0 },
+      });
     }
-    return byVendor;
+    const v = byVendor.get(key);
+    const amt = Number(r.amount || 0);
+    v.spend += amt;
+    v.line_count += 1;
+    const gl = String(r.gl_line_code || "");
+    if      (gl.startsWith("3200")) v.gl_split.food      += amt;
+    else if (gl.startsWith("3400")) v.gl_split.packaging += amt;
+    else if (gl.startsWith("3500")) v.gl_split.vehicle   += amt;
+    else if (gl === "5002.5")       v.gl_split.equipment += amt;
+    else if (gl === "5002.1")       v.gl_split.repair    += amt;
+    else if (gl.startsWith("13"))   v.gl_split.reimbursable += amt;
+    else                            v.gl_split.other     += amt;
   }
-  const curMap = rollup(cur.rows);
-  const priorMap = rollup(prior.rows);
-  // PR 2 R7 Fix 2 - "does the prior window contain any billcom data".
-  // Root cause of the "every vendor reads `new`" bug: on FYTD (FY2026)
-  // the mirrored prior window (~2025-05-03 -> 2025-12-28) falls entirely
-  // before purchasing data begins (FY2026 is the first year on this
-  // schema), so every vendor gets prior_spend=0 and the client's
-  // `isNewSpender = (prior === 0)` fires for every row - a claim ("new")
-  // that is false for Sysco JUP's 368 lines. Fix: expose whether the
-  // prior window has any data at all. When false, the client renders an
-  // absent-prior marker for every row; when true, the client keeps the
-  // per-row "new" / "▲/▼ %" logic (a genuinely new vendor still shows
-  // `new` correctly).
-  const priorHasData = (prior.rows || []).length > 0;
-
-  const enriched = [...curMap.values()].map(v => {
-    const p = priorMap.get(v.vendor_id || "__UNRESOLVED__");
-    const priorSpend = p ? Math.round(p.spend * 100) / 100 : 0;
-    return {
-      vendor_id: v.vendor_id,
-      name: v.name,
-      resolved: v.resolved,
-      spend: Math.round(v.spend * 100) / 100,
-      line_count: v.line_count,
-      gl_split: {
-        food: Math.round(v.gl_split.food * 100) / 100,
-        packaging: Math.round(v.gl_split.packaging * 100) / 100,
-        vehicle: Math.round(v.gl_split.vehicle * 100) / 100,
-        reimbursable: Math.round(v.gl_split.reimbursable * 100) / 100,
-        other: Math.round(v.gl_split.other * 100) / 100,
-      },
-      prior_spend: priorSpend,
-    };
-  }).sort((a, b) => Math.abs(b.spend) - Math.abs(a.spend));
-
+  const enriched = [...byVendor.values()].map(v => ({
+    vendor_id: v.vendor_id,
+    name: v.name,
+    resolved: v.resolved,
+    spend: Math.round(v.spend * 100) / 100,
+    line_count: v.line_count,
+    gl_split: {
+      food:         Math.round(v.gl_split.food * 100) / 100,
+      packaging:    Math.round(v.gl_split.packaging * 100) / 100,
+      vehicle:      Math.round(v.gl_split.vehicle * 100) / 100,
+      equipment:    Math.round(v.gl_split.equipment * 100) / 100,
+      repair:       Math.round(v.gl_split.repair * 100) / 100,
+      reimbursable: Math.round(v.gl_split.reimbursable * 100) / 100,
+      other:        Math.round(v.gl_split.other * 100) / 100,
+    },
+  })).sort((a, b) => Math.abs(b.spend) - Math.abs(a.spend));
   const totalAmount = enriched.reduce((s, v) => s + v.spend, 0);
-  const totalCount = enriched.length;
-  const unresolved = enriched.filter(v => !v.resolved).length;
-
-  // Fragmentation report. Kevin ruling: report, do not implement.
-  // Strip a trailing `_<SUFFIX>` or ` <SUFFIX>` or ` - <SUFFIX>` where
-  // SUFFIX is 2-5 uppercase letters/digits (matches TBR, JUP, TXR-AZ,
-  // REDS, CINN, LBAT, etc). This is a heuristic - the actual site-suffix
-  // vocabulary is not enumerated in Bill.com; we count *possible*
-  // collapses without merging anything downstream.
-  const names = enriched.filter(v => v.resolved && v.name).map(v => v.name);
-  const canonMap = new Map();
-  const suffixPat = /(?:[\s_-]+[A-Z0-9]{2,5}(?:[-][A-Z0-9]{1,3})?)$/;
-  for (const n of names) {
-    const stripped = n.replace(suffixPat, "").trim();
-    const key = stripped || n;
-    if (!canonMap.has(key)) canonMap.set(key, new Set());
-    canonMap.get(key).add(n);
-  }
-  const fragmented = [...canonMap.entries()]
-    .filter(([, set]) => set.size > 1)
-    .map(([canonical, set]) => ({ canonical, variants: [...set] }))
-    .sort((a, b) => b.variants.length - a.variants.length);
-  const suppliersIfCollapsed = canonMap.size;
-
   return {
     data: {
-      rows: enriched.slice(0, cap),
-      cap,
-      total_count: totalCount,
+      rows: enriched,
+      total_count: enriched.length,
       total_amount: Math.round(totalAmount * 100) / 100,
-      unresolved_count: unresolved,
-      // PR 2 R7 Fix 2 - prior-window transparency. `prior_has_data` says
-      // whether the mirrored window before `start` contains any billcom
-      // rows for any vendor in this account; the client uses it to gate
-      // the "new" / "no prior period" split. `prior_range` echoes the
-      // window we compared against so the payload is auditable.
-      prior_range: {
-        start: priorStart || null,
-        end: priorEnd || null,
-      },
-      prior_has_data: priorHasData,
-      fragmentation: {
-        distinct_names: names.length,
-        suppliers_if_suffix_stripped: suppliersIfCollapsed,
-        collapsed: fragmented,
-      },
     },
   };
 }
@@ -1627,38 +1554,57 @@ export async function GET(request) {
     would_need: "a bill.com AR-side hook that stamps the reimbursable row on client invoice, or a manual 'billed_on' field on the reimbursable row",
   };
 
-  // ─── PR-2 R6 Part B - capped aggregations for five populated cards ──
+  // ─── PR-2 R6 Part B - capped aggregations for populated cards ──
   //
-  // Ledgers.equipment / ledgers.repair / ledgers.reimbursable each cap
-  // at 25. card_charges caps at 50. vendors caps at 25. Each carries a
-  // total_count and total_amount for honest "showing 25 of 188" copy.
+  // Ledgers (vehicle / equipment / repair / reimbursable) each cap at 25.
+  // card_charges caps at 50. Each carries total_count + total_amount for
+  // honest "showing 25 of 188" copy.
   //
-  // Prior-range window for vendor movement: mirrored window before
-  // `start` of the same length. Preserves the shape of the compare:
-  // asking "how much did X spend last period vs this one" instead of
-  // baking a specific period-of/last-period assumption in the payload.
-  const priorRange = (() => {
-    const s = new Date(start + "T00:00:00.000Z").getTime();
-    const e = new Date(end + "T00:00:00.000Z").getTime();
-    const span = e - s;
-    if (!(span > 0)) return { start: null, end: null };
-    const priorEnd = new Date(s - 86400000).toISOString().slice(0, 10);
-    const priorStart = new Date(s - 86400000 - span).toISOString().slice(0, 10);
-    return { start: priorStart, end: priorEnd };
-  })();
+  // R15 E - vendor rollup + priorRange (mirrored prior-window compare)
+  // removed with VendorBreakdown; no other consumer of priorRange.
 
-  const [equipR, repairR, reimbR, cardChR, vendorR] = await Promise.all([
+  // R15 - Vehicle joins the matched-ledgers row (was a bucket card chart).
+  // Same shape as Equipment / R&M so page.js can render three cards with
+  // one component.  gl_line_code prefix is 3500 (any 3500.*).
+  // R15 F - vendor_rollup for the drill table's "By vendor" row mode
+  // (VendorBreakdown card gone; vendor rows land in-table now).
+  const [vehicleR, equipR, repairR, reimbR, cardChR, vendorRollupR] = await Promise.all([
+    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "3500%", cap: 25 }),
     loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 }),
     loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 }),
     loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 }),
     loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 }),
-    loadVendorRollup(supa, { members, start: effStart, end: effEnd, priorStart: priorRange.start, priorEnd: priorRange.end, cap: 25 }),
+    loadVendorRollup(supa, { members, start: effStart, end: effEnd }),
   ]);
-  if (equipR.error)   return NextResponse.json(safeError("ledgers.equipment",   equipR.error),   { status: 500 });
-  if (repairR.error)  return NextResponse.json(safeError("ledgers.repair",      repairR.error),  { status: 500 });
-  if (reimbR.error)   return NextResponse.json(safeError("ledgers.reimbursable", reimbR.error),  { status: 500 });
-  if (cardChR.error)  return NextResponse.json(safeError("card_charges",        cardChR.error),  { status: 500 });
-  if (vendorR.error)  return NextResponse.json(safeError("vendors",             vendorR.error),  { status: 500 });
+  if (vehicleR.error)       return NextResponse.json(safeError("ledgers.vehicle",     vehicleR.error), { status: 500 });
+  if (equipR.error)         return NextResponse.json(safeError("ledgers.equipment",   equipR.error),   { status: 500 });
+  if (repairR.error)        return NextResponse.json(safeError("ledgers.repair",      repairR.error),  { status: 500 });
+  if (reimbR.error)         return NextResponse.json(safeError("ledgers.reimbursable", reimbR.error),  { status: 500 });
+  if (cardChR.error)        return NextResponse.json(safeError("card_charges",        cardChR.error),  { status: 500 });
+  if (vendorRollupR.error)  return NextResponse.json(safeError("vendor_rollup",       vendorRollupR.error), { status: 500 });
+
+  // R15 B - Rule 2 flag: vendor on a known vehicle-service list appearing
+  // in R&M (5002.1) is a misclassification signal.  Small curated list;
+  // Kevin's ruling 2026-08-27 after measuring 30 candidate patterns
+  // against the four rule variants - Rule 2 was the only one that flagged
+  // exactly the target Meineke row with zero false positives on 2026-08-27
+  // data.  List maintained here in the route so changes are one code
+  // change (probe measurements + ledgers together).
+  const RM_VEHICLE_VENDOR_PATTERNS = [
+    "MEINEKE", "FIRESTONE", "MIDAS", "GOODYEAR", "JIFFY LUBE",
+    "ENTERPRISE RENT", "HERTZ", "AVIS", "DISCOUNT TIRE",
+    "AUTOZONE", "ADVANCE AUTO", "O'REILLY", "PEP BOYS", "VALVOLINE",
+    "BIG O TIRES", "LES SCHWAB", "AAMCO", "MAACO", "CHRISTIAN BROTHERS",
+    "MAVIS TIRE", "GRUBBS", "BROWN AUTOMOTIVE", "PENSKE", "RYDER",
+    "U-HAUL", "UHAUL", "NAPA AUTO", "CARQUEST",
+  ];
+  for (const row of (repairR.data?.rows || [])) {
+    const v = String(row.vendor || "").toUpperCase();
+    const match = RM_VEHICLE_VENDOR_PATTERNS.find(pat => v.startsWith(pat));
+    if (match) {
+      row.flag = { kind: "vehicle-in-rm", reason: "vehicle service in 5002.1" };
+    }
+  }
 
   // ─── Check 9 - ledger sum vs bucket hero reconciliation ─────────────
   //
@@ -1670,18 +1616,26 @@ export async function GET(request) {
   // payload so a client-side gate can crash on drift.
   const equipHero  = spentForGl("5002.5");
   const repairHero = spentForGl("5002.1");
+  // Vehicle hero: sum every 3500 gl category (R15 - was on the bucket
+  // card; now feeds the vehicle ledger).
+  const vehicleHero = categories
+    .filter(c => String(c.gl_line_code || "").startsWith("3500"))
+    .reduce((s, c) => s + Number(c.spent || 0), 0);
+  const vehicleHeroR = Math.round(vehicleHero * 100) / 100;
   // Reimb hero: sum every 13xx gl category.spent from `categories[]`.
   const reimbHero  = categories
     .filter(c => String(c.gl_line_code || "").startsWith("13"))
     .reduce((s, c) => s + Number(c.spent || 0), 0);
   const reimbHeroR = Math.round(reimbHero * 100) / 100;
   const ledger_reconciliation = {
+    vehicle:        { hero: vehicleHeroR, ledger_total: vehicleR.data.total_amount, delta: Math.round((vehicleHeroR - vehicleR.data.total_amount) * 100) / 100 },
     equipment:      { hero: equipHero,   ledger_total: equipR.data.total_amount,   delta: Math.round((equipHero  - equipR.data.total_amount)  * 100) / 100 },
     repair:         { hero: repairHero,  ledger_total: repairR.data.total_amount,  delta: Math.round((repairHero - repairR.data.total_amount) * 100) / 100 },
     reimbursable:   { hero: reimbHeroR,  ledger_total: reimbR.data.total_amount,   delta: Math.round((reimbHeroR - reimbR.data.total_amount)  * 100) / 100 },
   };
   const TOLERANCE_CENTS = 1;   // 1c tolerance to absorb rounding
   const check9_pass =
+    Math.abs(ledger_reconciliation.vehicle.delta)      <= (TOLERANCE_CENTS / 100) &&
     Math.abs(ledger_reconciliation.equipment.delta)    <= (TOLERANCE_CENTS / 100) &&
     Math.abs(ledger_reconciliation.repair.delta)       <= (TOLERANCE_CENTS / 100) &&
     Math.abs(ledger_reconciliation.reimbursable.delta) <= (TOLERANCE_CENTS / 100);
@@ -1930,12 +1884,15 @@ export async function GET(request) {
     // Each is small (25/50/25 rows). Payload size delta reported in
     // the return; the 4.5MB drill array remains off-by-default.
     ledgers: {
+      // R15 - vehicle joins as a fourth ledger, matched shape.
+      vehicle:      vehicleR.data,
       equipment:    equipR.data,
       repair:       repairR.data,
       reimbursable: reimbR.data,
     },
     card_charges: cardChR.data,
-    vendors:      vendorR.data,
+    // R15 F - per-vendor rollup for the drill table's By vendor row mode.
+    vendor_rollup: vendorRollupR.data,
     ledger_reconciliation,
     // PR 3 - management-fee board data (pass_through accounts only).
     // null at at_risk / aggregate. See mgmt_fee construction above.
