@@ -107,7 +107,13 @@ function rdoDisplayName(email) {
 // echoed as a folio-row tag (V7-15). Called once per request.
 async function fetchAccountsDirectory(supa) {
   const q = await supa.from("accounts")
-    .select("team_key, region, name, city, state")
+    // homestand-redesign 2026-08-26: timezone added so the day-strip
+    // caption can convert UTC game_time to local. Owner ruling: NO
+    // fallback - if timezone is null, client renders the date
+    // without a time. A wrong first pitch is worse than no first
+    // pitch. Populated today on STL - MO / CIN - OH / TXR - TX - H
+    // / TXR - TX - V per owner verification 2026-08-26.
+    .select("team_key, region, name, city, state, timezone")
     .neq("team_key", "CORP")
     .order("team_key");
   if (q.error) return { error: q.error };
@@ -119,6 +125,7 @@ async function fetchAccountsDirectory(supa) {
       team_name: r.name || null,
       city: r.city || null,
       state: r.state || null,
+      timezone: r.timezone || null,
       salaried: salaried.has(r.team_key),
     })),
   };
@@ -451,10 +458,24 @@ export async function GET(request) {
   if (allHomestands && allHomestands.length > 0) {
     const [dailyQ, schedQ] = await Promise.all([
         supa.from("labor_actuals_daily")
-          .select("work_date, amount")
+          // homestand-redesign 2026-08-26: extend the daily select to
+          // include per-worker OT hours so the played-day captions on
+          // the day-strip can render the regular/OT split
+          // (`06/26 Fri · vs MIA · $1,560 · 91% OT`). Client aggregates
+          // by work_date to compute the per-day OT %. Adds three
+          // fields to the payload; the existing per-day amount
+          // aggregation (aggregatePerDay) already ignores extras.
+          .select("work_date, amount, hours_regular, hours_overtime, dollars_overtime")
           .eq("account_key", account),
         supa.from("sc_homestand_schedule")
-          .select("service_date, day_type, day_night")
+          // homestand-redesign 2026-08-26: fetch game_time + opponent
+          // so the day-strip caption can carry `vs BAL · 6:45p` under
+          // each game bar. game_time is TIMESTAMPTZ (UTC); client
+          // converts via the account's timezone (added to response
+          // below). NO fallback - owner ruling: if timezone is null,
+          // render the date without a time rather than guessing UTC,
+          // because a wrong first pitch is worse than no first pitch.
+          .select("service_date, day_type, day_night, game_time, opponent")
           .eq("account_key", account),
       ]);
       if (dailyQ.error) return NextResponse.json(safeError("homestand_daily", dailyQ.error), { status: 500 });
@@ -644,10 +665,31 @@ export async function GET(request) {
         // season table renders from - one source, one answer. The
         // per-stand split was computed with today so spent_to_date
         // is already present when the window has opened.
+        // homestand-redesign 2026-08-26: per-game schedule detail for
+        // the day-strip caption. Each game in this stand's window
+        // ships { date, opponent, day_night, game_time }. Client
+        // renders `vs OPP · 6:45p` under game bars via account.timezone
+        // conversion. Non-game days (prep/off) are absent from this
+        // map; DayStrip already knows which dates ARE games via
+        // homestand_game_dates. game_time may be null on rare rows
+        // (e.g. TBD first-pitch on a rescheduled game); the client
+        // renders date-without-time in that case rather than guessing.
+        const schedByDate = new Map();
+        for (const r of schedRows) {
+          if (r.day_type !== "GAME") continue;
+          if (r.service_date < found.game_start || r.service_date > found.game_end) continue;
+          schedByDate.set(r.service_date, {
+            date: r.service_date,
+            opponent: r.opponent || null,
+            day_night: r.day_night || null,
+            game_time: r.game_time || null,   // TIMESTAMPTZ ISO, may be null
+          });
+        }
         homestandSplice = {
           homestand: found,
           homestand_game_dates: [...gameDatesForFound].sort(),
           homestand_night_dates: [...nightDatesForFound].sort(),
+          homestand_schedule: [...schedByDate.values()].sort((a, b) => a.date.localeCompare(b.date)),
           homestand_split: found.split || null,
         };
         // HS PR-A: attach homestand_estimated on POST-FLOOR future

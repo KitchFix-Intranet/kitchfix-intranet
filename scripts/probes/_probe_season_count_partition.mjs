@@ -18,7 +18,7 @@
 // on every account.
 
 import { createClient } from "@supabase/supabase-js";
-import { listHomestands, computeHomestandBank } from "../../src/lib/labor/homestandResolver.js";
+import { listHomestands, computeHomestandBank, foldPerStandSplits, actualsByStand } from "../../src/lib/labor/homestandResolver.js";
 import { foldPreFloorEstimates } from "../../src/lib/labor/preFloorEstimator.js";
 
 for (const k of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
@@ -56,8 +56,29 @@ for (const account of ACCOUNTS) {
     console.log(`  no homestands (non-MLB or empty schedule) - skipping`);
     continue;
   }
-  const homestands = await foldPreFloorEstimates(supa, account, raw, DAILY_FLOOR_ISO, TODAY);
-  const bank = computeHomestandBank(homestands, TODAY);
+  const homestands0 = await foldPreFloorEstimates(supa, account, raw, DAILY_FLOOR_ISO, TODAY);
+  // Post-verify follow-up (owner named on #848 merge): run
+  // foldPerStandSplits BEFORE computeHomestandBank so `stands_finished`
+  // reflects real per-stand actuals. Without this, `stands_finished`
+  // is always 0 in the probe context and the partition invariant
+  // holds via `0 + N + M` - catches the overlap that was the fix,
+  // but would also pass if stands_finished were broken. Fifth
+  // guard-shape defect this week (see feedback_guards_need_coverage).
+  // Load schedule rows the same way route.js does (l.456 area).
+  const schedQ = await supa.from("sc_homestand_schedule")
+    .select("service_date, day_type, day_night")
+    .eq("account_key", account);
+  if (schedQ.error) throw new Error(`sc_homestand_schedule (${account}): ${schedQ.error.message}`);
+  const homestands = await foldPerStandSplits(supa, account, homestands0, schedQ.data || [], TODAY);
+  // computeHomestandBank now needs an actualX10000ByGameStart map;
+  // build it via actualsByStand (which also loads labor_actuals_daily).
+  // Route.js does the same at l.472.
+  const dailyQ = await supa.from("labor_actuals_daily")
+    .select("work_date, amount")
+    .eq("account_key", account);
+  if (dailyQ.error) throw new Error(`labor_actuals_daily (${account}): ${dailyQ.error.message}`);
+  const actMap = actualsByStand(homestands, dailyQ.data || []);
+  const bank = computeHomestandBank(homestands, actMap, TODAY);
 
   const finishedCount   = Number(bank?.stands_finished || 0);
   const remainingCount  = Number(bank?.stands_remaining || 0);

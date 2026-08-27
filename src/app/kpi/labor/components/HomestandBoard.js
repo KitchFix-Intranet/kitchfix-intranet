@@ -40,16 +40,11 @@ function arrow(v, goodWhenPositive = true) {
 }
 
 // ─── Season rail card ───────────────────────────────────────────────
-// HS FB1 PR-4 2026-08-25: takes an Actuals | Plan toggle. viewMode +
-// setViewMode are lifted to HomestandBoard so the toggle's choice
-// drives which cards render below. actualsAvailable disables the
-// Actuals button on unplayed stands (pre-floor / future / not-yet-
-// played) where no actual dollars exist to compare against - Plan is
-// the only meaningful view there. Toggle sits on the .kpi-seg
-// component (same skin as Hourly | + Salary and Period | Homestand)
-// so all three segmented controls share one component per Kevin's
-// PR-2-verify unification.
-function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onViewModeChange, actualsAvailable, salaryAvailable, salaryOn }) {
+// 2026-08-26 homestand redesign: Actuals | Plan toggle REMOVED per
+// owner ruling. The board decides which cards to show, keyed on
+// game state (see gameState() helper). Signature drops viewMode /
+// onViewModeChange / actualsAvailable props.
+function SeasonRailCard({ homestands, selectedGameStart, onSelect, salaryAvailable, salaryOn }) {
   const rail = useMemo(() => {
     // Scale by max spend across played stands. Pre-floor stands with
     // an estimator amount contribute; future stands still render at a
@@ -90,30 +85,15 @@ function SeasonRailCard({ homestands, selectedGameStart, onSelect, viewMode, onV
               data-scope-pill
             >{salaryOn ? "+ SALARY" : "HOURLY"}</span>
           )}
-          {viewMode && onViewModeChange && (
-            <span className="kpi-seg kpi-hs-view-mode" role="group" aria-label="Compare actuals to plan">
-              <button
-                type="button"
-                className={viewMode === "actuals" ? "on" : ""}
-                onClick={() => actualsAvailable && onViewModeChange("actuals")}
-                disabled={!actualsAvailable}
-                aria-pressed={viewMode === "actuals"}
-                data-view-mode="actuals"
-              >Actuals</button>
-              <button
-                type="button"
-                className={viewMode === "plan" ? "on" : ""}
-                onClick={() => onViewModeChange("plan")}
-                aria-pressed={viewMode === "plan"}
-                data-view-mode="plan"
-              >Plan</button>
-            </span>
-          )}
+          {/* 2026-08-26 homestand redesign: Actuals | Plan segmented
+              control removed. Game-state now decides which cards
+              render below - the toggle's job moved into the layout
+              rules. */}
         </span>
         <HelpPop
           id="qRail"
           title="Season by homestand"
-          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.<br /><br /><b>Actuals | Plan</b> lets you see the plan the model would have made against the stand's real spend. On stands that have not been played yet, only Plan is meaningful.</>}
+          body={<>One bar per homestand, height is what it cost. Green came in under budget, red went over.<br /><br />The navy dashed line is the original budget for that stand. Pre-floor stands (before 04/20/26) render as estimates - the hatched bar shows what the schedule predicts against known weekly totals.<br /><br />Click a stand to open its detail below. The cards there change depending on whether the stand is upcoming or already played.</>}
         />
       </header>
       <div className="kpi-hs-rail">
@@ -312,7 +292,7 @@ function SeasonToDateCard({ bank, homestands }) {
 //       carry none. WINDOW IS UNCHANGED - the stand still owns those
 //       days, per-stand totals still include them; this is a display
 //       trim only. Card totals must be identical before/after.
-function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayISO }) {
+function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayISO, scheduleByDate, accountTimezone, otByDate }) {
   const days = useMemo(
     () => isoRange(stand.window_start, stand.window_end),
     [stand.window_start, stand.window_end],
@@ -370,6 +350,13 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
           <span className="kpi-hs-legend-sw kpi-hs-day-day" /> day game
           <span className="kpi-hs-legend-sw kpi-hs-day-prep" /> prep day
           <span className="kpi-hs-legend-sw kpi-hs-day-off" /> off day
+          {/* 2026-08-26 homestand redesign - "still to come" swatch
+              added for ghost bars on upcoming stands (round-2 item 6).
+              Uses the ghost-day variant (hatched fill on the day-game
+              identity colour) so the legend chip visually matches the
+              bar. Ghosts appear only on upcoming or part-played stands;
+              the swatch stays visible on all stands for legend stability. */}
+          <span className="kpi-hs-legend-sw kpi-hs-day-ghost-day" /> still to come
         </span>
       </header>
       <DayStripPlot
@@ -378,6 +365,9 @@ function StandDayStrip({ stand, actualsDaily, gameDates, nightGameDates, todayIS
         variant="identity"
         gameDates={gameDates}
         nightGameDates={nightGameDates}
+        scheduleByDate={scheduleByDate}
+        accountTimezone={accountTimezone}
+        otByDate={otByDate}
         ariaLabel={`Homestand ${stand.index} day strip`}
       />
     </div>
@@ -425,271 +415,6 @@ const OT_NORMS = {
   10: [26.0, 43.2, 34.4],
 };
 
-function SignalCards({
-  stand,
-  split,
-  employees,
-  hourlyRate,
-  salaryAvailable = false,
-  salaryOn = false,
-  actualsDaily = [],
-  gameDates,
-  nightGameDates,
-}) {
-  if (!stand || !split) return null;
-  const budget = stand.budget || 0;
-  const actual = stand.actual || 0;
-  const variance = budget - actual;   // positive = under budget = good
-  const arr = arrow(variance, true);
-  const perGame = stand.game_days > 0 ? split.game_day_dollars / stand.game_days : 0;
-  const perOffDay = split.off_day_count > 0 ? split.off_day_dollars / split.off_day_count : 0;
-  // HS FB1 PR-3 3e 2026-08-25: night-game and day-game averages for
-  // the AVG COST PER GAME facts. Aggregates actualsDaily filtered by
-  // the game-date sets - server does not split game_day_dollars by
-  // night vs day, so the client sums the daily rows using the same
-  // date sets the day-strip already receives.
-  const nightGameDollars = actualsDaily.reduce(
-    (s, r) => s + (nightGameDates?.has(r.work_date) ? Number(r.amount || 0) : 0),
-    0,
-  );
-  const dayGameDollars = actualsDaily.reduce(
-    (s, r) => (gameDates?.has(r.work_date) && !nightGameDates?.has(r.work_date) ? s + Number(r.amount || 0) : s),
-    0,
-  );
-  const nightAvg = stand.night_games > 0 ? nightGameDollars / stand.night_games : 0;
-  const dayAvg   = stand.day_games   > 0 ? dayGameDollars   / stand.day_games   : 0;
-  const norm = OT_NORMS[Math.min(stand.peak_games_in_week, 10)] || OT_NORMS[3];
-  // Owner ruling 2026-08-26 (homestand-fixes round 2, P0-1): OT %
-  // must be sum(OT hours) / sum(all hours), NOT avg(per-worker OT
-  // ratios). The avg-of-ratios formula inflates whenever a subset of
-  // the crew carries the overtime - on STL - MO HS 8, three of five
-  // workers carry OT and the avg-of-ratios formula returned 72% for
-  // an actual 41% (144 of 351 hours). Sum-over-sum is the honest
-  // metric - it weights by hours worked, not by worker count.
-  const totalOtHrs  = employees.reduce((s, e) => s + Number(e.hours_overtime || 0), 0);
-  const totalAllHrs = employees.reduce(
-    (s, e) => s + Number(e.hours_regular || 0) + Number(e.hours_overtime || 0) + Number(e.hours_double_time || 0),
-    0,
-  );
-  const otPct = totalAllHrs > 0 ? (totalOtHrs / totalAllHrs) * 100 : 0;
-  const otBand = otPct < norm[0] ? "kpi-hs-pill-good" : otPct > norm[1] ? "kpi-hs-pill-bad" : "kpi-hs-pill-amber";
-  const totalHrs = totalAllHrs;
-  const crewSize = employees.length;
-  const unapprovedHrs = employees.reduce((s, e) => s + (e.anomaly_no_clockout || 0) + (Math.max(0, (e.hours_without_dollars || 0))), 0);
-  // HS FB1 final polish item 14 2026-08-25: distinct payroll weeks the
-  // stand touches. Uses employees[].week_start (already in the payload
-  // per route.js labor query) rather than deriving from window - the
-  // payroll pipeline is what a Rippling operator thinks in weeks about,
-  // and this matches the "N stands, M weeks" phrasing on the season row.
-  const weeksSpanned = (() => {
-    const s = new Set();
-    for (const e of employees) if (e.week_start) s.add(e.week_start);
-    return s.size;
-  })();
-
-  return (
-    <div className="kpi-hs-signals" role="region" aria-label="Stand signal cards">
-      {/* Spend - variance is the hero. Scope pill sits beside the
-          on-track / over-budget pill per the header cleanup - moved
-          off the command-bar title into the first card at that
-          card's pill scale. Renders whenever the caller can toggle
-          salary so a printed / screenshotted stand board always
-          states which pool of workers it counted. */}
-      <div className={`kpi-hs-card kpi-hs-signal ${variance >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="spend">
-        <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">HS {stand.index} spend</span>
-          {/* HS FB1 final polish item 1 2026-08-25: scope pill moved off
-              this card and onto Season by homestand. Two pills on this
-              header crowded the eyebrow into two lines; the scope
-              applies to the whole board, not one stand, so the season
-              card is its honest home. Print header keeps its own scope
-              line (V41 - a printed board always states what it counted,
-              independent of the on-screen pill). */}
-          <span className={`kpi-hs-pill ${variance >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
-            {variance >= 0 ? "Under" : "Over"}
-          </span>
-          <HelpPop
-            id="qSpend"
-            title="What this stand cost"
-            body={<>Every dollar of hourly labor on the days this homestand owns - the prep day before it, the games, and any other day worked before the next stand opens.<br /><br />The arrow compares it to the budget for those same days. Down and green means you came in under.</>}
-          />
-        </header>
-        {/* HS FB1 PR-3 3d 2026-08-25: spend is the hero, variance is the
-            sub. Prior: variance $2,150.89 hero / "$7,372.92 spent
-            against budget" sub. Now: $7,372.92 spent hero / ▼ $2,150.89
-            under budget sub. Variance color: GREEN under, RED over -
-            .kpi-hs-good/bad on a <span> inside .kpi-hs-sub with higher
-            specificity so the sub-line color rule does not swallow it
-            (Kevin flagged prior render as navy). */}
-        <div className="kpi-hs-hero" data-figure="actual">
-          {fmt$(actual)} <span className="kpi-hs-hero-sub">spent</span>
-        </div>
-        <div className="kpi-hs-sub" data-figure="variance">
-          <span className={`kpi-hs-sub-fig ${arr.cls}`}>{arr.glyph} {fmt$(Math.abs(variance))}</span> {variance >= 0 ? "under budget" : "over budget"}
-        </div>
-        <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Budget</div><div className="kpi-hs-fact-v" data-figure="budget">{fmt$(budget)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Days</div><div className="kpi-hs-fact-v">{stand.window_days}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Hours</div><div className="kpi-hs-fact-v">{totalHrs.toFixed(1)}</div></div>
-        </div>
-      </div>
-
-      {/* Prep & off days - HS FB1 final polish item 4 2026-08-25:
-          "14%" pill moves out of the header (headers cleaner without
-          the pill; scope pill lives on the season card now) and
-          becomes a third fact reading "Share". */}
-      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-blue" data-card="prep">
-        <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Prep &amp; off days</span>
-          <HelpPop
-            id="qPrep"
-            title="Prep and off days"
-            body={<>Labor on days with no game - the prep day before the stand opens, plus anything worked while the team was away.<br /><br />This is the part of the stand you control. Game days are fixed by the schedule; these days are your call.</>}
-          />
-        </header>
-        <div className="kpi-hs-hero kpi-hs-blue" data-figure="off-day-dollars">
-          {fmt$(split.off_day_dollars)} <span className="kpi-hs-hero-sub">spent</span>
-        </div>
-        <div className="kpi-hs-sub">on {split.off_day_count} day{split.off_day_count === 1 ? "" : "s"} outside game days</div>
-        <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Per off day</div><div className="kpi-hs-fact-v kpi-hs-blue">{fmt$0(perOffDay)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Game days</div><div className="kpi-hs-fact-v">{fmt$0(split.game_day_dollars)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Share</div><div className="kpi-hs-fact-v kpi-hs-blue">{actual > 0 ? Math.round((split.off_day_dollars / actual) * 100) : 0}%</div></div>
-        </div>
-      </div>
-
-      {/* AVG COST PER GAME - HS FB1 PR-3 3e 2026-08-25: renamed from
-          "Cost per game day"; facts drop Crew and become Day avg / Night
-          avg (per-game averages split by game type). Night-vs-day dollar
-          split is aggregated client-side from actualsDaily using the
-          same date sets the day-strip receives - the server-supplied
-          split.game_day_dollars is a single total. */}
-      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-purple" data-card="game">
-        {/* HS FB1 final polish item 5 2026-08-25: "7 games" pill moves
-            into facts as "Games" - the count belongs with the other
-            per-game metrics, and dropping the pill lets the eyebrow
-            stay on one line. */}
-        <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">AVG cost per game</span>
-          <HelpPop
-            id="qGame"
-            title="Average cost per game"
-            body={<>Game-day labor divided by the number of games. Prep days are left out so this is a clean per-game number.<br /><br />Night games cost more than day games because they run later and the crew size is typically the same. Per-account base rates land with the pre-floor estimator.</>}
-          />
-        </header>
-        <div className="kpi-hs-hero kpi-hs-purple" data-figure="per-game">{fmt$(perGame)}</div>
-        <div className="kpi-hs-sub">across {stand.night_games} night + {stand.day_games} day game{stand.game_days === 1 ? "" : "s"}</div>
-        <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Day avg</div><div className="kpi-hs-fact-v" data-figure="day-avg">{fmt$0(dayAvg)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Night avg</div><div className="kpi-hs-fact-v" data-figure="night-avg">{fmt$0(nightAvg)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Games</div><div className="kpi-hs-fact-v">{stand.game_days}</div></div>
-        </div>
-      </div>
-
-      {/* Overtime - HS FB1 final polish item 6 2026-08-25: title trimmed
-          from "Overtime for this shape" to "Overtime". The eyebrow was
-          wrapping to two lines at 1280px; shorter title + no pill on
-          this card (moved to facts) keeps the header row at one line
-          alongside every other signal card. */}
-      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-amber" data-card="ot">
-        <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Overtime</span>
-          <span className={`kpi-hs-pill ${otBand}`}>
-            {otPct < norm[0] ? "Below normal" : otPct > norm[1] ? "Above normal" : "Typical"}
-          </span>
-          <HelpPop
-            id="qOT2"
-            title="Why this stand carries overtime"
-            body={<>
-              {stand.peak_games_in_week} game days land in one Monday-Sunday week, and the 40-hour clock resets Monday - so a stand packed into a single week carries overtime no matter how it is scheduled. This is the cost of the calendar, not the crew.
-              <table className="kpi-hs-pop-table">
-                <tbody>
-                  <tr><td>3 games in a week</td><td>2% OT</td></tr>
-                  <tr><td>6 games</td><td>23%</td></tr>
-                  <tr><td>7 games</td><td>38%</td></tr>
-                </tbody>
-              </table>
-              <span className="kpi-hs-pop-foot">Measured across 36 homestands at 4 accounts this season.</span>
-            </>}
-          />
-        </header>
-        <div className={`kpi-hs-hero ${otPct < norm[0] ? "kpi-hs-good" : otPct > norm[1] ? "kpi-hs-bad" : "kpi-hs-mid"}`}>
-          {otPct.toFixed(1)}%
-        </div>
-        {/* HS FB1 PR-3 3f 2026-08-25: split the sub copy above and
-            below the gauge. Above: what happened this stand. Below:
-            what similar stands typically run - the comparative band
-            reads with the gauge, not stacked over it.
-            homestand-fixes round 2 P0-1 (2026-08-26): sub-line now
-            states the arithmetic - "N.N of M.M hours at time and a
-            half" - so an operator can check the percentage without
-            leaving the card. The peak-days framing moves into the ?
-            popover where it belongs (it's causal context, not what
-            happened this stand). */}
-        <div className="kpi-hs-sub">
-          <b>{totalOtHrs.toFixed(1)}</b> of <b>{totalAllHrs.toFixed(1)}</b> hours at time and a half
-        </div>
-        <GaugeBar ot={otPct} band={norm} />
-        {/* HS FB1 final polish item 6 2026-08-25: --kpi-sp-3 margin
-            between gauge and the sentence below. Prior render had the
-            two colliding. */}
-        <div className="kpi-hs-sub kpi-hs-sub-below-gauge">
-          Homestands similar usually run <b>{norm[0].toFixed(1)}–{norm[1].toFixed(0)}%</b>
-        </div>
-      </div>
-
-      {/* Payroll data */}
-      <div className={`kpi-hs-card kpi-hs-signal ${unapprovedHrs > 0 ? "kpi-hs-edge-amber" : "kpi-hs-edge-good"}`} data-card="payroll">
-        <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Payroll data</span>
-          <span className={`kpi-hs-pill ${unapprovedHrs > 0 ? "kpi-hs-pill-amber" : "kpi-hs-pill-good"}`}>
-            {unapprovedHrs > 0 ? "Needs attention" : "Complete"}
-          </span>
-          <HelpPop
-            id="qPay"
-            title="Payroll data"
-            body={<>Hours clocked in Rippling that nobody has approved yet. Rippling does not calculate pay until a manager approves, so these hours carry no dollars.<br /><br />Will rise is what this stand grows by once they are approved.</>}
-          />
-        </header>
-        <div className={`kpi-hs-hero ${unapprovedHrs > 0 ? "kpi-hs-amber" : ""}`}>
-          {unapprovedHrs > 0 ? `${unapprovedHrs.toFixed(1)} hrs` : "All in"}
-        </div>
-        <div className="kpi-hs-sub">{unapprovedHrs > 0 ? "unapproved in Rippling" : "every shift approved"}</div>
-        {/* HS FB1 final polish item 14 2026-08-25: Weeks fact added
-            alongside Crew. After item 7's two-row layout a single
-            "Crew" fact reads stranded; Weeks is the second useful
-            metric next to "every shift approved" and is already in
-            the payload (employees[].week_start). */}
-        <div className="kpi-hs-facts">
-          {/* HS PR-C 2026-08-24: Will rise is absent when there are
-              no unapproved hours to price - the sub already reads
-              "every shift approved" and the hero reads "All in", so
-              the dashed fact added nothing. Standing rule: if a
-              fact's premise does not hold, it is absent, not `–`. */}
-          {unapprovedHrs > 0 && hourlyRate > 0 && (
-            <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Will rise</div>
-              <div className="kpi-hs-fact-v kpi-hs-amber">
-                ~{fmt$0(unapprovedHrs * hourlyRate)}
-              </div>
-            </div>
-          )}
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Crew</div><div className="kpi-hs-fact-v">{crewSize}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Weeks</div><div className="kpi-hs-fact-v">{weeksSpanned}</div></div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Season table with employee expansion ──────────────────────────
-// PR-2 audit 2026-08-21: row-click now selects AND expands. Prior
-// behavior called only onToggleExpand, but actuals_range is populated
-// only for the currently-selected stand, so expanding any other row
-// yielded an empty list ("cursor:pointer but clicking does nothing").
-// Fix: clicking a non-selected row fires onSelectStand (URL push -> new
-// fetch) AND onToggleExpand; a compact skeleton renders in the
-// expansion slot for the ~1s until data lands. Clicking an already-
-// selected + expanded row collapses (single onToggleExpand).
 function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggleExpand, onSelectStand, employeesByStand, workers, redact }) {
   const handleRowClick = (gameStart) => {
     if (gameStart !== selectedGameStart) onSelectStand?.(gameStart);
@@ -868,202 +593,294 @@ function SeasonTable({ homestands, selectedGameStart, expandedGameStart, onToggl
 
 // ─── Plan cards for pre-floor (estimated) stand selection ──────────
 // PR #273 - when a pre-floor stand is selected the server ships
-// source:"estimated" instead of the earlier refusal, and populates
-// homestand_estimated with the game-day-weighted total + per_day
-// breakdown + base_rates. The five cards below (HS X budget, Your
-// bank, Hours to schedule, Expected overtime, Spread across what is
-// left) mirror v11's plan-mode render. Each carries its own popover
-// (qPlan, qBank, qHrs, qOT, qSpread); this brings the total popover
-// count to 13 - the number owner's spec calls for.
-function PlanCards({ stand, estimate, split, bank, hourlyRate }) {
-  if (!stand || !estimate) return null;
+// 2026-08-26 homestand redesign - drop the toggle
+// ================================================
+//
+// Owner ruling per CC_PROMPT_HOMESTAND_REDESIGN.md: Actuals | Plan
+// toggle is gone. The board decides which cards to show, keyed on
+// the GAMES not the window. Three states:
+//
+//   games not started      -> UpcomingCards (4 cards)
+//   part played            -> UpcomingCards (same 4, plus spent-to-
+//                                            date on card one)
+//   all games played       -> PlayedCards (4 cards)
+//
+// A window that opened early for prep days does NOT make a stand in
+// progress - the games do. Prior gate keyed off window_start > today
+// and rendered plan cards on stands whose prep had begun; that read
+// as "0 spent against budget · under" on a stand that hadn't kicked
+// off. Game-state key fixes it.
+function gameState(stand, todayISO) {
+  if (!stand?.game_start || !stand?.game_end || !todayISO) return "unknown";
+  if (todayISO < stand.game_start) return "not_started";
+  if (todayISO > stand.game_end)   return "all_played";
+  return "part_played";
+}
+
+// Sum estimate.per_day amounts filtered by day_type. Kevin's spec
+// splits "What it should cost" into night / day / prep facts; the
+// per_day array carries day_type in {'night','day','prep','other'}.
+function sumEstimateByDayType(estimate, dayType) {
+  if (!estimate?.per_day) return 0;
+  return estimate.per_day.reduce(
+    (s, p) => (p.day_type === dayType ? s + Number(p.amount || 0) : s),
+    0,
+  );
+}
+
+// Count workers (not shifts) with any unapproved time in the stand.
+// Owner ruling 2026-08-26: "a chef thinks in people, not shifts";
+// copy reads "N people still need approval". Uses the same fields
+// the SignalCards row used (hours_without_dollars OR anomaly_no_clockout).
+function unapprovedPeopleCount(employees) {
+  return (employees || []).filter(
+    e => Number(e.hours_without_dollars || 0) > 0.004 || Number(e.anomaly_no_clockout || 0) > 0,
+  ).length;
+}
+function unapprovedHoursTotal(employees) {
+  return (employees || []).reduce(
+    (s, e) => s + Math.max(0, Number(e.hours_without_dollars || 0)) + Number(e.anomaly_no_clockout || 0),
+    0,
+  );
+}
+
+// ── UpcomingCards - four cards, games-not-started OR part-played ──
+//
+// Card 1  "What you have"          budget hero, Spent so far + Left facts
+// Card 2  "What it should cost"    plan total hero, night/day/prep + Vs budget
+// Card 3  "Hours to schedule"      regular hours hero, per game day + crew
+// Card 4  "Expect overtime"        expected % hero, dollar guess + norm band
+//
+// All figures reference the ESTIMATE (homestand_estimated + OT_NORMS).
+// On part-played, card 1's "Spent so far" > 0 - naturally handled by
+// data. The rest of the cards remain forward-looking; the plan is
+// still what a chef schedules against for the games remaining.
+function UpcomingCards({ stand, estimate, split, hourlyRate }) {
+  if (!stand) return null;
   const budget = Number(stand.budget || 0);
-  const plan   = Number(estimate.total || 0);
-  const budgetVsPlan = budget - plan;
-  const fits = budgetVsPlan >= 0;
-  // HS PR-A (owner ruling 2026-08-24): stand-scoped spent-to-date
-  // surfaces on plan mode when the window has opened but games have
-  // not (HS 12: window 08/21 past, games 08/31 future, $359.58 on
-  // prep). Absent when 0 - "if the fact's premise does not hold, it
-  // is absent, not $0. Seeing it means real money has already gone
-  // out before the games start, which is the signal worth surfacing."
-  const spentToDate = Number(split?.spent_to_date || 0);
-  const showSpentToDate = spentToDate > 0.005;
-
-  // Working days = days in per_day with non-zero weight (game or prep).
-  const workingDays = (estimate.per_day || []).filter(p => p.day_type !== "other").length;
-
-  // Peak-informed OT expectation. Uses same OT_NORMS table the actuals
-  // OT card reads so the plan and actual views agree on what "typical"
-  // means for this shape.
+  const spent = Number(split?.spent_to_date || 0);
+  const left = Math.max(0, budget - spent);
+  const planTotal = Number(estimate?.total || 0);
+  const nightTotal = sumEstimateByDayType(estimate, "night");
+  const dayTotal   = sumEstimateByDayType(estimate, "day");
+  const prepTotal  = sumEstimateByDayType(estimate, "prep");
+  const vsBudget = budget - planTotal;   // positive = plan under budget = good
+  const vsArr = arrow(vsBudget, true);
+  const rate = Number(hourlyRate) || 22.79;
+  const regularHours = rate > 0 ? planTotal / rate : 0;
+  const workingDays = (estimate?.per_day || []).filter(p => p.day_type !== "other").length;
+  const perGameDayHrs = workingDays > 0 ? regularHours / workingDays : 0;
+  // Crew size on an upcoming stand: no per-worker actuals to count,
+  // so use the account's typical crew from recent stands. Approximate
+  // as employees.length on the current homestand response - which is
+  // empty on future stands. Fall back to 5 as a plausible average;
+  // owner will refine if it matters. TODO(follow-up): expose
+  // stand.typical_crew from server.
+  const crewOfN = 5;
+  const perPersonHrs = crewOfN > 0 ? perGameDayHrs / crewOfN : 0;
   const norm = OT_NORMS[Math.min(stand.peak_games_in_week, 10)] || OT_NORMS[3];
-  const otPct = norm[2];
-  const rate = Number(hourlyRate) || 22.79;   // account's own blended rate; falls back to owner-published avg
-  // Regular hrs approximated from the plan-total minus expected OT dollars.
-  const otShare = otPct / 100 * 0.5;
-  const regHrs = Math.round(plan * (1 - otShare) / rate);
-  const otHrs  = Math.round(plan * otShare / (rate * 1.5));
-
-  const bankVal = Number(bank?.bank || 0);
-  const remaining = Number(bank?.stands_remaining || 0);
-  const bankShare = Number(bank?.bank_share || 0);
-  const adjustedTarget = budget + bankShare;
-  const planVsAdjusted = adjustedTarget - plan;
+  const expectedOtPct = norm[2];
+  const expectedOtDollars = planTotal * expectedOtPct / 100 * 0.5;   // half-hour OT premium
 
   return (
-    <div className="kpi-hs-signals" role="region" aria-label="Plan cards (pre-floor estimated stand)">
-      {/* Card 1 - HS X budget (qPlan popover) */}
-      <div className={`kpi-hs-card kpi-hs-signal ${fits ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="plan">
+    <div className="kpi-hs-signals" role="region" aria-label="Upcoming homestand cards">
+      {/* Card 1 - What you have */}
+      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-good" data-card="have">
         <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">HS {stand.index} budget</span>
-          <span className="kpi-hs-card-hdr-pills">
-            <span className={`kpi-hs-pill ${fits ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
-              {fits ? "Plan fits" : "Plan is over"}
-            </span>
-            <span className="kpi-hs-pill kpi-hs-pill-amber" data-est-pill>est.</span>
-          </span>
-          <HelpPop
-            id="qPlan"
-            title="How the plan is priced"
-            body={<>Your account's own averages this season, weighted by what the schedule says happened each day. Because daily detail starts 04/20/26, pre-floor stands are estimated - each week's real total is distributed across days by night/day/prep weights.<br /><br />The plan covers only what the schedule tells us: the prep day and the games. Off days show as $0 - the week's money is correctly sitting on the games at either end. Known limitation: the road-trip trickle (~$214 per stand, someone in while the team is away) has no schedule day to land on, so it gets absorbed into game days.</>}
-          />
+          <span className="kpi-hs-eyebrow">What you have</span>
+          <HelpPop id="qUpHave" title="What you have" body={<>The budget for this homestand. Spent so far is anything already clocked in the window - usually prep-day labor before the games start. Left is what remains for the days ahead.</>} />
         </header>
-        <div className="kpi-hs-hero" data-figure="budget">
-          {budget > 0 ? fmt$(budget) : "–"}
-        </div>
-        <div className="kpi-hs-sub">covers {stand.window_days} days · the plan works {workingDays} of them</div>
+        <div className="kpi-hs-hero kpi-hs-good">{fmt$0(budget)}</div>
+        <div className="kpi-hs-sub">budget for this homestand</div>
         <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Plan costs</div><div className="kpi-hs-fact-v kpi-hs-blue" data-figure="plan">{fmt$0(plan)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Vs budget</div><div className={`kpi-hs-fact-v ${fits ? "kpi-hs-good" : "kpi-hs-bad"}`}>{fits ? "▼ " : "▲ "}{fmt$0(Math.abs(budgetVsPlan))}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Working days</div><div className="kpi-hs-fact-v">{workingDays} of {stand.window_days}</div></div>
-          {/* HS PR-A: stand-scoped spent-to-date, absent when 0. On a
-              straddling plan-mode stand (HS 12: window open, games
-              ahead) this surfaces the real money already committed to
-              prep. Signal worth surfacing; not a card-bloating $0. */}
-          {showSpentToDate && (
-            <div className="kpi-hs-fact" data-fact="spent_to_date">
-              <div className="kpi-hs-fact-k">Spent to date</div>
-              <div className="kpi-hs-fact-v">{fmt$(spentToDate)}</div>
-            </div>
-          )}
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Spent so far</div><div className="kpi-hs-fact-v">{fmt$0(spent)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Left</div><div className="kpi-hs-fact-v kpi-hs-good">{fmt$0(left)}</div></div>
         </div>
       </div>
 
-      {/* homestand-fixes round 2 item 4 (2026-08-26): "Your bank" ->
-          "Under target so far". Owner ruling: "bank" tells an operator
-          they have money to spend, but this is cumulative variance
-          against target, not spendable money. Popover fully rewritten
-          to remove every "bank" sentence per Kevin's ruling that the
-          concept-explaining copy needs rewriting too, not just the
-          label. Season-fixed truth per owner reminder #3; reads
-          directly off homestand_bank. */}
-      <div className={`kpi-hs-card kpi-hs-signal ${bankVal >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="bank">
+      {/* Card 2 - What it should cost */}
+      <div className="kpi-hs-card kpi-hs-signal" data-card="plan-cost">
         <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">{bankVal >= 0 ? "Under target so far" : "Over target so far"}</span>
-          <span className="kpi-hs-card-hdr-pills">
-            <span className={`kpi-hs-pill ${bankVal >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>
-              {bankVal >= 0 ? "Ahead" : "Behind"}
-            </span>
-          </span>
-          <HelpPop
-            id="qBank"
-            title="Under target so far"
-            body={<>Every finished stand either came in under its target - budget you have not spent - or over. This is the running total for the season.<br /><br />Under target is budget still available; over target means the next stands have to run under to get back to even.<br /><br />Estimated stands do not enter this total - it stays a claim about money we can prove.</>}
-          />
+          <span className="kpi-hs-eyebrow">What it should cost</span>
+          <HelpPop id="qUpPlan" title="What it should cost" body={<>Your own averages this season - night game / day game / prep day - applied to the games on this homestand's calendar. Compares against the budget above.</>} />
         </header>
-        <div className={`kpi-hs-hero ${bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>
-          {bankVal >= 0 ? "▼ " : "▲ "}{fmt$0(Math.abs(bankVal))}
-        </div>
+        <div className="kpi-hs-hero">{fmt$0(planTotal)}</div>
         <div className="kpi-hs-sub">
-          {bankVal >= 0 ? "under target across " : "over target across "}{bank?.stands_finished || 0} finished stands
+          {stand.game_days} game{stand.game_days === 1 ? "" : "s"}
+          {workingDays > stand.game_days ? ` plus ${workingDays - stand.game_days} prep day${(workingDays - stand.game_days) === 1 ? "" : "s"}` : ""}
         </div>
         <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Spent so far</div><div className="kpi-hs-fact-v">{fmt$0(bank?.spent_to_date || 0)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Budget so far</div><div className="kpi-hs-fact-v">{fmt$0(bank?.budget_to_date || 0)}</div></div>
+          {stand.night_games > 0 && <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">{stand.night_games} night game{stand.night_games === 1 ? "" : "s"}</div><div className="kpi-hs-fact-v">{fmt$0(nightTotal)}</div></div>}
+          {stand.day_games > 0 && <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">{stand.day_games} day game{stand.day_games === 1 ? "" : "s"}</div><div className="kpi-hs-fact-v">{fmt$0(dayTotal)}</div></div>}
+          {prepTotal > 0.5 && <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Prep day{workingDays - stand.game_days === 1 ? "" : "s"}</div><div className="kpi-hs-fact-v">{fmt$0(prepTotal)}</div></div>}
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Vs budget</div><div className={`kpi-hs-fact-v ${vsArr.cls}`}>{vsArr.glyph} {fmt$0(Math.abs(vsBudget))} {vsBudget >= 0 ? "under" : "over"}</div></div>
         </div>
+        <div className="kpi-hs-covers"><b>Your own averages</b> this season, applied to the games on the calendar</div>
       </div>
 
-      {/* Card 3 - Hours to schedule (qHrs popover) */}
-      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-purple" data-card="hrs">
+      {/* Card 3 - Hours to schedule */}
+      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-blue" data-card="hrs">
         <header className="kpi-hs-card-hdr">
           <span className="kpi-hs-eyebrow">Hours to schedule</span>
-          <span className="kpi-hs-card-hdr-pills">
-            <span className="kpi-hs-pill kpi-hs-pill-mute">at ${rate.toFixed(2)}/hr avg</span>
-          </span>
-          <HelpPop
-            id="qHrs"
-            title="Hours to schedule"
-            body={<>Regular hours to put in Rippling for the prep day and the games. Overtime is shown separately because you do not schedule it - it happens when the week is packed.<br /><br />Against budget is what the budget alone buys. With your bank adds the money you have saved so far.</>}
-          />
+          <HelpPop id="qUpHrs" title="Hours to schedule" body={<>The regular hours behind the plan. Divide across the working days for the per-day number; divide again across a crew of N for a rough per-person estimate. This is the ceiling, not the schedule - overtime + doubleheaders will move it.</>} />
         </header>
-        <div className="kpi-hs-hero kpi-hs-purple">{regHrs}</div>
-        <div className="kpi-hs-sub">
-          regular hours to put in Rippling<br />
-          expect about <b>{otHrs}</b> overtime hours on top
-        </div>
+        <div className="kpi-hs-hero">{Math.round(regularHours)}<span className="kpi-hs-hero-unit">hrs</span></div>
+        <div className="kpi-hs-sub">across {workingDays} working day{workingDays === 1 ? "" : "s"}</div>
         <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Against budget</div><div className="kpi-hs-fact-v">{budget > 0 ? Math.round(budget / rate) + " hrs" : "–"}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">With your bank</div><div className="kpi-hs-fact-v kpi-hs-good">{Math.round((budget + bankVal) / rate)} hrs</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Per game day</div><div className="kpi-hs-fact-v">{Math.round(perGameDayHrs)} hrs</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Crew of {crewOfN}</div><div className="kpi-hs-fact-v">~{Math.round(perPersonHrs)} hrs each</div></div>
+        </div>
+        <div className="kpi-hs-covers"><b>At ${rate.toFixed(2)}/hr</b>, your blended rate this season</div>
+      </div>
+
+      {/* Card 4 - Expect overtime */}
+      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-amber" data-card="ot-expect">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">Expect overtime</span>
+          <span className={`kpi-hs-pill kpi-hs-pill-amber`}>{stand.peak_games_in_week} in a week</span>
+          <HelpPop id="qUpOT" title="Expect overtime" body={<>The 40-hour clock resets Monday, so a packed week carries overtime no matter how you schedule it. This is what stands with the same peak-week shape have run at this season.</>} />
+        </header>
+        <div className={`kpi-hs-hero ${expectedOtPct > 20 ? "kpi-hs-bad" : expectedOtPct > 5 ? "kpi-hs-mid" : "kpi-hs-good"}`}>~{expectedOtPct.toFixed(0)}%</div>
+        <div className="kpi-hs-sub">{stand.peak_games_in_week} game{stand.peak_games_in_week === 1 ? "" : "s"} fall in one Mon-Sun week</div>
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Roughly</div><div className={`kpi-hs-fact-v ${expectedOtPct > 20 ? "kpi-hs-bad" : expectedOtPct > 5 ? "kpi-hs-mid" : ""}`}>{fmt$0(expectedOtDollars)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Stands like this</div><div className="kpi-hs-fact-v">{norm[0].toFixed(0)} – {norm[1].toFixed(0)}%</div></div>
+        </div>
+        <div className="kpi-hs-covers"><b>The 40-hour clock resets Monday</b> - a packed week carries OT whatever you do</div>
+      </div>
+    </div>
+  );
+}
+
+// ── PlayedCards - four cards, all-games-played ────────────────────
+//
+// Card 1  "What it cost"           actual hero, variance sub, budget/hours facts
+//                                  + `>= $X` prefix + "N people still need
+//                                  approval" note when unapproved hours exist
+// Card 2  "Vs the plan"            game-day actual hero, plan sub, low/high +
+//                                  accuracy % (100 - abs(plan-actual)/actual;
+//                                  direction stated in words, never signed)
+// Card 3  "Prep & off days"        off+prep hero, per-day + share-of-total
+// Card 4  "Overtime"               actual % hero, N of M sub with plan expected
+//
+// Vs the plan replaces the toggle: it puts the retrospective on the
+// card itself so nobody has to hold a plan number in mind while
+// looking at an actual number on a different screen. Accuracy formula
+// per owner: 100 - abs(plan - actual) / actual. Direction stated in
+// WORDS - "$177 low" - never a signed number, because a negative
+// accuracy would be meaningless to read.
+function PlayedCards({ stand, split, employees, estimate, hourlyRate }) {
+  if (!stand || !split) return null;
+  const budget = Number(stand.budget || 0);
+  const actual = Number(stand.actual || 0);
+  const variance = budget - actual;
+  const vArr = arrow(variance, true);
+  const unapprovedHrs = unapprovedHoursTotal(employees);
+  const unapprovedPeople = unapprovedPeopleCount(employees);
+  const hasUnapproved = unapprovedHrs > 0.004;
+  const rate = Number(hourlyRate) || 22.79;
+  const willRise = hasUnapproved ? unapprovedHrs * rate : 0;
+
+  const gameDayActual = Number(split.game_day_dollars || 0);
+  const gameDayPlan = sumEstimateByDayType(estimate, "night") + sumEstimateByDayType(estimate, "day");
+  const planDelta = gameDayPlan - gameDayActual;   // positive => plan was HIGH
+  const planDeltaDir = Math.abs(planDelta) < 0.5 ? "on the number" : planDelta > 0 ? "high" : "low";
+  const planDeltaAbs = Math.abs(planDelta);
+  const accuracyPct = gameDayActual > 0 ? Math.max(0, Math.round(100 - (Math.abs(gameDayPlan - gameDayActual) / gameDayActual) * 100)) : null;
+
+  const offPlusPrep = Number(split.off_day_dollars || 0) + Number(split.prep_day_dollars || 0);
+  const offCount = Number(split.off_day_count || 0);
+  const prepCount = Number(split.prep_day_count || 0);
+  const nonGameDays = offCount + prepCount;
+  const perOffDay = nonGameDays > 0 ? offPlusPrep / nonGameDays : 0;
+  const offShare = actual > 0 ? (offPlusPrep / actual) * 100 : 0;
+
+  const norm = OT_NORMS[Math.min(stand.peak_games_in_week, 10)] || OT_NORMS[3];
+  const totalOtHrs  = employees.reduce((s, e) => s + Number(e.hours_overtime || 0), 0);
+  const totalAllHrs = employees.reduce(
+    (s, e) => s + Number(e.hours_regular || 0) + Number(e.hours_overtime || 0) + Number(e.hours_double_time || 0),
+    0,
+  );
+  const actualOtPct = totalAllHrs > 0 ? (totalOtHrs / totalAllHrs) * 100 : 0;
+  const otBand = actualOtPct < norm[0] ? "kpi-hs-pill-good" : actualOtPct > norm[1] ? "kpi-hs-pill-bad" : "kpi-hs-pill-amber";
+  const otBandLabel = actualOtPct < norm[0] ? "Below normal" : actualOtPct > norm[1] ? "Above normal" : "Typical";
+  const otCost = employees.reduce((s, e) => s + Number(e.dollars_overtime || 0), 0);
+  const expectedOtPct = norm[2];
+
+  return (
+    <div className="kpi-hs-signals" role="region" aria-label="Played homestand cards">
+      {/* Card 1 - What it cost */}
+      <div className={`kpi-hs-card kpi-hs-signal ${variance >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="cost">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">What it cost</span>
+          <span className={`kpi-hs-pill ${variance >= 0 ? "kpi-hs-pill-good" : "kpi-hs-pill-bad"}`}>{variance >= 0 ? "Under" : "Over"}</span>
+          <HelpPop id="qPlCost" title="What it cost" body={<>Actual hourly labor for the stand's window, against the budget from your season plan. Under is green; over is red.<br /><br /><b>If unapproved hours exist,</b> the hero shows a `&ge; $X` prefix. Approving those hours may grow the number.</>} />
+        </header>
+        <div className={`kpi-hs-hero ${variance < 0 ? "kpi-hs-bad" : ""}`}>{hasUnapproved ? `≥ ${fmt$0(actual)}` : fmt$0(actual)}</div>
+        <div className={`kpi-hs-sub ${variance >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>
+          <b>{vArr.glyph} {fmt$0(Math.abs(variance))} {variance >= 0 ? "under" : "over"} budget</b>
+        </div>
+        {hasUnapproved && (
+          <div className="kpi-hs-action-line" data-approvals-note>
+            {unapprovedPeople} {unapprovedPeople === 1 ? "person" : "people"} still need approval (~{fmt$0(willRise)})
+          </div>
+        )}
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Budget</div><div className="kpi-hs-fact-v">{fmt$0(budget)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Hours</div><div className="kpi-hs-fact-v">{totalAllHrs.toFixed(1)}</div></div>
         </div>
       </div>
 
-      {/* Card 4 - Expected overtime (qOT popover) */}
-      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-amber" data-card="ot-plan">
+      {/* Card 2 - Vs the plan (replaces the toggle) */}
+      <div className="kpi-hs-card kpi-hs-signal" data-card="vs-plan">
         <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Expected overtime</span>
-          <span className="kpi-hs-card-hdr-pills">
-            <span className={`kpi-hs-pill ${stand.peak_games_in_week >= 6 ? "kpi-hs-pill-amber" : "kpi-hs-pill-good"}`}>
-              {stand.peak_games_in_week >= 6 ? "High" : "Low"}
-            </span>
-          </span>
-          <HelpPop
-            id="qOT"
-            title="Why this stand carries overtime"
-            body={<>{stand.peak_games_in_week} game days land inside one Monday-Sunday week. The 40-hour clock resets every Monday, so a stand packed in before that reset carries overtime no matter how you schedule it. That is the calendar, not the crew.<br /><br />Typical overtime by shape: 3 games in a week ~2%, 6 games ~23%, 7 games ~38%. Measured across 36 homestands at 4 accounts this season.</>}
-          />
+          <span className="kpi-hs-eyebrow">Vs the plan</span>
+          {accuracyPct != null && <span className={`kpi-hs-pill ${accuracyPct >= 90 ? "kpi-hs-pill-good" : accuracyPct >= 75 ? "kpi-hs-pill-amber" : "kpi-hs-pill-bad"}`}>{accuracyPct >= 90 ? "Close" : accuracyPct >= 75 ? "Off" : "Way off"}</span>}
+          <HelpPop id="qPlVs" title="Vs the plan" body={<>Game-day spend against what the plan predicted for those same games. <b>Accuracy</b> is 100 percent minus the absolute error divided by the actual - the higher the better. Direction is stated in words (low or high) rather than as a signed number.</>} />
         </header>
-        <div className={`kpi-hs-hero ${otPct > 20 ? "kpi-hs-bad" : otPct > 5 ? "kpi-hs-mid" : "kpi-hs-good"}`}>
-          ~{otPct.toFixed(0)}%
+        <div className="kpi-hs-hero">{fmt$0(gameDayActual)}</div>
+        <div className="kpi-hs-sub">the plan said <b>{fmt$0(gameDayPlan)}</b></div>
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Plan was</div><div className="kpi-hs-fact-v">{planDeltaDir === "on the number" ? "on the number" : `${fmt$0(planDeltaAbs)} ${planDeltaDir}`}</div></div>
+          {accuracyPct != null && <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Accuracy</div><div className={`kpi-hs-fact-v ${accuracyPct >= 90 ? "kpi-hs-good" : accuracyPct >= 75 ? "kpi-hs-mid" : "kpi-hs-bad"}`}>{accuracyPct}%</div></div>}
         </div>
-        <div className="kpi-hs-sub">
-          <b>{stand.peak_games_in_week}</b> game days fall in one week before the Monday reset<br />
-          stands like this usually run <b>{norm[0].toFixed(1)}%–{norm[1].toFixed(0)}%</b>
-        </div>
-        <GaugeBar ot={otPct} band={norm} />
+        <div className="kpi-hs-covers">Game-day spend against what the model predicted</div>
       </div>
 
-      {/* Card 5 - Spread across what is left (qSpread popover) */}
-      <div className={`kpi-hs-card kpi-hs-signal ${bankVal >= 0 ? "kpi-hs-edge-good" : "kpi-hs-edge-bad"}`} data-card="spread">
+      {/* Card 3 - Prep & off days */}
+      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-blue" data-card="prep-off">
         <header className="kpi-hs-card-hdr">
-          <span className="kpi-hs-eyebrow">Spread across what is left</span>
-          <span className="kpi-hs-card-hdr-pills">
-            <span className="kpi-hs-pill kpi-hs-pill-mute">{remaining} stands</span>
-          </span>
-          <HelpPop
-            id="qSpread"
-            title="Adjusted target"
-            body={<>Your original budget for this stand, plus an even share of the bank.<br /><br />If you put the whole bank on the next stand there is nothing left for the one after. Spreading it means every remaining stand gets the same boost.<br /><br />Estimated stands are informational - the bank does not adjust based on them.</>}
-          />
+          <span className="kpi-hs-eyebrow">Prep &amp; off days</span>
+          <HelpPop id="qPlPrep" title="Prep & off days" body={<>Labor on days outside the games - prep the day before openers, cleanup the day after closers, and any off day inside the window. These are stand-related costs even though nobody was at the ballpark.</>} />
         </header>
-        <div className={`kpi-hs-hero ${bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>
-          {bankVal >= 0 ? "▼ " : "▲ "}{fmt$0(Math.abs(bankShare))}
-        </div>
-        <div className="kpi-hs-sub">extra per stand if you spread the bank evenly</div>
+        <div className="kpi-hs-hero">{fmt$0(offPlusPrep)}</div>
+        <div className="kpi-hs-sub">on {nonGameDays} day{nonGameDays === 1 ? "" : "s"} outside game days</div>
         <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Adjusted target</div><div className="kpi-hs-fact-v kpi-hs-good">{fmt$0(adjustedTarget)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Plan vs adjusted</div><div className={`kpi-hs-fact-v ${planVsAdjusted >= 0 ? "kpi-hs-good" : "kpi-hs-bad"}`}>{planVsAdjusted >= 0 ? "▼ " : "▲ "}{fmt$0(Math.abs(planVsAdjusted))}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Per off day</div><div className="kpi-hs-fact-v">{nonGameDays > 0 ? fmt$0(perOffDay) : "—"}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Share</div><div className="kpi-hs-fact-v">{actual > 0 ? `${offShare.toFixed(0)}%` : "—"}</div></div>
+        </div>
+      </div>
+
+      {/* Card 4 - Overtime (actual, with plan expected for context) */}
+      <div className="kpi-hs-card kpi-hs-signal kpi-hs-edge-amber" data-card="ot">
+        <header className="kpi-hs-card-hdr">
+          <span className="kpi-hs-eyebrow">Overtime</span>
+          <span className={`kpi-hs-pill ${otBand}`}>{otBandLabel}</span>
+          <HelpPop id="qPlOT" title="Overtime" body={<>Actual overtime as a share of all hours worked. The plan expected roughly the norm shown below.<br /><br /><b>Sum-over-sum</b>: total OT hours divided by total hours across the crew. A per-worker-avg formula inflates whenever a subset carries the OT (the reason this reading was 72% pre-fix on a stand that ran 41%).</>} />
+        </header>
+        <div className={`kpi-hs-hero ${actualOtPct < norm[0] ? "kpi-hs-good" : actualOtPct > norm[1] ? "kpi-hs-bad" : "kpi-hs-mid"}`}>{actualOtPct.toFixed(1)}%</div>
+        <div className="kpi-hs-sub">
+          <b>{totalOtHrs.toFixed(1)}</b> of <b>{totalAllHrs.toFixed(1)}</b> hours · plan expected <b>~{expectedOtPct.toFixed(0)}%</b>
+        </div>
+        <div className="kpi-hs-facts">
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">OT cost</div><div className={`kpi-hs-fact-v ${actualOtPct > 20 ? "kpi-hs-bad" : actualOtPct > 5 ? "kpi-hs-mid" : ""}`}>{fmt$0(otCost)}</div></div>
+          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Stands like this</div><div className="kpi-hs-fact-v">{norm[0].toFixed(0)} – {norm[1].toFixed(0)}%</div></div>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Stand-region skeleton (warm-nav pending) ──────────────────────
-// PR-2 transition stability. Mirrors the height stack of the three
-// stand-region cards (StandHeader, StandDayStrip, SignalCards row) so
-// the rail below does not jump when the real content lands. Uses the
-// existing .kpi-skel shimmer from kpi.css; new .kpi-hs-skel-* classes
-// carry heights.
 function StandRegionSkeleton() {
   return (
     <div className="kpi-hs-skel" role="status" aria-live="polite" aria-busy="true" data-hs-skel>
@@ -1131,6 +948,40 @@ export function HomestandBoard({
   );
   const gameDates = useMemo(() => new Set(data?.homestand_game_dates || []), [data?.homestand_game_dates]);
   const nightGameDates = useMemo(() => new Set(data?.homestand_night_dates || []), [data?.homestand_night_dates]);
+  // 2026-08-26 homestand redesign - per-day schedule map for the
+  // strip captions (opponent + first pitch on upcoming days; opponent
+  // + OT % on played days). data.homestand_schedule is scoped to the
+  // selected stand's window and only carries GAME days (day_type
+  // === "GAME"); prep/off days are absent.
+  const scheduleByDate = useMemo(() => {
+    const m = new Map();
+    for (const r of (data?.homestand_schedule || [])) m.set(r.date, r);
+    return m;
+  }, [data?.homestand_schedule]);
+  // Account timezone: NO fallback to UTC. Owner ruling 2026-08-26 -
+  // "a wrong first pitch is worse than no first pitch"; if timezone is
+  // null the caption drops the time and shows opponent only.
+  const accountTimezone = useMemo(() => {
+    const acct = (data?.accounts_directory || []).find(a => a.team_key === data?.account);
+    return acct?.timezone || null;
+  }, [data?.accounts_directory, data?.account]);
+  // Per-day OT hours aggregate so the played-day caption can render
+  // `91% OT`. Sum-over-sum, not mean-of-means - matches PlayedCards.
+  // hours_regular + hours_overtime are per-worker per-day; sum both
+  // over each work_date and take hours_ot / hours_all as the day's OT %.
+  const otByDate = useMemo(() => {
+    const m = new Map();
+    for (const r of (data?.actuals_daily || [])) {
+      const key = r.work_date;
+      const cur = m.get(key) || { hours_ot: 0, hours_all: 0 };
+      const reg = Number(r.hours_regular || 0);
+      const ot  = Number(r.hours_overtime || 0);
+      cur.hours_ot  += ot;
+      cur.hours_all += reg + ot;
+      m.set(key, cur);
+    }
+    return m;
+  }, [data?.actuals_daily]);
 
   // Employees for the selected stand come from data.actuals_range
   // (per-worker aggregates the server already produced for the
@@ -1154,20 +1005,10 @@ export function HomestandBoard({
   // played. When the selected stand changes, the mode SNAPS to that
   // stand's natural default (an operator picking an unplayed stand
   // gets Plan even if they were on Actuals for the previous one).
-  const derivedPlanMode = data?.source === "estimated"
-    || (stand?.game_start && todayISO && stand.game_start > todayISO);
-  const actualsAvailable = !derivedPlanMode;
-  const [viewMode, setViewMode] = useState(derivedPlanMode ? "plan" : "actuals");
-  useEffect(() => {
-    setViewMode(derivedPlanMode ? "plan" : "actuals");
-  }, [stand?.game_start, derivedPlanMode]);
-  // Active mode: what the toggle currently says. Falls back to the
-  // natural default if the operator has not overridden (or has been
-  // snapped to it by a stand change). The RENDER key: when viewMode
-  // is "plan" we render PlanCards regardless of whether the stand is
-  // played; when "actuals" we render SignalCards + StandDayStrip.
-  const activeMode = viewMode;
-  const planActive = activeMode === "plan";
+  // 2026-08-26 homestand redesign: viewMode toggle removed. Board
+  // keys off game-state, not window-state. See gameState() helper.
+  const gs = gameState(stand, todayISO);
+  const showPlayed = gs === "all_played" && !!split;
 
   return (
     <div className="kpi-hs-board" data-view="homestand">
@@ -1178,9 +1019,6 @@ export function HomestandBoard({
         homestands={homestands}
         selectedGameStart={selectedGameStart}
         onSelect={onSelectStand}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        actualsAvailable={actualsAvailable}
         salaryAvailable={salaryAvailable}
         salaryOn={salaryOn}
       />
@@ -1207,46 +1045,41 @@ export function HomestandBoard({
               merge (not done here). */}
           {(() => {
             if (!stand || settledRefusal) return null;
-            // HS FB1 PR-4 2026-08-25: view-mode key gates the stand
-            // region. planActive === true renders PlanCards (with the
-            // day strip hidden - Plan mode answers "what should this
-            // cost", and an actuals strip under plan cards would be
-            // the same category error as a green "under budget" on an
-            // unplayed stand; per-day plan values are a real feature
-            // we have not designed - do not invent one here).
-            // planActive === false renders SignalCards + StandDayStrip
-            // exactly as before.
+            // 2026-08-26 homestand redesign: game-state selection.
+            // Day strip always renders (with schedule captions in a
+            // follow-up commit). Card layout switches on game-state:
+            //   all_played   -> PlayedCards (four cards including
+            //                   Vs the plan; the retrospective is on
+            //                   the card so no toggle needed)
+            //   else         -> UpcomingCards (four cards, forward-
+            //                   looking; part-played adds spent-so-far
+            //                   naturally via split.spent_to_date)
             return (
               <>
-                {!planActive && (
-                  <StandDayStrip
-                    stand={stand}
-                    actualsDaily={data.actuals_daily || []}
-                    gameDates={gameDates}
-                    nightGameDates={nightGameDates}
-                    todayISO={todayISO}
-                  />
-                )}
-                {planActive && (
-                  <PlanCards
-                    stand={stand}
-                    estimate={data?.homestand_estimated}
-                    split={split}
-                    bank={bank}
-                    hourlyRate={hourlyRate}
-                  />
-                )}
-                {!planActive && split && (
-                  <SignalCards
+                <StandDayStrip
+                  stand={stand}
+                  actualsDaily={data.actuals_daily || []}
+                  gameDates={gameDates}
+                  nightGameDates={nightGameDates}
+                  todayISO={todayISO}
+                  scheduleByDate={scheduleByDate}
+                  accountTimezone={accountTimezone}
+                  otByDate={otByDate}
+                />
+                {showPlayed ? (
+                  <PlayedCards
                     stand={stand}
                     split={split}
                     employees={employeesByStand.get(stand.game_start) || []}
+                    estimate={data?.homestand_estimated}
                     hourlyRate={hourlyRate}
-                    salaryAvailable={salaryAvailable}
-                    salaryOn={salaryOn}
-                    actualsDaily={data.actuals_daily || []}
-                    gameDates={gameDates}
-                    nightGameDates={nightGameDates}
+                  />
+                ) : (
+                  <UpcomingCards
+                    stand={stand}
+                    estimate={data?.homestand_estimated}
+                    split={split}
+                    hourlyRate={hourlyRate}
                   />
                 )}
               </>

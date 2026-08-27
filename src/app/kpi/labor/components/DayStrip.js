@@ -60,20 +60,61 @@ function dowShort(iso) {
     .toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
 }
 
-function DayBar({ day, dailyTarget, scale, todayISO, density, variant, gameDates, nightGameDates }) {
+// 2026-08-26 homestand redesign - convert a TIMESTAMPTZ (UTC ISO) to
+// a short local-time label like "6:45p" using the account's timezone.
+// Returns null if either input is missing - owner ruling: NO fallback
+// to UTC. A wrong first pitch is worse than no first pitch.
+function fmtGameTime(utcIso, tz) {
+  if (!utcIso || !tz) return null;
+  try {
+    const d = new Date(utcIso);
+    if (Number.isNaN(d.getTime())) return null;
+    const fmt = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
+    // Yields "6:45 PM" -> compact to "6:45p" for the caption line.
+    const parts = fmt.formatToParts(d);
+    const hh = parts.find(p => p.type === "hour")?.value;
+    const mm = parts.find(p => p.type === "minute")?.value;
+    const dp = parts.find(p => p.type === "dayPeriod")?.value;
+    if (!hh || !mm || !dp) return null;
+    return `${hh}:${mm}${dp.toLowerCase().startsWith("p") ? "p" : "a"}`;
+  } catch { return null; }
+}
+
+function DayBar({
+  day, dailyTarget, scale, todayISO, density, variant,
+  gameDates, nightGameDates,
+  // 2026-08-26 homestand redesign: per-day detail for the new
+  // captions. `scheduleByDate` maps ISO date -> { opponent, game_time,
+  // day_night }. `accountTimezone` converts game_time UTC->local.
+  // `otByDate` maps ISO -> per-day { hours_ot, hours_all } for the
+  // played-day OT% suffix. All optional; DayBar falls back to today's
+  // simple caption if missing.
+  scheduleByDate, accountTimezone, otByDate,
+}) {
   const amount = day.amountX10000 / 10000;
   const isToday = day.workDate === todayISO;
   const isFuture = day.workDate > todayISO;
   const isZero = !isFuture && amount <= 0.5;
   const barPct = isFuture ? 0 : Math.max(0, Math.min(100, (amount / scale) * 90));
+  // 2026-08-26 - schedule lookup for this specific date. Present on
+  // game days only; prep/off days are absent from the map.
+  const sched = scheduleByDate?.get(day.workDate) || null;
+  const isFutureGame = isFuture && !!sched;
   // Fill class: variance encodes STATE (green under, amber running today);
   // identity encodes IDENTITY (navy night, blue day, hatch prep, stub zero).
-  // Owner reminder 2026-08-21: identity variant must never use green
-  // or red - those mean under/over budget on the rail card, and a
-  // green day-game would read as "good" when it only means daylight.
+  // 2026-08-26 redesign: future game days render as GHOSTS - hatched
+  // fill + dashed border, one variant per day_night category so the
+  // ghost preserves the identity (a ghosted night game reads as a
+  // ghosted-navy pattern; a ghosted day game as ghosted-blue). Owner
+  // ruling: colour encodes identity, pattern encodes state. Ghost is
+  // the state; the identity colour stays.
   let barCls;
   if (variant === "identity") {
-    if (isZero || isFuture) barCls = "kpi-wb-bar kpi-hs-day-zero";
+    if (isFutureGame) {
+      const isNight = sched.day_night === "night" || nightGameDates?.has(day.workDate);
+      barCls = isNight ? "kpi-wb-bar kpi-hs-day-ghost-night" : "kpi-wb-bar kpi-hs-day-ghost-day";
+    }
+    else if (isZero || isFuture) barCls = "kpi-wb-bar kpi-hs-day-zero";
     else if (nightGameDates?.has(day.workDate)) barCls = "kpi-wb-bar kpi-hs-day-night";
     else if (gameDates?.has(day.workDate)) barCls = "kpi-wb-bar kpi-hs-day-day";
     else barCls = "kpi-wb-bar kpi-hs-day-prep";
@@ -84,17 +125,50 @@ function DayBar({ day, dailyTarget, scale, todayISO, density, variant, gameDates
     ? Math.max(0, Math.min(100, (dailyTarget / scale) * 90))
     : null;
 
-  // Caption form is driven by the MEASURED per-bar width in the
-  // parent's ResizeObserver, not by day count. See
-  // chooseLabelDensity in src/lib/labor/dayRangeAggregate.js for
-  // the boundaries (>= 90px full, >= 44px compact, < 44px minimal)
-  // and the probe P11 for the assertion.
+  // 2026-08-26 redesign - captions now carry state-specific detail:
+  //   played game day  -> `MM/DD DoW · vs OPP · $N · N% OT`
+  //   ghost game day   -> `MM/DD DoW · vs OPP · 6:45p`
+  //   prep day         -> `MM/DD DoW · prep`
+  //   off day          -> `MM/DD DoW · off`
+  //   custom-range     -> `MM/DD · DoW` (unchanged; caller passes no
+  //                       schedule/otByDate so we fall through)
+  // Caption degrades at compact/minimal density (narrow bars) so the
+  // strip stays readable on mobile.
   const dateStr = fmtDayLabel(day.workDate);
-  const caption = density === "full"
-    ? `${dateStr} · ${dowShort(day.workDate)}`
-    : density === "compact"
-      ? dateStr
-      : null;   // minimal: no date caption, value only
+  const dow = dowShort(day.workDate);
+  const isGameDay = !!sched || (variant === "identity" && (gameDates?.has(day.workDate) || nightGameDates?.has(day.workDate)));
+  const isPrepDay = variant === "identity" && !isGameDay && !isZero && !isFuture && !sched;
+  let caption = null;
+  let captionExtra = null;   // second-line detail on full density
+  if (density === "full") {
+    caption = `${dateStr} · ${dow}`;
+    if (variant === "identity") {
+      if (isFutureGame && sched) {
+        // upcoming game: opponent + first pitch
+        const timeLocal = fmtGameTime(sched.game_time, accountTimezone);
+        const parts = [];
+        if (sched.opponent) parts.push(`vs ${sched.opponent}`);
+        if (timeLocal) parts.push(timeLocal);
+        if (parts.length > 0) captionExtra = parts.join(" · ");
+      } else if (isGameDay && !isFuture && sched) {
+        // played game: opponent + OT % suffix
+        const ot = otByDate?.get(day.workDate);
+        const otPct = (ot && ot.hours_all > 0) ? Math.round((ot.hours_ot / ot.hours_all) * 100) : null;
+        const parts = [];
+        if (sched.opponent) parts.push(`vs ${sched.opponent}`);
+        if (otPct != null && otPct > 0) parts.push(`${otPct}% OT`);
+        if (parts.length > 0) captionExtra = parts.join(" · ");
+      } else if (isPrepDay) {
+        captionExtra = "prep";
+      } else if (isZero && !isFuture) {
+        captionExtra = "off";
+      }
+    }
+  } else if (density === "compact") {
+    caption = dateStr;
+  } else {
+    caption = null;   // minimal: no date caption, value only
+  }
 
   return (
     <div className="kpi-wb">
@@ -102,16 +176,23 @@ function DayBar({ day, dailyTarget, scale, todayISO, density, variant, gameDates
         {targetPct != null && (
           <span className="kpi-wb-target" style={{ bottom: `${targetPct}%` }} />
         )}
-        {isFuture || isZero ? (
+        {isFutureGame ? (
+          <div className={barCls} style={{ height: `${Math.max(72, barPct)}%` }} />
+        ) : isFuture || isZero ? (
           <div className="kpi-wb-basel" />
         ) : (
           <div className={barCls} style={{ height: `${Math.max(barPct, 2)}%` }} />
         )}
       </div>
       <div className="kpi-wb-cap">
-        <b className="kpi-wb-cap-value">{isFuture ? "—" : fmt$(amount)}</b>
+        <b className={`kpi-wb-cap-value ${isFutureGame ? "kpi-hs-day-ghost-value" : ""}`}>
+          {isFutureGame ? "~$—" : (isFuture ? "—" : fmt$(amount))}
+        </b>
         {caption != null && (
           <span className="kpi-wb-dates" title={day.workDate}>{caption}</span>
+        )}
+        {captionExtra != null && (
+          <span className="kpi-wb-dates kpi-wb-dates-extra">{captionExtra}</span>
         )}
       </div>
     </div>
@@ -220,6 +301,13 @@ export function DayStripPlot({
   variant = "variance",
   gameDates,           // Set<ISO string>  - required for variant="identity"
   nightGameDates,      // Set<ISO string>  - required for variant="identity"
+  // 2026-08-26 homestand redesign - schedule + timezone let DayBar
+  // render opponent + first-pitch on ghost days and opponent + OT %
+  // on played days. otByDate is a Map<ISO, {hours_ot, hours_all}>
+  // aggregated per day so DayBar can compute the caption suffix.
+  scheduleByDate,       // Map<ISO, {opponent, day_night, game_time}>
+  accountTimezone,      // IANA tz string (never a fallback)
+  otByDate,             // Map<ISO, {hours_ot, hours_all}>
   ariaLabel = "Per-day labor",
 }) {
   // Measure the plot strip and pick the caption density from the
@@ -270,6 +358,9 @@ export function DayStripPlot({
           variant={variant}
           gameDates={gameDates}
           nightGameDates={nightGameDates}
+          scheduleByDate={scheduleByDate}
+          accountTimezone={accountTimezone}
+          otByDate={otByDate}
         />
       ))}
     </div>
