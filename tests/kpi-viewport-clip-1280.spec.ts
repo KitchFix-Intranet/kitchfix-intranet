@@ -80,11 +80,58 @@ async function hasPageScroll(page: Page) {
   return page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
 }
 
+// Card height parity within a row. I argued parity holds mechanically
+// because both card rows are grids (.kpi-hs-signals + .kpi-sig) with
+// stretch/center align - but wrapping labels is precisely the change
+// that could break that guarantee, and Kevin's ruling was explicit:
+// "card heights stay equal within a row - that parity was hard-won".
+// Assert it directly on the two card rows we ship.
+//
+// Returns rows where the min-max height spread exceeds 2px (rounding
+// tolerance).
+async function findParityBreaks(page: Page, rowSelector: string, cardSelector: string) {
+  return page.evaluate(
+    ({ row, card, tol }) => {
+      const rows = document.querySelectorAll(row);
+      const out: Array<{ selector: string; heights: number[]; spread: number }> = [];
+      rows.forEach(r => {
+        const cards = Array.from(r.querySelectorAll(card)) as HTMLElement[];
+        if (cards.length < 2) return;
+        const heights = cards.map(c => Math.round(c.getBoundingClientRect().height));
+        const spread = Math.max(...heights) - Math.min(...heights);
+        if (spread > tol) out.push({ selector: `${row} ${card}`, heights, spread });
+      });
+      return out;
+    },
+    { row: rowSelector, card: cardSelector, tol: 2 },
+  );
+}
+
+// Reject vacuous green from unauthenticated / not-authorised state
+// boxes. If the auth state file is stale the app renders
+// StateSessionExpired inside .kpi-app - a container that happens to
+// have no clipping - and every clip assertion passes without ever
+// looking at the real board. Require the concrete board selector,
+// and fail loud with a message when we land on a state box instead.
+async function assertBoardLoaded(page: Page, expected: string, context: string) {
+  const board = page.locator(expected).first();
+  const stateBox = page.locator('.kpi-statebox').first();
+  const winner = await Promise.race([
+    board.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'board'),
+    stateBox.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'statebox'),
+  ]).catch(() => 'timeout');
+  if (winner === 'board') return;
+  if (winner === 'statebox') {
+    const title = (await stateBox.locator('h3, .kpi-statebox-title').first().textContent().catch(() => '')) || '(untitled)';
+    throw new Error(`${context}: expected board (${expected}) but rendered a state box: "${title.trim()}". Auth state may be stale; refresh tests/.auth/user.json.`);
+  }
+  throw new Error(`${context}: timed out waiting for ${expected}`);
+}
+
 async function loadPeriod(page: Page, account: string) {
   await page.goto(`/kpi/labor?account=${encodeURIComponent(account)}`);
   await page.waitForSelector('.kpi-app', { timeout: 30_000 });
-  // Wait for the signals grid to render so labels are measurable.
-  await page.waitForSelector('.kpi-sig, .kpi-statebox-body', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-sig', `period on ${account}`);
 }
 
 async function loadHomestand(page: Page, account: string, gameStart?: string) {
@@ -92,31 +139,40 @@ async function loadHomestand(page: Page, account: string, gameStart?: string) {
     ? `account=${encodeURIComponent(account)}&view=homestand&homestand=${gameStart}`
     : `account=${encodeURIComponent(account)}&view=homestand`;
   await page.goto(`/kpi/labor?${q}`);
-  await page.waitForSelector('.kpi-hs-rail', { timeout: 30_000 });
+  await page.waitForSelector('.kpi-app', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-hs-rail', `homestand on ${account}`);
   if (!gameStart) {
     const stand = page.locator('.kpi-hs-rail-stand:not([disabled])').first();
     await stand.click();
   }
-  await page.waitForSelector('.kpi-hs-signals', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.kpi-hs-signals', `homestand cards on ${account}`);
 }
 
 for (const vp of VIEWPORTS) {
   test.describe(`viewport ${vp.label}`, () => {
     for (const account of MLB) {
-      test(`period board on ${account} - no clipped leaves, no page scroll`, async ({ page }) => {
+      test(`period board on ${account} - no clipped leaves, no page scroll, cards equal`, async ({ page }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await loadPeriod(page, account);
         const clipped = await findClippedLeaves(page);
         expect(clipped, `clipped leaves at ${vp.label} on ${account} period:\n${JSON.stringify(clipped, null, 2)}`).toEqual([]);
         expect(await hasPageScroll(page), 'horizontal page scroll').toBe(false);
+        // Period board: signal cards row + comparison strip items.
+        const sigParity = await findParityBreaks(page, '.kpi-app', '.kpi-sig');
+        expect(sigParity, `signal card heights not equal at ${vp.label} on ${account}:\n${JSON.stringify(sigParity, null, 2)}`).toEqual([]);
+        const cmpParity = await findParityBreaks(page, '.kpi-cmp-items', '.kpi-cmp-item');
+        expect(cmpParity, `comparison item heights not equal at ${vp.label} on ${account}:\n${JSON.stringify(cmpParity, null, 2)}`).toEqual([]);
       });
 
-      test(`homestand on ${account} - no clipped leaves, no page scroll`, async ({ page }) => {
+      test(`homestand on ${account} - no clipped leaves, no page scroll, cards equal`, async ({ page }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await loadHomestand(page, account);
         const clipped = await findClippedLeaves(page);
         expect(clipped, `clipped leaves at ${vp.label} on ${account} homestand:\n${JSON.stringify(clipped, null, 2)}`).toEqual([]);
         expect(await hasPageScroll(page), 'horizontal page scroll').toBe(false);
+        // Homestand board: five-card grid (upcoming or played).
+        const hsParity = await findParityBreaks(page, '.kpi-hs-signals', '.kpi-hs-signal');
+        expect(hsParity, `homestand card heights not equal at ${vp.label} on ${account}:\n${JSON.stringify(hsParity, null, 2)}`).toEqual([]);
       });
     }
   });
