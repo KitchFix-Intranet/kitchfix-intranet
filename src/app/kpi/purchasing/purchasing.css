@@ -1095,125 +1095,334 @@
   .kpi-app .kpi-p-card { transition: none; }
 }
 
-/* ═══ MGMT-FEE BOARD (PR 3, spec §2 + §6.7) ═══════════════════════
- * At CIN - OH, STL - FL, STL - MO. All rules use existing tokens; no
- * new custom properties, no raw px for type or spacing (border-widths
- * and radii stay literal per file-header rule).
+/* ═══ MGMT-FEE BOARD (R14 - two-pane, spec §6.7 hybrid render) ═════
+ * At CIN - OH, STL - FL, STL - MO. Two-pane grid: statement left,
+ * year right.  Consumes what R14 removed (PassThroughPeriodCard +
+ * ReimbursableRow).  Purple stripe kept as identity per Kevin ruling.
+ * All values + captions come off resolveMgmtFeeCard - no arithmetic
+ * on the component.
  */
 
-/* Reimbursable identity color mirrors Vehicle (spec §7 - #7A3E9D).
- * Reused for the mgmt-fee card + reimbursable row headers.  */
-.kpi-app .kpi-p-ct-reimb {
+/* Card identity - purple stripe, matches BUCKET_DEFS Vehicle colour. */
+.kpi-app .kpi-p-ct-mf {
   color: var(--kpi-p-veh);
 }
+.kpi-app .kpi-p-mf.kpi-p-card:before {
+  background: var(--kpi-p-veh);
+}
+.kpi-app .kpi-p-mf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+}
+.kpi-app .kpi-p-mf-pane {
+  padding: var(--kpi-card-pad);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-mf-pane-l {
+  border-right: 1px solid var(--n-200);
+}
 
-/* Small pill next to the mgmt-fee card title - "management fee". */
-.kpi-app .kpi-p-modelbadge {
-  display: inline-block;
+/* "Management fee" badge on the right pane (Kevin ruling: pill stack
+ * top-right of right pane, purple like the stripe). */
+.kpi-app .kpi-p-mf-badge {
+  display: inline-flex;
+  align-items: center;
+  height: var(--kpi-h-lane);
+  padding: 0 var(--kpi-sp-2);
   font-size: var(--kpi-t-label);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
   background: #F0E6F7;
   color: var(--kpi-p-veh);
+  border: 1px solid #DCC3EC;
 }
 
-/* Management-fee card stripe uses Reimbursable purple. */
-.kpi-app .kpi-p-mf.kpi-p-card:before {
-  background: var(--kpi-p-veh);
-}
-
-/* Hero row: big spend, "of $goal", pct pushed right. */
-.kpi-app .kpi-p-mfhero {
+/* Left hero - hero-size number matching PeriodCard (--t-hero from
+ * R14 D-consistency).  Label + code subtitle sit above; value below. */
+.kpi-app .kpi-p-mf-lhero {
   display: flex;
-  align-items: baseline;
-  gap: var(--kpi-sp-3);
-  flex-wrap: wrap;
-  margin-top: var(--kpi-sp-2);
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
-.kpi-app .kpi-p-mfhero-big {
+.kpi-app .kpi-p-mf-lhero .kpi-p-hero {
   font-size: var(--kpi-t-hero);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.018em;
+  line-height: 1;
   color: var(--n-900);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
 }
-.kpi-app .kpi-p-mfhero-of {
-  font-size: var(--kpi-t-medium);
+.kpi-app .kpi-p-mf-lhero-code {
+  font-size: var(--kpi-t-label);
   font-weight: 600;
-  color: var(--n-600);
-}
-.kpi-app .kpi-p-mfhero-of b {
-  color: var(--n-800);
-  font-weight: 800;
-}
-.kpi-app .kpi-p-mfhero-p {
-  margin-left: auto;
-  font-size: var(--kpi-t-value);
-  font-weight: 800;
-  color: var(--kpi-p-steel);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--n-500);
 }
 
-/* Progress bar + year-elapsed marker. Marker uses --n-700 stripe
- * hard against the neutral fill so it reads as calendar reference,
- * not a state signal. */
-.kpi-app .kpi-p-mfbar {
-  position: relative;
-  height: var(--kpi-h-lane);
-  border-radius: 8px;
-  background: var(--n-100);
-  overflow: hidden;
-  margin-top: var(--kpi-sp-3);
-}
-.kpi-app .kpi-p-mfbar i {
-  height: 100%;
-  display: block;
-  background: var(--kpi-p-steel);
-}
-.kpi-app .kpi-p-mfbar-yr {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  background: var(--n-700);
-  border-radius: 1px;
-}
-.kpi-app .kpi-p-mffoot {
+/* Category rows - three columns: label + code, value, share. */
+.kpi-app .kpi-p-mf-cats {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--kpi-sp-2);
-  margin-top: var(--kpi-sp-2);
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.kpi-app .kpi-p-mf-cat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--kpi-sp-3);
+  align-items: baseline;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--n-100);
+}
+.kpi-app .kpi-p-mf-cat:last-child { border-bottom: 0; }
+.kpi-app .kpi-p-mf-cat-tail .kpi-p-mf-cat-k {
+  color: var(--n-600);
+  font-style: italic;
+}
+/* Fun money row - the verdict line.  Value colour carries r (over)
+ * or b (under) per Kevin ruling 2026-08-27; same grammar as the
+ * right-pane hero.  Caption shows "of $Y · Z% used" instead of the
+ * share%. */
+.kpi-app .kpi-p-mf-cat-fun {
+  padding-top: 5px;
+  border-top: 1px dashed var(--n-200);
+  border-bottom: 0;
+}
+.kpi-app .kpi-p-mf-cat-v.r { color: var(--red-700); }
+.kpi-app .kpi-p-mf-cat-v.b { color: var(--navy-700); }
+.kpi-app .kpi-p-mf-cat-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.kpi-app .kpi-p-mf-cat-k small {
+  font-size: var(--kpi-t-label);
+  color: var(--n-500);
+  font-weight: 500;
+  margin-left: 5px;
+}
+.kpi-app .kpi-p-mf-cat-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+.kpi-app .kpi-p-mf-cat-p {
   font-size: var(--kpi-t-label);
   font-weight: 700;
-  letter-spacing: 0.04em;
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+  min-width: calc(40px * var(--kpi-scale, 1));
+  text-align: right;
+}
+
+/* Pending row - pinned below a divider at the bottom of the left
+ * pane (Kevin: "pinned to the bottom so short and tall ranges
+ * balance").  Amber value colour matches Pending elsewhere. */
+.kpi-app .kpi-p-mf-pending {
+  margin-top: auto;
+  padding-top: var(--kpi-sp-3);
+  border-top: 1px solid var(--n-200);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--kpi-sp-2);
+  align-items: baseline;
+}
+.kpi-app .kpi-p-mf-pending .kpi-p-mf-cat-k b {
+  color: var(--n-900);
+  font-weight: 800;
+}
+.kpi-app .kpi-p-mf-pending .kpi-p-mf-cat-v.a { color: var(--amber-txt, var(--amber-600)); }
+
+/* Right pane hero - "Over the annual goal by" (red) / "Room in the
+ * annual goal" (navy).  Same --t-hero as the left pane for consistency
+ * with the at-risk PeriodCard. */
+.kpi-app .kpi-p-mf-yhero {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.kpi-app .kpi-p-mf-yhero .kpi-p-hero {
+  font-size: var(--kpi-t-hero);
+  font-weight: 800;
+  letter-spacing: -0.018em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.kpi-app .kpi-p-mf-yhero .kpi-p-hero.r { color: var(--red-700); }
+.kpi-app .kpi-p-mf-yhero .kpi-p-hero.b { color: var(--navy-700); }
+.kpi-app .kpi-p-mf-yhero-sub {
+  font-size: var(--kpi-t-meta);
   color: var(--n-600);
-  text-transform: uppercase;
+  font-weight: 600;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+.kpi-app .kpi-p-mf-yhero-sub b {
+  color: var(--n-900);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-p-mf-tax {
+  font-weight: 700;
+  color: var(--amber-txt, var(--amber-600));
 }
 
-/* Amber caution for STL-MO missing-sales-tax note. */
-.kpi-app .kpi-p-mfcaution {
-  margin-top: var(--kpi-sp-3);
-  padding: var(--kpi-sp-2) var(--kpi-sp-3);
-  border-left: 3px solid var(--amber-600);
-  background: var(--amber-50);
+/* Track bar - runs to max(100%, spent%).  Steel fill up to goal,
+ * red pattern past it.  Two markers: goal (n-900) + year-elapsed
+ * (n-500 lighter). */
+.kpi-app .kpi-p-mf-track {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.kpi-app .kpi-p-mf-tbar {
+  position: relative;
+  height: calc(14px * var(--kpi-scale, 1));
+  background: var(--n-200);
+  border-radius: 999px;
+  overflow: visible;
+}
+.kpi-app .kpi-p-mf-tbar-sp {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: #6B2E8F;
+  border-radius: 999px 0 0 999px;
+}
+.kpi-app .kpi-p-mf-tbar-over {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: var(--red-500);
+  border-radius: 0 999px 999px 0;
+}
+.kpi-app .kpi-p-mf-tbar-cap {
+  position: absolute;
+  top: -5px; bottom: -5px;
+  width: 2px;
+  background: var(--n-900);
+}
+.kpi-app .kpi-p-mf-tbar-yr {
+  position: absolute;
+  top: -5px; bottom: -5px;
+  width: 2px;
+  background: var(--n-500);
+  opacity: 0.65;
+}
+.kpi-app .kpi-p-mf-tmark {
+  position: relative;
+  height: calc(15px * var(--kpi-scale, 1));
+  margin-top: 4px;
+}
+.kpi-app .kpi-p-mf-tmark span {
+  position: absolute;
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  color: var(--n-600);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.kpi-app .kpi-p-mf-tmark span.kpi-p-mf-tmark-hi {
+  color: var(--n-900);
+}
+
+/* Sentence - a single line of prose that reads the plan.  Weight
+ * bumps on the numbers so they scan first. */
+.kpi-app .kpi-p-mf-sent {
+  margin: 0;
   font-size: var(--kpi-t-body);
-  color: var(--n-700);
   line-height: 1.5;
-  border-radius: 0 4px 4px 0;
+  color: var(--n-800);
+  font-weight: 600;
 }
 
-/* Missing-goal hole (Kevin-not-reached fallback). */
+/* Mini trend - per-period bars (relative height), dashed avg,
+ * running-period hatch.  No red/green (owner ruling stands). */
+.kpi-app .kpi-p-mf-mini-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.kpi-app .kpi-p-mf-mini {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: calc(44px * var(--kpi-scale, 1));
+  margin-top: 6px;
+  position: relative;
+}
+.kpi-app .kpi-p-mf-mini-c {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+}
+.kpi-app .kpi-p-mf-mini-c i {
+  width: 100%;
+  border-radius: 1px 1px 0 0;
+  background: #C9B5DA;
+  display: block;
+  min-height: 2px;
+}
+.kpi-app .kpi-p-mf-mini-c i.kpi-p-mf-mini-hi {
+  background: #6B2E8F;
+}
+.kpi-app .kpi-p-mf-mini-c i.kpi-p-mf-mini-run {
+  background-image: repeating-linear-gradient(45deg, #E0D4EA 0 3px, #C9B5DA 3px 6px);
+  background-color: #C9B5DA;
+}
+.kpi-app .kpi-p-mf-mini-avg {
+  position: absolute;
+  left: 0; right: 0;
+  border-top: 1px dashed var(--n-400);
+  pointer-events: none;
+}
+.kpi-app .kpi-p-mf-mini-lab {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+.kpi-app .kpi-p-mf-mini-lab span {
+  flex: 1;
+  text-align: center;
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  color: var(--n-400);
+}
+.kpi-app .kpi-p-mf-mini-lab span.now {
+  color: #6B2E8F;
+}
+
+/* Missing-goal hole (goal not configured for the account). */
 .kpi-app .kpi-p-mf-hole {
-  margin-top: var(--kpi-sp-3);
-  padding: var(--kpi-sp-3);
+  padding: var(--kpi-card-pad);
   border-left: 3px solid var(--amber-600);
-  background: var(--amber-50);
+  background: #FDF0DC;
+  border-radius: 0 var(--kpi-card-r) var(--kpi-card-r) 0;
+}
+.kpi-app .kpi-p-mf-hole-body {
   font-size: var(--kpi-t-body);
   color: var(--n-700);
   line-height: 1.6;
-  border-radius: 0 4px 4px 0;
 }
 .kpi-app .kpi-p-mf-hole code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1223,98 +1432,22 @@
   font-size: 0.9em;
 }
 
-/* 8-period trend: bars, one per period, height-normalised to the
- * site's own recent average. `hi` swaps steel to amber to flag
- * outliers - still no red/green (Kevin ruling: no verdict). */
-.kpi-app .kpi-p-mftrend {
-  margin-top: var(--kpi-sp-4);
-}
-.kpi-app .kpi-p-mfbars {
-  display: flex;
-  gap: var(--kpi-sp-2);
-  align-items: flex-end;
-  height: var(--kpi-h-plot);
-  margin-top: var(--kpi-sp-2);
-}
-.kpi-app .kpi-p-mfbars-c {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  height: 100%;
-}
-.kpi-app .kpi-p-mfbars-c i {
-  width: 100%;
-  display: block;
-  background: var(--kpi-p-steel);
-  border-radius: 2px 2px 0 0;
-}
-/* PR 2 R9 P3-10 - the outlier accent on the management-fee trend
- * was amber-600. Amber is the attention colour everywhere else on
- * the board; using it on a card explicitly designed to carry no
- * verdict (owner ruling: "I dont want to use red or green for any
- * of the graphs... the idea behind this is quite different than
- * how we judge the other account types") is a verdict by another
- * name. Neutral emphasis via a darker navy: bar reads distinctly
- * from the steel baseline but does not carry an attention meaning. */
-.kpi-app .kpi-p-mfbars-c i.kpi-p-mfbars-hi {
-  background: var(--navy-700);
-}
-.kpi-app .kpi-p-mflab {
-  display: flex;
-  gap: var(--kpi-sp-2);
-  margin-top: var(--kpi-sp-2);
-}
-.kpi-app .kpi-p-mflab span {
-  flex: 1;
-  text-align: center;
-  font-size: var(--kpi-t-label);
-  font-weight: 700;
-  color: var(--n-600);
-}
-
-/* ═══ REIMBURSABLE FULL-WIDTH ROW (PR 3, spec §2, §6.6) ═══════════ */
-.kpi-app .kpi-p-reimbrow.kpi-p-card:before {
-  background: var(--kpi-p-veh);
-}
-.kpi-app .kpi-p-reimbrow-inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--kpi-sp-5);
-}
-.kpi-app .kpi-p-reimbrow-left,
-.kpi-app .kpi-p-reimbrow-right {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.kpi-app .kpi-p-reimb-ledgerlab {
-  margin-left: var(--kpi-sp-2);
-  color: var(--n-600);
-}
-.kpi-app .kpi-p-reimb-ledgerhint {
-  margin-left: auto;
-}
-.kpi-app .kpi-p-reimb-ledgerfoot {
-  padding-top: var(--kpi-sp-2);
-  text-align: right;
-}
-
-/* Reflow: at narrow viewports the two columns stack. */
+/* Two-pane reflow: at narrow viewports the panes stack.  Match the
+ * at-risk reflow breakpoint. */
 @media (max-width: 1300px) {
-  .kpi-app .kpi-p-reimbrow-inner {
+  .kpi-app .kpi-p-mf {
     grid-template-columns: 1fr;
+  }
+  .kpi-app .kpi-p-mf-pane-l {
+    border-right: 0;
+    border-bottom: 1px solid var(--n-200);
   }
 }
 
-/* ═══ FUN MONEY (STL - FL only, spec §2.3) ═══════════════════════════
- * Small at-risk card. Identity stripe uses Food navy since the GL is
- * 3200.2 (resale food). Real verdict - inherits from Pill / hero
- * state colours the shared board tokens already carry.
+/* R14 - the standalone Fun Money card is retired; the 3200.2 verdict
+ * (spend vs budget, over/under colour) now lives in the fun-money
+ * row inside the ManagementFeeCard.  See .kpi-p-mf-cat-fun above.
  */
-.kpi-app .kpi-p-funmoney.kpi-p-card:before {
-  background: var(--kpi-p-food);
-}
 
 /* ═══ REFLOW BREAKPOINT (PR-2 R6 Part A) ══════════════════════════
  * Placed at end-of-file so it overrides later same-specificity base

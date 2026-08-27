@@ -39,3 +39,15 @@ A5 PROBE CANON: settle-frames after interactions; elementFromPoint = paint truth
 ## Shared
 S1 Every PR body records "gate findings: N" - the number both sides are working to
    drive toward zero on first pass.
+S2 STANDING RULE (added 2026-08-27, R14): every screenshot sweep runs BOTH URL shapes -
+   preset (`?preset=fytd`, `?preset=this_period`, `?preset=last_period`) AND explicit-dates
+   (`?start=YYYY-MM-DD&end=YYYY-MM-DD`). The two hydrate on different timing paths and
+   they diverge. On 2026-08-27 a TDZ ReferenceError in WeekChart (#847 -> #856) fired
+   100% on explicit-dates URLs and 0% on preset URLs; R13's acceptance sweep landed 9
+   preset screenshots that captured what they captured but proved nothing about
+   explicit-dates renders. Same P0 was live in production for a day, discovered while
+   smoke-testing R14. A companion finding surfaced the same day: R13's projection-outline
+   feature only renders on explicit-dates URLs - preset-URL users never see it - because
+   the same hydration difference short-circuits the projection code path on preset. The
+   rule is simple: preset and explicit-dates are two paint surfaces, sweep both, or
+   acceptance is one-surface only.

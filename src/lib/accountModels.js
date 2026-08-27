@@ -201,11 +201,18 @@ export const MANAGEMENT_FEE_GOALS = {
     annual: 227391.02,
     salesTaxApplied: true,
     breakdown: null,
+    // R14 additions - card copy inputs for the two-pane layout.
+    // clientLabel drives the hero label "Billed back to <clientLabel>".
+    // taxCaveatState fills "before <state> sales tax" under the goal figure.
+    clientLabel: "Cincinnati Reds",
+    taxCaveatState: "Ohio",
   },
   "STL - FL": {
     annual: 1060000.00,
     salesTaxApplied: true,
     breakdown: null,
+    clientLabel: "St Louis Cardinals",
+    taxCaveatState: "Florida",
   },
   "STL - MO": {
     annual: 331345.95,
@@ -215,6 +222,8 @@ export const MANAGEMENT_FEE_GOALS = {
       water: 50000.00,
       note: "before Missouri sales tax - rate outstanding from Sebastian",
     },
+    clientLabel: "St Louis Cardinals",
+    taxCaveatState: "Missouri",
   },
 };
 

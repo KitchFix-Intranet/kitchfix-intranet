@@ -65,13 +65,11 @@ import { VendorBreakdown } from "./components/VendorBreakdown";
 // PR 3 - management-fee board components. Renders instead of the
 // at-risk cards for CIN - OH, STL - FL, STL - MO.
 import { ManagementFeeCard } from "./components/ManagementFeeCard";
-import { ReimbursableRow } from "./components/ReimbursableRow";
-import { FunMoneyCard } from "./components/FunMoneyCard";
+// R14 - FunMoneyCard removed; fun money renders inline in ManagementFeeCard.
 // PR 2 R9 P0 - dedicated period card for pass-through accounts.
 // The shared PeriodCard is only fed KPI-line spend (food + packaging
-// + vehicle) which is essentially Fun Money at these sites and left
-// the card reading $0.00 while $11k+ moved through reimbursable.
-import { PassThroughPeriodCard } from "./components/PassThroughPeriodCard";
+// R14 - PassThroughPeriodCard and ReimbursableRow deleted; the R14
+// ManagementFeeCard consumes both in a single two-pane card.
 // PR 4 - drill-down table. Sits below Card purchases on the at-risk
 // board. Pass-through boards skip the table (§2 - no COGS distinction
 // to check; the ReimbursableRow already carries the 13xx ledger).
@@ -817,23 +815,17 @@ export default function KpiPurchasingPage() {
             <span><b>Food, packaging and supplies are billed back to {clientLabel}. No verdict on this board - the reimbursable line is not a KitchFix cost.</b></span>
           </div>
 
+          {/* R14 - two-pane management-fee card consumes what was
+              previously three cards: ManagementFeeCard + PassThroughPeriodCard
+              + ReimbursableRow.  Resolver-owned.  See board.js
+              resolveMgmtFeeCard for the shape contract. */}
           <ManagementFeeCard
             account={account}
-            client={clientLabel}
             goal={goalRow}
-            goalFytdSpent={mgmt?.goal_fytd_spent}
-            periodsTrend={mgmt?.periods_trend || []}
+            mgmtFee={mgmt}
+            reimbSpentRange={reimbTotal}
+            pending={board.pending}
             yearElapsedFrac={yearElapsedFrac}
-          />
-
-          {/* PR 2 R9 P0 - pass-through period card shows TOTAL activity
-              (reimbursable + Fun Money), not the KPI-line-only view the
-              shared PeriodCard produces. That view left $0.00 next to
-              $11k+ of client-billed activity at STL - FL P9 and
-              duplicated the Fun Money card immediately below. Fun Money
-              still gets its own card as the VERDICT surface (real
-              state on 3200.2). */}
-          <PassThroughPeriodCard
             cardTitle={cardTitle}
             rangeLabel={rangeLabel}
             weekOfPeriod={wop}
@@ -842,34 +834,12 @@ export default function KpiPurchasingPage() {
             closed={closed}
             provisional={provisional}
             isFutureRange={isFutureRange}
-            reimbursableSpent={reimbTotal}
-            funMoneySpent={mgmt?.fun_money?.spent}
-            funMoneyBudget={mgmt?.fun_money?.budget}
-            pending={board.pending}
-            cardsThroughLabel={cardsThroughLabel}
           />
 
-          {mgmt?.fun_money && (
-            <FunMoneyCard
-              funMoney={mgmt.fun_money}
-              elapsedFrac={board.elapsedFrac}
-              closed={closed}
-              isFutureRange={isFutureRange}
-            />
-          )}
-
-          <ReimbursableRow
-            account={account}
-            client={clientLabel}
-            spent={reimbTotal}
-            annualGoal={goalRow?.annual}
-            categories={cats13}
-            ledgerRows={data?.ledgers?.reimbursable?.rows}
-            ledgerTotalCount={data?.ledgers?.reimbursable?.total_count}
-            ledgerTotalAmount={data?.ledgers?.reimbursable?.total_amount}
-            ledgerCap={data?.ledgers?.reimbursable?.cap}
-            isAggregate={false}
-          />
+          {/* R14 - FunMoneyCard deleted; the fun money row inside the
+              mgmt-fee card carries the budget + variance verdict inline
+              (Kevin ruling 2026-08-27).  Value colour is r/over or
+              b/under matching the right-pane hero grammar. */}
 
           <div className="kpi-p-flatrow kpi-p-flatrow-3up">
             {board.ledgers

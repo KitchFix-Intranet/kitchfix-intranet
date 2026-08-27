@@ -782,6 +782,291 @@ export function resolveCardDisplay(args) {
 //
 // Colors match §7 rule 1. Every card that carries an identity stripe
 // picks its stripe class from this table - never inline.
+// ─── R14 - Management fee resolver ────────────────────────────────
+//
+// The management-fee card is a two-pane statement (Kevin ruling
+// 2026-08-27, hybrid render).  Left = range-scoped reimbursable
+// statement.  Right = FYTD-anchored year status.  This resolver owns
+// every displayed value and caption on the card; the component reads
+// formatted strings and renders them verbatim.
+//
+// Prefix-strip rule: category names in billcom_ref_accounts embed the
+// account key (e.g. "STL - MO Food").  On a card viewing STL - MO
+// that reads redundant, so we strip the "<account_key> " prefix when
+// it matches the viewing account.  When the prefix does NOT match
+// (e.g. "STL - FL Food" appearing on the STL - MO card), we render
+// the raw name unchanged - a misattribution the operator needs to
+// see, not one the resolver silently hides.
+//
+// Tail rule: categories worth less than TAIL_THRESHOLD_PCT of the
+// hero collapse into a "N smaller lines" row, but only when N >= 2.
+// A single sub-1% line renders individually - "1 smaller line" reads
+// as a mystery bucket of one.
+//
+// Fun-money hero label swap: when 3200.2 spend > 0 in range, the hero
+// value = reimbursable + fun_money and the label swaps from "Billed
+// back to <client> · 13xx" to "Reimbursable and fun money · 13xx +
+// 3200.2".  Fun money then joins the category list so subrow shares
+// still sum to 100%.
+const TAIL_THRESHOLD_PCT = 0.01;   // categories under 1% of hero fold to "N smaller lines"
+
+// Number word for the sentence.  Beyond 4 falls back to the digit -
+// no operator needs "seven periods" to read as a story.
+const NUMBER_WORD = ["zero", "one", "two", "three", "four"];
+function numWord(n) {
+  return NUMBER_WORD[n] || String(n);
+}
+
+// Strip "<accountKey> " prefix from a category name IFF it matches.
+// A mismatched prefix renders verbatim so misattribution is visible.
+function stripAccountPrefix(name, accountKey) {
+  if (typeof name !== "string" || !name) return name;
+  const pfx = `${accountKey} `;
+  if (name.startsWith(pfx)) return name.slice(pfx.length);
+  return name;
+}
+
+// Case normalisation was originally added to match the render voice
+// ("Packaged Snacks" -> "Packaged snacks").  Removed: it stripped
+// legitimate second-word capitals off names like "Fun Money", and the
+// principled call is to render the chart-of-accounts name verbatim.
+// Kevin's PR body note: labels read as the DB has them; the render
+// voice difference is cosmetic.
+function normaliseCategoryCase(name) { return name; }
+
+export function resolveMgmtFeeCard(args) {
+  const {
+    accountKey,
+    goalRow,               // { annual, salesTaxApplied, clientLabel, taxCaveatState, breakdown }
+    mgmtFee,               // route.mgmt_fee shape
+    reimbSpentRange,       // range-scoped 13xx sum (from client-side categories rollup)
+    pending,               // { amount, line_count }
+    yearElapsedFrac,       // 0..1 (fraction of FY2026 elapsed)
+    closed,
+    provisional,
+    isFutureRange,
+    weekOfPeriod,
+    weeksInPeriod,
+    elapsedFrac,           // range-scoped elapsed
+    cardTitle,             // "Fiscal year to date" | "Period 8" | ...
+  } = args;
+
+  const goalAmount = Number(goalRow?.annual || 0);
+  const clientLabel = goalRow?.clientLabel || accountKey;
+  const taxState = goalRow?.taxCaveatState || null;
+
+  // ─── LEFT PANE: statement ────────────────────────────────────────
+  const funMoneyRange = Number(mgmtFee?.fun_money?.spent || 0);
+  const hasFunMoney = funMoneyRange > 0.005;
+  const leftHeroValue = reimbSpentRange + (hasFunMoney ? funMoneyRange : 0);
+  const leftHeroLabel = hasFunMoney
+    ? "Reimbursable and fun money"
+    : `Billed back to ${clientLabel}`;
+  const leftHeroCodeSubtitle = hasFunMoney ? "13xx + 3200.2" : "13xx";
+
+  // Category rows with tail grouping.
+  const catsRaw = Array.isArray(mgmtFee?.reimb_categories)
+    ? mgmtFee.reimb_categories.slice()
+    : [];
+  // Fun money joins the category list as a special row.  When it has
+  // a positive budget the row carries verdict colour (r if over, b if
+  // under) and a right-side "of $Y · Z% used" caveat.  This is the ONE
+  // KitchFix-borne budget line at these sites (Kevin ruling 2026-08-27
+  // - "the only number on the card that is a verdict").  The card
+  // already uses r / b on the right-pane hero for over / under goal,
+  // so the same grammar carries the fun-money verdict.
+  const funMoneyBudget = Number(mgmtFee?.fun_money?.budget || 0);
+  if (hasFunMoney) {
+    catsRaw.push({
+      gl_line_code: "3200.2",
+      name:         "Fun Money",
+      spent:        Math.round(funMoneyRange * 100) / 100,
+      isFunMoney:   true,
+      budget:       funMoneyBudget,
+    });
+  }
+  catsRaw.sort((a, b) => Number(b.spent || 0) - Number(a.spent || 0));
+
+  const categoryRows = [];
+  const tailBundle = [];
+  for (const c of catsRaw) {
+    const spentNum = Number(c.spent || 0);
+    const share = leftHeroValue > 0 ? spentNum / leftHeroValue : 0;
+    const rawName = c.name;
+    const displayName = rawName
+      ? normaliseCategoryCase(stripAccountPrefix(rawName, accountKey))
+      : null;
+    const row = {
+      gl_line_code: c.gl_line_code,
+      label:        displayName || c.gl_line_code,
+      hasName:      !!displayName,
+      spentNumeric: spentNum,
+      valueText:    fmt$(spentNum),
+      shareText:    fmtPct(share),
+      share,
+    };
+    // Fun money extras: budget, over/under state class, of/used caveat.
+    if (c.isFunMoney) {
+      const bud = Number(c.budget || 0);
+      row.isFunMoney = true;
+      row.budgetText = bud > 0 ? fmt$(bud) : null;
+      row.hasBudget = bud > 0;
+      if (bud > 0) {
+        const pct = spentNum / bud;
+        row.usedPctText = fmtPct(pct);
+        // r when over, b when under - same grammar as right-pane hero
+        // over/under goal.  Applied to `valueText` via a `.r` / `.b`
+        // class on the value cell.
+        row.stateClass = spentNum > bud ? "r" : "b";
+        row.captionText = `of ${fmt$(bud)} · ${row.usedPctText} used`;
+      } else {
+        row.stateClass = "";           // no budget, no verdict
+        row.captionText = "no budget";
+      }
+    }
+    if (share < TAIL_THRESHOLD_PCT && !c.isFunMoney) tailBundle.push(row);
+    else categoryRows.push(row);
+  }
+  if (tailBundle.length === 1) categoryRows.push(tailBundle[0]);
+  else if (tailBundle.length >= 2) {
+    const tailSpent = tailBundle.reduce((s, r) => s + r.spentNumeric, 0);
+    categoryRows.push({
+      gl_line_code: null,
+      label:        `${tailBundle.length} smaller lines`,
+      hasName:      true,
+      spentNumeric: tailSpent,
+      valueText:    fmt$(tailSpent),
+      shareText:    fmtPct(tailSpent / (leftHeroValue || 1)),
+      isTail:       true,
+    });
+  }
+
+  const pendingAmount = Number(pending?.amount || 0);
+  const showPendingRow = pendingAmount > 0.005;
+  const pendingValueText = fmt$(pendingAmount);
+
+  // ─── RIGHT PANE: the year ────────────────────────────────────────
+  // FYTD-anchored regardless of range picker.
+  const annualSpent = Number(mgmtFee?.goal_fytd_spent || 0);
+  const overAmount = annualSpent - goalAmount;
+  const isOver = overAmount > 0;
+  let rightHeroLabel = "";
+  let rightHeroValueText = "";
+  let rightHeroClass = "";
+  if (goalAmount > 0) {
+    if (isOver) {
+      rightHeroLabel = "Over the annual goal by";
+      rightHeroValueText = fmt$(overAmount);
+      rightHeroClass = "r";
+    } else {
+      rightHeroLabel = "Room in the annual goal";
+      rightHeroValueText = fmt$(-overAmount);
+      rightHeroClass = "b";   // navy - stated, not judged
+    }
+  }
+  const rightSubSpentText = fmt$(annualSpent);
+  const rightSubGoalText = fmt$(goalAmount);
+  const rightTaxCaption = taxState
+    ? `before ${taxState} sales tax · provisional`
+    : "provisional";
+
+  // Track bar - scale runs to max(1, spentPct) so overage renders past
+  // the goal marker.
+  const spentPct = goalAmount > 0 ? annualSpent / goalAmount : 0;
+  const scale = Math.max(1, spentPct);
+  const trackSpentFrac = Math.min(1, spentPct) / scale;
+  const trackOverFrac = Math.max(0, spentPct - 1) / scale;
+  const goalMarkerFrac = 1 / scale;
+  const yearMarkerFrac = Math.max(0, Math.min(1, yearElapsedFrac || 0)) / scale;
+  const yearMarkerText = `${Math.round((yearElapsedFrac || 0) * 100)}% of the year`;
+  const spentMarkerText = `${Math.round(spentPct * 100)}% spent`;
+
+  // Sentence - crossed vs not-crossed.
+  const currentPeriodTrend = Array.isArray(mgmtFee?.periods_trend) ? mgmtFee.periods_trend : [];
+  const currentPeriodNo = currentPeriodTrend.length > 0
+    ? currentPeriodTrend[currentPeriodTrend.length - 1].period_no
+    : null;
+  const periodsRemaining = currentPeriodNo != null ? Math.max(0, 13 - currentPeriodNo) : 0;
+  const yearLeftPct = Math.max(0, Math.round(100 - (yearElapsedFrac || 0) * 100));
+  const crossedPeriod = mgmtFee?.crossed_period_no;
+  let sentenceText = "";
+  if (crossedPeriod != null && goalAmount > 0) {
+    sentenceText = `Crossed the goal in period ${crossedPeriod}, with ${numWord(periodsRemaining)} ${periodsRemaining === 1 ? "period" : "periods"} and ${yearLeftPct}% of the year still to run.`;
+  } else if (goalAmount > 0) {
+    const remainingText = fmt$(Math.max(0, goalAmount - annualSpent));
+    sentenceText = `${remainingText} remains, with ${numWord(periodsRemaining)} ${periodsRemaining === 1 ? "period" : "periods"} and ${yearLeftPct}% of the year still to run.`;
+  }
+
+  // Mini trend (per-period spend, above-average = solid).
+  const trendSpends = currentPeriodTrend.map(t => Number(t.spent || 0));
+  const avgSpend = trendSpends.length > 0
+    ? trendSpends.reduce((s, v) => s + v, 0) / trendSpends.length
+    : 0;
+  const maxSpend = Math.max(1, ...trendSpends);
+  const miniBars = currentPeriodTrend.map(t => {
+    const v = Number(t.spent || 0);
+    const isRunning = t.period_no === currentPeriodNo && (yearElapsedFrac || 0) < 1;
+    return {
+      periodNo:  t.period_no,
+      heightPct: (v / maxSpend) * 100,
+      isAbove:   v > avgSpend,
+      isRunning,
+    };
+  });
+  const miniAvgFrac = maxSpend > 0 ? avgSpend / maxSpend : 0;
+
+  // Status line (matches PeriodCard voice).
+  let statusLineText = "";
+  if (isFutureRange) statusLineText = "hasn't started";
+  else if (closed) statusLineText = `${weeksInPeriod || 4} of ${weeksInPeriod || 4} weeks · closed`;
+  else if (weekOfPeriod && weeksInPeriod) {
+    const elapsedPct = elapsedFrac != null
+      ? `${Math.round(Number(elapsedFrac) * 100)}% elapsed`
+      : "";
+    statusLineText = `week ${weekOfPeriod} of ${weeksInPeriod}${elapsedPct ? ` · ${elapsedPct}` : ""}`;
+  } else if (elapsedFrac != null) {
+    statusLineText = `${Math.round(Number(elapsedFrac) * 100)}% elapsed`;
+  }
+
+  const showFinalPill = closed && !isFutureRange;
+  const showProvisionalPill = provisional && !closed && !isFutureRange;
+
+  return {
+    cardTitle,
+    // Left pane
+    leftHeroLabel,
+    leftHeroCodeSubtitle,
+    leftHeroValueText: fmt$(leftHeroValue),
+    hasFunMoney,
+    categoryRows,
+    showPendingRow,
+    pendingValueText,
+    // Right pane
+    rightHeroLabel,
+    rightHeroValueText,
+    rightHeroClass,
+    rightSubSpentText,
+    rightSubGoalText,
+    rightTaxCaption,
+    trackSpentFrac,
+    trackOverFrac,
+    goalMarkerFrac,
+    yearMarkerFrac,
+    yearMarkerText,
+    spentMarkerText,
+    sentenceText,
+    // Mini trend
+    miniBars,
+    miniAvgFrac,
+    // Shared card chrome
+    statusLineText,
+    pillTone: "n",
+    pillLabel: "Billed to client",
+    showFinalPill,
+    showProvisionalPill,
+  };
+}
+
 // R13 P2-1 ruling 2026-08-26: subtitle = GL code only.  Uniform width
 // across all three cards; the category name in the title conveys scope;
 // the GL code is what an operator cross-references against the P&L.
