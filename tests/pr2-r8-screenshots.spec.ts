@@ -6,6 +6,7 @@
 //   - popover open in the equipment ledger
 import { test, expect } from "@playwright/test";
 import path from "node:path";
+import { assertBoardLoaded } from "./lib/board-loaded";
 
 const OUT = path.resolve(__dirname, "..", "playwright-report", "pr2-r8");
 test.use({ baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3221" });
@@ -18,6 +19,7 @@ const P10_END = "2026-10-18";
 test("gap4: future range shows no pill, no verdict, no projected close", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(`/kpi/purchasing?account=ALL&start=${P10_START}&end=${P10_END}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   // Wait for the period card to be present.
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
@@ -44,6 +46,7 @@ test("gap4: future range shows no pill, no verdict, no projected close", async (
 test("gap4b: future range at 900px viewport", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 1200 });
   await page.goto(`/kpi/purchasing?account=ALL&start=${P10_START}&end=${P10_END}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   await page.screenshot({ path: path.join(OUT, "future-range-900.png"), fullPage: true });
@@ -52,6 +55,7 @@ test("gap4b: future range at 900px viewport", async ({ page }) => {
 test("gap1: popover escapes stacking context - week strip", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/kpi/purchasing?account=ALL");
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   // Click the week-strip help trigger
@@ -70,6 +74,7 @@ test("gap1: popover escapes stacking context - week strip", async ({ page }) => 
 test("gap1: popover escapes stacking context - equipment ledger", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1400 });
   await page.goto("/kpi/purchasing?account=ALL");
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   // Scroll to reveal the equipment card
@@ -86,12 +91,14 @@ test("gap1: popover escapes stacking context - equipment ledger", async ({ page 
 test("normal range at 1600 + 900 for baseline screenshots", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   await page.goto("/kpi/purchasing?account=ALL");
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   await page.screenshot({ path: path.join(OUT, "normal-1600.png"), fullPage: true });
 
   await page.setViewportSize({ width: 900, height: 1400 });
   await page.reload();
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await page.screenshot({ path: path.join(OUT, "normal-900.png"), fullPage: true });
 });

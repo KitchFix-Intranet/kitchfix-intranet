@@ -14,6 +14,7 @@
 // TEST_MODE=true is expected; the dev server bounces auth otherwise.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const VIEWPORTS = [
   { name: '1024', width: 1024, height: 720 },
@@ -52,7 +53,7 @@ function accountUrl(scope: 'period' | 'month', account: string) {
 // real data). Prefer a "needs-entry" / "overdue" tile which by
 // definition has projections but no actuals.
 async function clickAnyEntryDay(page: any) {
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   // Wait for the grid to actually render interactive tiles (not just
   // the container). Prior version raced past hydration.
   await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
@@ -86,7 +87,7 @@ for (const ctx of CONTEXTS) {
       test(`H7: ${ctx.name} - ${scope} - ${vp.name}px`, async ({ page }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto(accountUrl(scope, ctx.account));
-        await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+        await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
         await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
         await page.waitForTimeout(1200);
 
@@ -125,7 +126,7 @@ for (const ctx of CONTEXTS) {
 test('H1: empty state - hero "0 of M", bar 0%, "Start with X" affordance', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(accountUrl('period', 'TXR - AZ'));
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   const opened = await clickAnyEntryDay(page);
   test.skip(!opened, 'could not open a day modal');
   await page.waitForSelector('.sc-elr-shell', { timeout: 15_000 });
@@ -146,7 +147,7 @@ test('H1: empty state - hero "0 of M", bar 0%, "Start with X" affordance', async
 test('H1 + H4: mid-entry with variance flag firing does not disable save', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(accountUrl('period', 'TXR - AZ'));
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   const opened = await clickAnyEntryDay(page);
   test.skip(!opened, 'could not open a day modal');
   await page.waitForSelector('.sc-elr-shell', { timeout: 15_000 });
@@ -205,7 +206,7 @@ test('H1 + H4: mid-entry with variance flag firing does not disable save', async
 test('H6: fold shows N and toggles between SHOW and HIDE', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(accountUrl('period', 'TXR - AZ'));
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   const opened = await clickAnyEntryDay(page);
   test.skip(!opened, 'could not open a day modal');
   await page.waitForSelector('.sc-elr-shell', { timeout: 15_000 });

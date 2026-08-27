@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 test('vendor portal list view loads', async ({ page }) => {
   await page.goto('/ops');
+  await assertBoardLoaded(page, 'button:has-text("Vendors")', { context: 'ops hub vendors tab' });
 
   // Ops Hub renders behind a spinner until /api/ops?action=bootstrap resolves.
   // The OpsNav pill is the first stable, authed-only landmark; click into Vendors.

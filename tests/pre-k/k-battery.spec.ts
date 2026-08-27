@@ -8,13 +8,14 @@
 // code-reads captured in the PR body.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const TXR = 'TXR - AZ';
 
 async function openWorkspace(page: any) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(600);
 }
@@ -174,7 +175,7 @@ test('K8: matrix outlier tint changes font-weight beyond colour', async ({ page 
   // synthetic probe pick up the .sc-brm-* rules.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(600);
   await killMobileBarAtSmallViewports(page);
@@ -239,7 +240,7 @@ test('K8: matrix outlier tint changes font-weight beyond colour', async ({ page 
 test('K7: matrix polish - no vertical rules, group rows full width, dollar signs on Total', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(600);
   await killMobileBarAtSmallViewports(page);
@@ -335,7 +336,7 @@ for (const width of VIEWPORTS) {
   test(`K9: toast renders at ${width}px, bottom-centre, visible + readable`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-    await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+    await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
     await page.waitForTimeout(600);
     await mountProbeToast(page, {
       tier: 'ok',

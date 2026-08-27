@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 /**
  * SC nav-subsystem matrix (Phase 5 of the 2026-07-11 audit).
@@ -201,7 +202,11 @@ async function waitForSc(page: Page) {
   // scv2 non-admin scope (year/period/month) and every entry URL these
   // tests exercise (E1 cold /, E2/E3/E4 cold with ?period / ?month /
   // no-account). See src/app/service-calendar/v2/Ribbon.js.
-  await expect(page.locator('.sc-ribbon').first()).toBeVisible({ timeout: 10_000 });
+  //
+  // 2026-08-27: assertBoardLoaded races the ribbon against known
+  // auth-failure markers so a stale session throws a message that
+  // names the fix, not a 10s timeout on the ribbon selector.
+  await assertBoardLoaded(page, '.sc-ribbon', { context: 'service-calendar ribbon', timeoutMs: 10_000 });
 }
 
 function urlOf(page: Page): string {

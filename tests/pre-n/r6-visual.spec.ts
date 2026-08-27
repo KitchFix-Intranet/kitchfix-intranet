@@ -8,13 +8,14 @@
 //    descendant still renders as intended.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const ACCOUNT = 'TXR - AZ';
 
 async function openPriceRail(page: any, width = 1440) {
   await page.setViewportSize({ width, height: 1080 });
   await page.goto('/service-calendar?view=admin');
-  await page.waitForSelector('.scav', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.scav', { context: 'sc admin' });
   await page.locator(`.scav-acct[data-account-key="${ACCOUNT}"]`).click();
   await page.waitForSelector('.scav-srow');
   await page.locator('.scav-srow').first().click();

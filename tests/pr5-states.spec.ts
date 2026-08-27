@@ -19,6 +19,7 @@
 
 import { test, expect } from "@playwright/test";
 import path from "node:path";
+import { assertBoardLoaded } from "./lib/board-loaded";
 
 const OUT = path.resolve(__dirname, "..", "playwright-report", "pr5-states");
 test.use({ baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3230" });
@@ -30,6 +31,7 @@ const FYTD_END   = "2026-08-24";
 async function loadBoard(page, account, start = FYTD_START, end = FYTD_END) {
   const q = `?account=${encodeURIComponent(account)}&start=${start}&end=${end}`;
   await page.goto(`/kpi/purchasing${q}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator(".kpi-p-card").first()).toBeVisible();
   await page.waitForTimeout(400);
@@ -94,6 +96,7 @@ test("failure state - 500 renders FailureCard with retry", async ({ page }) => {
   });
   await page.setViewportSize({ width: 1600, height: 1200 });
   await page.goto("/kpi/purchasing?account=ALL&start=" + FYTD_START + "&end=" + FYTD_END);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   const failCard = page.locator('[data-card="board-failed"]');
   await expect(failCard).toBeVisible();
@@ -123,6 +126,7 @@ test("failure vs zero spend - visually unmistakable", async ({ page }) => {
   });
   await page.setViewportSize({ width: 1600, height: 1200 });
   await page.goto("/kpi/purchasing?account=ALL&start=" + FYTD_START + "&end=" + FYTD_END);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('[data-card="board-failed"]')).toBeVisible();
   // No bucket cards, no drill table, no reimbursable row - the whole
@@ -136,6 +140,7 @@ test("failure freshness uses real timestamps from a prior successful load", asyn
   await page.setViewportSize({ width: 1600, height: 1200 });
   // First successful load populates lastFreshness state.
   await page.goto("/kpi/purchasing?account=ALL&start=" + FYTD_START + "&end=" + FYTD_END);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
   // Now intercept a TBR fetch to 500.

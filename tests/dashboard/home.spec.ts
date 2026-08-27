@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 test('home dashboard loads with auth state', async ({ page }) => {
   await page.goto('/');
+  await assertBoardLoaded(page, '.kf-launch-title', { context: 'home dashboard launchpad', timeoutMs: 10_000 });
 
   // If the saved auth state failed, NextAuth/middleware would bounce us to the
   // login page — assert we are NOT on a sign-in route.

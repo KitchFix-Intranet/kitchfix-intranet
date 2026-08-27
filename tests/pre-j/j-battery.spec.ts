@@ -16,13 +16,14 @@
 // TEST_MODE=true required so the SC page renders without auth.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const TXR = 'TXR - AZ';
 
 async function openWorkspace(page: any) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-  await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
   await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(600);
 }
@@ -258,7 +259,7 @@ for (const width of VIEWPORTS) {
     test(`J8: renders at ${width}px with ${span}-day span - sticky column + 3-digit legibility`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/service-calendar?account=${encodeURIComponent(TXR)}&period=9`);
-      await page.waitForSelector('.sc-workspace-grid', { timeout: 30_000 });
+      await assertBoardLoaded(page, '.sc-workspace-grid', { context: 'sc workspace' });
       await page.waitForSelector('.sc-workspace-grid-cell .sc-daysq--interactive', { timeout: 15_000 }).catch(() => {});
       await page.waitForTimeout(600);
       await enterBulkMode(page);

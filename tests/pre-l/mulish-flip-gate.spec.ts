@@ -19,6 +19,7 @@
 // to Inter's wider default glyphs.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const SURFACES = [
   { path: '/ops', label: 'ops' },
@@ -126,6 +127,7 @@ for (const surface of SURFACES) {
     test(`${surface.label} @ ${width}px: nav pills within container, no wrap, no overflow`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1080 });
       await page.goto(surface.path);
+      await assertBoardLoaded(page, '.oh-nav-item', { context: `nav on ${surface.label}` });
       await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
       await page.waitForTimeout(600);
       await killMobileBar(page);
@@ -157,6 +159,7 @@ for (const surface of SURFACES) {
     test(`${surface.label} @ ${width}px: numeric columns keep tabular-nums`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1080 });
       await page.goto(surface.path);
+      await assertBoardLoaded(page, '.oh-nav-item', { context: `nav on ${surface.label}` });
       await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
       await page.waitForTimeout(600);
       await killMobileBar(page);
@@ -178,6 +181,7 @@ for (const surface of SURFACES) {
     test(`${surface.label} @ ${width}px: headings do not wrap unexpectedly`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1080 });
       await page.goto(surface.path);
+      await assertBoardLoaded(page, '.oh-nav-item', { context: `nav on ${surface.label}` });
       await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
       await page.waitForTimeout(600);
       await killMobileBar(page);

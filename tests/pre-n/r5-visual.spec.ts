@@ -4,13 +4,14 @@
 // no horizontal scrollbar in the rail at 1024 or 1536.
 
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from '../lib/board-loaded';
 
 const ACCOUNT = 'TXR - AZ';
 
 async function openBackdateWithCredit(page: any, width: number) {
   await page.setViewportSize({ width, height: 1080 });
   await page.goto('/service-calendar?view=admin');
-  await page.waitForSelector('.scav', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.scav', { context: 'sc admin' });
   await page.waitForTimeout(400);
 
   await page.locator(`.scav-acct[data-account-key="${ACCOUNT}"]`).click();
@@ -70,7 +71,7 @@ test('R5 visual: 1536 - rail has no horizontal scrollbar; credit cards render co
 test('R5 visual: pane container inset from shell edge; background transparent', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto('/service-calendar?view=admin');
-  await page.waitForSelector('.scav', { timeout: 30_000 });
+  await assertBoardLoaded(page, '.scav', { context: 'sc admin' });
   await page.waitForTimeout(400);
 
   const styles = await page.locator('.scav').evaluate((el) => {

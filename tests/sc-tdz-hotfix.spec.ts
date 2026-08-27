@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { assertBoardLoaded } from './lib/board-loaded';
 
 // Runtime-proof guard for F3-era ReferenceError bugs in the Service
 // Calendar client bundle (SC-079 free-variable class + hook-declaration-
@@ -174,6 +175,7 @@ test('/service-calendar renders + drills without ReferenceError', async ({ page 
   page.on('pageerror', (err) => pageErrors.push(err.message));
 
   await page.goto('/service-calendar', { waitUntil: 'networkidle' });
+  await assertBoardLoaded(page, '.sc-chrome-bar', { context: 'service-calendar tdz probe', timeoutMs: 10_000 });
 
   // Depth 1: ChromeBar renders from inside the ServiceCalendar
   // function body, past every useState + useMemo (including the

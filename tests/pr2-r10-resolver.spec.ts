@@ -13,6 +13,7 @@
 // canary that the eight at-risk accounts still render.
 
 import { test, expect } from "@playwright/test";
+import { assertBoardLoaded } from "./lib/board-loaded";
 import path from "node:path";
 
 const OUT = path.resolve(__dirname, "..", "playwright-report", "pr2-r10");
@@ -25,6 +26,7 @@ const P8_END   = "2026-08-09";
 async function loadBoard(page, account, start, end) {
   const q = `?account=${encodeURIComponent(account)}&start=${start}&end=${end}`;
   await page.goto(`/kpi/purchasing${q}`);
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator(".kpi-p-card").first()).toBeVisible();
   await page.waitForTimeout(300);

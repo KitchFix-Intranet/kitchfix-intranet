@@ -3,6 +3,7 @@
 import { test, expect } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
+import { assertBoardLoaded } from "./lib/board-loaded";
 
 test.use({ baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3221" });
 const OUT = path.resolve(__dirname, "..", "playwright-report", "pr2-r8");
@@ -10,6 +11,7 @@ const OUT = path.resolve(__dirname, "..", "playwright-report", "pr2-r8");
 test("export: button visible in command bar", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/kpi/purchasing?account=ALL");
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   // Wait for board to load so exportHref is populated
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
@@ -23,6 +25,7 @@ test("export: button visible in command bar", async ({ page }) => {
 
 test("export: payload figures match on-screen figures", async ({ page, context }) => {
   await page.goto("/kpi/purchasing?account=ALL");
+  await assertBoardLoaded(page, ".kpi-p-card", { context: "purchasing" });
   await page.waitForLoadState("networkidle");
   await expect(page.locator('.kpi-p-card').first()).toBeVisible();
 
