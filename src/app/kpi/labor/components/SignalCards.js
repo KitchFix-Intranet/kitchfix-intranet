@@ -246,7 +246,7 @@ function OvertimeCard({ board, salary }) {
   const boundsCopy = salary
     ? "share of hourly cost"
     : alarm != null
-      ? `off target above ${alarm}% · some overtime is normal`
+      ? `off target above ${alarm}% · some OT is normal`
       : "of hours worked";
 
   // 2026-08-26 - "OT workers" -> "Week workers OT" per owner. Same
