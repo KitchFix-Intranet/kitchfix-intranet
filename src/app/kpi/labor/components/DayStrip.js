@@ -90,6 +90,12 @@ function DayBar({
   // played-day OT% suffix. All optional; DayBar falls back to today's
   // simple caption if missing.
   scheduleByDate, accountTimezone, otByDate,
+  // #850 follow-up 2026-08-27: `estimateByDate` maps ISO -> base-rate
+  // dollar amount from homestand_estimated.per_day. Ghost bars render
+  // this value as their hero (e.g. `~$1,063`) rather than a placeholder
+  // dash, so the caption states what a typical stand of this shape
+  // costs on that day.
+  estimateByDate,
 }) {
   const amount = day.amountX10000 / 10000;
   const isToday = day.workDate === todayISO;
@@ -126,22 +132,26 @@ function DayBar({
     : null;
 
   // 2026-08-26 redesign - captions now carry state-specific detail:
-  //   played game day  -> `MM/DD DoW · vs OPP · $N · N% OT`
-  //   ghost game day   -> `MM/DD DoW · vs OPP · 6:45p`
-  //   prep day         -> `MM/DD DoW · prep`
-  //   off day          -> `MM/DD DoW · off`
-  //   custom-range     -> `MM/DD · DoW` (unchanged; caller passes no
-  //                       schedule/otByDate so we fall through)
-  // Caption degrades at compact/minimal density (narrow bars) so the
-  // strip stays readable on mobile.
+  //   played game day  -> `MM/DD DoW` + `vs OPP · N% OT`
+  //   ghost game day   -> `MM/DD DoW` + `vs OPP · 6:45p`
+  //   prep day         -> `MM/DD DoW` + `prep`
+  //   off day          -> `MM/DD DoW` + `off`
+  //   custom-range     -> `MM/DD · DoW` (caller passes no schedule/
+  //                       otByDate so the extra line stays null)
+  //
+  // #850 review 2026-08-27: captionExtra now renders at compact
+  // density too (previously full-only). Kevin's HS 12 review saw
+  // 14 bars land at ~83px per bar (compact by chooseLabelDensity),
+  // so opponent + first pitch never appeared. Compact primary caption
+  // now includes DoW when room; minimal density keeps value-only.
   const dateStr = fmtDayLabel(day.workDate);
   const dow = dowShort(day.workDate);
   const isGameDay = !!sched || (variant === "identity" && (gameDates?.has(day.workDate) || nightGameDates?.has(day.workDate)));
   const isPrepDay = variant === "identity" && !isGameDay && !isZero && !isFuture && !sched;
   let caption = null;
-  let captionExtra = null;   // second-line detail on full density
-  if (density === "full") {
-    caption = `${dateStr} · ${dow}`;
+  let captionExtra = null;
+  if (density === "full" || density === "compact") {
+    caption = density === "full" ? `${dateStr} · ${dow}` : dateStr;
     if (variant === "identity") {
       if (isFutureGame && sched) {
         // upcoming game: opponent + first pitch
@@ -164,8 +174,6 @@ function DayBar({
         captionExtra = "off";
       }
     }
-  } else if (density === "compact") {
-    caption = dateStr;
   } else {
     caption = null;   // minimal: no date caption, value only
   }
@@ -177,7 +185,18 @@ function DayBar({
           <span className="kpi-wb-target" style={{ bottom: `${targetPct}%` }} />
         )}
         {isFutureGame ? (
-          <div className={barCls} style={{ height: `${Math.max(72, barPct)}%` }} />
+          // #850 follow-up 2026-08-27: ghost bar height now reflects
+          // the estimate (relative to the same scale used for played
+          // bars) rather than a fixed 72%. Missing estimate falls back
+          // to 72% so the ghost is still visually distinguishable.
+          <div
+            className={barCls}
+            style={{ height: `${(() => {
+              const est = estimateByDate?.get(day.workDate);
+              if (est == null || !(est > 0)) return 72;
+              return Math.max(24, Math.min(100, (est / scale) * 90));
+            })()}%` }}
+          />
         ) : isFuture || isZero ? (
           <div className="kpi-wb-basel" />
         ) : (
@@ -186,7 +205,14 @@ function DayBar({
       </div>
       <div className="kpi-wb-cap">
         <b className={`kpi-wb-cap-value ${isFutureGame ? "kpi-hs-day-ghost-value" : ""}`}>
-          {isFutureGame ? "~$—" : (isFuture ? "—" : fmt$(amount))}
+          {(() => {
+            if (isFutureGame) {
+              const est = estimateByDate?.get(day.workDate);
+              return est != null && est > 0 ? `~${fmt$(est)}` : "~$-";
+            }
+            if (isFuture) return "-";
+            return fmt$(amount);
+          })()}
         </b>
         {caption != null && (
           <span className="kpi-wb-dates" title={day.workDate}>{caption}</span>
@@ -308,6 +334,9 @@ export function DayStripPlot({
   scheduleByDate,       // Map<ISO, {opponent, day_night, game_time}>
   accountTimezone,      // IANA tz string (never a fallback)
   otByDate,             // Map<ISO, {hours_ot, hours_all}>
+  // #850 follow-up 2026-08-27: per-day base-rate estimate for ghost
+  // bars (upcoming stands). Map<ISO, number>.
+  estimateByDate,
   ariaLabel = "Per-day labor",
 }) {
   // Measure the plot strip and pick the caption density from the
@@ -361,6 +390,7 @@ export function DayStripPlot({
           scheduleByDate={scheduleByDate}
           accountTimezone={accountTimezone}
           otByDate={otByDate}
+          estimateByDate={estimateByDate}
         />
       ))}
     </div>
