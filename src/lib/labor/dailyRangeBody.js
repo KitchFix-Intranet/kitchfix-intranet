@@ -14,6 +14,7 @@ import { buildWeekBudgets } from "../../app/kpi/labor/lib/board.js";
 import { loadSalaryActuals } from "./salaryBoard.js";
 import { proRateBudget } from "./budgetProRate.js";
 import { salaryProRate } from "./salaryProRate.js";
+import { fetchAllOffset } from "../rippling/paginate.js";
 
 const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 const MS_PER_DAY = 86400000;
@@ -52,13 +53,21 @@ export async function buildDailyRangeBody(ctx) {
   }
 
   // 2. Fetch daily rows for the range + members.
-  const dailyQ = await supa.from("labor_actuals_daily")
-    .select("account_key, worker_id, work_date, line_code, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, segment_count")
-    .in("account_key", members)
-    .gte("work_date", start)
-    .lte("work_date", end);
-  if (dailyQ.error) return { error: safeErr("labor_actuals_daily", dailyQ.error) };
-  const dailyRows = dailyQ.data || [];
+  // 2026-08-28 pagination sweep: paginated via fetchAllOffset. Members
+  // (up to 11 for portfolio ALL) x workers x days x lines can exceed
+  // 1000 on wider daily-branch windows; prior bare select truncated.
+  let dailyRows;
+  try {
+    dailyRows = await fetchAllOffset(supa, "labor_actuals_daily",
+      "account_key, worker_id, work_date, line_code, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, segment_count",
+      [
+        (q) => q.in("account_key", members),
+        (q) => q.gte("work_date", start),
+        (q) => q.lte("work_date", end),
+      ]);
+  } catch (e) {
+    return { error: safeErr("labor_actuals_daily", { message: e.message }) };
+  }
 
   // 3. Aggregate per (worker, line) - integer-cent accumulator so
   //    no FP-summation artifact on cross-grain sums.
