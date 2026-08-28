@@ -85,3 +85,50 @@ S2 STANDING RULE (added 2026-08-27, R14; corrected 2026-08-27 same day): every s
 
    References: 5th instance of the pattern law above. #856 (TDZ), R14 (#857), the
    `?preset=` silent-ignore case that this PR closes.
+
+S3 STANDING RULE (added 2026-08-28, R17): visual acceptance measures contrast against
+   the surface behind the mark, not just DOM presence. S2 is a URL-shape parity check;
+   nothing in it catches a mark the DOM says rendered and an eye says is invisible.
+
+   Two classes name this failure mode:
+
+   1. **Dashed / outline / border marks that carry information** (projection extensions,
+      target lines, forecast overlays, average lines, legend swatches). Their entire
+      job is to be readable against the plot / card background behind them. WCAG's
+      3.0:1 graphical-objects threshold applies. R17 shipped this class as
+      `.kpi-p-proj { border: 1.5px dashed var(--n-500) }` at 2.87:1 against the
+      white plot background - the DOM said the projection extension rendered, an
+      eye at 68% elapsed said it was not there, and R13's acceptance battery
+      passed because it checked element presence, not visual reading. The R13
+      CSS comment three lines above said the outline should use identity color;
+      the CSS used --n-500 and nobody read the code and its own documentation
+      together.
+
+   2. **Low-saturation identity marks measured against a state axis.** R13 approved
+      identity color on the running bar so a running Food bar reads as Food.
+      Read on ONE chart, this is coherent. Read on THREE charts on a state axis
+      where every closed period is red or green, three identity colors (Food navy,
+      Packaging pale blue, Vehicle purple) are three shades that mean nothing
+      about the state axis. Identity carries meaning within a chart and none
+      across a state axis; a running bar sits on the STATE axis and needs the
+      state axis's grammar (or a consistent neutral), not the identity axis's.
+
+   Procedure (both CC probe and Chat-Claude visual battery):
+     1. For any dashed / dotted / outline mark on a light surface, verify contrast
+        against the surface behind it clears 3.0:1. Not "the element rendered";
+        the color of its stroke vs its background.
+     2. For any identity-color-through-state situation, verify the identity is
+        readable in the CROSS-CHART view where multiple identities sit adjacent
+        on the same state axis. Coherence within one chart does not survive
+        the aggregate view.
+     3. `_probe_kpi_contrast.mjs` now scans both `kpi.css` and every purchasing
+        stylesheet, and gates the graphical axis at 3.0:1 in addition to the
+        text axis at 4.5:1. Extension landed in R17. Any future kpi/* stylesheet
+        joins the CSS_PATHS list at add-time.
+
+   References: 6th instance of the pattern law above. R17 (`.kpi-p-proj` invisible
+   at 2.87:1) plus R13's identity-on-a-state-axis ruling that shipped as three
+   accidental shades. The extension of `_probe_kpi_contrast.mjs` closed both blind
+   spots at once: it read `kpi.css` only, and it scanned `color:` only, so the
+   defect that lived on a `border:` declaration in `purchasing.css` was invisible
+   to the gate that was supposed to catch exactly this class.
