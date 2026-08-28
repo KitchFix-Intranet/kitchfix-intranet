@@ -267,14 +267,21 @@ async function buildPriorPeriodComparison({ supa, rangeStart, rangeEnd, today, i
     const rolled = members || [];
     if (rolled.length === 0) return { applies: false, reason: "no_rollup_members" };
     const q = await paginateActuals(supa, { members: rolled, start: priorStart, end: priorEnd, pageSize });
-    if (q.error) return { applies: false, reason: "query_error" };
+    // 2026-08-28 swallowing-catch fix: prior code returned
+    // `{ applies: false, reason: "query_error" }`; the client
+    // (ComparisonStrip.js:89) then rendered null on !pp.applies, so
+    // a DB error silently vanished the VS PERIOD widget from the
+    // board with no operator signal. The `reason` string was written
+    // and never read. Return an error field the caller surfaces
+    // via safeError.
+    if (q.error) return { error: q.error, scope: "labor_actuals_prior_aggregate" };
     priorActuals = q.data;
   } else {
     const q = await supa.from("labor_actuals_latest")
       .select("account_key, worker_id, week_start, week_end, hours_regular, hours_overtime, hours_double_time, hours_premium_other, amount")
       .eq("account_key", account)
       .lte("week_start", priorEnd).gte("week_end", priorStart);
-    if (q.error) return { applies: false, reason: "query_error" };
+    if (q.error) return { error: q.error, scope: "labor_actuals_prior_single" };
     priorActuals = q.data;
   }
 
@@ -900,16 +907,20 @@ export async function GET(request) {
       .gte("service_date", "2025-12-29")
       .lte("service_date", "2026-12-27")
       .not("period", "is", null);
+    // 2026-08-28 swallowing-catch fix: prior code did
+    // `if (!periodDays.error) { populate periodBounds }` - a DB error
+    // left the map empty and downstream period-scope math silently
+    // fell back to fiscal defaults. Board numbers looked right and
+    // were not. Surface as safeError.
+    if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_aggregate", periodDays.error), { status: 500 });
     const periodBounds = new Map();
-    if (!periodDays.error) {
-      for (const r of periodDays.data || []) {
-        const p = String(r.period);
-        const cur = periodBounds.get(p);
-        if (!cur) periodBounds.set(p, { start: r.service_date, end: r.service_date });
-        else {
-          if (r.service_date < cur.start) cur.start = r.service_date;
-          if (r.service_date > cur.end)   cur.end   = r.service_date;
-        }
+    for (const r of periodDays.data || []) {
+      const p = String(r.period);
+      const cur = periodBounds.get(p);
+      if (!cur) periodBounds.set(p, { start: r.service_date, end: r.service_date });
+      else {
+        if (r.service_date < cur.start) cur.start = r.service_date;
+        if (r.service_date > cur.end)   cur.end   = r.service_date;
       }
     }
     const account_periods = [...periodBounds.entries()]
@@ -976,6 +987,15 @@ export async function GET(request) {
     const rolledUpMembers = members;
     const rolledUpActuals = actualsRows;
 
+    // Prior-period comparison. Compute before body so a DB error
+    // surfaces via safeError instead of silently vanishing the widget.
+    const priorCmpAgg = await buildPriorPeriodComparison({
+      supa, rangeStart: start, rangeEnd: end, today,
+      isAggregate: true, members: rolledUpMembers,
+      currentActuals: rolledUpActuals, pageSize: pageSizeParam,
+    });
+    if (priorCmpAgg?.error) return NextResponse.json(safeError(priorCmpAgg.scope, priorCmpAgg.error), { status: 500 });
+
     let body = {
       ok: true,
       filters: { account, start, end },
@@ -1014,11 +1034,7 @@ export async function GET(request) {
         account_state: "hourly_ok",
       }),
       week_budgets: buildAggregateWeekBudgets({ start, end, member_budgets: memberBudgets }),
-      prior_period_comparison: await buildPriorPeriodComparison({
-        supa, rangeStart: start, rangeEnd: end, today,
-        isAggregate: true, members: rolledUpMembers,
-        currentActuals: rolledUpActuals, pageSize: pageSizeParam,
-      }),
+      prior_period_comparison: priorCmpAgg,
       name_availability: {
         has_names: resolvedNames > 0,
         resolved: resolvedNames,
@@ -1172,16 +1188,17 @@ export async function GET(request) {
     .gte("service_date", fyStart)
     .lte("service_date", fyEnd)
     .not("period", "is", null);
+  // 2026-08-28 swallowing-catch fix (single-account path). See the
+  // aggregate-path fix ~line 897 for the shape rationale.
+  if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_single", periodDays.error), { status: 500 });
   const periodBounds = new Map();
-  if (!periodDays.error) {
-    for (const r of periodDays.data || []) {
-      const p = String(r.period);
-      const cur = periodBounds.get(p);
-      if (!cur) periodBounds.set(p, { start: r.service_date, end: r.service_date });
-      else {
-        if (r.service_date < cur.start) cur.start = r.service_date;
-        if (r.service_date > cur.end)   cur.end   = r.service_date;
-      }
+  for (const r of periodDays.data || []) {
+    const p = String(r.period);
+    const cur = periodBounds.get(p);
+    if (!cur) periodBounds.set(p, { start: r.service_date, end: r.service_date });
+    else {
+      if (r.service_date < cur.start) cur.start = r.service_date;
+      if (r.service_date > cur.end)   cur.end   = r.service_date;
     }
   }
   const account_periods = [...periodBounds.entries()]
@@ -1288,6 +1305,16 @@ export async function GET(request) {
     }
   }
 
+  // Prior-period comparison. Compute before body so a DB error
+  // surfaces via safeError (see aggregate path ~line 992 for the
+  // same shape).
+  const priorCmpSingle = await buildPriorPeriodComparison({
+    supa, rangeStart: start, rangeEnd: end, today,
+    isAggregate: false, account,
+    currentActuals: actuals.data,
+  });
+  if (priorCmpSingle?.error) return NextResponse.json(safeError(priorCmpSingle.scope, priorCmpSingle.error), { status: 500 });
+
   let bodySingle = {
     ok: true,
     filters: { account, start, end },
@@ -1309,11 +1336,7 @@ export async function GET(request) {
       account_state: "hourly_ok",
     }),
     week_budgets: buildWeekBudgets({ start, end, budget_periods }),
-    prior_period_comparison: await buildPriorPeriodComparison({
-      supa, rangeStart: start, rangeEnd: end, today,
-      isAggregate: false, account,
-      currentActuals: actuals.data,
-    }),
+    prior_period_comparison: priorCmpSingle,
     name_availability: {
       has_names: resolvedNames > 0,
       resolved: resolvedNames,

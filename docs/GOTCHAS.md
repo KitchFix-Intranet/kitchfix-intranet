@@ -208,6 +208,34 @@ Related: the "silent-success shape" this class shares with the Sheets-drift + du
 
 The general shape: any window/range comparator that reduces to `true` when the inputs collapse to a single value should assert against that collapse in a pre-flight. `assertTxnDateHasMultipleValues` is the pattern for date; the same shape applies to `assertAmountHasMultipleValues`, `assertVendorHasMultipleValues`, etc., wherever a comparator would degenerate.
 
+### Swallow-into-empty: a query error rendered as "no data"
+
+A read errors on the DB, the caller converts the error into a placeholder-shaped success value, and downstream code cannot distinguish "query returned nothing" from "query blew up and we pretended". User sees "the feature just does not work" - blank cells, missing widgets, empty exports - with no error surface, no red banner, no log entry the operator would notice.
+
+**Two variants, same shape:**
+
+1. **`try { ... } catch { return []; }` or `catch { workerMeta = {} }`.** The catch swallows the error into an empty container. Fixed 2026-08-28 in `resolveWorkerMeta.js` after portfolio labor queries at 700+ workers errored with `400 Bad Request` from URL overflow (the `.in()` pagination sweep) and the existing `if (w.error) return { workerMeta, resolvedNames, usersReachable };` returned an empty workerMeta - so every cell rendered as raw `#rippling_id` instead of a name. Not silent-truncation but the same operator-visible bug shape.
+
+2. **`if (q.error) return { applies: false, reason: "query_error" };`** on a builder function, with the caller (`if (!pp.applies) return null`) rendering nothing. Fixed 2026-08-28 in `buildPriorPeriodComparison` after Kevin's ruling: a DB error on the prior-period read silently vanished the "VS PERIOD n" widget from the labor board with no operator signal. The `reason: "query_error"` field was written and never read - which is worse than not recording it.
+
+Same session, same class: `if (!periodDays.error) { populate periodBounds }` at `route.js:904` and `:1176`. When `sc_day_metadata` errored, the map stayed empty and downstream period-scope math fell back to fiscal defaults. Board numbers looked right and were not. Fixed to `if (periodDays.error) return safeError(...)` matching the rest of the route's error surface.
+
+**Why this class of bug is durable:** the anti-pattern is broader than `try/catch`. `if (q.error) return { stub }` is functionally identical to `catch { return {} }` - both convert an error into a success shape that reads as "no data" downstream. Any sweep for this class must include the `if (q.error) return {stub}` shape, not just literal `catch` blocks. This is the same general form as a probe passing on zero rows, a gate wired to nothing, and a health signal that freezes rather than failing - the surface reads as success while the underlying evidence never arrived.
+
+**The rule.** When a Supabase read helper handles a query error, ask "what does the caller see?" Three acceptable answers:
+
+1. **`throw` on error.** Caller must catch or crash. Shape-enforced surfacing.
+2. **Return the error up the stack** (`return { error, scope }`) and have the immediate caller do `if (result.error) return NextResponse.json(safeError(...))`. Standard pattern in `route.js` at every other DB read.
+3. **Discriminated return shape** (`{ ok: true, data } | { ok: false, error }`) so the caller has to branch. Structurally safe, would need a codebase-wide convention change.
+
+**Unacceptable:** returning a placeholder-shaped success value on error. `return []`, `return {}`, `return { applies: false }`, `return { byAccount: new Map() }` (without an `error` field the caller is forced to check) - all of these hide the failure as "no data". If the codebase ever adds a caller that doesn't check the optional `error` field, the swallow silently resumes.
+
+**When sweeping for this class**, grep BOTH:
+- `catch (` bodies that assign or return empty containers
+- `if (.*\.error) return {` patterns that don't include an `error:` field in the returned object
+
+The Sheets `catch { return { headers: [], rows: [] } }` sites (`src/lib/sheets.js`) are a deliberate exception - Sheets errors happen legitimately (retry-able network, quota) and every caller tolerates the empty shape as "not available right now". Not every swallow is a bug; distinguish the ones where empty is a legitimate answer from the ones where empty is a lie.
+
 ---
 
 ## Purchasing engine (Rippling + BillCom)
