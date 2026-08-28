@@ -19,7 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine, standWindow } from "./lib/formatting";
 import { computeStaleness } from "@/lib/labor/staleness";
-import { deriveClientAccount, shouldRestoreLastAccount, shouldAutoEnableSalary } from "@/lib/kpi/previewAccess";
+import { deriveClientAccount, shouldRestoreLastAccount, shouldAutoEnableSalary, shouldRenderLandingBridgeLoading } from "@/lib/kpi/previewAccess";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
@@ -885,8 +885,6 @@ export default function KpiLaborPage() {
   // response lands, mirroring the freshness chip's `Loading data`.
   const systemStrip = data && !isSalaried ? (
     <SystemStrip
-      coverageCounts={coverageCounts}
-      dominantCoverage={dominantCoverage}
       freshness={freshness}
       freshnessH={freshnessH}
       salarySummary={data?.salary_included ? data.salary_summary : null}
@@ -1107,11 +1105,22 @@ export default function KpiLaborPage() {
            person can navigate back to their own account without the
            browser back button. Copy per spec §3. */
         <LockedPanel />
-      ) : loadState === "ok" && !urlAccount && data?.landing_account ? (
+      ) : shouldRenderLandingBridgeLoading({
+        loadState,
+        urlAccount,
+        landingAccount: data?.landing_account,
+        previewAccount: data?.preview_account,
+      }) ? (
         /* V-role-gates - transient landing state. The route ships
            landing_account when the URL has no account; the effect
            above redirects. Render a loading box while the redirect
-           navigates to keep the "empty range" flash off screen. */
+           navigates to keep the "empty range" flash off screen.
+           2026-08-28: decision factored to shouldRenderLandingBridgeLoading
+           so the probe pins the rule. previewAccount is the critical
+           new guard - the landing-redirect does not fire when preview
+           is active (preview supplies the effective account), so this
+           branch would otherwise render StateLoading permanently.
+           Kevin caught the stuck skeleton on ?preview=CIN - KY. */
         <StateLoading />
       ) : loadState === "ok" && data.account_state === "salaried_only" ? (
         /* PR-E - city derives via folioMemberDescription off the live
@@ -1438,15 +1447,22 @@ function BoardSkeleton() {
   );
 }
 
-// SYSTEM status strip (V7-19). Two 22px rows, quietly stated: Payroll
-// data + Nightly feed. Colors mirror coverage severity + freshness
-// tint. Value classes: kpi-sys-v-ok / -warn / -bad. Dot mirrors.
-function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH, salarySummary }) {
-  const total = Object.values(coverageCounts || {}).reduce((s, n) => s + Number(n || 0), 0);
-  const complete = Number(coverageCounts?.complete || 0);
-  const payTone = dominantCoverage === "complete" ? "ok"
-                : dominantCoverage === "unknown"  ? "bad"
-                : "warn";
+// SYSTEM status strip (V7-19). Health block: is the pipeline working.
+// One 22px row + optional Salary state row. Value classes:
+// kpi-sys-v-ok / -warn / -bad; dot mirrors.
+//
+// 2026-08-28: the "Payroll data <complete> of <total>" row was removed.
+// Three reasons: (1) SYSTEM should answer pipeline health; coverage is
+// a data question and lives on the Approvals card with a popover.
+// (2) The row duplicated the Approvals card's Coverage fact without a
+// popover of its own - only amber signal on the board with no ? to
+// investigate. (3) Amber on a sub-1% coverage delta trains operators
+// to ignore amber. Also: the row could not catch a stopped pipeline -
+// when the rippling walk hangs, the derives that populate coverage do
+// not run and the number simply stops changing rather than going
+// amber. Nightly feed (derive_freshness) is the real health signal;
+// staleness banner (#854) + Slack failure webhook (#854) escalate.
+function SystemStrip({ freshness, freshnessH, salarySummary }) {
   const feedTone = freshnessH == null ? "bad"
                  : freshnessH >= 54    ? "bad"
                  : freshnessH >= 30    ? "warn"
@@ -1460,11 +1476,6 @@ function SystemStrip({ coverageCounts, dominantCoverage, freshness, freshnessH, 
   return (
     <div className="kpi-sys" role="status" aria-label="System status">
       <div className="kpi-sys-h">SYSTEM</div>
-      <div className="kpi-sys-r">
-        <span className={`kpi-sys-dot kpi-sys-dot-${payTone}`} aria-hidden="true" />
-        <span className="kpi-sys-k">Payroll data</span>
-        <span className={`kpi-sys-v kpi-sys-v-${payTone}`}>{complete} of {total}</span>
-      </div>
       <div className="kpi-sys-r">
         <span className={`kpi-sys-dot kpi-sys-dot-${feedTone}`} aria-hidden="true" />
         <span className="kpi-sys-k">Nightly feed</span>

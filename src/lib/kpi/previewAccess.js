@@ -129,3 +129,33 @@ export function shouldAutoEnableSalary({
   return true;
 }
 
+// 2026-08-28 stuck landing-bridge skeleton. Kevin caught an empty
+// .kpi-statebox rendering permanently below the signal cards on
+// ?preview=CIN - KY. The state chain in page.js has a branch:
+//
+//   loadState === "ok" && !urlAccount && data?.landing_account
+//     -> <StateLoading />
+//
+// designed to bridge the tiny window while the landing-redirect
+// effect pushes ?account=<landing> onto the URL. #874 gated that
+// redirect on `if (data?.preview_account) return;` (correct - preview
+// supplies the effective account, no redirect needed). Result: on
+// preview URLs the redirect never fires and this branch would render
+// StateLoading forever. Owner-verified assertion: "no preview URL
+// renders a statebox when loadState === 'ok'" - meaning no statebox
+// fires as a side effect of preview being active. Salary / refused /
+// empty-range stateboxes still render when the DATA warrants them;
+// this rule pins only the preview-caused case.
+export function shouldRenderLandingBridgeLoading({
+  loadState = null,
+  urlAccount = "",
+  landingAccount = "",
+  previewAccount = null,
+}) {
+  if (loadState !== "ok") return false;
+  if (urlAccount) return false;
+  if (!landingAccount) return false;
+  if (previewAccount) return false;
+  return true;
+}
+
