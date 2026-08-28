@@ -398,15 +398,15 @@ export async function GET(request) {
     //     for intent-aware landing (Stage 4 seam, activated here).
     //     Empty array when no contacts row matches the email.
     //
-    // 2026-08-27 cutover from user_accounts (hand-maintained) to
-    // user_accounts_derived (view over `people` + owner overlay).
-    // ilike preserved - view returns emails in whatever case
-    // `people` stores them, ilike matches any case on either side.
-    // Migration applied + probe verified before this change landed
+    // 2026-08-27 cutover: reads from user_accounts_derived (view over
+    // `people` ACTIVE rows + owner overlay in user_accounts_manual).
+    // The old hand-maintained user_accounts table was dropped
+    // 2026-08-28 after the view was verified live (35 rows,
+    // g.lawson@ absent, c.parry@ present, seasonal rehires retained).
+    // ilike preserved - view returns emails in whatever case `people`
+    // stores them, ilike matches any case on either side.
+    // Migration applied + probe verified before each step
     // (see PR #866 and scripts/probes/_probe_user_accounts_derived.mjs).
-    // The old user_accounts table stays in place for a few days
-    // before the third PR drops it - an orphaned table is
-    // recoverable, a dropped one is not.
     if (action === "sc-accounts") {
       const accounts = await loadAccountList();
       let defaultAccount = null;
@@ -429,8 +429,9 @@ export async function GET(request) {
               .filter(r => r != null && String(r).trim() !== "");
           }
         } catch {
-          // user_accounts / contacts missing or query failed - swallow.
-          // Frontend falls back to CIN-AZ + Season default landing.
+          // user_accounts_derived / contacts missing or query failed -
+          // swallow. Frontend falls back to CIN-AZ + Season default
+          // landing.
         }
       }
       return NextResponse.json({ success: true, accounts, defaultAccount, roles });
