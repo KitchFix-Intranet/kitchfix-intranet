@@ -26,7 +26,7 @@
 // resolve the tier via tierFromRoles() with the floor-wins tiebreaker.
 // Engine touch is minimal + scoped: the existing user-resolution in
 // sc-accounts gets one additional contacts query alongside the
-// user_accounts query (Promise.all).
+// user_accounts_derived query (Promise.all).
 
 // ─── Role alias map ─────────────────────────────────────────────
 // contacts.role is free-text - the seed has 14 known roles (per
@@ -102,13 +102,14 @@ function pickRepresentativeRole(roles) {
 }
 
 // F2 (R-A ruling 2026-07-09): the floor -> workspace redirect now
-// REQUIRES a resolved home account from user_accounts. A floor-tier
-// user with NO user_accounts row falls through to the Season overview
-// (the picker) rather than being force-landed on the CIN-AZ fallback
-// they don't own. hasHomeAccount is the new signal - true only when a
-// user_accounts.account exists AND is present in the account list the
-// dropdown carries (guards against a mapping pointing at an unimported
-// account; see the account-fallback comment in ServiceCalendar.js).
+// REQUIRES a resolved home account. A floor-tier user with NO
+// mapped account falls through to the Season overview (the picker)
+// rather than being force-landed on the CIN-AZ fallback they don't
+// own. hasHomeAccount is the signal - true only when the user has
+// a resolved account (via user_accounts_derived) AND that account is
+// present in the account list the dropdown carries (guards against
+// a mapping pointing at an unimported account; see the account-
+// fallback comment in ServiceCalendar.js).
 //
 // URL account/scope still wins over the landing computation (branches 1
 // and 2 below); the account switcher is orthogonal - flipping accounts
@@ -137,8 +138,9 @@ export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, r
   //    periodKey is null at mount; the existing periodRanges-init
   //    effect (B2a) sets periodKey to the period containing today
   //    when landOnCurrentPeriod is true.
-  //    F2: gated on hasHomeAccount so a floor role without a user_accounts
-  //    row falls to the Season overview instead of the CIN-AZ fallback.
+  //    F2: gated on hasHomeAccount so a floor role without a resolved
+  //    account (via user_accounts_derived) falls to the Season overview
+  //    instead of the CIN-AZ fallback.
   const tier = Array.isArray(roles)
     ? tierFromRoles(roles)
     : roleTier(role);

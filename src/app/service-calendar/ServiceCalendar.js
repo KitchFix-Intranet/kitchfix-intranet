@@ -518,10 +518,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // computeInitialView can be called with the multi-role-aware `roles`
   // input (floor-wins tiebreaker) rather than a pre-collapsed string.
   const [rawRoles, setRawRoles] = useState([]);
-  // F2: hasHomeAccount = user_accounts.account exists AND is in the
-  // sorted account list the dropdown carries. Gates the floor-tier
-  // Period-workspace redirect - a floor role without a home account
-  // lands on the Season overview instead of the CIN-AZ fallback.
+  // F2: hasHomeAccount = the user's resolved account (via
+  // user_accounts_derived) exists AND is in the sorted account list
+  // the dropdown carries. Gates the floor-tier Period-workspace
+  // redirect - a floor role without a home account lands on the
+  // Season overview instead of the CIN-AZ fallback.
   const [hasHomeAccount, setHasHomeAccount] = useState(false);
   const [adminView, setAdminView] = useState({ mode: "overview" });
   const [data, setData] = useState(null);
@@ -715,7 +716,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         // wins so a hard refresh at /?account=TXR-TX-H&period=P1 lands on
         // TXR-TX-H, not the user's default):
         //   1. `?account=` in the URL (if it maps to a loaded account)
-        //   2. user's mapped account (defaultAccount from user_accounts)
+        //   2. user's mapped account (defaultAccount from user_accounts_derived)
         //   3. CIN-AZ (corp/admin/unmapped operator default)
         //   4. first account in the sorted list
         // The match-against-list check guards against a mapping pointing
@@ -752,12 +753,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         setRoleTier(tierFromRoles(d.roles || []));
         setRawRoles(d.roles || []);
         // F2 (R-A ruling 2026-07-09): hasHomeAccount is TRUE only when
-        // user_accounts.account resolves to a live account in the
-        // dropdown list. A stale mapping (row points at an unimported
-        // account) or a missing row both resolve to FALSE, which
-        // demotes a floor user's landing from the Period workspace to
-        // the Season overview. Same in-list guard the account fallback
-        // above uses so the two decisions cannot disagree.
+        // the user's resolved account (via user_accounts_derived)
+        // matches a live account in the dropdown list. A stale mapping
+        // (row points at an unimported account) or a missing row both
+        // resolve to FALSE, which demotes a floor user's landing from
+        // the Period workspace to the Season overview. Same in-list
+        // guard the account fallback above uses so the two decisions
+        // cannot disagree.
         setHasHomeAccount(!!(d.defaultAccount && sorted.some(a => a.key === d.defaultAccount)));
         // landOnCurrentPeriod handled by the periodRanges-init effect
         // below: when a floor role lands and periodRanges arrives,
