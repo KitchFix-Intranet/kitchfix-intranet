@@ -30,52 +30,37 @@ export function fmtHrs(v) {
   return Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// 2026-08-27 day-strip abbreviation - three-band compact-dollar
-// formatter for the day strip caption on wide-window homestands
-// (CIN - OH HS 10 at 25 days = 28px per column, where `$1,509`
-// (33px) overflowed even after the caption dropped to --kpi-t-meta).
-// Owner ruling: abbreviate over $1,000 to `$X.Xk`, keep three bands
-// so the same rule covers every real value.
+// 2026-08-28 day-strip abbreviation - per-value formatter.
 //
-// Bands:
-//   A  |v| <   1,000    "$XXX"    ($234, $856, $999)
-//   B  |v| <  10,000    "$X.Xk"   ($1.5k, $9.9k)
-//   C  |v| >= 10,000    "$XXk"    ($12k, $47k, $999k)
+// Owner ruling (revised 2026-08-28 after uniformity-rule verify):
+// only values at or above $1,000 abbreviate. Everything below
+// renders plain. The prior strip-uniformity rule (every caption in
+// one strip picks the same band) was cut - the rule assumed
+// `$856` beside `$1.5k` would read as a bug, but the observed
+// failure mode was the opposite: a zero-dollar off-day rendering
+// `$0.0k` reads as broken while mixed conventions read fine.
 //
-// UNIFORMITY IS THE RULE. Every caption on one strip must render in
-// the same band. Mixed conventions on the same row (`$856` beside
-// `$1.5k`) read as a bug. The strip's band is picked from the
-// widest value across all days on that strip - pickStripBand()
-// below - and every caption formats with that band regardless of
-// its own value ($234 in a Band-B strip renders `$0.2k`).
+// Rules:
+//   n == 0            "$0"       (absence, not a magnitude; every case)
+//   |n| <   1,000     "$XXX"     ($99, $234, $508, $999)
+//   1,000 <= |n| < 10,000  "$X.Xk"    ($1.0k, $1.5k, $9.9k)
+//   |n| >= 10,000    "$XXk"     ($12k, $47k, $999k)
 //
-// Precision loss is deliberate. Kevin ruling: "loses precision an
-// operator can get by hovering". Chef scanning the strip wants
-// magnitude; exact figure lives in the title attribute (owner:
-// "the strip already uses that pattern for the date").
-export function pickStripBand(values) {
-  let max = 0;
-  for (const v of values) {
-    const a = Math.abs(Number(v) || 0);
-    if (a > max) max = a;
-  }
-  if (max < 1000)   return "A";
-  if (max < 10000)  return "B";
-  return "C";
-}
-
-export function fmtCompactDollars(v, band) {
+// Exact figure lives in the title attribute at the call site so an
+// operator hovers for precision on any abbreviated caption. Same
+// pattern the date caption already uses.
+export function fmtCompactDollars(v) {
   if (v == null) return "—";
   const n = Number(v);
-  if (band === "A") {
+  if (n === 0) return "$0";
+  const a = Math.abs(n);
+  if (a < 1000) {
     return "$" + Math.round(n).toLocaleString("en-US");
   }
-  if (band === "B") {
-    // one decimal on thousands. Round to 1 decimal so $499 -> $0.5k
-    // (matches the "magnitude" framing - "about a half-k").
+  if (a < 10000) {
+    // one decimal on thousands. Round to 1 decimal so $1,499 -> $1.5k.
     return "$" + (Math.round(n / 100) / 10).toFixed(1) + "k";
   }
-  // Band C - $XXk, no decimal, rounded to nearest thousand.
   return "$" + Math.round(n / 1000).toLocaleString("en-US") + "k";
 }
 
