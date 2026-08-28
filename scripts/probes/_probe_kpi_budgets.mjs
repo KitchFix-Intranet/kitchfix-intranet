@@ -4,9 +4,24 @@
 // seed JSON at runtime - zero dollar literals live in this file.
 // Output is PASS/FAIL lines and counts only; never a dollar amount.
 //
+// SEED FILE (INV-P23 documentation add, 2026-08-28):
+//   The probe is not runnable without a seed. It is not broken - it is
+//   input-driven. The seed is owner-supplied per fiscal year and is
+//   generated from the P&L workbook by `scripts/verify_budget_seed_vs_
+//   xlsx.mjs` (which reads the same "Budget vs Actual (SLT)" workbook
+//   used by the P22 reconcile probe). Two live locations at time of
+//   writing:
+//     - repo committed:   docs/audits/seeds/fy2026_pnl_budget_seed.json
+//                         (whenever the audit lands with its seed)
+//     - owner working:    ~/Downloads/fy2026_pnl_budget_seed.json
+//                         (Kevin's default per generator convention)
+//   New fiscal year -> regenerate + rename. If neither location has
+//   the file, run `verify_budget_seed_vs_xlsx.mjs --file <out>
+//   --xlsx-dir <p&l root>` to build one.
+//
 // Usage:
-//   node --env-file=.env.local scripts/_probe_kpi_budgets.mjs \
-//     --file <path>/fy2026_pnl_budget_seed.json
+//   node --env-file=.env.local scripts/probes/_probe_kpi_budgets.mjs \
+//     --file ~/Downloads/fy2026_pnl_budget_seed.json
 //
 // Asserts:
 //   1. row count == seed.row_count
