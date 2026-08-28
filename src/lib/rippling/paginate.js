@@ -22,6 +22,29 @@
 //     Standing rule: `.in(<key>, <bigArray>)` without this helper is
 //     the same failure mode as `.select()` without `.range()`.
 //
+// --- .in() failure mode note (2026-08-28 sweep) --------------------
+//
+// Bare `.in(col, bigArray)` fails TWO ways, not one:
+//
+//   1. Silent truncation at 1000 rows - same as `.select()` without
+//      `.range()`. Fires when the .in() key list fits in the URL but
+//      the RESPONSE would exceed the cap. The caller gets a partial
+//      result and a null error; the code carries on with short data.
+//
+//   2. 400 Bad Request from URL overflow - fires when the .in() list
+//      is long enough that the request URL crosses ~2KB. For UUID
+//      keys this happens around 50-100 items. Not silent - the
+//      response carries an error - but if the caller wraps the query
+//      in a try/catch (or `if (q.error) return {...empty maps}`), the
+//      operator sees "the feature just does not work" (blank cells,
+//      missing names, empty exports) instead of an error surface.
+//
+// This PR fixed the 400 shape in resolveWorkerMeta.js and the two
+// inline dupes in export/route.js. The catch blocks stay - they are
+// defense-in-depth - but the read now succeeds instead of erroring.
+// Related: swallowing-catch broader sweep flagged 2026-08-28. See
+// docs/CONVENTIONS.md "error swallowing" if that pass lands guidance.
+//
 // Why fetchAllKeyset exists (owner incident 2026-08-27):
 //
 // The `_latest` views are `SELECT DISTINCT ON (rippling_id) ... ORDER
