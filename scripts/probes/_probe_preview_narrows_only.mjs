@@ -24,7 +24,7 @@
 //   rdo       -> all (aggregate ok)
 //   site_*    -> own scope only, pseudos denied
 
-import { resolvePreviewAccess } from "../../src/lib/kpi/previewAccess.js";
+import { resolvePreviewAccess, deriveClientAccount } from "../../src/lib/kpi/previewAccess.js";
 
 const PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 
@@ -170,9 +170,62 @@ console.log("\nA3  named scenarios from the spec:");
     leaderPreviewAll);
 }
 
+// A4 - the chip. Owner ruling 2026-08-28 after #873 verify: with
+// ?preview=<account>, the rendered account chip equals the preview
+// account. Not just that the data matches. #873 shipped with a
+// landing-redirect that pushed ?account=ALL onto the URL when
+// preview was set but ?account= was absent, so the chip showed
+// "ALL" while the board showed Goodyear.
+//
+// The display account is derived by deriveClientAccount() from
+// (urlAccount, previewAccount, landingAccount) with preview at the
+// top of the precedence stack. This assertion pins the rule: any
+// combination that has preview set MUST resolve to preview,
+// regardless of what the URL or landing carries.
+console.log("\nA4  chip account tracks preview_account (the #873 verify bug):");
+{
+  const previews = ["CIN - AZ", "STL - MO", "TXR - TX - H"];
+  const urls = ["", "ALL", "CIN - OH", "EAST"];
+  const landings = ["ALL", "EAST", "WEST", "CIN - OH"];
+  let checked = 0, failed = 0;
+  for (const preview of previews) {
+    for (const url of urls) {
+      for (const landing of landings) {
+        checked++;
+        const displayed = deriveClientAccount({ urlAccount: url, previewAccount: preview, landingAccount: landing });
+        if (displayed !== preview) {
+          failed++;
+          console.log(`  ✗ A4  preview="${preview}" url="${url}" landing="${landing}" -> chip="${displayed}", expected "${preview}"`);
+        }
+      }
+    }
+  }
+  assert(`A4  chip=preview when preview is set (${checked} cases)`, failed === 0);
+}
+
+// A4b - the specific bug Kevin hit: ?preview=CIN - AZ&account=ALL
+// as a corporate user landing=ALL must render CIN - AZ in the chip.
+{
+  const chip = deriveClientAccount({ urlAccount: "ALL", previewAccount: "CIN - AZ", landingAccount: "ALL" });
+  assert(`A4b  #873 verify bug: preview=CIN - AZ + account=ALL renders chip="CIN - AZ" (was "ALL")`,
+    chip === "CIN - AZ",
+    { chip });
+}
+
+// A4c - precedence stack: no preview -> URL wins over landing;
+// no URL, no preview -> landing; nothing -> "".
+{
+  assert(`A4c  no preview, URL set: chip=URL`,
+    deriveClientAccount({ urlAccount: "CIN - OH", previewAccount: null, landingAccount: "ALL" }) === "CIN - OH");
+  assert(`A4c  no preview, no URL: chip=landing`,
+    deriveClientAccount({ urlAccount: "", previewAccount: null, landingAccount: "ALL" }) === "ALL");
+  assert(`A4c  no preview, no URL, no landing: chip=""`,
+    deriveClientAccount({ urlAccount: "", previewAccount: null, landingAccount: "" }) === "");
+}
+
 console.log(`\n---`);
 if (failures > 0) {
   console.log(`${failures} assertion(s) failed. Preview may have granted forbidden access - STOP and investigate.`);
   process.exit(1);
 }
-console.log(`all assertions pass. Preview narrows only.`);
+console.log(`all assertions pass. Preview narrows only + chip tracks preview.`);
