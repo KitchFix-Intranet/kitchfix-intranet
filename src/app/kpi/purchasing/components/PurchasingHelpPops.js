@@ -162,34 +162,8 @@ export const CARD_PURCHASES_BODY = (
   </>
 );
 
-export const VENDOR_BODY = (
-  <>
-    One row per vendor Sebastian entered a bill for in this range,
-    biggest first.
-    <br /><br />
-    <b>"Where it landed" splits one vendor across P&amp;L lines.</b>
-    A Sysco bill can carry food, packaging, and small non-food
-    supplies in one document; the split shows how much went to
-    which bucket.
-    <span className="kpi-hs-pop-foot"><b>vs prior</b> compares this range to the same length of
-      time immediately before it. A vendor that reads new was
-      not in that prior window at all - worth glancing at.</span>
-  </>
-);
-
-export const WEEK_STRIP_BODY = (
-  <>
-    Every fiscal week in the range. Each bar is what got spent in
-    that week; the <b>dashed target</b> is what an even pace would
-    put there.
-    <br /><br />
-    <b>Adjusted moves as weeks close.</b> The original target is
-    just budget over four; the adjusted line divides the money
-    that is left across the weeks that are left. A week that ran
-    hot raises the target on every week after it.
-    <span className="kpi-hs-pop-foot">The <b>hatched bar is the running week</b> - work in
-      progress, not a state. Green bars are under target; red
-      bars are over. The pattern says "still counting"; the
-      colour says over or under.</span>
-  </>
-);
+// INV-P23 (2026-08-28): VENDOR_BODY + WEEK_STRIP_BODY removed. Both
+// were help copy for surfaces that no longer render - VENDOR_BODY
+// belonged to VendorBreakdown (removed R15); WEEK_STRIP_BODY named a
+// hatched running-bar treatment that R17 replaced with a neutral steel
+// fill plus a projection outline. Zero external consumers; kept nowhere.
