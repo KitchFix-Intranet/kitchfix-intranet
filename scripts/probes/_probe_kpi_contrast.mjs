@@ -209,7 +209,8 @@ const DARK_CONTEXT_FRAGMENTS = [
   // white-on-white. Context fragment beats waiver because these are
   // not defects, they are the probe's blind spot for coloured
   // buttons.
-  ".kpi-p-cpact",
+  // INV-P23 (2026-08-28): .kpi-p-cpact removed with its rule; kept
+  // .kpi-p-fail-retry as the sole live coloured-button selector.
   ".kpi-p-fail-retry",
 ];
 

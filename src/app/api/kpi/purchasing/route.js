@@ -672,8 +672,11 @@ async function loadFreshness(supa) {
 //
 // A ledger card's rows must sum to something the card can explain
 // (Check 9 - THE GATE). The uncapped sum of ledger rows == the bucket
-// hero for that GL family. We assert it right before returning and
-// return a `ledger_reconciliation` block the client can crash on.
+// hero for that GL family. Check 9 is asserted on the CLIENT in
+// LedgerCard.js:56-73 + CardPurchases.js:39-59 against local props.
+// A server-side duplicate lived here until INV-P23 removed it - see
+// the deleted `ledger_reconciliation` block for why one implementation
+// per assertion is the rule.
 //
 // Vendor rollup ships UN-ROLLED-UP for now (Kevin ruling: report
 // fragmentation, do not implement).
@@ -1807,28 +1810,15 @@ export async function GET(request) {
   const debugRequested = new URL(request.url).searchParams.get("debug") === "1";
   const sentinelResp = debugRequested ? await computeSentinel(supa) : { data: null };
 
-  // cost_model: single-account calls carry the resolved cost model
-  // (at_risk / pass_through / revenue_flex). Aggregates get null -
-  // aggregates roll up mixed cost models and the caller must decide
-  // how to present.
-  //
-  // billed_back_reachable: is "billed back to client" derivable from
-  // data we hold today? The route reports the honest answer per INV-P9
-  // Q5. Reimbursable spend IS captured (13xx GL bucket, per PLAYBOOK
-  // §5.2). The client-invoice-back TIMESTAMP + AMOUNT event is NOT
-  // captured today - we know KitchFix ordered it, we do not have a
-  // record of when/whether Sebastian invoiced the client for it. So
-  // reachable = false. What it would need: a bill.com AR-side hook or
-  // a manual "billed on" field on the reimbursable row.
-  //
-  // Do NOT build the billed-back-to-client stream here - Kevin ruled
-  // Part B is report-only in this PR.
-  const cost_model = isAggregate ? null : costModelFor(account);
-  const billed_back_reachable = {
-    reachable: false,
-    reason: "no AR-side event captured today - reimbursable spend row (13xx) records KitchFix order + cost, but the client-invoice-back timestamp and amount are not persisted",
-    would_need: "a bill.com AR-side hook that stamps the reimbursable row on client invoice, or a manual 'billed_on' field on the reimbursable row",
-  };
+  // INV-P23 (2026-08-28): `cost_model`, `billed_back_reachable`,
+  // `filters`, `is_aggregate`, `members`, `ledger_reconciliation`
+  // were shipped in the payload for months with zero client consumers.
+  // Client computes cost_model itself (accountModels.costModelFor);
+  // isAggregate + filters come from URL state; members is server-
+  // internal; billed_back_reachable was documentation-as-payload from
+  // INV-P9 Q5; ledger_reconciliation duplicated the live client Check 9
+  // in LedgerCard.js:56 + CardPurchases.js:39 - see PR body for why the
+  // server duplicate was the risk, not the deletion.
 
   // ─── PR-2 R6 Part B - capped aggregations for populated cards ──
   //
@@ -1882,48 +1872,15 @@ export async function GET(request) {
     }
   }
 
-  // ─── Check 9 - ledger sum vs bucket hero reconciliation ─────────────
-  //
-  // A ledger card's rows must sum to something the card can explain.
-  // The uncapped ledger total_amount MUST equal the corresponding
-  // `categories[]` hero for that gl_line_code (the number the card's
-  // hero displays). If they diverge, the card is lying - same defect
-  // class as R4's Part A. Assert and expose the reconciliation on the
-  // payload so a client-side gate can crash on drift.
-  const equipHero  = spentForGl("5002.5");
-  const repairHero = spentForGl("5002.1");
-  // Vehicle hero: sum every 3500 gl category (R15 - was on the bucket
-  // card; now feeds the vehicle ledger).
-  const vehicleHero = categories
-    .filter(c => String(c.gl_line_code || "").startsWith("3500"))
-    .reduce((s, c) => s + Number(c.spent || 0), 0);
-  const vehicleHeroR = Math.round(vehicleHero * 100) / 100;
-  // Reimb hero: sum every 13xx gl category.spent from `categories[]`.
-  const reimbHero  = categories
-    .filter(c => String(c.gl_line_code || "").startsWith("13"))
-    .reduce((s, c) => s + Number(c.spent || 0), 0);
-  const reimbHeroR = Math.round(reimbHero * 100) / 100;
-  const ledger_reconciliation = {
-    vehicle:        { hero: vehicleHeroR, ledger_total: vehicleR.data.total_amount, delta: Math.round((vehicleHeroR - vehicleR.data.total_amount) * 100) / 100 },
-    equipment:      { hero: equipHero,   ledger_total: equipR.data.total_amount,   delta: Math.round((equipHero  - equipR.data.total_amount)  * 100) / 100 },
-    repair:         { hero: repairHero,  ledger_total: repairR.data.total_amount,  delta: Math.round((repairHero - repairR.data.total_amount) * 100) / 100 },
-    reimbursable:   { hero: reimbHeroR,  ledger_total: reimbR.data.total_amount,   delta: Math.round((reimbHeroR - reimbR.data.total_amount)  * 100) / 100 },
-  };
-  const TOLERANCE_CENTS = 1;   // 1c tolerance to absorb rounding
-  const check9_pass =
-    Math.abs(ledger_reconciliation.vehicle.delta)      <= (TOLERANCE_CENTS / 100) &&
-    Math.abs(ledger_reconciliation.equipment.delta)    <= (TOLERANCE_CENTS / 100) &&
-    Math.abs(ledger_reconciliation.repair.delta)       <= (TOLERANCE_CENTS / 100) &&
-    Math.abs(ledger_reconciliation.reimbursable.delta) <= (TOLERANCE_CENTS / 100);
-  ledger_reconciliation.pass = check9_pass;
-  if (!check9_pass) {
-    // Log the mismatch but do NOT throw - the client asserts on
-    // ledger_reconciliation.pass and refuses to render mismatched cards
-    // (Check 9 - THE GATE). Server-side we surface the numbers so the
-    // caller can see exactly which query diverged.
-    console.warn("[kpi/purchasing] Check 9 ledger reconciliation drift:",
-      JSON.stringify(ledger_reconciliation));
-  }
+  // Check 9 (ledger sum vs bucket hero) is asserted CLIENT-side in
+  // LedgerCard.js:56-73 + CardPurchases.js:39-59, reading local props.
+  // A server-side duplicate lived here from R6 through 2026-08-28,
+  // shipped in the payload as `ledger_reconciliation` with zero client
+  // consumers - the client never read the server's answer. Two
+  // implementations of the same assertion is the defect labor's
+  // three-surface invariant names (route select / view / RPC): either
+  // half can drift without the other firing. INV-P23 removed the
+  // server duplicate; the client assertion is the live one.
 
   // ─── PR 3 - management-fee board data (pass_through only) ───────────
   //
@@ -2121,13 +2078,8 @@ export async function GET(request) {
 
   const payload = {
     ok: true,
-    filters: { account, start, end, drill: includeLines ? "lines" : null },
-    is_aggregate: isAggregate,
-    members,
     range: { start, end },
     is_future_range,
-    cost_model,
-    billed_back_reachable,
     // 2026-08-28 preview mode.  landing_account = caller's default
     // landing (single-account users land on their site, corporate
     // lands on ALL); preview_account non-null when preview intersected
@@ -2174,7 +2126,6 @@ export async function GET(request) {
     card_charges: cardChR.data,
     // R15 F - per-vendor rollup for the drill table's By vendor row mode.
     vendor_rollup: vendorRollupR.data,
-    ledger_reconciliation,
     // PR 3 - management-fee board data (pass_through accounts only).
     // null at at_risk / aggregate. See mgmt_fee construction above.
     mgmt_fee,
