@@ -1431,6 +1431,14 @@
   display: grid;
   grid-template-columns: var(--kpi-folio-w) minmax(0, 1fr);
 }
+/* 2026-08-28 rail-hide - Shell omits the <aside> entirely when the
+   caller resolves to a single account (site_leader/manager) or when
+   a corporate/rdo user narrows via preview mode. The grid collapses
+   to one column and the 234px reclaims to the board. See
+   CC_PROMPT_RAIL_AND_PREVIEW for the rule. */
+.kpi-cols[data-no-folio] {
+  grid-template-columns: minmax(0, 1fr);
+}
 /* V30-3 - main column padding at --kpi-card-pad (14.4). */
 .kpi-main {
   padding: var(--kpi-card-pad);
@@ -1843,6 +1851,39 @@
   font-size: var(--kpi-t-body);
   line-height: 1.4;
 }
+
+/* 2026-08-28 preview mode banner - pinned above the command bar
+   when the URL has ?preview=X and the value is in the caller's
+   real access. Amber tone matches .kpi-stale-banner + .kpi-vpill-warn
+   so the "attention" surface is consistent across the board. The
+   exit button clears the ?preview= param via setParam("preview","")
+   at the page level. Owner rule: Kevin must never be unsure whether
+   a number is his view or theirs. */
+.kpi-preview-banner {
+  background: var(--amber-100);
+  color: #92580A;
+  border: 1px solid #F3D9AE;
+  border-radius: 6px;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  margin: var(--kpi-sp-2) var(--kpi-sp-3) 0;
+  font-size: var(--kpi-t-body);
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+}
+.kpi-preview-banner-exit {
+  background: transparent;
+  border: 0;
+  color: #92580A;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-left: auto;
+}
+.kpi-preview-banner-exit:hover { text-decoration: none; }
 
 /* Help control - one pattern across the board (V8-18) */
 .kpi-help-anchor { position: relative; display: inline-block; }

@@ -179,6 +179,13 @@ export function Shell({
   // Layout children.
   folioRail,      // left aside
   main,           // middle content
+  // 2026-08-28 preview mode - non-null when the server returned
+  // preview_account. Renders an amber banner above the command
+  // bar naming the previewed account, with an exit link that
+  // clears the ?preview= param from the URL. Kevin must never be
+  // unsure whether a number is his view or theirs.
+  previewAccount = null,
+  onExitPreview,
 }) {
   const freshH = hoursSinceISO(freshness?.last_walk_at);
   return (
@@ -192,6 +199,19 @@ export function Shell({
         {printScopeText && <div>{printScopeText}</div>}
         <div>Generated {new Date().toLocaleString()}</div>
       </div>
+
+      {/* 2026-08-28 preview banner. Amber, pinned above the command
+          bar, exit link clears the ?preview= param. Only renders
+          when preview is in effect (server returned preview_account
+          non-null after intersecting with real access). */}
+      {previewAccount && (
+        <div className="kpi-preview-banner" role="status" aria-live="polite">
+          Previewing as <b>{previewAccount}</b>
+          <button type="button" className="kpi-preview-banner-exit" onClick={onExitPreview}>
+            exit
+          </button>
+        </div>
+      )}
 
       {/* V7-7 - single command bar. Responsive give order (S-10):
           (1) Range date-tail ellipses first, (2) title account tail
@@ -318,10 +338,18 @@ export function Shell({
         />
       </div>
 
-      {/* Two-column grid: folio + main. */}
+      {/* Two-column grid: folio + main.
+          2026-08-28 rail-hide - when folioRail is null (single-
+          account user or corporate/rdo previewing one account),
+          the <aside> is omitted entirely and the .kpi-cols grid
+          collapses to one column. The 234px reclaims to the board.
+          CSS: .kpi-cols[data-no-folio] rule handles the collapse
+          (see src/app/kpi/kpi.css). */}
       <div className="kpi-page">
-        <div className="kpi-cols">
-          <aside className="kpi-folio" aria-label="Accounts">{folioRail}</aside>
+        <div className="kpi-cols" data-no-folio={folioRail == null ? "" : undefined}>
+          {folioRail != null && (
+            <aside className="kpi-folio" aria-label="Accounts">{folioRail}</aside>
+          )}
           <div className="kpi-main" id="kpi-main">{main}</div>
         </div>
       </div>
