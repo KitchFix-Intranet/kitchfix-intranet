@@ -65,12 +65,21 @@ export async function resolveWorkerMeta(supa, workerIds) {
     const title = p.title ? String(p.title).trim() : null;
     const name = resolveWorkerName(p, userPayload);
     if (name) resolvedNames++;
+    // 2026-08-28 person-key fix: expose work_email so callers can
+    // dedupe by person (email is stable across employment spells)
+    // instead of by worker_id (which Rippling reissues on every
+    // rehire). Prefer the workers payload work_email; fall back to
+    // the users payload email if the worker row does not carry one.
+    // Lowercased for stable comparison. See src/lib/labor/personCount.js.
+    const rawEmail = p.work_email || userPayload?.email || null;
+    const email = rawEmail ? String(rawEmail).trim().toLowerCase() : null;
     workerMeta[p.id] = {
       worker_id: p.id,
       number: p.number ?? null,
       display_name: name,
       title,
       status: p.status || null,
+      email,
     };
   }
 

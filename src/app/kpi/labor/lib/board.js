@@ -25,6 +25,7 @@ import {
   inferRangeSelection,
   periodOf,
 } from "./periods.js";
+import { countDistinctPeople } from "../../../../lib/labor/personCount.js";
 
 const MS_PER_DAY = 86400000;
 const WEEKS_PER_PERIOD = 4;
@@ -129,7 +130,10 @@ function parseISO(iso) {
 }
 
 // Sum rows for a slice of the actuals array.
-function sumRows(rows) {
+// 2026-08-28 person-key fix: takes workerToEmail so worker_count +
+// approval_people dedupe by person (email) not spell (worker_id).
+// Empty map preserves legacy worker_id-based count.
+function sumRows(rows, workerToEmail = new Map()) {
   let amount = 0, hours = 0, ot = 0, unpriced_hrs = 0;
   let complete = 0, total = 0;
   // V42 REVISED (C1 state model). Sum status-based approval signals
@@ -147,8 +151,12 @@ function sumRows(rows) {
   // in range - the "N people" figure the card's sub-line uses.
   let approved_hours = 0, still_costing_hours = 0;
   let oldest_draft_date = null;   // ISO date string or null
-  const approvalWorkerIds = new Set();
-  const workerIds = new Set();
+  // 2026-08-28 person-key fix - collect the ROWS driving each
+  // person-count instead of collecting worker_ids directly. Then
+  // countDistinctPeople dedupes by email (person key) via workerToEmail.
+  // Falls back to worker_id-based count when workerToEmail is empty,
+  // preserving legacy behavior for callers that do not pass a map.
+  const approvalRows = [];
   for (const r of rows) {
     total += 1;
     amount += Number(r.amount || 0);
@@ -169,26 +177,25 @@ function sumRows(rows) {
     if (r.oldest_draft_date && (oldest_draft_date === null || r.oldest_draft_date < oldest_draft_date)) {
       oldest_draft_date = r.oldest_draft_date;
     }
-    if (Number(r.draft_hours || 0) > 0.004 && r.worker_id) approvalWorkerIds.add(r.worker_id);
+    if (Number(r.draft_hours || 0) > 0.004 && r.worker_id) approvalRows.push(r);
     if (r.coverage_state === "complete") complete += 1;
-    if (r.worker_id) workerIds.add(r.worker_id);
   }
   return {
     amount: r2(amount), hours: r2(hours), ot: r2(ot), unpriced_hrs: r2(unpriced_hrs),
-    complete, total, worker_count: workerIds.size,
+    complete, total, worker_count: countDistinctPeople(rows, workerToEmail),
     draft_entry_count: draft_entries,
     draft_hours: r2(draft_hours),
     anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h,
     approved_hours: r2(approved_hours),
     still_costing_hours: r2(still_costing_hours),
     oldest_draft_date,   // pass-through - MIN across rows, null when no drafts
-    approval_people: approvalWorkerIds.size,
+    approval_people: countDistinctPeople(approvalRows, workerToEmail),
   };
 }
 
 // Build the per-week aggregates for [start, end]. Returns array in
 // week_start ASC order; missing weeks (no actuals) appear as zero-rows.
-function buildWeekAggregates(actuals, weekStarts) {
+function buildWeekAggregates(actuals, weekStarts, workerToEmail = new Map()) {
   const byWeek = new Map();
   for (const w of weekStarts) byWeek.set(w, { rows: [] });
   for (const r of actuals) {
@@ -198,7 +205,7 @@ function buildWeekAggregates(actuals, weekStarts) {
   const out = [];
   for (const wStart of weekStarts) {
     const rows = byWeek.get(wStart).rows;
-    const s = sumRows(rows);
+    const s = sumRows(rows, workerToEmail);
     const week_end = new Date(parseISO(wStart).getTime() + 6 * MS_PER_DAY).toISOString().slice(0, 10);
     out.push({
       week_start: wStart, week_end,
@@ -273,6 +280,13 @@ export function buildBoard({
   budget_periods,       // [{ period_no, amount, ... }]  (may be empty)
   account_state,        // "hourly_ok" | "salaried_only" | "envelope"
   ot_thresholds = { watch_pct: 0, alarm_pct: 8 },
+  // 2026-08-28 person-key fix - workerToEmail Map (worker_id -> email)
+  // built from resolveWorkerMeta. When present, distinct-people counts
+  // (worker_count, approval_people, distinct_workers) dedupe by email
+  // instead of by worker_id. Absent/empty preserves the legacy
+  // worker_id-based count (unmapped ids count as themselves). See
+  // src/lib/labor/personCount.js.
+  workerToEmail = new Map(),
 }) {
   if (account_state === "salaried_only" || account_state === "envelope") {
     return {
@@ -311,7 +325,7 @@ export function buildBoard({
   rangeBudget = hasBudget ? r2(rangeBudget) : null;
 
   // Weekly aggregates across the whole range.
-  const weekAggs = buildWeekAggregates(actuals, weeksInRange);
+  const weekAggs = buildWeekAggregates(actuals, weeksInRange, workerToEmail);
   // Range totals from weekly aggregates (avoids double-counting).
   // HS FB1 hotfix 2026-08-25: draft_hours added alongside unpriced.
   // Two distinct approval questions per Kevin's V42-clarified ruling:
@@ -342,9 +356,11 @@ export function buildBoard({
   // both. approved_hours + still_costing_hours DO sum row-wise, so
   // sumRows on the full actuals gives the same answer as a per-week
   // reduce - one call kept for consistency of the source.
-  const rangeApprovals = sumRows(actuals);
-  // Distinct worker count across the range (V8-9: people, not worker-weeks).
-  const distinctWorkers = new Set(actuals.map(r => r.worker_id)).size;
+  const rangeApprovals = sumRows(actuals, workerToEmail);
+  // Distinct PEOPLE across the range (V8-9: people, not worker-weeks).
+  // 2026-08-28 person-key fix: dedupes by email through workerToEmail so
+  // a seasonal rehire (multiple worker_ids, one person) counts as one.
+  const distinctWorkers = countDistinctPeople(actuals, workerToEmail);
 
   // Determine kind.
   let kind;

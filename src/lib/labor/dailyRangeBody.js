@@ -15,6 +15,7 @@ import { loadSalaryActuals } from "./salaryBoard.js";
 import { proRateBudget } from "./budgetProRate.js";
 import { salaryProRate } from "./salaryProRate.js";
 import { fetchAllOffset } from "../rippling/paginate.js";
+import { countDistinctPeople, buildWorkerToEmail } from "./personCount.js";
 
 const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 const MS_PER_DAY = 86400000;
@@ -182,6 +183,19 @@ export async function buildDailyRangeBody(ctx) {
   // 8. Worker meta - hourly + salary combined.
   const workerIds = [...new Set(actualsRangeWithSalary.map(r => r.worker_id))];
   const { workerMeta } = await resolveWorkerMeta(supa, workerIds);
+  // 2026-08-28 person-key fix: replace salary_summary.workers with a
+  // person-count (deduped by email) instead of the naive
+  // salaryProrate.workers.length, which counts one spell per worker_id.
+  // salaryProrate.workers is per-spell (correct for pay-slice math) but
+  // NOT the number Kevin wants in the summary. Applied post-resolver
+  // so workerMeta / email map are ready.
+  const workerToEmail = buildWorkerToEmail(workerMeta);
+  if (salarySummary) {
+    salarySummary.workers = countDistinctPeople(
+      salaryProrate.workers.map(w => ({ worker_id: w.worker_id })),
+      workerToEmail,
+    );
+  }
 
   return {
     body: {
