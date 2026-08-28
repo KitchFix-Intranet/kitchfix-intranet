@@ -8,7 +8,7 @@ function periodOf(w, periods) {
 
 async function main() {
   // FYTD ALL data.
-  const r = await fetch(`${BASE}/api/kpi/purchasing?account=ALL`).then(x => x.json());
+  const r = await fetch(`${BASE}/api/kpi/purchasing?account=ALL&debug=1`).then(x => x.json());
   const periods = r.periods;
   const weekly = r.weekly;
 
@@ -78,7 +78,7 @@ async function main() {
   // Check 11: Sentinel TBR - FL P8 gl 3200.1 billcom = $39,373.74.
   if (r.sentinel) console.log('sentinel keys:', Object.keys(r.sentinel));
   // Fetch TBR-FL directly for sentinel value.
-  const t = await fetch(`${BASE}/api/kpi/purchasing?account=TBR%20-%20FL`).then(x => x.json());
+  const t = await fetch(`${BASE}/api/kpi/purchasing?account=TBR%20-%20FL&debug=1`).then(x => x.json());
   console.log('TBR-FL sentinel:', JSON.stringify(t.sentinel || null, null, 2).slice(0, 500));
 
   // Also fetch the P8 3200.1 direct sum from weekly.

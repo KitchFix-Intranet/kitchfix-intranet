@@ -1019,7 +1019,15 @@ async function loadVendorRollup(supa, { members, start, end }) {
 
 // ─── Route handler ───────────────────────────────────────────────────
 
+// PROBE-ONLY (item 4 measurement, not for merge): timings map + helper.
+// Wraps each loader in a Date.now() diff, ships them as a Server-Timing
+// response header + inline in the JSON payload under `_timings`.
+// See PR #<N> for the fix that drops this instrumentation.
+function _now() { return Date.now(); }
+
 export async function GET(request) {
+  const _t = { start: _now() };
+  const _mark = (k, from) => { _t[k] = _now() - from; };
   // TEST_MODE double-gate mirrors src/middleware.js so local Playwright
   // + smoke runs can reach the read-only API. Never fires on Vercel
   // (VERCEL=1 unsets the bypass regardless of env vars).
@@ -1067,7 +1075,9 @@ export async function GET(request) {
   const supa = getServiceClient();
 
   // Resolve members.
+  const _memStart = _now();
   const membersResp = await fetchMembers(supa, account);
+  _t.pre_members = _now() - _memStart;
   if (membersResp.error) return NextResponse.json(safeError("members", membersResp.error), { status: 500 });
   const members = membersResp.members;
   if (members.length === 0) {
@@ -1115,7 +1125,9 @@ export async function GET(request) {
   // Budgets for members (needed by budget block, categories, buckets,
   // periods).
   const fyForRange = 2026;   // FY2026 hard-coded; matches labor's convention
+  const _budStart = _now();
   const budgetsResp = await loadPurchasingBudgets(supa, members, fyForRange);
+  _t.pre_budgets = _now() - _budStart;
   if (budgetsResp.error) return NextResponse.json(safeError("kpi_budgets", budgetsResp.error), { status: 500 });
   const budgetsByLine = budgetsResp.data;
 
@@ -1140,20 +1152,22 @@ export async function GET(request) {
   //
   // PR-2 R4 Part A: pass [effStart, effEnd] so weekly view, actuals,
   // pending and coverage all describe the same fiscal-week footprint.
+  // PROBE-ONLY: per-preamble-query timings.
+  const _timePre = async (k, p) => { const s = _now(); const v = await p; _t[`pre_${k}`] = _now() - s; return v; };
+  const _preStart = _now();
   const [weeklyResp, pendingResp, reportPendingResp, actualsResp, coverage, freshness, dirResp, priorHistoryResp] = await Promise.all([
-    paginateWeekly(supa, { members, start: effStart, end: effEnd }),
-    loadPending(supa, { members, start: effStart, end: effEnd }),
-    loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
-    paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam }),
-    loadCoverage(supa, { members, start: effStart, end: effEnd }),
-    loadFreshness(supa),
-    loadAccountsDirectory(supa),   // PR-2 R2 Fix 7
-    // R13 P0-1 - history for closed period card only.  Loader returns
-    // { data: null } instantly if the range isn't a closed period.
-    isClosedSinglePeriod
+    _timePre("weekly",         paginateWeekly(supa, { members, start: effStart, end: effEnd })),
+    _timePre("pending",        loadPending(supa, { members, start: effStart, end: effEnd })),
+    _timePre("report_pending", loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK })),
+    _timePre("actuals",        paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam })),
+    _timePre("coverage",       loadCoverage(supa, { members, start: effStart, end: effEnd })),
+    _timePre("freshness",      loadFreshness(supa)),
+    _timePre("dir",            loadAccountsDirectory(supa)),
+    _timePre("prior_history",  isClosedSinglePeriod
       ? loadPriorPeriodHistory(supa, { members, periodNo: singlePeriodNo })
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null })),
   ]);
+  _t.pre_promise_all_wall = _now() - _preStart;
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
   if (reportPendingResp.error) return NextResponse.json(safeError("rippling_report_only_pending_v1", reportPendingResp.error), { status: 500 });
@@ -1529,7 +1543,15 @@ export async function GET(request) {
   const provisional = provisionalCutoff > todayDate;
 
   // Sentinel: value the route returns for the frozen probe.
-  const sentinelResp = await computeSentinel(supa);
+  // Item 5 - skip the fixture-probe sentinel unless the caller asked
+  // for debug output.  Zero purchasing-board consumers read it (grep
+  // 2026-08-28); only acceptance probes at scripts/probes/_pr2r3_* +
+  // _pr2r5_* consume `body.sentinel`, and those pass ?debug=1.  Saving
+  // ~50ms per request on every board load without breaking the probes.
+  const _sentStart = _now();
+  const debugRequested = new URL(request.url).searchParams.get("debug") === "1";
+  const sentinelResp = debugRequested ? await computeSentinel(supa) : { data: null };
+  _t.pre_sentinel = _now() - _sentStart;
 
   // cost_model: single-account calls carry the resolved cost model
   // (at_risk / pass_through / revenue_flex). Aggregates get null -
@@ -1568,14 +1590,26 @@ export async function GET(request) {
   // one component.  gl_line_code prefix is 3500 (any 3500.*).
   // R15 F - vendor_rollup for the drill table's "By vendor" row mode
   // (VendorBreakdown card gone; vendor rows land in-table now).
+  // PROBE-ONLY: mark preamble as everything from GET-start to just before
+  // the Promise.all block below.  Preamble covers session check, members
+  // resolve, budgets + weekly + pending + actuals + accounts_directory +
+  // prior_period_history + provisional + sentinel + totals derive.
+  _t.preamble = _now() - _t.start;
+
+  // PROBE-ONLY: wrap each loader with per-loader timing.  Promise.all
+  // still runs them in parallel; per-loader duration is the loader's
+  // own wall-clock, and the Promise.all wall-clock is max of the six.
+  const _pStart = _now();
+  const _time = async (k, p) => { const s = _now(); const v = await p; _t[k] = _now() - s; return v; };
   const [vehicleR, equipR, repairR, reimbR, cardChR, vendorRollupR] = await Promise.all([
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "3500%", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 }),
-    loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 }),
-    loadVendorRollup(supa, { members, start: effStart, end: effEnd }),
+    _time("ledger_vehicle", loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "3500%", cap: 25 })),
+    _time("ledger_equip",   loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 })),
+    _time("ledger_repair",  loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 })),
+    _time("ledger_reimb",   loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 })),
+    _time("card_charges",   loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 })),
+    _time("vendor_rollup",  loadVendorRollup(supa, { members, start: effStart, end: effEnd })),
   ]);
+  _t.promise_all_wall = _now() - _pStart;
   if (vehicleR.error)       return NextResponse.json(safeError("ledgers.vehicle",     vehicleR.error), { status: 500 });
   if (equipR.error)         return NextResponse.json(safeError("ledgers.equipment",   equipR.error),   { status: 500 });
   if (repairR.error)        return NextResponse.json(safeError("ledgers.repair",      repairR.error),  { status: 500 });
@@ -1942,5 +1976,12 @@ export async function GET(request) {
     });
   }
 
-  return NextResponse.json(payload);
+  // PROBE-ONLY: attach timings inline + as Server-Timing header.
+  _t.total = _now() - _t.start;
+  payload._timings = _t;
+  const stHeader = Object.entries(_t)
+    .filter(([k]) => k !== "start")
+    .map(([k, v]) => `${k};dur=${v}`)
+    .join(", ");
+  return NextResponse.json(payload, { headers: { "Server-Timing": stHeader } });
 }
