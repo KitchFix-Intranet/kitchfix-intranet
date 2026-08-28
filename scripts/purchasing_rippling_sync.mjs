@@ -672,6 +672,53 @@ async function deriveSpendLines({ rippling_ids }) {
     console.log(`[ruling-4] report-seen parents loaded: ${reportSeen.size}`);
   }
 
+  // ─── Ruling 6 seed: parent hexes with a CODED report row ────────────
+  //
+  // Owner ruling 2026-08-28. Ruling 4 pairs same-(merchant,cents) rows
+  // WITHIN the API's own dataset within 5 days - it needs a partner on
+  // the API side to fire. When Rippling landed only the auth on the API
+  // and only the settled entry in the nightly report, Ruling 4 has no
+  // partner and does nothing. The API row sits on the board as pending
+  // even though the coder already dispositioned the underlying charge
+  // on the report side.
+  //
+  // Ruling 6 catches exactly that case. When a report row at the same
+  // parent_hex has a non-sentinel category (i.e. coded), the API row is
+  // a stale auth-record and gets excluded with reason='report_coded'.
+  // Exact-key match on the 24-char Mongo hex extracted from external_id
+  // (parentIdFromExternalId) against the report's parent_txn_id column;
+  // no site/amount/date fuzz.
+  //
+  // See docs/GOTCHAS.md - "Ruling 4 pair-only scope" and "parent-hex vs
+  // source_bill_id join-key trap" both describe the shape this rule
+  // completes.
+  const reportCodedParents = new Set();
+  {
+    const PAGE = 1000;
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supa
+        .from("rippling_report_txns_latest")
+        .select("parent_txn_id, category")
+        .not("category", "ilike", "%please select%")
+        .order("parent_txn_id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        if (error.code === "42P01") {
+          console.log("[ruling-6] rippling_report_txns_latest absent; proceeding with empty set");
+          break;
+        }
+        console.error(`[ruling-6] report-txns coded-parent load FAILED: ${error.message}`);
+        return { ok: false, error: error.message };
+      }
+      const rows = data || [];
+      for (const r of rows) if (r.parent_txn_id) reportCodedParents.add(r.parent_txn_id);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    console.log(`[ruling-6] report-coded parents loaded: ${reportCodedParents.size}`);
+  }
+
   // Load the current-latest rows for the touched ids. Chunk at 100 to
   // keep the IN() URL under the PostgREST/proxy request-line limit -
   // rippling_ids are 36-char UUIDs so 500-per-chunk overflows the URL
@@ -912,6 +959,9 @@ async function deriveSpendLines({ rippling_ids }) {
   let authPairExcludedLines = 0;
   let authPairExcludedUsdCents = 0;
   let zeroAmountExcludedLines = 0;
+  // Ruling 6 (report-coded) counters at the LINE level. Kevin 2026-08-28.
+  let reportCodedExcludedLines = 0;
+  let reportCodedExcludedUsdCents = 0;
   // INV-P12 truncation-pair (stored ruling) counters
   let truncationPairExcludedLines    = 0;
   let truncationPairExcludedUsdCents = 0;
@@ -983,6 +1033,10 @@ async function deriveSpendLines({ rippling_ids }) {
     const zeroAmountHit       = parent ? zeroAmountParents.has(parent) : false;
     // INV-P12 truncation-pair stored ruling (Kevin 2026-08-27).
     const truncationPairHit   = parent ? truncationPairRuledParents.has(parent) : false;
+    // Ruling 6 (2026-08-28): a coded report row at the same parent_hex
+    // means the settled twin closed on the report side. The API row is
+    // stale; exclude it.
+    const reportCodedHit      = parent ? reportCodedParents.has(parent) : false;
 
     // Reason precedence for the recorded reason column. First hit wins.
     // The order below matches the exclusion causality:
@@ -993,14 +1047,20 @@ async function deriveSpendLines({ rippling_ids }) {
     //                          labeled with the specific decision that put it here.
     //   4. dup_split         - Ruling 2 duplicate-split parent
     //   5. non_usd           - Ruling 3
-    //   6. auth_pair         - Ruling 4 (earlier of pair; or later when earlier-in-report)
-    //   7. zero_amount       - Ruling 5
+    //   6. report_coded      - Ruling 6 (2026-08-28). Report has a coded twin at
+    //                          the same parent_hex. Precedes auth_pair because it
+    //                          is a stronger statement: not "we suspect this is the
+    //                          earlier of a pair" but "the coder already closed the
+    //                          underlying charge on the report side."
+    //   7. auth_pair         - Ruling 4 (earlier of pair; or later when earlier-in-report)
+    //   8. zero_amount       - Ruling 5
     let reason = null;
     if (wlRow?.excluded === true) reason = "map_excluded";
     else if (labelFallbackHit)    reason = "label_fallback";
     else if (truncationPairHit)   reason = "truncation_pair";
     else if (dupSplitHit)         reason = "dup_split";
     else if (currencyHit)         reason = "non_usd";
+    else if (reportCodedHit)      reason = "report_coded";
     else if (authPairEarlierHit || authPairLaterHit) reason = "auth_pair";
     else if (zeroAmountHit)       reason = "zero_amount";
 
@@ -1026,6 +1086,10 @@ async function deriveSpendLines({ rippling_ids }) {
     if (reason === "auth_pair") {
       authPairExcludedLines++;
       if (ccy === "USD" && r.amount != null) authPairExcludedUsdCents += Math.round(Number(r.amount) * 100);
+    }
+    if (reason === "report_coded") {
+      reportCodedExcludedLines++;
+      if (ccy === "USD" && r.amount != null) reportCodedExcludedUsdCents += Math.round(Number(r.amount) * 100);
     }
     if (reason === "zero_amount") {
       zeroAmountExcludedLines++;
@@ -1082,6 +1146,22 @@ async function deriveSpendLines({ rippling_ids }) {
   console.log(`[ruling-3] non-USD exclusion: lines=${currencyExcludedLines} native_totals=(${ccyBreakdown || "none"})`);
   const apDollars = (authPairExcludedUsdCents / 100).toFixed(2);
   console.log(`[ruling-4] auth-pair line exclusion: lines=${authPairExcludedLines} usd_amount=$${apDollars} parent_earlier=${authPairEarlierParents.size} parent_later_excluded_via_report=${authPairLaterParentExcluded.size} both_in_report_kept=${authPairKeptEarlierParents.size}`);
+  const rcDollars = (reportCodedExcludedUsdCents / 100).toFixed(2);
+  console.log(`[ruling-6] report-coded line exclusion: lines=${reportCodedExcludedLines} usd_amount=$${rcDollars} coded_parents_in_report=${reportCodedParents.size}`);
+  // Standing figure Kevin ruled 2026-08-28: how many API parents have
+  // NO parent-hex presence in the report at all. These are the auths
+  // whose settled twin (if any) landed under a DIFFERENT parent_hex,
+  // outside the exact-key bridge. If Rippling's rate of same-hex-both-
+  // sides drifts, this number moves; if it drifts nobody notices unless
+  // it is logged per run. Not a rule, just visibility.
+  const apiParentsAll = new Set(parentAgg.keys());
+  let apiParentsInReport = 0;
+  for (const p of apiParentsAll) if (reportSeen.has(p)) apiParentsInReport++;
+  const apiParentsNotInReport = apiParentsAll.size - apiParentsInReport;
+  const parityPct = apiParentsAll.size > 0
+    ? ((apiParentsInReport / apiParentsAll.size) * 100).toFixed(1)
+    : "n/a";
+  console.log(`[ruling-6] cross-source parity: api_parents=${apiParentsAll.size} in_report=${apiParentsInReport} not_in_report=${apiParentsNotInReport} (${parityPct}% same-hex both sides)`);
   console.log(`[ruling-5] zero-amount line exclusion: lines=${zeroAmountExcludedLines} parents=${zeroAmountParents.size}`);
   const tpDollars = (truncationPairExcludedUsdCents / 100).toFixed(2);
   console.log(`[trunc-pair] stored-ruling line exclusion: lines=${truncationPairExcludedLines} usd_amount=$${tpDollars} parents_ruled=${truncationPairRuledParents.size}`);
