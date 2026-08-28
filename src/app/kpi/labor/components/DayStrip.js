@@ -13,7 +13,7 @@
 // verbatim; the client never restates or reformats it (spec).
 
 import { useEffect, useRef, useState } from "react";
-import { fmt$, fmt$0, fmtDate, fmtCompactDollars, pickStripBand } from "../lib/formatting.js";
+import { fmt$, fmt$0, fmtDate, fmtCompactDollars } from "../lib/formatting.js";
 import {
   isoRange,
   aggregatePerDay,
@@ -90,14 +90,6 @@ function DayBar({
   // played-day OT% suffix. All optional; DayBar falls back to today's
   // simple caption if missing.
   scheduleByDate, accountTimezone, otByDate,
-  // 2026-08-27 abbreviation - `stripBand` is picked ONCE by
-  // DayStripPlot via pickStripBand() over every value on the strip
-  // (both spent + estimated). DayBar formats its own value in that
-  // band regardless of the value's own magnitude - the uniformity
-  // rule per owner ruling ("no $856 beside $1.5k beside $1,509 on
-  // the same strip"). Title attribute carries the exact whole-dollar
-  // figure so an operator can hover for precision.
-  stripBand,
   // #850 follow-up 2026-08-27: `estimateByDate` maps ISO -> base-rate
   // dollar amount from homestand_estimated.per_day. Ghost bars render
   // this value as their hero (e.g. `~$1,063`) rather than a placeholder
@@ -213,17 +205,19 @@ function DayBar({
       </div>
       <div className="kpi-wb-cap">
         {(() => {
-          // 2026-08-27 abbreviation - fmtCompactDollars picks band A/B/C
-          // per stripBand (see DayStripPlot for the picker). Title
-          // attribute carries the un-abbreviated whole-dollar figure so
-          // an operator hovers for precision - same pattern the date
-          // caption already uses (title={day.workDate}). Ghost + future
-          // + waiting states preserve their prefix/placeholder markers.
+          // 2026-08-28 abbreviation - per-value rule. Values under
+          // $1,000 render plain ($99, $508); at or above render
+          // abbreviated ($1.5k, $12k). Zero always renders "$0",
+          // never "$0.0k" - absence, not magnitude. Title carries
+          // the un-abbreviated whole-dollar figure so an operator
+          // hovers for precision on any abbreviated value (same
+          // pattern the date caption uses via title={day.workDate}).
+          // Ghost / future / waiting states preserve their prefix.
           let visible, exact;
           if (isFutureGame) {
             const est = estimateByDate?.get(day.workDate);
             if (est != null && est > 0) {
-              visible = `~${fmtCompactDollars(est, stripBand)}`;
+              visible = `~${fmtCompactDollars(est)}`;
               exact = `~${fmt$0(est)}`;
             } else {
               visible = "~$-";
@@ -233,7 +227,7 @@ function DayBar({
             visible = "-";
             exact = "";
           } else {
-            visible = fmtCompactDollars(amount, stripBand);
+            visible = fmtCompactDollars(amount);
             exact = fmt$0(amount);
           }
           return (
@@ -398,22 +392,12 @@ export function DayStripPlot({
     return max * 1.10;
   })();
 
-  // 2026-08-27 abbreviation - one band picked over EVERY value the
-  // strip will show, so every caption uses the same format. Owner
-  // rule: no `$856` beside `$1.5k` beside `$1,509` on the same
-  // strip. Consumers are:
-  //   - actual spend per day (perDay.amountX10000)
-  //   - estimated per day for ghost bars on upcoming stands
-  //     (estimateByDate)
-  // Both feed the max so a future ghost bar of $1,063 pulls a
-  // played-only strip into Band B even if its own spend maxes at
-  // $856.
-  const stripValues = [];
-  for (const d of perDay || []) stripValues.push(d.amountX10000 / 10000);
-  if (estimateByDate) {
-    for (const v of estimateByDate.values()) stripValues.push(v);
-  }
-  const stripBand = pickStripBand(stripValues);
+  // 2026-08-28 abbreviation - per-value rule (owner-reversed from
+  // the prior strip-uniformity design after live verify showed
+  // $0.0k on zero-days reads as broken). fmtCompactDollars is
+  // called per-caption inside DayBar with no strip-wide band; the
+  // band is a property of the value, not the strip. No prop to
+  // thread from here.
 
   return (
     <div
@@ -439,7 +423,6 @@ export function DayStripPlot({
           accountTimezone={accountTimezone}
           otByDate={otByDate}
           estimateByDate={estimateByDate}
-          stripBand={stripBand}
         />
       ))}
     </div>

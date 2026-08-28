@@ -1,26 +1,28 @@
 // Day-strip abbreviation formatter contract.
 //
-// Owner ruling 2026-08-27. CIN - OH HS 10 at 25 days = 28px per
-// column. Whole dollars ($1,509 = 33px) still overflowed by 5px on
-// eight captions. Option 1 approved: three-band compact-dollar
-// formatter (`$XXX`, `$X.Xk`, `$XXk`).
+// Owner ruling revised 2026-08-28. The prior strip-uniformity rule
+// (every caption on one strip picks the same band) was cut - it
+// assumed `$856` beside `$1.5k` would read as a bug, but live
+// verify on CIN - OH ?homestand=2026-07-27 (22 captions) showed the
+// opposite: a zero-dollar off-day rendering `$0.0k` reads as broken
+// while mixed conventions read fine. Owner ruled per-value.
 //
 // Contract:
-//   A1  fmtCompactDollars formats per band, correctly at boundaries
-//   A2  UNIFORMITY - every caption on one strip renders in the same
-//                    band. Picked by pickStripBand() over every
-//                    value the strip will show (spent + estimated),
-//                    applied to every caption. The rule that owner
-//                    ruled "most likely to break when someone adds
-//                    a value near a boundary".
-//   A3  Width - widest string per band fits the target column at
-//               the abbreviation-font size (--kpi-t-meta, 11px)
-//   A4  >= prefix - `>= $X.Xk` does NOT fit 28px. Named as a
-//                   FINDING, not a passing assertion - the >=
-//                   prefix cannot host on day-strip captions,
-//                   it lives on the What-it-cost card only.
+//   A1  fmtCompactDollars formats per value, correctly at boundaries
+//        - zero is always "$0"
+//        - |n| <   1,000  render plain "$XXX"
+//        - |n| >=  1,000  render abbreviated "$X.Xk" or "$XXk"
+//   A2  no caption ever renders any "$0.Xk" form (the specific
+//        failure the owner flagged)
+//   A3  Width - widest string fits the 28px column at
+//        --kpi-t-meta (11px) on the 25-day stand. Widest sub-$1,000
+//        plain string is "$999" (24.3px); confirm this against the
+//        target column.
+//   A4  >= prefix width - documented finding: the `>=` prefix
+//        cannot host on day-strip captions at 28px columns.
+//        Reserved for the What-it-cost card only.
 
-import { fmtCompactDollars, pickStripBand, fmt$0 } from "../../src/app/kpi/labor/lib/formatting.js";
+import { fmtCompactDollars, fmt$0 } from "../../src/app/kpi/labor/lib/formatting.js";
 
 let failures = 0;
 function assert(name, cond, extra) {
@@ -30,58 +32,60 @@ function assert(name, cond, extra) {
   if (extra !== undefined) console.log(`      ${JSON.stringify(extra)}`);
 }
 
-console.log("=== day-strip abbreviation contract ===\n");
+console.log("=== day-strip abbreviation contract (per-value) ===\n");
 
-// A1 - per-band correctness
+// A1 - per-value correctness at every boundary
 {
-  assert("A1a  band A: $234 -> $234",           fmtCompactDollars(234, "A") === "$234");
-  assert("A1b  band A: $999 -> $999",           fmtCompactDollars(999, "A") === "$999");
-  assert("A1c  band A: 0 -> $0",                fmtCompactDollars(0, "A") === "$0");
-  assert("A1d  band B: 1509 -> $1.5k",          fmtCompactDollars(1509, "B") === "$1.5k");
-  assert("A1e  band B: 856 -> $0.9k (rounded)", fmtCompactDollars(856, "B") === "$0.9k");
-  assert("A1f  band B: 9999 -> $10.0k",         fmtCompactDollars(9999, "B") === "$10.0k");
-  assert("A1g  band B: 0 -> $0.0k",             fmtCompactDollars(0, "B") === "$0.0k");
-  assert("A1h  band C: 15000 -> $15k",          fmtCompactDollars(15000, "C") === "$15k");
-  assert("A1i  band C: 47500 -> $48k (rounded)", fmtCompactDollars(47500, "C") === "$48k");
-  assert("A1j  band C: 999500 -> $1,000k",      fmtCompactDollars(999500, "C") === "$1,000k");
-  assert("A1k  null -> —",                      fmtCompactDollars(null, "B") === "—");
+  // zero always renders "$0" regardless of what else the strip contains
+  assert("A1a  0 -> $0 (absence, not magnitude)",   fmtCompactDollars(0) === "$0");
+  assert("A1b  -0 -> $0",                            fmtCompactDollars(-0) === "$0");
+
+  // sub-$1,000 renders plain
+  assert("A1c  1 -> $1 (never $0.0k)",               fmtCompactDollars(1) === "$1");
+  assert("A1d  99 -> $99",                           fmtCompactDollars(99) === "$99");
+  assert("A1e  234 -> $234",                         fmtCompactDollars(234) === "$234");
+  assert("A1f  508 -> $508 (owner's live example)",  fmtCompactDollars(508) === "$508");
+  assert("A1g  999 -> $999",                         fmtCompactDollars(999) === "$999");
+  // 999.4 rounds to 999 - stays plain because the value is under $1000
+  assert("A1h  999.4 -> $999",                       fmtCompactDollars(999.4) === "$999");
+
+  // boundary - $1,000 crosses into abbreviation
+  assert("A1i  1000 -> $1.0k (boundary)",            fmtCompactDollars(1000) === "$1.0k");
+  assert("A1j  1509 -> $1.5k",                       fmtCompactDollars(1509) === "$1.5k");
+  assert("A1k  9999 -> $10.0k",                      fmtCompactDollars(9999) === "$10.0k");
+
+  // Band C - $XXk, rounded to nearest thousand
+  assert("A1l  10000 -> $10k",                       fmtCompactDollars(10000) === "$10k");
+  assert("A1m  12000 -> $12k",                       fmtCompactDollars(12000) === "$12k");
+  assert("A1n  47500 -> $48k",                       fmtCompactDollars(47500) === "$48k");
+  assert("A1o  999500 -> $1,000k",                   fmtCompactDollars(999500) === "$1,000k");
+
+  // null preserved
+  assert("A1p  null -> —",                           fmtCompactDollars(null) === "—");
 }
 
-// A2 - UNIFORMITY within a strip. This is the failure mode Kevin
-// named as "most likely to break when someone adds a value near a
-// boundary". Any strip that mixes bands is a bug in the caller,
-// not the formatter - but we can verify the picker + formatter
-// COMPOSE to a uniform result for a given input set.
+// A2 - no caption ever renders any $0.Xk form. Comprehensive sweep
+// across values 0 to 999 (the range where the prior rule would
+// have produced $0.0k, $0.1k, $0.2k, etc when the strip's picked
+// band was B). Under the new rule every one of these renders plain.
 {
-  const scenarios = [
-    { name: "all under $1,000 (played prep + light game day)",       vals: [0, 234, 856, 700], want: "A", widest: "$856" },
-    { name: "spans the $1k boundary (typical played MLB game day)",  vals: [0, 234, 1509, 700], want: "B", widest: "$1.5k" },
-    { name: "high-OT stand (Kevin's HS 8 evidence)",                 vals: [0, 1414, 1560, 234], want: "B", widest: "$1.6k" },
-    { name: "spans the $10k boundary (aggregate view)",              vals: [0, 234, 1509, 12500], want: "C", widest: "$12k" },
-    { name: "ghost + played mixed (upcoming stand)",                 vals: [0, 234, 1509, 1063 /* ghost estimate */], want: "B", widest: "$1.5k" },
-  ];
-  for (const s of scenarios) {
-    const band = pickStripBand(s.vals);
-    assert(`A2  ${s.name}: band=${band} (want ${s.want})`, band === s.want, { vals: s.vals, band });
-    // Every value renders in the picked band - no exception.
-    const outputs = s.vals.map(v => fmtCompactDollars(v, band));
-    const bandPattern = band === "A" ? /^\$\d+$/
-                      : band === "B" ? /^\$\d+\.\d+k$/
-                      : /^\$\d+k$/;
-    const nonConforming = outputs.filter(o => !bandPattern.test(o));
-    assert(`A2  ${s.name}: every caption matches band pattern`, nonConforming.length === 0, nonConforming);
-    // Widest observed matches the expected widest string.
-    const widestObserved = outputs.reduce((m, s) => s.length > m.length ? s : m, "");
-    // A soft check - "at least one caption reaches the band's widest form".
-    // We assert the OBSERVED widest is at least as wide as one of these.
+  const forbidden = /^\$0\.\d+k$/;
+  const offenders = [];
+  for (let v = 0; v < 1000; v++) {
+    const s = fmtCompactDollars(v);
+    if (forbidden.test(s)) offenders.push({ v, s });
   }
+  assert(
+    `A2  no value in [0, 999] renders any $0.Xk form (${offenders.length} offenders)`,
+    offenders.length === 0,
+    offenders.slice(0, 10),
+  );
+  // Also - zero itself never produces $0.0k regardless.
+  assert("A2  fmtCompactDollars(0) === '$0' (never $0.0k)", fmtCompactDollars(0) === "$0");
 }
 
-// A3 - Width. Character-count approximation at 11px numeric font
-// (Inter tabular). Per-char widths:
-//   $  4.5px    digit  6.6px    .  2.5px    ,  2.5px    k  5.5px
-//   space 3px  ~  5px  >=  8px (glyph width)
-// 28px column budget. Fits with 2px margin: <= 26px.
+// A3 - Width at 11px numeric font (Inter tabular). Per-char
+// approximations calibrated to Kevin's `$1,509` = 33px measurement.
 function width11px(s) {
   let w = 0;
   for (const ch of s) {
@@ -93,50 +97,41 @@ function width11px(s) {
     else if (ch === "≥")  w += 8.0;
     else if (ch === " ")  w += 3.0;
     else if (/\d/.test(ch)) w += 6.6;
-    else                  w += 6.6;   // fallback
+    else                  w += 6.6;
   }
   return w;
 }
 {
-  const columnPx = 28;      // Kevin's HS 10 25-day case
-  const widestA = "$999";
-  const widestB = "$9.9k";
-  const widestC = "$99k";   // MLB stand hero rarely > $99k; $XXk is 4-char max in normal ranges
-  console.log(`  reference: column=${columnPx}px  Band A widest="${widestA}"=${width11px(widestA).toFixed(1)}px  Band B widest="${widestB}"=${width11px(widestB).toFixed(1)}px  Band C widest="${widestC}"=${width11px(widestC).toFixed(1)}px`);
-  assert(`A3a  Band A widest "${widestA}" fits ${columnPx}px column`, width11px(widestA) <= columnPx);
-  assert(`A3b  Band B widest "${widestB}" fits ${columnPx}px column`, width11px(widestB) <= columnPx);
-  assert(`A3c  Band C widest "${widestC}" fits ${columnPx}px column`, width11px(widestC) <= columnPx);
-  // Ghost bar prefix `~$X.Xk` on Band-B stands at 25-day column
-  // width. This is a FINDING, not a hard assertion - the widest
-  // possible ghost caption in Band B (`~$9.9k` = 30.7px) overflows
-  // the 28px column by 2.7px. Owner ruling covers this: the CSS
-  // ellipsis fallback (`overflow: hidden; text-overflow: ellipsis`
-  // on .kpi-wb-cap-value in kpi.css) catches it as `~$9.9…`. That
-  // is the approved safety net.
-  //
-  // Fires today only on a hypothetical future 25-day MLB stand with
-  // a ghost estimate above ~$5k. Current portfolio: no future stand
-  // exceeds 22 days (~32px columns), where `~$9.9k` fits.
-  const ghost = "~$9.9k";
-  const ghostW = width11px(ghost);
-  const ghostFits = ghostW <= columnPx;
-  console.log(`  A3d finding: Ghost prefix "${ghost}" at ${columnPx}px column = ${ghostW.toFixed(1)}px ${ghostFits ? "(fits)" : "(overflows by " + (ghostW - columnPx).toFixed(1) + "px - CSS ellipsis fallback catches it)"}`);
-  // Not asserting - the CSS fallback is the design's answer for
-  // this edge, per the owner ruling on option 1's ellipsis clause.
+  const columnPx = 28;   // CIN - OH HS 10 25-day case
+  const widestPlain      = "$999";     // widest sub-$1,000
+  const widestAbbrevB    = "$9.9k";    // widest $X.Xk
+  const widestAbbrevC    = "$99k";     // realistic MLB stand max
+  console.log(`  reference: column=${columnPx}px  widestPlain="${widestPlain}"=${width11px(widestPlain).toFixed(1)}px  widestAbbrevB="${widestAbbrevB}"=${width11px(widestAbbrevB).toFixed(1)}px  widestAbbrevC="${widestAbbrevC}"=${width11px(widestAbbrevC).toFixed(1)}px`);
+  assert(`A3a  widest plain "${widestPlain}" fits ${columnPx}px column`,     width11px(widestPlain) <= columnPx);
+  assert(`A3b  widest $X.Xk "${widestAbbrevB}" fits ${columnPx}px column`,   width11px(widestAbbrevB) <= columnPx);
+  assert(`A3c  widest $XXk "${widestAbbrevC}" fits ${columnPx}px column`,    width11px(widestAbbrevC) <= columnPx);
+
+  // Ghost prefix `~$X` finding. `~$999` overflows 28px by 1.3px;
+  // `~$9.9k` overflows by 2.7px. Both catch on the CSS ellipsis
+  // fallback. Reachable only on a hypothetical future 25-day MLB
+  // stand; the current portfolio caps future stands at 22 days
+  // (~32px columns, both fit). Documented, not asserted.
+  const ghostPlain     = "~$999";
+  const ghostAbbrev    = "~$9.9k";
+  console.log(`  A3d finding: ghost prefix at ${columnPx}px column`);
+  console.log(`    "${ghostPlain}"  = ${width11px(ghostPlain).toFixed(1)}px  ${width11px(ghostPlain) <= columnPx ? "fits" : "overflows by " + (width11px(ghostPlain) - columnPx).toFixed(1) + "px"}`);
+  console.log(`    "${ghostAbbrev}" = ${width11px(ghostAbbrev).toFixed(1)}px  ${width11px(ghostAbbrev) <= columnPx ? "fits" : "overflows by " + (width11px(ghostAbbrev) - columnPx).toFixed(1) + "px"}`);
+  console.log(`    CSS ellipsis fallback on .kpi-wb-cap-value catches both if they land.`);
 }
 
-// A4 - >= prefix width. Owner-requested check. `>= $1.5k` is 7
-// characters plus space. At 11px this projects to ~34px which does
-// NOT fit a 28px column. This is a FINDING, not a passing assertion:
-// the >= prefix cannot host on day-strip captions at the widest
-// stand's density. Reserved for the What-it-cost card.
+// A4 - >= prefix cannot host on day-strip captions. Owner-requested
+// check. Kept for parity with the previous probe version.
 {
   const columnPx = 28;
   const geCases = [
-    { s: "≥ $999",   band: "A" },
-    { s: "≥ $9.9k",  band: "B" },
-    { s: "≥ $99k",   band: "C" },
-    { s: "≥$9.9k",   band: "B (no space)" },
+    { s: "≥ $999",  band: "plain" },
+    { s: "≥ $9.9k", band: "abbrev-B" },
+    { s: "≥ $99k",  band: "abbrev-C" },
   ];
   console.log(`\n  A4 finding: >= prefix width vs ${columnPx}px column`);
   let geHostable = true;
@@ -147,7 +142,7 @@ function width11px(s) {
     console.log(`    "${c.s}" (${c.band}) = ${w.toFixed(1)}px  ${fits ? "fits" : "DOES NOT FIT"}`);
   }
   assert(
-    `A4  >= prefix cannot host on day-strip captions at 28px columns (Kevin-owner finding)`,
+    `A4  >= prefix cannot host on day-strip captions at 28px columns`,
     !geHostable,
     { note: "expected failure: if any of the >= cases fits, revisit the design. Today all overflow, so the >= prefix stays on the What-it-cost card hero only." },
   );
