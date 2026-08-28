@@ -2090,3 +2090,12 @@
   border: 0;
   background: transparent;
 }
+
+/* 2026-08-28 freshness popover - the "· behind" marker.  Purchasing's
+   popover has three sources, so the operator needs to see which one is
+   trailing at a glance.  Amber tint uses the existing --amber-700 token
+   from the palette; no new colours. */
+.kpi-app .kpi-fresh-pop-marker {
+  color: var(--amber-700, #b45309);
+  font-weight: 600;
+}
