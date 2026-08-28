@@ -150,6 +150,29 @@ Beyond `billing_model`, two orthogonal booleans on `accounts` gate the schedule 
 - **Migration consideration:** Move `REVENUE_FLEX_ACCOUNTS` from code constant to a column on the `accounts` table (e.g. `is_revenue_flex` boolean OR a `budget_model` enum with values `fixed` and `revenue_ratio`). In Postgres, the adjusted budget should be a computed column or VIEW: for revenue-flex accounts, `budget = (SELECT sold_revenue FROM labor_sold_revenue WHERE ...) * (labor_ratio FROM labor_budgets)`. The two-stage submission flow (revenue first, then labor) should be a single transaction.
 - **Verification:** After migration, for `TXR - TX - V`, submit revenue $4,500 against a homestand with labor_ratio 0.20 - confirm the adjusted budget shown in the chef UI = $900. Then submit $850 actual labor and confirm variance shows +$50.
 
+### Labor earning-type bucket names are Rippling artifacts
+
+- **What:** The `labor_actuals_weekly` schema exposes four hour buckets: `hours_regular`, `hours_overtime`, `hours_double_time`, `hours_premium_other`. These names are Rippling-payroll bucket labels, not KitchFix taxonomy. In particular, `hours_double_time` does not imply KitchFix runs multiple double-time earning types; it is a bucket that happens to be fed by exactly one earning type.
+- **Mapping (as of 2026-08-28):** `earning_type_map` has 5 rows total. Full contents:
+
+| bucket | multiplier | merged_earning_type_name |
+|---|---|---|
+| `regular` | 1x | Base Pay |
+| `regular` | 1x | Regular |
+| `overtime` | 1.5x | 1.5x Overtime |
+| `overtime` | 1.5x | Overtime(1.5x Base) |
+| `double_time` | 2x | Holiday Double Rate |
+
+- **Consequence for the labor board:** The WeekTable's "Holiday 2x" column renders `w.hours_double_time`. That is correct - `hours_double_time` is fed by exactly one Rippling earning type (`Holiday Double Rate`, 2x), so the column label and the source agree. The bucket name is a Rippling artifact, not a claim that non-holiday double-time exists at KitchFix.
+- **Consequence for `hours_premium_other`:** Zero earning types route to this bucket. It exists only as the D37 unmapped-fallback path in `src/lib/labor/deriveActuals.js:426` - if a new earning type appears in payroll and is not yet in `earning_type_map`, its hours land here AND upsert into `earning_type_unmapped` for visibility.
+- **Audit result 2026-08-28** (`scripts/probes/_probe_earning_types_unmapped_audit.mjs`): scanned 11,464 rows of `rippling_raw_pay_segments_latest`; 5 distinct earning types observed, all 5 are in `earning_type_map`, `earning_type_unmapped` table is empty. **The map is definitionally complete for this fiscal year.** If sick pay, vacation pay, or a holiday-1.5x earning type ever needs to appear in the labor board, it starts by adding a row to Rippling's earning-type list, then the derive job auto-flags it in `earning_type_unmapped` on the next run, and Kevin adds the corresponding `earning_type_map` row.
+- **Implication - UNRESOLVED as of 2026-08-28:** no sick pay, vacation pay, PTO, or holiday-1.5x has appeared as a pay segment on ANY account this fiscal year. This is either a policy fact (KitchFix does not run those categories through Rippling's earning-type system on labor-attributed accounts - PTO may live in a separate time-off surface that never creates pay segments; the account labor board is only "hours worked at this site") OR a gap (a category that should be surfaced is being silently omitted). **Mariela is the person to ask.** The distinction matters: if it is a policy fact, this note should be updated to say so and the concern closes; if it is a gap, `earning_type_map` and possibly the WeekTable columns need to change to route those hours where they belong. Do not assume the current state is correct until the question is asked and the answer is written here.
+- **Where:**
+  - Derive routing: `src/lib/labor/deriveActuals.js` §D37 comment (line 28) + bucket dispatch (line 429).
+  - Table label: `src/app/kpi/labor/components/WeekTable.js:716` ("Holiday 2x") + render `w.hours_double_time` (line 966).
+  - Schema field: `labor_actuals_weekly.hours_double_time` (also `dollars_double_time`).
+- **Documented:** 2026-08-28 after Kevin observed CIN - AZ FYTD `hours_double_time = 69`, table "Holiday 2x" = 68.79, and asked whether the column label was right or the mapping was wrong. Mapping is right.
+
 ### Season Tracker streak calculation
 - **What:** A chef's "streak" is the count of consecutive homestands ending with the most recent submission where actual labor spent was at or under budget envelope (i.e. variance >= 0).
 - **Rules:**
