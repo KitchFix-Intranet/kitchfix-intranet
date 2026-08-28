@@ -24,7 +24,14 @@
 // or an email.
 
 import { resolveWorkerName } from "./resolveName";
+import { fetchAllIn } from "../rippling/paginate";
 
+// 2026-08-28 pagination sweep: both .in() reads now go through
+// fetchAllIn. Prior bare .in() failed with 400 Bad Request from URL
+// overflow when uniq exceeded ~700 (portfolio ALL queries), and the
+// existing early-return-on-error left workerMeta empty - so every
+// hourly cell rendered as `#rippling_id` instead of a name. Not
+// silent-truncation but the same operator-visible bug shape.
 export async function resolveWorkerMeta(supa, workerIds) {
   const workerMeta = {};
   let resolvedNames = 0;
@@ -32,26 +39,27 @@ export async function resolveWorkerMeta(supa, workerIds) {
   const uniq = [...new Set((workerIds || []).filter(Boolean))];
   if (uniq.length === 0) return { workerMeta, resolvedNames, usersReachable };
 
-  const w = await supa
-    .from("rippling_raw_workers_latest")
-    .select("payload")
-    .in("rippling_id", uniq);
-  if (w.error) return { workerMeta, resolvedNames, usersReachable };
+  let workerRows;
+  try {
+    workerRows = await fetchAllIn(supa, "rippling_raw_workers_latest", "payload", {
+      keyCol: "rippling_id", keyValues: uniq,
+    });
+  } catch { return { workerMeta, resolvedNames, usersReachable }; }
 
-  const userIds = [...new Set((w.data || []).map(r => r.payload?.user_id).filter(Boolean))];
+  const userIds = [...new Set(workerRows.map(r => r.payload?.user_id).filter(Boolean))];
   const userByRipplingId = new Map();
   if (userIds.length > 0) {
-    const u = await supa
-      .from("rippling_raw_users_latest")
-      .select("rippling_id, payload")
-      .in("rippling_id", userIds);
-    if (!u.error) {
+    let userRows;
+    try {
+      userRows = await fetchAllIn(supa, "rippling_raw_users_latest", "rippling_id, payload", {
+        keyCol: "rippling_id", keyValues: userIds,
+      });
       usersReachable = true;
-      for (const r of u.data || []) userByRipplingId.set(r.rippling_id, r.payload || {});
-    }
+    } catch { userRows = []; }
+    for (const r of userRows) userByRipplingId.set(r.rippling_id, r.payload || {});
   }
 
-  for (const r of w.data || []) {
+  for (const r of workerRows) {
     const p = r.payload || {};
     const userPayload = p.user_id ? userByRipplingId.get(p.user_id) : null;
     const title = p.title ? String(p.title).trim() : null;

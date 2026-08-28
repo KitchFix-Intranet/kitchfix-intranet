@@ -245,11 +245,16 @@ if (args.dryRun) {
 
 // ─── 4. Summary counts (no PII) ──────────────────────────────────────
 if (!args.dryRun) {
-  const q = await supa
-    .from("people")
-    .select("account_key, status, is_manager, is_salaried, worker_class, worker_class_source, last_synced_at");
-  if (q.error) { console.error(`summary select failed: ${q.error.message}`); process.exit(2); }
-  const all = q.data || [];
+  // 2026-08-28 pagination sweep: bare .select() capped at 1000 while
+  // people has 1,129 rows, so every prior sync log printed truncated
+  // totals ("total: 1000") without any indication it was short. No
+  // downstream data corruption (log-only) but the operator-facing
+  // summary lied - fixed via fetchAllOffset which paginates the read.
+  let all;
+  try {
+    all = await fetchAllOffset(supa, "people",
+      "account_key, status, is_manager, is_salaried, worker_class, worker_class_source, last_synced_at");
+  } catch (e) { console.error(`summary select failed: ${e.message}`); process.exit(2); }
   const total = all.length;
   const active = all.filter(r => r.status === "ACTIVE").length;
   const managerCount = all.filter(r => r.is_manager).length;

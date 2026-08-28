@@ -50,6 +50,7 @@ import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerName } from "@/lib/kpi/resolveName";
 import { PORTFOLIO_KEYS, resolvePortfolioMembers } from "@/lib/kpi/portfolioMembers";
+import { fetchAllOffset, fetchAllIn } from "@/lib/rippling/paginate";
 
 const D26_SALARIED_ONLY = new Set(["CIN - KY", "TBJ - NY"]);
 const D17_OUT_OF_SCOPE = new Set(["CORP"]);
@@ -140,54 +141,66 @@ export async function GET(request) {
     });
   }
 
-  const actuals = await supa
-    .from("labor_actuals_latest")
-    .select("account_key, worker_id, week_label, line_code, week_start, week_end, fiscal_year, period_no, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, segment_count, entry_count, coverage_state, derived_at")
-    .eq("account_key", account)
-    .lte("week_start", end)
-    .gte("week_end", start)
-    .order("worker_id", { ascending: true })
-    .order("week_start", { ascending: true });
-  if (actuals.error) return NextResponse.json(safeError("labor_actuals", actuals.error), { status: 500 });
-
-  let rows = actuals.data || [];
+  // 2026-08-28 pagination sweep: paginated via fetchAllOffset so the
+  // CSV cannot silently truncate at 1000 rows. Single-account FYTD
+  // (e.g., CIN - AZ mid-season) exceeds 1000 (worker, week, line)
+  // rows; the prior bare select capped the export at 1000 and the
+  // download opened in Excel with no indicator the tail was missing.
+  let rows;
+  try {
+    rows = await fetchAllOffset(supa, "labor_actuals_latest",
+      "account_key, worker_id, week_label, line_code, week_start, week_end, fiscal_year, period_no, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, segment_count, entry_count, coverage_state, derived_at",
+      [
+        (q) => q.eq("account_key", account),
+        (q) => q.lte("week_start", end),
+        (q) => q.gte("week_end", start),
+        (q) => q.order("worker_id", { ascending: true }).order("week_start", { ascending: true }),
+      ]);
+  } catch (e) {
+    return NextResponse.json(safeError("labor_actuals", { message: e.message }), { status: 500 });
+  }
   if (workersFilter) rows = rows.filter(r => workersFilter.has(r.worker_id));
 
+  // 2026-08-28 pagination sweep: .in() on rippling_raw_workers_latest
+  // used to fail with 400 Bad Request from URL overflow when the
+  // worker set exceeded ~700 (portfolio queries). The catch left the
+  // workerMeta map empty and every cell rendered as raw #rippling_id.
+  // fetchAllIn chunks the .in() key list; same for the users hop.
   const workerIds = [...new Set(rows.map(r => r.worker_id))];
   const workerMeta = new Map();
   if (workerIds.length > 0) {
-    const w = await supa
-      .from("rippling_raw_workers_latest")
-      .select("payload")
-      .in("rippling_id", workerIds);
-    if (!w.error) {
-      // Join user_id -> users. Same shape as the read route.
-      const userIds = [...new Set((w.data || []).map(r => r.payload?.user_id).filter(Boolean))];
-      const userByRipplingId = new Map();
-      if (userIds.length > 0) {
-        const u = await supa
-          .from("rippling_raw_users_latest")
-          .select("rippling_id, payload")
-          .in("rippling_id", userIds);
-        if (!u.error) {
-          for (const r of u.data || []) userByRipplingId.set(r.rippling_id, r.payload || {});
-        }
-      }
-      for (const r of w.data || []) {
-        const p = r.payload || {};
-        const userPayload = p.user_id ? userByRipplingId.get(p.user_id) : null;
-        // B3 hard guard: when redact=1 we drop the resolved name at
-        // ingest time so no downstream code path (existing or added
-        // later) can inadvertently write it into a cell. Number + title
-        // are the only worker fields the redacted export ever sees.
-        const name = redact ? null : resolveWorkerName(p, userPayload);
-        workerMeta.set(p.id, {
-          number: p.number ?? null,
-          name,
-          // C4.5: trim title strings. Rippling returns some with trailing spaces.
-          title: p.title ? String(p.title).trim() : null,
+    let workerRows = [];
+    try {
+      workerRows = await fetchAllIn(supa, "rippling_raw_workers_latest", "payload", {
+        keyCol: "rippling_id", keyValues: workerIds,
+      });
+    } catch { /* leave workerMeta empty on error - existing shape */ }
+    // Join user_id -> users. Same shape as the read route.
+    const userIds = [...new Set(workerRows.map(r => r.payload?.user_id).filter(Boolean))];
+    const userByRipplingId = new Map();
+    if (userIds.length > 0) {
+      let userRows = [];
+      try {
+        userRows = await fetchAllIn(supa, "rippling_raw_users_latest", "rippling_id, payload", {
+          keyCol: "rippling_id", keyValues: userIds,
         });
-      }
+      } catch { /* leave userByRipplingId empty on error */ }
+      for (const r of userRows) userByRipplingId.set(r.rippling_id, r.payload || {});
+    }
+    for (const r of workerRows) {
+      const p = r.payload || {};
+      const userPayload = p.user_id ? userByRipplingId.get(p.user_id) : null;
+      // B3 hard guard: when redact=1 we drop the resolved name at
+      // ingest time so no downstream code path (existing or added
+      // later) can inadvertently write it into a cell. Number + title
+      // are the only worker fields the redacted export ever sees.
+      const name = redact ? null : resolveWorkerName(p, userPayload);
+      workerMeta.set(p.id, {
+        number: p.number ?? null,
+        name,
+        // C4.5: trim title strings. Rippling returns some with trailing spaces.
+        title: p.title ? String(p.title).trim() : null,
+      });
     }
   }
 
@@ -441,16 +454,26 @@ async function handlePortfolioExport({ supa, session, account, start, end, viewN
 
   // 2. Actuals across all members. Same select set the read route
   // uses (plus dollar splits for coverage-flag transparency).
-  const actualsQ = await supa
-    .from("labor_actuals_latest")
-    .select("account_key, worker_id, week_start, week_end, fiscal_year, period_no, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, coverage_state, derived_at")
-    .in("account_key", memberKeys)
-    .lte("week_start", end)
-    .gte("week_end", start)
-    .order("account_key", { ascending: true })
-    .order("week_start", { ascending: true });
-  if (actualsQ.error) return NextResponse.json(safeError("labor_actuals_portfolio", actualsQ.error), { status: 500 });
-  let rows = actualsQ.data || [];
+  //
+  // 2026-08-28 pagination sweep - CRITICAL: this is the portfolio CSV
+  // export path. FYTD across all 11 accounts returns ~2,419 rows today;
+  // the prior bare select capped at 1,000 and the CSV downloaded to
+  // Excel with no indication the tail was missing. Joe/Josh workbooks
+  // built from a truncated CSV silently short every downstream figure.
+  // fetchAllOffset with .in() as a filter chunk paginates the response.
+  let rows;
+  try {
+    rows = await fetchAllOffset(supa, "labor_actuals_latest",
+      "account_key, worker_id, week_start, week_end, fiscal_year, period_no, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, coverage_state, derived_at",
+      [
+        (q) => q.in("account_key", memberKeys),
+        (q) => q.lte("week_start", end),
+        (q) => q.gte("week_end", start),
+        (q) => q.order("account_key", { ascending: true }).order("week_start", { ascending: true }),
+      ]);
+  } catch (e) {
+    return NextResponse.json(safeError("labor_actuals_portfolio", { message: e.message }), { status: 500 });
+  }
   if (workersFilter) rows = rows.filter(r => workersFilter.has(r.worker_id));
 
   // 3. Group by (account_key, week_start).

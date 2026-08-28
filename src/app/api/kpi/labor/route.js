@@ -28,6 +28,7 @@ import { auth } from "@/lib/auth";
 import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta";
 import { resolvePortfolioMembers } from "@/lib/kpi/portfolioMembers";
+import { fetchAllOffset } from "@/lib/rippling/paginate";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
@@ -506,8 +507,15 @@ export async function GET(request) {
   try { allHomestands = await listHomestands(supa, account, 2026, { includeSalary }); }
   catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
   if (allHomestands && allHomestands.length > 0) {
-    const [dailyQ, schedQ] = await Promise.all([
-        supa.from("labor_actuals_daily")
+    // 2026-08-28 pagination sweep. labor_actuals_daily is 4,792 rows
+    // globally (measured); a mature single account has ~880 daily rows
+    // today - 12% off the 1000 cap. sc_homestand_schedule is 1,146 rows
+    // globally; multi-year single-account reads sit close to the cap.
+    // Both go through fetchAllOffset with .eq() as a filter.
+    let dailyRows, schedRows;
+    try {
+      [dailyRows, schedRows] = await Promise.all([
+        fetchAllOffset(supa, "labor_actuals_daily",
           // homestand-redesign 2026-08-26: extend the daily select to
           // include per-worker OT hours so the played-day captions on
           // the day-strip can render the regular/OT split
@@ -515,9 +523,9 @@ export async function GET(request) {
           // by work_date to compute the per-day OT %. Adds three
           // fields to the payload; the existing per-day amount
           // aggregation (aggregatePerDay) already ignores extras.
-          .select("work_date, amount, hours_regular, hours_overtime, dollars_overtime")
-          .eq("account_key", account),
-        supa.from("sc_homestand_schedule")
+          "work_date, amount, hours_regular, hours_overtime, dollars_overtime",
+          [(q) => q.eq("account_key", account)]),
+        fetchAllOffset(supa, "sc_homestand_schedule",
           // homestand-redesign 2026-08-26: fetch game_time + opponent
           // so the day-strip caption can carry `vs BAL · 6:45p` under
           // each game bar. game_time is TIMESTAMPTZ (UTC); client
@@ -525,13 +533,12 @@ export async function GET(request) {
           // below). NO fallback - owner ruling: if timezone is null,
           // render the date without a time rather than guessing UTC,
           // because a wrong first pitch is worse than no first pitch.
-          .select("service_date, day_type, day_night, game_time, opponent")
-          .eq("account_key", account),
+          "service_date, day_type, day_night, game_time, opponent",
+          [(q) => q.eq("account_key", account)]),
       ]);
-      if (dailyQ.error) return NextResponse.json(safeError("homestand_daily", dailyQ.error), { status: 500 });
-      if (schedQ.error) return NextResponse.json(safeError("homestand_schedule", schedQ.error), { status: 500 });
-      const dailyRows = dailyQ.data || [];
-      const schedRows = schedQ.data || [];
+    } catch (e) {
+      return NextResponse.json(safeError("homestand_daily_or_schedule", { message: e.message }), { status: 500 });
+    }
 
       // Per-stand HOURLY actual (myriadth accumulator, cent-rounded per
       // stand - same discipline the bank uses per owner ruling
@@ -909,17 +916,22 @@ export async function GET(request) {
       .map(([p, b]) => ({ fiscal_year: 2026, period_no: parseInt(p, 10), start: b.start, end: b.end }))
       .sort((a, b) => a.period_no - b.period_no);
 
-    // 5. unattributed / unmapped - global, unchanged.
-    const [unattr, unmapped] = await Promise.all([
-      supa.from("labor_unattributed")
-        .select("reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes")
-        .order("amount", { ascending: false }),
-      supa.from("earning_type_unmapped")
-        .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
-        .is("resolved_at", null)
-        .order("total_amount", { ascending: false }),
-    ]);
-    if (unattr.error) return NextResponse.json(safeError("labor_unattributed", unattr.error), { status: 500 });
+    // 5. unattributed / unmapped - global. Paginated 2026-08-28 for
+    // labor_unattributed (0 rows today but grow-limit); earning_type
+    // _unmapped stays as-is (5-row map, empty unmapped table).
+    let unattrRowsAgg, unmapped;
+    try {
+      unattrRowsAgg = await fetchAllOffset(supa, "labor_unattributed",
+        "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
+        [(q) => q.order("amount", { ascending: false })]);
+    } catch (e) {
+      return NextResponse.json(safeError("labor_unattributed", { message: e.message }), { status: 500 });
+    }
+    unmapped = await supa.from("earning_type_unmapped")
+      .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
+      .is("resolved_at", null)
+      .order("total_amount", { ascending: false });
+    const unattr = { data: unattrRowsAgg };
 
     // 6. Aggregate budget_periods - resolve each member via 4.5, sum
     // per period. V37-5 - revenue-flex accounts (TXR - TX - V) now
@@ -1110,21 +1122,36 @@ export async function GET(request) {
     return NextResponse.json(bodyD26);
   }
 
-  const actuals = await supa
-    .from("labor_actuals_latest")
-    .select("account_key, worker_id, week_label, line_code, week_start, week_end, fiscal_year, period_no, week_source, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, segment_count, entry_count, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at, source_run")
-    .eq("account_key", account)
-    .lte("week_start", end)
-    .gte("week_end", start)
-    .order("week_start", { ascending: true })
-    .order("worker_id",  { ascending: true });
-  if (actuals.error) return NextResponse.json(safeError("labor_actuals", actuals.error), { status: 500 });
+  // 2026-08-28 pagination sweep. Single-account board over the URL
+  // date range - FYTD for a large-roster account exceeds 1000 rows.
+  // Prior bare select silently truncated; fetchAllOffset paginates.
+  let actualsRows;
+  try {
+    actualsRows = await fetchAllOffset(supa, "labor_actuals_latest",
+      "account_key, worker_id, week_label, line_code, week_start, week_end, fiscal_year, period_no, week_source, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, segment_count, entry_count, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at, source_run",
+      [
+        (q) => q.eq("account_key", account),
+        (q) => q.lte("week_start", end),
+        (q) => q.gte("week_end", start),
+        (q) => q.order("week_start", { ascending: true }).order("worker_id", { ascending: true }),
+      ]);
+  } catch (e) {
+    return NextResponse.json(safeError("labor_actuals", { message: e.message }), { status: 500 });
+  }
+  const actuals = { data: actualsRows };
 
-  const unattr = await supa
-    .from("labor_unattributed")
-    .select("reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes")
-    .order("amount", { ascending: false });
-  if (unattr.error) return NextResponse.json(safeError("labor_unattributed", unattr.error), { status: 500 });
+  // labor_unattributed is 0 rows today (2026-08-28); paginating
+  // pre-emptively so a future growth spike does not silently drop the
+  // tail of the by-amount ordering.
+  let unattrRows;
+  try {
+    unattrRows = await fetchAllOffset(supa, "labor_unattributed",
+      "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
+      [(q) => q.order("amount", { ascending: false })]);
+  } catch (e) {
+    return NextResponse.json(safeError("labor_unattributed", { message: e.message }), { status: 500 });
+  }
+  const unattr = { data: unattrRows };
 
   // V40 BUG 5 - name resolution extracted to resolveWorkerMeta so the
   // salary path can call it too. Prior inlined block was byte-identical
