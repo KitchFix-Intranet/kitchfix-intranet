@@ -754,9 +754,22 @@ async function loadLedgerRows(supa, { members, start, end, glLineCode, glLikePre
 }
 
 async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
-  // Uncoded card charges - rippling_spend rows with gl_line_code IS NULL.
-  // Same population as `pending` but returns per-charge rows instead of
-  // the dollar+count summary.
+  // Uncoded card charges - rippling_spend rows with gl_line_code IS NULL
+  // PLUS report-only pending rows (parents in rippling_report_only_pending_v1
+  // that have not yet landed in purchasing_actuals).
+  //
+  // R16 P0 (owner ruling 2026-08-28): before this change the list walked
+  // purchasing_actuals only, while the hero (board.pending) added report-
+  // only pending via mergePending().  That produced the 222 vs 219 gap on
+  // ALL FYTD - hero counted the report-only slice, list didn't.  The fix:
+  // ship both slices in one row set so hero, footer and drill agree.
+  // Removing the slice from the hero would understate real exposure -
+  // report-only rows are exactly what yesterday's ingest lane was built
+  // to bring onto the board.
+  //
+  // No double-count risk: the report-only view excludes parents already
+  // seen by the API (precedence rule, migration-8).  See
+  // src/app/kpi/purchasing/lib/precedence.js for the invariant.
   const rows = [];
   const PS = V6_PAGE_DEFAULT;
   for (const memberChunk of chunk(members, IN_CHUNK)) {
@@ -780,8 +793,33 @@ async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
       from += PS;
     }
   }
-  const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const totalCount = rows.length;
+  // R16 P0 - parallel walk of the report-only view.  Uses the same
+  // (account_key, date-window) chunking as loadReportOnlyPending, so the
+  // count/amount this produces exactly matches the aggregate that hero
+  // adds via mergePending().  CORP is filtered out at the site of the
+  // preamble Promise.all; we keep the same filter here for parity.
+  const reportRows = [];
+  const membersNoCorp = members.filter(m => m !== "CORP");
+  for (const memberChunk of chunk(membersNoCorp, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const r = await supa.from("rippling_report_only_pending_v1")
+        .select("parent_txn_id, account_key, purchased_at, amount, category, work_location")
+        .in("account_key", memberChunk)
+        .gte("purchased_at", start)
+        .lte("purchased_at", end)
+        .order("parent_txn_id", { ascending: true })
+        .range(from, from + PS - 1);
+      if (r.error) return { error: r.error };
+      const data = r.data || [];
+      for (const row of data) reportRows.push(row);
+      if (data.length < PS) break;
+      from += PS;
+    }
+  }
+  const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0)
+                    + reportRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalCount = rows.length + reportRows.length;
   // Operator category (the label the operator picked in Rippling)
   // lives on rippling_raw_spend_lines_latest as `category_id`, and the
   // human label lives on `spend_category_map.category_label`. Join
@@ -808,7 +846,7 @@ async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
       for (const row of cr.data || []) catLabelMap.set(row.category_id, row.category_label || null);
     }
   }
-  const enriched = rows.map(r => {
+  const enrichedApi = rows.map(r => {
     const rawId = (r.source_line_id || "").replace(/^rippling_spend:/, "");
     const catId = rawCatIdMap.get(rawId) || null;
     return {
@@ -818,8 +856,27 @@ async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
       merchant: r.vendor_or_merchant || null,
       category: catId ? (catLabelMap.get(catId) || null) : null,
       gl_line_code: null,   // uncoded by definition
+      source: "api",
     };
-  }).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  });
+  // R16 P0 - report-only rows carry `purchased_at`, `amount`, `category`
+  // and `work_location` from the CSV.  They do not carry a merchant
+  // name (the ingest lane hasn't matched them yet), so `merchant` is
+  // null; the client's `needsAttention` gate already flags null-merchant
+  // rows, so report-only rows read as "unknown merchant" - accurate.
+  // `source: "report_only"` marks their origin so future UI can label
+  // them if wanted.
+  const enrichedReport = reportRows.map(r => ({
+    account_key: r.account_key,
+    txn_date: r.purchased_at,
+    amount: Math.round(Number(r.amount || 0) * 100) / 100,
+    merchant: null,
+    category: r.category || null,
+    gl_line_code: null,
+    source: "report_only",
+  }));
+  const enriched = [...enrichedApi, ...enrichedReport]
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
   const capped = enriched.slice(0, cap);
   return {
     data: {

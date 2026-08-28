@@ -39,24 +39,49 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { fmt$, fmtPct } from "../lib/board";
 import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
 
-const COLUMNS = [
+// Column set for the at-risk board (default).  Pass-through swaps this
+// for a 13xx-family set so we don't show three empty columns (owner
+// ruling 2026-08-28, R16 P1: "restoring Food / Packaging / Vehicle
+// there would show three empty columns, which is worse than no table").
+const COLUMNS_AT_RISK = [
   { key: "food",      label: "Food",                 sub: "3200" },
   { key: "packaging", label: "Packaging & supplies", sub: "3400" },
   { key: "vehicle",   label: "Vehicle",              sub: "3500" },
   { key: "equipment", label: "Equipment",            sub: "5002.5" },
   { key: "repair",    label: "R&M",                  sub: "5002.1" },
 ];
+// Pass-through column set - single Reimbursable column that aggregates
+// every 13xx GL code.  MVP: one column.  Kevin can rule on a finer
+// per-family split (1385 vs 1374 vs .1 vs .2) later; at STL-MO right
+// now there are 8 distinct 13xx codes, at TBJ-FL the count differs,
+// so a variable per-account column set would drift table shape between
+// accounts.  Fixed 1-column is legible everywhere.
+const COLUMNS_PASS_THROUGH = [
+  { key: "reimbursable", label: "Reimbursable", sub: "13xx" },
+];
 
-// Column derivation - matches server-side `columnFor` in the route.
-function columnForRow(r) {
-  if (r.gl_line_code === "5002.5") return "equipment";
-  if (r.gl_line_code === "5002.1") return "repair";
-  const s = String(r.gl_line_code || "");
-  if (s.startsWith("3200")) return "food";
-  if (s.startsWith("3400")) return "packaging";
-  if (s.startsWith("3500")) return "vehicle";
-  return null;
+// Column derivation matches the server-side `columnFor` shape.  Selects
+// the correct rule set based on the passthrough flag.
+function makeColumnForRow(isPassThrough) {
+  if (isPassThrough) {
+    return (r) => {
+      const s = String(r.gl_line_code || "");
+      if (s.startsWith("13")) return "reimbursable";
+      return null;
+    };
+  }
+  return (r) => {
+    if (r.gl_line_code === "5002.5") return "equipment";
+    if (r.gl_line_code === "5002.1") return "repair";
+    const s = String(r.gl_line_code || "");
+    if (s.startsWith("3200")) return "food";
+    if (s.startsWith("3400")) return "packaging";
+    if (s.startsWith("3500")) return "vehicle";
+    return null;
+  };
 }
+// Legacy export retained for the at-risk consumer.
+function columnForRow(r) { return makeColumnForRow(false)(r); }
 
 // A cell display: em-dash when null (missing), $0.00 when genuinely
 // zero, formatted currency otherwise. `—` renders in muted color +
@@ -78,20 +103,24 @@ function Cell({ value, isFooter }) {
   );
 }
 
-// Aggregate weekly rows into per-week per-column cells. Rows without
-// a column mapping (uncoded card charges, reimbursable, SGA lines
-// other than 5002.5/5002.1) drop out of the table but the raw amount
-// stays visible on other cards; the table is a P&L-columns view.
-function buildWeeklyCells({ weekly, weekly_by_source, showFilter, weeks }) {
-  // Base source: `weekly` (combined) for SHOW=All, `weekly_by_source`
-  // otherwise. Both share (week_start, column, amount) once mapped.
+// Aggregate weekly rows into per-week per-column cells.  Column set is
+// dynamic (columns prop): the at-risk board uses the P&L 5-column set,
+// pass-through uses the 13xx reimbursable single-column set.  Rows
+// without a column mapping (uncoded card charges at at-risk; 5002 rows
+// at pass-through) drop out of the table but the raw amount stays
+// visible on other cards.
+function makeEmptyCell(columns) {
+  const cell = {};
+  for (const c of columns) cell[c.key] = 0;
+  cell.total = 0;
+  return cell;
+}
+function buildWeeklyCells({ weekly, weekly_by_source, showFilter, weeks, columns, columnFor }) {
   const cellsByWeek = new Map();
-  for (const iso of weeks) {
-    cellsByWeek.set(iso, { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 });
-  }
+  for (const iso of weeks) cellsByWeek.set(iso, makeEmptyCell(columns));
   if (showFilter === "all") {
     for (const r of weekly || []) {
-      const col = columnForRow(r);
+      const col = columnFor(r);
       if (!col) continue;
       const cell = cellsByWeek.get(r.week_start);
       if (!cell) continue;
@@ -101,8 +130,13 @@ function buildWeeklyCells({ weekly, weekly_by_source, showFilter, weeks }) {
     }
   } else if (Array.isArray(weekly_by_source)) {
     const wantSource = showFilter === "bills" ? "billcom" : "rippling_spend";
+    // weekly_by_source ships with `column` keys from the at-risk P&L
+    // mapping - the source-split lookup isn't wired for pass-through yet.
+    // Skip when the column isn't in our set (safer than double-counting).
+    const columnKeys = new Set(columns.map(c => c.key));
     for (const r of weekly_by_source) {
       if (r.source !== wantSource) continue;
+      if (!columnKeys.has(r.column)) continue;
       const cell = cellsByWeek.get(r.week_start);
       if (!cell) continue;
       const amt = Number(r.amount || 0);
@@ -114,22 +148,21 @@ function buildWeeklyCells({ weekly, weekly_by_source, showFilter, weeks }) {
 }
 
 // Sum week cells into period bands from decoratedPeriods bounds.
-function buildPeriodBands({ decoratedPeriods, cellsByWeek, weeks }) {
+function buildPeriodBands({ decoratedPeriods, cellsByWeek, weeks, columns }) {
   return decoratedPeriods.map(p => {
-    const bandCell = { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+    const bandCell = makeEmptyCell(columns);
     const weeksIn = weeks.filter(w => w >= p.start && w <= p.end);
+    const keys = [...columns.map(c => c.key), "total"];
     for (const w of weeksIn) {
       const c = cellsByWeek.get(w);
       if (!c) continue;
-      for (const col of ["food", "packaging", "vehicle", "equipment", "repair", "total"]) {
-        bandCell[col] += c[col];
-      }
+      for (const col of keys) bandCell[col] += c[col];
     }
     return { period: p, weeks: weeksIn, cell: bandCell };
   });
 }
 
-function BillRows({ scopeKey, drillState, isAggregate, showFilter }) {
+function BillRows({ scopeKey, drillState, isAggregate, showFilter, columns, columnFor }) {
   const state = drillState.get(scopeKey);
   if (!state || state.status === "loading") {
     return (
@@ -157,7 +190,7 @@ function BillRows({ scopeKey, drillState, isAggregate, showFilter }) {
     );
   }
   return filtered.slice(0, 100).map((r, i) => {
-    const col = columnForRow(r);
+    const col = columnFor(r);
     const amt = Number(r.amount || 0);
     return (
       <tr key={`${r.id || r.source_line_id || i}`} className="kpi-p-tbl-bill">
@@ -173,7 +206,7 @@ function BillRows({ scopeKey, drillState, isAggregate, showFilter }) {
             {isAggregate && r.account_key ? ` · ${r.account_key}` : ""}
           </span>
         </td>
-        {COLUMNS.map(c => (
+        {columns.map(c => (
           <Cell key={c.key} value={c.key === col ? amt : null} />
         ))}
         <td className="kpi-p-tbl-cell num kpi-p-tbl-footcell">{fmt$(amt)}</td>
@@ -200,7 +233,15 @@ export function PurchasingTable({
   vendorRollup,
   // R15 F - default row mode. Pass "vendor" from pass-through boards.
   defaultRowMode = "pnl",
+  // R16 P1 (owner ruling 2026-08-28): pass-through board renders this
+  // table with a single Reimbursable (13xx) column instead of the
+  // at-risk 5 columns.  Reimbursable is what a management-fee account
+  // actually spends against; Food / Packaging / Vehicle would land as
+  // three empty columns and that's worse than no table.
+  isPassThrough = false,
 }) {
+  const COLUMNS = isPassThrough ? COLUMNS_PASS_THROUGH : COLUMNS_AT_RISK;
+  const columnFor = makeColumnForRow(isPassThrough);
   const [showFilter, setShowFilter] = useState("all");            // 'all' | 'bills' | 'cards'
   const [rowMode, setRowMode] = useState(defaultRowMode);         // 'pnl' | 'vendor'
   const [expandedPeriods, setExpandedPeriods] = useState(new Set());
@@ -251,30 +292,36 @@ export function PurchasingTable({
       weekly_by_source: sourceSplit?.rows,
       showFilter,
       weeks,
+      columns: COLUMNS,
+      columnFor,
     }),
-    [weekly, sourceSplit, showFilter, weeks],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weekly, sourceSplit, showFilter, weeks, isPassThrough],
   );
 
   const bands = useMemo(
-    () => tier === "C" ? buildPeriodBands({ decoratedPeriods, cellsByWeek, weeks }) : [],
-    [tier, decoratedPeriods, cellsByWeek, weeks],
+    () => tier === "C" ? buildPeriodBands({ decoratedPeriods, cellsByWeek, weeks, columns: COLUMNS }) : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tier, decoratedPeriods, cellsByWeek, weeks, isPassThrough],
   );
 
-  // Footer totals - sum of aggregate cells.
+  // Footer totals - sum of aggregate cells across the columns in play.
   const footTotals = useMemo(() => {
-    const t = { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+    const t = makeEmptyCell(COLUMNS);
     for (const c of cellsByWeek.values()) {
       for (const col of Object.keys(t)) t[col] += c[col];
     }
     return t;
-  }, [cellsByWeek]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellsByWeek, isPassThrough]);
 
-  // R15 F - vendor-mode footer totals from vendor_rollup.gl_split.
-  // Card charges + reimbursable rows are not vendor-keyed, so vendor
-  // mode legitimately differs from P&L mode.  Kept separate to avoid
-  // asserting Check 1 against a partial dataset.
+  // R15 F - vendor-mode footer totals.  Only wired for at-risk (the
+  // vendor rollup's gl_split carries the P&L 5-column breakdown).  At
+  // pass-through we skip - Kevin can rule whether to build a reimb-only
+  // vendor rollup shape later.
   const vendorFootTotals = useMemo(() => {
-    const t = { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+    const t = makeEmptyCell(COLUMNS);
+    if (isPassThrough) return t;
     for (const v of (vendorRollup?.rows || [])) {
       const g = v.gl_split || {};
       t.food      += Number(g.food || 0);
@@ -285,15 +332,18 @@ export function PurchasingTable({
       t.total     += Number(v.spend || 0);
     }
     return t;
-  }, [vendorRollup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorRollup, isPassThrough]);
 
   // Check 1 - THE GATE. Aggregate cells (footer) MUST equal the bucket
   // card heroes above. Dev throws on mismatch; prod warns. Same one-
   // source discipline the LedgerCard Check 9 gate uses. Skipped when
   // SHOW is filtered (heroes reflect ALL bills+cards; filtered footer
-  // legitimately differs) or when in By vendor row mode (vendor mode
-  // shows bill.com-keyed rows only; card-side rows have no vendor id).
-  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production" && rowMode === "pnl" && showFilter === "all" && heroTotals) {
+  // legitimately differs), when in By vendor row mode, or when in the
+  // pass-through table (heroTotals shape is at-risk-only; the pass-
+  // through reimbursable hero binds via LedgerCard Check 9 on the reimb
+  // ledger card directly).
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production" && rowMode === "pnl" && showFilter === "all" && heroTotals && !isPassThrough) {
     const CENTS_TOLERANCE = 0.02;
     for (const col of ["food", "packaging", "vehicle"]) {
       const foot = Math.round(footTotals[col] * 100) / 100;
@@ -498,12 +548,14 @@ export function PurchasingTable({
                     drillState={drillState}
                     isAggregate={isAggregate}
                     showFilter={showFilter}
+                    columns={COLUMNS}
+                    columnFor={columnFor}
                   />
                 );
               })
             ) : (
               weeks.map((wIso, i) => {
-                const cell = cellsByWeek.get(wIso) || { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+                const cell = cellsByWeek.get(wIso) || makeEmptyCell(COLUMNS);
                 const weekEnd = weeks[i + 1] ? isoMinus1(weeks[i + 1]) : end;
                 const open = expandedWeeks.has(wIso);
                 const key = `${wIso}|${weekEnd}`;
@@ -516,6 +568,8 @@ export function PurchasingTable({
                         drillState={drillState}
                         isAggregate={isAggregate}
                         showFilter={showFilter}
+                        columns={COLUMNS}
+                        columnFor={columnFor}
                       />
                     )}
                   </Fragment>
@@ -577,6 +631,8 @@ function FragmentBand({
   drillState,
   isAggregate,
   showFilter,
+  columns,
+  columnFor,
 }) {
   const runFlag = period.running ? "in progress" : period.finished ? "closed" : "not started";
   return (
@@ -594,11 +650,14 @@ function FragmentBand({
             <span className="kpi-p-tbl-bandsub">{`${bandWeeks.length} wk${bandWeeks.length === 1 ? "" : "s"} · ${runFlag}`}</span>
           </button>
         </td>
-        {COLUMNS.map(c => (<Cell key={c.key} value={bandCell[c.key]} />))}
+        {columns.map(c => (<Cell key={c.key} value={bandCell[c.key]} />))}
         <Cell value={bandCell.total} isFooter />
       </tr>
       {open && bandWeeks.map((wIso, i) => {
-        const cell = cellsByWeek.get(wIso) || { food: 0, packaging: 0, vehicle: 0, equipment: 0, repair: 0, total: 0 };
+        const emptyCell = {};
+        for (const cc of columns) emptyCell[cc.key] = 0;
+        emptyCell.total = 0;
+        const cell = cellsByWeek.get(wIso) || emptyCell;
         const weekEnd = bandWeeks[i + 1] ? isoMinus1(bandWeeks[i + 1]) : period.end;
         const open2 = expandedWeeks.has(wIso);
         const key = `${wIso}|${weekEnd}`;
@@ -611,6 +670,8 @@ function FragmentBand({
                 drillState={drillState}
                 isAggregate={isAggregate}
                 showFilter={showFilter}
+                columns={COLUMNS}
+                columnFor={columnFor}
               />
             )}
           </Fragment>

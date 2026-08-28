@@ -1,31 +1,31 @@
 "use client";
 // src/app/kpi/purchasing/components/CardPurchases.js
 //
-// Row 6a of the at-risk board (spec §6.4).
+// R16 P2 restructure (owner ruling 2026-08-28): mirror LedgerCard's
+// shape.  Title + hero on top, list beneath, full-width.  The prior
+// two-column grid left a ~490px empty stripe at STL - MO and CIN - AZ
+// where the left column ran out of content but the right column
+// stretched to the row list's height.
 //
-// Two columns. Stats left - total pending + `Open Rippling`. Every
-// charge right, scrolling.
+// Reused wrappers match the LedgerCard family:
+//   .kpi-p-head  .kpi-p-nums  .kpi-p-stk  .kpi-p-hero  .kpi-p-subline
+//   .kpi-p-ledger-head  .kpi-p-ledger  .kpi-p-lr  .kpi-p-ledger-empty
+// so the visual match is structural, not styled-alike.
 //
-// PR-2 R6 Part B - per-charge rows now populate from the route's
-// `card_charges` block (uncoded rippling_spend, capped at 50 by amount
-// desc). Each row shows merchant, txn date, operator category (from
-// spend_category_map), amount. Rows needing a location or category
-// keep the amber flag (per-row .flagged class) - the v22 render kept
-// this affordance and the PR-2 R2 owner ruling is that a card that
-// says what is missing beats a card that invents.
+// Data flow after R16 P0: `card_charges.rows` now includes BOTH the API-
+// derived pending rows AND the report-only pending rows (source: "api"
+// vs "report_only" on each row).  Hero and footer both derive from the
+// combined slice, so the Check 9 assertion passes for every account+range.
+// Row shape: { account_key, txn_date, amount, merchant, category, source,
+//              gl_line_code:null }.
 
 import { fmt$ } from "../lib/board";
-// PR 2 R8 Gap 1 - shared HelpPop portal-renders at document.body so it
-// escapes the card and the txn-list scroll container's stacking context.
 import HelpPop from "@/app/kpi/labor/components/HelpPop.js";
 import { CARD_PURCHASES_BODY } from "./PurchasingHelpPops";
 
-// PR 2 R7 Fix 3 - the operator's Rippling default "**Please Select A
-// Category**" was landing raw in the row detail line, then getting
-// mid-word truncated by CSS ellipsis to "**Please Sel..." - the single
-// most important thing that row could tell you ("nobody chose one")
-// squashed to gibberish. Owner ruling: shorten deliberately to
-// "no category" in amber; never render the raw sentinel.
+// PR 2 R7 Fix 3 - normalise "**Please Select A Category**" sentinel to
+// "no category" so the amber affordance carries the fact rather than a
+// mid-word ellipsis.
 const NO_CATEGORY_SENTINEL = /^\**\s*please\s+select\s+a\s+category\s*\**$/i;
 function normaliseCategory(raw) {
   const s = (raw || "").trim();
@@ -34,15 +34,10 @@ function normaliseCategory(raw) {
   return { label: s, missing: false };
 }
 
-// R16 P0 gate (owner ruling 2026-08-28): CardPurchases lifted its hero
-// from `board.pending` (mergePending output: API + report-only) and
-// paired it with `card_charges.total_amount` (API only).  The two-source
-// mismatch is the ninth appearance of hero-vs-detail on this project
-// and the first outside a LedgerCard.  The gate below matches the shape
-// of LedgerCard's Check 9: dev throws, prod warns via console.error.
-// Fires whenever mergePending's report-only slice is non-zero for the
-// account+range in view - which is by design a state the derive
-// intentionally creates until the next report ingest lands.
+// R16 P0 gate (Kevin ruling 2026-08-28): compare merged hero against
+// list footer at render.  Same shape as LedgerCard's Check 9.  Dev
+// throws, prod warns.  After the P0 fix on the route this should not
+// fire; if it does, one of the two slices drifted.
 function assertPendingMatchesTotal({ pendingAmount, pendingLineCount, totalAmount, totalCount }) {
   if (typeof window === "undefined") return;
   if (totalAmount == null || totalCount == null) return;
@@ -50,9 +45,7 @@ function assertPendingMatchesTotal({ pendingAmount, pendingLineCount, totalAmoun
   const totR  = Math.round(Number(totalAmount   || 0) * 100) / 100;
   const heroN = Number(pendingLineCount || 0);
   const totN  = Number(totalCount || 0);
-  const amountDelta = Math.abs(heroR - totR);
-  const countDelta  = Math.abs(heroN - totN);
-  if (amountDelta <= 0.01 && countDelta === 0) return;
+  if (Math.abs(heroR - totR) <= 0.01 && heroN === totN) return;
   const msg = `CardPurchases Check 9: hero $${heroR.toFixed(2)} (${heroN} charges) != footer $${totR.toFixed(2)} (${totN} charges) - ` +
               `delta amount $${(heroR - totR).toFixed(2)}, delta count ${heroN - totN}. ` +
               `Most likely cause: mergePending includes report-only pending in the hero but loadCardCharges lists API rows only.`;
@@ -65,8 +58,8 @@ export function CardPurchases({
   pendingAmount,          // number - summary total
   pendingLineCount,       // integer - total count (may exceed cap)
   closed,                 // hide entirely when the period is closed (no action to take)
-  // PR-2 R6 Part B - capped list. Each row:
-  //   { account_key, txn_date, amount, merchant, category, gl_line_code? }
+  // R16 P0 - list carries both API + report-only rows.  Each row:
+  //   { account_key, txn_date, amount, merchant, category, source, gl_line_code? }
   rows,
   totalCount,
   totalAmount,
@@ -78,22 +71,26 @@ export function CardPurchases({
   const n = Number(pendingLineCount || 0);
   const list = Array.isArray(rows) ? rows : [];
   return (
-    <div className="kpi-p-card kpi-p-cp" data-card="card-purchases">
-      {/* R15 D - two-column header (was three).  The Open Rippling
-          button is now a text link inline with the pending subline;
-          card matches the ledger cards' two-stat grammar. */}
-      <div className="kpi-p-cpstats kpi-p-cpstats-2col">
-        <div>
+    <div className="kpi-p-card kpi-p-cp kpi-p-cp-stack" data-card="card-purchases">
+      {/* Head - title + subtitle (matches LedgerCard head grammar).  No
+          verdict pill on this card. */}
+      <div className="kpi-p-head">
+        <div className="kpi-p-head-body">
           <span className="kpi-p-cardtitle">
             Card purchases
             {" "}<HelpPop id="qPurchCardCharges" title="Card purchases" body={CARD_PURCHASES_BODY} />
           </span>
           <span className="kpi-p-cardsub">card charges not yet coded to a P&amp;L line</span>
         </div>
-        <div className="kpi-p-cpstat">
-          <span className="kpi-p-l">Total pending</span>
-          <span className="kpi-p-n">{fmt$(pendingAmount)}</span>
-          <span className="kpi-p-s">
+      </div>
+
+      {/* Numbers block: solo hero (there is no matching secondary stat,
+          same shape as LedgerCard `noBudget` mode). */}
+      <div className="kpi-p-nums kpi-p-nums-solo">
+        <div className="kpi-p-stk">
+          <span className="kpi-p-label">Total pending</span>
+          <span className="kpi-p-hero num">{fmt$(pendingAmount)}</span>
+          <span className="kpi-p-subline">
             {n === 0
               ? "no charges awaiting a code"
               : (
@@ -112,81 +109,66 @@ export function CardPurchases({
           </span>
         </div>
       </div>
-      <div className="kpi-p-cplist">
-        <div className="kpi-p-txnhead">
+
+      {/* Header row - "Every charge / amount" - suppressed when empty.
+          Matches LedgerCard's `.kpi-p-ledger-head` grammar. */}
+      {list.length > 0 && (
+        <div className="kpi-p-ledger-head">
           <span className="kpi-p-k">Every charge</span>
-          <span style={{ flex: 1 }} aria-hidden="true" />
           <span className="kpi-p-k">amount</span>
         </div>
-        <div className="kpi-p-txnlist">
-          {list.length === 0 ? (
-            /* Honest empty state per Kevin's PR-2 R2 ruling. Two
-               distinct cases: zero pending (nothing awaiting a code)
-               vs. the route did not ship rows (older payload / error). */
-            <div style={{
-              padding: "var(--kpi-sp-4) 0",
-              textAlign: "center",
-              fontSize: "var(--kpi-t-meta)",
-              color: "var(--n-600)",
-              fontWeight: 500,
-            }}>
-              {n === 0
-                ? "No charges pending a code."
-                : `Per-charge detail did not load. Route reports ${fmt$(pendingAmount)} across ${n} line${n === 1 ? "" : "s"}.`}
-            </div>
-          ) : (
-            <>
-              {list.map((r, i) => {
-                // PR 2 R7 Fix 3 - normalise the operator category BEFORE
-                // deciding "needs attention". Rippling's raw
-                // "**Please Select A Category**" sentinel counts as
-                // missing (nobody chose one) - same defect class as an
-                // absent category and the same amber affordance.
-                const cat = normaliseCategory(r.category);
-                // A charge is flagged when it lacks a category label
-                // (the operator picked something that has not been
-                // mapped) OR the merchant/description would be blank.
-                // Both are conditions the amber affordance calls out.
-                const needsAttention = cat.missing || !r.merchant;
-                return (
-                  <div
-                    key={`${r.merchant || "?"}-${r.txn_date || i}-${i}`}
-                    className={`kpi-p-rw${needsAttention ? " flagged" : ""}`}
-                  >
-                    <span className="kpi-p-k">
-                      {r.merchant || "unknown merchant"}
-                      <small>
-                        {isAggregate && r.account_key ? `${r.account_key} · ` : ""}
-                        {r.txn_date || ""}
-                        {" · "}
-                        {cat.missing ? (
-                          <span className="kpi-p-cat-amber">{cat.label}</span>
-                        ) : (
-                          cat.label
-                        )}
-                      </small>
-                    </span>
-                    <span className="kpi-p-v num">{fmt$(r.amount)}</span>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-        {list.length > 0 && totalCount != null && (
-          <div style={{
-            padding: "5px 0 0",
-            textAlign: "right",
-            fontSize: "var(--kpi-t-meta)",
-            color: "var(--n-600)",
-            fontWeight: 500,
-          }}>
-            {totalCount > (cap || 0)
-              ? `Showing ${cap} of ${totalCount} charges · ${fmt$(totalAmount)} total`
-              : `${totalCount} charge${totalCount === 1 ? "" : "s"} · ${fmt$(totalAmount)} total`}
+      )}
+
+      {/* List - full width, LedgerCard row shape (.kpi-p-lr). */}
+      <div className="kpi-p-ledger">
+        {list.length === 0 ? (
+          <div className="kpi-p-ledger-empty">
+            {n === 0
+              ? "No charges pending a code."
+              : `Per-charge detail did not load. Route reports ${fmt$(pendingAmount)} across ${n} line${n === 1 ? "" : "s"}.`}
           </div>
+        ) : (
+          list.map((r, i) => {
+            const cat = normaliseCategory(r.category);
+            // A row is flagged when it lacks a category label OR a
+            // merchant name.  Report-only rows currently arrive without
+            // a merchant string, so they land as flagged - accurate,
+            // that IS the ingest-lane state the operator needs to see.
+            const needsAttention = cat.missing || !r.merchant;
+            return (
+              <div
+                key={`${r.merchant || "?"}-${r.txn_date || i}-${i}`}
+                className={`kpi-p-lr${needsAttention ? " kpi-p-lr-flag" : ""}`}
+              >
+                <span className={`kpi-p-k${r.merchant ? "" : " kpi-p-nil"}`}>
+                  {r.merchant || "unknown merchant"}
+                  <small>
+                    {isAggregate && r.account_key ? `${r.account_key} · ` : ""}
+                    {r.txn_date || ""}
+                    {" · "}
+                    {cat.missing ? (
+                      <span className="kpi-p-cat-amber">{cat.label}</span>
+                    ) : (
+                      cat.label
+                    )}
+                  </small>
+                </span>
+                <span className="kpi-p-v num">{fmt$(r.amount)}</span>
+              </div>
+            );
+          })
         )}
       </div>
+
+      {/* Footer - "Showing N of M charges · $... total" - same shape as
+          LedgerCard's honest cap-of-M footer. */}
+      {list.length > 0 && totalCount != null && (
+        <div className="kpi-p-ledger-empty kpi-p-cp-foot">
+          {totalCount > (cap || 0)
+            ? `Showing ${cap} of ${totalCount} charges · ${fmt$(totalAmount)} total`
+            : `${totalCount} charge${totalCount === 1 ? "" : "s"} · ${fmt$(totalAmount)} total`}
+        </div>
+      )}
     </div>
   );
 }
