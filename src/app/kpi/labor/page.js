@@ -124,6 +124,11 @@ export default function KpiLaborPage() {
   // in a shared link, and it sorts).
   const urlView = searchParams.get("view") || "period";
   const urlHomestand = searchParams.get("homestand");
+  // 2026-08-28 preview mode - URL is the only source of truth (no
+  // cookie, no local storage; closing the tab ends preview).
+  // Forwarded to the API so the server-side resolvePreviewAccess
+  // handles the intersection with real access.
+  const urlPreview = searchParams.get("preview");
   const [expandedHomestand, setExpandedHomestand] = useState(null);
   const workersParam = (searchParams.get("workers") || "").trim();
   const selectedWorkers = useMemo(
@@ -211,6 +216,9 @@ export default function KpiLaborPage() {
     // Include the flag so the route builds the split + selected-stand
     // metadata into the response.
     if (urlHomestand) params.set("homestand", urlHomestand);
+    // 2026-08-28 preview mode - forward the param unchanged; the
+    // server intersects against real access.
+    if (urlPreview) params.set("preview", urlPreview);
     const markBase = `kpi-labor-fetch-${account}`;
     try { performance.mark(`${markBase}-start`); } catch {}
     fetch(`/api/kpi/labor?${params}`, { signal: ctrl.signal })
@@ -1239,6 +1247,8 @@ export default function KpiLaborPage() {
           dataLoading={loadState === "loading" || loadState === "idle"}
           activeSection="labor"
           printScopeText={printScopeText}
+          previewAccount={data?.preview_account || null}
+          onExitPreview={() => setParam("preview", "")}
           /* Salary PR 3 C1 - segmented toggle rendered ONLY when the
              route ships salary_available=true. Absent, never disabled,
              for anyone the gate would refuse (spec T-1). URL flag is
@@ -1293,13 +1303,33 @@ export default function KpiLaborPage() {
           exportDisabledReason={null}
           freshnessPop={freshnessPop}
           folioRail={
-            <FolioRail
-              activeAccount={account}
-              onPickAccount={onPickAccount}
-              accountsDirectory={data?.accounts_directory}
-              regionalDirectorsDisplay={data?.regional_directors_display}
-              folioFoot={systemStrip}
-            />
+            // 2026-08-28 rail-hide - hide the folio when the resolved
+            // effective account set has exactly one member. Rule:
+            //   landing_account is pseudo (ALL/EAST/WEST) -> multi-
+            //     account access -> rail visible
+            //   landing_account is non-pseudo -> site_leader or
+            //     site_manager -> single account -> rail hidden
+            //   preview_account set -> corporate/rdo narrowed to
+            //     one account -> rail hidden (previewing what a
+            //     single-account user sees)
+            // Passing null tells Shell not to render the <aside>,
+            // which reclaims the full 234px for the board (measured
+            // 18.3% of a 1280 screen).
+            (() => {
+              const PSEUDO = ["ALL", "EAST", "WEST"];
+              const isPseudoLanding = PSEUDO.includes(data?.landing_account);
+              const showRail = isPseudoLanding && !data?.preview_account;
+              if (!showRail) return null;
+              return (
+                <FolioRail
+                  activeAccount={account}
+                  onPickAccount={onPickAccount}
+                  accountsDirectory={data?.accounts_directory}
+                  regionalDirectorsDisplay={data?.regional_directors_display}
+                  folioFoot={systemStrip}
+                />
+              );
+            })()
           }
           main={mainContent}
         />

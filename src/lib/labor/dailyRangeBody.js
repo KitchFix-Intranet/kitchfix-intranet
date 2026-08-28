@@ -25,7 +25,7 @@ function safeErr(scope, err) {
 export async function buildDailyRangeBody(ctx) {
   const {
     supa, account, start, end,
-    caller, landing_account,
+    caller, landing_account, preview_account,
     accounts_directory, regional_directors_display,
     freshness,
     rangeSource,
@@ -193,6 +193,7 @@ export async function buildDailyRangeBody(ctx) {
       workers: workerMeta,
       members,
       landing_account,
+      preview_account,
       accounts_directory,
       regional_directors_display,
       salary_available,

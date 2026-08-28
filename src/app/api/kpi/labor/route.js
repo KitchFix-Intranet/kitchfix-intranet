@@ -32,6 +32,7 @@ import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
 import { loadRoleGate } from "@/lib/kpi/roleGate.js";
+import { resolvePreviewAccess } from "@/lib/kpi/previewAccess.js";
 import { load3100_2Budgets, loadSalaryActuals, withSalary as withSalaryMerge, pinHourlyOnly } from "@/lib/labor/salaryBoard.js";
 import { salaryProRate } from "@/lib/labor/salaryProRate.js";
 // PR-2 - range resolver + budget pro-rate. Three-way routing (grain
@@ -307,7 +308,11 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const today = new Date().toISOString().slice(0, 10);
-  const account = (searchParams.get("account") || "").trim();
+  // 2026-08-28 preview mode - `account` is `let` because
+  // resolvePreviewAccess may reassign it to the preview value when
+  // preview is in the caller's real access. See below.
+  let account = (searchParams.get("account") || "").trim();
+  const previewParam = (searchParams.get("preview") || "").trim();
   // homestand PR-1 - start/end can be overridden by the homestand
   // selection below. `let` so the override lands cleanly; the
   // downstream range resolver, board build, and daily branch see
@@ -351,6 +356,27 @@ export async function GET(request) {
 
   const landing_account = gate.landingAccount(caller);
 
+  // 2026-08-28 preview mode. Structural safety: preview only NARROWS
+  // access, never grants it. `resolvePreviewAccess` intersects the
+  // preview value against the caller's real access via the same
+  // canViewAccount gate every other check uses. If the preview
+  // isn't in real access, the resolver silently returns the URL
+  // account unchanged - the empty intersection returns real access,
+  // never grants. See src/lib/kpi/previewAccess.js + the 96-case
+  // safety probe.
+  //
+  // Client uses the returned `preview_account` to render the amber
+  // "Previewing as X" banner and to hide the folio rail when a
+  // corporate/rdo user narrows to a single account.
+  const preview = resolvePreviewAccess({
+    caller,
+    canViewAccount: gate.canViewAccount,
+    urlAccount: account,
+    previewParam,
+  });
+  account = preview.account;
+  const preview_account = preview.preview_account;
+
   // Fetch the accounts directory + regional-director display names
   // BEFORE any account-branch logic; every response path (landing,
   // locked, single, aggregate, salaried-only) carries them so the
@@ -368,6 +394,7 @@ export async function GET(request) {
   if (!account) {
     return NextResponse.json({
       landing_account,
+      preview_account,
       accounts_directory,
       regional_directors_display,
     });
@@ -388,6 +415,7 @@ export async function GET(request) {
       account,
       reason: "not_authorised",
       landing_account,
+      preview_account,
       accounts_directory,
       regional_directors_display,
     });
@@ -628,7 +656,7 @@ export async function GET(request) {
             homestand_bank: homestandBank,
             daily_floor: dailyFloorISO,
             account, filters: { account, homestand: homestandParam },
-            landing_account, accounts_directory, regional_directors_display,
+            landing_account, preview_account, accounts_directory, regional_directors_display,
             salary_available,
           });
         }
@@ -657,7 +685,7 @@ export async function GET(request) {
             homestands: allHomestands,
             homestand_bank: homestandBank,
             account, filters: { account, homestand: homestandParam },
-            landing_account, accounts_directory, regional_directors_display,
+            landing_account, preview_account, accounts_directory, regional_directors_display,
             salary_available: false,
           });
         }
@@ -795,6 +823,7 @@ export async function GET(request) {
       account,
       filters: { account, start, end },
       landing_account,
+      preview_account,
       accounts_directory,
       regional_directors_display,
       salary_available: false,
@@ -813,7 +842,7 @@ export async function GET(request) {
   if (rangeSource.source === "daily") {
     return await handleDailyRangeRequest({
       supa, account, start, end, today,
-      caller, landing_account,
+      caller, landing_account, preview_account,
       accounts_directory, regional_directors_display,
       freshness,
       rangeSource,
@@ -1015,6 +1044,7 @@ export async function GET(request) {
     }
     body.salary_available = salary_available;
     body.landing_account = landing_account;
+    body.preview_account = preview_account;
     body.source = "weekly";
     body.is_future_range = is_future_range;
     return NextResponse.json(body);
@@ -1074,6 +1104,7 @@ export async function GET(request) {
     }
     bodyD26.salary_available = salary_available;
     bodyD26.landing_account = landing_account;
+    bodyD26.preview_account = preview_account;
     bodyD26.source = "weekly";
     bodyD26.is_future_range = is_future_range;
     return NextResponse.json(bodyD26);
@@ -1294,6 +1325,7 @@ export async function GET(request) {
   }
   bodySingle.salary_available = salary_available;
   bodySingle.landing_account = landing_account;
+  bodySingle.preview_account = preview_account;
   bodySingle.source = "weekly";
   // homestand PR-1 - splice into the weekly body. Non-MLB accounts
   // get `homestands: []` so the client's tab-visibility check is
