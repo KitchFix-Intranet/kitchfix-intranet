@@ -937,6 +937,26 @@ export default function KpiPurchasingPage() {
             cap={data?.card_charges?.cap}
             isAggregate={isAggregate}
           />
+
+          {/* R16 P1 - drill table at pass-through with a single
+              Reimbursable (13xx) column instead of the at-risk 5.
+              Same flush wrapper the at-risk board uses. */}
+          <div className="kpi-p-tablewrap kpi-p-tablewrap-flush">
+            <PurchasingTable
+              account={account}
+              start={start}
+              end={end}
+              tier={board.tier}
+              weeks={board.weeks}
+              decoratedPeriods={board.decoratedPeriods}
+              weekly={board.weekly}
+              heroTotals={null}
+              isAggregate={isAggregate}
+              weeksInRange={board.weeksInRange}
+              vendorRollup={data?.vendor_rollup}
+              isPassThrough
+            />
+          </div>
         </div>
       );
     }

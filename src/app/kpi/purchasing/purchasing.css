@@ -2070,3 +2070,23 @@
   border-radius: var(--kpi-card-r);
   background: transparent;
 }
+
+/* ═══ R16 P2 - Card purchases LedgerCard-shape override ═══════════════ */
+/* Mirrors LedgerCard: title + hero on top, list beneath, full width.  The
+   pre-R16 two-column grid left a ~490px empty stripe at pass-through
+   accounts where the left column ran out of content but the right column
+   stretched.  Override .kpi-p-cp to a flex column when the stack flag is
+   present.  Keeps the amber left-stroke (identity) + padding. */
+.kpi-app .kpi-p-cp.kpi-p-cp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-3);
+}
+/* Footer shape - right-aligned "Showing N of M · $... total" matches
+   LedgerCard's honest cap-of-M footer. */
+.kpi-app .kpi-p-cp-foot {
+  padding: 5px 0 0;
+  text-align: right;
+  border: 0;
+  background: transparent;
+}
