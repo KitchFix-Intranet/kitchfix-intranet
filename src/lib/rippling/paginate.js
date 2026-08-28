@@ -1,7 +1,7 @@
 // src/lib/rippling/paginate.js
 //
 // Shared pagination helpers for reads against Supabase tables and
-// views. Two shapes:
+// views. Three shapes:
 //
 //   fetchAllOffset(supa, table, cols, filters)
 //     LIMIT/OFFSET pagination. Safe on base tables where offset is
@@ -12,6 +12,15 @@
 //     Keyset pagination via `WHERE keyCol > $last ORDER BY keyCol
 //     LIMIT N`. Each page is O(index seek); table size stops
 //     mattering. Required on every `rippling_raw_*_latest` view.
+//
+//   fetchAllIn(supa, table, cols, { keyCol, keyValues, chunkSize, filters })
+//     `.in(keyCol, keyValues)` pagination. Chunks keyValues on the
+//     KEY side so each request stays under the Supabase 1000-row
+//     response cap AND under any URL length ceiling. Chunks are then
+//     paginated with `.range()` inside as a belt-and-suspenders in
+//     case any single chunk still fans out past PAGE_SIZE rows.
+//     Standing rule: `.in(<key>, <bigArray>)` without this helper is
+//     the same failure mode as `.select()` without `.range()`.
 //
 // Why fetchAllKeyset exists (owner incident 2026-08-27):
 //
@@ -103,6 +112,64 @@ export async function fetchAllKeyset(supa, view, cols = "*", opts = {}) {
     out.push(...data);
     last = data[data.length - 1][keyCol];
     if (data.length < PAGE_SIZE) break;
+  }
+  return out;
+}
+
+// Chunk an array into fixed-size slices. Pure function extracted so
+// the probe can assert boundary behavior (empty, exact multiples,
+// single-chunk) without booting a Supabase client.
+export function chunkKeys(keys, chunkSize) {
+  if (chunkSize <= 0) throw new Error(`chunkKeys: chunkSize must be > 0, got ${chunkSize}`);
+  const out = [];
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    out.push(keys.slice(i, i + chunkSize));
+  }
+  return out;
+}
+
+/**
+ * `.in(keyCol, keyValues)` pagination for reads whose key set can
+ * exceed the Supabase 1000-row response cap or the URL length ceiling.
+ * Chunks the key array (default 100 per chunk - conservative for
+ * UUID-length keys; 100 x ~37 chars stays well under standard URL
+ * limits with room for the base URL and other filters). For each
+ * chunk runs an offset-paginated fetch in case a single chunk still
+ * fans out past PAGE_SIZE rows (e.g., .in on a non-unique column).
+ *
+ * De-dupes keyValues and drops falsy entries before chunking.
+ *
+ * @param {SupabaseClient} supa
+ * @param {string} table
+ * @param {string} cols
+ * @param {object} opts
+ * @param {string} opts.keyCol                   the column on the .in() filter
+ * @param {Array}  opts.keyValues                the values to filter for
+ * @param {number} [opts.chunkSize=100]          how many keys per request
+ * @param {Array<(q:any)=>any>} [opts.filters]   additional filter builders per chunk
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchAllIn(supa, table, cols, opts = {}) {
+  const { keyCol, keyValues, chunkSize = 100, filters = [] } = opts;
+  if (!keyCol) throw new Error(`fetchAllIn(${table}): keyCol is required`);
+  const keys = [...new Set((keyValues || []).filter(v => v != null && v !== ""))];
+  if (keys.length === 0) return [];
+  const out = [];
+  for (const chunk of chunkKeys(keys, chunkSize)) {
+    let from = 0;
+    while (true) {
+      let q = supa.from(table).select(cols)
+        .in(keyCol, chunk)
+        .order(keyCol, { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      for (const f of filters) q = f(q);
+      const { data, error } = await q;
+      if (error) throw new Error(`${table}: ${error.message}`);
+      if (!data?.length) break;
+      out.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
   }
   return out;
 }
