@@ -66,6 +66,7 @@ import { PeriodCard } from "./components/PeriodCard";
 import { BucketCard } from "./components/BucketCard";
 import { LedgerCard } from "./components/LedgerCard";
 import { CardPurchases } from "./components/CardPurchases";
+import { CardCompliance } from "./components/CardCompliance";
 // R15 E - VendorBreakdown deleted.  It carried a `vs prior` column and a
 // fragmentation footer; both were ruled not-delivering-value.  The three
 // matched ledger cards + the drill table cover the vendor view now.
@@ -1026,6 +1027,16 @@ export default function KpiPurchasingPage() {
             isAggregate={isAggregate}
           />
 
+          {/* PR 6 - compliance card. Pass-through accounts still have
+              real card compliance work even though their spend is
+              billed back to the client; a coder still has to code the
+              row. Same population and rules as the at-risk mount below. */}
+          <CardCompliance
+            data={data?.compliance}
+            isAggregate={isAggregate}
+            scopeLabel={`${account} · ${resolvedPreset === "fytd" ? "FYTD" : (rangeLabel || "custom")}`}
+          />
+
           {/* R16 P1 - drill table at pass-through with a single
               Reimbursable (13xx) column instead of the at-risk 5.
               Same flush wrapper the at-risk board uses. */}
@@ -1253,6 +1264,18 @@ export default function KpiPurchasingPage() {
           }
           return <>{reimbNode}{cardPurchNode}</>;
         })()}
+
+        {/* PR 6 - compliance card. Below the ledgers, above the drill
+            table. Population is report-side uncoded (sentinel category)
+            restricted to attributable work locations, so it counts what
+            the period card counts on the same exclusion set. Card hides
+            when nothing is outstanding (E-clause). Owner ruling ships
+            Option B: site totals with people on expand. */}
+        <CardCompliance
+          data={data?.compliance}
+          isAggregate={isAggregate}
+          scopeLabel={`${isAggregate ? (account === "ALL" ? "All accounts" : account) : account} · ${resolvedPreset === "fytd" ? "FYTD" : (rangeLabel || "custom")}`}
+        />
 
         {/* PR 4 - drill-down table. Sits below Card purchases on the
             at-risk board. Bill rows load on expand via scoped GET;

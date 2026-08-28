@@ -970,6 +970,268 @@ async function loadVendorRollup(supa, { members, start, end }) {
   };
 }
 
+// ─── Compliance card loader (PR 6) ───────────────────────────────────
+//
+// Population: rippling_report_txns_latest rows where category is the
+// sentinel `Please Select A Category`. This is the report's equivalent
+// of "uncoded" - the coder has to pick a P&L line before a row leaves
+// the sentinel bucket. Restricted to attributable work locations (rows
+// whose spend_work_location_site_map.account_key is set) so the card
+// counts what the period card counts: two surfaces describing uncoded
+// card spend with the SAME exclusion set. Two cards on different rules
+// is exactly the defect class Kevin ruled out.
+//
+// The Corp/Remote uncoded rows (work_location = "Remote" or "Corporate
+// (CORP)", account_key = null in the map, excluded = true) carry no site
+// attribution and surface as a footer count only at aggregate scopes -
+// they are real compliance work but a site-attribution card is not
+// their home.
+//
+// Compliance attributes come straight off the report row:
+//   has_receipt    - fraction present per site + person (Check 7)
+//   approval_state - "Missing Requirements" count feeds the header only;
+//                    per-person receipt fraction stays the primary signal
+//   purchased_at   - age source. Owner ruling 2026-08-28: purchased is
+//                    how long the money has been outstanding; submitted
+//                    is how long since the person acted. This card is
+//                    the money question, so purchased_at is the age.
+//
+// People are grouped by employee. Empty employee -> "unattributed" row,
+// never dropped (Check 4). The people sum to the site row (Check 3
+// gate) and the site rows sum to the hero. The client asserts the
+// site==sum(people) invariant.
+async function loadCompliance(supa, { members, start, end, today }) {
+  const PS = V6_PAGE_DEFAULT;
+  const rows = [];
+  let from = 0;
+  while (true) {
+    const q = await supa.from("rippling_report_txns_latest")
+      .select("purchased_at, amount, work_location, employee, has_receipt, approval_state, category")
+      .ilike("category", "%please select%")
+      .gte("purchased_at", start)
+      .lte("purchased_at", end)
+      .order("purchased_at", { ascending: true })
+      .range(from, from + PS - 1);
+    if (q.error) return { error: q.error };
+    const data = q.data || [];
+    for (const r of data) rows.push(r);
+    if (data.length < PS) break;
+    from += PS;
+  }
+
+  // Resolve work_location label -> account_key. The map keys by
+  // work_location_id, but the report gives us the label string, so join
+  // on label. Attributable labels are 1:1 with account_key; Corp/Remote
+  // labels have many map rows (one per work_location_id) all with
+  // account_key=null, so first-wins collapses them consistently.
+  const labels = [...new Set(rows.map(r => r.work_location).filter(Boolean))];
+  const labelToKey = new Map();
+  if (labels.length > 0) {
+    for (const chunkLabels of chunk(labels, IN_CHUNK)) {
+      const mr = await supa.from("spend_work_location_site_map")
+        .select("work_location_label, account_key")
+        .in("work_location_label", chunkLabels);
+      if (mr.error) return { error: mr.error };
+      for (const m of mr.data || []) {
+        if (!labelToKey.has(m.work_location_label)) {
+          labelToKey.set(m.work_location_label, m.account_key || null);
+        }
+      }
+    }
+  }
+
+  // Age is computed as of the range end, clamped to today for
+  // in-progress ranges. A closed-period range reads the age as it was on
+  // that period's last day; an FYTD-through-today range reads the age
+  // as of today. Consistent with how period cards handle "as of".
+  const asOfIso = (end > today) ? today : end;
+  const asOf = new Date(asOfIso + "T00:00:00Z");
+  function daysBetween(dateStr) {
+    if (!dateStr) return 0;
+    const d = new Date(dateStr + "T00:00:00Z");
+    return Math.floor((asOf.getTime() - d.getTime()) / 86400000);
+  }
+
+  // Partition rows: attributable (mapped to an account_key in members)
+  // vs Corp/Remote (label mapped to null account_key). Rows at
+  // attributable sites outside `members` (e.g. single-account scope
+  // looking at CIN - AZ, row is at TBR - FL) drop silently - they
+  // belong to a different account's view.
+  const memberSet = new Set(members);
+  const attributable = [];
+  const corpRemote = [];
+  for (const r of rows) {
+    const key = r.work_location ? labelToKey.get(r.work_location) : null;
+    if (key && memberSet.has(key)) {
+      attributable.push({ ...r, _account_key: key });
+    } else if (!key) {
+      corpRemote.push(r);
+    }
+  }
+
+  // Group by site, then by employee within site.
+  const bySite = new Map();
+  for (const r of attributable) {
+    const site = r._account_key;
+    if (!bySite.has(site)) bySite.set(site, new Map());
+    const perSite = bySite.get(site);
+    const empKey = (r.employee || "").trim() || "__UNATTRIBUTED__";
+    if (!perSite.has(empKey)) {
+      perSite.set(empKey, {
+        key: empKey,
+        label: empKey === "__UNATTRIBUTED__" ? "unattributed" : r.employee,
+        charges: 0,
+        amount: 0,
+        oldest_age_days: 0,
+        receipts_present: 0,
+        receipts_total: 0,
+      });
+    }
+    const person = perSite.get(empKey);
+    person.charges += 1;
+    person.amount += Number(r.amount || 0);
+    const age = daysBetween(r.purchased_at);
+    if (age > person.oldest_age_days) person.oldest_age_days = age;
+    if (r.has_receipt === true) person.receipts_present += 1;
+    person.receipts_total += 1;
+  }
+
+  // Build site_rows: people amount-desc, unattributed last so the
+  // catch-all reads as a floor, not a headline.
+  const site_rows = [];
+  for (const [site_code, perSite] of bySite.entries()) {
+    const people = [...perSite.values()].map(p => ({
+      key: p.key,
+      label: p.label,
+      charges: p.charges,
+      amount: Math.round(p.amount * 100) / 100,
+      oldest_age_days: p.oldest_age_days,
+      receipts_present: p.receipts_present,
+      receipts_total: p.receipts_total,
+    })).sort((a, b) => {
+      if (a.key === "__UNATTRIBUTED__") return 1;
+      if (b.key === "__UNATTRIBUTED__") return -1;
+      return b.amount - a.amount;
+    });
+    const charges = people.reduce((s, p) => s + p.charges, 0);
+    const amount = Math.round(people.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+    const oldest_age_days = people.reduce((m, p) => Math.max(m, p.oldest_age_days), 0);
+    const receipts_present = people.reduce((s, p) => s + p.receipts_present, 0);
+    const receipts_total = people.reduce((s, p) => s + p.receipts_total, 0);
+    site_rows.push({
+      site_code,
+      charges,
+      amount,
+      oldest_age_days,
+      receipts_present,
+      receipts_total,
+      people,
+    });
+  }
+  site_rows.sort((a, b) => b.amount - a.amount);
+
+  const total_count = site_rows.reduce((s, r) => s + r.charges, 0);
+  const total_amount = Math.round(site_rows.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+  const oldest_age_days = site_rows.reduce((m, r) => Math.max(m, r.oldest_age_days), 0);
+  const no_receipt_count = site_rows.reduce((s, r) => s + (r.receipts_total - r.receipts_present), 0);
+
+  // Stale-over-90d - a standing figure on the card's OWN population
+  // (attributable/in-range). Currently zero on 2026-08-28. Ships even
+  // when zero so a nine-month-old charge landing on this surface is
+  // observable, not a silent transition from empty to populated.
+  const stale_over_90d_count = site_rows.reduce(
+    (s, r) => s + r.people.reduce((sp, p) => sp + (p.oldest_age_days > 90 ? p.charges : 0), 0),
+    0,
+  );
+  // We can't cleanly derive amount from the per-person aggregate above
+  // without re-walking rows; do the walk once here.
+  let stale_over_90d_amount = 0;
+  for (const r of attributable) {
+    const age = daysBetween(r.purchased_at);
+    if (age > 90) stale_over_90d_amount += Number(r.amount || 0);
+  }
+  const stale_over_90d = {
+    count:  stale_over_90d_count,
+    amount: Math.round(stale_over_90d_amount * 100) / 100,
+  };
+
+  // Corp/Remote footer bucket - only at aggregate scopes (single
+  // accounts don't need noise about Corp/Remote spend they don't own).
+  // Kevin ruling 2026-08-28: also carry oldest_age_days on the footer
+  // so a nine-month-old Corp/Remote charge (275d observed on the
+  // corpus) has a surface. Card's own scope is unchanged.
+  let corp_remote = null;
+  if (members.length > 1 && corpRemote.length > 0) {
+    let crOldest = 0;
+    for (const r of corpRemote) {
+      const age = daysBetween(r.purchased_at);
+      if (age > crOldest) crOldest = age;
+    }
+    corp_remote = {
+      count: corpRemote.length,
+      amount: Math.round(corpRemote.reduce((s, r) => s + Number(r.amount || 0), 0) * 100) / 100,
+      oldest_age_days: crOldest,
+    };
+  }
+
+  // Region split at aggregate scopes. Same shape as Check 3 - the
+  // regions must sum to the portfolio, otherwise a row belongs to a
+  // site that no region owns and the ALL / EAST / WEST views disagree.
+  // Server throws (not just logs) so a drift can't ship. Region parity
+  // holds structurally on 2026-08-28 (5 East + 6 West + 0 NULL), but
+  // this guards against future region-null accounts.
+  let region_split = null;
+  if (members.length > 1) {
+    // 11-row read; kept inside the resolver so loadCompliance is
+    // self-contained and its assertions don't depend on parallel-load
+    // ordering. loadAccountsDirectory also fetches these fields for the
+    // rail; the duplication is worth the isolation.
+    const arResp = await supa.from("accounts").select("team_key, region").neq("team_key", "CORP");
+    if (arResp.error) return { error: arResp.error };
+    const regionByKey = new Map();
+    for (const row of arResp.data || []) regionByKey.set(row.team_key, row.region);
+    const east = { count: 0, amount: 0 };
+    const west = { count: 0, amount: 0 };
+    const other = { count: 0, amount: 0, keys: new Set() };
+    for (const site of site_rows) {
+      const region = regionByKey.get(site.site_code);
+      const bucket = region === "East" ? east : region === "West" ? west : other;
+      bucket.count += site.charges;
+      bucket.amount += site.amount;
+      if (bucket === other) bucket.keys.add(site.site_code);
+    }
+    east.amount  = Math.round(east.amount  * 100) / 100;
+    west.amount  = Math.round(west.amount  * 100) / 100;
+    other.amount = Math.round(other.amount * 100) / 100;
+    // Same-defect-shape check: regions must sum to total. Throw so the
+    // resolver refuses to serve a broken payload; the client Check 3 is
+    // the belt-and-braces gate over the same invariant on the whole
+    // (site == sum-of-people == sum-of-regions) column.
+    const combined = east.count + west.count + other.count;
+    if (combined !== total_count) {
+      return { error: { message: `region parity: east=${east.count} west=${west.count} other=${other.count} sum=${combined} total_count=${total_count}`, code: "region_parity_sum" } };
+    }
+    if (other.count > 0) {
+      return { error: { message: `region parity: ${other.count} charge(s) at site(s) [${[...other.keys].join(",")}] whose region is neither East nor West. Fix accounts.region before continuing.`, code: "region_parity_other" } };
+    }
+    region_split = { east, west };
+  }
+
+  return {
+    data: {
+      total_count,
+      total_amount,
+      oldest_age_days,
+      no_receipt_count,
+      site_rows,
+      corp_remote,
+      region_split,
+      stale_over_90d,
+      thresholds: { red_days: 14, amber_days: 7 },
+    },
+  };
+}
+
 // ─── Route handler ───────────────────────────────────────────────────
 
 export async function GET(request) {
@@ -1144,7 +1406,7 @@ export async function GET(request) {
   //
   // PR-2 R4 Part A: pass [effStart, effEnd] so weekly view, actuals,
   // pending all describe the same fiscal-week footprint.
-  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, freshness, dirResp, priorHistoryResp] = await Promise.all([
+  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, freshness, dirResp, priorHistoryResp, complianceResp] = await Promise.all([
     paginateWeekly(supa, { members, start: effStart, end: effEnd }),
     loadPending(supa, { members, start: effStart, end: effEnd }),
     loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
@@ -1156,6 +1418,12 @@ export async function GET(request) {
     isClosedSinglePeriod
       ? loadPriorPeriodHistory(supa, { members, periodNo: singlePeriodNo })
       : Promise.resolve({ data: null }),
+    // PR 6 - compliance card. Reads the report side of uncoded card
+    // spend (rippling_report_txns_latest sentinel category) restricted
+    // to attributable work locations. Corp/Remote uncoded rows are a
+    // footer count only. See loadCompliance() docblock for the full
+    // shape + why the population is the report side, not the board.
+    loadCompliance(supa, { members, start: effStart, end: effEnd, today }),
   ]);
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
@@ -1163,6 +1431,7 @@ export async function GET(request) {
   if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
   if (dirResp.error) return NextResponse.json(safeError("accounts_directory", dirResp.error), { status: 500 });
   if (priorHistoryResp.error) return NextResponse.json(safeError("prior_period_history", priorHistoryResp.error), { status: 500 });
+  if (complianceResp.error) return NextResponse.json(safeError("compliance", complianceResp.error), { status: 500 });
   const weekly = weeklyResp.data;
   // Precedence merge: API pending + report-only pending (no double
   // count - API rows are structurally excluded from the report-only
@@ -1913,6 +2182,14 @@ export async function GET(request) {
     // SHOW filter. null unless ?table=1 (lazy fetch on first Bills /
     // Cards switch).
     weekly_by_source,
+    // PR 6 - compliance card. Report-side uncoded (sentinel category)
+    // rows restricted to attributable work locations, grouped by site
+    // and by person. Corp/Remote uncoded surfaces as a footer count at
+    // aggregate scopes. Empty (`total_count = 0`) means every uncoded
+    // charge at attributable sites has already been coded; the card
+    // hides itself in that case (E-clause rule: empty card does not
+    // appear).
+    compliance: complianceResp.data,
   };
   if (includeLines) {
     // PR-2 R11 item 4 - drill-table vendor column was rendering `—` on
