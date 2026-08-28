@@ -68,20 +68,6 @@
 //                        reimbursable {spent, billed_to_client},
 //                        sga {spent},
 //                        card {spent, unattributed, uncoded} }
-//   coverage           { bills_in_range, last_bill_created_at,
-//                        days_since_last_bill, lines_unattributed,
-//                        lines_uncoded, invoice_capture_matched_pct
-//                       (null until P0d audit's join lands),
-//                        miscoded_card_lines: { count, by_account: [...] } }
-//                       miscoded_card_lines: card lines whose
-//                       work_location is Remote/Corporate/HQ (so they
-//                       are excluded from any per-account spend view)
-//                       BUT whose department_id resolves to a site via
-//                       rippling_department_map. That is a policy miss:
-//                       a site person spent money and did not code a
-//                       location. Attributed by the DEPARTMENT
-//                       (cardholder's payroll site) for the report;
-//                       NEVER summed into any spend figure.
 //   provisional        true when range end + 16 days > today
 //                       (bill.com entry-lag p90).
 //   freshness          { last_billcom_sync, last_rippling_sync,
@@ -262,8 +248,8 @@ function stateOf({ spent, budget, elapsedFrac, hasBills, isPassThrough }) {
 // never has to remember to exclude them. Unattributed / uncoded
 // analysis reads a separate query (below) that keeps the null rows.
 //
-// Population: bills + coded card lines. Pending sum + coverage nulls
-// go via separate paths that keep the rows this drops.
+// Population: bills + coded card lines. Pending sum + null-attribution
+// analysis go via separate paths that keep the rows this drops.
 async function paginateActuals(supa, { members, start, end, pageSize }) {
   const PS = pageSize && pageSize > 0 && pageSize <= V6_PAGE_DEFAULT ? pageSize : V6_PAGE_DEFAULT;
   const out = [];
@@ -662,99 +648,6 @@ async function loadFreshness(supa) {
   };
 }
 
-// ─── Coverage read ───────────────────────────────────────────────────
-
-async function loadCoverage(supa, { members, start, end }) {
-  const [billCount, lastBill, unattr, uncoded] = await Promise.all([
-    supa.from("purchasing_actuals")
-      .select("source_bill_id", { count: "exact", head: true })
-      .eq("source", "billcom").eq("excluded", false)
-      .in("account_key", members).gte("txn_date", start).lte("txn_date", end),
-    supa.from("billcom_raw_bills_latest")
-      .select("created_time")
-      .order("created_time", { ascending: false })
-      .limit(1).maybeSingle(),
-    supa.from("purchasing_actuals")
-      .select("id", { count: "exact", head: true })
-      .is("account_key", null).eq("excluded", false),
-    supa.from("purchasing_actuals")
-      .select("id", { count: "exact", head: true })
-      .is("gl_line_code", null),
-  ]);
-  const lastBillCreated = lastBill.data?.created_time || null;
-  const daysSince = lastBillCreated
-    ? Math.max(0, Math.floor((Date.now() - new Date(lastBillCreated).getTime()) / 86400000))
-    : null;
-
-  // miscoded_card_lines (owner ruling 2026-08-18): card lines whose
-  // work_location resolved to excluded (Remote/Corporate/HQ) but whose
-  // department_id maps to a labor site via rippling_department_map.
-  // Attribute by DEPARTMENT (that is the only signal for who should
-  // have coded it). NEVER sum into any per-account spend figure.
-  //
-  // Read the excluded rippling_spend rows in range from raw_latest
-  // (excluded rows in purchasing_actuals do not carry account_key by
-  // construction; we need the raw row's department_id). Then join
-  // against rippling_department_map for account_key.
-  const miscoded = { count: 0, by_account: [] };
-  {
-    // Load raw excluded rows in range. The raw row's first_seen_at
-    // approximates the txn_date the derive step uses.
-    const rawRows = [];
-    let from = 0;
-    const CHUNK = 1000;
-    while (true) {
-      const q = await supa.from("rippling_raw_spend_lines_latest")
-        .select("rippling_id, department_id, work_location_id, first_seen_at")
-        .not("work_location_id", "is", null)
-        .not("department_id", "is", null)
-        .gte("first_seen_at", start + "T00:00:00.000Z")
-        .lte("first_seen_at", end + "T23:59:59.999Z")
-        .order("rippling_id", { ascending: true })
-        .range(from, from + CHUNK - 1);
-      if (q.error) break;
-      const rows = q.data || [];
-      for (const r of rows) rawRows.push(r);
-      if (rows.length < CHUNK) break;
-      from += CHUNK;
-    }
-    // Load work_location map (excluded set) + rippling_department_map.
-    const [wlMap, deptMap] = await Promise.all([
-      supa.from("spend_work_location_site_map").select("work_location_id, excluded"),
-      supa.from("rippling_department_map").select("department_id, account_key"),
-    ]);
-    const excludedWLIds = new Set((wlMap.data || []).filter(r => r.excluded).map(r => r.work_location_id));
-    const deptToAccount = new Map((deptMap.data || []).map(r => [r.department_id, r.account_key]));
-    const byAcct = new Map();
-    for (const r of rawRows) {
-      if (!excludedWLIds.has(r.work_location_id)) continue;      // not excluded -> normal attribution path
-      const accountKey = deptToAccount.get(r.department_id);
-      if (!accountKey) continue;                                 // department not mapped
-      // miscoding definition: CORP-department cards coded to Remote are
-      // expected, not miscodes. Single site of truth for this rule
-      // (owner ruling 2026-08-19, PR #713 flag 2 - ACCEPTED as built).
-      // A corporate person coding to Remote is expected behaviour: they
-      // work remotely. Filtering CORP-department rows out of the count
-      // here is the definition, not a policy layered on top.
-      if (accountKey === "CORP") continue;
-      byAcct.set(accountKey, (byAcct.get(accountKey) || 0) + 1);
-    }
-    miscoded.count = [...byAcct.values()].reduce((s, n) => s + n, 0);
-    miscoded.by_account = [...byAcct.entries()]
-      .map(([account_key, lines]) => ({ account_key, lines }))
-      .sort((a, b) => b.lines - a.lines);
-  }
-
-  return {
-    bills_in_range:                billCount.count || 0,
-    last_bill_created_at:          lastBillCreated,
-    days_since_last_bill:          daysSince,
-    lines_unattributed:            unattr.count || 0,
-    lines_uncoded:                 uncoded.count || 0,
-    invoice_capture_matched_pct:   null,   // P0d audit lands separately
-    miscoded_card_lines:           miscoded,
-  };
-}
 
 // ─── PR-2 R6 Part B - capped aggregations for the five populated cards ───
 //
@@ -1094,8 +987,8 @@ export async function GET(request) {
   //
   // Chosen rule: **include the whole fiscal week when it overlaps the
   // range** (Kevin's Option 2). Matches labor's overlap semantics.
-  // Every read below (weekly view, purchasing_actuals, pending,
-  // coverage) uses the SAME [effStart, effEnd] pair so hero, bills,
+  // Every read below (weekly view, purchasing_actuals, pending) uses
+  // the SAME [effStart, effEnd] pair so hero, bills,
   // cards, bars all describe the same fiscal-week footprint. URL /
   // rangeLabel keep the user's start/end untouched - the chart bar
   // caption already prints the real MM/DD - MM/DD fiscal-week label
@@ -1131,7 +1024,7 @@ export async function GET(request) {
   const todayDateEarly = new Date(today + "T00:00:00Z");
   const isClosedSinglePeriod = isSinglePeriodRange && rangeEndDate < todayDateEarly;
 
-  // Fetch weekly / pending / raw actuals / coverage / freshness in
+  // Fetch weekly / pending / raw actuals / freshness in
   // parallel. Weekly reads the SQL-aggregated view; raw actuals are
   // still needed for source-level splits (bills-only bucket state,
   // totals.card by source). Parallelising cuts wall-time on the
@@ -1139,13 +1032,12 @@ export async function GET(request) {
   // rows) would otherwise serialise behind the weekly read.
   //
   // PR-2 R4 Part A: pass [effStart, effEnd] so weekly view, actuals,
-  // pending and coverage all describe the same fiscal-week footprint.
-  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, coverage, freshness, dirResp, priorHistoryResp] = await Promise.all([
+  // pending all describe the same fiscal-week footprint.
+  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, freshness, dirResp, priorHistoryResp] = await Promise.all([
     paginateWeekly(supa, { members, start: effStart, end: effEnd }),
     loadPending(supa, { members, start: effStart, end: effEnd }),
     loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
     paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam }),
-    loadCoverage(supa, { members, start: effStart, end: effEnd }),
     loadFreshness(supa),
     loadAccountsDirectory(supa),   // PR-2 R2 Fix 7
     // R13 P0-1 - history for closed period card only.  Loader returns
@@ -1528,8 +1420,12 @@ export async function GET(request) {
   const provisionalCutoff = new Date(endDate.getTime() + PROVISIONAL_WINDOW_DAYS * 86400000);
   const provisional = provisionalCutoff > todayDate;
 
-  // Sentinel: value the route returns for the frozen probe.
-  const sentinelResp = await computeSentinel(supa);
+  // Sentinel: value the route returns for the frozen probe.  Gated on
+  // ?debug=1 (owner ruling 2026-08-28) - zero board consumers read
+  // body.sentinel; only acceptance probes _pr2r3_ + _pr2r5_ do and
+  // they pass debug=1.  Saves ~50ms per board load.
+  const debugRequested = new URL(request.url).searchParams.get("debug") === "1";
+  const sentinelResp = debugRequested ? await computeSentinel(supa) : { data: null };
 
   // cost_model: single-account calls carry the resolved cost model
   // (at_risk / pass_through / revenue_flex). Aggregates get null -
@@ -1875,7 +1771,6 @@ export async function GET(request) {
     period_history: priorHistoryResp.data,
     categories,
     totals,
-    coverage,
     provisional,
     freshness,
     accounts_directory: dirResp.data,   // PR-2 R2 Fix 7 - rail meta on 11/11

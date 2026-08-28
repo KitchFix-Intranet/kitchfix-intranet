@@ -11,7 +11,7 @@ const BASE = "http://localhost:3220";
 const HEADLESS = true;
 
 async function fetchApi(account, start, end) {
-  const u = `${BASE}/api/kpi/purchasing?account=${encodeURIComponent(account)}&start=${start}&end=${end}`;
+  const u = `${BASE}/api/kpi/purchasing?account=${encodeURIComponent(account)}&start=${start}&end=${end}&debug=1`;
   const r = await fetch(u);
   if (!r.ok) throw new Error(`${account} ${start}..${end} -> ${r.status}`);
   return r.json();
