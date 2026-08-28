@@ -614,7 +614,14 @@ export default function KpiLaborPage() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [data, redact]);
 
-  const totalWorkersInRange = data?.actuals ? new Set(data.actuals.map(r => r.worker_id)).size : 0;
+  // 2026-08-28 person-key fix: prefer the server-computed
+  // board.distinct_workers (dedupes by email so a seasonal rehire
+  // counts as one person) over recomputing locally by worker_id.
+  // Legacy fallback handles the salaried-only case where board.applies
+  // is false and distinct_workers is not present, plus the transient
+  // window before data arrives - both count zero, safe defaults.
+  const totalWorkersInRange = data?.board?.distinct_workers
+    ?? (data?.actuals ? new Set(data.actuals.map(r => r.worker_id)).size : 0);
   const shownWorkers = selectedWorkers && selectedWorkers.size > 0 ? selectedWorkers.size : totalWorkersInRange;
 
   const grand = useMemo(() => {

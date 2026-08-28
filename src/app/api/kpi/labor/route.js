@@ -29,6 +29,7 @@ import { getServiceClient } from "@/lib/supabase";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta";
 import { resolvePortfolioMembers } from "@/lib/kpi/portfolioMembers";
 import { fetchAllOffset } from "@/lib/rippling/paginate";
+import { buildWorkerToEmail } from "@/lib/labor/personCount";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets, computePeriodMeasures } from "@/app/kpi/labor/lib/board.js";
 import { periodStartISO as fyPeriodStart, periodEndISO as fyPeriodEnd, inferRangeSelection as fyInferRange } from "@/app/kpi/labor/lib/periods.js";
@@ -896,6 +897,10 @@ export async function GET(request) {
     //    workers unresolved (rendered as id hashes at CIN - AZ).
     const workerIds = [...new Set(actualsRows.map(r => r.worker_id))];
     const { workerMeta, resolvedNames, usersReachable } = await resolveWorkerMeta(supa, workerIds);
+    // 2026-08-28 person-key fix: build the worker_id -> email map once
+    // and thread it through buildBoard + salary paths so distinct-people
+    // counts dedupe by person (email) not employment spell (worker_id).
+    const workerToEmail = buildWorkerToEmail(workerMeta);
 
     // 4. account_periods - fiscal calendar is universal across accounts;
     // use the first member as the canonical source (any account would
@@ -1032,6 +1037,7 @@ export async function GET(request) {
         actuals: rolledUpActuals,
         budget_periods,
         account_state: "hourly_ok",
+        workerToEmail,
       }),
       week_budgets: buildAggregateWeekBudgets({ start, end, member_budgets: memberBudgets }),
       prior_period_comparison: priorCmpAgg,
@@ -1054,21 +1060,28 @@ export async function GET(request) {
       ]);
       if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
       if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+      // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
+      // withSalaryMerge so the merged workerToEmail covers both the
+      // hourly and salary sides. Previously salary worker names were
+      // resolved AFTER the merge for display only - the merged board's
+      // person-counts would have missed salary rehires. Now the merge
+      // sees the complete map.
+      const salaryOnlyIds = [...new Set(actQ.rows.map(r => r.worker_id))]
+        .filter(id => id && !body.workers[id]);
+      let mergedWorkerToEmail = workerToEmail;
+      if (salaryOnlyIds.length > 0) {
+        const extra = await resolveWorkerMeta(supa, salaryOnlyIds);
+        body.workers = { ...body.workers, ...extra.workerMeta };
+        mergedWorkerToEmail = buildWorkerToEmail(body.workers);
+      }
       body = withSalaryMerge(body, {
         account, members, start, end, today,
         buildBoard,
         buildWeekBudgets,
         salary3100_2: budQ.byAccount,
         salaryRows: actQ.rows,
+        workerToEmail: mergedWorkerToEmail,
       });
-      // V40 BUG 5 - resolve names for salary worker_ids not already
-      // covered by the hourly resolve above. Same helper, same fallback.
-      const salaryOnly = [...new Set(actQ.rows.map(r => r.worker_id))]
-        .filter(id => id && !body.workers[id]);
-      if (salaryOnly.length > 0) {
-        const extra = await resolveWorkerMeta(supa, salaryOnly);
-        body.workers = { ...body.workers, ...extra.workerMeta };
-      }
     }
     body.salary_available = salary_available;
     body.landing_account = landing_account;
@@ -1114,21 +1127,26 @@ export async function GET(request) {
       if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
       bodyD26.account_state = "hourly_ok";
       bodyD26.account_state_message = undefined;
+      // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
+      // withSalaryMerge so the workerToEmail map covers them; D26
+      // accounts arrive with an empty workers dict, so this is the
+      // FIRST resolve for them.
+      const salaryOnlyIds = [...new Set(actQ.rows.map(r => r.worker_id))]
+        .filter(id => id && !bodyD26.workers[id]);
+      let d26WorkerToEmail = new Map();
+      if (salaryOnlyIds.length > 0) {
+        const extra = await resolveWorkerMeta(supa, salaryOnlyIds);
+        bodyD26.workers = { ...bodyD26.workers, ...extra.workerMeta };
+        d26WorkerToEmail = buildWorkerToEmail(bodyD26.workers);
+      }
       bodyD26 = withSalaryMerge(bodyD26, {
         account, members: [account], start, end, today,
         buildBoard,
         buildWeekBudgets,
         salary3100_2: budQ.byAccount,
         salaryRows: actQ.rows,
+        workerToEmail: d26WorkerToEmail,
       });
-      // V40 BUG 5 - D26 accounts arrive with an empty workers dict.
-      // Resolve the salary worker_ids so their names render.
-      const salaryOnly = [...new Set(actQ.rows.map(r => r.worker_id))]
-        .filter(id => id && !bodyD26.workers[id]);
-      if (salaryOnly.length > 0) {
-        const extra = await resolveWorkerMeta(supa, salaryOnly);
-        bodyD26.workers = { ...bodyD26.workers, ...extra.workerMeta };
-      }
     }
     bodyD26.salary_available = salary_available;
     bodyD26.landing_account = landing_account;
@@ -1174,6 +1192,8 @@ export async function GET(request) {
   // to the aggregate one; both now share resolveWorkerMeta.
   const workerIds = [...new Set(actuals.data.map(r => r.worker_id))];
   const { workerMeta, resolvedNames, usersReachable } = await resolveWorkerMeta(supa, workerIds);
+  // 2026-08-28 person-key fix (single-account path).
+  const workerToEmail = buildWorkerToEmail(workerMeta);
 
   // account_periods: full FY period boundaries from sc_day_metadata for
   // this account. Powers client-side "this period" / "last period"
@@ -1334,6 +1354,7 @@ export async function GET(request) {
       actuals: actuals.data,
       budget_periods,
       account_state: "hourly_ok",
+      workerToEmail,
     }),
     week_budgets: buildWeekBudgets({ start, end, budget_periods }),
     prior_period_comparison: priorCmpSingle,
@@ -1356,16 +1377,32 @@ export async function GET(request) {
     ]);
     if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
     if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
+    // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
+    // withSalaryMerge so the workerToEmail map covers them. This is
+    // the CIN - AZ path (three salaried workers, none in labor_actuals
+    // hourly) - salary workers were previously only resolved AFTER
+    // the merge for display, so the merged board's person-counts
+    // missed any salary rehires.
+    const salaryOnlyIds = [...new Set(actQ.rows.map(r => r.worker_id))]
+      .filter(id => id && !bodySingle.workers[id]);
+    let mergedWorkerToEmail = workerToEmail;
+    if (salaryOnlyIds.length > 0) {
+      const extra = await resolveWorkerMeta(supa, salaryOnlyIds);
+      bodySingle.workers = { ...bodySingle.workers, ...extra.workerMeta };
+      mergedWorkerToEmail = buildWorkerToEmail(bodySingle.workers);
+    }
     bodySingle = withSalaryMerge(bodySingle, {
       account, members: [account], start, end, today,
       buildBoard,
       buildWeekBudgets,
       salary3100_2: budQ.byAccount,
       salaryRows: actQ.rows,
+      workerToEmail: mergedWorkerToEmail,
     });
-    // V40 BUG 5 - resolve any salary worker_ids not covered by the
-    // hourly resolve. This is the CIN - AZ path (three salaried
-    // workers, none in labor_actuals hourly).
+    // Legacy CIN - AZ re-resolve retained as belt-and-braces: the
+    // salary-first resolve above covers this today, but a future
+    // refactor that changes the merge shape shouldn't silently drop
+    // salary names. Idempotent.
     const salaryOnly = [...new Set(actQ.rows.map(r => r.worker_id))]
       .filter(id => id && !bodySingle.workers[id]);
     if (salaryOnly.length > 0) {

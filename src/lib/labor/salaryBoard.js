@@ -38,6 +38,8 @@
 // the hourly path) but this module never logs a name, an email, or
 // a dollar figure.
 
+import { countDistinctPeople } from "./personCount.js";
+
 function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
 const FY2026 = 2026;
@@ -192,6 +194,12 @@ export function withSalary(body, {
   salary3100_2,
   salaryRows,
   otThresholds,
+  // 2026-08-28 person-key fix. worker_id -> email map so distinct-
+  // people counts (buildBoard's worker_count / approval_people /
+  // distinct_workers AND our salary_summary.workers) dedupe by person
+  // (email) instead of employment spell (worker_id). Empty preserves
+  // the legacy worker_id-based count for callers that do not build one.
+  workerToEmail = new Map(),
 }) {
   // 1. Sum 3100.2 per-period across the members whose budget we merge.
   const salaryByPeriod = new Map();
@@ -220,10 +228,13 @@ export function withSalary(body, {
     budget_periods: merged.periods,
     account_state: "hourly_ok",
     ot_thresholds: otThresholds,
+    workerToEmail,
   });
 
   // 5. Salary summary counts.
-  const distinctWorkers = new Set(salaryRows.map(r => r.worker_id)).size;
+  // 2026-08-28 person-key fix: dedupe by email so a rehired salaried
+  // employee (rare but possible) counts as one person.
+  const distinctWorkers = countDistinctPeople(salaryRows, workerToEmail);
   const distinctWeeks = new Set(salaryRows.map(r => r.week_start)).size;
   const salaryAmount = r2(salaryRows.reduce((s, r) => s + Number(r.amount || 0), 0));
   const salary_summary = { workers: distinctWorkers, weeks: distinctWeeks, amount: salaryAmount };
