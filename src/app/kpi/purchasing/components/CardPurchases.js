@@ -34,6 +34,33 @@ function normaliseCategory(raw) {
   return { label: s, missing: false };
 }
 
+// R16 P0 gate (owner ruling 2026-08-28): CardPurchases lifted its hero
+// from `board.pending` (mergePending output: API + report-only) and
+// paired it with `card_charges.total_amount` (API only).  The two-source
+// mismatch is the ninth appearance of hero-vs-detail on this project
+// and the first outside a LedgerCard.  The gate below matches the shape
+// of LedgerCard's Check 9: dev throws, prod warns via console.error.
+// Fires whenever mergePending's report-only slice is non-zero for the
+// account+range in view - which is by design a state the derive
+// intentionally creates until the next report ingest lands.
+function assertPendingMatchesTotal({ pendingAmount, pendingLineCount, totalAmount, totalCount }) {
+  if (typeof window === "undefined") return;
+  if (totalAmount == null || totalCount == null) return;
+  const heroR = Math.round(Number(pendingAmount || 0) * 100) / 100;
+  const totR  = Math.round(Number(totalAmount   || 0) * 100) / 100;
+  const heroN = Number(pendingLineCount || 0);
+  const totN  = Number(totalCount || 0);
+  const amountDelta = Math.abs(heroR - totR);
+  const countDelta  = Math.abs(heroN - totN);
+  if (amountDelta <= 0.01 && countDelta === 0) return;
+  const msg = `CardPurchases Check 9: hero $${heroR.toFixed(2)} (${heroN} charges) != footer $${totR.toFixed(2)} (${totN} charges) - ` +
+              `delta amount $${(heroR - totR).toFixed(2)}, delta count ${heroN - totN}. ` +
+              `Most likely cause: mergePending includes report-only pending in the hero but loadCardCharges lists API rows only.`;
+  // eslint-disable-next-line no-console
+  console.error(`[CardPurchases Check 9] ${msg}`);
+  if (process.env.NODE_ENV !== "production") throw new Error(msg);
+}
+
 export function CardPurchases({
   pendingAmount,          // number - summary total
   pendingLineCount,       // integer - total count (may exceed cap)
@@ -47,6 +74,7 @@ export function CardPurchases({
   isAggregate,
 }) {
   if (closed) return null;
+  assertPendingMatchesTotal({ pendingAmount, pendingLineCount, totalAmount, totalCount });
   const n = Number(pendingLineCount || 0);
   const list = Array.isArray(rows) ? rows : [];
   return (
