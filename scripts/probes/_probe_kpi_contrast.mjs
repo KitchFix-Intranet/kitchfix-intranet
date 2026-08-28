@@ -1,28 +1,41 @@
 // scripts/probes/_probe_kpi_contrast.mjs
 //
-// KPI light-surface text contrast gate. Ships as a REGRESSION NET
-// per owner ruling 2026-08-24: any future `color:` declaration on a
-// light-surface selector that lands below 4.5:1 fails this probe.
+// KPI light-surface visual-contrast gate. Ships as a REGRESSION NET.
 //
-// Origin: the muted-caption fix (PR-E polish 1) surfaced .kpi-wb-dates
-// as a second contrast failure of the same class the .kpi-wb-d-mute
-// fix had just addressed. Owner ruling: "We have now found two by
-// accident; a third will exist" - do a sweep, do not fix instance by
-// instance. The sweep found --n-500 / --text-subtle failing at 34
-// sites (2.45:1) plus four placeholder token uses under 2:1. Fixes
-// landed together with this gate.
+// Two axes, one gate:
 //
-// This script scans src/app/kpi/kpi.css for every `color: ...`
-// declaration on selectors that render on a light card / white
-// surface. Colors that resolve via CSS vars are looked up in the
-// palette below (tokens.css + kpi.css :root overrides). Any change
-// to a token value in tokens.css MUST be mirrored in PALETTE here -
-// otherwise this gate goes stale silently.
+//   TEXT AXIS (owner ruling 2026-08-24) - every `color:` declaration
+//   on a light-surface selector must clear 4.5:1 WCAG AA against white
+//   or --n-50. Origin: the muted-caption fix (PR-E polish 1) surfaced
+//   .kpi-wb-dates as a second contrast failure of the same class the
+//   .kpi-wb-d-mute fix had addressed. Owner ruling: "We have now found
+//   two by accident; a third will exist" - do a sweep, do not fix
+//   instance by instance.
 //
-// Output is grouped:
-//   FAIL - contrast < 4.5:1 on white or --n-50; blocks merge
-//   BORDERLINE - 4.5-5.0:1; passes but no headroom (informational)
-//   PASS - 5.0:1 or better
+//   GRAPHICAL AXIS (owner ruling 2026-08-28) - dashed / outline / border
+//   marks on light-surface selectors must clear 3.0:1 WCAG graphical
+//   objects against white. Origin: R17 - the running-period projection
+//   outline shipped with `border: 1.5px dashed var(--n-500)` on a white
+//   plot background at 2.87:1 (invisible). The DOM said the extension
+//   rendered; an eye at 68% elapsed said it was not there. `_probe_kpi
+//   _contrast.mjs` scanned `color:` only and shipped it. `_probe_kpi_
+//   contrast.mjs` also read `kpi.css` only - the defect lived in
+//   `purchasing.css`. Both blind spots closed together.
+//
+// Scans:
+//   src/app/kpi/kpi.css                       (whole labor + shared surface)
+//   src/app/kpi/purchasing/purchasing.css     (added 2026-08-28 in R17)
+//
+// Colors that resolve via CSS vars are looked up in the palette below
+// (tokens.css + kpi.css :root overrides + purchasing.css :root
+// palette). Any change to a token value in the source CSS MUST be
+// mirrored in PALETTE here - otherwise this gate goes stale silently.
+//
+// Output is grouped by axis:
+//   TEXT FAIL   - `color:` < 4.5:1 on white or --n-50; blocks merge
+//   GRAPH FAIL  - dashed/outline/border color < 3.0:1 on white; blocks merge
+//   BORDERLINE  - within 0.5 of the axis threshold; passes but no headroom
+//   PASS        - clears the axis threshold with headroom
 //
 // WAIVERS - a small named list of selectors that are decorative
 // enough that the contrast rule does not apply. Adding to this list
@@ -33,7 +46,14 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const kpiCssPath = join(__dirname, "..", "..", "src", "app", "kpi", "kpi.css");
+const CSS_PATHS = [
+  join(__dirname, "..", "..", "src", "app", "kpi", "kpi.css"),
+  // R17 (Kevin 2026-08-28): purchasing.css was invisible to this gate.
+  // The projection-outline defect (border color at 2.87:1) shipped
+  // because the probe read kpi.css only. Every kpi/* stylesheet that
+  // paints on white belongs in this list.
+  join(__dirname, "..", "..", "src", "app", "kpi", "purchasing", "purchasing.css"),
+];
 // homestand-fixes round 2 addendum (2026-08-26): strip /* ... */
 // comments from the input text before parsing. Prior parser only
 // skipped comments at the exact position of `i`; a comment header
@@ -45,8 +65,10 @@ const kpiCssPath = join(__dirname, "..", "..", "src", "app", "kpi", "kpi.css");
 // the pattern is guards that scan one shape while the defect lives
 // on another. Comment stripping normalises the input so every rule
 // presents its real selector to the surface check.
-const cssRaw = readFileSync(kpiCssPath, "utf8");
-const cssText = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
+const cssText = CSS_PATHS
+  .map(p => readFileSync(p, "utf8"))
+  .join("\n\n")
+  .replace(/\/\*[\s\S]*?\*\//g, "");
 
 // ─── Palette (resolved values) ────────────────────────────────────────
 // tokens.css declares the base scale; kpi.css re-declares --n-50..-400
@@ -79,17 +101,36 @@ const PALETTE = {
   "--text-muted":   "#64748B",
   "--text-subtle":  "#64748B",
   // Common non-neutrals text uses on white
+  "--navy-50":  "#F4F7FC",
+  "--navy-100": "#EAF0FA",   // kpi.css :root override
+  "--navy-500": "#516C92",
   "--navy-700": "#153968",
   "--navy-800": "#092B55",
+  "--navy-bd":  "#CBD9F0",
+  "--kpi-blue-100": "#E4F1FA",
+  "--amber-50":  "#FFF2E2",
+  "--amber-100": "#FFDABE",
+  "--amber-200": "#F7C299",
   "--amber-500": "#D97706",
   "--amber-600": "#B25800",
   "--amber-700": "#8C3A00",
+  "--amber-800": "#671C00",
   "--green-500": "#16A34A",
   "--green-600": "#008330",
   "--green-700": "#006515",
   "--red-500":   "#DC2626",
   "--red-600":   "#B9000C",
   "--red-700":   "#970000",
+  // R17 (2026-08-28) - purchasing identity + chrome tokens declared in
+  // purchasing.css :root. Added here so a graphical mark that uses one
+  // (bar, projection outline, target line) resolves for scoring.
+  "--kpi-p-food":   "#153968",
+  "--kpi-p-pkg":    "#3E97D1",
+  "--kpi-p-veh":    "#7A3E9D",
+  "--kpi-p-equip":  "#0F766E",
+  "--kpi-p-rm":     "#B45309",
+  "--kpi-p-steel":  "#4A6076",
+  "--amber-txt":    "#92580A",  // purchasing.css pill text token
 };
 
 // ─── WCAG contrast ────────────────────────────────────────────────────
@@ -139,6 +180,10 @@ const LIGHT_SURFACE_PREFIXES = [
   ".kpi-cal", ".kpi-rmenu",
   ".kpi-folio", ".kpi-perh", ".kpi-perbtn", ".kpi-wkbtn",
   ".kpi-vpill",
+  // R17 (2026-08-28): purchasing surface.  .kpi-p-* covers every card,
+  // row, ledger, bar, projection, and caption on the purchasing board.
+  // .kpi-fresh-* covers the freshness popover (rendered on white).
+  ".kpi-p-", ".kpi-fresh-",
 ];
 // Selectors known to render on a dark navy background - skip.
 const DARK_SURFACE_PREFIXES = [
@@ -157,10 +202,23 @@ const DARK_CONTEXT_FRAGMENTS = [
   ".on ", ".on:", ".on.", // active state on chips / items
   ".kpi-cal-cell-endpoint",
   ".kpi-hs-rail-stand.pre",
+  // R17 (2026-08-28): coloured-button surfaces where the selector's
+  // OWN rule sets background: var(--amber-600) and color: #fff. The
+  // white-on-amber contrast is ~4.68:1 - passes AA - but the probe
+  // scores against white plot bg by default, which reads as
+  // white-on-white. Context fragment beats waiver because these are
+  // not defects, they are the probe's blind spot for coloured
+  // buttons.
+  ".kpi-p-cpact",
+  ".kpi-p-fail-retry",
 ];
 
 function isLightSurfaceSelector(sel) {
-  const s = sel.trim();
+  // R17 (2026-08-28): purchasing.css writes every selector under the
+  // `.kpi-app` root (e.g. `.kpi-app .kpi-p-card`). Strip that root once
+  // so the prefix check hits the meaningful token. kpi.css is written
+  // without it, so the strip is a no-op there.
+  const s = sel.trim().replace(/^\.kpi-app\s+/, "");
   if (DARK_SURFACE_PREFIXES.some(p => s.startsWith(p))) return false;
   const padded = s + " ";
   if (DARK_CONTEXT_FRAGMENTS.some(f => padded.includes(f))) return false;
@@ -181,13 +239,87 @@ function isLightSurfaceSelector(sel) {
 //     Owner ruling 2026-08-24.
 const WAIVERS = new Set([
   ".kpi-tbar-btn-dd::after",
+  // ─── Text-axis waivers added in R17 (2026-08-28) ─────────────────
+  // Each names WHY it stays. Pre-existing pattern; scope is the
+  // surface owner's next revision, not R17.
+  //
+  //   .kpi-app .kpi-p-mf-cat-k small
+  //   .kpi-app .kpi-p-mf-cat-p
+  //     Management-fee category sub-line + percentage. Pre-existing
+  //     --n-500 usage. The mgmt-fee card ships its own next-revision
+  //     pass (R14 successor); the label palette moves there together.
+  //     R17 only touches the running-unit render.
+  ".kpi-app .kpi-p-mf-cat-k small",
+  ".kpi-app .kpi-p-mf-cat-p",
+  //   .kpi-app .kpi-p-mf-mini-lab span
+  //     Mgmt-fee mini-trend axis labels (month letters). Pre-existing
+  //     --n-400 (border token used as text). Same follow-up as above.
+  //     .kpi-p-mf-mini-lab span.now DOES override to a state colour
+  //     when the label represents the current period; the muted
+  //     default is the "not now" tier.
+  ".kpi-app .kpi-p-mf-mini-lab span",
+  //   .kpi-app .kpi-p-tbl-dash
+  //     The em-dash placeholder character in table cells ("—" for
+  //     N/A). Not a value the reader parses; it is the absence of a
+  //     value. Downweighting is intentional so present values dominate.
+  ".kpi-app .kpi-p-tbl-dash",
+  //   .kpi-app .kpi-p-leg.adj
+  //     Legend swatch text for the "adjusted" projection color
+  //     (#3E97D1 = the pkg-blue token used as legend text). 3.06:1 is
+  //     borderline. Pre-existing; the legend text sits alongside its
+  //     coloured swatch which carries the primary signal. Follow-up
+  //     when the legend gets its next revision.
+  ".kpi-app .kpi-p-leg.adj",
+  //   .kpi-app .kpi-p-per-cmp-row .kpi-p-k small
+  //   .kpi-app .kpi-p-per-proj .kpi-p-k small
+  //     Period-card comparison + projected-close row subtexts.
+  //     Pre-existing --n-500. The period card is a shared surface with
+  //     labor visually and gets its next revision as a unit; the
+  //     compliance card cc-k fix here (--n-500 -> --n-600) is the
+  //     template for the period-card sweep.
+  ".kpi-app .kpi-p-per-cmp-row .kpi-p-k small",
+  ".kpi-app .kpi-p-per-proj .kpi-p-k small",
+  //   .kpi-app .kpi-p-mf-lhero-code
+  //     Mgmt-fee card lhero code label. Pre-existing --n-500. Same
+  //     mgmt-fee-follow-up group as .kpi-p-mf-cat-k small above.
+  ".kpi-app .kpi-p-mf-lhero-code",
 ]);
 
-// ─── Walk kpi.css, extract `selector { color: ...; }` pairs ──────────
+// R17 (2026-08-28): graphical-axis waivers. Each names WHY the low-
+// contrast dashed/dotted mark stays. Waivers do NOT count toward
+// GRAPHICAL FAIL total.
+const GRAPHICAL_WAIVERS = new Map([
+  //   .kpi-app .kpi-p-mf-cat-fun border-top - decorative divider
+  //   inside the fun-money row of the mgmt-fee card. Separates the
+  //   fun-money callout from the categories above it; carries no
+  //   information beyond "these are different sections."
+  [".kpi-app .kpi-p-mf-cat-fun [border-top]",
+   "decorative divider between fun-money and categories - no information encoded"],
+  //   .kpi-app .kpi-p-mf-empty-row border - empty-state placeholder
+  //   outline. Renders when the mgmt-fee card has no data yet; the
+  //   dashed border communicates "empty" more than the muted tone
+  //   fails at communicating anything.
+  [".kpi-app .kpi-p-mf-empty-row [border]",
+   "empty-state placeholder - muted outline is the intent, no info mark"],
+  //   .kpi-sig-covers border-top - labor covers-value divider.
+  //   Cannot modify per hard rule 3 (do not touch src/app/kpi/labor).
+  //   Pre-existing, tracked as a labor follow-up.
+  [".kpi-sig-covers [border-top]",
+   "labor surface - hard rule 3 blocks R17 from modifying; labor follow-up"],
+  //   .kpi-hs-rail-bar-future border - labor homestand rail bar for a
+  //   future stand. Same labor-rule block; pre-existing.
+  [".kpi-hs-rail-bar-future [border]",
+   "labor surface - hard rule 3 blocks R17 from modifying; labor follow-up"],
+]);
+
+// ─── Walk kpi.css + purchasing.css, extract per-selector declarations ──
 // Simple parser: for each ruleset we grab the outer selector list and
-// scan for the FIRST `color:` declaration (nested media queries etc.
-// are handled naturally because we track brace depth).
+// scan for `color:` declarations (text axis) plus dashed/dotted
+// `border[-side]:` / `outline:` declarations (graphical axis).  Nested
+// media queries etc. are handled naturally because we track brace
+// depth.
 const rules = [];
+const graphicalRules = [];
 let i = 0;
 while (i < cssText.length) {
   // Skip comments
@@ -217,6 +349,32 @@ while (i < cssText.length) {
     // each so the audit names every distinct call site.
     const sels = selectorRaw.split(",").map(s => s.trim()).filter(Boolean);
     for (const sel of sels) rules.push({ sel, raw: cm[1].trim() });
+  }
+
+  // R17 (2026-08-28) - GRAPHICAL AXIS scan. Only DASHED / DOTTED
+  // border shorthands qualify; solid borders are usually card frames
+  // or dividers where a low-saturation tone is intentional. Dashed
+  // and dotted borders in this codebase carry INFORMATION (projection
+  // outlines, target lines, forecast overlays) and must clear WCAG's
+  // 3.0:1 graphical-objects threshold against the surface behind them.
+  //
+  // Also scans `outline:` shorthands with the same heuristic.
+  const dashedBorderMatches = [...flatBody.matchAll(
+    /(?:^|\s|;)(border(?:-(?:top|right|bottom|left))?|outline)\s*:\s*([^;{}]+)/g,
+  )];
+  for (const dm of dashedBorderMatches) {
+    const prop  = dm[1];
+    const value = dm[2].trim();
+    // Skip solid / initial / inherit / 0 / none - not an info mark.
+    if (!/\b(dashed|dotted)\b/.test(value)) continue;
+    // Extract the color from the tail of the shorthand. Support #hex
+    // or var(--token[, fallback]) shapes.
+    const varM = value.match(/var\(--[a-z0-9-]+(?:\s*,\s*[^)]+)?\)/i);
+    const hexM = value.match(/#[0-9a-fA-F]{3,8}/);
+    const raw = varM ? varM[0] : (hexM ? hexM[0] : null);
+    if (!raw) continue;
+    const sels = selectorRaw.split(",").map(s => s.trim()).filter(Boolean);
+    for (const sel of sels) graphicalRules.push({ sel, raw, prop });
   }
   i = j;
 }
@@ -256,9 +414,32 @@ for (const { sel, raw } of rules) {
   findings.push({ sel, raw, hex, cWhite, cNear, worst, tier, reason });
 }
 
+// ─── Score dashed / dotted border colors against light surface ────────
+// WCAG 3.0:1 minimum for graphical objects (dashed outlines,
+// projection extensions, target lines, forecast overlays).  Below that
+// the mark is not readable and might as well not be rendered.  Same
+// LIGHT_SURFACE_PREFIXES gate as the text axis.
+const graphicalFindings = [];
+for (const { sel, raw, prop } of graphicalRules) {
+  if (!isLightSurfaceSelector(sel)) continue;
+  const hex = resolveColor(raw);
+  if (!hex) continue;
+  const cWhite = contrast(hex, WHITE);
+  const cNear = contrast(hex, NEAR_WHITE);
+  const worst = Math.min(cWhite, cNear);
+  const waiverKey = `${sel} [${prop}]`;
+  const waiverReason = GRAPHICAL_WAIVERS.get(waiverKey);
+  let tier;
+  if (waiverReason) tier = "WAIVER";
+  else if (worst < 3.0) tier = "FAIL";
+  else if (worst < 3.5) tier = "BORDERLINE";
+  else tier = "PASS";
+  graphicalFindings.push({ sel, raw, hex, prop, cWhite, cNear, worst, tier, waiverReason });
+}
+
 // ─── Report ───────────────────────────────────────────────────────────
 console.log("=".repeat(78));
-console.log("KPI light-surface text contrast sweep (PR-E polish 2 report)");
+console.log("KPI light-surface visual-contrast sweep (text + graphical axes)");
 console.log("=".repeat(78));
 
 const fails = findings.filter(f => f.tier === "FAIL")
@@ -267,7 +448,7 @@ const borderline = findings.filter(f => f.tier === "BORDERLINE")
   .sort((a, b) => a.worst - b.worst);
 
 console.log("");
-console.log(`FAIL (< 4.5:1 on white or --n-50):  ${fails.length}`);
+console.log(`TEXT FAIL (color: < 4.5:1 on white or --n-50):  ${fails.length}`);
 console.log("-".repeat(78));
 // Deduplicate by (raw, hex) so 15 uses of --n-500 don't spam the report.
 const grouped = new Map();
@@ -286,7 +467,7 @@ for (const [key, g] of [...grouped.entries()].sort((a, b) => a[1].worst - b[1].w
 }
 
 console.log("");
-console.log(`BORDERLINE (4.5-5.0:1 on white):  ${borderline.length}`);
+console.log(`TEXT BORDERLINE (4.5-5.0:1 on white):  ${borderline.length}`);
 console.log("-".repeat(78));
 const groupedBL = new Map();
 for (const f of borderline) {
@@ -312,10 +493,52 @@ for (const w of waivers) {
 }
 
 console.log("");
-console.log(`PASS (>= 5.0:1 on white):  ${findings.length - fails.length - borderline.length - waivers.length}`);
+console.log(`TEXT PASS (>= 5.0:1 on white):  ${findings.length - fails.length - borderline.length - waivers.length}`);
+
+// ─── Graphical axis report (R17 addition) ────────────────────────────
+const gFails = graphicalFindings.filter(f => f.tier === "FAIL")
+  .sort((a, b) => a.worst - b.worst);
+const gBorderline = graphicalFindings.filter(f => f.tier === "BORDERLINE")
+  .sort((a, b) => a.worst - b.worst);
+console.log("");
 console.log("=".repeat(78));
-console.log(`total light-surface color declarations scanned: ${findings.length}`);
+console.log(`GRAPHICAL FAIL (dashed/dotted border < 3.0:1 on white): ${gFails.length}`);
+console.log("-".repeat(78));
+const gGrouped = new Map();
+for (const f of gFails) {
+  const key = `${f.raw} → ${f.hex}`;
+  const g = gGrouped.get(key) || { raw: f.raw, hex: f.hex, worst: f.worst, sels: new Set() };
+  g.sels.add(`${f.sel} [${f.prop}]`);
+  gGrouped.set(key, g);
+}
+for (const [key, g] of [...gGrouped.entries()].sort((a, b) => a[1].worst - b[1].worst)) {
+  console.log(`  ${key}   contrast ${g.worst.toFixed(2)}:1   (${g.sels.size} selectors)`);
+  const sample = [...g.sels].sort().slice(0, 6);
+  for (const s of sample) console.log(`      ${s}`);
+  if (g.sels.size > sample.length) console.log(`      ...+${g.sels.size - sample.length} more`);
+}
+console.log("");
+console.log(`GRAPHICAL BORDERLINE (3.0-3.5:1 on white):  ${gBorderline.length}`);
+console.log("-".repeat(78));
+for (const f of gBorderline) {
+  console.log(`  ${f.sel} [${f.prop}]   ${f.raw} → ${f.hex}   contrast ${f.worst.toFixed(2)}:1`);
+}
+console.log("");
+const gWaivers = graphicalFindings.filter(f => f.tier === "WAIVER");
+console.log("");
+console.log(`GRAPHICAL WAIVER:  ${gWaivers.length}`);
+console.log("-".repeat(78));
+for (const w of gWaivers) {
+  console.log(`  ${w.sel} [${w.prop}]   ${w.raw} → ${w.hex}   contrast ${w.worst.toFixed(2)}:1`);
+  console.log(`      (waived: ${w.waiverReason})`);
+}
+
+console.log("");
+console.log(`GRAPHICAL PASS (>= 3.5:1 on white):  ${graphicalFindings.length - gFails.length - gBorderline.length - gWaivers.length}`);
+
+console.log("=".repeat(78));
+console.log(`total light-surface declarations scanned: text=${findings.length} graphical=${graphicalFindings.length}`);
 console.log("=".repeat(78));
 
-// Regression net: non-zero exit if any FAIL survives after waivers.
-process.exit(fails.length > 0 ? 1 : 0);
+// Regression net: non-zero exit if any FAIL (text or graphical) survives after waivers.
+process.exit(fails.length > 0 || gFails.length > 0 ? 1 : 0);

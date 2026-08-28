@@ -649,33 +649,42 @@
 .kpi-app .kpi-p-bar.st-over {
   background: #DC5A5A;
 }
-/* Running (in-progress) unit - R13 P0-2 owner ruling 2026-08-26.
-   Prior state used an amber hatch on the bar that read as a texture
-   (or "the smallest bar on the chart") not as incompleteness.  The
-   running bar now fills at the actual spent height, wearing the
-   bucket identity colour of the chart it lives in (the identity
-   fallback rules above already apply via `i-<identity>` when no
-   state class is set).  Incompleteness is signalled by:
+/* Running (in-progress) unit - R17 owner ruling 2026-08-28 (revising
+   R13 P0-2). R13 shipped identity-color-through-running so a running
+   Food bar read as Food. In practice this produced three distinct
+   colours across period+Food+Packaging (navy / navy / pale blue) on a
+   two-state axis where every closed period is red or green - identity
+   carries meaning within a chart and none across a state axis. R17
+   drops identity on the running bar and applies a deliberate neutral
+   fill (--kpi-p-steel) that reads the same across all three charts
+   and says "incomplete measurement, no verdict." Green/red stays
+   reserved for the closed-period verdict layer where it means the
+   period closed under/over. Incompleteness is signalled by:
+     - a single consistent neutral fill (regardless of identity)
      - the dashed projection outline that extends above the fill
        (kpi-p-proj below), when elapsed >= 25%
      - the caption `N% through` (stated numerically, not textured)
-   `st-running` remains as a hook if we ever need running-specific
-   treatment - currently identity fills through. */
+   Placed AFTER the .i-* identity rules so the neutral wins the
+   cascade, matching how .st-under / .st-over win over identity. */
 .kpi-app .kpi-p-bar.st-running {
-  /* Reserved for future running-specific treatment.  No override -
-     identity colour renders through so a running Food bar reads
-     as Food. */
+  background: var(--kpi-p-steel);
 }
 
-/* R13 P0-2 - projection extension above a running bar.  Dashed
+/* R13 P0-2 - projection extension above a running bar. Dashed
    outline, no fill, drawn from the top of the filled bar up to the
-   projection height.  Uses the identity colour of the running bar so
-   `Food + projection` reads as one visual unit. */
+   projection height.
+   R17 (owner ruling 2026-08-28) - border color moves from --n-500
+   (2.45:1 against white plot bg, invisible per _probe_kpi_contrast)
+   to --n-700 (~9.5:1). The R13 comment three lines above said
+   "Uses the identity colour of the running bar" but the CSS used
+   --n-500 - the code and its own documentation disagreed and nobody
+   read them together. The extended graphical-axis gate now catches
+   this class. */
 .kpi-app .kpi-p-proj {
   position: absolute;
   left: 0;
   right: 0;
-  border: 1.5px dashed var(--n-500);
+  border: 1.5px dashed var(--n-700);
   border-bottom: none;
   border-radius: 2px 2px 0 0;
   background: transparent;
@@ -1393,7 +1402,12 @@
 .kpi-app .kpi-p-mf-mini-avg {
   position: absolute;
   left: 0; right: 0;
-  border-top: 1px dashed var(--n-400);
+  /* R17 owner ruling 2026-08-28: this is the average line an operator
+     reads the mini-trend bars against - an information mark, not a
+     divider. --n-400 (1.42:1) meant the reference could not be seen.
+     Fixed alongside .kpi-p-proj as part of the graphical-axis gate
+     extension. */
+  border-top: 1px dashed var(--n-700);
   pointer-events: none;
 }
 .kpi-app .kpi-p-mf-mini-lab {
@@ -2121,7 +2135,7 @@
 }
 .kpi-app .kpi-p-cc-meta {
   font-size: var(--kpi-t-meta);
-  color: var(--n-500);
+  color: var(--n-600);
   font-weight: 500;
 }
 .kpi-app .kpi-p-cc-sp {
@@ -2157,7 +2171,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 .kpi-app .kpi-p-cc-v {
   font-size: var(--kpi-t-value);
@@ -2183,7 +2197,7 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
   background: var(--n-50);
   border-top: 1px solid var(--n-200);
   border-bottom: 1px solid var(--n-200);
@@ -2232,7 +2246,7 @@
 .kpi-app .kpi-p-cc-chev {
   display: inline-block;
   width: 14px;
-  color: var(--n-400);
+  color: var(--n-600);
   font-size: 10px;
   margin-right: 6px;
   transition: transform 0.12s ease;
@@ -2263,7 +2277,7 @@
 }
 .kpi-app .kpi-p-cc-unatt .kpi-p-cc-k {
   font-style: italic;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 
 /* Footer notes (Corp/Remote sidebar; over-90d alert) */
