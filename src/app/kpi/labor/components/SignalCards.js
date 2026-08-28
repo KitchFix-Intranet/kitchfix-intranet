@@ -15,7 +15,6 @@ import { fmt$, fmtHrs } from "../lib/formatting.js";
 import { estimateUnpricedDollars } from "@/lib/labor/estimateUnpricedDollars";
 import HelpPop from "./HelpPop.js";
 import Arrow from "./Arrow.js";
-import { APPROVAL_TRACKING_START_DISPLAY } from "@/lib/labor/approvalsTracking";
 
 // PR-E - card-level help copy per kitchfix-help-copy.html; 2026-08-26
 // rewritten from kitchfix-card-revisions.html. One body per signal
@@ -28,21 +27,21 @@ const PACE_BODY = (
   <>
     Whether you are ahead or behind if the period&apos;s budget were spent evenly, day by day.
     <br /><br />
-    <b>Down and green means behind the even line</b> - you have spent less than the calendar says you could have. Up and red means ahead of it.
+    <b>Down and green means behind the even line</b> - you have spent less than the calendar says you could have. Up and red means you have spent more than budgeted.
     <br /><br />
-    Being ahead is not automatically bad. A period with a heavy homestand early should run ahead in week one. What matters is whether the rest of the period has enough left in it.
-    <span className="kpi-hs-pop-foot"><b>Projected end</b> is where you finish if the rest of the period looks like what you have done so far. <b>Vs budget</b> is how far that lands over or under.<br /><br /><b>Covers</b> tells you which weeks are in these figures - a week still running is included at whatever has been clocked so far.</span>
+    Being over on spend is not automatically bad. A period with a heavy homestand early should run ahead in week one. What matters is whether the rest of the period has enough left in it.
+    <span className="kpi-hs-pop-foot"><b>Projected end</b> is where you finish if the rest of the period continues at the same spend you have done so far.<br /><br /><b>Vs budget</b> is how far that lands over or under.<br /><br /><b>Covers</b> tells you which weeks are in these figures - a week still running is included at whatever has been clocked so far.</span>
   </>
 );
 
 const OVERTIME_BODY = (
   <>
-    Overtime hours as a share of all hours worked. <b>5.3% means about five of every hundred hours were paid at time and a half.</b>
+    Overtime hours as a share of all hours worked. <b>Overtime is 1.5 x hourly rate.</b>
     <br /><br />
-    Overtime is not automatically a problem. The 40-hour clock resets every Monday, so a week with a lot of games packed into it carries overtime no matter how you schedule it - that is the calendar, not the crew.
+    The 40-hour clock resets every Monday.
     <br /><br />
-    <b>Worth a look when</b> the same one or two people carry all of it, or when a light week still shows a high number.
-    <span className="kpi-hs-pop-foot"><b>Week workers OT</b> is how many of the crew had any overtime. <b>Peak OT week</b> names the worst single week so you know where to look.<br /><br /><b>Covers</b> tells you which weeks are in these figures.</span>
+    <b>Worth a look when</b> the same one or two people carry all the OT, or when a light week still shows a high number.
+    <span className="kpi-hs-pop-foot"><b>Week workers OT</b> is how many of the crew had any overtime.<br /><br /><b>Peak OT week</b> names the worst single week so you know where to look.<br /><br /><b>Covers</b> tells you which weeks are in these figures.</span>
   </>
 );
 
@@ -72,8 +71,6 @@ const APPROVALS_BODY = (
     <b>Oldest shift</b> is the one to watch. A shift sitting a month is a shift that may have missed its payroll.
     <br /><br />
     <b>Still costing</b> means approved but the money has not posted yet. It resolves on its own.
-    <br /><br />
-    We started tracking approvals on {APPROVAL_TRACKING_START_DISPLAY}. Anything before that is not counted here.
     <span className="kpi-hs-pop-foot"><b>Hourly only, always</b> - salaried staff do not clock in.</span>
   </>
 );
