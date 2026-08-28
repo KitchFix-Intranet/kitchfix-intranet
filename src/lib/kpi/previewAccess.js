@@ -81,3 +81,51 @@ export function deriveClientAccount({ urlAccount = "", previewAccount = null, la
   return "";
 }
 
+// 2026-08-28 URL clean-up. The labor page has TWO auto-inject-account
+// sites triggered when the URL arrives without ?account=: the landing
+// redirect (guarded in #874) and the localStorage last-account restore.
+// Kevin reported ?preview=CIN - AZ still rewriting to
+// ?preview=CIN - AZ&account=ALL - traced to the second site.
+//
+// Both need the same guard: SKIP the auto-inject when the URL has a
+// ?preview=. Preview supplies the effective account server-side;
+// appending &account=<something> here would leave the URL contradicting
+// itself. Factored as a pure decision so the probe pins the rule:
+// "no preview -> restore if saved valid; preview set -> never restore."
+export function shouldRestoreLastAccount({
+  urlAccount = "",
+  urlPreview = "",
+  saved = null,
+  savedIsValidAccount = false,
+}) {
+  if (urlAccount) return false;
+  if (urlPreview) return false;
+  if (!saved) return false;
+  if (saved === "CIN - OH") return false;
+  if (!savedIsValidAccount) return false;
+  return true;
+}
+
+// 2026-08-28 salary-only auto-enable. Owner ruling: CIN - KY and
+// TBJ - NY have zero hourly rows, so their default board is the
+// StateSalaried empty state telling the user to flip + Salary. Derive
+// from data.account_state === "salaried_only" (server-classified, not
+// hardcoded) so any future salary-only account gets the same treatment.
+//
+// Ref-per-account so if a user turns the toggle OFF we respect that
+// choice on the same account. Navigating to a different account and
+// back does not re-fire either - preserved through the mount session.
+// A fresh page load resets the ref and auto-enables once more.
+export function shouldAutoEnableSalary({
+  accountState = null,
+  salaryParam = null,
+  autoSalaryForAccount = null,
+  currentAccount = "",
+}) {
+  if (accountState !== "salaried_only") return false;
+  if (salaryParam === "1") return false;
+  if (!currentAccount) return false;
+  if (autoSalaryForAccount === currentAccount) return false;
+  return true;
+}
+

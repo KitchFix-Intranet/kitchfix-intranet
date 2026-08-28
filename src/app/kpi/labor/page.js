@@ -19,7 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine, standWindow } from "./lib/formatting";
 import { computeStaleness } from "@/lib/labor/staleness";
-import { deriveClientAccount } from "@/lib/kpi/previewAccess";
+import { deriveClientAccount, shouldRestoreLastAccount, shouldAutoEnableSalary } from "@/lib/kpi/previewAccess";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
@@ -96,15 +96,27 @@ export default function KpiLaborPage() {
       try { localStorage.setItem(LAST_ACCOUNT_KEY, urlAccount); } catch {}
       return;
     }
+    // 2026-08-28 preview URL clean-up + last-account restore. The
+    // decision is factored to shouldRestoreLastAccount() so a probe
+    // pins the rule. Key change vs the pre-#874 world: when the URL
+    // has ?preview=, we skip the restore entirely - preview supplies
+    // the effective account and any &account=<saved> would leave the
+    // URL contradicting itself. #874 covered the landing-redirect;
+    // this is the other auto-inject site.
     let saved = null;
     try { saved = localStorage.getItem(LAST_ACCOUNT_KEY); } catch {}
     // V6 - accept pseudo-keys ALL / EAST / WEST alongside real
     // account team_keys in the last-account persistence.
-    if (saved && saved !== "CIN - OH" && (ACCOUNTS.includes(saved) || PSEUDO_KEYS.has(saved))) {
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("account", saved);
-      router.replace(`/kpi/labor?${p.toString()}`);
-    }
+    const savedIsValidAccount = !!saved && (ACCOUNTS.includes(saved) || PSEUDO_KEYS.has(saved));
+    if (!shouldRestoreLastAccount({
+      urlAccount,
+      urlPreview: searchParams.get("preview") || "",
+      saved,
+      savedIsValidAccount,
+    })) return;
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("account", saved);
+    router.replace(`/kpi/labor?${p.toString()}`);
   }, [urlAccount, router, searchParams]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -304,6 +316,27 @@ export default function KpiLaborPage() {
     p.set("account", landing);
     router.replace(`/kpi/labor?${p.toString()}`);
   }, [urlAccount, data?.landing_account, data?.preview_account, router, searchParams]);
+
+  // 2026-08-28 salary-only auto-enable. Decision factored to
+  // shouldAutoEnableSalary() so the probe pins the rule. Owner ruling:
+  // CIN - KY and TBJ - NY have zero hourly rows, so their default
+  // board is the StateSalaried empty state telling the user to flip
+  // + Salary. Derived from data.account_state === "salaried_only"
+  // (server-classified, not hardcoded) so any future salary-only
+  // account gets the same treatment automatically.
+  const autoSalaryForRef = useRef(null);
+  useEffect(() => {
+    if (!shouldAutoEnableSalary({
+      accountState: data?.account_state ?? null,
+      salaryParam: searchParams.get("salary"),
+      autoSalaryForAccount: autoSalaryForRef.current,
+      currentAccount: account,
+    })) return;
+    autoSalaryForRef.current = account;
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("salary", "1");
+    router.replace(`/kpi/labor?${p.toString()}`);
+  }, [data?.account_state, account, router, searchParams]);
 
   // ── URL setters ──────────────────────────────────────
   const setParam = (key, value) => {

@@ -24,7 +24,12 @@
 //   rdo       -> all (aggregate ok)
 //   site_*    -> own scope only, pseudos denied
 
-import { resolvePreviewAccess, deriveClientAccount } from "../../src/lib/kpi/previewAccess.js";
+import {
+  resolvePreviewAccess,
+  deriveClientAccount,
+  shouldRestoreLastAccount,
+  shouldAutoEnableSalary,
+} from "../../src/lib/kpi/previewAccess.js";
 
 const PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 
@@ -223,9 +228,133 @@ console.log("\nA4  chip account tracks preview_account (the #873 verify bug):");
     deriveClientAccount({ urlAccount: "", previewAccount: null, landingAccount: "" }) === "");
 }
 
+// A5 - shouldRestoreLastAccount. The 2026-08-28 URL clean-up fix.
+// Kevin reported that ?preview=CIN - AZ still ended up as
+// ?preview=CIN - AZ&account=ALL because the localStorage-based
+// last-account restore fired unconditionally when the URL had no
+// ?account=. Guard added: when URL carries ?preview=, skip restore.
+console.log("\nA5  URL clean-up: last-account restore respects ?preview=:");
+{
+  // Fix-2 bug case (Kevin's report): preview set, no explicit account,
+  // localStorage has "ALL" from prior session.
+  assert("A5a  preview set + no url account + saved=ALL: DO NOT restore",
+    shouldRestoreLastAccount({
+      urlAccount: "", urlPreview: "CIN - AZ", saved: "ALL", savedIsValidAccount: true,
+    }) === false);
+
+  // No preview, valid saved -> restore (baseline behaviour, unchanged).
+  assert("A5b  no preview + no url account + saved valid: restore",
+    shouldRestoreLastAccount({
+      urlAccount: "", urlPreview: "", saved: "CIN - AZ", savedIsValidAccount: true,
+    }) === true);
+
+  // URL already has an account -> caller returns early before this
+  // decision fires. Simulated: url present should still say "do not
+  // restore" (the effect skips this branch entirely; helper mirrors it).
+  assert("A5c  url account present: DO NOT restore (caller has priority)",
+    shouldRestoreLastAccount({
+      urlAccount: "STL - MO", urlPreview: "", saved: "CIN - AZ", savedIsValidAccount: true,
+    }) === false);
+
+  // Saved is CIN - OH (V6 special-case: user's landing-default that
+  // predates the pseudo-key era; do not persist to avoid re-injecting
+  // an old landing).
+  assert("A5d  saved=CIN - OH: DO NOT restore (V6 exclusion)",
+    shouldRestoreLastAccount({
+      urlAccount: "", urlPreview: "", saved: "CIN - OH", savedIsValidAccount: true,
+    }) === false);
+
+  // Saved is invalid (renamed account or garbage).
+  assert("A5e  saved value not in ACCOUNTS/PSEUDO_KEYS: DO NOT restore",
+    shouldRestoreLastAccount({
+      urlAccount: "", urlPreview: "", saved: "GHOST - TX", savedIsValidAccount: false,
+    }) === false);
+
+  // Empty localStorage.
+  assert("A5f  no saved value: DO NOT restore",
+    shouldRestoreLastAccount({
+      urlAccount: "", urlPreview: "", saved: null, savedIsValidAccount: false,
+    }) === false);
+
+  // Preview + no url + saved is a real account (not ALL) - still skip.
+  assert("A5g  preview set + saved=CIN - OH: DO NOT restore (preview wins)",
+    shouldRestoreLastAccount({
+      urlAccount: "", urlPreview: "STL - MO", saved: "CIN - OH", savedIsValidAccount: true,
+    }) === false);
+}
+
+// A6 - shouldAutoEnableSalary. The 2026-08-28 salary-only fix. Owner
+// ruling: CIN - KY and TBJ - NY (any account with zero hourly rows)
+// should default the salary toggle ON so the board shows numbers
+// instead of the StateSalaried empty-state prompt. Derive from
+// data.account_state === "salaried_only" (server-classified), not
+// hardcoded team_keys. Respect user opt-out via ref-per-account.
+console.log("\nA6  salary auto-enable: salaried_only accounts flip on:");
+{
+  // Happy path: CIN - KY renders salaried_only, no salary param, no
+  // prior auto-enable for this account -> flip on.
+  assert("A6a  salaried_only + no salary param + first render: enable",
+    shouldAutoEnableSalary({
+      accountState: "salaried_only", salaryParam: null,
+      autoSalaryForAccount: null, currentAccount: "CIN - KY",
+    }) === true);
+
+  // Same board, but user has manually flipped ON via URL - do not
+  // re-fire (idempotent).
+  assert("A6b  salaried_only + salary=1 already: DO NOT re-enable",
+    shouldAutoEnableSalary({
+      accountState: "salaried_only", salaryParam: "1",
+      autoSalaryForAccount: null, currentAccount: "CIN - KY",
+    }) === false);
+
+  // User just turned salary OFF (salaryParam becomes null, ref
+  // remembers we already auto-enabled once for this account) - respect
+  // opt-out.
+  assert("A6c  salaried_only + salary off + ref matches account: DO NOT re-enable (user opt-out)",
+    shouldAutoEnableSalary({
+      accountState: "salaried_only", salaryParam: null,
+      autoSalaryForAccount: "CIN - KY", currentAccount: "CIN - KY",
+    }) === false);
+
+  // Navigating to a different salaried_only account fires fresh.
+  assert("A6d  salaried_only + ref matches PRIOR account: enable for new account",
+    shouldAutoEnableSalary({
+      accountState: "salaried_only", salaryParam: null,
+      autoSalaryForAccount: "CIN - KY", currentAccount: "TBJ - NY",
+    }) === true);
+
+  // Non-salaried-only account never auto-enables.
+  assert("A6e  account_state hourly_only: DO NOT enable",
+    shouldAutoEnableSalary({
+      accountState: "hourly_only", salaryParam: null,
+      autoSalaryForAccount: null, currentAccount: "STL - MO",
+    }) === false);
+
+  assert("A6f  account_state mixed: DO NOT enable",
+    shouldAutoEnableSalary({
+      accountState: "mixed", salaryParam: null,
+      autoSalaryForAccount: null, currentAccount: "STL - MO",
+    }) === false);
+
+  // Data not loaded yet - do not enable (would spam URL replaces).
+  assert("A6g  accountState=null (data not yet loaded): DO NOT enable",
+    shouldAutoEnableSalary({
+      accountState: null, salaryParam: null,
+      autoSalaryForAccount: null, currentAccount: "CIN - KY",
+    }) === false);
+
+  // currentAccount empty -> skip (chip resolves to "" during initial
+  // render; would set ref to "" and misfire on all future accounts).
+  assert("A6h  currentAccount empty: DO NOT enable (ref would poison)",
+    shouldAutoEnableSalary({
+      accountState: "salaried_only", salaryParam: null,
+      autoSalaryForAccount: null, currentAccount: "",
+    }) === false);
+}
+
 console.log(`\n---`);
 if (failures > 0) {
   console.log(`${failures} assertion(s) failed. Preview may have granted forbidden access - STOP and investigate.`);
   process.exit(1);
 }
-console.log(`all assertions pass. Preview narrows only + chip tracks preview.`);
+console.log(`all assertions pass. Preview narrows only + chip tracks preview + URL restore respects preview + salary auto-enable respects opt-out.`);
