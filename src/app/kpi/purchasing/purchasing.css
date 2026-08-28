@@ -2099,3 +2099,193 @@
   color: var(--amber-700, #b45309);
   font-weight: 600;
 }
+
+/* ═══ PR 6 · COMPLIANCE CARD ══════════════════════════════════════════
+   Owner ruling 2026-08-28: Option B, site totals with people on expand.
+   Reuses .kpi-p-card frame (identity stripe, shadow) and .kpi-p-pill.a
+   for the header pill. Compliance-specific rules:
+     - the header is a title / scope-label / spacer / pill row
+     - the numbers block is hero on the left, oldest + no-receipt on the right
+     - the 5-column grid carries site rows, expandable to their people rows
+     - age is colored (red 14 / amber 7); receipts are a plain fraction
+   No new colour tokens - --red-700, --amber-*, and --n-* cover everything.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.kpi-app .kpi-p-cc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-3);
+  padding-bottom: var(--kpi-sp-2);
+  border-bottom: 1px solid var(--n-100);
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-cc-meta {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-500);
+  font-weight: 500;
+}
+.kpi-app .kpi-p-cc-sp {
+  flex: 1;
+}
+
+/* Numbers block: hero left + two stats right */
+.kpi-app .kpi-p-cc-nums {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--kpi-sp-3);
+  align-items: end;
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-p-cc-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-1);
+  min-width: 0;
+}
+.kpi-app .kpi-p-cc-sec {
+  display: flex;
+  gap: var(--kpi-sp-4);
+}
+.kpi-app .kpi-p-cc-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+}
+.kpi-app .kpi-p-cc-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.kpi-app .kpi-p-cc-v {
+  font-size: var(--kpi-t-value);
+  font-weight: 800;
+  color: var(--n-900);
+}
+
+/* Age color tiers - reused across hero, site row, and person row */
+.kpi-app .kpi-p-cc-red   { color: var(--red-700); }
+.kpi-app .kpi-p-cc-amber { color: #92580A; }
+
+/* 5-column grid: label / charges / amount / oldest / receipts */
+.kpi-app .kpi-p-cc-cols5 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 110px 70px 90px;
+  gap: var(--kpi-sp-3);
+  align-items: center;
+  padding: 0 var(--kpi-sp-3);
+  min-height: 34px;
+}
+.kpi-app .kpi-p-cc-colshead {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  background: var(--n-50);
+  border-top: 1px solid var(--n-200);
+  border-bottom: 1px solid var(--n-200);
+  min-height: 28px;
+}
+.kpi-app .kpi-p-cc-r {
+  text-align: right;
+}
+.kpi-app .kpi-p-cc-body {
+  display: flex;
+  flex-direction: column;
+}
+.kpi-app .kpi-p-cc-site {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--n-100);
+}
+.kpi-app .kpi-p-cc-site:last-child {
+  border-bottom: 0;
+}
+
+/* Site row (chevron button). All the standard button-reset needed
+   because it's rendered as <button> so keyboard navigation works. */
+.kpi-app .kpi-p-cc-siterow {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-900);
+}
+.kpi-app .kpi-p-cc-siterow:hover {
+  background: var(--n-50);
+}
+.kpi-app .kpi-p-cc-open {
+  background: var(--navy-100);
+  color: var(--navy-700);
+  box-shadow: inset 3px 0 0 var(--navy-700);
+}
+.kpi-app .kpi-p-cc-open .kpi-p-cc-k {
+  color: var(--navy-700);
+}
+.kpi-app .kpi-p-cc-chev {
+  display: inline-block;
+  width: 14px;
+  color: var(--n-400);
+  font-size: 10px;
+  margin-right: 6px;
+  transition: transform 0.12s ease;
+}
+.kpi-app .kpi-p-cc-chev-open {
+  transform: rotate(90deg);
+  color: var(--navy-700);
+}
+
+/* Person row - indented under its site row. */
+.kpi-app .kpi-p-cc-personrow {
+  font-size: var(--kpi-t-body);
+  font-weight: 500;
+  color: var(--n-700);
+  background: #fff;
+}
+.kpi-app .kpi-p-cc-nested {
+  padding-left: calc(var(--kpi-sp-3) + 20px);
+}
+.kpi-app .kpi-p-cc-nested .kpi-p-cc-k::before {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  background: var(--n-200);
+  margin-right: 12px;
+  vertical-align: middle;
+}
+.kpi-app .kpi-p-cc-unatt .kpi-p-cc-k {
+  font-style: italic;
+  color: var(--n-500);
+}
+
+/* Footer notes (Corp/Remote sidebar; over-90d alert) */
+.kpi-app .kpi-p-cc-foot {
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-3);
+  border-top: 1px solid var(--n-200);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-sp-2);
+}
+.kpi-app .kpi-p-cc-footnote {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  line-height: 1.5;
+}
+.kpi-app .kpi-p-cc-footnote b {
+  color: var(--n-800);
+}
+.kpi-app .kpi-p-cc-footnote-alert {
+  color: var(--red-700);
+}
+.kpi-app .kpi-p-cc-footnote-alert b {
+  color: var(--red-700);
+}
