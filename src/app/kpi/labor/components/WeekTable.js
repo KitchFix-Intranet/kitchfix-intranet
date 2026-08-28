@@ -127,7 +127,7 @@ const WEEK_TABLE_POP_BODY = (
     <b>The amber chips mean different things:</b>
     <table className="kpi-hs-pop-table">
       <tbody>
-        <tr><td>&ldquo;N need attention&rdquo;</td><td>broken punches</td></tr>
+        <tr><td>&ldquo;need attention&rdquo;</td><td>broken punches</td></tr>
         <tr><td>&ldquo;awaiting approval&rdquo;</td><td>just needs a click</td></tr>
         <tr><td>&ldquo;unpriced&rdquo;</td><td>dollars still coming</td></tr>
       </tbody>
