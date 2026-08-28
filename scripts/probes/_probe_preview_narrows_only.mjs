@@ -29,6 +29,7 @@ import {
   deriveClientAccount,
   shouldRestoreLastAccount,
   shouldAutoEnableSalary,
+  shouldRenderLandingBridgeLoading,
 } from "../../src/lib/kpi/previewAccess.js";
 
 const PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
@@ -352,9 +353,79 @@ console.log("\nA6  salary auto-enable: salaried_only accounts flip on:");
     }) === false);
 }
 
+// A7 - shouldRenderLandingBridgeLoading. The 2026-08-28 stuck-skeleton
+// fix. Kevin caught an empty .kpi-statebox rendering permanently below
+// the signal cards on ?preview=CIN - KY. The landing-bridge branch had
+// no preview guard - the redirect it was bridging never fires under
+// preview, so the loading box would render forever. Owner ruling:
+// "no preview URL renders a statebox when loadState === 'ok'" - no
+// statebox fires as a side effect of preview being active. This helper
+// pins the specific preview-caused case.
+console.log("\nA7  landing-bridge StateLoading does not fire on preview URLs:");
+{
+  // The critical Kevin bug: preview set, no urlAccount, landing set,
+  // loadState ok -> should NOT render (previously did, permanently).
+  assert("A7a  loadState=ok + no urlAccount + landing set + PREVIEW set: DO NOT render",
+    shouldRenderLandingBridgeLoading({
+      loadState: "ok", urlAccount: "", landingAccount: "ALL", previewAccount: "CIN - KY",
+    }) === false);
+
+  // Baseline: same shape without preview - render (the transient
+  // landing-redirect bridge is still valid).
+  assert("A7b  loadState=ok + no urlAccount + landing set + no preview: render (bridge)",
+    shouldRenderLandingBridgeLoading({
+      loadState: "ok", urlAccount: "", landingAccount: "ALL", previewAccount: null,
+    }) === true);
+
+  // urlAccount present -> not a bridge case.
+  assert("A7c  urlAccount present: DO NOT render (bridge does not apply)",
+    shouldRenderLandingBridgeLoading({
+      loadState: "ok", urlAccount: "CIN - OH", landingAccount: "ALL", previewAccount: null,
+    }) === false);
+
+  // No landing_account -> can't bridge to anything.
+  assert("A7d  no landing_account: DO NOT render",
+    shouldRenderLandingBridgeLoading({
+      loadState: "ok", urlAccount: "", landingAccount: "", previewAccount: null,
+    }) === false);
+
+  // loadState not ok -> other branches own the render.
+  assert("A7e  loadState=loading: DO NOT render",
+    shouldRenderLandingBridgeLoading({
+      loadState: "loading", urlAccount: "", landingAccount: "ALL", previewAccount: null,
+    }) === false);
+  assert("A7f  loadState=error: DO NOT render",
+    shouldRenderLandingBridgeLoading({
+      loadState: "error", urlAccount: "", landingAccount: "ALL", previewAccount: null,
+    }) === false);
+
+  // Cartesian: for every preview value with loadState=ok, if preview
+  // is set the branch must skip. This is the "no preview URL renders
+  // this statebox" property in code.
+  let cases = 0, fails = 0;
+  const PREVIEWS_NON_EMPTY = ["CIN - AZ", "STL - MO", "CIN - KY", "TBJ - NY"];
+  const URLS = ["", "ALL", "CIN - OH", "STL - MO"];
+  const LANDINGS = ["", "ALL", "EAST", "WEST", "CIN - OH"];
+  for (const preview of PREVIEWS_NON_EMPTY) {
+    for (const url of URLS) {
+      for (const landing of LANDINGS) {
+        cases++;
+        const r = shouldRenderLandingBridgeLoading({
+          loadState: "ok", urlAccount: url, landingAccount: landing, previewAccount: preview,
+        });
+        if (r !== false) {
+          fails++;
+          console.log(`  ✗ A7  preview=${preview} url=${url} landing=${landing} -> ${r} (must be false when preview set)`);
+        }
+      }
+    }
+  }
+  assert(`A7g  preview set + loadState=ok: NEVER renders (${cases} cases)`, fails === 0);
+}
+
 console.log(`\n---`);
 if (failures > 0) {
   console.log(`${failures} assertion(s) failed. Preview may have granted forbidden access - STOP and investigate.`);
   process.exit(1);
 }
-console.log(`all assertions pass. Preview narrows only + chip tracks preview + URL restore respects preview + salary auto-enable respects opt-out.`);
+console.log(`all assertions pass. Preview narrows only + chip tracks preview + URL restore respects preview + salary auto-enable respects opt-out + landing-bridge does not fire on preview.`);
