@@ -50,3 +50,34 @@ export function resolvePreviewAccess({ caller, canViewAccount, urlAccount = "", 
   // Preview is in real access. Narrow to it.
   return { account: preview, preview_account: preview };
 }
+
+// 2026-08-28 fix (owner verify of #873): the client's account state
+// must render the previewed account in the command bar chip, not
+// "ALL". #873 shipped with a landing-redirect that pushed
+// `?account=<landing>` when the URL had no explicit account, so a
+// corporate hitting `?preview=CIN - AZ` got URL rewritten to
+// `?preview=CIN - AZ&account=ALL`. Data was correct (server preview
+// intersection wins), but the chip read "ALL" while showing Goodyear
+// numbers - "worse than a cosmetic issue on a board where account
+// identity is how you know whose figures you are looking at".
+//
+// Precedence (highest to lowest):
+//   1. previewAccount     - server says preview is active
+//   2. urlAccount         - explicit ?account= from the URL
+//   3. landingAccount     - the caller's default landing
+//   4. "" (empty)
+//
+// A single-account user lands on their own account (their scope IS
+// their landing). Preview replicates that exactly - the previewed
+// account is the chip.
+//
+// Pure function so a probe can prove: with preview set, the chip
+// value equals the preview value regardless of what the URL account
+// or the caller's landing account carries.
+export function deriveClientAccount({ urlAccount = "", previewAccount = null, landingAccount = "" }) {
+  if (previewAccount) return previewAccount;
+  if (urlAccount) return urlAccount;
+  if (landingAccount) return landingAccount;
+  return "";
+}
+

@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { fmt$, fmtHrs, fmtDate, hoursSinceISO, fmtTimestamp, buildPrintScopeLine, standWindow } from "./lib/formatting";
 import { computeStaleness } from "@/lib/labor/staleness";
+import { deriveClientAccount } from "@/lib/kpi/previewAccess";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
 import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
@@ -80,7 +81,14 @@ export default function KpiLaborPage() {
   // account still hydrates and simply renders locked if the role
   // no longer permits it - the user can navigate.
   const urlAccount = searchParams.get("account");
-  const account = urlAccount || "";
+  // 2026-08-28 preview verify (#873 owner ruling): the DISPLAY
+  // account (chip in the command bar, downstream lookups) is derived
+  // from the RESPONSE so a preview_account rendering shows the
+  // previewed account, not the URL's account=ALL. Fetch keeps
+  // reading from the URL so the fetch effect does not re-fire when
+  // data lands. See src/lib/kpi/previewAccess.js for
+  // deriveClientAccount and the assertion probe.
+  const fetchAccount = urlAccount || "";
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (urlAccount) {
@@ -146,6 +154,18 @@ export default function KpiLaborPage() {
 
   const [data, setData] = useState(null);
   const [loadState, setLoadState] = useState("idle");
+  // 2026-08-28 - display account. Precedence: preview_account (server
+  // says preview is active) -> urlAccount (explicit) -> landing_account
+  // (default) -> "". The chip in the command bar reads this, along
+  // with every downstream lookup keyed by account (timezone, folio
+  // active-highlight, homestand board plumbing). Fetch uses
+  // fetchAccount (URL only) so this derivation does NOT trigger a
+  // re-fetch when data lands.
+  const account = deriveClientAccount({
+    urlAccount,
+    previewAccount: data?.preview_account,
+    landingAccount: data?.landing_account,
+  });
   const [errorMsg, setErrorMsg] = useState(null);
   const [errCode, setErrCode] = useState(null);
   const [authError, setAuthError] = useState(null); // "expired" (401) | "forbidden" (403) | null
@@ -205,7 +225,7 @@ export default function KpiLaborPage() {
     setErrorMsg(null);
     setErrCode(null);
     setAuthError(null);
-    const params = new URLSearchParams({ account, start, end });
+    const params = new URLSearchParams({ account: fetchAccount, start, end });
     // Salary PR 3 C1 - opt into the salary-merged response when the
     // URL flag says so. The route re-checks the gate on every request
     // (spec T-2), so a shared link that opens as a site leader is
@@ -219,7 +239,7 @@ export default function KpiLaborPage() {
     // 2026-08-28 preview mode - forward the param unchanged; the
     // server intersects against real access.
     if (urlPreview) params.set("preview", urlPreview);
-    const markBase = `kpi-labor-fetch-${account}`;
+    const markBase = `kpi-labor-fetch-${fetchAccount}`;
     try { performance.mark(`${markBase}-start`); } catch {}
     fetch(`/api/kpi/labor?${params}`, { signal: ctrl.signal })
       .then(async (r) => {
@@ -260,21 +280,30 @@ export default function KpiLaborPage() {
       })
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
-  }, [status, isAllowed, account, start, end, searchParams]);
+  }, [status, isAllowed, fetchAccount, start, end, searchParams]);
 
   // V-role-gates - landing redirect. Fires when the server ships
   // landing_account back on a URL that had no explicit account
   // (the initial cold-load for a role whose home is not CIN - OH).
   // Explicit URL accounts are never re-routed by this effect - the
   // guard is "urlAccount is empty", not "landing_account is set".
+  //
+  // 2026-08-28 preview verify (#873 owner ruling): SKIP this redirect
+  // when preview_account is set. Prior state pushed ?account=<landing>
+  // whenever the URL had no explicit account - so a corporate hitting
+  // ?preview=CIN - AZ got URL rewritten to ?preview=CIN - AZ&account=ALL,
+  // and the chip showed "ALL" while the board showed Goodyear. The
+  // display account now derives from preview_account first (see
+  // deriveClientAccount) so leaving the URL clean is correct.
   useEffect(() => {
     if (urlAccount) return;
+    if (data?.preview_account) return;
     const landing = data?.landing_account;
     if (!landing) return;
     const p = new URLSearchParams(searchParams.toString());
     p.set("account", landing);
     router.replace(`/kpi/labor?${p.toString()}`);
-  }, [urlAccount, data?.landing_account, router, searchParams]);
+  }, [urlAccount, data?.landing_account, data?.preview_account, router, searchParams]);
 
   // ── URL setters ──────────────────────────────────────
   const setParam = (key, value) => {
