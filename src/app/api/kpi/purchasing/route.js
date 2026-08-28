@@ -98,6 +98,8 @@ import { OPS_LEADERSHIP_EMAILS } from "@/lib/admin";
 // Phase 2 work); until it does, the same allowlist that gates the
 // labor route also gates this one.
 import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
+import { loadRoleGate } from "@/lib/kpi/roleGate.js";
+import { resolvePreviewAccess } from "@/lib/kpi/previewAccess.js";
 import { getServiceClient } from "@/lib/supabase";
 import {
   FY_START_ISO, periodOf, periodStartISO, periodEndISO,
@@ -116,6 +118,7 @@ import {
   PURCHASING_ENVELOPE_EXCLUSIONS,
   costModelFor,
   MANAGEMENT_FEE_GOALS,
+  isKnownAccount,
 } from "@/lib/accountModels";
 // Precedence: API over report between sources, newest over older
 // within report.  loadReportOnlyPending reads the migration-8 view;
@@ -993,7 +996,11 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const today = new Date().toISOString().slice(0, 10);
-  const account = (searchParams.get("account") || "").trim();
+  // 2026-08-28 preview mode adoption (labor's #873 shape).  `account`
+  // is `let` because resolvePreviewAccess reassigns it to the preview
+  // value when preview intersects real access.
+  let account = (searchParams.get("account") || "").trim();
+  const previewParam = (searchParams.get("preview") || "").trim();
   const start = searchParams.get("start") || FY_START_ISO;
   const end = searchParams.get("end") || today;
   const drill = (searchParams.get("drill") || "").trim().toLowerCase();
@@ -1007,14 +1014,61 @@ export async function GET(request) {
   const includeTable = (searchParams.get("table") || "").trim() === "1";
   const pageSizeParam = parseInt(searchParams.get("_page_size") || "0", 10);
 
+  const supa = getServiceClient();
+
+  // 2026-08-28 preview mode adoption (labor's #873 shape).  Load the
+  // role gate to get `canViewAccount` for the preview intersection;
+  // resolvePreviewAccess silently ignores preview whose target the
+  // caller can't view.  This runs BEFORE the !account 400 gate so a
+  // corporate hitting `?preview=CIN - AZ` (no ?account=) still lands
+  // on the previewed account.
+  //
+  // NOT a permissions change: the OPS_LEADERSHIP + KPI_PREVIEW gates
+  // above already refused unauthorised callers.  This block only
+  // narrows an authorised caller's effective account.
+  const gate = await loadRoleGate(supa);
+  if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
+  let caller = null;
+  if (testModeBypass) {
+    caller = { role: "corporate", scope: null, can_see_salary: true };
+  } else {
+    // Auth already ran above; re-derive email for the gate.
+    const session = await auth();
+    const email = session?.user?.email?.toLowerCase().trim();
+    if (email) {
+      try { caller = await gate.resolveKpiRole(email); } catch {}
+    }
+  }
+  const landing_account = caller ? gate.landingAccount(caller) : null;
+
+  // Preview target must be a known account (or a pseudo like ALL/EAST/
+  // WEST that maps to a member set).  Skip the intersection when it
+  // isn't - downstream `costModelFor` and friends throw on unknown
+  // strings.  Silent-ignore an unknown preview matches the safety
+  // spirit of resolvePreviewAccess: never grant, never crash.
+  const previewIsValidTarget = previewParam && (
+    isKnownAccount(previewParam) || V6_PSEUDO_KEYS.has(previewParam)
+  );
+  const preview = resolvePreviewAccess({
+    caller,
+    canViewAccount: gate.canViewAccount,
+    urlAccount: account,
+    previewParam: previewIsValidTarget ? previewParam : "",
+  });
+  account = preview.account;
+  const preview_account = preview.preview_account;
+
   if (!account) {
-    return NextResponse.json({ error: "account_required", detail: "?account=<team_key> is required" }, { status: 400 });
+    return NextResponse.json({
+      error: "account_required",
+      detail: "?account=<team_key> is required",
+      landing_account,
+      preview_account,
+    }, { status: 400 });
   }
   if (D17_OUT_OF_SCOPE.has(account)) {
     return NextResponse.json({ error: "account_out_of_scope", account }, { status: 400 });
   }
-
-  const supa = getServiceClient();
 
   // Resolve members.
   const membersResp = await fetchMembers(supa, account);
@@ -1805,6 +1859,12 @@ export async function GET(request) {
     is_future_range,
     cost_model,
     billed_back_reachable,
+    // 2026-08-28 preview mode.  landing_account = caller's default
+    // landing (single-account users land on their site, corporate
+    // lands on ALL); preview_account non-null when preview intersected
+    // real access.  Client uses both to decide the rail + banner.
+    landing_account,
+    preview_account,
     fiscal: {
       fiscal_year:           fyForRange,
       period_no:             periodNo,

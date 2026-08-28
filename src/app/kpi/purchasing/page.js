@@ -42,6 +42,11 @@ import { Shell } from "@/app/kpi/labor/components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "@/app/kpi/labor/components/FolioRail";
 import { costModelFor, isKnownAccount, goalFor } from "@/lib/accountModels";
 import { classifyTier } from "@/lib/kpi/classifyTier";
+// 2026-08-28 preview mode - adopts labor's shared helpers.
+import { deriveClientAccount } from "@/lib/kpi/previewAccess";
+// 2026-08-28 freshness popover - reuse labor's formatter so purchasing
+// renders the timestamps the same way.
+import { fmtTimestamp, hoursSinceISO } from "@/app/kpi/labor/lib/formatting";
 
 import {
   BUCKET_DEFS,
@@ -129,6 +134,11 @@ export default function KpiPurchasingPage() {
   // requires this path to render).
 
   const urlAccount = searchParams.get("account");
+  // 2026-08-28 preview mode - `preview=` is threaded through every
+  // client fetch + URL rewrite.  Server intersects it against real
+  // access via resolvePreviewAccess and returns preview_account in
+  // the payload; the chip derives from that.
+  const urlPreview = searchParams.get("preview") || "";
   const account = urlAccount || "";
 
   const today = new Date().toISOString().slice(0, 10);
@@ -189,6 +199,11 @@ export default function KpiPurchasingPage() {
       try { localStorage.setItem(LAST_ACCOUNT_KEY, urlAccount); } catch {}
       return;
     }
+    // 2026-08-28 preview mode - do NOT auto-inject ?account= when the
+    // URL carries ?preview=.  Preview supplies the effective account
+    // server-side; appending &account=ALL here would leave the URL
+    // contradicting itself (same failure mode as labor's #874).
+    if (urlPreview) return;
     let saved = null;
     try { saved = localStorage.getItem(LAST_ACCOUNT_KEY); } catch {}
     const p = new URLSearchParams(searchParams.toString());
@@ -199,7 +214,7 @@ export default function KpiPurchasingPage() {
       p.set("account", "ALL");
     }
     router.replace(`/kpi/purchasing?${p.toString()}`);
-  }, [urlAccount, router, searchParams]);
+  }, [urlAccount, urlPreview, router, searchParams]);
 
   const [data, setData] = useState(null);
   const [loadState, setLoadState] = useState("idle");
@@ -230,7 +245,12 @@ export default function KpiPurchasingPage() {
     }, 15000);
     setLoadState("loading");
     setErrorMsg(null);
+    // 2026-08-28 preview - thread ?preview= through to the API.
+    // Without this the server never sees preview and always returns
+    // the URL account.  (This was the "?preview= silently ignored"
+    // bug Kevin found.)
     const params = new URLSearchParams({ account, start, end });
+    if (urlPreview) params.set("preview", urlPreview);
     fetch(`/api/kpi/purchasing?${params.toString()}`, {
       credentials: "include",
       signal: ctrl.signal,
@@ -771,16 +791,84 @@ export default function KpiPurchasingPage() {
   const cardsFreshAnchorISO = cardsThroughISO
     ? `${cardsThroughISO}T23:59:59Z`
     : null;
-  const lastDeriveISO = data?.freshness?.last_derive_at || null;
-  // Older ISO = older source = worst freshness (larger hoursSince).
-  let worstSourceISO = null;
-  if (lastDeriveISO && cardsFreshAnchorISO) {
-    worstSourceISO = lastDeriveISO < cardsFreshAnchorISO
-      ? lastDeriveISO
-      : cardsFreshAnchorISO;
-  } else {
-    worstSourceISO = lastDeriveISO || cardsFreshAnchorISO;
-  }
+  // 2026-08-28 freshness popover (Kevin ruling: labor has one, purchasing
+  // does not).  Three sources feed the pill on this route:
+  //   - bill.com sync         (purchasing_derive_runs.source='billcom')
+  //   - Rippling card sync    (purchasing_derive_runs.source='rippling_spend')
+  //   - Nightly report ingest (purchasing_derive_runs.source='rippling_report')
+  // The pill shows STATUS; the popover shows all three timestamps AND
+  // marks the one that drove the state.  When an operator sees "Data
+  // stale" they can tell in one click which lane is behind.
+  //
+  // "Behind" = oldest of the three ISO timestamps (missing = worst).
+  // Chip anchor was previously min(last_derive_at, cards_through) - a
+  // 2-source derivation that didn't line up with the 3 sources feeding
+  // the board.  Aligning chip + popover on the same 3-source concept
+  // is Kevin's ruling: the pill reports the worst of the three, and
+  // the popover names which.
+  const billcomISO = data?.freshness?.last_billcom_sync || null;
+  const ripplingISO = data?.freshness?.last_rippling_sync || null;
+  const reportISO = data?.freshness?.last_report_ingest_at || null;
+  const reportStale = data?.freshness?.report_stale === true;
+  const reportAgeH = data?.freshness?.report_age_hours;
+  const _sourceRows = [
+    { key: "billcom",  label: "bill.com sync",         iso: billcomISO },
+    { key: "rippling", label: "Rippling card sync",    iso: ripplingISO },
+    { key: "report",   label: "Nightly report ingest", iso: reportISO },
+  ];
+  const _worst = _sourceRows.slice().sort((a, b) => {
+    if (a.iso == null && b.iso == null) return 0;
+    if (a.iso == null) return -1;   // missing = oldest
+    if (b.iso == null) return 1;
+    return a.iso < b.iso ? -1 : 1;
+  })[0];
+  const worstSourceKey = _worst?.key || null;
+  // worstSourceISO is what the chip reads via freshness.last_walk_at.
+  // Missing timestamp -> null anchor -> chip shows "No recent walk"
+  // (fail-loud, better than pretending fresh).
+  const worstSourceISO = _worst?.iso || null;
+  const worstHours = hoursSinceISO(worstSourceISO);
+  // Plain intro adapts to the pill state.  When Data current: reassure.
+  // When Data slow / Data stale: point at the lane that's behind.
+  const _stateIntro = (() => {
+    if (loadState !== "ok" || !data) return null;
+    if (worstHours == null) return "No recent walk on any source.";
+    const worstName = _worst?.label || "one source";
+    if (worstHours >= 54) return `${worstName} is behind — the pill reflects that source.`;
+    if (worstHours >= 30) return `${worstName} is running slow. Bills and cards land nightly around 2 AM CT.`;
+    return "All three sources landed within the last day.";
+  })();
+  const freshnessPop = loadState === "ok" && data ? (
+    <div className="kpi-fresh-pop-body">
+      {_stateIntro && <div className="kpi-fresh-pop-plain">{_stateIntro}</div>}
+      {_sourceRows.map(row => (
+        <div key={row.key} className="kpi-fresh-pop-row">
+          <span>
+            {row.label}
+            {row.key === worstSourceKey && worstHours != null && worstHours >= 30 && (
+              <span className="kpi-fresh-pop-marker" aria-label="drove the pill state"> · behind</span>
+            )}
+          </span>
+          <b>{row.iso ? fmtTimestamp(row.iso) : "—"}</b>
+        </div>
+      ))}
+      <div className="kpi-fresh-pop-sep" aria-hidden="true" />
+      <div className="kpi-fresh-pop-row">
+        <span>Cards through</span>
+        <b>{cardsThroughLabel ? cardsThroughLabel : "—"}</b>
+      </div>
+      {reportStale && (
+        <div className="kpi-fresh-pop-row">
+          <span>Report age</span>
+          <b>{reportAgeH != null ? `${reportAgeH}h (SLA 36h)` : "not started"}</b>
+        </div>
+      )}
+      <div className="kpi-fresh-pop-sep" aria-hidden="true" />
+      <div className="kpi-fresh-pop-contract">
+        bill.com and the Rippling card sync run nightly around 2 AM CT.  The nightly report ingests the scheduled Rippling email around 1 AM CT.  Cards trail purchase date by ~8 days per Rippling's post lag.
+      </div>
+    </div>
+  ) : null;
 
   const boardContent = (() => {
     if (loadState === "loading" || loadState === "idle") {
@@ -1201,9 +1289,20 @@ export default function KpiPurchasingPage() {
     <div className="kpi-app">
       <div className="kpi-wrap">
         <Shell
-          account={account || "…"}
+          account={deriveClientAccount({
+            urlAccount: account,
+            previewAccount: data?.preview_account,
+            landingAccount: data?.landing_account,
+          }) || "…"}
           fiscal={fiscalCtx}
           freshness={{ last_walk_at: worstSourceISO }}
+          freshnessPop={freshnessPop}
+          previewAccount={data?.preview_account || null}
+          onExitPreview={() => {
+            const p = new URLSearchParams(searchParams.toString());
+            p.delete("preview");
+            router.replace(`/kpi/purchasing?${p.toString()}`);
+          }}
           dataLoading={loadState === "loading" || loadState === "idle"}
           activeSection="purchasing"
           rangeProps={data ? {
@@ -1229,18 +1328,33 @@ export default function KpiPurchasingPage() {
           exportHref={data && account
             ? `/api/kpi/purchasing/export?account=${encodeURIComponent(account)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${resolvedPreset ? `&view_name=${encodeURIComponent(resolvedPreset)}&view_date_mode=preset` : ""}`
             : null}
-          folioRail={
-            <FolioRail
-              activeAccount={account}
-              onPickAccount={onPickAccount}
-              /* PR-2 R2 Fix 7: pass the live directory the route now ships.
-                 Prior undefined forced STATIC_DIRECTORY (team_name null on
-                 every row), leaving 8/11 rail rows blank. */
-              accountsDirectory={data?.accounts_directory}
-              regionalDirectorsDisplay={undefined}
-              folioFoot={null}
-            />
-          }
+          folioRail={(() => {
+            // 2026-08-28 rail-hide (labor #873 shape).  Rules:
+            //   landing_account pseudo (ALL/EAST/WEST) -> multi-account
+            //     access -> rail visible
+            //   landing_account non-pseudo -> single-account user ->
+            //     rail hidden
+            //   preview_account set -> corporate narrowed to one ->
+            //     rail hidden (previewing what a single-account user sees)
+            // Passing null tells Shell to omit the aside; kpi.css collapses
+            // the .kpi-cols grid via [data-no-folio].
+            const PSEUDO = ["ALL", "EAST", "WEST"];
+            const isPseudoLanding = PSEUDO.includes(data?.landing_account);
+            const showRail = isPseudoLanding && !data?.preview_account;
+            if (!showRail) return null;
+            return (
+              <FolioRail
+                activeAccount={account}
+                onPickAccount={onPickAccount}
+                /* PR-2 R2 Fix 7: pass the live directory the route now ships.
+                   Prior undefined forced STATIC_DIRECTORY (team_name null on
+                   every row), leaving 8/11 rail rows blank. */
+                accountsDirectory={data?.accounts_directory}
+                regionalDirectorsDisplay={undefined}
+                folioFoot={null}
+              />
+            );
+          })()}
           main={boardContent}
         />
       </div>
