@@ -1394,12 +1394,9 @@ export async function GET(request) {
       })()
     : end;
 
-  // Budgets for members (needed by budget block, categories, buckets,
-  // periods).
-  const fyForRange = 2026;   // FY2026 hard-coded; matches labor's convention
-  const budgetsResp = await loadPurchasingBudgets(supa, members, fyForRange);
-  if (budgetsResp.error) return NextResponse.json(safeError("kpi_budgets", budgetsResp.error), { status: 500 });
-  const budgetsByLine = budgetsResp.data;
+  // FY2026 hard-coded; matches labor's convention. Loaded inside the
+  // merged Promise.all below.
+  const fyForRange = 2026;
 
   // R13 P0-1: detect the closed single-period case so we can fetch
   // prior-period + 8-period sparkline history in parallel with the
@@ -1413,16 +1410,23 @@ export async function GET(request) {
   const todayDateEarly = new Date(today + "T00:00:00Z");
   const isClosedSinglePeriod = isSinglePeriodRange && rangeEndDate < todayDateEarly;
 
-  // Fetch weekly / pending / raw actuals / freshness in
-  // parallel. Weekly reads the SQL-aggregated view; raw actuals are
-  // still needed for source-level splits (bills-only bucket state,
-  // totals.card by source). Parallelising cuts wall-time on the
-  // common ALL/FYTD path where the largest read (actuals ~ 12.7k
-  // rows) would otherwise serialise behind the weekly read.
+  // Merged loader block (INV-P23 arc 2026-08-29). What used to be
+  // three sequential waits (serial loadPurchasingBudgets + first
+  // Promise.all of 8 loaders + second Promise.all of 6 loaders) is
+  // one Promise.all of 15. Rollups between the two prior blocks
+  // measured at 6ms combined on ALL FYTD - the split bought nothing.
+  // Dependency audit 2026-08-29 read each of the six ledger/card/
+  // vendor loaders and confirmed none reads first-block state; they
+  // only take {members, start, end, cap}. Wait time is max(all 15)
+  // instead of sum-of-three-waits.
   //
-  // PR-2 R4 Part A: pass [effStart, effEnd] so weekly view, actuals,
+  // PR-2 R4 Part A: [effStart, effEnd] pass so weekly view, actuals,
   // pending all describe the same fiscal-week footprint.
-  const [weeklyResp, pendingResp, reportPendingResp, actualsResp, freshness, dirResp, priorHistoryResp, complianceResp] = await Promise.all([
+  const [
+    weeklyResp, pendingResp, reportPendingResp, actualsResp, freshness,
+    dirResp, priorHistoryResp, complianceResp, budgetsResp,
+    vehicleR, equipR, repairR, reimbR, cardChR, vendorRollupR,
+  ] = await Promise.all([
     paginateWeekly(supa, { members, start: effStart, end: effEnd }),
     loadPending(supa, { members, start: effStart, end: effEnd }),
     loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
@@ -1440,6 +1444,16 @@ export async function GET(request) {
     // footer count only. See loadCompliance() docblock for the full
     // shape + why the population is the report side, not the board.
     loadCompliance(supa, { members, start: effStart, end: effEnd, today }),
+    // Moved from serial (INV-P23 arc, was ~265ms of blocking wait).
+    loadPurchasingBudgets(supa, members, fyForRange),
+    // Moved from the second Promise.all (INV-P23 arc). Each loader's
+    // dependency confirmed to be {members, start, end, cap} only.
+    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "3500%", cap: 25 }),
+    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 }),
+    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 }),
+    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 }),
+    loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 }),
+    loadVendorRollup(supa, { members, start: effStart, end: effEnd }),
   ]);
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
@@ -1448,6 +1462,14 @@ export async function GET(request) {
   if (dirResp.error) return NextResponse.json(safeError("accounts_directory", dirResp.error), { status: 500 });
   if (priorHistoryResp.error) return NextResponse.json(safeError("prior_period_history", priorHistoryResp.error), { status: 500 });
   if (complianceResp.error) return NextResponse.json(safeError("compliance", complianceResp.error), { status: 500 });
+  if (budgetsResp.error) return NextResponse.json(safeError("kpi_budgets", budgetsResp.error), { status: 500 });
+  if (vehicleR.error) return NextResponse.json(safeError("ledgers.vehicle", vehicleR.error), { status: 500 });
+  if (equipR.error) return NextResponse.json(safeError("ledgers.equipment", equipR.error), { status: 500 });
+  if (repairR.error) return NextResponse.json(safeError("ledgers.repair", repairR.error), { status: 500 });
+  if (reimbR.error) return NextResponse.json(safeError("ledgers.reimbursable", reimbR.error), { status: 500 });
+  if (cardChR.error) return NextResponse.json(safeError("card_charges", cardChR.error), { status: 500 });
+  if (vendorRollupR.error) return NextResponse.json(safeError("vendor_rollup", vendorRollupR.error), { status: 500 });
+  const budgetsByLine = budgetsResp.data;
   const weekly = weeklyResp.data;
   // Precedence merge: API pending + report-only pending (no double
   // count - API rows are structurally excluded from the report-only
@@ -1842,25 +1864,12 @@ export async function GET(request) {
   // R15 E - vendor rollup + priorRange (mirrored prior-window compare)
   // removed with VendorBreakdown; no other consumer of priorRange.
 
-  // R15 - Vehicle joins the matched-ledgers row (was a bucket card chart).
-  // Same shape as Equipment / R&M so page.js can render three cards with
-  // one component.  gl_line_code prefix is 3500 (any 3500.*).
-  // R15 F - vendor_rollup for the drill table's "By vendor" row mode
-  // (VendorBreakdown card gone; vendor rows land in-table now).
-  const [vehicleR, equipR, repairR, reimbR, cardChR, vendorRollupR] = await Promise.all([
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "3500%", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 }),
-    loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 }),
-    loadVendorRollup(supa, { members, start: effStart, end: effEnd }),
-  ]);
-  if (vehicleR.error)       return NextResponse.json(safeError("ledgers.vehicle",     vehicleR.error), { status: 500 });
-  if (equipR.error)         return NextResponse.json(safeError("ledgers.equipment",   equipR.error),   { status: 500 });
-  if (repairR.error)        return NextResponse.json(safeError("ledgers.repair",      repairR.error),  { status: 500 });
-  if (reimbR.error)         return NextResponse.json(safeError("ledgers.reimbursable", reimbR.error),  { status: 500 });
-  if (cardChR.error)        return NextResponse.json(safeError("card_charges",        cardChR.error),  { status: 500 });
-  if (vendorRollupR.error)  return NextResponse.json(safeError("vendor_rollup",       vendorRollupR.error), { status: 500 });
+  // Ledger loaders now live in the merged Promise.all further up
+  // (INV-P23 arc). vehicleR/equipR/repairR/reimbR/cardChR/vendorRollupR
+  // are already resolved and error-checked; this block used to await
+  // them serially after the rollups. R15 - Vehicle joins the matched-
+  // ledgers row (was a bucket card chart); R15 F - vendor_rollup for
+  // the drill table's "By vendor" row mode.
 
   // R15 B - Rule 2 flag: vendor on a known vehicle-service list appearing
   // in R&M (5002.1) is a misclassification signal.  Small curated list;
