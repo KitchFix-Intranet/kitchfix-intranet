@@ -1027,7 +1027,10 @@ export async function GET(request) {
       unmapped_names: unmapped.data || [],
       account_periods,
       budget_periods,
-      budget_mode: "static",
+      // Step 1 dead-payload sweep 2026-08-29: `budget_mode: "static"`
+      // removed here and from the single body below. Value never
+      // varied and no client code read it (only comment reference in
+      // src/app/kpi/labor/lib/budgets.js was stale doc).
       members,
       rolled_up_members: rolledUpMembers,
       accounts_directory,
@@ -1092,11 +1095,17 @@ export async function GET(request) {
   }
 
   if (D26_SALARIED_ONLY.has(account)) {
+    // Step 1 dead-payload sweep 2026-08-29: `account_state_message`
+    // removed. Nothing in the client (or elsewhere in the repo) read
+    // this diagnostic string; the D26 body set it and, if
+    // include_salary=1 was passed, immediately unset it below - a
+    // clear signal it was dead by construction. Kept the
+    // account_state discriminator ("salaried_only" vs "hourly_ok"),
+    // which the client does branch on.
     let bodyD26 = {
       ok: true,
       filters: { account, start, end },
       account_state: "salaried_only",
-      account_state_message: `${account} is a single-employee salaried account (D26). 3100.1 hourly labor is not applicable.`,
       actuals: [],
       unattributed: [],
       workers: {},
@@ -1126,7 +1135,9 @@ export async function GET(request) {
       if (budQ.error) return NextResponse.json(safeError("kpi_budgets_3100_2", budQ.error), { status: 500 });
       if (actQ.error) return NextResponse.json(safeError("labor_salary_actuals", actQ.error), { status: 500 });
       bodyD26.account_state = "hourly_ok";
-      bodyD26.account_state_message = undefined;
+      // Step 1 sweep 2026-08-29: `bodyD26.account_state_message = undefined`
+      // removed. The field is no longer set at construction so there
+      // is nothing to unset.
       // 2026-08-28 person-key fix: resolve salary worker_ids BEFORE
       // withSalaryMerge so the workerToEmail map covers them; D26
       // accounts arrive with an empty workers dict, so this is the
@@ -1244,7 +1255,7 @@ export async function GET(request) {
     .is("resolved_at", null)
     .order("total_amount", { ascending: false });
 
-  // ── kpi-2 · budget_periods + budget_mode ────────────────────────
+  // ── kpi-2 · budget_periods ──────────────────────────────────────
   // Playbook 4.5 resolution order per period:
   //   1. live sc_labor_budgets row (superseded_at IS NULL) wins as
   //      the SUPERSEDE source; carry its reason. If a kpi_budgets
@@ -1263,7 +1274,11 @@ export async function GET(request) {
   // Playbook 8.2 hard rule: this route selects line_code = '3100.1'
   // ONLY. Never 3100.2. Never any 3100-group total. The salary
   // subtraction-attack surface must not open here.
-  const budget_mode = "static";
+  //
+  // Step 1 dead-payload sweep 2026-08-29: `budget_mode = "static"`
+  // removed. Value never varied and no client code read it. If a
+  // future superseded-vs-static discriminator is needed, add it as
+  // a live signal (not a constant).
   const isRevenueFlexAcct = V37_REVENUE_FLEX_ACCOUNTS.has(account);
   let budget_periods = [];
   {
@@ -1346,7 +1361,8 @@ export async function GET(request) {
     unmapped_names: unmapped.data || [],
     account_periods,
     budget_periods,
-    budget_mode,
+    // Step 1 dead-payload sweep 2026-08-29: `budget_mode` removed
+    // (was always "static", never read).
     accounts_directory,
     regional_directors_display,
     board: buildBoard({

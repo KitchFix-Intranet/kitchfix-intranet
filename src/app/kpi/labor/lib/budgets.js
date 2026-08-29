@@ -18,8 +18,12 @@ import { periodOf, weekStartsInRange } from "./periods";
 // underspend information, not a gap in the divisor. Pre-opening
 // periods carry $0 amounts in the seed, so they cannot inflate.
 //
-// Envelope mode: the labor route omits budget_periods entirely for
-// TXR - TX - V. Callers must gate on budget_mode before calling this.
+// V37 (2026-08) collapsed the envelope carve-out - TXR - TX - V now
+// resolves via the same 4.5 order, with basis: 'envelope' on the
+// per-period row where applicable. `budget_mode` used to name the
+// mode at the top level; the field was removed in the Step 1
+// dead-payload sweep 2026-08-29 (constant "static", no consumer).
+// Callers can inspect per-period `basis` if envelope-vs-pnl matters.
 export function budgetForRange(budgetPeriods, startISO, endISO) {
   if (!Array.isArray(budgetPeriods) || budgetPeriods.length === 0) return 0;
   const byPeriod = new Map();
