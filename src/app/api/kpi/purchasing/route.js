@@ -253,22 +253,35 @@ function stateOf({ spent, budget, elapsedFrac, hasBills, isPassThrough }) {
 //
 // Population: bills + coded card lines. Pending sum + null-attribution
 // analysis go via separate paths that keep the rows this drops.
-async function paginateActuals(supa, { members, start, end, pageSize }) {
+//
+// INV-P23 column trim (2026-08-28): the DEFAULT payload (no
+// ?drill=lines) only needs 5 columns for its consumers -
+// billsOnlySpentForGl / codedCardSpentForGl / card totals block /
+// weekly_by_source. That set is `source, gl_line_code, amount,
+// account_key, txn_date`. Consumer walk 2026-08-28 confirmed nobody
+// reads `r.gl_bucket` off an actuals row (see the columnFor() comment
+// around L2033: "purchasing_actuals.gl_bucket is the broader family
+// - do not read it"). `?drill=lines` still ships every column - the
+// row-level table needs the full shape.
+const ACTUALS_COLS_DEFAULT = "source, gl_line_code, amount, account_key, txn_date";
+const ACTUALS_COLS_DRILL   = "id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at, vendor_or_merchant";
+async function paginateActuals(supa, { members, start, end, pageSize, includeLines }) {
   const PS = pageSize && pageSize > 0 && pageSize <= V6_PAGE_DEFAULT ? pageSize : V6_PAGE_DEFAULT;
+  const cols = includeLines ? ACTUALS_COLS_DRILL : ACTUALS_COLS_DEFAULT;
   const out = [];
   for (const memberChunk of chunk(members, IN_CHUNK)) {
     let from = 0;
     while (true) {
       const q = await supa
         .from("purchasing_actuals")
-        .select("id, source, source_bill_id, source_line_id, account_key, gl_line_code, gl_bucket, txn_date, posting_date, amount, paid, approx_date, derived_at, vendor_or_merchant")
+        .select(cols)
         .in("account_key", memberChunk)
         .eq("excluded", false)
         .gte("txn_date", start)
         .lte("txn_date", end)
         .order("txn_date", { ascending: true })
         .order("account_key", { ascending: true })
-        .order("id", { ascending: true })
+        .order("id", { ascending: true })   // stable tiebreak - .order() accepts columns outside .select()
         .range(from, from + PS - 1);
       if (q.error) return { error: q.error };
       const rows = q.data || [];
@@ -1413,7 +1426,7 @@ export async function GET(request) {
     paginateWeekly(supa, { members, start: effStart, end: effEnd }),
     loadPending(supa, { members, start: effStart, end: effEnd }),
     loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
-    paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam }),
+    paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam, includeLines }),
     loadFreshness(supa),
     loadAccountsDirectory(supa),   // PR-2 R2 Fix 7
     // R13 P0-1 - history for closed period card only.  Loader returns
