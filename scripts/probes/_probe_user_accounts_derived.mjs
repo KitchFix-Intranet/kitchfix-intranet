@@ -162,17 +162,29 @@ assert(
 );
 
 // Bonus: report the diff against the old user_accounts table for
-// human review during the pre-cutover verification.
+// human review during the pre-cutover verification. Step 4 2026-08-29:
+// user_accounts was dropped after cutover; the diff is a best-effort
+// human-review aid that must not crash the probe's verdict. When the
+// old table is gone, print a note and continue - the A1..A7 assertions
+// above are the load-bearing part.
 console.log("\n--- diff report (old user_accounts vs derived) ---");
-const oldUa = await fetchAll(() => supa.from("user_accounts").select("email, account"));
-const oldByEmail = new Map(oldUa.map(u => [u.email.trim().toLowerCase(), u]));
-const gains = [...derivedByEmail].filter(([e]) => !oldByEmail.has(e));
-const loses = [...oldByEmail].filter(([e]) => !derivedByEmail.has(e));
-console.log(`  GAINS (in derived, not in user_accounts): ${gains.length}`);
-for (const [_, r] of gains) console.log(`    + ${r.email.padEnd(35)} ${r.account}`);
-console.log(`  LOSES (in user_accounts, not in derived): ${loses.length}`);
-for (const [_, r] of loses) console.log(`    - ${r.email.padEnd(35)} ${r.account}`);
-console.log(`  UNCHANGED: ${derivedByEmail.size - gains.length}`);
+try {
+  const oldUa = await fetchAll(() => supa.from("user_accounts").select("email, account"));
+  const oldByEmail = new Map(oldUa.map(u => [u.email.trim().toLowerCase(), u]));
+  const gains = [...derivedByEmail].filter(([e]) => !oldByEmail.has(e));
+  const loses = [...oldByEmail].filter(([e]) => !derivedByEmail.has(e));
+  console.log(`  GAINS (in derived, not in user_accounts): ${gains.length}`);
+  for (const [_, r] of gains) console.log(`    + ${r.email.padEnd(35)} ${r.account}`);
+  console.log(`  LOSES (in user_accounts, not in derived): ${loses.length}`);
+  for (const [_, r] of loses) console.log(`    - ${r.email.padEnd(35)} ${r.account}`);
+  console.log(`  UNCHANGED: ${derivedByEmail.size - gains.length}`);
+} catch (e) {
+  if (/Could not find the table|does not exist/i.test(e.message)) {
+    console.log(`  (user_accounts table has been dropped - diff skipped; the derived view is now the sole source)`);
+  } else {
+    throw e;
+  }
+}
 
 console.log(`\n---`);
 if (failures > 0) {
