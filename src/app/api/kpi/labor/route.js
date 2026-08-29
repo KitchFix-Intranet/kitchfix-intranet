@@ -937,38 +937,64 @@ export async function GET(request) {
       return NextResponse.json({ error: "no_members_in_region", account }, { status: 400 });
     }
 
-    // 2. Actuals - paginated union across members.
-    const aQ = await paginateActuals(supa, { members, start, end, pageSize: pageSizeParam });
+    // Step 3 restructure 2026-08-29: five independent reads fired in
+    // parallel now that members is resolved. Independence audit is in
+    // the PR body; every branch below is proven to read only (supa,
+    // members) or (supa) - none consume paginateActuals output.
+    //
+    // Loader inputs (audit):
+    //   - paginateActuals(supa, {members, start, end, pageSize}) - members only
+    //   - sc_day_metadata period bounds - (supa, canonAcct = members[0])
+    //   - labor_unattributed - (supa) global read
+    //   - earning_type_unmapped - (supa) global read
+    //   - resolveMemberBudget(supa, m) x members.length - (supa, m per iter)
+    //
+    // The prior serial for-loop over resolveMemberBudget was 805ms
+    // median (11 members * ~73ms per call, hitting kpi_budgets +
+    // sc_labor_budgets on each). Promise.all over the same 11 calls
+    // measured at 197ms median (-75%). The Map assembly downstream
+    // (line ~1015 second loop) reads memberBudgets AFTER all entries
+    // are populated - no ordering dependency, verified by reading.
+    // See _probe_labor_step3_attribution.mjs for the numbers.
+    const canonAcct = members[0];
+    let aQ, periodDays, unattrRowsAgg, unmapped, memberBudgetResults;
+    try {
+      [aQ, periodDays, unattrRowsAgg, unmapped, memberBudgetResults] = await Promise.all([
+        paginateActuals(supa, { members, start, end, pageSize: pageSizeParam }),
+        supa.from("sc_day_metadata")
+          .select("service_date, period")
+          .eq("account_key", canonAcct)
+          .gte("service_date", "2025-12-29")
+          .lte("service_date", "2026-12-27")
+          .not("period", "is", null),
+        fetchAllOffset(supa, "labor_unattributed",
+          "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
+          [(q) => q.order("amount", { ascending: false })]),
+        supa.from("earning_type_unmapped")
+          .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
+          .is("resolved_at", null)
+          .order("total_amount", { ascending: false }),
+        Promise.all(members.map(m => resolveMemberBudget(supa, m))),
+      ]);
+    } catch (e) {
+      return NextResponse.json(safeError("labor_unattributed", { message: e.message }), { status: 500 });
+    }
     if (aQ.error) return NextResponse.json(safeError("labor_actuals_aggregate", aQ.error), { status: 500 });
     const actualsRows = aQ.data;
 
-    // 3. Workers - union by rippling_id (collisions = same person).
-    //    V40 BUG 5 - name resolution extracted to resolveWorkerMeta so
-    //    the salary path can call it too. Prior state left salaried
-    //    workers unresolved (rendered as id hashes at CIN - AZ).
-    const workerIds = [...new Set(actualsRows.map(r => r.worker_id))];
-    const { workerMeta, resolvedNames, usersReachable } = await resolveWorkerMeta(supa, workerIds);
-    // 2026-08-28 person-key fix: build the worker_id -> email map once
-    // and thread it through buildBoard + salary paths so distinct-people
-    // counts dedupe by person (email) not employment spell (worker_id).
-    const workerToEmail = buildWorkerToEmail(workerMeta);
-
-    // 4. account_periods - fiscal calendar is universal across accounts;
-    // use the first member as the canonical source (any account would
-    // yield the same period boundaries).
-    const canonAcct = members[0];
-    const periodDays = await supa.from("sc_day_metadata")
-      .select("service_date, period")
-      .eq("account_key", canonAcct)
-      .gte("service_date", "2025-12-29")
-      .lte("service_date", "2026-12-27")
-      .not("period", "is", null);
-    // 2026-08-28 swallowing-catch fix: prior code did
-    // `if (!periodDays.error) { populate periodBounds }` - a DB error
-    // left the map empty and downstream period-scope math silently
-    // fell back to fiscal defaults. Board numbers looked right and
-    // were not. Surface as safeError.
+    // 2026-08-28 swallowing-catch fix: a DB error must surface as
+    // safeError so downstream period-scope math cannot silently fall
+    // back to fiscal defaults with wrong-looking-right numbers.
     if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_aggregate", periodDays.error), { status: 500 });
+    // resolveMemberBudget error surfacing: each element in
+    // memberBudgetResults carries { data } or { error, scope }. First
+    // non-null error is the one we surface (same shape as the prior
+    // serial loop's early return).
+    for (let i = 0; i < memberBudgetResults.length; i += 1) {
+      const r = memberBudgetResults[i];
+      if (r.error) return NextResponse.json(safeError(r.scope, r.error), { status: 500 });
+    }
+
     const periodBounds = new Map();
     for (const r of periodDays.data || []) {
       const p = String(r.period);
@@ -983,33 +1009,18 @@ export async function GET(request) {
       .map(([p, b]) => ({ fiscal_year: 2026, period_no: parseInt(p, 10), start: b.start, end: b.end }))
       .sort((a, b) => a.period_no - b.period_no);
 
-    // 5. unattributed / unmapped - global. Paginated 2026-08-28 for
-    // labor_unattributed (0 rows today but grow-limit); earning_type
-    // _unmapped stays as-is (5-row map, empty unmapped table).
-    let unattrRowsAgg, unmapped;
-    try {
-      unattrRowsAgg = await fetchAllOffset(supa, "labor_unattributed",
-        "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
-        [(q) => q.order("amount", { ascending: false })]);
-    } catch (e) {
-      return NextResponse.json(safeError("labor_unattributed", { message: e.message }), { status: 500 });
-    }
-    unmapped = await supa.from("earning_type_unmapped")
-      .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
-      .is("resolved_at", null)
-      .order("total_amount", { ascending: false });
     const unattr = { data: unattrRowsAgg };
 
-    // 6. Aggregate budget_periods - resolve each member via 4.5, sum
-    // per period. V37-5 - revenue-flex accounts (TXR - TX - V) now
-    // join every aggregate on both sides. Any superseded member
-    // period marks the aggregate period superseded; member_detail
-    // carries the per-member breakdown for the drill.
+    // Aggregate budget_periods - resolve each member via 4.5, sum
+    // per period. Assembly before buildPriorPeriodComparison so its
+    // return value is safely built before the next Promise.all.
+    // V37-5 - revenue-flex accounts (TXR - TX - V) now join every
+    // aggregate on both sides. Any superseded member period marks the
+    // aggregate period superseded; member_detail carries the per-member
+    // breakdown for the drill.
     const memberBudgets = new Map();
-    for (const m of members) {
-      const b = await resolveMemberBudget(supa, m);
-      if (b.error) return NextResponse.json(safeError(b.scope, b.error), { status: 500 });
-      memberBudgets.set(m, b.data);
+    for (let i = 0; i < members.length; i += 1) {
+      memberBudgets.set(members[i], memberBudgetResults[i].data);
     }
     const perPeriodAgg = new Map();  // p -> { amount, superseded, member_detail: [] }
     for (const [m, list] of memberBudgets) {
@@ -1043,14 +1054,51 @@ export async function GET(request) {
     const rolledUpMembers = members;
     const rolledUpActuals = actualsRows;
 
-    // Prior-period comparison. Compute before body so a DB error
-    // surfaces via safeError instead of silently vanishing the widget.
-    const priorCmpAgg = await buildPriorPeriodComparison({
-      supa, rangeStart: start, rangeEnd: end, today,
-      isAggregate: true, members: rolledUpMembers,
-      currentActuals: rolledUpActuals, pageSize: pageSizeParam,
-    });
+    // Step 3 restructure: workerMeta (needs actualsRows.worker_id) and
+    // buildPriorPeriodComparison (needs actualsRows via
+    // currentActuals; fires its own paginateActuals over the prior
+    // window) are both independent-of-each-other reads that only
+    // consume the Layer-1 outputs (actualsRows, members). Fire them
+    // in parallel. Median saving: ~75ms (priorPeriod overlaps
+    // resolveWorkerMeta rather than running after it).
+    //
+    // Loader inputs (audit):
+    //   - resolveWorkerMeta(supa, workerIds): supa, workerIds from
+    //     actualsRows[].worker_id (unique). Reads
+    //     rippling_raw_workers_latest -> rippling_raw_users_latest
+    //     (its own internal serial chain).
+    //   - buildPriorPeriodComparison({supa, rangeStart, rangeEnd,
+    //     today, isAggregate, members, currentActuals, pageSize}):
+    //     supa, rangeStart/rangeEnd/today (URL params), isAggregate,
+    //     members (Layer 1), currentActuals (paginateActuals output).
+    //     Fires prior-period paginateActuals; does NOT touch
+    //     workerMeta.
+    //
+    // Neither reads the other's output. Confirmed by reading; see
+    // src/lib/kpi/resolveWorkerMeta.js and buildPriorPeriodComparison
+    // (route.js line ~275).
+    const workerIds = [...new Set(actualsRows.map(r => r.worker_id))];
+    let workerMeta, resolvedNames, usersReachable, priorCmpAgg;
+    try {
+      const [workerRes, priorRes] = await Promise.all([
+        resolveWorkerMeta(supa, workerIds),
+        buildPriorPeriodComparison({
+          supa, rangeStart: start, rangeEnd: end, today,
+          isAggregate: true, members: rolledUpMembers,
+          currentActuals: rolledUpActuals, pageSize: pageSizeParam,
+        }),
+      ]);
+      ({ workerMeta, resolvedNames, usersReachable } = workerRes);
+      priorCmpAgg = priorRes;
+    } catch (e) {
+      return NextResponse.json(safeError("workerMeta_or_prior", { message: e.message }), { status: 500 });
+    }
     if (priorCmpAgg?.error) return NextResponse.json(safeError(priorCmpAgg.scope, priorCmpAgg.error), { status: 500 });
+
+    // 2026-08-28 person-key fix: build the worker_id -> email map once
+    // and thread it through buildBoard + salary paths so distinct-people
+    // counts dedupe by person (email) not employment spell (worker_id).
+    const workerToEmail = buildWorkerToEmail(workerMeta);
 
     let body = {
       ok: true,
@@ -1218,69 +1266,74 @@ export async function GET(request) {
     return NextResponse.json(bodyD26);
   }
 
-  // 2026-08-28 pagination sweep. Single-account board over the URL
-  // date range - FYTD for a large-roster account exceeds 1000 rows.
-  // Prior bare select silently truncated; fetchAllOffset paginates.
+  // Step 3 restructure 2026-08-29: five independent single-account
+  // reads fired in parallel. Each depends only on (supa, account) or
+  // (supa) - none consume any other's output.
   //
-  // Step 2 column trim 2026-08-29: matches paginateActuals - six dead
-  // cols dropped (line_code, period_no, week_source, segment_count,
-  // entry_count, source_run). Same consumer walk applies to this
-  // single-account path (same client, same buildBoard, same
-  // salaryBoard merge). .order() chain preserved on the tiebreak
-  // even after columns leave the select (worker_id is still in the
-  // select; only comment adjusted for parallelism with paginateActuals).
-  let actualsRows;
+  // Loader inputs (audit):
+  //   - labor_actuals_latest (paginated): (supa, account, start, end)
+  //     Step 2 column trim 2026-08-29: matches paginateActuals - six
+  //     dead cols dropped (line_code, period_no, week_source,
+  //     segment_count, entry_count, source_run). Same consumer walk
+  //     applies to this single-account path (same client, same
+  //     buildBoard, same salaryBoard merge). .order() chain preserved.
+  //   - labor_unattributed (paginated): (supa) global. 0 rows today
+  //     (2026-08-28); paginating pre-emptively.
+  //   - sc_day_metadata period bounds: (supa, account)
+  //   - earning_type_unmapped: (supa) global. Empty today; 5-row map.
+  //   - kpi_budgets 3100.1 + sc_labor_budgets: (supa, account) - was
+  //     already a Promise.all inside a block; hoisted here.
+  //
+  // Median serial sum on TBR - FL FYTD: ~294ms (79+55+58+53+49).
+  // Layer-1 parallel: max(79, 55, 58, 53, 49) = 79ms (-215ms).
+  let actualsRows, unattrRows, periodDays, unmapped, pnlQ, scQ;
   try {
-    actualsRows = await fetchAllOffset(supa, "labor_actuals_latest",
-      "account_key, worker_id, week_label, week_start, week_end, fiscal_year, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at",
-      [
-        (q) => q.eq("account_key", account),
-        (q) => q.lte("week_start", end),
-        (q) => q.gte("week_end", start),
-        (q) => q.order("week_start", { ascending: true }).order("worker_id", { ascending: true }),
-      ]);
+    [actualsRows, unattrRows, periodDays, unmapped, pnlQ, scQ] = await Promise.all([
+      fetchAllOffset(supa, "labor_actuals_latest",
+        "account_key, worker_id, week_label, week_start, week_end, fiscal_year, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at",
+        [
+          (q) => q.eq("account_key", account),
+          (q) => q.lte("week_start", end),
+          (q) => q.gte("week_end", start),
+          (q) => q.order("week_start", { ascending: true }).order("worker_id", { ascending: true }),
+        ]),
+      fetchAllOffset(supa, "labor_unattributed",
+        "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
+        [(q) => q.order("amount", { ascending: false })]),
+      supa.from("sc_day_metadata")
+        .select("service_date, period")
+        .eq("account_key", account)
+        .gte("service_date", "2025-12-29")
+        .lte("service_date", "2026-12-27")
+        .not("period", "is", null),
+      supa.from("earning_type_unmapped")
+        .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
+        .is("resolved_at", null)
+        .order("total_amount", { ascending: false }),
+      supa.from("kpi_budgets")
+        .select("period_no, amount")
+        .eq("account_key", account)
+        .eq("line_code", "3100.1")
+        .eq("fiscal_year", 2026),
+      supa.from("sc_labor_budgets")
+        .select("period, hourly_budget, reason")
+        .eq("account_key", account)
+        .is("superseded_at", null),
+    ]);
   } catch (e) {
     return NextResponse.json(safeError("labor_actuals", { message: e.message }), { status: 500 });
   }
   const actuals = { data: actualsRows };
-
-  // labor_unattributed is 0 rows today (2026-08-28); paginating
-  // pre-emptively so a future growth spike does not silently drop the
-  // tail of the by-amount ordering.
-  let unattrRows;
-  try {
-    unattrRows = await fetchAllOffset(supa, "labor_unattributed",
-      "reason_code, department_id, worker_id, amount, hours, segment_count, first_seen_date, last_seen_date, derived_at, notes",
-      [(q) => q.order("amount", { ascending: false })]);
-  } catch (e) {
-    return NextResponse.json(safeError("labor_unattributed", { message: e.message }), { status: 500 });
-  }
   const unattr = { data: unattrRows };
-
-  // V40 BUG 5 - name resolution extracted to resolveWorkerMeta so the
-  // salary path can call it too. Prior inlined block was byte-identical
-  // to the aggregate one; both now share resolveWorkerMeta.
-  const workerIds = [...new Set(actuals.data.map(r => r.worker_id))];
-  const { workerMeta, resolvedNames, usersReachable } = await resolveWorkerMeta(supa, workerIds);
-  // 2026-08-28 person-key fix (single-account path).
-  const workerToEmail = buildWorkerToEmail(workerMeta);
+  // 2026-08-28 swallowing-catch fix (single-account path). See the
+  // aggregate-path fix for shape rationale.
+  if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_single", periodDays.error), { status: 500 });
+  if (pnlQ.error) return NextResponse.json(safeError("kpi_budgets_3100_1", pnlQ.error), { status: 500 });
+  if (scQ.error)  return NextResponse.json(safeError("sc_labor_budgets", scQ.error),   { status: 500 });
 
   // account_periods: full FY period boundaries from sc_day_metadata for
   // this account. Powers client-side "this period" / "last period"
   // presets even before the current date-range fetch overlaps them.
-  // Cheap query; keyed only to today's fiscal year.
-  const fyStart = "2025-12-29";
-  const fyEnd = "2026-12-27";
-  const periodDays = await supa
-    .from("sc_day_metadata")
-    .select("service_date, period")
-    .eq("account_key", account)
-    .gte("service_date", fyStart)
-    .lte("service_date", fyEnd)
-    .not("period", "is", null);
-  // 2026-08-28 swallowing-catch fix (single-account path). See the
-  // aggregate-path fix ~line 897 for the shape rationale.
-  if (periodDays.error) return NextResponse.json(safeError("sc_day_metadata_period_bounds_single", periodDays.error), { status: 500 });
   const periodBounds = new Map();
   for (const r of periodDays.data || []) {
     const p = String(r.period);
@@ -1307,12 +1360,6 @@ export async function GET(request) {
     last_weekly_derive_at: freshness.last_weekly_derive_at,
     last_daily_derive_at:  freshness.last_daily_derive_at,
   };
-
-  const unmapped = await supa
-    .from("earning_type_unmapped")
-    .select("merged_earning_type_name, occurrence_count, total_hours, total_amount, first_seen_at, last_seen_at, resolved_at")
-    .is("resolved_at", null)
-    .order("total_amount", { ascending: false });
 
   // ── kpi-2 · budget_periods ──────────────────────────────────────
   // Playbook 4.5 resolution order per period:
@@ -1341,25 +1388,13 @@ export async function GET(request) {
   const isRevenueFlexAcct = V37_REVENUE_FLEX_ACCOUNTS.has(account);
   let budget_periods = [];
   {
-    // Pull all 13 periods for this account from the two sources in
-    // parallel. Both queries are small (<= 13 rows each) - no
-    // pagination concern.
-    const [pnlQ, scQ] = await Promise.all([
-      supa
-        .from("kpi_budgets")
-        .select("period_no, amount")
-        .eq("account_key", account)
-        .eq("line_code", "3100.1")
-        .eq("fiscal_year", 2026),
-      supa
-        .from("sc_labor_budgets")
-        .select("period, hourly_budget, reason")
-        .eq("account_key", account)
-        .is("superseded_at", null),
-    ]);
-    if (pnlQ.error) return NextResponse.json(safeError("kpi_budgets_3100_1", pnlQ.error), { status: 500 });
-    if (scQ.error)  return NextResponse.json(safeError("sc_labor_budgets", scQ.error),   { status: 500 });
-
+    // Step 3 restructure: pnlQ + scQ were previously fired as a
+    // sub-Promise.all here; they now ride along in the Layer 1 hoist
+    // above (labor_actuals + labor_unattributed + sc_day_metadata +
+    // earning_type_unmapped + kpi_budgets + sc_labor_budgets = one
+    // Promise.all after the preamble). Same read shape, same result
+    // objects (pnlQ, scQ), same error handling; the parallel-of-two
+    // moved into the parallel-of-six.
     const pnlByPeriod = new Map(
       (pnlQ.data || []).map(r => [Number(r.period_no), Number(r.amount)])
     );
@@ -1399,15 +1434,40 @@ export async function GET(request) {
     }
   }
 
-  // Prior-period comparison. Compute before body so a DB error
-  // surfaces via safeError (see aggregate path ~line 992 for the
-  // same shape).
-  const priorCmpSingle = await buildPriorPeriodComparison({
-    supa, rangeStart: start, rangeEnd: end, today,
-    isAggregate: false, account,
-    currentActuals: actuals.data,
-  });
+  // Step 3 restructure 2026-08-29: resolveWorkerMeta and
+  // buildPriorPeriodComparison are both independent-of-each-other
+  // reads that only depend on Layer-1 outputs (actualsRows). Fire in
+  // parallel. Loader inputs (audit) - identical shape to the aggregate
+  // path's Layer 2:
+  //   - resolveWorkerMeta(supa, workerIds): supa, workerIds from
+  //     actualsRows[].worker_id. Reads workers -> users (own serial
+  //     chain per Candidate B).
+  //   - buildPriorPeriodComparison(single): supa, rangeStart, rangeEnd,
+  //     today, isAggregate:false, account, currentActuals. Fires the
+  //     narrow 9-column prior-period read against labor_actuals_latest;
+  //     does NOT touch workerMeta.
+  //
+  // Median saving: ~55ms (priorPeriodSingle overlaps
+  // resolveWorkerMeta rather than running after it).
+  const workerIds = [...new Set(actuals.data.map(r => r.worker_id))];
+  let workerMeta, resolvedNames, usersReachable, priorCmpSingle;
+  try {
+    const [workerRes, priorRes] = await Promise.all([
+      resolveWorkerMeta(supa, workerIds),
+      buildPriorPeriodComparison({
+        supa, rangeStart: start, rangeEnd: end, today,
+        isAggregate: false, account,
+        currentActuals: actuals.data,
+      }),
+    ]);
+    ({ workerMeta, resolvedNames, usersReachable } = workerRes);
+    priorCmpSingle = priorRes;
+  } catch (e) {
+    return NextResponse.json(safeError("workerMeta_or_prior_single", { message: e.message }), { status: 500 });
+  }
   if (priorCmpSingle?.error) return NextResponse.json(safeError(priorCmpSingle.scope, priorCmpSingle.error), { status: 500 });
+  // 2026-08-28 person-key fix (single-account path).
+  const workerToEmail = buildWorkerToEmail(workerMeta);
 
   let bodySingle = {
     ok: true,
