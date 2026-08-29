@@ -977,7 +977,15 @@ export async function GET(request) {
         Promise.all(members.map(m => resolveMemberBudget(supa, m))),
       ]);
     } catch (e) {
-      return NextResponse.json(safeError("labor_unattributed", { message: e.message }), { status: 500 });
+      // P3 (Step 4 2026-08-29): the try/catch wraps 5 loaders
+      // (paginateActuals + sc_day_metadata + labor_unattributed +
+      // earning_type_unmapped + resolveMemberBudget per-member).
+      // Prior label `labor_unattributed` pointed a debugger at the
+      // wrong table whenever any of the other four threw. Scope now
+      // names the block, and the message carries the thrown text for
+      // triage; the specific-loader .error paths below still surface
+      // with their own precise scopes for the non-throw failure mode.
+      return NextResponse.json(safeError("labor_aggregate_loaders", { message: e.message }), { status: 500 });
     }
     if (aQ.error) return NextResponse.json(safeError("labor_actuals_aggregate", aQ.error), { status: 500 });
     const actualsRows = aQ.data;
