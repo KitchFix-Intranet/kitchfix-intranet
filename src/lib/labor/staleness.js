@@ -6,11 +6,16 @@
 // in the banner. Pure function so scripts/probes/_probe_labor_staleness.mjs
 // can feed it fixtures and assert the flip.
 //
-// derive_freshness is PRE-EXISTING - it carries last_walk_at,
-// last_walk_ids_seen, and last_derive_at from before this PR. #854
-// EXTENDS the object with two new fields, one per table:
+// derive_freshness is PRE-EXISTING - it carries last_walk_at and
+// last_derive_at from before this PR. #854 EXTENDS the object with two
+// new fields, one per table:
 //   last_weekly_derive_at   MAX(labor_actuals.derived_at)
 //   last_daily_derive_at    MAX(labor_actuals_daily.derived_at)
+//
+// Step 2 ride-along 2026-08-29: `last_walk_ids_seen` removed from
+// derive_freshness. It was written but never read by any client
+// surface; the write sites lived in src/app/api/kpi/labor/route.js
+// (aggregate + single-account bodies).
 //
 // Named separately (not overloaded onto the existing last_derive_at)
 // because last_derive_at is IN-SCOPE MAX - used by the existing
