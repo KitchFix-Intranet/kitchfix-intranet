@@ -136,6 +136,47 @@ async function fetchAccountsDirectory(supa) {
 
 // Paginate through a labor_actuals_latest filter, .range() loop,
 // deterministic ordering, single flat array return.
+//
+// Step 2 column trim 2026-08-29 (PR #892 sibling). Six columns dropped
+// from the wire select - no consumer for any of them across the read
+// path (server body assembly, buildBoard, salaryBoard merge, client
+// page.js weekAggregates, WeekTable, StoryBlock, HomestandBoard,
+// weekTableModels, SignalCards). The dropped set:
+//
+//   line_code        - only used in salaryBoard.shapeSalaryRow as a
+//                      constant '3100.2' marker on synthetic salary
+//                      rows; nothing reads r.line_code back from
+//                      labor_actuals_latest rows.
+//   period_no        - client explicitly derives via periodOf(week_start)
+//                      per page.js:392-395: "H1: derive period client
+//                      -side. Payload period_no is null on backfill
+//                      rows; we NEVER trust it."
+//   week_source      - table-level 'sc_day_metadata' floor query stays
+//                      (route.js:484); no per-row r.week_source read.
+//   segment_count    - read from labor_actuals_daily in dailyRangeBody
+//                      but NOT from labor_actuals_latest rows.
+//   entry_count      - only referenced in the derive script's bucket
+//                      builder; no reader on the response path.
+//   source_run       - no consumer anywhere.
+//
+// Not dropped (reading confirmed a consumer):
+//   fiscal_year      - page.js:394 fallback in weekAggregates
+//                      (`fiscalYearOf(r.week_start) ?? r.fiscal_year ?? 2026`)
+//   week_label       - page.js:391 stored on the weekAggregate object.
+//
+// .order() chain preserved on week_start, account_key, worker_id even
+// though none of those three left the select. PostgREST accepts unselected
+// columns in .order(); dropping the tiebreak on purchasing PR #892
+// cost $595.45 of page-boundary drift on ties (rehold note in Step 2
+// brief). This paginator uses .range()-offset (not keyset), so no
+// cursor column is read from the returned rows.
+//
+// The export path (src/app/api/kpi/labor/export/route.js:151) keeps its
+// own wider select for CSV output; that path is out-of-scope for Step 2.
+// buildPriorPeriodComparison's aggregate branch calls this function, so
+// the trim rides down the prior-period read for free on aggregate paths.
+// Its single-account inline .select() at line 282 is already narrow
+// (9 columns) and unchanged.
 async function paginateActuals(supa, { members, start, end, pageSize }) {
   const PS = pageSize && pageSize > 0 && pageSize <= V6_PAGE_DEFAULT ? pageSize : V6_PAGE_DEFAULT;
   const out = [];
@@ -143,7 +184,7 @@ async function paginateActuals(supa, { members, start, end, pageSize }) {
   while (true) {
     const q = await supa
       .from("labor_actuals_latest")
-      .select("account_key, worker_id, week_label, line_code, week_start, week_end, fiscal_year, period_no, week_source, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, segment_count, entry_count, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at, source_run")
+      .select("account_key, worker_id, week_label, week_start, week_end, fiscal_year, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at")
       .in("account_key", members)
       .lte("week_start", end)
       .gte("week_end", start)
@@ -430,9 +471,13 @@ export async function GET(request) {
     });
   }
 
+  // Step 2 ride-along 2026-08-29: `ids_seen` dropped from the select
+  // because the only consumer was the deferred `last_walk_ids_seen`
+  // field in derive_freshness, now removed. maybeSingle row read
+  // stays; only the trimmed column count changes.
   const psWalkGlobal = await supa
     .from("rippling_walks")
-    .select("completed_at, ids_seen")
+    .select("completed_at")
     .eq("kind", "pay_segments")
     .eq("status", "success")
     .order("completed_at", { ascending: false })
@@ -454,9 +499,15 @@ export async function GET(request) {
     supa.from("labor_actuals_daily").select("derived_at")
       .order("derived_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
+  // Step 2 ride-along 2026-08-29: `last_walk_ids_seen` removed from
+  // the response. Deferred from Step 1; the only reference outside
+  // this route was a stale comment in src/lib/labor/staleness.js
+  // which the ride-along also updates. Prior value came from
+  // rippling_walks.ids_seen; the rippling_walks read on the two
+  // lines above stays (needed for last_walk_at). Nothing on the
+  // client read the field.
   const freshness = {
     last_walk_at: psWalkGlobal.data?.completed_at || null,
-    last_walk_ids_seen: psWalkGlobal.data?.ids_seen || null,
     last_derive_at: null,
     // 2026-08-27 - table-wide maxes for the staleness banner. Distinct
     // from `last_derive_at` above which is in-scope-max (used by the
@@ -1010,7 +1061,7 @@ export async function GET(request) {
       workers: workerMeta,
       derive_freshness: {
         last_walk_at: freshness.last_walk_at,
-        last_walk_ids_seen: freshness.last_walk_ids_seen,
+        // Step 2 ride-along 2026-08-29: `last_walk_ids_seen` removed.
         // V31 item 1 - MAX(derived_at) across in-scope rows. Derive is
         // incremental (only rewrites rows whose inputs changed), so the
         // FIRST row's timestamp reads as a five-day lag on settled
@@ -1170,10 +1221,18 @@ export async function GET(request) {
   // 2026-08-28 pagination sweep. Single-account board over the URL
   // date range - FYTD for a large-roster account exceeds 1000 rows.
   // Prior bare select silently truncated; fetchAllOffset paginates.
+  //
+  // Step 2 column trim 2026-08-29: matches paginateActuals - six dead
+  // cols dropped (line_code, period_no, week_source, segment_count,
+  // entry_count, source_run). Same consumer walk applies to this
+  // single-account path (same client, same buildBoard, same
+  // salaryBoard merge). .order() chain preserved on the tiebreak
+  // even after columns leave the select (worker_id is still in the
+  // select; only comment adjusted for parallelism with paginateActuals).
   let actualsRows;
   try {
     actualsRows = await fetchAllOffset(supa, "labor_actuals_latest",
-      "account_key, worker_id, week_label, line_code, week_start, week_end, fiscal_year, period_no, week_source, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, segment_count, entry_count, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at, source_run",
+      "account_key, worker_id, week_label, week_start, week_end, fiscal_year, hours_regular, hours_overtime, hours_double_time, hours_premium_other, dollars_regular, dollars_overtime, dollars_double_time, dollars_premium_other, amount, hours_without_dollars, coverage_state, draft_entry_count, draft_hours, anomaly_no_clockout, anomaly_under_1h, anomaly_over_16h, approved_hours, oldest_draft_date, still_costing_hours, derived_at",
       [
         (q) => q.eq("account_key", account),
         (q) => q.lte("week_start", end),
@@ -1238,7 +1297,7 @@ export async function GET(request) {
 
   const derive_freshness = {
     last_walk_at: freshness.last_walk_at,
-    last_walk_ids_seen: freshness.last_walk_ids_seen,
+    // Step 2 ride-along 2026-08-29: `last_walk_ids_seen` removed.
     // V31 item 1 - MAX(derived_at) across in-scope rows. See aggregate
     // path above for cause.
     last_derive_at: (actuals.data || []).reduce(
