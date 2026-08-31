@@ -176,6 +176,13 @@ export function Shell({
   // for anyone without permission, never disabled - the toggle can
   // never appear for a caller the route would refuse.
   salaryToggle,   // { on: boolean, onChange: (next: boolean) => void } | null
+  // Overview Phase 3 - optional revenue-source toggle slot. Renders
+  // adjacent to the salary toggle when passed. Zero fork: existing
+  // labor / purchasing consumers pass nothing and get identical
+  // behavior. When present, it's a ReactNode the caller composes.
+  // Overview uses this for the corporate posture's "Planned revenue /
+  // Service Calendar revenue" segmented control (§5.5 / R-20).
+  revSourceToggle = null,
   // Layout children.
   folioRail,      // left aside
   main,           // middle content
@@ -194,8 +201,16 @@ export function Shell({
       <div className="kpi-sr" id="kpi-live" role="status" aria-live="polite" />
       <div className="kpi-printhdr" id="kpi-printhdr">
         {/* PR-2 R2 Fix 8 - print header follows the active section so a
-            printed Purchasing sheet does not label itself Labor. */}
-        <div><strong>KPI {activeSection === "purchasing" ? "Purchasing" : "Labor"} · {account}</strong></div>
+            printed Purchasing sheet does not label itself Labor.
+            Overview Phase 3 - "P&L Overview" branch for the new
+            board so a printed Overview sheet identifies itself. */}
+        <div>
+          <strong>
+            KPI {activeSection === "purchasing" ? "Purchasing"
+              : activeSection === "pnl_overview" ? "P&L Overview"
+              : "Labor"} · {account}
+          </strong>
+        </div>
         {printScopeText && <div>{printScopeText}</div>}
         <div>Generated {new Date().toLocaleString()}</div>
       </div>
@@ -272,6 +287,8 @@ export function Shell({
             paired with the other view-scoped controls (Export, print)
             rather than the left-side identity block. Same rendering
             rules: absent when the caller cannot see salary. */}
+        {revSourceToggle}
+
         {salaryToggle && (
           /* HS FB1 PR-2 verify 2026-08-25: salary toggle joins .kpi-seg
              wholesale (no .kpi-cmd-salary wrapper, no "Include" label).

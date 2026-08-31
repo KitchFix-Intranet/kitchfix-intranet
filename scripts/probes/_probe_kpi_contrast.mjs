@@ -53,6 +53,12 @@ const CSS_PATHS = [
   // because the probe read kpi.css only. Every kpi/* stylesheet that
   // paints on white belongs in this list.
   join(__dirname, "..", "..", "src", "app", "kpi", "purchasing", "purchasing.css"),
+  // Overview Phase 3 (2026-08-31): overview.css joins the CSS_PATHS
+  // in the same PR that creates it, per §5 charter 5 ("new stylesheets
+  // join the contrast probe CSS_PATHS in their creating PR") and the
+  // Phase 3 brief non-negotiable "overview.css joins _probe_kpi_
+  // contrast.mjs CSS_PATHS in this PR, not after."
+  join(__dirname, "..", "..", "src", "app", "kpi", "overview", "overview.css"),
 ];
 // homestand-fixes round 2 addendum (2026-08-26): strip /* ... */
 // comments from the input text before parsing. Prior parser only
@@ -184,11 +190,21 @@ const LIGHT_SURFACE_PREFIXES = [
   // row, ledger, bar, projection, and caption on the purchasing board.
   // .kpi-fresh-* covers the freshness popover (rendered on white).
   ".kpi-p-", ".kpi-fresh-",
+  // Overview Phase 3 (2026-08-31): .kpi-ov-* covers every Overview
+  // card, ticker segment, chart bar, lever row, statement cell,
+  // drill button, tracked row, and dash-vs-zero glyph. Registered
+  // here in the same PR the stylesheet lands per §5 charter 5.
+  ".kpi-ov-",
 ];
 // Selectors known to render on a dark navy background - skip.
 const DARK_SURFACE_PREFIXES = [
   ".kpi-cmd", ".kpi-cmd-",
   ".kpi-hs-sbar",
+  // Overview Phase 3 - the bar-tooltip and state pills sit on dark
+  // surfaces (n-900 for tooltips, green-600 / navy-700 / amber-500 /
+  // red-600 for ticker state / rev-source active). White text on
+  // these clears 4.5:1 by construction.
+  ".kpi-ov-bt", ".kpi-ov-ticker-st",
 ];
 // Selector fragments that indicate the element sits on a DARK / non
 // -white surface at render time - skip regardless of prefix.
@@ -201,6 +217,11 @@ const DARK_CONTEXT_FRAGMENTS = [
   ".kpi-tbl-total",
   ".on ", ".on:", ".on.", // active state on chips / items
   ".kpi-cal-cell-endpoint",
+  // Overview Phase 3 - `.ona` marks the amber-filled active state on
+  // the corporate rev-source toggle (SC-mode). White text on amber
+  // clears 4.5:1 by construction; the probe treats the `.ona` class
+  // the same way it treats the navy `.on` state.
+  ".ona ", ".ona:", ".ona.",
   ".kpi-hs-rail-stand.pre",
   // R17 (2026-08-28): coloured-button surfaces where the selector's
   // OWN rule sets background: var(--amber-600) and color: #fff. The

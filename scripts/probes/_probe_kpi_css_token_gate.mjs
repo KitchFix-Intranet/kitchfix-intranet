@@ -33,7 +33,16 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
-const CSS_PATH = path.join(REPO_ROOT, "src/app/kpi/kpi.css");
+// Overview Phase 3 (2026-08-31): overview.css joins the gate in the
+// same PR the stylesheet lands, per §5 charter 6 ("gates extended at
+// file-add"). Each stylesheet is scanned independently; the token
+// block bounds are its own .kpi-app declaration if present, else the
+// whole file. Multi-file scan keeps a per-file drift count and sums
+// to the total d1 count.
+const CSS_PATHS = [
+  path.join(REPO_ROOT, "src/app/kpi/kpi.css"),
+  path.join(REPO_ROOT, "src/app/kpi/overview/overview.css"),
+];
 
 // HS FB1 PR-2 (2026-08-24) drove d1 from 68 to 0 and locks the floor
 // here. Do NOT bump this to accommodate a new violation - fix the
@@ -45,12 +54,16 @@ function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
-function scan() {
-  const raw = fs.readFileSync(CSS_PATH, "utf8");
+function scanFile(cssPath) {
+  const raw = fs.readFileSync(cssPath, "utf8");
   const src = stripComments(raw);
 
   // .kpi-app { --tokens... } block bounds - excluded from the count
-  // since token declarations legitimately carry px literals.
+  // since token declarations legitimately carry px literals. If the
+  // file does not declare .kpi-app (overview.css does not - kpi.css
+  // holds the canonical token block), the whole file is subject to
+  // the scan; that is correct because a satellite stylesheet should
+  // never redeclare tokens.
   const appIdx = src.indexOf(".kpi-app");
   const brace = appIdx < 0 ? -1 : src.indexOf("{", appIdx);
   let tokenStart = -1, tokenEnd = -1;
@@ -97,7 +110,7 @@ function scan() {
       if (n === 999) continue;
       d1.total++;
       if (d1.samples.length < 15) {
-        d1.samples.push({ line: posToLine(m.index), prop: m[1], n, snippet: m[0].trim().slice(0, 90) });
+        d1.samples.push({ file: cssPath, line: posToLine(m.index), prop: m[1], n, snippet: m[0].trim().slice(0, 90) });
       }
     }
   }
@@ -113,6 +126,20 @@ function scan() {
   }
 
   return { d1, d2 };
+}
+
+function scan() {
+  const merged = { d1: { total: 0, samples: [] }, d2: { total: 0, byValue: {} } };
+  for (const p of CSS_PATHS) {
+    const one = scanFile(p);
+    merged.d1.total += one.d1.total;
+    merged.d1.samples.push(...one.d1.samples.slice(0, 15 - merged.d1.samples.length));
+    merged.d2.total += one.d2.total;
+    for (const [k, v] of Object.entries(one.d2.byValue)) {
+      merged.d2.byValue[k] = (merged.d2.byValue[k] || 0) + v;
+    }
+  }
+  return merged;
 }
 
 function report() {
