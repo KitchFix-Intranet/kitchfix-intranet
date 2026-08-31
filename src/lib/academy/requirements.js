@@ -184,24 +184,70 @@ async function loadAccountStateMap(supa) {
   return m;
 }
 
+// Paginated select. Supabase / PostgREST silently caps unpaginated
+// `.select()` at 1000 rows per response - a table with more rows
+// returns 1000 with no error, no warning, no signal, and downstream
+// map-lookups return `undefined` for the truncated worker_ids.
+// This helper loops with `.range()` until fewer than pageSize rows
+// come back, so the caller gets every row regardless of table size.
+//
+// This bug shipped once (cycle 2 published 8 requirements with
+// NULL person_id because loadStintMap truncated at 1000 while
+// academy_person_stints holds 1,129). Not shipping it twice.
+//
+// `queryFn` is `(from, to) => supa.from(...).select(...).range(from, to)`.
+async function selectAllPaginated(queryFn, pageSize = 1000) {
+  const all = [];
+  let from = 0;
+  // Loop until the page returns fewer than pageSize rows, which is
+  // the only sound termination signal (PostgREST does not return
+  // total-count unless asked, and asking is a separate round-trip).
+  // Cap at 100 iterations as a defense against an accidental infinite
+  // loop; that is 100,000 rows, well above any Academy table's realistic
+  // size, and if it ever fires it means the loader is being pointed at
+  // the wrong table.
+  for (let i = 0; i < 100; i += 1) {
+    const to = from + pageSize - 1;
+    const q = await queryFn(from, to);
+    if (q.error) throw new Error(q.error.message);
+    const rows = q.data || [];
+    all.push(...rows);
+    if (rows.length < pageSize) return all;
+    from = to + 1;
+  }
+  throw new Error(`selectAllPaginated: hit 100-page ceiling (${all.length} rows) - the loader is probably pointing at the wrong table`);
+}
+
 async function loadPeoplePool(supa, options = {}) {
   const { includeHired = true, includeActive = true } = options;
-  const q = await supa
-    .from("people")
-    .select("worker_id, display_name, is_salaried, account_key, status, start_date, end_date")
-    .is("end_date", null);
-  if (q.error) throw new Error(`load people: ${q.error.message}`);
-  let rows = q.data || [];
-  if (!includeHired)   rows = rows.filter((r) => r.status !== "HIRED");
-  if (!includeActive)  rows = rows.filter((r) => r.status !== "ACTIVE");
-  return rows;
+  // Paginated: end_date IS NULL filters to ~104 rows today, well
+  // under the 1000 cap, but pagination is defensive against future
+  // growth and matches the pattern used for stints below.
+  const rows = await selectAllPaginated((from, to) =>
+    supa
+      .from("people")
+      .select("worker_id, display_name, is_salaried, account_key, status, start_date, end_date")
+      .is("end_date", null)
+      .range(from, to)
+  );
+  let filtered = rows;
+  if (!includeHired)   filtered = filtered.filter((r) => r.status !== "HIRED");
+  if (!includeActive)  filtered = filtered.filter((r) => r.status !== "ACTIVE");
+  return filtered;
 }
 
 async function loadStintMap(supa) {
-  const q = await supa.from("academy_person_stints").select("worker_id, person_id");
-  if (q.error) throw new Error(`load stints: ${q.error.message}`);
+  // Paginated: academy_person_stints holds 1,129 rows today (one
+  // per Rippling stint), and grows with the roster. An unpaginated
+  // .select() returned exactly 1000 and silently truncated 129 of
+  // them, causing cycle 2's publish to write NULL person_id on
+  // every row for a worker whose stint fell in the truncated 129.
+  // See selectAllPaginated header for the class of bug.
+  const rows = await selectAllPaginated((from, to) =>
+    supa.from("academy_person_stints").select("worker_id, person_id").range(from, to)
+  );
   const m = new Map();
-  for (const s of q.data || []) m.set(s.worker_id, s.person_id);
+  for (const s of rows) m.set(s.worker_id, s.person_id);
   return m;
 }
 
@@ -472,6 +518,24 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
   const byClass = { salaried: 0, hourly: 0, unknown: 0 };
   const byAccount = {};
   const minutesPerPerson = new Map();
+  // Missing-stint drift: an eligible+in-scope worker with no
+  // academy_person_stints row. Post-pagination-fix this should
+  // never happen for a person migration 1's backfill covered
+  // (887 of 887 have stints, verified). The only path that
+  // triggers this today is a person who arrived AFTER the
+  // migration-1 backfill and BEFORE the derive extension ships
+  // (that extension is parked - see academy-1 P2 comment).
+  //
+  // Chose issue-with-null + loud surface over refuse-the-row so
+  // the eligible person still gets their compliance requirement.
+  // Compliance issuance is core; cross-stint history reconstruction
+  // is a nice-to-have that a follow-up backfill (see
+  // backfill_requirement_person_ids RPC in academy-8) can restore
+  // once the derive extension fills the stint gap. Silent NULL is
+  // what this PR was written to prevent; visible NULL surfaced in
+  // the plan output is the acceptable middle. Track the affected
+  // rows in driftCandidates so the operator sees them.
+  const driftCandidates = new Map();
 
   for (const mod of modules) {
     const key = `${mod.doc_id}|${mod.obligation_key}`;
@@ -506,10 +570,30 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
         continue;
       }
 
-      const person_id = stints.get(p.worker_id) || null;
-      // person_id null is expected drift until the nightly derive
-      // extension ships; the requirements table permits null and
-      // the row still issues correctly, keyed on worker_id.
+      // Look up the person_id AT ISSUANCE TIME. Denormalized into
+      // the requirement row (spec: "the stint could theoretically
+      // be reassigned; the historical requirement should carry the
+      // person_id that was true when it was issued"). If the stint
+      // map has no entry for this worker_id, that is derive-drift
+      // (see driftCandidates declaration above): the person is on
+      // the roster but the academy_person_stints extension has
+      // not yet caught them. Loud surface via driftCandidates so
+      // the operator sees them; the row still issues because
+      // compliance is core, but the null person_id is visible in
+      // the plan output rather than a silent write.
+      const stintValue = stints.get(p.worker_id);
+      const person_id = stintValue == null ? null : stintValue;
+      if (person_id == null) {
+        if (!driftCandidates.has(p.worker_id)) {
+          driftCandidates.set(p.worker_id, {
+            worker_id: p.worker_id,
+            display_name: p.display_name || null,
+            account_key: p.account_key || null,
+            reason:
+              "no academy_person_stints row (derive-drift; person exists in people but the derive extension has not populated their stint). Row will issue with person_id=NULL; run backfill_requirement_person_ids() after the stint arrives to fill it retroactively.",
+          });
+        }
+      }
       rows.push({
         worker_id: p.worker_id,
         person_id,
@@ -574,6 +658,7 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
       scopeSkippedByReason: Object.fromEntries(scopeSkippedByReason),
       roleWarnings,
       onHireModules,
+      driftCandidates: [...driftCandidates.values()],
       scopeRefusals,
       refuseReasons,
       wouldRefuseApply: refuseReasons.length > 0,
@@ -662,6 +747,11 @@ export async function planOnboarding(supa, options = {}) {
   let backfillWouldInsert = 0;
   const backfillByClass = { salaried: 0, hourly: 0, unknown: 0 };
   const boundaryByClass = { salaried: 0, hourly: 0, unknown: 0 };
+  // Missing-stint drift, same class + policy as planCyclePublish:
+  // issue the row with null person_id but surface it loudly so the
+  // operator can trigger the backfill after the derive extension
+  // catches up. See planCyclePublish for the full rationale.
+  const driftCandidates = new Map();
 
   for (const ob of obligationsAll) {
     for (const p of people) {
@@ -687,7 +777,17 @@ export async function planOnboarding(supa, options = {}) {
       // Apply boundary
       if (!backfill && !inBoundary(p)) continue;
 
-      const person_id = stints.get(p.worker_id) || null;
+      const stintValue = stints.get(p.worker_id);
+      const person_id = stintValue == null ? null : stintValue;
+      if (person_id == null && !driftCandidates.has(p.worker_id)) {
+        driftCandidates.set(p.worker_id, {
+          worker_id: p.worker_id,
+          display_name: p.display_name || null,
+          account_key: p.account_key || null,
+          reason:
+            "no academy_person_stints row (derive-drift). Row will issue with person_id=NULL; run backfill_requirement_person_ids() after the stint arrives to fill it retroactively.",
+        });
+      }
       rows.push({
         worker_id: p.worker_id,
         person_id,
@@ -724,6 +824,7 @@ export async function planOnboarding(supa, options = {}) {
       },
       skippedByReason: Object.fromEntries(skippedByReason),
       roleWarnings,
+      driftCandidates: [...driftCandidates.values()],
       boundaryPeople: boundaryPeople.map((p) => ({
         worker_id: p.worker_id,
         display_name: p.display_name,
@@ -759,21 +860,28 @@ export async function planOnboarding(supa, options = {}) {
 export async function planRehire(supa, options = {}) {
   const db = supa || getServiceClient();
 
-  const [stintsQ, reqsQ, obligationsQ, excluded, accountStates, people] = await Promise.all([
-    db.from("academy_person_stints").select("worker_id, person_id"),
+  // stints load uses the paginated loader for the same reason
+  // loadStintMap does - academy_person_stints > 1000 rows and the
+  // unpaginated .select() silently truncated. That truncation is
+  // what shipped cycle 2 with NULL person_id on every row; not
+  // repeating it here.
+  const [stintRows, reqsQ, obligationsQ, excluded, accountStates, people] = await Promise.all([
+    selectAllPaginated((from, to) =>
+      db.from("academy_person_stints").select("worker_id, person_id").range(from, to)
+    ),
     db.from("academy_requirements").select("worker_id").eq("source", REQUIREMENT_SOURCE_ONBOARDING),
     db.from("academy_obligations").select("doc_id, obligation_key, doc_version, est_minutes, applies_to").eq("cadence", "on-hire"),
     loadExcludedWorkerIds(db),
     loadAccountStateMap(db),
     loadPeoplePool(db, { includeHired: true, includeActive: true }),
   ]);
-  for (const q of [stintsQ, reqsQ, obligationsQ]) {
+  for (const q of [reqsQ, obligationsQ]) {
     if (q.error) throw new Error(`rehire plan load: ${q.error.message}`);
   }
 
   // Multi-stint persons.
   const stintsByPerson = new Map();
-  for (const s of stintsQ.data || []) {
+  for (const s of stintRows) {
     if (!s.person_id) continue;
     const arr = stintsByPerson.get(s.person_id) || [];
     arr.push(s.worker_id);
@@ -783,7 +891,7 @@ export async function planRehire(supa, options = {}) {
     [...stintsByPerson.entries()].filter(([, ws]) => ws.length > 1).map(([pid]) => pid)
   );
 
-  const stintMap = new Map((stintsQ.data || []).map((s) => [s.worker_id, s.person_id]));
+  const stintMap = new Map(stintRows.map((s) => [s.worker_id, s.person_id]));
   const workersWithReqs = new Set((reqsQ.data || []).map((r) => r.worker_id));
   const peopleByWorker = new Map(people.map((p) => [p.worker_id, p]));
 
