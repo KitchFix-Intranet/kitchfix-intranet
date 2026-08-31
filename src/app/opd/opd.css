@@ -1,17 +1,26 @@
 /* /opd - Academy shell + Library room.
  *
- * Consumes semantic tokens from src/app/tokens.css. Divergences
- * from the prompt's token table:
- *   - Command bar (prompt: #0A2548) is not a live semantic token.
- *     Nearest is --navy-800 (#092B55); repo wins per the prompt's
- *     rule. Used here.
- *   - Brand ink #153968 -> --navy-700 (exact).
- *   - Page bg #EDEFF2 -> --surface-page (exact).
- *   - Sous green #0F6E56 -> --accent-playbook (exact).
- *   - 14px radius -> --radius-container-lg.
+ * Consumes SEMANTIC tokens from src/app/tokens.css (Tier 2 only).
+ * The token README (§2, §4) is binding: components consume semantic
+ * tokens; a raw hex or pixel or Tier-1 primitive in a component is
+ * a defect, not a style choice.
+ *
+ * Module-scoped tokens (below) exist to name jobs the shared
+ * semantic layer does not currently cover. They are namespaced with
+ * an --opd- prefix so they do not collide with any other module and
+ * so a future semantic (e.g. --surface-navy-tint) can absorb them
+ * in one place.
  *
  * Type floor 10px absolute; tab labels 10.5px minimum. Touch
  * targets 44px effective on every interactive element at <=768.
+ *
+ * Numerics use Inter with font-variant-numeric: tabular-nums to
+ * match KPI; monospace is NOT the standard for numeric display
+ * (DESIGN_SYSTEM_REFERENCE.md's mono guidance was never implemented,
+ * confirmed against kpi.css which has zero font-mono references).
+ * Font-mono here is reserved for genuinely non-numeric mono roles
+ * (keyboard-key chips, obligation-id strings) where the mono style
+ * carries semantic meaning.
  *
  * Local prefix: opd- (Academy identity is /opd for now; if the
  * module renames later, this prefix moves in one sweep).
@@ -19,6 +28,38 @@
 
 /* ── Frame + shell (the lid) ─────────────────────────────────── */
 .opd-frame {
+  /* Module tokens. --opd-cmd-bg is the namespaced command chrome
+     per SC/KPI convention (each surface owns its command background).
+     Adopts --n-900 (the KPI value) so /opd starts aligned with the
+     newest surface, per Kevin ruling 2026-08-31.
+     --opd-chip-* names the doc-id chip's navy-tinted fill and text
+     pair. The shared semantic layer has no --surface-navy-tint
+     token; module-scoped so a future token can absorb this. */
+  --opd-cmd-bg: var(--n-900);
+  --opd-chip-bg: var(--navy-50);
+  --opd-chip-bg-hover: var(--navy-100);
+  --opd-chip-fg: var(--text-link);
+
+  /* Playbook doc-class family tints. Named module-scope so raw
+     values sit in ONE place; every consumer (badge wall, doc-id
+     chip variants) reads the token. Values mirror the shipped
+     `.pb-class-chip--*` families in playbook.css:1104-1107 so
+     /opd and /playbook share a scan-by-color vocabulary rather
+     than diverging. There is no shared semantic for these four
+     tints today; report as a gap. */
+  --opd-class-gov-bg:   rgba(33, 78, 130, 0.08);
+  --opd-class-gov-bd:   rgba(33, 78, 130, 0.22);
+  --opd-class-gov-fg:   #214e82;
+  --opd-class-proc-bg:  rgba(15, 110, 86, 0.08);
+  --opd-class-proc-bd:  rgba(15, 110, 86, 0.22);
+  --opd-class-proc-fg:  var(--opd-teal-dark);
+  --opd-class-tool-bg:  rgba(193, 122, 35, 0.09);
+  --opd-class-tool-bd:  rgba(193, 122, 35, 0.24);
+  --opd-class-tool-fg:  #7a4a1a;
+  --opd-class-ref-bg:   rgba(120, 80, 35, 0.09);
+  --opd-class-ref-bd:   rgba(120, 80, 35, 0.24);
+  --opd-class-ref-fg:   #6b4f25;
+
   max-width: 1300px;
   margin: 16px auto 60px;
   padding: 0 20px;
@@ -38,13 +79,18 @@
 
 /* ── Command bar (navy lid) ──────────────────────────────────── */
 .opd-cmd {
-  background: var(--navy-800);
-  color: #fff;
+  /* Module token so /opd owns its command chrome the way SC
+     (--sc2-cmd-bg #1a3050) and KPI (--n-900 #0A2548) do. Top
+     corners share the shell's radius so the bar reads as one
+     surface's lid, not a bar dropped inside a rounded frame. */
+  background: var(--opd-cmd-bg);
+  color: var(--surface-card);
   display: flex;
   align-items: center;
   gap: 12px;
   height: 54px;
   padding: 0 16px;
+  border-radius: var(--radius-container-lg) var(--radius-container-lg) 0 0;
 }
 .opd-cmd-title {
   font-size: 15px;
@@ -87,7 +133,7 @@
 }
 .opd-tab--on {
   background: #fff;
-  color: var(--navy-800);
+  color: var(--action-primary-bg-hover);
   font-weight: 700;
 }
 .opd-tab--inert {
@@ -103,14 +149,15 @@
 .opd-tab--inert.opd-tab--on {
   /* An inert tab that is currently selected (Kevin clicked it to
    * see the placeholder) reads as active but stays visibly muted. */
-  color: var(--navy-800);
+  color: var(--action-primary-bg-hover);
   background: rgba(255, 255, 255, 0.85);
   font-weight: 700;
 }
 
 .opd-cmd-today {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.1);
@@ -156,7 +203,8 @@
 
 .opd-rail-title {
   padding: 8px 9px 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -181,9 +229,9 @@
   transition: background 0.12s;
   min-height: 36px;
 }
-.opd-rail-item:hover { background: var(--n-100); }
+.opd-rail-item:hover { background: var(--surface-sunken); }
 .opd-rail-item--on {
-  background: var(--navy-700);
+  background: var(--action-primary-bg);
   color: #fff;
   font-weight: 600;
 }
@@ -197,7 +245,8 @@
 }
 .opd-rail-count {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   flex: none;
@@ -220,7 +269,7 @@
 .opd-rail-toggle input {
   width: 15px;
   height: 15px;
-  accent-color: var(--navy-700);
+  accent-color: var(--text-link);
   cursor: pointer;
 }
 .opd-rail-help {
@@ -267,10 +316,11 @@
   text-overflow: ellipsis;
 }
 .opd-kbd {
+  /* Keyboard shortcut key - mono is semantic (it reads as a code). */
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: 10px;
-  background: var(--n-100);
+  background: var(--surface-sunken);
   border: 1px solid var(--border-subtle);
   border-radius: 5px;
   padding: 2px 6px;
@@ -283,7 +333,8 @@
   flex: none;
 }
 .opd-libbar-count {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.04em;
@@ -299,19 +350,20 @@
   align-items: center;
   gap: 9px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--n-100);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .opd-shelf-title {
   font-size: 12px;
   font-weight: 800;
-  color: var(--navy-700);
+  color: var(--text-link);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   margin: 0;
 }
 .opd-shelf-count {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.02em;
@@ -324,19 +376,23 @@
   gap: 14px;
   align-items: center;
   padding: 11px 16px;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
   min-height: 44px;
   transition: background 0.12s;
 }
 .opd-doc-row:first-child { border-top: none; }
-.opd-doc-row:hover { background: var(--n-50); }
+.opd-doc-row:hover { background: var(--surface-sunken); }
 
 .opd-doc-chip {
+  /* Doc id chips (PB-014, AGR-001) are coded identifiers - mono is
+     semantic here, not decorative. Consumes --opd-chip-* module
+     tokens for the navy-tinted fill/text pair (no shared
+     --surface-navy-tint semantic exists today). */
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
-  color: var(--navy-700);
-  background: var(--navy-50);
+  color: var(--opd-chip-fg);
+  background: var(--opd-chip-bg);
   border-radius: 4px;
   padding: 4px 6px;
   text-align: center;
@@ -384,7 +440,8 @@
 }
 
 .opd-doc-meta {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   text-align: right;
@@ -413,11 +470,17 @@
   grid-template-columns: 68px 1fr 128px;
   gap: 14px;
   padding: 11px 16px;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
   min-height: 44px;
 }
 .opd-skel {
   display: inline-block;
+  /* Skeleton shimmer stops. Primitives used deliberately per token
+     README (§9 carveout: primitives allowed for decoration where the
+     value does not carry a role - dividers, icons, shimmer). Shimmer
+     needs a low-contrast animated gradient; no semantic covers this
+     since it is not a surface / border / state. Same pattern below
+     wherever .opd-*--skel appears. */
   background: linear-gradient(90deg, var(--n-100) 0%, var(--n-200) 50%, var(--n-100) 100%);
   background-size: 200% 100%;
   animation: opd-skel-shine 1.4s ease-in-out infinite;
@@ -444,8 +507,8 @@
       45deg,
       var(--surface-card) 0,
       var(--surface-card) 12px,
-      var(--n-50) 12px,
-      var(--n-50) 24px
+      var(--surface-sunken) 12px,
+      var(--surface-sunken) 24px
     );
   border: 1.5px dashed var(--feedback-danger, #B03226);
   border-radius: 12px;
@@ -507,7 +570,8 @@
   text-align: left;
 }
 .opd-inert-eyebrow {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 700;
   color: var(--text-subtle);
@@ -527,9 +591,10 @@
   margin: 0;
 }
 .opd-inert-note code {
+  /* <code> element - mono is semantic. */
   font-family: var(--font-mono);
   font-size: 10.5px;
-  background: var(--n-100);
+  background: var(--surface-sunken);
   padding: 1px 5px;
   border-radius: 4px;
   color: var(--text-default);
@@ -540,16 +605,22 @@
  * Profile rail, greeting, queue, year track, company standing.
  * ═════════════════════════════════════════════════════════════ */
 
-/* Shared eyebrow token used across academy surfaces. Matches the
-   `.k` idiom in the visual contract (mono, 10px, uppercase). */
-.opd-k {
+/* Canonical eyebrow/kicker treatment. ONE style across every
+   academy surface (P1-7 ruling). Inter 700 at true 10px with
+   0.7px letter-spacing. Same rule feeds `.opd-queue-kick` via a
+   grouped selector so a future kicker change lives in one place.
+   No monospace here - the eyebrow reads like a section marker
+   ("STANDING" / "AHEAD OF YOU"), not like coded numeric data. */
+.opd-k,
+.opd-queue-kick {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0.7px;
   text-transform: uppercase;
   color: var(--text-subtle);
-  font-weight: 600;
 }
 .opd-k--tight { letter-spacing: 0.04em; }
 
@@ -563,15 +634,15 @@
 .opd-profile-id {
   padding: 16px 15px 14px;
   text-align: center;
-  border-bottom: 1px solid var(--n-100);
-  background: linear-gradient(180deg, var(--n-50), var(--surface-card));
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--surface-sunken), var(--surface-card));
 }
 .opd-profile-avatar {
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--navy-700);
-  color: var(--n-0);
+  background: var(--action-primary-bg);
+  color: var(--surface-card);
   font-size: 17px;
   font-weight: 750;
   display: flex;
@@ -588,7 +659,8 @@
   margin: 0;
 }
 .opd-profile-loc {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   margin-top: 5px;
@@ -597,7 +669,7 @@
 
 .opd-profile-sec {
   padding: 12px 15px;
-  border-bottom: 1px solid var(--n-100);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .opd-profile-sec:last-child { border-bottom: none; }
 
@@ -626,7 +698,8 @@
   font-weight: 600;
 }
 .opd-standing-sub {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   color: var(--text-subtle);
   margin-top: 6px;
@@ -669,8 +742,8 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 1px solid var(--n-300);
-  background: var(--n-100);
+  border: 1px solid var(--border-default);
+  background: var(--surface-sunken);
   color: var(--text-subtle);
   padding: 4px;
   min-height: 44px;
@@ -681,10 +754,19 @@
   box-shadow: var(--elevation-card);
 }
 .opd-bdge--awaiting {
-  background: var(--n-100);
-  border-color: var(--n-300);
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
   color: var(--text-subtle);
 }
+/* Doc-class family tints (P1-2). Reuses the Playbook chip families
+   from playbook.css so /opd and /playbook read from the same visual
+   vocabulary. Awaiting-state keeps the muted register - the tint
+   just carries the class differentiation so eight tiles read as
+   two distinct classes at glance instead of one grey block. */
+.opd-bdge--class-gov  { background: var(--opd-class-gov-bg);  border-color: var(--opd-class-gov-bd);  color: var(--opd-class-gov-fg); }
+.opd-bdge--class-proc { background: var(--opd-class-proc-bg); border-color: var(--opd-class-proc-bd); color: var(--opd-class-proc-fg); }
+.opd-bdge--class-tool { background: var(--opd-class-tool-bg); border-color: var(--opd-class-tool-bd); color: var(--opd-class-tool-fg); }
+.opd-bdge--class-ref  { background: var(--opd-class-ref-bg);  border-color: var(--opd-class-ref-bd);  color: var(--opd-class-ref-fg); }
 .opd-bdge--skel {
   background: linear-gradient(90deg, var(--n-100) 0%, var(--n-200) 50%, var(--n-100) 100%);
   background-size: 200% 100%;
@@ -697,7 +779,8 @@
   opacity: 0.72;
 }
 .opd-bdge-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -708,7 +791,8 @@
   align-items: center;
   gap: 8px;
   margin-top: 9px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.04em;
@@ -723,12 +807,12 @@
   width: 10px;
   height: 10px;
   border-radius: 3px;
-  border: 1px solid var(--n-300);
-  background: var(--n-100);
+  border: 1px solid var(--border-default);
+  background: var(--surface-sunken);
 }
 .opd-bwall-swatch--awaiting {
-  background: var(--n-100);
-  border-color: var(--n-300);
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
 }
 .opd-badges-empty {
   font-size: 11.5px;
@@ -740,11 +824,12 @@
 .opd-profile-reserved {
   padding: 10px 15px;
   border-top: 1px dashed var(--border-default);
-  background: var(--n-50);
+  background: var(--surface-sunken);
   text-align: center;
 }
 .opd-profile-reserved-line {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.05em;
@@ -787,18 +872,19 @@
   align-items: center;
   gap: 9px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--n-100);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .opd-queue-title {
   font-size: 12px;
   font-weight: 800;
-  color: var(--navy-700);
+  color: var(--text-link);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .opd-queue-count {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.02em;
@@ -810,7 +896,7 @@
   align-items: center;
   padding: 13px 16px;
   border: none;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
   background: none;
   width: 100%;
   text-align: left;
@@ -820,9 +906,9 @@
   font-family: var(--font-ui);
   color: var(--text-default);
 }
-.opd-queue-row:hover { background: var(--n-50); }
+.opd-queue-row:hover { background: var(--surface-sunken); }
 .opd-queue-row:focus-visible {
-  outline: 2px solid var(--navy-700);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: -2px;
 }
 .opd-queue-row--skel {
@@ -834,25 +920,20 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--n-500);
+  background: var(--status-upcoming-strong);
   flex: none;
   display: inline-block;
 }
-.opd-queue-dot--open { background: var(--n-500); }
+.opd-queue-dot--open { background: var(--status-upcoming-strong); }
 .opd-queue-dot--waived {
-  background: var(--n-0);
-  border: 1.5px dashed var(--n-500);
+  background: var(--surface-card);
+  border: 1.5px dashed var(--status-upcoming-strong);
   width: 10px;
   height: 10px;
 }
 .opd-queue-body { min-width: 0; }
-.opd-queue-kick {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-}
+/* .opd-queue-kick inherits from .opd-k (see canonical eyebrow
+   rule above) - one kicker treatment for the whole surface. */
 .opd-queue-title-line {
   font-size: 14px;
   font-weight: 700;
@@ -881,7 +962,8 @@
   color: var(--text-default);
 }
 .opd-queue-est {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   margin-top: 2px;
@@ -894,8 +976,8 @@
   justify-self: end;
   font-size: 12px;
   font-weight: 700;
-  color: var(--navy-700);
-  background: var(--navy-50);
+  color: var(--text-link);
+  background: var(--opd-chip-bg);
   border-radius: 8px;
   padding: 9px 13px;
   min-height: 40px;
@@ -905,8 +987,8 @@
   letter-spacing: 0.01em;
 }
 .opd-queue-row:hover .opd-queue-cta {
-  background: var(--navy-100);
-  color: var(--navy-800);
+  background: var(--opd-chip-bg-hover);
+  color: var(--action-primary-bg-hover);
 }
 .opd-queue--empty { }
 .opd-queue-empty-body {
@@ -935,13 +1017,14 @@
 .opd-year-title {
   font-size: 12px;
   font-weight: 800;
-  color: var(--navy-700);
+  color: var(--text-link);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .opd-year-sub {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
 }
@@ -952,10 +1035,17 @@
 }
 .opd-year-seg {
   flex: 1;
-  height: 26px;
-  border-radius: 5px;
-  background: var(--n-100);
-  border: 1px solid var(--n-300);
+  /* P1-3 - segments raised from 26 -> 32 to earn their place on the
+     card and read at glance distance. Radius uses --radius-cell (4px)
+     per the shared radius roles rather than a raw 5px. */
+  height: 32px;
+  border-radius: var(--radius-cell);
+  /* Base fill = --status-off (non-actionable, warm neutral) so a
+     month with no cycle reads as "not in play" - distinct from the
+     open state (--status-upcoming, green tint) and from the current-
+     month ring (navy border). */
+  background: var(--status-off-bg);
+  border: 1px solid var(--status-off-bd);
   position: relative;
   display: flex;
   align-items: center;
@@ -966,23 +1056,23 @@
 /* Months with no cycle render neutral - NEVER "current". Green would
    be a lie until something is signed. */
 .opd-year-seg--empty {
-  background: var(--n-100);
-  border-color: var(--n-300);
+  background: var(--status-off-bg);
+  border-color: var(--status-off-bd);
 }
 .opd-year-seg--open {
-  background: var(--navy-50);
-  border-color: var(--navy-200);
+  background: var(--status-upcoming-bg);
+  border-color: var(--status-upcoming-bd);
 }
 .opd-year-seg--draft {
-  background: var(--n-50);
-  border: 1px dashed var(--navy-300);
+  background: var(--status-off-bg);
+  border: 1px dashed var(--status-upcoming-bd);
 }
 .opd-year-seg--closed {
-  background: var(--n-100);
-  border-color: var(--n-400);
+  background: var(--status-off-bg);
+  border-color: var(--status-off-strong);
 }
 .opd-year-seg--now {
-  border: 1.5px solid var(--navy-700);
+  border: 1.5px solid var(--focus-ring-color);
 }
 .opd-year-seg--skel {
   background: linear-gradient(90deg, var(--n-100) 0%, var(--n-200) 50%, var(--n-100) 100%);
@@ -992,7 +1082,7 @@
 }
 .opd-year-seg-mark {
   font-size: 12px;
-  color: var(--navy-700);
+  color: var(--text-link);
   line-height: 1;
 }
 .opd-year-labels {
@@ -1003,20 +1093,21 @@
 .opd-year-label {
   flex: 1;
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.02em;
 }
 .opd-year-label--now {
-  color: var(--navy-700);
+  color: var(--text-link);
   font-weight: 800;
 }
 .opd-year-legend {
   display: flex;
   gap: 14px;
   padding: 10px 16px 0;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
   margin-top: 10px;
   flex-wrap: wrap;
 }
@@ -1024,7 +1115,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.04em;
@@ -1034,15 +1126,15 @@
   width: 12px;
   height: 12px;
   border-radius: 3px;
-  border: 1px solid var(--n-300);
+  border: 1px solid var(--border-default);
 }
 .opd-year-legend-swatch--open {
-  background: var(--navy-50);
-  border-color: var(--navy-200);
+  background: var(--status-upcoming-bg);
+  border-color: var(--status-upcoming-bd);
 }
 .opd-year-legend-swatch--empty {
-  background: var(--n-100);
-  border-color: var(--n-300);
+  background: var(--status-off-bg);
+  border-color: var(--status-off-bd);
 }
 .opd-year-note {
   padding: 8px 16px 0;
@@ -1051,6 +1143,44 @@
   line-height: 1.45;
   margin: 0;
 }
+.opd-year-note b { color: var(--text-heading); font-weight: 700; }
+
+/* Phase band - a hairline strip beneath the segments naming the
+   season phases (Spring Training / Season / Instructional / Off-
+   season). Ties the year visually to Service Calendar's phase
+   grammar without duplicating its per-account phase palette. */
+.opd-year-phase {
+  display: flex;
+  gap: 3px;
+  padding: 8px 16px 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+.opd-year-phase-span {
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  padding: 2px 4px;
+  border-radius: var(--radius-cell);
+  border-top: 2px solid var(--border-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Phase tone accents. Each phase gets a distinct top-rule color so
+   the band is scannable without competing with the segment row's
+   state family. Values route through --status-* to avoid inventing
+   raw hex; each pick is the family whose meaning most closely
+   matches the phase's operational tempo. */
+.opd-year-phase-span--spring   { border-top-color: var(--status-needs-strong); color: var(--status-needs-fg); }
+.opd-year-phase-span--season   { border-top-color: var(--status-entered-strong); color: var(--text-success); }
+.opd-year-phase-span--instr    { border-top-color: var(--status-upcoming-strong); color: var(--text-default); }
+.opd-year-phase-span--off      { border-top-color: var(--status-off-strong); color: var(--text-subtle); }
 
 /* ── Company standing card ────────────────────────────────────── */
 .opd-comp { overflow: hidden; }
@@ -1059,18 +1189,19 @@
   align-items: baseline;
   gap: 9px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--n-100);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .opd-comp-title {
   font-size: 12px;
   font-weight: 800;
-  color: var(--navy-700);
+  color: var(--text-link);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .opd-comp-sub {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
 }
@@ -1078,15 +1209,16 @@
   display: flex;
   gap: 14px;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--n-100);
-  background: var(--n-50);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
   flex-wrap: wrap;
 }
 .opd-comp-legend-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.04em;
@@ -1096,22 +1228,22 @@
   width: 12px;
   height: 12px;
   border-radius: 3px;
-  border: 1px solid var(--n-300);
+  border: 1px solid var(--border-default);
 }
 .opd-comp-legend-swatch--inprog {
-  background: var(--amber-50);
-  border-color: var(--amber-200);
+  background: var(--status-needs-bg);
+  border-color: var(--status-needs-bd);
 }
-/* Not-enrolled has a distinct dashed pattern so it does NOT read as
-   "current" and does NOT read as an empty cell. It reads as "a fact
-   we know: this account is not in this cycle." */
+/* Not-enrolled swatch mirrors the in-row 2px SOLID accent-bar
+   treatment (P1-6). --status-off-strong here matches the row rule
+   exactly so the legend swatch reads as the same visual token. */
 .opd-comp-legend-swatch--nenrol {
   background: var(--surface-card);
-  border: 1.5px dashed var(--navy-300);
+  border: 1.5px solid var(--status-off-strong);
 }
 .opd-comp-legend-swatch--unstaff {
-  background: var(--n-100);
-  border-color: var(--n-300);
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
 }
 .opd-comp-list {
   list-style: none;
@@ -1124,24 +1256,29 @@
   gap: 10px;
   align-items: center;
   padding: 11px 16px;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
   min-height: 44px;
   transition: background 0.12s;
 }
 .opd-comp-row:first-child { border-top: none; }
-.opd-comp-row:hover { background: var(--n-50); }
-/* Not-enrolled row: dashed left border so the visual "we know this
-   account exists but has no enrollment" is legible at a glance,
-   distinct from unstaffed or in-progress. */
+.opd-comp-row:hover { background: var(--surface-sunken); }
+/* State marker on the row is a 2px SOLID accent bar (P1-6 ruling)
+   matching sc-season-month-card's treatment. Tone routes through
+   the --status-* family (P1-1 mapping):
+     not_enrolled -> --status-off-strong  (non-actionable)
+     in_progress  -> --status-needs-strong (amber, started/not done)
+     unstaffed    -> --status-off-bd      (faintest, "no one here") */
 .opd-comp-row--not_enrolled {
-  border-left: 3px dashed var(--navy-300);
-  padding-left: 13px;
+  border-left: 2px solid var(--status-off-strong);
+  padding-left: 14px;
 }
 .opd-comp-row--in_progress {
-  border-left: 3px solid var(--amber-500);
-  padding-left: 13px;
+  border-left: 2px solid var(--status-needs-strong);
+  padding-left: 14px;
 }
 .opd-comp-row--unstaffed {
+  border-left: 2px solid var(--status-off-bd);
+  padding-left: 14px;
   color: var(--text-subtle);
 }
 .opd-comp-row--skel {
@@ -1154,7 +1291,8 @@
   border-top: none;
 }
 .opd-comp-region {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   text-transform: uppercase;
@@ -1162,7 +1300,8 @@
   font-weight: 700;
 }
 .opd-comp-key {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   font-weight: 700;
   color: var(--text-heading);
@@ -1180,18 +1319,19 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--n-500);
+  background: var(--status-off-strong);
 }
 .opd-comp-tone-dot--not_enrolled {
   background: var(--surface-card);
-  border: 1.5px dashed var(--navy-500);
+  border: 1.5px solid var(--status-off-strong);
   width: 10px;
   height: 10px;
 }
-.opd-comp-tone-dot--in_progress { background: var(--amber-500); }
-.opd-comp-tone-dot--unstaffed { background: var(--n-400); }
+.opd-comp-tone-dot--in_progress { background: var(--status-needs-strong); }
+.opd-comp-tone-dot--unstaffed { background: var(--status-off-strong); opacity: 0.55; }
 .opd-comp-counts {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   color: var(--text-default);
   display: inline-flex;
@@ -1222,8 +1362,8 @@
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;
-  border-top: 1px solid var(--n-100);
-  background: var(--n-50);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
 }
 .opd-comp-note b { color: var(--text-heading); }
 
@@ -1254,21 +1394,22 @@
   cursor: pointer;
   min-height: 32px;
 }
-.opd-crumb-link:hover { color: var(--navy-700); }
+.opd-crumb-link:hover { color: var(--text-link); }
 .opd-crumb-link:focus-visible {
-  outline: 2px solid var(--navy-700);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
   border-radius: 4px;
 }
 .opd-crumb-sep {
-  color: var(--n-400);
+  color: var(--border-strong);
   font-weight: 500;
 }
 .opd-crumb-scope { color: var(--text-muted); }
 .opd-crumb-current {
   color: var(--text-heading);
   font-weight: 700;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 11.5px;
 }
 
@@ -1291,16 +1432,18 @@
   flex-wrap: wrap;
   align-items: center;
   color: var(--text-subtle);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   letter-spacing: 0.06em;
 }
 .opd-focus-meta .opd-doc-chip {
+  /* Doc id chip on the focus paper header - mono is semantic. */
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
-  color: var(--navy-700);
-  background: var(--navy-50);
+  color: var(--opd-chip-fg);
+  background: var(--opd-chip-bg);
   border-radius: 4px;
   padding: 4px 8px;
   letter-spacing: 0.02em;
@@ -1311,7 +1454,8 @@
 }
 .opd-focus-meta-status {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   font-weight: 700;
   padding: 3px 8px;
@@ -1320,20 +1464,20 @@
   text-transform: uppercase;
 }
 .opd-focus-meta-status--live {
-  background: var(--green-50);
-  color: var(--green-600);
-  border: 1px solid var(--green-100);
+  background: var(--status-entered-subtle);
+  color: var(--text-success);
+  border: 1px solid var(--status-entered-bd);
 }
 .opd-focus-meta-status--pending {
-  background: var(--amber-50);
-  color: var(--amber-700);
-  border: 1px solid var(--amber-100);
+  background: var(--status-needs-subtle);
+  color: var(--status-needs-fg);
+  border: 1px solid var(--status-needs-bd);
 }
 .opd-focus-meta-status--retired,
 .opd-focus-meta-status--archived {
-  background: var(--n-100);
+  background: var(--surface-sunken);
   color: var(--text-muted);
-  border: 1px solid var(--n-300);
+  border: 1px solid var(--border-default);
 }
 .opd-focus-h1 {
   font-size: 24px;
@@ -1364,17 +1508,17 @@
 .opd-focus-body h1 {
   font-size: 20px;
   font-weight: 800;
-  color: var(--navy-700);
+  color: var(--text-link);
   letter-spacing: -0.018em;
   margin: 26px 0 10px;
   padding-top: 18px;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
   line-height: 1.25;
 }
 .opd-focus-body h2 {
   font-size: 16px;
   font-weight: 800;
-  color: var(--navy-700);
+  color: var(--text-link);
   margin: 20px 0 8px;
   letter-spacing: -0.01em;
 }
@@ -1397,13 +1541,13 @@
   font-weight: 700;
 }
 .opd-focus-body a {
-  color: var(--navy-700);
+  color: var(--text-link);
   text-decoration: underline;
   font-weight: 600;
 }
 .opd-focus-body blockquote {
-  border-left: 3px solid var(--navy-500);
-  background: var(--n-50);
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-sunken);
   border-radius: 0 8px 8px 0;
   padding: 10px 14px;
   margin: 14px 0;
@@ -1411,9 +1555,10 @@
   font-size: 13px;
 }
 .opd-focus-body code {
+  /* <code> element - mono is semantic. */
   font-family: var(--font-mono);
   font-size: 12px;
-  background: var(--n-100);
+  background: var(--surface-sunken);
   padding: 1px 6px;
   border-radius: 4px;
   color: var(--text-heading);
@@ -1426,11 +1571,11 @@
 }
 .opd-focus-body th, .opd-focus-body td {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--n-200);
+  border-bottom: 1px solid var(--border-subtle);
   text-align: left;
 }
 .opd-focus-body th {
-  background: var(--n-50);
+  background: var(--surface-sunken);
   font-weight: 700;
   color: var(--text-heading);
 }
@@ -1468,16 +1613,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
   font-weight: 700;
-  border: 1.5px solid var(--n-300);
+  border: 1.5px solid var(--border-default);
   color: var(--text-subtle);
   background: var(--surface-card);
 }
 .opd-focus-step--now .opd-focus-step-num {
-  border-color: var(--navy-700);
-  color: var(--navy-700);
+  border-color: var(--text-link);
+  color: var(--text-link);
 }
 /* Step 3 dim - the approved treatment for not-yet-available. No
    click handler on this LI. No pointer cursor. The dim treatment
@@ -1488,9 +1634,9 @@
   cursor: default;
 }
 .opd-focus-step--dim .opd-focus-step-num {
-  border-color: var(--n-300);
+  border-color: var(--border-default);
   color: var(--text-subtle);
-  background: var(--n-50);
+  background: var(--surface-sunken);
 }
 .opd-focus-step-title {
   display: block;
@@ -1509,11 +1655,12 @@
 .opd-focus-sections {
   margin-top: 14px;
   padding-top: 10px;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
 }
 .opd-focus-sections-label {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   color: var(--text-subtle);
   letter-spacing: 0.06em;
@@ -1542,7 +1689,7 @@
 .opd-focus-cyclechip {
   margin-top: 14px;
   padding-top: 10px;
-  border-top: 1px solid var(--n-100);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1559,7 +1706,8 @@
   font-weight: 700;
 }
 .opd-focus-cyclechip-body span {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
   color: var(--text-subtle);
   letter-spacing: 0.04em;
@@ -1591,6 +1739,9 @@
   text-overflow: ellipsis;
 }
 .opd-focus-kv-mono {
+  /* Version + date rows on the About card. Mono is semantic here -
+     these are coded fields (`1.5`, `AUG 20, 2026`) that read as
+     record values, not narrative text. */
   font-family: var(--font-mono);
   font-weight: 500 !important;
   font-size: 10.5px !important;

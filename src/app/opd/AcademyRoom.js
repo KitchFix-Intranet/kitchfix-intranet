@@ -29,8 +29,30 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AcademyFocus from "./AcademyFocus";
+import { CLASS_FAMILY } from "../playbook/_shared";
 
 const EMPTY_ARR = Object.freeze([]);
+
+// FY2026 season phases across twelve calendar months. Kept in-file
+// as a small display constant (styling-adjacent decoration for the
+// year track); the phase strip is a visual anchor to Service
+// Calendar's phase grammar. flex-basis expressed as month counts.
+const YEAR_PHASES = [
+  { key: "off",    label: "Off-season",     months: 2, cls: "opd-year-phase-span--off"    }, // Jan-Feb
+  { key: "spring", label: "Spring Training", months: 2, cls: "opd-year-phase-span--spring" }, // Mar-Apr
+  { key: "season", label: "Season",          months: 4, cls: "opd-year-phase-span--season" }, // May-Aug
+  { key: "instr",  label: "Instructional",   months: 1, cls: "opd-year-phase-span--instr"  }, // Sep
+  { key: "off2",   label: "Off-season",      months: 3, cls: "opd-year-phase-span--off"    }, // Oct-Dec
+];
+
+function daysUntilISO(isoDate, todayISO) {
+  if (!isoDate) return null;
+  const then = new Date(`${isoDate}T00:00:00Z`);
+  const today = new Date(`${todayISO}T00:00:00Z`);
+  if (Number.isNaN(then.getTime()) || Number.isNaN(today.getTime())) return null;
+  const ms = then.getTime() - today.getTime();
+  return Math.round(ms / (24 * 60 * 60 * 1000));
+}
 
 function formatMonthDay(iso) {
   if (!iso) return null;
@@ -130,17 +152,21 @@ function ProfileRail({ viewer, queueSummary, queueLength, loading }) {
           <p className="opd-badges-empty">No credentials in your queue.</p>
         ) : (
           <div className="opd-bwall" role="list" aria-label="Credentials in your queue (none earned yet)">
-            {(queueSummary?.badges || []).map((b) => (
-              <div
-                key={b.key}
-                className="opd-bdge opd-bdge--awaiting"
-                role="listitem"
-                title={`${b.docId} · ${b.obligationKey} · awaiting signature (not built in PR 8)`}
-              >
-                <span className="opd-bdge-glyph" aria-hidden="true">&#128274;</span>
-                <span className="opd-bdge-label">{b.label}</span>
-              </div>
-            ))}
+            {(queueSummary?.badges || []).map((b) => {
+              const cls = b.docClass ? (CLASS_FAMILY[b.docClass] || null) : null;
+              const familyClass = cls ? ` opd-bdge--class-${cls}` : "";
+              return (
+                <div
+                  key={b.key}
+                  className={"opd-bdge opd-bdge--awaiting" + familyClass}
+                  role="listitem"
+                  title={`${b.docId} · ${b.obligationKey} · awaiting signature (not built in PR 8)`}
+                >
+                  <span className="opd-bdge-glyph" aria-hidden="true">&#128274;</span>
+                  <span className="opd-bdge-label">{b.label}</span>
+                </div>
+              );
+            })}
           </div>
         )}
         <div className="opd-bwall-legend">
@@ -261,16 +287,33 @@ function QueueCard({ queue, loading, onOpen }) {
               {r.cadence ? ` · ${r.cadence}` : ""}
             </div>
             <div className="opd-queue-title-line">{r.doc_title}</div>
-            {r.source_section ? (
-              <div className="opd-queue-why">
-                Applies to <b>&sect;{r.source_section}</b>
-                {r.cycle_label ? ` · ${r.cycle_label} cycle` : ""}
-              </div>
-            ) : (
-              <div className="opd-queue-why">
-                {r.cycle_label ? `${r.cycle_label} cycle` : "Issued to your queue"}
-              </div>
-            )}
+            {(() => {
+              // P1-4 truncate. source_section can list five sections
+              // joined by "; " (PB-014); rendering the full list wraps
+              // the row past its neighbours for reference data rather
+              // than action. Show the first + a count; full list on
+              // hover via the row's aria-label + a title on this line.
+              const sections = r.source_section
+                ? String(r.source_section).split(/;\s*/).map((s) => s.trim()).filter(Boolean)
+                : [];
+              if (sections.length === 0) {
+                return (
+                  <div className="opd-queue-why">
+                    {r.cycle_label ? `${r.cycle_label} cycle` : "Issued to your queue"}
+                  </div>
+                );
+              }
+              const tail = sections.length > 1 ? ` +${sections.length - 1} section${sections.length - 1 === 1 ? "" : "s"}` : "";
+              return (
+                <div
+                  className="opd-queue-why"
+                  title={`Applies to §${sections.join("  §")}`}
+                >
+                  Applies to <b>&sect;{sections[0]}{tail}</b>
+                  {r.cycle_label ? ` · ${r.cycle_label} cycle` : ""}
+                </div>
+              );
+            })()}
           </div>
           <div className="opd-queue-meta">
             <div className="opd-queue-due">Due {formatMonthDay(r.due_date) || r.due_date}</div>
@@ -284,6 +327,10 @@ function QueueCard({ queue, loading, onOpen }) {
 }
 
 // ── Content: Year Track ───────────────────────────────────────────
+// Short month labels (P1-3 restoration) so the row reads as calendar
+// context, not a coded strip. Aligns with the twelve segments.
+const YEAR_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
 function YearTrack({ yearTrack, loading }) {
   if (loading || !yearTrack || yearTrack.length === 0) {
     return (
@@ -301,6 +348,22 @@ function YearTrack({ yearTrack, loading }) {
     );
   }
   const withCycle = yearTrack.filter((c) => c.hasCycle);
+  // P1-3 next-cycle note. Compute "opens in N days" client-side from
+  // the yearTrack cell that holds the current active cycle. Uses UTC
+  // today so the number is stable regardless of the operator's zone
+  // for a whole-day countdown.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const nextOpen = withCycle.find((c) => c.cycleStatus === "published");
+  let nextLine = null;
+  if (nextOpen) {
+    const openDate = `${nextOpen.month}-01`;
+    const days = daysUntilISO(openDate, todayISO);
+    if (days == null) nextLine = null;
+    else if (days > 1) nextLine = `${nextOpen.cycleLabel || "The next cycle"} opens in ${days} days.`;
+    else if (days === 1) nextLine = `${nextOpen.cycleLabel || "The next cycle"} opens tomorrow.`;
+    else if (days === 0) nextLine = `${nextOpen.cycleLabel || "The current cycle"} opens today.`;
+    else nextLine = `${nextOpen.cycleLabel || "This cycle"} is currently open.`;
+  }
   return (
     <div className="opd-card opd-year">
       <div className="opd-year-head">
@@ -329,12 +392,28 @@ function YearTrack({ yearTrack, loading }) {
         })}
       </div>
       <div className="opd-year-labels" aria-hidden="true">
-        {yearTrack.map((c) => (
+        {yearTrack.map((c, i) => (
           <span
             key={c.month}
             className={c.isCurrentMonth ? "opd-year-label opd-year-label--now" : "opd-year-label"}
           >
-            {c.label}
+            {YEAR_MONTH_SHORT[i]}
+          </span>
+        ))}
+      </div>
+      {/* Phase band (P1-3). Names the season context beneath the
+          twelve month segments. Purely decorative context - the
+          band itself carries no state; the segment row is where
+          state lives. */}
+      <div className="opd-year-phase" aria-hidden="true">
+        {YEAR_PHASES.map((p, i) => (
+          <span
+            key={p.key + i}
+            className={"opd-year-phase-span " + p.cls}
+            style={{ flexGrow: p.months }}
+            title={p.label}
+          >
+            {p.label}
           </span>
         ))}
       </div>
@@ -350,8 +429,9 @@ function YearTrack({ yearTrack, loading }) {
       </div>
       {withCycle.length > 0 ? (
         <p className="opd-year-note">
+          {nextLine ? <><b>Next:</b> {nextLine}{" "}</> : null}
           {withCycle.length === 1
-            ? `One cycle live: ${withCycle[0].cycleLabel}. The other eleven months have no cycle.`
+            ? `The other eleven months have no cycle.`
             : `${withCycle.length} cycles live.`}
         </p>
       ) : (
@@ -512,6 +592,7 @@ export default function AcademyRoom({ viewerEmail }) {
       badges: queue.map((q) => ({
         key: `${q.doc_id}|${q.obligation_key}`,
         docId: q.doc_id,
+        docClass: q.doc_class || null,
         obligationKey: q.obligation_key,
         label: badgeLabelFor(q.obligation_key),
       })),
