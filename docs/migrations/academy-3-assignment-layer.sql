@@ -210,14 +210,19 @@ CREATE TABLE IF NOT EXISTS academy_requirements (
   waived_by        TEXT,
   waive_reason     TEXT,
 
-  -- Cycle-source requirements MUST carry a cycle_id; non-cycle
-  -- sources MUST NOT. Prevents an orphan cycle-source row from
-  -- becoming a mystery in the queue.
-  CONSTRAINT academy_requirements_cycle_id_matches_source
-    CHECK (
-      (source = 'cycle'    AND cycle_id IS NOT NULL) OR
-      (source <> 'cycle'   AND cycle_id IS NULL)
-    ),
+  -- A cycle-sourced requirement ALWAYS knows its cycle. Other
+  -- sources MAY carry one: a manual issuance that catches someone
+  -- up on a missed cycle, or a version_recert the owner wants
+  -- counted in the current cycle's rollup, should both be
+  -- attributable to that cycle. Forbidding the association would
+  -- permanently understate that cycle's completion and leave the
+  -- requirement floating with no reporting home. Uniqueness is
+  -- unaffected: the unique index below already uses
+  -- COALESCE(cycle_id, -1), so a manual requirement tagged to a
+  -- cycle and an untagged one remain distinct rows rather than
+  -- colliding.
+  CONSTRAINT academy_requirements_cycle_source_has_cycle
+    CHECK (source <> 'cycle' OR cycle_id IS NOT NULL),
 
   -- Waiver is all-or-nothing. A waiver without a reason is not a
   -- waiver, and a reason without a stamp is authoring garbage.
@@ -266,6 +271,12 @@ COMMENT ON TABLE academy_requirements IS
    (with a required reason string) but NEVER destroyed. service_role
    holds SELECT / INSERT / UPDATE - never DELETE. A post-flight
    assertion below fails apply if DELETE is ever granted.
+
+   est_minutes denormalizes for the same reason the document fields
+   do. A cycle-scoped rollup of total minutes owed must read
+   academy_requirements.est_minutes, never academy_obligations.
+   est_minutes - re-authoring an obligation''s estimate must not
+   retroactively change what a closed cycle asked of people.
 
    SATISFACTION lives on the attestation, not on this table. A
    satisfied_by pointer will be added in migration 4, the same
