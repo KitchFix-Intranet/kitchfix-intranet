@@ -188,34 +188,71 @@ async function loadAccountStateMap(supa) {
 // `.select()` at 1000 rows per response - a table with more rows
 // returns 1000 with no error, no warning, no signal, and downstream
 // map-lookups return `undefined` for the truncated worker_ids.
-// This helper loops with `.range()` until fewer than pageSize rows
-// come back, so the caller gets every row regardless of table size.
+// This helper loops with `.range()` and verifies against the exact
+// count returned by PostgREST's `count: "exact"` option.
+//
+// Two-part discipline enforced by this helper AND its callers (per
+// docs/GOTCHAS.md:185, 187):
+//   1. Caller MUST specify `.order("<stable_col>")` in the query
+//      before `.range()`. Without an ORDER BY the executor can
+//      return rows in different order per page - causing overlaps
+//      or gaps that the count-check would catch but silently.
+//   2. Caller MUST specify `{ count: "exact" }` in the .select()
+//      options. That routes PostgREST's total-count header into
+//      the response's `count` field; this helper captures it from
+//      the first page and asserts the paged total matches.
+//
+// Both are the reviewer's "count-exact HEAD probe" pattern from
+// GOTCHAS.md, adapted to the query-embedded form that avoids a
+// separate round-trip.
 //
 // This bug shipped once (cycle 2 published 8 requirements with
 // NULL person_id because loadStintMap truncated at 1000 while
 // academy_person_stints holds 1,129). Not shipping it twice.
 //
-// `queryFn` is `(from, to) => supa.from(...).select(...).range(from, to)`.
-async function selectAllPaginated(queryFn, pageSize = 1000) {
+// `queryFn` is `(from, to) => supa.from(...).select("...", { count: "exact" }).order(...).range(from, to)`.
+async function selectAllPaginated(queryFn, opts = {}) {
+  const { pageSize = 1000, tableName = "(unspecified)" } = opts;
   const all = [];
+  let expectedTotal = null;
   let from = 0;
-  // Loop until the page returns fewer than pageSize rows, which is
-  // the only sound termination signal (PostgREST does not return
-  // total-count unless asked, and asking is a separate round-trip).
-  // Cap at 100 iterations as a defense against an accidental infinite
-  // loop; that is 100,000 rows, well above any Academy table's realistic
-  // size, and if it ever fires it means the loader is being pointed at
-  // the wrong table.
+  // Loop until the page returns fewer than pageSize rows. The
+  // exact-count assertion below is the safety belt: if pagination
+  // is broken (page overlap, page gap, order not stable), the
+  // paged total will diverge from the count and we throw with
+  // both numbers.
+  //
+  // Cap at 100 iterations as an infinite-loop defense; that is
+  // 100,000 rows, well above any Academy table's realistic size.
+  // If it ever fires the loader is pointing at the wrong table.
   for (let i = 0; i < 100; i += 1) {
     const to = from + pageSize - 1;
     const q = await queryFn(from, to);
-    if (q.error) throw new Error(q.error.message);
+    if (q.error) throw new Error(`selectAllPaginated[${tableName}]: ${q.error.message}`);
+    // Capture the exact count from the first response that has it.
+    // Supabase returns count when the query used { count: "exact" }.
+    if (expectedTotal === null && typeof q.count === "number") {
+      expectedTotal = q.count;
+    }
     const rows = q.data || [];
     all.push(...rows);
-    if (rows.length < pageSize) return all;
+    if (rows.length < pageSize) break;
     from = to + 1;
   }
-  throw new Error(`selectAllPaginated: hit 100-page ceiling (${all.length} rows) - the loader is probably pointing at the wrong table`);
+  if (from === (100 * pageSize)) {
+    throw new Error(`selectAllPaginated[${tableName}]: hit 100-page ceiling (${all.length} rows) - the loader is probably pointing at the wrong table`);
+  }
+  // Safety belt: paged total MUST match the exact count PostgREST
+  // reported on the first page. A mismatch means the pagination is
+  // wrong (missing .order() → overlap/gap, or concurrent writes
+  // during the walk). Throw with both numbers per GOTCHAS.md:187.
+  if (expectedTotal === null) {
+    throw new Error(`selectAllPaginated[${tableName}]: no exact count returned - caller must build the query with { count: "exact" } so the walk can be verified`);
+  }
+  if (all.length !== expectedTotal) {
+    throw new Error(`selectAllPaginated[${tableName}]: paged total ${all.length} != exact count ${expectedTotal}. Pagination is wrong; verify .order() precedes .range() and that no concurrent writes happened mid-walk.`);
+  }
+  return all;
 }
 
 async function loadPeoplePool(supa, options = {}) {
@@ -223,13 +260,18 @@ async function loadPeoplePool(supa, options = {}) {
   // Paginated: end_date IS NULL filters to ~104 rows today, well
   // under the 1000 cap, but pagination is defensive against future
   // growth and matches the pattern used for stints below.
+  // .order("worker_id") is required BEFORE .range() (GOTCHAS.md:185):
+  // without a stable ORDER BY the executor can pick a different order
+  // per page, causing overlap or gap that the exact-count check
+  // catches loudly but should not have to.
   const rows = await selectAllPaginated((from, to) =>
     supa
       .from("people")
-      .select("worker_id, display_name, is_salaried, account_key, status, start_date, end_date")
+      .select("worker_id, display_name, is_salaried, account_key, status, start_date, end_date", { count: "exact" })
       .is("end_date", null)
+      .order("worker_id", { ascending: true })
       .range(from, to)
-  );
+  , { tableName: "people (end_date IS NULL)" });
   let filtered = rows;
   if (!includeHired)   filtered = filtered.filter((r) => r.status !== "HIRED");
   if (!includeActive)  filtered = filtered.filter((r) => r.status !== "ACTIVE");
@@ -243,9 +285,14 @@ async function loadStintMap(supa) {
   // them, causing cycle 2's publish to write NULL person_id on
   // every row for a worker whose stint fell in the truncated 129.
   // See selectAllPaginated header for the class of bug.
+  // .order("worker_id") required before .range() per GOTCHAS.md:185.
   const rows = await selectAllPaginated((from, to) =>
-    supa.from("academy_person_stints").select("worker_id, person_id").range(from, to)
-  );
+    supa
+      .from("academy_person_stints")
+      .select("worker_id, person_id", { count: "exact" })
+      .order("worker_id", { ascending: true })
+      .range(from, to)
+  , { tableName: "academy_person_stints" });
   const m = new Map();
   for (const s of rows) m.set(s.worker_id, s.person_id);
   return m;
@@ -864,11 +911,16 @@ export async function planRehire(supa, options = {}) {
   // loadStintMap does - academy_person_stints > 1000 rows and the
   // unpaginated .select() silently truncated. That truncation is
   // what shipped cycle 2 with NULL person_id on every row; not
-  // repeating it here.
+  // repeating it here. .order("worker_id") required before .range()
+  // per GOTCHAS.md:185; count:"exact" enables the safety-belt total
+  // check inside selectAllPaginated.
   const [stintRows, reqsQ, obligationsQ, excluded, accountStates, people] = await Promise.all([
     selectAllPaginated((from, to) =>
-      db.from("academy_person_stints").select("worker_id, person_id").range(from, to)
-    ),
+      db.from("academy_person_stints")
+        .select("worker_id, person_id", { count: "exact" })
+        .order("worker_id", { ascending: true })
+        .range(from, to)
+    , { tableName: "academy_person_stints (rehire)" }),
     db.from("academy_requirements").select("worker_id").eq("source", REQUIREMENT_SOURCE_ONBOARDING),
     db.from("academy_obligations").select("doc_id, obligation_key, doc_version, est_minutes, applies_to").eq("cadence", "on-hire"),
     loadExcludedWorkerIds(db),
