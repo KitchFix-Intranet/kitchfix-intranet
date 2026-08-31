@@ -55,11 +55,18 @@
 -- any application route" policy (people-1-table.sql:118-121). The
 -- Academy hourly portal (spec Section 2.5) is the opt-in workflow
 -- that policy anticipated. `natural_key` on academy_persons is a
--- one-way DERIVED value (lower(trim(personal_email))) that lets us
--- ORDER, GROUP, and JOIN without ever needing to SELECT the address
--- itself back through any route. The address stays in people; one
--- copy of the truth means a Rippling update cannot leave a stale
--- copy behind.
+-- true one-way SHA-256 digest of lower(trim(personal_email)), stored
+-- as hex. It groups stints for the same human without copying the
+-- address into the Academy namespace, and it is not reversible to
+-- an address. Sends read `people.personal_email` DIRECTLY inside a
+-- server-only send function at the moment of sending; the digest
+-- can never substitute. The address stays in people; one copy of
+-- the truth means a Rippling update cannot leave a stale copy
+-- behind. Built-in sha256(bytea) is used deliberately - no pgcrypto
+-- dependency, works on PG 11+ and confirmed on PG 17.6. Unsalted
+-- on purpose: the threat model is a developer accidentally exposing
+-- the column through a route, not an attacker with database access,
+-- and a salt would break cross-environment determinism for no gain.
 --
 -- Ownership model
 -- ───────────────
@@ -120,16 +127,19 @@ COMMENT ON TABLE academy_persons IS
    carry it and re-anchoring would silently orphan history.';
 
 COMMENT ON COLUMN academy_persons.natural_key IS
-  'Derived: lower(trim(personal_email)). This column exists so a
-   returning seasonal worker''s history stays legible without merging
-   their compliance record across employment periods (Antonio
-   Rodriguez, seven stints, is the canonical case). The underlying
-   personal_email address itself is NEVER exposed through any route,
-   view, export, or API response - see people.personal_email column
-   comment and spec Section 2.5. Only the derived natural_key
-   surfaces beyond the DB, and only for JOIN / GROUP / ORDER, never
-   for display or send. Sends read directly from people.personal_email
-   inside a server-only send function at the moment of sending.';
+  'SHA-256 hex digest of lower(trim(personal_email)). Deliberately a
+   real one-way digest, not a normalization: the plaintext address
+   must never exist outside people.personal_email, which carries the
+   standing "NEVER selected by any application route" policy. This
+   column groups a returning seasonal worker''s stints into one
+   person without copying the address into the Academy namespace
+   (Antonio Rodriguez, seven stints, is the canonical case).
+   Unsalted on purpose - the threat model is accidental exposure
+   through a route, not an attacker holding database access, and a
+   salt would break cross-environment determinism for no gain. Never
+   reversible to an address. Sends read people.personal_email
+   directly inside a server-only send function at the moment of
+   sending.';
 
 COMMENT ON COLUMN academy_persons.display_name IS
   'Legibility field for Admin views. Refreshed from the most recent
@@ -198,7 +208,8 @@ COMMENT ON TABLE academy_eligibility_exceptions IS
 
 -- ─── academy_grants ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS academy_grants (
-  email       TEXT        NOT NULL,
+  email       TEXT        NOT NULL
+                CHECK (email = lower(email)),
   grant_type  TEXT        NOT NULL
                 CHECK (grant_type IN ('library_admin', 'academy_admin')),
   granted_by  TEXT        NOT NULL,
@@ -213,6 +224,14 @@ COMMENT ON TABLE academy_grants IS
    Sync plus Reports (both under academy_admin) without holding
    library_admin. The primary key (email, grant_type) means a person
    may hold zero, one, or both.';
+
+COMMENT ON COLUMN academy_grants.email IS
+  'Google Workspace address, lower-cased. The CHECK enforces the
+   lower-cased invariant at insert time so grant lookups from the
+   session email do not depend on convention. NextAuth session
+   emails must be normalized (lower + trim) before the lookup;
+   roleGate.js already uses ilike, but a CHECK is cheaper than
+   remembering.';
 
 
 -- ─── RLS + grants ──────────────────────────────────────────────────
@@ -253,16 +272,23 @@ REVOKE TRUNCATE ON academy_person_stints  FROM anon, authenticated;
 --
 -- Both blocks are ON CONFLICT DO NOTHING so re-application is a
 -- no-op. To rebuild identity from a clean slate, DELETE both tables
--- in Studio first (in this order because of the FK), then re-run.
+-- in Studio first (academy_person_stints then academy_persons
+-- because of the FK), then re-run. **This is an owner-only Studio
+-- operation, deliberately.** service_role holds SELECT / INSERT /
+-- UPDATE only (see grants block above); a DELETE grant to
+-- service_role would let any app-code bug or exploit wipe the
+-- identity spine every future attestation depends on. The rebuild
+-- surface stays out of the app layer on purpose.
 
 WITH ranked_stints AS (
   SELECT
-    lower(trim(personal_email)) AS natural_key,
+    encode(sha256(lower(trim(personal_email))::bytea), 'hex') AS natural_key,
     display_name,
     ROW_NUMBER() OVER (
-      PARTITION BY lower(trim(personal_email))
+      PARTITION BY encode(sha256(lower(trim(personal_email))::bytea), 'hex')
       ORDER BY start_date DESC NULLS LAST,
-               first_seen_at DESC NULLS LAST
+               first_seen_at DESC NULLS LAST,
+               worker_id DESC
     ) AS rnk
   FROM people
   WHERE personal_email IS NOT NULL
@@ -281,7 +307,7 @@ SELECT
   'auto'
 FROM people p
 JOIN academy_persons ap
-  ON ap.natural_key = lower(trim(p.personal_email))
+  ON ap.natural_key = encode(sha256(lower(trim(p.personal_email))::bytea), 'hex')
 WHERE p.personal_email IS NOT NULL
   AND trim(p.personal_email) <> ''
 ON CONFLICT (worker_id) DO NOTHING;
@@ -321,20 +347,36 @@ ON CONFLICT (email, grant_type) DO NOTHING;
 -- ═══════════════════════════════════════════════════════════════════
 
 -- P1. Person rows exactly match the distinct personal_email count.
+-- Both sides hash - the plaintext count is 887, the hashed count is
+-- also 887 (verified independently 2026-08-31; no collisions),
+-- and every academy_persons row must trace back to a live people
+-- row through the same hash.
 -- Expected: 887 / 887 / 0 (zero unmatched).
 SELECT
-  (SELECT count(*) FROM academy_persons)                       AS person_rows,
-  (SELECT count(DISTINCT lower(trim(personal_email)))
+  (SELECT count(*) FROM academy_persons)                                  AS person_rows,
+  (SELECT count(DISTINCT encode(sha256(lower(trim(personal_email))::bytea), 'hex'))
      FROM people
     WHERE personal_email IS NOT NULL
-      AND trim(personal_email) <> '')                          AS distinct_emails,
+      AND trim(personal_email) <> '')                                     AS distinct_email_hashes,
   (SELECT count(*) FROM academy_persons ap
     WHERE NOT EXISTS (
       SELECT 1 FROM people p
-       WHERE lower(trim(p.personal_email)) = ap.natural_key))  AS orphan_persons;
+       WHERE encode(sha256(lower(trim(p.personal_email))::bytea), 'hex')
+             = ap.natural_key))                                           AS orphan_persons;
 
 -- P2. Stints exactly match the roster.
--- Expected: 1129 / 1129 / 0.
+-- Expected on first apply: 1129 / 1129 / 0.
+--
+-- **This probe is also the derive-extension drift detector.** The
+-- backfill above runs exactly once. Once the derive extension PR
+-- lands, every new Rippling row appears in people first and gets
+-- an academy_person_stints row on the same nightly cycle. Until
+-- that extension ships, `people_without_stint_row` starts drifting
+-- non-zero the day the first new hire syncs. A non-zero return
+-- from this probe is EXPECTED once new hires arrive and is the
+-- signal that the derive extension is overdue - NOT that this
+-- apply failed. On re-application before the derive ships, expect
+-- exactly (backfill-count) / (current-people-count) / (drift).
 SELECT
   (SELECT count(*) FROM academy_person_stints)                 AS stint_rows,
   (SELECT count(*) FROM people
