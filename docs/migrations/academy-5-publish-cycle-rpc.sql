@@ -230,12 +230,11 @@ GRANT EXECUTE ON FUNCTION publish_cycle_atomic(BIGINT, TEXT, JSONB) TO service_r
 
 -- ─── insert_requirements_bulk ──────────────────────────────────────
 --
--- The non-cycle write path. Onboarding + rehire (+ future manual)
--- go through this, so `academy_requirements` never sees an app-
--- layer INSERT and the ON CONFLICT expression appears in exactly
--- two places, both in this file. Structural fix for the class of
--- bug that let a JS `.upsert` restate the index's expression
--- incorrectly.
+-- The non-cycle write path. Onboarding + rehire + manual go through
+-- this, so `academy_requirements` never sees an app-layer INSERT
+-- and the ON CONFLICT expression appears in exactly two places,
+-- both in this file. Structural fix for the class of bug that let
+-- a JS `.upsert` restate the index's expression incorrectly.
 --
 -- Why cycle is refused
 -- ───────────────────
@@ -246,6 +245,25 @@ GRANT EXECUTE ON FUNCTION publish_cycle_atomic(BIGINT, TEXT, JSONB) TO service_r
 -- cycle already published from the other path, producing a state
 -- where two writers disagree about which rows belong to a cycle.
 -- Refused loudly.
+--
+-- Why only `manual` may carry a non-null cycle_id
+-- ────────────────────────────────────────────────
+-- academy-3 loosened academy_requirements_cycle_source_has_cycle
+-- to one-way: cycle-sourced rows require a cycle_id, but non-cycle
+-- sources MAY carry one. The scenario is Kevin manually issuing a
+-- September module to a site leader who was on leave that month,
+-- attributing the row to September so the person's completion
+-- still counts against September's rollup. Under the two-way rule
+-- that requirement could never be cycle-attributed and September
+-- would report permanently incomplete for that person even after
+-- they finished it (see review of academy-3, ruling to loosen).
+--
+-- `onboarding` and `rehire` are triggered by hiring events, not
+-- calendar cycles. A cycle-attributed onboarding row would be
+-- meaningless - a chef hired on October 3 owes onboarding because
+-- of the hire, not because a September cycle published. The RPC
+-- refuses non-null cycle_id from those two sources so the schema-
+-- permitted capability cannot be misused.
 --
 -- INDEX INFERENCE, NOT CONSTRAINT NAME. Same lockstep with
 -- academy-3-assignment-layer.sql's academy_requirements_unique_
@@ -288,10 +306,26 @@ BEGIN
     RETURN 0;
   END IF;
 
-  -- Non-cycle sources: cycle_id is fixed to NULL. The CHECK
-  -- academy_requirements_cycle_source_has_cycle only requires a
-  -- non-null cycle_id when source = 'cycle', so all three of these
-  -- sources are compatible with cycle_id NULL.
+  -- Guard: only source='manual' may carry a non-null cycle_id (see
+  -- header for the "site leader on leave" scenario). onboarding
+  -- and rehire are hiring-triggered - a cycle-attributed row from
+  -- those sources would be meaningless. Refuse before the INSERT
+  -- so a mixed batch fails clean rather than leaving some rows
+  -- inserted.
+  IF p_source IN ('onboarding', 'rehire') THEN
+    IF EXISTS (
+      SELECT 1
+      FROM jsonb_to_recordset(p_rows) AS x(cycle_id BIGINT)
+      WHERE x.cycle_id IS NOT NULL
+    ) THEN
+      RAISE EXCEPTION 'insert_requirements_bulk: refused - source="%" cannot carry a non-null cycle_id on any row. Only manual may carry a cycle attribution; onboarding and rehire are hiring-triggered and cannot be cycle-attributed.',
+        p_source;
+    END IF;
+  END IF;
+
+  -- Insert. cycle_id comes from the row (nullable). The RPC does
+  -- NOT hardcode NULL, so the manual-catch-up scenario is
+  -- reachable through this write path.
   INSERT INTO academy_requirements (
     worker_id,
     person_id,
@@ -312,7 +346,7 @@ BEGIN
     x.doc_version,
     x.est_minutes,
     p_source,
-    NULL,
+    x.cycle_id,
     x.due_date,
     COALESCE(x.issued_by, 'system')
   FROM jsonb_to_recordset(p_rows) AS x(
@@ -322,6 +356,7 @@ BEGIN
     obligation_key  TEXT,
     doc_version     TEXT,
     est_minutes     INTEGER,
+    cycle_id        BIGINT,
     due_date        DATE,
     issued_by       TEXT
   )
@@ -359,7 +394,14 @@ WHERE n.nspname = 'public'
 ORDER BY p.proname;
 
 -- P2. service_role has EXECUTE on both.
--- Expected: 2 rows, grantee = service_role.
+-- Expected: 6 rows total - 3 grantees per function (postgres,
+-- PUBLIC, service_role). Postgres grants EXECUTE to PUBLIC by
+-- default on every new function; that is harmless here because
+-- both functions are SECURITY INVOKER, so an anon caller without
+-- the underlying table privileges fails on the table, not on the
+-- function. Same shape as archive_document (pr-7-7),
+-- replace_document_relationships/_surfaces (pr-7-15), and the two
+-- academy-4 functions.
 SELECT routine_name, grantee, privilege_type
 FROM information_schema.routine_privileges
 WHERE routine_schema = 'public'
@@ -410,13 +452,14 @@ ORDER BY routine_name, grantee;
 --     ]$j$::jsonb
 --   );
 --
---   -- Second call with same p_rows exercises idempotency.
---   -- Expected: requirements_inserted=0, requirements_skipped=2,
---   -- but ALSO expected to ERROR because the cycle is already
---   -- published - RAISE fires from the draft-check. Both are
---   -- correct answers depending on the read: a repeat publish
---   -- attempt should be refused loudly.
---   -- SELECT publish_cycle_atomic(:cid, 'probe', ...);
+--   -- A second call against the same cycle is refused by the
+--   -- draft-check ("cycle_id ... is in status \"published\" (must
+--   -- be draft to publish)"), which runs BEFORE any INSERT, so
+--   -- the ON CONFLICT DO NOTHING never gets a chance to fire.
+--   -- Insert-side idempotency is exercised in P5 (which does not
+--   -- involve a state flip) rather than here.
+--   -- SELECT publish_cycle_atomic(:cid, 'probe', '[]'::jsonb);
+--   -- Expected error: "cycle_id ... is in status \"published\"..."
 --
 --   ROLLBACK;
 
@@ -505,7 +548,7 @@ ORDER BY routine_name, grantee;
 -- applied by:        k.fietek@kitchfix.com
 -- applied at:        <fill in ISO timestamp>
 -- p1_functions:      <expected 2 rows: publish_cycle_atomic + insert_requirements_bulk>
--- p2_grants:         <expected 2 rows, both service_role>
+-- p2_grants:         <expected 6 rows: 3 grantees per function - postgres, PUBLIC, service_role - see P2 comment>
 -- p3_publish_probe:  <run probe; expected new_status=published, inserted=2, skipped=0>
 -- p4_publish_refusals: <run three probes; each must error on its named branch>
 -- p5_bulk_probe:     <run probe; expected first_call_inserted=1, second_call_inserted=0, empty_call_inserted=0, three refusals each error>
