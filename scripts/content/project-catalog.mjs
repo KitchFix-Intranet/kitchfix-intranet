@@ -579,6 +579,34 @@ async function applyObligations({ plan, supabaseUrl, supabaseKey }) {
     docsWritten += 1;
   }
 
+  // Guard the sweep call site. Refuse to invoke the RPC with an empty
+  // or NULL-bearing list rather than letting it surface as a raw
+  // Postgres exception; the diagnostic here names the likely cause
+  // (corpus parse failure) and the fact that no sweep was attempted.
+  // Belt-and-braces with the RPC's own guard: the RPC holds regardless
+  // of what any future caller does, this holds regardless of how the
+  // caller wires its plan.
+  if (!Array.isArray(plan.liveDocIds) || plan.liveDocIds.length === 0) {
+    return {
+      ok: false,
+      rowsWritten,
+      docsWritten,
+      orphanRowsSwept: 0,
+      error:
+        "sweep_orphan_obligations refused at call site: liveDocIds is empty. Likely cause is a corpus-wide parse failure in buildObligationsPlan (any doc with parseError is skipped, so a broken parser produces an empty list). No sweep attempted; per-doc replaces above are already committed.",
+    };
+  }
+  if (plan.liveDocIds.some((id) => id == null || typeof id !== "string" || id.length === 0)) {
+    return {
+      ok: false,
+      rowsWritten,
+      docsWritten,
+      orphanRowsSwept: 0,
+      error:
+        "sweep_orphan_obligations refused at call site: liveDocIds contains at least one null/empty/non-string element. Fix buildObligationsPlan before rerunning; no sweep attempted.",
+    };
+  }
+
   const { data: sweptData, error: sweepError } = await sb.rpc(
     "sweep_orphan_obligations",
     { p_live_doc_ids: plan.liveDocIds }

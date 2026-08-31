@@ -169,7 +169,7 @@ GRANT EXECUTE ON FUNCTION replace_document_obligations(TEXT, JSONB) TO service_r
 -- ─── sweep_orphan_obligations ──────────────────────────────────────
 -- Deletes every academy_obligations row whose doc_id is NOT in the
 -- supplied array. Called once per apply, at the end of step 6, with
--- the full list of doc_ids currently parsed from the MDX corpus.
+-- the FULL list of doc_ids currently parsed from the MDX corpus.
 --
 -- The FK on academy_obligations.doc_id -> documents(id) is
 -- ON DELETE CASCADE, but archive_document (pr-7-7) only flips a
@@ -180,10 +180,24 @@ GRANT EXECUTE ON FUNCTION replace_document_obligations(TEXT, JSONB) TO service_r
 -- filesystem, and the archive path removes the file from the corpus
 -- semantically even when the row survives).
 --
--- If p_live_doc_ids is NULL or empty, the sweep would delete ALL
--- rows. That is legitimate (the corpus really is empty) but rare;
--- either way the WHERE clause is present so the Supabase REST guard
--- does not object.
+-- REFUSAL SEMANTICS
+-- ─────────────────
+-- A NULL, empty, or NULL-element-containing array is NEVER treated
+-- as "the corpus is empty, delete everything." Two realistic ways
+-- the caller can arrive here in a state that would wipe the table:
+--   1. A corpus-wide parse failure in buildObligationsPlan, which
+--      skips any doc carrying a parseError. In that moment the
+--      parser is broken and the obligations are the thing most
+--      worth preserving.
+--   2. A future refactor that passes only CHANGED doc ids (a
+--      reasonable optimization the workflow's path filter invites)
+--      would arrive here the same way and would silently delete
+--      every unchanged document's obligations.
+-- Both fail loudly here rather than in either place. An empty
+-- /content/documents/ tree is a repo emergency requiring human
+-- judgment, not an input the projection should act on
+-- automatically. If you find yourself relaxing this guard, stop
+-- and instead investigate the caller.
 CREATE OR REPLACE FUNCTION sweep_orphan_obligations(p_live_doc_ids TEXT[])
 RETURNS INT
 LANGUAGE plpgsql
@@ -192,12 +206,23 @@ DECLARE
   v_deleted INT := 0;
 BEGIN
   IF p_live_doc_ids IS NULL OR array_length(p_live_doc_ids, 1) IS NULL THEN
-    -- Empty corpus: sweep everything. Rare but valid.
-    DELETE FROM academy_obligations WHERE TRUE;
-  ELSE
-    DELETE FROM academy_obligations
-    WHERE doc_id <> ALL (p_live_doc_ids);
+    RAISE EXCEPTION 'sweep_orphan_obligations: refused - live doc id array is null or empty. This function requires the FULL parsed corpus. An empty array means the corpus failed to parse or the caller passed a changed-docs subset; either way, sweeping would delete every obligation. Investigate the caller, do not relax this guard.';
   END IF;
+
+  -- NULL-element guard. `doc_id <> ALL (array_containing_null)`
+  -- evaluates to NULL rather than true in Postgres, so a single NULL
+  -- element would silently prevent the sweep from matching anything
+  -- and orphans would accumulate with no signal. Chose RAISE over
+  -- array_remove(..., NULL) because the append-only discipline in
+  -- this codebase prefers loud refusal over silent normalization -
+  -- a NULL doc_id in the caller's list means the caller has a bug,
+  -- and silently working around it hides that bug from the operator.
+  IF EXISTS (SELECT 1 FROM unnest(p_live_doc_ids) AS d WHERE d IS NULL) THEN
+    RAISE EXCEPTION 'sweep_orphan_obligations: refused - live doc id array contains at least one NULL element. NULL in the array would evaluate the <> ALL comparison as NULL for every row and silently sweep nothing; the correct response is for the caller to strip its NULLs before calling, not for this function to guess.';
+  END IF;
+
+  DELETE FROM academy_obligations
+  WHERE doc_id <> ALL (p_live_doc_ids);
 
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN v_deleted;
@@ -294,8 +319,15 @@ ORDER BY routine_name, grantee;
 -- ─── P4 (probe, run deliberately) ──────────────────────────────────
 -- sweep_orphan_obligations. Inserts 2 sentinel rows on two different
 -- docs, sweeps with only one in the live list, expects 1 deletion.
+-- Then exercises the two refusal branches - each MUST error with the
+-- named message; if either succeeds, the guard is missing.
 --
--- Expected on run: swept = 1, remaining = 1 (only PB-014's row).
+-- Expected on run:
+--   swept                        = 1
+--   remaining                    = 1 (only PB-014's row)
+--   ARRAY[]::TEXT[] call         must ERROR: "refused - live doc id array is null or empty..."
+--   NULL cast                    must ERROR: "refused - live doc id array is null or empty..."
+--   ARRAY['PB-014', NULL] call   must ERROR: "refused - live doc id array contains at least one NULL element..."
 --
 --   BEGIN;
 --   SELECT replace_document_obligations('PB-014', $j$[
@@ -306,6 +338,24 @@ ORDER BY routine_name, grantee;
 --   ]$j$::jsonb);
 --   SELECT sweep_orphan_obligations(ARRAY['PB-014']) AS swept;
 --   SELECT count(*) AS remaining FROM academy_obligations WHERE owner = 'probe';
+--   ROLLBACK;
+--
+--   -- Refusal branch A: empty array.
+--   BEGIN;
+--   SELECT sweep_orphan_obligations(ARRAY[]::TEXT[]);
+--   -- Expected error: "refused - live doc id array is null or empty..."
+--   ROLLBACK;
+--
+--   -- Refusal branch B: NULL argument.
+--   BEGIN;
+--   SELECT sweep_orphan_obligations(NULL::TEXT[]);
+--   -- Expected error: "refused - live doc id array is null or empty..."
+--   ROLLBACK;
+--
+--   -- Refusal branch C: NULL element in the array.
+--   BEGIN;
+--   SELECT sweep_orphan_obligations(ARRAY['PB-014', NULL]::TEXT[]);
+--   -- Expected error: "refused - live doc id array contains at least one NULL element..."
 --   ROLLBACK;
 
 
@@ -327,5 +377,5 @@ ORDER BY routine_name, grantee;
 -- p1_functions:       <expected 2 rows>
 -- p2_grants:          <expected 2 rows, both service_role>
 -- p3_replace_probe:   <run probe; expected inserted_first=2, inserted_second=1, final applies_to = "company-wide">
--- p4_sweep_probe:     <run probe; expected swept=1, remaining=1>
+-- p4_sweep_probe:     <run probe; expected swept=1, remaining=1, plus three refusal branches each ERROR as named>
 -- notes:              <optional>
