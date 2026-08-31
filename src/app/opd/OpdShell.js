@@ -22,9 +22,10 @@
 
 import { useState } from "react";
 import LibraryRoom from "./LibraryRoom";
+import AcademyRoom from "./AcademyRoom";
 
 const TABS = [
-  { id: "academy",  label: "Academy", ready: false },
+  { id: "academy",  label: "Academy", ready: true  },
   { id: "library",  label: "Library", ready: true  },
   { id: "records",  label: "Records", ready: false },
   { id: "admin",    label: "Admin",   ready: false },
@@ -54,7 +55,7 @@ function InertRoom({ label }) {
 }
 
 export default function OpdShell({ viewerEmail }) {
-  const [tab, setTab] = useState("library");
+  const [tab, setTab] = useState("academy");
   const today = new Date();
   const monthDay = today.toLocaleString("en-US", { month: "short", day: "numeric" }).toUpperCase();
 
@@ -97,6 +98,8 @@ export default function OpdShell({ viewerEmail }) {
         <div className="opd-sbody">
           {tab === "library" ? (
             <LibraryRoom viewerEmail={viewerEmail} />
+          ) : tab === "academy" ? (
+            <AcademyRoom viewerEmail={viewerEmail} />
           ) : (
             <InertRoom
               label={TABS.find((t) => t.id === tab)?.label || "This"}
