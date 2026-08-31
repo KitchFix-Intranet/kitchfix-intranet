@@ -26,11 +26,24 @@
 --                           Defaults to false; Kevin flips per account
 --                           as each site validates.
 --
--- Companion loader + seed: scripts/derive_pnl_actuals.mjs upserts pnl_actuals
--- + kpi_period_status.verified_at per (fiscal_year, period_no).
+-- Companion loader + seed: scripts/derive_pnl_actuals.mjs writes pnl_actuals
+-- and UPDATEs kpi_period_status.verified_at per (fiscal_year, period_no).
 -- kpi_account_flags is seeded here at migration time with 11 rows
--- (sc_revenue_live=false, set_by='phase1-seed-2026-08-31') so the
--- flag surface is present the moment the migration lands.
+-- (sc_revenue_live=false, set_by='phase1-seed-2026-08-31') and
+-- kpi_period_status is seeded here with 13 FY2026 rows carrying
+-- closed_at from the fiscal calendar (verified_at NULL until the
+-- loader lands the workbook) so both surfaces are present the
+-- moment the migration lands.
+--
+-- Resolver contract for pnl_actuals (BINDING):
+--   An absent row for (account_key, fiscal_year, period_no, line_code)
+--   means "NOT REPORTED" - it never means "$0". The `actual` column is
+--   NOT NULL, so absence is the only way the workbook can say "no
+--   figure this period". The Phase 2 resolver MUST treat missing rows
+--   as unreported (fall back to budget or emit "no data") and MUST NOT
+--   substitute zero.  Rows the workbook explicitly emits with actual=0
+--   are loaded as `actual=0` and DO mean zero - that path is
+--   distinguished from absence at read time.
 --
 -- ─── Apply discipline ──────────────────────────────────────────────
 --
@@ -78,11 +91,15 @@ BEGIN
     RAISE NOTICE 'pnl-1 pre-flight [pnl_actuals]: table already exists (idempotent re-apply)';
   END IF;
   SELECT COUNT(*) INTO n_kpi_lines FROM kpi_lines;
-  IF n_kpi_lines <> 34 THEN
+  -- Use `<` (not `<>`) so a legitimate catalog growth on re-apply does
+  -- not fail the migration. A shrinking catalog remains loud.
+  IF n_kpi_lines < 34 THEN
     RAISE EXCEPTION 'pnl-1 pre-flight [pnl_actuals]: kpi_lines = %, expected 34 (matches kpi-2 discipline)', n_kpi_lines;
   END IF;
   SELECT COUNT(*) INTO n_accounts FROM accounts;
-  IF n_accounts <> 12 THEN
+  -- Use `<` (not `<>`) so a legitimate account addition on re-apply does
+  -- not fail the migration. A shrinking account list remains loud.
+  IF n_accounts < 12 THEN
     RAISE EXCEPTION 'pnl-1 pre-flight [pnl_actuals]: accounts = %, expected 12 (11 client + CORP)', n_accounts;
   END IF;
   -- Verify service_role currently has grants to resolve on kpi_lines/kpi_budgets
@@ -122,11 +139,13 @@ CREATE INDEX IF NOT EXISTS pnl_actuals_account_period_idx
 CREATE INDEX IF NOT EXISTS pnl_actuals_line_period_idx
   ON pnl_actuals (line_code, fiscal_year, period_no);
 
--- Grants. service_role writes (loader) and reads (Overview resolver
--- via getServiceClient). authenticated reads only. anon has no
--- privileges. Mirrors kpi-2b-grants.sql intent.
-GRANT SELECT ON pnl_actuals TO authenticated, service_role;
-GRANT INSERT, UPDATE, DELETE ON pnl_actuals TO service_role;
+-- Grants. service_role only. Every KPI route reads via getServiceClient
+-- (labor/route.js:28,390) and kpi_budgets grants service_role only
+-- (kpi-2b-grants.sql:35). Granting authenticated SELECT on pnl_actuals
+-- would let any signed-in user read every account's finance P&L via a
+-- direct PostgREST call, bypassing the role gate the Overview enforces
+-- at the route. service_role only, matching kpi-2b.
+GRANT SELECT, INSERT, UPDATE, DELETE ON pnl_actuals TO service_role;
 
 -- Post-flight: table + indexes + grants live; no seed rows expected
 -- at migration time (loader owns UPSERT). Belt-and-suspenders on
@@ -162,9 +181,6 @@ BEGIN
   END IF;
   IF NOT has_table_privilege('service_role', 'public.pnl_actuals', 'DELETE') THEN
     RAISE EXCEPTION 'pnl-1 post-flight [pnl_actuals]: service_role missing DELETE';
-  END IF;
-  IF NOT has_table_privilege('authenticated', 'public.pnl_actuals', 'SELECT') THEN
-    RAISE EXCEPTION 'pnl-1 post-flight [pnl_actuals]: authenticated missing SELECT';
   END IF;
   SELECT COUNT(*) INTO n_rows FROM pnl_actuals;
   IF n_rows > 0 THEN
@@ -211,15 +227,58 @@ CREATE TABLE IF NOT EXISTS kpi_period_status (
 -- No index beyond the PK - the table is at most 13 rows per fiscal
 -- year. Every Overview read is a PK lookup.
 
-GRANT SELECT ON kpi_period_status TO authenticated, service_role;
-GRANT INSERT, UPDATE ON kpi_period_status TO service_role;
--- No DELETE grant: a period never disappears - the loader UPSERTs
+-- Grants. service_role only (same rationale as pnl_actuals above).
+-- No DELETE grant: a period never disappears - the loader moves
 -- verified_at from NULL to a real timestamp; it never sets it back
 -- to NULL. If a workbook is retracted, updated_at moves; the row
 -- stays.
+GRANT SELECT, INSERT, UPDATE ON kpi_period_status TO service_role;
 
--- Post-flight: existence, columns, grants.
+-- Seed FY2026 calendar. closed_at is computed from the fiscal calendar,
+-- NOT from a workbook (fiscal calendar = deterministic; workbook =
+-- verified truth). Sources: src/app/kpi/labor/lib/periods.js FY_START_ISO
+-- = 2025-12-29 + 28 days per period; owner brief 2026-08-31 confirms
+-- FY2026 period boundaries below.
+--
+--   P1  12/29/25 - 01/25/26   (closed)
+--   P2  01/26/26 - 02/22/26   (closed)
+--   P3  02/23/26 - 03/22/26   (closed)
+--   P4  03/23/26 - 04/19/26   (closed)
+--   P5  04/20/26 - 05/17/26   (closed)
+--   P6  05/18/26 - 06/14/26   (closed)
+--   P7  06/15/26 - 07/12/26   (closed)
+--   P8  07/13/26 - 08/09/26   (closed)
+--   P9  08/10/26 - 09/06/26   (open through today, ends 2026-09-06)
+--   P10 09/07/26 - 10/04/26   (future)
+--   P11 10/05/26 - 11/01/26   (future)
+--   P12 11/02/26 - 11/29/26   (future)
+--   P13 11/30/26 - 12/27/26   (future)
+--
+-- verified_at is NULL on every row until the loader lands the
+-- corresponding workbook. ON CONFLICT DO NOTHING so a re-apply does
+-- not clobber verified_at flips the loader has already written.
+INSERT INTO kpi_period_status (fiscal_year, period_no, closed_at, verified_at, verified_by, source_ref) VALUES
+  (2026,  1, '2026-01-25T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  2, '2026-02-22T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  3, '2026-03-22T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  4, '2026-04-19T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  5, '2026-05-17T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  6, '2026-06-14T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  7, '2026-07-12T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  8, '2026-08-09T23:59:59Z'::timestamptz, NULL, NULL, NULL),
+  (2026,  9, NULL,                                NULL, NULL, NULL),
+  (2026, 10, NULL,                                NULL, NULL, NULL),
+  (2026, 11, NULL,                                NULL, NULL, NULL),
+  (2026, 12, NULL,                                NULL, NULL, NULL),
+  (2026, 13, NULL,                                NULL, NULL, NULL)
+ON CONFLICT (fiscal_year, period_no) DO NOTHING;
+
+-- Post-flight: existence, columns, grants, seed count.
 DO $$
+DECLARE
+  n_rows      INTEGER;
+  n_closed    INTEGER;
+  n_verified  INTEGER;
 BEGIN
   IF to_regclass('public.kpi_period_status') IS NULL THEN
     RAISE EXCEPTION 'pnl-1 post-flight [kpi_period_status]: table did not materialise';
@@ -242,10 +301,19 @@ BEGIN
   IF NOT has_table_privilege('service_role', 'public.kpi_period_status', 'UPDATE') THEN
     RAISE EXCEPTION 'pnl-1 post-flight [kpi_period_status]: service_role missing UPDATE';
   END IF;
-  IF NOT has_table_privilege('authenticated', 'public.kpi_period_status', 'SELECT') THEN
-    RAISE EXCEPTION 'pnl-1 post-flight [kpi_period_status]: authenticated missing SELECT';
+  SELECT COUNT(*) INTO n_rows      FROM kpi_period_status WHERE fiscal_year = 2026;
+  SELECT COUNT(*) INTO n_closed    FROM kpi_period_status WHERE fiscal_year = 2026 AND closed_at   IS NOT NULL;
+  SELECT COUNT(*) INTO n_verified  FROM kpi_period_status WHERE fiscal_year = 2026 AND verified_at IS NOT NULL;
+  IF n_rows < 13 THEN
+    RAISE EXCEPTION 'pnl-1 post-flight [kpi_period_status]: FY2026 seed rows = %, expected >= 13', n_rows;
   END IF;
-  RAISE NOTICE 'pnl-1 post-flight [kpi_period_status] OK';
+  -- closed_at count is not asserted strictly (loader/ops may set future
+  -- periods closed as calendar advances). At minimum, P1..P8 (8 rows)
+  -- must be closed on a fresh apply.
+  IF n_closed < 8 THEN
+    RAISE EXCEPTION 'pnl-1 post-flight [kpi_period_status]: FY2026 closed rows = %, expected >= 8 (P1..P8)', n_closed;
+  END IF;
+  RAISE NOTICE 'pnl-1 post-flight [kpi_period_status] OK (% FY2026 rows; % closed; % verified)', n_rows, n_closed, n_verified;
 END $$;
 
 COMMIT;
@@ -281,8 +349,8 @@ CREATE TABLE IF NOT EXISTS kpi_account_flags (
   set_by            TEXT NOT NULL
 );
 
-GRANT SELECT ON kpi_account_flags TO authenticated, service_role;
-GRANT INSERT, UPDATE ON kpi_account_flags TO service_role;
+-- Grants. service_role only (same rationale as pnl_actuals above).
+GRANT SELECT, INSERT, UPDATE ON kpi_account_flags TO service_role;
 
 -- Seed all 11 real account keys. INSERT ... ON CONFLICT DO NOTHING
 -- so re-applying this migration is a no-op on the flag values. If
@@ -327,9 +395,6 @@ BEGIN
   END IF;
   IF NOT has_table_privilege('service_role', 'public.kpi_account_flags', 'UPDATE') THEN
     RAISE EXCEPTION 'pnl-1 post-flight [kpi_account_flags]: service_role missing UPDATE';
-  END IF;
-  IF NOT has_table_privilege('authenticated', 'public.kpi_account_flags', 'SELECT') THEN
-    RAISE EXCEPTION 'pnl-1 post-flight [kpi_account_flags]: authenticated missing SELECT';
   END IF;
   SELECT COUNT(*) INTO n_rows FROM kpi_account_flags;
   IF n_rows < 11 THEN

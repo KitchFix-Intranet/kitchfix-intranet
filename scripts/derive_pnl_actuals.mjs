@@ -1,13 +1,25 @@
 // scripts/derive_pnl_actuals.mjs
 //
 // Overview Phase 1 - load Sebastian's Budget vs Actual (SLT) FY2026
-// P8 workbook into pnl_actuals + flip kpi_period_status.verified_at
-// for the loaded periods.
+// P8 workbook into pnl_actuals + UPDATE kpi_period_status
+// verified_at / verified_by / source_ref / updated_at for the loaded
+// periods.
+//
+// closed_at is fiscal-calendar arithmetic seeded by pnl-1 migration
+// (P1..P8 = period end date; P9..P13 = NULL until the calendar
+// advances). The loader NEVER touches closed_at.
 //
 // The workbook lives at ~/Downloads/ and is NEVER committed. The path
 // constant near the top of this file is a *default*; --file overrides.
 // Every dollar this script prints comes from --file at runtime; the
 // public repo carries zero budget/actual literals.
+//
+// Resolver contract (BINDING, per PR #902 Fix 2 review):
+//   An ABSENT (account_key, fiscal_year, period_no, line_code) row
+//   means "NOT REPORTED", never "$0". The `actual` column is NOT NULL,
+//   so absence is the only channel the workbook has for "no figure
+//   this period". A row explicitly loaded with actual=0 DOES mean zero.
+//   The Phase 2 resolver must distinguish absence from explicit zero.
 //
 // Usage:
 //   node --env-file=.env.local scripts/derive_pnl_actuals.mjs --dry-run
@@ -30,14 +42,22 @@
 //   3  DB write error mid-run
 //
 // Sequence:
-//   1. Load workbook (11 mapped tabs; ignore CORP / Kitchfix Total / P&L Across).
-//   2. For each account tab: scan revenue+COGS rows (fixed row map) + SG&A block
+//   1. Load kpi_lines catalog (FK pre-validation set).
+//   2. Load workbook (11 mapped tabs; ignore CORP / Kitchfix Total / P&L Across).
+//   3. For each account tab: scan revenue+COGS rows (fixed row map) + SG&A block
 //      (rows 60-97, label-driven scan) - extract per-period actual AND budget.
-//   3. Print reconciliation table: per account, per line, loaded P1..P8 sum vs
+//      Every skipped ROW is captured with (tab, row, kind, label, reason).
+//      Every skipped CELL (numbered row, blank on both actual + budget) is
+//      captured with (tab, row, code, period, reason).
+//      An unrecognized line_code (not in kpi_lines) is a LOUD STOP (exit 2)
+//      before any DB write. The FK would catch it, but the loader refuses.
+//   4. Print reconciliation table: per account, per line, loaded P1..P8 sum vs
 //      workbook YTD-P8 Actual column, delta, PASS/FAIL.
-//   4. If not --dry-run: upsert pnl_actuals in batches of 500; upsert
-//      kpi_period_status verified_at for the loaded periods.
-//   5. Post-load DB verification: total rows in FY2026 P1..P8 matches
+//   5. If not --dry-run: upsert pnl_actuals in batches of 500; UPDATE
+//      kpi_period_status verified_at / verified_by / source_ref /
+//      updated_at for the loaded periods (row already seeded by migration;
+//      closed_at NEVER touched).
+//   6. Post-load DB verification: total rows in FY2026 P1..P8 matches
 //      expected cell count; kpi_period_status has the loaded periods
 //      marked verified.
 //
@@ -253,9 +273,42 @@ console.log("");
 // the workbook emitted a numeric value (0 counts) for either actual
 // or budget on that (account, line, period) triple.
 
+// Load kpi_lines catalog up front so we can validate every parsed
+// code before we accumulate rows. An unrecognized code MUST stop the
+// load (the FK would catch it at write time, but the loader should
+// refuse to accept it - see PR #902 Fix 2 review).
+console.log("loading kpi_lines catalog for FK pre-validation...");
+const { data: catalogRows, error: catalogErr } = await supa
+  .from("kpi_lines")
+  .select("line_code");
+if (catalogErr) { console.error(`kpi_lines read failed: ${catalogErr.message}`); process.exit(1); }
+const kpiLinesCatalog = new Set(catalogRows.map((r) => r.line_code));
+console.log(`  kpi_lines catalog: ${kpiLinesCatalog.size} codes`);
+console.log("");
+
 const rows = [];                                        // pnl_actuals batch
 const perAccountLineInventory = new Map();              // account -> Set(line_code)
-const anomalies = [];                                   // parse warnings for the log
+const skippedRows = [];                                 // parsed-but-not-loaded rows (row-level)
+const emptyCells = [];                                  // named cells that were null on both actual + budget
+const unrecognizedCodes = [];                           // codes parsed but NOT in kpi_lines (LOUD STOP)
+
+// Classify a skipped row so the report distinguishes:
+//   - empty_row          truly blank cell in the SG&A range fill
+//   - total_row          "Total ..." aggregator
+//   - group_header_row   4-digit-no-dot SG&A group header (e.g. "5002 Repair & Maintenance")
+//   - unnumbered_row     any label with no leading numbered-code prefix
+//   - revcogs_row_unparsed  fixed REV_COGS row whose label did not parse (unexpected)
+function classifySkippedLabel(rawLabel, rowNo) {
+  const stringForm = typeof rawLabel === "string"
+    ? rawLabel.trim()
+    : (rawLabel == null ? "" : String(rawLabel));
+  if (stringForm.length === 0) return { kind: "empty_row", reason: "blank cell", label: "" };
+  if (/^total\b/i.test(stringForm)) return { kind: "total_row", reason: "Total aggregator (label starts 'Total')", label: stringForm };
+  if (rowNo >= SGA_ROW_RANGE.first && /^\d{4}\s+/.test(stringForm)) {
+    return { kind: "group_header_row", reason: "SG&A group header (4-digit no dot)", label: stringForm };
+  }
+  return { kind: "unnumbered_row", reason: "no leading numbered-code prefix", label: stringForm };
+}
 
 for (const [tab, accountKey] of Object.entries(TAB_TO_ACCOUNT)) {
   const ws = wb.getWorksheet(tab);
@@ -264,16 +317,34 @@ for (const [tab, accountKey] of Object.entries(TAB_TO_ACCOUNT)) {
   // Revenue + COGS rows: fixed row set, label-driven code.
   for (const rowNo of REV_COGS_ROWS) {
     const row = ws.getRow(rowNo);
-    const parsed = parseLineCode(row.getCell(1).value, rowNo);
+    const rawLabel = row.getCell(1).value;
+    const parsed = parseLineCode(rawLabel, rowNo);
     if (!parsed) {
-      anomalies.push({ tab, rowNo, kind: "revcogs_row_unparsed", label: row.getCell(1).value });
+      // A fixed REV_COGS row that did not parse is unexpected shape
+      // (Kevin's row map should hit a numbered line every time). Log
+      // it prominently.
+      const c = classifySkippedLabel(rawLabel, rowNo);
+      skippedRows.push({ tab, rowNo, kind: `revcogs_${c.kind}`, label: c.label, reason: `[fixed REV_COGS row] ${c.reason}` });
       continue;
+    }
+    // FK pre-validation: unrecognized code must abort the load. Loud stop
+    // per Kevin's Fix 2 review ("must fail loudly - foreign key would
+    // catch it, but the loader should refuse to write").
+    if (!kpiLinesCatalog.has(parsed.code)) {
+      unrecognizedCodes.push({ tab, rowNo, code: parsed.code, label: parsed.label, reason: "code not in kpi_lines catalog" });
+      continue;                                          // do not accumulate; loader will abort after scan
     }
     linesForAccount.add(parsed.code);
     for (let p = periods.first; p <= periods.last; p += 1) {
       const actual = readNumeric(row.getCell(periodActualCol(p)));
       const budget = readNumeric(row.getCell(periodBudgetCol(p)));
-      if (actual == null && budget == null) continue;   // truly empty cell
+      if (actual == null && budget == null) {
+        // Named skip: which account, row, code, period was empty.
+        // Contract: absence in the workbook -> absence in pnl_actuals
+        // -> "NOT REPORTED" at read time. Never $0.
+        emptyCells.push({ tab, rowNo, code: parsed.code, period: p, reason: "workbook cell blank on both actual + budget (contract: NOT REPORTED)" });
+        continue;
+      }
       rows.push({
         account_key: accountKey,
         fiscal_year: FISCAL_YEAR,
@@ -292,13 +363,25 @@ for (const [tab, accountKey] of Object.entries(TAB_TO_ACCOUNT)) {
   // whether the row is a numbered line at all.
   for (let rowNo = SGA_ROW_RANGE.first; rowNo <= SGA_ROW_RANGE.last; rowNo += 1) {
     const row = ws.getRow(rowNo);
-    const parsed = parseLineCode(row.getCell(1).value, rowNo);
-    if (!parsed) continue;
+    const rawLabel = row.getCell(1).value;
+    const parsed = parseLineCode(rawLabel, rowNo);
+    if (!parsed) {
+      const c = classifySkippedLabel(rawLabel, rowNo);
+      skippedRows.push({ tab, rowNo, kind: c.kind, label: c.label, reason: c.reason });
+      continue;
+    }
+    if (!kpiLinesCatalog.has(parsed.code)) {
+      unrecognizedCodes.push({ tab, rowNo, code: parsed.code, label: parsed.label, reason: "code not in kpi_lines catalog" });
+      continue;
+    }
     linesForAccount.add(parsed.code);
     for (let p = periods.first; p <= periods.last; p += 1) {
       const actual = readNumeric(row.getCell(periodActualCol(p)));
       const budget = readNumeric(row.getCell(periodBudgetCol(p)));
-      if (actual == null && budget == null) continue;
+      if (actual == null && budget == null) {
+        emptyCells.push({ tab, rowNo, code: parsed.code, period: p, reason: "workbook cell blank on both actual + budget (contract: NOT REPORTED)" });
+        continue;
+      }
       rows.push({
         account_key: accountKey,
         fiscal_year: FISCAL_YEAR,
@@ -316,6 +399,16 @@ for (const [tab, accountKey] of Object.entries(TAB_TO_ACCOUNT)) {
   perAccountLineInventory.set(accountKey, linesForAccount);
 }
 
+// LOUD STOP: any unrecognized code aborts the load before we touch the DB.
+if (unrecognizedCodes.length > 0) {
+  console.error(`\n[LOAD ABORTED] ${unrecognizedCodes.length} workbook row(s) carry a line_code NOT in kpi_lines catalog.`);
+  console.error(`Add the code to kpi_lines OR fix the workbook label BEFORE re-running.`);
+  for (const u of unrecognizedCodes) {
+    console.error(`  tab=${u.tab} row=${u.rowNo} code=${u.code} label="${u.label}"`);
+  }
+  process.exit(2);
+}
+
 console.log(`parsed rows: ${rows.length}`);
 console.log("");
 
@@ -329,11 +422,36 @@ for (const [acct, set] of perAccountLineInventory) {
 console.log(`  distinct line codes across all accounts: ${allLines.size}`);
 console.log("");
 
-if (anomalies.length > 0) {
-  console.log(`parse anomalies (${anomalies.length}):`);
-  for (const a of anomalies) console.log(`  ${a.tab} row ${a.rowNo} [${a.kind}]: ${JSON.stringify(a.label)}`);
-  console.log("");
+// ── Parsed-but-not-loaded report (Fix 2). Every workbook row skipped
+// is named here with (tab, row, kind, label, reason). Collapses
+// identical (rowNo, label) across the 11 tabs so the log stays
+// legible.
+console.log(`parsed-but-not-loaded rows: ${skippedRows.length}`);
+if (skippedRows.length > 0) {
+  const groups = new Map();
+  for (const s of skippedRows) {
+    const key = `${s.rowNo}::${s.kind}::${s.label}`;
+    const g = groups.get(key) || { rowNo: s.rowNo, kind: s.kind, label: s.label, reason: s.reason, tabs: [] };
+    g.tabs.push(s.tab);
+    groups.set(key, g);
+  }
+  const sorted = [...groups.values()].sort((a, b) => a.rowNo - b.rowNo || a.kind.localeCompare(b.kind));
+  console.log(`  ${sorted.length} distinct (row, kind, label) group(s):`);
+  console.log("  row  kind                    label                                              tabs");
+  console.log("  ---+-----------------------+--------------------------------------------------+-----");
+  for (const g of sorted) {
+    const tabsHint = g.tabs.length === Object.keys(TAB_TO_ACCOUNT).length ? "(all 11)" : `(${g.tabs.length}: ${g.tabs.join(",")})`;
+    const labelShort = g.label.length > 48 ? g.label.slice(0, 45) + "..." : g.label;
+    console.log(`  ${String(g.rowNo).padStart(3)}  ${g.kind.padEnd(22)}  ${labelShort.padEnd(50)}  ${tabsHint}  reason: ${g.reason}`);
+  }
 }
+console.log("");
+
+console.log(`empty cells (numbered row, blank on both actual + budget): ${emptyCells.length}`);
+for (const c of emptyCells) {
+  console.log(`  tab=${c.tab.padEnd(11)} row=${String(c.rowNo).padStart(2)} code=${c.code.padEnd(6)} period=P${c.period}  reason: ${c.reason}`);
+}
+console.log("");
 
 // ─── Reconciliation ─────────────────────────────────────────────────
 // For each (account, line): sum loaded P1..P8 actual vs workbook YTD-P8
@@ -472,7 +590,10 @@ console.log("");
 console.log("");
 
 if (args.dryRun) {
-  console.log(`DRY-RUN: no DB writes. Would upsert ${rows.length} pnl_actuals rows + ${periods.last - periods.first + 1} kpi_period_status rows.`);
+  console.log(`DRY-RUN: no DB writes.`);
+  console.log(`  Would UPSERT ${rows.length} pnl_actuals rows (on account_key,fiscal_year,period_no,line_code)`);
+  console.log(`  Would UPDATE ${periods.last - periods.first + 1} kpi_period_status rows (verified_at + verified_by + source_ref + updated_at; closed_at untouched)`);
+  console.log(`  Skipped rows: ${skippedRows.length}   Empty cells: ${emptyCells.length}   Unrecognized codes: 0 (loader would abort if any)`);
   process.exit(0);
 }
 
@@ -496,42 +617,42 @@ for (let i = 0; i < rows.length; i += BATCH) {
 }
 process.stdout.write("\n");
 
-// ─── Write kpi_period_status ────────────────────────────────────────
-console.log(`writing kpi_period_status (verified_at=${args.verifiedAt}, source_ref=${path.basename(workbookPath)})...`);
-const statusRows = [];
-for (let p = periods.first; p <= periods.last; p += 1) {
-  statusRows.push({
-    fiscal_year:  FISCAL_YEAR,
-    period_no:    p,
-    // closed_at is deterministic - set to workbook verified_at as a
-    // reasonable "yes this period is closed on the calendar" mark.
-    // If the migration seeded a real calendar close date via a
-    // separate future migration, this UPSERT will not overwrite it
-    // (kpi_period_status has NO closed_at update in the ON CONFLICT
-    // clause below - we only touch verified_at, verified_by, source_ref).
-    closed_at:    args.verifiedAt,
-    verified_at:  args.verifiedAt,
-    verified_by:  args.verifiedBy,
-    source_ref:   path.basename(workbookPath),
-    updated_at:   new Date().toISOString(),
-  });
-}
-// UPSERT with explicit onConflict on the PK. Note: Supabase's upsert
-// updates ALL columns on conflict by default; the closed_at value
-// above intentionally matches verified_at so a re-run does not
-// invalidate a previously-real closed_at.  If a future migration
-// seeds a distinct closed_at, THIS loader must be updated to skip
-// touching closed_at (via a stored procedure or a separate UPDATE
-// path); documented as an open item in the PR body.
+// ─── Update kpi_period_status ───────────────────────────────────────
+// The migration seeds all 13 FY2026 rows with closed_at from the fiscal
+// calendar. The loader OWNS verified_at / verified_by / source_ref
+// only and NEVER touches closed_at (closed_at is fiscal-calendar
+// arithmetic; verified_at is workbook truth). One UPDATE per
+// (fiscal_year, period_no) - do not use upsert, do not include
+// closed_at, do not include a row for a period the calendar has not
+// closed yet.
+console.log(`updating kpi_period_status (verified_at=${args.verifiedAt}, source_ref=${path.basename(workbookPath)})...`);
 {
-  const { error } = await supa
-    .from("kpi_period_status")
-    .upsert(statusRows, { onConflict: "fiscal_year,period_no" });
-  if (error) {
-    console.error(`kpi_period_status upsert failed: ${error.message}`);
-    process.exit(3);
+  const nowIso = new Date().toISOString();
+  let updatedCount = 0;
+  for (let p = periods.first; p <= periods.last; p += 1) {
+    const { data, error } = await supa
+      .from("kpi_period_status")
+      .update({
+        verified_at:  args.verifiedAt,
+        verified_by:  args.verifiedBy,
+        source_ref:   path.basename(workbookPath),
+        updated_at:   nowIso,
+      })
+      .eq("fiscal_year", FISCAL_YEAR)
+      .eq("period_no", p)
+      .select("period_no");
+    if (error) {
+      console.error(`kpi_period_status update failed at P${p}: ${error.message}`);
+      process.exit(3);
+    }
+    if (!data || data.length === 0) {
+      console.error(`kpi_period_status has no row for FY${FISCAL_YEAR} P${p} - migration seed missing`);
+      process.exit(3);
+    }
+    updatedCount += data.length;
   }
-  console.log(`  upserted ${statusRows.length} kpi_period_status rows`);
+  console.log(`  updated ${updatedCount} kpi_period_status rows (verified_at + verified_by + source_ref + updated_at)`);
+  console.log(`  closed_at NOT TOUCHED (migration owns calendar closes)`);
 }
 
 // ─── Post-load verification ─────────────────────────────────────────
