@@ -243,24 +243,52 @@ export function elapsedShape(elapsedFrac, weeksInPeriod) {
 // card's per-week bars can render straight from the same numbers the
 // route computed.
 //
-// bucketKey values: 'food' | 'packaging' | 'vehicle' | 'equip' | 'rm'.
+// bucketKey values: 'food' | 'packaging' | 'vehicle' | 'equip' | 'rm' | 'perks'.
 // Mapping to gl_bucket lives on the route:
 //   'food'      -> gl_line_code startsWith '3200'
 //   'packaging' -> gl_line_code startsWith '3400'
 //   'vehicle'   -> gl_line_code startsWith '3500'
 //   'equip'     -> gl_line_code === '5002.5'
 //   'rm'        -> gl_line_code === '5002.1'
+//   'perks'     -> gl_line_code === '5017.3'   (Overview PR-2 addition,
+//                  Phase 0 Q6 finding: rows exist in purchasing_actuals
+//                  but had no bucket entry. Added here so the Overview
+//                  "Also tracked" band (§5.4.9) reads from one map.)
 //
 // The route already returns gl_bucket = 'pl_cogs' for 3200/3400/3500
 // and 'sga' for the 5xxx family; we still filter on gl_line_code here
-// to keep the split precise (equipment vs R&M share sga).
-const GL_PREFIX_FOR_BUCKET = {
+// to keep the split precise (equipment vs R&M vs perks share sga).
+//
+// EXPORTED (was internal) as of Overview Phase 2 PR-2: the server-side
+// resolver in ./resolver.js consumes this map so bucket-mapping lives
+// in one place (rule: one implementation per number - the mapping IS
+// the number's definition).
+export const GL_PREFIX_FOR_BUCKET = {
   food:      (gl) => typeof gl === "string" && gl.startsWith("3200"),
   packaging: (gl) => typeof gl === "string" && gl.startsWith("3400"),
   vehicle:   (gl) => typeof gl === "string" && gl.startsWith("3500"),
   equip:     (gl) => gl === "5002.5",
   rm:        (gl) => gl === "5002.1",
+  perks:     (gl) => gl === "5017.3",
 };
+
+// ─── Overview "Also tracked" band (Phase 2 PR-2) ─────────────────────
+//
+// Per KPI_MASTER_SCOPE §5.4.9 + R-17b: the Overview surfaces R&M,
+// Equipment, Perks as a visually-distinct band beneath the P&L
+// section - not part of gross margin, no verdict pills, watched
+// together. The three line codes:
+//
+//   5002.1  Repair & maintenance
+//   5002.5  Equipment
+//   5017.3  Perks               (Phase 0 Q6 finding, added here)
+//
+// The Overview resolver reads TRACKED_LINE_CODES so a fourth line
+// (or a re-scope) is one code change, not four scattered edits. The
+// client board (purchasing page) does NOT read this constant today -
+// its ledger cards + BUCKET_DEFS carry their own subset. This is the
+// Overview seat's contract only.
+export const TRACKED_LINE_CODES = ["5002.1", "5002.5", "5017.3"];
 
 /**
  * Sum weekly spend for one bucket, per week_start ISO. Returns an
