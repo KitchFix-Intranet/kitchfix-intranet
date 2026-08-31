@@ -440,6 +440,163 @@ async function executeApply({ diff, render, corpus, supabaseUrl, supabaseKey }) 
   }
 }
 
+// ─── 6. Obligations projection (Academy) ────────────────────────────────────
+// The sixth write, added by academy-4-obligations-rpc.sql. It sits AFTER the
+// five existing writes in the apply flow (main() calls it separately) so a
+// failure here cannot roll back documents/relationships/surfaces/content -
+// those have already landed and the shipped Playbook pipeline keeps working.
+// A failure logs loudly and main() exits non-zero, so the GitHub Action goes
+// red and the failure is visible rather than silent.
+//
+// Read academy_obligations, spec Section 4.4, and docs/migrations/
+// academy-3-assignment-layer.sql for the target-side rules; nothing here
+// invents shape.
+
+/**
+ * Deterministic JSON serializer. Sorts object keys at every level so a
+ * frontmatter re-indent or YAML key reorder does not churn the source hash.
+ * Arrays keep their author-defined order because ordering IS semantic there
+ * (states / accounts / roles are lists, not sets).
+ */
+function stableStringify(v) {
+  if (v === null || typeof v === "undefined") return "null";
+  if (typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  const keys = Object.keys(v).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(",")}}`;
+}
+
+/**
+ * SHA-256 of the deterministically-serialized obligation object. Stable
+ * across runs even when YAML reformats the frontmatter, because
+ * stableStringify normalizes object key order.
+ */
+function obligationSourceHash(ob) {
+  return createHash("sha256").update(stableStringify(ob)).digest("hex");
+}
+
+/**
+ * Build the per-doc obligation plan from the parsed corpus. Returns:
+ *   {
+ *     byDoc: [ { doc_id, doc_version, rows: [ { obligation_key, ... } ] }, ... ],
+ *     liveDocIds: [ ... ],       // every parsed doc id, for the sweep
+ *     totalRows: N,
+ *     docsWithObligations: M,
+ *   }
+ *
+ * Does not read the DB. Safe to call in both --dry-run and --apply modes.
+ * Docs with parse errors or missing ids are excluded (they cannot be
+ * projected anyway). Docs with no obligations array or an empty one produce
+ * no rows but still contribute their id to liveDocIds so the sweep does not
+ * mistake them for orphans.
+ */
+function buildObligationsPlan(corpus) {
+  const byDoc = [];
+  const liveDocIds = [];
+  let totalRows = 0;
+  let docsWithObligations = 0;
+  for (const d of corpus) {
+    if (d.parseError || !d.id) continue;
+    liveDocIds.push(d.id);
+    const fm = d.frontmatter || {};
+    const raw = Array.isArray(fm.obligations) ? fm.obligations : [];
+    if (raw.length === 0) continue;
+    const rows = raw.map((ob) => {
+      const applies_to =
+        typeof ob.applies_to === "undefined" ? {} : ob.applies_to;
+      return {
+        obligation_key: ob.key,
+        doc_version: fm.version == null ? "" : String(fm.version),
+        type: ob.type,
+        cadence: ob.cadence,
+        owner: ob.owner,
+        source_section: ob.source_section ?? null,
+        description: ob.description ?? null,
+        est_minutes: ob.est_minutes ?? null,
+        applies_to,
+        next_due: ob.next_due ?? null,
+        source_hash: obligationSourceHash(ob),
+      };
+    });
+    byDoc.push({ doc_id: d.id, doc_version: rows[0].doc_version, rows });
+    totalRows += rows.length;
+    docsWithObligations += 1;
+  }
+  return { byDoc, liveDocIds, totalRows, docsWithObligations };
+}
+
+/**
+ * Apply the obligation plan against Postgres. Runs the per-doc atomic
+ * replace RPC for each doc that carries obligations, then a single orphan
+ * sweep. Returns:
+ *   {
+ *     ok: bool,
+ *     rowsWritten: N,          // total rows inserted across all replaces
+ *     docsWritten: M,          // count of docs that had a replace call
+ *     orphanRowsSwept: K,      // rows deleted by sweep_orphan_obligations
+ *     error?: string,          // present on failure
+ *     failedDocId?: string,    // present when the replace RPC failed for one doc
+ *   }
+ *
+ * Callers should exit non-zero on ok=false without aborting steps 1-5;
+ * those writes have already committed.
+ */
+async function applyObligations({ plan, supabaseUrl, supabaseKey }) {
+  const sb = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  let rowsWritten = 0;
+  let docsWritten = 0;
+
+  for (const doc of plan.byDoc) {
+    const { data, error } = await sb.rpc("replace_document_obligations", {
+      p_doc_id: doc.doc_id,
+      p_rows: doc.rows,
+    });
+    if (error) {
+      return {
+        ok: false,
+        rowsWritten,
+        docsWritten,
+        orphanRowsSwept: 0,
+        error: error.message,
+        failedDocId: doc.doc_id,
+      };
+    }
+    const insertedCount = typeof data === "number" ? data : Number(data);
+    if (!Number.isFinite(insertedCount) || insertedCount !== doc.rows.length) {
+      return {
+        ok: false,
+        rowsWritten,
+        docsWritten,
+        orphanRowsSwept: 0,
+        error: `replace_document_obligations count mismatch: doc=${doc.doc_id}, planned=${doc.rows.length}, function returned=${insertedCount}`,
+        failedDocId: doc.doc_id,
+      };
+    }
+    rowsWritten += insertedCount;
+    docsWritten += 1;
+  }
+
+  const { data: sweptData, error: sweepError } = await sb.rpc(
+    "sweep_orphan_obligations",
+    { p_live_doc_ids: plan.liveDocIds }
+  );
+  if (sweepError) {
+    return {
+      ok: false,
+      rowsWritten,
+      docsWritten,
+      orphanRowsSwept: 0,
+      error: `sweep_orphan_obligations: ${sweepError.message}`,
+    };
+  }
+  const orphanRowsSwept = typeof sweptData === "number" ? sweptData : Number(sweptData) || 0;
+
+  return { ok: true, rowsWritten, docsWritten, orphanRowsSwept };
+}
+
 /**
  * Build a structured plan summary for the dry-run report. Does not execute.
  */
@@ -459,7 +616,7 @@ function buildApplyPlan(diff, render) {
 }
 
 // ─── 7. Dry-run report ──────────────────────────────────────────────────────
-function writeDryRunReport({ corpus, validation, diff, render, applyPlan, live }) {
+function writeDryRunReport({ corpus, validation, diff, render, applyPlan, live, obligationsPlan }) {
   const lines = [];
   lines.push(`# Projection Dry-Run Report`);
   lines.push(``);
@@ -501,6 +658,30 @@ function writeDryRunReport({ corpus, validation, diff, render, applyPlan, live }
   lines.push(`- Current pinned rows in document_pins: ${live.pins.length}`);
   lines.push(`- Current content rows: ${live.content.length}`);
   lines.push(``);
+
+  // Step 6 (Academy) - obligations projection preview.
+  if (obligationsPlan) {
+    lines.push(`### Step 6 · Academy obligations (would write on --apply)`);
+    lines.push(``);
+    lines.push(`| Item | Count |`);
+    lines.push(`|---|---|`);
+    lines.push(`| Docs authoring obligations | ${obligationsPlan.docsWithObligations} |`);
+    lines.push(`| Total obligation rows | ${obligationsPlan.totalRows} |`);
+    lines.push(`| Live doc_ids (sweep list) | ${obligationsPlan.liveDocIds.length} |`);
+    lines.push(``);
+    if (obligationsPlan.byDoc.length > 0) {
+      lines.push(`| Document | Version | Rows | Keys |`);
+      lines.push(`|---|---|---|---|`);
+      for (const d of obligationsPlan.byDoc) {
+        const keys = d.rows.map((r) => `\`${r.obligation_key}\``).join(", ");
+        lines.push(`| ${d.doc_id} | ${d.doc_version || "-"} | ${d.rows.length} | ${keys} |`);
+      }
+      lines.push(``);
+    } else {
+      lines.push(`_No documents currently author obligations. Step 6 would write nothing._`);
+      lines.push(``);
+    }
+  }
 
   // Validation failures
   if (validation.errors.length > 0) {
@@ -776,8 +957,15 @@ async function main() {
   const applyPlan = buildApplyPlan(diff, render);
   console.log(`  ${diff.docPlan.insert.length} insert, ${diff.docPlan.update.length} update, ${diff.docPlan.archive.length} archive`);
 
+  // Step 6 (Academy): obligations plan. Built for both modes so the dry-run
+  // report shows exactly what the apply would write. See buildObligationsPlan.
+  const obligationsPlan = buildObligationsPlan(corpus);
+  console.log(
+    `  step 6 (Academy): ${obligationsPlan.totalRows} obligation rows across ${obligationsPlan.docsWithObligations} doc(s); sweep list = ${obligationsPlan.liveDocIds.length} doc_ids`
+  );
+
   // Write report + samples (both modes - dry-run report stays useful post-apply too)
-  const reportPath = writeDryRunReport({ corpus, validation, diff, render, applyPlan, live });
+  const reportPath = writeDryRunReport({ corpus, validation, diff, render, applyPlan, live, obligationsPlan });
   const samples = writeSampleHtml(renderById);
 
   console.log("");
@@ -825,6 +1013,43 @@ async function main() {
     for (const e of applyLog.errors) console.error(`  ${e.step}: ${e.msg}`);
     console.error("");
     console.error("Local JSON backup is in .scratch/a4-backup/ - manual rollback path.");
+    process.exit(1);
+  }
+
+  // ── Step 6 · Academy obligations projection ─────────────────────────────
+  // Runs AFTER steps 1-5 succeed. A failure here cannot roll back the writes
+  // above - those have already committed - so the shipped Playbook pipeline
+  // keeps working. This block logs loudly and exits non-zero so the GitHub
+  // Action goes red and the failure surfaces immediately.
+  console.log("");
+  console.log("══════════════════════════════════════════════════");
+  console.log("Step 6 · Academy obligations projection");
+  console.log("══════════════════════════════════════════════════");
+  console.log(
+    `  planning ${obligationsPlan.totalRows} rows across ${obligationsPlan.docsWithObligations} doc(s); sweep list = ${obligationsPlan.liveDocIds.length} doc_ids`
+  );
+  const obligationsLog = await applyObligations({
+    plan: obligationsPlan,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  });
+  if (obligationsLog.ok) {
+    console.log(
+      `Step 6 OK · wrote ${obligationsLog.rowsWritten} obligation row(s) across ${obligationsLog.docsWritten} doc(s); orphan sweep deleted ${obligationsLog.orphanRowsSwept}`
+    );
+  } else {
+    console.error("Step 6 FAILED · obligations projection did not complete");
+    if (obligationsLog.failedDocId) {
+      console.error(`  failed on doc: ${obligationsLog.failedDocId}`);
+    }
+    console.error(`  error: ${obligationsLog.error}`);
+    console.error(
+      `  partial state: wrote ${obligationsLog.rowsWritten} row(s) across ${obligationsLog.docsWritten} doc(s) before failure; orphan sweep did NOT run`
+    );
+    console.error("");
+    console.error(
+      "Steps 1-5 completed successfully - Playbook pipeline is intact. Fix the obligations issue and re-run --apply; the RPC replaces per-doc atomically so a rerun is safe."
+    );
     process.exit(1);
   }
 }
