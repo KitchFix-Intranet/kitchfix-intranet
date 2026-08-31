@@ -184,24 +184,117 @@ async function loadAccountStateMap(supa) {
   return m;
 }
 
+// Paginated select. Supabase / PostgREST silently caps unpaginated
+// `.select()` at 1000 rows per response - a table with more rows
+// returns 1000 with no error, no warning, no signal, and downstream
+// map-lookups return `undefined` for the truncated worker_ids.
+// This helper loops with `.range()` and verifies against the exact
+// count returned by PostgREST's `count: "exact"` option.
+//
+// Two-part discipline enforced by this helper AND its callers (per
+// docs/GOTCHAS.md:185, 187):
+//   1. Caller MUST specify `.order("<stable_col>")` in the query
+//      before `.range()`. Without an ORDER BY the executor can
+//      return rows in different order per page - causing overlaps
+//      or gaps that the count-check would catch but silently.
+//   2. Caller MUST specify `{ count: "exact" }` in the .select()
+//      options. That routes PostgREST's total-count header into
+//      the response's `count` field; this helper captures it from
+//      the first page and asserts the paged total matches.
+//
+// Both are the reviewer's "count-exact HEAD probe" pattern from
+// GOTCHAS.md, adapted to the query-embedded form that avoids a
+// separate round-trip.
+//
+// This bug shipped once (cycle 2 published 8 requirements with
+// NULL person_id because loadStintMap truncated at 1000 while
+// academy_person_stints holds 1,129). Not shipping it twice.
+//
+// `queryFn` is `(from, to) => supa.from(...).select("...", { count: "exact" }).order(...).range(from, to)`.
+async function selectAllPaginated(queryFn, opts = {}) {
+  const { pageSize = 1000, tableName = "(unspecified)" } = opts;
+  const all = [];
+  let expectedTotal = null;
+  let from = 0;
+  // Loop until the page returns fewer than pageSize rows. The
+  // exact-count assertion below is the safety belt: if pagination
+  // is broken (page overlap, page gap, order not stable), the
+  // paged total will diverge from the count and we throw with
+  // both numbers.
+  //
+  // Cap at 100 iterations as an infinite-loop defense; that is
+  // 100,000 rows, well above any Academy table's realistic size.
+  // If it ever fires the loader is pointing at the wrong table.
+  for (let i = 0; i < 100; i += 1) {
+    const to = from + pageSize - 1;
+    const q = await queryFn(from, to);
+    if (q.error) throw new Error(`selectAllPaginated[${tableName}]: ${q.error.message}`);
+    // Capture the exact count from the first response that has it.
+    // Supabase returns count when the query used { count: "exact" }.
+    if (expectedTotal === null && typeof q.count === "number") {
+      expectedTotal = q.count;
+    }
+    const rows = q.data || [];
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from = to + 1;
+  }
+  if (from === (100 * pageSize)) {
+    throw new Error(`selectAllPaginated[${tableName}]: hit 100-page ceiling (${all.length} rows) - the loader is probably pointing at the wrong table`);
+  }
+  // Safety belt: paged total MUST match the exact count PostgREST
+  // reported on the first page. A mismatch means the pagination is
+  // wrong (missing .order() → overlap/gap, or concurrent writes
+  // during the walk). Throw with both numbers per GOTCHAS.md:187.
+  if (expectedTotal === null) {
+    throw new Error(`selectAllPaginated[${tableName}]: no exact count returned - caller must build the query with { count: "exact" } so the walk can be verified`);
+  }
+  if (all.length !== expectedTotal) {
+    throw new Error(`selectAllPaginated[${tableName}]: paged total ${all.length} != exact count ${expectedTotal}. Pagination is wrong; verify .order() precedes .range() and that no concurrent writes happened mid-walk.`);
+  }
+  return all;
+}
+
 async function loadPeoplePool(supa, options = {}) {
   const { includeHired = true, includeActive = true } = options;
-  const q = await supa
-    .from("people")
-    .select("worker_id, display_name, is_salaried, account_key, status, start_date, end_date")
-    .is("end_date", null);
-  if (q.error) throw new Error(`load people: ${q.error.message}`);
-  let rows = q.data || [];
-  if (!includeHired)   rows = rows.filter((r) => r.status !== "HIRED");
-  if (!includeActive)  rows = rows.filter((r) => r.status !== "ACTIVE");
-  return rows;
+  // Paginated: end_date IS NULL filters to ~104 rows today, well
+  // under the 1000 cap, but pagination is defensive against future
+  // growth and matches the pattern used for stints below.
+  // .order("worker_id") is required BEFORE .range() (GOTCHAS.md:185):
+  // without a stable ORDER BY the executor can pick a different order
+  // per page, causing overlap or gap that the exact-count check
+  // catches loudly but should not have to.
+  const rows = await selectAllPaginated((from, to) =>
+    supa
+      .from("people")
+      .select("worker_id, display_name, is_salaried, account_key, status, start_date, end_date", { count: "exact" })
+      .is("end_date", null)
+      .order("worker_id", { ascending: true })
+      .range(from, to)
+  , { tableName: "people (end_date IS NULL)" });
+  let filtered = rows;
+  if (!includeHired)   filtered = filtered.filter((r) => r.status !== "HIRED");
+  if (!includeActive)  filtered = filtered.filter((r) => r.status !== "ACTIVE");
+  return filtered;
 }
 
 async function loadStintMap(supa) {
-  const q = await supa.from("academy_person_stints").select("worker_id, person_id");
-  if (q.error) throw new Error(`load stints: ${q.error.message}`);
+  // Paginated: academy_person_stints holds 1,129 rows today (one
+  // per Rippling stint), and grows with the roster. An unpaginated
+  // .select() returned exactly 1000 and silently truncated 129 of
+  // them, causing cycle 2's publish to write NULL person_id on
+  // every row for a worker whose stint fell in the truncated 129.
+  // See selectAllPaginated header for the class of bug.
+  // .order("worker_id") required before .range() per GOTCHAS.md:185.
+  const rows = await selectAllPaginated((from, to) =>
+    supa
+      .from("academy_person_stints")
+      .select("worker_id, person_id", { count: "exact" })
+      .order("worker_id", { ascending: true })
+      .range(from, to)
+  , { tableName: "academy_person_stints" });
   const m = new Map();
-  for (const s of q.data || []) m.set(s.worker_id, s.person_id);
+  for (const s of rows) m.set(s.worker_id, s.person_id);
   return m;
 }
 
@@ -472,6 +565,24 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
   const byClass = { salaried: 0, hourly: 0, unknown: 0 };
   const byAccount = {};
   const minutesPerPerson = new Map();
+  // Missing-stint drift: an eligible+in-scope worker with no
+  // academy_person_stints row. Post-pagination-fix this should
+  // never happen for a person migration 1's backfill covered
+  // (887 of 887 have stints, verified). The only path that
+  // triggers this today is a person who arrived AFTER the
+  // migration-1 backfill and BEFORE the derive extension ships
+  // (that extension is parked - see academy-1 P2 comment).
+  //
+  // Chose issue-with-null + loud surface over refuse-the-row so
+  // the eligible person still gets their compliance requirement.
+  // Compliance issuance is core; cross-stint history reconstruction
+  // is a nice-to-have that a follow-up backfill (see
+  // backfill_requirement_person_ids RPC in academy-8) can restore
+  // once the derive extension fills the stint gap. Silent NULL is
+  // what this PR was written to prevent; visible NULL surfaced in
+  // the plan output is the acceptable middle. Track the affected
+  // rows in driftCandidates so the operator sees them.
+  const driftCandidates = new Map();
 
   for (const mod of modules) {
     const key = `${mod.doc_id}|${mod.obligation_key}`;
@@ -506,10 +617,30 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
         continue;
       }
 
-      const person_id = stints.get(p.worker_id) || null;
-      // person_id null is expected drift until the nightly derive
-      // extension ships; the requirements table permits null and
-      // the row still issues correctly, keyed on worker_id.
+      // Look up the person_id AT ISSUANCE TIME. Denormalized into
+      // the requirement row (spec: "the stint could theoretically
+      // be reassigned; the historical requirement should carry the
+      // person_id that was true when it was issued"). If the stint
+      // map has no entry for this worker_id, that is derive-drift
+      // (see driftCandidates declaration above): the person is on
+      // the roster but the academy_person_stints extension has
+      // not yet caught them. Loud surface via driftCandidates so
+      // the operator sees them; the row still issues because
+      // compliance is core, but the null person_id is visible in
+      // the plan output rather than a silent write.
+      const stintValue = stints.get(p.worker_id);
+      const person_id = stintValue == null ? null : stintValue;
+      if (person_id == null) {
+        if (!driftCandidates.has(p.worker_id)) {
+          driftCandidates.set(p.worker_id, {
+            worker_id: p.worker_id,
+            display_name: p.display_name || null,
+            account_key: p.account_key || null,
+            reason:
+              "no academy_person_stints row (derive-drift; person exists in people but the derive extension has not populated their stint). Row will issue with person_id=NULL; run backfill_requirement_person_ids() after the stint arrives to fill it retroactively.",
+          });
+        }
+      }
       rows.push({
         worker_id: p.worker_id,
         person_id,
@@ -574,6 +705,7 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
       scopeSkippedByReason: Object.fromEntries(scopeSkippedByReason),
       roleWarnings,
       onHireModules,
+      driftCandidates: [...driftCandidates.values()],
       scopeRefusals,
       refuseReasons,
       wouldRefuseApply: refuseReasons.length > 0,
@@ -662,6 +794,11 @@ export async function planOnboarding(supa, options = {}) {
   let backfillWouldInsert = 0;
   const backfillByClass = { salaried: 0, hourly: 0, unknown: 0 };
   const boundaryByClass = { salaried: 0, hourly: 0, unknown: 0 };
+  // Missing-stint drift, same class + policy as planCyclePublish:
+  // issue the row with null person_id but surface it loudly so the
+  // operator can trigger the backfill after the derive extension
+  // catches up. See planCyclePublish for the full rationale.
+  const driftCandidates = new Map();
 
   for (const ob of obligationsAll) {
     for (const p of people) {
@@ -687,7 +824,17 @@ export async function planOnboarding(supa, options = {}) {
       // Apply boundary
       if (!backfill && !inBoundary(p)) continue;
 
-      const person_id = stints.get(p.worker_id) || null;
+      const stintValue = stints.get(p.worker_id);
+      const person_id = stintValue == null ? null : stintValue;
+      if (person_id == null && !driftCandidates.has(p.worker_id)) {
+        driftCandidates.set(p.worker_id, {
+          worker_id: p.worker_id,
+          display_name: p.display_name || null,
+          account_key: p.account_key || null,
+          reason:
+            "no academy_person_stints row (derive-drift). Row will issue with person_id=NULL; run backfill_requirement_person_ids() after the stint arrives to fill it retroactively.",
+        });
+      }
       rows.push({
         worker_id: p.worker_id,
         person_id,
@@ -724,6 +871,7 @@ export async function planOnboarding(supa, options = {}) {
       },
       skippedByReason: Object.fromEntries(skippedByReason),
       roleWarnings,
+      driftCandidates: [...driftCandidates.values()],
       boundaryPeople: boundaryPeople.map((p) => ({
         worker_id: p.worker_id,
         display_name: p.display_name,
@@ -759,21 +907,33 @@ export async function planOnboarding(supa, options = {}) {
 export async function planRehire(supa, options = {}) {
   const db = supa || getServiceClient();
 
-  const [stintsQ, reqsQ, obligationsQ, excluded, accountStates, people] = await Promise.all([
-    db.from("academy_person_stints").select("worker_id, person_id"),
+  // stints load uses the paginated loader for the same reason
+  // loadStintMap does - academy_person_stints > 1000 rows and the
+  // unpaginated .select() silently truncated. That truncation is
+  // what shipped cycle 2 with NULL person_id on every row; not
+  // repeating it here. .order("worker_id") required before .range()
+  // per GOTCHAS.md:185; count:"exact" enables the safety-belt total
+  // check inside selectAllPaginated.
+  const [stintRows, reqsQ, obligationsQ, excluded, accountStates, people] = await Promise.all([
+    selectAllPaginated((from, to) =>
+      db.from("academy_person_stints")
+        .select("worker_id, person_id", { count: "exact" })
+        .order("worker_id", { ascending: true })
+        .range(from, to)
+    , { tableName: "academy_person_stints (rehire)" }),
     db.from("academy_requirements").select("worker_id").eq("source", REQUIREMENT_SOURCE_ONBOARDING),
     db.from("academy_obligations").select("doc_id, obligation_key, doc_version, est_minutes, applies_to").eq("cadence", "on-hire"),
     loadExcludedWorkerIds(db),
     loadAccountStateMap(db),
     loadPeoplePool(db, { includeHired: true, includeActive: true }),
   ]);
-  for (const q of [stintsQ, reqsQ, obligationsQ]) {
+  for (const q of [reqsQ, obligationsQ]) {
     if (q.error) throw new Error(`rehire plan load: ${q.error.message}`);
   }
 
   // Multi-stint persons.
   const stintsByPerson = new Map();
-  for (const s of stintsQ.data || []) {
+  for (const s of stintRows) {
     if (!s.person_id) continue;
     const arr = stintsByPerson.get(s.person_id) || [];
     arr.push(s.worker_id);
@@ -783,7 +943,7 @@ export async function planRehire(supa, options = {}) {
     [...stintsByPerson.entries()].filter(([, ws]) => ws.length > 1).map(([pid]) => pid)
   );
 
-  const stintMap = new Map((stintsQ.data || []).map((s) => [s.worker_id, s.person_id]));
+  const stintMap = new Map(stintRows.map((s) => [s.worker_id, s.person_id]));
   const workersWithReqs = new Set((reqsQ.data || []).map((r) => r.worker_id));
   const peopleByWorker = new Map(people.map((p) => [p.worker_id, p]));
 

@@ -150,6 +150,23 @@ async function runCycle() {
     console.log("    otherwise. Kevin's call.");
     console.log("");
   }
+  // Derive-drift: eligible+in-scope workers with no
+  // academy_person_stints row. Rows still issue (with NULL
+  // person_id) so compliance is not blocked, but the operator
+  // must see them - a silent NULL is what shipped cycle 2 with a
+  // whole batch of unrecoverable person_ids. Run
+  // backfill_requirement_person_ids() after the derive extension
+  // catches up to fill retroactively.
+  if ((r.driftCandidates || []).length > 0) {
+    console.log(`  WARNING - derive-drift on ${r.driftCandidates.length} eligible worker(s) (rows WILL issue with person_id=NULL):`);
+    for (const d of r.driftCandidates.slice(0, 20)) {
+      console.log(`    ${d.worker_id}  ${d.display_name || "?"}  ${d.account_key || "?"}`);
+    }
+    if (r.driftCandidates.length > 20) console.log(`    ...and ${r.driftCandidates.length - 20} more`);
+    console.log("    Run backfill_requirement_person_ids() after the stint arrives");
+    console.log("    to fill the NULL person_ids retroactively.");
+    console.log("");
+  }
   // Publish-time refusals.
   if (r.wouldRefuseApply) {
     console.log("  PUBLISH WOULD BE REFUSED:");
