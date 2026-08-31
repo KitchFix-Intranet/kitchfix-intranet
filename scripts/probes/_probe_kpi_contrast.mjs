@@ -53,6 +53,12 @@ const CSS_PATHS = [
   // because the probe read kpi.css only. Every kpi/* stylesheet that
   // paints on white belongs in this list.
   join(__dirname, "..", "..", "src", "app", "kpi", "purchasing", "purchasing.css"),
+  // Overview Phase 3 (2026-08-31): overview.css joins the CSS_PATHS
+  // in the same PR that creates it, per §5 charter 5 ("new stylesheets
+  // join the contrast probe CSS_PATHS in their creating PR") and the
+  // Phase 3 brief non-negotiable "overview.css joins _probe_kpi_
+  // contrast.mjs CSS_PATHS in this PR, not after."
+  join(__dirname, "..", "..", "src", "app", "kpi", "overview", "overview.css"),
 ];
 // homestand-fixes round 2 addendum (2026-08-26): strip /* ... */
 // comments from the input text before parsing. Prior parser only
@@ -184,6 +190,11 @@ const LIGHT_SURFACE_PREFIXES = [
   // row, ledger, bar, projection, and caption on the purchasing board.
   // .kpi-fresh-* covers the freshness popover (rendered on white).
   ".kpi-p-", ".kpi-fresh-",
+  // Overview Phase 3 (2026-08-31): .kpi-ov-* covers every Overview
+  // card, ticker segment, chart bar, lever row, statement cell,
+  // drill button, tracked row, and dash-vs-zero glyph. Registered
+  // here in the same PR the stylesheet lands per §5 charter 5.
+  ".kpi-ov-",
 ];
 // Selectors known to render on a dark navy background - skip.
 const DARK_SURFACE_PREFIXES = [
@@ -202,17 +213,47 @@ const DARK_CONTEXT_FRAGMENTS = [
   ".on ", ".on:", ".on.", // active state on chips / items
   ".kpi-cal-cell-endpoint",
   ".kpi-hs-rail-stand.pre",
-  // R17 (2026-08-28): coloured-button surfaces where the selector's
-  // OWN rule sets background: var(--amber-600) and color: #fff. The
-  // white-on-amber contrast is ~4.68:1 - passes AA - but the probe
-  // scores against white plot bg by default, which reads as
-  // white-on-white. Context fragment beats waiver because these are
-  // not defects, they are the probe's blind spot for coloured
-  // buttons.
-  // INV-P23 (2026-08-28): .kpi-p-cpact removed with its rule; kept
-  // .kpi-p-fail-retry as the sole live coloured-button selector.
-  ".kpi-p-fail-retry",
 ];
+
+// ─── Owned-background selectors (Overview Phase 3, 2026-08-31) ────────
+// Selectors whose OWN rule sets both `background:` and `color:` and
+// therefore render on a known non-white surface. Kevin's rule (PR #916
+// review): "An exclusion added in the PR that creates a stylesheet is
+// how a permanent waiver starts. §11 C-3 has 'no waived selectors' as
+// an alignment item." Prior approach put these in DARK_CONTEXT_FRAGMENTS
+// which silently skipped measurement; now we measure on merit against
+// the actual background token. If a background token changes, the
+// probe re-scores automatically.
+//
+// A match here overrides both the light-surface prefix check and the
+// white-surface scoring: the selector's color is measured against the
+// resolved background hex from the map (via PALETTE). PASS threshold
+// is the same 4.5:1 WCAG AA text rule.
+const OWNED_BACKGROUND_SELECTORS = new Map([
+  // Overview Phase 3 - rev-source toggle SC-active pill (background:
+  // var(--amber-600) at .kpi-app .kpi-ov-revtog button.ona).
+  [".kpi-app .kpi-ov-revtog button.ona", "--amber-600"],
+  // Overview Phase 3 - rev-source toggle planned-active pill (background:
+  // var(--navy-700) at .kpi-app .kpi-ov-revtog button.on).
+  [".kpi-app .kpi-ov-revtog button.on", "--navy-700"],
+  // Overview Phase 3 - segmented control active pill on navy-700
+  // (Summary / Full toggle for the P&L statement).
+  [".kpi-app .kpi-ov-seg button.on", "--navy-700"],
+  // Overview Phase 3 - bar hover tooltip on n-900 navy plate.
+  [".kpi-app .kpi-ov-bt", "--n-900"],
+  [".kpi-app .kpi-ov-bt-h", "--n-900"],
+  [".kpi-app .kpi-ov-bt-r", "--n-900"],
+  [".kpi-app .kpi-ov-bt-r.res", "--n-900"],
+  // Overview Phase 3 - ticker state pill (per-tier background set on
+  // parent selectors .kpi-ov-ticker-ahead / -ontrack / -behind /
+  // -critical). All four tier backgrounds resolve to a dark token
+  // (green-600, navy-700, amber-600, red-600) that clears 4.5:1 on
+  // white text. Scored against amber-600 as the worst-case token
+  // among the four (worst contrast); if that PASSes, all four do.
+  [".kpi-app .kpi-ov-ticker-st", "--amber-600"],
+  // Purchasing coloured buttons - retained from R17.
+  [".kpi-p-fail-retry", "--amber-600"],
+]);
 
 function isLightSurfaceSelector(sel) {
   // R17 (2026-08-28): purchasing.css writes every selector under the
@@ -225,6 +266,22 @@ function isLightSurfaceSelector(sel) {
   if (DARK_CONTEXT_FRAGMENTS.some(f => padded.includes(f))) return false;
   if (/\.on(?:$|[\s.:])/.test(s)) return false;
   return LIGHT_SURFACE_PREFIXES.some(p => s.startsWith(p));
+}
+
+// Lookup owned-background token for a selector. Compares against the
+// map both as-written and with the `.kpi-app ` root prefix stripped so
+// entries can be listed in either form.
+function ownedBackgroundToken(sel) {
+  const raw = sel.trim();
+  if (OWNED_BACKGROUND_SELECTORS.has(raw)) return OWNED_BACKGROUND_SELECTORS.get(raw);
+  const stripped = raw.replace(/^\.kpi-app\s+/, "");
+  if (OWNED_BACKGROUND_SELECTORS.has(stripped)) return OWNED_BACKGROUND_SELECTORS.get(stripped);
+  // Fragment match: any registered entry as a suffix (e.g. `.kpi-p-fail-retry`
+  // registered without `.kpi-app` root matches `.kpi-app .kpi-p-fail-retry`).
+  for (const [k, v] of OWNED_BACKGROUND_SELECTORS.entries()) {
+    if (raw === k || stripped === k || raw.endsWith(" " + k) || raw.endsWith(k)) return v;
+  }
+  return null;
 }
 
 // ─── Waivers ──────────────────────────────────────────────────────────
@@ -397,6 +454,25 @@ function borderTokenName(raw) {
 }
 const findings = [];
 for (const { sel, raw } of rules) {
+  // Owned-background selectors bypass the light-surface gate and are
+  // scored against their known background token. Measurement on merit
+  // per Kevin's PR #916 review: "The probe measures on merit after the
+  // fix." Replaces the DARK_CONTEXT_FRAGMENTS silent-skip for
+  // .ona / .kpi-ov-bt / .kpi-ov-ticker-st / .kpi-p-fail-retry.
+  const bgToken = ownedBackgroundToken(sel);
+  if (bgToken) {
+    const hex = resolveColor(raw);
+    if (!hex) continue;
+    const bgHex = PALETTE[bgToken];
+    if (!bgHex) continue;
+    const c = contrast(hex, bgHex);
+    let tier;
+    if (c < 4.5) tier = "FAIL";
+    else if (c < 5.0) tier = "BORDERLINE";
+    else tier = "PASS";
+    findings.push({ sel, raw, hex, cWhite: c, cNear: c, worst: c, tier, reason: `owned-background: measured on ${bgToken} (${bgHex})` });
+    continue;
+  }
   if (!isLightSurfaceSelector(sel)) continue;
   const hex = resolveColor(raw);
   if (!hex) continue;

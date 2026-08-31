@@ -1,3 +1,15 @@
+// USAGE (path aliases required)
+// This probe imports from the `@/…` path alias, which Node cannot resolve
+// on its own. Run with the alias hook installed via `--import`:
+//
+//   node --env-file=.env.local \
+//        --import ./scripts/probes/_at_alias_hook.mjs \
+//        scripts/probes/<this-file>
+//
+// Running without --import fails at import time with
+//   `Cannot find package '@/…'`
+// which reads identically to a probe defect - added 2026-08-31 after
+// PR #916 review named this as the sentinel-#4 root cause.
 // Quick look-up: what's item_dc50ec3d (the third STL-MO pepper Claude
 // matched to)? Helps understand if Bug 2 is one-shape or many.
 import { readSheetSA, SHEET_IDS } from "@/lib/sheets";

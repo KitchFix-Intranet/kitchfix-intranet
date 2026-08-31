@@ -1,3 +1,15 @@
+// USAGE (path aliases required)
+// This probe imports from the `@/…` path alias, which Node cannot resolve
+// on its own. Run with the alias hook installed via `--import`:
+//
+//   node --env-file=.env.local \
+//        --import ./scripts/probes/_at_alias_hook.mjs \
+//        scripts/probes/<this-file>
+//
+// Running without --import fails at import time with
+//   `Cannot find package '@/…'`
+// which reads identically to a probe defect - added 2026-08-31 after
+// PR #916 review named this as the sentinel-#4 root cause.
 // Part 1 - classify Bug 1 dup excess rows by A1 vs A2 upstream scenario.
 //
 // A1 (ref was "new" conf >= 60, queued as possible_new): when the cron's

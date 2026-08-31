@@ -1,0 +1,766 @@
+/* src/app/kpi/overview/overview.css
+ *
+ * Overview board (KPI Master §5.4-§5.8, prototype v5). Scoped to
+ * .kpi-app so tokens (--kf-scale, --kpi-t-*, --kpi-sp-*, --kpi-card-*)
+ * resolve correctly. Tokens only, no raw px outside the border
+ * sentinel (borders <= 3px). Joins _probe_kpi_contrast.mjs CSS_PATHS
+ * in this PR so text axis 4.5:1 + graphical axis 3.0:1 are gated.
+ *
+ * All class names prefixed `kpi-ov-` so a probe grepping `.kpi-ov-`
+ * finds every Overview-specific rule.
+ *
+ * Card grammar: pill-right header (R-7). One pill style across every
+ * card. Consumes .kpi-hs-qwrap / .kpi-hs-qbtn / .kpi-hs-pop from the
+ * shared HelpPop primitive; no fork.
+ */
+
+/* ── Sources line (element 2) ────────────────────────────────────── */
+.kpi-app .kpi-ov-sources {
+  display: flex;
+  gap: var(--kpi-sp-3);
+  flex-wrap: wrap;
+  align-items: center;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-ctl-r);
+  margin-bottom: var(--kpi-sp-3);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-700);
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-sources b { color: var(--n-900); font-weight: 700; }
+.kpi-app .kpi-ov-sources .kpi-ov-sources-lag { color: var(--amber-600); }
+.kpi-app .kpi-ov-sources-state {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+}
+
+/* Period-state chip (three states) */
+.kpi-app .kpi-ov-stc {
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  padding: 2px var(--kpi-sp-2);
+  border-radius: var(--kpi-ctl-r);
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-stc-open { background: var(--amber-50); color: var(--amber-600); }
+.kpi-app .kpi-ov-stc-wait { background: var(--n-100);    color: var(--n-700); }
+.kpi-app .kpi-ov-stc-ver  { background: var(--green-50); color: var(--green-600); }
+
+/* ── Ticker (element 3) ──────────────────────────────────────────── */
+.kpi-app .kpi-ov-ticker {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  margin-bottom: var(--kpi-sp-3);
+  overflow: hidden;
+}
+.kpi-app .kpi-ov-ticker-tk {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--kpi-sp-2) var(--kpi-sp-4);
+  border-right: 1px solid var(--n-200);
+  min-width: 0;
+}
+.kpi-app .kpi-ov-ticker-tk:last-child { border-right: none; }
+.kpi-app .kpi-ov-ticker-tk-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-ticker-tk-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-ticker-tk-v em {
+  font-style: normal;
+  font-weight: 800;
+  margin-left: var(--kpi-sp-1);
+}
+.kpi-app .kpi-ov-ticker-st {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--kpi-sp-4);
+  color: var(--n-0);
+  font-size: var(--kpi-t-meta);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-ticker-ahead .kpi-ov-ticker-st    { background: var(--green-600); }
+.kpi-app .kpi-ov-ticker-ontrack .kpi-ov-ticker-st  { background: var(--navy-700); }
+.kpi-app .kpi-ov-ticker-behind .kpi-ov-ticker-st   { background: var(--amber-600); }
+.kpi-app .kpi-ov-ticker-critical .kpi-ov-ticker-st { background: var(--red-600); }
+.kpi-app .kpi-ov-ticker-tk-note {
+  background: var(--amber-50);
+}
+.kpi-app .kpi-ov-ticker-tk-note .kpi-ov-ticker-tk-v {
+  color: var(--amber-600);
+  font-weight: 600;
+  white-space: normal;
+}
+
+/* Direction words on the ticker */
+.kpi-app .kpi-ov-good { color: var(--green-600); }
+.kpi-app .kpi-ov-bad  { color: var(--red-600); }
+.kpi-app .kpi-ov-warn { color: var(--amber-600); }
+.kpi-app .kpi-ov-nb   { color: var(--n-700); font-weight: 600; }
+
+/* ── Cards grid (element 4) ──────────────────────────────────────── */
+.kpi-app .kpi-ov-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
+}
+@media (max-width: 1024px) {
+  .kpi-app .kpi-ov-cards { grid-template-columns: 1fr; }
+}
+
+.kpi-app .kpi-ov-card {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+}
+.kpi-app .kpi-ov-card-rev  { border-left: 3px solid var(--green-600); }
+.kpi-app .kpi-ov-card-cogs { border-left: 3px solid var(--navy-700); }
+.kpi-app .kpi-ov-card-gm   { border-left: 3px solid var(--kpi-purple-600); }
+.kpi-app .kpi-ov-card-aa   { border-left: 3px solid var(--amber-500); }
+
+/* Pill-right card header (R-7). Adopt shared .kpi-hs-qwrap for the ?
+   affordance so HelpPop primitive works unforked. */
+.kpi-app .kpi-ov-ch {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  padding: var(--kpi-sp-3) var(--kpi-sp-4) 0 var(--kpi-sp-4);
+}
+.kpi-app .kpi-ov-eb {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--n-700);
+}
+.kpi-app .kpi-ov-gl {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+}
+
+/* One pill style across every card */
+.kpi-app .kpi-ov-pill {
+  margin-left: auto;
+  font-size: var(--kpi-t-meta);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: 3px var(--kpi-sp-2);
+  border-radius: 999px;
+}
+.kpi-app .kpi-ov-pill-good { background: var(--green-50); color: var(--green-600); }
+.kpi-app .kpi-ov-pill-warn { background: var(--amber-50); color: var(--amber-600); }
+.kpi-app .kpi-ov-pill-bad  { background: var(--red-50);   color: var(--red-600); }
+.kpi-app .kpi-ov-pill-neutral { background: var(--n-100); color: var(--n-700); }
+
+/* Card body */
+.kpi-app .kpi-ov-cb {
+  padding: var(--kpi-sp-2) var(--kpi-sp-4) var(--kpi-sp-4) var(--kpi-sp-4);
+}
+.kpi-app .kpi-ov-hero {
+  font-size: var(--kpi-t-hero);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.05;
+  display: flex;
+  align-items: baseline;
+  gap: var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-hero small {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-600);
+  letter-spacing: 0;
+}
+.kpi-app .kpi-ov-kpi2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kpi-sp-2);
+  margin-top: var(--kpi-sp-2);
+  flex-wrap: wrap;
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-kpi2 b {
+  font-size: var(--kpi-t-value);
+  font-weight: 800;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-mini {
+  display: flex;
+  gap: var(--kpi-sp-4);
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  /* Decorative divider, not an info-carrying dashed mark - solid at
+     --n-300 stays inside the graphical-axis rule (S3): dashed marks
+     that carry info must clear 3.0:1; a solid divider between two
+     content stripes carries no info and clears the rule by not being
+     the class the rule governs. */
+  border-top: 1px solid var(--n-300);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-ov-mini b { color: var(--n-900); font-weight: 700; }
+
+/* ── Lever table (element 5) ─────────────────────────────────────── */
+.kpi-app .kpi-ov-mt { margin-top: var(--kpi-sp-3); }
+.kpi-app .kpi-ov-lev {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--kpi-t-body);
+  table-layout: fixed;
+}
+.kpi-app .kpi-ov-lev th {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+  text-align: right;
+  padding: 0 0 var(--kpi-sp-2);
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-lev th.l { text-align: left; }
+.kpi-app .kpi-ov-lev td {
+  padding: var(--kpi-sp-2) 0;
+  border-top: 1px solid var(--n-200);
+  text-align: right;
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-lev td.l { text-align: left; font-weight: 700; }
+.kpi-app .kpi-ov-lev tr.tot td {
+  border-top: 1px solid var(--n-400);
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-glc {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  margin-right: var(--kpi-sp-1);
+  display: inline-block;
+  min-width: 36px;
+}
+.kpi-app .kpi-ov-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Dash-vs-zero states - each renders distinctly */
+.kpi-app .kpi-ov-dash { color: var(--n-600); font-weight: 600; }
+.kpi-app .kpi-ov-notactive {
+  color: var(--n-600);
+  font-style: italic;
+  font-weight: 500;
+}
+.kpi-app .kpi-ov-nobudget {
+  color: var(--n-700);
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-notstarted {
+  color: var(--n-600);
+  font-style: italic;
+  font-weight: 500;
+}
+.kpi-app .kpi-ov-failed {
+  color: var(--red-600);
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-zero {
+  color: var(--n-900);
+  font-weight: 600;
+}
+
+/* Flag chips inside the levers/statement (mapping gap etc.) */
+.kpi-app .kpi-ov-chip-absent {
+  background: var(--amber-50);
+  color: var(--amber-600);
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  padding: 2px var(--kpi-sp-2);
+  border-radius: var(--kpi-ctl-r);
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-chip-fixed {
+  background: var(--navy-100);
+  color: var(--navy-700);
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  padding: 2px var(--kpi-sp-2);
+  border-radius: var(--kpi-ctl-r);
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-chip-seed {
+  background: var(--amber-50);
+  color: var(--amber-600);
+  border: 1px solid var(--amber-500);
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  padding: 2px var(--kpi-sp-2);
+  border-radius: var(--kpi-ctl-r);
+  white-space: nowrap;
+}
+
+/* ── Chart (element 6) ───────────────────────────────────────────── */
+.kpi-app .kpi-ov-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--kpi-sp-3);
+  height: calc(110px * var(--kf-scale));
+  position: relative;
+  padding-top: var(--kpi-sp-3);
+}
+.kpi-app .kpi-ov-bar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  display: block;
+  min-height: 2px;
+  position: relative;
+}
+.kpi-app .kpi-ov-bar-good  { background: var(--green-500); }
+.kpi-app .kpi-ov-bar-over  { background: var(--red-500); }
+/* Hatched running-week/period marker. --navy-700 stroke on white
+   background clears the 3.0:1 graphical axis (see contrast probe). */
+.kpi-app .kpi-ov-bar-hatch {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--navy-700),
+    var(--navy-700) 3px,
+    transparent 3px,
+    transparent 7px
+  );
+  border: 1px solid var(--navy-700);
+  border-bottom: none;
+}
+.kpi-app .kpi-ov-bar-dash {
+  background: transparent;
+  border-bottom: 2px dashed var(--n-600); /* n-600 for 3.0:1 graphical axis */
+  height: 2px;
+  align-self: flex-end;
+  border-radius: 0;
+}
+.kpi-app .kpi-ov-tgt {
+  position: absolute;
+  left: 0; right: 0;
+  border-top: 2px dashed var(--navy-700);
+  pointer-events: none;
+  z-index: 2;
+}
+.kpi-app .kpi-ov-tgt em {
+  position: absolute;
+  right: 0;
+  top: calc(-15px * var(--kf-scale));
+  font-style: normal;
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: var(--navy-700);
+  text-transform: uppercase;
+  background: var(--n-0);
+  padding: 0 var(--kpi-sp-1);
+}
+
+/* Bar hover tooltip */
+.kpi-app .kpi-ov-bt {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--n-900);
+  color: var(--n-0);
+  border-radius: var(--kpi-ctl-r);
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  z-index: 20;
+  min-width: calc(170px * var(--kf-scale));
+  text-align: left;
+}
+.kpi-app .kpi-ov-bar:hover .kpi-ov-bt { display: block; }
+.kpi-app .kpi-ov-bt-h {
+  font-size: var(--kpi-t-meta);
+  font-weight: 800;
+  letter-spacing: .04em;
+  margin-bottom: var(--kpi-sp-1);
+  color: var(--n-200);
+}
+.kpi-app .kpi-ov-bt-r {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--kpi-sp-3);
+  font-size: var(--kpi-t-meta);
+  font-weight: 500;
+  line-height: 1.7;
+}
+.kpi-app .kpi-ov-bt-r b { font-weight: 700; }
+.kpi-app .kpi-ov-bt-r.res {
+  border-top: 1px solid var(--n-700);
+  margin-top: 3px;
+  padding-top: var(--kpi-sp-1);
+  font-weight: 800;
+}
+
+.kpi-app .kpi-ov-axis {
+  display: flex;
+  gap: var(--kpi-sp-3);
+  margin-top: var(--kpi-sp-1);
+}
+.kpi-app .kpi-ov-axis span {
+  flex: 1;
+  text-align: center;
+  font-size: var(--kpi-t-body);
+  color: var(--n-900);
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-axis small {
+  display: block;
+  font-weight: 500;
+  color: var(--n-600);
+  font-size: var(--kpi-t-meta);
+  margin-top: 1px;
+}
+.kpi-app .kpi-ov-axis .kpi-ov-amt {
+  display: block;
+  font-weight: 700;
+  font-size: var(--kpi-t-meta);
+  margin-top: 2px;
+}
+
+.kpi-app .kpi-ov-legend {
+  display: flex;
+  gap: var(--kpi-sp-4);
+  flex-wrap: wrap;
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  margin-top: var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+  margin-right: var(--kpi-sp-1);
+  vertical-align: -1px;
+}
+
+/* ── Drill buttons (element 7) ───────────────────────────────────── */
+.kpi-app .kpi-ov-drills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
+  margin-top: var(--kpi-sp-3);
+}
+@media (max-width: 768px) {
+  .kpi-app .kpi-ov-drills { grid-template-columns: 1fr; }
+}
+.kpi-app .kpi-ov-dr {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.kpi-app .kpi-ov-dr:hover {
+  border-color: var(--navy-700);
+  background: var(--navy-50);
+}
+.kpi-app .kpi-ov-dr-lab { border-left: 3px solid var(--navy-700); }
+.kpi-app .kpi-ov-dr-pur { border-left: 3px solid var(--green-600); }
+.kpi-app .kpi-ov-dr-top {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-dr-t1 {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-dr-go {
+  margin-left: auto;
+  color: var(--navy-700);
+  font-weight: 800;
+  font-size: var(--kpi-t-medium);
+}
+.kpi-app .kpi-ov-dr-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--kpi-sp-2);
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  /* Decorative divider, not an info-carrying dashed mark - solid at
+     --n-300 stays inside the graphical-axis rule (S3): dashed marks
+     that carry info must clear 3.0:1; a solid divider between two
+     content stripes carries no info and clears the rule by not being
+     the class the rule governs. */
+  border-top: 1px solid var(--n-300);
+}
+.kpi-app .kpi-ov-dr-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-dr-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  margin-top: 2px;
+}
+.kpi-app .kpi-ov-dr-v small {
+  font-weight: 500;
+  color: var(--n-600);
+}
+
+/* ── Fold + statement (element 8) ────────────────────────────────── */
+.kpi-app .kpi-ov-fold {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.kpi-app .kpi-ov-fold:hover { background: var(--n-50); }
+.kpi-app .kpi-ov-fold-cv {
+  margin-left: auto;
+  color: var(--n-600);
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-seg {
+  display: flex;
+  border: 1px solid var(--n-300);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-left: auto;
+}
+.kpi-app .kpi-ov-seg button {
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  padding: var(--kpi-sp-1) var(--kpi-sp-3);
+  color: var(--n-600);
+  background: var(--n-0);
+  border: none;
+  cursor: pointer;
+}
+.kpi-app .kpi-ov-seg button.on {
+  background: var(--navy-700);
+  color: var(--n-0);
+}
+
+/* Statement table */
+.kpi-app .kpi-ov-stmt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--kpi-t-body);
+}
+.kpi-app .kpi-ov-stmt th {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+  text-align: right;
+  padding: 0 0 var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-stmt th.l { text-align: left; }
+.kpi-app .kpi-ov-stmt td {
+  padding: var(--kpi-sp-2) 0;
+  border-top: 1px solid var(--n-200);
+  text-align: right;
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-stmt td.l { text-align: left; }
+.kpi-app .kpi-ov-stmt tr.sect td {
+  border-top: none;
+  padding: var(--kpi-sp-3) 0 3px 0;
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+  text-align: left;
+}
+.kpi-app .kpi-ov-stmt tr.tot td {
+  border-top: 1px solid var(--n-400);
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-stmt tr.gm td {
+  border-top: 2px solid var(--navy-700);
+  font-weight: 800;
+  padding-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-medium);
+}
+
+/* ── Also tracked (element 9) ────────────────────────────────────── */
+.kpi-app .kpi-ov-tracked {
+  background: var(--n-50);
+  border: 1px dashed var(--n-600);
+  border-radius: var(--kpi-card-r);
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+}
+.kpi-app .kpi-ov-tracked-hd {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  margin-bottom: 3px;
+}
+.kpi-app .kpi-ov-tracked-sub {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 500;
+  margin-bottom: var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-tracked-note {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 500;
+  margin-top: var(--kpi-sp-2);
+  line-height: 1.55;
+}
+
+/* ── Note + banner ───────────────────────────────────────────────── */
+.kpi-app .kpi-ov-note {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 500;
+  margin-top: var(--kpi-sp-2);
+  line-height: 1.55;
+}
+
+/* ── Loading + ghost overlay (Phase E) ───────────────────────────── */
+.kpi-app .kpi-ov-skel {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  padding: var(--kpi-sp-4);
+  min-height: calc(120px * var(--kf-scale));
+}
+.kpi-app .kpi-ov-skel-bar {
+  background: var(--n-200);
+  border-radius: 6px;
+  height: calc(14px * var(--kf-scale));
+  margin-bottom: var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-skel-hero {
+  height: calc(30px * var(--kf-scale));
+  width: 60%;
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-ov-ghost {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.kpi-app .kpi-ov-refresh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  padding: 3px var(--kpi-sp-2);
+  border-radius: 999px;
+  background: var(--amber-50);
+  color: var(--amber-600);
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  margin-left: var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-refresh-chip .kpi-ov-refresh-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber-600);
+  animation: kpi-ov-pulse 1.2s ease-in-out infinite;
+}
+@keyframes kpi-ov-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* ── Rev-source toggle (corporate posture) - lives in Shell's
+     revSourceToggle slot ────────────────────────────────────────── */
+.kpi-app .kpi-ov-revtog {
+  display: flex;
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-ctl-r);
+  overflow: hidden;
+}
+.kpi-app .kpi-ov-revtog button {
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  color: var(--n-700);
+  background: var(--n-0);
+  border: none;
+  cursor: pointer;
+}
+.kpi-app .kpi-ov-revtog button.on {
+  background: var(--navy-700);
+  color: var(--n-0);
+}
+.kpi-app .kpi-ov-revtog button.ona {
+  background: var(--amber-600);
+  color: var(--n-0);
+}
+
+/* ── By-account grid (corporate portfolio) ───────────────────────── */
+.kpi-app .kpi-ov-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--kpi-t-body);
+}
+.kpi-app .kpi-ov-grid th {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+  text-align: right;
+  padding: 0 0 var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-grid th.l { text-align: left; }
+.kpi-app .kpi-ov-grid td {
+  padding: var(--kpi-sp-2) 0;
+  border-top: 1px solid var(--n-200);
+  text-align: right;
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-grid td.l { text-align: left; }
+.kpi-app .kpi-ov-grid tr.dr:hover {
+  background: var(--navy-50);
+  cursor: pointer;
+}
+.kpi-app .kpi-ov-grid tr.tot td {
+  border-top: 1px solid var(--n-400);
+  font-weight: 800;
+}
