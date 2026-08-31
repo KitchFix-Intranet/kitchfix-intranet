@@ -493,14 +493,15 @@ Updated with every merged PR. This is the living section.
 
 ### 16.1 Migration split
 
-PR 1 ships as four migrations rather than three, split as follows so no downstream migration is invalidated by the pending frontmatter schema extension (open ruling 17.6):
+Five migrations. The identity foundation split off first, then the RDO region-leads table landed alongside the resolver, and the assignment layer is next. Split so no downstream migration is invalidated by upstream schema work:
 
-| Migration | Contents | Gated on |
-|---|---|---|
-| 1 (this PR) | Identity foundation: persons, stints, eligibility exceptions, grants | Nothing |
-| 2 | Assignment layer: obligations, cycles, cycle modules, requirements | Frontmatter schema extension approved and merged |
-| 3 | Signature layer: questions, check attempts, module progress, attestations (append-only, DB-enforced per `kpi-8a`) | Migration 2 |
-| 4 | Delivery: portal tokens, email events, admin audit | Migration 3 |
+| Migration | File | Contents | Gated on |
+|---|---|---|---|
+| 1 | `academy-1-identity-schema.sql` | Identity foundation: persons, stints, eligibility exceptions, grants | Nothing |
+| 2 | `academy-2-region-leads.sql` | Region -> RDO email mapping (owner-maintained) | Migration 1 |
+| 3 | `academy-3-assignment-layer.sql` | Assignment layer: obligations, cycles, cycle modules, requirements | Migrations 1-2 + frontmatter schema extension (closed as 17.6 in PR #908) |
+| 4 | pending | Signature layer: questions, check attempts, module progress, attestations (append-only, DB-enforced per `kpi-8a`) | Migration 3 |
+| 5 | pending | Delivery: portal tokens, email events, admin audit | Migration 4 |
 
 ### 16.2 PR ledger
 
