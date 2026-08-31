@@ -109,6 +109,13 @@ export async function GET(request) {
     // testModeBypass upstream). Never trust these params off a local
     // TEST_MODE run. The values are echoed into the audit-log line
     // via caller.role so the render is self-labelling.
+    //
+    // TODO (Phase 4, 2026-08-31): remove this backdoor once the site
+    // posture signs off on the live build. Kevin ruling on PR #916:
+    // "log the backdoor for removal once the site posture has been
+    // signed off on the live build." Gate is enforced by
+    // scripts/probes/_probe_test_mode_inertness.mjs - do not lift
+    // the double-gate without removing the block entirely.
     const testRoleReq = (new URL(request.url).searchParams.get("_test_role") || "").trim();
     const testScopeReq = (new URL(request.url).searchParams.get("_test_scope") || "").trim();
     const ALLOWED_TEST_ROLES = new Set(["corporate", "rdo", "site_leader", "site_manager"]);

@@ -37,19 +37,26 @@ function fmtMoney(n) {
 // The three-column budget span (Period budget · Budget to date · Actual
 // to date) is R-25/R-26 vocabulary. Closed periods drop Period budget.
 //
-// **Actual % / Target % on statement rows:** the payload ships per-line
-// pct on levers[] for the four COGS lines (3100/3200/3400/3500), and
-// on cards[] for the three totals (revenue / cogs / gm). Per-line pct
-// for the revenue rows (2200 / 2300 / 2400.1 / 2400.2 / 2600) is NOT
-// in the payload today - the resolver ships `variance_pct` for revenue
-// rows only when both bt+actual are present. This is an engine gap for
-// Phase 4: extend `statement_rows[]` to carry actual_pct + target_pct
-// per line. Until then those cells render "-" (missing) with a
-// consistent dash-vs-zero glyph rather than a client-side computation.
+// **Actual % / Target % on statement rows:** the resolver ships raw
+// `actual_pct` / `target_pct` per statement row (engine follow-up PR
+// #919 added these to revenue rows; levers[] carries the COGS pcts).
+// This client formats absence per the dash-vs-zero contract:
+//   - null                           -> DashOrValue missing (dash)
+//   - 0                              -> "0.0%"
+//   - number                         -> "N.N%"
+// Sub-line rows (3100.1 / 3100.2 salary reveal, per Phase 4 R-28)
+// carry `parent_line_code` and render indented under their parent
+// with no pct cells (totals are always the 3100 aggregate).
+function fmtPct(n) {
+  if (n == null || Number.isNaN(Number(n))) return null;
+  return Number(n).toFixed(1) + "%";
+}
+
 function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
   const isFee = Array.isArray(row.flags) && row.flags.includes("contractual");
   const isPassThrough = Array.isArray(row.flags) && row.flags.includes("pass_through");
   const isPackagingGap = Array.isArray(row.flags) && row.flags.includes("packaging_gap");
+  const isSubLine = !!row.parent_line_code;
 
   const actual = row.actual;
   const bt = row.budget_to_date;
@@ -58,15 +65,23 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
   // Both nullish + reported false -> not active
   const notActive = (actual == null || actual === 0) && (bt == null || bt === 0) && (pb == null || pb === 0) && !row.reported;
 
-  // Per-line pct comes from levers[] where available (COGS lines only
-  // ship this today; revenue rows are an engine gap noted above).
+  // Per-line pct comes from the row itself when the resolver ships it
+  // (revenue rows since #919 + lever rows always). Fall back to
+  // leverPctByLine for legacy paths where a row omits the pct fields.
   const leverPct = leverPctByLine[row.line_code];
-  const actualPct = leverPct?.actual_pct_display || null;
-  const targetPct = leverPct?.target_pct_display || null;
+  const rowActualPct = row.actual_pct != null ? row.actual_pct : (leverPct?.actual_pct ?? null);
+  const rowTargetPct = row.target_pct != null ? row.target_pct : (leverPct?.target_pct ?? null);
+  const actualPct = fmtPct(rowActualPct);
+  const targetPct = fmtPct(rowTargetPct);
+
+  const trClass = [
+    isSubLine ? "sub" : "",
+    indent ? "ind" : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <tr data-kpi-ov="statement-row" data-kpi-ov-line-code={row.line_code} className={indent ? "" : ""}>
-      <td className="l">
+    <tr data-kpi-ov="statement-row" data-kpi-ov-line-code={row.line_code} data-kpi-ov-sub={isSubLine ? "1" : undefined} className={trClass}>
+      <td className="l" style={isSubLine ? { paddingLeft: 24 } : undefined}>
         <span className="kpi-ov-glc kpi-ov-num">{row.line_code}</span>
         {row.label}
         {isFee && (
@@ -236,15 +251,21 @@ export default function PnlStatement({ payload, open, onToggle }) {
                 )}
 
                 <tr className="sect"><td colSpan={isOpen ? 7 : 6}>Cost of goods sold</td></tr>
-                {cogsRows.map(r => (
-                  <StatementRow
-                    key={r.line_code}
-                    row={r}
-                    isOpen={isOpen}
-                    totalRevenueActual={totalRevenueActual}
-                    totalRevenueBudget={totalRevenueBudget}
-                  />
-                ))}
+                {cogsRows
+                  /* Sub-line rows (parent_line_code set) render only
+                     in Full mode - Summary keeps the four totals
+                     line clean. The salary reveal (3100.1 / 3100.2)
+                     is a Full-mode disclosure per §5.9 / R-28. */
+                  .filter(r => dense === "full" || !r.parent_line_code)
+                  .map(r => (
+                    <StatementRow
+                      key={r.line_code}
+                      row={r}
+                      isOpen={isOpen}
+                      leverPctByLine={leverPctByLine}
+                      indent={!!r.parent_line_code}
+                    />
+                  ))}
                 {/* COGS total row */}
                 {cogsCard && (
                   <tr className="tot" data-kpi-ov="statement-cogs-total">

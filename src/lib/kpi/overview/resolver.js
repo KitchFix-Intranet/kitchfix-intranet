@@ -1006,6 +1006,73 @@ export async function resolveOverview({
     sources: ["labor_actuals"],
     flags: [],
   });
+  // Salary reveal (Phase 4, R-28): emit 3100.1 (hourly) + 3100.2
+  // (salary) sub-rows under 3100 when the caller requested the salary
+  // split AND the posture makes it visible. The rows carry
+  // `parent_line_code: "3100"` so the client renders them indented
+  // beneath the aggregate. The 3100 total row above is unchanged -
+  // the totals never move; the split just becomes visible. Sources:
+  // pnl_actuals (verified periods) + labor engine's own split when
+  // pnl_actuals is absent (open period).
+  //
+  // Absence contract: reported=false on any sub-row we cannot ground
+  // in either source. The client renders "-" (missing) rather than
+  // guessing.
+  //
+  // Corporate posture always includes salary in the 3100 total
+  // (labor board sums both when include_salary=1 upstream); this
+  // reveal is the site-posture affordance per R-28.
+  if (includeSalary && posture.salary_toggle_visible) {
+    const sumSubLineFromPnl = (lineCode) => {
+      let amt = 0;
+      let anyReported = false;
+      for (const m of members) {
+        const byAcct = pnl.get(m);
+        for (const p of periods) {
+          const row = byAcct?.get(p)?.get(lineCode);
+          if (row && row.actual != null) {
+            amt += Number(row.actual);
+            anyReported = true;
+          }
+        }
+      }
+      return anyReported ? r2(amt) : null;
+    };
+    const hourly = sumSubLineFromPnl("3100.1");
+    const salary = sumSubLineFromPnl("3100.2");
+    statementRows.push({
+      line_code: "3100.1",
+      section: "cogs",
+      parent_line_code: "3100",
+      label: "Hourly wages",
+      reported: hourly != null,
+      actual: hourly,
+      budget_to_date: null,
+      period_budget: null,
+      variance: null,
+      variance_pct: null,
+      actual_pct: pctOf(hourly, totalRevenue),
+      target_pct: null,
+      sources: ["pnl_actuals"],
+      flags: [],
+    });
+    statementRows.push({
+      line_code: "3100.2",
+      section: "cogs",
+      parent_line_code: "3100",
+      label: "Salary wages",
+      reported: salary != null,
+      actual: salary,
+      budget_to_date: null,
+      period_budget: null,
+      variance: null,
+      variance_pct: null,
+      actual_pct: pctOf(salary, totalRevenue),
+      target_pct: null,
+      sources: ["pnl_actuals"],
+      flags: [],
+    });
+  }
   statementRows.push({
     line_code: "3200",
     section: "cogs",

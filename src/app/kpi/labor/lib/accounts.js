@@ -41,8 +41,15 @@ export const STATIC_RDO_DISPLAY = { East: "S. Lynch", West: "R. Moore" };
 // tabs row. K5 preserved: non-Labor items ghosted with a SOON tag.
 // Enabled sections carry a `path`; disabled sections do NOT - a path
 // on a SOON item invites someone to make it clickable without thinking.
+//
+// Overview Phase 4 (2026-08-31): pnl_overview flips to enabled=true
+// with path /kpi/overview per KPI_MASTER_SCOPE.md §7 build phase 4
+// ("landing PR"). Overview is the P&L landing section; labor and
+// purchasing remain reachable via the section dropdown from any
+// board. TopNav's /kpi link re-points to /kpi/overview in the same
+// PR so the KPI entry point lands on Overview by default.
 export const SECTIONS = [
-  { key: "pnl_overview", label: "P&L Overview", enabled: false                          },
+  { key: "pnl_overview", label: "P&L Overview", enabled: true,  path: "/kpi/overview"   },
   { key: "labor",        label: "Labor",        enabled: true,  path: "/kpi/labor"      },
   { key: "purchasing",   label: "Purchasing",   enabled: true,  path: "/kpi/purchasing" },
   { key: "sga",          label: "SG&A",         enabled: false                          },

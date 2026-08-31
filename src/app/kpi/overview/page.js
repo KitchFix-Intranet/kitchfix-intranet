@@ -9,14 +9,19 @@
 // arrives formatted from the resolver.
 //
 // URL state (subset of labor's, tuned for the Overview):
-//   ?account     team_key / ALL / EAST / WEST
-//   ?start       YYYY-MM-DD
-//   ?end         YYYY-MM-DD
-//   ?preview     preview target (narrows via role gate)
-//   ?rev_source  'planned' (default) | 'sc' (corporate + per-meal only)
+//   ?account         team_key / ALL / EAST / WEST
+//   ?start           YYYY-MM-DD
+//   ?end             YYYY-MM-DD
+//   ?preview         preview target (narrows via role gate)
+//   ?rev_source      'planned' (default) | 'sc' (corporate + per-meal only)
+//   ?include_salary  '1' -> reveals 3100.1 / 3100.2 sub-lines (site
+//                          posture only; corporate always includes)
 //
-// Route stays reachable only by direct URL for this PR - SECTIONS[0]
-// stays enabled=false until Phase 4.
+// Overview Phase 4 (2026-08-31): the section is enabled and this route
+// is reachable from the Section dropdown + the TopNav /kpi entry. The
+// salary control renders on the site posture only (R-28) and drives
+// ?include_salary=1 on this URL; the drill button to /kpi/labor
+// preserves the flag so the two boards agree on which pool is counted.
 //
 // Loading philosophy (§5.4 charter 4):
 //   - Skeleton on cold load (no prior data)
@@ -108,6 +113,12 @@ export default function KpiOverviewPage() {
   const urlRevSource = searchParams.get("rev_source") || "planned";
   const urlPreview = searchParams.get("preview");
   const urlLabel = searchParams.get("label");
+  // Overview Phase 4 (R-28): salary reveal is a URL-tracked flag,
+  // mirroring the labor board's ?salary=1 pattern. The route re-checks
+  // the visibility gate every request, so a shared link that opens as
+  // a caller without salary access renders without the split - no
+  // error, no message, just correct behaviour.
+  const urlIncludeSalary = searchParams.get("include_salary") === "1";
 
   const start = urlStart || FY_START;
   const end = urlEnd || today;
@@ -156,6 +167,7 @@ export default function KpiOverviewPage() {
     if (end) params.set("end", end);
     if (urlPreview) params.set("preview", urlPreview);
     if (urlRevSource && urlRevSource !== "planned") params.set("rev_source", urlRevSource);
+    if (urlIncludeSalary) params.set("include_salary", "1");
     // TEST_MODE role-injection forwards (Overview Phase 3, PR #916).
     // These params only take effect on the server when the route sees
     // TEST_MODE=true && VERCEL!=1 (double-gated in route.js). On Vercel
@@ -197,7 +209,7 @@ export default function KpiOverviewPage() {
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, fetchAccount, start, end, urlPreview, urlRevSource]);
+  }, [status, fetchAccount, start, end, urlPreview, urlRevSource, urlIncludeSalary]);
 
   // Landing redirect - when the URL has no account and preview is not
   // active, redirect to the caller's landing_account once known.
@@ -251,6 +263,14 @@ export default function KpiOverviewPage() {
   // renders when the server ships posture.revenue_toggle_visible=true.
   const setRevSource = useCallback((next) => {
     setParams({ rev_source: next === "planned" ? "" : next });
+  }, [setParams]);
+
+  // Salary control (Phase 4, R-28). Site posture only; corporate
+  // always includes salary in totals. The route re-checks the gate,
+  // so on Vercel a shared link opened by a caller without salary
+  // access renders without the split - silent-drop, no error.
+  const setIncludeSalary = useCallback((next) => {
+    setParams({ include_salary: next ? "1" : "" });
   }, [setParams]);
 
   // ── Statement fold state ────────────────────────────────────
@@ -369,7 +389,7 @@ export default function KpiOverviewPage() {
           title={data.posture === "site_leader" ? "Your cost of goods lines" : "Cost of goods lines"}
         />
         <Chart chart={data.chart} />
-        <DrillButtons payload={data} />
+        <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
         <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
         <AlsoTracked payload={data} />
       </div>
@@ -388,6 +408,17 @@ export default function KpiOverviewPage() {
         activeSection="pnl_overview"
         rangeProps={rangeProps}
         revSourceToggle={revSourceToggle}
+        /* Salary control (Phase 4, R-28). Posture-gated: site posture
+           with `salary_toggle_visible` on the payload. Absent, never
+           disabled, for anyone the route would refuse - matches the
+           labor-board pattern (spec T-1). Wire matches the segmented
+           Hourly / +Salary control the labor board already renders,
+           so a site leader who flips between /kpi/overview and
+           /kpi/labor sees the same widget in the same slot. */
+        salaryToggle={data?.posture_details?.salary_toggle_visible && data?.posture === "site_leader" ? {
+          on: urlIncludeSalary,
+          onChange: (next) => setIncludeSalary(next),
+        } : null}
         folioRail={folioRail}
         main={mainContent}
         previewAccount={data?.preview_account || null}
