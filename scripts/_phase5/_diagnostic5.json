@@ -1,0 +1,58 @@
+{
+  "q9_unit_lb": {
+    "rows": 164,
+    "reconcile_ok": 51,
+    "reject": 113,
+    "spend": 58988.720000000016
+  },
+  "fused": {
+    "lb3": {
+      "rows": 443,
+      "spend": 33551.48000000004
+    },
+    "lb4": {
+      "rows": 1,
+      "spend": 0
+    },
+    "oz3": {
+      "rows": 143,
+      "spend": 9950.519999999997
+    },
+    "oz4": {
+      "rows": 97,
+      "spend": 12979.789999999995
+    }
+  },
+  "catch_weight": {
+    "rows": 959,
+    "spend": 167077.20999999996
+  },
+  "beverage": {
+    "rows": 374,
+    "spend": 76028.6
+  },
+  "plant_or_egg": {
+    "rows": 178,
+    "spend": 18743.81
+  },
+  "tbj_beef_blank": {
+    "rows": 12,
+    "spend": 5673.320000000001
+  },
+  "cheney_pound_n": {
+    "rows": 19,
+    "spend": 1828.2099999999998
+  },
+  "invoice_over_extracted": {
+    "rows": 188,
+    "spend": 29314.021999999997
+  },
+  "other_cat": {
+    "rows": 383,
+    "spend": 22132.252
+  },
+  "fee_lines": {
+    "rows": 191,
+    "spend": 821.4600000000002
+  }
+}
