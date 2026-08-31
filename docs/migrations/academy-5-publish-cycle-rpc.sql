@@ -154,6 +154,20 @@ BEGIN
   -- index academy_requirements_unique_issue so a partial re-run
   -- reports skipped rather than crashing on duplicates.
   --
+  -- INDEX INFERENCE, NOT CONSTRAINT NAME. The unique enforcer in
+  -- academy-3 is a CREATE UNIQUE INDEX over the expression
+  -- COALESCE(cycle_id, -1), which never enters pg_constraint (an
+  -- expression cannot be a table constraint in Postgres). ON
+  -- CONFLICT ON CONSTRAINT <name> resolves against pg_constraint
+  -- and would fail at runtime with "constraint ... does not
+  -- exist." The only shape Postgres accepts here is index
+  -- inference matching the exact expression list.
+  --
+  -- The column + expression tuple below MUST stay in lockstep with
+  -- academy-3-assignment-layer.sql's academy_requirements_unique_
+  -- issue index. If either changes without the other, apply
+  -- fails.
+  --
   -- source is fixed to 'cycle' here; the CHECK
   -- academy_requirements_cycle_source_has_cycle then requires the
   -- non-null cycle_id, which we supply from the argument.
@@ -189,7 +203,8 @@ BEGIN
     est_minutes     INTEGER,
     due_date        DATE
   )
-  ON CONFLICT ON CONSTRAINT academy_requirements_unique_issue DO NOTHING;
+  ON CONFLICT (worker_id, doc_id, obligation_key, doc_version, source, COALESCE(cycle_id, -1))
+  DO NOTHING;
 
   GET DIAGNOSTICS v_row_count = ROW_COUNT;
 
