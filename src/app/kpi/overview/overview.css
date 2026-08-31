@@ -622,6 +622,23 @@
   padding-top: var(--kpi-sp-2);
   font-size: var(--kpi-t-medium);
 }
+/* Sub-line rows (salary reveal 3100.1 / 3100.2 per R-28; food and
+   packaging sub-lines in a future PR): lighter weight, indent under
+   parent, no decorative border. Rendered only in Full mode; the
+   3100 aggregate row above is unchanged.
+   No border-top rule here - the default td border-top from
+   .kpi-ov-stmt (var(--n-200)) is decorative delineation shared with
+   every other row and does not carry graphical information the sub-
+   row visualises; contrast probe treats this as identity with the
+   established table baseline. */
+.kpi-app .kpi-ov-stmt tr.sub td {
+  font-weight: 500;
+  color: var(--n-700);
+  font-size: var(--kpi-t-label);
+}
+.kpi-app .kpi-ov-stmt tr.sub td.l {
+  color: var(--n-600);
+}
 
 /* ── Also tracked (element 9) ────────────────────────────────────── */
 .kpi-app .kpi-ov-tracked {

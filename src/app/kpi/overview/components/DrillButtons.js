@@ -10,30 +10,33 @@
 // needs a number the payload does not carry, that is an engine gap -
 // report it, do not compute it locally."
 //
-// The payload ships `levers[]` with per-line pct-of-revenue for 3100
-// (labor) directly. For purchasing, the drill needs COMBINED
-// purchasing pct-of-revenue (3200+3400+3500 / revenue). The payload
-// does NOT carry that combined figure today - it ships per-line pcts
-// on levers[], and the COGS card's aggregate pct-of-revenue is
-// labor+food+packaging+vehicle combined, not purchasing-only.
+// Overview Phase 4 (2026-08-31): the engine-gap-follow-up (PR #919)
+// shipped `drill.purchasing.{spent_display, pct_of_revenue_display,
+// target_pct_display}` on the payload; the purchasing drill now
+// renders that three-field layout in parity with the labor drill,
+// dropping the per-line "Food · Packaging" fallback that PR #916
+// left behind. Both drills now show: Spent / Of revenue / Inside.
 //
-// **Engine gap for Phase 4:** add a `drill.purchasing` block on the
-// payload with { spent_display, pct_of_revenue_display, target_pct_
-// display } - the same shape as the labor lever. Until then this card
-// shows the payload's per-line breakdown as the "Inside" description
-// and omits the summed pct field.
-//
-// The Labor drill DOES have its full metrics on `levers[]` line_code
-// 3100 - hero display, actual_pct, target_pct - so that card renders
-// with the full three-field layout.
+// R-5 drill wiring: the destination URL carries account + start + end
+// (the Overview resolver ships explicit ISO dates on filters.range;
+// labor + purchasing both read start/end natively so no shape
+// translation is needed at the link boundary). Labor's URL also
+// preserves ?salary=1 when the site-posture salary control is on.
 
 import Link from "next/link";
 
-function buildDrillHref(basePath, filters) {
+// Build the drill destination URL. Both boards read `account` + `start`
+// + `end` with identical semantics; carry them through unchanged.
+// includeSalary is a labor-only flag (?salary=1 on the labor URL is
+// the operator-facing name; ?include_salary=1 on the API). Overview
+// site posture with the salary control on carries this into the
+// labor drill so the two boards agree on which pool is counted.
+function buildDrillHref(basePath, filters, opts = {}) {
   const p = new URLSearchParams();
   if (filters?.account) p.set("account", filters.account);
   if (filters?.range?.start) p.set("start", filters.range.start);
   if (filters?.range?.end) p.set("end", filters.range.end);
+  if (opts.includeSalary) p.set("salary", "1");
   const qs = p.toString();
   return qs ? `${basePath}?${qs}` : basePath;
 }
@@ -75,11 +78,16 @@ function LaborDrill({ href, laborLever, throughDate }) {
   );
 }
 
-function PurchasingDrill({ href, purchasingLevers, throughDate }) {
-  // Render per-line breakdown so the operator sees what the drill
-  // covers WITHOUT the client computing a combined figure. When the
-  // engine gap closes, wire the summed spent + pct fields into the
-  // grid the same shape as the Labor drill.
+function PurchasingDrill({ href, purchasingDrill, throughDate }) {
+  // Renders the combined-purchasing summary shipped by the resolver
+  // on payload.drill.purchasing (engine follow-up PR #919). Three
+  // fields, same shape as the Labor drill:
+  //   - spent_display                                (dollars)
+  //   - pct_of_revenue_display + target_pct_display  (percent)
+  //   - Inside                                       (label only)
+  // R-17b: the "Also tracked" band (5002.1 / 5002.5 / 5017.3) is
+  // deliberately outside this measured figure - Kevin's ruling
+  // 2026-08-31 on PR #919 resolver comment.
   return (
     <Link href={href} className="kpi-ov-dr kpi-ov-dr-pur" data-kpi-ov="drill" data-kpi-ov-drill="purchasing">
       <div className="kpi-ov-dr-top">
@@ -88,47 +96,46 @@ function PurchasingDrill({ href, purchasingLevers, throughDate }) {
       </div>
       <div className="kpi-ov-dr-grid">
         <div>
-          <div className="kpi-ov-dr-k">Food</div>
+          <div className="kpi-ov-dr-k">Spent</div>
           <div className="kpi-ov-dr-v kpi-ov-num">
-            {purchasingLevers.find(l => l.line_code === "3200")?.actual_display || "-"}
+            {purchasingDrill?.spent_display || "-"}{" "}
+            {throughDate && <small>through {fmtDateShort(throughDate)}</small>}
           </div>
         </div>
         <div>
-          <div className="kpi-ov-dr-k">Packaging</div>
+          <div className="kpi-ov-dr-k">Of revenue</div>
           <div className="kpi-ov-dr-v kpi-ov-num">
-            {purchasingLevers.find(l => l.line_code === "3400")?.actual_display || "-"}
+            {purchasingDrill?.pct_of_revenue_display || "-"}
+            {purchasingDrill?.target_pct_display && (
+              <> <small>target {purchasingDrill.target_pct_display}</small></>
+            )}
           </div>
         </div>
         <div>
           <div className="kpi-ov-dr-k">Inside</div>
-          <div className="kpi-ov-dr-v">
-            <small>
-              bills, cards, every purchase
-              {throughDate && <> · through {fmtDateShort(throughDate)}</>}
-            </small>
-          </div>
+          <div className="kpi-ov-dr-v"><small>food, packaging, vehicle</small></div>
         </div>
       </div>
     </Link>
   );
 }
 
-export default function DrillButtons({ payload }) {
+export default function DrillButtons({ payload, includeSalary = false }) {
   if (!payload || !payload.filters) return null;
   const filters = payload.filters;
   const laborLever = payload.levers?.find(l => l.line_code === "3100");
-  const purchasingLevers = payload.levers?.filter(l => ["3200", "3400", "3500"].includes(l.line_code)) || [];
+  const purchasingDrill = payload.drill?.purchasing || null;
 
   return (
     <div className="kpi-ov-drills" data-kpi-ov="drills">
       <LaborDrill
-        href={buildDrillHref("/kpi/labor", filters)}
+        href={buildDrillHref("/kpi/labor", filters, { includeSalary })}
         laborLever={laborLever}
         throughDate={payload.sources?.labor?.through_date}
       />
       <PurchasingDrill
         href={buildDrillHref("/kpi/purchasing", filters)}
-        purchasingLevers={purchasingLevers}
+        purchasingDrill={purchasingDrill}
         throughDate={payload.sources?.purchases?.through_date}
       />
     </div>

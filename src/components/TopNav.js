@@ -89,10 +89,13 @@ const navLinks = [
   { href: '/service-calendar', label: 'Service',   icon: icons.calendar  },
   // KPI is admin-gated at the server (OPS_LEADERSHIP_EMAILS) but visible
   // to everyone in the nav per the 2026-08-10 ruling; non-allowlisted
-  // users get a Coming Soon screen. Routes /kpi/labor to the labor
-  // section by default; the Overview tab is a placeholder pending
-  // spec §13.4.
-  { href: '/kpi/labor',        label: 'KPI',       icon: kpiIcon         },
+  // users get a Coming Soon screen.
+  //
+  // Overview Phase 4 (2026-08-31): KPI landing now goes to /kpi/overview,
+  // the P&L Overview board. Labor and Purchasing remain reachable via
+  // the section dropdown on any board. See KPI_MASTER_SCOPE.md §5.1
+  // ("landing section pnl_overview") + §7 build phase 4 ("landing PR").
+  { href: '/kpi/overview',     label: 'KPI',       icon: kpiIcon         },
   { href: '/playbook',         label: 'Playbook',  icon: icons.playbook  },
   // Train 3 A1: Chat's assumption - Sous sits between Playbook and Directory.
   // Kevin to strike or approve. Rationale: adjacent to Playbook because both
