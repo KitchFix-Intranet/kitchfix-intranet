@@ -1,6 +1,6 @@
 # CONFLICT REGISTER — Pricing Summit Evidence Gather
 
-> **[2026-08-11 WITHDRAWAL NOTE]** All TBR-FL "75% of CPI" / "75% × YoY" / SEFV01 / Nov-reset escalation content in this register (including A-1 analysis, the digest-derivation-bug diagnosis, the "TBR-FL SOWs use 75% of CPI-U..." summary claim, and the LEDGER §Q cross-reference) is WITHDRAWN as UNVERIFIED per REF-129 §B.4 withdrawal. The mechanic itself was not a verified contract term. Do NOT quote to the client, print in any deck, or use in internal projections. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Body of the register retained as an audit log per "never delete history silently"; findings that depended on the withdrawn mechanic are struck at source in REF-129, REC-108, ACCOUNT_TBR-FL, CONTRACT_DIGEST_TBR-FL, EVIDENCE_TBR-FL.
+> **Note (2026-08-13):** 75%-of-CPI term restored - accurate per 2024 agreement; source read still outstanding.
 
 > Read-only register. Every entry is A-vs-B verbatim (or "SILENT" where sources are silent). **No resolutions — Kevin rules at the summit.** Numbering: A-* live conflicts, B-* rate-table gaps, C-* paperwork gaps confirmed, D-* documentation corrections, E-* items intentionally NOT flagged (per Kevin's rulings context).
 >

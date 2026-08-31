@@ -1,6 +1,6 @@
 # Escalation Verification Report
 
-> **[2026-08-11 WITHDRAWAL NOTE]** All "TBR-FL - 75% × SEFV01" verification content in §2.8 and the summary tables of this report is WITHDRAWN as UNVERIFIED per REF-129 §B.4 withdrawal. The mechanic ("75% × Nov SEFV01 YoY, compound 2024→2026") was a misreading of prior documentation and is not a verified contract term. Do NOT quote to the client, print in any deck, or use in internal projections. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Body of the report retained as an audit log; findings that depended on the withdrawn TBR-FL mechanic are struck at source (REF-129, REC-108, ACCOUNT_TBR-FL, CONTRACT_DIGEST_TBR-FL, EVIDENCE_TBR-FL).
+> **Note (2026-08-13):** 75%-of-CPI term restored - accurate per 2024 agreement; source read still outstanding.
 
 **Generated:** 2026-07-17 by Claude Code (read-only).
 **Scope:** 9 escalation treatments across 11 accounts. Re-derive each 2026 rate/fee from contract clause + real BLS CPI data; compare against signed Price Review v3 + current PG. Plus 3 owed spot-checks (FSL currency, BGC in signed/PG, C-17 volume tier).

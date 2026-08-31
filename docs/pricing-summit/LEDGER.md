@@ -1,7 +1,7 @@
 # PRICING SUMMIT LEDGER — SC financial + contractual alignment
 **Opened 2026-07-14 · Roadmap item 3 · Rule: every number traces to a named source. No code this phase. Existing docs win (SC_MONEY_MODEL is authority).**
 
-> **[2026-08-11 WITHDRAWAL NOTE]** All TBR-FL "75% of CPI" / "75% × SEFV01" / "sub-index SEFV01" / "Nov reset" escalation claims scattered through this ledger (A-1 workthrough, §L closure, escalation-divergence entries, "TBR = 75% of CPI" summary lines) are WITHDRAWN as UNVERIFIED per REF-129 §B.4 withdrawal. The mechanic was a misreading of prior documentation and is not a verified contract term. Do NOT quote to the client, print in any deck, or use in internal projections. Actual escalation basis is UNVERIFIED pending a direct read of the signed agreement (owners: Joe Lessard / Josh Katt). Ledger body retained as an audit-log per "never delete history silently"; findings that depended on the withdrawn mechanic are struck at source in REF-129, REC-108, ACCOUNT_TBR-FL, CONTRACT_DIGEST_TBR-FL, EVIDENCE_TBR-FL.
+> **Note (2026-08-13):** 75%-of-CPI term restored - accurate per 2024 agreement; source read still outstanding.
 
 ---
 
