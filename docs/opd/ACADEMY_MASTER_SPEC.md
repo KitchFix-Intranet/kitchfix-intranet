@@ -283,6 +283,10 @@ Mid-month hires receive onboarding only and join the cycle rhythm on the followi
 
 ## 7. Signatures and attestation integrity
 
+### 7.0 What a module is
+
+**A module is one obligation, not one document version.** A document may carry several, scoped by `source_section`. Measured reading times put four of the six pilot documents over the 15-minute ceiling, with `PB-001` at roughly 61 minutes, and it contains five role definitions that no single reader needs in full.
+
 ### 7.1 The attestation
 
 ```
@@ -487,6 +491,19 @@ Standing build rules apply throughout: confirm branch before every commit, open 
 
 Updated with every merged PR. This is the living section.
 
+### 16.1 Migration split
+
+PR 1 ships as four migrations rather than three, split as follows so no downstream migration is invalidated by the pending frontmatter schema extension (open ruling 17.6):
+
+| Migration | Contents | Gated on |
+|---|---|---|
+| 1 (this PR) | Identity foundation: persons, stints, eligibility exceptions, grants | Nothing |
+| 2 | Assignment layer: obligations, cycles, cycle modules, requirements | Frontmatter schema extension approved and merged |
+| 3 | Signature layer: questions, check attempts, module progress, attestations (append-only, DB-enforced per `kpi-8a`) | Migration 2 |
+| 4 | Delivery: portal tokens, email events, admin audit | Migration 3 |
+
+### 16.2 PR ledger
+
 | PR | Title | Status | Merged | Notes |
 |---|---|---|---|---|
 | #901 | OPD + Academy technical findings (docs) | Delivered, awaiting merge | - | 10 documents, `docs/opd/alignment/` |
@@ -523,5 +540,6 @@ Updated with every merged PR. This is the living section.
 | 17.3 | Overdue consequence ladder and any lockout policy | At minimum a "not current" chip plus a lead nudge on day 8. A status without a consequence becomes wallpaper. | PR 10 |
 | 17.4 | Spanish parity: `PB-004-ES` is Retired and hourly needs it most | Restore for the hourly pilot | PR 2 |
 | 17.5 | SLT and CEO compliance ownership, given scope-by-reports leaves the root unmonitored | People Ops owns CORP standing | PR 9 |
+| 17.6 | Frontmatter obligations schema extension. Add `obligations[].key` (required), `cadence: on-hire`, and `applies_to.worker_class`. Additive and safe today because zero documents author the block; expensive after authoring begins. | Approve additive extension. | Blocks migration 2 and PR 2. |
 
 **Closed rulings** (recorded for history): stints versus persons (2.1), scope by region (3.1), eligibility exceptions (2.6), hourly identity and the `personal_email` policy (2.5), calendar months (6), pilot document set (4.3), v1 audience (15), peer visibility (3.4), hourly roster visibility (3.4), Admin permission split (12.2), "% current" denominator as signed-of-assigned-this-cycle, document-open pattern (Focus for requirements, modal for Library peeks, inline for single-check refreshers), Sous freeze scope (12.4), shelf taxonomy (4.1).
