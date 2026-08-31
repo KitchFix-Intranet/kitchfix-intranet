@@ -10,6 +10,14 @@
 //     == purchasing board's totals + per-bucket period_total + budget,
 //     to the cent.
 //
+// Additional assertion (Kevin ruling 2026-08-31, PR #919 follow-up):
+//   Overview drill.purchasing.spent_display MUST equal
+//   formatMoneyWhole(purchasing totals.pl_cogs.spent) on every
+//   scenario. Two surfaces (drill button + purchasing headline)
+//   should agree - R-17b tracked lines (5002.1 / 5002.5 / 5017.3)
+//   are the "Also tracked" band, deliberately outside the measured
+//   figure. Permanent assertion.
+//
 // Purchasing check imports buildPurchasingBoard directly and runs it
 // against the same raw inputs, per Kevin's PR-2 turn rule:
 //   "Compute the client-fold side by importing and running the actual
@@ -189,6 +197,25 @@ async function runScenario(a, r) {
   const btdOk = btdBuckets && typeof btdBuckets === "object" && "amount" in btdBuckets;
   RESULTS.push({ scenario, name: "purchasing.totals.buckets_budget_to_date_days present + shape", ok: !!btdOk, got: JSON.stringify(btdBuckets), expected: "object w/ amount" });
   console.log(`    ${btdOk ? "PASS " : "FAIL "} purchasing.totals.buckets_budget_to_date_days: ${JSON.stringify(btdBuckets)}`);
+
+  // ── Two-surfaces-agree: drill spent_display equals purchasing headline ──
+  // Kevin ruling 2026-08-31 (PR #919): the Overview drill button and
+  // the purchasing board's own pl_cogs headline must show the same
+  // number. If drill included the tracked band (R-17b), the drill
+  // would exceed the purchasing headline. Permanent assertion.
+  const { formatMoneyWhole } = await import("@/lib/kpi/overview/formatting.js");
+  const drillDisplay = ov?.drill?.purchasing?.spent_display ?? null;
+  const cogsSpent = pur?.totals?.pl_cogs?.spent ?? null;
+  const cogsDisplay = formatMoneyWhole(cogsSpent);
+  const drillEq = drillDisplay != null && drillDisplay === cogsDisplay;
+  RESULTS.push({
+    scenario,
+    name: "drill.purchasing.spent_display == formatMoneyWhole(purchasing.totals.pl_cogs.spent)",
+    ok: drillEq,
+    got: drillDisplay,
+    expected: cogsDisplay,
+  });
+  console.log(`    ${drillEq ? "PASS " : "FAIL "} drill.spent_display == formatMoneyWhole(pl_cogs.spent): got=${drillDisplay} expected=${cogsDisplay}`);
 }
 
 async function main() {

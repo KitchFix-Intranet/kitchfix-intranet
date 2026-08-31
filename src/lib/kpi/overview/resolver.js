@@ -1068,23 +1068,24 @@ export async function resolveOverview({
   // The purchasing drill button on the Overview needs a single
   // combined-purchasing summary (spend, pct-of-revenue, target-pct).
   // Kevin's approved render pulls these three pre-formatted display
-  // strings from the payload rather than having the client sum four
+  // strings from the payload rather than having the client sum
   // buckets and derive a combined pct client-side (§9B: server
   // computes every dollar, formatting decisions server-side).
   //
-  // Combined purchasing spend = food + packaging + vehicle (the three
-  // buckets that compose the purchasing engine's pl_cogs total) +
-  // tracked (5002.1 R&M + 5002.5 Equipment + 5017.3 Perks). Each
-  // bucket + tracked value already exists on purchBoard - no new
-  // queries, no new computation, just fold + format.
+  // COGS / drill total is food + packaging + vehicle only. R&M /
+  // Equipment / Perks are the "Also tracked" band per R-17b
+  // (charter §11: "not part of gross margin or cost of goods sold
+  // - watched together"), deliberately outside the measured figure.
+  // Including them here would create two numbers for one idea on
+  // the same page (drill would exceed the purchasing board's own
+  // pl_cogs.spent headline) and cross the scored-versus-tracked
+  // line. Kevin ruling 2026-08-31.
   //
   // Nulls are treated as 0 for the summation (mirrors cogsActual /
   // cogsBudget on line 646-647 above). A null-only spend collapses
   // pct via pctOf's zero-denominator branch to null.
-  const purchSpentActual = (food_actual || 0) + (packaging_actual || 0) + (vehicle_actual || 0)
-    + (rm_actual || 0) + (equip_actual || 0) + (perks_actual || 0);
-  const purchSpentBudget = (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0)
-    + (rm_budget || 0) + (equip_budget || 0) + (perks_budget || 0);
+  const purchSpentActual = (food_actual || 0) + (packaging_actual || 0) + (vehicle_actual || 0);
+  const purchSpentBudget = (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0);
   const drill = {
     purchasing: {
       spent_display: formatMoneyWhole(purchSpentActual),
