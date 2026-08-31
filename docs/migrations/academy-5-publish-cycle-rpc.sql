@@ -1,11 +1,14 @@
 -- ═══════════════════════════════════════════════════════════════════
 -- academy-5-publish-cycle-rpc.sql
 --
--- One RPC: publish_cycle_atomic. Flips a draft cycle to published
--- AND inserts its resolved requirements in one transaction.
+-- Two RPCs. Together they make `academy_requirements` write-only
+-- through plpgsql - no application-code INSERT reaches it - which
+-- keeps the `COALESCE(cycle_id, -1)` unique-index expression in
+-- exactly two places (both in this file) rather than restated in
+-- JavaScript where a subtle mismatch already surfaced once.
 --
--- Function authored
--- ─────────────────
+-- Functions authored
+-- ──────────────────
 --   publish_cycle_atomic(
 --     p_cycle_id      BIGINT,
 --     p_published_by  TEXT,
@@ -17,6 +20,11 @@
 --     requirements_inserted   INT,
 --     requirements_skipped    INT
 --   )
+--
+--   insert_requirements_bulk(
+--     p_source        TEXT,       -- 'onboarding' | 'rehire' | 'manual'
+--     p_rows          JSONB       -- the row list; empty is legal
+--   ) RETURNS INT                 -- rows inserted (skipped = planned - inserted)
 --
 -- Why an RPC (not two statements from JS)
 -- ───────────────────────────────────────
@@ -220,6 +228,114 @@ $$;
 GRANT EXECUTE ON FUNCTION publish_cycle_atomic(BIGINT, TEXT, JSONB) TO service_role;
 
 
+-- ─── insert_requirements_bulk ──────────────────────────────────────
+--
+-- The non-cycle write path. Onboarding + rehire (+ future manual)
+-- go through this, so `academy_requirements` never sees an app-
+-- layer INSERT and the ON CONFLICT expression appears in exactly
+-- two places, both in this file. Structural fix for the class of
+-- bug that let a JS `.upsert` restate the index's expression
+-- incorrectly.
+--
+-- Why cycle is refused
+-- ───────────────────
+-- Cycle requirements MUST land in the same transaction as the
+-- cycle's status flip (publish_cycle_atomic). A second writer here
+-- would fork that atomicity - a caller could insert cycle rows
+-- through this RPC without publishing the cycle, or after the
+-- cycle already published from the other path, producing a state
+-- where two writers disagree about which rows belong to a cycle.
+-- Refused loudly.
+--
+-- INDEX INFERENCE, NOT CONSTRAINT NAME. Same lockstep with
+-- academy-3-assignment-layer.sql's academy_requirements_unique_
+-- issue as publish_cycle_atomic above. The index is an expression
+-- index (COALESCE(cycle_id, -1)), and an expression index cannot
+-- become a table constraint in Postgres, so ON CONFLICT ON
+-- CONSTRAINT would fail at runtime with "constraint ... does not
+-- exist." The tuple below MUST stay in lockstep with the index
+-- definition; if either changes without the other, apply fails.
+CREATE OR REPLACE FUNCTION insert_requirements_bulk(
+  p_source TEXT,
+  p_rows   JSONB
+)
+RETURNS INT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_inserted INT := 0;
+BEGIN
+  -- Refuse anything outside the non-cycle set. The
+  -- academy_requirements.source CHECK also admits 'version_recert',
+  -- but that source depends on academy_attestations (does not exist
+  -- yet) so it has no producer today; when it lands, it will get
+  -- its own RPC or be added here explicitly. Refusing unknown
+  -- values now keeps the write path from silently accepting
+  -- something the CHECK will reject downstream.
+  IF p_source IS NULL OR p_source NOT IN ('onboarding', 'rehire', 'manual') THEN
+    RAISE EXCEPTION 'insert_requirements_bulk: refused - p_source must be one of onboarding|rehire|manual (got "%"). Cycle issuance goes through publish_cycle_atomic; version_recert has no producer yet.',
+      COALESCE(p_source, '(null)');
+  END IF;
+
+  -- Refuse a null input array (matches the discipline in
+  -- academy-4's sweep_orphan_obligations). An empty array is
+  -- legal - it returns 0 and skips the INSERT so a caller can run
+  -- idempotently with no rows.
+  IF p_rows IS NULL THEN
+    RAISE EXCEPTION 'insert_requirements_bulk: refused - p_rows is null; pass an empty array to run with zero rows';
+  END IF;
+  IF jsonb_array_length(p_rows) = 0 THEN
+    RETURN 0;
+  END IF;
+
+  -- Non-cycle sources: cycle_id is fixed to NULL. The CHECK
+  -- academy_requirements_cycle_source_has_cycle only requires a
+  -- non-null cycle_id when source = 'cycle', so all three of these
+  -- sources are compatible with cycle_id NULL.
+  INSERT INTO academy_requirements (
+    worker_id,
+    person_id,
+    doc_id,
+    obligation_key,
+    doc_version,
+    est_minutes,
+    source,
+    cycle_id,
+    due_date,
+    issued_by
+  )
+  SELECT
+    x.worker_id,
+    x.person_id,
+    x.doc_id,
+    x.obligation_key,
+    x.doc_version,
+    x.est_minutes,
+    p_source,
+    NULL,
+    x.due_date,
+    COALESCE(x.issued_by, 'system')
+  FROM jsonb_to_recordset(p_rows) AS x(
+    worker_id       TEXT,
+    person_id       UUID,
+    doc_id          TEXT,
+    obligation_key  TEXT,
+    doc_version     TEXT,
+    est_minutes     INTEGER,
+    due_date        DATE,
+    issued_by       TEXT
+  )
+  ON CONFLICT (worker_id, doc_id, obligation_key, doc_version, source, COALESCE(cycle_id, -1))
+  DO NOTHING;
+
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+  RETURN v_inserted;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION insert_requirements_bulk(TEXT, JSONB) TO service_role;
+
+
 -- ═══════════════════════════════════════════════════════════════════
 --
 --   V E R I F Y   B L O C K
@@ -233,21 +349,23 @@ GRANT EXECUTE ON FUNCTION publish_cycle_atomic(BIGINT, TEXT, JSONB) TO service_r
 --
 -- ═══════════════════════════════════════════════════════════════════
 
--- P1. Function exists and is executable by service_role.
--- Expected: 1 row.
+-- P1. Both functions exist.
+-- Expected: 2 rows.
 SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public' AND p.proname = 'publish_cycle_atomic';
+WHERE n.nspname = 'public'
+  AND p.proname IN ('publish_cycle_atomic', 'insert_requirements_bulk')
+ORDER BY p.proname;
 
--- P2. service_role has EXECUTE on it.
--- Expected: 1 row, grantee = service_role.
+-- P2. service_role has EXECUTE on both.
+-- Expected: 2 rows, grantee = service_role.
 SELECT routine_name, grantee, privilege_type
 FROM information_schema.routine_privileges
 WHERE routine_schema = 'public'
-  AND routine_name = 'publish_cycle_atomic'
+  AND routine_name IN ('publish_cycle_atomic', 'insert_requirements_bulk')
   AND privilege_type = 'EXECUTE'
-ORDER BY grantee;
+ORDER BY routine_name, grantee;
 
 
 -- ─── P3 (probe, run deliberately) ──────────────────────────────────
@@ -304,7 +422,7 @@ ORDER BY grantee;
 
 
 -- ─── P4 (probe, run deliberately) ──────────────────────────────────
--- Refusal branches. Each MUST error with its named message.
+-- Refusal branches for publish_cycle_atomic. Each MUST error.
 --
 --   BEGIN;
 --   SELECT publish_cycle_atomic(999999, 'x', '[]'::jsonb);
@@ -319,6 +437,55 @@ ORDER BY grantee;
 --   BEGIN;
 --   SELECT publish_cycle_atomic(1, 'x', NULL);
 --   -- Expected error: "p_rows is null"
+--   ROLLBACK;
+
+
+-- ─── P5 (probe, run deliberately) ──────────────────────────────────
+-- insert_requirements_bulk happy path + idempotency + refusals.
+-- Uses Kevin's worker_id and PB-014 as the FK anchors.
+--
+-- Expected on run:
+--   first_call_inserted  = 1
+--   second_call_inserted = 0   (same rows; expression index skip)
+--   empty_call_inserted  = 0   (empty array is legal)
+--   cycle-source call    ERRORS: "p_source must be one of onboarding|rehire|manual"
+--   null-source call     ERRORS: "p_source must be one of onboarding|rehire|manual"
+--   null-rows call       ERRORS: "p_rows is null"
+--
+--   BEGIN;
+--   SELECT insert_requirements_bulk('onboarding', $j$[
+--     {
+--       "worker_id":      "6418e1e52a44e07c8b303f7b",
+--       "person_id":      null,
+--       "doc_id":         "PB-014",
+--       "obligation_key": "p5-probe",
+--       "doc_version":    "probe",
+--       "est_minutes":    11,
+--       "due_date":       "2026-10-31",
+--       "issued_by":      "probe"
+--     }
+--   ]$j$::jsonb) AS first_call_inserted;
+--
+--   SELECT insert_requirements_bulk('onboarding', $j$[
+--     {
+--       "worker_id":      "6418e1e52a44e07c8b303f7b",
+--       "person_id":      null,
+--       "doc_id":         "PB-014",
+--       "obligation_key": "p5-probe",
+--       "doc_version":    "probe",
+--       "est_minutes":    11,
+--       "due_date":       "2026-10-31",
+--       "issued_by":      "probe"
+--     }
+--   ]$j$::jsonb) AS second_call_inserted;
+--
+--   SELECT insert_requirements_bulk('rehire', '[]'::jsonb) AS empty_call_inserted;
+--
+--   -- Refusal branches:
+--   -- SELECT insert_requirements_bulk('cycle', '[]'::jsonb);
+--   -- SELECT insert_requirements_bulk(NULL, '[]'::jsonb);
+--   -- SELECT insert_requirements_bulk('onboarding', NULL);
+--
 --   ROLLBACK;
 
 
@@ -337,8 +504,9 @@ ORDER BY grantee;
 -- sha:               <fill in commit SHA>
 -- applied by:        k.fietek@kitchfix.com
 -- applied at:        <fill in ISO timestamp>
--- p1_function:       <expected 1 row>
--- p2_grant:          <expected 1 row, service_role>
+-- p1_functions:      <expected 2 rows: publish_cycle_atomic + insert_requirements_bulk>
+-- p2_grants:         <expected 2 rows, both service_role>
 -- p3_publish_probe:  <run probe; expected new_status=published, inserted=2, skipped=0>
--- p4_refusal_probes: <run three probes; each must error on its named branch>
+-- p4_publish_refusals: <run three probes; each must error on its named branch>
+-- p5_bulk_probe:     <run probe; expected first_call_inserted=1, second_call_inserted=0, empty_call_inserted=0, three refusals each error>
 -- notes:             <optional>

@@ -634,10 +634,17 @@ export async function planRehire(supa, options = {}) {
 
 // ─── apply (non-cycle triggers) ────────────────────────────────────
 //
-// Onboarding and rehire share the same insert shape - just a bulk
-// INSERT ... ON CONFLICT DO NOTHING against academy_requirements.
-// No RPC needed because there is no cross-table atomic swap to
-// preserve; the unique index does the idempotency work.
+// Onboarding and rehire share the same insert shape and route
+// through the same RPC: insert_requirements_bulk (academy-5). That
+// keeps the COALESCE(cycle_id, -1) ON CONFLICT expression in
+// exactly one file rather than restated in JavaScript where a
+// prior version subtly diverged from the index definition and
+// would have failed at runtime.
+//
+// Routing all writes through RPCs also means academy_requirements
+// is never touched by an app-code INSERT / .upsert / .from(...)
+// .insert(...) - grep-verify: the only writer sites in src/ and
+// scripts/ are RPC calls (publish_cycle_atomic + this function).
 //
 // Returns { inserted, skipped } (skipped = planned rows minus
 // inserted, i.e., conflict-suppressed rows).
@@ -647,42 +654,57 @@ export async function applyRequirements(supa, plan, options = {}) {
   if (!Array.isArray(plan?.rows) || plan.rows.length === 0) {
     return { inserted: 0, skipped: 0 };
   }
-  // Enforce source is always non-cycle here - the cycle path uses
-  // the RPC. Belt-and-braces: refuse to bulk-insert a cycle row
-  // through this bypass path.
-  const cycleAttempts = plan.rows.filter((r) => r.source === REQUIREMENT_SOURCE_CYCLE);
-  if (cycleAttempts.length > 0) {
+
+  // Enforce a single non-cycle source per call. insert_requirements_
+  // bulk (academy-5) takes source as a top-level parameter so that
+  // the COALESCE(cycle_id, -1) expression appears in exactly one
+  // place per write path. A plan mixing sources would have to be
+  // split before calling; refuse instead of guessing.
+  const sources = new Set(plan.rows.map((r) => r.source));
+  if (sources.has(REQUIREMENT_SOURCE_CYCLE)) {
     throw new Error(
       "applyRequirements refused: plan contains source='cycle' rows. Cycle requirements must go through publish_cycle_atomic to keep status flip + insert atomic."
     );
   }
-  const now = new Date().toISOString();
-  const enriched = plan.rows.map((r) => ({
+  if (sources.size !== 1) {
+    throw new Error(
+      `applyRequirements refused: plan has mixed sources (${[...sources].join(",")}). insert_requirements_bulk takes a single source per call; split the plan by source and call once per group.`
+    );
+  }
+  const source = [...sources][0];
+  const issuedBy = options.issuedBy || "system";
+
+  // Strip `source` from row payload; the RPC assigns it from the
+  // top-level parameter. Same for cycle_id (fixed to NULL for the
+  // non-cycle sources this RPC serves). issued_by is per-row so
+  // future callers can attribute individual rows differently,
+  // defaulting to the top-level issuedBy option.
+  const stripped = plan.rows.map((r) => ({
     worker_id: r.worker_id,
     person_id: r.person_id,
     doc_id: r.doc_id,
     obligation_key: r.obligation_key,
     doc_version: r.doc_version,
     est_minutes: r.est_minutes,
-    source: r.source,
-    cycle_id: r.cycle_id ?? null,
     due_date: r.due_date,
-    issued_at: now,
-    issued_by: options.issuedBy || "system",
+    issued_by: issuedBy,
   }));
 
-  // Supabase upsert with ignoreDuplicates=true is the JS-side
-  // equivalent of ON CONFLICT DO NOTHING against the unique index.
-  const q = await db
-    .from("academy_requirements")
-    .upsert(enriched, {
-      onConflict:
-        // must match academy_requirements_unique_issue column list
-        "worker_id,doc_id,obligation_key,doc_version,source,cycle_id",
-      ignoreDuplicates: true,
-    })
-    .select("requirement_id");
-  if (q.error) throw new Error(`applyRequirements: ${q.error.message}`);
-  const inserted = (q.data || []).length;
-  return { inserted, skipped: enriched.length - inserted };
+  // Route through the RPC. This is the ONLY app-code write into
+  // academy_requirements outside publish_cycle_atomic; those two
+  // RPCs together hold the COALESCE(cycle_id, -1) inference in the
+  // one file so a future edit cannot fork the expression across
+  // JavaScript and plpgsql.
+  const q = await db.rpc("insert_requirements_bulk", {
+    p_source: source,
+    p_rows: stripped,
+  });
+  if (q.error) throw new Error(`insert_requirements_bulk: ${q.error.message}`);
+  const inserted = typeof q.data === "number" ? q.data : Number(q.data);
+  if (!Number.isFinite(inserted)) {
+    throw new Error(
+      `insert_requirements_bulk: non-numeric return value ${JSON.stringify(q.data)}`
+    );
+  }
+  return { inserted, skipped: stripped.length - inserted };
 }
