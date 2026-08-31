@@ -95,7 +95,14 @@ export async function loadSalaryActuals(supa, members, start, end) {
 // buildBoard's sumRows() can fold it into range/week totals without
 // branching. week_end is Sunday = week_start + 6 (Mon..Sun fiscal
 // week, same convention deriveActuals uses).
-function shapeSalaryRow(r) {
+//
+// Exported (2026-08-31) so the Overview resolver can use the same
+// shape helper before calling buildBoard. R-28 / §5.9: Overview
+// unconditionally composes salary into 3100; the route-level withSalary
+// merge is not on the Overview code path (Overview calls buildBoard
+// directly), so the resolver runs an inline equivalent using this
+// helper + mergeBudgetPeriods.
+export function shapeSalaryRow(r) {
   const wsD = new Date(`${r.week_start}T00:00:00.000Z`);
   wsD.setUTCDate(wsD.getUTCDate() + 6);
   const weekEnd = wsD.toISOString().slice(0, 10);
