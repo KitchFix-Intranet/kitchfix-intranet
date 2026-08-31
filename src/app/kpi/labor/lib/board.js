@@ -111,6 +111,110 @@ export function buildAggregateWeekBudgets({ start, end, member_budgets }) {
   });
 }
 
+// Overview Phase 2 PR-3 · §11 B-11 rollout: budget-to-date by DAYS
+// through YESTERDAY. Exported so both drill boards (labor here + the
+// purchasing resolver) and the Overview resolver read the same
+// implementation - one place, one number.
+//
+// Contract:
+//   - Closed periods in range: full period budget contributes.
+//   - The current period (contains today) in range: period budget
+//     x (days_elapsed_through_yesterday / days_in_period).
+//   - Future periods in range: nothing.
+//   - Days count period-start through yesterday INCLUSIVE. On the
+//     first day of a period this returns 0 (nothing elapsed yet
+//     through yesterday). On the last day of a period this returns
+//     full period budget - period end is yesterday.
+//
+// The rule is period-scoped, not fiscal-week-scoped: the Overview
+// prototype's PRO factor is `(P9_ELAPSED_DAYS / 28)`. Weeks are the
+// rendering grain; days-through-yesterday is the money grain for
+// budget_to_date.
+//
+// budget_periods carries per-period amounts already summed across
+// members (aggregate case) or the single member's own budget (single-
+// account case). One implementation covers both.
+//
+// Signature:
+//   computeBudgetToDateDays({ budget_periods, start, end, today })
+//   -> { amount: number | null, days_elapsed_current: number | null,
+//        days_in_current: number | null, current_period_no: number | null,
+//        closed_period_nos: number[] }
+//
+// amount is null when there is no budget in the range OR when the
+// range enumerates zero fiscal weeks (empty range). Callers surface
+// the null; NEVER 0 (0 is a valid amount when nothing has elapsed +
+// no closed periods have budget).
+export function computeBudgetToDateDays({ budget_periods, start, end, today }) {
+  const weeks = weekStartsInRange(start, end);
+  if (weeks.length === 0) {
+    return { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
+  }
+  const periodsTouched = [...new Set(weeks.map(w => periodOf(w)).filter(p => p != null))].sort((a, b) => a - b);
+  const budgetByPeriod = new Map((budget_periods || []).map(b => [Number(b.period_no), Number(b.amount)]));
+  if (budgetByPeriod.size === 0) {
+    return { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
+  }
+  const todayD = parseISO(today);
+  if (!todayD) {
+    return { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
+  }
+  let total = 0;
+  let anyContribution = false;
+  const closed = [];
+  let currentPeriodNo = null;
+  let daysElapsedCurrent = null;
+  let daysInCurrent = null;
+  for (const p of periodsTouched) {
+    const pStart = parseISO(periodStartISO(p));
+    const pEnd = parseISO(periodEndISO(p));
+    if (!pStart || !pEnd) continue;
+    const amt = budgetByPeriod.get(p);
+    // Closed: period_end < today (strictly earlier than today's date).
+    // Open (current): period_start <= today <= period_end.
+    // Future: period_start > today.
+    if (pEnd < todayD) {
+      // Closed period. Full period budget contributes if present.
+      closed.push(p);
+      if (amt != null) {
+        total += amt;
+        anyContribution = true;
+      }
+    } else if (pStart <= todayD && todayD <= pEnd) {
+      // Current period. days_elapsed_through_yesterday inclusive.
+      // On day 1 of the period, yesterday is BEFORE pStart -> 0 days.
+      // On day D of the period, yesterday is D-1 days after pStart.
+      currentPeriodNo = p;
+      const daysInclusive = Math.floor((pEnd.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
+      daysInCurrent = daysInclusive;
+      const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
+      daysElapsedCurrent = Math.min(daysThroughYesterday, daysInclusive);
+      if (amt != null) {
+        const prorated = amt * (daysElapsedCurrent / daysInclusive);
+        total += prorated;
+        anyContribution = true;
+      }
+    }
+    // Future periods: no contribution.
+  }
+  if (!anyContribution) {
+    return {
+      amount: null,
+      days_elapsed_current: daysElapsedCurrent,
+      days_in_current: daysInCurrent,
+      current_period_no: currentPeriodNo,
+      closed_period_nos: closed,
+    };
+  }
+  return {
+    amount: r2(total),
+    days_elapsed_current: daysElapsedCurrent,
+    days_in_current: daysInCurrent,
+    current_period_no: currentPeriodNo,
+    closed_period_nos: closed,
+  };
+}
+
 // Verdict bands (V8-7 canonical). One source of truth for every
 // colored element on the page.
 export function verdictBand(pacePctPoints) {
@@ -605,6 +709,19 @@ export function buildBoard({
     // Money
     period_budget: isSinglePeriod ? budget : null,
     range_budget: budget,
+    // Overview Phase 2 PR-3 · §11 B-11 rider (approved by Kevin at
+    // Phase 0). New field, additive - `range_budget` above stays
+    // unchanged (byte-identical across the PR-3 change per the parity
+    // capture). Overview reads this; labor board's own surfaces keep
+    // reading range_budget for backward compatibility. The rollout
+    // for §11 B-11 is Phase 6; this ships the value only.
+    //
+    // amount is null when there is no budget in the range OR the
+    // range enumerates zero fiscal weeks. Callers surface the null.
+    // See computeBudgetToDateDays above for the exact contract.
+    budget_to_date_days: computeBudgetToDateDays({
+      budget_periods, start, end, today,
+    }),
     // V37-4 - basis of the money above. Single period reads its one
     // basis; multi-period agrees only if every touched period has
     // the same basis (else null so the sub-line can drop the word).

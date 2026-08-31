@@ -74,6 +74,8 @@
 import {
   weekStartsInRange,
   periodOf,
+  periodStartISO,
+  periodEndISO,
 } from "@/app/kpi/labor/lib/periods.js";
 import {
   GL_PREFIX_FOR_BUCKET,
@@ -192,6 +194,120 @@ function bucketBudgetForRange({ budgetMap, bucketKey, members, weeks }) {
   return Math.round(total * 100) / 100;
 }
 
+// ─── Budget-to-date by days (Overview Phase 2 PR-3 · §11 B-11) ──────
+//
+// Additive to the existing budgetForRange (which sums period_amount/4
+// per fiscal week). This function sums per-period budget with day-
+// proration on the CURRENT period only - closed periods contribute
+// full budget, current period contributes (days_elapsed_through_
+// yesterday / days_in_period), future periods contribute nothing.
+//
+// Sums across ALL purchasing lines that carry a budget in budgetMap
+// (any GL - the buckets + the tracked lines both flow through this
+// map). Envelope exclusions apply (PURCHASING_ENVELOPE_EXCLUSIONS is
+// a named empty set today).
+//
+// Returns { amount, days_elapsed_current, days_in_current,
+//           current_period_no, closed_period_nos }.
+// amount is null when no budget exists in the range OR the range
+// enumerates zero fiscal weeks.
+function parseISOUTC(iso) {
+  const m = String(iso || "").slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+const MS_PER_DAY = 86400000;
+
+// Compute for ONE gl_line_code across members - closed-full + current-
+// prorated. Returned amount is the sum across the members set.
+function budgetToDateDaysForLine({ budgetMap, glLineCode, members, periodsInRange, today }) {
+  const perLine = budgetLookup(budgetMap, glLineCode);
+  if (!perLine) return { amount: 0, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
+  const todayD = parseISOUTC(today);
+  if (!todayD) return { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
+  let total = 0;
+  let anyContribution = false;
+  const closed = [];
+  let currentPeriodNo = null;
+  let daysElapsedCurrent = null;
+  let daysInCurrent = null;
+  for (const p of periodsInRange) {
+    const pStart = parseISOUTC(periodStartISO(p));
+    const pEnd = parseISOUTC(periodEndISO(p));
+    if (!pStart || !pEnd) continue;
+    // Sum across members for this period.
+    let periodSum = 0;
+    let anyMember = false;
+    for (const m of members) {
+      if (PURCHASING_ENVELOPE_EXCLUSIONS.has(m)) continue;
+      const byAcct = accountLookup(perLine, m);
+      if (!byAcct) continue;
+      const amt = periodLookup(byAcct, p);
+      if (amt == null) continue;
+      periodSum += amt;
+      anyMember = true;
+    }
+    if (!anyMember) continue;
+    if (pEnd < todayD) {
+      if (!closed.includes(p)) closed.push(p);
+      total += periodSum;
+      anyContribution = true;
+    } else if (pStart <= todayD && todayD <= pEnd) {
+      currentPeriodNo = p;
+      const daysInclusive = Math.floor((pEnd.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
+      daysInCurrent = daysInclusive;
+      const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
+      daysElapsedCurrent = Math.min(daysThroughYesterday, daysInclusive);
+      total += periodSum * (daysElapsedCurrent / daysInclusive);
+      anyContribution = true;
+    }
+    // future: no contribution
+  }
+  return {
+    amount: anyContribution ? Math.round(total * 100) / 100 : null,
+    days_elapsed_current: daysElapsedCurrent,
+    days_in_current: daysInCurrent,
+    current_period_no: currentPeriodNo,
+    closed_period_nos: closed,
+  };
+}
+
+// Aggregate over every GL in budgetMap that matches the predicate.
+// Returns aggregate amount + a single days_* context (they're all the
+// same today's calendar - one current period, one closed set).
+function budgetToDateDaysForPredicate({ budgetMap, predicate, members, periodsInRange, today }) {
+  let total = 0;
+  let anyLine = false;
+  let ctx = { days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
+  const keys = typeof budgetMap?.keys === "function"
+    ? [...budgetMap.keys()]
+    : Object.keys(budgetMap || {});
+  for (const gl of keys) {
+    if (!predicate(gl)) continue;
+    const r = budgetToDateDaysForLine({ budgetMap, glLineCode: gl, members, periodsInRange, today });
+    if (r.amount != null) {
+      total += r.amount;
+      anyLine = true;
+    }
+    // context: keep the first non-null we see (all lines share
+    // calendar so this is deterministic).
+    if (ctx.current_period_no == null && r.current_period_no != null) {
+      ctx = {
+        days_elapsed_current: r.days_elapsed_current,
+        days_in_current: r.days_in_current,
+        current_period_no: r.current_period_no,
+        closed_period_nos: r.closed_period_nos,
+      };
+    } else if (ctx.closed_period_nos.length === 0 && r.closed_period_nos.length > 0) {
+      ctx.closed_period_nos = r.closed_period_nos;
+    }
+  }
+  return {
+    amount: anyLine ? Math.round(total * 100) / 100 : null,
+    ...ctx,
+  };
+}
+
 // ─── Main entry point ────────────────────────────────────────────────
 
 /**
@@ -281,6 +397,39 @@ export function buildPurchasingBoard({
     tracked_budget       += tracked[lineCode].budget;
   }
 
+  // Overview Phase 2 PR-3 · §11 B-11 rider (approved by Kevin at
+  // Phase 0). New field, additive - `buckets_budget` +
+  // `tracked_budget` above stay byte-identical across the PR-3 change
+  // per the parity capture. The Overview resolver reads
+  // `buckets_budget_to_date_days` + `tracked_budget_to_date_days`;
+  // the purchasing board's own surfaces keep reading the range-
+  // scoped fields. Rollout for §11 B-11 is Phase 6; this ships
+  // the value only.
+  //
+  // periodsInRange is the set of fiscal periods the range's fiscal
+  // weeks touch. Same set the totals blocks above sum against, so
+  // day-proration doesn't accidentally include a period outside
+  // the requested range.
+  const periodsInRange = [...new Set(weeks.map(w => periodOf(w)).filter(p => p != null))].sort((a, b) => a - b);
+  const buckets_budget_to_date_days = budgetToDateDaysForPredicate({
+    budgetMap,
+    predicate: (gl) => (
+      GL_PREFIX_FOR_BUCKET.food(gl) ||
+      GL_PREFIX_FOR_BUCKET.packaging(gl) ||
+      GL_PREFIX_FOR_BUCKET.vehicle(gl)
+    ),
+    members,
+    periodsInRange,
+    today: today || null,
+  });
+  const tracked_budget_to_date_days = budgetToDateDaysForPredicate({
+    budgetMap,
+    predicate: (gl) => TRACKED_LINE_CODES.includes(gl),
+    members,
+    periodsInRange,
+    today: today || null,
+  });
+
   return {
     buckets,
     tracked,
@@ -289,6 +438,9 @@ export function buildPurchasingBoard({
       buckets_budget:       Math.round(buckets_budget * 100) / 100,
       tracked_period_total: Math.round(tracked_period_total * 100) / 100,
       tracked_budget:       Math.round(tracked_budget * 100) / 100,
+      // Overview Phase 2 PR-3 · §11 B-11 rider
+      buckets_budget_to_date_days,
+      tracked_budget_to_date_days,
       members:              [...members],
       range:                { start, end },
     },
