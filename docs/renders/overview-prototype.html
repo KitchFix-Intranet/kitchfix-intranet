@@ -1,0 +1,607 @@
+<meta charset="utf-8">
+<title>KPI Overview - interactive prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+--navy-50:#F4F7FC;--navy-100:#EAF0FA;--navy-600:#33527D;--navy-700:#153968;--navy-800:#092B55;
+--amber-50:#FFF2E2;--amber-500:#D97706;--amber-600:#B25800;
+--green-50:#E9FDEC;--green-500:#16A34A;--green-600:#008330;
+--red-50:#FFEDE7;--red-500:#DC2626;--red-600:#B9000C;
+--n-0:#FFFFFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;
+--n-400:#CBD5E1;--n-500:#94A3B8;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;
+--purple:#7c3aed;--s:0.9;
+--t-lab:calc(10px*var(--s));--t-met:calc(11px*var(--s));--t-bod:calc(12.5px*var(--s));
+--t-med:calc(15px*var(--s));--t-lg:calc(20px*var(--s));--t-hero:calc(30px*var(--s));
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+button{font-family:inherit;cursor:pointer}
+
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.devbar b{font-size:12px;font-weight:700}
+.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}
+.devbar button{font-size:11px;font-weight:600;padding:5px 12px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+
+.nav{background:var(--n-0);border-bottom:1px solid var(--n-300);padding:0 24px;height:56px;display:flex;align-items:center}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:-.02em}
+.mark{width:26px;height:26px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.navlinks{display:flex;gap:22px;margin:0 auto}
+.navlinks span{font-size:13px;font-weight:600;color:var(--n-700)}
+.navlinks span.on{color:var(--navy-700);background:var(--navy-100);padding:6px 12px;border-radius:8px;margin:-6px -12px}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+
+.wrap{padding:18px 22px 60px;max-width:1560px;margin:0 auto}
+.cmd{background:var(--navy-700);border-radius:12px 12px 0 0;padding:13px 18px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;position:relative}
+.cmd .ttl{color:#fff;font-size:var(--t-med);font-weight:700}
+.cmd .acct{color:#fff;font-size:var(--t-med);font-weight:800}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 11px;display:flex;align-items:center;gap:7px;cursor:pointer}
+.chip:hover{background:rgba(255,255,255,.17)}
+.chip .k{color:#93a9c9;font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.chip .v{color:#fff;font-size:var(--t-bod);font-weight:600}
+.chip .d{color:#93a9c9;font-size:var(--t-bod);font-weight:500}
+.meta{color:#b9c8de;font-size:var(--t-met);font-weight:600;letter-spacing:.04em}
+.meta b{color:#fff;font-weight:700}
+.tog{display:flex;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:8px;overflow:hidden;margin-left:auto}
+.tog button{font-size:var(--t-bod);font-weight:700;padding:6px 14px;color:#cddbee;background:transparent;border:none}
+.tog button.on{background:#fff;color:var(--navy-700)}
+.tog button.ona{background:var(--amber-500);color:#fff}
+.fresh{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;color:#dbe6f5;font-size:var(--t-met);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:#54B56B}
+.rmenu{position:absolute;top:52px;left:18px;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px;z-index:40;box-shadow:0 8px 28px rgba(10,37,72,.16);display:none}
+.rmenu.on{display:block}
+.rmenu h4{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);margin-bottom:7px}
+.rmenu .row{display:flex;gap:5px;flex-wrap:wrap;max-width:330px}
+.rmenu button{font-size:var(--t-met);font-weight:700;padding:5px 10px;border:1px solid var(--n-300);background:var(--n-0);border-radius:6px;color:var(--n-700)}
+.rmenu button.on{background:var(--navy-700);border-color:var(--navy-700);color:#fff}
+
+.body{display:grid;grid-template-columns:236px minmax(0,1fr);gap:16px;background:var(--n-100);padding:16px;border-radius:0 0 12px 12px;border:1px solid var(--n-300);border-top:none;align-items:start}
+.body.solo{grid-template-columns:minmax(0,1fr)}
+.rail h2{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;margin-bottom:2px}
+.rail .sub{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-bottom:11px}
+.grp{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-bottom:11px;overflow:hidden}
+.grp .hd{padding:9px 12px;border-bottom:1px solid var(--n-200);display:flex;align-items:center;cursor:pointer}
+.grp .hd:hover{background:var(--n-50)}
+.grp .hd.sel{background:var(--navy-50);box-shadow:inset 3px 0 0 var(--navy-700)}
+.grp .hd .nm{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.grp .hd .rd{font-size:var(--t-met);color:var(--n-600);font-weight:500;display:block;letter-spacing:0;text-transform:none}
+.grp .hd .ct{margin-left:auto;font-size:var(--t-met);font-weight:700;color:var(--n-600);background:var(--n-100);border-radius:999px;padding:2px 8px}
+.acc{padding:9px 12px;border-bottom:1px solid var(--n-200);cursor:pointer}
+.acc:last-child{border-bottom:none}
+.acc:hover{background:var(--n-50)}
+.acc .k{font-size:var(--t-bod);font-weight:700}
+.acc .t{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.acc.sel{background:var(--navy-50);box-shadow:inset 3px 0 0 var(--navy-700)}
+.all{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:10px 12px;margin-bottom:11px;display:flex;align-items:center;cursor:pointer}
+.all.sel{background:var(--navy-700);border-color:var(--navy-700)}
+.all .k{font-size:var(--t-bod);font-weight:800}.all .t{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.all.sel .k{color:#fff}.all.sel .t{color:#b9c8de}
+.all .ct{margin-left:auto;font-size:var(--t-met);font-weight:700;color:var(--n-600);background:var(--n-100);border-radius:999px;padding:2px 8px}
+.all.sel .ct{background:rgba(255,255,255,.16);color:#fff}
+
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px}
+.ag{border-left:3px solid var(--green-600)}.ab{border-left:3px solid var(--navy-700)}
+.ap{border-left:3px solid var(--purple)}.aa{border-left:3px solid var(--amber-500)}
+.ch{display:flex;align-items:center;gap:8px;padding:11px 14px 0}
+.ch .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.ch .gl{font-size:var(--t-met);color:var(--n-600);font-weight:600}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;background:var(--n-0);position:relative}
+.q:hover{background:var(--navy-700);color:#fff;border-color:var(--navy-700)}
+.q .tip{display:none;position:absolute;bottom:22px;left:-8px;width:250px;background:var(--n-900);color:#fff;font-size:var(--t-met);font-weight:500;line-height:1.5;padding:9px 11px;border-radius:8px;z-index:30;text-transform:none;letter-spacing:0}
+.q:hover .tip{display:block}
+.pill{margin-left:auto;font-size:var(--t-met);font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.pok{background:var(--green-50);color:var(--green-600)}
+.pwa{background:var(--amber-50);color:var(--amber-600)}
+.pba{background:var(--red-50);color:var(--red-600)}
+.pne{background:var(--n-100);color:var(--n-700)}
+.cb{padding:9px 14px 14px}
+.hero{font-size:var(--t-hero);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.sub2{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:4px}
+.ok{color:var(--green-600)}.bad{color:var(--red-600)}.wa{color:var(--amber-600)}
+.kv{display:flex;gap:22px;margin-top:11px;padding-top:9px;border-top:1px dashed var(--n-300);flex-wrap:wrap}
+.kv .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600)}
+.kv .v{font-size:var(--t-bod);font-weight:700;margin-top:2px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mt{margin-top:12px}
+
+table{width:100%;border-collapse:collapse;font-size:var(--t-bod)}
+th{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);text-align:right;padding:0 0 7px}
+th.l{text-align:left}
+td{padding:6px 0;border-top:1px solid var(--n-200);text-align:right;font-weight:600}
+td.l{text-align:left}
+tr.sect td{border-top:none;padding:13px 0 3px;font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);text-align:left}
+tr.tot td{border-top:1px solid var(--n-400);font-weight:800}
+tr.gm td{border-top:2px solid var(--navy-700);font-weight:800;padding-top:9px;font-size:var(--t-med)}
+tr.ind td{color:var(--n-700);font-weight:500}
+tr.ind td.l{padding-left:16px}
+tr.dr:hover{background:var(--navy-50);cursor:pointer}
+.glc{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-right:6px;display:inline-block;min-width:36px}
+.drill{color:var(--navy-700);font-size:var(--t-met);font-weight:700;margin-left:7px}
+.absent{background:var(--amber-50);color:var(--amber-600);font-size:var(--t-met);font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.fixedp{background:var(--navy-100);color:var(--navy-700);font-size:var(--t-met);font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.seed{background:var(--amber-50);color:var(--amber-600);border:1px solid #F7C299;font-size:var(--t-met);font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.nb{color:var(--n-600);font-weight:600}
+
+.bars{display:flex;align-items:flex-end;gap:7px;height:96px}
+.bars i{flex:1;border-radius:2px 2px 0 0;display:block;min-height:2px}
+.bok{background:var(--green-500)}.bba{background:var(--red-500)}
+.bpr{background:repeating-linear-gradient(45deg,var(--navy-700),var(--navy-700) 3px,transparent 3px,transparent 7px);border:1px solid var(--navy-700);border-bottom:none}
+.axis{display:flex;gap:7px;margin-top:5px}
+.axis span{flex:1;text-align:center;font-size:var(--t-met);color:var(--n-600);font-weight:700}
+.axis small{display:block;font-weight:500;color:var(--n-500);font-size:calc(10px*var(--s))}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:9px}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.note{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-top:10px;line-height:1.55}
+
+.fold{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-top:12px;padding:12px 14px;display:flex;align-items:center;gap:9px;cursor:pointer}
+.fold:hover{background:var(--n-50)}
+.fold .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.fold .hx{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.fold .cv{margin-left:auto;color:var(--n-600);font-size:13px;font-weight:700}
+.seg{display:flex;border:1px solid var(--n-300);border-radius:7px;overflow:hidden;margin-left:auto}
+.seg button{font-size:var(--t-met);font-weight:700;padding:4px 11px;color:var(--n-600);background:var(--n-0);border:none}
+.seg button.on{background:var(--navy-700);color:#fff}
+
+.tracked{background:var(--n-50);border:1px dashed var(--n-400);border-radius:10px;margin-top:12px;padding:12px 14px}
+.tracked .hd2{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.tracked .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.tracked .sl{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-bottom:9px}
+
+.banner{background:var(--amber-50);border:1px solid #F7C299;border-radius:8px;padding:9px 13px;margin-bottom:12px;font-size:var(--t-bod);font-weight:600;color:var(--amber-600)}
+.verdict{background:linear-gradient(180deg,var(--navy-50),var(--n-0));border:1px solid var(--n-300);border-left:4px solid var(--green-600);border-radius:10px;padding:16px 18px;margin-bottom:12px}
+.verdict.warn{border-left-color:var(--amber-500)}
+.verdict .big{font-size:calc(22px*var(--s));font-weight:800;letter-spacing:-.02em;line-height:1.25}
+.verdict .say{font-size:var(--t-bod);color:var(--n-700);font-weight:500;margin-top:7px;line-height:1.65;max-width:78ch}
+.bigc{padding:15px 17px}
+.bigc .lbl{font-size:calc(13px*var(--s));font-weight:700;color:var(--n-700)}
+.bigc .hero{font-size:calc(34px*var(--s));margin-top:4px}
+.plain{font-size:var(--t-bod);color:var(--n-700);font-weight:500;line-height:1.55;margin-top:7px}
+.mover{display:flex;align-items:baseline;gap:9px;padding:8px 0;border-top:1px solid var(--n-200)}
+.mover:first-child{border-top:none}
+.mover .nm{font-weight:700;font-size:var(--t-bod)}
+.mover .wh{font-size:var(--t-met);color:var(--n-600);font-weight:500;display:block}
+.mover .vl{margin-left:auto;font-weight:800;font-size:var(--t-bod);white-space:nowrap}
+.dr2{display:flex;align-items:center;gap:12px;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:14px 16px;cursor:pointer}
+.dr2:hover{border-color:var(--navy-700);background:var(--navy-50)}
+.dr2 .ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.dr2 .t1{font-size:calc(14px*var(--s));font-weight:700}
+.dr2 .t2{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-top:2px}
+.dr2 .go{margin-left:auto;color:var(--navy-700);font-weight:800;font-size:15px}
+.cap{font-size:11px;color:var(--n-600);padding:12px 22px 0;max-width:1560px;margin:0 auto;line-height:1.6}
+.cap b{color:var(--n-900)}
+</style>
+<style>
+/* v3 additions */
+.stc{font-size:var(--t-met);font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap;position:relative;cursor:default}
+.stc-open{background:var(--amber-50);color:var(--amber-600)}
+.stc-wait{background:var(--n-100);color:var(--n-700)}
+.stc-ver{background:var(--green-50);color:var(--green-600)}
+.stc .tip{display:none;position:absolute;top:24px;left:0;width:280px;background:var(--n-900);color:#fff;font-size:var(--t-met);font-weight:500;line-height:1.55;padding:9px 11px;border-radius:8px;z-index:30;text-align:left}
+.stc:hover .tip{display:block}
+.src{display:flex;gap:14px;flex-wrap:wrap;font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-bottom:12px;padding:8px 12px;background:var(--n-0);border:1px solid var(--n-300);border-radius:8px}
+.src b{color:var(--n-900);font-weight:700}
+.src .lagx{color:var(--amber-600)}
+.kpi{display:flex;align-items:baseline;gap:8px;margin-top:6px;flex-wrap:wrap}
+.kpi .pa{font-size:calc(22px*var(--s));font-weight:800;letter-spacing:-.02em}
+.kpi .vs{font-size:var(--t-bod);color:var(--n-600);font-weight:600}
+.kpi .pt{font-size:var(--t-bod);font-weight:800;padding:2px 8px;border-radius:6px}
+.pt-ok{background:var(--green-50);color:var(--green-600)}
+.pt-bad{background:var(--red-50);color:var(--red-600)}
+.pt-neu{background:var(--n-100);color:var(--n-700)}
+.money{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:11px;padding-top:9px;border-top:1px dashed var(--n-300)}
+.money .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600)}
+.money .v{font-size:var(--t-bod);font-weight:700;margin-top:2px}
+.brk{margin-top:9px;font-size:var(--t-met)}
+.brk div{display:flex;gap:8px;padding:4px 0;border-top:1px solid var(--n-200);color:var(--n-700);font-weight:500}
+.brk div span:last-child{margin-left:auto;font-weight:700;color:var(--n-900)}
+.brk div span.bud{margin-left:0;color:var(--n-500);font-weight:600}
+.bars{position:relative}
+.bars .tgt{position:absolute;left:0;right:0;border-top:2px dashed var(--amber-500);pointer-events:none}
+.bars .tgt em{position:absolute;right:0;top:-16px;font-style:normal;font-size:var(--t-lab);font-weight:800;letter-spacing:.06em;color:var(--amber-600);text-transform:uppercase}
+.bars i{position:relative}
+.bars i .bt{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--n-900);color:#fff;font-size:var(--t-met);font-weight:500;line-height:1.5;padding:7px 10px;border-radius:7px;white-space:nowrap;z-index:20}
+.bars i:hover .bt{display:block}
+.bars i.dash{background:transparent;border-bottom:2px dashed var(--n-400);height:2px;align-self:flex-end;border-radius:0}
+.lev th{white-space:nowrap}
+.lev td.l{font-weight:700}
+.verdict .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.verdict .st{font-size:var(--t-met);font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:999px}
+.verdict.ahead{border-left-color:var(--green-600)}.verdict.ontrack{border-left-color:var(--navy-700)}
+.verdict.behind{border-left-color:var(--amber-500)}.verdict.risk{border-left-color:var(--red-600)}
+.verdict .pace{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:8px}
+.plannote{font-size:var(--t-met);color:var(--amber-600);font-weight:600;margin-top:5px}
+.saltog{display:flex;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:8px;overflow:hidden;margin-left:auto;position:relative}
+.saltog button{font-size:var(--t-bod);font-weight:700;padding:6px 12px;color:#cddbee;background:transparent;border:none}
+.saltog button.on{background:#fff;color:var(--navy-700)}
+.saltog button.ona{background:var(--amber-500);color:#fff}
+.gate{font-size:var(--t-lab);color:#93a9c9;font-weight:700;letter-spacing:.06em;text-transform:uppercase;align-self:center;margin-left:8px}
+</style>
+<style>
+/* v4 additions */
+.ticker{display:flex;align-items:stretch;flex-wrap:wrap;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.ticker .tk{display:flex;flex-direction:column;justify-content:center;padding:10px 16px;border-right:1px solid var(--n-200);min-width:0}
+.ticker .tk:last-child{border-right:none}
+.ticker .tk .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600)}
+.ticker .tk .v{font-size:var(--t-bod);font-weight:700;margin-top:3px;white-space:nowrap}
+.ticker .tk .v em{font-style:normal;font-weight:800;margin-left:6px}
+.ticker .st{display:flex;align-items:center;padding:0 18px;color:#fff;font-size:var(--t-met);font-weight:800;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.ticker.ahead .st{background:var(--green-600)}.ticker.ontrack .st{background:var(--navy-700)}
+.ticker.behind .st{background:var(--amber-500)}.ticker.risk .st{background:var(--red-600)}
+.ticker .tk.note{background:var(--amber-50)}
+.ticker .tk.note .v{color:var(--amber-600);font-weight:600;white-space:normal}
+.hero2{font-size:calc(32px*var(--s));font-weight:800;letter-spacing:-.02em;line-height:1.05;display:flex;align-items:baseline;gap:8px}
+.hero2 small{font-size:var(--t-bod);font-weight:600;color:var(--n-600);letter-spacing:0}
+.kpi2{display:flex;align-items:baseline;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:var(--t-bod);font-weight:600;color:var(--n-600)}
+.kpi2 b{font-size:calc(20px*var(--s));font-weight:800;color:var(--n-900)}
+.kpi2 .g{font-weight:800}
+.lev2{table-layout:fixed}
+.lev2 col.c0{width:auto}.lev2 col.c1{width:13%}.lev2 col.c2{width:13%}.lev2 col.c3{width:12%}.lev2 col.c4{width:9%}.lev2 col.c5{width:9%}.lev2 col.c6{width:12%}
+.bars2{display:flex;align-items:flex-end;gap:14px;height:110px;position:relative;padding-top:14px}
+.bars2 i{flex:1;border-radius:3px 3px 0 0;display:block;min-height:2px;position:relative}
+.bars2 .tgt{position:absolute;left:0;right:0;border-top:2px dashed var(--navy-700);pointer-events:none;z-index:2}
+.bars2 .tgt em{position:absolute;right:0;top:-15px;font-style:normal;font-size:var(--t-lab);font-weight:800;letter-spacing:.06em;color:var(--navy-700);text-transform:uppercase;background:var(--n-0);padding:0 4px}
+.bars2 i .bt{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--n-900);color:#fff;border-radius:8px;padding:8px 10px;z-index:20;min-width:170px;text-align:left}
+.bars2 i:hover .bt{display:block}
+.bt .bth{font-size:var(--t-met);font-weight:800;letter-spacing:.04em;margin-bottom:5px;color:#dbe6f5}
+.bt .btr{display:flex;justify-content:space-between;gap:14px;font-size:var(--t-met);font-weight:500;line-height:1.7}
+.bt .btr b{font-weight:700}
+.bt .btr.res{border-top:1px solid rgba(255,255,255,.2);margin-top:3px;padding-top:4px;font-weight:800}
+.bars2 i.dash{background:transparent;border-bottom:2px dashed var(--n-400);height:2px;align-self:flex-end;border-radius:0}
+.axis2{display:flex;gap:14px;margin-top:6px}
+.axis2 span{flex:1;text-align:center;font-size:var(--t-bod);color:var(--n-900);font-weight:700}
+.axis2 small{display:block;font-weight:500;color:var(--n-600);font-size:var(--t-met);margin-top:1px}
+.axis2 .amt{display:block;font-weight:700;font-size:var(--t-met);margin-top:2px}
+.dr3{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;cursor:pointer}
+.dr3:hover{border-color:var(--navy-700);background:var(--navy-50)}
+.dr3 .top{display:flex;align-items:center;gap:9px}
+.dr3 .top .t1{font-size:calc(14px*var(--s));font-weight:800}
+.dr3 .top .go{margin-left:auto;color:var(--navy-700);font-weight:800;font-size:15px}
+.dr3 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;padding-top:9px;border-top:1px dashed var(--n-300)}
+.dr3 .grid .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600)}
+.dr3 .grid .v{font-size:var(--t-bod);font-weight:700;margin-top:2px}
+.dr3 .grid .v small{font-weight:500;color:var(--n-600)}
+</style>
+<style>
+/* v5 */
+.mini{display:flex;gap:16px;margin-top:9px;padding-top:8px;border-top:1px dashed var(--n-300);font-size:var(--t-met);color:var(--n-600);font-weight:600;flex-wrap:wrap}
+.mini b{color:var(--n-900);font-weight:700}
+.tog button.onb{background:#fff;color:var(--navy-700)}
+</style>
+<div class="devbar">
+  <b>Overview prototype v5</b>
+  <span class="h">Real P8 workbook · P9 is a live estimate, 3 of 4 weeks closed · today Mon 08/31 · data through Sun 08/30</span>
+  <button id="bCorp" onclick="setRole('corp')">Corporate</button>
+  <button id="bSite" class="on" onclick="setRole('site')">Site leader</button>
+</div>
+<div class="nav">
+  <div class="brand"><span class="mark">KF</span>KitchFix</div>
+  <div class="navlinks"><span>Home</span><span>People</span><span>Ops Hub</span><span>Service</span><span class="on">KPI</span><span>Playbook</span><span>Sous</span><span>Directory</span></div>
+  <div class="avatar" id="av">JT</div>
+</div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+
+<script>
+const PNL={"CIN - AZ":{"r2200":{"b":[46000.0,3000.0,3000.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[46805.4,2400.0,17113.0,0.0,0.0,0.0,0.0,0.0],"fy":52000.0},"r2300":{"b":[6087.0,53224.0,115234.0,38304.0,31126.0,37672.0,37672.0,39453.0,35835.0],"a":[6087.0,53224.0,115234.0,38304.0,31126.0,37672.0,37672.0,39453.0],"fy":445717.0},"r2400_1":{"b":[15029.0,156980.0,320184.0,87747.0,67996.0,70742.0,70742.0,82477.0,82295.0],"a":[31299.88,144310.89,328174.53,81892.58,65725.08,68394.98,65340.92,70159.52],"fy":1074983.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[67116.0,213204.0,438418.0,126051.0,99122.0,108414.0,108414.0,121930.0,118130.0],"a":[84192.28,199934.89,460521.53,120196.58,96851.08,106066.98,103012.92,109612.52],"fy":1572700.0},"r3100_1":{"b":[14140.0,27025.0,55177.0,15756.0,12390.0,13552.0,13552.0,15241.0,14766.0],"a":[14445.65,29805.11,46470.62,16660.03,15290.9,17770.03,15305.57,14157.89],"fy":203087.0},"r3100_2":{"b":[17115.0,17115.0,17115.0,17115.0,17115.0,17115.0,17115.0,17115.0,17115.0],"a":[17115.38,17115.38,17225.15,14701.75,12307.68,12527.17,12417.41,12307.72],"fy":222495.0},"tot3100":{"b":[31255.0,44140.0,72292.0,32871.0,29505.0,30667.0,30667.0,32356.0,31881.0],"a":[31561.03,46920.49,63695.77,31361.78,27598.58,30297.2,27722.98,26465.61],"fy":425582.0},"r3200_1":{"b":[19688.0,61410.0,123663.0,30015.0,24390.0,29520.0,29520.0,30915.0,28080.0],"a":[29752.54,51358.25,97342.95,25454.86,24771.05,26695.05,26125.98,26261.38],"fy":417251.0},"r3200_2":{"b":[788.0,2456.0,4947.0,1201.0,976.0,1181.0,1181.0,1237.0,1123.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":16692.0},"tot3200":{"b":[20476.0,63866.0,128610.0,31216.0,25366.0,30701.0,30701.0,32152.0,29203.0],"a":[29752.54,51358.25,97342.95,25454.86,24771.05,26695.05,26125.98,26261.38],"fy":433943.0},"r3400_1":{"b":[2262.0,4324.0,8828.0,2521.0,1982.0,2168.0,2168.0,2439.0,2363.0],"a":[2240.5,1172.92,6025.87,838.97,1072.56,2229.7,1683.81,1287.1],"fy":32493.0},"r3400_2":{"b":[2149.0,4108.0,8387.0,2395.0,1883.0,2060.0,2060.0,2317.0,2244.0],"a":[1824.72,5348.32,7489.14,1992.26,2011.36,1451.98,3016.4,2568.74],"fy":30868.0},"r3400_5":{"b":[1750.0,800.0,800.0,700.0,700.0,700.0,700.0,700.0,700.0],"a":[923.1,885.12,1133.94,955.18,443.07,444.03,870.5,883.95],"fy":9700.0},"tot3400":{"b":[6161.0,9232.0,18015.0,5616.0,4565.0,4928.0,4928.0,5456.0,5307.0],"a":[4988.32,7406.36,14648.95,3786.41,3526.99,4125.71,5570.71,4739.79],"fy":73061.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,119.9,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,119.9,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totCOGS":{"b":[57892.0,117238.0,218917.0,69703.0,59436.0,66296.0,66296.0,69964.0,66391.0],"a":[66301.89,105805.0,175687.67,60603.05,55896.62,61117.96,59419.67,57466.78],"fy":932586.0},"r5002_1":{"b":[115.0,115.0,115.0,115.0,115.0,115.0,115.0,115.0,115.0],"a":[0.0,0.0,0.0,0.0,0.0,99.99,714.0,99.99],"fy":1495.0},"r5002_5":{"b":[615.0,615.0,615.0,615.0,615.0,615.0,615.0,615.0,615.0],"a":[2613.52,1677.51,818.55,13.03,369.91,177.32,0.0,171.26],"fy":7995.0},"r5017_3":{"b":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"a":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"fy":2145.0}},"CIN - KY":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2300":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2400_1":{"b":[0.0,0.0,0.0,36203.0,28807.0,28807.0,28807.0,14403.0,28807.0],"a":[0.0,0.0,0.0,36846.9,28931.85,28023.3,24520.05,14141.25],"fy":180237.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[0.0,0.0,0.0,36203.0,28807.0,28807.0,28807.0,14403.0,28807.0],"a":[0.0,0.0,0.0,36846.9,28931.85,28023.3,24520.05,14141.25],"fy":180237.0},"r3100_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3100_2":{"b":[0.0,0.0,0.0,7143.0,7143.0,7143.0,7143.0,7143.0,7143.0],"a":[0.0,0.0,3307.46,6614.92,6614.92,6614.92,6614.92,6614.92],"fy":50001.0},"tot3100":{"b":[0.0,0.0,0.0,7143.0,7143.0,7143.0,7143.0,7143.0,7143.0],"a":[0.0,0.0,3307.46,6614.92,6614.92,6614.92,6614.92,6614.92],"fy":50001.0},"r3200_1":{"b":[0.0,0.0,0.0,13320.0,10800.0,10800.0,10800.0,5400.0,10800.0],"a":[0.0,0.0,0.0,15742.52,11072.23,10363.05,12571.44,8959.96],"fy":67320.0},"r3200_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3200":{"b":[0.0,0.0,0.0,13320.0,10800.0,10800.0,10800.0,5400.0,10800.0],"a":[0.0,0.0,0.0,15742.52,11072.23,10363.05,12571.44,8959.96],"fy":67320.0},"r3400_1":{"b":[0.0,0.0,0.0,362.0,288.0,288.0,288.0,144.0,288.0],"a":[0.0,0.0,1041.76,111.59,139.73,92.56,0.0,0.0],"fy":1802.0},"r3400_2":{"b":[0.0,0.0,0.0,362.0,288.0,288.0,288.0,144.0,288.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":1802.0},"r3400_5":{"b":[0.0,0.0,0.0,200.0,20.0,20.0,20.0,20.0,20.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":320.0},"tot3400":{"b":[0.0,0.0,0.0,924.0,596.0,596.0,596.0,308.0,596.0],"a":[0.0,0.0,1041.76,111.59,139.73,92.56,0.0,0.0],"fy":3924.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[0.0,0.0,0.0,65.0,65.0,65.0,65.0,65.0,65.0],"a":[0.0,0.0,0.0,107.06,20.0,0.0,20.0,20.0],"fy":455.0},"r3500_5":{"b":[0.0,0.0,0.0,100.0,100.0,100.0,100.0,100.0,100.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":700.0},"tot3500":{"b":[300.0,300.0,300.0,465.0,465.0,465.0,465.0,465.0,465.0],"a":[243.53,295.72,279.01,385.98,296.32,277.3,297.95,292.75],"fy":5055.0},"totCOGS":{"b":[300.0,300.0,300.0,21852.0,19004.0,19004.0,19004.0,13316.0,19004.0],"a":[243.53,295.72,4628.23,22855.01,18123.2,17347.83,19484.31,15867.63],"fy":126300.0},"r5002_1":{"b":[0.0,0.0,0.0,143.0,143.0,143.0,143.0,143.0,143.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,3301.36],"fy":1001.0},"r5002_5":{"b":[0.0,0.0,0.0,143.0,143.0,143.0,143.0,143.0,143.0],"a":[0.0,0.0,401.78,53.65,0.0,0.0,0.0,0.0],"fy":1001.0},"r5017_3":{"b":[0.0,0.0,0.0,50.0,50.0,50.0,50.0,50.0,50.0],"a":[0.0,0.0,0.0,50.0,50.0,50.0,50.0,50.0],"fy":350.0}},"CIN - OH":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2300":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2400_1":{"b":[0.0,0.0,0.0,57218.0,57218.0,52450.0,71523.0,47682.0,57218.0],"a":[0.0,0.0,0.0,57218.0,57218.0,52450.0,71523.0,47682.0],"fy":376686.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[0.0,0.0,0.0,57218.0,57218.0,52450.0,71523.0,47682.0,57218.0],"a":[0.0,0.0,0.0,57218.0,57218.0,52450.0,71523.0,47682.0],"fy":376686.0},"r3100_1":{"b":[0.0,0.0,0.0,16709.0,16709.0,15316.0,20886.0,13924.0,16709.0],"a":[0.0,0.0,506.53,16292.53,14558.83,15342.85,18796.46,12874.92],"fy":110000.0},"r3100_2":{"b":[6722.0,6722.0,6722.0,6722.0,6722.0,6722.0,6722.0,6722.0,6722.0],"a":[6721.54,6721.54,6721.54,6721.54,6721.54,6721.54,6721.54,6721.55],"fy":87386.0},"tot3100":{"b":[6722.0,6722.0,6722.0,23431.0,23431.0,22038.0,27608.0,20646.0,23431.0],"a":[6721.54,6721.54,7228.07,23014.07,21280.37,22064.39,25518.0,19596.47],"fy":197386.0},"r3200_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3200_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3400_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3400_2":{"b":[0.0,0.0,0.0,1000.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,81.9,73.8,73.8,692.41,73.8,36.9],"fy":1000.0},"r3400_5":{"b":[0.0,0.0,0.0,1000.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,940.23,36.38,144.72,0.0,0.0,0.0,0.0],"fy":1000.0},"tot3400":{"b":[0.0,0.0,0.0,2000.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,940.23,118.28,218.52,73.8,692.41,73.8,36.9],"fy":2000.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totCOGS":{"b":[6722.0,6722.0,6722.0,25431.0,23431.0,22038.0,27608.0,20646.0,23431.0],"a":[6721.54,7661.77,7346.35,23232.59,21354.17,22756.8,25591.8,19633.37],"fy":199386.0},"r5002_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r5002_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,1177.4,0.0,0.0,0.0,0.0],"fy":0.0},"r5017_3":{"b":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"a":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"fy":1352.0}},"STL - FL":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2300":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2400_1":{"b":[45553.0,171367.0,407375.0,132755.0,98915.0,98915.0,98915.0,98915.0,98915.0],"a":[45553.0,171367.0,407375.0,132755.0,98915.0,98915.0,98915.0,98915.0],"fy":1399999.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[45553.0,171367.0,407375.0,132755.0,98915.0,98915.0,98915.0,98915.0,98915.0],"a":[45553.0,171367.0,407375.0,132755.0,98915.0,98915.0,98915.0,98915.0],"fy":1399999.0},"r3100_1":{"b":[10022.0,49251.0,111073.0,29206.0,21761.0,21761.0,21761.0,21761.0,21761.0],"a":[0.0,31569.15,53931.41,31102.49,30627.39,33366.43,35753.99,40719.64],"fy":340999.0},"r3100_2":{"b":[16538.0,16538.0,16538.0,16538.0,16538.0,16538.0,16538.0,16538.0,16538.0],"a":[6923.08,14395.61,20115.38,15640.38,15615.38,23538.46,16181.32,12598.61],"fy":214994.0},"tot3100":{"b":[26560.0,65789.0,127611.0,45744.0,38299.0,38299.0,38299.0,38299.0,38299.0],"a":[6923.08,45964.76,74046.79,46742.87,46242.77,56904.89,51935.31,53318.25],"fy":555993.0},"r3200_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,841.5,0.0,21.76,0.0,0.0,0.0],"fy":0.0},"r3200_2":{"b":[813.0,3060.0,7275.0,2371.0,1766.0,1766.0,1766.0,1766.0,1766.0],"a":[0.0,0.0,0.0,0.0,15285.0,1766.0,1766.0,1766.0],"fy":24999.0},"tot3200":{"b":[813.0,3060.0,7275.0,2371.0,1766.0,1766.0,1766.0,1766.0,1766.0],"a":[0.0,0.0,841.5,0.0,15306.76,1766.0,1766.0,1766.0],"fy":24999.0},"r3400_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,830.03,0.0,0.0,0.0,0.0],"fy":0.0},"r3400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[1065.52,922.27,96.39,0.0,-381.9,123.59,625.96,190.5],"fy":0.0},"r3400_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[2690.53,1970.47,1197.69,71.36,331.21,861.8,396.06,0.0],"fy":0.0},"tot3400":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[3756.05,2892.74,1294.08,901.39,-50.69,985.39,1022.02,190.5],"fy":0.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,79.05,127.88,0.0,20.67,7.79,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,79.05,127.88,0.0,20.67,7.79,0.0,0.0],"fy":0.0},"totCOGS":{"b":[27373.0,68849.0,134886.0,48115.0,40065.0,40065.0,40065.0,40065.0,40065.0],"a":[10679.13,48936.55,76310.25,47644.26,61519.51,59664.07,54723.33,55274.75],"fy":580992.0},"r5002_1":{"b":[385.0,385.0,385.0,385.0,385.0,385.0,385.0,385.0,385.0],"a":[0.0,22.65,0.0,0.0,0.0,0.0,0.0,0.0],"fy":5005.0},"r5002_5":{"b":[385.0,385.0,385.0,385.0,385.0,385.0,385.0,385.0,385.0],"a":[0.0,571.4,73.47,1305.22,0.0,0.0,0.0,2145.35],"fy":5005.0},"r5017_3":{"b":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"a":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"fy":2145.0}},"STL - MO":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2300":{"b":[0.0,0.0,0.0,7143.0,7143.0,7143.0,7143.0,7143.0,7143.0],"a":[0.0,0.0,0.0,7143.0,7143.0,7143.0,7143.0,7143.0],"fy":50001.0},"r2400_1":{"b":[0.0,0.0,0.0,65101.0,65101.0,65101.0,92226.0,54251.0,48826.0],"a":[0.0,0.0,0.0,65101.0,65101.0,65101.0,92226.0,54251.0],"fy":439432.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[0.0,0.0,0.0,72244.0,72244.0,72244.0,99369.0,61394.0,55969.0],"a":[0.0,0.0,0.0,72244.0,72244.0,72244.0,99369.0,61394.0],"fy":489433.0},"r3100_1":{"b":[0.0,0.0,0.0,17778.0,17778.0,17778.0,25185.0,14815.0,13333.0],"a":[0.0,0.0,0.0,20498.39,14554.58,15825.03,22566.11,13103.94],"fy":120000.0},"r3100_2":{"b":[9904.0,11538.0,11538.0,16154.0,16154.0,16154.0,16154.0,16154.0,16154.0],"a":[9903.85,11538.46,16788.46,16538.46,16538.46,11538.46,16538.46,16538.46],"fy":165672.0},"tot3100":{"b":[9904.0,11538.0,11538.0,33932.0,33932.0,33932.0,41339.0,30969.0,29487.0],"a":[9903.85,11538.46,16788.46,37036.85,31093.04,27363.49,39104.57,29642.4],"fy":285672.0},"r3200_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3200_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3400_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,276.89,0.0,0.0,0.0],"fy":0.0},"r3400_2":{"b":[0.0,0.0,0.0,1000.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,133.04,2897.58,195.78,0.0,388.7,437.55],"fy":1000.0},"r3400_5":{"b":[0.0,0.0,0.0,1000.0,0.0,0.0,0.0,0.0,0.0],"a":[214.96,0.0,1141.01,328.96,0.0,0.0,0.0,0.0],"fy":1000.0},"tot3400":{"b":[0.0,0.0,0.0,2000.0,0.0,0.0,0.0,0.0,0.0],"a":[214.96,0.0,1274.05,3226.54,472.67,0.0,388.7,437.55],"fy":2000.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totCOGS":{"b":[9904.0,11538.0,11538.0,35932.0,33932.0,33932.0,41339.0,30969.0,29487.0],"a":[10118.81,11538.46,18062.51,40263.39,31565.71,27363.49,39493.27,30079.95],"fy":287672.0},"r5002_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r5002_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[1153.85,1153.85,1153.85,1153.85,10384.6,0.0,0.0,0.0],"fy":0.0},"r5017_3":{"b":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"a":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"fy":1352.0}},"TBJ - NY":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2300":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2400_1":{"b":[0.0,0.0,0.0,19685.0,24606.0,24606.0,24606.0,24606.0,24606.0],"a":[0.0,0.0,0.0,19548.1,26929.9,27066.6,25426.2,26929.9],"fy":155018.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[0.0,0.0,0.0,19685.0,24606.0,24606.0,24606.0,24606.0,24606.0],"a":[0.0,0.0,0.0,19548.1,26929.9,27066.6,25426.2,26929.9],"fy":155018.0},"r3100_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3100_2":{"b":[0.0,0.0,0.0,6488.0,6488.0,6488.0,6488.0,6488.0,6488.0],"a":[0.0,0.0,1746.63,6986.54,6986.54,6986.54,6986.54,6986.54],"fy":45416.0},"tot3100":{"b":[0.0,0.0,0.0,6488.0,6488.0,6488.0,6488.0,6488.0,6488.0],"a":[0.0,0.0,1746.63,6986.54,6986.54,6986.54,6986.54,6986.54],"fy":45416.0},"r3200_1":{"b":[0.0,0.0,0.0,6028.0,7535.0,7535.0,7535.0,7535.0,7535.0],"a":[0.0,0.0,0.0,7882.78,8148.15,8999.92,9557.15,6349.45],"fy":47470.0},"r3200_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3200":{"b":[0.0,0.0,0.0,6028.0,7535.0,7535.0,7535.0,7535.0,7535.0],"a":[0.0,0.0,0.0,7882.78,8148.15,8999.92,9557.15,6349.45],"fy":47470.0},"r3400_1":{"b":[0.0,0.0,0.0,100.0,100.0,100.0,100.0,100.0,100.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":700.0},"r3400_2":{"b":[0.0,0.0,0.0,75.0,75.0,75.0,75.0,75.0,75.0],"a":[0.0,0.0,0.0,276.29,41.33,199.74,268.21,252.06],"fy":525.0},"r3400_5":{"b":[0.0,0.0,0.0,120.0,15.0,15.0,15.0,15.0,15.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":210.0},"tot3400":{"b":[0.0,0.0,0.0,295.0,190.0,190.0,190.0,190.0,190.0],"a":[0.0,0.0,0.0,276.29,41.33,199.74,268.21,252.06],"fy":1435.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totCOGS":{"b":[0.0,0.0,0.0,12811.0,14213.0,14213.0,14213.0,14213.0,14213.0],"a":[0.0,0.0,1746.63,15145.61,15176.02,16186.2,16811.9,13588.05],"fy":94321.0},"r5002_1":{"b":[0.0,0.0,0.0,71.0,71.0,71.0,71.0,71.0,71.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":497.0},"r5002_5":{"b":[0.0,0.0,0.0,286.0,286.0,286.0,286.0,286.0,286.0],"a":[0.0,0.0,0.0,284.88,0.0,86.33,0.0,0.0],"fy":2002.0},"r5017_3":{"b":[0.0,0.0,0.0,50.0,50.0,50.0,50.0,50.0,50.0],"a":[0.0,0.0,0.0,50.0,50.0,50.0,50.0,50.0],"fy":350.0}},"TBJ - FL":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,2635.68,1801.8,1801.8,0.0,0.0,0.0],"fy":0.0},"r2300":{"b":[18692.0,76755.0,117894.0,43840.0,39175.0,39238.0,35252.0,44104.0,25169.0],"a":[18692.0,76755.0,117894.0,43840.0,39175.0,39238.0,35252.0,44104.0],"fy":515710.0},"r2400_1":{"b":[41016.0,227221.0,349002.0,104121.0,100983.0,105745.0,93201.0,114274.0,79826.0],"a":[59087.35,274006.38,388540.09,117229.94,104177.91,101843.13,101717.1,110080.47],"fy":1381254.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[5000.0,5000.0,15000.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[10000.0,0.0,0.0,0.0,15000.0,0.0,0.0,0.0],"fy":25000.0},"totRev":{"b":[64708.0,308976.0,481896.0,147961.0,140158.0,144983.0,128453.0,158378.0,104995.0],"a":[87779.35,350761.38,509069.77,162871.74,160154.71,141081.13,136969.1,154184.47],"fy":1921964.0},"r3100_1":{"b":[10867.0,55324.0,84975.0,26929.0,25509.0,26387.0,23379.0,28825.0,19109.0],"a":[35053.83,81935.24,85694.53,31623.65,26009.17,27998.34,27184.15,28619.54],"fy":345249.0},"r3100_2":{"b":[16386.0,16386.0,16386.0,16386.0,16386.0,16386.0,16386.0,16386.0,16386.0],"a":[16386.16,16386.16,16386.19,16386.16,14174.62,11963.08,11963.08,11963.08],"fy":213018.0},"tot3100":{"b":[27253.0,71710.0,101361.0,43315.0,41895.0,42773.0,39765.0,45211.0,35495.0],"a":[51439.99,98321.4,102080.72,48009.81,40183.79,39961.42,39147.23,40582.62],"fy":558267.0},"r3200_1":{"b":[12780.0,62139.0,95443.0,31654.0,29969.0,30992.0,27462.0,33864.0,22423.0],"a":[16661.41,73413.01,93045.8,37677.09,46258.89,27931.28,35835.19,34062.83],"fy":398408.0},"r3200_2":{"b":[972.0,3990.0,6128.0,2410.0,2285.0,2365.0,2095.0,2583.0,1716.0],"a":[972.0,3990.0,9440.56,0.0,8026.14,-4278.7,2095.0,2583.0],"fy":28474.0},"tot3200":{"b":[13752.0,66129.0,101571.0,34064.0,32254.0,33357.0,29557.0,36447.0,24139.0],"a":[17633.41,77403.01,102486.36,37677.09,54285.03,23652.58,37930.19,36645.83],"fy":426882.0},"r3400_1":{"b":[119.0,608.0,934.0,296.0,280.0,290.0,257.0,317.0,210.0],"a":[141.29,288.88,128.67,215.95,-59.49,62.26,275.78,238.93],"fy":3794.0},"r3400_2":{"b":[955.0,4864.0,7470.0,2367.0,2243.0,2320.0,2055.0,2534.0,1680.0],"a":[2487.38,6945.61,3205.53,3264.85,2446.55,3543.55,2954.68,2607.42],"fy":30351.0},"r3400_5":{"b":[2200.0,800.0,1000.0,800.0,700.0,700.0,700.0,700.0,700.0],"a":[296.76,909.44,965.72,1767.37,825.77,524.16,547.5,570.84],"fy":11100.0},"tot3400":{"b":[3274.0,6272.0,9404.0,3463.0,3223.0,3310.0,3012.0,3551.0,2590.0],"a":[2925.43,8143.93,4299.92,5248.17,3212.83,4129.97,3777.96,3417.19],"fy":45245.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[25.0,100.0,100.0,40.0,40.0,40.0,40.0,40.0,25.0],"a":[0.0,414.23,40.0,60.0,112.25,227.22,60.0,90.62],"fy":525.0},"r3500_5":{"b":[77.0,77.0,77.0,77.0,77.0,77.0,77.0,77.0,77.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":1001.0},"tot3500":{"b":[756.0,831.0,831.0,771.0,771.0,771.0,771.0,771.0,756.0],"a":[542.05,1072.43,661.03,680.82,727.29,844.42,678.65,697.72],"fy":10028.0},"totCOGS":{"b":[45035.0,144942.0,213167.0,81613.0,78143.0,80211.0,73105.0,85980.0,62980.0],"a":[72540.88,184940.77,209528.03,91615.89,98408.94,68588.39,81534.03,81343.36],"fy":1040422.0},"r5002_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,10.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r5002_5":{"b":[231.0,231.0,231.0,231.0,231.0,231.0,231.0,231.0,231.0],"a":[0.0,975.3,462.08,60.17,0.0,0.0,0.0,261.93],"fy":3003.0},"r5017_3":{"b":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"a":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"fy":2145.0}},"TBR - FL":{"r2200":{"b":[9100.0,9100.0,7150.0,9100.0,9100.0,1950.0,0.0,0.0,4550.0],"a":[6727.5,8970.0,7020.0,10140.0,9165.0,5265.0,0.0,0.0],"fy":79950.0},"r2300":{"b":[2046.0,30072.0,99287.0,45688.0,40915.0,40915.0,40915.0,42961.0,40915.0],"a":[2046.0,30072.0,99287.0,45688.0,40915.0,40915.0,40915.0,42961.0],"fy":457770.0},"r2400_1":{"b":[5855.0,225506.0,562034.0,134756.0,121095.0,121095.0,121095.0,126950.0,120095.0],"a":[7902.0,293405.05,536503.45,145442.12,111266.88,109258.16,111344.48,113142.94],"fy":1752423.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[17001.0,264678.0,668471.0,189544.0,171110.0,163960.0,162010.0,169911.0,165560.0],"a":[16675.5,332447.05,642810.45,201270.12,161346.88,155438.16,152259.48,156103.94],"fy":2290143.0},"r3100_1":{"b":[17199.0,75020.0,109838.0,40491.0,32252.0,32252.0,32252.0,32252.0,32252.0],"a":[8669.29,70623.64,116827.49,40470.42,28522.77,28559.47,29417.11,29751.84],"fy":455814.0},"r3100_2":{"b":[21154.0,21154.0,21154.0,16731.0,16731.0,16731.0,16731.0,16731.0,16731.0],"a":[21153.86,21153.86,19061.57,18969.26,16730.78,16969.26,16850.02,16730.79],"fy":244041.0},"tot3100":{"b":[38353.0,96174.0,130992.0,57222.0,48983.0,48983.0,48983.0,48983.0,48983.0],"a":[29823.15,91777.5,135889.06,59439.68,45253.55,45528.73,46267.13,46482.63],"fy":699855.0},"r3200_1":{"b":[4100.0,65105.0,158555.0,40300.0,36450.0,34525.0,34000.0,35650.0,34975.0],"a":[9019.2,80259.01,134975.62,55650.41,39821.44,45427.74,39564.82,40884.06],"fy":511940.0},"r3200_2":{"b":[164.0,2604.0,6342.0,1612.0,1458.0,1381.0,1360.0,1426.0,1399.0],"a":[0.0,0.0,0.0,0.0,1200.0,0.0,0.0,0.0],"fy":20478.0},"tot3200":{"b":[4264.0,67709.0,164897.0,41912.0,37908.0,35906.0,35360.0,37076.0,36374.0],"a":[9019.2,80259.01,134975.62,55650.41,41021.44,45427.74,39564.82,40884.06],"fy":532418.0},"r3400_1":{"b":[408.0,6160.0,15683.0,4453.0,4011.0,3839.0,3792.0,3982.0,3901.0],"a":[1229.22,8970.24,9155.98,6114.36,5027.62,2450.56,2659.7,3466.77],"fy":53810.0},"r3400_2":{"b":[204.0,3080.0,7842.0,2227.0,2005.0,1920.0,1896.0,1991.0,1951.0],"a":[2847.37,2393.56,7436.94,1263.71,1576.03,2082.85,715.95,2040.31],"fy":26907.0},"r3400_5":{"b":[2250.0,900.0,900.0,700.0,600.0,600.0,600.0,600.0,600.0],"a":[2223.13,1496.75,616.83,490.0,611.92,390.68,390.68,390.68],"fy":9550.0},"tot3400":{"b":[2862.0,10140.0,24425.0,7380.0,6616.0,6359.0,6288.0,6573.0,6452.0],"a":[6299.72,12860.55,17209.75,7868.07,7215.57,4924.09,3766.33,5897.76],"fy":90267.0},"r3500_3":{"b":[1850.0,1850.0,1850.0,1850.0,1850.0,1850.0,1850.0,1850.0,1850.0],"a":[1760.29,1761.88,1761.88,0.0,3577.76,0.0,1761.88,0.0],"fy":24050.0},"r3500_4":{"b":[300.0,800.0,1000.0,600.0,600.0,600.0,600.0,600.0,600.0],"a":[392.62,441.38,536.77,564.32,342.2,432.22,416.91,536.36],"fy":7500.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[2150.0,2650.0,2850.0,2450.0,2450.0,2450.0,2450.0,2450.0,2450.0],"a":[2249.24,2203.26,2298.65,564.32,3919.96,432.22,2178.79,536.36],"fy":31550.0},"totCOGS":{"b":[47629.0,176673.0,323164.0,108964.0,95957.0,93698.0,93081.0,95082.0,94259.0],"a":[47391.31,187100.32,290373.08,123522.48,97410.52,96312.78,91777.07,93800.81],"fy":1354090.0},"r5002_1":{"b":[923.0,923.0,923.0,923.0,923.0,923.0,923.0,923.0,923.0],"a":[2720.55,2898.73,4964.37,507.69,507.69,507.69,2957.69,1311.0],"fy":11999.0},"r5002_5":{"b":[1154.0,1154.0,1154.0,1154.0,1154.0,1154.0,1154.0,1154.0,1154.0],"a":[0.0,545.86,68.48,26.72,2222.96,-372.0,591.41,-455.48],"fy":15002.0},"r5017_3":{"b":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"a":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"fy":2145.0}},"TXR - AZ":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[4860.0,0.0,5200.0,0.0,0.0,19250.0,-429.91,0.0],"fy":0.0},"r2300":{"b":[5576.0,25092.0,84568.0,27099.0,21635.0,24980.0,24980.0,28214.0,25203.0],"a":[5576.0,25092.0,84918.0,27449.0,21635.0,24980.0,24980.0,28214.0],"fy":301621.0},"r2400_1":{"b":[21223.0,141926.0,407160.0,93371.0,73309.0,83311.0,83311.0,95410.0,84580.0],"a":[41512.45,189113.64,359047.66,101792.45,79776.15,76962.5,79223.3,80504.57],"fy":1206486.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[26799.0,167018.0,491728.0,120470.0,94944.0,108291.0,108291.0,123624.0,109783.0],"a":[51948.45,214205.64,449165.66,129241.45,101411.15,121192.5,103773.39,108718.57],"fy":1508107.0},"r3100_1":{"b":[4127.0,25721.0,75726.0,18552.0,14621.0,16677.0,16677.0,19038.0,16907.0],"a":[16275.4,36100.98,51496.32,18918.14,17778.19,18257.29,19951.99,18101.55],"fy":232249.0},"r3100_2":{"b":[16606.0,16606.0,16606.0,16606.0,16606.0,16606.0,16606.0,16606.0,16606.0],"a":[16856.16,16606.16,16679.31,16752.42,11682.32,10404.74,10331.61,10258.49],"fy":215878.0},"tot3100":{"b":[20733.0,42327.0,92332.0,35158.0,31227.0,33283.0,33283.0,35644.0,33513.0],"a":[33131.56,52707.14,68175.63,35670.56,29460.51,28662.03,30283.6,28360.04],"fy":448127.0},"r3200_1":{"b":[6900.0,46130.0,137130.0,33534.0,26772.0,30912.0,30912.0,34914.0,31188.0],"a":[20960.45,63717.22,109371.92,39648.65,29516.25,36432.69,29094.32,28461.41],"fy":420804.0},"r3200_2":{"b":[276.0,1845.0,5485.0,1341.0,1071.0,1236.0,1236.0,1397.0,1248.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":16831.0},"tot3200":{"b":[7176.0,47975.0,142615.0,34875.0,27843.0,32148.0,32148.0,36311.0,32436.0],"a":[20960.45,63717.22,109371.92,39648.65,29516.25,36432.69,29094.32,28461.41],"fy":437635.0},"r3400_1":{"b":[670.0,4175.0,12293.0,3012.0,2374.0,2707.0,2707.0,3091.0,2745.0],"a":[3944.67,4537.31,11985.88,4566.54,3807.22,4072.51,1009.39,2551.25],"fy":37703.0},"r3400_2":{"b":[402.0,2505.0,7376.0,1807.0,1424.0,1624.0,1624.0,1854.0,1647.0],"a":[2023.98,2356.91,3928.0,95.6,2440.18,2594.01,2189.06,1767.1],"fy":22620.0},"r3400_5":{"b":[2204.0,754.0,754.0,704.0,704.0,704.0,704.0,704.0,704.0],"a":[780.87,1041.16,1118.4,1060.47,1034.66,1331.64,1211.55,1039.87],"fy":10752.0},"tot3400":{"b":[3276.0,7434.0,20423.0,5523.0,4502.0,5035.0,5035.0,5649.0,5096.0],"a":[6749.52,7935.38,17032.28,5722.61,7282.06,7998.16,4410.0,5358.22],"fy":71075.0},"r3500_3":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,41.04,48.76,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,41.04,48.76,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totCOGS":{"b":[31185.0,97736.0,255370.0,75556.0,63572.0,70466.0,70466.0,77604.0,71045.0],"a":[60841.53,124400.78,194628.59,81041.82,66258.82,73092.88,63787.92,62179.67],"fy":956837.0},"r5002_1":{"b":[115.0,115.0,115.0,115.0,115.0,115.0,115.0,115.0,115.0],"a":[1019.71,0.0,0.0,0.0,0.0,0.0,0.0,437.74],"fy":1495.0},"r5002_5":{"b":[1923.0,1923.0,1923.0,1923.0,1923.0,1923.0,1923.0,1923.0,1923.0],"a":[2048.04,3221.5,2106.71,2631.33,2753.94,1923.0,2233.12,4077.18],"fy":24999.0},"r5017_3":{"b":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"a":[165.0,165.0,165.0,165.0,165.0,165.0,165.0,165.0],"fy":2145.0}},"TXR - TX - H":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[2490.0,0.0,0.0,17148.0,0.0,0.0,0.0,1625.0],"fy":0.0},"r2300":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2400_1":{"b":[0.0,0.0,0.0,44452.0,112436.0,73214.0,112436.0,96748.0,96748.0],"a":[1140.0,0.0,0.0,44452.0,112436.0,73214.0,112436.0,97748.0],"fy":604019.0},"r2400_2":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[0.0,0.0,0.0,44452.0,112436.0,73214.0,112436.0,96748.0,96748.0],"a":[3630.0,0.0,0.0,61600.0,112436.0,73214.0,112436.0,99373.0],"fy":604019.0},"r3100_1":{"b":[0.0,0.0,0.0,11039.0,27922.0,18182.0,27922.0,24026.0,24026.0],"a":[0.0,0.0,952.99,7988.32,13547.9,11945.77,18037.49,17308.51],"fy":150000.0},"r3100_2":{"b":[6722.0,6722.0,6722.0,6722.0,6722.0,6722.0,6722.0,6722.0,6722.0],"a":[7546.54,8067.69,13215.46,12106.16,13856.16,12106.19,13356.16,6721.54],"fy":87386.0},"tot3100":{"b":[6722.0,6722.0,6722.0,17761.0,34644.0,24904.0,34644.0,30748.0,30748.0],"a":[7546.54,8067.69,14168.45,20094.48,27404.06,24051.96,31393.65,24030.05],"fy":237386.0},"r3200_1":{"b":[0.0,0.0,0.0,18544.0,46904.0,30542.0,46904.0,40360.0,40360.0],"a":[2398.59,351.88,2791.66,46921.84,52457.98,41731.11,45789.83,42927.81],"fy":251975.0},"r3200_2":{"b":[0.0,0.0,0.0,742.0,1876.0,1222.0,1876.0,1614.0,1614.0],"a":[0.0,0.0,577.16,739.3,0.0,0.0,0.0,491.24],"fy":10078.0},"tot3200":{"b":[0.0,0.0,0.0,19286.0,48780.0,31764.0,48780.0,41974.0,41974.0],"a":[2398.59,351.88,3368.82,47661.14,52457.98,41731.11,45789.83,43419.05],"fy":262053.0},"r3400_1":{"b":[0.0,0.0,0.0,445.0,1124.0,732.0,1124.0,967.0,967.0],"a":[0.0,0.0,524.26,1107.39,1629.58,-112.72,2406.77,2357.25],"fy":6039.0},"r3400_2":{"b":[0.0,0.0,0.0,1334.0,3373.0,2196.0,3373.0,2902.0,2902.0],"a":[0.0,0.0,372.75,2750.46,3521.79,1498.02,1238.1,1271.04],"fy":18120.0},"r3400_5":{"b":[1000.0,500.0,500.0,500.0,500.0,500.0,500.0,500.0,500.0],"a":[0.0,0.0,306.1,1718.77,597.83,1119.88,809.21,1460.2],"fy":7000.0},"tot3400":{"b":[1000.0,500.0,500.0,2279.0,4997.0,3428.0,4997.0,4369.0,4369.0],"a":[0.0,0.0,1203.11,5576.62,5749.2,2505.18,4454.08,5088.49],"fy":31159.0},"r3500_3":{"b":[0.0,0.0,0.0,250.0,250.0,250.0,250.0,250.0,250.0],"a":[0.0,0.0,0.0,11.73,0.0,833.52,429.26,429.26],"fy":1750.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,250.0,250.0,250.0,250.0,250.0,250.0],"a":[0.0,0.0,0.0,11.73,0.0,833.52,429.26,429.26],"fy":1750.0},"totCOGS":{"b":[7722.0,7222.0,7222.0,39576.0,88671.0,60346.0,88671.0,77341.0,77341.0],"a":[9945.13,8419.57,18740.38,73343.97,85611.24,69121.77,82066.82,72966.85],"fy":532348.0},"r5002_1":{"b":[0.0,0.0,0.0,71.0,71.0,71.0,71.0,71.0,71.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":497.0},"r5002_5":{"b":[0.0,0.0,0.0,214.0,214.0,214.0,214.0,214.0,214.0],"a":[0.0,0.0,0.0,10.83,0.0,327.47,303.65,718.92],"fy":1498.0},"r5017_3":{"b":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"a":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"fy":1352.0}},"TXR - TX - V":{"r2200":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,16055.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2300":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2400_1":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r2400_2":{"b":[0.0,0.0,0.0,21600.0,62400.0,31200.0,62400.0,48000.0,48000.0],"a":[0.0,0.0,0.0,30258.0,45317.5,52893.5,79333.0,37236.0],"fy":312000.0},"r2600":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"totRev":{"b":[0.0,0.0,0.0,21600.0,62400.0,31200.0,62400.0,48000.0,48000.0],"a":[0.0,0.0,0.0,46313.0,45317.5,52893.5,79333.0,37236.0],"fy":312000.0},"r3100_1":{"b":[0.0,0.0,0.0,4154.0,12000.0,6000.0,12000.0,9231.0,9231.0],"a":[0.0,0.0,819.95,6024.54,10904.01,10565.17,14301.06,8962.49],"fy":60001.0},"r3100_2":{"b":[0.0,0.0,5142.0,6856.0,6856.0,6856.0,6856.0,6856.0,6856.0],"a":[0.0,0.0,3766.54,9208.0,6856.0,6856.0,6856.0,6856.0],"fy":59990.0},"tot3100":{"b":[0.0,0.0,5142.0,11010.0,18856.0,12856.0,18856.0,16087.0,16087.0],"a":[0.0,0.0,4586.49,15232.54,17760.01,17421.17,21157.06,15818.49],"fy":119991.0},"r3200_1":{"b":[0.0,0.0,0.0,6804.0,19656.0,9828.0,19656.0,15120.0,15120.0],"a":[0.0,0.0,8776.79,9375.37,16404.54,17618.59,21096.43,19926.82],"fy":98280.0},"r3200_2":{"b":[0.0,0.0,0.0,272.0,786.0,393.0,786.0,605.0,605.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":3931.0},"tot3200":{"b":[0.0,0.0,0.0,7076.0,20442.0,10221.0,20442.0,15725.0,15725.0],"a":[0.0,0.0,8776.79,9375.37,16404.54,17618.59,21096.43,19926.82],"fy":102211.0},"r3400_1":{"b":[0.0,0.0,0.0,216.0,624.0,312.0,624.0,480.0,480.0],"a":[0.0,0.0,0.0,-12.67,-264.55,-441.85,197.65,319.15],"fy":3120.0},"r3400_2":{"b":[0.0,0.0,0.0,756.0,2184.0,1092.0,2184.0,1680.0,1680.0],"a":[0.0,0.0,745.65,1005.91,2590.4,2639.78,2385.72,2178.12],"fy":10920.0},"r3400_5":{"b":[0.0,0.0,0.0,500.0,250.0,250.0,250.0,250.0,250.0],"a":[0.0,0.0,0.0,734.58,0.0,0.0,0.0,0.0],"fy":2000.0},"tot3400":{"b":[0.0,0.0,0.0,1472.0,3058.0,1654.0,3058.0,2410.0,2410.0],"a":[0.0,0.0,745.65,1727.82,2325.85,2197.93,2583.37,2497.27],"fy":16040.0},"r3500_3":{"b":[0.0,0.0,0.0,250.0,250.0,250.0,250.0,250.0,250.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":1750.0},"r3500_4":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"r3500_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":0.0},"tot3500":{"b":[0.0,0.0,0.0,250.0,250.0,250.0,250.0,250.0,250.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":1750.0},"totCOGS":{"b":[0.0,0.0,5142.0,19808.0,42606.0,24981.0,42606.0,34472.0,34472.0],"a":[0.0,0.0,14108.93,26335.73,36490.4,37237.69,44836.86,38242.58],"fy":239992.0},"r5002_1":{"b":[0.0,0.0,0.0,71.0,71.0,71.0,71.0,71.0,71.0],"a":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"fy":497.0},"r5002_5":{"b":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"a":[0.0,0.0,352.35,0.0,0.0,193.13,0.0,0.0],"fy":0.0},"r5017_3":{"b":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"a":[104.0,104.0,104.0,104.0,104.0,104.0,104.0,104.0],"fy":1352.0}}};
+const ACCTS=[
+ ["EAST REGION","RDO S. Lynch",[["STL - FL","St Louis Cardinals · Jupiter, FL"],["STL - MO","St Louis Cardinals · St Louis, MO"],["TBJ - FL","Toronto Blue Jays · Dunedin, FL"],["TBJ - NY","Buffalo Bisons · Buffalo, NY"],["TBR - FL","Tampa Bay Rays · Port Charlotte, FL"]]],
+ ["WEST REGION","RDO R. Moore",[["CIN - AZ","Cincinnati Reds · Goodyear, AZ"],["CIN - KY","Louisville Bats · Louisville, KY"],["CIN - OH","Cincinnati Reds · Cincinnati, OH"],["TXR - AZ","Texas Rangers · Surprise, AZ"],["TXR - TX - H","Rangers · Home · Arlington, TX"],["TXR - TX - V","Rangers · Visitor · Arlington, TX"]]]];
+const MODEL={"CIN - AZ":"per-meal","CIN - KY":"per-meal","CIN - OH":"fee","STL - FL":"fee","STL - MO":"fee","TBJ - FL":"per-meal","TBJ - NY":"per-meal","TBR - FL":"per-meal","TXR - AZ":"per-meal","TXR - TX - H":"fee","TXR - TX - V":"direct"};
+const PASS={"CIN - OH":1,"STL - MO":1};
+const SEEDED={"CIN - AZ":1,"CIN - KY":1,"TBJ - FL":1,"TBJ - NY":1,"TBR - FL":1,"TXR - AZ":1};
+const PKGGAP={"CIN - KY":1,"STL - FL":1};
+const ALLK=[];ACCTS.forEach(G=>G[2].forEach(a=>ALLK.push(a[0])));
+
+/* ---- time ---- */
+const TODAY="08/31", DATA_THRU="08/30", CARDS_THRU="08/30";   /* cards nightly - CC to confirm */
+const P9_DAYS=28, P9_ELAPSED=21, PRO=P9_ELAPSED/P9_DAYS;   /* days through yesterday */
+const WK_CLOSED=3, WK_TOTAL=4;
+const R_FYTD=0,R_THIS=1,R_LAST=2;
+const RANGES=[
+ {lab:"FYTD",slab:"This year so far",sub:"12/29/25 – 08/30/26",open:true,state:"open"},
+ {lab:"This period",slab:"This period",sub:"P9 · 08/10 – 09/06",open:true,state:"open"},
+ {lab:"Last period",slab:"Last period",sub:"P8 · 07/13 – 08/09",open:false,state:"verified"}];
+const STATES={
+ open:['stc-open','open · live estimate',"Numbers update nightly from labor, purchasing and the Service Calendar. Nothing is final until the period closes and is verified against the finance P&L."],
+ wait:['stc-wait','closed · awaiting finance',"The period has closed. Our numbers are final on our side, but finance has not yet issued the P&L, so they are not yet verified."],
+ verified:['stc-ver','verified against P&L · 08/20',"Closed, and Kevin has matched these figures against the finance P&L issued 08/20. This is the confirmed record."]};
+
+/* P9 live estimate: ~75% of a period at the P8 run rate, deterministic per account+line */
+function seedf(k){let h=0;for(let i=0;i<k.length;i++)h=(h*31+k.charCodeAt(i))%1000;return 0.66+(h%180)/1000;}
+function p9est(acct,key){const d=PNL[acct];if(!d||!d[key])return 0;return d[key].a[7]*seedf(acct+key);}
+
+let S={role:"site",acct:"CIN - AZ",mode:"planned",range:R_THIS,stmt:false,dense:"sum",rmenu:false,salary:false};
+const $=id=>document.getElementById(id);
+const m=n=>(n<0?"−$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const pct=(a,b)=>b?(a/b*100):0;
+const pf=x=>x.toFixed(1)+"%";
+const gap=(x,good,bad)=>Math.abs(x).toFixed(1)+"% "+(x>=0?good:bad);   /* x>0 means the good direction */
+const gapd=(x,good,bad)=>m(Math.abs(x))+" "+(x>=0?good:bad);
+const R=()=>RANGES[S.range];
+const isOpen=()=>R().open;
+const scMode=()=>S.role==="corp"&&S.mode==="sc";
+function keys(){return S.acct==="ALL"?ALLK:S.acct==="EAST"?ACCTS[0][2].map(a=>a[0]):S.acct==="WEST"?ACCTS[1][2].map(a=>a[0]):[S.acct];}
+
+/* [budgetToDate, actualToDate, periodBudget, fullYearBudget] over the active range.
+   Revenue lines follow the source rule: closed periods use finance actuals; the open period uses planned
+   (contractual for fee accounts) unless the corporate SC-revenue mode is on for a per-meal account.
+   Cost lines are always live. */
+const REVK={r2200:1,r2300:1,r2400_1:1,r2400_2:1,r2600:1,totRev:1};
+function openRev(k,key,d){ if(REVK[key]&&!(scMode()&&(SEEDED[k]))) return d[key].b[8]*PRO; return p9est(k,key); }
+function L(key){
+  let b=0,a=0,pb=0,fy=0;
+  keys().forEach(k=>{const d=PNL[k];if(!d||!d[key])return; fy+=d[key].fy;
+    if(S.range===R_LAST){b+=d[key].b[7];a+=d[key].a[7];pb+=d[key].b[7];}
+    else if(S.range===R_THIS){b+=d[key].b[8]*PRO;a+=openRev(k,key,d);pb+=d[key].b[8];}
+    else{for(let i=0;i<8;i++){b+=d[key].b[i];a+=d[key].a[i];pb+=d[key].b[i];}b+=d[key].b[8]*PRO;a+=openRev(k,key,d);pb+=d[key].b[8];}
+  });
+  return [b,a,pb,fy];
+}
+const val=p=>p[1];
+function tip(t){return '<span class="q">?<span class="tip">'+t+'</span></span>'}
+function stChip(){const s=STATES[R().state];return '<span class="stc '+s[0]+'">'+s[1]+'<span class="tip">'+s[2]+'</span></span>';}
+
+/* revenue source state for the active range */
+function siteRev(){
+  const r=L("totRev");
+  const planned=isOpen()&&!scMode()&&keys().some(k=>SEEDED[k]||MODEL[k]==="direct");
+  return {b:r[0],v:r[1],pb:r[2],fy:r[3],planned};
+}
+/* ---------- rail ---------- */
+function rail(){
+  let h='<div class="rail"><h2>Portfolio</h2><div class="sub">11 sites · 2 regions</div>';
+  h+='<div class="all'+(S.acct==="ALL"?" sel":"")+'" onclick="pickAcct(\'ALL\')"><div><div class="k">ALL ACCOUNTS</div><div class="t">every site · both regions</div></div><div class="ct">11</div></div>';
+  ACCTS.forEach((G,i)=>{const code=i===0?"EAST":"WEST";
+    h+='<div class="grp"><div class="hd'+(S.acct===code?" sel":"")+'" onclick="pickAcct(\''+code+'\')"><div><div class="nm">'+G[0]+'<span class="rd">'+G[1]+'</span></div></div><div class="ct">'+G[2].length+'</div></div>';
+    G[2].forEach(a=>{h+='<div class="acc'+(S.acct===a[0]?" sel":"")+'" onclick="pickAcct(\''+a[0]+'\')"><div class="k">'+a[0]+'</div><div class="t">'+a[1]+'</div></div>';});
+    h+='</div>';});
+  return h+'</div>';
+}
+/* ---------- command bar ---------- */
+function cmdbar(){
+  const site=S.role==="site",r=R();
+  let h='<div class="cmd">';
+  h+=site?'<span class="ttl">My numbers ·</span><span class="acct">'+S.acct+'</span>'
+        :'<span class="ttl">KPI Dashboard ·</span><span class="acct">'+S.acct+'</span><span class="chip"><span class="k">Section</span><span class="v">Overview</span><span class="d">▾</span></span>';
+  h+='<span class="chip" onclick="tglRange(event)"><span class="v">'+(site?r.slab:r.lab)+'</span><span class="d">'+r.sub+'</span><span class="d">▾</span></span>';
+  h+='<span class="meta">TODAY <b>'+TODAY+'</b> &nbsp;|&nbsp; PERIOD <b>9</b> &nbsp;|&nbsp; WEEK <b>4</b></span>';
+  if(site){h+='<span class="saltog"><button class="'+(!S.salary?"on":"")+'" onclick="setSal(false)">Hourly</button><button class="'+(S.salary?"ona":"")+'" onclick="setSal(true)">+ Salary</button></span><span class="gate">gated · GM</span>';}
+  else h+='<span class="tog"><button class="'+(!scMode()?"on":"")+'" onclick="setMode(\'planned\')">Planned revenue</button><button class="'+(scMode()?"ona":"")+'" onclick="setMode(\'sc\')">Service Calendar revenue</button></span>';
+  h+='<span class="fresh"><span class="dot"></span>'+(site?"Up to date":"Data current")+'</span>';
+  h+='<div class="rmenu'+(S.rmenu?" on":"")+'"><h4>Range</h4><div class="row">';
+  RANGES.forEach((x,i)=>{h+='<button class="'+(S.range===i?"on":"")+'" onclick="setRange('+i+')">'+(site?x.slab:x.lab)+'</button>';});
+  h+='</div></div></div>';
+  return h;
+}
+function srcline(){
+  const open=isOpen();
+  return '<div class="src"><span>Labor through <b>Sun '+DATA_THRU+'</b></span><span>Purchases through <b>Sun '+CARDS_THRU+'</b></span><span>Revenue from Service Calendar through <b>'+DATA_THRU+'</b></span><span style="margin-left:auto">'+stChip()+'</span></div>';
+}
+
+/* ---------- charts: cost of goods sold vs budget (below the line is good) ---------- */
+function btip(title,rows,res){let h='<span class="bt"><div class="bth">'+title+'</div>';rows.forEach(r=>{h+='<div class="btr"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>';});if(res)h+='<div class="btr res"><span>'+res[0]+'</span><b>'+res[1]+'</b></div>';return h+'</span>';}
+function chartFY(){
+  const cb=[],ca=[];
+  for(let i=0;i<9;i++){let x=0,y=0;keys().forEach(k=>{const d=PNL[k];if(!d)return;x+=(d.totCOGS.b[i]||0)*(i===8?PRO:1);y+= i<8?d.totCOGS.a[i]:p9est(k,"totCOGS");});cb.push(x);ca.push(y);}
+  const A=ca,mx=Math.max(...A,...cb,1);
+  let h='<div class="card ab mt"><div class="ch"><span class="eb">Cost of goods sold, period by period</span><span class="gl">bars are spend · line is budget</span>'+tip("Each period's cost of goods sold against its budget. Below the line is under budget. Period 9 is still running, so it is hatched. Hover a bar for the numbers.")+'<span class="pill pne">9 periods</span></div><div class="cb"><div class="bars2">';
+  A.forEach((v,i)=>{const hgt=Math.max(2,Math.round(v/mx*100));
+    const over=v-cb[i];
+    h+='<i class="'+(i===8?"bpr":(v<=cb[i]?"bok":"bba"))+'" style="height:'+hgt+'%">'+btip('P'+(i+1)+(i===8?' · running':''),[["Spent",m(v)],["Budget",m(cb[i])]],i===8?null:[over<=0?"Under":"Over",m(Math.abs(over))])+'</i>';});
+  h+='</div><div class="axis2">';
+  A.forEach((v,i)=>{h+='<span>P'+(i+1)+'<span class="amt '+(i===8?"nb":(v<=cb[i]?"ok":"bad"))+'">'+(i===8?"running":m(v))+'</span></span>';});
+  h+='</div><div class="legend"><span><i class="bok"></i>under budget</span><span><i class="bba"></i>over budget</span><span><i class="bpr"></i>still running</span></div></div></div>';
+  return h;
+}
+function chartWeeks(){
+  const cog=L("totCOGS"),open=isOpen(),wkB=cog[2]/WK_TOTAL,done=open?WK_CLOSED:WK_TOTAL;
+  const split=[0.31,0.36,0.33,0.30],tot=split.slice(0,done).reduce((s,x)=>s+x,0);
+  const wa=[];for(let i=0;i<done;i++)wa.push(cog[1]*split[i]/tot);
+  const mx=Math.max(wkB,...wa,1);
+  const dates=S.range===R_THIS?["08/10 – 08/16","08/17 – 08/23","08/24 – 08/30","08/31 – 09/06"]:["07/13 – 07/19","07/20 – 07/26","07/27 – 08/02","08/03 – 08/09"];
+  let h='<div class="card ab mt"><div class="ch"><span class="eb">Cost of goods sold, week by week</span><span class="gl">bars are spend · line is the weekly budget</span>'+
+   tip(open?"Three weeks closed. Week 4 started today and has no data yet, so it shows a dash - not a zero. Below the line is under budget.":"All four weeks closed. Below the line is under budget.")+'<span class="pill '+(open?"pwa":"pne")+'">'+(open?"3 of 4 weeks closed":"4 of 4 closed")+'</span></div><div class="cb"><div class="bars2">';
+  h+='<div class="tgt" style="bottom:'+Math.round(wkB/mx*100)+'%"><em>budget '+m(wkB)+' / wk</em></div>';
+  for(let i=0;i<WK_TOTAL;i++){
+    if(i<done){const hgt=Math.max(2,Math.round(wa[i]/mx*100)),over=wa[i]-wkB;
+      h+='<i class="'+(wa[i]<=wkB?"bok":"bba")+'" style="height:'+hgt+'%">'+btip('Week '+(i+1)+' · '+dates[i],[["Spent",m(wa[i])],["Budget",m(wkB)]],[over<=0?"Under":"Over",m(Math.abs(over))])+'</i>';}
+    else h+='<i class="dash">'+btip('Week '+(i+1)+' · '+dates[i],[["Starts today","no data yet"]])+'</i>';}
+  h+='</div><div class="axis2">';
+  for(let i=0;i<WK_TOTAL;i++){h+='<span>Week '+(i+1)+'<small>'+dates[i]+'</small><span class="amt '+(i<done?(wa[i]<=wkB?"ok":"bad"):"nb")+'">'+(i<done?m(wa[i]):"— starts today")+'</span></span>';}
+  h+='</div></div></div>';
+  return h;
+}
+const chart=()=>S.range===R_FYTD?chartFY():chartWeeks();
+
+/* ---------- statement ---------- */
+function row(lbl,gl,key,o){
+  o=o||{};const p=L(key),rv=L("totRev")[1],rb=L("totRev")[0];
+  const b=p[0],v=p[1],pb=p[2];
+  const open=isOpen(),site=S.role==="site";
+  let cells;
+  if(b===0&&v===0) cells=(open?'<td class="nb">—</td>':'')+'<td class="nb">—</td><td class="nb">—</td><td class="nb">not active</td><td class="nb">—</td><td class="nb">—</td>';
+  else{
+    const pa=pct(v,rv),pbg=pct(b,rb),dv=v-b,good=o.rev?dv>=0:dv<=0;
+    const ptsv=(pa-pbg)*(o.rev?1:-1);
+    cells=(open?'<td class="num nb">'+m(pb)+'</td>':'')+'<td class="num">'+m(b)+'</td><td class="num">'+m(v)+'</td>'+
+      (o.novar?'<td><span class="fixedp">contractual</span></td>':(Math.abs(dv)<1?'<td class="num nb">on budget</td>':'<td class="num '+(good?"ok":"bad")+'">'+gapd(o.rev?dv:-dv,(o.rev?"above":"under"),(o.rev?"below":"over"))+'</td>'))+
+      '<td class="num">'+pf(pa)+'</td><td class="num nb">'+pf(pbg)+(o.novar||(b===0)?'':' <span class="'+(ptsv>=0?"ok":"bad")+'">'+gap(ptsv,(o.rev?"above":"under"),(o.rev?"below":"over"))+'</span>')+'</td>';
+  }
+  return '<tr'+(o.ind?' class="ind"':'')+'><td class="l"><span class="glc num">'+gl+'</span>'+lbl+(o.drill?'<span class="drill">'+o.drill+' →</span>':'')+(o.chip?' <span class="'+o.chip[0]+'">'+o.chip[1]+'</span>':'')+'</td>'+cells+'</tr>';
+}
+function statement(){
+  const site=S.role==="site",open=isOpen(),acct=S.acct,fee=MODEL[acct]==="fee",dense=S.dense==="full";
+  const rev=L("totRev"),cog=L("totCOGS");
+  const rv=rev[1],cg=cog[1];
+  const gmB=rev[0]-cog[0],gm=rv-cg,gmPB=rev[2]-cog[2];
+  const gmpA=pct(gm,rv),gmpB=pct(gmB,rev[0]);
+  let h='<div class="card ab mt"><div class="ch"><span class="eb">Profit and loss</span><span class="gl">'+(MODEL[acct]||"portfolio")+' · '+R().sub+'</span>'+
+   tip("The statement the way finance builds it. Percent of revenue is on every line - that is how each cost is judged, not the dollar alone."+(open?" Period budget is the whole period. Budget to date is that budget for the days elapsed. Actual to date is through last night.":""))+
+   '<span class="seg"><button class="'+(dense?"on":"")+'" onclick="setDense(\'full\')">Full</button><button class="'+(!dense?"on":"")+'" onclick="setDense(\'sum\')">Summary</button></span></div><div class="cb">';
+  h+='<table><tr><th class="l">Line</th>'+(open?'<th>Period budget</th><th>Budget to date</th><th>Actual to date</th>':'<th>Budget</th><th>Actual</th>')+'<th>Variance</th><th style="width:66px">Actual %</th><th style="width:150px">Target % · vs target</th></tr>';
+  h+='<tr class="sect"><td colspan="8">Revenue</td></tr>';
+  h+=row("Catering revenue","2200","r2200",{rev:1});
+  h+=row("Service charges","2300","r2300",{rev:1});
+  h+=row("Meal service (home)","2400.1","r2400_1",{rev:1,novar:fee});
+  if(dense){h+=row("Meal service (away)","2400.2","r2400_2",{rev:1,ind:1});h+=row("Consulting","2600","r2600",{rev:1,ind:1});}
+  h+='<tr class="tot"><td class="l">Total revenue</td>'+(open?'<td class="num nb">'+m(rev[2])+'</td>':'')+'<td class="num">'+m(rev[0])+'</td><td class="num">'+m(rv)+'</td><td>'+(fee?'<span class="fixedp">contractual</span>':'<span class="num '+(rv-rev[0]>=0?"ok":"bad")+'">'+gapd(rv-rev[0],"above","below")+'</span>')+'</td><td class="num">100%</td><td class="num nb">100%</td></tr>';
+  h+='<tr class="sect"><td colspan="8">Cost of goods sold</td></tr>';
+  h+=row("Kitchen labor","3100","tot3100",{drill:"Labor"});
+  if(dense&&(S.role==="corp"||S.salary)){h+=row("Hourly wages","3100.1","r3100_1",{ind:1});h+=row("Salary wages","3100.2","r3100_2",{ind:1});}
+  h+=row("Food purchased","3200","tot3200",{drill:"Purchasing"});
+  if(dense){h+=row("General food","3200.1","r3200_1",{ind:1});h+=row("Resale food","3200.2","r3200_2",{ind:1,chip:L("r3200_2")[0]>0?["fixedp","incl. Fun Money"]:null});}
+  h+=row("Packaging and supplies","3400","tot3400",{drill:"Purchasing",chip:PKGGAP[acct]?["absent","mapping gap"]:null});
+  if(dense){h+=row("Packaging","3400.1","r3400_1",{ind:1});h+=row("Supplies","3400.2","r3400_2",{ind:1});h+=row("Linen","3400.5","r3400_5",{ind:1});}
+  h+=row("Vehicle","3500","tot3500",{});
+  if(dense){h+=row("Leased vehicle","3500.3","r3500_3",{ind:1});h+=row("Fuel","3500.4","r3500_4",{ind:1});h+=row("Vehicle repair","3500.5","r3500_5",{ind:1});}
+  const cpA=pct(cg,rv),cpB=pct(cog[0],rev[0]);
+  h+='<tr class="tot"><td class="l">Total cost of goods sold</td>'+(open?'<td class="num nb">'+m(cog[2])+'</td>':'')+'<td class="num">'+m(cog[0])+'</td><td class="num">'+m(cg)+'</td><td class="num '+(cg<=cog[0]?"ok":"bad")+'">'+gapd(cog[0]-cg,"under","over")+'</td><td class="num">'+pf(cpA)+'</td><td class="num nb">'+pf(cpB)+' <span class="'+(cpB-cpA>=0?"ok":"bad")+'">'+gap(cpB-cpA,"under","over")+'</span></td></tr>';
+  h+='<tr class="gm"><td class="l">Gross margin</td>'+(open?'<td class="num nb">'+m(gmPB)+'</td>':'')+'<td class="num">'+m(gmB)+'</td><td class="num">'+m(gm)+'</td><td class="num '+(gm>=gmB?"ok":"bad")+'" style="font-size:var(--t-bod)">'+gapd(gm-gmB,"ahead","behind")+'</td><td class="num" style="font-size:var(--t-bod)">'+pf(gmpA)+'</td><td class="num nb" style="font-size:var(--t-bod)">'+pf(gmpB)+' <span class="'+(gmpA-gmpB>=0?"ok":"bad")+'">'+gap(gmpA-gmpB,"ahead","behind")+'</span></td></tr>';
+  h+='</table><p class="note"><b>Food purchased</b> is what was bought in this range. Finance adjusts food cost for inventory at close, so the closed number can differ.'+
+   (PKGGAP[acct]?' <b>Packaging on this account has a known mapping gap</b> - our figure is incomplete.':'')+
+   (siteRev().planned?' <b>Revenue for the open period is planned</b> until this site\'s meal counts are live in the Service Calendar; closed periods use finance actuals.':'')+'</p></div></div>';
+  return h;
+}
+function tracked(){
+  const rows=[["General repair and maintenance","5002.1","r5002_1"],["Equipment","5002.5","r5002_5"],["Perks","5017.3","r5017_3"]];
+  let h='<div class="tracked"><div class="hd2"><span class="eb">Also tracked</span>'+tip("These sit outside gross margin and cost of goods sold. They are not part of how this account is measured - we watch them together because the site influences them.")+'</div><div class="sl">Not part of gross margin or cost of goods sold - watched together.</div><table>';
+  h+='<tr><th class="l">Line</th><th>Budget'+(isOpen()?' to date':'')+'</th><th>Actual'+(isOpen()?' to date':'')+'</th><th style="width:110px">vs budget</th></tr>';
+  rows.forEach(r=>{const p=L(r[2]),v=p[1];
+    let right=(p[0]===0&&v===0)?'<td class="nb">—</td><td class="nb">—</td><td class="nb">no activity</td>'
+      :(p[0]===0?'<td class="nb">no budget</td><td class="num">'+m(v)+'</td><td class="nb">—</td>'
+      :(Math.abs(v-p[0])<1?'<td class="num">'+m(p[0])+'</td><td class="num">'+m(v)+'</td><td class="num nb">on budget</td>':'<td class="num">'+m(p[0])+'</td><td class="num">'+m(v)+'</td><td class="num '+(v<=p[0]?"ok":"bad")+'">'+gapd(p[0]-v,"under","over")+'</td>'));
+    h+='<tr><td class="l"><span class="glc num">'+r[1]+'</span>'+r[0]+'</td>'+right+'</tr>';});
+  h+='</table><p class="note">Perks is the budget for celebrating your team - parties, recognitions, the Friday doughnuts. Spent on the Rippling card.</p></div>';
+  return h;
+}
+
+/* ---------- ticker (rules-based) ---------- */
+function banner(){
+  const sr=siteRev(),rev=L("totRev"),cog=L("totCOGS");
+  const gmpA=pct(sr.v-cog[1],sr.v),gmpB=pct(rev[0]-cog[0],rev[0]),d=gmpA-gmpB;
+  const st=d>=1?["ahead","Ahead of target"]:d>=-1?["ontrack","On track"]:d>=-3?["behind","Behind target"]:["risk","At risk"];
+  const lines=[["Labor","tot3100"],["Food purchased","tot3200"],["Packaging and supplies","tot3400"],["Vehicle","tot3500"]]
+    .map(x=>{const p=L(x[1]);if(p[0]===0)return null;return{n:x[0],dev:pct(p[1],sr.v)-pct(p[0],rev[0])};}).filter(Boolean).sort((a,b)=>Math.abs(b.dev)-Math.abs(a.dev));
+  let h='<div class="ticker '+st[0]+'"><span class="st">'+st[1]+'</span>';
+  h+='<span class="tk"><span class="k">Gross margin</span><span class="v">'+pf(gmpA)+' <span class="nb" style="font-weight:600">vs '+pf(gmpB)+' target</span><em class="'+(d>=0?"ok":"bad")+'">'+gap(d,"ahead","behind")+'</em></span></span>';
+  if(lines[0])h+='<span class="tk"><span class="k">Biggest lever</span><span class="v">'+lines[0].n+'<em class="'+(lines[0].dev<=0?"ok":"bad")+'">'+Math.abs(lines[0].dev).toFixed(1)+'% '+(lines[0].dev>0?"over":"under")+'</em></span></span>';
+  if(lines[1]&&Math.sign(lines[1].dev)!==Math.sign(lines[0].dev)&&Math.abs(lines[1].dev)>=0.3)h+='<span class="tk"><span class="k">Offsetting</span><span class="v">'+lines[1].n+'<em class="'+(lines[1].dev<=0?"ok":"bad")+'">'+Math.abs(lines[1].dev).toFixed(1)+'% '+(lines[1].dev>0?"over":"under")+'</em></span></span>';
+  h+='<span class="tk"><span class="k">'+(isOpen()?"Through "+DATA_THRU:"Period closed")+'</span><span class="v">'+(isOpen()?(S.range===R_THIS?WK_CLOSED+' of '+WK_TOTAL+' weeks closed':'P9 running · 3 of 4 weeks'):'Verified against P&L 08/20')+'</span></span>';
+  if(MODEL[S.acct]==="fee")h+='<span class="tk note"><span class="k">Revenue</span><span class="v">Set by contract - margin is managed through cost of goods sold</span></span>';
+  if(PASS[S.acct])h+='<span class="tk note"><span class="k">Food</span><span class="v">Billed back to the client - labor is the main lever</span></span>';
+  if(sr.planned)h+='<span class="tk note"><span class="k">Note</span><span class="v">Open-period revenue is planned until meal counts are live</span></span>';
+  if(scMode()&&SEEDED[S.acct])h+='<span class="tk note"><span class="k">Test data</span><span class="v">Service Calendar revenue on this account is seeded test data</span></span>';
+  return h+'</div>';
+}
+
+/* ---------- site leader ---------- */
+function site(){
+  const sr=siteRev(),rev=L("totRev"),cog=L("totCOGS"),open=isOpen(),fee=MODEL[S.acct]==="fee";
+  const rv=sr.v,cg=cog[1],gmB=rev[0]-cog[0],gm=rv-cg;
+  const cpA=pct(cg,rv),cpB=pct(cog[0],rev[0]),gpA=pct(gm,rv),gpB=pct(gmB,rev[0]);
+  let h=cmdbar()+'<div class="body solo"><div>'+srcline()+banner();
+  h+='<div class="g3">';
+  /* revenue */
+  h+='<div class="card ag"><div class="ch"><span class="eb">Revenue</span><span class="gl">2200 · 2300 · 2400</span>'+tip("What your account bills for the food and service you provide. Everything below is judged as a percent of this number.")+'<span class="pill '+(fee?"pne":(sr.planned?"pwa":"pok"))+'">'+(fee?"Contractual":(sr.planned?"Planned":"On plan"))+'</span></div><div class="cb">'+
+     '<div class="hero2 num">'+m(rv)+'</div>'+
+     '<div class="kpi2">'+(open?'<span><b>'+m(rev[0])+'</b> budget to date</span><span>· '+(S.range===R_FYTD?m(rev[3])+' full year':m(rev[2])+' period budget')+'</span>':'<span><b>'+m(rev[0])+'</b> budget</span><span class="'+(rv>=rev[0]?"ok":"bad")+'">· '+(fee?'contractual':gapd(rv-rev[0],"above","below"))+'</span>')+'</div>'+
+     '<div class="brk">'+[["Meal service","r2400_1"],["Service charges","r2300"],["Catering","r2200"]].map(x=>{const p=L(x[1]);if(p[0]===0&&p[1]===0)return'';return '<div><span>'+x[0]+'</span><span class="bud">budget '+m(p[0])+'</span><span>'+m(p[1])+'</span></div>';}).join('')+'</div></div></div>';
+  /* cogs */
+  h+='<div class="card ab"><div class="ch"><span class="eb">Cost of goods sold</span><span class="gl">3100 – 3500</span>'+tip("Labor, food purchased, packaging and supplies, vehicle - the lines you control. Finance calls this COGS. Judged as a percent of revenue.")+'<span class="pill '+(cpA<=cpB?"pok":"pba")+'">'+(cpA<=cpB?"Under target":"Over target")+'</span></div><div class="cb">'+
+     '<div class="hero2 num '+(cpA<=cpB?"ok":"bad")+'">'+m(cg)+'<small>spent</small></div>'+
+     '<div class="kpi2"><b>'+pf(cpA)+'</b><span>of revenue vs '+pf(cpB)+' target</span><span class="g '+(cpB-cpA>=0?"ok":"bad")+'">'+gap(cpB-cpA,"under","over")+'</span></div>'+
+     '<div class="kpi2" style="margin-top:6px">'+(open?'<span><b style="font-size:var(--t-bod)">'+m(cog[0])+'</b> budget to date</span><span>· '+(S.range===R_FYTD?m(cog[3])+' full year':m(cog[2])+' period budget')+'</span>':'<span><b style="font-size:var(--t-bod)">'+m(cog[0])+'</b> budget</span><span class="'+(cg<=cog[0]?"ok":"bad")+'">· '+gapd(cog[0]-cg,"under","over")+'</span>')+'</div>'+
+     '<div class="mini"><span>Labor <b>'+m(L("tot3100")[1])+'</b></span><span>Food <b>'+m(L("tot3200")[1])+'</b></span><span>Packaging <b>'+m(L("tot3400")[1])+'</b></span>'+(L("tot3500")[1]?'<span>Vehicle <b>'+m(L("tot3500")[1])+'</b></span>':'')+'</div></div></div>';
+  /* gm */
+  h+='<div class="card ap"><div class="ch"><span class="eb">Gross margin</span>'+tip("Revenue minus cost of goods sold. This is the number the account is measured on. It is before company overhead, so it is not profit.")+'<span class="pill '+(gpA>=gpB?"pok":"pwa")+'">'+(gpA>=gpB?"Ahead":"Behind")+'</span></div><div class="cb">'+
+     '<div class="hero2 num">'+m(gm)+'</div>'+
+     '<div class="kpi2"><b>'+pf(gpA)+'</b><span>of revenue vs '+pf(gpB)+' target</span><span class="g '+(gpA-gpB>=0?"ok":"bad")+'">'+gap(gpA-gpB,"ahead","behind")+'</span></div>'+
+     '<div class="kpi2" style="margin-top:6px">'+(open?'<span><b style="font-size:var(--t-bod)">'+m(gmB)+'</b> budget to date</span><span>· '+(S.range===R_FYTD?m(rev[3]-cog[3])+' full year':m(rev[2]-cog[2])+' period budget')+'</span>':'<span><b style="font-size:var(--t-bod)">'+m(gmB)+'</b> budget</span><span class="'+(gm>=gmB?"ok":"bad")+'">· '+gapd(gm-gmB,"ahead","behind")+'</span>')+'</div>'+
+     '<div class="mini"><span>Target for the '+(S.range===R_FYTD?'year':'period')+' <b>'+pf(pct(rev[3+(S.range===R_FYTD?0:-1)]-cog[3+(S.range===R_FYTD?0:-1)],rev[3+(S.range===R_FYTD?0:-1)]))+'</b></span><span>'+(open?'Still moving - the period is open':'Closed and verified')+'</span></div></div></div>';
+  h+='</div>';
+  /* levers */
+  h+='<div class="card aa mt"><div class="ch"><span class="eb">Your cost of goods lines</span><span class="gl">the levers behind gross margin</span>'+tip("Each line as a percent of revenue against its own target. You hit the gross margin target by landing these at or under - or by trading between them.")+'<span class="pill pne">4 lines</span></div><div class="cb"><table class="lev lev2"><colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"><col class="c6"></colgroup>';
+  h+='<tr><th class="l">Line</th><th>Actual'+(open?' to date':'')+'</th><th>Budget'+(open?' to date':'')+'</th><th>Variance</th><th>Actual %</th><th>Target %</th><th>vs target</th></tr>';
+  [["Labor","3100","tot3100"],["Food purchased","3200","tot3200"],["Packaging and supplies","3400","tot3400"],["Vehicle","3500","tot3500"]].forEach(x=>{
+    const p=L(x[2]);if(p[0]===0&&p[1]===0){h+='<tr><td class="l"><span class="glc num">'+x[1]+'</span>'+x[0]+'</td><td class="nb">—</td><td class="nb">—</td><td class="nb">not active</td><td class="nb">—</td><td class="nb">—</td><td class="nb">—</td></tr>';return;}
+    const pa=pct(p[1],rv),pb=pct(p[0],rev[0]),d=pb-pa,dv=p[1]-p[0];
+    if(p[0]===0){h+='<tr><td class="l"><span class="glc num">'+x[1]+'</span>'+x[0]+'</td><td class="num">'+m(p[1])+'</td><td class="nb">no budget</td><td class="nb">—</td><td class="num">'+pf(pa)+'</td><td class="nb">—</td><td class="nb">—</td></tr>';return;}
+    h+='<tr><td class="l"><span class="glc num">'+x[1]+'</span>'+x[0]+(PKGGAP[S.acct]&&x[1]==="3400"?' <span class="absent">mapping gap</span>':'')+'</td><td class="num">'+m(p[1])+'</td><td class="num">'+m(p[0])+'</td><td class="num '+(dv<=0?"ok":"bad")+'">'+gapd(-dv,"under","over")+'</td><td class="num">'+pf(pa)+'</td><td class="num nb">'+pf(pb)+'</td><td class="num '+(d>=0?"ok":"bad")+'">'+gap(d,"under","over")+'</td></tr>';});
+  h+='<tr class="tot"><td class="l">Total cost of goods sold</td><td class="num">'+m(cg)+'</td><td class="num">'+m(cog[0])+'</td><td class="num '+(cg<=cog[0]?"ok":"bad")+'">'+gapd(cog[0]-cg,"under","over")+'</td><td class="num">'+pf(cpA)+'</td><td class="num nb">'+pf(cpB)+'</td><td class="num '+(cpB-cpA>=0?"ok":"bad")+'">'+gap(cpB-cpA,"under","over")+'</td></tr>';
+  h+='</table></div></div>';
+  h+=chart();
+  /* drills */
+  const lab=L("tot3100"),pur=[L("tot3200")[0]+L("tot3400")[0]+L("tot3500")[0],L("tot3200")[1]+L("tot3400")[1]+L("tot3500")[1]];
+  const drill=(name,acc,p,thru,inside)=>'<div class="dr3" style="border-left:3px solid '+acc+'"><div class="top"><span class="t1">'+name+'</span><span class="go">→</span></div><div class="grid">'+
+    '<div><div class="k">Spent</div><div class="v num">'+m(p[1])+' <small>through '+thru+'</small></div></div>'+
+    '<div><div class="k">Of revenue</div><div class="v num">'+pf(pct(p[1],rv))+' <small>target '+pf(pct(p[0],rev[0]))+'</small></div></div>'+
+    '<div><div class="k">Inside</div><div class="v"><small>'+inside+'</small></div></div></div></div>';
+  h+='<div class="g2 mt">'+drill("Labor","var(--navy-700)",lab,DATA_THRU,"hours, overtime, approvals")+drill("Purchasing","var(--green-600)",pur,CARDS_THRU,"bills, cards, every purchase")+'</div>';
+  h+='<div class="fold" onclick="tglStmt()"><span class="eb">Full profit and loss</span><span class="hx">every line the way finance sees it, with percent of revenue</span><span class="cv">'+(S.stmt?"▴":"▾")+'</span></div>';
+  if(S.stmt)h+=statement();
+  h+=tracked();
+  return h+'</div></div>';
+}
+
+/* ---------- corporate (shared changes only; full review later) ---------- */
+function grid(){
+  let h='<div class="card ab mt"><div class="ch"><span class="eb">By account</span><span class="gl">'+R().sub+' · click a row to open it</span>'+tip("A statement is a per-account artifact, so at portfolio level this grid replaces it.")+'<span class="pill pwa">2 with gaps</span></div><div class="cb"><table>';
+  h+='<tr><th class="l">Account</th><th class="l" style="width:70px">Model</th><th>Revenue</th><th>COGS</th><th>Gross margin</th><th style="width:66px">GM %</th><th style="width:66px">Target</th><th style="width:112px">Note</th></tr>';
+  const save=S.acct;let tr=0,tc=0,trb=0,tcb=0;
+  ALLK.forEach(k=>{S.acct=k;const r=L("totRev"),c=L("totCOGS"),rv=r[1],cg=c[1];tr+=rv;tc+=cg;trb+=r[0];tcb+=c[0];
+    const note=PKGGAP[k]?'<span class="absent">pkg mapping gap</span>':(MODEL[k]==="fee"?'<span class="fixedp">fee · contractual</span>':(MODEL[k]==="direct"?'<span class="absent">tracked in SC</span>':'<span class="nb">—</span>'));
+    h+='<tr class="dr" onclick="pickAcct(\''+k+'\')"><td class="l">'+k+'</td><td class="l nb">'+MODEL[k]+'</td><td class="num">'+(rv?m(rv):'<span class="nb">—</span>')+'</td><td class="num">'+m(cg)+'</td><td class="num">'+(rv?m(rv-cg):'<span class="nb">—</span>')+'</td><td class="num">'+(rv?pf(pct(rv-cg,rv)):'—')+'</td><td class="num nb">'+(r[0]?pf(pct(r[0]-c[0],r[0])):'—')+'</td><td>'+note+'</td></tr>';});
+  S.acct=save;
+  h+='<tr class="tot"><td class="l">Portfolio</td><td></td><td class="num">'+m(tr)+'</td><td class="num">'+m(tc)+'</td><td class="num">'+m(tr-tc)+'</td><td class="num">'+pf(pct(tr-tc,tr))+'</td><td class="num nb">'+pf(pct(trb-tcb,trb))+'</td><td class="nb">2 gaps</td></tr>';
+  h+='</table></div></div>';return h;
+}
+function corp(){
+  const rev=L("totRev"),cog=L("totCOGS"),rv=rev[1],cg=cog[1],gmB=rev[0]-cog[0],gm=rv-cg;
+  const port=["ALL","EAST","WEST"].includes(S.acct),fee=MODEL[S.acct]==="fee",open=isOpen(),sr=siteRev();
+  const cpA=pct(cg,rv),cpB=pct(cog[0],rev[0]),gpA=pct(gm,rv),gpB=pct(gmB,rev[0]);
+  let h=cmdbar()+'<div class="body">'+rail()+'<div>'+srcline()+banner();
+  h+='<div class="g3">';
+  h+='<div class="card ag"><div class="ch"><span class="eb">Revenue</span><span class="gl">2200 · 2300 · 2400</span>'+tip("What the account bills. Closed periods use finance actuals. The open period uses planned revenue, or contract for fee accounts.")+'<span class="pill '+(fee?"pne":(sr.planned?"pwa":(rv>=rev[0]?"pok":"pba")))+'">'+(fee?"Contractual":(sr.planned?"Planned":(rv>=rev[0]?"Above budget":"Below budget")))+'</span></div><div class="cb"><div class="hero2 num">'+m(rv)+'</div>'+
+     '<div class="kpi2">'+(open?'<span><b style="font-size:var(--t-bod)">'+m(rev[0])+'</b> budget to date</span><span>· '+(S.range===R_FYTD?m(rev[3])+' full year':m(rev[2])+' period budget')+'</span>':'<span><b style="font-size:var(--t-bod)">'+m(rev[0])+'</b> budget</span>')+'</div>'+
+     '<div class="mini"><span>Meal service <b>'+m(L("r2400_1")[1])+'</b></span>'+(L("r2300")[0]?'<span>Service charges <b>'+m(L("r2300")[1])+'</b></span>':'')+(L("r2200")[0]?'<span>Catering <b>'+m(L("r2200")[1])+'</b></span>':'')+'</div></div></div>';
+  h+='<div class="card ab"><div class="ch"><span class="eb">Cost of goods sold</span><span class="gl">3100 – 3500</span>'+tip("Labor, food purchased, packaging and supplies, vehicle.")+'<span class="pill '+(cpA<=cpB?"pok":"pba")+'">'+(cpA<=cpB?"Under target":"Over target")+'</span></div><div class="cb"><div class="hero2 num '+(cpA<=cpB?"ok":"bad")+'">'+m(cg)+'<small>spent</small></div><div class="kpi2"><b>'+pf(cpA)+'</b><span>of revenue vs '+pf(cpB)+' target</span><span class="g '+(cpB-cpA>=0?"ok":"bad")+'">'+gap(cpB-cpA,"under","over")+'</span></div>'+
+     '<div class="mini"><span>Labor <b>'+m(L("tot3100")[1])+'</b></span><span>Food <b>'+m(L("tot3200")[1])+'</b></span><span>Packaging <b>'+m(L("tot3400")[1])+'</b></span></div></div></div>';
+  h+='<div class="card ap"><div class="ch"><span class="eb">Gross margin</span>'+tip("Revenue minus cost of goods sold. The account-level measure. Stops here - SG&A is not part of it.")+'<span class="pill '+(gpA>=gpB?"pok":"pwa")+'">'+(gpA>=gpB?"Ahead":"Behind")+'</span></div><div class="cb"><div class="hero2 num">'+m(gm)+'</div><div class="kpi2"><b>'+pf(gpA)+'</b><span>of revenue vs '+pf(gpB)+' target</span><span class="g '+(gpA-gpB>=0?"ok":"bad")+'">'+gap(gpA-gpB,"ahead","behind")+'</span></div>'+
+     '<div class="mini"><span>Budget'+(open?' to date':'')+' <b>'+m(gmB)+'</b></span><span class="'+(gm>=gmB?"ok":"bad")+'">'+gapd(gm-gmB,"ahead","behind")+'</span></div></div></div>';
+  h+='</div>';
+  if(port){h+=chart()+grid();}
+  else{
+    /* levers - same component as the site view */
+    h+='<div class="card aa mt"><div class="ch"><span class="eb">Cost of goods lines</span><span class="gl">percent of revenue against target</span>'+tip("Each line as a percent of revenue against its own target.")+'<span class="pill pne">4 lines</span></div><div class="cb"><table class="lev lev2"><colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"><col class="c6"></colgroup>';
+    h+='<tr><th class="l">Line</th><th>Actual'+(open?' to date':'')+'</th><th>Budget'+(open?' to date':'')+'</th><th>Variance</th><th>Actual %</th><th>Target %</th><th>vs target</th></tr>';
+    [["Kitchen labor","3100","tot3100"],["Food purchased","3200","tot3200"],["Packaging and supplies","3400","tot3400"],["Vehicle","3500","tot3500"]].forEach(x=>{
+      const p=L(x[2]);if(p[0]===0&&p[1]===0){h+='<tr><td class="l"><span class="glc num">'+x[1]+'</span>'+x[0]+'</td><td class="nb">—</td><td class="nb">—</td><td class="nb">not active</td><td class="nb">—</td><td class="nb">—</td><td class="nb">—</td></tr>';return;}
+      if(p[0]===0){h+='<tr><td class="l"><span class="glc num">'+x[1]+'</span>'+x[0]+'</td><td class="num">'+m(p[1])+'</td><td class="nb">no budget</td><td class="nb">—</td><td class="num">'+pf(pct(p[1],rv))+'</td><td class="nb">—</td><td class="nb">—</td></tr>';return;}
+      const pa=pct(p[1],rv),pb=pct(p[0],rev[0]),d=pb-pa,dv=p[1]-p[0];
+      h+='<tr><td class="l"><span class="glc num">'+x[1]+'</span>'+x[0]+(PKGGAP[S.acct]&&x[1]==="3400"?' <span class="absent">mapping gap</span>':'')+'</td><td class="num">'+m(p[1])+'</td><td class="num">'+m(p[0])+'</td><td class="num '+(dv<=0?"ok":"bad")+'">'+gapd(-dv,"under","over")+'</td><td class="num">'+pf(pa)+'</td><td class="num nb">'+pf(pb)+'</td><td class="num '+(d>=0?"ok":"bad")+'">'+gap(d,"under","over")+'</td></tr>';});
+    h+='<tr class="tot"><td class="l">Total cost of goods sold</td><td class="num">'+m(cg)+'</td><td class="num">'+m(cog[0])+'</td><td class="num '+(cg<=cog[0]?"ok":"bad")+'">'+gapd(cog[0]-cg,"under","over")+'</td><td class="num">'+pf(cpA)+'</td><td class="num nb">'+pf(cpB)+'</td><td class="num '+(cpB-cpA>=0?"ok":"bad")+'">'+gap(cpB-cpA,"under","over")+'</td></tr></table></div></div>';
+    h+=chart();
+    h+='<div class="fold" onclick="tglStmt()"><span class="eb">Profit and loss statement</span><span class="hx">every line, percent of revenue</span><span class="cv">'+(S.stmt?"▴":"▾")+'</span></div>';
+    if(S.stmt)h+=statement();
+    h+=tracked();}
+  return h+'</div></div>';
+}
+const CAPS={site:'<b>Site leader</b> - built on the management logic: gross margin % is the goal, the COGS %s are the levers, and they trade between lines. Every line shows actual and budget in dollars and in percent of revenue, with the gap stated plainly - under or over, ahead or behind. Ticker at the top is the rules-based summary. Switch the range chip between this year, this period and last period.',
+ corp:'<b>Corporate</b> - same engine and structure as the site view with the portfolio rail, GL codes and the account grid at ALL / region. The toggle switches only the open-period revenue source for per-meal accounts: planned revenue (default) or Service Calendar revenue, which is seeded test data until each site is live.'};
+function render(){$("app").innerHTML=S.role==="site"?site():corp();$("cap").innerHTML=CAPS[S.role];$("av").textContent=S.role==="corp"?"KF":"JT";}
+function pickAcct(a){S.acct=a;if(S.role==="site"&&["ALL","EAST","WEST"].includes(a))S.acct="CIN - AZ";render();}
+function setMode(x){S.mode=x;render();}
+function setSal(x){S.salary=x;render();}
+function setRange(i){S.range=i;S.rmenu=false;render();}
+function tglRange(e){e.stopPropagation();S.rmenu=!S.rmenu;render();}
+function tglStmt(){S.stmt=!S.stmt;render();}
+function setDense(d){S.dense=d;render();}
+function setRole(r){S.role=r;S.stmt=false;if(r==="site"&&["ALL","EAST","WEST"].includes(S.acct))S.acct="CIN - AZ";
+  $("bCorp").className=r==="corp"?"on":"";$("bSite").className=r==="site"?"on":"";render();}
+document.addEventListener("click",()=>{if(S.rmenu){S.rmenu=false;render();}});
+render();
+</script>
