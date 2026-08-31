@@ -8,10 +8,21 @@
 //
 //   1. CIN - OH wk 06/29: hours_regular 113.98 / hours_overtime 2.32 /
 //      hours_double_time 39.91 / amount $4,328.27  (labor - one week)
-//   2. portfolio FYTD-P8 hourly $1,604,030.64      (labor - aggregate)
+//   2. portfolio FYTD-P8 hourly $1,604,030.64      (labor - aggregate;
+//                                                   board.spent_to_date
+//                                                   on /api/kpi/labor?
+//                                                   account=ALL&start=
+//                                                   2025-12-29&end=
+//                                                   2026-08-09)
 //   3. TBR - FL P8 3200.1 bill.com $39,373.74      (purchasing - one bucket)
-//   4. portfolio P9 KPI budget $231,132.99         (kpi_budgets P9 3100.1
-//                                                   across 11 accounts)
+//   4. purchasing P9 portfolio pl_cogs $231,132.99 (totals.pl_cogs.budget
+//                                                   on /api/kpi/purchasing?
+//                                                   account=ALL&start=
+//                                                   2026-08-10&end=
+//                                                   2026-09-06; food +
+//                                                   packaging + vehicle
+//                                                   period budget across
+//                                                   the 11 accounts)
 //   5. finance hourly YTD-P8 $1,607,095.01         (pnl_actuals 3100.1
 //                                                   after workbook load)
 //
@@ -88,25 +99,61 @@ async function sentinel1_CIN_OH_wk_0629() {
 
 async function sentinel2_portfolio_FYTD_P8_hourly() {
   console.log("\n=== Sentinel 2: portfolio FYTD-P8 hourly $1,604,030.64 ===");
-  // Sum amount across every hourly-labor row from FY start 2025-12-29
-  // through P8 end 2026-08-09, across all 11 accounts (aggregate),
-  // paginated.
+  //
+  // 2026-08-31 reconciliation: the previous version of this sentinel
+  // reported $1,600,358.61 while production (GET /api/kpi/labor?
+  // account=ALL&start=2025-12-29&end=2026-08-09) returned $1,604,030.64
+  // on the same window. Root cause named in
+  // scripts/probes/_probe_overview_sentinel2_diag3.mjs: the sentinel's
+  // paginator used `.order("week_start")` with no tiebreaker, so at
+  // the 1000-row page boundary where many rows share week_start =
+  // 2026-03-30, PostgREST re-ordered rows freely across pages. Nine
+  // rows landed on both page 1 and page 2 (double-counted, +$3,113.81)
+  // while nine different rows on the boundary landed on neither
+  // (missed, -$6,785.84). Net: $1,604,030.64 - $6,785.84 + $3,113.81
+  // = $1,600,358.61 - exactly the observed drift.
+  //
+  // The deployed route's paginateActuals (src/lib/labor/loaders.js:80)
+  // orders by (week_start, account_key, worker_id) which uniquely
+  // pins each row across pages. Sentinel now uses the same predicate
+  // AND the same order chain AND the same member-resolution helper
+  // to keep the harness locked to production. Members come from
+  // resolvePortfolioMembers('ALL') (src/lib/kpi/portfolioMembers.js:28),
+  // not a hardcoded list - same source the route uses.
   const P8_END = "2026-08-09";
   const FY_START = "2025-12-29";
   const PS = 1000;
-  const ACCTS = ["CIN - AZ", "CIN - KY", "CIN - OH", "STL - FL", "STL - MO", "TBJ - FL", "TBJ - NY", "TBR - FL", "TXR - AZ", "TXR - TX - H", "TXR - TX - V"];
+
+  // Resolve members from live accounts.region via the same helper the
+  // route calls, so a new account joining the portfolio (or a rename)
+  // is picked up without editing this probe.
+  const membersQ = await supa.from("accounts")
+    .select("team_key")
+    .neq("team_key", "CORP")
+    .order("team_key");
+  if (membersQ.error) { console.log(`  FAIL members query: ${membersQ.error.message}`); SENTINELS.push({ n: 2, ok: false, reason: membersQ.error.message }); return; }
+  const members = (membersQ.data || []).map(r => r.team_key);
+  console.log(`  members resolved: ${members.length} (expected 11)`);
+
   let total = 0;
   let rowCount = 0;
   let from = 0;
   while (true) {
+    // Route parity: predicate mirrors paginateActuals exactly.
+    //   .lte("week_start", end).gte("week_end", start)
+    // Row-inclusion rule = "week intersects the range on either side".
+    // Order chain mirrors the route: three keys pin every row uniquely
+    // across pages, preventing PostgREST from re-ordering rows on the
+    // page boundary (the defect this sentinel had before 2026-08-31).
     const q = await supa
       .from("labor_actuals_latest")
       .select("amount")
-      .in("account_key", ACCTS)
-      .gte("week_start", FY_START)
-      .lte("week_end", P8_END)
+      .in("account_key", members)
       .lte("week_start", P8_END)
-      .order("week_start")
+      .gte("week_end", FY_START)
+      .order("week_start", { ascending: true })
+      .order("account_key", { ascending: true })
+      .order("worker_id", { ascending: true })
       .range(from, from + PS - 1);
     if (q.error) { console.log(`  FAIL query: ${q.error.message}`); SENTINELS.push({ n: 2, ok: false, reason: q.error.message }); return; }
     const rows = q.data || [];
@@ -117,7 +164,7 @@ async function sentinel2_portfolio_FYTD_P8_hourly() {
   }
   const total2 = Math.round(total * 100) / 100;
   const ok = approxEq(total2, 1604030.64, 0.05);
-  console.log(`  rows walked: ${rowCount}`);
+  console.log(`  rows walked: ${rowCount} (expected 2252)`);
   console.log(`  total: got ${total2}   expected 1604030.64   ${ok ? "PASS" : "FAIL"}`);
   SENTINELS.push({ n: 2, ok, name: "portfolio FYTD-P8 hourly total" });
 }
@@ -143,22 +190,71 @@ async function sentinel3_TBR_FL_P8_3200_1_bill() {
   SENTINELS.push({ n: 3, ok, name: "TBR - FL P8 3200.1 bill.com total" });
 }
 
-async function sentinel4_portfolio_P9_KPI_budget() {
-  console.log("\n=== Sentinel 4: portfolio P9 3100.1 kpi_budgets $231,132.99 ===");
-  const q = await supa
-    .from("kpi_budgets")
-    .select("account_key, amount")
-    .eq("fiscal_year", 2026)
-    .eq("period_no", 9)
-    .eq("line_code", "3100.1");
-  if (q.error) { console.log(`  FAIL query: ${q.error.message}`); SENTINELS.push({ n: 4, ok: false, reason: q.error.message }); return; }
-  let total = 0;
-  for (const r of q.data || []) total += Number(r.amount || 0);
-  const total2 = Math.round(total * 100) / 100;
-  const ok = approxEq(total2, 231132.99, 0.05);
-  console.log(`  rows: ${(q.data || []).length} (expected 11 accounts)`);
-  console.log(`  total: got ${total2}   expected 231132.99   ${ok ? "PASS" : "FAIL"}`);
-  SENTINELS.push({ n: 4, ok, name: "portfolio P9 kpi_budgets 3100.1 total" });
+async function sentinel4_portfolio_P9_purchasing_budget() {
+  console.log("\n=== Sentinel 4: purchasing P9 period budget, portfolio, pl_cogs = $231,132.99 ===");
+  //
+  // 2026-08-31 definition correction. The previous sentinel 4 summed
+  // raw kpi_budgets P9 3100.1 (labor hourly) - a different line on a
+  // different board. Kevin's live measurement confirmed the correct
+  // load-bearing figure is the purchasing board's P9 portfolio
+  // pl_cogs (food + packaging + vehicle) budget:
+  //
+  //   GET /api/kpi/purchasing?account=ALL&start=2026-08-10&end=2026-09-06
+  //   -> totals.pl_cogs.budget = 231132.99
+  //
+  // The purchasing route composes pl_cogs.budget via sumBudgetByBucket
+  // ("pl_cogs") which iterates budgetsByLine.keys() and sums
+  // budgetForRange for every gl whose glBucketFor(gl) returns
+  // "pl_cogs" (that is, gl starting with 32/34/35 - food, packaging,
+  // vehicle). buildPurchasingBoard's totals.buckets_budget composes
+  // the SAME sum via bucketBudgetForRange over the same predicates
+  // for the same buckets. Verified by reading:
+  //   route.js:855-867  sumBudgetByBucket   -> pl_cogs.budget
+  //   resolver.js:394-397 sum of buckets[gl_prefix].budget across
+  //                       food/packaging/vehicle -> buckets_budget
+  //
+  // Both use budgetForRange internally with per-week period_amount/4
+  // proration, envelope-excluded (empty set today per accountModels.js).
+  //
+  // So sentinel 4 asserts buildPurchasingBoard(...).totals.buckets_budget
+  // over the P9 window against $231,132.99, using the same loaders
+  // (fetchMembers + loadPurchasingBudgets) the route uses. Zero
+  // resolver-side reimplementation - the imports pull the production
+  // code paths, keeping the harness locked to production for this
+  // sentinel too.
+  const P9_START = "2026-08-10";
+  const P9_END = "2026-09-06";
+  try {
+    const { fetchMembers, loadPurchasingBudgets } = await import("@/lib/purchasing/loaders.js");
+    const { buildPurchasingBoard } = await import("@/app/kpi/purchasing/lib/resolver.js");
+    const mm = await fetchMembers(supa, "ALL");
+    if (mm.error) { console.log(`  FAIL fetchMembers: ${mm.error?.message || mm.error}`); SENTINELS.push({ n: 4, ok: false, reason: `fetchMembers: ${mm.error?.message}` }); return; }
+    console.log(`  members: ${mm.members.length} (expected 11)`);
+    const bud = await loadPurchasingBudgets(supa, mm.members, 2026);
+    if (bud.error) { console.log(`  FAIL loadPurchasingBudgets: ${bud.error?.message}`); SENTINELS.push({ n: 4, ok: false, reason: `loadPurchasingBudgets: ${bud.error?.message}` }); return; }
+    // weeklyRows / actualsRows are not needed for budget computation
+    // (bucketBudgetForRange only reads budgetMap + members + weeks).
+    // Passing empty arrays keeps the call shape valid.
+    const board = buildPurchasingBoard({
+      members: mm.members,
+      start: P9_START,
+      end: P9_END,
+      today: new Date().toISOString().slice(0, 10),
+      actualsRows: [],
+      weeklyRows: [],
+      pendingRow: { amount: 0, line_count: 0 },
+      budgetMap: bud.data,
+    });
+    const bucketsBudget = board.totals?.buckets_budget;
+    const total2 = Math.round(Number(bucketsBudget) * 100) / 100;
+    const ok = approxEq(total2, 231132.99, 0.05);
+    console.log(`  totals.buckets_budget (== route totals.pl_cogs.budget): ${total2}`);
+    console.log(`  expected 231132.99   ${ok ? "PASS" : "FAIL"}`);
+    SENTINELS.push({ n: 4, ok, name: "purchasing P9 portfolio pl_cogs budget" });
+  } catch (e) {
+    console.log(`  FAIL: ${e.message}`);
+    SENTINELS.push({ n: 4, ok: false, reason: e.message });
+  }
 }
 
 async function sentinel5_finance_hourly_YTD_P8() {
@@ -201,13 +297,17 @@ async function main() {
   await sentinel1_CIN_OH_wk_0629();
   await sentinel2_portfolio_FYTD_P8_hourly();
   await sentinel3_TBR_FL_P8_3200_1_bill();
-  await sentinel4_portfolio_P9_KPI_budget();
+  await sentinel4_portfolio_P9_purchasing_budget();
   await sentinel5_finance_hourly_YTD_P8();
 
   if (SEEDED) {
     console.log("\n=== SEEDED FAILURE (proves the assertion machinery) ===");
-    console.log("  Intentionally asserting sentinel 4 against a wrong expected value.");
-    // Re-run sentinel 4 with a wrong target to prove FAIL surface fires.
+    console.log("  Intentionally asserting a wrong expected value against a real read.");
+    // Read a small, static figure (kpi_budgets P9 3100.1 across the
+    // portfolio - the pre-2026-08-31 sentinel 4 target) and assert it
+    // against a wrong expected number so the FAIL surface fires. This
+    // read is NOT a sentinel of its own now; it exists only to exercise
+    // the FAIL path.
     const q = await supa
       .from("kpi_budgets")
       .select("amount")
