@@ -207,13 +207,22 @@ export async function loadScDailyRevenue(supa, { members, start, end }) {
     while (true) {
       const q = await supa
         .from("sc_daily_revenue")
-        .select("account_key, service_date, actual_revenue, is_non_revenue")
+        .select("account_key, service_date, service_id, actual_revenue, is_non_revenue")
         .in("account_key", memberChunk)
         .gte("service_date", start)
         .lte("service_date", end)
         .not("is_non_revenue", "is", true)   // §5.10: NOT is_non_revenue always
+        // Order chain must uniquely order rows across the 1000-row page
+        // boundary. sc_daily_revenue is grained per
+        // (account_key, service_id, service_date) - see sc-6b's
+        // service_days CTE. Without service_id in the order chain, tie
+        // groups of rows sharing (account_key, service_date) reorder
+        // freely across pages, dropping or duplicating rows. Same
+        // pagination-order defect class as the sentinel probe fix on
+        // 2026-08-31 and purchasing #892's .order("id") retraction.
         .order("account_key")
         .order("service_date")
+        .order("service_id")
         .range(from, from + PS_DEFAULT - 1);
       if (q.error) return { error: q.error, scope: "sc_daily_revenue" };
       const rows = q.data || [];
