@@ -31,7 +31,11 @@
 // depends on. The `source` CHECK already permits the value; the
 // value simply has no producer today.
 
-import { getServiceClient } from "@/lib/supabase";
+// Relative path (not the "@/lib" Next.js alias) so this module is
+// importable by CLI scripts under plain Node - scripts/academy-issue.mjs
+// bypasses webpack. Next.js resolves relative imports too, so API-route
+// usage is unaffected.
+import { getServiceClient } from "../supabase.js";
 
 // ═══════════════════════════════════════════════════════════════
 // The onboarding boundary. Recommended default: NO backfill.
