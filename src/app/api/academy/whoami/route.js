@@ -27,7 +27,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   resolveAcademyIdentity,
-  canSeeStandingCard,
   eligibleCountInScope,
   ACADEMY_PREVIEW_ONLY,
   ACADEMY_PREVIEW_ALLOWLIST,
@@ -73,19 +72,19 @@ export async function GET() {
       ok: true,
       identity: null,
       canSeeStandingCard: false,
-      eligibleCountInScope: 0,
+      canSeeHourlyRoster: false,
+      eligibleCountInScope: { salaried: 0, hourly: 0, total: 0 },
       resolvedFor: email,
       reason: "no active roster row for this email",
     });
   }
 
-  let canSee = false;
-  let eligibleCount = 0;
+  // One DB call for the split counts; both booleans are derived
+  // locally so the route stays a single round-trip rather than
+  // three overlapping ones.
+  let counts;
   try {
-    [canSee, eligibleCount] = await Promise.all([
-      canSeeStandingCard(identity),
-      eligibleCountInScope(identity),
-    ]);
+    counts = await eligibleCountInScope(identity);
   } catch (err) {
     console.error("[api/academy/whoami] scope math threw:", err?.message || err);
     return NextResponse.json({ error: "server_error", scope: "scope" }, { status: 500 });
@@ -95,7 +94,8 @@ export async function GET() {
     ok: true,
     resolvedFor: email,
     identity,
-    canSeeStandingCard: canSee,
-    eligibleCountInScope: eligibleCount,
+    canSeeStandingCard: counts.salaried > 0,
+    canSeeHourlyRoster: counts.hourly > 0,
+    eligibleCountInScope: counts,
   });
 }

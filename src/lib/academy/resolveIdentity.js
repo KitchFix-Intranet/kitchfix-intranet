@@ -77,6 +77,18 @@
 // is a separate module in a later PR and does not share this
 // resolver's return shape.
 //
+// Why the eligibility count is split salaried / hourly
+// ────────────────────────────────────────────────────
+// The Academy renders two DISTINCT cards for the two populations:
+// the salaried standing card (managers who sign in to the intranet)
+// and the hourly roster card (portal staff and their link
+// lifecycle). Each card must gate on its OWN population - a single
+// mixed count would render the salaried card empty for the three
+// site leaders who have exactly one eligible salaried person (self)
+// but a non-zero hourly roster: Atherton (CIN - OH, 0/5), Forkner
+// (TXR - TX - H, 0/5), Rogers (TXR - TX - V, 0/5). Verified against
+// production 2026-08-31. Do not collapse this back into one number.
+//
 // Cache posture
 // ─────────────
 // No process-lifetime cache. This resolver runs per request. If a
@@ -296,119 +308,101 @@ export async function resolveAcademyIdentity(sessionEmail, { supa } = {}) {
 }
 
 /**
- * Standing card visibility (spec Section 3.3, the "scope-not-title"
- * rule). Returns true only when at least one eligible person OTHER
- * than the viewer sits inside scope.accounts.
+ * Count eligible people in scope, split by class.
  *
- * Eligible means: people row with end_date IS NULL, in scope.accounts,
- * excluding the viewer's worker_id, excluding any worker with an
- * eligible=false exception row.
+ * "Eligible" means: `people` row with `end_date IS NULL`, in
+ * `scope.accounts`, excluding the viewer's own `worker_id`, and
+ * excluding anyone with an `academy_eligibility_exceptions` row
+ * where `eligible = false`.
  *
- * Five of eleven site leaders are the only eligible salaried person
- * at their site (Atherton, Bailey, Gilman, Forkner, Rogers); two of
- * those sites also have zero hourly staff. A title-based rule would
- * render them a team card containing exactly one person, themselves.
- * This function returns false for those cases.
+ * Returns `{ salaried, hourly, total }`. The split is load-bearing
+ * (see the file header) - the Academy renders salaried and hourly
+ * as two separate cards, each gated on its own population.
+ *
+ * Implementation note: fetches all in-scope people rows and
+ * partitions in JS rather than issuing two count-only queries.
+ * At current scale (~100 rows max per scope; 1 exception row)
+ * this is a single small query plus a set lookup, and it
+ * eliminates the need to inline worker_id strings into a NOT IN
+ * SQL fragment.
  *
  * @param {object|null} identity  return of resolveAcademyIdentity
  * @param {{ supa?: object }} [opts]
- * @returns {Promise<boolean>}
+ * @returns {Promise<{ salaried: number, hourly: number, total: number }>}
  */
-export async function canSeeStandingCard(identity, { supa } = {}) {
-  if (!identity) return false;
+export async function eligibleCountInScope(identity, { supa } = {}) {
+  const zeroes = { salaried: 0, hourly: 0, total: 0 };
+  if (!identity) return zeroes;
   const { scope, workerId } = identity;
-  if (!scope || !Array.isArray(scope.accounts) || scope.accounts.length === 0) {
-    return false;
-  }
+  if (!scope || !Array.isArray(scope.accounts) || scope.accounts.length === 0) return zeroes;
   const db = supa || getServiceClient();
 
-  // LEFT JOIN excluded via NOT EXISTS: keep the query legible and
-  // let Postgres pick the plan. The exception table is tiny (1 row
-  // today) so cost is trivial.
-  const query = db
-    .from("people")
-    .select("worker_id, end_date, account_key", { count: "exact", head: true })
-    .is("end_date", null)
-    .in("account_key", scope.accounts)
-    .neq("worker_id", workerId);
-  const totalQ = await query;
-  if (totalQ.error) {
-    console.error("[academy/canSeeStandingCard] eligible count:", totalQ.error.message);
-    return false;
+  const [rowsQ, excQ] = await Promise.all([
+    db
+      .from("people")
+      .select("worker_id, is_salaried")
+      .is("end_date", null)
+      .in("account_key", scope.accounts)
+      .neq("worker_id", workerId),
+    db
+      .from("academy_eligibility_exceptions")
+      .select("worker_id")
+      .eq("eligible", false),
+  ]);
+  if (rowsQ.error) {
+    console.error("[academy/eligibleCountInScope] people fetch:", rowsQ.error.message);
+    return zeroes;
   }
-  const total = totalQ.count || 0;
-  if (total === 0) return false;
-
-  // Subtract explicit exclusions. Load the exception list once and
-  // filter in JS - the table is tiny and this keeps the SQL simple.
-  const excQ = await db
-    .from("academy_eligibility_exceptions")
-    .select("worker_id")
-    .eq("eligible", false);
   if (excQ.error) {
-    console.error("[academy/canSeeStandingCard] exception scan:", excQ.error.message);
     // Fail closed on the count math: if we cannot subtract exclusions,
-    // do not lie by returning the raw total.
-    return false;
+    // do not lie by returning the raw totals.
+    console.error("[academy/eligibleCountInScope] exception scan:", excQ.error.message);
+    return zeroes;
   }
   const excluded = new Set((excQ.data || []).map((r) => r.worker_id));
-  if (excluded.size === 0) return total > 0;
 
-  // Re-check with exclusions applied. Cheapest correct path: one
-  // more scoped query that ALSO filters by not-in the exception list.
-  const excludedIds = [...excluded];
-  const refinedQ = await db
-    .from("people")
-    .select("worker_id", { count: "exact", head: true })
-    .is("end_date", null)
-    .in("account_key", scope.accounts)
-    .neq("worker_id", workerId)
-    .not("worker_id", "in", `(${excludedIds.map((id) => `"${id}"`).join(",")})`);
-  if (refinedQ.error) {
-    console.error("[academy/canSeeStandingCard] refined count:", refinedQ.error.message);
-    return false;
+  let salaried = 0;
+  let hourly = 0;
+  for (const r of rowsQ.data || []) {
+    if (excluded.has(r.worker_id)) continue;
+    if (r.is_salaried) salaried += 1;
+    else hourly += 1;
   }
-  return (refinedQ.count || 0) > 0;
+  return { salaried, hourly, total: salaried + hourly };
 }
 
 /**
- * Count of eligible people in scope, excluding the viewer.
- * Same math as canSeeStandingCard; returned as a number for the
- * whoami debug route so Kevin can see the denominator.
+ * Salaried standing card visibility (spec Section 3.3, the
+ * "scope-not-title" rule). Returns true only when at least one
+ * eligible SALARIED person other than the viewer sits inside
+ * scope.accounts.
+ *
+ * Three of eleven site leaders are the only eligible salaried
+ * person at their site (Atherton CIN - OH, Forkner TXR - TX - H,
+ * Rogers TXR - TX - V) and have a non-zero hourly roster. A
+ * mixed-population rule would render them an empty salaried card.
+ * Two more (Bailey CIN - KY, Gilman TBJ - NY) have zero of both
+ * and correctly return false here as well.
  *
  * @param {object|null} identity
  * @param {{ supa?: object }} [opts]
- * @returns {Promise<number>}
+ * @returns {Promise<boolean>}
  */
-export async function eligibleCountInScope(identity, { supa } = {}) {
-  if (!identity) return 0;
-  const { scope, workerId } = identity;
-  if (!scope || !Array.isArray(scope.accounts) || scope.accounts.length === 0) return 0;
-  const db = supa || getServiceClient();
+export async function canSeeStandingCard(identity, opts) {
+  const c = await eligibleCountInScope(identity, opts);
+  return c.salaried > 0;
+}
 
-  const excQ = await db
-    .from("academy_eligibility_exceptions")
-    .select("worker_id")
-    .eq("eligible", false);
-  if (excQ.error) {
-    console.error("[academy/eligibleCountInScope] exception scan:", excQ.error.message);
-    return 0;
-  }
-  const excludedIds = (excQ.data || []).map((r) => r.worker_id);
-
-  let q = db
-    .from("people")
-    .select("worker_id", { count: "exact", head: true })
-    .is("end_date", null)
-    .in("account_key", scope.accounts)
-    .neq("worker_id", workerId);
-  if (excludedIds.length > 0) {
-    q = q.not("worker_id", "in", `(${excludedIds.map((id) => `"${id}"`).join(",")})`);
-  }
-  const r = await q;
-  if (r.error) {
-    console.error("[academy/eligibleCountInScope] count:", r.error.message);
-    return 0;
-  }
-  return r.count || 0;
+/**
+ * Hourly roster card visibility (spec Section 10.3). Returns true
+ * only when at least one eligible HOURLY person other than the
+ * viewer sits inside scope.accounts.
+ *
+ * @param {object|null} identity
+ * @param {{ supa?: object }} [opts]
+ * @returns {Promise<boolean>}
+ */
+export async function canSeeHourlyRoster(identity, opts) {
+  const c = await eligibleCountInScope(identity, opts);
+  return c.hourly > 0;
 }
