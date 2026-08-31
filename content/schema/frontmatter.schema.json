@@ -179,8 +179,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["type", "cadence", "owner"],
+        "required": ["key", "type", "cadence", "owner"],
         "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Stable identifier for this obligation within its document. Requirements reference it, so it must never be reused or renumbered. Without it, requirements would have to point at array index and reordering the array would silently re-point every requirement to the wrong obligation."
+          },
           "type": {
             "type": "string",
             "enum": [
@@ -196,7 +201,8 @@
           },
           "cadence": {
             "type": "string",
-            "enum": ["annual", "biannual", "quarterly", "monthly", "weekly", "daily", "one-time", "per-event"]
+            "enum": ["annual", "biannual", "quarterly", "monthly", "weekly", "daily", "one-time", "per-event", "on-hire"],
+            "description": "How often the obligation recurs. `on-hire` means once per employment stint - a rehire is a new stint and therefore a new obligation, which is what makes 'rehires always redo onboarding' structural rather than a maintained rule."
           },
           "next_due": {
             "type": ["string", "null"],
@@ -205,8 +211,13 @@
           "owner": { "type": "string" },
           "source_section": { "type": ["string", "null"] },
           "description": { "type": ["string", "null"] },
+          "est_minutes": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "description": "Estimated reading time in minutes. Every assignment surface carries its time estimate; this is adoption law, not decoration."
+          },
           "applies_to": {
-            "description": "Optional per-obligation scope when the doc covers obligations that vary by state/account/role.",
+            "description": "Optional per-obligation scope when the doc covers obligations that vary by state/account/role/worker_class.",
             "oneOf": [
               { "type": "string", "const": "company-wide" },
               {
@@ -215,7 +226,12 @@
                 "properties": {
                   "states": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]{2}$" } },
                   "account": { "type": "string" },
-                  "role": { "type": "string" }
+                  "role": { "type": "string" },
+                  "worker_class": {
+                    "type": "string",
+                    "enum": ["all", "salaried", "hourly"],
+                    "description": "Routes the obligation by employment class. Maps to people.is_salaried, which is pinned 1:1 to the Rippling overtime_exemption field. applies_to.role is free text and matches nothing in people, so worker_class is the only reliable audience dimension in v1."
+                  }
                 }
               }
             ]
