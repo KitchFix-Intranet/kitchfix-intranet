@@ -156,6 +156,14 @@ export default function KpiOverviewPage() {
     if (end) params.set("end", end);
     if (urlPreview) params.set("preview", urlPreview);
     if (urlRevSource && urlRevSource !== "planned") params.set("rev_source", urlRevSource);
+    // TEST_MODE role-injection forwards (Overview Phase 3, PR #916).
+    // These params only take effect on the server when the route sees
+    // TEST_MODE=true && VERCEL!=1 (double-gated in route.js). On Vercel
+    // they are silently ignored - the real session role wins.
+    const urlTestRole = searchParams.get("_test_role");
+    const urlTestScope = searchParams.get("_test_scope");
+    if (urlTestRole) params.set("_test_role", urlTestRole);
+    if (urlTestScope) params.set("_test_scope", urlTestScope);
     fetch(`/api/kpi/overview?${params}`, { signal: ctrl.signal })
       .then(async (r) => {
         if (r.status === 401) { setAuthError("expired"); throw new Error("session_expired"); }

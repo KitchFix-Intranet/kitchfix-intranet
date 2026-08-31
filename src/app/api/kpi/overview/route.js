@@ -96,7 +96,33 @@ export async function GET(request) {
   if (gate.error) return NextResponse.json(safeError("role_gate", gate.error), { status: 500 });
   let caller;
   if (testModeBypass) {
-    caller = { role: "corporate", scope: null, can_see_salary: true };
+    // Default to corporate for TEST_MODE (matches labor + purchasing).
+    // Overview Phase 3 additional: honor `?_test_role=<role>` +
+    // `?_test_scope=<key>` when set, so a local Playwright / probe run
+    // can exercise the site posture directly instead of narrowing an
+    // account via ?preview= (which keeps the caller corporate). Kevin
+    // PR #916 review: "exercise the site posture directly, in
+    // TEST_MODE, by supplying a site-leader role to the resolver
+    // rather than by narrowing account access."
+    //
+    // BINDING: this branch is unreachable on Vercel (`VERCEL=1` kills
+    // testModeBypass upstream). Never trust these params off a local
+    // TEST_MODE run. The values are echoed into the audit-log line
+    // via caller.role so the render is self-labelling.
+    const testRoleReq = (new URL(request.url).searchParams.get("_test_role") || "").trim();
+    const testScopeReq = (new URL(request.url).searchParams.get("_test_scope") || "").trim();
+    const ALLOWED_TEST_ROLES = new Set(["corporate", "rdo", "site_leader", "site_manager"]);
+    if (testRoleReq && ALLOWED_TEST_ROLES.has(testRoleReq)) {
+      caller = {
+        role: testRoleReq,
+        scope: testScopeReq || null,
+        // site_manager cannot see salary; every other role defaults
+        // true (matches the roleGate default).
+        can_see_salary: testRoleReq !== "site_manager",
+      };
+    } else {
+      caller = { role: "corporate", scope: null, can_see_salary: true };
+    }
   } else {
     try { caller = await gate.resolveKpiRole(email); }
     catch (e) { return NextResponse.json(safeError("role_gate_resolve", e), { status: 500 }); }

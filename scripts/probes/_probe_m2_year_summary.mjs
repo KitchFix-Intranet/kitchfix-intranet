@@ -1,3 +1,15 @@
+// USAGE (path aliases required)
+// This probe imports from the `@/…` path alias, which Node cannot resolve
+// on its own. Run with the alias hook installed via `--import`:
+//
+//   node --env-file=.env.local \
+//        --import ./scripts/probes/_at_alias_hook.mjs \
+//        scripts/probes/<this-file>
+//
+// Running without --import fails at import time with
+//   `Cannot find package '@/…'`
+// which reads identically to a probe defect - added 2026-08-31 after
+// PR #916 review named this as the sentinel-#4 root cause.
 // M-2 smoke probe: verify the year-summary payload emits `homestands`
 // for CIN-OH (pilot) and does NOT emit it for the four fence-class
 // accounts (three non-pilot MLB + STL-FL + two MiLB AAA + PDC per-meal).

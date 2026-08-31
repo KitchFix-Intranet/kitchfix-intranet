@@ -101,7 +101,7 @@
 }
 .kpi-app .kpi-ov-ticker-ahead .kpi-ov-ticker-st    { background: var(--green-600); }
 .kpi-app .kpi-ov-ticker-ontrack .kpi-ov-ticker-st  { background: var(--navy-700); }
-.kpi-app .kpi-ov-ticker-behind .kpi-ov-ticker-st   { background: var(--amber-500); }
+.kpi-app .kpi-ov-ticker-behind .kpi-ov-ticker-st   { background: var(--amber-600); }
 .kpi-app .kpi-ov-ticker-critical .kpi-ov-ticker-st { background: var(--red-600); }
 .kpi-app .kpi-ov-ticker-tk-note {
   background: var(--amber-50);
@@ -729,7 +729,7 @@
   color: var(--n-0);
 }
 .kpi-app .kpi-ov-revtog button.ona {
-  background: var(--amber-500);
+  background: var(--amber-600);
   color: var(--n-0);
 }
 
