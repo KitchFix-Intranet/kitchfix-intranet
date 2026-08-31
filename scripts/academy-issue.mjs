@@ -96,6 +96,15 @@ async function runCycle() {
   console.log(`  people      : ${r.peopleAffected}`);
   console.log(`  requirements: ${r.totalRequirements}`);
   console.log("");
+  // Audience scope: {} means no narrowing. Print it so the reader
+  // always knows whether the plan is Kevin-only, region-only, etc.
+  const scopeKeys = Object.keys(r.audienceScope || {});
+  if (scopeKeys.length === 0) {
+    console.log("  audience scope: {} (no narrowing - full obligation audience)");
+  } else {
+    console.log(`  audience scope: ${JSON.stringify(r.audienceScope)}`);
+  }
+  console.log("");
   console.log("  by class:");
   printByObject(r.byClass);
   console.log("");
@@ -112,10 +121,41 @@ async function runCycle() {
     for (const s of r.skipped) console.log(`    ${s.module}: ${s.reason}`);
     console.log("");
   }
+  // Cycle-scope skips are separated from obligation-eligibility
+  // skips so a reader can tell "this obligation does not apply to
+  // you" (spec) from "this cycle was not published to you"
+  // (operator choice). Same person can appear in both counts if
+  // they are excluded by different modules for different reasons.
+  const scopeSkipEntries = Object.entries(r.scopeSkippedByReason || {}).sort((a, b) => b[1] - a[1]);
+  if (scopeSkipEntries.length > 0) {
+    console.log(`  cycle-scope skipped (obligation × person, ${scopeSkipEntries.reduce((s, [, n]) => s + n, 0)} total):`);
+    for (const [reason, n] of scopeSkipEntries) console.log(`    ${String(n).padStart(6)}  ${reason}`);
+    console.log("");
+  }
   if (r.roleWarnings.length > 0) {
     console.log(`  role warnings (${r.roleWarnings.length}):`);
     for (const w of r.roleWarnings.slice(0, 10)) console.log(`    ${w.module} / ${w.worker_id}: ${w.reason}`);
     if (r.roleWarnings.length > 10) console.log(`    ...and ${r.roleWarnings.length - 10} more`);
+    console.log("");
+  }
+  // On-hire warning: a cycle carrying an on-hire obligation
+  // conflates the cycle mechanism with the onboarding trigger.
+  // Kevin decides whether a given cycle is a launch-catch-up.
+  if ((r.onHireModules || []).length > 0) {
+    console.log(`  WARNING - cycle contains ${r.onHireModules.length} on-hire cadence module(s):`);
+    for (const m of r.onHireModules) console.log(`    ${m}`);
+    console.log("    Rationale: a new hire in October would receive these from BOTH");
+    console.log("    the onboarding trigger AND this cycle (different `source` values;");
+    console.log("    unique index permits both). Defensible as a launch catch-up; not");
+    console.log("    otherwise. Kevin's call.");
+    console.log("");
+  }
+  // Publish-time refusals.
+  if (r.wouldRefuseApply) {
+    console.log("  PUBLISH WOULD BE REFUSED:");
+    for (const reason of (r.refuseReasons || [])) {
+      console.log(`    - ${reason}`);
+    }
     console.log("");
   }
 

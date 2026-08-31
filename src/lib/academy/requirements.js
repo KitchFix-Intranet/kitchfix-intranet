@@ -201,6 +201,139 @@ async function loadStintMap(supa) {
   return m;
 }
 
+// ─── cycle audience scope (academy-6) ──────────────────────────────
+//
+// Composes with evaluateEligibility, does NOT replace it. The
+// resolution order for cycle issuance is fixed:
+//   1. Obligation audience via evaluateEligibility
+//   2. Then cycle audience_scope via evaluateCycleScope
+// Both must pass. The two return distinct exclusion reasons so a
+// dry-run reader can tell "this obligation does not apply to you"
+// (spec) from "this cycle was not published to you" (operator
+// choice) - they are different facts.
+
+const VALID_SCOPE_WORKER_CLASS = new Set(["all", "salaried", "hourly"]);
+
+/**
+ * Validate an audience_scope's values against live reference data.
+ * Returns an array of human-readable error strings; empty means
+ * every value resolves. Called before publish so a scope typo
+ * refuses loudly rather than silently producing an empty result.
+ *
+ * @param {object} scope             the cycle's audience_scope (may be null/{})
+ * @param {object} ctx
+ * @param {Set<string>} ctx.knownAccountKeys
+ * @param {Set<string>} ctx.knownRegions
+ * @param {Set<string>} ctx.activeWorkerIdsSet
+ * @returns {string[]}
+ */
+export function validateAudienceScope(scope, ctx) {
+  const errors = [];
+  if (scope == null) return errors;
+  if (typeof scope !== "object" || Array.isArray(scope)) {
+    return [`audience_scope must be an object, got ${Array.isArray(scope) ? "array" : typeof scope}`];
+  }
+  if (scope.worker_class != null) {
+    if (!VALID_SCOPE_WORKER_CLASS.has(scope.worker_class)) {
+      errors.push(
+        `audience_scope.worker_class "${scope.worker_class}" is not one of all|salaried|hourly`
+      );
+    }
+  }
+  if (scope.accounts != null) {
+    if (!Array.isArray(scope.accounts)) {
+      errors.push("audience_scope.accounts must be an array");
+    } else {
+      for (const a of scope.accounts) {
+        if (typeof a !== "string" || !ctx.knownAccountKeys.has(a)) {
+          errors.push(`audience_scope.accounts entry "${a}" does not exist in accounts.team_key`);
+        }
+      }
+    }
+  }
+  if (scope.regions != null) {
+    if (!Array.isArray(scope.regions)) {
+      errors.push("audience_scope.regions must be an array");
+    } else {
+      for (const r of scope.regions) {
+        if (typeof r !== "string" || !ctx.knownRegions.has(r)) {
+          errors.push(`audience_scope.regions entry "${r}" does not exist in accounts.region`);
+        }
+      }
+    }
+  }
+  if (scope.worker_ids != null) {
+    if (!Array.isArray(scope.worker_ids)) {
+      errors.push("audience_scope.worker_ids must be an array");
+    } else {
+      for (const w of scope.worker_ids) {
+        if (typeof w !== "string" || !ctx.activeWorkerIdsSet.has(w)) {
+          errors.push(
+            `audience_scope.worker_ids entry "${w}" is not a people row with end_date IS NULL`
+          );
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * Per-person cycle-scope check. Runs AFTER evaluateEligibility.
+ * Absent/empty scope matches everyone (no narrowing).
+ *
+ * @param {object} person
+ * @param {object} audienceScope
+ * @param {object} ctx
+ * @param {Map<string,string>} ctx.accountRegionMap
+ * @returns {{inScope: boolean, reason: string|null}}
+ */
+export function evaluateCycleScope(person, audienceScope, ctx = {}) {
+  if (audienceScope == null || typeof audienceScope !== "object") {
+    return { inScope: true, reason: null };
+  }
+  const keys = Object.keys(audienceScope);
+  if (keys.length === 0) return { inScope: true, reason: null };
+
+  if (audienceScope.worker_class != null) {
+    const wc = audienceScope.worker_class;
+    if (wc === "salaried" && !person.is_salaried) {
+      return { inScope: false, reason: "cycle scope worker_class=salaried, viewer is hourly" };
+    }
+    if (wc === "hourly" && person.is_salaried) {
+      return { inScope: false, reason: "cycle scope worker_class=hourly, viewer is salaried" };
+    }
+    // "all" matches; unknown values are refused by validateAudienceScope
+  }
+  if (Array.isArray(audienceScope.accounts) && audienceScope.accounts.length > 0) {
+    if (!audienceScope.accounts.includes(person.account_key)) {
+      return {
+        inScope: false,
+        reason: `cycle scope accounts excludes viewer's account "${person.account_key || "(none)"}"`,
+      };
+    }
+  }
+  if (Array.isArray(audienceScope.regions) && audienceScope.regions.length > 0) {
+    const accountRegionMap = ctx.accountRegionMap || new Map();
+    const region = accountRegionMap.get(person.account_key);
+    if (!audienceScope.regions.includes(region)) {
+      return {
+        inScope: false,
+        reason: `cycle scope regions excludes viewer's region "${region || "(none)"}"`,
+      };
+    }
+  }
+  if (Array.isArray(audienceScope.worker_ids) && audienceScope.worker_ids.length > 0) {
+    if (!audienceScope.worker_ids.includes(person.worker_id)) {
+      return {
+        inScope: false,
+        reason: `cycle scope worker_ids does not include viewer`,
+      };
+    }
+  }
+  return { inScope: true, reason: null };
+}
+
 async function loadObligationsByDocKey(supa, docKeyPairs) {
   // docKeyPairs: Array<{ doc_id, obligation_key }>. Returns
   // Map<`${doc_id}|${obligation_key}`, obligation-row>.
@@ -230,7 +363,7 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
 
   const cycleQ = await db
     .from("academy_cycles")
-    .select("cycle_id, label, period_start, period_end, status")
+    .select("cycle_id, label, period_start, period_end, status, audience_scope")
     .eq("cycle_id", cycleId)
     .maybeSingle();
   if (cycleQ.error) throw new Error(`load cycle ${cycleId}: ${cycleQ.error.message}`);
@@ -250,36 +383,87 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
     .order("doc_id", { ascending: true });
   if (modulesQ.error) throw new Error(`load modules: ${modulesQ.error.message}`);
   const modules = modulesQ.data || [];
+
+  // Load accounts once for both state resolution (obligation states
+  // scope) and region resolution (cycle scope), and pull the full
+  // account catalog into a Set for scope-name validation.
+  const accountsQ = await db.from("accounts").select("team_key, state, region");
+  if (accountsQ.error) throw new Error(`load accounts: ${accountsQ.error.message}`);
+  const accountRegionMap = new Map();
+  const knownAccountKeys = new Set();
+  const knownRegions = new Set();
+  const accountStateMap = new Map();
+  for (const a of accountsQ.data || []) {
+    if (!a.team_key) continue;
+    knownAccountKeys.add(a.team_key);
+    if (a.state) accountStateMap.set(a.team_key, a.state);
+    if (a.region) {
+      accountRegionMap.set(a.team_key, a.region);
+      knownRegions.add(a.region);
+    }
+  }
+
+  const [excluded, people, stints, obligations] = await Promise.all([
+    loadExcludedWorkerIds(db),
+    loadPeoplePool(db, { includeHired: true, includeActive: true }),
+    loadStintMap(db),
+    loadObligationsByDocKey(db, modules),
+  ]);
+
+  const activeWorkerIdsSet = new Set(people.map((p) => p.worker_id));
+  const context = { excludedWorkerIds: excluded, accountStateMap };
+  const scopeCtx = { accountRegionMap };
+
+  // Validate the cycle's audience_scope value-set before iterating.
+  // An unresolved value (bad account, non-existent worker_id, etc.)
+  // becomes a semantic refusal that both the dry-run reader and the
+  // apply path can see.
+  const scopeRefusals = validateAudienceScope(cycle.audience_scope, {
+    knownAccountKeys,
+    knownRegions,
+    activeWorkerIdsSet,
+  });
+
+  // Detect on-hire cadence in cycle modules. It is not a refusal
+  // (Kevin may deliberately run a launch catch-up cycle), but it
+  // needs to be visible in the dry-run because it conflates two
+  // issuance mechanisms - a new hire in October would receive
+  // big-rules-onboarding from the onboarding trigger AND again from
+  // any October cycle carrying it (different `source` values, both
+  // pass the unique index). See PR 7 prompt Part 4.
+  const onHireModules = [];
+
   if (modules.length === 0) {
     return {
       cycle,
       rows: [],
       report: {
         modules: 0,
+        audienceScope: cycle.audience_scope || {},
         peopleAffected: 0,
         totalRequirements: 0,
         byClass: {},
         byAccount: {},
-        totalMinutesPerPerson: {},
+        minutesSummary: { min: 0, max: 0, avg: 0, total: 0 },
         skipped: [],
+        scopeSkippedByReason: {},
         roleWarnings: [],
+        onHireModules: [],
+        scopeRefusals,
+        wouldRefuseApply: scopeRefusals.length > 0 || true, // zero modules is a de-facto refusal too
+        refuseReasons: [
+          ...scopeRefusals,
+          "cycle has zero modules; publishing writes zero requirements",
+        ],
         note: "cycle has zero modules; publishing writes zero requirements",
       },
     };
   }
 
-  const [excluded, accountStates, people, stints, obligations] = await Promise.all([
-    loadExcludedWorkerIds(db),
-    loadAccountStateMap(db),
-    loadPeoplePool(db, { includeHired: true, includeActive: true }),
-    loadStintMap(db),
-    loadObligationsByDocKey(db, modules),
-  ]);
-
-  const context = { excludedWorkerIds: excluded, accountStateMap: accountStates };
   const rows = [];
   const skipped = [];
   const roleWarnings = [];
+  const scopeSkippedByReason = new Map();
   const seenPeople = new Set();
   const byClass = { salaried: 0, hourly: 0, unknown: 0 };
   const byAccount = {};
@@ -296,17 +480,27 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
       });
       continue;
     }
+    if (ob.cadence === "on-hire") {
+      onHireModules.push(key);
+    }
 
     for (const p of people) {
-      const verdict = evaluateEligibility(p, ob, context);
-      if (verdict.roleWarning) {
-        roleWarnings.push({
-          module: key,
-          worker_id: p.worker_id,
-          reason: verdict.reason,
-        });
+      // Step 1: obligation audience (existing filter).
+      const oblVerdict = evaluateEligibility(p, ob, context);
+      if (oblVerdict.roleWarning) {
+        roleWarnings.push({ module: key, worker_id: p.worker_id, reason: oblVerdict.reason });
       }
-      if (!verdict.eligible) continue;
+      if (!oblVerdict.eligible) continue;
+
+      // Step 2: cycle audience_scope (new). Distinct exclusion
+      // reason so the dry-run tally shows "obligation excluded"
+      // and "cycle scope excluded" as separate categories.
+      const scopeVerdict = evaluateCycleScope(p, cycle.audience_scope, scopeCtx);
+      if (!scopeVerdict.inScope) {
+        const r = scopeVerdict.reason || "cycle scope excluded (unknown reason)";
+        scopeSkippedByReason.set(r, (scopeSkippedByReason.get(r) || 0) + 1);
+        continue;
+      }
 
       const person_id = stints.get(p.worker_id) || null;
       // person_id null is expected drift until the nightly derive
@@ -349,24 +543,57 @@ export async function planCyclePublish(supa, cycleId, options = {}) {
         total: minutesList.reduce((a, b) => a + b, 0),
       };
 
+  // Publish-time refusals. Two kinds: unresolved scope values
+  // (name typos) and zero resolved population (the scope reaches
+  // nobody - almost always a scope typo, and if genuinely intended,
+  // the operator can say so another way). Both feed the same
+  // wouldRefuseApply flag applyCyclePublish honours.
+  const refuseReasons = [...scopeRefusals];
+  if (rows.length === 0 && modules.length > 0) {
+    refuseReasons.push(
+      `cycle resolves to zero people (modules=${modules.length}, audience_scope=${JSON.stringify(cycle.audience_scope || {})}). A cycle that reaches nobody is almost always a scope typo; refuse rather than publish an empty cycle that reports "complete".`
+    );
+  }
+
   return {
     cycle,
     rows,
     report: {
       modules: modules.length,
+      audienceScope: cycle.audience_scope || {},
       peopleAffected: seenPeople.size,
       totalRequirements: rows.length,
       byClass,
       byAccount,
       minutesSummary,
       skipped,
+      scopeSkippedByReason: Object.fromEntries(scopeSkippedByReason),
       roleWarnings,
+      onHireModules,
+      scopeRefusals,
+      refuseReasons,
+      wouldRefuseApply: refuseReasons.length > 0,
     },
   };
 }
 
 export async function applyCyclePublish(supa, cycleId, publishedBy, plan) {
   const db = supa || getServiceClient();
+
+  // Honour the plan's semantic refusals BEFORE calling the RPC.
+  // These are audience_scope typos + zero-resolution refusals from
+  // planCyclePublish. The RPC would happily accept an empty
+  // p_rows (that path exists for a legitimate but rare "cycle
+  // with zero eligible people" case that predates cycle scopes),
+  // so the JS side owns the "did you really mean to publish to
+  // nobody" question.
+  if (plan?.report?.wouldRefuseApply) {
+    const reasons = (plan.report.refuseReasons || []).map((r) => `  - ${r}`).join("\n");
+    throw new Error(
+      `applyCyclePublish refused: plan would refuse to publish (see planCyclePublish report). Reasons:\n${reasons || "  (no reasons captured)"}`
+    );
+  }
+
   const q = await db.rpc("publish_cycle_atomic", {
     p_cycle_id: cycleId,
     p_published_by: publishedBy,
