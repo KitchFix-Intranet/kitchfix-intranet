@@ -43,6 +43,34 @@ relationships:
   - { to: PB-005, type: references, from_section: "Culinary Defined (the SLA tunes specifics per account)" }
   - { to: PB-002, type: references, from_section: "3.13 Allergens (Allergen Playbook holds the working detail)" }
   - { to: SOP-008, type: references, from_section: "3.14 Sanitation and Food Safety" }
+obligations:
+  - key: culinary-os-philosophy
+    type: training
+    cadence: on-hire
+    owner: "Director of Culinary"
+    applies_to:
+      worker_class: salaried
+    source_section: "Culinary Philosophy; Culinary Overview"
+    est_minutes: 10
+    description: "The purpose, promise, and principles behind KitchFix culinary, and what remarkable, authentic, responsible, and inspiring mean in a kitchen."
+  - key: culinary-os-standards
+    type: training
+    cadence: on-hire
+    owner: "Director of Culinary"
+    applies_to:
+      worker_class: salaried
+    source_section: "Culinary Defined"
+    est_minutes: 14
+    description: "The operating standards - cooking methods, sourcing, protein framework, restricted products, station and action programs, menu cycle, allergens, and sanitation."
+  - key: culinary-os-standards-annual
+    type: training
+    cadence: annual
+    owner: "Director of Culinary"
+    applies_to:
+      worker_class: salaried
+    source_section: "Culinary Defined"
+    est_minutes: 14
+    description: "Annual refresh of the operating standards. Philosophy is read once at onboarding; the standards are re-affirmed each year."
 ---
 
 *Philosophy, principles, and operating standards for every KitchFix kitchen.*
