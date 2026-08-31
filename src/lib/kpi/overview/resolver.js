@@ -954,11 +954,28 @@ export async function resolveOverview({
   // 18. Statement rows (per-line P&L) and also-tracked rows.
   const statementRows = [];
   // Revenue section
+  //
+  // actual_pct / target_pct additions (2026-08-31, engine follow-up):
+  // Revenue rows previously carried only variance_pct, so the client
+  // rendered a dash on pct-of-revenue for each revenue line even when
+  // the row was reported. That reads as "no data" on a money surface
+  // where data does exist (e.g. 2400.1 is genuinely 68.1% of revenue).
+  // Emit the ratio here, mirroring the lever-row convention:
+  //   - fraction returned by pctOf is a percent number (e.g. 68.1),
+  //     not 0.681 - same shape as levers[].actual_pct.
+  // Absence contract propagated:
+  //   - reported=false                     -> actual_pct = null
+  //   - reported=true, totalRevenue = 0    -> actual_pct = null (pctOf
+  //     returns null when denominator is 0)
+  //   - reported=true, actual = 0          -> actual_pct = 0
+  // Same rules apply to target_pct against the revenue budget-to-date.
   for (const line of REVENUE_LINE_CODES) {
     const rev = revenueByLine[line];
     const byPeriod = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: line, members });
     const bto = computeBudgetToDateForLine({ budgetByPeriod: byPeriod, periodsInRange: periods, today });
     const fp = computeFullPeriodBudget({ budgetByPeriod: byPeriod, periodsInRange: periods });
+    const rowActualPct = rev.reported ? pctOf(rev.amount, totalRevenue) : null;
+    const rowTargetPct = bto.amount != null ? pctOf(bto.amount, revenue_budget_to_date) : null;
     statementRows.push({
       line_code: line,
       section: "revenue",
@@ -969,6 +986,8 @@ export async function resolveOverview({
       period_budget: fp,
       variance: (rev.reported && bto.amount != null) ? r2(rev.amount - bto.amount) : null,
       variance_pct: (rev.reported && bto.amount != null && bto.amount > 0) ? r2(((rev.amount - bto.amount) / bto.amount) * 100) : null,
+      actual_pct: rowActualPct,
+      target_pct: rowTargetPct,
       sources: rev.sources,
       flags: isFeeAccount && line === "2400.1" ? ["contractual"] : [],
     });
@@ -1044,6 +1063,36 @@ export async function resolveOverview({
     note: r.line_code === "5017.3" ? "Rippling card spend on perks" : null,
   }));
 
+  // 18b. Drill sub-object (2026-08-31, engine follow-up).
+  //
+  // The purchasing drill button on the Overview needs a single
+  // combined-purchasing summary (spend, pct-of-revenue, target-pct).
+  // Kevin's approved render pulls these three pre-formatted display
+  // strings from the payload rather than having the client sum four
+  // buckets and derive a combined pct client-side (§9B: server
+  // computes every dollar, formatting decisions server-side).
+  //
+  // Combined purchasing spend = food + packaging + vehicle (the three
+  // buckets that compose the purchasing engine's pl_cogs total) +
+  // tracked (5002.1 R&M + 5002.5 Equipment + 5017.3 Perks). Each
+  // bucket + tracked value already exists on purchBoard - no new
+  // queries, no new computation, just fold + format.
+  //
+  // Nulls are treated as 0 for the summation (mirrors cogsActual /
+  // cogsBudget on line 646-647 above). A null-only spend collapses
+  // pct via pctOf's zero-denominator branch to null.
+  const purchSpentActual = (food_actual || 0) + (packaging_actual || 0) + (vehicle_actual || 0)
+    + (rm_actual || 0) + (equip_actual || 0) + (perks_actual || 0);
+  const purchSpentBudget = (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0)
+    + (rm_budget || 0) + (equip_budget || 0) + (perks_budget || 0);
+  const drill = {
+    purchasing: {
+      spent_display: formatMoneyWhole(purchSpentActual),
+      pct_of_revenue_display: formatPct(pctOf(purchSpentActual, totalRevenue)),
+      target_pct_display: formatPct(pctOf(purchSpentBudget, revenue_budget_to_date)),
+    },
+  };
+
   // 19. Sources line. Data-through dates for each source.
   const sourcesLine = {
     labor: {
@@ -1113,6 +1162,7 @@ export async function resolveOverview({
     chart,
     statement_rows: statementRows,
     also_tracked: alsoTracked,
+    drill,
     sources: sourcesLine,
     flags,
     freshness,
