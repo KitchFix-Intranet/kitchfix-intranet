@@ -1,0 +1,625 @@
+/* /opd - Academy shell + Library room.
+ *
+ * Consumes semantic tokens from src/app/tokens.css. Divergences
+ * from the prompt's token table:
+ *   - Command bar (prompt: #0A2548) is not a live semantic token.
+ *     Nearest is --navy-800 (#092B55); repo wins per the prompt's
+ *     rule. Used here.
+ *   - Brand ink #153968 -> --navy-700 (exact).
+ *   - Page bg #EDEFF2 -> --surface-page (exact).
+ *   - Sous green #0F6E56 -> --accent-playbook (exact).
+ *   - 14px radius -> --radius-container-lg.
+ *
+ * Type floor 10px absolute; tab labels 10.5px minimum. Touch
+ * targets 44px effective on every interactive element at <=768.
+ *
+ * Local prefix: opd- (Academy identity is /opd for now; if the
+ * module renames later, this prefix moves in one sweep).
+ */
+
+/* ── Frame + shell (the lid) ─────────────────────────────────── */
+.opd-frame {
+  max-width: 1300px;
+  margin: 16px auto 60px;
+  padding: 0 20px;
+  color: var(--text-default);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.opd-shell {
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-container-lg);
+  box-shadow: var(--elevation-raised);
+  overflow: hidden;
+}
+
+/* ── Command bar (navy lid) ──────────────────────────────────── */
+.opd-cmd {
+  background: var(--navy-800);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 54px;
+  padding: 0 16px;
+}
+.opd-cmd-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.opd-cmd-sep {
+  width: 1px;
+  height: 21px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Tabs cluster */
+.opd-tabs {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 9px;
+  padding: 3px;
+}
+.opd-tab {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.68);
+  font-family: var(--font-ui);
+  /* Tab label floor per spec Section 14: 10.5px minimum. */
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5.5px 13px;
+  border-radius: 6px;
+  min-height: 32px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.opd-tab:hover:not(.opd-tab--inert) {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+}
+.opd-tab--on {
+  background: #fff;
+  color: var(--navy-800);
+  font-weight: 700;
+}
+.opd-tab--inert {
+  color: rgba(255, 255, 255, 0.42);
+  font-weight: 500;
+  cursor: not-allowed;
+  /* Inert tabs are visibly present per spec Section 1 - "hiding
+   * them would misrepresent the product's shape." The muted color
+   * + not-allowed cursor + aria-disabled on the button
+   * communicates their state without a fake screen behind them.
+   * Clicking still opens a labelled placeholder (InertRoom). */
+}
+.opd-tab--inert.opd-tab--on {
+  /* An inert tab that is currently selected (Kevin clicked it to
+   * see the placeholder) reads as active but stays visibly muted. */
+  color: var(--navy-800);
+  background: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+}
+
+.opd-cmd-today {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+.opd-cmd-today-strong { color: rgba(255, 255, 255, 0.85); }
+
+/* ── Body ────────────────────────────────────────────────────── */
+.opd-sbody {
+  padding: 16px;
+  min-height: 560px;
+  background: var(--surface-page);
+}
+
+/* ── Room grid (rail + content) ───────────────────────────────── */
+.opd-room {
+  display: grid;
+  grid-template-columns: 238px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.opd-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: var(--elevation-card);
+}
+
+.opd-rail {
+  position: sticky;
+  top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.opd-railcard { padding: 7px; }
+
+.opd-rail-title {
+  padding: 8px 9px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+
+.opd-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--text-default);
+  text-align: left;
+  transition: background 0.12s;
+  min-height: 36px;
+}
+.opd-rail-item:hover { background: var(--n-100); }
+.opd-rail-item--on {
+  background: var(--navy-700);
+  color: #fff;
+  font-weight: 600;
+}
+.opd-rail-item--on .opd-rail-count { color: rgba(255, 255, 255, 0.7); }
+.opd-rail-item-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opd-rail-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  flex: none;
+}
+.opd-rail-item--skel {
+  cursor: default;
+  pointer-events: none;
+}
+
+.opd-railcard--filter { padding: 10px 12px 12px; }
+.opd-rail-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-default);
+  cursor: pointer;
+  min-height: 32px;
+}
+.opd-rail-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--navy-700);
+  cursor: pointer;
+}
+.opd-rail-help {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.45;
+}
+
+/* ── Library content column ──────────────────────────────────── */
+.opd-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.opd-libbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+}
+.opd-libbar-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--text-subtle);
+  font-size: 13px;
+  box-shadow: var(--elevation-card);
+  min-height: 44px;
+}
+.opd-libbar-search-placeholder {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opd-kbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--n-100);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: var(--text-muted);
+}
+.opd-libbar-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.opd-libbar-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Shelf card ──────────────────────────────────────────────── */
+.opd-shelf {
+  overflow: hidden;
+}
+.opd-shelf-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--n-100);
+}
+.opd-shelf-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--navy-700);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.opd-shelf-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+}
+
+/* Document row - grid: chip | title+cardline | meta */
+.opd-doc-row {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) 128px;
+  gap: 14px;
+  align-items: center;
+  padding: 11px 16px;
+  border-top: 1px solid var(--n-100);
+  min-height: 44px;
+  transition: background 0.12s;
+}
+.opd-doc-row:first-child { border-top: none; }
+.opd-doc-row:hover { background: var(--n-50); }
+
+.opd-doc-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--navy-700);
+  background: var(--navy-50);
+  border-radius: 4px;
+  padding: 4px 6px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.opd-doc-body {
+  min-width: 0;
+}
+.opd-doc-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.opd-doc-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+}
+.opd-doc-cardline {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.opd-doc-trains {
+  /* The one personal signal this PR can honestly show.
+   * "compliance" is deliberately absent from the copy per spec
+   * Section 1's language rule. */
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent-playbook);
+  background: var(--accent-sc-subtle);
+  border: 1px solid var(--accent-sc-tint);
+  border-radius: 999px;
+  padding: 2px 8px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.opd-doc-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+}
+.opd-doc-meta-sep {
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.opd-doc-row--empty {
+  grid-template-columns: 1fr;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  padding: 12px 16px;
+}
+.opd-doc-empty { color: var(--text-muted); }
+
+/* ── Skeleton state ──────────────────────────────────────────── */
+.opd-shelf--skel { opacity: 0.75; }
+.opd-doc-row--skel {
+  grid-template-columns: 68px 1fr 128px;
+  gap: 14px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--n-100);
+  min-height: 44px;
+}
+.opd-skel {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--n-100) 0%, var(--n-200) 50%, var(--n-100) 100%);
+  background-size: 200% 100%;
+  animation: opd-skel-shine 1.4s ease-in-out infinite;
+  border-radius: 4px;
+  height: 12px;
+  min-height: 12px;
+}
+.opd-skel--bar { height: 12px; }
+.opd-skel--chip { width: 44px; height: 16px; border-radius: 4px; }
+.opd-skel--w10 { width: 22px; }
+.opd-skel--w20 { width: 60px; }
+.opd-skel--w40 { width: 40%; }
+.opd-skel--w60 { width: 60%; }
+@keyframes opd-skel-shine {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Error state (dashed brick) ──────────────────────────────── */
+.opd-brick {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--surface-card) 0,
+      var(--surface-card) 12px,
+      var(--n-50) 12px,
+      var(--n-50) 24px
+    );
+  border: 1.5px dashed var(--feedback-danger, #B03226);
+  border-radius: 12px;
+  padding: 20px 24px;
+  color: var(--text-default);
+}
+.opd-brick-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--feedback-danger, #B03226);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.opd-brick-body {
+  font-size: 12.5px;
+  color: var(--text-default);
+  line-height: 1.5;
+  margin: 0 0 10px 0;
+}
+.opd-brick-retry {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--feedback-danger, #B03226);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.opd-brick-retry:hover { filter: brightness(0.92); }
+
+/* ── Empty state (defensive) ─────────────────────────────────── */
+.opd-empty {
+  background: var(--surface-card);
+  border: 1px dashed var(--border-default);
+  border-radius: 12px;
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.opd-empty p { margin: 0; }
+
+/* ── Inert-room placeholder (Academy / Records / Admin) ──────── */
+.opd-inert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px 0;
+}
+.opd-inert-card {
+  max-width: 520px;
+  background: var(--surface-card);
+  border: 1px dashed var(--border-default);
+  border-radius: 12px;
+  padding: 20px 24px;
+  text-align: left;
+}
+.opd-inert-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.opd-inert-body {
+  font-size: 13px;
+  color: var(--text-default);
+  line-height: 1.55;
+  margin: 0 0 8px 0;
+}
+.opd-inert-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.opd-inert-note code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: var(--n-100);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--text-default);
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Mobile behaviour - ships in this PR per spec Section 14.
+ * Two breakpoints:
+ *   <=900  rail unstacks; content stays a single column.
+ *   <=430  frame padding tightens; meta wraps under title.
+ *
+ * Type floor stays 10px absolute; touch targets stay 44px min.
+ * ───────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .opd-frame { margin: 12px auto 40px; padding: 0 12px; }
+  .opd-room {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .opd-rail {
+    position: static;
+    top: auto;
+  }
+  /* Rail card compacts: shelves become a horizontal chip strip so
+   * a 238px vertical rail does not eat half of a 390px screen. */
+  .opd-railcard {
+    padding: 8px 10px;
+  }
+  .opd-rail-title {
+    padding: 4px 4px 8px;
+  }
+  .opd-railcard--filter { padding: 8px 10px 10px; }
+  .opd-rail-item {
+    padding: 8px 10px;
+    min-height: 44px; /* touch */
+    font-size: 13px;
+  }
+  .opd-doc-row {
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: 10px;
+    padding: 12px 14px;
+    min-height: 56px;
+  }
+  .opd-doc-chip {
+    grid-row: 1;
+    grid-column: 1;
+    align-self: start;
+    padding: 5px 6px;
+  }
+  .opd-doc-body {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .opd-doc-meta {
+    grid-row: 2;
+    grid-column: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    justify-content: flex-start;
+  }
+  .opd-doc-cardline {
+    white-space: normal;
+    line-height: 1.4;
+  }
+  .opd-shelf-head {
+    padding: 11px 14px;
+  }
+}
+
+@media (max-width: 430px) {
+  .opd-frame { padding: 0 8px; }
+  .opd-cmd {
+    padding: 0 12px;
+    gap: 8px;
+    height: 52px;
+  }
+  .opd-cmd-title { font-size: 14px; }
+  .opd-cmd-sep { display: none; }
+  .opd-cmd-today {
+    /* Preserve chip but shrink; still readable at 10px floor. */
+    padding: 5px 8px;
+  }
+  .opd-tab { padding: 6px 10px; font-size: 12px; }
+  .opd-sbody { padding: 12px; }
+  .opd-libbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .opd-libbar-context { flex-basis: 100%; }
+  .opd-shelf-title { font-size: 11.5px; letter-spacing: 0.03em; }
+}
