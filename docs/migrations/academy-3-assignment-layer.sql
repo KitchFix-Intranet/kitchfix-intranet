@@ -329,6 +329,32 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON academy_cycle_modules TO service_role;
 -- The post-flight assertion below enforces this at apply time.
 GRANT SELECT, INSERT, UPDATE                ON academy_requirements TO service_role;
 
+-- TRUNCATE is granted to service_role by the Supabase DEFAULT
+-- PRIVILEGES record (service_role=Dxtm/postgres - the D is
+-- TRUNCATE), so it must be revoked explicitly rather than merely
+-- not granted. This matters most on academy_requirements: the table
+-- forbids DELETE precisely because requirements are waived and
+-- never destroyed, and a TRUNCATE from application code would erase
+-- the entire ledger in one statement. Revoked on all four for
+-- consistency - none of these tables is ever legitimately truncated
+-- by the application. Owner-run Studio operations are unaffected.
+REVOKE TRUNCATE ON academy_obligations   FROM service_role, anon, authenticated;
+REVOKE TRUNCATE ON academy_cycles        FROM service_role, anon, authenticated;
+REVOKE TRUNCATE ON academy_cycle_modules FROM service_role, anon, authenticated;
+REVOKE TRUNCATE ON academy_requirements  FROM service_role, anon, authenticated;
+
+-- Retroactive: academy-1 and academy-2 revoked TRUNCATE from anon +
+-- authenticated (which never held it by default ACL) and not from
+-- service_role (which does). Closing that here so the whole Academy
+-- family is consistent rather than leaving a follow-up migration to
+-- be forgotten. REVOKE is idempotent and these tables are days old
+-- with no code path that truncates them, so this is safe.
+REVOKE TRUNCATE ON academy_persons                FROM service_role, anon, authenticated;
+REVOKE TRUNCATE ON academy_person_stints          FROM service_role, anon, authenticated;
+REVOKE TRUNCATE ON academy_eligibility_exceptions FROM service_role, anon, authenticated;
+REVOKE TRUNCATE ON academy_grants                 FROM service_role, anon, authenticated;
+REVOKE TRUNCATE ON academy_region_leads           FROM service_role, anon, authenticated;
+
 -- Defensive: sequence grants for the BIGSERIAL / UUID columns.
 -- Only service_role needs USAGE on these; anon + authenticated get
 -- nothing on the sequences.
@@ -336,21 +362,35 @@ GRANT USAGE, SELECT ON SEQUENCE academy_obligations_obligation_id_seq TO service
 GRANT USAGE, SELECT ON SEQUENCE academy_cycles_cycle_id_seq           TO service_role;
 
 
--- ─── Post-flight assertion: no DELETE on academy_requirements ──────
+-- ─── Post-flight assertion: no DELETE or TRUNCATE on academy_requirements ──
 -- Same shape as kpi-8a-rippling-raw.sql:329-339. Reads the current
--- grants via has_table_privilege and fails the apply if DELETE is
--- present on any role other than the owner (the table owner is
--- outside the has_table_privilege('service_role'|'anon'|
+-- grants via has_table_privilege and fails the apply if DELETE or
+-- TRUNCATE is present on any role other than the owner (the table
+-- owner is outside the has_table_privilege('service_role'|'anon'|
 -- 'authenticated', ...) query set by construction).
+--
+-- TRUNCATE is the more serious of the two: DELETE removes rows a
+-- caller names, TRUNCATE removes the entire ledger in one
+-- statement. TRUNCATE is granted to service_role by the Supabase
+-- DEFAULT PRIVILEGES record, so an omitted REVOKE would leave the
+-- ledger destructible from the role the application runs as. The
+-- REVOKE block above closes it; this assertion is the trip-wire
+-- that catches any future migration that silently re-grants it.
 DO $$
 DECLARE
-  req_sr_del  BOOLEAN;
-  req_anon_del BOOLEAN;
-  req_auth_del BOOLEAN;
+  req_sr_del    BOOLEAN;
+  req_anon_del  BOOLEAN;
+  req_auth_del  BOOLEAN;
+  req_sr_trunc   BOOLEAN;
+  req_anon_trunc BOOLEAN;
+  req_auth_trunc BOOLEAN;
 BEGIN
-  req_sr_del   := has_table_privilege('service_role',   'academy_requirements', 'DELETE');
-  req_anon_del := has_table_privilege('anon',           'academy_requirements', 'DELETE');
-  req_auth_del := has_table_privilege('authenticated',  'academy_requirements', 'DELETE');
+  req_sr_del     := has_table_privilege('service_role',   'academy_requirements', 'DELETE');
+  req_anon_del   := has_table_privilege('anon',           'academy_requirements', 'DELETE');
+  req_auth_del   := has_table_privilege('authenticated',  'academy_requirements', 'DELETE');
+  req_sr_trunc   := has_table_privilege('service_role',   'academy_requirements', 'TRUNCATE');
+  req_anon_trunc := has_table_privilege('anon',           'academy_requirements', 'TRUNCATE');
+  req_auth_trunc := has_table_privilege('authenticated',  'academy_requirements', 'TRUNCATE');
   IF req_sr_del THEN
     RAISE EXCEPTION 'post-flight: service_role has DELETE on academy_requirements (must be waived, never destroyed - see table comment)';
   END IF;
@@ -359,6 +399,15 @@ BEGIN
   END IF;
   IF req_auth_del THEN
     RAISE EXCEPTION 'post-flight: authenticated has DELETE on academy_requirements (must be waived, never destroyed)';
+  END IF;
+  IF req_sr_trunc THEN
+    RAISE EXCEPTION 'post-flight: service_role has TRUNCATE on academy_requirements (would erase the entire ledger in one statement - the REVOKE block above must run before this assertion; a TRUNCATE grant granted by DEFAULT PRIVILEGES that survived REVOKE means the ACL model has changed and needs review)';
+  END IF;
+  IF req_anon_trunc THEN
+    RAISE EXCEPTION 'post-flight: anon has TRUNCATE on academy_requirements (must not exist under any circumstance)';
+  END IF;
+  IF req_auth_trunc THEN
+    RAISE EXCEPTION 'post-flight: authenticated has TRUNCATE on academy_requirements (must not exist under any circumstance)';
   END IF;
 END
 $$;
@@ -398,14 +447,19 @@ SELECT
   (SELECT count(*) FROM academy_cycle_modules)  AS cycle_modules,
   (SELECT count(*) FROM academy_requirements)   AS requirements;
 
--- P5. DELETE not granted on academy_requirements to anon or authenticated.
+-- P5. Neither DELETE nor TRUNCATE granted on academy_requirements
+-- to service_role, anon, or authenticated. Reports both privileges
+-- because TRUNCATE is the more serious hole (DEFAULT PRIVILEGES
+-- grants it to service_role unless we REVOKE) and the assertion
+-- above already refuses to apply if either is present, so any row
+-- here means the REVOKE block did not land.
 -- Expected: 0 rows.
 SELECT grantee, privilege_type
 FROM information_schema.role_table_grants
 WHERE table_schema = 'public'
   AND table_name = 'academy_requirements'
   AND grantee IN ('anon', 'authenticated', 'service_role')
-  AND privilege_type = 'DELETE';
+  AND privilege_type IN ('DELETE', 'TRUNCATE');
 
 
 -- ─── P3 (probe, run deliberately) ──────────────────────────────────
@@ -477,5 +531,5 @@ WHERE table_schema = 'public'
 -- p2_row_counts:     <expected 0 / 0 / 0 / 0>
 -- p3_cadence_ok:    <run probe; expected 9>
 -- p4_check_rejects: <run three probes; each must error on its named CHECK>
--- p5_no_delete:      <expected 0 rows>
+-- p5_no_delete_or_truncate: <expected 0 rows>
 -- notes:             <optional>
