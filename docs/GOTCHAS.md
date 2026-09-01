@@ -261,6 +261,34 @@ If neither approach is practical (rate-limited, one-shot cron), fall back to cli
 
 Documented inline in `src/lib/billcom.js` vendorsUrl header. **The rule.** Any bill.com endpoint that returns a `nextPage` in the response uses cursor pagination, not offset. Never assume start= works because it was accepted; walk one page, read the cursor, walk again.
 
+### `rippling_raw_spend_lines` bulk re-lands are normal, not leaks
+
+The table is append-on-content-hash. Rippling's spend feed rewrites the payload on state progression (auth -> settled, GL sync toggles, coder reclassifications), and each new content hash is a new row. A single external_id caps at three versions with distinct hashes each. That is normal state progression, not runaway re-hashing.
+
+Bulk re-lands hit the table on schedule when Rippling's backend reprocesses:
+
+- **2026-08-07**: 20,836 rows landed in one day (normal daily range: 2-136 rows)
+- **2026-08-27**: 10,991 rows landed in one day
+
+The first sight of one of these days looks like a leak. It is not. Verify by grouping row counts per day AND per `external_id`. If the per-external_id cap holds at 3 with distinct content hashes, it is a re-land, not a duplication defect.
+
+**The rule.** Before treating a `rippling_raw_spend_lines` row-count spike as a data defect, run:
+
+```sql
+SELECT DATE(first_seen_at) AS d, COUNT(*)
+FROM   rippling_raw_spend_lines
+GROUP  BY 1
+ORDER  BY 1;
+
+SELECT external_id, COUNT(*), COUNT(DISTINCT content_hash)
+FROM   rippling_raw_spend_lines
+GROUP  BY external_id
+HAVING COUNT(*) > 3
+ORDER  BY 2 DESC LIMIT 20;
+```
+
+A spike day with zero rows above the >3 threshold is a bulk re-land. Above threshold is a defect worth chasing. Chased once during the F-11 investigation (2026-09-01) - the base grew 21,578 -> 32,991 in six days and the cold-start-on-a-large-table hypothesis for `rippling_report_only_pending_v1` looked like it would benefit from a materialised view refresh. Growth was legitimate; the argument for the migration was thin. Would have shipped a schema change to fix a data defect that did not exist.
+
 ---
 
 ## Time & Dates

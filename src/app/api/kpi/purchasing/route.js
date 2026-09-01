@@ -487,6 +487,21 @@ export async function GET(request) {
   // only take {members, start, end, cap}. Wait time is max(all 15)
   // instead of sum-of-three-waits.
   //
+  // F-11 item 1 instrumentation (2026-09-01): per-loader timing so
+  // cold-lambda reproduction can name the loader that timed out and
+  // its elapsed. Side-channel array; returns unchanged. Logged after
+  // Promise.all settles as one greppable [F-11-timing] line so we
+  // can slice by scope in Vercel runtime logs.
+  const loaderTimings = [];
+  const timed = (name, p) => {
+    const t0 = Date.now();
+    return p.then(
+      r => { loaderTimings.push({ name, ms: Date.now() - t0, ok: !r?.error }); return r; },
+      e => { loaderTimings.push({ name, ms: Date.now() - t0, ok: false, thrown: true }); throw e; }
+    );
+  };
+  const promiseAllT0 = Date.now();
+
   // PR-2 R4 Part A: [effStart, effEnd] pass so weekly view, actuals,
   // pending all describe the same fiscal-week footprint.
   const [
@@ -494,34 +509,48 @@ export async function GET(request) {
     dirResp, priorHistoryResp, complianceResp, budgetsResp,
     vehicleR, equipR, repairR, reimbR, cardChR, vendorRollupR,
   ] = await Promise.all([
-    paginateWeekly(supa, { members, start: effStart, end: effEnd }),
-    loadPending(supa, { members, start: effStart, end: effEnd }),
-    loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK }),
-    paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam, includeLines }),
-    loadFreshness(supa),
-    loadAccountsDirectory(supa),   // PR-2 R2 Fix 7
+    timed("paginateWeekly",        paginateWeekly(supa, { members, start: effStart, end: effEnd })),
+    timed("loadPending",           loadPending(supa, { members, start: effStart, end: effEnd })),
+    timed("loadReportOnlyPending", loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK })),
+    timed("paginateActuals",       paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam, includeLines })),
+    timed("loadFreshness",         loadFreshness(supa)),
+    timed("loadAccountsDirectory", loadAccountsDirectory(supa)),   // PR-2 R2 Fix 7
     // R13 P0-1 - history for closed period card only.  Loader returns
     // { data: null } instantly if the range isn't a closed period.
-    isClosedSinglePeriod
+    timed("loadPriorPeriodHistory", isClosedSinglePeriod
       ? loadPriorPeriodHistory(supa, { members, periodNo: singlePeriodNo })
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null })),
     // PR 6 - compliance card. Reads the report side of uncoded card
     // spend (rippling_report_txns_latest sentinel category) restricted
     // to attributable work locations. Corp/Remote uncoded rows are a
     // footer count only. See loadCompliance() docblock for the full
     // shape + why the population is the report side, not the board.
-    loadCompliance(supa, { members, start: effStart, end: effEnd, today }),
+    timed("loadCompliance",        loadCompliance(supa, { members, start: effStart, end: effEnd, today })),
     // Moved from serial (INV-P23 arc, was ~265ms of blocking wait).
-    loadPurchasingBudgets(supa, members, fyForRange),
+    timed("loadPurchasingBudgets", loadPurchasingBudgets(supa, members, fyForRange)),
     // Moved from the second Promise.all (INV-P23 arc). Each loader's
     // dependency confirmed to be {members, start, end, cap} only.
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "3500%", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 }),
-    loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 }),
-    loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 }),
-    loadVendorRollup(supa, { members, start: effStart, end: effEnd }),
+    timed("loadLedgerRows.vehicle",       loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "3500%", cap: 25 })),
+    timed("loadLedgerRows.equipment",     loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 })),
+    timed("loadLedgerRows.repair",        loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 })),
+    timed("loadLedgerRows.reimbursable",  loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 })),
+    timed("loadCardCharges",       loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 })),
+    timed("loadVendorRollup",      loadVendorRollup(supa, { members, start: effStart, end: effEnd })),
   ]);
+
+  // F-11 item 1: emit greppable timing summary. Every request; not
+  // gated on threshold - the cold-vs-warm distinction is what we
+  // need to see, and warm requests are ~200ms of log noise that
+  // amortises cheaply against the diagnostic value.
+  {
+    const total = Date.now() - promiseAllT0;
+    const sorted = [...loaderTimings].sort((a, b) => b.ms - a.ms);
+    const slowest = sorted[0] || { name: "?", ms: 0 };
+    const near = sorted.filter(t => t.ms >= 5500);  // within 500ms of the 6s F-11 guard
+    const parts = sorted.map(t => `${t.name}=${t.ms}${t.ok ? "" : "!"}`).join(" ");
+    const near_note = near.length > 0 ? ` near_guard=${near.map(t => `${t.name}:${t.ms}`).join(",")}` : "";
+    console.log(`[F-11-timing] account=${account} range=${effStart}..${effEnd} total=${total}ms slowest=${slowest.name}:${slowest.ms}ms${near_note} | ${parts}`);
+  }
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
   // F-11: reportPendingResp is a genuine SQL error only. Timeouts on
