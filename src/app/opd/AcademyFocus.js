@@ -391,7 +391,7 @@ function CompletionScreen({ doc, version, attestation, onBack }) {
 // ═══════════════════════════════════════════════════════════════════
 // Main component - the stepper
 // ═══════════════════════════════════════════════════════════════════
-export default function AcademyFocus({ requirementId, docId, docTitle, docShelf, onBack, onSigned }) {
+export default function AcademyFocus({ requirementId, docId, docTitle, docShelf, partNumber, totalParts, onBack, onSigned }) {
   const [state, setState] = useState({ status: "loading", data: null, error: null });
   const isFirstLoadRef = useRef(true);
   const startTimeRef = useRef(Date.now());
@@ -694,25 +694,19 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
         <span className="opd-crumb-current">{docId}</span>
       </nav>
 
-      {/* Module header - doc chip, title, minutes remaining as the
-          largest number, progress bar. */}
+      {/* Module header - doc chip, title, part-of chip, minutes
+          remaining as the largest number, progress bar. Subtitle
+          shows "part N of M" only when the doc has multiple
+          obligations (parent passes totalParts > 1 from the queue).
+          Never derive subtitle from obligation_key - spec 18.3
+          forbids obligation keys in operator copy. */}
       <div className="opd-focus-mhead">
         <span className="opd-doc-chip">{doc?.id || docId}</span>
         <div className="opd-focus-mhead-title">
           <h1>{doc?.title || docTitle || docId}</h1>
-          {ob?.obligation_key ? (
+          {totalParts > 1 ? (
             <div className="opd-focus-mhead-sub">
-              {(() => {
-                // Human-readable subtitle from obligation_key's last
-                // hyphenated portion (e.g. culture-os-standard -> Standard,
-                // culture-os-origin -> Origin, big-rules-onboarding ->
-                // Onboarding). Not shown when only one obligation exists
-                // for the doc, but we do not have that count here so
-                // we always render the tail word for consistency.
-                const parts = String(ob.obligation_key).split("-");
-                const tail = parts[parts.length - 1] || ob.obligation_key;
-                return tail.charAt(0).toUpperCase() + tail.slice(1);
-              })()}
+              Part {partNumber} of {totalParts}
             </div>
           ) : null}
         </div>
@@ -908,6 +902,12 @@ function renderRailItem(step, i, currentStepIdx, sectionsSeen, goToStep, closeMo
     + (done ? " opd-focus-rail-step--done" : "")
     + (now ? " opd-focus-rail-step--now" : "")
     + (locked ? " opd-focus-rail-step--locked" : "");
+  // Merged step: rail title stays the first anchor, but a +N chip
+  // signals the additional merged sections. Spec 18.5: never invent a
+  // synthesised title, never show section-number ranges in operator
+  // copy - the +N chip is the honest signal. Sub-headings render as
+  // inline sub-headings inside the step body when the step opens.
+  const extraSections = Math.max(0, (step.anchors?.length || 1) - 1);
   return (
     <li
       key={step.key + i}
@@ -924,7 +924,17 @@ function renderRailItem(step, i, currentStepIdx, sectionsSeen, goToStep, closeMo
           {done ? "✓" : i + 1}
         </span>
         <span className="opd-focus-rail-step-tx">
-          <b>{step.anchor}</b>
+          <b>
+            {step.anchor}
+            {extraSections > 0 ? (
+              <span
+                className="opd-focus-rail-step-plus"
+                aria-label={`plus ${extraSections} more section${extraSections === 1 ? "" : "s"}`}
+              >
+                +{extraSections}
+              </span>
+            ) : null}
+          </b>
           <span className="opd-focus-rail-step-meta">
             <span>{step.estMinutes} min</span>
             {step.questionIds?.length ? (

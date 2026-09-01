@@ -2593,6 +2593,18 @@
   font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
 }
 .opd-focus-rail-step-chk { color: var(--text-muted, #999); }
+.opd-focus-rail-step-plus {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-inset, #eee);
+  color: var(--text-muted, #666);
+  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  vertical-align: middle;
+}
 .opd-focus-rail-step--sign .opd-focus-rail-step-num {
   background: var(--surface-inset, #eee);
   color: var(--text-muted, #666);

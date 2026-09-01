@@ -150,6 +150,15 @@ function parseHeadingTree(html) {
 // Given a heading tree + an optional source_section filter, emit the
 // step list. Descends a level whenever a node's total word count
 // exceeds WORDS_PER_STEP.
+//
+// Each emitted step carries:
+//   - descended: true iff produced by the isBig-descend branch (a
+//     sub-step of a parent that was too big). Named roots have
+//     descended=false. Only descended sub-steps are candidates for
+//     the merge pass below.
+//   - parentKey: identity of the immediate parent in the tree
+//     (empty string for root emissions). Two descended steps are
+//     merge candidates ONLY if their parentKey matches.
 function computeSteps(tree, sourceSectionList) {
   const inScope = (node) => {
     if (!sourceSectionList || sourceSectionList.length === 0) return true;
@@ -158,10 +167,11 @@ function computeSteps(tree, sourceSectionList) {
     );
   };
   const out = [];
-  const emit = (node, forceLevel) => {
+  const emit = (node, descended, parentKey) => {
     const isBig = node.wordCount > WORDS_PER_STEP && node.children.length > 0;
     if (isBig) {
-      for (const child of node.children) emit(child, node.level + 1);
+      const nextParent = slugAnchor(node.text);
+      for (const child of node.children) emit(child, true, nextParent);
       return;
     }
     out.push({
@@ -170,6 +180,8 @@ function computeSteps(tree, sourceSectionList) {
       level: node.level,
       html: node.chunkHtml,
       wordCount: node.wordCount,
+      descended,
+      parentKey,
     });
   };
   // Two modes:
@@ -179,9 +191,114 @@ function computeSteps(tree, sourceSectionList) {
   //       needed.
   for (const root of tree) {
     if (!inScope(root)) continue;
-    emit(root, root.level);
+    emit(root, false, "");
   }
   return out;
+}
+
+// After computeSteps + question-attachment, walk the emitted steps
+// and merge undersized siblings. Two-sided rule: computeSteps SPLITS
+// when a parent runs long (>600w); mergeSteps combines when descended
+// siblings run short. Prevents the "22-word step wearing a card"
+// failure that fragmenting Culinary Defined into 15 steps produced.
+//
+// Merge is permitted only when ALL of these hold for two consecutive
+// steps A and B:
+//   1. Both were produced by the descend branch (A.descended && B.descended).
+//      Named roots the author called out individually in source_section
+//      stay solo - the section list is a deliberate outline.
+//   2. Same immediate parent (A.parentKey === B.parentKey). Never
+//      merge across a parent boundary.
+//   3. Neither carries an attached check (A.questionIds.length === 0
+//      && B.questionIds.length === 0). A check is anchored to its
+//      section; merging would confuse "which section is being tested".
+//   4. Combined wordCount <= WORDS_PER_STEP.
+//
+// After the greedy pass, one trailing rule: if the LAST merged step
+// in a parent group has wordCount < TRAILING_STUB_WORDS, fold it into
+// the previous merged step of the same parent (only if that previous
+// step also has no checks - never overwrite a check anchor). This
+// rule may push slightly past the cap; a 620-word step is better than
+// an orphaned 22-word one.
+const TRAILING_STUB_WORDS = 150;
+function mergeSteps(rawSteps, stepQuestions) {
+  if (rawSteps.length === 0) return { steps: [], questionIdsByStep: [] };
+
+  const canMerge = (aIdx, bIdx) => {
+    const a = rawSteps[aIdx];
+    const b = rawSteps[bIdx];
+    if (!a.descended || !b.descended) return false;
+    if (a.parentKey !== b.parentKey) return false;
+    if ((stepQuestions[aIdx]?.length || 0) > 0) return false;
+    if ((stepQuestions[bIdx]?.length || 0) > 0) return false;
+    return true;
+  };
+
+  // Greedy pass: build merged groups (each group = array of raw
+  // indices in order).
+  const groups = [];
+  let cur = [0];
+  for (let i = 1; i < rawSteps.length; i += 1) {
+    const last = cur[cur.length - 1];
+    const curWords = cur.reduce((acc, idx) => acc + rawSteps[idx].wordCount, 0);
+    if (canMerge(last, i) && curWords + rawSteps[i].wordCount <= WORDS_PER_STEP) {
+      cur.push(i);
+    } else {
+      groups.push(cur);
+      cur = [i];
+    }
+  }
+  groups.push(cur);
+
+  // Trailing-stub pass: for each group with wordCount < TRAILING_STUB_WORDS,
+  // if the previous group is a valid merge target (mergeable last-of-prev
+  // with first-of-current), append this group's members to the previous
+  // group even if it pushes past cap.
+  const merged = [];
+  for (const g of groups) {
+    const words = g.reduce((acc, idx) => acc + rawSteps[idx].wordCount, 0);
+    if (
+      words < TRAILING_STUB_WORDS &&
+      merged.length > 0 &&
+      canMerge(merged[merged.length - 1][merged[merged.length - 1].length - 1], g[0])
+    ) {
+      merged[merged.length - 1].push(...g);
+    } else {
+      merged.push(g);
+    }
+  }
+
+  // Assemble output. First-section leading heading is stripped from
+  // the merged HTML (it renders as the step title in .opd-focus-step-h2);
+  // subsequent sections keep their headings so they render as inline
+  // sub-headings within the step card body.
+  const stripLeadingHeading = (html) =>
+    String(html || "").replace(/^\s*<h[1-3][^>]*>[^<]*<\/h[1-3]>\s*/i, "");
+
+  const steps = [];
+  const questionIdsByStep = [];
+  for (const g of merged) {
+    const first = rawSteps[g[0]];
+    const anchors = g.map((idx) => rawSteps[idx].anchor);
+    const wordCount = g.reduce((acc, idx) => acc + rawSteps[idx].wordCount, 0);
+    // First chunk: strip the leading heading (rendered as step title).
+    // Subsequent chunks: keep verbatim (their headings are subheadings).
+    const chunks = g.map((idx, j) =>
+      j === 0 ? stripLeadingHeading(rawSteps[idx].html) : rawSteps[idx].html
+    );
+    const html = chunks.join("");
+    const questionIds = g.flatMap((idx) => stepQuestions[idx] || []);
+    steps.push({
+      key: first.key,
+      anchor: first.anchor,
+      anchors,
+      level: first.level,
+      html,
+      wordCount,
+    });
+    questionIdsByStep.push(questionIds);
+  }
+  return { steps, questionIdsByStep };
 }
 
 export async function GET(request, ctx) {
@@ -387,7 +504,7 @@ export async function GET(request, ctx) {
   // them silently.
   const anchorIndex = new Map();
   rawSteps.forEach((s, i) => anchorIndex.set(s.anchor.toLowerCase(), i));
-  const stepQuestions = rawSteps.map(() => []);
+  const rawStepQuestions = rawSteps.map(() => []);
   const orphanQuestionIds = [];
   for (const q of questions) {
     const key = String(q.section_anchor || "").trim().toLowerCase();
@@ -395,16 +512,21 @@ export async function GET(request, ctx) {
     if (idx == null) {
       orphanQuestionIds.push(q.question_id);
     } else {
-      stepQuestions[idx].push(q.question_id);
+      rawStepQuestions[idx].push(q.question_id);
     }
   }
-  const steps = rawSteps.map((s, i) => ({
+  // Merge pass: fold undersized descended siblings so a doc that
+  // splits into 15 stubs collapses to a natural 5. Named roots and
+  // checked steps are protected (see mergeSteps header).
+  const { steps: mergedSteps, questionIdsByStep } = mergeSteps(rawSteps, rawStepQuestions);
+  const steps = mergedSteps.map((s, i) => ({
     key: s.key,
     anchor: s.anchor,
+    anchors: s.anchors,
     level: s.level,
     html: s.html,
     wordCount: s.wordCount,
-    questionIds: stepQuestions[i],
+    questionIds: questionIdsByStep[i],
     // Estimated minutes: word count at 200 wpm, rounded up to at
     // least 1. UI uses this to display "About N min" on the step
     // rail alongside the check count.
