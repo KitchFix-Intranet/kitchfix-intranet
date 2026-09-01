@@ -658,11 +658,31 @@ That last card is not decoration. It is the permission to leave, and it is what 
 
 ### 18.5 Stage 4 - Reading
 
-Sections reveal one at a time so a check can sit at each boundary.
+**A module is a sequence of steps, not a document with checks appended.** One step is on screen at a time; the page does not grow as the person progresses. A step is a section of the document, sized so a reasonable reader can absorb it in about three minutes. Where a document section runs longer than that (roughly 600 words at 200 wpm), the server descends one heading level and breaks the step at the next boundary. Where a section is short, it stays whole.
 
-**No scroll tracking. No scroll gating. No progress bar that fills as you scroll.** Progress advances on check completion only.
+**The frame carries three things every step:** a persistent **step rail** on the left listing every section (title, minutes, check count) plus a final **Sign** step; a **module header** at the top with the doc chip, the module title, the "part N of M" tag when the doc has multiple obligations, and the **minutes remaining as the largest number**, with a progress bar beneath; and a **step card** on the right holding one step's content and the check(s) that gate its advance.
 
-A completed section is marked "Read" - a statement of position, not an assertion that comprehension occurred. The signature makes that claim, and only the person can make it.
+**Reveal-and-append is the defect being fixed.** An implementation that keeps every section on screen and adds the next one below it has not implemented the stepper - by the last section the page is enormous, which is exactly the pattern the stepper replaces. The step card is the ONLY content surface; when the person advances, that card is replaced.
+
+**No scroll tracking. No scroll gating. No progress bar that fills as you scroll.** Progress advances step by step, gated by checks where present.
+
+**Two checks in a step come one at a time.** The active check is on screen; passed checks fold up above it; unstarted checks below it do not appear. The Continue button reads "Next check" between them and "Continue" (or "Continue to sign" on the last step) when the step is cleared.
+
+**Locking after a right answer.** Once a check is correct, the options lock. There is no way to change a passed answer to a wrong one; the state that would produce is ambiguous and is not a state we ever want to be in.
+
+**Positional answer letters.** Options are labeled A/B by display position. The shuffle happens server-side per request, so a stable underlying option letter would confuse; the letter the operator sees is the letter of the button they are looking at.
+
+**Wrong-answer recovery stays inside the step.** The amber "Show me that line" scrolls and flashes an anchor WITHIN the current step card. It does not scroll the whole document, because at this point in the module there is no whole document on screen.
+
+**Save & exit + resume.** Every step advance and every Save & Exit posts to `/api/academy/progress`, which UPSERTs a mutable scratch row (`academy_module_progress`) with the union of sections seen and the max of time spent. On re-entry, the client mounts at `progress.furthest_step_index`, not step zero. Passed-check state is server-tracked (append-only attempts) and reconstructed from `progress.all_correct_ids`, so a passed check stays passed across sessions.
+
+**Keyboard.** Enter or Right advances when Continue is enabled; Left goes back; 1/2 select an option. Ignored while focus is in a text input, so the signature field is not disturbed.
+
+**Mobile rail collapse.** Below 900px the desktop rail is replaced by a single line - "Section N of M", a thin progress bar, and an "All sections" toggle. The toggle expands the same list as the desktop rail.
+
+**Accessibility.** Focus moves to the step heading on advance. Feedback panels are `aria-live="polite"`. Options are real `<button>` elements with `aria-pressed`. The step rail is an ordered list with `aria-current="step"` on the active item.
+
+A completed step is marked done in the rail - a statement of position, not an assertion that comprehension occurred. The signature makes that claim, and only the person can make it.
 
 ---
 

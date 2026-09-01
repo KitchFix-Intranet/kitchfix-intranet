@@ -2415,3 +2415,446 @@
   .opd-focus-body h1 { font-size: 18px; padding-top: 14px; margin: 20px 0 8px; }
   .opd-crumb { font-size: 11.5px; }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Stepper (module-stepper PR, spec 18.5 amended)
+   -----------------------------------------------
+   One step on screen at a time. Fixed rail on the left listing
+   every section + a final Sign step. Module header at the top with
+   doc chip, title, minutes-remaining as the largest number, and a
+   progress bar. The page NEVER grows as the person progresses.
+   Below 900px the rail collapses to a single line + toggle.
+   ───────────────────────────────────────────────────────────────── */
+
+/* Module header sits above the grid, spans the full focus width. */
+.opd-focus-mhead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px 12px;
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--surface-border, #e6e6e6);
+  border-radius: 12px 12px 0 0;
+  margin-top: 10px;
+}
+.opd-focus-mhead-title h1 {
+  font-family: var(--font-serif, "GT Sectra", "Charter", Georgia, serif);
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0;
+  color: var(--text-strong, #111);
+}
+.opd-focus-mhead-sub {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted, #666);
+  margin-top: 2px;
+}
+.opd-focus-mhead-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+.opd-focus-mhead-time b {
+  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text-strong, #111);
+}
+.opd-focus-mhead-time span {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #666);
+  margin-top: 4px;
+}
+.opd-focus-mbar {
+  height: 4px;
+  background: var(--surface-inset, #eee);
+  border-radius: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--surface-border, #e6e6e6);
+  border-right: 1px solid var(--surface-border, #e6e6e6);
+}
+.opd-focus-mbar > i {
+  display: block;
+  height: 100%;
+  background: var(--status-live, #2c8b62);
+  transition: width 260ms ease;
+}
+
+/* Mobile rail bar - hidden on desktop, shown below 900px. */
+.opd-focus-mrail { display: none; }
+
+/* Stepper grid: rail left, step card right. */
+.opd-focus-grid--stepper {
+  grid-template-columns: 260px minmax(0, 1fr);
+  margin-top: -1px; /* seal to the mhead + mbar */
+}
+
+/* ── Rail (desktop) ───────────────────────────────────────── */
+.opd-focus-rail--stepper {
+  position: sticky;
+  top: 76px;
+  padding: 14px 12px 14px;
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--surface-border, #e6e6e6);
+  border-radius: 0 0 0 12px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+}
+.opd-focus-rail-header {
+  padding: 0 6px 8px;
+  border-bottom: 1px dashed var(--surface-border, #e6e6e6);
+  margin-bottom: 10px;
+}
+.opd-focus-rail-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.opd-focus-rail-step {
+  margin: 0;
+}
+.opd-focus-rail-step-btn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 8px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-strong, #111);
+  font: inherit;
+  transition: background-color 120ms ease;
+}
+.opd-focus-rail-step-btn:hover:not(:disabled) {
+  background: var(--surface-inset, #f4f4f4);
+}
+.opd-focus-rail-step-btn:disabled {
+  cursor: default;
+  color: var(--text-muted, #999);
+}
+.opd-focus-rail-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-inset, #eee);
+  color: var(--text-muted, #666);
+  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.opd-focus-rail-step--now .opd-focus-rail-step-num {
+  background: var(--status-live, #2c8b62);
+  color: #fff;
+}
+.opd-focus-rail-step--done .opd-focus-rail-step-num {
+  background: var(--surface-inset-strong, #d8d8d8);
+  color: var(--text-strong, #111);
+}
+.opd-focus-rail-step-tx {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.opd-focus-rail-step-tx b {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.opd-focus-rail-step--locked .opd-focus-rail-step-tx b {
+  color: var(--text-muted, #999);
+  font-weight: 500;
+}
+.opd-focus-rail-step-meta {
+  display: flex;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted, #999);
+  margin-top: 2px;
+  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+}
+.opd-focus-rail-step-chk { color: var(--text-muted, #999); }
+.opd-focus-rail-step--sign .opd-focus-rail-step-num {
+  background: var(--surface-inset, #eee);
+  color: var(--text-muted, #666);
+}
+.opd-focus-rail-step--sign.opd-focus-rail-step--now .opd-focus-rail-step-num {
+  background: var(--status-live, #2c8b62);
+  color: #fff;
+}
+.opd-focus-rail-footer {
+  margin-top: 12px;
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  color: var(--text-muted, #999);
+  border-top: 1px dashed var(--surface-border, #e6e6e6);
+  line-height: 1.35;
+}
+
+/* ── Step card (right column) ─────────────────────────────── */
+.opd-focus-step {
+  padding: 24px 32px 22px;
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--surface-border, #e6e6e6);
+  border-radius: 0 0 12px 0;
+  border-left: none;
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.opd-focus-step-head {
+  border-bottom: 1px dashed var(--surface-border, #e6e6e6);
+  padding-bottom: 12px;
+}
+.opd-focus-step-kk {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #666);
+  margin-bottom: 6px;
+}
+.opd-focus-step-h2 {
+  font-family: var(--font-serif, "GT Sectra", "Charter", Georgia, serif);
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0 0 4px;
+  color: var(--text-strong, #111);
+  outline: none;
+}
+.opd-focus-step-h2:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring, rgba(44, 139, 98, 0.35));
+  border-radius: 4px;
+}
+.opd-focus-step-est {
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  margin: 0;
+}
+.opd-focus-step-body {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-strong, #111);
+}
+.opd-focus-step-check {
+  margin-top: 4px;
+}
+.opd-focus-step-past-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0.65;
+}
+.opd-focus-step-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--surface-border, #e6e6e6);
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+.opd-focus-step-back,
+.opd-focus-step-exit {
+  padding: 10px 14px;
+  min-height: 40px;
+  background: transparent;
+  border: 1px solid var(--surface-border, #e6e6e6);
+  border-radius: 6px;
+  color: var(--text-strong, #111);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.opd-focus-step-back:hover,
+.opd-focus-step-exit:hover {
+  background: var(--surface-inset, #f4f4f4);
+}
+.opd-focus-step-hint {
+  flex: 1 1 auto;
+  font-size: 12px;
+  color: var(--text-muted, #999);
+  text-align: right;
+}
+.opd-focus-step-next {
+  padding: 10px 18px;
+  min-height: 40px;
+  background: var(--action-primary-bg, #111);
+  border: 1px solid var(--action-primary-bg, #111);
+  border-radius: 6px;
+  color: var(--action-primary-fg, #fff);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+.opd-focus-step-next:hover:not(:disabled) {
+  background: var(--action-primary-bg-hover, #000);
+}
+.opd-focus-step-next--disabled,
+.opd-focus-step-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Anchor flash target within the current step. */
+.opd-step-anchor-flash {
+  animation: opd-step-flash 1.6s ease;
+}
+@keyframes opd-step-flash {
+  0%   { background: transparent; }
+  20%  { background: var(--status-amber-bg, rgba(219, 154, 4, 0.18)); }
+  100% { background: transparent; }
+}
+
+/* Sign step recap tiles. */
+.opd-step-recap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.opd-step-recap-tile {
+  border: 1px solid var(--surface-border, #e6e6e6);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface-inset, #fafafa);
+}
+.opd-step-recap-tile b {
+  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-strong, #111);
+  line-height: 1;
+}
+.opd-step-recap-tile span {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #666);
+}
+
+/* ── Mobile rail (< 900px) ───────────────────────────────── */
+@media (max-width: 900px) {
+  .opd-focus-mhead {
+    grid-template-columns: 1fr auto;
+    padding: 14px 16px 10px;
+    gap: 10px;
+  }
+  .opd-focus-mhead .opd-doc-chip {
+    grid-column: 1 / -1;
+    justify-self: flex-start;
+  }
+  .opd-focus-mhead-title h1 { font-size: 19px; }
+  .opd-focus-mhead-time b { font-size: 24px; }
+  .opd-focus-grid--stepper {
+    grid-template-columns: 1fr;
+  }
+  .opd-focus-rail--stepper {
+    display: none;
+  }
+  .opd-focus-mrail {
+    display: block;
+    background: var(--surface-card, #fff);
+    border-left: 1px solid var(--surface-border, #e6e6e6);
+    border-right: 1px solid var(--surface-border, #e6e6e6);
+    padding: 10px 14px;
+  }
+  .opd-focus-mrail-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+  .opd-focus-mrail-label {
+    font-size: 12px;
+    color: var(--text-muted, #666);
+    font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+    white-space: nowrap;
+  }
+  .opd-focus-mrail-bar {
+    display: block;
+    height: 4px;
+    background: var(--surface-inset, #eee);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 60px;
+  }
+  .opd-focus-mrail-bar > i {
+    display: block;
+    height: 100%;
+    background: var(--status-live, #2c8b62);
+    transition: width 260ms ease;
+  }
+  .opd-focus-mrail-toggle {
+    background: transparent;
+    border: 1px solid var(--surface-border, #e6e6e6);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-strong, #111);
+    cursor: pointer;
+    min-height: 32px;
+  }
+  .opd-focus-mrail-list {
+    list-style: none;
+    padding: 10px 0 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-top: 1px dashed var(--surface-border, #e6e6e6);
+    margin-top: 10px;
+  }
+  .opd-focus-step {
+    border-radius: 0 0 12px 12px;
+    border-left: 1px solid var(--surface-border, #e6e6e6);
+    padding: 18px 16px 20px;
+  }
+  .opd-focus-step-h2 { font-size: 22px; }
+  .opd-focus-step-body { font-size: 13.5px; }
+  .opd-step-recap {
+    grid-template-columns: 1fr 1fr;
+  }
+  .opd-focus-step-foot {
+    gap: 8px;
+  }
+  .opd-focus-step-hint {
+    order: 3;
+    flex-basis: 100%;
+    text-align: left;
+  }
+  .opd-focus-step-next {
+    flex: 1;
+  }
+}
+@media (max-width: 430px) {
+  .opd-focus-mhead-title h1 { font-size: 17px; }
+  .opd-focus-mhead-time b { font-size: 22px; }
+  .opd-focus-step-h2 { font-size: 20px; }
+}
+

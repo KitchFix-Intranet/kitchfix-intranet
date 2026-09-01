@@ -150,10 +150,11 @@ for (const w of WIDTHS) {
       // signature-flow spec.
       await queueRows.first().click();
       await expect(page.locator(".opd-crumb-current")).toBeVisible({ timeout: 10_000 });
-      // Either the read-check-sign paper OR the completion cert can
-      // legitimately be the landing state (depending on whether the
-      // clicked row is signed).
-      const paperOrCert = page.locator(".opd-focus-paper, .opd-cert").first();
+      // Either the stepper step card OR the completion cert can be
+      // the landing state (depending on whether the clicked row is
+      // signed). Post-stepper the read surface is .opd-focus-step
+      // (was .opd-focus-paper before the module-stepper PR).
+      const paperOrCert = page.locator(".opd-focus-step, .opd-cert").first();
       await expect(paperOrCert).toBeVisible({ timeout: 10_000 });
 
       // Breadcrumb returns to the queue.

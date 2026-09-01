@@ -1,33 +1,41 @@
 "use client";
 
-// Academy Focus view. Read-check-sign flow, inside the shell.
+// Academy Focus view - stepper.
 //
-// Discipline (spec Section 18, non-negotiable):
-//   - Section-at-a-time reveal (18.5). Progress advances on check
-//     completion only. NO scroll tracking, NO scroll gating, NO
-//     progress bar that fills on scroll.
-//   - One check per section, inline at the boundary (18.6). Multiple
-//     questions on the same section stack in order. "Quick check" in
-//     operator copy - never "assessment", "test", "quiz".
-//   - Wrong answer = amber, never red (18.7). Explanation names the
-//     line. Back-to-section button scrolls + flashes the section.
-//     Attempts recorded honestly, unlimited.
-//   - Right answer (18.8) = brief, warm, one button forward. NO
-//     celebration; correct is expected.
-//   - Signing (18.9) = serif attestation. Button disabled until name
-//     matches. Hint states the expected name after a few characters.
-//     What will be earned is stated before commit.
-//   - Idempotency by client-supplied UUID (spec 7.2). NO optimistic
-//     UI - the completion screen only renders after the server
-//     confirms the row persisted.
-//   - correct_option_id never reaches the client. Grading is
-//     server-side, /api/academy/check returns { correct, explanation }
-//     for the SELECTED option only.
-//   - Zero approved questions is a legitimate state (7 of Kevin's 8
-//     modules). Renders 2-step rail (read + sign), no check step.
+// Spec 18.5 (amended by the module-stepper PR): a module is a
+// sequence of steps, not a document with checks appended. ONE
+// section is on screen at a time and the page does not grow as
+// the person progresses. The server-side step-boundary algorithm
+// (WORDS_PER_STEP = 600 = 3 min at 200 wpm) determines the step
+// list; the client renders one step card at a time.
+//
+// Discipline
+// ──────────
+//   - Step-at-a-time reveal. The page NEVER grows.
+//   - Checks live inside their step, at the section boundary.
+//     Continue is disabled until the check is passed. Two checks
+//     in a step come one at a time; button reads "Next check"
+//     between them.
+//   - Wrong answer = amber (never red). "Show me that line"
+//     flashes the anchor WITHIN the current step - no scrolling
+//     through a document.
+//   - Right answer = brief warm confirmation, options LOCKED,
+//     Continue enabled. No celebration on individual correct.
+//   - Save & exit persists progress; resume mounts at the
+//     furthest step reached (spec A1).
+//   - Keyboard: Enter/Right advances, Left goes back, 1/2 select
+//     option. Ignored inside text inputs (signature field
+//     unaffected).
+//   - Below 900px the rail collapses to a single line + toggle.
+//   - Sign step: recap + serif attestation + type-to-match name.
+//   - Accessibility: focus moves to step heading on advance;
+//     feedback panels are aria-live=polite; options are real
+//     buttons with aria-pressed; step rail is a list with
+//     aria-current on the active step.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+// ─── Constants + helpers ──────────────────────────────────────────
 function formatDayShort(iso) {
   if (!iso) return null;
   try {
@@ -36,7 +44,6 @@ function formatDayShort(iso) {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   } catch { return null; }
 }
-
 function formatUpdated(iso) {
   if (!iso) return null;
   try {
@@ -45,7 +52,6 @@ function formatUpdated(iso) {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   } catch { return null; }
 }
-
 function formatSignedAt(iso) {
   if (!iso) return null;
   try {
@@ -54,12 +60,6 @@ function formatSignedAt(iso) {
     return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
   } catch { return null; }
 }
-
-// UUID v4 generator - client-side, for the attestation_id
-// idempotency key. Uses crypto.randomUUID when available; falls
-// back to a Math.random-based v4 for older browsers. The client
-// generates this BEFORE submitting so a retry after a dropped
-// connection cannot double-sign (spec 7.2).
 function newAttestationId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -83,81 +83,35 @@ function DashedBrick({ scope, message, onRetry }) {
   );
 }
 
-// Parse the rendered document_content HTML into a list of sections
-// keyed by their H1/H2 heading text. Sections that carry no heading
-// (a leading intro block) become an untitled leading section with
-// anchor=null. Splits on <h1>...</h1> AND <h2>...</h2> because the
-// question anchors mix both tiers (e.g. "Hospitality: What We Mean"
-// is an H1, "Mission: Why We Exist" is an H2 under H1 "Our North
-// Stars"). Anchor text is decoded from common HTML entities so a
-// title like `Best Food, Best Service, Best Hospitality` matches
-// its DB-stored counterpart verbatim.
-function parseSections(html) {
-  if (!html || typeof html !== "string") return [];
-  // Match either H1 or H2 with optional attributes. Capture the
-  // inner text (may contain HTML entities but not tags in our
-  // corpus). Sections split at the OPENING tag; heading text +
-  // section body live together in the same chunk so the check card
-  // renders after the section content, not after the title.
-  const HEADING_RE = /<h[12][^>]*>([^<]*)<\/h[12]>/gi;
-  const sections = [];
-  let lastIdx = 0;
-  let match;
-  const boundaries = [];
-  while ((match = HEADING_RE.exec(html)) !== null) {
-    boundaries.push({ start: match.index, anchor: decodeEntities(match[1] || "").trim() });
-  }
-  // Leading chunk before the first heading (if any content there).
-  if (boundaries.length === 0) {
-    return [{ anchor: null, html }];
-  }
-  if (boundaries[0].start > 0) {
-    const lead = html.slice(0, boundaries[0].start).trim();
-    if (lead.length > 0) sections.push({ anchor: null, html: lead });
-  }
-  for (let i = 0; i < boundaries.length; i += 1) {
-    const start = boundaries[i].start;
-    const end = i + 1 < boundaries.length ? boundaries[i + 1].start : html.length;
-    sections.push({ anchor: boundaries[i].anchor, html: html.slice(start, end) });
-  }
-  return sections;
-}
-
-function decodeEntities(s) {
-  return String(s || "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-// ─── CheckCard ─────────────────────────────────────────────────────
-// One check, inline at the end of its section. Options are shuffled
-// server-side per request; the client renders them in the order it
-// received. Selecting an option POSTs to /api/academy/check and
-// re-reads the server's { correct, explanation }. Wrong answer =
-// amber card, explanation, "Show me that line again" button that
-// scrolls + flashes the section. Correct = green card, one-line
-// affirm, "Continue" button that reveals the next section.
+// ─── CheckCard ────────────────────────────────────────────────────
+// One question, inline at the end of its step's section content.
+// D3: options render with a POSITIONAL letter (A/B by index), not
+//     the option id. Grading is by id server-side.
+// D4: only the ACTIVE question in a step renders as interactive;
+//     later ones do not appear until the active one is passed.
+// D5: once passed, options LOCK - no further selection.
 function CheckCard({
   requirementId,
   question,
-  sectionAnchor,
-  onAnswered,
+  qIndex,
+  qCount,
+  alreadyCorrect,
+  onCorrect,
   onBackToSection,
-  onContinue,
-  serverCorrect,
 }) {
   const [state, setState] = useState({
-    status: "idle",         // idle | submitting | wrong | right | error
+    status: alreadyCorrect ? "right" : "idle",
     selectedId: null,
     explanation: null,
     error: null,
   });
-  const wasAlreadyCorrect = !!serverCorrect;
+  const [autoLocked] = useState(alreadyCorrect);
+
+  const disabled = state.status === "submitting" || state.status === "right" || autoLocked;
+  const feedbackRef = useRef(null);
 
   async function submit(optionId) {
+    if (disabled) return;
     setState((s) => ({ ...s, status: "submitting", selectedId: optionId, error: null }));
     try {
       const res = await fetch("/api/academy/check", {
@@ -178,102 +132,100 @@ function CheckCard({
         explanation: body.explanation || "",
         error: null,
       });
-      // Notify parent so it can bump progress + advance reveal on correct.
-      if (body.correct && onAnswered) onAnswered(question.question_id);
+      if (body.correct && onCorrect) onCorrect(question.question_id);
     } catch (err) {
       setState({ status: "error", selectedId: optionId, explanation: null, error: err?.message || String(err) });
     }
   }
 
-  // A question that was correct on load renders as passed-through
-  // rather than a fresh interactive card. Keeps the flow legible on
-  // a reload (server-tracked correctness carries).
-  if (wasAlreadyCorrect && state.status !== "wrong" && state.status !== "right") {
+  // If already-correct on mount (resume scenario), show the passed
+  // treatment without re-fetching. The client had this info from
+  // /module.progress.all_correct_ids.
+  if (autoLocked && state.status === "right" && !state.explanation) {
     return (
       <div className="opd-check opd-check--done" role="status">
-        <span className="opd-k">Quick check &middot; passed</span>
+        <span className="opd-k">Quick check {qIndex + 1} of {qCount} · passed</span>
         <p className="opd-check-passed-line">{question.prompt}</p>
       </div>
     );
   }
 
   return (
-    <div className="opd-check" data-section={sectionAnchor || ""}>
-      <span className="opd-k">Quick check{sectionAnchor ? ` · from ${sectionAnchor}` : ""}</span>
+    <div className="opd-check" data-question-key={question.question_key}>
+      <span className="opd-k">Quick check {qIndex + 1} of {qCount}</span>
       <h4 className="opd-check-prompt">{question.prompt}</h4>
-      <div className="opd-check-options" role="radiogroup" aria-label={question.prompt}>
-        {question.options.map((opt) => {
+      <div className="opd-check-options" role="group" aria-label={question.prompt}>
+        {question.options.map((opt, idx) => {
           const isSelected = state.selectedId === opt.id;
+          // D3: display letter is POSITIONAL (A/B by index).
+          const letter = String.fromCharCode(65 + idx);
           const tone = state.status === "wrong" && isSelected
             ? " opd-check-opt--miss"
             : state.status === "right" && isSelected
               ? " opd-check-opt--right"
               : state.status === "right" && !isSelected
-                ? " opd-check-opt--dim"
+                ? " opd-check-opt--dim opd-check-opt--locked"
                 : "";
-          const disabled = state.status === "submitting" || state.status === "right";
           return (
             <button
               key={opt.id}
               type="button"
-              role="radio"
-              aria-checked={isSelected}
               disabled={disabled}
+              aria-pressed={isSelected}
               className={"opd-check-opt" + tone}
               onClick={() => submit(opt.id)}
+              data-position={letter}
+              data-option-id={opt.id}
             >
-              <span className="opd-check-opt-key">{String(opt.id).toUpperCase()}</span>
+              <span className="opd-check-opt-key">{letter}</span>
               <span className="opd-check-opt-text">{opt.text}</span>
             </button>
           );
         })}
       </div>
-      {state.status === "wrong" ? (
-        <div className="opd-check-fb opd-check-fb--amber" role="alert">
-          <b>Not quite - let's look again.</b>
-          <p className="opd-check-fb-body">{state.explanation}</p>
-          <button
-            type="button"
-            className="opd-check-back"
-            onClick={() => onBackToSection && onBackToSection(sectionAnchor)}
-          >
-            &uarr; Show me that line again
-          </button>
-        </div>
-      ) : null}
-      {state.status === "right" ? (
-        <div className="opd-check-fb opd-check-fb--green">
-          <b>That is it.</b>
-          <p className="opd-check-fb-body">{state.explanation}</p>
-          <button
-            type="button"
-            className="opd-check-cont"
-            onClick={onContinue}
-          >
-            Continue
-          </button>
-        </div>
-      ) : null}
-      {state.status === "error" ? (
-        <div className="opd-brick opd-brick--inline" role="alert">
-          <div className="opd-brick-title">Could not record your answer</div>
-          <p className="opd-brick-body">{state.error}. Your answer was not lost - pick it again to retry.</p>
-        </div>
-      ) : null}
+      <div ref={feedbackRef} aria-live="polite" aria-atomic="true">
+        {state.status === "wrong" ? (
+          <div className="opd-check-fb opd-check-fb--amber" role="alert">
+            <span className="opd-check-fb-verdict">Not quite - let us look again.</span>
+            <p className="opd-check-fb-body">{state.explanation}</p>
+            <button
+              type="button"
+              className="opd-check-back"
+              onClick={() => onBackToSection && onBackToSection()}
+            >
+              &uarr; Show me that line
+            </button>
+          </div>
+        ) : null}
+        {state.status === "right" ? (
+          <div className="opd-check-fb opd-check-fb--green">
+            <span className="opd-check-fb-verdict">That is it.</span>
+            <p className="opd-check-fb-body">{state.explanation}</p>
+          </div>
+        ) : null}
+        {state.status === "error" ? (
+          <div className="opd-brick opd-brick--inline" role="alert">
+            <div className="opd-brick-title">Could not record your answer</div>
+            <p className="opd-brick-body">{state.error}. Your answer was not lost - pick it again to retry.</p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-// ─── SignBlock ─────────────────────────────────────────────────────
-// Serif attestation. Type-name-to-match. Button disabled until match.
-// Hint updates on input. What will be earned shown before commit.
-// Client-supplied attestation_id for idempotency; no optimistic UI.
+// ─── SignBlock ────────────────────────────────────────────────────
+// Serif attestation with type-to-match name. Unchanged behavior
+// from the signature-flow PR; the sign step is the LAST step in the
+// stepper. Recap + earn block sit above.
 function SignBlock({
   requirementId,
   doc,
   version,
   displayName,
   timeSpentSeconds,
+  stepsCount,
+  totalQuestionsPassed,
   onSigned,
 }) {
   const attestationText = useMemo(() => (
@@ -310,9 +262,6 @@ function SignBlock({
         setStatus({ state: "error", error: body?.detail || body?.error || `HTTP ${res.status}` });
         return;
       }
-      // Only surface success once the row is persisted. Same UUID
-      // resubmit lands in the idempotent branch and returns the same
-      // attestation - onSigned handles either.
       if (onSigned) onSigned(body.attestation);
     } catch (err) {
       setStatus({ state: "error", error: err?.message || String(err) });
@@ -325,60 +274,75 @@ function SignBlock({
       ? <>Type it exactly as it appears on your account: <b>{displayName}</b></>
       : "Your typed name must match your account.";
 
+  const minutes = timeSpentSeconds > 0 ? Math.max(1, Math.round(timeSpentSeconds / 60)) : null;
+
   return (
-    <div className="opd-sign">
-      <span className="opd-k">Attestation</span>
-      <p className="opd-sign-text">{attestationText}</p>
-      <div className="opd-sign-row">
-        <input
-          type="text"
-          className="opd-sign-input"
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          placeholder="Type your full name"
-          autoComplete="off"
-          spellCheck="false"
-          disabled={status.state === "submitting"}
-          aria-label="Type your full name to sign"
-        />
-        <button
-          type="button"
-          className={"opd-sign-btn" + (matches ? " opd-sign-btn--ready" : "")}
-          disabled={!matches || status.state === "submitting"}
-          onClick={submit}
-        >
-          {status.state === "submitting" ? "Signing" : "Sign"}
-        </button>
-      </div>
-      <p className="opd-sign-hint">{hint}</p>
-      <div className="opd-sign-earn">
-        <div className="opd-sign-earn-glyph" aria-hidden="true">&#127942;</div>
-        <div>
-          <b>You will earn: {doc?.title || doc?.id}</b>
-          <span>Certificate issued on signing.</span>
+    <>
+      <div className="opd-step-recap">
+        <div className="opd-step-recap-tile">
+          <b className="num">{stepsCount}</b>
+          <span>SECTIONS READ</span>
         </div>
-      </div>
-      {status.state === "error" ? (
-        <div className="opd-brick opd-brick--inline" role="alert" style={{ marginTop: 14 }}>
-          <div className="opd-brick-title">Could not record your signature</div>
-          <p className="opd-brick-body">{status.error}. Nothing was recorded - try again.</p>
+        <div className="opd-step-recap-tile">
+          <b className="num">{totalQuestionsPassed}</b>
+          <span>CHECK{totalQuestionsPassed === 1 ? "" : "S"} PASSED</span>
         </div>
-      ) : null}
-    </div>
+        {minutes != null ? (
+          <div className="opd-step-recap-tile">
+            <b className="num">{minutes}</b>
+            <span>MINUTE{minutes === 1 ? "" : "S"}</span>
+          </div>
+        ) : null}
+      </div>
+      <div className="opd-sign">
+        <span className="opd-k">Attestation</span>
+        <p className="opd-sign-text">{attestationText}</p>
+        <div className="opd-sign-row">
+          <input
+            type="text"
+            className="opd-sign-input"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder="Type your full name"
+            autoComplete="off"
+            spellCheck="false"
+            disabled={status.state === "submitting"}
+            aria-label="Type your full name to sign"
+          />
+          <button
+            type="button"
+            className={"opd-sign-btn" + (matches ? " opd-sign-btn--ready" : "")}
+            disabled={!matches || status.state === "submitting"}
+            onClick={submit}
+          >
+            {status.state === "submitting" ? "Signing" : "Sign"}
+          </button>
+        </div>
+        <p className="opd-sign-hint">{hint}</p>
+        <div className="opd-sign-earn">
+          <div className="opd-sign-earn-glyph" aria-hidden="true">&#127942;</div>
+          <div>
+            <b>You will earn: {doc?.title || doc?.id}</b>
+            <span>Certificate issued on signing.</span>
+          </div>
+        </div>
+        {status.state === "error" ? (
+          <div className="opd-brick opd-brick--inline" role="alert" style={{ marginTop: 14 }}>
+            <div className="opd-brick-title">Could not record your signature</div>
+            <p className="opd-brick-body">{status.error}. Nothing was recorded - try again.</p>
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }
 
-// ─── CompletionScreen ──────────────────────────────────────────────
-// Shown after successful sign OR when the module was already signed
-// on load. Real certificate serial, honest attempt count + time,
-// credential lit, next-module offered. NO celebration animation
-// beyond a single entrance transition on the seal.
+// ─── Completion cert (post-sign) ──────────────────────────────────
 function CompletionScreen({ doc, version, attestation, onBack }) {
   const cert = attestation?.certificate_serial || "";
   const attempts = attestation?.attempts_count ?? 0;
   const timeSec = attestation?.time_spent_seconds ?? 0;
   const minutes = timeSec > 0 ? Math.max(1, Math.round(timeSec / 60)) : null;
-
   return (
     <div className="opd-focus-done">
       <div className="opd-cert">
@@ -425,7 +389,7 @@ function CompletionScreen({ doc, version, attestation, onBack }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Main component
+// Main component - the stepper
 // ═══════════════════════════════════════════════════════════════════
 export default function AcademyFocus({ requirementId, docId, docTitle, docShelf, onBack, onSigned }) {
   const [state, setState] = useState({ status: "loading", data: null, error: null });
@@ -446,10 +410,7 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
       });
       if (!res.ok) {
         let bodyText = "";
-        try {
-          const b = await res.json();
-          bodyText = b?.detail || b?.error || "";
-        } catch {}
+        try { const b = await res.json(); bodyText = b?.detail || b?.error || ""; } catch {}
         setState({ status: "error", data: null, error: `HTTP ${res.status}${bodyText ? ` - ${bodyText}` : ""}` });
         return;
       }
@@ -471,92 +432,130 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
   }, [load]);
 
   const doc = state.data?.doc || null;
-  const content = state.data?.content_html || null;
   const req = state.data?.requirement || null;
   const ob = state.data?.obligation || null;
   const cyc = state.data?.cycle || null;
+  const steps = state.data?.steps || [];
   const questions = state.data?.questions || [];
   const progress = state.data?.progress || null;
-  const attestation = state.data?.attestation || null;
+  const initialAttestation = state.data?.attestation || null;
   const viewer = state.data?.viewer || null;
 
   const version = doc?.version || req?.doc_version || null;
 
-  // Parse HTML into sections keyed by heading text.
-  const parsedSections = useMemo(() => parseSections(content), [content]);
-
-  // Group approved questions by section_anchor.
-  const questionsByAnchor = useMemo(() => {
+  // Map question_id -> question object (for step lookup).
+  const questionsById = useMemo(() => {
     const m = new Map();
-    for (const q of questions) {
-      const key = String(q.section_anchor || "").trim();
-      if (!m.has(key)) m.set(key, []);
-      m.get(key).push(q);
-    }
+    for (const q of questions) m.set(q.question_id, q);
     return m;
   }, [questions]);
 
-  // ── Reveal state (spec 18.5: section-at-a-time; progress advances
-  //    on check completion only). Starts at 1 (only first section
-  //    visible). On correct check completion for a section's LAST
-  //    question, revealedCount bumps by 1. Sections with no questions
-  //    auto-advance via a Continue button.
-  //
-  // Initial value: if the module was already signed (attestation
-  // present on load), reveal everything so the operator can review.
-  // If there are prior correct attempts, reveal enough sections to
-  // cover those checks so the reader lands where they left off.
-  const initialReveal = useMemo(() => {
-    if (attestation) return parsedSections.length;
-    const correct = new Set(progress?.all_correct_ids || []);
-    let n = 1;
-    for (let i = 0; i < parsedSections.length; i += 1) {
-      const anchor = parsedSections[i].anchor || "";
-      const qs = questionsByAnchor.get(anchor) || [];
-      // Section i is "cleared" if all its questions have >=1 correct.
-      const cleared = qs.length === 0 || qs.every((q) => correct.has(q.question_id));
-      if (cleared) n = Math.max(n, i + 2); else break;
-    }
-    return Math.min(n, parsedSections.length);
-  }, [attestation, parsedSections, progress, questionsByAnchor]);
+  // ─── Local step state ────────────────────────────────────────────
+  // currentStepIdx: which step is on screen. Sign step is at
+  // steps.length (one past the last content step). Signed
+  // completion cert shows when signedAttestation is set.
+  const initialStepIdx = progress?.furthest_step_index ?? 0;
+  const [currentStepIdx, setCurrentStepIdx] = useState(initialStepIdx);
+  const [signedAttestation, setSignedAttestation] = useState(initialAttestation);
 
-  const [revealCount, setRevealCount] = useState(initialReveal);
-  const [signedAttestation, setSignedAttestation] = useState(attestation);
-
-  // Sync reveal when data loads.
-  useEffect(() => {
-    setRevealCount(initialReveal);
-    setSignedAttestation(attestation);
-  }, [initialReveal, attestation]);
-
-  // Correct-question set, mutable as the user answers.
+  // Correct-answer set (mutable as user progresses). Seeded from
+  // server-tracked all_correct_ids.
   const [correctIds, setCorrectIds] = useState(() => new Set(progress?.all_correct_ids || []));
+
+  // Sync when data loads (resume mounts at furthest).
   useEffect(() => {
+    setCurrentStepIdx(progress?.furthest_step_index ?? 0);
     setCorrectIds(new Set(progress?.all_correct_ids || []));
-  }, [progress]);
+    setSignedAttestation(initialAttestation);
+  }, [progress?.furthest_step_index, progress?.all_correct_ids, initialAttestation]);
 
-  // ── Sign-ready gate. Server tracked this via progress.ready_to_
-  //    sign at load, but we also compute it locally so the sign block
-  //    appears immediately after the last correct answer without
-  //    re-fetching. Both must be true; server-side is the authoritative
-  //    gate on POST /api/academy/sign.
-  const questionIds = questions.map((q) => q.question_id);
-  const localReadyToSign = questionIds.length === 0 || questionIds.every((id) => correctIds.has(id));
+  // Sections seen: the union of everything we have visited. Seeded
+  // from server, extended as the user advances. POSTed to /progress
+  // on step advance + save-and-exit.
+  const [sectionsSeen, setSectionsSeen] = useState(() => new Set(progress?.sections_seen || []));
+  useEffect(() => {
+    setSectionsSeen(new Set(progress?.sections_seen || []));
+  }, [progress?.sections_seen]);
 
-  const flashRef = useRef(null);
-  const scrollToSection = useCallback((anchor) => {
-    if (!anchor) return;
-    const el = document.querySelector(`[data-section-anchor="${CSS.escape(String(anchor))}"]`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Re-trigger the flash animation.
-    el.classList.remove("opd-focus-section--flash");
-    // Force reflow so the animation restarts.
-    void el.offsetWidth;
-    el.classList.add("opd-focus-section--flash");
+  // ─── Save & Exit + progress push ───────────────────────────────
+  const timeSpentSeconds = () => {
+    const clientDelta = Math.round((Date.now() - startTimeRef.current) / 1000);
+    return Math.max(progress?.time_spent_seconds ?? 0, clientDelta);
+  };
+  const pushProgress = useCallback(async (extraKey) => {
+    const merged = new Set(sectionsSeen);
+    if (extraKey) merged.add(extraKey);
+    try {
+      await fetch("/api/academy/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({
+          requirementId,
+          sectionsSeen: [...merged],
+          timeSpentSeconds: timeSpentSeconds(),
+        }),
+      });
+    } catch {
+      // Best-effort. Failure does not block the user; the next
+      // /module fetch reflects whatever landed.
+    }
+    if (extraKey) setSectionsSeen(merged);
+  }, [requirementId, sectionsSeen, progress?.time_spent_seconds]);
+
+  // ─── Per-step derived state ────────────────────────────────────
+  const isSignStep = currentStepIdx >= steps.length;
+  const currentStep = isSignStep ? null : steps[currentStepIdx];
+  const currentQuestions = useMemo(() => {
+    if (!currentStep) return [];
+    return (currentStep.questionIds || []).map((id) => questionsById.get(id)).filter(Boolean);
+  }, [currentStep, questionsById]);
+  // The first uncleared question in this step (only one visible at
+  // a time, D4). If all cleared or no questions, activeQIndex = -1
+  // and the "Continue" button is enabled.
+  const activeQIndex = currentQuestions.findIndex((q) => !correctIds.has(q.question_id));
+  const stepCleared = activeQIndex === -1;
+
+  // ─── Anchor flash within the current step ─────────────────────
+  // D-flash: the wrong-answer "Show me that line" scrolls + flashes
+  // an anchor WITHIN the current step card (not the whole doc).
+  const stepHeadingRef = useRef(null);
+  const stepBodyRef = useRef(null);
+  const flashAnchor = useCallback(() => {
+    const body = stepBodyRef.current;
+    if (!body) return;
+    // Prefer explicit <div class="anchor">; fall back to the
+    // step's first blockquote or the step body itself.
+    const anchor = body.querySelector(".anchor, blockquote, [data-anchor]") || body;
+    anchor.scrollIntoView({ behavior: "smooth", block: "center" });
+    anchor.classList.remove("opd-step-anchor-flash");
+    // Reflow so the animation restarts.
+    void anchor.offsetWidth;
+    anchor.classList.add("opd-step-anchor-flash");
   }, []);
 
-  const onCheckAnswered = useCallback((questionId) => {
+  // ─── Advance / back ────────────────────────────────────────────
+  const goToStep = useCallback((i) => {
+    if (i < 0 || i > steps.length) return;
+    setCurrentStepIdx(i);
+    // Focus the step heading on advance (accessibility A4).
+    setTimeout(() => {
+      const h = document.querySelector("[data-step-heading]");
+      if (h && typeof h.focus === "function") h.focus();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 60);
+  }, [steps.length]);
+
+  const advanceStep = useCallback(async () => {
+    // Mark the current step's key as seen and push progress.
+    if (currentStep) {
+      await pushProgress(currentStep.key);
+    }
+    goToStep(currentStepIdx + 1);
+  }, [currentStep, currentStepIdx, pushProgress, goToStep]);
+
+  const onCorrect = useCallback((questionId) => {
     setCorrectIds((prev) => {
       const next = new Set(prev);
       next.add(questionId);
@@ -564,30 +563,77 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
     });
   }, []);
 
-  const onContinueToNextSection = useCallback(() => {
-    setRevealCount((n) => Math.min(n + 1, parsedSections.length));
-    // Scroll the newly revealed section into view after paint.
-    setTimeout(() => {
-      const els = document.querySelectorAll(".opd-focus-section");
-      const last = els[els.length - 1];
-      if (last) last.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
-  }, [parsedSections.length]);
-
   const onSignedInternal = useCallback((att) => {
     setSignedAttestation(att);
-    // Bubble up so the room can invalidate its cache + re-render
-    // standing / queue / credential wall.
     if (onSigned) onSigned(att);
-    // Scroll to the top of the completion screen.
     setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 60);
   }, [onSigned]);
 
-  // Time spent, client-side. Reset on load. Sent on sign as a
-  // fallback signal alongside the server's progress accumulator.
-  const timeSpentSeconds = () => Math.round((Date.now() - startTimeRef.current) / 1000);
+  const saveAndExit = useCallback(async () => {
+    // Push whatever we have; do not mark a new key seen (user is
+    // leaving on a step they may not yet have passed).
+    await pushProgress(null);
+    if (onBack) onBack();
+  }, [pushProgress, onBack]);
 
-  // ── COMPLETION SCREEN ──────────────────────────────────────────
+  // ─── Mobile rail collapse ─────────────────────────────────────
+  const [mobileRailOpen, setMobileRailOpen] = useState(false);
+
+  // ─── Keyboard navigation (A2) ─────────────────────────────────
+  const advanceRef = useRef({ advance: null, back: null, submitOpt: null });
+  useEffect(() => {
+    advanceRef.current = {
+      advance: async () => {
+        if (isSignStep) return;
+        if (!stepCleared) return;
+        await advanceStep();
+      },
+      back: () => {
+        if (currentStepIdx > 0) goToStep(currentStepIdx - 1);
+      },
+      submitOpt: (idx) => {
+        if (isSignStep) return;
+        const opts = document.querySelectorAll(".opd-check-opt");
+        const target = opts[idx];
+        if (target && !target.disabled) target.click();
+      },
+    };
+  }, [isSignStep, stepCleared, currentStepIdx, advanceStep, goToStep]);
+  useEffect(() => {
+    function onKey(e) {
+      // Skip while focus is in a text input - signature field must
+      // accept space, backspace, Enter without triggering advance.
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
+      const a = advanceRef.current;
+      if (e.key === "Enter" || e.key === "ArrowRight") {
+        a.advance?.();
+        e.preventDefault();
+      } else if (e.key === "ArrowLeft") {
+        a.back?.();
+        e.preventDefault();
+      } else if (e.key === "1" || e.key === "2") {
+        a.submitOpt?.(Number(e.key) - 1);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ─── Rail data ────────────────────────────────────────────────
+  const totalChecks = steps.reduce((acc, s) => acc + (s.questionIds?.length || 0), 0);
+  const passedChecks = correctIds.size;
+  // Minutes-remaining: sum estMinutes of steps ahead + this one.
+  const minutesLeft = steps.slice(currentStepIdx).reduce((acc, s) => acc + (s.estMinutes || 0), 0);
+  const totalMinutes = steps.reduce((acc, s) => acc + (s.estMinutes || 0), 0);
+  const progressPct = steps.length === 0 ? 0 : Math.round(((isSignStep ? steps.length : currentStepIdx) / (steps.length + 1)) * 100);
+
+  // Part number for the header subtitle (comes from the queue via
+  // parent, not the module route - we don't want to double-fetch).
+  // For now the docTitle carries it if the caller passed it; leaving
+  // as-is unless expanded.
+
+  // ─── Completion screen when signed ────────────────────────────
   if (signedAttestation) {
     return (
       <div className="opd-focus" data-room="focus-done">
@@ -608,25 +654,32 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
     );
   }
 
-  // ── READ + CHECK + SIGN ────────────────────────────────────────
-  // Time-remaining estimate for the rail: est_minutes minus a rough
-  // proportion for revealed sections. Kept honest with a "~" prefix.
-  const totalSections = parsedSections.length;
-  const estMinutes = req?.est_minutes || ob?.est_minutes || 0;
-  const proportionRead = totalSections > 0 ? Math.min(1, (revealCount - 1) / Math.max(1, totalSections - 1)) : 0;
-  const minutesLeft = Math.max(0, Math.round(estMinutes * (1 - proportionRead)));
+  // ─── Loading / error ─────────────────────────────────────────
+  if (state.status === "loading") {
+    return (
+      <div className="opd-focus" data-room="focus">
+        <div className="opd-focus-mhead" aria-busy="true">
+          <span className="opd-skel opd-skel--bar opd-skel--w40" />
+        </div>
+      </div>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <div className="opd-focus" data-room="focus">
+        <nav className="opd-crumb" aria-label="Breadcrumb">
+          <button type="button" className="opd-crumb-link" onClick={onBack}>Academy</button>
+          <span className="opd-crumb-sep" aria-hidden="true">/</span>
+          <span className="opd-crumb-current">{docId}</span>
+        </nav>
+        <DashedBrick scope={`module ${docId || ""}`.trim()} message={state.error} onRetry={() => load()} />
+      </div>
+    );
+  }
 
-  const stepsCount = questions.length === 0 ? 2 : 3;
-  const stepNow = signedAttestation
-    ? stepsCount
-    : localReadyToSign
-      ? stepsCount
-      : questions.length === 0
-        ? 1
-        : correctIds.size > 0 ? 2 : 1;
-
+  // ─── Main render ─────────────────────────────────────────────
   return (
-    <div className="opd-focus" data-room="focus">
+    <div className="opd-focus opd-focus--stepper" data-room="focus">
       <nav className="opd-crumb" aria-label="Breadcrumb">
         <button type="button" className="opd-crumb-link" onClick={onBack}>Academy</button>
         <span className="opd-crumb-sep" aria-hidden="true">/</span>
@@ -641,206 +694,271 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
         <span className="opd-crumb-current">{docId}</span>
       </nav>
 
-      <div className="opd-focus-grid">
-        <article className="opd-card opd-focus-paper" aria-busy={state.status === "loading"}>
-          {state.status === "loading" ? (
-            <div className="opd-focus-paper" aria-busy="true">
-              <span className="opd-skel opd-skel--bar opd-skel--w40" />
-              <span className="opd-skel opd-skel--bar opd-skel--w60" style={{ marginTop: 10 }} />
-              {[0,1,2,3].map((i) => (
-                <span key={i} className="opd-skel opd-skel--bar opd-skel--w60" style={{ marginTop: 22 }} />
-              ))}
-            </div>
-          ) : state.status === "error" ? (
-            <DashedBrick scope={`module ${docId || ""}`.trim()} message={state.error} onRetry={() => load()} />
-          ) : (
-            <>
-              <div className="opd-focus-meta">
-                <span className="opd-doc-chip">{doc?.id || docId}</span>
-                {version ? <span className="opd-focus-meta-item">v{version}</span> : null}
-                {ob?.cadence ? <span className="opd-focus-meta-item">{ob.cadence}</span> : null}
-                {doc?.owner ? <span className="opd-focus-meta-item">Owner: {doc.owner}</span> : null}
-              </div>
-              <h1 className="opd-focus-h1">{doc?.title || docTitle || docId}</h1>
-              {doc?.card_line ? <p className="opd-focus-lede">{doc.card_line}</p> : null}
-
-              {parsedSections.length === 0 ? (
-                <div className="opd-brick opd-brick--inline">
-                  <div className="opd-brick-title">No rendered content for this document</div>
-                  <p className="opd-brick-body">
-                    document_content has no English row for <b>{doc?.id || docId}</b>.
-                  </p>
-                </div>
-              ) : (
-                parsedSections.slice(0, revealCount).map((sec, i) => {
-                  const anchor = sec.anchor || "";
-                  const qs = questionsByAnchor.get(anchor) || [];
-                  const isLastRevealed = i === revealCount - 1;
-                  const sectionCleared = qs.length === 0 || qs.every((q) => correctIds.has(q.question_id));
-                  const hasNextSection = i + 1 < parsedSections.length;
-                  return (
-                    <section
-                      key={`${anchor}-${i}`}
-                      className="opd-focus-section"
-                      data-section-anchor={anchor}
-                    >
-                      <div
-                        className="opd-focus-body"
-                        dangerouslySetInnerHTML={{ __html: sec.html }}
-                      />
-                      {/* Check cards inline at the end of each section
-                          that carries approved questions. Sequential:
-                          first uncleared question renders as
-                          interactive; already-correct earlier ones
-                          render as done. Later ones do not render
-                          until the previous is cleared. */}
-                      {qs.length > 0 ? (
-                        (() => {
-                          // Show all cleared questions as done, plus the
-                          // first uncleared question as active.
-                          const rendered = [];
-                          let sawActive = false;
-                          for (const q of qs) {
-                            const done = correctIds.has(q.question_id);
-                            if (done) {
-                              rendered.push(
-                                <CheckCard
-                                  key={q.question_id}
-                                  requirementId={requirementId}
-                                  question={q}
-                                  sectionAnchor={anchor}
-                                  serverCorrect={true}
-                                  onAnswered={onCheckAnswered}
-                                  onBackToSection={scrollToSection}
-                                  onContinue={() => {}}
-                                />
-                              );
-                              continue;
-                            }
-                            if (!sawActive) {
-                              sawActive = true;
-                              const isLastQuestionInSection =
-                                qs.filter((qq) => !correctIds.has(qq.question_id)).length === 1;
-                              rendered.push(
-                                <CheckCard
-                                  key={q.question_id}
-                                  requirementId={requirementId}
-                                  question={q}
-                                  sectionAnchor={anchor}
-                                  serverCorrect={false}
-                                  onAnswered={onCheckAnswered}
-                                  onBackToSection={scrollToSection}
-                                  onContinue={
-                                    isLastQuestionInSection && hasNextSection
-                                      ? onContinueToNextSection
-                                      : () => { /* stays on this section for the next check */ }
-                                  }
-                                />
-                              );
-                            }
-                          }
-                          return rendered;
-                        })()
-                      ) : null}
-                      {/* Sections without a check auto-advance: show a
-                          small Continue button if this is the last
-                          revealed section and it is cleared, and there
-                          are more sections to reveal. */}
-                      {isLastRevealed && qs.length === 0 && sectionCleared && hasNextSection ? (
-                        <div className="opd-focus-continue">
-                          <button
-                            type="button"
-                            className="opd-focus-continue-btn"
-                            onClick={onContinueToNextSection}
-                          >
-                            Continue &rsaquo;
-                          </button>
-                        </div>
-                      ) : null}
-                    </section>
-                  );
-                })
-              )}
-
-              {/* Sign block: appears when all sections are revealed AND
-                  all approved questions are correct (or the module has
-                  zero questions). */}
-              {parsedSections.length > 0
-                && revealCount >= parsedSections.length
-                && localReadyToSign
-                && viewer?.displayName ? (
-                <SignBlock
-                  requirementId={requirementId}
-                  doc={doc}
-                  version={version}
-                  displayName={viewer.displayName}
-                  timeSpentSeconds={timeSpentSeconds()}
-                  onSigned={onSignedInternal}
-                />
-              ) : null}
-            </>
-          )}
-        </article>
-
-        {/* ── Rail ────────────────────────────────────────────────── */}
-        <aside className="opd-focus-rail" aria-label="Requirement context">
-          <div className="opd-card opd-focus-timeleft" aria-live="polite">
-            <b className="num">~{minutesLeft}</b>
-            <span>{minutesLeft === 1 ? "minute left in this one" : "minutes left in this one"}</span>
-          </div>
-          <div className="opd-card opd-focus-req">
-            <span className="opd-k">Your steps</span>
-            <ol className="opd-focus-steps" aria-label="Requirement steps">
-              <li className={"opd-focus-step" + (stepNow > 1 ? " opd-focus-step--done" : " opd-focus-step--now")}>
-                <span className="opd-focus-step-num" aria-hidden="true">{stepNow > 1 ? "✓" : "1"}</span>
-                <div>
-                  <b className="opd-focus-step-title">Read {parsedSections.length === 1 ? "the document" : `${parsedSections.length} sections`}</b>
-                  <span className="opd-focus-step-help">{estMinutes ? `About ${estMinutes} min in all` : "Take your time"}</span>
-                </div>
-              </li>
-              {questions.length > 0 ? (
-                <li className={"opd-focus-step" + (stepNow > 2 ? " opd-focus-step--done" : stepNow === 2 ? " opd-focus-step--now" : " opd-focus-step--dim")}>
-                  <span className="opd-focus-step-num" aria-hidden="true">{stepNow > 2 ? "✓" : "2"}</span>
-                  <div>
-                    <b className="opd-focus-step-title">Quick check{questions.length > 1 ? "s" : ""}</b>
-                    <span className="opd-focus-step-help">{correctIds.size} of {questions.length} passed</span>
-                  </div>
-                </li>
-              ) : null}
-              <li className={"opd-focus-step" + (stepNow >= stepsCount ? " opd-focus-step--now" : " opd-focus-step--dim")}>
-                <span className="opd-focus-step-num" aria-hidden="true">{stepsCount}</span>
-                <div>
-                  <b className="opd-focus-step-title">Sign v{version || "?"}</b>
-                  <span className="opd-focus-step-help">Type your name, done</span>
-                </div>
-              </li>
-            </ol>
-          </div>
-          <div className="opd-card opd-focus-norush">
-            <span className="opd-k">No rush</span>
-            <p className="opd-focus-norush-body">Your place is saved. Nothing is submitted until you sign.</p>
-          </div>
-          {cyc ? (
-            <div className="opd-card opd-focus-cyclechip">
-              <span className="opd-k opd-k--tight">Cycle</span>
-              <div className="opd-focus-cyclechip-body">
-                <b>{cyc.label}</b>
-                <span>{formatDayShort(cyc.period_start)} - {formatDayShort(cyc.period_end)}</span>
-              </div>
+      {/* Module header - doc chip, title, minutes remaining as the
+          largest number, progress bar. */}
+      <div className="opd-focus-mhead">
+        <span className="opd-doc-chip">{doc?.id || docId}</span>
+        <div className="opd-focus-mhead-title">
+          <h1>{doc?.title || docTitle || docId}</h1>
+          {ob?.obligation_key ? (
+            <div className="opd-focus-mhead-sub">
+              {(() => {
+                // Human-readable subtitle from obligation_key's last
+                // hyphenated portion (e.g. culture-os-standard -> Standard,
+                // culture-os-origin -> Origin, big-rules-onboarding ->
+                // Onboarding). Not shown when only one obligation exists
+                // for the doc, but we do not have that count here so
+                // we always render the tail word for consistency.
+                const parts = String(ob.obligation_key).split("-");
+                const tail = parts[parts.length - 1] || ob.obligation_key;
+                return tail.charAt(0).toUpperCase() + tail.slice(1);
+              })()}
             </div>
           ) : null}
-          <div className="opd-card opd-focus-about">
-            <span className="opd-k">About this document</span>
-            <dl className="opd-focus-kv">
-              <dt>Version</dt><dd className="opd-focus-kv-mono">{version || "-"}</dd>
-              <dt>Updated</dt><dd className="opd-focus-kv-mono">{formatUpdated(doc?.updated_at) || "-"}</dd>
-              <dt>Owner</dt><dd>{doc?.owner || "-"}</dd>
-              {doc?.next_review ? (<><dt>Next review</dt><dd className="opd-focus-kv-mono">{formatUpdated(doc?.next_review)}</dd></>) : null}
-              {ob?.cadence ? (<><dt>Cadence</dt><dd>{ob.cadence}</dd></>) : null}
-            </dl>
+        </div>
+        <div className="opd-focus-mhead-time">
+          <b className="num">{isSignStep ? 1 : Math.max(1, minutesLeft)}</b>
+          <span>min left</span>
+        </div>
+      </div>
+      <div className="opd-focus-mbar" aria-hidden="true">
+        <i style={{ width: `${progressPct}%` }} />
+      </div>
+
+      {/* Mobile rail - single line + toggle, below 900px. */}
+      <div className={"opd-focus-mrail" + (mobileRailOpen ? " opd-focus-mrail--open" : "")}>
+        <div className="opd-focus-mrail-row">
+          <span className="opd-focus-mrail-label">
+            {isSignStep ? "Sign" : `Section ${currentStepIdx + 1} of ${steps.length}`}
+          </span>
+          <span className="opd-focus-mrail-bar">
+            <i style={{ width: `${progressPct}%` }} />
+          </span>
+          <button
+            type="button"
+            className="opd-focus-mrail-toggle"
+            onClick={() => setMobileRailOpen((v) => !v)}
+            aria-expanded={mobileRailOpen}
+          >
+            {mobileRailOpen ? "Hide" : "All sections"}
+          </button>
+        </div>
+        {mobileRailOpen ? (
+          <ol className="opd-focus-mrail-list" aria-label="Module sections">
+            {steps.map((s, i) => renderRailItem(s, i, currentStepIdx, sectionsSeen, goToStep, setMobileRailOpen))}
+            {renderSignRailItem(steps.length, isSignStep, () => setMobileRailOpen(false), goToStep)}
+          </ol>
+        ) : null}
+      </div>
+
+      {/* Two-column grid: rail on left, step card on right */}
+      <div className="opd-focus-grid opd-focus-grid--stepper">
+        <aside className="opd-focus-rail opd-focus-rail--stepper" aria-label="Module sections">
+          <div className="opd-focus-rail-header">
+            <span className="opd-k">
+              {ob?.description ? "In this module" : (doc?.title || "Sections")}
+            </span>
+          </div>
+          <ol className="opd-focus-rail-steps">
+            {steps.map((s, i) => renderRailItem(s, i, currentStepIdx, sectionsSeen, goToStep))}
+            {renderSignRailItem(steps.length, isSignStep, null, goToStep)}
+          </ol>
+          <div className="opd-focus-rail-footer">
+            Your place is saved. Nothing is submitted until you sign.
           </div>
         </aside>
+
+        <article className="opd-card opd-focus-step" aria-live="polite" aria-busy={state.status === "loading"}>
+          {isSignStep ? (
+            <>
+              <header className="opd-focus-step-head">
+                <span className="opd-focus-step-kk">Last step</span>
+                <h2 className="opd-focus-step-h2" data-step-heading tabIndex={-1} ref={stepHeadingRef}>Sign</h2>
+                <p className="opd-focus-step-est">
+                  You have read all {steps.length} section{steps.length === 1 ? "" : "s"}
+                  {totalChecks > 0 ? ` and passed ${passedChecks} check${passedChecks === 1 ? "" : "s"}` : ""}.
+                </p>
+              </header>
+              <div className="opd-focus-step-body">
+                {viewer?.displayName ? (
+                  <SignBlock
+                    requirementId={requirementId}
+                    doc={doc}
+                    version={version}
+                    displayName={viewer.displayName}
+                    timeSpentSeconds={timeSpentSeconds()}
+                    stepsCount={steps.length}
+                    totalQuestionsPassed={passedChecks}
+                    onSigned={onSignedInternal}
+                  />
+                ) : null}
+              </div>
+              <footer className="opd-focus-step-foot">
+                <button
+                  type="button"
+                  className="opd-focus-step-back"
+                  onClick={() => goToStep(steps.length - 1)}
+                >
+                  Back
+                </button>
+                <button type="button" className="opd-focus-step-exit" onClick={saveAndExit}>
+                  Save &amp; exit
+                </button>
+                <span className="opd-focus-step-hint">Your typed name must match your account.</span>
+              </footer>
+            </>
+          ) : currentStep ? (
+            <>
+              <header className="opd-focus-step-head">
+                <span className="opd-focus-step-kk">Section {currentStepIdx + 1} of {steps.length}</span>
+                <h2 className="opd-focus-step-h2" data-step-heading tabIndex={-1} ref={stepHeadingRef}>
+                  {currentStep.anchor}
+                </h2>
+                <p className="opd-focus-step-est">
+                  About {currentStep.estMinutes} minute{currentStep.estMinutes === 1 ? "" : "s"}
+                  {currentQuestions.length > 0
+                    ? ` · ${currentQuestions.length} quick check${currentQuestions.length === 1 ? "" : "s"}`
+                    : " · no check"}
+                </p>
+              </header>
+              <div
+                className="opd-focus-step-body opd-focus-body"
+                ref={stepBodyRef}
+                dangerouslySetInnerHTML={{ __html: currentStep.html }}
+              />
+              {currentQuestions.length > 0 && activeQIndex >= 0 ? (
+                <div className="opd-focus-step-check">
+                  <CheckCard
+                    key={currentQuestions[activeQIndex].question_id}
+                    requirementId={requirementId}
+                    question={currentQuestions[activeQIndex]}
+                    qIndex={activeQIndex}
+                    qCount={currentQuestions.length}
+                    alreadyCorrect={false}
+                    onCorrect={onCorrect}
+                    onBackToSection={flashAnchor}
+                  />
+                </div>
+              ) : null}
+              {/* Show already-passed checks quietly above the active one */}
+              {currentQuestions.length > 1 && currentQuestions.slice(0, activeQIndex >= 0 ? activeQIndex : currentQuestions.length).length > 0 ? (
+                <div className="opd-focus-step-past-checks">
+                  {currentQuestions.slice(0, activeQIndex >= 0 ? activeQIndex : currentQuestions.length).map((q, i) => (
+                    <CheckCard
+                      key={q.question_id}
+                      requirementId={requirementId}
+                      question={q}
+                      qIndex={i}
+                      qCount={currentQuestions.length}
+                      alreadyCorrect={true}
+                      onCorrect={onCorrect}
+                      onBackToSection={flashAnchor}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <footer className="opd-focus-step-foot">
+                {currentStepIdx > 0 ? (
+                  <button
+                    type="button"
+                    className="opd-focus-step-back"
+                    onClick={() => goToStep(currentStepIdx - 1)}
+                  >
+                    Back
+                  </button>
+                ) : null}
+                <button type="button" className="opd-focus-step-exit" onClick={saveAndExit}>
+                  Save &amp; exit
+                </button>
+                <span className="opd-focus-step-hint" aria-live="polite">
+                  {stepCleared
+                    ? ""
+                    : "Answer the check to continue"}
+                </span>
+                <button
+                  type="button"
+                  className={"opd-focus-step-next" + (stepCleared ? "" : " opd-focus-step-next--disabled")}
+                  disabled={!stepCleared}
+                  onClick={advanceStep}
+                >
+                  {currentStepIdx === steps.length - 1
+                    ? "Continue to sign"
+                    : (currentQuestions.length > 1 && activeQIndex >= 0 && activeQIndex < currentQuestions.length - 1)
+                      ? "Next check"
+                      : "Continue"}
+                </button>
+              </footer>
+            </>
+          ) : (
+            <DashedBrick scope="this module" message="No sections found in this document." />
+          )}
+        </article>
       </div>
     </div>
+  );
+}
+
+// ─── Rail item helpers (kept out of the main render for clarity) ──
+function renderRailItem(step, i, currentStepIdx, sectionsSeen, goToStep, closeMobile) {
+  const done = sectionsSeen.has(step.key) && i < currentStepIdx;
+  const now = i === currentStepIdx;
+  const locked = i > currentStepIdx && !sectionsSeen.has(step.key);
+  const clickable = !locked;
+  const cls = "opd-focus-rail-step"
+    + (done ? " opd-focus-rail-step--done" : "")
+    + (now ? " opd-focus-rail-step--now" : "")
+    + (locked ? " opd-focus-rail-step--locked" : "");
+  return (
+    <li
+      key={step.key + i}
+      className={cls}
+      aria-current={now ? "step" : undefined}
+    >
+      <button
+        type="button"
+        disabled={!clickable}
+        onClick={() => { if (clickable) { goToStep(i); if (closeMobile) closeMobile(); } }}
+        className="opd-focus-rail-step-btn"
+      >
+        <span className="opd-focus-rail-step-num" aria-hidden="true">
+          {done ? "✓" : i + 1}
+        </span>
+        <span className="opd-focus-rail-step-tx">
+          <b>{step.anchor}</b>
+          <span className="opd-focus-rail-step-meta">
+            <span>{step.estMinutes} min</span>
+            {step.questionIds?.length ? (
+              <span className="opd-focus-rail-step-chk">
+                &middot; {step.questionIds.length} check{step.questionIds.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function renderSignRailItem(stepsCount, isSignStep, closeMobile, goToStep) {
+  const now = isSignStep;
+  return (
+    <li
+      key="sign"
+      className={"opd-focus-rail-step opd-focus-rail-step--sign" + (now ? " opd-focus-rail-step--now" : " opd-focus-rail-step--locked")}
+      aria-current={now ? "step" : undefined}
+    >
+      <button
+        type="button"
+        disabled={!now}
+        onClick={() => { if (now) { goToStep(stepsCount); if (closeMobile) closeMobile(); } }}
+        className="opd-focus-rail-step-btn"
+      >
+        <span className="opd-focus-rail-step-num" aria-hidden="true">&#9998;</span>
+        <span className="opd-focus-rail-step-tx">
+          <b>Sign</b>
+          <span className="opd-focus-rail-step-meta"><span>1 min</span></span>
+        </span>
+      </button>
+    </li>
   );
 }

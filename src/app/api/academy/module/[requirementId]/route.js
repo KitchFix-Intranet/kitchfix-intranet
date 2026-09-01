@@ -74,6 +74,116 @@ function shuffle(arr) {
   return a;
 }
 
+// ─── Step boundary computation ─────────────────────────────────────
+// Spec 18.5 (amended 2026-09-01 by the module-stepper PR): a step is
+// a heading whose content reads in roughly three minutes or less.
+// Where a section exceeds that, the step boundary descends a heading
+// level.
+//
+// Reading rate: 200 wpm. 3 min * 200 wpm = 600 words. Configurable
+// via WORDS_PER_STEP below.
+const WORDS_PER_STEP = 600;
+const HEADING_RE = /<h([1-3])[^>]*>([^<]+)<\/h\1>/gi;
+
+function decodeEntities(s) {
+  return String(s || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function slugAnchor(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/&amp;/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function countWords(html) {
+  // Strip tags, collapse whitespace, count non-empty tokens.
+  const text = String(html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return 0;
+  return text.split(" ").filter(Boolean).length;
+}
+
+// Parse the doc HTML into a flat list of headings + a nested tree.
+// Each node: { level, text, start, end, chunkHtml, wordCount, children }.
+function parseHeadingTree(html) {
+  if (!html) return [];
+  const flat = [];
+  let m;
+  const re = new RegExp(HEADING_RE.source, "gi");
+  while ((m = re.exec(html)) !== null) {
+    flat.push({ level: Number(m[1]), text: decodeEntities(m[2]).trim(), start: m.index });
+  }
+  if (flat.length === 0) return [];
+  // Compute end + chunk per heading (end = next heading of same OR
+  // higher level, or EOF).
+  for (let i = 0; i < flat.length; i += 1) {
+    const cur = flat[i];
+    let end = html.length;
+    for (let j = i + 1; j < flat.length; j += 1) {
+      if (flat[j].level <= cur.level) { end = flat[j].start; break; }
+    }
+    cur.end = end;
+    cur.chunkHtml = html.slice(cur.start, cur.end);
+    cur.wordCount = countWords(cur.chunkHtml);
+  }
+  // Build the tree: attach each heading to the last heading of a
+  // shallower level.
+  const roots = [];
+  const stack = [];
+  for (const node of flat) {
+    node.children = [];
+    while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop();
+    if (stack.length === 0) roots.push(node);
+    else stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+// Given a heading tree + an optional source_section filter, emit the
+// step list. Descends a level whenever a node's total word count
+// exceeds WORDS_PER_STEP.
+function computeSteps(tree, sourceSectionList) {
+  const inScope = (node) => {
+    if (!sourceSectionList || sourceSectionList.length === 0) return true;
+    return sourceSectionList.some(
+      (s) => s.trim().toLowerCase() === node.text.trim().toLowerCase()
+    );
+  };
+  const out = [];
+  const emit = (node, forceLevel) => {
+    const isBig = node.wordCount > WORDS_PER_STEP && node.children.length > 0;
+    if (isBig) {
+      for (const child of node.children) emit(child, node.level + 1);
+      return;
+    }
+    out.push({
+      key: slugAnchor(node.text),
+      anchor: node.text,
+      level: node.level,
+      html: node.chunkHtml,
+      wordCount: node.wordCount,
+    });
+  };
+  // Two modes:
+  //   (1) source_section filter present: walk the tree, emit any
+  //       ROOT node whose text is in the list. If it is big, descend.
+  //   (2) No filter: emit every top-level (root) node, descending as
+  //       needed.
+  for (const root of tree) {
+    if (!inScope(root)) continue;
+    emit(root, root.level);
+  }
+  return out;
+}
+
 export async function GET(request, ctx) {
   const testModeBypass =
     process.env.TEST_MODE === "true" && process.env.VERCEL !== "1";
@@ -260,6 +370,61 @@ export async function GET(request, ctx) {
     questions.length === 0 ||
     questions.every((q) => correctByQuestion.has(q.question_id));
 
+  // Compute step boundaries. `steps` is what the client renders one
+  // at a time (spec 18.5, amended by the module-stepper PR). Each
+  // step carries its HTML chunk, wordCount, and the ordered list of
+  // approved-question ids scoped to its anchor.
+  const sourceSectionList = ob?.source_section
+    ? String(ob.source_section).split(/;\s*/).map((s) => s.trim()).filter(Boolean)
+    : null;
+  const headingTree = parseHeadingTree(content?.html || "");
+  const rawSteps = computeSteps(headingTree, sourceSectionList);
+  // Attach questions to steps by anchor match. A question whose
+  // section_anchor does not match any step is a data drift
+  // (rare; surfaces here as an orphaned question). Return the
+  // unmatched ids in a `steps_orphan_questions` field so the client
+  // can render them at the end as a safety net rather than dropping
+  // them silently.
+  const anchorIndex = new Map();
+  rawSteps.forEach((s, i) => anchorIndex.set(s.anchor.toLowerCase(), i));
+  const stepQuestions = rawSteps.map(() => []);
+  const orphanQuestionIds = [];
+  for (const q of questions) {
+    const key = String(q.section_anchor || "").trim().toLowerCase();
+    const idx = anchorIndex.get(key);
+    if (idx == null) {
+      orphanQuestionIds.push(q.question_id);
+    } else {
+      stepQuestions[idx].push(q.question_id);
+    }
+  }
+  const steps = rawSteps.map((s, i) => ({
+    key: s.key,
+    anchor: s.anchor,
+    level: s.level,
+    html: s.html,
+    wordCount: s.wordCount,
+    questionIds: stepQuestions[i],
+    // Estimated minutes: word count at 200 wpm, rounded up to at
+    // least 1. UI uses this to display "About N min" on the step
+    // rail alongside the check count.
+    estMinutes: Math.max(1, Math.ceil(s.wordCount / 200)),
+  }));
+
+  // Resume-at-furthest step. `sections_seen` on progress is the
+  // authoritative record of which step keys the operator has moved
+  // past. Client uses this to mount at the correct step.
+  const seenKeys = new Set(
+    Array.isArray(progressRow?.sections_seen) ? progressRow.sections_seen : []
+  );
+  // "furthest" = index of the first step whose key is NOT in
+  // seenKeys, OR the sign step (steps.length) if all seen.
+  let furthestStepIndex = 0;
+  for (let i = 0; i < steps.length; i += 1) {
+    if (seenKeys.has(steps[i].key)) furthestStepIndex = i + 1;
+    else break;
+  }
+
   // Sanitize + shuffle questions for the wire. options is shuffled
   // per REQUEST; id preserved. correct_option_id was never selected.
   const wireQuestions = questions.map((q) => ({
@@ -331,6 +496,8 @@ export async function GET(request, ctx) {
         }
       : null,
     questions: wireQuestions,
+    steps,
+    steps_orphan_questions: orphanQuestionIds,
     progress: {
       attempts_by_question: attemptsByQuestion,
       all_correct_ids: [...correctByQuestion],
@@ -338,6 +505,8 @@ export async function GET(request, ctx) {
       started_at: progressRow?.started_at || new Date().toISOString(),
       last_seen_at: progressRow?.last_seen_at || null,
       time_spent_seconds: progressRow?.time_spent_seconds ?? 0,
+      sections_seen: Array.isArray(progressRow?.sections_seen) ? progressRow.sections_seen : [],
+      furthest_step_index: furthestStepIndex,
     },
     attestation: attestation
       ? {

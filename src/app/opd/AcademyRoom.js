@@ -320,8 +320,8 @@ function QueueCard({ queue, loading, onOpen }) {
           />
           <div className="opd-queue-body">
             <div className="opd-queue-kick">
-              {(r.doc_class || "Document")} &middot; {r.doc_id}
-              {r.cadence ? ` · ${r.cadence}` : ""}
+              {r.doc_id}
+              {r.total_parts > 1 ? ` · part ${r.part_number} of ${r.total_parts}` : ""}
             </div>
             <div className="opd-queue-title-line">{r.doc_title}</div>
             {(() => {
