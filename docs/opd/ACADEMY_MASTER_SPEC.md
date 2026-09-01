@@ -645,14 +645,27 @@ One row per requirement, ordered by due date then by estimated minutes ascending
 
 The document opens **inside the shell** as a Focus view with a breadcrumb. Never a modal, never a drawer.
 
-**The session thread** is a persistent strip above the document: "Module 1 of 8", a progress bar, and "84 min left in September". It is the thread through the set rather than the item.
+**A module is one card.** Header, step rail, and reading column are regions of a single bordered surface divided by hairlines, not separate cards on a background. The reading column is centred within its own space so the measure reads as a deliberate column rather than a narrow card in a wide box. Do not widen the text; centre the column. Same logic as the approved shell where the navy bar is the lid of one surface, applied one level down.
 
-**The rail carries, in this order:**
-1. **Estimated time remaining, as the largest number on the screen.** It decreases as sections complete. "How much more of this" is the question people actually have.
-2. The three steps in plain language: read, one quick check, sign.
-3. A card stating: **your place is saved, nothing is submitted until you sign.**
+**The header band** carries the doc chip, title, "part N of M" when the doc has multiple obligations, and **minutes remaining right-aligned as the largest number on the screen**. It decreases as sections complete. "How much more of this" is the question people actually have.
+
+**A 3px progress rule** runs edge to edge directly under the header, so it belongs to the module rather than sitting near it.
+
+**The reading pane is capped, not fixed.** Content shorter than the cap sits at its natural height with no scrollbar. Content longer caps at the smaller of 620px or `100vh - 360px`, and scrolls, with a fade at the edge as the only signal (no "keep reading" text cue - text clipped mid-line under a gradient is the signal). Below 900px the cap is removed and the page scrolls naturally; nested scroll on a phone is worse. The pane is `tabindex="0"` and carries an `aria-label` so it is reachable and announced by screen readers.
+
+**The rail carries**, in order:
+1. "In this module" header with a count ("3 of 8" done).
+2. Every section as a row with title, minutes, and check count. A merged step shows a `+N` chip signalling additional sections folded into it.
+3. A final **Sign** step.
+4. A footer card stating: **your place is saved, nothing is submitted until you sign.**
 
 That last card is not decoration. It is the permission to leave, and it is what makes a twelve-minute document openable on a phone between services.
+
+**A passed check persists across navigation.** Returning to a completed section shows it as answered, with the option locked and the explanation visible, not rebuilt empty. Within-session Back preserves the exact option the person picked; a cross-session revisit shows a compact "passed" summary (the option identity isn't tracked server-side by design).
+
+**Motion is a system, not a decoration.** One easing curve and three durations tune everything - step content slides in on change, the rail bubble pops when a section completes, the progress bar eases, buttons depress on `:active`, options transition border and shadow only. `transition: all` is banned; every transition names its properties, and `width`, `height`, `max-height`, `top`, `left`, `margin`, and `padding` are never transitioned. `prefers-reduced-motion: reduce` collapses every animation and transition to near-zero - not optional on a compliance surface.
+
+**After answering a check, the pane scrolls just enough to bring the feedback above the fold.** Not a jump to top - the minimum scroll that reveals it, smooth. Applies to both correct and incorrect.
 
 ---
 
