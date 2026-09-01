@@ -320,8 +320,6 @@ When a design choice could be reinforced by Slack notification quality, call it 
 <!-- GENERATED:reference START - do not edit by hand, run scripts/gen_design_docs.mjs -->
 > Generated from the module stylesheets. Run `node scripts/gen_design_docs.mjs` to refresh. Prose outside this marker is hand-maintained.
 
-Generated: 2026-09-01T16:44:45.733Z
-
 ### Namespaced token sets (per-module identity)
 
 **`--sc2-*`** (188 declarations)

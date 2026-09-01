@@ -319,10 +319,13 @@ function main() {
   const { resolved } = buildResolvedMap(allDecls);
 
   // ─── DESIGN_TOKENS.md ───
+  //
+  // NO wall-clock timestamp in the emitted body. The generator runs
+  // on every stylesheet change under CI (--check); a timestamp would
+  // make `--check` fail on clean state because the timestamp always
+  // changes. The commit SHA that produced this file lives in git.
   const tokensBody = [
     "> Generated from `src/app/tokens.css` (+ `src/app/kpi/kpi.css`, `src/app/opd/opd.css` where namespaced). Run `node scripts/gen_design_docs.mjs` to refresh. Prose outside this marker is hand-maintained.",
-    "",
-    `Generated: ${new Date().toISOString()}`,
     "",
     "### Color ramps",
     "",
@@ -353,8 +356,6 @@ function main() {
   // ─── DESIGN_SYSTEM_REFERENCE.md ───
   const refBody = [
     "> Generated from the module stylesheets. Run `node scripts/gen_design_docs.mjs` to refresh. Prose outside this marker is hand-maintained.",
-    "",
-    `Generated: ${new Date().toISOString()}`,
     "",
     "### Namespaced token sets (per-module identity)",
     "",

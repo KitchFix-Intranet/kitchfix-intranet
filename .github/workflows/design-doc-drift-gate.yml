@@ -1,0 +1,88 @@
+name: Design doc drift gate
+
+# 2026-09-01 (Kevin ruling post-#939 merge). PR #939 shipped the
+# generator + drift probe; without CI wiring the docs drift the
+# first time someone edits a stylesheet and the generator becomes
+# a thing people forget to run. Mirrors the kpi-css-gate pattern.
+#
+# Two gates:
+#   1. gen-check   fails if the GENERATED blocks in
+#                  docs/DESIGN_TOKENS.md or docs/DESIGN_SYSTEM_REFERENCE.md
+#                  differ from what scripts/gen_design_docs.mjs would
+#                  emit against the current stylesheets. Forces the
+#                  author to run the generator before merging.
+#   2. drift-probe fails if any value asserted inside a GENERATED
+#                  block does not match the code truth. This is the
+#                  fail-build gate for the generated docs (per Kevin's
+#                  ruling in PR #939 - don't fail-build on the whole
+#                  repo; that turns everything red on first run and
+#                  gets ignored).
+#
+# Both are pure static reads - no browser, no dev server, no secrets.
+
+on:
+  pull_request:
+    paths:
+      - "src/app/tokens.css"
+      - "src/app/globals.css"
+      - "src/app/kpi/kpi.css"
+      - "src/app/opd/opd.css"
+      - "docs/**.md"
+      - "scripts/gen_design_docs.mjs"
+      - "scripts/probes/_probe_doc_drift.mjs"
+      - ".github/workflows/design-doc-drift-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/app/tokens.css"
+      - "src/app/globals.css"
+      - "src/app/kpi/kpi.css"
+      - "src/app/opd/opd.css"
+      - "docs/**.md"
+      - "scripts/gen_design_docs.mjs"
+      - "scripts/probes/_probe_doc_drift.mjs"
+
+jobs:
+  gen-check:
+    name: Generated blocks match code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generator check (fails if GENERATED blocks are stale)
+        run: npm run audit:design-docs-gen
+
+  drift-probe:
+    name: Doc drift probe (seeded failure both directions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Doc drift probe
+        run: npm run audit:doc-drift
+      - name: Seeded failure (wrong value must FAIL, annotated must ACCEPT)
+        env:
+          SEEDED_FAILURE: "1"
+        # The probe returns non-zero when generated docs carry drift.
+        # Under SEEDED_FAILURE=1 it still applies the same exit
+        # convention (based on real drift, not the seed rows which are
+        # written+deleted inside the run). If gen-check already passed
+        # AND main-run passed, this run's exit code is dominated by
+        # whether the seeded assertions themselves logged PASS - we
+        # grep the output as belt-and-suspenders.
+        run: |
+          set +e
+          out=$(npm run audit:doc-drift 2>&1)
+          echo "$out"
+          if ! echo "$out" | grep -q "PASS  seed wrong -> FAIL"; then
+            echo "::error::seeded-failure regression: 'wrong -> FAIL' did not fire"
+            exit 1
+          fi
+          if ! echo "$out" | grep -q "PASS  seed ok -> ACCEPT"; then
+            echo "::error::seeded-failure regression: 'ok -> ACCEPT' did not fire"
+            exit 1
+          fi
