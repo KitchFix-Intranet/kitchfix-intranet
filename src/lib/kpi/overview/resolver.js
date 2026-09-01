@@ -48,8 +48,11 @@ import {
   paginateWeekly as paginatePurchasingWeekly,
   loadPending as loadPurchasingPending,
   loadPurchasingBudgets,
+  loadFreshness as loadPurchasingFreshness,
   fetchMembers,
 } from "@/lib/purchasing/loaders.js";
+
+import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 
 // Overview owned modules.
 import {
@@ -72,6 +75,7 @@ import { computeTicker } from "./ticker.js";
 import {
   formatMoneyWhole,
   formatPct,
+  formatDayLabel,
   pctOf,
   gapDollarsCost,
   gapDollarsRevenue,
@@ -169,6 +173,93 @@ async function resolveMembers(supa, account) {
   return { data: [account] };
 }
 
+// P2-1 (2026-09-01): the folio rail on the Overview corporate posture
+// needs the same live directory shape labor + purchasing ship
+// (accounts.name / city / state). Prior to this fix the Overview
+// passed STATIC_DIRECTORY from lib/accounts.js, which reserves the
+// desc-line slot but carries null team_name / city / state on 8 of
+// 11 accounts. folioMemberDescription returned `line: null` for
+// those 8 rows, so the FolioRail rendered the placeholder single
+// space (" ") for 8/11 accounts instead of "St Louis Cardinals ·
+// Jupiter, FL". Kevin's DOM audit named this class as a "payload
+// gap, not styling."
+//
+// Mirrors the private helper in src/app/api/kpi/labor/route.js
+// (fetchAccountsDirectory). Duplication is intentional - the labor
+// route helper is not exported and lifting it into a shared module
+// would touch the labor route (off-limits for this PR). Query is
+// small (15 lines, one SELECT), self-contained, and the CORP filter
+// / D17 exclusion are inherited from the labor version.
+async function fetchAccountsDirectoryOv(supa) {
+  const q = await supa.from("accounts")
+    .select("team_key, region, name, city, state, timezone")
+    .neq("team_key", "CORP")
+    .order("team_key");
+  if (q.error) return { error: q.error };
+  const salaried = new Set(["CIN - KY", "TBJ - NY"]);
+  return {
+    data: (q.data || []).map(r => ({
+      team_key: r.team_key,
+      region: r.region,
+      team_name: r.name || null,
+      city: r.city || null,
+      state: r.state || null,
+      timezone: r.timezone || null,
+      salaried: salaried.has(r.team_key),
+    })),
+  };
+}
+
+// P2-1 (2026-09-01): mirrors labor route's rdoDisplayName. Turns a
+// REGIONAL_DIRECTORS email ("first.lastname@kitchfix.com") into the
+// folio display format "F. Lastname". Returns null when the email
+// cannot be parsed - the folio suppresses the "RDO ..." subline.
+function ovRdoDisplayName(email) {
+  if (!email) return null;
+  const local = String(email).split("@")[0] || "";
+  const parts = local.split(".");
+  if (parts.length < 2) return null;
+  const first = parts[0];
+  const last = parts.slice(1).join(" ");
+  if (!first || !last) return null;
+  return `${first.charAt(0).toUpperCase()}. ${last.charAt(0).toUpperCase() + last.slice(1)}`;
+}
+
+const FY_START_ISO = "2025-12-29";
+
+// P2-3 / P2-5 (2026-09-01): normalize an `explicit` (start, end) that
+// matches a known preset window to that preset's canonical kind so
+// downstream consumers (range chip label, revenue card full-year
+// vs full-period budget label) hit the right branch. Same class as
+// R14's `?preset=` silent-ignore: the client sends explicit dates
+// but the server had no way to recover the preset identity, so the
+// range chip read "Custom 12/29/25 - 08/31/26" instead of "FYTD"
+// and the revenue card read "period budget" ($1,400,799 for CIN - AZ,
+// = sum of P1-P9) instead of "annual budget" ($1,572,700).
+//
+// Two preset windows are recognized:
+//   - FYTD:  start === FY_START_ISO && end === today
+//   - Period N: (start, end) === (periodStartISO(N), periodEndISO(N))
+//
+// A single-period explicit range folds to { kind: 'period', period_no }.
+// FY start..today folds to { kind: 'fytd' }. Everything else stays
+// explicit. Range PR-2 retired last_4wk / last_13wk as presets on
+// the picker; those windows do not fold and correctly read as
+// "Custom" on the chip.
+function normalizeExplicitToPreset({ start, end, today }) {
+  if (start === FY_START_ISO && end === today) {
+    return { kind: "fytd", period_no: null };
+  }
+  for (let p = 1; p <= 13; p += 1) {
+    const ps = periodStartISO(p);
+    const pe = periodEndISO(p);
+    if (ps && pe && start === ps && end === pe) {
+      return { kind: "period", period_no: p };
+    }
+  }
+  return null;
+}
+
 // Range resolution. `range` inputs:
 //   - { kind: 'fytd' }
 //   - { kind: 'period', period_no: N }
@@ -176,7 +267,7 @@ async function resolveMembers(supa, account) {
 function resolveRange({ range, today }) {
   if (!range || range.kind === "fytd") {
     return {
-      start: "2025-12-29",
+      start: FY_START_ISO,
       end: today,
       kind: "fytd",
       period_no: null,
@@ -196,6 +287,19 @@ function resolveRange({ range, today }) {
     };
   }
   if (range.kind === "explicit") {
+    const folded = normalizeExplicitToPreset({
+      start: range.start,
+      end: range.end,
+      today,
+    });
+    if (folded) {
+      return {
+        start: range.start,
+        end: range.end,
+        kind: folded.kind,
+        period_no: folded.period_no,
+      };
+    }
     return {
       start: range.start,
       end: range.end,
@@ -473,12 +577,20 @@ export async function resolveOverview({
     // (buildBoard) below.
     load3100_2Budgets(supa, members),
     loadSalaryActuals(supa, members, rng.start, rng.end),
+    // P2-1 (2026-09-01): live accounts_directory for the folio rail.
+    // Global read (independent of members). Cheap - one SELECT.
+    fetchAccountsDirectoryOv(supa),
+    // P2-4b / P2-4d (2026-09-01): purchasing freshness for cards_
+    // through (last CLOSED card date) + last_derive_at (drives the
+    // Overview's command-bar freshness chip via last_walk_at echo).
+    loadPurchasingFreshness(supa),
   ]));
   const [
     periodStatusResp, accountFlagsResp, overviewBudgetsResp, pnlResp,
     scResp, laborActualsResp, memberBudgetResults,
     purchWeeklyResp, purchActualsResp, purchPendingResp, purchBudgetsResp,
     salaryBudgetsResp, salaryActualsResp,
+    dirResp, purchFreshness,
   ] = layer1;
 
   const errs = [];
@@ -497,6 +609,10 @@ export async function resolveOverview({
   if (purchBudgetsResp.error) errs.push({ scope: "kpi_budgets_purchasing", error: purchBudgetsResp.error });
   if (salaryBudgetsResp.error) errs.push({ scope: "kpi_budgets_3100_2", error: salaryBudgetsResp.error });
   if (salaryActualsResp.error) errs.push({ scope: "labor_salary_actuals", error: salaryActualsResp.error });
+  if (dirResp?.error) errs.push({ scope: "accounts_directory", error: dirResp.error });
+  // purchFreshness never returns an `error` field per its loader
+  // shape (loadFreshness returns the freshness object directly),
+  // so no err check here.
   if (errs.length > 0) {
     return { error: errs[0].error, scope: errs[0].scope, all_errors: errs };
   }
@@ -1224,19 +1340,72 @@ export async function resolveOverview({
   };
 
   // 19. Sources line. Data-through dates for each source.
+  //
+  // P2-4a / P2-4b / P2-4c (2026-09-01): three-way rewrite.
+  //   (a) Raw ISO dates -> formatDayLabel ("Sun 08/30") per the
+  //       render of record (docs/renders/overview-prototype.html:382).
+  //   (b) Never assert data through a day that has not closed. Each
+  //       source ships the max CLOSED day it actually has:
+  //         - labor:     max labor board week_end where state==='closed'
+  //         - purchases: purchFreshness.cards_through (last CLOSED
+  //                      card txn_date from rippling_spend - one-week
+  //                      lag is baked in)
+  //         - sc:        max sc_daily_revenue.service_date seen for
+  //                      any member in range
+  //       Prior implementation echoed `today` which claimed data
+  //       through an incomplete day (Kevin's live measurement:
+  //       "Labor through 2026-08-31 [today] while cards_through is
+  //       08/30").
+  //   (c) SC revenue always renders as a third source line - not
+  //       gated on effRevSource==='sc' + scLiveAny. Per render of
+  //       record the sources line advertises three sources
+  //       regardless of the revenue-source toggle; the toggle
+  //       controls which SOURCE feeds the open-period revenue
+  //       NUMBERS, not whether the SC through-date is disclosed.
+  //       When no SC data landed at all in range (empty scByAcct),
+  //       the line renders "not yet reporting" so it never asserts
+  //       a date it doesn't have.
+  const laborLastClosed = (() => {
+    const weeks = laborBoard?.weeks || [];
+    let max = null;
+    for (const w of weeks) {
+      if (w.state !== "closed") continue;
+      if (max == null || w.week_end > max) max = w.week_end;
+    }
+    return max;
+  })();
+  const scMaxDate = (() => {
+    let max = null;
+    for (const [, byDate] of scByAcct) {
+      for (const [day] of byDate) {
+        if (max == null || day > max) max = day;
+      }
+    }
+    return max;
+  })();
+  const cardsThrough = purchFreshness?.cards_through || null;
+
+  const labelWithThrough = (base, iso, fallback) => {
+    const day = iso ? formatDayLabel(iso) : null;
+    return day ? `${base} ${day}` : (fallback || `${base} (not yet reporting)`);
+  };
   const sourcesLine = {
     labor: {
-      through_date: today,  // placeholder - labor route has more precise; Overview echoes today
-      label: `Labor through ${today}`,
+      through_date: laborLastClosed,
+      label: labelWithThrough("Labor through", laborLastClosed, "Labor not yet reporting"),
     },
     purchases: {
-      through_date: today,
-      label: `Purchases through ${today}`,
+      through_date: cardsThrough,
+      label: labelWithThrough("Purchases through", cardsThrough, "Purchases not yet reporting"),
     },
-    sc_revenue: (effRevSource === "sc" && scLiveAny) ? {
-      through_date: today,
-      label: `Revenue from Service Calendar through ${today}`,
-    } : null,
+    sc_revenue: {
+      through_date: scMaxDate,
+      label: labelWithThrough(
+        "Revenue from Service Calendar through",
+        scMaxDate,
+        "Service Calendar revenue not yet reporting",
+      ),
+    },
     period_state: displayPeriodState,
     period_state_display: (() => {
       switch (displayPeriodState) {
@@ -1253,13 +1422,37 @@ export async function resolveOverview({
     })(),
   };
 
-  // 20. Freshness echo (freshness sub-object mirrors what the labor
-  //     + purchasing routes return; kept minimal here so consumers
-  //     have a single object to read; deeper freshness is out of scope
-  //     for Phase 2).
+  // 20. Freshness echo. cards_through comes from the purchasing
+  //     freshness loader; today is the request date. `last_walk_at`
+  //     drives the Shell's command-bar freshness chip (green / amber
+  //     / red per hoursSinceISO(last_walk_at)).
+  //
+  //     P2-4d (2026-09-01): fix the false red chip. The Overview
+  //     composes labor + purchasing + SC. Prior implementation
+  //     passed `freshness={ last_walk_at: null }` on the client
+  //     side, which the Shell's FreshnessChip renders as red
+  //     "No recent walk". That is wrong for the Overview: the
+  //     signal that drives the red on the labor board is the
+  //     Rippling walk age (a labor-pipeline-specific concept),
+  //     but the Overview's aggregated view has no single "walk"
+  //     - it has three source pipes. On the same account,
+  //     purchasing was reading "Data current" while Overview
+  //     was reading red "No recent walk".
+  //     Kevin's ruling: a false red alarm is worse than no chip.
+  //     Fix: emit last_walk_at as the max(labor last derive,
+  //     purchasing last derive). The client passes this into
+  //     Shell's `freshness` prop and the chip reflects the
+  //     underlying data-pipe age. When both pipes are fresh
+  //     (< 30h old per freshnessTint) the chip renders "Data
+  //     current" - matching what purchasing shows on the same
+  //     account.
+  const laborDeriveAt = null;  // labor board doesn't ship this on library-call output
+  const purchDeriveAt = purchFreshness?.last_derive_at || null;
+  const composedWalkAt = purchDeriveAt || laborDeriveAt;
   const freshness = {
     today,
-    cards_through: today,
+    cards_through: cardsThrough || today,
+    last_walk_at: composedWalkAt,
   };
 
   // 21. Payload assembly.
@@ -1296,6 +1489,17 @@ export async function resolveOverview({
     sources: sourcesLine,
     flags,
     freshness,
+    // P2-1 (2026-09-01): live accounts_directory + rdo display so
+    // the folio rail on the corporate posture can render real
+    // descriptions ("St Louis Cardinals · Jupiter, FL") on all 11
+    // rows instead of the placeholder space that STATIC_DIRECTORY
+    // (nulls) resolved to via folioMemberDescription. Mirrors the
+    // labor + purchasing payloads.
+    accounts_directory: dirResp?.data || null,
+    regional_directors_display: {
+      East: ovRdoDisplayName(REGIONAL_DIRECTORS.East),
+      West: ovRdoDisplayName(REGIONAL_DIRECTORS.West),
+    },
     // Preview-mode + landing propagation (mirrors labor route echoes).
     preview_account: null,
     landing_account: null,
