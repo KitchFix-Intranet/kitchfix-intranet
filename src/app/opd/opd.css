@@ -4022,9 +4022,14 @@
   flex-direction: column;
   gap: 12px;
 }
-.opd-scol .opd-card2 { display: flex; flex-direction: column; }
-.opd-scol .opd-rgrid { flex: 1; }
-.opd-card2 {
+.opd-scol .opd-c2 { display: flex; flex-direction: column; }
+.opd-scol .opd-rg { flex: 1; }
+/* Renamed .opd-card2 -> .opd-c2 2026-09-01 (owner ruling): the JSX
+   renders .opd-c2 (matches .opd-c2h + .opd-c2h-k etc.) but the base
+   card rule was still called .opd-card2, so the four secondary cards
+   had no background, border, radius or shadow. Same defect class as
+   the .opd-rgrid mismatch caught in the same review. */
+.opd-c2 {
   background: #fff;
   border: 1px solid var(--opd-n300);
   border-radius: 12px;
@@ -4130,8 +4135,13 @@
 }
 .opd-ynx b { color: var(--opd-navy); font-weight: 700; }
 
-/* Record card - quad grid */
-.opd-rgrid {
+/* Record card - quad grid. Renamed .opd-rgrid -> .opd-rg 2026-09-01
+   (owner ruling): the JSX renders .opd-rg and this rule was
+   .opd-rgrid, so the grid never applied above 960px and the four
+   tiles stacked. Only the mobile stack rule was ever named .opd-rg,
+   which is why the failure mode was the reverse of the usual one -
+   correct on phones, broken on desktops. */
+.opd-rg {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
@@ -4168,7 +4178,9 @@
    sized between the big num and the label so the tile stays visually
    balanced against its siblings but the copy reads as "not measured
    yet" rather than a numeric zero. */
-.opd-rq-firstrun {
+/* Renamed .opd-rq-firstrun -> .opd-rq-fr 2026-09-01 to match the
+   JSX (owner ruling: same defect class as .opd-rgrid + .opd-card2). */
+.opd-rq-fr {
   display: block;
   font-family: var(--font-ui);
   font-size: 15px;
@@ -4365,7 +4377,9 @@
     border-right: none;
     border-bottom: 1px solid var(--opd-n200);
   }
-  .opd-rgrid { grid-template-columns: 1fr; }
+  /* .opd-rgrid mobile stack rule deleted 2026-09-01 - the class was
+     renamed to .opd-rg everywhere; the equivalent .opd-rg rule lives
+     in the room composition block below. */
   .opd-phead { flex-wrap: wrap; }
   .opd-cta { margin-left: 0; margin-top: 10px; }
   .opd-set { margin: 10px 12px; }
