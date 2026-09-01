@@ -347,10 +347,14 @@ export async function GET() {
     const currentCycle = activeCycles[0] || null;
 
     // People + exclusions + accounts for scope.
-    const [peopleQ, excQ, acctsQ, cycleReqsQ] = await Promise.all([
+    // display_name added for the Company Standing expand rows (spec
+    // 18.2 amended by the room-composition PR). Peer visibility rule
+    // is enforced client-side: salaried people render named; hourly
+    // people not in the cycle's audience aggregate to a single row.
+    const [peopleQ, excQ, acctsQ, cycleReqsQ, cycleAttQ] = await Promise.all([
       supa
         .from("people")
-        .select("worker_id, is_salaried, account_key")
+        .select("worker_id, display_name, is_salaried, account_key")
         .is("end_date", null)
         .in("account_key", identity.scope.accounts || []),
       supa
@@ -366,6 +370,11 @@ export async function GET() {
             .from("academy_requirements")
             .select("worker_id, cycle_id")
             .eq("cycle_id", currentCycle.cycle_id)
+        : Promise.resolve({ data: [], error: null }),
+      currentCycle
+        ? supa
+            .from("academy_attestations")
+            .select("worker_id, requirement_id")
         : Promise.resolve({ data: [], error: null }),
     ]);
     if (peopleQ.error) {
@@ -384,14 +393,21 @@ export async function GET() {
       console.error("[api/academy/room] cycle reqs:", cycleReqsQ.error.message);
       return NextResponse.json({ error: "server_error", scope: "scope_cyclereqs" }, { status: 500 });
     }
+    if (cycleAttQ.error) {
+      console.error("[api/academy/room] cycle attestations:", cycleAttQ.error.message);
+      return NextResponse.json({ error: "server_error", scope: "scope_cycleatt" }, { status: 500 });
+    }
 
     const excludedIds = new Set((excQ.data || []).map((r) => r.worker_id));
     const enrolledWorkerIds = new Set((cycleReqsQ.data || []).map((r) => r.worker_id));
+    const signedWorkerIds = new Set((cycleAttQ.data || []).map((r) => r.worker_id));
 
     // Per-account rollup: for each account in scope, count eligibility
     // and enrollment. Every account renders - even ones with zero
     // enrolled - because a not-enrolled state is a real fact, not an
-    // absent one.
+    // absent one. Also builds a per-account people[] for the Company
+    // Standing expand rows (spec 3.4 peer visibility: salaried named,
+    // hourly-not-in-audience aggregated).
     const perAccount = new Map();
     for (const a of acctsQ.data || []) {
       perAccount.set(a.team_key, {
@@ -399,6 +415,8 @@ export async function GET() {
         region: a.region || null,
         eligible: 0,
         enrolled: 0,
+        people: [],
+        aggregateHourly: 0,
       });
     }
     for (const p of peopleQ.data || []) {
@@ -406,7 +424,26 @@ export async function GET() {
       if (!row) continue; // person on an account not in scope (defensive)
       if (excludedIds.has(p.worker_id)) continue;
       row.eligible += 1;
-      if (enrolledWorkerIds.has(p.worker_id)) row.enrolled += 1;
+      const isEnrolled = enrolledWorkerIds.has(p.worker_id);
+      const isSigned = signedWorkerIds.has(p.worker_id);
+      if (isEnrolled) row.enrolled += 1;
+      // Spec 3.4 peer visibility. Salaried people render named. Hourly
+      // people IN this cycle's audience (enrolled) render named too.
+      // Hourly people NOT in the audience aggregate to a single row -
+      // never named lists of people who have not done something.
+      if (p.is_salaried || isEnrolled) {
+        row.people.push({
+          worker_id: p.worker_id,
+          display_name: p.display_name || null,
+          is_salaried: !!p.is_salaried,
+          status: isSigned ? "signed" : (isEnrolled ? "in_progress" : "not_enrolled"),
+        });
+      } else {
+        row.aggregateHourly += 1;
+      }
+    }
+    for (const row of perAccount.values()) {
+      row.people.sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""));
     }
 
     const accountsOut = [...perAccount.values()]
@@ -417,6 +454,8 @@ export async function GET() {
         eligible: r.eligible,
         enrolled: r.enrolled,
         notEnrolled: r.eligible - r.enrolled,
+        people: r.people,
+        aggregateHourly: r.aggregateHourly,
         // Standing tier for this account. In the pilot with zero
         // attestations, an account is either enrolled=0 (not-enrolled)
         // or enrolled>0 (in-progress; nothing is signed yet). "Current"
