@@ -85,7 +85,7 @@ import {
   gapPointsMargin,
   directionOfDelta,
 } from "./formatting.js";
-import { resolvePosture, resolveIncludeSalary } from "./posture.js";
+import { resolveAccessFlags, resolveIncludeSalary } from "./accessFlags.js";
 import { composeFlags, isPackagingGapAccount, isSeededAccount } from "./flags.js";
 
 import { periodOf, periodStartISO, periodEndISO, weekStartsInRange } from "@/app/kpi/labor/lib/periods.js";
@@ -527,11 +527,13 @@ export async function resolveOverview({
   }
 
   const isAggregate = accountKey === "ALL" || accountKey === "EAST" || accountKey === "WEST";
-  const posture = resolvePosture({ caller, salaryAvailable: caller?.can_see_salary === true });
+  // R-40: no `posture` variable. Access flags only. Layout is one
+  // thing everywhere; role governs access.
+  const access = resolveAccessFlags({ caller, salaryAvailable: caller?.can_see_salary === true });
 
   // Corp-only rev toggle: if a non-corp caller passes rev_source=sc,
   // silently ignore (mirrors labor's include_salary silent-drop).
-  const effRevSource = posture.revenue_toggle_visible && revSource === "sc" ? "sc" : "planned";
+  const effRevSource = access.revenue_toggle_visible && revSource === "sc" ? "sc" : "planned";
 
   // 2. Layer-1 loaders. Fire in parallel - all read (supa, members)
   //    or (supa) or (supa, members, start, end).
@@ -903,7 +905,11 @@ export async function resolveOverview({
     is_fee_account: isFeeAccount,
     is_pass_through: isPassThrough,
     revenue_is_planned: flags.planned,
-    sc_mode_test_data: effRevSource === "sc" && flags.seeded && posture.posture === "corporate",
+    // R-40: effRevSource === "sc" is only reachable when the caller
+    // has revenue_toggle_visible (access-gated in resolveAccessFlags),
+    // so the prior redundant `posture.posture === "corporate"` check
+    // is dropped. Same set of callers reach this branch as before.
+    sc_mode_test_data: effRevSource === "sc" && flags.seeded,
   });
 
   // 15. Cards (Revenue, COGS, Gross margin). Server-side formatting.
@@ -1200,7 +1206,7 @@ export async function resolveOverview({
   // Absence contract: reported=false on any sub-row we cannot ground
   // in pnl_actuals. The client renders "-" (missing) rather than
   // guessing.
-  if (includeSalary && posture.salary_toggle_visible) {
+  if (includeSalary && access.salary_toggle_visible) {
     const sumSubLineFromPnl = (lineCode) => {
       let amt = 0;
       let anyReported = false;
@@ -1368,11 +1374,15 @@ export async function resolveOverview({
   // No projection ("at this pace margin closes at X%") - that is an
   // identity under linear accrual, not a forecast (R-33). Never
   // shipped from this resolver.
+  // R-40 (2026-09-01): what_is_left gate is SCOPE-based, not role-
+  // based. Everyone at single-account scope on an open period sees
+  // it. Portfolio scope (ALL / EAST / WEST) and closed periods and
+  // FYTD do not - unchanged from before.
   let whatIsLeft = null;
-  const isSitePosture = posture.posture === "site_leader";
+  const isSingleAccountScope = !isAggregate;
   const isSinglePeriodRange = rng.kind === "period";
   const isOpenPeriod = displayPeriodState === "open";
-  if (isSitePosture && isSinglePeriodRange && isOpenPeriod && displayPeriodNo != null) {
+  if (isSingleAccountScope && isSinglePeriodRange && isOpenPeriod && displayPeriodNo != null) {
     // Compute period bounds + elapsed. Days elapsed = calendar days
     // from period start through today (inclusive). Days remaining =
     // period total - elapsed. Clamped so we never advertise negative
@@ -1603,8 +1613,12 @@ export async function resolveOverview({
       period_no: rng.period_no,
       periods_in_range: periods,
     },
-    posture: posture.posture,
-    posture_details: posture,
+    // R-40 (2026-09-01): posture retired as a layout switch. Access
+    // flags only, named for what they do. Consumers that read the
+    // deleted `posture` / `posture_details` fields must migrate to
+    // these two flags + landing_account (below).
+    salary_toggle_visible:  access.salary_toggle_visible,
+    revenue_toggle_visible: access.revenue_toggle_visible,
     period_state: displayPeriodState,
     period_state_details: {
       period_no: displayPeriodNo,
