@@ -73,10 +73,22 @@ for (const vp of VIEWPORTS) {
         await expect(page.locator(".opd-urail")).toBeVisible();
         const overflow = await page.locator(".opd-upane").evaluate((el) => getComputedStyle(el).overflowY);
         expect(overflow).toBe("auto");
-        // Reading column centred at --opd-measure (640px * 1) inside
-        // a wider column. Check .opd-ucw is exactly 640 wide.
-        const cwWidth = await page.locator(".opd-ucw").evaluate((el) => el.getBoundingClientRect().width);
-        expect(Math.round(cwWidth)).toBe(640);
+        // Reading column centred at --opd-measure inside a wider
+        // column. --opd-measure = calc(640px * var(--kf-scale));
+        // the polish PR set --kf-scale to 0.9 so this resolves to
+        // 576px. Compute the expected width from --kf-scale rather
+        // than hardcoding, so future density changes don't break
+        // this assertion.
+        const { cwWidth, expected } = await page.evaluate(() => {
+          const cw = document.querySelector(".opd-ucw");
+          const app = document.querySelector(".opd-app");
+          const scale = parseFloat(getComputedStyle(app).getPropertyValue("--kf-scale")) || 1;
+          return {
+            cwWidth: cw ? Math.round(cw.getBoundingClientRect().width) : 0,
+            expected: Math.round(640 * scale),
+          };
+        });
+        expect(cwWidth).toBe(expected);
       }
 
       // Rail lists steps + Sign. Exactly one aria-current="step".

@@ -173,7 +173,11 @@ export async function GET() {
   // Attestations: viewer's signed record. Used to mark done queue
   // rows + light credentials + fill year segments + gate the
   // percentage (spec 18.1 principle 5: no percentage without history).
-  const [docsQ, obligationsQ, cyclesQ, attestationsQ] = await Promise.all([
+  // viewerAttemptsQ + viewerProgressQ power the "Your record" tiles.
+  // Added 2026-09-01 (owner walk): the tiles were rendering four
+  // zeros, which is technically true but reads as broken since the
+  // data exists in academy_check_attempts + academy_module_progress.
+  const [docsQ, obligationsQ, cyclesQ, attestationsQ, viewerAttemptsQ, viewerProgressQ] = await Promise.all([
     distinctDocIds.length > 0
       ? supa.from("documents").select("id, title, shelf, doc_class, version").in("id", distinctDocIds)
       : Promise.resolve({ data: [], error: null }),
@@ -192,6 +196,14 @@ export async function GET() {
       .select("attestation_id, requirement_id, doc_id, obligation_key, doc_version, signed_at, certificate_serial, supersedes")
       .eq("worker_id", identity.workerId)
       .order("signed_at", { ascending: false }),
+    supa
+      .from("academy_check_attempts")
+      .select("attempt_id, correct")
+      .eq("worker_id", identity.workerId),
+    supa
+      .from("academy_module_progress")
+      .select("requirement_id, time_spent_seconds")
+      .eq("worker_id", identity.workerId),
   ]);
   if (docsQ.error) {
     console.error("[api/academy/room] documents:", docsQ.error.message);
@@ -208,6 +220,14 @@ export async function GET() {
   if (attestationsQ.error) {
     console.error("[api/academy/room] attestations:", attestationsQ.error.message);
     return NextResponse.json({ error: "server_error", scope: "attestations" }, { status: 500 });
+  }
+  if (viewerAttemptsQ.error) {
+    console.error("[api/academy/room] viewer attempts:", viewerAttemptsQ.error.message);
+    return NextResponse.json({ error: "server_error", scope: "viewer_attempts" }, { status: 500 });
+  }
+  if (viewerProgressQ.error) {
+    console.error("[api/academy/room] viewer progress:", viewerProgressQ.error.message);
+    return NextResponse.json({ error: "server_error", scope: "viewer_progress" }, { status: 500 });
   }
 
   const docsById = new Map();
@@ -312,6 +332,55 @@ export async function GET() {
   // 4. Year track - always the current calendar year on the server.
   const today = new Date();
   const yearTrack = buildYearTrack(cycles, today);
+
+  // 4a. Next cycle - first published cycle whose period_start is
+  // in the future. Feeds the rail's "Coming up" section (owner walk
+  // 2026-09-01: it was rendering "Opens when this cycle closes"
+  // which is vague where it should be concrete). When there IS no
+  // future cycle, the client says so plainly.
+  const _todayISO = today.toISOString().slice(0, 10);
+  const nextCycle = (() => {
+    const future = cycles
+      .filter((c) => c.status === "published" && c.period_start > _todayISO)
+      .sort((a, b) => a.period_start.localeCompare(b.period_start));
+    return future[0]
+      ? {
+          cycle_id: future[0].cycle_id,
+          label: future[0].label,
+          period_start: future[0].period_start,
+          period_end: future[0].period_end,
+        }
+      : null;
+  })();
+
+  // 4b. Viewer record - real numbers for the "Your record" tiles
+  // (owner walk 2026-09-01: three of four tiles were 0). All-time
+  // signed count uses the full attestations list from step 3; the
+  // check + minute totals come from the two new viewer queries.
+  const viewerAttempts = viewerAttemptsQ.data || [];
+  const viewerProgress = viewerProgressQ.data || [];
+  const checksPassed = viewerAttempts.filter((a) => a.correct).length;
+  const retries = Math.max(0, viewerAttempts.length - checksPassed);
+  const secondsRead = viewerProgress.reduce(
+    (acc, r) => acc + (r.time_spent_seconds || 0),
+    0
+  );
+  const minutesRead = secondsRead > 0 ? Math.max(1, Math.round(secondsRead / 60)) : 0;
+  // "Cycles closed" is any cycle whose period_end is in the past AND
+  // was published. Zero on a first-run pilot; when zero the client
+  // renders a first-run state for the on-time-cycles tile rather
+  // than a bare "0".
+  const cyclesClosedCount = cycles.filter(
+    (c) => c.status === "published" && c.period_end < _todayISO
+  ).length;
+  const viewerRecord = {
+    signedAllTime: (attestationsQ.data || []).length,
+    minutesReadThisCycle: minutesRead,
+    checksPassed,
+    retries,
+    cyclesClosedCount,
+    firstRun: cyclesClosedCount === 0,
+  };
 
   // 5. Company standing - only for company + region scope. Uses the
   //    resolver's scope.accounts list. For every account in scope we
@@ -525,6 +594,10 @@ export async function GET() {
       workerId: identity.workerId,
       personId: identity.personId,
       displayName: identity.displayName,
+      // roleTitle = people.title (e.g. "Director of Operations"),
+      // added 2026-09-01 for the room rail. Owner walk found the rail
+      // was rendering accountKey ("Corporate") as a job title.
+      roleTitle: identity.roleTitle,
       accountKey: identity.accountKey,
       region: identity.region,
       isSalaried: identity.isSalaried,
@@ -533,10 +606,12 @@ export async function GET() {
       scope: identity.scope,
       grants: identity.grants,
       eligibleInScope: eligibleCounts,
+      record: viewerRecord,
     },
     queue,
     queueSummary,
     yearTrack,
+    nextCycle,
     companyStanding,
   });
 }

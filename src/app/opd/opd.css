@@ -2438,18 +2438,35 @@
    token is redeclared HERE as calc(Npx * var(--kf-scale)) so each
    calc resolves against this module's own scale rather than :root's
    (tokens.css:291-296 explains why :root can't hold module scales).
-   OPD is a READING surface: --kf-scale is 1 by design, not KPI's
-   0.9, which is a data-density surface. */
-.opd-app {
-  --kf-scale: 1;
 
-  /* Type scale */
-  --opd-t-label: calc(10px * var(--kf-scale));
-  --opd-t-meta:  calc(11px * var(--kf-scale));
+   Density is 0.9 (owner walk 2026-09-01). The shell widened to
+   var(--sc2-shell-max) (1520px) matching KPI; same type in a wider
+   container reads oversized. KPI at the same width runs 0.9;
+   OPD now matches.
+
+   ONE exception: --opd-t-read is pinned at an unscaled 15px. Reading
+   text is the module body copy - a legibility floor, not a density
+   choice. At 0.9 it would drop to 13.5px, which is the size the
+   composition PR moved AWAY from. The density dial does not apply
+   to prose. */
+.opd-app {
+  --kf-scale: 0.9;
+
+  /* Type scale.
+     Two families are pinned unscaled - the density dial does not
+     apply to type at or below the readability floor:
+       --opd-t-label (10px) - spec Section 14 type floor; scaling to
+                              9px would fail the floor check
+       --opd-t-meta  (11px) - same reason, would drop to 9.9px
+       --opd-t-read  (15px) - long-form body copy, legibility floor
+                              (see the header comment above)
+     Everything else scales - that's where the density comes from. */
+  --opd-t-label: 10px;
+  --opd-t-meta:  11px;
   --opd-t-ui:    calc(12px * var(--kf-scale));
   --opd-t-ctl:   calc(13px * var(--kf-scale));
   --opd-t-h3:    calc(14px * var(--kf-scale));
-  --opd-t-read:  calc(15px * var(--kf-scale));
+  --opd-t-read:  15px;
   --opd-t-hero:  calc(23px * var(--kf-scale));
   --opd-t-h2:    calc(25px * var(--kf-scale));
 
@@ -2585,7 +2602,7 @@
   color: var(--opd-navy);
   line-height: 1;
 }
-.opd-uhead-rt s {
+.opd-uhead-rt .opd-lb {
   font-size: var(--opd-t-label);
   color: var(--opd-n600);
   font-weight: 700;
@@ -2605,10 +2622,20 @@
   transition: width var(--opd-t-slow) var(--opd-ease);
 }
 
-/* Body: two-col grid, rail hairline-separated from content. */
+/* Body: two-col grid, rail hairline-separated from content.
+   align-items:start is load-bearing (owner walk 2026-09-01). The
+   grid default is stretch, which forced .opd-ucont to match the
+   rail's taller height and pushed the footer down, leaving roughly
+   130px of empty white space between short content (Vision, 91
+   words) and the Continue button. With align:start the content
+   column takes its natural height and the pane sits with the
+   footer directly beneath. Any resulting empty area is BELOW the
+   shorter column within the card border, which reads as a whole
+   card rather than a broken row. */
 .opd-ubody {
   display: grid;
   grid-template-columns: var(--opd-rail-w) minmax(0, 1fr);
+  align-items: start;
 }
 
 /* Rail (left, faintly tinted, right hairline) */
@@ -3115,7 +3142,7 @@
   font-weight: 800;
   color: var(--opd-navy);
 }
-.opd-rc s {
+.opd-rc .opd-lb {
   font-size: var(--opd-t-label);
   color: var(--opd-n600);
   font-weight: 700;
@@ -3184,7 +3211,7 @@
   color: var(--opd-gov);
   font-weight: 750;
 }
-.opd-earn s {
+.opd-earn .opd-lb {
   font-size: var(--opd-t-meta);
   color: var(--opd-n600);
   text-decoration: none;
@@ -3498,7 +3525,7 @@
   display: block;
   line-height: 1.3;
 }
-.opd-sg-tx s {
+.opd-sg-tx .opd-lb {
   font-size: var(--opd-t-label);
   color: var(--opd-n500);
   font-weight: 650;
@@ -3565,7 +3592,7 @@
   font-weight: 750;
   display: block;
 }
-.opd-nextline s {
+.opd-nextline .opd-lb {
   font-size: var(--opd-t-meta);
   color: var(--opd-n600);
   text-decoration: none;
@@ -3677,14 +3704,26 @@
   color: var(--opd-n600);
   margin-top: 2px;
 }
-.opd-setprog {
+/* One right-edge grammar (owner walk 2026-09-01): every multi-part
+   set shows a progress bar; the zero state adds a muted "Not
+   started" label beneath the empty track rather than replacing it.
+   The old .opd-setnone/no-progress-bar variants have been retired -
+   left in the sheet as dead selectors would be a foot-gun the next
+   time someone adds a set state. */
+.opd-setend {
   margin-left: auto;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.opd-setprog {
   width: 66px;
   height: 5px;
   border-radius: 3px;
   background: var(--opd-n200);
   overflow: hidden;
-  flex: none;
 }
 .opd-setprog > i {
   display: block;
@@ -3692,13 +3731,12 @@
   background: var(--opd-grn);
   transition: width var(--opd-t-slow) var(--opd-ease);
 }
-.opd-setnone {
-  margin-left: auto;
+.opd-setend-lbl {
   font-size: var(--opd-t-label);
   font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--opd-n400);
-  flex: none;
+  letter-spacing: 0.04em;
+  color: var(--opd-n500);
+  text-transform: none;
 }
 
 /* Part row */
@@ -3912,7 +3950,7 @@
   text-transform: uppercase;
   color: var(--opd-navy);
 }
-.opd-c2h s {
+.opd-c2h .opd-lb {
   margin-left: auto;
   font-size: var(--opd-t-meta);
   color: var(--opd-n500);
@@ -4018,7 +4056,7 @@
   letter-spacing: -0.02em;
   line-height: 1;
 }
-.opd-rq s {
+.opd-rq .opd-lb {
   font-size: var(--opd-t-label);
   color: var(--opd-n600);
   font-weight: 700;
@@ -4030,6 +4068,19 @@
   font-size: var(--opd-t-meta);
   color: var(--opd-n500);
   margin-top: 3px;
+}
+/* First-run state for a tile whose honest number is not "0". Text
+   sized between the big num and the label so the tile stays visually
+   balanced against its siblings but the copy reads as "not measured
+   yet" rather than a numeric zero. */
+.opd-rq-firstrun {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--opd-navy);
+  letter-spacing: -0.005em;
+  line-height: 1.05;
 }
 .opd-rfoot {
   padding: 12px 18px;
@@ -4188,7 +4239,7 @@
   display: block;
   font-size: var(--opd-t-ui);
 }
-.opd-pp-pn s {
+.opd-pp-pn .opd-lb {
   font-size: var(--opd-t-meta);
   color: var(--opd-n500);
   text-decoration: none;

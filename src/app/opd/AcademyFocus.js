@@ -217,10 +217,10 @@ function SignBlock({
   return (
     <>
       <div className="opd-recap">
-        <div className="opd-rc"><b>{stepsCount}</b><s>SECTIONS</s></div>
-        <div className="opd-rc"><b>{totalQuestionsPassed}</b><s>CHECK{totalQuestionsPassed === 1 ? "" : "S"}</s></div>
+        <div className="opd-rc"><b>{stepsCount}</b><span className="opd-lb">SECTIONS</span></div>
+        <div className="opd-rc"><b>{totalQuestionsPassed}</b><span className="opd-lb">CHECK{totalQuestionsPassed === 1 ? "" : "S"}</span></div>
         {minutes != null ? (
-          <div className="opd-rc"><b>{minutes}</b><s>MINUTE{minutes === 1 ? "" : "S"}</s></div>
+          <div className="opd-rc"><b>{minutes}</b><span className="opd-lb">MINUTE{minutes === 1 ? "" : "S"}</span></div>
         ) : null}
       </div>
       <p className="opd-att">{attestationText}</p>
@@ -238,7 +238,7 @@ function SignBlock({
         <div className="opd-earn-g" aria-hidden="true">&#127942;</div>
         <div>
           <b>You will earn: {doc?.title || doc?.id}</b>
-          <s>Certificate issued on signing.</s>
+          <span className="opd-lb">Certificate issued on signing.</span>
         </div>
       </div>
     </>
@@ -650,7 +650,7 @@ export default function AcademyFocus({
           </div>
           <div className="opd-uhead-rt">
             <b>{minutesLeft}</b>
-            <s>MIN LEFT</s>
+            <span className="opd-lb">MIN LEFT</span>
           </div>
         </header>
 
