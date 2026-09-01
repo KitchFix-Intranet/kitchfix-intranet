@@ -358,6 +358,56 @@ export async function GET(request, ctx) {
   }
   const req = reqQ.data;
 
+  // ── Part-lock gate ────────────────────────────────────────────
+  // Spec 18.4 (composition PR): "Parts are ordered and gated. Part 2
+  // is locked until Part 1 is signed." Enforced BOTH client-side
+  // (display) and server-side (this refuses even if a client submits
+  // the URL directly).
+  //
+  // Ordering mirrors /api/academy/room:246 - siblings are the same
+  // worker's requirements for the same doc_id + cycle, sorted by
+  // obligation_key. This requirement is "locked" when any earlier
+  // sibling in that ordering is unsigned + not waived.
+  {
+    const siblingsQ = await supa
+      .from("academy_requirements")
+      .select("requirement_id, obligation_key, waived_at")
+      .eq("worker_id", identity.workerId)
+      .eq("doc_id", req.doc_id)
+      .eq("cycle_id", req.cycle_id);
+    if (siblingsQ.error) {
+      console.error("[api/academy/module] part-lock siblings:", siblingsQ.error.message);
+      return NextResponse.json({ error: "server_error", scope: "part_lock" }, { status: 500 });
+    }
+    const siblings = (siblingsQ.data || [])
+      .filter((s) => s.waived_at == null)
+      .sort((a, b) => a.obligation_key.localeCompare(b.obligation_key));
+    if (siblings.length > 1) {
+      const partIdx = siblings.findIndex((s) => s.requirement_id === req.requirement_id);
+      if (partIdx > 0) {
+        // Check attestations for the earlier parts.
+        const priorIds = siblings.slice(0, partIdx).map((s) => s.requirement_id);
+        const priorAttQ = await supa
+          .from("academy_attestations")
+          .select("requirement_id")
+          .in("requirement_id", priorIds);
+        if (priorAttQ.error) {
+          console.error("[api/academy/module] part-lock attestations:", priorAttQ.error.message);
+          return NextResponse.json({ error: "server_error", scope: "part_lock" }, { status: 500 });
+        }
+        const signedPrior = new Set((priorAttQ.data || []).map((a) => a.requirement_id));
+        const unsignedPrior = priorIds.filter((id) => !signedPrior.has(id));
+        if (unsignedPrior.length > 0) {
+          return NextResponse.json({
+            error: "part_locked",
+            detail: `Part ${partIdx + 1} is locked until Part ${partIdx} is signed.`,
+            unlocks_after_part: partIdx,
+          }, { status: 409 });
+        }
+      }
+    }
+  }
+
   // Doc, obligation, cycle, content, questions, attempts, existing
   // attestation, progress in parallel. Single round-trip.
   const [docQ, obQ, cycleQ, contentQ, questionsQ, attemptsQ, attestationQ, progressQ] = await Promise.all([

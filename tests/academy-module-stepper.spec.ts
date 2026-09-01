@@ -33,19 +33,17 @@ for (const vp of VIEWPORTS) {
 
       await page.goto("/opd");
       await expect(page.getByRole("tab", { name: /Academy/i })).toHaveAttribute("aria-selected", "true");
-      await page.locator(".opd-queue-row").first().waitFor({ timeout: 10_000 });
+      await page.locator(".opd-prim").waitFor({ timeout: 15_000 });
 
-      // D1 fix (owner ruling from a prior PR): queue kicker shows
-      // "part N of M", never obligation_key or cadence.
-      const partRow = page.locator(".opd-queue-row").filter({ hasText: /part\s+\d+\s+of\s+\d+/i }).first();
-      await expect(partRow).toBeVisible({ timeout: 10_000 });
-      const allRowsText = await page.locator(".opd-queue-row").allTextContents();
-      const joined = allRowsText.join(" ");
-      expect(joined, "cadence must be stripped").not.toMatch(/\b(quarterly|on-hire|monthly|weekly|annual)\b/i);
+      // Post room-composition PR: parts live inside .opd-set blocks
+      // on the primary card. No cadence text anywhere in operator copy.
+      const partRows = page.locator(".opd-prim .opd-pr:not(.opd-pr--lk)");
+      await expect(partRows.first()).toBeVisible({ timeout: 10_000 });
+      const bodyText = await page.locator(".opd-prim").innerText();
+      expect(bodyText, "cadence must be stripped").not.toMatch(/\b(quarterly|on-hire|monthly|weekly|annual)\b/i);
 
-      // Open the first non-signed row.
-      const target = page.locator(".opd-queue-row:not(.opd-queue-row--done)").first();
-      await expect(target).toBeVisible({ timeout: 10_000 });
+      // Open the first non-locked, non-signed part row.
+      const target = partRows.first();
       await target.click();
 
       // Wait for the one-card surface to render.
