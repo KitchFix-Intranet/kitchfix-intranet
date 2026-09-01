@@ -420,6 +420,8 @@ Archive keeps signature history. A signature on an archived version stays valid 
 
 The one question is minor or material. Material expires every prior signature, requires a plain-language change note, and re-opens the document with the changed section emphasized. Minor leaves the record untouched. The UI states the blast radius before the decision ("re-opens 30").
 
+**Pre-signature corrections do not bump the version.** Ruled 2026-09-01. Once anything is signed against a version, corrections bump. Until then, edits are the same version - bumping would create a version nobody ever saw and would leave any already-issued requirement rows pointing at a stale version string. The trigger is the existence of an `academy_attestations` row for the current version, not the passage of time.
+
 ### 12.4 The Sous fence
 
 Sous is frozen at v2.0. The Academy adds **no Sous capability, no gate, no prompt line**.
@@ -574,12 +576,11 @@ Five migrations. The identity foundation split off first, then the RDO region-le
 | 17.2 | Bounce detection: Gmail `history.list` polling or ESP webhook | Polling first, no new vendor | Hourly portal |
 | 17.3 | Overdue consequence ladder and any lockout policy | Minimum: a "not current" chip plus a lead nudge on day 8 | Notifications |
 | 17.4 | Spanish parity: `PB-004-ES` is Retired and hourly needs it most | Restore before the hourly pilot | Hourly portal |
-| 17.9 | **Do both Culture OS modules get comprehension checks, or only The Standard?** | Architect's lean: The Standard only. Origin is company history; a comprehension test on it is trivia, and trivia erodes trust in the record. Origin's signature is a straight acknowledgment. | First questions |
 | 17.10 | **The full learner experience, landing through recognition.** See Section 18. | Design before build. | Everything downstream |
 
 ### Closed
 
-Stints versus persons (2.1). Scope by region (3.1). Eligibility exceptions (2.6). Hourly identity and the `personal_email` policy (2.5). Calendar months (6). Pilot document set (4.3). v1 audience (15). Peer visibility (3.4). Hourly roster visibility (3.4). Admin permission split (12.2) - **superseded 2026-09-01: Josh and Joe hold both grants; no separate standing-viewer type is needed.** "% current" denominator as signed-of-assigned-this-cycle. Document-open pattern (Focus for requirements, modal for Library peeks, inline for single-check refreshers). Sous freeze scope (12.4). Shelf taxonomy (4.1). Frontmatter obligations extension (17.6). `supersedes` direction inversion (17.7). `satisfied_by` omission (17.8). **Academy replaces Rippling for document signing (1). Witness countersignature retired (1).**
+Stints versus persons (2.1). Scope by region (3.1). Eligibility exceptions (2.6). Hourly identity and the `personal_email` policy (2.5). Calendar months (6). Pilot document set (4.3). v1 audience (15). Peer visibility (3.4). Hourly roster visibility (3.4). Admin permission split (12.2) - **superseded 2026-09-01: Josh and Joe hold both grants; no separate standing-viewer type is needed.** "% current" denominator as signed-of-assigned-this-cycle. Document-open pattern (Focus for requirements, modal for Library peeks, inline for single-check refreshers). Sous freeze scope (12.4). Shelf taxonomy (4.1). Frontmatter obligations extension (17.6). `supersedes` direction inversion (17.7). `satisfied_by` omission (17.8). **Academy replaces Rippling for document signing (1). Witness countersignature retired (1). Culture OS check scope (17.9) - closed 2026-09-01: `culture-os-standard` gets checks, `culture-os-origin` does not. Origin is company history; a comprehension test on it is trivia. Origin's signature is a straight acknowledgment.** **Pre-signature corrections do not bump the version (12.3).**
 
 ---
 
@@ -667,7 +668,22 @@ A completed section is marked "Read" - a statement of position, not an assertion
 
 Called a **quick check** in all operator-facing copy. Never "assessment", "test", "quiz", or "comprehension evaluation".
 
-**One check per section, inline at the section boundary**, not gathered at the end. The person read the answer within the last minute, so the source is one scroll away. This is what makes the wrong-answer path recoverable rather than punishing.
+Checks appear inline at the section boundary, not gathered at the end. The person read the answer within the last minute, so the source is one scroll away. This is what makes the wrong-answer path recoverable rather than punishing.
+
+**A section earns a check when it carries information an operator must actually retain.** Ruled 2026-09-01.
+
+A check is warranted where the content is:
+
+- something a person could plausibly get wrong on the floor, with consequence
+- legally or contractually binding
+- a specific standard, threshold, or sequence that has to be recalled correctly
+- a distinction the document itself draws sharply, where collapsing it changes behaviour
+
+A check is **not** warranted for narrative, history, or context, however well written. Testing those produces trivia, and trivia teaches people that checks are a hoop rather than a point.
+
+There is no cap per section and no target per module. A section with four critical ideas earns four checks. A section with none earns none. **Volume follows the content, never the structure.**
+
+**A check must never quote a `<Fact>` value.** Mission, Vision and the brand promise are interpolated components, not body text. A check that tests an interpolated value becomes wrong the moment that value is edited - and wrong for people who were already graded on it, whose attempts are recorded and whose signatures are on file. Checks test the standard and the surrounding commentary, never the interpolated value.
 
 Answer order shuffles per attempt. `correct_option_id` never reaches the client.
 
