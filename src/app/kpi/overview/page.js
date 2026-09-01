@@ -65,7 +65,6 @@ import {
 import SourcesLine from "./components/SourcesLine";
 import Ticker from "./components/Ticker";
 import CardsRow from "./components/CardsRow";
-import CogsLevers from "./components/CogsLevers";
 import Chart from "./components/Chart";
 import DrillButtons from "./components/DrillButtons";
 import PnlStatement from "./components/PnlStatement";
@@ -336,9 +335,11 @@ export default function KpiOverviewPage() {
     };
   }, [start, end, today, rangeSelection, urlLabel, onCommitRange]);
 
-  // ── Rev source toggle ReactNode (posture-gated) ─────────────
+  // ── Rev source toggle ReactNode (access-gated) ─────────────
+  // R-40: gated by revenue_toggle_visible directly on the payload
+  // (access flag, corporate/rdo only). No layout branch.
   const revSourceToggle = useMemo(() => {
-    if (!data?.posture_details?.revenue_toggle_visible) return null;
+    if (!data?.revenue_toggle_visible) return null;
     const isSc = urlRevSource === "sc";
     return (
       <span className="kpi-ov-revtog" role="group" aria-label="Revenue source">
@@ -358,19 +359,18 @@ export default function KpiOverviewPage() {
         >Service Calendar revenue</button>
       </span>
     );
-  }, [data?.posture_details?.revenue_toggle_visible, urlRevSource, setRevSource]);
+  }, [data?.revenue_toggle_visible, urlRevSource, setRevSource]);
 
-  // Posture-driven folio rail (corporate = show, site = hide).
-  // P2-1 (2026-09-01): prefer live accounts_directory + rdo display
-  // shipped by the resolver so all 11 rows render real descriptions
-  // ("St Louis Cardinals · Jupiter, FL") instead of the placeholder
-  // space STATIC_DIRECTORY resolved to (team_name / city / state
-  // null on 8 of 11 rows -> folioMemberDescription returned line:null
-  // -> FolioRail rendered " " to preserve row height). Fall back to
-  // STATIC_DIRECTORY on the cold paint so the folio still lays out
-  // in three grouped cards before the fetch lands (same fallback
-  // FolioRail itself carries via hasLive).
-  const showFolioRail = data?.posture === "corporate";
+  // R-40: folio rail visibility mirrors Labor's mechanism exactly -
+  // show the rail when landing_account is a portfolio pseudo-key
+  // (ALL / EAST / WEST) AND the corporate/rdo user is not previewing
+  // a specific site (preview narrows to one account, so the rail
+  // collapses to reclaim the width for the board). See
+  // src/app/kpi/labor/page.js:1383-1411 for the source pattern.
+  // No layout branch on posture - this is access, not layout.
+  const PORTFOLIO_KEYS = ["ALL", "EAST", "WEST"];
+  const isPortfolioLanding = PORTFOLIO_KEYS.includes(data?.landing_account);
+  const showFolioRail = isPortfolioLanding && !data?.preview_account;
   const folioRail = showFolioRail ? (
     <FolioRail
       activeAccount={account}
@@ -401,9 +401,8 @@ export default function KpiOverviewPage() {
     const rangeMeta = { ...data.range, period_state: data.period_state };
     // Ghost the prior board at reduced opacity during warm refetch.
     const wrapClass = loadState === "refetching" ? "kpi-ov-ghost" : "";
-    const cogsCard = data.cards?.find(c => c.key === "cogs");
     mainContent = (
-      <div className={wrapClass} data-kpi-ov="board" data-kpi-ov-posture={data.posture}>
+      <div className={wrapClass} data-kpi-ov="board">
         {loadState === "refetching" && (
           <div style={{ marginBottom: 12 }}>
             <span className="kpi-ov-refresh-chip" data-kpi-ov="refresh-chip">
@@ -412,38 +411,20 @@ export default function KpiOverviewPage() {
             </span>
           </div>
         )}
+        {/* R-40 (2026-09-01): the Overview is one layout everywhere.
+            Role governs access only - portfolio rail visibility, the
+            revenue-source toggle, the salary control. It does not
+            fork the board. Same account + range = same board render
+            for every role. */}
         <SourcesLine sources={data.sources} freshness={data.freshness} />
-        <Ticker ticker={data.ticker} posture={data.posture} />
-        <CardsRow cards={data.cards} posture={data.posture} rangeMeta={rangeMeta} />
-        {/* R-34 "What is left" - self-hides on corporate, closed
-            periods, and FYTD. Resolver returns null in those cases. */}
+        <Ticker ticker={data.ticker} />
+        <CardsRow cards={data.cards} rangeMeta={rangeMeta} />
+        {/* R-34 "What is left" - self-hides on portfolio scope,
+            closed periods, and FYTD (server sets what_is_left=null in
+            those cases). */}
         <WhatIsLeft whatIsLeft={data.what_is_left} />
-        {/* R-32 site posture drops the seven-column lever table -
-            the drill buttons carry the verdict instead. Corporate
-            keeps it. */}
-        {data.posture === "corporate" && (
-          <CogsLevers
-            levers={data.levers}
-            cogsCard={cogsCard}
-            open={data.period_state === "open"}
-            postureLabel={"percent of revenue against target"}
-            title={"Cost of goods lines"}
-          />
-        )}
-        {/* Site posture: drills before chart (matches the render's
-            operator ordering - "what is driving it" comes before the
-            week-by-week review). Corporate keeps chart then drills. */}
-        {data.posture === "site_leader" ? (
-          <>
-            <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
-            <Chart chart={data.chart} />
-          </>
-        ) : (
-          <>
-            <Chart chart={data.chart} />
-            <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
-          </>
-        )}
+        <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
+        <Chart chart={data.chart} />
         <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
         <AlsoTracked payload={data} />
       </div>
@@ -480,14 +461,12 @@ export default function KpiOverviewPage() {
         activeSection="pnl_overview"
         rangeProps={rangeProps}
         revSourceToggle={revSourceToggle}
-        /* Salary control (Phase 4, R-28). Posture-gated: site posture
-           with `salary_toggle_visible` on the payload. Absent, never
-           disabled, for anyone the route would refuse - matches the
-           labor-board pattern (spec T-1). Wire matches the segmented
-           Hourly / +Salary control the labor board already renders,
-           so a site leader who flips between /kpi/overview and
-           /kpi/labor sees the same widget in the same slot. */
-        salaryToggle={data?.posture_details?.salary_toggle_visible && data?.posture === "site_leader" ? {
+        /* Salary control - access-gated by salary_toggle_visible on
+           the payload (mirrors Labor's canSeeSalary). R-40: no
+           layout branch; the control appears whenever access permits,
+           regardless of role. Absent, never disabled, for anyone the
+           route would refuse. */
+        salaryToggle={data?.salary_toggle_visible ? {
           on: urlIncludeSalary,
           onChange: (next) => setIncludeSalary(next),
         } : null}

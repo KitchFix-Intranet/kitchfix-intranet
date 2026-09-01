@@ -58,25 +58,20 @@ function Pill({ pill }) {
   );
 }
 
-function RevenueCard({ card, posture, range }) {
-  const rangeIsOpen = range?.period_state === "open" || range?.kind === "fytd";
-  const isSite = posture === "site_leader";
+// R-40 (2026-09-01): one revenue-card sub-line rhythm for every role.
+// Bold horizon budget, grey descriptor, matching COGS + GM rhythm.
+//   Open period: "$118,130 budget this period · $88,598 expected by today"
+//   FYTD:        "$1,572,700 full year budget · $1,371,266 expected by today"
+//   Closed:      "$121,930 budget"
+// GL codes are no longer rendered on card headers - they live in the
+// statement (one fold away). Kevin flagged this as reversible in the
+// R-40 report if he misses them.
+function RevenueCard({ card, range }) {
   const isFytd = range?.kind === "fytd";
   const isClosed = range?.period_state === "verified" || range?.period_state === "closed_awaiting";
 
-  // R-32 revenue-card sub-line rhythm for site posture: bold the
-  // PERIOD or FULL-YEAR budget, grey the descriptor. Match COGS +
-  // margin rhythm so all three cards share a shape. Bolding the
-  // to-date figure duplicates what the hero already anchors; bolding
-  // the horizon budget carries something the hero does not say.
-  //   Open period: "$118,130 budget this period · $88,598 expected by today"
-  //   FYTD:        "$1,572,700 full year budget · $1,371,266 expected by today"
-  //   Closed:      "$121,930 budget"
-  // Corporate keeps the existing to-date-first rhythm untouched.
-  const siteSubLine = (() => {
-    if (!isSite) return null;
+  const subLine = (() => {
     if (isClosed) {
-      // Closed period: single line, bold the period budget only.
       const closedBudget = card.budget_full_period_display || card.budget_to_date_display;
       if (!closedBudget) return null;
       return (
@@ -88,8 +83,6 @@ function RevenueCard({ card, posture, range }) {
         </div>
       );
     }
-    // Open period or FYTD: bold horizon budget, then descriptor, then
-    // "· expected by today".
     const horizon = isFytd
       ? card.budget_full_year_display
       : card.budget_full_period_display;
@@ -112,9 +105,6 @@ function RevenueCard({ card, posture, range }) {
     <div className={`kpi-ov-card ${CARD_BORDER.revenue}`} data-kpi-ov="card-revenue">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">{card.label}</span>
-        {posture === "corporate" && card.gl_codes && (
-          <span className="kpi-ov-gl">{card.gl_codes}</span>
-        )}
         <HelpPop id="overview-card-revenue" title={HELP_BODIES.revenue.title} body={HELP_BODIES.revenue.body} />
         <Pill pill={card.pill} />
       </div>
@@ -122,44 +112,21 @@ function RevenueCard({ card, posture, range }) {
         <div className="kpi-ov-hero kpi-ov-num" data-kpi-ov="hero-revenue">
           <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
         </div>
-        {isSite ? siteSubLine : (
-          <div className="kpi-ov-kpi2">
-            {card.budget_to_date_display && (
-              <>
-                <span>
-                  <b style={{ fontSize: "var(--kpi-t-body)" }}>{card.budget_to_date_display}</b>
-                  {" "}budget{rangeIsOpen ? " to date" : ""}
-                </span>
-                <span>
-                  ·{" "}
-                  {range?.kind === "fytd" && card.budget_full_year_display
-                    ? `${card.budget_full_year_display} full year`
-                    : card.budget_full_period_display
-                      ? `${card.budget_full_period_display} period budget`
-                      : ""}
-                </span>
-              </>
-            )}
-            {card.delta_display && (
-              <span className={card.delta_direction === "good" ? "kpi-ov-good" : card.delta_direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb"}>
-                · {card.delta_display}
-              </span>
-            )}
-          </div>
-        )}
+        {subLine}
       </div>
     </div>
   );
 }
 
-function CogsCard({ card, posture }) {
+// R-40: no posture branch. GL codes dropped from the card header
+// (they live in the statement, one fold away). Mini breakdown
+// dropped - labor + food dollars each appear once, carried by the
+// drill buttons downstream. Applies to every role.
+function CogsCard({ card }) {
   return (
     <div className={`kpi-ov-card ${CARD_BORDER.cogs}`} data-kpi-ov="card-cogs">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">{card.label}</span>
-        {posture === "corporate" && card.gl_codes && (
-          <span className="kpi-ov-gl">{card.gl_codes}</span>
-        )}
         <HelpPop id="overview-card-cogs" title={HELP_BODIES.cogs.title} body={HELP_BODIES.cogs.body} />
         <Pill pill={card.pill} />
       </div>
@@ -188,19 +155,6 @@ function CogsCard({ card, posture }) {
               <b style={{ fontSize: "var(--kpi-t-body)" }}>{card.budget_to_date_display}</b>
               {" "}budget to date
             </span>
-          </div>
-        )}
-        {/* R-32 site posture cuts the COGS mini breakdown. Labor
-            and food dollars each appear once - the drill buttons carry
-            the lever verdicts on the site posture. Corporate keeps
-            the mini for the same numbers-in-context reason. */}
-        {posture === "corporate" && card.mini && card.mini.length > 0 && (
-          <div className="kpi-ov-mini">
-            {card.mini.map((m) => (
-              <span key={m.label}>
-                {m.label} <b><DashOrValue value={m.display} reported={m.actual != null} /></b>
-              </span>
-            ))}
           </div>
         )}
       </div>
@@ -250,15 +204,15 @@ function GrossMarginCard({ card, range }) {
   );
 }
 
-export default function CardsRow({ cards, posture, rangeMeta }) {
+export default function CardsRow({ cards, rangeMeta }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
   const gm      = cards.find(c => c.key === "gross_margin");
   return (
     <div className="kpi-ov-cards" data-kpi-ov="cards-row">
-      {revenue && <RevenueCard card={revenue} posture={posture} range={rangeMeta} />}
-      {cogs    && <CogsCard    card={cogs}    posture={posture} />}
+      {revenue && <RevenueCard card={revenue} range={rangeMeta} />}
+      {cogs    && <CogsCard    card={cogs} />}
       {gm      && <GrossMarginCard card={gm} range={rangeMeta} />}
     </div>
   );

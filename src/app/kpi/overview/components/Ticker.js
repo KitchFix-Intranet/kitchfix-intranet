@@ -38,42 +38,23 @@ function directionClass(deltaPct, axis) {
   return "kpi-ov-nb";
 }
 
-export default function Ticker({ ticker, posture }) {
+export default function Ticker({ ticker }) {
   if (!ticker || !ticker.state) return null;
   const stateClass = STATE_CLASS[ticker.state] || "kpi-ov-ticker-ontrack";
-  // R-32 (site posture only): the state pill is already the margin
-  // verdict and the GM card carries the number - a GM segment in the
-  // ticker is a third rendering of the same idea. Corporate keeps it.
-  const showGmSegment = posture !== "site_leader";
+  // R-40 (2026-09-01): no posture branch. The state pill IS the
+  // margin verdict and the GM card carries the number - a third GM
+  // segment in the ticker would be a third rendering of the same
+  // idea. Applies to every role.
 
   return (
     <div
       className={`kpi-ov-ticker ${stateClass}`}
       data-kpi-ov="ticker"
       data-kpi-ov-state={ticker.state}
-      data-kpi-ov-posture={posture || null}
     >
       <span className="kpi-ov-ticker-st" data-kpi-ov="ticker-state">
         {ticker.state_copy}
       </span>
-
-      {/* Gross margin segment - present on corporate, hidden on site */}
-      {showGmSegment && ticker.gm_pct_actual != null && ticker.gm_pct_target != null && (
-        <span className="kpi-ov-ticker-tk" data-kpi-ov="ticker-gm">
-          <span className="kpi-ov-ticker-tk-k">Gross margin</span>
-          <span className="kpi-ov-ticker-tk-v kpi-ov-num">
-            {fmtPct(ticker.gm_pct_actual)}
-            <span className="kpi-ov-nb" style={{ fontWeight: 600, marginLeft: 6 }}>
-              vs {fmtPct(ticker.gm_pct_target)} target
-            </span>
-            {ticker.gm_delta_pct != null && (
-              <em className={directionClass(ticker.gm_delta_pct, "margin")}>
-                {directionWord(ticker.gm_delta_pct, "margin")}
-              </em>
-            )}
-          </span>
-        </span>
-      )}
 
       {/* Biggest lever */}
       {ticker.biggest_lever && (
