@@ -454,9 +454,17 @@ export default function KpiOverviewPage() {
 
   return (
     <div className="kpi-app" data-kpi-app>
-      <Shell
-        account={account}
-        fiscal={fiscal}
+      {/* 2026-09-01 follow-up: wrap the Shell in .kpi-wrap to match
+          Labor and Purchasing (max-width: var(--sc2-shell-max) = 1520px,
+          padding: var(--space-5) var(--space-6) var(--space-7), auto-
+          centred). Without this the Overview cmd bar starts at x=0
+          full-viewport-width while Labor's is auto-centred at 1520px -
+          Overview reads ~200px oversized at 1680 even though every
+          token matches. See labor page.js:1320 for the source pattern. */}
+      <div className="kpi-wrap">
+        <Shell
+          account={account}
+          fiscal={fiscal}
         /* P2-4d (2026-09-01): pass the composed last_walk_at the
            resolver ships on freshness.last_walk_at (max of labor +
            purchasing derive timestamps). Prior implementation
@@ -483,12 +491,13 @@ export default function KpiOverviewPage() {
           on: urlIncludeSalary,
           onChange: (next) => setIncludeSalary(next),
         } : null}
-        folioRail={folioRail}
-        main={mainContent}
-        previewAccount={data?.preview_account || null}
-        onExitPreview={onExitPreview}
-        freshnessPop={null}
-      />
+          folioRail={folioRail}
+          main={mainContent}
+          previewAccount={data?.preview_account || null}
+          onExitPreview={onExitPreview}
+          freshnessPop={null}
+        />
+      </div>
     </div>
   );
 }

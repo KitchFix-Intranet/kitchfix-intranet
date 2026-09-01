@@ -1477,6 +1477,25 @@ export async function resolveOverview({
   //       When no SC data landed at all in range (empty scByAcct),
   //       the line renders "not yet reporting" so it never asserts
   //       a date it doesn't have.
+  // 2026-09-01 follow-up rule: NEVER claim data through an incomplete
+  // day. Every source's through_date is capped at STRICTLY LESS THAN
+  // `today` so a sources line can never assert "through Tue 09/01"
+  // when 09/01 is today. Labor already respects this via its
+  // state==='closed' filter (the week has to be closed for its
+  // week_end to count). Purchases + SC use raw last-observed values
+  // from their loaders and can slip past midnight - cap them here.
+  const capBeforeToday = (iso) => {
+    if (!iso) return null;
+    if (iso < today) return iso;
+    // Fall back to today - 1. Cheaper than parsing the ISO and
+    // stepping back a day - today is already an ISO YYYY-MM-DD string
+    // computed against the request's timezone in step 1 of the
+    // resolver; subtracting one day from an ISO date is a
+    // well-defined arithmetic on the Date wrapper.
+    const t = new Date(`${today}T00:00:00Z`);
+    t.setUTCDate(t.getUTCDate() - 1);
+    return t.toISOString().slice(0, 10);
+  };
   const laborLastClosed = (() => {
     const weeks = laborBoard?.weeks || [];
     let max = null;
@@ -1484,7 +1503,7 @@ export async function resolveOverview({
       if (w.state !== "closed") continue;
       if (max == null || w.week_end > max) max = w.week_end;
     }
-    return max;
+    return capBeforeToday(max);
   })();
   const scMaxDate = (() => {
     let max = null;
@@ -1493,9 +1512,9 @@ export async function resolveOverview({
         if (max == null || day > max) max = day;
       }
     }
-    return max;
+    return capBeforeToday(max);
   })();
-  const cardsThrough = purchFreshness?.cards_through || null;
+  const cardsThrough = capBeforeToday(purchFreshness?.cards_through || null);
 
   const labelWithThrough = (base, iso, fallback) => {
     const day = iso ? formatDayLabel(iso) : null;

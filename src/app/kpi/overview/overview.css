@@ -858,3 +858,46 @@
   font-weight: 700;
   margin-top: 2px;
 }
+
+/* Site-posture drill button - compact inline layout matching the
+   locked render. Left column carries title + "$spend · what's
+   inside" sub-line; right column is right-aligned with the actual
+   percent stacked over the gap-to-target direction word; then the
+   → arrow. Corporate keeps the existing three-column .kpi-ov-dr-grid
+   layout above. Matches docs/renders/overview-site-leader-LOCKED.html
+   .dr / .dr .rt / .dr .go rules. */
+.kpi-app .kpi-ov-dr-inline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+}
+.kpi-app .kpi-ov-dr-inline-left { display: flex; flex-direction: column; }
+.kpi-app .kpi-ov-dr-inline-t1 {
+  font-size: calc(14px * var(--kf-scale));
+  font-weight: 800;
+  color: var(--text-heading);
+}
+.kpi-app .kpi-ov-dr-inline-t2 {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  margin-top: 3px;
+}
+.kpi-app .kpi-ov-dr-inline-right {
+  margin-left: auto;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.kpi-app .kpi-ov-dr-inline-p {
+  font-size: calc(17px * var(--kf-scale));
+  font-weight: 800;
+  line-height: 1;
+}
+.kpi-app .kpi-ov-dr-inline-g {
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  margin-top: 2px;
+}
