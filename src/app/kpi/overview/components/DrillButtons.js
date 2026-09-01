@@ -47,18 +47,67 @@ function fmtDateShort(iso) {
   return `${m}/${d}`;
 }
 
+// Compact inline drill for the site-leader posture (locked render).
+// Left column: title, then "$spent · what's inside" sub-line.
+// Right column (right-aligned): actual percent, then gap-to-target
+// direction word beneath. Then the → arrow. Matches the locked
+// render's .dr layout at docs/renders/overview-site-leader-LOCKED.html.
+function SiteDrillInline({ href, drillKind, title, spend, actualPct, variance, direction, insideText, dataAttrs }) {
+  const varClass = direction === "good"
+    ? "kpi-ov-good"
+    : direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb";
+  return (
+    <Link
+      href={href}
+      className={`kpi-ov-dr kpi-ov-dr-inline kpi-ov-dr-${drillKind}`}
+      data-kpi-ov="drill"
+      data-kpi-ov-drill={drillKind}
+      {...(dataAttrs || {})}
+    >
+      <div className="kpi-ov-dr-inline-left">
+        <div className="kpi-ov-dr-inline-t1">{title}</div>
+        <div className="kpi-ov-dr-inline-t2">
+          <span className="kpi-ov-num">{spend || "-"}</span> · {insideText}
+        </div>
+      </div>
+      <div className="kpi-ov-dr-inline-right">
+        <div className="kpi-ov-dr-inline-p kpi-ov-num">{actualPct || "-"}</div>
+        {variance && (
+          <div className={`kpi-ov-dr-inline-g ${varClass}`} data-kpi-ov="drill-gap">
+            {variance} target
+          </div>
+        )}
+      </div>
+      <span className="kpi-ov-dr-go">→</span>
+    </Link>
+  );
+}
+
 function LaborDrill({ href, laborLever, throughDate, isSite }) {
   // R-32 site posture requirement: the drill button carries the
   // verdict - the gap-to-target beneath the actual percent. The
   // lever's variance_pct_display is the "5.4% under target" pattern
   // already computed server-side (cost axis: under=good, over=bad).
-  // Corporate keeps its existing seven-column lever table, so it
-  // doesn't need the tail here - render the variance ONLY on site
-  // posture to keep corporate visually byte-identical.
+  // Corporate keeps its existing three-column grid + seven-column
+  // lever table, so it doesn't need the tail here.
   const variance = isSite ? (laborLever?.variance_pct_display || null) : null;
   const varClass = laborLever?.direction === "good"
     ? "kpi-ov-good"
     : laborLever?.direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb";
+  if (isSite) {
+    return (
+      <SiteDrillInline
+        href={href}
+        drillKind="labor"
+        title="Labor"
+        spend={laborLever?.actual_display}
+        actualPct={laborLever?.actual_pct_display}
+        variance={variance}
+        direction={laborLever?.direction}
+        insideText="hours, overtime, approvals"
+      />
+    );
+  }
   return (
     <Link href={href} className="kpi-ov-dr kpi-ov-dr-lab" data-kpi-ov="drill" data-kpi-ov-drill="labor">
       <div className="kpi-ov-dr-top">
@@ -79,9 +128,6 @@ function LaborDrill({ href, laborLever, throughDate, isSite }) {
             {laborLever?.actual_pct_display || "-"}
             {laborLever?.target_pct_display && <> <small>vs {laborLever.target_pct_display} target</small></>}
           </div>
-          {variance && (
-            <div className={`kpi-ov-dr-gap ${varClass}`} data-kpi-ov="drill-gap">{variance} target</div>
-          )}
         </div>
         <div>
           <div className="kpi-ov-dr-k">Inside</div>
@@ -109,6 +155,20 @@ function PurchasingDrill({ href, purchasingDrill, throughDate, isSite }) {
   const varClass = purchasingDrill?.direction === "good"
     ? "kpi-ov-good"
     : purchasingDrill?.direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb";
+  if (isSite) {
+    return (
+      <SiteDrillInline
+        href={href}
+        drillKind="purchasing"
+        title="Purchasing"
+        spend={purchasingDrill?.spent_display}
+        actualPct={purchasingDrill?.pct_of_revenue_display}
+        variance={variance}
+        direction={purchasingDrill?.direction}
+        insideText="food, packaging, every purchase"
+      />
+    );
+  }
   return (
     <Link href={href} className="kpi-ov-dr kpi-ov-dr-pur" data-kpi-ov="drill" data-kpi-ov-drill="purchasing">
       <div className="kpi-ov-dr-top">
