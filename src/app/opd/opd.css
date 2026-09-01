@@ -2552,6 +2552,36 @@
    wide box (margin either side grew to 435px at the density-drop
    pass). The room card keeps full width - it has standing rows and
    a two-column secondary tier that use it. */
+/* --chrome names every pixel above and below the module card so the
+   height math is auditable. Owner walk 2026-09-01: I got this wrong
+   in the first cut (190px) - the actual sum is 240px. Every term:
+     46px    kf-topnav top nav bar (globals)
+     16px    .opd-frame margin-top
+     52px    .opd-cmd (Operational Playbook lid)
+     16px    .opd-sbody padding-top
+     13px    .opd-uni margin-top
+     ---
+    143px    above the card (verified by probe: card top ~158)
+     ---
+     18px    .opd-uni margin-bottom
+     16px    .opd-sbody padding-bottom
+     60px    .opd-frame margin-bottom
+     ---
+     94px    below the card
+     ---
+   Total = 143 + 94 = 237px. Rounded to 252px because probe at
+   1520x900 shows document scrollHeight overflows viewport by 12px
+   at 240 (frame margin-bottom is 60, which extends the frame past
+   the viewport bottom even when the card fits). 252 gives page-
+   scroll = 0 with a small safety margin. The card also carries
+   min-height: 440px so short viewports still render a usable
+   module (page WILL scroll then). Below 960px the whole
+   viewport-fit rule releases (see @media at end of module block).
+
+   Owner ruling 2026-09-01: card capped at 1080px + centred. Held. */
+.opd-app {
+  --opd-chrome: 252px;
+}
 .opd-uni {
   max-width: 1080px;
   margin: 13px auto 18px;
@@ -2560,6 +2590,13 @@
   border-radius: 12px;
   box-shadow: var(--opd-mod-sh);
   overflow: hidden;
+  /* Viewport-fit: card fills the window (minus chrome) and never
+     scrolls the page. Internal panes handle their own scroll. */
+  height: calc(100vh - var(--opd-chrome));
+  max-height: calc(100vh - var(--opd-chrome));
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Header band: chip + title + minutes right, hairline below. */
@@ -2630,26 +2667,30 @@
 }
 
 /* Body: two-col grid, rail hairline-separated from content.
-   align-items:start is load-bearing (owner walk 2026-09-01). The
-   grid default is stretch, which forced .opd-ucont to match the
-   rail's taller height and pushed the footer down, leaving roughly
-   130px of empty white space between short content (Vision, 91
-   words) and the Continue button. With align:start the content
-   column takes its natural height and the pane sits with the
-   footer directly beneath. Any resulting empty area is BELOW the
-   shorter column within the card border, which reads as a whole
-   card rather than a broken row. */
+   Viewport-fit contract (density pass 2026-09-01): rail scrolls on
+   its own AND pane scrolls on its own; the footer is pinned. The
+   grid needs min-height:0 + overflow:hidden or the internal scroll
+   containers won't shrink and the card grows regardless of its
+   fixed height. See @media (max-width:960) at the end of the
+   module block for the release. */
 .opd-ubody {
   display: grid;
   grid-template-columns: var(--opd-rail-w) minmax(0, 1fr);
-  align-items: start;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Rail (left, faintly tinted, right hairline) */
+/* Rail (left, faintly tinted, right hairline). Scrolls independently
+   so a nine-section module (AGR-001) fits without page scroll. */
 .opd-urail {
   border-right: 1px solid var(--opd-n200);
   background: linear-gradient(180deg, #FCFDFE, #F8FAFC);
   padding: 15px 0 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  height: 100%;
 }
 .opd-urail-head {
   padding: 0 18px 11px;
@@ -2798,17 +2839,24 @@
   line-height: 1.55;
 }
 
-/* Content column - flex so the footer meets short content. */
+/* Content column - flex column so the pane fills and the footer
+   sits at natural height. min-height:0 lets internal panes shrink. */
 .opd-ucont {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Scroll container wraps the pane; hosts the fade signal. */
 .opd-usc {
   position: relative;
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .opd-usc-fade {
   position: absolute;
@@ -2829,7 +2877,12 @@
    Below 900px the cap is removed entirely (nested scroll on a phone
    is worse than page scroll). */
 .opd-upane {
-  max-height: min(620px, calc(100vh - 360px));
+  /* Viewport-fit: fills the .opd-usc column, scrolls independently.
+     The old max-height cap is gone (superseded by the card's fixed
+     height + flex chain). */
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 26px 0 30px;
@@ -3097,6 +3150,13 @@
   font-weight: 650;
 }
 .opd-bt--gh:hover:not(:disabled) { background: var(--opd-n50); color: var(--opd-navy); }
+/* Home button in the module footer (replaces the removed
+   breadcrumb). Navy foreground so the route home reads as
+   deliberate, not decorative. */
+.opd-bt--home {
+  color: var(--opd-navy);
+  font-weight: 700;
+}
 .opd-ufoot-hint {
   font-size: var(--opd-t-ui);
   color: var(--opd-n600);
@@ -3224,26 +3284,49 @@
   text-decoration: none;
 }
 
-/* ── Below 900px: single column, cap removed ────────────────── */
-@media (max-width: 900px) {
+/* ── Below 960px: viewport-fit releases; page scrolls naturally ─
+   Spec 18.4 amended: below this width the whole rule releases
+   (heights auto, overflow visible, page scrolls normally). Nested
+   scroll on a phone is worse than a natural page scroll. */
+@media (max-width: 960px) {
+  .opd-uni {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    display: block;
+    margin: 12px 0 14px;
+  }
   .opd-ubody {
     grid-template-columns: 1fr;
+    overflow: visible;
+    min-height: 0;
   }
   .opd-urail {
     border-right: none;
     border-bottom: 1px solid var(--opd-n200);
+    overflow: visible;
+    height: auto;
+    min-height: 0;
+  }
+  .opd-ucont {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .opd-usc {
+    min-height: 0;
+    display: block;
   }
   .opd-upane {
     max-height: none;
     overflow: visible;
     padding: 22px 0 26px;
+    height: auto;
+    min-height: 0;
   }
   .opd-usc-fade { display: none; }
   .opd-ucw {
     padding: 0 var(--opd-sp-3);
-  }
-  .opd-uni {
-    margin: 12px 0 14px;
   }
   .opd-uhead {
     padding: 14px 16px 12px;
@@ -4290,4 +4373,697 @@
   .opd-tone { width: auto; }
   .opd-cr-ct { width: auto; margin-left: auto; }
   .opd-pp { padding: 10px 14px 10px 30px; }
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   Room density pass (spec 18.2 amended)
+   Two cards on one gutter. A card holds BLOCKS, not bands. The
+   lessons list caps + counts what's hidden. One --lead column
+   governs every row's text left-edge.
+   ═════════════════════════════════════════════════════════════════ */
+
+/* --gut is the single spacing value used between the two primary
+   cards, between the secondary cards, and as the inset padding
+   inside cards. Reads as one rhythm across the whole page. */
+.opd-app {
+  --opd-gut: 11px;
+  --opd-lead: 44px;
+  --opd-lmax: min(520px, calc(100vh - 330px));
+}
+
+.opd-room--dense {
+  display: block;
+}
+
+/* Two cards on one gutter, stretched to equal height. */
+.opd-pgrid {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: var(--opd-gut);
+  align-items: stretch;
+}
+/* One shared card grammar so the secondary and primary pairs read
+   as the same object. */
+.opd-card {
+  background: #fff;
+  border: 1px solid #DCE3EC;
+  border-radius: 12px;
+  box-shadow: var(--opd-sh-1);
+  overflow: hidden;
+}
+
+/* ── Profile rail card ─────────────────────────────────────── */
+.opd-prail {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #FCFDFE, #F8FAFC);
+}
+/* Identity strip = the card's header. Horizontal (36px avatar
+   beside name), not stacked above. Full-bleed bottom border earned. */
+.opd-pid {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--opd-n200);
+  background: #FBFCFE;
+}
+.opd-pid-av {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--opd-navy);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 750;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  font-family: var(--font-ui);
+}
+.opd-pid-who {
+  min-width: 0;
+  flex: 1;
+}
+.opd-pid-who h2 {
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-ctl);
+  font-weight: 800;
+  color: var(--opd-navy);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opd-pid-r {
+  font-size: var(--opd-t-meta);
+  color: var(--opd-n600);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Body: blocks inside the card, on one --gut rhythm. */
+.opd-pbody {
+  padding: var(--opd-gut);
+  display: flex;
+  flex-direction: column;
+  gap: var(--opd-gut);
+  flex: 1;
+}
+.opd-psec {
+  padding: 10px 12px;
+  border: 1px solid var(--opd-n300);
+  border-radius: 10px;
+  background: #fff;
+}
+.opd-psec--tint { background: #FBFCFE; }
+.opd-psec--row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+}
+.opd-psec--row .opd-psec-k { margin: 0; }
+.opd-psec-k {
+  font-size: var(--opd-t-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--opd-n600);
+}
+.opd-strk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--opd-t-meta);
+  font-weight: 700;
+  color: var(--opd-pur);
+  background: var(--opd-purbg);
+  border: 1px solid var(--opd-purbd);
+  border-radius: 20px;
+  padding: 4px 10px;
+  margin-left: auto;
+  flex: none;
+}
+/* One-line "N of M signed" + minutes chip. */
+.opd-cyc {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 6px;
+}
+.opd-cyc-num {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--opd-navy);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.opd-cyc-of {
+  font-size: var(--opd-t-ui);
+  color: var(--opd-n600);
+  font-weight: 650;
+}
+.opd-cyc-min {
+  margin-left: auto;
+  font-style: normal;
+  font-size: var(--opd-t-meta);
+  font-weight: 700;
+  color: var(--opd-navy);
+  font-variant-numeric: tabular-nums;
+}
+.opd-mlab {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: var(--opd-t-label);
+  font-weight: 700;
+  color: var(--opd-n500);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+/* Due on one line: N + days-left + date right-aligned. */
+.opd-duel {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 6px;
+}
+.opd-duel-b {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--opd-navy);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.opd-duel-s {
+  font-size: var(--opd-t-ui);
+  color: var(--opd-n600);
+  font-weight: 650;
+}
+.opd-duel-w {
+  margin-left: auto;
+  font-style: normal;
+  font-size: var(--opd-t-meta);
+  color: var(--opd-n500);
+  font-weight: 700;
+}
+/* Signed certificates list inside the Your Certificates block. */
+.opd-sg {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 0;
+}
+.opd-sg + .opd-sg { border-top: 1px solid var(--opd-n200); }
+.opd-sg-ic {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--opd-grnbg);
+  border: 1px solid var(--opd-grnbd);
+  color: var(--opd-grnfg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.opd-sg b {
+  font-size: var(--opd-t-ui);
+  font-weight: 700;
+  color: var(--opd-navy);
+  display: block;
+  line-height: 1.25;
+}
+.opd-sg-serial {
+  font-size: var(--opd-t-label);
+  color: var(--opd-n500);
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+/* Coming-up line. */
+.opd-nx1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: var(--opd-t-ui);
+  color: var(--opd-n600);
+}
+.opd-nx1 b {
+  color: var(--opd-navy);
+  font-weight: 700;
+}
+/* Card footer (full-bleed tinted). Row of links. */
+.opd-plinks {
+  margin-top: auto;
+  border-top: 1px solid var(--opd-n200);
+  background: #FBFCFE;
+}
+.opd-plink {
+  padding: 9px 14px;
+  font-size: var(--opd-t-ui);
+  font-weight: 650;
+  color: var(--opd-navy);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-ui);
+  transition: background-color var(--opd-t-fast) var(--opd-ease);
+}
+.opd-plink + .opd-plink { border-top: 1px solid var(--opd-n200); }
+.opd-plink:hover { background: #F2F6FA; }
+.opd-plink svg {
+  margin-left: auto;
+  color: var(--opd-n500);
+}
+
+/* ── Lessons card ─────────────────────────────────────────── */
+.opd-lcard {
+  display: flex;
+  flex-direction: column;
+}
+.opd-lh {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--opd-n200);
+  background: #FBFCFE;
+}
+.opd-lh-k {
+  font-size: var(--opd-t-label);
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--opd-navy);
+}
+.opd-lh-meta {
+  font-size: var(--opd-t-meta);
+  color: var(--opd-n600);
+  font-weight: 650;
+}
+.opd-lh-cta {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-ctl);
+  font-weight: 700;
+  color: #fff;
+  background: var(--opd-navy);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  transition:
+    background-color var(--opd-t-fast) var(--opd-ease),
+    transform var(--opd-t-fast) var(--opd-ease);
+}
+.opd-lh-cta:hover { background: var(--opd-n900); }
+.opd-lh-cta:active { transform: translateY(1px); }
+.opd-lwrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.opd-lbody {
+  padding: var(--opd-gut);
+  display: flex;
+  flex-direction: column;
+  gap: var(--opd-gut);
+  max-height: var(--opd-lmax);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #C7D2E0 transparent;
+}
+.opd-lbody::-webkit-scrollbar { width: 10px; }
+.opd-lbody::-webkit-scrollbar-thumb {
+  background: #CCD6E2;
+  border-radius: 5px;
+  border: 3px solid #fff;
+}
+.opd-lbody::-webkit-scrollbar-track { background: transparent; }
+/* Cue: fade + counted pill. Both only appear when there's more below. */
+.opd-lfade {
+  position: absolute;
+  left: 1px;
+  right: 11px;
+  bottom: 1px;
+  height: 54px;
+  pointer-events: none;
+  border-radius: 0 0 11px 11px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 78%);
+  opacity: 0;
+  transition: opacity var(--opd-t-mid) var(--opd-ease);
+}
+.opd-lcue {
+  position: absolute;
+  left: 50%;
+  bottom: 11px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-label);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--opd-navy);
+  background: #fff;
+  border: 1px solid var(--opd-n300);
+  border-radius: 20px;
+  padding: 5px 12px;
+  box-shadow: var(--opd-sh-1);
+  opacity: 0;
+  transition: opacity var(--opd-t-mid) var(--opd-ease);
+  cursor: pointer;
+}
+.opd-lwrap--more .opd-lfade,
+.opd-lwrap--more .opd-lcue { opacity: 1; }
+
+/* ── Set = block, radius 10, inset by --gut, gap between = --gut ──
+   margin:0 resets the older .opd-set rule (composition PR) that
+   applied 12px 18px - that horizontal margin was making sets 36px
+   narrower than sibling blocks (the completed section) and threw
+   the density gate's right-edge alignment off. */
+.opd-set {
+  margin: 0;
+  border: 1px solid var(--opd-n300);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  transition: box-shadow var(--opd-t-fast) var(--opd-ease);
+  padding: 0;
+  text-align: left;
+  width: 100%;
+  color: var(--opd-n700);
+  font-family: var(--font-ui);
+  cursor: default;
+}
+.opd-set:hover { box-shadow: var(--opd-sh-2); }
+/* Solo set: whole row is a button. Padding replaces the seth padding. */
+button.opd-set.opd-set--solo {
+  padding: 11px 13px;
+  cursor: pointer;
+}
+button.opd-set.opd-set--solo:hover {
+  background: #F8FBFD;
+}
+.opd-set--solo .opd-seth {
+  padding: 0;
+  background: none;
+  border-bottom: none;
+}
+.opd-seth {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 9px 13px;
+  background: #FBFCFE;
+  border-bottom: 1px solid var(--opd-n200);
+}
+/* One leading column for every row type - governs the text left-edge
+   so set headers, part rows and the solo header all line up. Icons +
+   bubbles centre within it at their own sizes. */
+.opd-lead {
+  width: var(--opd-lead);
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.opd-seti {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+}
+.opd-seti--gov {
+  background: var(--opd-govbg2);
+  border-color: var(--opd-govbd2);
+  color: var(--opd-gov);
+}
+.opd-seti--proc {
+  background: var(--opd-procbg);
+  border-color: var(--opd-procbd);
+  color: var(--opd-teal);
+}
+.opd-seti--tool {
+  background: var(--opd-toolbg);
+  border-color: var(--opd-toolbd);
+  color: var(--opd-tool);
+}
+.opd-seth-tx {
+  min-width: 0;
+  flex: 1;
+}
+.opd-seth h3 {
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-row);
+  font-weight: 750;
+  color: var(--opd-navy);
+  line-height: 1.25;
+}
+.opd-seth-mt {
+  font-size: var(--opd-t-meta);
+  color: var(--opd-n600);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opd-sright {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.opd-sprog {
+  width: 58px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--opd-n200);
+  overflow: hidden;
+  display: block;
+}
+.opd-sprog > i {
+  display: block;
+  height: 100%;
+  background: var(--opd-grn);
+  transition: width var(--opd-t-slow) var(--opd-ease);
+}
+.opd-sstat {
+  font-size: var(--opd-t-label);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--opd-n500);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Part row */
+.opd-pr {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 9px 13px;
+  position: relative;
+  transition: background-color var(--opd-t-fast) var(--opd-ease);
+  border-bottom: 1px solid var(--opd-n200);
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  background: #fff;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-ui);
+  color: var(--opd-n700);
+  cursor: default;
+}
+.opd-set .opd-pr:last-child { border-bottom: none; }
+.opd-pr:not(.opd-pr--lk) { cursor: pointer; }
+.opd-pr:not(.opd-pr--lk):hover { background: #F8FBFD; }
+.opd-pr:not(.opd-pr--lk):hover .opd-go {
+  background: var(--opd-navy);
+  color: #fff;
+  border-color: var(--opd-navy);
+}
+.opd-spine {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--opd-n200);
+}
+.opd-pr--dn .opd-spine { background: var(--opd-grn); }
+.opd-pr--nx .opd-spine { background: var(--opd-navy); }
+.opd-pnum {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 750;
+  border: 1.5px solid var(--opd-n300);
+  color: var(--opd-n500);
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-ui);
+}
+.opd-pr--dn .opd-pnum {
+  background: var(--opd-grnbg);
+  border-color: var(--opd-grn);
+  color: var(--opd-grnfg);
+}
+.opd-pr--nx .opd-pnum {
+  border-color: var(--opd-navy);
+  color: var(--opd-navy);
+}
+.opd-pr--lk { opacity: 0.6; }
+.opd-pb {
+  flex: 1;
+  min-width: 0;
+}
+.opd-pb h4 {
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-ctl);
+  font-weight: 700;
+  color: var(--opd-navy);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opd-pr--lk .opd-pb h4 { color: var(--opd-n600); }
+.opd-pb-d {
+  font-size: var(--opd-t-ui);
+  color: var(--opd-n600);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opd-lkn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--opd-t-meta);
+  color: var(--opd-n500);
+  font-weight: 650;
+  margin-top: 2px;
+}
+/* Fixed-width right column so the numerics align exactly across
+   rows. Was measurably 18px of wobble pre-fix. */
+.opd-pm {
+  width: 96px;
+  flex: none;
+  text-align: right;
+  margin-right: 12px;
+}
+.opd-pm-a {
+  font-size: var(--opd-t-meta);
+  font-weight: 700;
+  color: var(--opd-n600);
+}
+/* Due-urgency (spec 18.10): neutral outside the last 5 days, amber
+   inside, red overdue. Amber overrides pr--dn's success color. */
+.opd-pm-a--urg { color: var(--opd-ambfg); }
+.opd-pm-a--over { color: #B91C1C; }
+.opd-pr--dn .opd-pm-a { color: var(--opd-grnfg); }
+.opd-pm-b {
+  font-size: var(--opd-t-label);
+  color: var(--opd-n500);
+  font-weight: 700;
+  margin-top: 1px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+/* Fixed-width start/locked/view button, right-aligned with .opd-pm. */
+.opd-go {
+  width: 92px;
+  flex: none;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-ui);
+  font-weight: 700;
+  color: var(--opd-navy);
+  background: #fff;
+  border: 1px solid var(--opd-n300);
+  border-radius: 8px;
+  padding: 7px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition:
+    background-color var(--opd-t-fast) var(--opd-ease),
+    color var(--opd-t-fast) var(--opd-ease),
+    border-color var(--opd-t-fast) var(--opd-ease);
+}
+.opd-go--q {
+  color: var(--opd-n500);
+  cursor: not-allowed;
+}
+
+/* Completed block (inside the lessons card, same block grammar).
+   margin:0 resets the older Completed-section rule at .opd-cmpl:3977
+   which set margin: 2px 18px 16px - that 18px horizontal margin was
+   making the completed block 36px narrower than sibling sets and
+   causing the due-column right-edge outlier the density gate caught. */
+.opd-cmpl {
+  margin: 0;
+  border: 1px solid var(--opd-n300);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.opd-cmplh {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  background: #FBFDFC;
+  border-bottom: 1px solid var(--opd-n200);
+}
+.opd-cmplh-k {
+  font-size: var(--opd-t-label);
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--opd-navy);
+}
+.opd-cmplh-s {
+  margin-left: auto;
+  font-size: var(--opd-t-meta);
+  color: var(--opd-n500);
+  font-weight: 650;
+}
+
+/* Below 960: primary grid stacks. Lessons cap releases so short
+   viewports don't nest scrollers on a phone. */
+@media (max-width: 960px) {
+  .opd-pgrid { grid-template-columns: 1fr; }
+  .opd-lbody {
+    max-height: none;
+    overflow: visible;
+  }
+  .opd-lfade, .opd-lcue { display: none; }
+  .opd-rg { grid-template-columns: 1fr; }
+  .opd-pm { width: 84px; }
+  .opd-go { width: 84px; }
 }

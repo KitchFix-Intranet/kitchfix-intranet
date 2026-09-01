@@ -614,20 +614,25 @@ No Academy surface ships that contradicts this section. If a build needs an exce
 
 The Academy tab is the default room.
 
-**Shown:** the person's identity and role; a **streak chip** when the streak is true; the queue count phrased as **"to go"** rather than "items"; total minutes; days remaining in the cycle; a progress meter; the credential wall; the year track; the site card.
+**Two cards on one gutter.** The landing is a profile card and a lessons card side by side, stretched to equal height, separated by the page's single gutter value. The secondary row (Your Year + Your Record left, Company Standing right) sits below on the same gutter. Five cards at five different gaps reads as scattered; four cards on one gutter reads as a grid.
 
-**Greeting varies by state**, and the variants are not interchangeable:
+**A card holds blocks; it is not divided into bands.** Content inside a card sits as bordered blocks inset by the page gutter. Full-bleed rules are reserved for a card's own header and footer (the identity strip, the lessons title bar, the tinted footer with links). One gutter value governs the gap between cards, the gap between blocks, and the inset inside them.
 
-| State | Heading | Sub |
-|---|---|---|
-| Nothing started | "September is open, Kevin." | Sets an expectation of effort. See 18.14. |
-| In progress | "Two down, Kevin." | Count remaining and minutes. |
-| One remaining | "Almost there." | The push fires. See 18.10. |
-| Complete | "You are all current, Kevin." | Next cycle opening date. |
+**The profile card takes this grammar too**: the identity strip is its header (36px avatar horizontal beside name and role, not a 52px avatar stacked above), and Streak, This cycle, Due, Your certificates and Coming up are each a block inside.
 
-**The primary button always names the time cost**: "Start · 12 min", "Keep going · 11 min", "Finish · 11 min". A person is told what they are agreeing to before they agree to it.
+**No top greeting band.** The greeting, count, minutes and due date all live in the rail once each. Continue lives in the lessons card's own header, right-aligned next to the work it starts.
 
-**Prohibited here:** a percentage before any signature exists; the word "compliance"; any nag when the queue is empty.
+**Shown:** the person's identity and role; a **streak chip** when the streak is true; the queue count phrased as **"to go"** rather than "items"; total minutes; days remaining in the cycle; a progress meter; the certificates list (a legible list with document title, serial, and date - never a credential-tile wall); the year track; the record card; the site standing card.
+
+**A list that can outgrow its card is capped and scrolls internally**, and when content is hidden the surface says how much - a fade alone tells the person something is below, not whether it is one item or six. The lessons list caps at `min(520px, calc(100vh - 330px))` and shows three signals when there's more below at once: a fade at the bottom edge, a visible scrollbar, and a **counted pill naming how many blocks are hidden** ("2 more below") that scrolls the list when clicked.
+
+**One leading column governs alignment.** `--lead: 44px` (or its scaled equivalent) sets the icon/bubble column for every row type in the lessons list. Set headers, part rows, and single-part rows all start their text at the same x. The due column is fixed-width and right-aligned. A single-part document renders as a set header with no rows beneath it; NEVER as a part row wearing a header icon.
+
+**Descriptions come from `documents.card_line` or `obligations.description`.** Never from `source_section` (that's a semicolon-joined heading list, not a description). If neither exists, render nothing - an empty second line beats an unreadable one.
+
+**Due dates render neutral until the last five days of the cycle**, then amber, then red when overdue. Amber for a date 29 days out on a page whose rail already says 29 days left means amber has stopped meaning anything.
+
+**Prohibited here:** a percentage before any signature exists; the word "compliance"; any nag when the queue is empty; emoji in operator copy; obligation keys in visible text or on `title` attributes.
 
 ---
 
@@ -666,6 +671,10 @@ That last card is not decoration. It is the permission to leave, and it is what 
 **Motion is a system, not a decoration.** One easing curve and three durations tune everything - step content slides in on change, the rail bubble pops when a section completes, the progress bar eases, buttons depress on `:active`, options transition border and shadow only. `transition: all` is banned; every transition names its properties, and `width`, `height`, `max-height`, `top`, `left`, `margin`, and `padding` are never transitioned. `prefers-reduced-motion: reduce` collapses every animation and transition to near-zero - not optional on a compliance surface.
 
 **After answering a check, the pane scrolls just enough to bring the feedback above the fold.** Not a jump to top - the minimum scroll that reveals it, smooth. Applies to both correct and incorrect.
+
+**The module fits the viewport.** Card height is `calc(100vh - --chrome)`, where `--chrome` names every contributing pixel (nav, margins, command bar, body padding, borders) so the sum is auditable rather than a magic number. The rail scrolls independently, the reading pane scrolls independently, and the footer is pinned. Both scroll containers need `min-height: 0` and `height: 100%`; the grid needs `min-height: 0` and `overflow: hidden`. Below 960px the whole viewport-fit rule releases (heights auto, overflow visible, page scrolls normally) - nested scroll on a phone is worse than a natural page scroll.
+
+**No breadcrumb.** The Academy button in the footer is the route home. A crumb trail nobody clicks is chrome; a labelled button next to Back and Save & exit is a real affordance.
 
 ---
 

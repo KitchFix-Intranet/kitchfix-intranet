@@ -179,7 +179,7 @@ export async function GET() {
   // data exists in academy_check_attempts + academy_module_progress.
   const [docsQ, obligationsQ, cyclesQ, attestationsQ, viewerAttemptsQ, viewerProgressQ] = await Promise.all([
     distinctDocIds.length > 0
-      ? supa.from("documents").select("id, title, shelf, doc_class, version").in("id", distinctDocIds)
+      ? supa.from("documents").select("id, title, shelf, doc_class, version, card_line").in("id", distinctDocIds)
       : Promise.resolve({ data: [], error: null }),
     distinctObligationPairs.length > 0
       ? supa
@@ -295,6 +295,12 @@ export async function GET() {
       cadence: ob?.cadence || null,
       obligation_type: ob?.type || null,
       description: ob?.description || null,
+      // Authored description candidates for the part-row line under
+      // the title. Preference (client-side): card_line > description >
+      // nothing. source_section is a semicolon-joined heading list
+      // and is deliberately NOT a description candidate - it was
+      // producing unreadable one-liners in the density review.
+      card_line: doc?.card_line || null,
       doc_version: r.doc_version,
       est_minutes: r.est_minutes || 0,
       due_date: r.due_date,

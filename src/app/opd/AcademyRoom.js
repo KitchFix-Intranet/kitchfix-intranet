@@ -1,27 +1,27 @@
 "use client";
 
-// Academy room. One PRIMARY card (the person's work: header + progress
-// rule + rail + lessons body) plus a SECONDARY row (Your Year, Your
-// Record stacked left; Company Standing right at 1.15fr). Two tiers,
-// not five cards. Built per OPD_Academy_Room_v5.html visual contract
-// (spec 18.2/18.3 amended by the composition PR).
-//
-// Discipline enforced by construction:
-//   1. NO emoji in operator copy. Lucide icons only.
-//   2. NO obligation_key in operator copy - not in visible text, not
-//      in aria-label, not in title attributes. Spec 18.3.
-//   3. A document is a SET. Two parts of one doc render as one .opd-set
-//      with numbered part rows on a connecting spine. Part 2 is locked
-//      until Part 1 is signed - both display-locked here AND refused
-//      by /api/academy/module (server enforces the same rule).
-//   4. Single-part documents are ONE row, not a header + fake part.
-//   5. Completed lessons leave their set and appear only under
-//      "Completed this cycle" - the set header carries the aggregate
-//      so nothing is lost and no lesson renders twice.
-//   6. Peer visibility per spec 3.4: salaried people render named;
-//      hourly people not in the cycle's audience appear as an
-//      aggregate ("N hourly team members · Not in this cycle's
-//      audience").
+// Academy room. Density-pass composition (spec 18.2 amended):
+//   - TWO cards on one gutter: profile + lessons, side by side.
+//   - A card holds BLOCKS; it is not divided into bands. Every set,
+//     every rail section, and Completed are bordered blocks inset by
+//     --gut. Full-bleed rules are reserved for a card's own header
+//     and footer.
+//   - No top greeting band. The count + minutes + due date live in
+//     the rail once each; Continue lives in the lessons card header.
+//   - Identity is horizontal (36px avatar beside the name, not
+//     stacked above).
+//   - The lessons list is CAPPED and scrolls internally. When content
+//     is hidden three signals fire at once: a fade, a scrollbar, and
+//     a counted pill ("N more below") that scrolls when clicked.
+//   - One leading column (--lead: 44px) governs every row type so the
+//     text column starts at ONE x. A single-part document is a set
+//     header with no rows beneath it, not a part row wearing a header
+//     icon.
+//   - The due column is fixed-width and right-aligned. Due dates are
+//     neutral until the last five days; amber then; red overdue.
+//   - Descriptions come from card_line > obligation.description. If
+//     both are empty, render nothing. NEVER source_section.
+//   - No emoji, no obligation_key anywhere in operator copy.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -30,19 +30,18 @@ import {
   Lock,
   Award,
   Flame,
-  Clock,
   ArrowRight,
   ChevronRight,
   Users,
   Calendar,
+  ChevronDown,
 } from "lucide-react";
 import AcademyFocus from "./AcademyFocus";
 
 const EMPTY_ARR = Object.freeze([]);
 
 // FY2026 season phases across twelve months. Kept in-file as a small
-// display constant; the phase strip is a visual anchor to Service
-// Calendar's phase grammar.
+// display constant.
 const YEAR_PHASES = [
   { key: "spring", label: "SPRING TRAINING", months: 3, color: "#D9892F" },
   { key: "ext",    label: "EXT",              months: 1, color: "#C8A96A" },
@@ -51,6 +50,9 @@ const YEAR_PHASES = [
   { key: "off",    label: "OFF-SEASON",       months: 2, color: "var(--opd-n400)" },
 ];
 const MONTH_LETTERS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+// Spec 18.10: five days is the honest threshold for due-date urgency.
+const DUE_AMBER_DAYS = 5;
 
 // ─── Helpers ────────────────────────────────────────────────────
 function initials(name) {
@@ -61,16 +63,12 @@ function initials(name) {
 }
 function daysUntilISO(isoDate, todayISO) {
   if (!isoDate) return null;
-  const then = new Date(`${isoDate}T00:00:00Z`);
+  const dateOnly = String(isoDate).length >= 10 ? String(isoDate).slice(0, 10) : String(isoDate);
+  const then = new Date(`${dateOnly}T00:00:00Z`);
   const today = new Date(`${todayISO}T00:00:00Z`);
   if (Number.isNaN(then.getTime()) || Number.isNaN(today.getTime())) return null;
   return Math.round((then.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
 }
-// Accept EITHER a bare date ("2026-09-01") OR a full ISO timestamp
-// ("2026-09-01T16:37:26+00:00"). The "Signed null" bug on the
-// completed row (owner walk, 2026-09-01) was this function appending
-// T00:00:00 to a value that already carried a time, producing an
-// invalid parse. Slice to the date portion when a "T" is present.
 function formatMonthDay(iso) {
   if (!iso) return null;
   const s = String(iso);
@@ -81,13 +79,18 @@ function formatMonthDay(iso) {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   } catch { return null; }
 }
-function formatShortDate(iso) {
-  if (!iso) return null;
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
-  } catch { return null; }
+function formatMonthDayUpper(iso) {
+  const s = formatMonthDay(iso);
+  return s ? s.toUpperCase() : null;
+}
+// Due-date urgency (spec 18.10): amber inside 5 days, red overdue,
+// neutral otherwise. Returns a class suffix ("", "urg", "over").
+function dueUrgencyClass(dueISO, todayISO) {
+  const d = daysUntilISO(dueISO, todayISO);
+  if (d == null) return "";
+  if (d < 0) return "opd-pm-a--over";
+  if (d <= DUE_AMBER_DAYS) return "opd-pm-a--urg";
+  return "";
 }
 function DashedBrick({ scope, message, onRetry }) {
   return (
@@ -101,20 +104,22 @@ function DashedBrick({ scope, message, onRetry }) {
   );
 }
 
-// Doc-class -> chip family tint (matches the render's .seti--{gov,proc,tool}).
-// Kept small; unknown classes fall through to gov.
+// Doc-class -> chip family tint.
 function docClassFamily(docClass) {
   const c = String(docClass || "").toUpperCase();
-  if (c === "PB") return "proc";  // Playbook = green family
-  if (c === "AGR") return "gov";  // Agreement = navy family
-  if (c === "SOP" || c === "POL") return "tool"; // Procedures = amber family
+  if (c === "PB") return "proc";
+  if (c === "AGR") return "gov";
+  if (c === "SOP" || c === "POL") return "tool";
   return "gov";
 }
 
+// Description precedence per prompt: card_line > obligation.description
+// > null. NEVER source_section. If neither exists, render nothing.
+function rowDescription(row) {
+  return (row.card_line || row.description || "").trim() || null;
+}
+
 // ─── Sets: group queue rows by doc ─────────────────────────────
-// Each set represents one document. Rows are ordered by part_number.
-// A row is "locked" when it's a later part whose prior part is not
-// yet signed. The server enforces the same rule at /api/academy/module.
 function buildSets(queue) {
   const byDoc = new Map();
   for (const r of queue || []) {
@@ -125,27 +130,11 @@ function buildSets(queue) {
   const sets = [];
   for (const [docId, rows] of byDoc) {
     rows.sort((a, b) => (a.part_number || 1) - (b.part_number || 1));
-    // Priors: any queued rows for this doc that are signed.
-    const priorSignedNums = new Set(
-      (queue || [])
-        .filter((r) => r.doc_id === docId && r.signed)
-        .map((r) => r.part_number)
-    );
     const totalParts = rows[0]?.total_parts || rows.length;
-    const parts = rows.map((r, i) => {
-      // A later part is locked when any earlier part number is
-      // neither signed nor present-as-open in the rows list. In this
-      // build every part is issued upfront, so "locked" = there's an
-      // earlier part_number in the queue that is NOT yet signed.
-      const priorInQueue = rows.slice(0, i);
-      const hasUnsignedPrior = priorInQueue.length > 0;
-      return {
-        ...r,
-        _locked: hasUnsignedPrior,
-      };
-    });
-    // Set aggregate: how many parts are complete, total minutes left,
-    // "next" part index (first non-locked, non-signed).
+    const parts = rows.map((r, i) => ({
+      ...r,
+      _locked: i > 0,
+    }));
     const completedPriorCount = totalParts - rows.length;
     const minutesLeft = rows.reduce((acc, r) => acc + (r.est_minutes || 0), 0);
     const nextIdx = parts.findIndex((r) => !r._locked);
@@ -163,12 +152,9 @@ function buildSets(queue) {
   return sets;
 }
 
-// ─── Rail sections ─────────────────────────────────────────────
-function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, todayISO, streakCycles, nextCycle, onOpenRecord, onOpenLibrary }) {
+// ─── Profile rail (block grammar) ──────────────────────────────
+function PrimaryRail({ viewer, queue, cycleLabel, cycleEndISO, todayISO, streakCycles, nextCycle }) {
   const displayName = viewer?.displayName || "";
-  // Rail role = people.title only. Owner walk 2026-09-01 forbids
-  // substituting account_key or isCorp/isSiteLeader as a title -
-  // those are scope facts, not roles. Empty when title is missing.
   const role = viewer?.roleTitle || "";
   const signedCount = (queue || []).filter((r) => r.signed).length;
   const totalCount = (queue || []).length;
@@ -176,9 +162,7 @@ function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, tod
   const openMinutes = (queue || []).filter((r) => !r.signed).reduce((a, r) => a + (r.est_minutes || 0), 0);
   const meterPct = totalCount === 0 ? 0 : Math.round((signedCount / totalCount) * 100);
   const daysLeft = daysUntilISO(cycleEndISO, todayISO);
-  const dueDateLabel = cycleEndISO ? formatMonthDay(cycleEndISO) : null;
-
-  // Signed certificates list (replaces the tile wall + badgeLabelFor).
+  const dueDateLabel = cycleEndISO ? formatMonthDayUpper(cycleEndISO) : null;
   const certs = (queue || [])
     .filter((r) => r.signed)
     .map((r) => ({
@@ -187,146 +171,241 @@ function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, tod
       serial: r.certificate_serial,
       signed_at: r.signed_at,
     }));
-  const certsToEarn = openCount;
 
   return (
-    <aside className="opd-prail" aria-label="Your profile">
-      <div className="opd-prail-id">
-        <div className="opd-prail-av" aria-hidden="true">{initials(displayName)}</div>
-        <h2>{displayName || " "}</h2>
-        {role ? <div className="opd-prail-id-role">{role}</div> : null}
+    <aside className="opd-card opd-prail" aria-label="Your profile">
+      {/* Identity strip = card header (full-bleed bottom border earned) */}
+      <div className="opd-pid">
+        <div className="opd-pid-av" aria-hidden="true">{initials(displayName)}</div>
+        <div className="opd-pid-who">
+          <h2>{displayName || " "}</h2>
+          {role ? <div className="opd-pid-r">{role}</div> : null}
+        </div>
+      </div>
+
+      {/* Everything below is a block inside the card. */}
+      <div className="opd-pbody">
         {streakCycles > 0 ? (
-          <div className="opd-streak">
-            <Flame size={12} strokeWidth={1.75} />
-            {streakCycles} cycles on time
+          <div className="opd-psec opd-psec--tint opd-psec--row">
+            <span className="opd-psec-k">Streak</span>
+            <span className="opd-strk">
+              <Flame size={11} strokeWidth={1.75} />
+              {streakCycles} cycles on time
+            </span>
           </div>
         ) : null}
-      </div>
 
-      <div className="opd-psec">
-        <span className="opd-psec-k">This cycle</span>
-        <div className="opd-stand">
-          <b className="opd-stand-num num">{signedCount}</b>
-          <span className="opd-stand-of">of {totalCount} signed</span>
+        <div className="opd-psec">
+          <span className="opd-psec-k">This cycle</span>
+          <div className="opd-cyc">
+            <b className="opd-cyc-num num">{signedCount}</b>
+            <span className="opd-cyc-of">of {totalCount} signed</span>
+            <em className="opd-cyc-min num">{openMinutes} MIN</em>
+          </div>
+          <div className="opd-meter" aria-hidden="true">
+            <i style={{ width: `${meterPct}%` }} />
+          </div>
+          <div className="opd-mlab">
+            <span>{openCount} TO GO</span>
+            <span>{cycleLabel ? cycleLabel.toUpperCase() : ""}</span>
+          </div>
         </div>
-        <div className="opd-meter" aria-hidden="true">
-          <i style={{ width: `${meterPct}%` }} />
-        </div>
-        <div className="opd-mlab">
-          <span><b className="num">{openCount}</b> TO GO</span>
-          <span className="num">{openMinutes} MIN</span>
-        </div>
-      </div>
 
-      <div className="opd-psec">
-        <span className="opd-psec-k">Your certificates</span>
-        <div style={{ marginTop: 10 }}>
+        {daysLeft != null ? (
+          <div className="opd-psec">
+            <span className="opd-psec-k">Due</span>
+            <div className="opd-duel">
+              <b className="opd-duel-b num">{Math.max(0, daysLeft)}</b>
+              <span className="opd-duel-s">days left</span>
+              <em className="opd-duel-w">{dueDateLabel}</em>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="opd-psec">
+          <span className="opd-psec-k">Your certificates</span>
           {certs.length === 0 ? (
-            <div className="opd-certfoot" style={{ marginTop: 0, borderTop: "none", paddingTop: 0 }}>
+            <div className="opd-certfoot" style={{ marginTop: 6, borderTop: "none", paddingTop: 0 }}>
               No signatures yet this cycle
             </div>
           ) : (
-            certs.map((c) => (
-              <div key={c.doc_id} className="opd-sg">
-                <span className="opd-sg-ic" aria-hidden="true">
-                  <Award size={14} strokeWidth={1.75} />
-                </span>
-                <span className="opd-sg-tx">
-                  <b>{c.doc_title}</b>
-                  <span className="opd-lb">{c.serial ? `${c.serial} · ` : ""}{formatShortDate(c.signed_at) || ""}</span>
-                </span>
-              </div>
-            ))
+            <div style={{ marginTop: 7 }}>
+              {certs.map((c) => (
+                <div key={c.doc_id} className="opd-sg">
+                  <span className="opd-sg-ic" aria-hidden="true">
+                    <Award size={12} strokeWidth={1.75} />
+                  </span>
+                  <div>
+                    <b>{c.doc_title}</b>
+                    <span className="opd-sg-serial">{c.serial ? `${c.serial} · ` : ""}{formatMonthDayUpper(c.signed_at) || ""}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
-        {certsToEarn > 0 ? (
-          <div className="opd-certfoot">{certsToEarn} more to earn this cycle</div>
-        ) : null}
-      </div>
 
-      {daysLeft != null ? (
-        <div className="opd-psec">
-          <span className="opd-psec-k">Due</span>
-          <div className="opd-duebox">
-            <div>
-              <b className="opd-dnum-b num">{Math.max(0, daysLeft)}</b>
-              <span className="opd-dnum-s">days left</span>
-            </div>
-            <div className="opd-dwhen">
-              {dueDateLabel}
-              <br /><em>Cycle closes</em>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="opd-psec">
-        <span className="opd-psec-k">Coming up</span>
-        <div className="opd-nextline">
-          <Calendar size={13} strokeWidth={1.75} />
-          <div>
+        <div className="opd-psec opd-psec--tint">
+          <span className="opd-psec-k">Coming up</span>
+          <div className="opd-nx1">
+            <Calendar size={13} strokeWidth={1.75} />
             {nextCycle?.label ? (
-              <>
-                <b>{nextCycle.label}</b>
-                <span className="opd-lb">
-                  opens {formatMonthDay(nextCycle.period_start) || "next cycle"}
-                </span>
-              </>
+              <div>
+                <b>{nextCycle.label}</b> · opens {formatMonthDay(nextCycle.period_start) || "next cycle"}
+              </div>
             ) : (
-              <>
-                <b>Next cycle</b>
-                <span className="opd-lb">No cycle scheduled yet</span>
-              </>
+              <div>
+                <b>Next cycle</b> · no cycle scheduled yet
+              </div>
             )}
           </div>
         </div>
       </div>
 
+      {/* Card footer (full-bleed tinted). */}
       <div className="opd-plinks">
-        <button type="button" className="opd-plink" onClick={onOpenRecord}>
+        <button type="button" className="opd-plink">
           My full record
-          <ChevronRight size={15} strokeWidth={2} />
+          <ChevronRight size={14} strokeWidth={2} />
         </button>
-        <button type="button" className="opd-plink" onClick={onOpenLibrary}>
+        <button type="button" className="opd-plink">
           Browse the Library
-          <ChevronRight size={15} strokeWidth={2} />
+          <ChevronRight size={14} strokeWidth={2} />
         </button>
       </div>
     </aside>
   );
 }
 
-// ─── Sets + parts (the lessons area) ───────────────────────────
-function SetBlock({ set, onOpen, onOpenCompleted }) {
+// ─── Lessons list wrapper (capped, cued) ───────────────────────
+function LessonsCard({ sets, completed, openCount, openMinutes, cycleEndDate, onOpen, todayISO, nextOpenPart }) {
+  const wrapRef = useRef(null);
+  const bodyRef = useRef(null);
+  const [belowCount, setBelowCount] = useState(0);
+
+  const recompute = useCallback(() => {
+    const wrap = wrapRef.current;
+    const body = bodyRef.current;
+    if (!wrap || !body) return;
+    const more = body.scrollHeight > body.clientHeight + 8
+      && (body.scrollHeight - body.clientHeight - body.scrollTop) > 26;
+    wrap.classList.toggle("opd-lwrap--more", more);
+    if (more) {
+      const bb = body.getBoundingClientRect();
+      const blocks = [
+        ...body.querySelectorAll(":scope > .opd-set"),
+        ...body.querySelectorAll(":scope > .opd-cmpl"),
+      ];
+      const hidden = blocks.filter((el) => el.getBoundingClientRect().top > bb.bottom - 40).length;
+      setBelowCount(hidden);
+    } else {
+      setBelowCount(0);
+    }
+  }, []);
+  useEffect(() => {
+    recompute();
+    const body = bodyRef.current;
+    if (!body) return;
+    body.addEventListener("scroll", recompute, { passive: true });
+    window.addEventListener("resize", recompute);
+    return () => {
+      body.removeEventListener("scroll", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, [recompute, sets, completed]);
+
+  const scrollDown = () => {
+    const body = bodyRef.current;
+    if (!body) return;
+    body.scrollBy({ top: 260, behavior: "smooth" });
+  };
+
+  return (
+    <div className="opd-card opd-lcard">
+      <div className="opd-lh">
+        <span className="opd-lh-k">Lessons</span>
+        <span className="opd-lh-meta">
+          {openCount} open · about {openMinutes} min
+          {cycleEndDate ? ` · due ${cycleEndDate}` : ""}
+        </span>
+        {nextOpenPart ? (
+          <button
+            type="button"
+            className="opd-lh-cta"
+            onClick={() => onOpen(nextOpenPart)}
+          >
+            Continue
+            <ArrowRight size={14} strokeWidth={2} />
+          </button>
+        ) : null}
+      </div>
+      <div className="opd-lwrap" ref={wrapRef}>
+        <div className="opd-lbody" ref={bodyRef}>
+          {sets.map((s) => (
+            <SetBlock key={s.doc_id} set={s} onOpen={onOpen} todayISO={todayISO} />
+          ))}
+          {sets.length === 0 && completed.length === 0 ? (
+            <div className="opd-set" style={{ padding: 22, textAlign: "center" }}>
+              <div className="opd-lh-meta">Nothing needs you this cycle.</div>
+            </div>
+          ) : null}
+          {completed.length > 0 ? (
+            <CompletedBlock completed={completed} onOpen={onOpen} />
+          ) : null}
+        </div>
+        <div className="opd-lfade" aria-hidden="true" />
+        {belowCount > 0 ? (
+          <button
+            type="button"
+            className="opd-lcue"
+            onClick={scrollDown}
+            aria-label={`${belowCount} more below - scroll`}
+          >
+            <span>{belowCount} more below</span>
+            <ChevronDown size={12} strokeWidth={2} />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ─── SetBlock ──────────────────────────────────────────────────
+function SetBlock({ set, onOpen, todayISO }) {
   const family = docClassFamily(set.doc_class);
   const isSolo = set.parts.length === 1 && set.totalParts === 1;
 
   if (isSolo) {
-    // Single-part document: one row, no set header, no fake part.
+    // Solo = set header only. No fake part row wearing a header icon.
+    // The header row IS the click target.
     const p = set.parts[0];
+    const desc = rowDescription(p);
+    const dueClass = dueUrgencyClass(p.due_date, todayISO);
     return (
-      <div className="opd-set opd-set--solo">
-        <button
-          type="button"
-          className={"opd-pr opd-pr--nx"}
-          onClick={() => onOpen(p)}
-          style={{ padding: "14px 15px 14px 17px" }}
-        >
-          <i className="opd-spine" aria-hidden="true" />
-          <span className={"opd-seti opd-seti--" + family} aria-hidden="true" style={{ width: 34, height: 34 }}>
-            <FileText size={17} strokeWidth={1.75} />
+      <button
+        type="button"
+        className="opd-set opd-set--solo"
+        onClick={() => onOpen(p)}
+      >
+        <div className="opd-seth">
+          <span className="opd-lead" aria-hidden="true">
+            <span className={"opd-seti opd-seti--" + family}>
+              <FileText size={15} strokeWidth={1.75} />
+            </span>
           </span>
-          <div className="opd-pb2" style={{ marginLeft: 2 }}>
-            <h4 style={{ fontSize: "var(--opd-t-row)", fontWeight: 750 }}>{set.doc_title}</h4>
-            {p.description ? <div className="opd-pb2-d">{p.description}</div> : null}
+          <div className="opd-seth-tx">
+            <h3>{set.doc_title}</h3>
+            {desc ? <div className="opd-seth-mt">{desc}</div> : null}
           </div>
-          <div className="opd-pm">
-            <div className="opd-pm-a">{p.due_date ? `Due ${formatMonthDay(p.due_date)}` : ""}</div>
-            <div className="opd-pm-b num">{p.est_minutes} MIN</div>
+          <div className="opd-sright">
+            <div className="opd-pm">
+              <div className={"opd-pm-a " + dueClass}>{p.due_date ? `Due ${formatMonthDay(p.due_date)}` : ""}</div>
+              <div className="opd-pm-b num">{p.est_minutes} MIN</div>
+            </div>
+            <span className="opd-go" aria-hidden="true">Start <ArrowRight size={12} strokeWidth={2} /></span>
           </div>
-          <span className="opd-go" aria-hidden="true">Start <ArrowRight size={13} strokeWidth={2} /></span>
-        </button>
-      </div>
+        </div>
+      </button>
     );
   }
 
@@ -338,10 +417,12 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
   return (
     <div className="opd-set">
       <div className="opd-seth">
-        <span className={"opd-seti opd-seti--" + family} aria-hidden="true">
-          <FileText size={17} strokeWidth={1.75} />
+        <span className="opd-lead" aria-hidden="true">
+          <span className={"opd-seti opd-seti--" + family}>
+            <FileText size={15} strokeWidth={1.75} />
+          </span>
         </span>
-        <div>
+        <div className="opd-seth-tx">
           <h3>{set.doc_title}</h3>
           <div className="opd-seth-mt">
             {started
@@ -349,18 +430,13 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
               : `${set.totalParts} parts, in order · ${set.minutesLeft} min`}
           </div>
         </div>
-        {/* Owner walk 2026-09-01: unify the right edge. Every
-            multi-part set shows a progress bar; the zero state is
-            an empty track PLUS a muted "Not started" label beneath,
-            not INSTEAD of the bar. Three treatments in the same
-            column position read as broken. Single-part sets have
-            nothing here (they have no progress to show; the solo
-            branch above handles that). */}
-        <div className="opd-setend" aria-hidden="true">
-          <span className="opd-setprog">
+        <div className="opd-sright">
+          <span className="opd-sprog" aria-hidden="true">
             <i style={{ width: `${progressPct}%` }} />
           </span>
-          {!started ? <span className="opd-setend-lbl">Not started</span> : null}
+          <span className="opd-sstat">
+            {started ? `${completedSetParts} OF ${set.totalParts}` : "NOT STARTED"}
+          </span>
         </div>
       </div>
       {set.parts.map((p) => {
@@ -369,8 +445,9 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
         const cls = "opd-pr"
           + (isLocked ? " opd-pr--lk" : "")
           + (isNext ? " opd-pr--nx" : "");
-        const rowTitle = partRowTitle(p.source_section, p.description);
-        const rowTitleFull = String(p.source_section || p.description || "").trim();
+        const desc = rowDescription(p);
+        const shortTitle = partShortTitle(p.source_section);
+        const dueClass = dueUrgencyClass(p.due_date, todayISO);
         return (
           <button
             key={p.requirement_id}
@@ -378,27 +455,27 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
             className={cls}
             onClick={() => { if (!isLocked) onOpen(p); }}
             disabled={isLocked}
-            title={rowTitleFull || undefined}
+            title={p.source_section || undefined}
           >
             <i className="opd-spine" aria-hidden="true" />
-            <span className="opd-pnum" aria-hidden="true">
-              {isLocked ? <Lock size={11} strokeWidth={1.75} /> : p.part_number}
+            <span className="opd-lead" aria-hidden="true">
+              <span className="opd-pnum">
+                {isLocked ? <Lock size={10} strokeWidth={1.75} /> : p.part_number}
+              </span>
             </span>
-            <div className="opd-pb2">
-              <h4>Part {p.part_number}{rowTitle ? ` · ${rowTitle}` : ""}</h4>
-              {p.description ? <div className="opd-pb2-d">{p.description}</div> : null}
+            <div className="opd-pb">
+              <h4>Part {p.part_number}{shortTitle ? ` · ${shortTitle}` : ""}</h4>
+              {desc ? <div className="opd-pb-d">{desc}</div> : null}
               {isLocked ? (
                 <span className="opd-lkn">
-                  <Lock size={11} strokeWidth={1.75} />
+                  <Lock size={10} strokeWidth={1.75} />
                   Opens when you finish Part {p.part_number - 1}
                 </span>
               ) : null}
             </div>
             <div className="opd-pm">
-              <div
-                className="opd-pm-a"
-                style={isLocked ? { color: "var(--opd-n500)" } : undefined}
-              >
+              <div className={"opd-pm-a " + (isLocked ? "" : dueClass)}
+                style={isLocked ? { color: "var(--opd-n500)" } : undefined}>
                 {p.due_date ? `Due ${formatMonthDay(p.due_date)}` : ""}
               </div>
               <div className="opd-pm-b num">{p.est_minutes} MIN</div>
@@ -407,7 +484,7 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
               className={"opd-go" + (isLocked ? " opd-go--q" : "")}
               aria-hidden="true"
             >
-              {isLocked ? "Locked" : (<>Start <ArrowRight size={13} strokeWidth={2} /></>)}
+              {isLocked ? "Locked" : (<>Start <ArrowRight size={12} strokeWidth={2} /></>)}
             </span>
           </button>
         );
@@ -416,77 +493,67 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
   );
 }
 
-// Part-row title from the source_section, which the obligations
-// table stores as a semicolon-joined list of headings from the
-// document. Take the first heading only; drop the rest. If the
-// remaining string exceeds ~40 chars, truncate at a word boundary
-// with an ellipsis. Caller puts the full string on the row's
-// `title` attribute so hover reveals the whole list.
-//
-// Falls back to description when source_section is empty (e.g. the
-// single-part solo path where source_section may not be set) - and
-// in that fallback we truncate on the same rule to avoid the row
-// title running long.
-const TITLE_MAX_CHARS = 40;
-function partRowTitle(sourceSection, description) {
+// First section from source_section, truncated to ~40 chars at a word
+// boundary. Used as an internal navigation aid ("Part 2 · Culinary
+// Defined"), NOT as the description.
+function partShortTitle(sourceSection) {
   const src = String(sourceSection || "").trim();
-  const first = src ? src.split(/;/, 1)[0].trim() : "";
-  const raw = first || String(description || "").trim();
-  if (!raw) return "";
-  if (raw.length <= TITLE_MAX_CHARS) return raw;
-  const cut = raw.slice(0, TITLE_MAX_CHARS);
+  if (!src) return "";
+  const first = src.split(/;/, 1)[0].trim();
+  if (!first) return "";
+  const MAX = 40;
+  if (first.length <= MAX) return first;
+  const cut = first.slice(0, MAX);
   const lastSp = cut.lastIndexOf(" ");
-  const truncated = (lastSp > 20 ? cut.slice(0, lastSp) : cut).replace(/[\s,.·-]+$/, "");
-  return truncated + "…";
+  return (lastSp > 20 ? cut.slice(0, lastSp) : cut).replace(/[\s,.·-]+$/, "") + "…";
 }
 
-// ─── Completed section (leaves the set) ────────────────────────
-function CompletedSection({ queue, onOpen }) {
-  const done = (queue || []).filter((r) => r.signed);
-  if (done.length === 0) return null;
+// ─── Completed block ───────────────────────────────────────────
+function CompletedBlock({ completed, onOpen }) {
   return (
     <div className="opd-cmpl">
       <div className="opd-cmplh">
-        <Check size={14} strokeWidth={2.25} style={{ color: "var(--opd-grnfg)" }} />
+        <Check size={13} strokeWidth={2.25} style={{ color: "var(--opd-grnfg)" }} />
         <span className="opd-cmplh-k">Completed this cycle</span>
         <span className="opd-cmplh-s">
-          {done.length} lesson{done.length === 1 ? "" : "s"} · {done.length} certificate{done.length === 1 ? "" : "s"}
+          {completed.length} lesson{completed.length === 1 ? "" : "s"} · {completed.length} certificate{completed.length === 1 ? "" : "s"}
         </span>
       </div>
-      {done.map((r) => (
-        <button
-          key={r.requirement_id}
-          type="button"
-          className="opd-pr opd-pr--dn"
-          onClick={() => onOpen(r)}
-          style={{ border: "none" }}
-        >
-          <i className="opd-spine" aria-hidden="true" />
-          <span className="opd-pnum" aria-hidden="true">
-            <Check size={12} strokeWidth={2.25} />
-          </span>
-          <div className="opd-pb2">
-            <h4>{r.doc_title}{r.total_parts > 1 ? ` · Part ${r.part_number}` : ""}</h4>
-            <div className="opd-pb2-d">
-              {(() => {
-                const md = formatMonthDay(r.signed_at);
-                return md ? `Signed ${md}` : "Signed";
-              })()}
-              {r.doc_version ? ` · version ${r.doc_version}` : ""}
+      {completed.map((r) => {
+        const md = formatMonthDay(r.signed_at);
+        return (
+          <button
+            key={r.requirement_id}
+            type="button"
+            className="opd-pr opd-pr--dn"
+            onClick={() => onOpen(r)}
+          >
+            <i className="opd-spine" aria-hidden="true" />
+            <span className="opd-lead" aria-hidden="true">
+              <span className="opd-pnum">
+                <Check size={11} strokeWidth={2.25} />
+              </span>
+            </span>
+            <div className="opd-pb">
+              <h4>{r.doc_title}{r.total_parts > 1 ? ` · Part ${r.part_number}` : ""}</h4>
+              <div className="opd-pb-d">
+                {md ? `Signed ${md}` : "Signed"}
+                {r.doc_version ? ` · version ${r.doc_version}` : ""}
+              </div>
             </div>
-          </div>
-          <div className="opd-pm">
-            <div className="opd-pm-a">{r.certificate_serial || ""}</div>
-            <div className="opd-pm-b">CERTIFICATE</div>
-          </div>
-          <span className="opd-go" aria-hidden="true">View</span>
-        </button>
-      ))}
+            <div className="opd-pm">
+              <div className="opd-pm-a">{r.certificate_serial || ""}</div>
+              <div className="opd-pm-b">CERTIFICATE</div>
+            </div>
+            <span className="opd-go" aria-hidden="true">View</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// ─── Year track ────────────────────────────────────────────────
+// ─── Year track (unchanged behaviour, class names align to render) ──
 function YearCard({ yearTrack, currentCycleLabel }) {
   const cells = Array.from({ length: 12 }, (_, i) => {
     const cell = (yearTrack || [])[i] || null;
@@ -497,9 +564,9 @@ function YearCard({ yearTrack, currentCycleLabel }) {
     };
   });
   return (
-    <div className="opd-card2">
+    <div className="opd-c2">
       <div className="opd-c2h">
-        <Calendar size={14} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
+        <Calendar size={13} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
         <span className="opd-c2h-k">Your year</span>
         <span className="opd-lb">one cycle per month</span>
       </div>
@@ -534,7 +601,7 @@ function YearCard({ yearTrack, currentCycleLabel }) {
       </div>
       <div className="opd-ynx">
         {currentCycleLabel ? (
-          <><b>{currentCycleLabel} is your first live cycle.</b> Next cycle opens when this one closes.</>
+          <><b>{currentCycleLabel} is your first live cycle.</b></>
         ) : "No cycle is open at the moment."}
       </div>
     </div>
@@ -543,61 +610,51 @@ function YearCard({ yearTrack, currentCycleLabel }) {
 
 // ─── Record card ───────────────────────────────────────────────
 function RecordCard({ record, cycleLabel }) {
-  // record is now the server-side viewer.record (see api/academy/room:
-  // { signedAllTime, minutesReadThisCycle, checksPassed, retries,
-  //   cyclesClosedCount, firstRun }).
-  // Owner walk 2026-09-01: the tiles were four zeros, which is
-  // technically true but reads as broken. Three of the four now have
-  // real data. The "on-time cycles" tile has no honest number until
-  // at least one published cycle has closed, so we render a first-run
-  // state ("Record starts now") instead of "0 · Never missed".
   const r = record || {
     signedAllTime: 0, minutesReadThisCycle: 0, checksPassed: 0,
     retries: 0, cyclesClosedCount: 0, firstRun: true,
   };
   return (
-    <div className="opd-card2">
+    <div className="opd-c2">
       <div className="opd-c2h">
-        <Award size={14} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
+        <Award size={13} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
         <span className="opd-c2h-k">Your record</span>
         <span className="opd-lb">{cycleLabel ? `since ${cycleLabel}` : "all time"}</span>
       </div>
-      <div className="opd-rgrid">
+      <div className="opd-rg">
         <div className="opd-rq">
           <b className="num">{r.signedAllTime}</b>
           <span className="opd-lb">SIGNED</span>
-          <div className="opd-rq-sub">All time</div>
+          <em>All time</em>
         </div>
         <div className="opd-rq">
           {r.firstRun ? (
             <>
-              <b className="opd-rq-firstrun">Starts now</b>
-              <span className="opd-lb">ON-TIME CYCLES</span>
-              <div className="opd-rq-sub">No cycle has closed yet</div>
+              <div className="opd-rq-fr">Starts now</div>
+              <span className="opd-lb" style={{ marginTop: 6 }}>ON-TIME CYCLES</span>
+              <em>No cycle has closed yet</em>
             </>
           ) : (
             <>
-              <b className="num">{r.cyclesClosedCount - 0}</b>
+              <b className="num">{r.cyclesClosedCount}</b>
               <span className="opd-lb">ON-TIME CYCLES</span>
-              <div className="opd-rq-sub">of {r.cyclesClosedCount} closed</div>
+              <em>of {r.cyclesClosedCount} closed</em>
             </>
           )}
         </div>
         <div className="opd-rq">
           <b className="num">{r.minutesReadThisCycle}</b>
           <span className="opd-lb">MINUTES READ</span>
-          <div className="opd-rq-sub">This cycle</div>
+          <em>This cycle</em>
         </div>
         <div className="opd-rq">
           <b className="num">{r.checksPassed}</b>
           <span className="opd-lb">CHECKS PASSED</span>
-          <div className="opd-rq-sub">
-            {r.retries > 0 ? `${r.retries} retr${r.retries === 1 ? "y" : "ies"}` : "First try each"}
-          </div>
+          <em>{r.retries > 0 ? `${r.retries} retr${r.retries === 1 ? "y" : "ies"}` : "First try each"}</em>
         </div>
       </div>
       <div className="opd-rfoot">
-        Your record is permanent and version-bound. If a document is materially revised, the signature expires and you are asked to sign the new version. <b>Nothing is ever deleted.</b>
+        Permanent and version-bound. If a document is materially revised the signature expires. <b>Nothing is ever deleted.</b>
       </div>
     </div>
   );
@@ -621,9 +678,9 @@ function StandingCard({ standing }) {
   const siteCount = standing.totals?.accounts ?? accounts.length;
 
   return (
-    <div className="opd-card2 opd-cs">
+    <div className="opd-c2 opd-cs">
       <div className="opd-c2h">
-        <Users size={14} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
+        <Users size={13} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
         <span className="opd-c2h-k">Company standing</span>
         <span className="opd-lb">{siteCount} site{siteCount === 1 ? "" : "s"} · {cycleLabel}</span>
       </div>
@@ -649,7 +706,7 @@ function StandingCard({ standing }) {
               aria-expanded={isOpen}
               aria-controls={`opd-exp-${a.team_key}`}
             >
-              <ChevronRight size={14} strokeWidth={2} className="opd-cr-chv" />
+              <ChevronRight size={13} strokeWidth={2} className="opd-cr-chv" />
               <span className="opd-cr-kk">{a.team_key}</span>
               <span className="opd-cr-nm">{a.region || a.team_key}</span>
               <span className={"opd-tone " + tone}>
@@ -668,7 +725,7 @@ function StandingCard({ standing }) {
                 <div key={p.worker_id} className="opd-pp">
                   <span className="opd-pp-av" aria-hidden="true">{initials(p.display_name)}</span>
                   <span className="opd-pp-pn">
-                    <b>{p.display_name || " "}</b>
+                    <b>{p.display_name || " "}</b>
                     <span className="opd-lb">{p.is_salaried ? "Salaried" : "Hourly"}</span>
                   </span>
                   <span className={"opd-pp-st " + (
@@ -774,13 +831,15 @@ export default function AcademyRoom({ viewerEmail }) {
     if (!acc || r.due_date > acc) return r.due_date;
     return acc;
   }, null);
+  const cycleEndDate = cycleEndISO ? formatMonthDay(cycleEndISO) : null;
 
   const sets = useMemo(() => buildSets(queue), [queue]);
+  const completed = useMemo(
+    () => (queue || []).filter((r) => r.signed),
+    [queue]
+  );
   const openCount = queue.filter((r) => !r.signed).length;
   const openMinutes = queue.filter((r) => !r.signed).reduce((a, r) => a + (r.est_minutes || 0), 0);
-  const signedCount = queue.filter((r) => r.signed).length;
-  const totalCount = queue.length;
-  const meterPct = totalCount === 0 ? 0 : Math.round((signedCount / totalCount) * 100);
 
   const onOpen = useCallback((r) => setFocus({
     requirementId: r.requirement_id,
@@ -815,92 +874,41 @@ export default function AcademyRoom({ viewerEmail }) {
     );
   }
 
-  // Aggregate greeting numbers
   const nextOpenPart = sets.find((s) => s.parts.some((p) => !p._locked))?.parts.find((p) => !p._locked) || null;
 
   return (
-    <div className="opd-room opd-room--v5" data-room="academy">
-      {/* ── PRIMARY ── */}
-      <section className="opd-prim">
-        <header className="opd-phead">
-          <div>
-            <div className="opd-phead-kk">
-              {cycleLabel ? `${cycleLabel} · opens today` : "This cycle"}
-            </div>
-            <h1>
-              {openCount === 0
-                ? (totalCount > 0 ? "You are current." : "Nothing needs you right now.")
-                : `${openCount} lesson${openCount === 1 ? "" : "s"} to go, ${(viewer?.displayName || "").split(/\s+/)[0] || "you"}.`}
-            </h1>
-            {openCount > 0 ? (
-              <div className="opd-phead-sb">
-                <Clock size={14} strokeWidth={1.75} />
-                <b>{openMinutes} minutes</b> left this cycle
-                {cycleEndISO ? ` · due ${formatMonthDay(cycleEndISO)}` : ""}
-              </div>
-            ) : null}
+    <div className="opd-room opd-room--dense" data-room="academy">
+      {/* Two cards on one gutter, stretched to equal height. */}
+      <div className="opd-pgrid">
+        <PrimaryRail
+          viewer={viewer}
+          queue={queue}
+          cycleLabel={cycleLabel}
+          cycleEndISO={cycleEndISO}
+          todayISO={todayISO}
+          streakCycles={0}
+          nextCycle={nextCycle}
+        />
+        {loading ? (
+          <div className="opd-card opd-lcard" style={{ padding: 22 }} aria-busy="true">
+            <span className="opd-skel opd-skel--bar opd-skel--w40" />
           </div>
-          {nextOpenPart ? (
-            <button
-              type="button"
-              className="opd-cta"
-              onClick={() => onOpen(nextOpenPart)}
-            >
-              Continue
-              <ArrowRight size={15} strokeWidth={2} />
-            </button>
-          ) : null}
-        </header>
-        <div className="opd-pbar" aria-hidden="true">
-          <i style={{ width: `${meterPct}%` }} />
-        </div>
-        <div className="opd-pbody">
-          <PrimaryRail
-            viewer={viewer}
-            queue={queue}
-            cycleLabel={cycleLabel}
-            cycleEndISO={cycleEndISO}
+        ) : (
+          <LessonsCard
+            sets={sets}
+            completed={completed}
+            openCount={openCount}
+            openMinutes={openMinutes}
+            cycleEndDate={cycleEndDate}
+            onOpen={onOpen}
             todayISO={todayISO}
-            streakCycles={0}
-            nextCycle={nextCycle}
-            onOpenRecord={() => { /* future */ }}
-            onOpenLibrary={() => { /* future */ }}
+            nextOpenPart={nextOpenPart}
           />
-          <div className="opd-pq">
-            <div className="opd-grph">
-              <span className="opd-grph-k">Lessons</span>
-              <span className="opd-grph-s">
-                {loading
-                  ? "Loading"
-                  : `${openCount} open · about ${openMinutes} min`}
-              </span>
-            </div>
-            {loading ? (
-              <div className="opd-set" style={{ padding: 22 }}>
-                <span className="opd-skel opd-skel--bar opd-skel--w40" />
-              </div>
-            ) : (
-              <>
-                {sets.map((s) => (
-                  <SetBlock
-                    key={s.doc_id}
-                    set={s}
-                    onOpen={onOpen}
-                  />
-                ))}
-                {sets.length === 0 && signedCount === 0 ? (
-                  <div className="opd-set" style={{ padding: 22, textAlign: "center" }}>
-                    <div className="opd-grph-s">Nothing needs you this cycle.</div>
-                  </div>
-                ) : null}
-                <CompletedSection queue={queue} onOpen={onOpen} />
-              </>
-            )}
-          </div>
-        </div>
-      </section>
+        )}
+      </div>
 
-      {/* ── SECONDARY ROW ── */}
+      {/* Secondary row (unchanged from prior PR): Year + Record stacked
+          left, Company Standing right. */}
       <div className="opd-srow">
         <div className="opd-scol">
           <YearCard yearTrack={yearTrack} currentCycleLabel={cycleLabel} />
