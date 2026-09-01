@@ -29,7 +29,7 @@
 //     account (see the loading-skeleton + wipe-on-account-change
 //     defenses below)
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -136,17 +136,17 @@ export default function KpiOverviewPage() {
     landingAccount: data?.landing_account,
   });
 
-  // Track fetch identity: any account change wipes prior data (avoids
-  // showing stale numbers from the previous account during warm
-  // refetch - Kevin's charter 4 rule "never a stale control from the
-  // previous account").
-  const prevAccountRef = useRef(account);
-  useEffect(() => {
-    if (prevAccountRef.current !== account) {
-      setData(null);
-      prevAccountRef.current = account;
-    }
-  }, [account]);
+  // 2026-09-01 preview-render fix: no derived-account wipe. Prior
+  // implementation ran an effect on `account` change and setData(null)
+  // to defend against showing stale numbers from a previous account.
+  // But `account` is derived from the response (preview_account /
+  // landing_account) as well as the URL, so the initial "" -> real
+  // transition on preview arrival wiped the just-fetched payload and
+  // left the client on skeleton forever. Labor + Purchasing carry no
+  // equivalent wipe; the refetching state below already renders the
+  // prior board at reduced opacity with a "Refreshing..." chip on real
+  // URL-driven account switches (charter 4 satisfied by the ghost
+  // pattern, not by nuking data).
 
   // ── Fetch overview data ─────────────────────────────────────
   useEffect(() => {
