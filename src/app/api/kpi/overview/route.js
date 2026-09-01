@@ -22,7 +22,6 @@
 //   preview       - preview target (narrows via role gate)
 //   range         - 'fytd' | 'period:N' (shorthand) OR use start/end
 //   start, end    - ISO YYYY-MM-DD (when range is explicit)
-//   rev_source    - 'planned' (default) | 'sc' (corporate + per-meal only)
 //   include_salary - '1' to include salary (gated by canSeeSalary)
 //   debug         - 'timing' -> include _debug.timings block
 //

@@ -1011,9 +1011,13 @@ export async function resolveOverview({
         const pa = pctOf(cogsActual, totalRevenue);
         const pt = pctOf(cogsBudgetToDateDays, revenue_budget_to_date);
         if (pa == null || pt == null) return { label: "No data", tone: "neutral" };
+        // B6 (2026-09-01): the gap moves INTO the pill. Prior copy was
+        // "Under target" plus a separate "10.4% under" below - two
+        // statements of one fact. Now the pill carries both.
+        const absPct = Math.abs(Number(pa) - Number(pt)).toFixed(1);
         return pa <= pt
-          ? { label: "Under target", tone: "good" }
-          : { label: "Over target", tone: "bad" };
+          ? { label: `${absPct}% UNDER TARGET`, tone: "good" }
+          : { label: `${absPct}% OVER TARGET`, tone: "bad" };
       })(),
       mini: [
         { label: "Labor",     actual: labor3100_actual, display: formatMoneyWhole(labor3100_actual) },
@@ -1040,9 +1044,12 @@ export async function resolveOverview({
       delta_pct_display: (gmPctActual != null && gmPctBudget != null) ? gapPointsMargin(gmPctActual - gmPctBudget) : null,
       pill: (() => {
         if (gmPctActual == null || gmPctBudget == null) return { label: "No data", tone: "neutral" };
+        // B6 (2026-09-01): the gap moves INTO the pill. Same pattern
+        // as COGS above - one statement, not two.
+        const absPct = Math.abs(Number(gmPctActual) - Number(gmPctBudget)).toFixed(1);
         return gmPctActual >= gmPctBudget
-          ? { label: "Ahead", tone: "good" }
-          : { label: "Behind", tone: "warn" };
+          ? { label: `${absPct}% AHEAD`, tone: "good" }
+          : { label: `${absPct}% BEHIND`, tone: "warn" };
       })(),
     },
   ];
@@ -1123,7 +1130,13 @@ export async function resolveOverview({
         budget: wkBudget,
       };
     });
-    chart = { grain: "week", series, weekly_budget: wkBudget };
+    // C13 (2026-09-01): bar hover leads with the period + its dates.
+    // The chart carries the period_no so the tooltip header can read
+    // "Period 9 · Week 2" rather than the standalone "Week 2" the
+    // prior render used - naming the period + the week is what makes
+    // the tooltip legible on FYTD screenshots where the period is
+    // otherwise off-screen.
+    chart = { grain: "week", series, weekly_budget: wkBudget, period_no: rng.period_no };
   } else {
     // Period grain for FYTD or explicit range - build one point per
     // fiscal period in the range.
@@ -1415,18 +1428,25 @@ export async function resolveOverview({
     { line_code: "5002.5", label: "Equipment",                     actual: equip_actual, budget: equip_budget },
     { line_code: "5017.3", label: "Perks",                         actual: perks_actual, budget: perks_budget },
   ].map(r => {
-    const reported = r.actual != null && r.actual > 0;
+    // reported is true iff the loader saw a non-zero actual - positive
+    // OR negative (a credit note on 5002.5 is a real reported figure,
+    // e.g. ALL/P9 -157.03). Zero on the purchasing side is ambiguous
+    // between reported-zero and absent, so we treat it as unreported.
+    const reported = r.actual != null && r.actual !== 0;
+    // PR 2 addition (2026-09-01, Kevin surfaced): when reported=false,
+    // the actual + actual_display fields must go null too. Prior code
+    // shipped actual:0 + actual_display:"$0" alongside reported:false -
+    // the flag was right but the payload string was one step behind
+    // it, and any consumer reading actual_display in isolation saw a
+    // phantom zero instead of an absence.
     return {
       line_code: r.line_code,
       label: r.label,
       reported,
-      actual: r.actual,
-      actual_display: formatMoneyWhole(r.actual),
+      actual: reported ? r.actual : null,
+      actual_display: reported ? formatMoneyWhole(r.actual) : null,
       budget: r.budget,
       budget_display: formatMoneyWhole(r.budget),
-      // Variance is only computed against a reported actual. An
-      // unreported line has null variance - the client renders
-      // "no data" instead of computing a delta from a phantom zero.
       variance: (reported && r.budget != null) ? r2(r.actual - r.budget) : null,
       note: r.line_code === "5017.3" ? "Rippling card spend on perks" : null,
     };
@@ -1571,6 +1591,10 @@ export async function resolveOverview({
     const paceCopy = pace === "slower"
       ? "spending slower than the clock"
       : (pace === "faster" ? "spending faster than the clock" : null);
+    // B8+B9 (2026-09-01): two cards, not three. "Which is" retired -
+    // it was left ÷ days, a restatement of the card beside it. The
+    // per-day figure moves onto Left to spend. Both cards use the
+    // .split layout (headline left, two labelled stats right-aligned).
     whatIsLeft = {
       // Machine values so probes can assert numerics without parsing
       // display strings.
@@ -1583,26 +1607,47 @@ export async function resolveOverview({
       budget_used_pct: budgetUsedPct,
       elapsed_pct: elapsedPct,
       pace,
-      // Display strings for the three cells.
-      cell_1: {
-        label: "Cost of goods left to spend",
-        value_display: formatMoneyWhole(cogsLeft),
-        sub_line: `for the ${daysRemaining} days remaining`,
+      // Card 1: Left to spend. Headline dollars remaining, two stats
+      // right-aligned. "A day available" is what today's remaining
+      // budget would buy per day if spent linearly through period end.
+      // "Averaging" is what has actually been spent per day so far -
+      // the reality check on the plan.
+      left_card: {
+        days_left_pill: `${daysRemaining} days left`,
+        hero_display: formatMoneyWhole(cogsLeft),
+        stats: [
+          {
+            label: "A day available",
+            value_display: formatMoneyWhole(perDayLeft),
+          },
+          {
+            label: "Averaging",
+            value_display: formatMoneyWhole(perDaySoFar),
+            value_suffix: perDaySoFar != null ? "a day" : null,
+          },
+        ],
       },
-      cell_2: {
-        label: "Which is",
-        value_display: formatMoneyWhole(perDayLeft),
-        value_suffix: "a day",
-        sub_line: perDaySoFar != null
-          ? `you have averaged ${formatMoneyWhole(perDaySoFar)} a day so far`
+      // Card 2: Budget used. Headline pct of budget consumed, colored
+      // by pace. Two stats right-aligned. Behind-the-clock is good.
+      used_card: {
+        pace_pill: paceCopy
+          ? (pace === "slower" ? "Slower than the clock" : "Faster than the clock")
           : null,
-      },
-      cell_3: {
-        label: "Budget used",
-        value_display: formatPct(budgetUsedPct),
-        direction: pace === "slower" ? "good" : (pace === "faster" ? "bad" : "neutral"),
-        sub_line_prefix: elapsedPct != null ? `with ${formatPct(elapsedPct)} of the period gone` : null,
-        verdict: paceCopy,
+        pace_direction: pace === "slower" ? "good" : (pace === "faster" ? "bad" : "neutral"),
+        hero_display: formatPct(budgetUsedPct),
+        stats: [
+          {
+            label: "Period gone",
+            value_display: formatPct(elapsedPct),
+          },
+          {
+            label: "Spent of budget",
+            value_display: formatMoneyWhole(cogsActual),
+            value_suffix: cogsBudgetFullPeriod != null
+              ? `of ${formatMoneyWhole(cogsBudgetFullPeriod)}`
+              : null,
+          },
+        ],
       },
     };
   }
@@ -1809,6 +1854,20 @@ export async function resolveOverview({
     // makes the absence intentional rather than an accident of key
     // ordering.
     what_is_left: whatIsLeft,
+    // A3+A4 (2026-09-01): the ticker retired. A single status line
+    // replaces it - fixed shape on every account. The pass-through /
+    // fee / planned notes were three restatements of a fact already
+    // carried by the Revenue card's pill and the billed-back tags,
+    // and the longest one forced the ticker to wrap on fee accounts.
+    // status_line has NO account-model notes; every account renders
+    // the same three segments (GM · lever · progress).
+    status_line: buildStatusLine({
+      ticker,
+      cogsLines: cogsLinesForTicker,
+      weeks_closed,
+      weeks_total,
+      period_state: displayPeriodState,
+    }),
     sources: sourcesLine,
     flags,
     freshness,
@@ -1831,6 +1890,50 @@ export async function resolveOverview({
   };
 
   return payload;
+}
+
+// A3+A4 (2026-09-01): the single-sentence status line that replaces
+// the ticker. Fixed shape across every account. Three segments joined
+// by " · " on the client. No notes, no account-model clauses.
+//
+// Segments:
+//   1. "Gross margin <X%> vs <Y%> target"        - always renders when both pcts known
+//   2. "<Lever> is <N.N%> under|over its target" - biggest lever, dropped if unknown
+//   3. "N of M weeks closed"                     - open period only, dropped otherwise
+//
+// State + state_copy come from the ticker computation - the classifier
+// logic is the same, only the render shape changed.
+function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_state }) {
+  if (!ticker) return null;
+  const gmActualPct = ticker.gm_pct_actual;
+  const gmTargetPct = ticker.gm_pct_target;
+  const gm_actual_display = gmActualPct != null ? `${Number(gmActualPct).toFixed(1)}%` : null;
+  const gm_target_display = gmTargetPct != null ? `${Number(gmTargetPct).toFixed(1)}%` : null;
+
+  // Biggest lever: ticker already ranked levers by |dev_pct|; we take
+  // the top one. Direction is cost-axis: dev_pct > 0 means over target.
+  let biggest_lever = null;
+  if (ticker.biggest_lever && ticker.biggest_lever.dev_pct != null) {
+    const dev = Number(ticker.biggest_lever.dev_pct);
+    biggest_lever = {
+      label: ticker.biggest_lever.label,
+      dev_display: `${Math.abs(dev).toFixed(1)}%`,
+      direction: dev > 0 ? "over" : "under",
+    };
+  }
+
+  const progress_display = (period_state === "open" && weeks_closed != null && weeks_total != null)
+    ? `${weeks_closed} of ${weeks_total} weeks closed`
+    : null;
+
+  return {
+    state: ticker.state,
+    state_copy: ticker.state_copy,
+    gm_actual_display,
+    gm_target_display,
+    biggest_lever,
+    progress_display,
+  };
 }
 
 function labelForLine(code) {

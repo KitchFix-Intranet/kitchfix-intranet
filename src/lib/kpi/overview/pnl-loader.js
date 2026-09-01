@@ -194,11 +194,11 @@ export async function loadOverviewBudgets(supa, { members, fiscalYear = 2026 }) 
 //
 // GUARD: this loader is called ONLY when the caller has already
 // verified: (1) the account is per-meal (cost model = at_risk) AND
-// (2) kpi_account_flags.sc_revenue_live = true AND (3) rev_source =
-// 'sc'. Fee accounts NEVER read this table. The Overview resolver's
-// revenue-source picker enforces those preconditions BEFORE calling
-// this function. Passing a fee account here is a caller bug - we
-// don't re-check, but the resolver's guard does.
+// (2) kpi_account_flags.sc_revenue_live = true. Fee accounts NEVER
+// read this table. The Overview resolver's revenue-source picker
+// enforces those preconditions BEFORE calling this function.
+// Passing a fee account here is a caller bug - we don't re-check,
+// but the resolver's guard does.
 export async function loadScDailyRevenue(supa, { members, start, end }) {
   if (!members || members.length === 0) return { data: new Map() };
   const out = new Map();
