@@ -16,25 +16,48 @@ import { fmtTimestamp, hoursSinceISO, freshnessTint } from "../lib/formatting";
 import { SECTIONS } from "../lib/accounts";
 import { RangeMenu } from "./RangeMenu";
 
-// Build the target href for a section item, carrying ONLY the params
-// that both boards (labor + purchasing) read with the same semantic:
+// Build the target href for a section item, carrying params that
+// every section reads with the same semantic:
 //   ?account   team_key / ALL / EAST / WEST
 //   ?start     YYYY-MM-DD (ISO period boundary)
 //   ?end       YYYY-MM-DD (ISO period boundary)
-// Labor-only params (?workers, ?redact, ?view, ?homestand, ?salary)
-// are deliberately dropped - purchasing does not read them and carrying
-// them would risk confusing a future purchasing reader with the same
-// name meaning something different. See src/app/kpi/purchasing/page.js
-// URL-state comment: "subset of labor's, no ?workers / ?redact /
-// ?homestand". `account` + `start` + `end` are the safe trio.
+//   ?preview   preview target - added 2026-09-01 after Kevin surfaced
+//              that a section hop dropped out of preview mode. `preview`
+//              is an ACCESS-scope param (which account the caller
+//              impersonates), not a view-scope param, and all three
+//              sections read it the same way (Overview + Labor +
+//              Purchasing route.js each call resolvePreviewAccess with
+//              it). Belongs alongside account so a corporate user
+//              walking an account end-to-end as its operator sees it
+//              stays in that role through Overview -> Labor ->
+//              Purchasing. (Kevin: "That is the only way to test every
+//              view before Arizona, and it is how the chef test will
+//              be run.")
+// Labor-only view params (?workers, ?redact, ?view, ?homestand,
+// ?salary) are deliberately dropped - purchasing does not read them
+// and carrying them would risk confusing a future purchasing reader
+// with the same name meaning something different. See
+// src/app/kpi/purchasing/page.js URL-state comment: "subset of
+// labor's, no ?workers / ?redact / ?homestand".
 function buildSectionHref(basePath, searchParams) {
   const carry = new URLSearchParams();
   const account = searchParams?.get("account");
   const start = searchParams?.get("start");
   const end = searchParams?.get("end");
-  if (account) carry.set("account", account);
+  const preview = searchParams?.get("preview");
+  // Preview may arrive without an explicit ?account= on the URL.
+  // Overview supports that shape (its landing redirect skips when
+  // preview is active), but Purchasing gates its fetch on account
+  // being present (src/app/kpi/purchasing/page.js:235 - `if (!account)
+  // return`) and Labor's account-name cell also reads urlAccount
+  // first. In preview the effective account IS the preview target,
+  // so mirror it into ?account= for the destination link. Server-side
+  // preview intersection still narrows account = preview correctly.
+  const emitAccount = account || preview || "";
+  if (emitAccount) carry.set("account", emitAccount);
   if (start) carry.set("start", start);
   if (end) carry.set("end", end);
+  if (preview) carry.set("preview", preview);
   const qs = carry.toString();
   return qs ? `${basePath}?${qs}` : basePath;
 }
