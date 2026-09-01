@@ -127,3 +127,275 @@ encoded by color alone - always pair with glyph/label/shape.
   defined in the `globals.css` `[data-density]` blocks (legacy primitive-remap density). They
   win by specificity, so current behavior is unchanged. They retire during the density
   refactor. The `.cs-root` inventory module keeps its own scoped tokens until Module 7.
+
+<!-- GENERATED:tokens START - do not edit by hand, run scripts/gen_design_docs.mjs -->
+> Generated from `src/app/tokens.css` (+ `src/app/kpi/kpi.css`, `src/app/opd/opd.css` where namespaced). Run `node scripts/gen_design_docs.mjs` to refresh. Prose outside this marker is hand-maintained.
+
+Generated: 2026-09-01T16:44:45.726Z
+
+### Color ramps
+
+**Navy (brand, 700)**
+
+| Token | Hex |
+|---|---|
+| `--navy-50` | #F4F7FC |
+| `--navy-100` | #D1DAE6 |
+| `--navy-200` | #AFBDD1 |
+| `--navy-300` | #8FA2BC |
+| `--navy-400` | #6F87A6 |
+| `--navy-500` | #516C92 |
+| `--navy-600` | #33527D |
+| `--navy-700` | #153968 |
+| `--navy-800` | #092B55 |
+| `--navy-900` | #011D42 |
+
+**Amber (accent, 500)**
+
+| Token | Hex |
+|---|---|
+| `--amber-50` | #FFF2E2 |
+| `--amber-100` | #FFDABE |
+| `--amber-200` | #F7C299 |
+| `--amber-300` | #EEA973 |
+| `--amber-400` | #E4904B |
+| `--amber-500` | #D97706 |
+| `--amber-600` | #B25800 |
+| `--amber-700` | #8C3A00 |
+| `--amber-800` | #671C00 |
+| `--amber-900` | #440000 |
+
+**Green (success, 500)**
+
+| Token | Hex |
+|---|---|
+| `--green-50` | #E9FDEC |
+| `--green-100` | #C6EBCB |
+| `--green-200` | #A2D9AB |
+| `--green-300` | #7DC78B |
+| `--green-400` | #54B56B |
+| `--green-500` | #16A34A |
+| `--green-600` | #008330 |
+| `--green-700` | #006515 |
+| `--green-800` | #004800 |
+| `--green-900` | #002C00 |
+
+**Red (danger, 500)**
+
+| Token | Hex |
+|---|---|
+| `--red-50` | #FFEDE7 |
+| `--red-100` | #FFCAC1 |
+| `--red-200` | #FFA69B |
+| `--red-300` | #F88276 |
+| `--red-400` | #EB5B50 |
+| `--red-500` | #DC2626 |
+| `--red-600` | #B9000C |
+| `--red-700` | #970000 |
+| `--red-800` | #760000 |
+| `--red-900` | #560000 |
+
+**Neutral (n)**
+
+| Token | Hex |
+|---|---|
+| `--n-0` | #FFFFFF |
+| `--n-50` | #FAF9F5 |
+| `--n-100` | #F4F2EC |
+| `--n-200` | #F0EEE7 |
+| `--n-300` | #E5E7EB |
+| `--n-400` | #D3CFC4 |
+| `--n-500` | #94A3B8 |
+| `--n-600` | #64748B |
+| `--n-700` | #475569 |
+| `--n-800` | #334155 |
+| `--n-900` | #0A2548 |
+
+**Named neutrals / soft fills**
+
+| Token | Value |
+|---|---|
+| `--mint-300` | #7FD3B4 |
+| `--fill-needs` | #FCD9A0 |
+| `--fill-needs-bd` | #E4AD84 |
+| `--fill-upcoming` | #E2EFE4 |
+| `--fill-upcoming-bd` | #C6D8C8 |
+| `--fill-off` | #F1EEE7 |
+| `--fill-off-bd` | #DDD7CA |
+
+### Type scale
+
+**Type sizes**
+
+| Token | Value |
+|---|---|
+| `--size-micro` | 10px |
+| `--size-caption` | 12px |
+| `--size-body` | 14px |
+| `--size-subhead` | 17px |
+| `--size-h3` | 20px |
+| `--size-h2` | 24px |
+| `--size-h1` | 29px |
+| `--size-display` | 35px |
+
+**Weights**
+
+| Token | Value |
+|---|---|
+| `--wt-regular` | 400 |
+| `--wt-medium` | 500 |
+| `--wt-semibold` | 600 |
+| `--wt-bold` | 700 |
+| `--wt-display` | 800 |
+
+**Leading + tracking**
+
+| Token | Declared | Resolved |
+|---|---|---|
+| `--lb-caption` | calc(16/12) | calc(16/12) |
+| `--lb-h3` | calc(24/20) | calc(24/20) |
+| `--lb-h2` | calc(32/24) | calc(32/24) |
+| `--lb-hero` | calc(40/35) | calc(40/35) |
+| `--lead-tight` | 1.1 | 1.1 |
+| `--lead-snug` | 1.25 | 1.25 |
+| `--lead-normal` | 1.5 | 1.5 |
+| `--track-tight` | -0.01em | -0.01em |
+| `--track-caps` | 0.06em | 0.06em |
+
+### Spacing
+
+| Token | Value |
+|---|---|
+| `--space-1` | 4px |
+| `--space-2` | 8px |
+| `--space-3` | 12px |
+| `--space-4` | 16px |
+| `--space-5` | 20px |
+| `--space-6` | 24px |
+| `--space-7` | 32px |
+| `--space-8` | 40px |
+
+### Radius
+
+| Token | Value |
+|---|---|
+| `--rad-4` | 4px |
+| `--rad-6` | 6px |
+| `--rad-10` | 10px |
+| `--rad-14` | 14px |
+| `--rad-pill` | 9999px |
+| `--rad-circle` | 50% |
+
+### Font stacks
+
+| Token | Value |
+|---|---|
+| `--font-ui` | 'Inter',-apple-system,system-ui,sans-serif |
+| `--font-body` | 'Inter',-apple-system,system-ui,sans-serif |
+| `--font-mono` | 'JetBrains Mono','SF Mono',Menlo,monospace |
+
+### Semantic tokens (Tier 2)
+
+**Text**
+
+| Token | Resolved |
+|---|---|
+| `--text-heading` | var(--n-900) → #0A2548 |
+| `--text-strong` | var(--n-800) → #334155 |
+| `--text-default` | var(--n-700) → #475569 |
+| `--text-muted` | var(--n-600) → #64748B |
+| `--text-subtle` | var(--n-600) → #64748B |
+| `--text-inverse` | var(--n-0) → #FFFFFF |
+| `--text-link` | var(--navy-700) → #153968 |
+| `--text-success` | var(--green-600) → #008330 |
+| `--text-danger` | var(--red-500) → #DC2626 |
+
+**Surface**
+
+| Token | Resolved |
+|---|---|
+| `--surface-page` | #edeff2 |
+| `--surface-card` | var(--n-0) → #FFFFFF |
+| `--surface-sunken` | var(--n-50) → #FAF9F5 |
+| `--surface-overlay` | var(--n-0) → #FFFFFF |
+
+**Border**
+
+| Token | Resolved |
+|---|---|
+| `--border-thin` | 1px |
+| `--border-thick` | 2px |
+| `--border-subtle` | var(--n-200) → #F0EEE7 |
+| `--border-default` | var(--n-300) → #E5E7EB |
+| `--border-strong` | var(--n-400) → #D3CFC4 |
+
+**Action**
+
+| Token | Resolved |
+|---|---|
+| `--action-primary-bg` | var(--navy-700) → #153968 |
+| `--action-primary-bg-hover` | var(--navy-800) → #092B55 |
+| `--action-primary-text` | var(--n-0) → #FFFFFF |
+| `--action-secondary-bg` | var(--n-0) → #FFFFFF |
+| `--action-secondary-border` | var(--n-400) → #D3CFC4 |
+| `--action-secondary-text` | var(--n-700) → #475569 |
+
+**Accent**
+
+| Token | Resolved |
+|---|---|
+| `--accent` | var(--amber-500) → #D97706 |
+| `--accent-solid` | var(--amber-600) → #B25800 |
+| `--accent-text` | var(--amber-700) → #8C3A00 |
+| `--accent-backplate` | var(--amber-50) → #FFF2E2 |
+| `--accent-ops` | var(--amber-500) → #D97706 |
+| `--accent-people` | #7C3AED |
+| `--accent-directory` | #C41E3A |
+| `--accent-playbook` | #0F6E56 |
+| `--accent-sc` | #0F6E56 |
+| `--accent-sc-dark` | #085041 |
+| `--accent-sc-subtle` | #E1F5EE |
+| `--accent-sc-tint` | #F0FDF4 |
+| `--accent-sous` | #0891B2 |
+| `--accent-sous-deep` | #0E7490 |
+| `--accent-sous-subtle` | #ECFEFF |
+| `--accent-sous-line` | #A5F3FC |
+
+**Feedback + status**
+
+| Token | Resolved |
+|---|---|
+| `--status-entered-bg` | var(--green-300) → #7DC78B |
+| `--status-entered-bd` | var(--green-400) → #54B56B |
+| `--status-entered-fg` | var(--green-800) → #004800 |
+| `--status-entered-subtle` | var(--green-100) → #C6EBCB |
+| `--status-entered-strong` | var(--green-500) → #16A34A |
+| `--status-needs-bg` | var(--fill-needs) → #FCD9A0 |
+| `--status-needs-bd` | var(--fill-needs-bd) → #E4AD84 |
+| `--status-needs-fg` | var(--amber-700) → #8C3A00 |
+| `--status-needs-subtle` | var(--amber-100) → #FFDABE |
+| `--status-needs-strong` | var(--amber-500) → #D97706 |
+| `--status-overdue-bg` | var(--red-200) → #FFA69B |
+| `--status-overdue-bd` | var(--red-300) → #F88276 |
+| `--status-overdue-fg` | var(--red-700) → #970000 |
+| `--status-overdue-subtle` | var(--red-100) → #FFCAC1 |
+| `--status-overdue-strong` | var(--red-500) → #DC2626 |
+| `--status-upcoming-bg` | var(--fill-upcoming) → #E2EFE4 |
+| `--status-upcoming-bd` | var(--fill-upcoming-bd) → #C6D8C8 |
+| `--status-upcoming-fg` | var(--n-700) → #475569 |
+| `--status-upcoming-subtle` | var(--n-100) → #F4F2EC |
+| `--status-upcoming-strong` | var(--n-500) → #94A3B8 |
+| `--status-off-bg` | var(--fill-off) → #F1EEE7 |
+| `--status-off-bd` | var(--fill-off-bd) → #DDD7CA |
+| `--status-off-fg` | var(--n-700) → #475569 |
+| `--status-off-subtle` | var(--n-50) → #FAF9F5 |
+| `--status-off-strong` | var(--n-400) → #D3CFC4 |
+| `--status-today-ring` | var(--navy-700) → #153968 |
+| `--status-today-fg` | var(--navy-700) → #153968 |
+| `--feedback-success` | var(--green-600) → #008330 |
+| `--feedback-warning` | var(--amber-500) → #D97706 |
+| `--feedback-danger` | var(--red-500) → #DC2626 |
+| `--feedback-info` | #2563EB |
+| `--feedback-info-subtle` | #f0f5ff |
+| `--feedback-info-border` | #bfdbfe |
+<!-- GENERATED:tokens END -->
