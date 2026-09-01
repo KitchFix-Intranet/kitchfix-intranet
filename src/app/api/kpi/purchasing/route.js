@@ -524,6 +524,9 @@ export async function GET(request) {
   ]);
   if (weeklyResp.error) return NextResponse.json(safeError("v_purchasing_by_site_week", weeklyResp.error), { status: 500 });
   if (pendingResp.error) return NextResponse.json(safeError("pending", pendingResp.error), { status: 500 });
+  // F-11: reportPendingResp is a genuine SQL error only. Timeouts on
+  // the view are absorbed by loadReportOnlyPending's Promise.race and
+  // returned as data.unavailable=true. Real errors still 500.
   if (reportPendingResp.error) return NextResponse.json(safeError("rippling_report_only_pending_v1", reportPendingResp.error), { status: 500 });
   if (actualsResp.error) return NextResponse.json(safeError("purchasing_actuals", actualsResp.error), { status: 500 });
   if (dirResp.error) return NextResponse.json(safeError("accounts_directory", dirResp.error), { status: 500 });
@@ -550,13 +553,28 @@ export async function GET(request) {
   // pill reflects the picture the operator is actually looking at.
   // Owner ruling 2026-08-26 (Part D).  cards_through unchanged to keep
   // probes and other consumers stable.
+  //
+  // F-11: if the report-only slice was unavailable this request (view
+  // timed out at 6s), the max_purchased_at we have is not
+  // trustworthy - fall back to apiThrough alone AND surface the
+  // unavailability so the pill can say so. A silent empty is
+  // indistinguishable from a true empty and the view currently returns
+  // zero rows either way.
   {
     const apiThrough = freshness.cards_through;
-    const reportThrough = pending.report_only.max_purchased_at;
+    const reportOnlyUnavailable = pending.report_only.unavailable === true;
+    const reportThrough = reportOnlyUnavailable ? null : pending.report_only.max_purchased_at;
     freshness.cards_through_effective =
       apiThrough && reportThrough
         ? (apiThrough > reportThrough ? apiThrough : reportThrough)
         : (apiThrough || reportThrough || null);
+    // F-11: two new freshness fields consumers can render.
+    // - report_only_unavailable: true when the view timeout fired
+    // - report_only_unavailable_reason: 'timeout' when so; null when ok
+    // The pill / sources line should surface these when true; hero + list +
+    // drill all read `pending.report_only.line_count === 0` regardless.
+    freshness.report_only_unavailable = reportOnlyUnavailable;
+    freshness.report_only_unavailable_reason = pending.report_only.unavailable_reason || null;
   }
 
   // Adaptive categories: union of every gl_line_code with actual > 0
