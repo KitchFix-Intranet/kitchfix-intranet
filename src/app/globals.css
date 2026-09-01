@@ -200,7 +200,7 @@ body {
   font-weight: 600;
   color: rgba(255,255,255,0.9);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   border-radius: 20px;
   padding: 2px 0;
 }
@@ -269,7 +269,7 @@ body {
   box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
   font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px;
   display: flex; align-items: center; gap: 12px; cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .kf-help-fab:hover { transform: scale(1.05) translateY(-2px); box-shadow: 0 12px 30px rgba(37, 99, 235, 0.5); }
 .kf-help-fab:active { transform: scale(0.95); }
@@ -292,7 +292,7 @@ body {
   background: white; border-radius: 16px; border: 1px solid #e2e8f0;
   box-shadow: 0 20px 50px -10px rgba(15, 48, 87, 0.2);
   overflow: hidden; opacity: 0; transform: translateY(20px) scale(0.95);
-  pointer-events: none; transition: all 0.2s ease-out;
+  pointer-events: none; transition: opacity 0.2s ease-out, transform 0.2s ease-out;
 }
 .kf-help-menu.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 .kf-help-menu-header {
@@ -381,7 +381,7 @@ body {
   background: white; border: 1px solid var(--kf-border); border-radius: 16px;
   padding: 24px; display: flex; flex-direction: column;
   text-decoration: none; color: inherit;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 3px rgba(15, 48, 87, 0.06);
 }
 .kf-launch-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -4px rgba(15, 48, 87, 0.12); }
@@ -691,7 +691,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
 }
 .kf-news-admin-ghost:hover:not(:disabled) { background: #f8fafc; color: #153968; }
 .kf-news-admin-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -839,7 +839,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
 }
 .nf-manage-btn:hover { background: #f8fafc; color: #153968; border-color: #cbd5e1; }
 .nf-mark-all {
@@ -1246,7 +1246,7 @@ body {
   aspect-ratio: 1;
   text-decoration: none;
   color: var(--kf-navy);
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   overflow: hidden;
   cursor: pointer;
   width: 100%;
@@ -1266,7 +1266,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   background: white; color: #94a3b8;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: all 0.3s;
+  transition: background-color 0.3s, color 0.3s, transform 0.3s, box-shadow 0.3s;
 }
 
 .kf-tool-tile:hover .kf-tool-icon-box {
@@ -1290,7 +1290,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   color: #e2e8f0; z-index: 10;
   background: transparent; border: none; padding: 0;
-  opacity: 0; cursor: pointer; transition: all 0.2s;
+  opacity: 0; cursor: pointer; transition: opacity 0.2s, color 0.2s, transform 0.2s;
 }
 .kf-tool-star svg { fill: none; stroke: currentColor; stroke-width: 2.5; }
 .kf-tool-wrap:hover .kf-tool-star,
@@ -1347,7 +1347,7 @@ body {
 .kf-help-send {
   background: var(--kf-blue); color: white; border: none; border-radius: 8px;
   padding: 8px 16px; font-family: 'Inter', sans-serif; font-size: 12px;
-  font-weight: 700; cursor: pointer; transition: all 0.15s;
+  font-weight: 700; cursor: pointer; transition: filter 0.15s, transform 0.15s, background-color 0.15s, opacity 0.15s;
 }
 .kf-help-send:hover { filter: brightness(1.1); }
 .kf-help-send:active { transform: scale(0.97); }
@@ -1532,7 +1532,7 @@ body {
   justify-content: center;
   gap: 10px;
   box-shadow: 0 4px 16px rgba(21, 57, 104, 0.25);
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .kf-login-btn:hover {

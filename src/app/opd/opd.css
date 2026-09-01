@@ -2439,8 +2439,9 @@
   margin-top: 10px;
 }
 .opd-focus-mhead-title h1 {
-  font-family: var(--font-serif, "GT Sectra", "Charter", Georgia, serif);
+  font-family: var(--font-ui);
   font-size: 22px;
+  font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.015em;
   margin: 0;
@@ -2459,9 +2460,10 @@
   line-height: 1;
 }
 .opd-focus-mhead-time b {
-  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 30px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-strong, #111);
 }
 .opd-focus-mhead-time span {
@@ -2489,20 +2491,28 @@
 /* Mobile rail bar - hidden on desktop, shown below 900px. */
 .opd-focus-mrail { display: none; }
 
-/* Stepper grid: rail left, step card right. */
+/* Stepper grid: rail left, step card right.
+   align-items: start is load-bearing - without it the grid resolves
+   to stretch, matches the rail column's height to the card column's
+   height, and the rail can never scroll past its own bottom
+   (position:sticky needs range to work). */
 .opd-focus-grid--stepper {
   grid-template-columns: 260px minmax(0, 1fr);
+  align-items: start;
   margin-top: -1px; /* seal to the mhead + mbar */
 }
 
 /* ── Rail (desktop) ───────────────────────────────────────── */
+/* Sticky within the grid. Requires the parent grid to be
+   align-items:start (see .opd-focus-grid--stepper) - otherwise the
+   rail's column stretches to card height and sticky has no range. */
 .opd-focus-rail--stepper {
   position: sticky;
   top: 76px;
   padding: 14px 12px 14px;
   background: var(--surface-card, #fff);
   border: 1px solid var(--surface-border, #e6e6e6);
-  border-radius: 0 0 0 12px;
+  border-radius: 12px;
   max-height: calc(100vh - 96px);
   overflow-y: auto;
 }
@@ -2554,9 +2564,10 @@
   border-radius: 50%;
   background: var(--surface-inset, #eee);
   color: var(--text-muted, #666);
-  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   margin-top: 2px;
 }
 .opd-focus-rail-step--now .opd-focus-rail-step-num {
@@ -2590,7 +2601,7 @@
   font-size: 11px;
   color: var(--text-muted, #999);
   margin-top: 2px;
-  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
 }
 .opd-focus-rail-step-chk { color: var(--text-muted, #999); }
 .opd-focus-rail-step-plus {
@@ -2600,9 +2611,9 @@
   border-radius: 4px;
   background: var(--surface-inset, #eee);
   color: var(--text-muted, #666);
-  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 700;
   vertical-align: middle;
 }
 .opd-focus-rail-step--sign .opd-focus-rail-step-num {
@@ -2623,12 +2634,17 @@
 }
 
 /* ── Step card (right column) ─────────────────────────────── */
+/* Card narrowed to the reading measure (~700px total) and centred
+   in its column - a 952px card with 600px of left-aligned prose reads
+   as a layout error. Long measures also hurt readability on a twelve-
+   minute doc. Do NOT stretch the prose to fill; narrow the card. */
 .opd-focus-step {
-  padding: 24px 32px 22px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 40px 26px;
   background: var(--surface-card, #fff);
   border: 1px solid var(--surface-border, #e6e6e6);
-  border-radius: 0 0 12px 0;
-  border-left: none;
+  border-radius: 12px;
   min-height: 60vh;
   display: flex;
   flex-direction: column;
@@ -2647,8 +2663,9 @@
   margin-bottom: 6px;
 }
 .opd-focus-step-h2 {
-  font-family: var(--font-serif, "GT Sectra", "Charter", Georgia, serif);
+  font-family: var(--font-ui);
   font-size: 26px;
+  font-weight: 750;
   line-height: 1.15;
   letter-spacing: -0.015em;
   margin: 0 0 4px;
@@ -2665,8 +2682,8 @@
   margin: 0;
 }
 .opd-focus-step-body {
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.7;
   color: var(--text-strong, #111);
 }
 .opd-focus-step-check {
@@ -2757,9 +2774,10 @@
   background: var(--surface-inset, #fafafa);
 }
 .opd-step-recap-tile b {
-  font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 26px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-strong, #111);
   line-height: 1;
 }
@@ -2804,7 +2822,7 @@
   .opd-focus-mrail-label {
     font-size: 12px;
     color: var(--text-muted, #666);
-    font-family: var(--font-num, "IBM Plex Mono", ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
   .opd-focus-mrail-bar {
@@ -2843,12 +2861,15 @@
     margin-top: 10px;
   }
   .opd-focus-step {
-    border-radius: 0 0 12px 12px;
-    border-left: 1px solid var(--surface-border, #e6e6e6);
-    padding: 18px 16px 20px;
+    max-width: none;
+    margin: 0;
+    border-radius: 12px;
+    padding: 18px 18px 20px;
   }
   .opd-focus-step-h2 { font-size: 22px; }
-  .opd-focus-step-body { font-size: 13.5px; }
+  /* Body kept at 15/1.7 on mobile too - it is a reading surface,
+     not UI chrome. Twelve minutes of prose at 13.5 is too small. */
+  .opd-focus-step-body { font-size: 15px; line-height: 1.7; }
   .opd-step-recap {
     grid-template-columns: 1fr 1fr;
   }
