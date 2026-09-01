@@ -36,7 +36,15 @@ review_interval_months: 12
 effective_date: 2026-05-04
 print_required: true
 critical: true
-sort_order: 5
+# sort_order intentionally at the 10 default (not 5). The other four
+# posters + two foundational Playbook handbooks use 5 to float to the
+# top of their shelves, which reads correctly for them - none of them
+# shares a shelf with the doc they derive from. POSTER-001 does share
+# People & Conduct with AGR-001 (its `derived_from` source), so
+# floating produces the visually confusing "derived doc appears above
+# source doc" outcome. Leaving at the default so the poster sorts
+# alphabetically after AGR-001, in ID order with its peers.
+sort_order: 10
 relationships:
   - { to: AGR-001, type: derived_from, from_section: "section 03 Clubhouse Rules + section 02 Confidentiality" }
 ---
