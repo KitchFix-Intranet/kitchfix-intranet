@@ -577,16 +577,12 @@ export default function AcademyFocus({
   ).length;
 
   // ─── Completion screen ───────────────────────────────────────
+  // Breadcrumb removed (density pass, spec 18.4 amended). The
+  // Academy button in the footer replaces the crumb as the route
+  // home - a better path than a trail nobody clicks.
   if (signedAttestation) {
     return (
       <div className="opd-focus" data-room="focus-done">
-        <nav className="opd-crumb" aria-label="Breadcrumb">
-          <button type="button" className="opd-crumb-link" onClick={onBack}>Academy</button>
-          <span className="opd-crumb-sep" aria-hidden="true">/</span>
-          <button type="button" className="opd-crumb-link" onClick={onBack}>Queue</button>
-          <span className="opd-crumb-sep" aria-hidden="true">/</span>
-          <span className="opd-crumb-current">{docId}</span>
-        </nav>
         <CompletionScreen
           doc={doc}
           version={version}
@@ -597,7 +593,6 @@ export default function AcademyFocus({
     );
   }
 
-  // ─── Loading / error ─────────────────────────────────────────
   if (state.status === "loading") {
     return (
       <div className="opd-focus" data-room="focus">
@@ -610,11 +605,6 @@ export default function AcademyFocus({
   if (state.status === "error") {
     return (
       <div className="opd-focus" data-room="focus">
-        <nav className="opd-crumb" aria-label="Breadcrumb">
-          <button type="button" className="opd-crumb-link" onClick={onBack}>Academy</button>
-          <span className="opd-crumb-sep" aria-hidden="true">/</span>
-          <span className="opd-crumb-current">{docId}</span>
-        </nav>
         <DashedBrick scope={`module ${docId || ""}`.trim()} message={state.error} onRetry={() => load()} />
       </div>
     );
@@ -623,20 +613,6 @@ export default function AcademyFocus({
   // ─── Main render ─────────────────────────────────────────────
   return (
     <div className="opd-focus opd-focus--uni" data-room="focus">
-      <nav className="opd-crumb" aria-label="Breadcrumb">
-        <button type="button" className="opd-crumb-link" onClick={onBack}>Academy</button>
-        <span className="opd-crumb-sep" aria-hidden="true">/</span>
-        <button type="button" className="opd-crumb-link" onClick={onBack}>Queue</button>
-        {docShelf ? (
-          <>
-            <span className="opd-crumb-sep" aria-hidden="true">/</span>
-            <span className="opd-crumb-scope">{docShelf}</span>
-          </>
-        ) : null}
-        <span className="opd-crumb-sep" aria-hidden="true">/</span>
-        <span className="opd-crumb-current">{docId}</span>
-      </nav>
-
       {/* The one card. Header + progress rule + body all inside .opd-uni. */}
       <div className="opd-uni">
 
@@ -744,6 +720,7 @@ export default function AcademyFocus({
               {isSignStep ? (
                 <SignFooter
                   requirementId={requirementId}
+                  onAcademy={onBack}
                   onBack={() => goToStep(steps.length - 1)}
                   onSignedInternal={onSignedInternal}
                   displayName={viewer?.displayName || ""}
@@ -762,6 +739,7 @@ export default function AcademyFocus({
                   activeQIndex={activeQIndex}
                   stepCleared={stepCleared}
                   savedTag={savedTag}
+                  onAcademy={onBack}
                   onBack={() => goToStep(currentStepIdx - 1)}
                   onSaveExit={saveAndExit}
                   onNext={advanceStep}
@@ -875,6 +853,7 @@ function ReadFooter({
   activeQIndex,
   stepCleared,
   savedTag,
+  onAcademy,
   onBack,
   onSaveExit,
   onNext,
@@ -886,6 +865,17 @@ function ReadFooter({
     : (last ? "Continue to sign" : "Continue");
   return (
     <>
+      {/* Academy button (density pass 2026-09-01): the route home,
+          replacing the breadcrumb. Same click target as the removed
+          crumb link. Home glyph is the leading &larr; character. */}
+      <button
+        type="button"
+        className="opd-bt opd-bt--gh opd-bt--home"
+        onClick={onAcademy}
+        aria-label="Back to Academy"
+      >
+        &larr; Academy
+      </button>
       {currentStepIdx > 0 ? (
         <button type="button" className="opd-bt opd-bt--gh" onClick={onBack}>Back</button>
       ) : null}
@@ -914,6 +904,7 @@ function ReadFooter({
 
 function SignFooter({
   requirementId,
+  onAcademy,
   onBack,
   onSignedInternal,
   displayName,
@@ -983,6 +974,14 @@ function SignFooter({
 
   return (
     <>
+      <button
+        type="button"
+        className="opd-bt opd-bt--gh opd-bt--home"
+        onClick={onAcademy}
+        aria-label="Back to Academy"
+      >
+        &larr; Academy
+      </button>
       <button type="button" className="opd-bt opd-bt--gh" onClick={onBack}>Back</button>
       <button type="button" className="opd-bt opd-bt--gh" onClick={onSaveExit}>Save &amp; exit</button>
       <span className="opd-ufoot-hint">{hint}</span>

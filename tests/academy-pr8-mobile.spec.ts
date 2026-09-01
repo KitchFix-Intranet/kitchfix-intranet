@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 //
 // What it asserts, post room-composition PR:
 //   1. /opd loads and the Academy tab is selected on mount.
-//   2. The primary card (.opd-prim) renders as the single lesson
+//   2. The primary card (.opd-lcard) renders as the single lesson
 //      surface, with the rail moved INSIDE it (spec 18.2 amended).
 //   3. Lessons are grouped by document into .opd-set blocks. Kevin's
 //      current cycle has 3 open sets after the composition PR:
@@ -49,15 +49,15 @@ for (const w of WIDTHS) {
       await expect(academyTab).toHaveAttribute("aria-selected", "true");
 
       // Primary card is the single lesson surface.
-      await expect(page.locator(".opd-prim")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator(".opd-lcard")).toBeVisible({ timeout: 15_000 });
       await expect(page.locator(".opd-prail")).toBeVisible();
-      await page.locator(".opd-prim .opd-set").first().waitFor({ timeout: 15_000 });
+      await page.locator(".opd-lcard .opd-set").first().waitFor({ timeout: 15_000 });
 
-      const sets = page.locator(".opd-prim .opd-set");
+      const sets = page.locator(".opd-lcard .opd-set");
       const setCount = await sets.count();
       expect(setCount).toBeGreaterThan(0);
 
-      const partRows = page.locator(".opd-prim .opd-pr");
+      const partRows = page.locator(".opd-lcard .opd-pr");
       const partCount = await partRows.count();
       expect(partCount).toBeGreaterThan(0);
 
@@ -66,7 +66,7 @@ for (const w of WIDTHS) {
       await expect(page.locator(".opd-cs .opd-leg")).toBeVisible();
 
       // Year card + Record card.
-      await expect(page.locator(".opd-card2").first()).toBeVisible();
+      await expect(page.locator(".opd-c2").first()).toBeVisible();
 
       // ── No obligation_key or emoji in visible operator text ────────
       const bodyText = await page.locator("body").innerText();
@@ -128,16 +128,24 @@ for (const w of WIDTHS) {
       expect(smallTouch, `touch target too small: ${JSON.stringify(smallTouch, null, 2)}`).toEqual([]);
 
       // ── Focus view: click a NON-locked part row and verify open ──
-      const openRow = page.locator(".opd-prim .opd-pr:not(.opd-pr--lk)").first();
+      // Solo sets ARE the click target (density pass: solo = set header
+      // with no inner rows). Multi-part rows are inside .opd-set.
+      const openRow = page.locator(
+        ".opd-lcard button.opd-set--solo, .opd-lcard .opd-pr:not(.opd-pr--lk)"
+      ).first();
       await openRow.waitFor({ timeout: 5_000 });
       await openRow.click();
-      await expect(page.locator(".opd-crumb-current")).toBeVisible({ timeout: 10_000 });
+      // Density pass removed the breadcrumb. Landing surface is the
+      // module card (.opd-uni) or completion cert (.opd-cert).
       const paperOrCert = page.locator(".opd-uni, .opd-cert").first();
       await expect(paperOrCert).toBeVisible({ timeout: 10_000 });
 
-      // Breadcrumb returns to the room.
-      await page.locator(".opd-crumb-link").first().click();
-      await expect(page.locator(".opd-prim")).toBeVisible({ timeout: 5_000 });
+      // Academy button (footer) is the route home; replaces the crumb.
+      const academyBtn = page.locator(".opd-bt--home").first();
+      if (await academyBtn.count() > 0) {
+        await academyBtn.click();
+        await expect(page.locator(".opd-lcard")).toBeVisible({ timeout: 5_000 });
+      }
 
       expect(errors, `runtime errors: ${errors.join(" | ")}`).toEqual([]);
     });

@@ -33,13 +33,13 @@ for (const vp of VIEWPORTS) {
 
       await page.goto("/opd");
       await expect(page.getByRole("tab", { name: /Academy/i })).toHaveAttribute("aria-selected", "true");
-      await page.locator(".opd-prim").waitFor({ timeout: 15_000 });
+      await page.locator(".opd-lcard").waitFor({ timeout: 15_000 });
 
       // Post room-composition PR: parts live inside .opd-set blocks
       // on the primary card. No cadence text anywhere in operator copy.
-      const partRows = page.locator(".opd-prim .opd-pr:not(.opd-pr--lk)");
+      const partRows = page.locator(".opd-lcard .opd-pr:not(.opd-pr--lk)");
       await expect(partRows.first()).toBeVisible({ timeout: 10_000 });
-      const bodyText = await page.locator(".opd-prim").innerText();
+      const bodyText = await page.locator(".opd-lcard").innerText();
       expect(bodyText, "cadence must be stripped").not.toMatch(/\b(quarterly|on-hire|monthly|weekly|annual)\b/i);
 
       // Open the first non-locked, non-signed part row.
