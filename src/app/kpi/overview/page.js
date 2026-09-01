@@ -13,7 +13,6 @@
 //   ?start           YYYY-MM-DD
 //   ?end             YYYY-MM-DD
 //   ?preview         preview target (narrows via role gate)
-//   ?rev_source      'planned' (default) | 'sc' (corporate + per-meal only)
 //   ?include_salary  '1' -> reveals 3100.1 / 3100.2 sub-lines (site
 //                          posture only; corporate always includes)
 //
@@ -62,8 +61,8 @@ import {
   errorCode,
 } from "@/app/kpi/labor/components/StateBoxes";
 
-import SourcesLine from "./components/SourcesLine";
-import Ticker from "./components/Ticker";
+import StatusLine from "./components/StatusLine";
+import DataCurrentPop from "./components/DataCurrentPop";
 import CardsRow from "./components/CardsRow";
 import Chart from "./components/Chart";
 import DrillButtons from "./components/DrillButtons";
@@ -386,11 +385,15 @@ export default function KpiOverviewPage() {
         )}
         {/* R-40 (2026-09-01): the Overview is one layout everywhere.
             Role governs access only - portfolio rail visibility, the
-            revenue-source toggle, the salary control. It does not
-            fork the board. Same account + range = same board render
-            for every role. */}
-        <SourcesLine sources={data.sources} freshness={data.freshness} />
-        <Ticker ticker={data.ticker} />
+            salary control. It does not fork the board. Same account +
+            range = same board render for every role.
+
+            A2 + A3 + A4 (PR 2 polish, 2026-09-01): the standalone
+            sources strip retired - its content moved into the Data
+            current pill popover (passed as freshnessPop to Shell,
+            below). The ticker retired - a single-sentence StatusLine
+            with a fixed shape (no account-model notes) replaces it. */}
+        <StatusLine statusLine={data.status_line} />
         <CardsRow cards={data.cards} rangeMeta={rangeMeta} />
         {/* R-34 "What is left" - self-hides on portfolio scope,
             closed periods, and FYTD (server sets what_is_left=null in
@@ -447,7 +450,11 @@ export default function KpiOverviewPage() {
           main={mainContent}
           previewAccount={data?.preview_account || null}
           onExitPreview={onExitPreview}
-          freshnessPop={null}
+          /* A2 (2026-09-01): the sources block that used to render as
+             a standalone strip above the board now lives inside the
+             Data current pill popover, same pattern as Labor. Shell
+             wires this node as the FreshnessChip popover body. */
+          freshnessPop={data?.sources ? <DataCurrentPop sources={data.sources} /> : null}
         />
       </div>
     </div>

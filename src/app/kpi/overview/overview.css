@@ -14,103 +14,49 @@
  * shared HelpPop primitive; no fork.
  */
 
-/* ── Sources line (element 2) ────────────────────────────────────── */
-.kpi-app .kpi-ov-sources {
-  display: flex;
-  gap: var(--kpi-sp-3);
-  flex-wrap: wrap;
-  align-items: center;
-  padding: var(--kpi-sp-2) var(--kpi-sp-3);
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-ctl-r);
-  margin-bottom: var(--kpi-sp-3);
-  font-size: var(--kpi-t-meta);
-  color: var(--n-700);
-  font-weight: 600;
-}
-.kpi-app .kpi-ov-sources b { color: var(--n-900); font-weight: 700; }
-.kpi-app .kpi-ov-sources .kpi-ov-sources-lag { color: var(--amber-600); }
-.kpi-app .kpi-ov-sources-state {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--kpi-sp-2);
-}
-
-/* Period-state chip (three states) */
-.kpi-app .kpi-ov-stc {
-  font-size: var(--kpi-t-meta);
-  font-weight: 700;
-  padding: 2px var(--kpi-sp-2);
-  border-radius: var(--kpi-ctl-r);
-  white-space: nowrap;
-}
-.kpi-app .kpi-ov-stc-open { background: var(--amber-50); color: var(--amber-600); }
-.kpi-app .kpi-ov-stc-wait { background: var(--n-100);    color: var(--n-700); }
-.kpi-app .kpi-ov-stc-ver  { background: var(--green-50); color: var(--green-600); }
-
-/* ── Ticker (element 3) ──────────────────────────────────────────── */
-.kpi-app .kpi-ov-ticker {
+/* ── Status line (element 2+3, PR 2 polish 2026-09-01) ─────────────
+ * Retires the ticker (element 3) and the sources strip (element 2)
+ * together. Sources moved into the Data current pill popover in the
+ * command bar; the ticker's state block + biggest lever now render
+ * as a single sentence in a fixed shape on every account. See
+ * docs/renders/overview-polish-LOCKED.html:60-68 for the render
+ * ruling. */
+.kpi-app .kpi-ov-status {
   display: flex;
   align-items: stretch;
-  flex-wrap: wrap;
   background: var(--n-0);
   border: 1px solid var(--n-300);
   border-radius: var(--kpi-card-r);
   margin-bottom: var(--kpi-sp-3);
   overflow: hidden;
 }
-.kpi-app .kpi-ov-ticker-tk {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: var(--kpi-sp-2) var(--kpi-sp-4);
-  border-right: 1px solid var(--n-200);
-  min-width: 0;
-}
-.kpi-app .kpi-ov-ticker-tk:last-child { border-right: none; }
-.kpi-app .kpi-ov-ticker-tk-k {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-ticker-tk-v {
-  font-size: var(--kpi-t-body);
-  font-weight: 700;
-  margin-top: 3px;
-  white-space: nowrap;
-}
-.kpi-app .kpi-ov-ticker-tk-v em {
-  font-style: normal;
-  font-weight: 800;
-  margin-left: var(--kpi-sp-1);
-}
-.kpi-app .kpi-ov-ticker-st {
+.kpi-app .kpi-ov-status-st {
   display: flex;
   align-items: center;
   padding: 0 var(--kpi-sp-4);
   color: var(--n-0);
   font-size: var(--kpi-t-meta);
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: .07em;
   text-transform: uppercase;
   white-space: nowrap;
 }
-.kpi-app .kpi-ov-ticker-ahead .kpi-ov-ticker-st    { background: var(--green-600); }
-.kpi-app .kpi-ov-ticker-ontrack .kpi-ov-ticker-st  { background: var(--navy-700); }
-.kpi-app .kpi-ov-ticker-behind .kpi-ov-ticker-st   { background: var(--amber-600); }
-.kpi-app .kpi-ov-ticker-critical .kpi-ov-ticker-st { background: var(--red-600); }
-.kpi-app .kpi-ov-ticker-tk-note {
-  background: var(--amber-50);
-}
-.kpi-app .kpi-ov-ticker-tk-note .kpi-ov-ticker-tk-v {
-  color: var(--amber-600);
+.kpi-app .kpi-ov-status-ahead    .kpi-ov-status-st { background: var(--green-600); }
+.kpi-app .kpi-ov-status-ontrack  .kpi-ov-status-st { background: var(--navy-700); }
+.kpi-app .kpi-ov-status-behind   .kpi-ov-status-st { background: var(--amber-600); }
+.kpi-app .kpi-ov-status-critical .kpi-ov-status-st { background: var(--red-600); }
+.kpi-app .kpi-ov-status-say {
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  font-size: var(--kpi-t-body);
   font-weight: 600;
-  white-space: normal;
+  color: var(--n-700);
+  line-height: 1.55;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 }
+.kpi-app .kpi-ov-status-say b { color: var(--n-900); font-weight: 800; }
+.kpi-app .kpi-ov-status-sep { color: var(--n-400); margin: 0 var(--kpi-sp-2); }
 
 /* Direction words on the ticker */
 .kpi-app .kpi-ov-good { color: var(--green-600); }
@@ -735,6 +681,185 @@
 @keyframes kpi-ov-pulse {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
+}
+
+/* ═════════════════════════════════════════════════════════════════
+ * PR 2 polish additions (2026-09-01)
+ * ═════════════════════════════════════════════════════════════════ */
+
+/* ── B7 hero row: dollars + pct side by side with a divider ─────── */
+.kpi-app .kpi-ov-heroline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kpi-sp-2);
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-ov-heroline .kpi-ov-hero {
+  margin-bottom: 0;
+}
+.kpi-app .kpi-ov-heroline-dv {
+  color: var(--n-400);
+  font-size: var(--kpi-t-value);
+  font-weight: 400;
+}
+.kpi-app .kpi-ov-heroline-sec {
+  font-size: var(--kpi-t-medium);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-heroline-sec small {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-600);
+  margin-left: var(--kpi-sp-1);
+  letter-spacing: 0;
+}
+
+/* ── B5 / B7 one-line sub under cards (vs $X · $Y budget) ───────── */
+.kpi-app .kpi-ov-sub {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  margin-top: var(--kpi-sp-2);
+  line-height: 1.55;
+}
+.kpi-app .kpi-ov-sub b { color: var(--n-900); font-weight: 800; }
+.kpi-app .kpi-ov-sub-sep { color: var(--n-400); }
+
+/* ── B8+B9 What is left: two cards with split layout ─────────────
+ * Headline on the left, two labelled stats right-aligned. Both
+ * cards share the same rhythm as the three cards above so the type
+ * scale is identical.
+ * Grid mirrors .kpi-ov-cards but with two columns instead of three
+ * so the two cards fill the row on the desktop breakpoint. */
+.kpi-app .kpi-ov-wil {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kpi-sp-3);
+  margin-top: var(--kpi-sp-3);
+}
+@media (max-width: 1024px) {
+  .kpi-app .kpi-ov-wil { grid-template-columns: 1fr; }
+}
+.kpi-app .kpi-ov-split {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-4);
+}
+.kpi-app .kpi-ov-split-lead {
+  flex: none;
+}
+.kpi-app .kpi-ov-split-stats {
+  margin-left: auto;
+  display: flex;
+  gap: var(--kpi-sp-5, 22px);
+  text-align: right;
+}
+.kpi-app .kpi-ov-split-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.kpi-app .kpi-ov-split-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-split-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-split-suffix { font-weight: 600; color: var(--n-600); }
+
+/* ── C12 chart budget label moves out of the bar area ────────────
+ * Sits above the chart in the card body, right below the header.
+ * The dashed target line inside .kpi-ov-bars keeps its position
+ * (bottom % anchored to the weekly budget). Only the label moved.
+ * .kpi-ov-bars-inset adds horizontal padding so the leftmost bar
+ * cannot start under the label. */
+.kpi-app .kpi-ov-tgt-label {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: var(--navy-700);
+  text-transform: uppercase;
+  padding: var(--kpi-sp-1) 0;
+}
+.kpi-app .kpi-ov-bars-inset {
+  padding-left: var(--kpi-sp-2);
+  padding-right: var(--kpi-sp-2);
+}
+/* C12 addendum: with the label out of the bar area, the em label on
+ * .kpi-ov-tgt is no longer rendered - drop the padding it required
+ * on the bars container so the top of the tallest bar reads clean. */
+.kpi-app .kpi-ov-bars-inset { padding-top: var(--kpi-sp-2); }
+
+/* ── C13 bar hover: date range on line 2 ────────────────────────── */
+.kpi-app .kpi-ov-bt-d {
+  font-size: var(--kpi-t-meta);
+  font-weight: 500;
+  color: var(--n-400);
+  margin-bottom: var(--kpi-sp-1);
+}
+
+/* ── D14 + D15 fold cards: one card, header trigger, rotating cv ──
+ * The fold trigger lives inside the card as a header row; body
+ * expands in place. Chevron rotates via CSS on data-kpi-ov-open="1"
+ * so the same DOM node handles both states.
+ * D15 also-tracked uses the same pattern but with .kpi-ov-card-plain
+ * (solid grey left border, not the coloured card stripes). */
+.kpi-app .kpi-ov-fold-card {
+  padding: 0;
+}
+.kpi-app .kpi-ov-card-plain {
+  border-left: 3px solid var(--n-400);
+}
+.kpi-app .kpi-ov-fold-trigger {
+  background: transparent;
+  border: none;
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.kpi-app .kpi-ov-fold-trigger:hover { background: var(--n-50); }
+.kpi-app .kpi-ov-fold-trigger .kpi-ov-fold-cv {
+  margin-left: auto;
+  color: var(--n-600);
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  transition: transform .15s ease;
+}
+.kpi-app .kpi-ov-fold-card[data-kpi-ov-open="1"] .kpi-ov-fold-cv {
+  transform: rotate(180deg);
+}
+.kpi-app .kpi-ov-fold-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-2);
+  padding: 0 var(--kpi-sp-4) var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  padding-top: var(--kpi-sp-3);
+}
+.kpi-app .kpi-ov-fold-card .kpi-ov-cb {
+  padding: 0 var(--kpi-sp-4) var(--kpi-sp-4);
+}
+/* When the trigger has the segment control inline (P&L Full/Summary),
+ * pin the seg to the right and let the chevron sit past it. */
+.kpi-app .kpi-ov-fold-trigger .kpi-ov-seg {
+  margin-left: auto;
+}
+.kpi-app .kpi-ov-fold-trigger .kpi-ov-seg + .kpi-ov-fold-cv {
+  margin-left: var(--kpi-sp-2);
 }
 
 /* ── Rev-source toggle (corporate posture) - lives in Shell's

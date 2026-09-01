@@ -1,10 +1,16 @@
 "use client";
 // src/app/kpi/overview/components/AlsoTracked.js
 //
-// Element 9. Dashed band, no pills. Three lines:
+// Element 9. Three lines watched together, not part of gross margin
+// or cost of goods sold:
 //   5002.1 General repair and maintenance
 //   5002.5 Equipment
 //   5017.3 Perks
+//
+// D15 (PR 2, 2026-09-01): the strip is now a fold, collapsed by
+// default, with a solid grey border. Prior version rendered a dashed
+// band that stayed open below the P&L fold - a permanent decorative
+// dashed outline on a section the operator rarely needs to open.
 //
 // Per §5.4 anatomy 9 + charter 11: "Not part of gross margin or cost
 // of goods sold - watched together." No verdict, no pills, no ▲/▼.
@@ -19,6 +25,7 @@
 //   - actual reported + budget = 0            -> "no budget" for budget cell
 //   - variance under $1                       -> "on budget"
 
+import { useState } from "react";
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import DashOrValue from "./DashOrValue";
 
@@ -81,40 +88,58 @@ function Row({ row, isOpen }) {
 }
 
 export default function AlsoTracked({ payload }) {
+  const [open, setOpen] = useState(false);
   if (!payload?.also_tracked || payload.also_tracked.length === 0) return null;
   const isOpen = payload.period_state === "open";
 
   return (
-    <div className="kpi-ov-tracked" data-kpi-ov="also-tracked">
-      <div className="kpi-ov-tracked-hd">
+    <div
+      className={`kpi-ov-card kpi-ov-card-plain kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
+      data-kpi-ov="also-tracked"
+      data-kpi-ov-open={open ? "1" : "0"}
+    >
+      <button
+        type="button"
+        className="kpi-ov-fold-trigger"
+        data-kpi-ov="fold-tracked"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open ? "true" : "false"}
+      >
         <span className="kpi-ov-eb">Also tracked</span>
-        <HelpPop
-          id="overview-also-tracked"
-          title="Also tracked"
-          body={<p>These sit outside gross margin and cost of goods sold. They are not part of how this account is measured - we watch them together because the site influences them.</p>}
-        />
-      </div>
-      <div className="kpi-ov-tracked-sub">
-        Not part of gross margin or cost of goods sold - watched together.
-      </div>
-      <table className="kpi-ov-lev">
-        <thead>
-          <tr>
-            <th className="l">Line</th>
-            <th>Budget{isOpen ? " to date" : ""}</th>
-            <th>Actual{isOpen ? " to date" : ""}</th>
-            <th style={{ width: 130 }}>vs budget</th>
-          </tr>
-        </thead>
-        <tbody>
-          {payload.also_tracked.map((r) => (
-            <Row key={r.line_code} row={r} isOpen={isOpen} />
-          ))}
-        </tbody>
-      </table>
-      <p className="kpi-ov-tracked-note">
-        <b>Perks</b> is the budget for celebrating your team - parties, recognitions, the Friday doughnuts. Spent on the Rippling card.
-      </p>
+        <span className="kpi-ov-gl">repair, equipment and perks - not part of gross margin, watched together</span>
+        <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="kpi-ov-fold-meta">
+            <HelpPop
+              id="overview-also-tracked"
+              title="Also tracked"
+              body={<p>These sit outside gross margin and cost of goods sold. They are not part of how this account is measured - we watch them together because the site influences them.</p>}
+            />
+          </div>
+          <div className="kpi-ov-cb">
+            <table className="kpi-ov-lev">
+              <thead>
+                <tr>
+                  <th className="l">Line</th>
+                  <th>Budget{isOpen ? " to date" : ""}</th>
+                  <th>Actual{isOpen ? " to date" : ""}</th>
+                  <th style={{ width: 130 }}>vs budget</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payload.also_tracked.map((r) => (
+                  <Row key={r.line_code} row={r} isOpen={isOpen} />
+                ))}
+              </tbody>
+            </table>
+            <p className="kpi-ov-tracked-note">
+              <b>Perks</b> is the budget for celebrating your team - parties, recognitions, the Friday doughnuts. Spent on the Rippling card.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }

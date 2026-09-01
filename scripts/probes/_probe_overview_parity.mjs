@@ -250,12 +250,20 @@ async function runScenario(a, r) {
   const ovVehBudg = ov.levers?.find(l => l.line_code === "3500")?.budget ?? null;
   assert(scenario, "3500 budget", ovVehBudg, purBoard.buckets["3500"]?.budget ?? null);
 
+  // PR 2 addition (2026-09-01, Kevin surfaced): the resolver now ships
+  // `actual: null` (not 0) on tracked rows where the loader returns
+  // period_total=0. The loader can't distinguish reported-zero from
+  // absent on the purchasing side, so a 0 there is treated as "no
+  // data" - the reported flag drops false and the actual + display
+  // both null out. Normalize the expected value here so parity reads
+  // the same fact from both sides.
+  const zeroAsNull = (v) => (v === 0 || v == null) ? null : v;
   const ovRm = ov.also_tracked?.find(x => x.line_code === "5002.1")?.actual ?? null;
-  assert(scenario, "5002.1 tracked actual", ovRm, purBoard.tracked["5002.1"]?.period_total ?? null);
+  assert(scenario, "5002.1 tracked actual", ovRm, zeroAsNull(purBoard.tracked["5002.1"]?.period_total));
   const ovEq = ov.also_tracked?.find(x => x.line_code === "5002.5")?.actual ?? null;
-  assert(scenario, "5002.5 tracked actual", ovEq, purBoard.tracked["5002.5"]?.period_total ?? null);
+  assert(scenario, "5002.5 tracked actual", ovEq, zeroAsNull(purBoard.tracked["5002.5"]?.period_total));
   const ovPk = ov.also_tracked?.find(x => x.line_code === "5017.3")?.actual ?? null;
-  assert(scenario, "5017.3 tracked actual", ovPk, purBoard.tracked["5017.3"]?.period_total ?? null);
+  assert(scenario, "5017.3 tracked actual", ovPk, zeroAsNull(purBoard.tracked["5017.3"]?.period_total));
 
   // Additive purchasing totals field.
   const btdBuckets = purBoard.totals?.buckets_budget_to_date_days;

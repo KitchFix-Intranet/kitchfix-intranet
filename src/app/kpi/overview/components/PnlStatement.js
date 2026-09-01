@@ -171,44 +171,54 @@ export default function PnlStatement({ payload, open, onToggle }) {
     leverPctByLine[l.line_code] = l;
   });
 
+  // D14 (2026-09-01): one card, not two. Prior structure rendered a
+  // fold button ABOVE and a separate card BELOW when open - two things
+  // visually. Now the fold trigger is a header row INSIDE the card and
+  // the body expands in place. The chevron rotates via CSS on
+  // data-kpi-ov-open="1".
   return (
-    <>
+    <div
+      className={`kpi-ov-card kpi-ov-card-cogs kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
+      data-kpi-ov="statement"
+      data-kpi-ov-open={open ? "1" : "0"}
+    >
       <button
         type="button"
-        className="kpi-ov-fold"
+        className="kpi-ov-fold-trigger"
         data-kpi-ov="fold-pnl"
         onClick={onToggle}
         aria-expanded={open ? "true" : "false"}
       >
         <span className="kpi-ov-eb">Full profit and loss</span>
         <span className="kpi-ov-gl">every line the way finance sees it, with percent of revenue</span>
-        <span className="kpi-ov-fold-cv">{open ? "▴" : "▾"}</span>
+        {open && (
+          <span className="kpi-ov-seg" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className={dense === "full" ? "on" : ""}
+              onClick={(e) => { e.stopPropagation(); setDense("full"); }}
+              data-kpi-ov="dense-full"
+            >Full</button>
+            <button
+              type="button"
+              className={dense === "sum" ? "on" : ""}
+              onClick={(e) => { e.stopPropagation(); setDense("sum"); }}
+              data-kpi-ov="dense-sum"
+            >Summary</button>
+          </span>
+        )}
+        <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="statement">
-          <div className="kpi-ov-ch">
-            <span className="kpi-ov-eb">Profit and loss</span>
-            <span className="kpi-ov-gl">
-              {payload.filters?.account} · {payload.range?.start} – {payload.range?.end}
-            </span>
+        <>
+          <div className="kpi-ov-fold-meta">
             <HelpPop
               id="overview-pnl"
               title="Profit and loss"
               body={<p>The statement the way finance builds it. Percent of revenue is on every line - that is how each cost is judged, not the dollar alone.</p>}
             />
-            <span className="kpi-ov-seg">
-              <button
-                type="button"
-                className={dense === "full" ? "on" : ""}
-                onClick={() => setDense("full")}
-                data-kpi-ov="dense-full"
-              >Full</button>
-              <button
-                type="button"
-                className={dense === "sum" ? "on" : ""}
-                onClick={() => setDense("sum")}
-                data-kpi-ov="dense-sum"
-              >Summary</button>
+            <span className="kpi-ov-gl">
+              {payload.filters?.account} · {payload.range?.start} – {payload.range?.end}
             </span>
           </div>
           <div className="kpi-ov-cb">
@@ -353,12 +363,12 @@ export default function PnlStatement({ payload, open, onToggle }) {
                 <> <b>Packaging on this account has a known mapping gap</b> - our figure is incomplete.</>
               )}
               {payload.flags?.planned && (
-                <> <b>Revenue for the open period is planned</b> until this site's meal counts are live in the Service Calendar; closed periods use finance actuals.</>
+                <> <b>Revenue for the open period is planned</b> until this site&rsquo;s meal counts are live in the Service Calendar; closed periods use finance actuals.</>
               )}
             </p>
           </div>
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }

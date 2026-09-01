@@ -5,13 +5,18 @@
 // Gross margin. Every dollar / percent / direction word arrives
 // formatted on the payload's cards[] array (server-side per §9B).
 //
-// Card structure per §5.4 anatomy 4 + prototype v5:
-//   - eyebrow (label) + optional GL codes (corporate posture) + ? + pill (R-7)
-//   - hero (formatted dollar; may be null when unreported)
-//   - kpi2 line (revenue: budget-to-date + full period/year;
-//                cogs: %-of-rev vs target · direction word;
-//                gm:   same)
-//   - mini breakdown line (labels + amounts)
+// PR 2 polish (2026-09-01) layout of record: see
+// docs/renders/overview-polish-LOCKED.html:262-272.
+//
+//   Revenue     - hero ($amount period to date) · sub "vs $X P9 budget"
+//                 (B5: dropped the "expected by today" figure, it was
+//                 the same number as the hero while revenue was planned)
+//   COGS        - heroline "$X · N% of revenue" (dollars + pct side by
+//                 side with a divider) · sub "56.2% target · $Y budget
+//                 to date" (B7: two rows collapsed to one hero + one
+//                 sub); pill carries the gap (B6, server-side)
+//   Gross marg  - same heroline + sub shape as COGS (B7). Dollar delta
+//                 dropped - the pill already says "10.4% AHEAD".
 
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import DashOrValue from "./DashOrValue";
@@ -58,45 +63,48 @@ function Pill({ pill }) {
   );
 }
 
-// R-40 (2026-09-01): one revenue-card sub-line rhythm for every role.
-// Bold horizon budget, grey descriptor, matching COGS + GM rhythm.
-//   Open period: "$118,130 budget this period · $88,598 expected by today"
-//   FYTD:        "$1,572,700 full year budget · $1,371,266 expected by today"
-//   Closed:      "$121,930 budget"
-// GL codes are no longer rendered on card headers - they live in the
-// statement (one fold away). Kevin flagged this as reversible in the
-// R-40 report if he misses them.
+// B5 (2026-09-01): revenue card sub-line reads "vs $118,130 P9 budget".
+// Drops the "expected by today" figure - it was the same number as the
+// hero while revenue was planned (0.5x zero relationship = same).
+//   Open period: "vs $118,130 P9 budget"
+//   FYTD:        "vs $1,572,700 full-year budget"
+//   Closed:      "vs $121,930 budget"
 function RevenueCard({ card, range }) {
   const isFytd = range?.kind === "fytd";
   const isClosed = range?.period_state === "verified" || range?.period_state === "closed_awaiting";
+  // "P9 budget" copy for the open-period case. The payload's range
+  // carries period_no as a number; the card copy prefers "P9" over
+  // "period 9" to match the command bar's Range chip vocabulary
+  // ("This period · P9 · 08/10 – 09/06").
+  const periodLabel = range?.period_no != null ? `P${range.period_no}` : null;
 
   const subLine = (() => {
     if (isClosed) {
       const closedBudget = card.budget_full_period_display || card.budget_to_date_display;
       if (!closedBudget) return null;
       return (
-        <div className="kpi-ov-kpi2">
-          <span>
-            <b style={{ fontSize: "var(--kpi-t-body)" }}>{closedBudget}</b>
-            {" "}budget
-          </span>
+        <div className="kpi-ov-sub" data-kpi-ov="revenue-sub">
+          vs <b className="kpi-ov-num">{closedBudget}</b> budget
         </div>
       );
     }
-    const horizon = isFytd
-      ? card.budget_full_year_display
-      : card.budget_full_period_display;
-    const horizonLabel = isFytd ? "full year budget" : "budget this period";
+    if (isFytd) {
+      const horizon = card.budget_full_year_display;
+      if (!horizon) return null;
+      return (
+        <div className="kpi-ov-sub" data-kpi-ov="revenue-sub">
+          vs <b className="kpi-ov-num">{horizon}</b> full-year budget
+        </div>
+      );
+    }
+    // Open period (default): "vs $X P9 budget" with the period label
+    // pulled from the range meta when present.
+    const horizon = card.budget_full_period_display;
     if (!horizon) return null;
+    const suffix = periodLabel ? `${periodLabel} budget` : "period budget";
     return (
-      <div className="kpi-ov-kpi2">
-        <span>
-          <b style={{ fontSize: "var(--kpi-t-body)" }}>{horizon}</b>
-          {" "}{horizonLabel}
-        </span>
-        {card.budget_to_date_display && (
-          <span>· {card.budget_to_date_display} expected by today</span>
-        )}
+      <div className="kpi-ov-sub" data-kpi-ov="revenue-sub">
+        vs <b className="kpi-ov-num">{horizon}</b> {suffix}
       </div>
     );
   })();
@@ -111,6 +119,7 @@ function RevenueCard({ card, range }) {
       <div className="kpi-ov-cb">
         <div className="kpi-ov-hero kpi-ov-num" data-kpi-ov="hero-revenue">
           <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
+          <small>period to date</small>
         </div>
         {subLine}
       </div>
@@ -118,10 +127,44 @@ function RevenueCard({ card, range }) {
   );
 }
 
-// R-40: no posture branch. GL codes dropped from the card header
-// (they live in the statement, one fold away). Mini breakdown
-// dropped - labor + food dollars each appear once, carried by the
-// drill buttons downstream. Applies to every role.
+// B7 (2026-09-01): COGS + GM cards use a heroline (dollars + pct side
+// by side with a divider) + one sub-line ("56.2% target · $52,165
+// budget to date"). GM drops the dollar-gap sub - the pill states it.
+function HeroLineWithPct({ card, dataAttr, colorHero }) {
+  const heroColor = colorHero
+    ? (card.pill?.tone === "good" ? "kpi-ov-good" : card.pill?.tone === "bad" ? "kpi-ov-bad" : "")
+    : "";
+  return (
+    <div className="kpi-ov-heroline" data-kpi-ov={dataAttr}>
+      <span className={`kpi-ov-hero kpi-ov-num ${heroColor}`}>
+        <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
+      </span>
+      {card.pct_of_revenue_display && (
+        <>
+          <span className="kpi-ov-heroline-dv" aria-hidden="true">·</span>
+          <span className="kpi-ov-heroline-sec kpi-ov-num">
+            {card.pct_of_revenue_display}
+            <small>of revenue</small>
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TargetAndBudgetLine({ card }) {
+  const targetTxt = card.target_pct_display ? `${card.target_pct_display} target` : null;
+  const budgetTxt = card.budget_to_date_display ? `${card.budget_to_date_display} budget to date` : null;
+  if (!targetTxt && !budgetTxt) return null;
+  return (
+    <div className="kpi-ov-sub" data-kpi-ov="card-sub">
+      {targetTxt}
+      {targetTxt && budgetTxt && <span className="kpi-ov-sub-sep"> · </span>}
+      {budgetTxt}
+    </div>
+  );
+}
+
 function CogsCard({ card }) {
   return (
     <div className={`kpi-ov-card ${CARD_BORDER.cogs}`} data-kpi-ov="card-cogs">
@@ -131,39 +174,14 @@ function CogsCard({ card }) {
         <Pill pill={card.pill} />
       </div>
       <div className="kpi-ov-cb">
-        <div
-          className={`kpi-ov-hero kpi-ov-num ${card.pill?.tone === "good" ? "kpi-ov-good" : card.pill?.tone === "bad" ? "kpi-ov-bad" : ""}`}
-          data-kpi-ov="hero-cogs"
-        >
-          <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
-          <small>spent</small>
-        </div>
-        {card.pct_of_revenue_display && card.target_pct_display && (
-          <div className="kpi-ov-kpi2">
-            <b>{card.pct_of_revenue_display}</b>
-            <span>of revenue vs {card.target_pct_display} target</span>
-            {card.delta_pct_display && (
-              <span className={card.delta_direction === "good" ? "kpi-ov-good" : card.delta_direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb"} style={{ fontWeight: 800 }}>
-                {card.delta_pct_display}
-              </span>
-            )}
-          </div>
-        )}
-        {card.budget_to_date_display && (
-          <div className="kpi-ov-kpi2" style={{ marginTop: 6 }}>
-            <span>
-              <b style={{ fontSize: "var(--kpi-t-body)" }}>{card.budget_to_date_display}</b>
-              {" "}budget to date
-            </span>
-          </div>
-        )}
+        <HeroLineWithPct card={card} dataAttr="hero-cogs" colorHero />
+        <TargetAndBudgetLine card={card} />
       </div>
     </div>
   );
 }
 
-function GrossMarginCard({ card, range }) {
-  const rangeIsOpen = range?.period_state === "open" || range?.kind === "fytd";
+function GrossMarginCard({ card }) {
   return (
     <div className={`kpi-ov-card ${CARD_BORDER.gross_margin}`} data-kpi-ov="card-gm">
       <div className="kpi-ov-ch">
@@ -172,33 +190,8 @@ function GrossMarginCard({ card, range }) {
         <Pill pill={card.pill} />
       </div>
       <div className="kpi-ov-cb">
-        <div className="kpi-ov-hero kpi-ov-num" data-kpi-ov="hero-gm">
-          <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
-        </div>
-        {card.pct_of_revenue_display && card.target_pct_display && (
-          <div className="kpi-ov-kpi2">
-            <b>{card.pct_of_revenue_display}</b>
-            <span>of revenue vs {card.target_pct_display} target</span>
-            {card.delta_pct_display && (
-              <span className={card.delta_direction === "good" ? "kpi-ov-good" : card.delta_direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb"} style={{ fontWeight: 800 }}>
-                {card.delta_pct_display}
-              </span>
-            )}
-          </div>
-        )}
-        {card.budget_to_date_display && (
-          <div className="kpi-ov-kpi2" style={{ marginTop: 6 }}>
-            <span>
-              <b style={{ fontSize: "var(--kpi-t-body)" }}>{card.budget_to_date_display}</b>
-              {" "}budget{rangeIsOpen ? " to date" : ""}
-            </span>
-            {card.delta_display && (
-              <span className={card.delta_direction === "good" ? "kpi-ov-good" : card.delta_direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb"}>
-                · {card.delta_display}
-              </span>
-            )}
-          </div>
-        )}
+        <HeroLineWithPct card={card} dataAttr="hero-gm" colorHero={false} />
+        <TargetAndBudgetLine card={card} />
       </div>
     </div>
   );
@@ -213,7 +206,7 @@ export default function CardsRow({ cards, rangeMeta }) {
     <div className="kpi-ov-cards" data-kpi-ov="cards-row">
       {revenue && <RevenueCard card={revenue} range={rangeMeta} />}
       {cogs    && <CogsCard    card={cogs} />}
-      {gm      && <GrossMarginCard card={gm} range={rangeMeta} />}
+      {gm      && <GrossMarginCard card={gm} />}
     </div>
   );
 }
