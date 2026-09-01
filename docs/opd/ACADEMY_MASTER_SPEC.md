@@ -1,9 +1,9 @@
 # OPD + Academy - Master Specification
 
-**Status:** v1.0, approved to build
+**Status:** v1.2, approved to build
 **Owner:** Kevin Fietek
 **Repo home:** `docs/opd/ACADEMY_MASTER_SPEC.md`
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-01
 
 This is the living scope document. Section 16 (Status Ledger) is updated with every merged PR. Everything else changes only by explicit ruling, recorded in Section 17.
 
@@ -20,13 +20,22 @@ The Playbook becomes two rooms on one spine. The **Library** is the truth: every
 
 The atomic unit is a **version-bound signature**. Not a completion, not a checkbox. A typed-name attestation, gated by comprehension checks, stored with the document version, timestamp, and attempt count, and issued a certificate serial. When a document changes materially, the prior signature expires and the re-sign flow covers the changed section.
 
+### Scope ruling, 2026-09-01
+
+**The Academy is the compliance home for KitchFix.** It replaces Rippling for company document distribution and signature capture. Documents that today collect signatures in Rippling migrate here as they are onboarded to the Academy, and the Academy's attestation record becomes the authoritative one.
+
+Two consequences:
+
+- **The witness countersignature is retired.** `AGR-001 The Big Rules` currently collects Employee Name / Signature / Date plus KitchFix Witness Name / Signature / Date in Rippling. The Academy models one signer per attestation. The witness requirement does not carry over. Where a document's body references a witness line, that text needs a content edit before the document is onboarded.
+- **Migration is per document, not wholesale.** A document has one signing home at a time. When it gets obligations and questions here, its Rippling signing stops. Until then, Rippling remains authoritative for it. Never both.
+
 ### Non-goals for v1
 
 - Not a personnel or performance system. It records what was read and signed, nothing else.
 - Not a replacement for the Directory, People Portal, or Ops Hub.
-- Not a Sous change. Sous stays frozen at v2.0 (Section 12.4).
-- Not an authoring tool rebuild. The MDX + PR-gate publishing flow already works and is reused as-is.
-- Not a KPI Dashboard dependency. The Academy resolves from `people` and `accounts` directly.
+- Not a Sous change. Sous stays frozen at v2.0.
+- Not an authoring tool rebuild. The MDX + PR-gate publishing flow works and is reused as-is.
+- Not a Rippling replacement for anything other than document distribution and signature. Payroll, roster, and HR records stay there and remain the upstream source for the people spine.
 
 ### Language rule
 
@@ -405,6 +414,8 @@ Archive keeps signature history. A signature on an archived version stays valid 
 
 **Ruling:** `library_admin` and `academy_admin` are **separate grants**. Britt can hold Library without Academy. Mariela can hold People and Sync plus Reports without Version Publisher. Admin is not a role tier.
 
+> **Superseded 2026-09-01 (Section 17 closed rulings):** Josh and Joe now hold both grants; no separate standing-viewer type is needed. The two grants remain formally separate for authoring flexibility, but the current admin roster carries both on every holder.
+
 ### 12.3 Version publisher
 
 The one question is minor or material. Material expires every prior signature, requires a plain-language change note, and re-opens the document with the changed section emphasized. Minor leaves the record untouched. The UI states the blast radius before the decision ("re-opens 30").
@@ -459,31 +470,52 @@ Manager usage is roughly **50/50 desktop and mobile**, and the intranet has been
 
 ---
 
-## 15. PR ladder
+## 15. Build state and PR ladder
 
-**v1 audience ruling (Kevin, 2026-08-31): Kevin-only pilot**, using the established `KPI_PREVIEW_ONLY` fence pattern (`roleGate.js:69-70`). Widen to one site, then all 30 salaried, then hourly. Each step gated by the previous.
+**v1 audience: Kevin-only pilot**, fenced by `ACADEMY_PREVIEW_ONLY` in `src/lib/academy/resolveIdentity.js`. Widen to one site, then all salaried, then hourly. Each step gated by the previous.
 
-| PR | Scope | Size | Depends on |
-|---|---|---|---|
-| 1 | `academy_*` schema + append-only assertions + grants | M | - |
-| 2 | Obligations authoring, 6 pilot docs (content only) | M | - (parallel) |
-| 3 | Projection extension: write `academy_obligations` | S | 1, 2 |
-| 4 | `resolveAcademyIdentity` + scope resolver | M | 1 |
-| 5 | Shell, four rooms, rail grammar, Library reskin | L | 4 |
-| 6 | Requirements engine + cycles + Cycle Builder | L | 3, 4 |
-| 7 | Checks, questions, attestation write path | L | 6 |
-| 8 | Certificates (pdf-lib reuse) | S | 7 |
-| 9 | Records room | M | 7 |
-| 10 | Notifications + `academy@` alias | M | 6 |
-| 11 | Magic-link primitive + hourly portal | **XL** | 1, 10 |
-| 12 | Bounce detection | M | 11, ruling 17.2 |
-| 13 | Admin: Library worklist + permission split | M | 5 |
+### Shipped
 
-**PR 2 blocks the most and is content work, not engineering.** It can start immediately and run in parallel with everything.
+| PR | What landed |
+|---|---|
+| #901 | Technical findings, 10 alignment documents |
+| #903 | This spec, v1.0 |
+| #904 | `academy-1` identity foundation: persons, stints, eligibility exceptions, grants |
+| #905 | `academy-2` region leads; `resolveAcademyIdentity`; `/api/academy/whoami` |
+| #908 | Frontmatter schema extension (`key`, `on-hire`, `worker_class`, `est_minutes`); obligations authored on 3 documents |
+| #909 | `academy-3` assignment layer: obligations, cycles, cycle modules, requirements |
+| #911 | `academy-4` projection RPCs; projection writes obligations |
+| #913 | `/opd` shell + Library room |
+| #914 | `academy-5` publish RPCs; requirements issuance engine |
+| #915 | `academy-6` cycle audience scope |
+| #917 | CLI import fix + alias audit |
+| #918 | `academy-7` ambiguity fix + mandatory execution probes |
+| #920 | Pagination discipline + `person_id` backfill RPC |
+| #922 | Academy room |
+| #924 | Design alignment pass |
+| #925 | `academy-9` signature layer: questions, check attempts, module progress, attestations |
 
-**PR 11 is auth-adjacent and estimated at 2-3x** surface reading, per standing rule.
+### Live state
 
-Standing build rules apply throughout: confirm branch before every commit, open the PR in the same turn as the push with the number in the report, re-merge before push, stop and report after each PR, migrations reviewed by the architect before Studio apply, no merge without CI green plus a live browser gate measurement. Build Accuracy Protocol governs verification; `[code-read]` claims are unverified until gated.
+- **14 `academy_*` tables**, six RPCs, all TRUNCATE-fenced.
+- **887 persons / 1,129 stints**; identity spine populated and verified.
+- **8 obligations** projected from `AGR-001`, `PB-014`, `PB-006`.
+- **Cycle 2 (September 2026) published**, scoped to Kevin, 8 requirements, 96 minutes, due 2026-09-30, all carrying `person_id`.
+- **`academy_attestations` and `academy_check_attempts` are append-only**, DB-enforced: `service_role` holds no UPDATE, DELETE, or TRUNCATE. Verified by probe.
+- `academy_grants` holds three admins: `k.fietek@`, `josh@`, `joe@`, each with `library_admin` and `academy_admin`.
+
+### Remaining
+
+| Item | State |
+|---|---|
+| Comprehension questions | **Not started. Nothing can be signed until a module has approved questions.** |
+| Read-check-sign flow | Not started. Requires the experience design (Section 18). |
+| Certificates | Not started. `pdf-lib` path confirmed reusable. |
+| Records room | Not started. |
+| Admin room | Not started. Library administration exists at OPD Command and must fold in. |
+| Notifications | Not started. Gmail send confirmed production-live; `academy@` alias created. |
+| Hourly portal | Not started. No magic-link primitive exists. Auth-adjacent, estimate 2-3x. |
+| Derive extension | **Parked and now load-bearing.** Nothing keeps `academy_person_stints` current as new hires sync; the next new hire issues with a NULL `person_id`. |
 
 ---
 
@@ -532,17 +564,231 @@ Five migrations. The identity foundation split off first, then the RDO region-le
 
 ---
 
-## 17. Open rulings
+## 17. Rulings
+
+### Open
 
 | # | Ruling | Recommendation | Blocks |
 |---|---|---|---|
-| 17.1 | Mobile chrome sequencing: Academy-native then extract, or shared arc first | Architect: Academy-native, extract later. Gate on the mobile measurement first. | PR 5 shape |
-| 17.2 | Bounce detection: Gmail `history.list` polling or ESP webhook | Polling first, it needs no new vendor | PR 12 |
-| 17.3 | Overdue consequence ladder and any lockout policy | At minimum a "not current" chip plus a lead nudge on day 8. A status without a consequence becomes wallpaper. | PR 10 |
-| 17.4 | Spanish parity: `PB-004-ES` is Retired and hourly needs it most | Restore for the hourly pilot | PR 2 |
-| 17.5 | SLT and CEO compliance ownership, given scope-by-reports leaves the root unmonitored | People Ops owns CORP standing | PR 9 |
-| 17.6 | Frontmatter obligations schema extension. Add `obligations[].key` (required), `cadence: on-hire`, and `applies_to.worker_class`. Additive and safe today because zero documents author the block; expensive after authoring begins. | Approve additive extension. | Blocks migration 2 and PR 2. |
-| 17.7 | `academy_attestations.supersedes` (not `superseded_by`). Section 7.2 originally implied a `superseded_by` pointer on the older row. That conflicts with the append-only invariant: setting `superseded_by` on the corrected row is an UPDATE, and the table forbids UPDATE. Direction inverts: the CORRECTING row carries `supersedes` pointing at what it replaces. "Is this attestation current?" becomes "does any row supersede it?" - a `NOT EXISTS` query against the `supersedes` index, not a stored flag. | Approve inversion. Landed in `academy-9`. | Migration 4 (landed). |
-| 17.8 | `satisfied_by` on `academy_requirements` NOT added. Section 13 suggested a `satisfied_by` pointer would land in migration 4. Deliberately omitted: satisfaction is answered by the existence of an attestation for that requirement, and a stored pointer is a second source of truth for one fact. This project has been bitten three times by that shape (KPI-versus-Sous divergence, the `person_id` denormalization gap, doc-versus-code drift). The performance argument does not hold at this scale - an indexed `NOT EXISTS` against a few hundred rows is free. | Approve omission. Landed as an absence in `academy-9` (nothing added to `academy_requirements`). | Migration 4 (landed). |
+| 17.1 | Mobile chrome sequencing: Academy-native then extract, or shared arc first | Academy-native. Gate on the mobile measurement first. | Chrome work |
+| 17.2 | Bounce detection: Gmail `history.list` polling or ESP webhook | Polling first, no new vendor | Hourly portal |
+| 17.3 | Overdue consequence ladder and any lockout policy | Minimum: a "not current" chip plus a lead nudge on day 8 | Notifications |
+| 17.4 | Spanish parity: `PB-004-ES` is Retired and hourly needs it most | Restore before the hourly pilot | Hourly portal |
+| 17.9 | **Do both Culture OS modules get comprehension checks, or only The Standard?** | Architect's lean: The Standard only. Origin is company history; a comprehension test on it is trivia, and trivia erodes trust in the record. Origin's signature is a straight acknowledgment. | First questions |
+| 17.10 | **The full learner experience, landing through recognition.** See Section 18. | Design before build. | Everything downstream |
 
-**Closed rulings** (recorded for history): stints versus persons (2.1), scope by region (3.1), eligibility exceptions (2.6), hourly identity and the `personal_email` policy (2.5), calendar months (6), pilot document set (4.3), v1 audience (15), peer visibility (3.4), hourly roster visibility (3.4), Admin permission split (12.2), "% current" denominator as signed-of-assigned-this-cycle, document-open pattern (Focus for requirements, modal for Library peeks, inline for single-check refreshers), Sous freeze scope (12.4), shelf taxonomy (4.1), `supersedes` direction inversion (17.7), `satisfied_by` omission (17.8).
+### Closed
+
+Stints versus persons (2.1). Scope by region (3.1). Eligibility exceptions (2.6). Hourly identity and the `personal_email` policy (2.5). Calendar months (6). Pilot document set (4.3). v1 audience (15). Peer visibility (3.4). Hourly roster visibility (3.4). Admin permission split (12.2) - **superseded 2026-09-01: Josh and Joe hold both grants; no separate standing-viewer type is needed.** "% current" denominator as signed-of-assigned-this-cycle. Document-open pattern (Focus for requirements, modal for Library peeks, inline for single-check refreshers). Sous freeze scope (12.4). Shelf taxonomy (4.1). Frontmatter obligations extension (17.6). `supersedes` direction inversion (17.7). `satisfied_by` omission (17.8). **Academy replaces Rippling for document signing (1). Witness countersignature retired (1).**
+
+---
+
+## 18. The learner experience
+
+**Status: designed and approved, 2026-09-01.** Visual reference: `OPD_Academy_Journey_v2.html`. The render illustrates; this section rules. Where they disagree, this section wins.
+
+No Academy surface ships that contradicts this section. If a build needs an exception, it is a ruling, not an implementation choice.
+
+---
+
+### 18.1 Six governing principles
+
+**1. The reward is the record.** What a person earns for signing is a real certificate with a real serial, a credential that lights up, and honest numbers. Not points, not levels, not experience. The evidence is the prize because the evidence is what the system exists to produce.
+
+**2. Celebration is proportional to what happened.** A correct answer gets nothing - correct is the expected outcome. A signature gets a quiet, dignified confirmation. **Finishing a cycle gets a real moment.** Celebrating small things devalues the large ones and makes a compliance record feel like a game.
+
+**3. Every claim is true, or it is absent.** No invented statistics, no aspirational framing dressed as observation, no manufactured urgency. If the system does not know a thing, it says nothing rather than guessing warmly.
+
+**4. Reading is not gated. Comprehension is.** Scroll depth is never tracked as evidence and never blocks progress. Scrolling is not reading, and gating on it is theater people defeat within a week. The comprehension check is the real gate, and it is the only gate.
+
+**5. No percentage without history.** A person with zero signatures sees their queue and their minutes, never 0%. A percentage on a surface someone has never been able to act on reads as failure. Once there is signed history, the percentage appears.
+
+**6. No ranking, ever.** No leaderboards, no position, no "you are Nth of thirty." Ranking motivates the fast and shames the slow, and a shamed operator clicks through without reading. Peer information is permitted only in the aggregate and the affirmative forms defined in 18.13.
+
+---
+
+### 18.2 Stage 1 - Landing
+
+The Academy tab is the default room.
+
+**Shown:** the person's identity and role; a **streak chip** when the streak is true; the queue count phrased as **"to go"** rather than "items"; total minutes; days remaining in the cycle; a progress meter; the credential wall; the year track; the site card.
+
+**Greeting varies by state**, and the variants are not interchangeable:
+
+| State | Heading | Sub |
+|---|---|---|
+| Nothing started | "September is open, Kevin." | Sets an expectation of effort. See 18.14. |
+| In progress | "Two down, Kevin." | Count remaining and minutes. |
+| One remaining | "Almost there." | The push fires. See 18.10. |
+| Complete | "You are all current, Kevin." | Next cycle opening date. |
+
+**The primary button always names the time cost**: "Start · 12 min", "Keep going · 11 min", "Finish · 11 min". A person is told what they are agreeing to before they agree to it.
+
+**Prohibited here:** a percentage before any signature exists; the word "compliance"; any nag when the queue is empty.
+
+---
+
+### 18.3 Stage 2 - The queue
+
+One row per requirement, ordered by due date then by estimated minutes ascending, so the shortest item is reachable first.
+
+**Each row carries:** the document and its part ("Culture OS · part 1 of 2"); the module title; a **plain-language reason it applies** - "Every KitchFix leader reads this in their first month" - never a cadence code; due date; estimated minutes; social proof where it qualifies (18.13).
+
+**Prohibited:** obligation keys, cadence enums, or worker-class labels in operator-facing copy. Those are Admin vocabulary.
+
+---
+
+### 18.4 Stage 3 - Opening a module
+
+The document opens **inside the shell** as a Focus view with a breadcrumb. Never a modal, never a drawer.
+
+**The session thread** is a persistent strip above the document: "Module 1 of 8", a progress bar, and "84 min left in September". It is the thread through the set rather than the item.
+
+**The rail carries, in this order:**
+1. **Estimated time remaining, as the largest number on the screen.** It decreases as sections complete. "How much more of this" is the question people actually have.
+2. The three steps in plain language: read, one quick check, sign.
+3. A card stating: **your place is saved, nothing is submitted until you sign.**
+
+That last card is not decoration. It is the permission to leave, and it is what makes a twelve-minute document openable on a phone between services.
+
+---
+
+### 18.5 Stage 4 - Reading
+
+Sections reveal one at a time so a check can sit at each boundary.
+
+**No scroll tracking. No scroll gating. No progress bar that fills as you scroll.** Progress advances on check completion only.
+
+A completed section is marked "Read" - a statement of position, not an assertion that comprehension occurred. The signature makes that claim, and only the person can make it.
+
+---
+
+### 18.6 Stage 5 - The check
+
+Called a **quick check** in all operator-facing copy. Never "assessment", "test", "quiz", or "comprehension evaluation".
+
+**One check per section, inline at the section boundary**, not gathered at the end. The person read the answer within the last minute, so the source is one scroll away. This is what makes the wrong-answer path recoverable rather than punishing.
+
+Answer order shuffles per attempt. `correct_option_id` never reaches the client.
+
+---
+
+### 18.7 Stage 6 - A wrong answer
+
+**Amber. Never red.** Red is failure; amber is "look again".
+
+The feedback must: say plainly that it is not right, in warm register; **explain why**, naming the specific line or anchor that holds the answer; offer a button that scrolls to that section and **flashes it** so it is findable.
+
+Attempts are unlimited and every attempt is recorded. The certificate showing "2 attempts" is correct and is not a mark against anyone - it is what honest looks like.
+
+**Prohibited:** scores, percentages, "you failed", red, any limit on retries, any consequence for a wrong answer beyond trying again.
+
+---
+
+### 18.8 Stage 7 - A right answer
+
+Brief, warm, and then out of the way. One sentence confirming, one sentence of why it matters, one button forward.
+
+**No celebration.** Correct is expected. Celebrating the expected is how a compliance record starts feeling like a game, and a person who feels they are playing a game reads less carefully.
+
+---
+
+### 18.9 Stage 8 - Signing
+
+The attestation is set in a **serif face** so it reads as a document rather than interface. It is the one place legal register is correct; everywhere else uses operator language.
+
+The typed name must match the authenticated person's name. **The button is disabled until it matches**, and the hint states the expected name after a few characters. No submission is possible with a mismatched name.
+
+**What the person will earn is shown before they commit** - the credential and the fact a certificate will be issued and emailed. The reward is stated, never sprung.
+
+---
+
+### 18.10 Stage 9 - The push
+
+**The highest-leverage screen in the product.** When a person is nearly done, the room stops being a list and becomes a single call to finish: one banner, one sentence, one button.
+
+**Trigger rule, ruled 2026-09-01:**
+
+> The push fires when **one requirement remains**, or when **any number remain and the cycle has 5 or fewer days left**.
+
+**It fires once per state change, not on every page load.** A push that appears every time is a nag, and a nag gets ignored and then resented.
+
+Copy names the remaining work and the time: "One left, Kevin. Eleven minutes and September is done."
+
+**Prohibited:** countdown timers, red urgency, consequence threats, or any push while more than five days remain and more than one item is outstanding.
+
+---
+
+### 18.11 Stage 10 - Cycle complete
+
+**This is where celebration belongs, and it is the only place it belongs.**
+
+**Shown:** a plain declarative heading - "September is done."; the real numbers (modules signed, minutes spent, days early); the streak incremented; every credential earned in the cycle, current, in one row; the next cycle previewed with its opening date and size.
+
+**Prohibited:** confetti, animation beyond a single entrance, points, levels, badges that are not credentials, any comparison to other people.
+
+The numbers are the reward because the numbers are true.
+
+---
+
+### 18.12 Stage 11 - The resting state
+
+What most people see most of the time, and it must be good.
+
+**Shown:** that they are current; the credential wall, all earned; the year track; the next cycle opening date.
+
+**Not shown:** a queue, a call to action, optional extra learning, or anything that manufactures work.
+
+**A quiet Academy is a working Academy.** The correct response to a person who is up to date is to tell them so and get out of the way.
+
+---
+
+### 18.13 Social proof - permitted forms and the floor
+
+Peer information is one of the strongest adoption levers available and one of the easiest to corrupt. Two forms are permitted and both must be literally true.
+
+**Aggregate, on a queue row:** "12 of 30 leaders have signed this."
+
+> **Floor, ruled 2026-09-01: display only at 25% or above.** Below the floor, show nothing. "0 of 30 have signed this" is true and demotivating, and on day one of every cycle it is the true number.
+
+**Named and affirmative, on the site card:** "Jen finished hers on August 29."
+
+> Only ever names people who have **completed**. Never names who is behind, late, or outstanding. A colleague's incompleteness is management information (spec 3.4) and is not shown to peers.
+
+**Prohibited:** ranking, position, percentile, anyone's incompleteness, or any comparison framed as competition.
+
+---
+
+### 18.14 Expectation-setting copy
+
+The landing sub-line sets effort expectation. Once completion data exists it may state an observed fact - "most people finish this in two sittings".
+
+> **Ruled 2026-09-01: until that data exists, it is phrased as intent, not observation.** For example: "Eight short reads, built to be done in two sittings." That is a design statement and it is true. "Most people finish in two sittings" is a claim about behaviour nobody has measured.
+
+This is principle 3 applied to the friendliest-sounding sentence on the page, which is exactly where an untrue claim is most likely to slip in.
+
+---
+
+### 18.15 Prohibited across the whole experience
+
+- Points, levels, experience, or any invented score
+- Leaderboards, ranking, or position
+- Confetti or celebration on an individual signature
+- A streak that is not literally true
+- A progress bar that advances on scroll
+- Red as the wrong-answer treatment
+- A percentage score anywhere on the record - the record stores passed, attempts, and time
+- Any statistic about people that has not been measured
+- The word "compliance" in operator-facing UI
+- Countdown timers or consequence threats
+- Dark patterns of every kind, including the friendly ones
+
+---
+
+### 18.16 Open
+
+| # | Question | Blocks |
+|---|---|---|
+| 18.a | Does the streak reset on a missed cycle, or degrade? | Streak display |
+| 18.b | Hourly portal: which of these stages carry over, and which are replaced by the magic-link flow? | Hourly portal |
+| 18.c | Mobile: does the session thread persist, or collapse to the time remaining alone? | Mobile chrome |
