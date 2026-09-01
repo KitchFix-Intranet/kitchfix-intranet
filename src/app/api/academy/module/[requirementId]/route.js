@@ -74,6 +74,233 @@ function shuffle(arr) {
   return a;
 }
 
+// ─── Step boundary computation ─────────────────────────────────────
+// Spec 18.5 (amended 2026-09-01 by the module-stepper PR): a step is
+// a heading whose content reads in roughly three minutes or less.
+// Where a section exceeds that, the step boundary descends a heading
+// level.
+//
+// Reading rate: 200 wpm. 3 min * 200 wpm = 600 words. Configurable
+// via WORDS_PER_STEP below.
+const WORDS_PER_STEP = 600;
+const HEADING_RE = /<h([1-3])[^>]*>([^<]+)<\/h\1>/gi;
+
+function decodeEntities(s) {
+  return String(s || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function slugAnchor(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/&amp;/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function countWords(html) {
+  // Strip tags, collapse whitespace, count non-empty tokens.
+  const text = String(html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return 0;
+  return text.split(" ").filter(Boolean).length;
+}
+
+// Parse the doc HTML into a flat list of headings + a nested tree.
+// Each node: { level, text, start, end, chunkHtml, wordCount, children }.
+function parseHeadingTree(html) {
+  if (!html) return [];
+  const flat = [];
+  let m;
+  const re = new RegExp(HEADING_RE.source, "gi");
+  while ((m = re.exec(html)) !== null) {
+    flat.push({ level: Number(m[1]), text: decodeEntities(m[2]).trim(), start: m.index });
+  }
+  if (flat.length === 0) return [];
+  // Compute end + chunk per heading (end = next heading of same OR
+  // higher level, or EOF).
+  for (let i = 0; i < flat.length; i += 1) {
+    const cur = flat[i];
+    let end = html.length;
+    for (let j = i + 1; j < flat.length; j += 1) {
+      if (flat[j].level <= cur.level) { end = flat[j].start; break; }
+    }
+    cur.end = end;
+    cur.chunkHtml = html.slice(cur.start, cur.end);
+    cur.wordCount = countWords(cur.chunkHtml);
+  }
+  // Build the tree: attach each heading to the last heading of a
+  // shallower level.
+  const roots = [];
+  const stack = [];
+  for (const node of flat) {
+    node.children = [];
+    while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop();
+    if (stack.length === 0) roots.push(node);
+    else stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+// Given a heading tree + an optional source_section filter, emit the
+// step list. Descends a level whenever a node's total word count
+// exceeds WORDS_PER_STEP.
+//
+// Each emitted step carries:
+//   - descended: true iff produced by the isBig-descend branch (a
+//     sub-step of a parent that was too big). Named roots have
+//     descended=false. Only descended sub-steps are candidates for
+//     the merge pass below.
+//   - parentKey: identity of the immediate parent in the tree
+//     (empty string for root emissions). Two descended steps are
+//     merge candidates ONLY if their parentKey matches.
+function computeSteps(tree, sourceSectionList) {
+  const inScope = (node) => {
+    if (!sourceSectionList || sourceSectionList.length === 0) return true;
+    return sourceSectionList.some(
+      (s) => s.trim().toLowerCase() === node.text.trim().toLowerCase()
+    );
+  };
+  const out = [];
+  const emit = (node, descended, parentKey) => {
+    const isBig = node.wordCount > WORDS_PER_STEP && node.children.length > 0;
+    if (isBig) {
+      const nextParent = slugAnchor(node.text);
+      for (const child of node.children) emit(child, true, nextParent);
+      return;
+    }
+    out.push({
+      key: slugAnchor(node.text),
+      anchor: node.text,
+      level: node.level,
+      html: node.chunkHtml,
+      wordCount: node.wordCount,
+      descended,
+      parentKey,
+    });
+  };
+  // Two modes:
+  //   (1) source_section filter present: walk the tree, emit any
+  //       ROOT node whose text is in the list. If it is big, descend.
+  //   (2) No filter: emit every top-level (root) node, descending as
+  //       needed.
+  for (const root of tree) {
+    if (!inScope(root)) continue;
+    emit(root, false, "");
+  }
+  return out;
+}
+
+// After computeSteps + question-attachment, walk the emitted steps
+// and merge undersized siblings. Two-sided rule: computeSteps SPLITS
+// when a parent runs long (>600w); mergeSteps combines when descended
+// siblings run short. Prevents the "22-word step wearing a card"
+// failure that fragmenting Culinary Defined into 15 steps produced.
+//
+// Merge is permitted only when ALL of these hold for two consecutive
+// steps A and B:
+//   1. Both were produced by the descend branch (A.descended && B.descended).
+//      Named roots the author called out individually in source_section
+//      stay solo - the section list is a deliberate outline.
+//   2. Same immediate parent (A.parentKey === B.parentKey). Never
+//      merge across a parent boundary.
+//   3. Neither carries an attached check (A.questionIds.length === 0
+//      && B.questionIds.length === 0). A check is anchored to its
+//      section; merging would confuse "which section is being tested".
+//   4. Combined wordCount <= WORDS_PER_STEP.
+//
+// After the greedy pass, one trailing rule: if the LAST merged step
+// in a parent group has wordCount < TRAILING_STUB_WORDS, fold it into
+// the previous merged step of the same parent (only if that previous
+// step also has no checks - never overwrite a check anchor). This
+// rule may push slightly past the cap; a 620-word step is better than
+// an orphaned 22-word one.
+const TRAILING_STUB_WORDS = 150;
+function mergeSteps(rawSteps, stepQuestions) {
+  if (rawSteps.length === 0) return { steps: [], questionIdsByStep: [] };
+
+  const canMerge = (aIdx, bIdx) => {
+    const a = rawSteps[aIdx];
+    const b = rawSteps[bIdx];
+    if (!a.descended || !b.descended) return false;
+    if (a.parentKey !== b.parentKey) return false;
+    if ((stepQuestions[aIdx]?.length || 0) > 0) return false;
+    if ((stepQuestions[bIdx]?.length || 0) > 0) return false;
+    return true;
+  };
+
+  // Greedy pass: build merged groups (each group = array of raw
+  // indices in order).
+  const groups = [];
+  let cur = [0];
+  for (let i = 1; i < rawSteps.length; i += 1) {
+    const last = cur[cur.length - 1];
+    const curWords = cur.reduce((acc, idx) => acc + rawSteps[idx].wordCount, 0);
+    if (canMerge(last, i) && curWords + rawSteps[i].wordCount <= WORDS_PER_STEP) {
+      cur.push(i);
+    } else {
+      groups.push(cur);
+      cur = [i];
+    }
+  }
+  groups.push(cur);
+
+  // Trailing-stub pass: for each group with wordCount < TRAILING_STUB_WORDS,
+  // if the previous group is a valid merge target (mergeable last-of-prev
+  // with first-of-current), append this group's members to the previous
+  // group even if it pushes past cap.
+  const merged = [];
+  for (const g of groups) {
+    const words = g.reduce((acc, idx) => acc + rawSteps[idx].wordCount, 0);
+    if (
+      words < TRAILING_STUB_WORDS &&
+      merged.length > 0 &&
+      canMerge(merged[merged.length - 1][merged[merged.length - 1].length - 1], g[0])
+    ) {
+      merged[merged.length - 1].push(...g);
+    } else {
+      merged.push(g);
+    }
+  }
+
+  // Assemble output. First-section leading heading is stripped from
+  // the merged HTML (it renders as the step title in .opd-focus-step-h2);
+  // subsequent sections keep their headings so they render as inline
+  // sub-headings within the step card body.
+  const stripLeadingHeading = (html) =>
+    String(html || "").replace(/^\s*<h[1-3][^>]*>[^<]*<\/h[1-3]>\s*/i, "");
+
+  const steps = [];
+  const questionIdsByStep = [];
+  for (const g of merged) {
+    const first = rawSteps[g[0]];
+    const anchors = g.map((idx) => rawSteps[idx].anchor);
+    const wordCount = g.reduce((acc, idx) => acc + rawSteps[idx].wordCount, 0);
+    // First chunk: strip the leading heading (rendered as step title).
+    // Subsequent chunks: keep verbatim (their headings are subheadings).
+    const chunks = g.map((idx, j) =>
+      j === 0 ? stripLeadingHeading(rawSteps[idx].html) : rawSteps[idx].html
+    );
+    const html = chunks.join("");
+    const questionIds = g.flatMap((idx) => stepQuestions[idx] || []);
+    steps.push({
+      key: first.key,
+      anchor: first.anchor,
+      anchors,
+      level: first.level,
+      html,
+      wordCount,
+    });
+    questionIdsByStep.push(questionIds);
+  }
+  return { steps, questionIdsByStep };
+}
+
 export async function GET(request, ctx) {
   const testModeBypass =
     process.env.TEST_MODE === "true" && process.env.VERCEL !== "1";
@@ -260,6 +487,66 @@ export async function GET(request, ctx) {
     questions.length === 0 ||
     questions.every((q) => correctByQuestion.has(q.question_id));
 
+  // Compute step boundaries. `steps` is what the client renders one
+  // at a time (spec 18.5, amended by the module-stepper PR). Each
+  // step carries its HTML chunk, wordCount, and the ordered list of
+  // approved-question ids scoped to its anchor.
+  const sourceSectionList = ob?.source_section
+    ? String(ob.source_section).split(/;\s*/).map((s) => s.trim()).filter(Boolean)
+    : null;
+  const headingTree = parseHeadingTree(content?.html || "");
+  const rawSteps = computeSteps(headingTree, sourceSectionList);
+  // Attach questions to steps by anchor match. A question whose
+  // section_anchor does not match any step is a data drift
+  // (rare; surfaces here as an orphaned question). Return the
+  // unmatched ids in a `steps_orphan_questions` field so the client
+  // can render them at the end as a safety net rather than dropping
+  // them silently.
+  const anchorIndex = new Map();
+  rawSteps.forEach((s, i) => anchorIndex.set(s.anchor.toLowerCase(), i));
+  const rawStepQuestions = rawSteps.map(() => []);
+  const orphanQuestionIds = [];
+  for (const q of questions) {
+    const key = String(q.section_anchor || "").trim().toLowerCase();
+    const idx = anchorIndex.get(key);
+    if (idx == null) {
+      orphanQuestionIds.push(q.question_id);
+    } else {
+      rawStepQuestions[idx].push(q.question_id);
+    }
+  }
+  // Merge pass: fold undersized descended siblings so a doc that
+  // splits into 15 stubs collapses to a natural 5. Named roots and
+  // checked steps are protected (see mergeSteps header).
+  const { steps: mergedSteps, questionIdsByStep } = mergeSteps(rawSteps, rawStepQuestions);
+  const steps = mergedSteps.map((s, i) => ({
+    key: s.key,
+    anchor: s.anchor,
+    anchors: s.anchors,
+    level: s.level,
+    html: s.html,
+    wordCount: s.wordCount,
+    questionIds: questionIdsByStep[i],
+    // Estimated minutes: word count at 200 wpm, rounded up to at
+    // least 1. UI uses this to display "About N min" on the step
+    // rail alongside the check count.
+    estMinutes: Math.max(1, Math.ceil(s.wordCount / 200)),
+  }));
+
+  // Resume-at-furthest step. `sections_seen` on progress is the
+  // authoritative record of which step keys the operator has moved
+  // past. Client uses this to mount at the correct step.
+  const seenKeys = new Set(
+    Array.isArray(progressRow?.sections_seen) ? progressRow.sections_seen : []
+  );
+  // "furthest" = index of the first step whose key is NOT in
+  // seenKeys, OR the sign step (steps.length) if all seen.
+  let furthestStepIndex = 0;
+  for (let i = 0; i < steps.length; i += 1) {
+    if (seenKeys.has(steps[i].key)) furthestStepIndex = i + 1;
+    else break;
+  }
+
   // Sanitize + shuffle questions for the wire. options is shuffled
   // per REQUEST; id preserved. correct_option_id was never selected.
   const wireQuestions = questions.map((q) => ({
@@ -331,6 +618,8 @@ export async function GET(request, ctx) {
         }
       : null,
     questions: wireQuestions,
+    steps,
+    steps_orphan_questions: orphanQuestionIds,
     progress: {
       attempts_by_question: attemptsByQuestion,
       all_correct_ids: [...correctByQuestion],
@@ -338,6 +627,8 @@ export async function GET(request, ctx) {
       started_at: progressRow?.started_at || new Date().toISOString(),
       last_seen_at: progressRow?.last_seen_at || null,
       time_spent_seconds: progressRow?.time_spent_seconds ?? 0,
+      sections_seen: Array.isArray(progressRow?.sections_seen) ? progressRow.sections_seen : [],
+      furthest_step_index: furthestStepIndex,
     },
     attestation: attestation
       ? {

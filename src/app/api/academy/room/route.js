@@ -229,12 +229,32 @@ export async function GET() {
     if (att.requirement_id) attestationsByReq.set(att.requirement_id, att);
   }
 
+  // Group requirements by doc_id so a doc with multiple visible
+  // obligations (e.g. PB-014 has origin + standard) can render each
+  // row with a "part N of M" suffix. Ordering within a doc is by
+  // obligation_key alphabetically - deterministic, no additional
+  // fields needed. When a doc has only one visible obligation for
+  // this worker, no suffix is added.
+  const byDoc = new Map();
+  for (const r of reqs) {
+    if (!byDoc.has(r.doc_id)) byDoc.set(r.doc_id, []);
+    byDoc.get(r.doc_id).push(r);
+  }
+  for (const [, list] of byDoc) list.sort((a, b) => a.obligation_key.localeCompare(b.obligation_key));
+  const partIndex = new Map(); // requirement_id -> { partNumber, totalParts }
+  for (const [, list] of byDoc) {
+    list.forEach((r, i) => {
+      partIndex.set(r.requirement_id, { partNumber: i + 1, totalParts: list.length });
+    });
+  }
+
   // 3. Enrich the queue.
   const queue = reqs.map((r) => {
     const doc = docsById.get(r.doc_id) || null;
     const ob = obligationsByKey.get(`${r.doc_id}|${r.obligation_key}`) || null;
     const cyc = r.cycle_id != null ? cyclesById.get(r.cycle_id) || null : null;
     const att = attestationsByReq.get(r.requirement_id) || null;
+    const part = partIndex.get(r.requirement_id) || { partNumber: 1, totalParts: 1 };
     return {
       requirement_id: r.requirement_id,
       doc_id: r.doc_id,
@@ -242,7 +262,16 @@ export async function GET() {
       doc_shelf: doc?.shelf || null,
       doc_class: doc?.doc_class || null,
       obligation_key: r.obligation_key,
+      // Part numbering for docs with multiple visible obligations.
+      // The client renders "· part N of M" when totalParts > 1.
+      part_number: part.partNumber,
+      total_parts: part.totalParts,
       source_section: ob?.source_section || null,
+      // cadence carried on the wire for Admin surfaces + a future
+      // Records room; the operator-facing queue does NOT render it
+      // (spec 18.3: no cadence enums in operator copy). Kept off the
+      // Focus rail's About card for the same reason - the client
+      // filters, not the API.
       cadence: ob?.cadence || null,
       obligation_type: ob?.type || null,
       description: ob?.description || null,

@@ -312,7 +312,11 @@ function QueueCard({ queue, loading, onOpen }) {
           type="button"
           className={"opd-queue-row" + (r.signed ? " opd-queue-row--done" : "")}
           onClick={() => onOpen(r)}
-          aria-label={r.signed ? `View certificate for ${r.doc_title}` : `Open ${r.doc_title} - ${r.obligation_key}`}
+          aria-label={r.signed
+            ? `View certificate for ${r.doc_title}`
+            : (r.total_parts > 1
+                ? `Open ${r.doc_title}, part ${r.part_number} of ${r.total_parts}`
+                : `Open ${r.doc_title}`)}
         >
           <span
             className={"opd-queue-dot opd-queue-dot--" + (r.signed ? "done" : "open")}
@@ -320,8 +324,8 @@ function QueueCard({ queue, loading, onOpen }) {
           />
           <div className="opd-queue-body">
             <div className="opd-queue-kick">
-              {(r.doc_class || "Document")} &middot; {r.doc_id}
-              {r.cadence ? ` · ${r.cadence}` : ""}
+              {r.doc_id}
+              {r.total_parts > 1 ? ` · part ${r.part_number} of ${r.total_parts}` : ""}
             </div>
             <div className="opd-queue-title-line">{r.doc_title}</div>
             {(() => {
@@ -653,6 +657,8 @@ export default function AcademyRoom({ viewerEmail }) {
         docId={focus.docId}
         docTitle={focus.docTitle}
         docShelf={focus.docShelf}
+        partNumber={focus.partNumber}
+        totalParts={focus.totalParts}
         onBack={() => {
           setFocus(null);
           // Re-fetch the room so the queue row moves to done, the
@@ -699,6 +705,8 @@ export default function AcademyRoom({ viewerEmail }) {
                 docId: r.doc_id,
                 docTitle: r.doc_title,
                 docShelf: r.doc_shelf,
+                partNumber: r.part_number,
+                totalParts: r.total_parts,
               })}
             />
             <div className="opd-twoup">
