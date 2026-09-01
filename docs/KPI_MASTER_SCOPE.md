@@ -1,9 +1,10 @@
-# KPI Master Scope v4 - Overview, Alignment, and the System Ledger
+# KPI Master Scope v5 - Overview, Alignment, and the System Ledger
 
 **Status:** ACTIVE. Canonical scope for the consolidated Master KPI workstream.
 **Owner:** Kevin Fietek. **Architect:** Master KPI Chat-Claude. **Builders:** CC lanes (§1).
-**v4, 2026-08-31:** locks the Overview design from the prototype rounds (R-18..R-30), adds the
-revenue source rule, the period-state model, the build phases and gates, and extends §11.
+**v5, 2026-09-01:** Overview shipped and live. Adds the operator-first site posture ruling
+(R-31..R-36), the Ruling 6 defect and its fix ruling, the Labor overtime fix, the doc-drift
+program, and the current state of every lane.
 Commit path `docs/KPI_MASTER_SCOPE.md`.
 **Companions:** `KPI_DASHBOARD_PLAYBOOK.md`, `KPI_PURCHASING_MASTER.md`,
 `BUILD_ACCURACY_PROTOCOL.md` (binding), `ACCOUNT_MODEL_MATRIX.md`, `SC_MONEY_MODEL.md`,
@@ -126,7 +127,18 @@ stop-and-report per PR with PR number; polish lane waits for cleanup lanes to cl
 | W-4 | **Every line carries a percent-of-revenue column.** This is the finance-literacy vehicle - adopted system-wide. |
 | W-5 | Structure: 97 rows x 197 cols per account tab; cols 2-15 period + year budget; then repeating 7-col bands per period and per YTD with Budget / % / Actual / % / ∆ / ∆%. Period starts P1 2025-12-29 through P8 2026-07-13 (closes 2026-08-09). |
 
-### 3.6 Cleanup lane audit
+### 3.6 Ruling 6 - the live money defect (2026-09-01)
+
+| ID | Sev | Finding |
+|---|---|---|
+| RU6-1 | **P1** | Ruling 6 excludes API rows whose `parent_txn_id` appears in the report feed, on the theory the report side captured the charge. **Nothing loads report-side rows into `purchasing_actuals`**, and that table is the board's only source for coded-card totals. Money leaves, nothing replaces it. |
+| RU6-2 | **P1** | **The shipped rule lost its scope.** `reportCodedHit` (sync:1039) is a bare set-membership test; `glLine` is not computed until line 1069, after the reason chain. The ruling was scoped to 56 uncoded stale-pending rows / $17,863.01. Shipped behaviour: **4,215 rows / $991,456.39**. |
+| RU6-3 | ok | **R898-2 was a Ruling 6 artifact, not a mapping defect.** Packaging portfolio -35.19% to +3.33% when the exclusion is dropped; every catastrophic delta resolves. Close R898-2. |
+| RU6-4 | open | Food partially closes (-3.07% to +3.90%, 5/11 accounts). Four accounts overshoot: CIN - AZ, TBJ - FL, TXR - AZ, TXR - TX - V. That residual is the P22 tilt - **bill.com, not cards**, splitting by regional distributor family (Sysco / Cheney / Ben E Keith positive; Shamrock / Peddler's Son negative). The auth-vs-settled hypothesis is **dead** for the food tilt (measured $1,393 against $35,099 of variance). |
+| RU6-5 | note | `parent_txn_id` matches only 47% of API parents (5,318 of 11,215) - Rippling assigns different hexes to auth and settlement on some charges. Exact where present, absent where not. Do not build on it without this caveat. |
+| RU6-6 | **P1** | **The purchasing 0.23% reconciliation measured a pre-exclusion state** (first application 2026-08-29 07:41 UTC). Until re-run after the fix, no purchasing or Overview cost figure is proven. |
+
+### 3.7 Cleanup lane audit
 
 | ID | Finding |
 |---|---|
@@ -317,20 +329,63 @@ V tracked figure (v1.1 - budget + note in v1); inventory anything; bonus anythin
 | **R-27** | Statement collapsed by default, opens on Summary. |
 | **R-28** | Salary control reveals sub-lines only; totals always include salary. |
 | **R-29** | Charts are cost vs budget, below the line is green; unstarted units are dashes. |
-| **R-30** | Cards updated nightly - CC to confirm; the 8-day lag note is retired pending that check. |
+| **R-30** | Cards updated nightly - CONFIRMED (3 clean nightly syncs, 1-day lag). |
+| **R-31** | **Operator-first site posture.** Every number appears once. Page order follows the operator's questions - am I okay / what are the numbers / what is left / what is driving it / how did the weeks go / depth - not the chart of accounts. Locked render: `docs/renders/overview-site-leader-LOCKED.html`. |
+| **R-32** | **Cut from the site posture:** gross margin in the ticker (the state pill is the verdict), card mini-breakdowns, the seven-column lever table (corporate only), the period-by-period chart, the progress bar, and the planned-revenue note once counts are live. |
+| **R-33** | **No projection until it is a real one.** "At this pace margin closes at X%" is arithmetically identical to the current margin under linear accrual - an identity, not a forecast. Only ship a projection when it consumes what makes the remainder different (remaining game days, scheduled deliveries, homestand shape). |
+| **R-34** | **"What is left" is the operator's number:** budget remaining, per day remaining, and pace as a sentence with both percentages behind it. Open period only - closed periods and FYTD drop the strip. |
+| **R-35** | **Percent semantics during the planned-revenue window.** COGS% and GM% are to-date over to-date. While revenue is planned, revenue-to-date equals budget-to-date, so the percentage is the dollar variance rescaled, not a second signal. Teach dollars first; percentages become primary when Service Calendar counts go live. |
+| **R-36** | **Labor and Purchasing are deliberately blended surfaces** - corporate density with site-leader access, reached by drill-down. Periods are the unit of work; weeks are navigation within a period. The Overview site posture is the only pure operator surface. |
+| **R-37** | **Ruling 6 fix: add the missing condition, do not revert.** The ruling was correct and scoped to uncoded stale-pending rows; the implementation shipped without `!glLine` and fires on coded rows too. |
+| **R-38** | **Labor overtime card shows this week against last week, in hours** - not a fiscal-year percentage against a fixed threshold. Wrong for both audiences: a site can sit at 1.3% all year and blow up last week. |
+| **R-39** | **Docs that restate values will always drift.** Value docs get generated from source; prose docs carry decisions only and reference tokens by name, never by value. A drift probe fails any doc asserting a hex, px or font the code contradicts. |
 
 ## 7. Build sequence
 
-| # | Phase | Contents | Gate |
+### Shipped
+
+| Phase | PRs | State |
+|---|---|---|
+| Labor cleanup + perf | #894-#897 | merged, verified live, 2,142ms -> ~1,200ms |
+| Purchasing cleanup + perf | #889-#893 | merged, 3,303ms -> 988ms |
+| Overview foundations | #902 | merged - `pnl_actuals` 2,815 rows, 11/11 to the cent |
+| Overview engine | #906, #907, #910, #912 | merged - loaders extracted both boards, purchasing resolver + parity gate, Overview resolver |
+| Overview board + enable | #916, #919, #921 | merged - both postures, live in the section dropdown |
+| Salary blocker | #923 | merged - GM was overstated ~9.5 points |
+| P2 defects | #929 | **merge now** - rail, sizing, range chip, sources line, FYTD budget |
+
+### Now
+
+| # | Item | Owner | Gate |
 |---|---|---|---|
-| 0 | Alignment investigation | CC answers the §7.1 questions, read-only, one report | report graded |
-| 1 | Foundations PR | `pnl_actuals` table + P8 workbook loader (P1-P8 verified) · `kpi_period_status` · `kpi_account_flags.sc_revenue_live` · `kpi_line_catalog` for 5017.3 if absent · migration reviewed by Chat, Studio-applied | migration gate |
-| 2 | Engine PR | `api/kpi/overview` resolver: reuses labor + purchasing engines as library calls (no re-query, no re-bucketing); revenue source rule; day proration; ticker rules; both grains (period, week); five sentinels asserted; instrumented from day one; zero unconsumed keys | parity + sentinels |
-| 3 | Board PR | `src/app/kpi/overview` on shared primitives; both postures; css registered in the contrast gate in the same PR; laptop matrix | standing battery + S2/S3 |
-| 4 | Enable PR | `pnl_overview` on; landing + range carry (R-5) | live browser gate, Kevin + me on the glass |
-| 5 | Pre-release (R-8) | F-1..F-4, F-8, contrast pull-up, C889-1, C897-1/2; contamination fix (R-9) | before any team release |
-| 6 | Alignment | §11 register worked through on both boards | per-PR battery |
-| 7 | Follow-ons | workbook upload UI; TXR - V tracked figure; packaging mapping (R898-2); inventory practice surface (R-15); food gap (R898-1) | |
+| 1 | **Ruling 6 fix (R-37)** - add `!glLine`, move the computation above the reason chain, add the uncoded-only assertion with seeded failure, re-run purchasing reconciliation + food/packaging vs finance + sentinels + parity | CC | the reconciliation must re-establish before anything is called proven |
+| 2 | Merge #926 / #927 as the audit record | Kevin | - |
+
+### Next
+
+| # | Item | Why now |
+|---|---|---|
+| 3 | **Doc generator + drift probe (R-39)** - whole codebase, not KPI only | OPD, Academy and mobile are all being built against stale docs today. Half a day, zero product risk. Report findings, triage later. |
+| 4 | **Overview site posture to the locked render (R-31..R-35)** | The pure operator surface. Cut list in R-32, "what is left" in R-34. |
+| 5 | **Labor overtime card (R-38)** | This week vs last week in hours. |
+| 6 | **Pre-release list (R-8)** - F-1..F-4, F-8, contrast pull-up, C889-1, C897-1/2, contamination fix (R-9) | Kevin's gate before any team sees it |
+| 7 | **Operator test** - Jen or Liz in front of the site posture, cold, no narration | The only evidence that settles whether we built it for them or for us |
+
+### Then
+
+| # | Item |
+|---|---|
+| 8 | Alignment register §11 worked through on both boards |
+| 9 | Food residual (RU6-4) - bill.com distributor-family pattern, now bounded |
+| 10 | Pagination sweep - 213 sites flagged by the committed guard; triage, do not bulk-fix |
+| 11 | Workbook upload UI; TXR - V tracked figure; inventory practice surface (R-15) |
+| 12 | Arizona training |
+
+### Standing gates
+
+Renders before code. Migrations reviewed by Chat before Studio. CC never self-certifies or
+merges. Every guard answers "what other path could make this pass?" A stated blocker beats a
+workaround.
 
 ### 7.1 Questions CC answers before Phase 1 (read-only)
 
