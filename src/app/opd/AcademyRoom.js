@@ -91,7 +91,7 @@ function DashedBrick({ scope, message, onRetry }) {
 }
 
 // ── Rail (Profile) ────────────────────────────────────────────────
-function ProfileRail({ viewer, queueSummary, queueLength, loading }) {
+function ProfileRail({ viewer, queueSummary, queueLength, loading, queue }) {
   const scopeLabel = viewer?.isCorp
     ? "CORP · ALL REGIONS"
     : viewer?.accountKey && viewer?.region
@@ -107,8 +107,10 @@ function ProfileRail({ viewer, queueSummary, queueLength, loading }) {
         {scopeLabel ? <div className="opd-profile-loc">{scopeLabel}</div> : null}
       </div>
 
-      {/* Standing block. Counts plainly - no percentage, no meter.
-          Rule: no percentage until there is history. */}
+      {/* Standing block. Counts plainly with a percentage that only
+          appears once signed history exists (spec 18.1 principle 5).
+          Work remaining is the primary number; the percentage is
+          status. */}
       <div className="opd-profile-sec" data-block="standing">
         <span className="opd-k">Standing · September 2026</span>
         {loading ? (
@@ -123,25 +125,45 @@ function ProfileRail({ viewer, queueSummary, queueLength, loading }) {
         ) : (
           <div className="opd-standing-body">
             <div className="opd-standing-top">
-              <span className="opd-standing-count num">{queueLength}</span>
-              <span className="opd-standing-noun">{queueLength === 1 ? "item" : "items"}</span>
+              <span className="opd-standing-count num">{queueSummary?.remainingCount ?? queueLength}</span>
+              <span className="opd-standing-noun">
+                {(queueSummary?.remainingCount ?? queueLength) === 1 ? "to go" : "to go"}
+              </span>
+              {queueSummary?.percentCurrent != null ? (
+                <span className="opd-standing-pct num" aria-label="percent current">
+                  · {queueSummary.percentCurrent}% current
+                </span>
+              ) : null}
             </div>
             <div className="opd-standing-sub">
-              <span className="num">{queueSummary?.totalMinutes || 0}</span> min · due Sep 30
+              <span className="num">{queueSummary?.totalMinutesRemaining ?? queueSummary?.totalMinutes ?? 0}</span> min · due Sep 30
             </div>
-            <p className="opd-standing-help">
-              Percentages appear once you have signed history. Nothing has been
-              signed yet.
-            </p>
+            {queueSummary?.percentCurrent == null ? (
+              <p className="opd-standing-help">
+                Percentages appear once you have signed history. Nothing has been
+                signed yet.
+              </p>
+            ) : (
+              <p className="opd-standing-help">
+                <span className="num">{queueSummary?.signedCount}</span> of{" "}
+                <span className="num">{queueLength}</span> signed so far.
+              </p>
+            )}
           </div>
         )}
       </div>
 
-      {/* Badge wall. One slot per obligation the person owes, all in
-          the unearned state so the wall shows what is ahead rather
-          than an empty box. Legend below matches the label copy. */}
+      {/* Badge wall. One slot per obligation the person owes; slots
+          light up as their matching requirement is signed. The signed
+          side uses the class-family tint at full saturation; the
+          awaiting side keeps the muted tint. Legend reflects both
+          states once any credential is earned. */}
       <div className="opd-profile-sec" data-block="badges">
-        <span className="opd-k">Credentials · {queueLength} awaiting</span>
+        <span className="opd-k">
+          Credentials{queueSummary?.signedCount
+            ? ` · ${queueSummary.signedCount} earned`
+            : ` · ${queueLength} awaiting`}
+        </span>
         {loading ? (
           <div className="opd-bwall" aria-busy="true">
             {[0,1,2,3].map((i) => (
@@ -151,18 +173,23 @@ function ProfileRail({ viewer, queueSummary, queueLength, loading }) {
         ) : queueLength === 0 ? (
           <p className="opd-badges-empty">No credentials in your queue.</p>
         ) : (
-          <div className="opd-bwall" role="list" aria-label="Credentials in your queue (none earned yet)">
+          <div className="opd-bwall" role="list" aria-label="Credentials in your queue">
             {(queueSummary?.badges || []).map((b) => {
               const cls = b.docClass ? (CLASS_FAMILY[b.docClass] || null) : null;
               const familyClass = cls ? ` opd-bdge--class-${cls}` : "";
+              const state = b.signed ? "opd-bdge--earned" : "opd-bdge--awaiting";
+              const glyph = b.signed ? "✓" : "🔒"; // check vs lock
+              const titleParts = [b.docId, b.obligationKey];
+              if (b.signed && b.certificateSerial) titleParts.push(`certificate ${b.certificateSerial}`);
+              else titleParts.push("awaiting signature");
               return (
                 <div
                   key={b.key}
-                  className={"opd-bdge opd-bdge--awaiting" + familyClass}
+                  className={"opd-bdge " + state + familyClass}
                   role="listitem"
-                  title={`${b.docId} · ${b.obligationKey} · awaiting signature (not built in PR 8)`}
+                  title={titleParts.join(" · ")}
                 >
-                  <span className="opd-bdge-glyph" aria-hidden="true">&#128274;</span>
+                  <span className="opd-bdge-glyph" aria-hidden="true">{glyph}</span>
                   <span className="opd-bdge-label">{b.label}</span>
                 </div>
               );
@@ -170,7 +197,17 @@ function ProfileRail({ viewer, queueSummary, queueLength, loading }) {
           </div>
         )}
         <div className="opd-bwall-legend">
-          <span><span className="opd-bwall-swatch opd-bwall-swatch--awaiting" aria-hidden="true" /> Awaiting</span>
+          {queueSummary?.signedCount ? (
+            <span>
+              <span className="opd-bwall-swatch opd-bwall-swatch--earned" aria-hidden="true" />
+              {" "}{queueSummary.signedCount} earned
+            </span>
+          ) : (
+            <span>
+              <span className="opd-bwall-swatch opd-bwall-swatch--awaiting" aria-hidden="true" />
+              {" "}Awaiting
+            </span>
+          )}
           <span>{queueLength} available</span>
         </div>
       </div>
@@ -273,12 +310,12 @@ function QueueCard({ queue, loading, onOpen }) {
         <button
           key={r.requirement_id}
           type="button"
-          className="opd-queue-row"
+          className={"opd-queue-row" + (r.signed ? " opd-queue-row--done" : "")}
           onClick={() => onOpen(r)}
-          aria-label={`Open ${r.doc_title} - ${r.obligation_key}`}
+          aria-label={r.signed ? `View certificate for ${r.doc_title}` : `Open ${r.doc_title} - ${r.obligation_key}`}
         >
           <span
-            className={"opd-queue-dot opd-queue-dot--" + (r.waived ? "waived" : "open")}
+            className={"opd-queue-dot opd-queue-dot--" + (r.waived ? "waived" : r.signed ? "done" : "open")}
             aria-hidden="true"
           />
           <div className="opd-queue-body">
@@ -316,10 +353,14 @@ function QueueCard({ queue, loading, onOpen }) {
             })()}
           </div>
           <div className="opd-queue-meta">
-            <div className="opd-queue-due">Due {formatMonthDay(r.due_date) || r.due_date}</div>
+            <div className={"opd-queue-due" + (r.signed ? " opd-queue-due--done" : "")}>
+              {r.signed
+                ? `Signed ${formatMonthDay(r.signed_at) || ""}`
+                : `Due ${formatMonthDay(r.due_date) || r.due_date}`}
+            </div>
             <div className="opd-queue-est">~{r.est_minutes || 0} MIN</div>
           </div>
-          <span className="opd-queue-cta">Open</span>
+          <span className="opd-queue-cta">{r.signed ? "Certificate" : "Open"}</span>
         </button>
       ))}
     </div>
@@ -595,6 +636,8 @@ export default function AcademyRoom({ viewerEmail }) {
         docClass: q.doc_class || null,
         obligationKey: q.obligation_key,
         label: badgeLabelFor(q.obligation_key),
+        signed: !!q.signed,
+        certificateSerial: q.certificate_serial || null,
       })),
     };
   }, [state.data, queue]);
@@ -610,7 +653,18 @@ export default function AcademyRoom({ viewerEmail }) {
         docId={focus.docId}
         docTitle={focus.docTitle}
         docShelf={focus.docShelf}
-        onBack={() => setFocus(null)}
+        onBack={() => {
+          setFocus(null);
+          // Re-fetch the room so the queue row moves to done, the
+          // credential lights, and the standing block picks up the
+          // percentage now that history exists.
+          load();
+        }}
+        onSigned={() => {
+          // Fire-and-forget re-fetch so the room stays coherent even
+          // if the user does not immediately click back.
+          load();
+        }}
       />
     );
   }
@@ -623,6 +677,7 @@ export default function AcademyRoom({ viewerEmail }) {
           queueSummary={queueSummary}
           queueLength={queue.length}
           loading={loading}
+          queue={queue}
         />
       </aside>
 
