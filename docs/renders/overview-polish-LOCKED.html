@@ -1,0 +1,353 @@
+<meta charset="utf-8">
+<title>Overview - polish pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy-50:#F4F7FC;--navy-100:#EAF0FA;--navy-700:#153968;--navy-800:#092B55;
+--amber-50:#FFF2E2;--amber-500:#D97706;--amber-600:#B25800;
+--green-50:#E9FDEC;--green-500:#16A34A;--green-600:#008330;
+--red-50:#FFEDE7;--red-500:#DC2626;--red-600:#B9000C;
+--n-0:#FFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;--purple:#7c3aed;--s:.9;
+--t-lab:calc(10px*var(--s));--t-met:calc(11px*var(--s));--t-bod:calc(12.5px*var(--s));--t-med:calc(15px*var(--s));--t-hero:calc(30px*var(--s));}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}
+.devbar button{font-size:11px;font-weight:600;padding:5px 12px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.nav{background:var(--n-0);border-bottom:1px solid var(--n-300);padding:0 24px;height:56px;display:flex;align-items:center}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:-.02em}
+.mark{width:26px;height:26px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.navlinks{display:flex;gap:22px;margin:0 auto}.navlinks span{font-size:13px;font-weight:600;color:var(--n-700)}
+.navlinks span.on{color:var(--navy-700);background:var(--navy-100);padding:6px 12px;border-radius:8px;margin:-6px -12px}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.wrap{max-width:1520px;margin:0 auto;padding:20px 24px 40px}
+.cmd{background:var(--navy-700);border-radius:14px 14px 0 0;padding:0 21.6px;min-height:54px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;position:relative}
+.cmd .ttl{color:#fff;font-size:var(--t-med);font-weight:700}.cmd .acct{color:#fff;font-size:var(--t-med);font-weight:800}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 11px;display:flex;align-items:center;gap:7px;cursor:pointer}
+.chip:hover{background:rgba(255,255,255,.17)}
+.chip .k{color:#93a9c9;font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.chip .v{color:#fff;font-size:var(--t-bod);font-weight:600}.chip .d{color:#93a9c9;font-size:var(--t-bod);font-weight:500}
+.meta{color:#b9c8de;font-size:var(--t-met);font-weight:600}.meta b{color:#fff}
+.tog{display:flex;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:8px;overflow:hidden}
+.tog button{font-size:var(--t-bod);font-weight:700;padding:6px 12px;color:#cddbee;background:transparent;border:none}
+.tog button.on{background:#fff;color:var(--navy-700)}
+.fresh{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;color:#dbe6f5;font-size:var(--t-met);font-weight:600;margin-left:auto;cursor:pointer;position:relative}
+.fresh:hover{background:rgba(255,255,255,.18)}
+.dot{width:7px;height:7px;border-radius:50%;background:#54B56B}
+.pop{display:none;position:absolute;top:34px;right:0;width:330px;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;box-shadow:0 10px 30px rgba(10,37,72,.18);padding:13px 15px;z-index:50;text-align:left;cursor:default}
+.pop.on{display:block}
+.pop h4{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);margin-bottom:9px}
+.pop .row{display:flex;justify-content:space-between;gap:14px;font-size:var(--t-bod);font-weight:600;color:var(--n-700);padding:5px 0;border-top:1px solid var(--n-200)}
+.pop .row:first-of-type{border-top:none}.pop .row b{color:var(--n-900);font-weight:700}
+.pop .note{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-top:9px;padding-top:9px;border-top:1px solid var(--n-200);line-height:1.55}
+.body{background:var(--n-100);padding:16px;border-radius:0 0 12px 12px;border:1px solid var(--n-300);border-top:none}
+.grid{display:grid;grid-template-columns:236px minmax(0,1fr);gap:16px;align-items:start}
+.rail h2{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;margin-bottom:2px}
+.rail .sub{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-bottom:11px}
+.grp{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-bottom:11px;overflow:hidden}
+.grp .hd{padding:9px 12px;border-bottom:1px solid var(--n-200)}
+.grp .hd .nm{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.grp .hd .rd{font-size:var(--t-met);color:var(--n-600);font-weight:500;display:block}
+.acc{padding:9px 12px;border-bottom:1px solid var(--n-200);cursor:pointer}.acc:last-child{border-bottom:none}
+.acc:hover{background:var(--n-50)}.acc .k{font-size:var(--t-bod);font-weight:700}.acc .t{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.acc.sel{background:var(--navy-50);box-shadow:inset 3px 0 0 var(--navy-700)}
+.all{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:10px 12px;margin-bottom:11px;display:flex;align-items:center}
+.all .k{font-size:var(--t-bod);font-weight:800}.all .t{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.all .ct{margin-left:auto;font-size:var(--t-met);font-weight:700;color:var(--n-600);background:var(--n-100);border-radius:999px;padding:2px 8px}
+
+/* ---- STATUS LINE (was the ticker) ---- */
+.status{display:flex;align-items:stretch;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.status .st{display:flex;align-items:center;padding:0 16px;color:#fff;font-size:var(--t-met);font-weight:800;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
+.status.ahead .st{background:var(--green-600)}.status.ontrack .st{background:var(--navy-700)}
+.status.behind .st{background:var(--amber-500)}.status.risk .st{background:var(--red-600)}
+.status .say{padding:11px 16px;font-size:var(--t-bod);font-weight:600;color:var(--n-700);line-height:1.55;display:flex;align-items:center}
+.status .say b{color:var(--n-900);font-weight:800}
+.status .say .sep{color:var(--n-400);margin:0 8px}
+.status .say .mod{color:var(--amber-600);font-weight:700}
+
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px}
+.ag{border-left:3px solid var(--green-600)}.ab{border-left:3px solid var(--navy-700)}.ap{border-left:3px solid var(--purple)}
+.ch{display:flex;align-items:center;gap:8px;padding:12px 15px 0}
+.ch .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;position:relative}
+.q:hover{background:var(--navy-700);color:#fff;border-color:var(--navy-700)}
+.q .tip{display:none;position:absolute;bottom:22px;left:-10px;width:250px;background:var(--n-900);color:#fff;font-size:var(--t-met);font-weight:500;line-height:1.55;padding:9px 11px;border-radius:8px;z-index:30;text-transform:none;letter-spacing:0;text-align:left}
+.q:hover .tip{display:block}
+.pill{margin-left:auto;font-size:var(--t-met);font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.pok{background:var(--green-50);color:var(--green-600)}.pwa{background:var(--amber-50);color:var(--amber-600)}
+.pba{background:var(--red-50);color:var(--red-600)}.pne{background:var(--n-100);color:var(--n-700)}
+.cb{padding:8px 15px 15px}
+.hero{font-size:var(--t-hero);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.hero small{font-size:var(--t-bod);font-weight:600;color:var(--n-600);margin-left:6px}
+.heroline{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.heroline .sec{font-size:calc(20px*var(--s));font-weight:800;letter-spacing:-.01em}
+.heroline .sec small{font-size:var(--t-bod);font-weight:600;color:var(--n-600);margin-left:4px}
+.heroline .dv{color:var(--n-400);font-weight:400}
+.split{display:flex;align-items:center;gap:18px}
+.split .lead{flex:none}
+.split .stats{margin-left:auto;display:flex;gap:22px;text-align:right}
+.split .stats .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600)}
+.split .stats .v2{font-size:var(--t-bod);font-weight:800;margin-top:3px}
+.split .stats .v2 span{font-weight:600;color:var(--n-600)}
+.kpi2{display:flex;align-items:baseline;gap:8px;margin-top:7px;flex-wrap:wrap;font-size:var(--t-bod);font-weight:600;color:var(--n-600)}
+.kpi2 b{font-size:calc(20px*var(--s));font-weight:800;color:var(--n-900)}
+.sub{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:6px}
+.ok{color:var(--green-600)}.bad{color:var(--red-600)}
+
+/* ---- WHAT IS LEFT: three cards ---- */
+.wil{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.wil .card{border-left:3px solid var(--navy-700)}
+
+/* ---- DRILL: single line ---- */
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.dr{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:0 15px;height:52px;display:flex;align-items:center;gap:10px;cursor:pointer;white-space:nowrap}
+.dr:hover{border-color:var(--navy-700);background:var(--navy-50)}
+.dr .t1{font-size:var(--t-bod);font-weight:800}
+.dr .sp{font-size:var(--t-bod);font-weight:700;color:var(--n-900)}
+.dr .in{font-size:var(--t-met);color:var(--n-600);font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.dr .pc{margin-left:auto;font-size:var(--t-bod);font-weight:800}
+.dr .gp{font-size:var(--t-met);font-weight:700}
+.dr .go{color:var(--navy-700);font-weight:800;font-size:14px}
+.dr .sep{color:var(--n-400)}
+
+/* ---- CHART ---- */
+.chartcard{margin-top:12px}
+.chead{display:flex;align-items:center;gap:8px;padding:12px 15px 0}
+.chead .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.chead .hx{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.bars{display:flex;align-items:flex-end;gap:14px;height:112px;position:relative;padding-top:26px;margin:0 15px}
+.bars i{flex:1;border-radius:3px 3px 0 0;display:block;min-height:2px;position:relative}
+.bok{background:var(--green-500)}.bba{background:var(--red-500)}
+.bpr{background:repeating-linear-gradient(45deg,var(--navy-700),var(--navy-700) 3px,transparent 3px,transparent 7px);border:1px solid var(--navy-700);border-bottom:none}
+.tgt{position:absolute;left:0;right:0;border-top:2px dashed var(--navy-700);z-index:2}
+.tgt em{position:absolute;left:0;top:-15px;font-style:normal;font-size:var(--t-lab);font-weight:800;letter-spacing:.06em;color:var(--navy-700);text-transform:uppercase;background:var(--n-0);padding:0 5px}
+.bars i .bt{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--n-900);color:#fff;border-radius:8px;padding:9px 11px;z-index:20;min-width:186px;text-align:left}
+.bars i:hover .bt{display:block}
+.bt .bth{font-size:var(--t-met);font-weight:800;margin-bottom:2px;color:#fff}
+.bt .btd{font-size:var(--t-met);font-weight:500;color:#93a9c9;margin-bottom:6px}
+.bt .btr{display:flex;justify-content:space-between;gap:14px;font-size:var(--t-met);font-weight:500;line-height:1.7}
+.bt .btr.res{border-top:1px solid rgba(255,255,255,.2);margin-top:3px;padding-top:4px;font-weight:800}
+.axis{display:flex;gap:14px;margin:6px 15px 15px}
+.axis span{flex:1;text-align:center;font-size:var(--t-bod);font-weight:700}
+.axis small{display:block;font-weight:500;color:var(--n-600);font-size:var(--t-met);margin-top:1px}
+.axis .amt{display:block;font-weight:700;font-size:var(--t-met);margin-top:2px}
+
+/* ---- FOLD ---- */
+.fold{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-top:12px;overflow:hidden}
+.fold.open{border-color:var(--n-400)}
+.fold .fh{padding:13px 15px;display:flex;align-items:center;gap:9px;cursor:pointer}
+.fold .fh:hover{background:var(--n-50)}
+.fold .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.fold .hx{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.fold .cv{margin-left:auto;color:var(--n-600);font-weight:700;transition:transform .15s}
+.fold.open .cv{transform:rotate(180deg)}
+.fold .fb{display:none;border-top:1px solid var(--n-200);padding:13px 15px 15px}
+.fold.open .fb{display:block}
+.seg{display:flex;border:1px solid var(--n-300);border-radius:7px;overflow:hidden;margin-left:auto}
+.seg button{font-size:var(--t-met);font-weight:700;padding:4px 11px;color:var(--n-600);background:var(--n-0);border:none}
+.seg button.on{background:var(--navy-700);color:#fff}
+table{width:100%;border-collapse:collapse;font-size:var(--t-bod)}
+th{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);text-align:right;padding:0 0 7px}
+th.l{text-align:left}
+td{padding:6px 0;border-top:1px solid var(--n-200);text-align:right;font-weight:600}td.l{text-align:left}
+tr.sect td{border-top:none;padding:12px 0 3px;font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);text-align:left}
+tr.tot td{border-top:1px solid var(--n-400);font-weight:800}
+tr.gm td{border-top:2px solid var(--navy-700);font-weight:800;padding-top:9px}
+.glc{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-right:6px;display:inline-block;min-width:36px}
+.nb{color:var(--n-600);font-weight:600}
+.tag{font-size:var(--t-met);font-weight:700;padding:2px 7px;border-radius:6px;background:var(--navy-100);color:var(--navy-700);margin-left:6px}
+.note{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-top:10px;line-height:1.55}
+.cap{font-size:11px;color:var(--n-600);padding:12px 24px 0;max-width:1520px;margin:0 auto;line-height:1.6}
+.cap b{color:var(--n-900)}
+.chg{max-width:1520px;margin:14px auto 0;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.chg div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11px;line-height:1.7;color:var(--n-700)}
+.chg h4{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.chg b{color:var(--n-900)}
+</style>
+
+<div class="devbar"><b>Overview - polish pass</b><span class="h">Real P8 data · today Mon 09/01 · P9 week 4 of 4</span>
+<button id="bA" class="on" onclick="setA('CIN - AZ')">CIN - AZ (per-meal)</button>
+<button id="bB" onclick="setA('CIN - OH')">CIN - OH (fee, pass-through)</button></div>
+<div class="nav"><div class="brand"><span class="mark">KF</span>KitchFix</div>
+<div class="navlinks"><span>Home</span><span>People</span><span>Ops Hub</span><span>Service</span><span class="on">KPI</span><span>Playbook</span><span>Sous</span><span>Directory</span></div>
+<div class="avatar">KF</div></div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+<div class="chg">
+<div><h4>Your nine, applied</h4>
+<b>1.</b> Planned / Service Calendar toggle removed. Revenue reads live Service Calendar actuals; the sources line names the date it read through.<br>
+<b>2.</b> Sources moved into the <b>Data current</b> pill - click it, same pattern as Labor.<br>
+<b>3.</b> Ticker retired. Replaced by a <b>single status line</b>: state block + one sentence. Account-specific notes are clauses in that sentence, so the shape never changes per account and there is no yellow block or dead whitespace.<br>
+<b>4.</b> Labor / Purchasing cards slimmed to one 52px line.<br>
+<b>5.</b> Bar hover leads with the period and its date range.<br>
+<b>6.</b> Full P&amp;L expands <b>inside</b> the same card - one item, not two.<br>
+<b>7.</b> Also tracked collapsed, solid grey border.<br>
+<b>8.</b> Budget label moved to the left and the bar area is inset, so it cannot collide with the pill.<br>
+<b>9.</b> "What is left" split into cards with their own borders - now <b>two</b>, not three (see below).</div>
+<div><h4>This round</h4><b>"against a" is now "vs"</b> throughout.<br><b>COGS and Gross margin dropped a line each.</b> The dollars and the percent now share one hero row separated by a divider; the target and budget-to-date sit on a single sub-line. The gross-margin card also lost its dollar gap - the pill already says 10.4% ahead.<br><b>Left to spend and Budget used use the width now</b> - the headline sits left, the two supporting figures sit right in labelled pairs, instead of three stacked rows in a half-width card.<br><br><b>Revenue subline</b> reads period to date against the P9 budget - the "expected by today" figure was the same number as the hero while revenue is planned.<br><b>The gap moved into the pill.</b> "3.5% under target" replaces "UNDER TARGET" plus a separate "3.5% under" - one statement, not two.<br><b>Left to spend and Budget used now use the same hero / figure / sub-line structure as the three cards above</b>, so the type scale is identical instead of each card inventing its own.<br><br><b>Chart title</b> was falling back to default type - the eyebrow style was scoped to <code>.ch</code> and the chart header uses <code>.chead</code>. Fixed.<br><b>The pass-through note is gone from the status line.</b> It said what the page already says twice - the Revenue card carries a CONTRACTUAL pill and the billed-back lines carry tags. The status line now has the same shape on every account.<br><b>"Which is" retired.</b> You were right: it was <code>left ÷ days</code>, a restatement of the card beside it wearing a metric's clothes. The per-day figure now lives on the Left to spend card where it belongs, next to what you have actually been averaging.<br><br><h4>Five found earlier</h4>
+<b>Pass-through accounts show false verdicts.</b> CIN - OH's Purchasing button read "0.1% over target" on $37 against a $0 budget - a billed-back line carrying a red verdict. Billed-back lines now show <b>billed back</b> and no verdict.<br>
+<b>"$0 under" on inactive lines.</b> Food purchased at $0 budget and $0 actual rendered "$0 under". Now reads <b>not active</b>, matching the revenue lines above it.<br>
+<b>Also tracked claims savings it cannot know.</b> Budget $115, actual absent, "$115 under". Now <b>no data</b> - you cannot compute a variance against a number you do not have.<br>
+<b>Total COGS period budget rendered as a dash</b> while total revenue showed a figure. Now consistent.<br>
+<b>Two day counts on one screen.</b> Revenue prorates through yesterday (22/28); "what is left" counted today (23/28). One count everywhere - through yesterday.</div>
+</div>
+
+<script>
+const D={
+"CIN - AZ":{model:"per-meal",rev:92816,revB:92816,revPB:118130,cogs:42541,cogsB:52165,cogsPB:66391,
+  labor:22235,laborB:31882,pur:20306,purB:34510,wk:[12246,14540,12267],wkB:16598,
+  lines:[["Kitchen labor","3100",22235,31882,null],["Food purchased","3200",17780,29203,null],["Packaging and supplies","3400",2526,5307,null],["Vehicle","3500",0,0,"inactive"]],
+  revLines:[["Catering revenue","2200",0,0,"inactive"],["Service charges","2300",27845,35435,null],["Meal service (home)","2400.1",64971,82695,null]],
+  tracked:[["General repair and maintenance","5002.1",115,null],["Equipment","5002.5",615,null],["Perks","5017.3",165,null]],
+  note:null},
+"CIN - OH":{model:"fee · pass-through",rev:44957,revB:44957,revPB:57218,cogs:16823,cogsB:18410,cogsPB:23431,
+  labor:16786,laborB:18410,pur:37,purB:0,wk:[5982,6210,2425],wkB:5858,
+  lines:[["Kitchen labor","3100",16786,18410,null],["Food purchased","3200",0,0,"billed"],["Packaging and supplies","3400",37,0,"billed"],["Vehicle","3500",0,0,"inactive"]],
+  revLines:[["Catering revenue","2200",0,0,"inactive"],["Service charges","2300",0,0,"inactive"],["Meal service (home)","2400.1",44957,44957,"contract"]],
+  tracked:[["General repair and maintenance","5002.1",86,73],["Equipment","5002.5",461,126],["Perks","5017.3",124,113]],
+  note:null}};
+const ACCTS=[["EAST REGION","RDO S. Lynch",[["STL - FL","St Louis Cardinals · Jupiter, FL"],["STL - MO","St Louis Cardinals · St Louis, MO"],["TBJ - FL","Toronto Blue Jays · Dunedin, FL"],["TBJ - NY","Buffalo Bisons · Buffalo, NY"],["TBR - FL","Tampa Bay Rays · Port Charlotte, FL"]]],
+["WEST REGION","RDO R. Moore",[["CIN - AZ","Cincinnati Reds · Goodyear, AZ"],["CIN - KY","Louisville Bats · Louisville, KY"],["CIN - OH","Cincinnati Reds · Cincinnati, OH"],["TXR - AZ","Texas Rangers · Surprise, AZ"],["TXR - TX - H","Rangers · Home · Arlington, TX"],["TXR - TX - V","Rangers · Visitor · Arlington, TX"]]]];
+const ELAPSED=22,DAYS=28,LEFTD=6;
+let A="CIN - AZ",popOpen=false,stmtOpen=false,trkOpen=false,dense="sum";
+const $=i=>document.getElementById(i);
+const m=n=>(n<0?"−$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const pf=x=>x.toFixed(1)+"%";const pc=(a,b)=>b?a/b*100:0;
+const gap=(x,g,b)=>Math.abs(x).toFixed(1)+"% "+(x>=0?g:b);
+const gd=(x,g,b)=>m(Math.abs(x))+" "+(x>=0?g:b);
+const tip=t=>'<span class="q">?<span class="tip">'+t+'</span></span>';
+const WK=[["Week 1","08/10 – 08/16"],["Week 2","08/17 – 08/23"],["Week 3","08/24 – 08/30"],["Week 4","08/31 – 09/06"]];
+
+function view(){
+ const d=D[A];
+ const gm=d.rev-d.cogs,gmB=d.revB-d.cogsB;
+ const cpA=pc(d.cogs,d.rev),cpB=pc(d.cogsB,d.revB);
+ const gpA=pc(gm,d.rev),gpB=pc(gmB,d.revB);
+ const dev=gpA-gpB;
+ const st=dev>=1?["ahead","Ahead of target"]:dev>=-1?["ontrack","On track"]:dev>=-3?["behind","Behind target"]:["risk","At risk"];
+ const lev=d.lines.filter(l=>l[3]>0).map(l=>({n:l[0],dev:pc(l[3],d.revB)-pc(l[2],d.rev)})).sort((a,b)=>Math.abs(b.dev)-Math.abs(a.dev));
+ const left=d.cogsPB-d.cogs, perDay=left/LEFTD, soFar=d.cogs/ELAPSED;
+ const usedPct=pc(d.cogs,d.cogsPB), elapPct=ELAPSED/DAYS*100, slower=usedPct<=elapPct;
+
+ let h='<div class="cmd"><span class="ttl">KPI Dashboard ·</span><span class="acct">'+A+'</span>'+
+  '<span class="chip"><span class="k">Section</span><span class="v">P&L Overview</span><span class="d">▾</span></span>'+
+  '<span class="chip"><span class="v">This period</span><span class="d">P9 · 08/10 – 09/06</span><span class="d">▾</span></span>'+
+  '<span class="meta">TODAY <b>09/01</b> · PERIOD <b>9</b> · WEEK <b>4</b> of 4</span>'+
+  '<span class="tog"><button class="on">Hourly</button><button>+ Salary</button></span>'+
+  '<span class="fresh" onclick="tglPop(event)"><span class="dot"></span>Data current'+
+    '<span class="pop'+(popOpen?" on":"")+'"><h4>Where these numbers come from</h4>'+
+    '<div class="row"><span>Labor</span><b>through Sun 08/30</b></div>'+
+    '<div class="row"><span>Purchases · bills and cards</span><b>through Sun 08/30</b></div>'+
+    '<div class="row"><span>Revenue · Service Calendar</span><b>through Sun 08/30</b></div>'+
+    '<div class="row"><span>Period state</span><b>open · live estimate</b></div>'+
+    '<p class="note">All three sync nightly around 2 AM CT. Nothing is final until the period closes and is verified against the finance P&L.</p></span></span>';
+ h+='</div><div class="body"><div class="grid">';
+ /* rail */
+ h+='<div class="rail"><h2>Portfolio</h2><div class="sub">11 sites · 2 regions</div>'+
+   '<div class="all"><div><div class="k">ALL ACCOUNTS</div><div class="t">every site · both regions</div></div><div class="ct">11</div></div>';
+ ACCTS.forEach(G=>{h+='<div class="grp"><div class="hd"><div class="nm">'+G[0]+'<span class="rd">'+G[1]+'</span></div></div>';
+  G[2].forEach(a=>{h+='<div class="acc'+(a[0]===A?" sel":"")+'" onclick="setA(\''+a[0]+'\')"><div class="k">'+a[0]+'</div><div class="t">'+a[1]+'</div></div>';});h+='</div>';});
+ h+='</div><div>';
+
+ /* STATUS LINE - one sentence, fixed shape */
+ h+='<div class="status '+st[0]+'"><span class="st">'+st[1]+'</span><span class="say">'+
+   'Gross margin <b>'+pf(gpA)+'</b> vs '+pf(gpB)+' target'+
+   (lev[0]?'<span class="sep">·</span>'+lev[0].n+' is <b>'+Math.abs(lev[0].dev).toFixed(1)+'% '+(lev[0].dev>0?'over':'under')+'</b> its target':'')+
+   '<span class="sep">·</span>3 of 4 weeks closed'+
+   '</span></div>';
+
+ /* three cards */
+ h+='<div class="g3">';
+ h+='<div class="card ag"><div class="ch"><span class="eb">Revenue</span>'+tip("What your account bills for the food and service you provide. Everything below is judged as a percent of this.")+'<span class="pill '+(d.model.startsWith("fee")?"pne":"pok")+'">'+(d.model.startsWith("fee")?"Contractual":"On plan")+'</span></div><div class="cb">'+
+  '<div class="hero num">'+m(d.rev)+'<small>period to date</small></div>'+
+  '<div class="sub">vs <b style="color:var(--n-900);font-weight:800">'+m(d.revPB)+'</b> P9 budget</div></div></div>';
+ h+='<div class="card ab"><div class="ch"><span class="eb">Cost of goods sold</span>'+tip("Labor, food purchased, packaging and supplies, vehicle - the lines you control. Finance calls this COGS.")+'<span class="pill '+(cpA<=cpB?"pok":"pba")+'">'+gap(cpB-cpA,"under target","over target")+'</span></div><div class="cb">'+
+  '<div class="heroline"><span class="hero num '+(cpA<=cpB?"ok":"bad")+'">'+m(d.cogs)+'</span><span class="dv">·</span><span class="sec num">'+pf(cpA)+'<small>of revenue</small></span></div>'+
+  '<div class="sub">'+pf(cpB)+' target · '+m(d.cogsB)+' budget to date</div></div></div>';
+ h+='<div class="card ap"><div class="ch"><span class="eb">Gross margin</span>'+tip("Revenue minus cost of goods sold. This is the number your account is measured on. Before company overhead, so it is not profit.")+'<span class="pill '+(gpA>=gpB?"pok":"pwa")+'">'+gap(gpA-gpB,"ahead","behind")+'</span></div><div class="cb">'+
+  '<div class="heroline"><span class="hero num">'+m(gm)+'</span><span class="dv">·</span><span class="sec num">'+pf(gpA)+'<small>of revenue</small></span></div>'+
+  '<div class="sub">'+pf(gpB)+' target · '+m(gmB)+' budget to date</div></div></div>';
+ h+='</div>';
+
+ /* what is left - three cards */
+ h+='<div class="wil">'+
+  '<div class="card"><div class="ch"><span class="eb">Left to spend</span>'+tip("Your cost of goods budget for this period minus what you have spent, and what that leaves you per day against what you have actually been spending.")+'<span class="pill pne">'+LEFTD+' days left</span></div><div class="cb"><div class="split">'+
+    '<span class="lead hero num">'+m(left)+'</span>'+
+    '<span class="stats"><span><span class="k">A day available</span><span class="v2 num">'+m(perDay)+'</span></span>'+
+    '<span><span class="k">Averaging</span><span class="v2 num">'+m(soFar)+' <span>a day</span></span></span></span>'+
+  '</div></div></div>'+
+  '<div class="card"><div class="ch"><span class="eb">Budget used</span>'+tip("How much of the period budget is gone against how much of the period is gone. Behind the clock is good.")+'<span class="pill '+(slower?"pok":"pba")+'">'+(slower?"Slower than the clock":"Faster than the clock")+'</span></div><div class="cb"><div class="split">'+
+    '<span class="lead hero num '+(slower?"ok":"bad")+'">'+pf(usedPct)+'</span>'+
+    '<span class="stats"><span><span class="k">Period gone</span><span class="v2 num">'+pf(elapPct)+'</span></span>'+
+    '<span><span class="k">Spent of budget</span><span class="v2 num">'+m(d.cogs)+' <span>of '+m(d.cogsPB)+'</span></span></span></span>'+
+  '</div></div></div>'+
+ '</div>';
+
+ /* drills - single line */
+ const dr=(nm,acc,sp,spB,inside)=>{const pa=pc(sp,d.rev),pt=pc(spB,d.revB);const billed=spB===0&&nm==="Purchasing"&&d.model.includes("pass-through");
+  return '<div class="dr" style="border-left:3px solid '+acc+'"><span class="t1">'+nm+'</span><span class="sep">·</span><span class="sp num">'+m(sp)+'</span><span class="in">'+inside+'</span>'+
+   (billed?'<span class="pc"><span class="tag">billed back</span></span>':'<span class="pc num">'+pf(pa)+'<span class="gp '+(pa<=pt?"ok":"bad")+'" style="margin-left:7px">'+gap(pt-pa,"under","over")+' target</span></span>')+
+   '<span class="go">→</span></div>';};
+ h+='<div class="g2">'+dr("Labor","var(--navy-700)",d.labor,d.laborB,"hours, overtime, approvals")+dr("Purchasing","var(--green-600)",d.pur,d.purB,"food, packaging, every purchase")+'</div>';
+
+ /* chart */
+ const mx=Math.max(d.wkB,...d.wk)*1.18;
+ h+='<div class="card ab chartcard"><div class="chead"><span class="eb">Cost of goods sold, week by week</span><span class="hx">bars are spend · line is the weekly budget</span>'+tip("Three weeks closed. Week 4 is running. Below the dashed line is under budget.")+'<span class="pill pwa" style="margin-left:auto">3 of 4 weeks closed</span></div>'+
+  '<div class="bars"><div class="tgt" style="bottom:'+(d.wkB/mx*100)+'%"><em>budget '+m(d.wkB)+' / wk</em></div>';
+ for(let i=0;i<4;i++){
+  if(i<3){const v=d.wk[i],ov=v-d.wkB;
+   h+='<i class="'+(v<=d.wkB?"bok":"bba")+'" style="height:'+(v/mx*100)+'%"><span class="bt"><div class="bth">Period 9 · '+WK[i][0]+'</div><div class="btd">'+WK[i][1]+'</div>'+
+     '<div class="btr"><span>Spent</span><b>'+m(v)+'</b></div><div class="btr"><span>Budget</span><b>'+m(d.wkB)+'</b></div>'+
+     '<div class="btr res"><span>'+(ov<=0?"Under":"Over")+'</span><b>'+m(Math.abs(ov))+'</b></div></span></i>';}
+  else h+='<i class="bpr" style="height:34%"><span class="bt"><div class="bth">Period 9 · Week 4</div><div class="btd">'+WK[3][1]+'</div><div class="btr"><span>Running</span><b>2 days in</b></div></span></i>';}
+ h+='</div><div class="axis">';
+ for(let i=0;i<4;i++)h+='<span>'+WK[i][0]+'<small>'+WK[i][1]+'</small><span class="amt '+(i<3?(d.wk[i]<=d.wkB?"ok":"bad"):"nb")+'">'+(i<3?m(d.wk[i]):"running")+'</span></span>';
+ h+='</div></div>';
+
+ /* P&L fold - expands inside */
+ h+='<div class="fold'+(stmtOpen?" open":"")+'"><div class="fh" onclick="tglStmt()"><span class="eb">Full profit and loss</span><span class="hx">every line the way finance sees it, with percent of revenue</span><span class="cv">▾</span></div><div class="fb">';
+ h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="eb" style="font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-700)">'+A+' · P9 · 08/10 – 09/06</span>'+
+   '<span class="seg"><button class="'+(dense==="full"?"on":"")+'" onclick="event.stopPropagation();setD(\'full\')">Full</button><button class="'+(dense==="sum"?"on":"")+'" onclick="event.stopPropagation();setD(\'sum\')">Summary</button></span></div>';
+ h+='<table><tr><th class="l">Line</th><th>Period budget</th><th>Budget to date</th><th>Actual to date</th><th>Variance</th><th style="width:62px">Actual %</th><th style="width:62px">Target %</th></tr>';
+ const row=(nm,gl,act,bud,flag)=>{
+   if(flag==="inactive")return '<tr><td class="l"><span class="glc num">'+gl+'</span>'+nm+'</td><td class="nb">not active</td><td class="nb">not active</td><td class="nb">not active</td><td class="nb">—</td><td class="nb">—</td><td class="nb">—</td></tr>';
+   if(flag==="billed")return '<tr><td class="l"><span class="glc num">'+gl+'</span>'+nm+'<span class="tag">billed back</span></td><td class="nb">—</td><td class="nb">—</td><td class="num">'+m(act)+'</td><td class="nb">no verdict</td><td class="nb">—</td><td class="nb">—</td></tr>';
+   if(flag==="contract")return '<tr><td class="l"><span class="glc num">'+gl+'</span>'+nm+'<span class="tag">contractual</span></td><td class="num">'+m(d.revPB)+'</td><td class="num">'+m(bud)+'</td><td class="num">'+m(act)+'</td><td class="nb">contractual</td><td class="num">100.0%</td><td class="num nb">100.0%</td></tr>';
+   const dv=act-bud,good=dv<=0;
+   return '<tr><td class="l"><span class="glc num">'+gl+'</span>'+nm+'</td><td class="num nb">'+m(bud/ELAPSED*DAYS)+'</td><td class="num">'+m(bud)+'</td><td class="num">'+m(act)+'</td><td class="num '+(good?"ok":"bad")+'">'+gd(-dv,"under","over")+'</td><td class="num">'+pf(pc(act,d.rev))+'</td><td class="num nb">'+pf(pc(bud,d.revB))+'</td></tr>';};
+ h+='<tr class="sect"><td colspan="7">Revenue</td></tr>';
+ d.revLines.forEach(l=>{h+=row(l[0],l[1],l[2],l[3],l[4]);});
+ h+='<tr class="tot"><td class="l">Total revenue</td><td class="num nb">'+m(d.revPB)+'</td><td class="num">'+m(d.revB)+'</td><td class="num">'+m(d.rev)+'</td><td class="nb">'+(d.model.startsWith("fee")?"contractual":"on budget")+'</td><td class="num">100%</td><td class="num nb">100%</td></tr>';
+ h+='<tr class="sect"><td colspan="7">Cost of goods sold</td></tr>';
+ d.lines.forEach(l=>{h+=row(l[0],l[1],l[2],l[3],l[4]);});
+ h+='<tr class="tot"><td class="l">Total cost of goods sold</td><td class="num nb">'+m(d.cogsPB)+'</td><td class="num">'+m(d.cogsB)+'</td><td class="num">'+m(d.cogs)+'</td><td class="num ok">'+gd(d.cogsB-d.cogs,"under","over")+'</td><td class="num">'+pf(cpA)+'</td><td class="num nb">'+pf(cpB)+'</td></tr>';
+ h+='<tr class="gm"><td class="l">Gross margin</td><td class="num nb">'+m(d.revPB-d.cogsPB)+'</td><td class="num">'+m(gmB)+'</td><td class="num">'+m(gm)+'</td><td class="num ok">'+gd(gm-gmB,"ahead","behind")+'</td><td class="num">'+pf(gpA)+'</td><td class="num nb">'+pf(gpB)+'</td></tr>';
+ h+='</table><p class="note"><b>Food purchased</b> is what was bought in this range. Finance adjusts food cost for inventory at close, so the closed number can differ.</p></div></div>';
+
+ /* also tracked - collapsed, solid border */
+ h+='<div class="fold'+(trkOpen?" open":"")+'"><div class="fh" onclick="tglTrk()"><span class="eb">Also tracked</span><span class="hx">repair, equipment and perks - not part of gross margin, watched together</span><span class="cv">▾</span></div><div class="fb"><table>'+
+   '<tr><th class="l">Line</th><th>Budget to date</th><th>Actual to date</th><th style="width:110px">vs budget</th></tr>';
+ d.tracked.forEach(t=>{const bud=t[2], act=t[3];
+   h+='<tr><td class="l"><span class="glc num">'+t[1]+'</span>'+t[0]+'</td><td class="num">'+m(bud)+'</td>';
+   if(act===null||act===undefined) h+='<td class="nb">—</td><td class="nb">no data</td></tr>';
+   else h+='<td class="num">'+m(act)+'</td><td class="num '+(act<=bud?"ok":"bad")+'">'+gd(bud-act,"under","over")+'</td></tr>';
+ });
+ h+='</table><p class="note"><b>Perks</b> is the budget for celebrating your team - parties, recognitions, the Friday doughnuts. Spent on the Rippling card.</p></div></div>';
+
+ h+='</div></div></div>';
+ return h;
+}
+const CAP={"CIN - AZ":'<b>CIN - AZ · per-meal.</b> Status line carries the state, the lever and the pace in one sentence - no yellow block, no whitespace that shifts per account. Revenue reads live Service Calendar actuals; the toggle is gone. Sources live in the Data current pill.',
+"CIN - OH":'<b>CIN - OH · fee, pass-through.</b> The account-specific facts are clauses in the same sentence rather than separate amber cells, so the status line is the same shape as every other account. Billed-back lines carry a tag and no verdict - the old board showed "0.1% over target" on $37 against a $0 budget.'};
+function render(){$("app").innerHTML=view();$("cap").innerHTML=CAP[A];$("bA").className=A==="CIN - AZ"?"on":"";$("bB").className=A==="CIN - OH"?"on":"";}
+function setA(a){if(!D[a])return;A=a;stmtOpen=false;trkOpen=false;popOpen=false;render();window.scrollTo(0,0);}
+function tglPop(e){e.stopPropagation();popOpen=!popOpen;render();}
+function tglStmt(){stmtOpen=!stmtOpen;render();}
+function tglTrk(){trkOpen=!trkOpen;render();}
+function setD(x){dense=x;render();}
+document.addEventListener("click",()=>{if(popOpen){popOpen=false;render();}});
+render();
+</script>

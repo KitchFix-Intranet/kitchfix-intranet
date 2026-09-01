@@ -502,7 +502,11 @@ export async function resolveOverview({
   supa,
   accountKey,
   range,
-  revSource = "planned",
+  // R-40 polish (2026-09-01): rev_source URL parameter retired.
+  // Overview picks SC automatically when the account carries
+  // sc_revenue_live=true. The `revSource` positional keeps a stub
+  // value here for the internal `assertScReadAllowed` signature (see
+  // step 3 loader block below); no caller passes it.
   includeSalary = false,
   caller,
   today,
@@ -531,9 +535,13 @@ export async function resolveOverview({
   // thing everywhere; role governs access.
   const access = resolveAccessFlags({ caller, salaryAvailable: caller?.can_see_salary === true });
 
-  // Corp-only rev toggle: if a non-corp caller passes rev_source=sc,
-  // silently ignore (mirrors labor's include_salary silent-drop).
-  const effRevSource = access.revenue_toggle_visible && revSource === "sc" ? "sc" : "planned";
+  // R-40 polish (2026-09-01): the user-facing rev-source toggle was
+  // retired. revenue-source.js now flips to SC purely on the account's
+  // own sc_revenue_live flag - no caller input consulted. `effRevSource`
+  // stays as a string for the downstream sc_mode_test_data flag +
+  // the payload's rev_source echo (audit trail so a debugger can tell
+  // which source produced a given revenue figure).
+  const effRevSource = "sc";   // marker; resolveRevenueSource ignores this
 
   // 2. Layer-1 loaders. Fire in parallel - all read (supa, members)
   //    or (supa) or (supa, members, start, end).
@@ -1194,37 +1202,58 @@ export async function resolveOverview({
     const byPeriod = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: line, members });
     const bto = computeBudgetToDateForLine({ budgetByPeriod: byPeriod, periodsInRange: periods, today });
     const fp = computeFullPeriodBudget({ budgetByPeriod: byPeriod, periodsInRange: periods });
-    const rowActualPct = rev.reported ? pctOf(rev.amount, totalRevenue) : null;
-    const rowTargetPct = bto.amount != null ? pctOf(bto.amount, revenue_budget_to_date) : null;
+    // E17 (2026-09-01): a revenue line the account does not run (no
+    // budget, no actual) reads `inactive`, not a $0 variance. The
+    // contractual flag on the fee account's 2400.1 takes precedence
+    // - a fee account IS running that line, the ratio is just always
+    // 100%.
+    const isContractual = isFeeAccount && line === "2400.1";
+    const noBudget = fp == null || fp === 0;
+    const noActual = !rev.reported || rev.amount == null || rev.amount === 0;
+    const inactive = !isContractual && noBudget && noActual;
+    const suppress = inactive;
+    const rowActualPct = (!inactive && rev.reported) ? pctOf(rev.amount, totalRevenue) : null;
+    const rowTargetPct = (!inactive && bto.amount != null) ? pctOf(bto.amount, revenue_budget_to_date) : null;
     statementRows.push({
       line_code: line,
       section: "revenue",
       label: labelForLine(line),
-      reported: rev.reported,
-      actual: rev.reported ? rev.amount : null,
-      budget_to_date: bto.amount,
-      period_budget: fp,
-      variance: (rev.reported && bto.amount != null) ? r2(rev.amount - bto.amount) : null,
-      variance_pct: (rev.reported && bto.amount != null && bto.amount > 0) ? r2(((rev.amount - bto.amount) / bto.amount) * 100) : null,
+      reported: !inactive && rev.reported,
+      actual: (!inactive && rev.reported) ? rev.amount : null,
+      budget_to_date: inactive ? null : bto.amount,
+      period_budget: inactive ? null : fp,
+      variance: (!suppress && rev.reported && bto.amount != null) ? r2(rev.amount - bto.amount) : null,
+      variance_pct: (!suppress && rev.reported && bto.amount != null && bto.amount > 0) ? r2(((rev.amount - bto.amount) / bto.amount) * 100) : null,
       actual_pct: rowActualPct,
       target_pct: rowTargetPct,
       sources: rev.sources,
-      flags: isFeeAccount && line === "2400.1" ? ["contractual"] : [],
+      flags: [
+        ...(isContractual ? ["contractual"] : []),
+        ...(inactive ? ["inactive"] : []),
+      ],
     });
   }
   // COGS section
+  // E17 (2026-09-01): 3100 is inactive when both actual and budget
+  // are absent (labor board didn't apply, or the account genuinely
+  // ran no labor in range). Salaried-only D26 accounts return
+  // applies=false from buildBoard, so labor3100_actual is null - we
+  // don't want that to render as "$0 under".
+  const labor3100_inactive =
+    (labor3100_actual == null || labor3100_actual === 0) &&
+    (labor3100_budget == null || labor3100_budget === 0);
   statementRows.push({
     line_code: "3100",
     section: "cogs",
     label: "Kitchen labor",
-    reported: laborBoard?.applies === true,
+    reported: !labor3100_inactive && laborBoard?.applies === true,
     actual: labor3100_actual,
     budget_to_date: labor3100_budget_to_date_days,
     period_budget: labor3100_budget,
-    variance: (labor3100_actual != null && labor3100_budget_to_date_days != null) ? r2(labor3100_actual - labor3100_budget_to_date_days) : null,
+    variance: (!labor3100_inactive && labor3100_actual != null && labor3100_budget_to_date_days != null) ? r2(labor3100_actual - labor3100_budget_to_date_days) : null,
     variance_pct: null,
     sources: ["labor_actuals"],
-    flags: [],
+    flags: labor3100_inactive ? ["inactive"] : [],
   });
   // Salary reveal (R-28 / §5.9): emit 3100.1 (hourly) + 3100.2
   // (salary) sub-rows under 3100 when the caller requested the salary
@@ -1296,45 +1325,78 @@ export async function resolveOverview({
       flags: [],
     });
   }
-  statementRows.push({
+  // 2026-09-01 polish PR (E16 + E17): tagging + verdict suppression
+  // on cost-section statement rows.
+  //
+  // E16 billed_back: on pass-through accounts (CIN - OH, STL - MO,
+  // STL - FL) food + packaging are the client's cost, billed back on
+  // the reimbursable line. Rendering a red "over target" verdict on
+  // $37 of packaging against a $0 budget was the specific defect
+  // Kevin flagged - the purchasing board's own §5.6 rule (no verdict
+  // on billed-back lines) applied to the Overview statement too.
+  // Cost rows on pass-through accounts carry `billed_back: true`,
+  // variance NULL, no target/actual pct. Client renders a tag + no
+  // percentage.
+  //
+  // E17 inactive: a cost line with no budget AND no actual (or
+  // actual=0) is not a saving - it is a line the account does not
+  // run at all. Cost rows with (budget == null || budget == 0) AND
+  // (actual == null || actual == 0) carry `inactive: true`, variance
+  // NULL. Client renders "not active".
+  //
+  // Bill-back takes precedence: on a pass-through account with a
+  // real $37 packaging charge and a $0 budget, the row is billed_
+  // back (client's cost), not inactive (line the account doesn't
+  // run).
+  const isCostInactive = (actual, budget) => {
+    const noBudget = budget == null || budget === 0;
+    const noActual = actual == null || actual === 0;
+    return noBudget && noActual;
+  };
+  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [] }) => {
+    const billed_back = isPassThrough;
+    // inactive takes precedence over billed_back only when there is
+    // truly nothing to say (no actual and no budget). Billed-back
+    // accounts with real spend against $0 budget remain billed_back.
+    const inactive = !billed_back && isCostInactive(actual, budget);
+    const suppress = billed_back || inactive;
+    return {
+      line_code,
+      section: "cogs",
+      label,
+      reported: !inactive,
+      actual,
+      budget_to_date: null,
+      period_budget: budget,
+      variance: (!suppress && actual != null && budget != null) ? r2(actual - budget) : null,
+      variance_pct: null,
+      sources: ["purchasing_actuals"],
+      flags: [
+        ...(billed_back ? ["billed_back"] : []),
+        ...(inactive ? ["inactive"] : []),
+        ...extraFlags,
+      ],
+    };
+  };
+  statementRows.push(buildCostRow({
     line_code: "3200",
-    section: "cogs",
     label: "Food purchased",
-    reported: true,
     actual: food_actual,
-    budget_to_date: null, // per-bucket day budget not shipped in Phase 2; kept null explicitly
-    period_budget: food_budget,
-    variance: (food_actual != null && food_budget != null) ? r2(food_actual - food_budget) : null,
-    variance_pct: null,
-    sources: ["purchasing_actuals"],
-    flags: isPassThrough ? ["pass_through"] : [],
-  });
-  statementRows.push({
+    budget: food_budget,
+  }));
+  statementRows.push(buildCostRow({
     line_code: "3400",
-    section: "cogs",
     label: "Packaging and supplies",
-    reported: true,
     actual: packaging_actual,
-    budget_to_date: null,
-    period_budget: packaging_budget,
-    variance: (packaging_actual != null && packaging_budget != null) ? r2(packaging_actual - packaging_budget) : null,
-    variance_pct: null,
-    sources: ["purchasing_actuals"],
-    flags: flags.packaging_gap ? ["packaging_gap"] : (isPassThrough ? ["pass_through"] : []),
-  });
-  statementRows.push({
+    budget: packaging_budget,
+    extraFlags: flags.packaging_gap ? ["packaging_gap"] : [],
+  }));
+  statementRows.push(buildCostRow({
     line_code: "3500",
-    section: "cogs",
     label: "Vehicle",
-    reported: true,
     actual: vehicle_actual,
-    budget_to_date: null,
-    period_budget: vehicle_budget,
-    variance: (vehicle_actual != null && vehicle_budget != null) ? r2(vehicle_actual - vehicle_budget) : null,
-    variance_pct: null,
-    sources: ["purchasing_actuals"],
-    flags: [],
-  });
+    budget: vehicle_budget,
+  }));
 
   // Also-tracked rows
   // 2026-09-01 defect fix: the tracked lines (5002.1 / 5002.5 /
@@ -1403,16 +1465,26 @@ export async function resolveOverview({
   const purchVariancePct = (purchActualPct != null && purchTargetPct != null)
     ? r2(purchActualPct - purchTargetPct)
     : null;
+  // E16 (2026-09-01): on pass-through accounts the purchasing spend
+  // is billed back - the client pays for it. Rendering "0.1% over
+  // target" on $37 against $0 was the specific defect Kevin flagged.
+  // The drill payload carries a `billed_back: true` flag so the
+  // client hides the percentage and renders a tag. No variance,
+  // no direction, no verdict.
+  const drillBilledBack = isPassThrough;
   const drill = {
     purchasing: {
       spent_display: formatMoneyWhole(purchSpentActual),
-      pct_of_revenue_display: formatPct(purchActualPct),
-      target_pct_display: formatPct(purchTargetPct),
+      pct_of_revenue_display: drillBilledBack ? null : formatPct(purchActualPct),
+      target_pct_display: drillBilledBack ? null : formatPct(purchTargetPct),
       // Site posture drill button carries the verdict (R-32). "5.4%
       // under target" pattern - cost axis, so under=good, over=bad.
-      variance_pct: purchVariancePct,
-      variance_pct_display: purchVariancePct != null ? gapPointsCost(purchVariancePct) : null,
-      direction: purchVariancePct != null ? directionOfDelta(purchVariancePct, "cost") : null,
+      // Billed-back accounts get null on all three so the client
+      // cannot accidentally render a verdict.
+      variance_pct: drillBilledBack ? null : purchVariancePct,
+      variance_pct_display: (drillBilledBack || purchVariancePct == null) ? null : gapPointsCost(purchVariancePct),
+      direction: (drillBilledBack || purchVariancePct == null) ? null : directionOfDelta(purchVariancePct, "cost"),
+      billed_back: drillBilledBack,
     },
   };
 
@@ -1688,11 +1760,13 @@ export async function resolveOverview({
       periods_in_range: periods,
     },
     // R-40 (2026-09-01): posture retired as a layout switch. Access
-    // flags only, named for what they do. Consumers that read the
-    // deleted `posture` / `posture_details` fields must migrate to
-    // these two flags + landing_account (below).
-    salary_toggle_visible:  access.salary_toggle_visible,
-    revenue_toggle_visible: access.revenue_toggle_visible,
+    // flags only, named for what they do.
+    //
+    // Polish PR (2026-09-01): revenue_toggle_visible was also
+    // retired - the account's own sc_revenue_live flag flips the
+    // source with no user control, so the toggle has nothing left to
+    // do. Zero unconsumed keys.
+    salary_toggle_visible: access.salary_toggle_visible,
     period_state: displayPeriodState,
     period_state_details: {
       period_no: displayPeriodNo,
@@ -1703,6 +1777,29 @@ export async function resolveOverview({
     levers,
     chart,
     statement_rows: statementRows,
+    // E19 (2026-09-01): total-row period-budget figures the client
+    // renders on Total revenue and Total COGS. Prior payload shipped
+    // only revenue totals in the cards + a null total-COGS period
+    // budget in the statement, so Total COGS rendered as a dash next
+    // to Total revenue's actual dollar figure - two different shapes
+    // for two total rows on one page.
+    statement_totals: {
+      revenue: {
+        period_budget: revenue_budget_full_period,
+        budget_to_date: revenue_budget_to_date,
+        actual: totalRevenue,
+      },
+      cogs: {
+        period_budget: r2(cogsBudget),
+        budget_to_date: r2(cogsBudgetToDateDays),
+        actual: r2(cogsActual),
+      },
+      gross_margin: {
+        period_budget: (revenue_budget_full_period != null) ? r2(revenue_budget_full_period - cogsBudget) : null,
+        budget_to_date: grossMarginBudget,
+        actual: grossMargin,
+      },
+    },
     also_tracked: alsoTracked,
     drill,
     // R-34 what-is-left. null on corporate posture, closed periods,

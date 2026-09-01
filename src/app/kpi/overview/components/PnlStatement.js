@@ -54,16 +54,20 @@ function fmtPct(n) {
 
 function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
   const isFee = Array.isArray(row.flags) && row.flags.includes("contractual");
-  const isPassThrough = Array.isArray(row.flags) && row.flags.includes("pass_through");
+  // E16 (2026-09-01): server flag renamed from "pass_through" to
+  // "billed_back" to describe what the render actually is - the
+  // client's cost, billed back on the reimbursable line, carries no
+  // verdict on the operator's cost dashboard.
+  const isBilledBack = Array.isArray(row.flags) && row.flags.includes("billed_back");
+  // E17: server-flagged inactive rows. A line the account does not
+  // run at all - not a saving.
+  const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   const isPackagingGap = Array.isArray(row.flags) && row.flags.includes("packaging_gap");
   const isSubLine = !!row.parent_line_code;
 
   const actual = row.actual;
   const bt = row.budget_to_date;
   const pb = row.period_budget;
-
-  // Both nullish + reported false -> not active
-  const notActive = (actual == null || actual === 0) && (bt == null || bt === 0) && (pb == null || pb === 0) && !row.reported;
 
   // Per-line pct comes from the row itself when the resolver ships it
   // (revenue rows since #919 + lever rows always). Fall back to
@@ -80,7 +84,7 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
   ].filter(Boolean).join(" ");
 
   return (
-    <tr data-kpi-ov="statement-row" data-kpi-ov-line-code={row.line_code} data-kpi-ov-sub={isSubLine ? "1" : undefined} className={trClass}>
+    <tr data-kpi-ov="statement-row" data-kpi-ov-line-code={row.line_code} data-kpi-ov-sub={isSubLine ? "1" : undefined} className={trClass} data-kpi-ov-billed-back={isBilledBack ? "1" : undefined} data-kpi-ov-inactive={isInactive ? "1" : undefined}>
       <td className="l" style={isSubLine ? { paddingLeft: 24 } : undefined}>
         <span className="kpi-ov-glc kpi-ov-num">{row.line_code}</span>
         {row.label}
@@ -89,8 +93,8 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
             contractual
           </span>
         )}
-        {isPassThrough && (
-          <span className="kpi-ov-chip-fixed" style={{ marginLeft: 8 }} data-kpi-ov="chip-pass-through">
+        {isBilledBack && (
+          <span className="kpi-ov-chip-fixed" style={{ marginLeft: 8 }} data-kpi-ov="chip-billed-back">
             billed back
           </span>
         )}
@@ -102,17 +106,23 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
       </td>
       {isOpen && (
         <td className="kpi-ov-num kpi-ov-nb">
-          {notActive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(pb)} reported={pb != null} />}
+          {isInactive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(pb)} reported={pb != null} />}
         </td>
       )}
       <td className="kpi-ov-num">
-        {notActive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(bt)} reported={bt != null} />}
+        {isInactive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(bt)} reported={bt != null} />}
       </td>
       <td className="kpi-ov-num">
-        {notActive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(actual)} reported={row.reported} />}
+        {isInactive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(actual)} reported={row.reported} />}
       </td>
       <td className="kpi-ov-num">
-        {isFee ? (
+        {isInactive ? (
+          <DashOrValue state="not_active" />
+        ) : isBilledBack ? (
+          /* E16: billed-back lines never render a variance. The
+             underlying $ number is the client's cost - no verdict. */
+          <span className="kpi-ov-nb" data-kpi-ov="cell-no-verdict">no verdict</span>
+        ) : isFee ? (
           <span className="kpi-ov-chip-fixed">contractual</span>
         ) : row.variance != null ? (
           <span className={row.section === "revenue" ? (row.variance >= 0 ? "kpi-ov-good" : "kpi-ov-bad") : (row.variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad")}>
@@ -123,10 +133,18 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
         )}
       </td>
       <td className="kpi-ov-num">
-        <DashOrValue value={actualPct} reported={actualPct != null} />
+        {(isBilledBack || isInactive) ? (
+          <DashOrValue state="not_active" />
+        ) : (
+          <DashOrValue value={actualPct} reported={actualPct != null} />
+        )}
       </td>
       <td className="kpi-ov-num kpi-ov-nb">
-        <DashOrValue value={targetPct} reported={targetPct != null} />
+        {(isBilledBack || isInactive) ? (
+          <DashOrValue state="not_active" />
+        ) : (
+          <DashOrValue value={targetPct} reported={targetPct != null} />
+        )}
       </td>
     </tr>
   );
@@ -266,11 +284,22 @@ export default function PnlStatement({ payload, open, onToggle }) {
                       indent={!!r.parent_line_code}
                     />
                   ))}
-                {/* COGS total row */}
+                {/* COGS total row. E19 (2026-09-01): period-budget
+                    cell now reads statement_totals.cogs.period_budget
+                    so the row matches Total revenue above it (which
+                    already shipped a period budget via the revenue
+                    card). Prior payload had no total-cogs period-
+                    budget, so the cell rendered as a dash next to
+                    Total revenue's actual dollar figure - two
+                    different shapes for two total rows on one page. */}
                 {cogsCard && (
                   <tr className="tot" data-kpi-ov="statement-cogs-total">
                     <td className="l">Total cost of goods sold</td>
-                    {isOpen && <td className="kpi-ov-num kpi-ov-nb"><DashOrValue value={null} reported={false} /></td>}
+                    {isOpen && (
+                      <td className="kpi-ov-num kpi-ov-nb">
+                        <DashOrValue value={fmtMoney(payload.statement_totals?.cogs?.period_budget)} reported={payload.statement_totals?.cogs?.period_budget != null} />
+                      </td>
+                    )}
                     <td className="kpi-ov-num">
                       <DashOrValue value={cogsCard.budget_to_date_display} reported={cogsCard.budget_to_date != null} />
                     </td>
@@ -289,11 +318,16 @@ export default function PnlStatement({ payload, open, onToggle }) {
                   </tr>
                 )}
 
-                {/* Gross margin row */}
+                {/* Gross margin row. E19 (2026-09-01): period-budget
+                    cell now reads statement_totals.gross_margin. */}
                 {gmCard && (
                   <tr className="gm" data-kpi-ov="statement-gm-total">
                     <td className="l">Gross margin</td>
-                    {isOpen && <td className="kpi-ov-num kpi-ov-nb"><DashOrValue value={null} reported={false} /></td>}
+                    {isOpen && (
+                      <td className="kpi-ov-num kpi-ov-nb">
+                        <DashOrValue value={fmtMoney(payload.statement_totals?.gross_margin?.period_budget)} reported={payload.statement_totals?.gross_margin?.period_budget != null} />
+                      </td>
+                    )}
                     <td className="kpi-ov-num">
                       <DashOrValue value={gmCard.budget_to_date_display} reported={gmCard.budget_to_date != null} />
                     </td>

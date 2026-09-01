@@ -174,8 +174,12 @@ export function resolveRevenueSource({ accountKey, periodState, revSource = "pla
       read_sc_daily_revenue: false,
     };
   }
-  // open
-  if (scLive && wantsSc) {
+  // open. R-40 polish (2026-09-01): the user control was retired -
+  // scLive alone flips the source, no separate toggle. Once counts
+  // are live for an account the board picks them up on the next fetch
+  // without anyone flipping a switch. wantsSc is preserved for the
+  // legacy signature but is not consulted here.
+  if (scLive) {
     return {
       source: "sc_daily_revenue",
       model: "live_count",
