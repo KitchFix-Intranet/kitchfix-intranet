@@ -52,7 +52,7 @@ function fmtDateShort(iso) {
 // Right column (right-aligned): actual percent, then gap-to-target
 // direction word beneath. Then the → arrow. Matches the locked
 // render's .dr layout at docs/renders/overview-site-leader-LOCKED.html.
-function SiteDrillInline({ href, drillKind, title, spend, actualPct, variance, direction, insideText, dataAttrs }) {
+function SiteDrillInline({ href, drillKind, title, spend, actualPct, variance, direction, insideText, billedBack = false, dataAttrs }) {
   const varClass = direction === "good"
     ? "kpi-ov-good"
     : direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb";
@@ -62,6 +62,7 @@ function SiteDrillInline({ href, drillKind, title, spend, actualPct, variance, d
       className={`kpi-ov-dr kpi-ov-dr-inline kpi-ov-dr-${drillKind}`}
       data-kpi-ov="drill"
       data-kpi-ov-drill={drillKind}
+      data-kpi-ov-billed-back={billedBack ? "1" : undefined}
       {...(dataAttrs || {})}
     >
       <div className="kpi-ov-dr-inline-left">
@@ -71,11 +72,21 @@ function SiteDrillInline({ href, drillKind, title, spend, actualPct, variance, d
         </div>
       </div>
       <div className="kpi-ov-dr-inline-right">
-        <div className="kpi-ov-dr-inline-p kpi-ov-num">{actualPct || "-"}</div>
-        {variance && (
-          <div className={`kpi-ov-dr-inline-g ${varClass}`} data-kpi-ov="drill-gap">
-            {variance} target
-          </div>
+        {billedBack ? (
+          /* E16 (2026-09-01): pass-through drill button carries a
+             billed-back tag and no percentage. Rendering "0.1% over
+             target" on a line the client pays for was the specific
+             defect Kevin flagged. */
+          <span className="kpi-ov-chip-fixed" data-kpi-ov="drill-billed-back">billed back</span>
+        ) : (
+          <>
+            <div className="kpi-ov-dr-inline-p kpi-ov-num">{actualPct || "-"}</div>
+            {variance && (
+              <div className={`kpi-ov-dr-inline-g ${varClass}`} data-kpi-ov="drill-gap">
+                {variance} target
+              </div>
+            )}
+          </>
         )}
       </div>
       <span className="kpi-ov-dr-go">→</span>
@@ -116,6 +127,7 @@ function PurchasingDrill({ href, purchasingDrill }) {
       variance={purchasingDrill?.variance_pct_display || null}
       direction={purchasingDrill?.direction}
       insideText="food, packaging, every purchase"
+      billedBack={purchasingDrill?.billed_back === true}
     />
   );
 }

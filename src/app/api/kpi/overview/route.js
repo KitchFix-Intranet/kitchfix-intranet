@@ -84,7 +84,6 @@ export async function GET(request) {
   const today = new Date().toISOString().slice(0, 10);
   let account = (searchParams.get("account") || "").trim();
   const previewParam = (searchParams.get("preview") || "").trim();
-  const revSourceReq = (searchParams.get("rev_source") || "").trim().toLowerCase();
   const includeSalaryReq = searchParams.get("include_salary") === "1";
   const debug = (searchParams.get("debug") || "").trim().toLowerCase();
   const debugTiming = debug === "timing";
@@ -173,14 +172,14 @@ export async function GET(request) {
     });
   }
 
-  // Role gate for salary + rev_source.
+  // Role gate for salary.
+  //
+  // Overview polish PR 2026-09-01 (R-40 A1): the rev_source URL
+  // parameter was retired - Revenue picks SC actuals automatically
+  // whenever the account carries sc_revenue_live=true, and planned
+  // otherwise. See revenue-source.js resolveRevenueSource().
   const salaryAvailable = gate.canSeeSalary(caller, account);
   const includeSalary = includeSalaryReq && salaryAvailable;
-
-  // rev_source: 'planned' default. 'sc' requires corporate posture
-  // (rdo counts). Site leader / manager silently drop to 'planned'.
-  const isCorporatePosture = caller.role === "corporate" || caller.role === "rdo";
-  const revSource = (revSourceReq === "sc" && isCorporatePosture) ? "sc" : "planned";
 
   // Range resolution.
   let range;
@@ -194,7 +193,6 @@ export async function GET(request) {
       supa,
       accountKey: account,
       range,
-      revSource,
       includeSalary,
       caller: { ...caller, can_see_salary: caller.can_see_salary !== false },
       today,

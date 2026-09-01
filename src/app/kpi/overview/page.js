@@ -111,7 +111,6 @@ export default function KpiOverviewPage() {
   const today = new Date().toISOString().slice(0, 10);
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
-  const urlRevSource = searchParams.get("rev_source") || "planned";
   const urlPreview = searchParams.get("preview");
   const urlLabel = searchParams.get("label");
   // Overview Phase 4 (R-28): salary reveal is a URL-tracked flag,
@@ -167,7 +166,6 @@ export default function KpiOverviewPage() {
     if (start) params.set("start", start);
     if (end) params.set("end", end);
     if (urlPreview) params.set("preview", urlPreview);
-    if (urlRevSource && urlRevSource !== "planned") params.set("rev_source", urlRevSource);
     if (urlIncludeSalary) params.set("include_salary", "1");
     // TEST_MODE role-injection forwards (Overview Phase 3, PR #916).
     // These params only take effect on the server when the route sees
@@ -210,7 +208,7 @@ export default function KpiOverviewPage() {
       .finally(() => clearTimeout(to));
     return () => { clearTimeout(to); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, fetchAccount, start, end, urlPreview, urlRevSource, urlIncludeSalary]);
+  }, [status, fetchAccount, start, end, urlPreview, urlIncludeSalary]);
 
   // Landing redirect - when the URL has no account and preview is not
   // active, redirect to the caller's landing_account once known.
@@ -259,12 +257,9 @@ export default function KpiOverviewPage() {
     setParams(patch);
   }, [setParams]);
 
-  // Revenue source toggle (corporate posture only). Silently narrows
-  // to 'planned' on server for non-corporate; the toggle itself only
-  // renders when the server ships posture.revenue_toggle_visible=true.
-  const setRevSource = useCallback((next) => {
-    setParams({ rev_source: next === "planned" ? "" : next });
-  }, [setParams]);
+  // R-40 polish (2026-09-01): the revenue-source toggle was retired.
+  // Revenue reads SC actuals when the account's sc_revenue_live is
+  // true, planned otherwise, with no user control. Nothing to wire.
 
   // Salary control (Phase 4, R-28). Site posture only; corporate
   // always includes salary in totals. The route re-checks the gate,
@@ -335,31 +330,9 @@ export default function KpiOverviewPage() {
     };
   }, [start, end, today, rangeSelection, urlLabel, onCommitRange]);
 
-  // ── Rev source toggle ReactNode (access-gated) ─────────────
-  // R-40: gated by revenue_toggle_visible directly on the payload
-  // (access flag, corporate/rdo only). No layout branch.
-  const revSourceToggle = useMemo(() => {
-    if (!data?.revenue_toggle_visible) return null;
-    const isSc = urlRevSource === "sc";
-    return (
-      <span className="kpi-ov-revtog" role="group" aria-label="Revenue source">
-        <button
-          type="button"
-          className={!isSc ? "on" : ""}
-          onClick={() => setRevSource("planned")}
-          aria-pressed={!isSc}
-          data-kpi-ov="rev-src-planned"
-        >Planned revenue</button>
-        <button
-          type="button"
-          className={isSc ? "ona" : ""}
-          onClick={() => setRevSource("sc")}
-          aria-pressed={isSc}
-          data-kpi-ov="rev-src-sc"
-        >Service Calendar revenue</button>
-      </span>
-    );
-  }, [data?.revenue_toggle_visible, urlRevSource, setRevSource]);
+  // R-40 polish (2026-09-01): revenue-source toggle retired
+  // end-to-end. Nothing to render.
+  const revSourceToggle = null;
 
   // R-40: folio rail visibility mirrors Labor's mechanism exactly -
   // show the rail when landing_account is a portfolio pseudo-key
