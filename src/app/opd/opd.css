@@ -237,11 +237,17 @@
 }
 .opd-rail-item--on .opd-rail-count { color: rgba(255, 255, 255, 0.7); }
 .opd-rail-item-label {
+  /* Wrap to two lines rather than truncate. Two of the six live
+     shelf names ("Service Delivery & Client Accounts", "Brand &
+     Documentation Standards") are longer than the 238px rail; the
+     prior nowrap+ellipsis silently clipped them, and "Service
+     Delivery & Client Acc..." is not a shelf. Wrapping keeps the
+     data honest and only the two long rows grow vertically. */
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
 }
 .opd-rail-count {
   margin-left: auto;
