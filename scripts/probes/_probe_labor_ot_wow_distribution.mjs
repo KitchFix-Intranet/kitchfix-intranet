@@ -125,55 +125,182 @@ async function main() {
     byAcct.set(acct, closed.slice(-LOOKBACK_WEEKS));
   }
 
-  // Per-account WoW deltas (weekN.ot - weekN-1.ot) + accompanying
-  // display so Kevin can eyeball the shape.
-  console.log("## Per-account WoW deltas (hours)");
+  // Median of a numeric array. Empty -> null.
+  const median = (arr) => {
+    if (arr.length === 0) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+  };
+
+  // Per-account WoW deltas plus per-account median weekly OT hours.
+  console.log("## Per-account WoW deltas (hours) and median weekly OT");
   console.log("");
-  const allDeltas = [];
-  const allAbsDeltas = [];
+  const rawDeltasByAcct = new Map();       // acct -> [{ week, hours }]
+  const medianByAcct = new Map();          // acct -> median weekly OT
+  const allRawDeltas = [];                 // pre-clean signed deltas
   for (const acct of HOURLY_ACCOUNTS) {
     const arr = byAcct.get(acct) || [];
     if (arr.length < 2) { console.log(`  ${acct}: fewer than 2 closed weeks in scope`); continue; }
-    const parts = [];
+    const rows = [];
     for (let i = 1; i < arr.length; i += 1) {
       const d = Math.round((arr[i].ot_hours - arr[i - 1].ot_hours) * 10) / 10;
-      allDeltas.push(d);
-      allAbsDeltas.push(Math.abs(d));
-      parts.push(`${arr[i].week_start.slice(5)}=${d >= 0 ? "+" : ""}${d.toFixed(1)}`);
+      rows.push({ week: arr[i].week_start, hours: d });
+      allRawDeltas.push(d);
     }
-    console.log(`  ${acct.padEnd(14)} n_weeks=${arr.length}  n_deltas=${arr.length - 1}  deltas: ${parts.join("  ")}`);
+    rawDeltasByAcct.set(acct, rows);
+    const med = median(arr.map(w => w.ot_hours));
+    medianByAcct.set(acct, med);
+    const parts = rows.map(r => `${r.week.slice(5)}=${r.hours >= 0 ? "+" : ""}${r.hours.toFixed(1)}`);
+    console.log(`  ${acct.padEnd(14)} med_wkly_ot=${med.toFixed(1)}  n_deltas=${rows.length}  deltas: ${parts.join("  ")}`);
   }
   console.log("");
 
-  console.log("## Distribution of |WoW delta| in hours (all accounts pooled)");
-  const abs = distributionSummary(allAbsDeltas);
-  if (abs) {
-    console.log(`  n=${abs.n}  min=${abs.min.toFixed(1)}  p25=${abs.p25.toFixed(1)}  p50=${abs.p50.toFixed(1)}  p75=${abs.p75.toFixed(1)}  p90=${abs.p90.toFixed(1)}  p95=${abs.p95.toFixed(1)}  p99=${abs.p99.toFixed(1)}  max=${abs.max.toFixed(1)}  mean=${abs.mean.toFixed(2)}`);
+  // ─── Mirror-image cleaning ─────────────────────────────────────
+  // A pair of consecutive deltas (d_i, d_{i+1}) is a "mirror pair"
+  // when they cancel each other. Formal:
+  //   sign(d_i) != sign(d_{i+1})           (opposite direction)
+  //   min(|d_i|, |d_{i+1}|) >= MIRROR_MIN  (not noise)
+  //   |d_i + d_{i+1}| <= MIRROR_TOL_ABS *or* |d_i + d_{i+1}| / max(|d_i|, |d_{i+1}|) <= MIRROR_TOL_REL
+  // Drop BOTH deltas when a pair matches. Loop scans left-to-right
+  // and skips past the pair after a match (no overlapping matches).
+  const MIRROR_MIN = 10;   // hours - anything smaller is normal noise, not a bulk reload
+  const MIRROR_TOL_ABS = 5;
+  const MIRROR_TOL_REL = 0.10;
+  console.log("## Mirror-image pair detection");
+  console.log(`# Rule: opposite sign, both >= ${MIRROR_MIN} hrs magnitude, sum within +/- ${MIRROR_TOL_ABS} hrs OR ${MIRROR_TOL_REL * 100}% of the larger side.`);
+  console.log("");
+  const cleanedDeltasByAcct = new Map();
+  const droppedByAcct = new Map();
+  let droppedTotal = 0;
+  for (const [acct, rows] of rawDeltasByAcct) {
+    const keep = [];
+    const dropped = [];
+    let i = 0;
+    while (i < rows.length) {
+      if (i + 1 < rows.length) {
+        const a = rows[i].hours, b = rows[i + 1].hours;
+        const oppSign = (a > 0 && b < 0) || (a < 0 && b > 0);
+        const bigEnough = Math.min(Math.abs(a), Math.abs(b)) >= MIRROR_MIN;
+        const net = Math.abs(a + b);
+        const relTol = Math.max(Math.abs(a), Math.abs(b)) * MIRROR_TOL_REL;
+        const cancels = net <= MIRROR_TOL_ABS || net <= relTol;
+        if (oppSign && bigEnough && cancels) {
+          dropped.push({ week: rows[i].week, hours: a }, { week: rows[i + 1].week, hours: b });
+          i += 2;
+          continue;
+        }
+      }
+      keep.push(rows[i]);
+      i += 1;
+    }
+    cleanedDeltasByAcct.set(acct, keep);
+    if (dropped.length > 0) droppedByAcct.set(acct, dropped);
+    droppedTotal += dropped.length;
+  }
+  if (droppedTotal === 0) {
+    console.log("  no mirror pairs detected");
+  } else {
+    console.log(`  dropped ${droppedTotal} deltas (${droppedTotal / 2} pairs) across ${droppedByAcct.size} account(s):`);
+    for (const [acct, dropped] of droppedByAcct) {
+      const parts = [];
+      for (let k = 0; k < dropped.length; k += 2) {
+        parts.push(`(${dropped[k].week.slice(5)}=${dropped[k].hours >= 0 ? "+" : ""}${dropped[k].hours.toFixed(1)}, ${dropped[k + 1].week.slice(5)}=${dropped[k + 1].hours >= 0 ? "+" : ""}${dropped[k + 1].hours.toFixed(1)})`);
+      }
+      console.log(`    ${acct.padEnd(14)} dropped=${dropped.length}  pairs: ${parts.join("  ")}`);
+    }
   }
   console.log("");
 
-  console.log("## Distribution of SIGNED WoW delta in hours (all accounts pooled)");
-  const signed = distributionSummary(allDeltas);
-  if (signed) {
-    console.log(`  n=${signed.n}  min=${signed.min.toFixed(1)}  p10=${signed.p10.toFixed(1)}  p25=${signed.p25.toFixed(1)}  p50=${signed.p50.toFixed(1)}  p75=${signed.p75.toFixed(1)}  p90=${signed.p90.toFixed(1)}  p95=${signed.p95.toFixed(1)}  max=${signed.max.toFixed(1)}  mean=${signed.mean.toFixed(2)}`);
+  // Pooled cleaned deltas.
+  const cleanedDeltas = [];
+  for (const [, rows] of cleanedDeltasByAcct) {
+    for (const r of rows) cleanedDeltas.push(r.hours);
+  }
+  const cleanedAbs = cleanedDeltas.map(x => Math.abs(x));
+
+  console.log("## Cleaned distribution of |WoW delta| in hours (mirror pairs removed)");
+  const cleanAbs = distributionSummary(cleanedAbs);
+  if (cleanAbs) {
+    console.log(`  n=${cleanAbs.n}  min=${cleanAbs.min.toFixed(1)}  p25=${cleanAbs.p25.toFixed(1)}  p50=${cleanAbs.p50.toFixed(1)}  p75=${cleanAbs.p75.toFixed(1)}  p90=${cleanAbs.p90.toFixed(1)}  p95=${cleanAbs.p95.toFixed(1)}  p99=${cleanAbs.p99.toFixed(1)}  max=${cleanAbs.max.toFixed(1)}  mean=${cleanAbs.mean.toFixed(2)}`);
   }
   console.log("");
 
-  console.log("## Suggested breakpoint framework (Kevin rules on the actual numbers)");
-  console.log("");
-  console.log("  Idea: pair a hours-magnitude threshold with a direction:");
-  console.log("    up > <thr_hrs>            -> WATCH");
-  console.log("    up > <thr_hrs> and worse  -> ALARM");
-  console.log("    down > <any>              -> CLEAR (improvement)");
-  console.log("    within +/- <thr_hrs>      -> NEUTRAL / on track");
-  console.log("");
-  if (abs) {
-    console.log(`  Data-driven candidates from the distribution above:`);
-    console.log(`    NEUTRAL band: within +/- ${abs.p50.toFixed(1)} hrs (the median absolute move)`);
-    console.log(`    WATCH:        up > ${abs.p75.toFixed(1)} hrs (top-quartile increase)`);
-    console.log(`    ALARM:        up > ${abs.p90.toFixed(1)} hrs (top-decile increase)`);
+  console.log("## Cleaned distribution of SIGNED WoW delta in hours (mirror pairs removed)");
+  const cleanSigned = distributionSummary(cleanedDeltas);
+  if (cleanSigned) {
+    console.log(`  n=${cleanSigned.n}  min=${cleanSigned.min.toFixed(1)}  p10=${cleanSigned.p10.toFixed(1)}  p25=${cleanSigned.p25.toFixed(1)}  p50=${cleanSigned.p50.toFixed(1)}  p75=${cleanSigned.p75.toFixed(1)}  p90=${cleanSigned.p90.toFixed(1)}  p95=${cleanSigned.p95.toFixed(1)}  max=${cleanSigned.max.toFixed(1)}  mean=${cleanSigned.mean.toFixed(2)}`);
   }
   console.log("");
-  console.log("These are candidates only. Kevin owns the final numbers.");
+
+  // ─── Relative-to-median distribution ────────────────────────────
+  // Normalize each cleaned delta by that account's median weekly OT.
+  // Accounts with median 0 (e.g. TXR - AZ ships 0.0 every week) are
+  // excluded from the relative distribution - a threshold measured
+  // as a fraction of zero is undefined. State that exclusion.
+  console.log("## Per-account median weekly OT hours (scale sanity check)");
+  console.log("");
+  console.log("  Account         median_wkly_ot_hrs");
+  const relDeltas = [];
+  const relSigned = [];
+  const relExcluded = [];
+  for (const acct of HOURLY_ACCOUNTS) {
+    const med = medianByAcct.get(acct);
+    if (med == null) continue;
+    const note = med < 0.1 ? " (excluded from relative distribution)" : "";
+    console.log(`  ${acct.padEnd(14)}  ${med.toFixed(1)}${note}`);
+    if (med < 0.1) { relExcluded.push(acct); continue; }
+    const rows = cleanedDeltasByAcct.get(acct) || [];
+    for (const r of rows) {
+      const rel = r.hours / med;
+      relSigned.push(rel);
+      relDeltas.push(Math.abs(rel));
+    }
+  }
+  console.log("");
+  if (relExcluded.length > 0) {
+    console.log(`  Excluded from relative distribution (median == 0): ${relExcluded.join(", ")}`);
+    console.log("");
+  }
+
+  console.log("## Distribution of |WoW delta / account median| (unitless multiplier)");
+  const relAbs = distributionSummary(relDeltas);
+  if (relAbs) {
+    const p = (v) => v.toFixed(2);
+    console.log(`  n=${relAbs.n}  min=${p(relAbs.min)}  p25=${p(relAbs.p25)}  p50=${p(relAbs.p50)}  p75=${p(relAbs.p75)}  p90=${p(relAbs.p90)}  p95=${p(relAbs.p95)}  p99=${p(relAbs.p99)}  max=${p(relAbs.max)}  mean=${p(relAbs.mean)}`);
+    console.log("");
+    console.log("  Interpretation: a value of 1.0x means the delta equalled the account's median weekly OT.");
+  }
+  console.log("");
+
+  console.log("## Distribution of SIGNED WoW delta / account median");
+  const relSignedDist = distributionSummary(relSigned);
+  if (relSignedDist) {
+    const p = (v) => v.toFixed(2);
+    console.log(`  n=${relSignedDist.n}  min=${p(relSignedDist.min)}  p10=${p(relSignedDist.p10)}  p25=${p(relSignedDist.p25)}  p50=${p(relSignedDist.p50)}  p75=${p(relSignedDist.p75)}  p90=${p(relSignedDist.p90)}  p95=${p(relSignedDist.p95)}  max=${p(relSignedDist.max)}  mean=${p(relSignedDist.mean)}`);
+  }
+  console.log("");
+
+  // ─── Proposed breakpoints from the RELATIVE distribution ────────
+  console.log("## Proposed breakpoints (relative to account median)");
+  console.log("");
+  console.log("  Chip form: 'up 0.6x' means the delta was 60% of the account's median weekly OT.");
+  console.log("  Same threshold means the same thing at TBR - FL and CIN - AZ.");
+  console.log("");
+  if (relAbs) {
+    console.log("  Data-driven candidates (Kevin owns the final numbers):");
+    console.log(`    NEUTRAL band: |delta| within ${relAbs.p50.toFixed(2)}x of median (the median relative move)`);
+    console.log(`    WATCH:        up > ${relAbs.p75.toFixed(2)}x median (top-quartile increase)`);
+    console.log(`    ALARM:        up > ${relAbs.p90.toFixed(2)}x median (top-decile increase)`);
+  }
+  console.log("");
+  console.log("  Down deltas (improvement) stay CLEAR regardless of magnitude.");
+  console.log("");
+  console.log("  Rounded to sensible operator numbers, the shape suggests:");
+  console.log("    NEUTRAL   |delta| < 0.5x median");
+  console.log("    WATCH     up in [0.5x, 1.0x] median");
+  console.log("    ALARM     up > 1.0x median (i.e. this week's OT jumped by MORE than the account's typical whole week)");
+  console.log("");
+  console.log("  Rounded numbers are a starting point. Kevin picks the actual multipliers.");
 }
 main().catch(e => { console.error(e); process.exit(1); });
