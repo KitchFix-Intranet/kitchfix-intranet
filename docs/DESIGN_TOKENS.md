@@ -131,8 +131,6 @@ encoded by color alone - always pair with glyph/label/shape.
 <!-- GENERATED:tokens START - do not edit by hand, run scripts/gen_design_docs.mjs -->
 > Generated from `src/app/tokens.css` (+ `src/app/kpi/kpi.css`, `src/app/opd/opd.css` where namespaced). Run `node scripts/gen_design_docs.mjs` to refresh. Prose outside this marker is hand-maintained.
 
-Generated: 2026-09-01T16:44:45.726Z
-
 ### Color ramps
 
 **Navy (brand, 700)**

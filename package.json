@@ -12,6 +12,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:setup": "playwright test --project=setup",
     "audit:kpi-scale": "node scripts/probes/_probe_kpi_css_token_gate.mjs",
+    "audit:design-docs-gen": "node scripts/gen_design_docs.mjs --check",
+    "audit:doc-drift": "node scripts/probes/_probe_doc_drift.mjs",
     "test:unit": "node --import ./scripts/_setup/register-aliases.mjs --test 'scripts/content/__tests__/*.test.mjs' 'src/lib/**/__tests__/*.test.mjs' 'src/app/**/__tests__/*.test.mjs'",
     "backfill:directory": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-directory.mjs",
     "backfill:submissions": "node --import ./scripts/_setup/register-aliases.mjs --env-file=.env.local scripts/backfill-submissions.mjs",
