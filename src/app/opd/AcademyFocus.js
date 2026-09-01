@@ -1,57 +1,28 @@
 "use client";
 
-// Academy Focus view - stepper.
+// Academy Focus - the module surface.
 //
-// Spec 18.5 (amended by the module-stepper PR): a module is a
-// sequence of steps, not a document with checks appended. ONE
-// section is on screen at a time and the page does not grow as
-// the person progresses. The server-side step-boundary algorithm
-// (WORDS_PER_STEP = 600 = 3 min at 200 wpm) determines the step
-// list; the client renders one step card at a time.
+// Spec 18.4/18.5 (amended by the module-composition PR):
+//   - A module is ONE bordered card. Header, step rail, and reading
+//     column are regions of a single surface divided by hairlines,
+//     not separate cards on a background.
+//   - The reading column is centred within its own space so the
+//     640px measure reads as a deliberate column.
+//   - The reading pane is CAPPED, not fixed. Short content sits at
+//     natural height with no scrollbar. Long content caps at
+//     min(620px, calc(100vh - 360px)) and scrolls, with a fade at
+//     the edge as the only signal.
+//   - Below 900px the cap is removed and the page scrolls naturally.
+//   - A passed check persists across navigation - Back does not
+//     wipe the answered state.
+//   - After answering, the feedback scrolls into view within the
+//     pane (D1) - not to top, the minimum scroll that reveals it.
 //
-// Discipline
-// ──────────
-//   - Step-at-a-time reveal. The page NEVER grows.
-//   - Checks live inside their step, at the section boundary.
-//     Continue is disabled until the check is passed. Two checks
-//     in a step come one at a time; button reads "Next check"
-//     between them.
-//   - Wrong answer = amber (never red). "Show me that line"
-//     flashes the anchor WITHIN the current step - no scrolling
-//     through a document.
-//   - Right answer = brief warm confirmation, options LOCKED,
-//     Continue enabled. No celebration on individual correct.
-//   - Save & exit persists progress; resume mounts at the
-//     furthest step reached (spec A1).
-//   - Keyboard: Enter/Right advances, Left goes back, 1/2 select
-//     option. Ignored inside text inputs (signature field
-//     unaffected).
-//   - Below 900px the rail collapses to a single line + toggle.
-//   - Sign step: recap + serif attestation + type-to-match name.
-//   - Accessibility: focus moves to step heading on advance;
-//     feedback panels are aria-live=polite; options are real
-//     buttons with aria-pressed; step rail is a list with
-//     aria-current on the active step.
+// The visual contract lives at docs/opd/OPD_Module_Final.html.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-// ─── Constants + helpers ──────────────────────────────────────────
-function formatDayShort(iso) {
-  if (!iso) return null;
-  try {
-    const d = new Date(`${iso}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch { return null; }
-}
-function formatUpdated(iso) {
-  if (!iso) return null;
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  } catch { return null; }
-}
+// ─── helpers ─────────────────────────────────────────────────────
 function formatSignedAt(iso) {
   if (!iso) return null;
   try {
@@ -84,31 +55,51 @@ function DashedBrick({ scope, message, onRetry }) {
 }
 
 // ─── CheckCard ────────────────────────────────────────────────────
-// One question, inline at the end of its step's section content.
-// D3: options render with a POSITIONAL letter (A/B by index), not
-//     the option id. Grading is by id server-side.
-// D4: only the ACTIVE question in a step renders as interactive;
-//     later ones do not appear until the active one is passed.
-// D5: once passed, options LOCK - no further selection.
+// One question, inline at the section boundary inside the pane.
+//   D3: options render with a POSITIONAL letter (A/B by index), not
+//       the option id. Grading is by id server-side.
+//   D5: once passed, options LOCK - no further selection.
+//   D2: pickedOptionId prop restores the answered state when the
+//       user navigates back to a passed check. Session-scoped;
+//       cross-session fallback is the compact "passed" summary.
 function CheckCard({
   requirementId,
   question,
   qIndex,
   qCount,
-  alreadyCorrect,
-  onCorrect,
+  pickedOptionId,           // if set, mount as answered with this option locked
+  onCorrect,                // (questionId, selectedOptionId) -> void
+  onFeedbackShown,          // () -> void, called after a feedback panel becomes visible
   onBackToSection,
 }) {
+  // Look up the pre-picked option's explanation from the question
+  // payload (safe to expose to a user who has already passed it;
+  // both explanations are already on the wire per academy-12).
+  const pickedExplanation = useMemo(() => {
+    if (!pickedOptionId) return null;
+    const opt = (question.options || []).find((o) => o.id === pickedOptionId);
+    return opt?.explanation || "";
+  }, [pickedOptionId, question]);
+
   const [state, setState] = useState({
-    status: alreadyCorrect ? "right" : "idle",
-    selectedId: null,
-    explanation: null,
+    status: pickedOptionId ? "right" : "idle",
+    selectedId: pickedOptionId || null,
+    explanation: pickedExplanation,
     error: null,
   });
-  const [autoLocked] = useState(alreadyCorrect);
 
-  const disabled = state.status === "submitting" || state.status === "right" || autoLocked;
+  const disabled = state.status === "submitting" || state.status === "right";
   const feedbackRef = useRef(null);
+  const cardRef = useRef(null);
+
+  // Mark chk as "seen" (animates in) shortly after mount.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const el = cardRef.current;
+      if (el && !el.classList.contains("opd-chk--seen")) el.classList.add("opd-chk--seen");
+    }, 30);
+    return () => clearTimeout(t);
+  }, []);
 
   async function submit(optionId) {
     if (disabled) return;
@@ -132,65 +123,53 @@ function CheckCard({
         explanation: body.explanation || "",
         error: null,
       });
-      if (body.correct && onCorrect) onCorrect(question.question_id);
+      if (body.correct && onCorrect) onCorrect(question.question_id, optionId);
+      // D1: scroll the pane so the feedback panel is visible. Runs
+      // after render so the panel has laid out.
+      requestAnimationFrame(() => onFeedbackShown && onFeedbackShown(feedbackRef.current));
     } catch (err) {
       setState({ status: "error", selectedId: optionId, explanation: null, error: err?.message || String(err) });
     }
   }
 
-  // If already-correct on mount (resume scenario), show the passed
-  // treatment without re-fetching. The client had this info from
-  // /module.progress.all_correct_ids.
-  if (autoLocked && state.status === "right" && !state.explanation) {
-    return (
-      <div className="opd-check opd-check--done" role="status">
-        <span className="opd-k">Quick check {qIndex + 1} of {qCount} · passed</span>
-        <p className="opd-check-passed-line">{question.prompt}</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="opd-check" data-question-key={question.question_key}>
-      <span className="opd-k">Quick check {qIndex + 1} of {qCount}</span>
-      <h4 className="opd-check-prompt">{question.prompt}</h4>
-      <div className="opd-check-options" role="group" aria-label={question.prompt}>
+    <div className="opd-chk" ref={cardRef} data-question-key={question.question_key}>
+      <span className="opd-chk-k">Quick check {qIndex + 1} of {qCount}</span>
+      <h4>{question.prompt}</h4>
+      <div role="group" aria-label={question.prompt}>
         {question.options.map((opt, idx) => {
           const isSelected = state.selectedId === opt.id;
-          // D3: display letter is POSITIONAL (A/B by index).
           const letter = String.fromCharCode(65 + idx);
-          const tone = state.status === "wrong" && isSelected
-            ? " opd-check-opt--miss"
-            : state.status === "right" && isSelected
-              ? " opd-check-opt--right"
-              : state.status === "right" && !isSelected
-                ? " opd-check-opt--dim opd-check-opt--locked"
-                : "";
+          let mod = "";
+          if (state.status === "wrong" && isSelected) mod = " opd-opt--miss";
+          else if (state.status === "right" && isSelected) mod = " opd-opt--rt opd-opt--lock";
+          else if (state.status === "right" && !isSelected) mod = " opd-opt--dim opd-opt--lock";
           return (
             <button
               key={opt.id}
               type="button"
               disabled={disabled}
               aria-pressed={isSelected}
-              className={"opd-check-opt" + tone}
+              className={"opd-opt" + mod}
               onClick={() => submit(opt.id)}
               data-position={letter}
               data-option-id={opt.id}
             >
-              <span className="opd-check-opt-key">{letter}</span>
-              <span className="opd-check-opt-text">{opt.text}</span>
+              <span className="opd-opt-lt">{letter}</span>
+              <span>{opt.text}</span>
             </button>
           );
         })}
       </div>
       <div ref={feedbackRef} aria-live="polite" aria-atomic="true">
         {state.status === "wrong" ? (
-          <div className="opd-check-fb opd-check-fb--amber" role="alert">
-            <span className="opd-check-fb-verdict">Not quite - let us look again.</span>
-            <p className="opd-check-fb-body">{state.explanation}</p>
+          <div className="opd-fb opd-fb--a" role="alert">
+            <span className="opd-fb-vd">Not quite - let us look again.</span>
+            {state.explanation}
+            <br />
             <button
               type="button"
-              className="opd-check-back"
+              className="opd-fb-bk"
               onClick={() => onBackToSection && onBackToSection()}
             >
               &uarr; Show me that line
@@ -198,13 +177,13 @@ function CheckCard({
           </div>
         ) : null}
         {state.status === "right" ? (
-          <div className="opd-check-fb opd-check-fb--green">
-            <span className="opd-check-fb-verdict">That is it.</span>
-            <p className="opd-check-fb-body">{state.explanation}</p>
+          <div className="opd-fb opd-fb--g">
+            <span className="opd-fb-vd">That is it.</span>
+            {state.explanation}
           </div>
         ) : null}
         {state.status === "error" ? (
-          <div className="opd-brick opd-brick--inline" role="alert">
+          <div className="opd-brick opd-brick--inline" role="alert" style={{ marginTop: 12 }}>
             <div className="opd-brick-title">Could not record your answer</div>
             <p className="opd-brick-body">{state.error}. Your answer was not lost - pick it again to retry.</p>
           </div>
@@ -215,129 +194,58 @@ function CheckCard({
 }
 
 // ─── SignBlock ────────────────────────────────────────────────────
-// Serif attestation with type-to-match name. Unchanged behavior
-// from the signature-flow PR; the sign step is the LAST step in the
-// stepper. Recap + earn block sit above.
+// Recap + attestation + typed-name input + earn card. The signature
+// SUBMIT lives in SignFooter (footer belongs to .opd-ufoot, not the
+// scrolled pane). SignFooter observes .opd-sgi via DOM query, keeping
+// the two visually adjacent regions decoupled without lifting typed
+// state through the whole tree. This is fine because only one
+// .opd-sgi is ever on screen (the sign step is a terminal state).
 function SignBlock({
-  requirementId,
   doc,
   version,
   displayName,
   timeSpentSeconds,
   stepsCount,
   totalQuestionsPassed,
-  onSigned,
 }) {
   const attestationText = useMemo(() => (
     `I, ${displayName}, have read and understood ${doc?.title || doc?.id || "this document"}, version ${version || "?"}, and I will hold this standard at my sites.`
   ), [displayName, doc?.title, doc?.id, version]);
 
-  const attestationIdRef = useRef(newAttestationId());
-  const [typed, setTyped] = useState("");
-  const [status, setStatus] = useState({ state: "idle", error: null });
-
-  const normExpected = String(displayName || "").trim().replace(/\s+/g, " ").toLowerCase();
-  const normTyped = String(typed || "").trim().replace(/\s+/g, " ").toLowerCase();
-  const matches = normExpected.length > 0 && normTyped === normExpected;
-
-  async function submit() {
-    if (!matches) return;
-    setStatus({ state: "submitting", error: null });
-    try {
-      const res = await fetch("/api/academy/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        cache: "no-store",
-        body: JSON.stringify({
-          requirementId,
-          attestationId: attestationIdRef.current,
-          typedName: typed,
-          attestationText,
-          timeSpentSeconds,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok || !body.ok) {
-        setStatus({ state: "error", error: body?.detail || body?.error || `HTTP ${res.status}` });
-        return;
-      }
-      if (onSigned) onSigned(body.attestation);
-    } catch (err) {
-      setStatus({ state: "error", error: err?.message || String(err) });
-    }
-  }
-
-  const hint = matches
-    ? "Ready."
-    : typed.trim().length >= 3
-      ? <>Type it exactly as it appears on your account: <b>{displayName}</b></>
-      : "Your typed name must match your account.";
-
   const minutes = timeSpentSeconds > 0 ? Math.max(1, Math.round(timeSpentSeconds / 60)) : null;
 
   return (
     <>
-      <div className="opd-step-recap">
-        <div className="opd-step-recap-tile">
-          <b className="num">{stepsCount}</b>
-          <span>SECTIONS READ</span>
-        </div>
-        <div className="opd-step-recap-tile">
-          <b className="num">{totalQuestionsPassed}</b>
-          <span>CHECK{totalQuestionsPassed === 1 ? "" : "S"} PASSED</span>
-        </div>
+      <div className="opd-recap">
+        <div className="opd-rc"><b>{stepsCount}</b><s>SECTIONS</s></div>
+        <div className="opd-rc"><b>{totalQuestionsPassed}</b><s>CHECK{totalQuestionsPassed === 1 ? "" : "S"}</s></div>
         {minutes != null ? (
-          <div className="opd-step-recap-tile">
-            <b className="num">{minutes}</b>
-            <span>MINUTE{minutes === 1 ? "" : "S"}</span>
-          </div>
+          <div className="opd-rc"><b>{minutes}</b><s>MINUTE{minutes === 1 ? "" : "S"}</s></div>
         ) : null}
       </div>
-      <div className="opd-sign">
-        <span className="opd-k">Attestation</span>
-        <p className="opd-sign-text">{attestationText}</p>
-        <div className="opd-sign-row">
-          <input
-            type="text"
-            className="opd-sign-input"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder="Type your full name"
-            autoComplete="off"
-            spellCheck="false"
-            disabled={status.state === "submitting"}
-            aria-label="Type your full name to sign"
-          />
-          <button
-            type="button"
-            className={"opd-sign-btn" + (matches ? " opd-sign-btn--ready" : "")}
-            disabled={!matches || status.state === "submitting"}
-            onClick={submit}
-          >
-            {status.state === "submitting" ? "Signing" : "Sign"}
-          </button>
+      <p className="opd-att">{attestationText}</p>
+      <div className="opd-sgr">
+        <input
+          type="text"
+          className="opd-sgi"
+          placeholder="Type your full name"
+          autoComplete="off"
+          spellCheck="false"
+          aria-label="Type your full name to sign"
+        />
+      </div>
+      <div className="opd-earn">
+        <div className="opd-earn-g" aria-hidden="true">&#127942;</div>
+        <div>
+          <b>You will earn: {doc?.title || doc?.id}</b>
+          <s>Certificate issued on signing.</s>
         </div>
-        <p className="opd-sign-hint">{hint}</p>
-        <div className="opd-sign-earn">
-          <div className="opd-sign-earn-glyph" aria-hidden="true">&#127942;</div>
-          <div>
-            <b>You will earn: {doc?.title || doc?.id}</b>
-            <span>Certificate issued on signing.</span>
-          </div>
-        </div>
-        {status.state === "error" ? (
-          <div className="opd-brick opd-brick--inline" role="alert" style={{ marginTop: 14 }}>
-            <div className="opd-brick-title">Could not record your signature</div>
-            <p className="opd-brick-body">{status.error}. Nothing was recorded - try again.</p>
-          </div>
-        ) : null}
       </div>
     </>
   );
 }
 
-// ─── Completion cert (post-sign) ──────────────────────────────────
+// ─── Completion cert ─────────────────────────────────────────────
 function CompletionScreen({ doc, version, attestation, onBack }) {
   const cert = attestation?.certificate_serial || "";
   const attempts = attestation?.attempts_count ?? 0;
@@ -389,9 +297,18 @@ function CompletionScreen({ doc, version, attestation, onBack }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Main component - the stepper
+// Main - the one-card module surface
 // ═══════════════════════════════════════════════════════════════════
-export default function AcademyFocus({ requirementId, docId, docTitle, docShelf, partNumber, totalParts, onBack, onSigned }) {
+export default function AcademyFocus({
+  requirementId,
+  docId,
+  docTitle,
+  docShelf,
+  partNumber,
+  totalParts,
+  onBack,
+  onSigned,
+}) {
   const [state, setState] = useState({ status: "loading", data: null, error: null });
   const isFirstLoadRef = useRef(true);
   const startTimeRef = useRef(Date.now());
@@ -434,7 +351,6 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
   const doc = state.data?.doc || null;
   const req = state.data?.requirement || null;
   const ob = state.data?.obligation || null;
-  const cyc = state.data?.cycle || null;
   const steps = state.data?.steps || [];
   const questions = state.data?.questions || [];
   const progress = state.data?.progress || null;
@@ -443,41 +359,35 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
 
   const version = doc?.version || req?.doc_version || null;
 
-  // Map question_id -> question object (for step lookup).
   const questionsById = useMemo(() => {
     const m = new Map();
     for (const q of questions) m.set(q.question_id, q);
     return m;
   }, [questions]);
 
-  // ─── Local step state ────────────────────────────────────────────
-  // currentStepIdx: which step is on screen. Sign step is at
-  // steps.length (one past the last content step). Signed
-  // completion cert shows when signedAttestation is set.
+  // ─── State ────────────────────────────────────────────────────
   const initialStepIdx = progress?.furthest_step_index ?? 0;
   const [currentStepIdx, setCurrentStepIdx] = useState(initialStepIdx);
   const [signedAttestation, setSignedAttestation] = useState(initialAttestation);
-
-  // Correct-answer set (mutable as user progresses). Seeded from
-  // server-tracked all_correct_ids.
   const [correctIds, setCorrectIds] = useState(() => new Set(progress?.all_correct_ids || []));
+  const [sectionsSeen, setSectionsSeen] = useState(() => new Set(progress?.sections_seen || []));
+  // D2: session-scoped map of question_id -> option_id the user picked
+  // when they got it right. Rebuilt on each session; server tracks the
+  // "passed" flag but not which option, so cross-session Back falls
+  // back to the compact "passed" summary. Within-session Back restores
+  // the full answered view.
+  const [pickedByQuestion, setPickedByQuestion] = useState(() => ({}));
+  const [savedTag, setSavedTag] = useState(false);
+  const [justDoneIdx, setJustDoneIdx] = useState(-1);
 
-  // Sync when data loads (resume mounts at furthest).
   useEffect(() => {
     setCurrentStepIdx(progress?.furthest_step_index ?? 0);
     setCorrectIds(new Set(progress?.all_correct_ids || []));
-    setSignedAttestation(initialAttestation);
-  }, [progress?.furthest_step_index, progress?.all_correct_ids, initialAttestation]);
-
-  // Sections seen: the union of everything we have visited. Seeded
-  // from server, extended as the user advances. POSTed to /progress
-  // on step advance + save-and-exit.
-  const [sectionsSeen, setSectionsSeen] = useState(() => new Set(progress?.sections_seen || []));
-  useEffect(() => {
     setSectionsSeen(new Set(progress?.sections_seen || []));
-  }, [progress?.sections_seen]);
+    setSignedAttestation(initialAttestation);
+  }, [progress?.furthest_step_index, progress?.all_correct_ids, progress?.sections_seen, initialAttestation]);
 
-  // ─── Save & Exit + progress push ───────────────────────────────
+  // ─── Progress push ────────────────────────────────────────────
   const timeSpentSeconds = () => {
     const clientDelta = Math.round((Date.now() - startTimeRef.current) / 1000);
     return Math.max(progress?.time_spent_seconds ?? 0, clientDelta);
@@ -497,70 +407,98 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
           timeSpentSeconds: timeSpentSeconds(),
         }),
       });
-    } catch {
-      // Best-effort. Failure does not block the user; the next
-      // /module fetch reflects whatever landed.
-    }
+    } catch { /* best-effort */ }
     if (extraKey) setSectionsSeen(merged);
   }, [requirementId, sectionsSeen, progress?.time_spent_seconds]);
 
-  // ─── Per-step derived state ────────────────────────────────────
+  // ─── Per-step derived state ───────────────────────────────────
   const isSignStep = currentStepIdx >= steps.length;
   const currentStep = isSignStep ? null : steps[currentStepIdx];
   const currentQuestions = useMemo(() => {
     if (!currentStep) return [];
     return (currentStep.questionIds || []).map((id) => questionsById.get(id)).filter(Boolean);
   }, [currentStep, questionsById]);
-  // The first uncleared question in this step (only one visible at
-  // a time, D4). If all cleared or no questions, activeQIndex = -1
-  // and the "Continue" button is enabled.
+  // Two checks in a step come one at a time: the first unanswered one
+  // is active. If all answered, activeQIndex = -1 and Continue enables.
   const activeQIndex = currentQuestions.findIndex((q) => !correctIds.has(q.question_id));
   const stepCleared = activeQIndex === -1;
 
-  // ─── Anchor flash within the current step ─────────────────────
-  // D-flash: the wrong-answer "Show me that line" scrolls + flashes
-  // an anchor WITHIN the current step card (not the whole doc).
-  const stepHeadingRef = useRef(null);
-  const stepBodyRef = useRef(null);
+  // ─── Refs for the pane + anchor flash ─────────────────────────
+  const paneRef = useRef(null);
+  const uscRef = useRef(null);
+  const cwRef = useRef(null);
+
   const flashAnchor = useCallback(() => {
-    const body = stepBodyRef.current;
+    const body = cwRef.current;
     if (!body) return;
-    // Prefer explicit <div class="anchor">; fall back to the
-    // step's first blockquote or the step body itself.
-    const anchor = body.querySelector(".anchor, blockquote, [data-anchor]") || body;
-    anchor.scrollIntoView({ behavior: "smooth", block: "center" });
-    anchor.classList.remove("opd-step-anchor-flash");
-    // Reflow so the animation restarts.
+    const anchor = body.querySelector(".anchor, .anch, blockquote, [data-anchor]") || body;
+    if (typeof anchor.scrollIntoView === "function") {
+      anchor.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    anchor.classList.remove("opd-anchor-flash");
     void anchor.offsetWidth;
-    anchor.classList.add("opd-step-anchor-flash");
+    anchor.classList.add("opd-anchor-flash");
   }, []);
 
-  // ─── Advance / back ────────────────────────────────────────────
+  // Fade-cue: toggle .opd-usc--more when there is more below to
+  // scroll to. Runs on scroll + on step change.
+  const cueMore = useCallback(() => {
+    const usc = uscRef.current;
+    const pane = paneRef.current;
+    if (!usc || !pane) return;
+    const more = pane.scrollHeight > pane.clientHeight + 8
+      && (pane.scrollHeight - pane.clientHeight - pane.scrollTop) > 26;
+    usc.classList.toggle("opd-usc--more", more);
+  }, []);
+
+  // ─── D1: reveal feedback within the pane ──────────────────────
+  const revealInPane = useCallback((el) => {
+    const pane = paneRef.current;
+    if (!pane || !el) return;
+    requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      const pr = pane.getBoundingClientRect();
+      const over = r.bottom - (pr.bottom - 18);
+      if (over > 0) {
+        pane.scrollTo({ top: pane.scrollTop + over, behavior: "smooth" });
+      }
+      setTimeout(cueMore, 400);
+    });
+  }, [cueMore]);
+
+  // ─── Advance / back ───────────────────────────────────────────
   const goToStep = useCallback((i) => {
     if (i < 0 || i > steps.length) return;
     setCurrentStepIdx(i);
-    // Focus the step heading on advance (accessibility A4).
     setTimeout(() => {
       const h = document.querySelector("[data-step-heading]");
       if (h && typeof h.focus === "function") h.focus();
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const pane = paneRef.current;
+      if (pane) pane.scrollTop = 0;
+      cueMore();
     }, 60);
-  }, [steps.length]);
+  }, [steps.length, cueMore]);
 
   const advanceStep = useCallback(async () => {
-    // Mark the current step's key as seen and push progress.
     if (currentStep) {
-      await pushProgress(currentStep.key);
+      // Fire-and-forget with a brief "Saved" tag.
+      pushProgress(currentStep.key).then(() => {
+        setSavedTag(true);
+        setTimeout(() => setSavedTag(false), 1300);
+      });
+      setJustDoneIdx(currentStepIdx);
+      setTimeout(() => setJustDoneIdx(-1), 550);
     }
     goToStep(currentStepIdx + 1);
   }, [currentStep, currentStepIdx, pushProgress, goToStep]);
 
-  const onCorrect = useCallback((questionId) => {
+  const onCorrect = useCallback((questionId, optionId) => {
     setCorrectIds((prev) => {
       const next = new Set(prev);
       next.add(questionId);
       return next;
     });
+    setPickedByQuestion((prev) => ({ ...prev, [questionId]: optionId }));
   }, []);
 
   const onSignedInternal = useCallback((att) => {
@@ -570,21 +508,20 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
   }, [onSigned]);
 
   const saveAndExit = useCallback(async () => {
-    // Push whatever we have; do not mark a new key seen (user is
-    // leaving on a step they may not yet have passed).
     await pushProgress(null);
     if (onBack) onBack();
   }, [pushProgress, onBack]);
 
-  // ─── Mobile rail collapse ─────────────────────────────────────
-  const [mobileRailOpen, setMobileRailOpen] = useState(false);
-
-  // ─── Keyboard navigation (A2) ─────────────────────────────────
+  // ─── Keyboard nav ─────────────────────────────────────────────
   const advanceRef = useRef({ advance: null, back: null, submitOpt: null });
   useEffect(() => {
     advanceRef.current = {
       advance: async () => {
-        if (isSignStep) return;
+        if (isSignStep) {
+          const b = document.getElementById("opd-sign-btn");
+          if (b && !b.disabled) b.click();
+          return;
+        }
         if (!stepCleared) return;
         await advanceStep();
       },
@@ -593,7 +530,7 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
       },
       submitOpt: (idx) => {
         if (isSignStep) return;
-        const opts = document.querySelectorAll(".opd-check-opt");
+        const opts = document.querySelectorAll(".opd-opt");
         const target = opts[idx];
         if (target && !target.disabled) target.click();
       },
@@ -601,8 +538,6 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
   }, [isSignStep, stepCleared, currentStepIdx, advanceStep, goToStep]);
   useEffect(() => {
     function onKey(e) {
-      // Skip while focus is in a text input - signature field must
-      // accept space, backspace, Enter without triggering advance.
       const tag = document.activeElement?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
       const a = advanceRef.current;
@@ -620,20 +555,28 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // ─── Rail data ────────────────────────────────────────────────
+  // Recompute fade cue after each paint (when current step changes).
+  useEffect(() => {
+    cueMore();
+  }, [currentStepIdx, cueMore]);
+
+  // ─── Rail data ───────────────────────────────────────────────
   const totalChecks = steps.reduce((acc, s) => acc + (s.questionIds?.length || 0), 0);
   const passedChecks = correctIds.size;
-  // Minutes-remaining: sum estMinutes of steps ahead + this one.
-  const minutesLeft = steps.slice(currentStepIdx).reduce((acc, s) => acc + (s.estMinutes || 0), 0);
-  const totalMinutes = steps.reduce((acc, s) => acc + (s.estMinutes || 0), 0);
-  const progressPct = steps.length === 0 ? 0 : Math.round(((isSignStep ? steps.length : currentStepIdx) / (steps.length + 1)) * 100);
+  const minutesLeft = isSignStep
+    ? 1
+    : Math.max(1, steps.slice(currentStepIdx).reduce((acc, s) => acc + (s.estMinutes || 0), 0) + 1); // +1 for sign
+  const progressPct = steps.length === 0
+    ? 0
+    : Math.round(((isSignStep ? steps.length : currentStepIdx) / (steps.length + 1)) * 100);
+  const doneCount = Object.keys(
+    Array.from({ length: steps.length }).reduce((acc, _, i) => {
+      if (sectionsSeen.has(steps[i]?.key)) acc[i] = true;
+      return acc;
+    }, {})
+  ).length;
 
-  // Part number for the header subtitle (comes from the queue via
-  // parent, not the module route - we don't want to double-fetch).
-  // For now the docTitle carries it if the caller passed it; leaving
-  // as-is unless expanded.
-
-  // ─── Completion screen when signed ────────────────────────────
+  // ─── Completion screen ───────────────────────────────────────
   if (signedAttestation) {
     return (
       <div className="opd-focus" data-room="focus-done">
@@ -658,7 +601,7 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
   if (state.status === "loading") {
     return (
       <div className="opd-focus" data-room="focus">
-        <div className="opd-focus-mhead" aria-busy="true">
+        <div className="opd-uni" aria-busy="true" style={{ padding: 24 }}>
           <span className="opd-skel opd-skel--bar opd-skel--w40" />
         </div>
       </div>
@@ -679,7 +622,7 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
 
   // ─── Main render ─────────────────────────────────────────────
   return (
-    <div className="opd-focus opd-focus--stepper" data-room="focus">
+    <div className="opd-focus opd-focus--uni" data-room="focus">
       <nav className="opd-crumb" aria-label="Breadcrumb">
         <button type="button" className="opd-crumb-link" onClick={onBack}>Academy</button>
         <span className="opd-crumb-sep" aria-hidden="true">/</span>
@@ -694,253 +637,408 @@ export default function AcademyFocus({ requirementId, docId, docTitle, docShelf,
         <span className="opd-crumb-current">{docId}</span>
       </nav>
 
-      {/* Module header - doc chip, title, part-of chip, minutes
-          remaining as the largest number, progress bar. Subtitle
-          shows "part N of M" only when the doc has multiple
-          obligations (parent passes totalParts > 1 from the queue).
-          Never derive subtitle from obligation_key - spec 18.3
-          forbids obligation keys in operator copy. */}
-      <div className="opd-focus-mhead">
-        <span className="opd-doc-chip">{doc?.id || docId}</span>
-        <div className="opd-focus-mhead-title">
-          <h1>{doc?.title || docTitle || docId}</h1>
-          {totalParts > 1 ? (
-            <div className="opd-focus-mhead-sub">
-              Part {partNumber} of {totalParts}
+      {/* The one card. Header + progress rule + body all inside .opd-uni. */}
+      <div className="opd-uni">
+
+        <header className="opd-uhead">
+          <span className="opd-doc-chip">{doc?.id || docId}</span>
+          <div className="opd-uhead-title">
+            <h1>{doc?.title || docTitle || docId}</h1>
+            {totalParts > 1 ? (
+              <div className="opd-uhead-sub">Part {partNumber} of {totalParts}</div>
+            ) : null}
+          </div>
+          <div className="opd-uhead-rt">
+            <b>{minutesLeft}</b>
+            <s>MIN LEFT</s>
+          </div>
+        </header>
+
+        <div className="opd-ubar" aria-hidden="true">
+          <i style={{ width: `${progressPct}%` }} />
+        </div>
+
+        <div className="opd-ubody">
+          {/* Step rail */}
+          <aside className="opd-urail" aria-label="Module sections">
+            <div className="opd-urail-head">
+              <span className="opd-urail-head-k">In this module</span>
+              <em className="opd-urail-head-count">
+                {doneCount} of {steps.length}
+              </em>
             </div>
-          ) : null}
-        </div>
-        <div className="opd-focus-mhead-time">
-          <b className="num">{isSignStep ? 1 : Math.max(1, minutesLeft)}</b>
-          <span>min left</span>
-        </div>
-      </div>
-      <div className="opd-focus-mbar" aria-hidden="true">
-        <i style={{ width: `${progressPct}%` }} />
-      </div>
-
-      {/* Mobile rail - single line + toggle, below 900px. */}
-      <div className={"opd-focus-mrail" + (mobileRailOpen ? " opd-focus-mrail--open" : "")}>
-        <div className="opd-focus-mrail-row">
-          <span className="opd-focus-mrail-label">
-            {isSignStep ? "Sign" : `Section ${currentStepIdx + 1} of ${steps.length}`}
-          </span>
-          <span className="opd-focus-mrail-bar">
-            <i style={{ width: `${progressPct}%` }} />
-          </span>
-          <button
-            type="button"
-            className="opd-focus-mrail-toggle"
-            onClick={() => setMobileRailOpen((v) => !v)}
-            aria-expanded={mobileRailOpen}
-          >
-            {mobileRailOpen ? "Hide" : "All sections"}
-          </button>
-        </div>
-        {mobileRailOpen ? (
-          <ol className="opd-focus-mrail-list" aria-label="Module sections">
-            {steps.map((s, i) => renderRailItem(s, i, currentStepIdx, sectionsSeen, goToStep, setMobileRailOpen))}
-            {renderSignRailItem(steps.length, isSignStep, () => setMobileRailOpen(false), goToStep)}
-          </ol>
-        ) : null}
-      </div>
-
-      {/* Two-column grid: rail on left, step card on right */}
-      <div className="opd-focus-grid opd-focus-grid--stepper">
-        <aside className="opd-focus-rail opd-focus-rail--stepper" aria-label="Module sections">
-          <div className="opd-focus-rail-header">
-            <span className="opd-k">
-              {ob?.description ? "In this module" : (doc?.title || "Sections")}
-            </span>
-          </div>
-          <ol className="opd-focus-rail-steps">
-            {steps.map((s, i) => renderRailItem(s, i, currentStepIdx, sectionsSeen, goToStep))}
-            {renderSignRailItem(steps.length, isSignStep, null, goToStep)}
-          </ol>
-          <div className="opd-focus-rail-footer">
-            Your place is saved. Nothing is submitted until you sign.
-          </div>
-        </aside>
-
-        <article className="opd-card opd-focus-step" aria-live="polite" aria-busy={state.status === "loading"}>
-          {isSignStep ? (
-            <>
-              <header className="opd-focus-step-head">
-                <span className="opd-focus-step-kk">Last step</span>
-                <h2 className="opd-focus-step-h2" data-step-heading tabIndex={-1} ref={stepHeadingRef}>Sign</h2>
-                <p className="opd-focus-step-est">
-                  You have read all {steps.length} section{steps.length === 1 ? "" : "s"}
-                  {totalChecks > 0 ? ` and passed ${passedChecks} check${passedChecks === 1 ? "" : "s"}` : ""}.
-                </p>
-              </header>
-              <div className="opd-focus-step-body">
-                {viewer?.displayName ? (
-                  <SignBlock
-                    requirementId={requirementId}
-                    doc={doc}
-                    version={version}
-                    displayName={viewer.displayName}
-                    timeSpentSeconds={timeSpentSeconds()}
-                    stepsCount={steps.length}
-                    totalQuestionsPassed={passedChecks}
-                    onSigned={onSignedInternal}
-                  />
-                ) : null}
-              </div>
-              <footer className="opd-focus-step-foot">
-                <button
-                  type="button"
-                  className="opd-focus-step-back"
-                  onClick={() => goToStep(steps.length - 1)}
-                >
-                  Back
-                </button>
-                <button type="button" className="opd-focus-step-exit" onClick={saveAndExit}>
-                  Save &amp; exit
-                </button>
-                <span className="opd-focus-step-hint">Your typed name must match your account.</span>
-              </footer>
-            </>
-          ) : currentStep ? (
-            <>
-              <header className="opd-focus-step-head">
-                <span className="opd-focus-step-kk">Section {currentStepIdx + 1} of {steps.length}</span>
-                <h2 className="opd-focus-step-h2" data-step-heading tabIndex={-1} ref={stepHeadingRef}>
-                  {currentStep.anchor}
-                </h2>
-                <p className="opd-focus-step-est">
-                  About {currentStep.estMinutes} minute{currentStep.estMinutes === 1 ? "" : "s"}
-                  {currentQuestions.length > 0
-                    ? ` · ${currentQuestions.length} quick check${currentQuestions.length === 1 ? "" : "s"}`
-                    : " · no check"}
-                </p>
-              </header>
-              <div
-                className="opd-focus-step-body opd-focus-body"
-                ref={stepBodyRef}
-                dangerouslySetInnerHTML={{ __html: currentStep.html }}
+            <ol className="opd-urail-list">
+              {steps.map((s, i) => (
+                <RailItem
+                  key={s.key + i}
+                  step={s}
+                  index={i}
+                  currentStepIdx={currentStepIdx}
+                  sectionsSeen={sectionsSeen}
+                  justDoneIdx={justDoneIdx}
+                  goToStep={goToStep}
+                />
+              ))}
+              <SignRailItem
+                stepsCount={steps.length}
+                isSignStep={isSignStep}
+                goToStep={goToStep}
               />
-              {currentQuestions.length > 0 && activeQIndex >= 0 ? (
-                <div className="opd-focus-step-check">
-                  <CheckCard
-                    key={currentQuestions[activeQIndex].question_id}
-                    requirementId={requirementId}
-                    question={currentQuestions[activeQIndex]}
-                    qIndex={activeQIndex}
-                    qCount={currentQuestions.length}
-                    alreadyCorrect={false}
-                    onCorrect={onCorrect}
-                    onBackToSection={flashAnchor}
-                  />
-                </div>
-              ) : null}
-              {/* Show already-passed checks quietly above the active one */}
-              {currentQuestions.length > 1 && currentQuestions.slice(0, activeQIndex >= 0 ? activeQIndex : currentQuestions.length).length > 0 ? (
-                <div className="opd-focus-step-past-checks">
-                  {currentQuestions.slice(0, activeQIndex >= 0 ? activeQIndex : currentQuestions.length).map((q, i) => (
-                    <CheckCard
-                      key={q.question_id}
+            </ol>
+            <div className="opd-urail-foot">
+              Your place is saved. Nothing is submitted until you sign.
+            </div>
+          </aside>
+
+          {/* Content column: usc > pane > cw + fade */}
+          <div className="opd-ucont">
+            <div className="opd-usc" ref={uscRef}>
+              <div
+                className="opd-upane"
+                ref={paneRef}
+                tabIndex={0}
+                role="region"
+                aria-label={
+                  isSignStep
+                    ? "Sign this module"
+                    : (currentStep ? `Reading pane - ${currentStep.anchor}` : "Reading pane")
+                }
+                onScroll={cueMore}
+              >
+                <article className="opd-ucw" ref={cwRef}>
+                  {isSignStep ? (
+                    <SignPane
+                      steps={steps}
+                      totalChecks={totalChecks}
+                      passedChecks={passedChecks}
+                      doc={doc}
+                      version={version}
+                      viewer={viewer}
+                      timeSpentSeconds={timeSpentSeconds}
+                    />
+                  ) : currentStep ? (
+                    <ReadPane
+                      step={currentStep}
+                      stepIndex={currentStepIdx}
+                      stepsTotal={steps.length}
+                      isDone={sectionsSeen.has(currentStep.key) && currentStepIdx < steps.length}
+                      currentQuestions={currentQuestions}
+                      activeQIndex={activeQIndex}
+                      pickedByQuestion={pickedByQuestion}
+                      correctIds={correctIds}
                       requirementId={requirementId}
-                      question={q}
-                      qIndex={i}
-                      qCount={currentQuestions.length}
-                      alreadyCorrect={true}
                       onCorrect={onCorrect}
+                      onFeedbackShown={revealInPane}
                       onBackToSection={flashAnchor}
                     />
-                  ))}
-                </div>
-              ) : null}
-              <footer className="opd-focus-step-foot">
-                {currentStepIdx > 0 ? (
-                  <button
-                    type="button"
-                    className="opd-focus-step-back"
-                    onClick={() => goToStep(currentStepIdx - 1)}
-                  >
-                    Back
-                  </button>
-                ) : null}
-                <button type="button" className="opd-focus-step-exit" onClick={saveAndExit}>
-                  Save &amp; exit
-                </button>
-                <span className="opd-focus-step-hint" aria-live="polite">
-                  {stepCleared
-                    ? ""
-                    : "Answer the check to continue"}
-                </span>
-                <button
-                  type="button"
-                  className={"opd-focus-step-next" + (stepCleared ? "" : " opd-focus-step-next--disabled")}
-                  disabled={!stepCleared}
-                  onClick={advanceStep}
-                >
-                  {currentStepIdx === steps.length - 1
-                    ? "Continue to sign"
-                    : (currentQuestions.length > 1 && activeQIndex >= 0 && activeQIndex < currentQuestions.length - 1)
-                      ? "Next check"
-                      : "Continue"}
-                </button>
-              </footer>
-            </>
-          ) : (
-            <DashedBrick scope="this module" message="No sections found in this document." />
-          )}
-        </article>
+                  ) : (
+                    <DashedBrick scope="this module" message="No sections found in this document." />
+                  )}
+                </article>
+              </div>
+              <div className="opd-usc-fade" aria-hidden="true" />
+            </div>
+
+            {/* Footer */}
+            <footer className="opd-ufoot">
+              {isSignStep ? (
+                <SignFooter
+                  requirementId={requirementId}
+                  onBack={() => goToStep(steps.length - 1)}
+                  onSignedInternal={onSignedInternal}
+                  displayName={viewer?.displayName || ""}
+                  doc={doc}
+                  version={version}
+                  stepsCount={steps.length}
+                  totalQuestionsPassed={passedChecks}
+                  timeSpentSeconds={timeSpentSeconds}
+                  onSaveExit={saveAndExit}
+                />
+              ) : (
+                <ReadFooter
+                  currentStepIdx={currentStepIdx}
+                  stepsTotal={steps.length}
+                  currentQuestions={currentQuestions}
+                  activeQIndex={activeQIndex}
+                  stepCleared={stepCleared}
+                  savedTag={savedTag}
+                  onBack={() => goToStep(currentStepIdx - 1)}
+                  onSaveExit={saveAndExit}
+                  onNext={advanceStep}
+                />
+              )}
+            </footer>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Rail item helpers (kept out of the main render for clarity) ──
-function renderRailItem(step, i, currentStepIdx, sectionsSeen, goToStep, closeMobile) {
-  const done = sectionsSeen.has(step.key) && i < currentStepIdx;
-  const now = i === currentStepIdx;
-  const locked = i > currentStepIdx && !sectionsSeen.has(step.key);
+// ─── ReadPane (content + optional check inside the pane) ─────────
+function ReadPane({
+  step,
+  stepIndex,
+  stepsTotal,
+  isDone,
+  currentQuestions,
+  activeQIndex,
+  pickedByQuestion,
+  correctIds,
+  requirementId,
+  onCorrect,
+  onFeedbackShown,
+  onBackToSection,
+}) {
+  const activeQuestion = activeQIndex >= 0 ? currentQuestions[activeQIndex] : null;
+  return (
+    <>
+      <div className="opd-ucw-sk">Section {stepIndex + 1} of {stepsTotal}</div>
+      <h2 data-step-heading tabIndex={-1}>{step.anchor}</h2>
+      <div className="opd-ucw-est">
+        About {step.estMinutes} minute{step.estMinutes === 1 ? "" : "s"}
+        {currentQuestions.length > 0
+          ? ` · ${currentQuestions.length} quick check${currentQuestions.length === 1 ? "" : "s"}`
+          : " · no check"}
+      </div>
+      <div dangerouslySetInnerHTML={{ __html: step.html }} />
+      {isDone && currentQuestions.length === 0 ? (
+        <div className="opd-done-tag">&#10003; Read</div>
+      ) : null}
+      {activeQuestion ? (
+        <CheckCard
+          key={activeQuestion.question_id}
+          requirementId={requirementId}
+          question={activeQuestion}
+          qIndex={activeQIndex}
+          qCount={currentQuestions.length}
+          pickedOptionId={pickedByQuestion[activeQuestion.question_id]}
+          onCorrect={onCorrect}
+          onFeedbackShown={onFeedbackShown}
+          onBackToSection={onBackToSection}
+        />
+      ) : null}
+      {/* Passed checks in this step, above the active one, are
+          collapsed into compact summary rows (cross-section: same
+          layout for session or cross-session). */}
+      {currentQuestions.length > 1 && currentQuestions.slice(0, activeQIndex >= 0 ? activeQIndex : currentQuestions.length).length > 0 ? (
+        <div className="opd-focus-step-past-checks" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14, opacity: 0.7 }}>
+          {currentQuestions.slice(0, activeQIndex >= 0 ? activeQIndex : currentQuestions.length).map((q, i) => (
+            <div key={q.question_id} className="opd-chk opd-chk--seen" role="status" style={{ padding: "10px 14px" }}>
+              <span className="opd-chk-k">Quick check {i + 1} of {currentQuestions.length} · passed</span>
+              <div style={{ marginTop: 4, fontSize: 13, color: "var(--opd-n700)" }}>{q.prompt}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+// ─── SignPane (recap + attestation, inside the pane) ─────────────
+function SignPane({
+  steps,
+  totalChecks,
+  passedChecks,
+  doc,
+  version,
+  viewer,
+  timeSpentSeconds,
+}) {
+  return (
+    <>
+      <div className="opd-ucw-sk">Last step</div>
+      <h2 data-step-heading tabIndex={-1}>Sign</h2>
+      <div className="opd-ucw-est">
+        All {steps.length} sections read
+        {totalChecks > 0 ? ` · ${passedChecks} check${passedChecks === 1 ? "" : "s"} passed` : ""}
+      </div>
+      {viewer?.displayName ? (
+        <SignBlock
+          doc={doc}
+          version={version}
+          displayName={viewer.displayName}
+          timeSpentSeconds={timeSpentSeconds()}
+          stepsCount={steps.length}
+          totalQuestionsPassed={passedChecks}
+        />
+      ) : null}
+    </>
+  );
+}
+
+// ─── Footers ─────────────────────────────────────────────────────
+function ReadFooter({
+  currentStepIdx,
+  stepsTotal,
+  currentQuestions,
+  activeQIndex,
+  stepCleared,
+  savedTag,
+  onBack,
+  onSaveExit,
+  onNext,
+}) {
+  const last = currentStepIdx === stepsTotal - 1
+    && (!currentQuestions.length || activeQIndex === currentQuestions.length - 1 || stepCleared);
+  const nextLabel = !stepCleared
+    ? (activeQIndex < currentQuestions.length - 1 ? "Next check" : "Continue")
+    : (last ? "Continue to sign" : "Continue");
+  return (
+    <>
+      {currentStepIdx > 0 ? (
+        <button type="button" className="opd-bt opd-bt--gh" onClick={onBack}>Back</button>
+      ) : null}
+      <button type="button" className="opd-bt opd-bt--gh" onClick={onSaveExit}>
+        Save &amp; exit
+      </button>
+      {stepCleared && savedTag ? (
+        <span className="opd-ufoot-saved opd-ufoot-saved--on" role="status">&#10003; Saved</span>
+      ) : (
+        <span className="opd-ufoot-hint" aria-live="polite">
+          {stepCleared ? "" : "Answer the check to continue"}
+        </span>
+      )}
+      <button
+        type="button"
+        className="opd-bt"
+        disabled={!stepCleared}
+        onClick={onNext}
+      >
+        {nextLabel}
+      </button>
+      <span className="opd-kbd"><i>&#8629;</i></span>
+    </>
+  );
+}
+
+function SignFooter({
+  requirementId,
+  onBack,
+  onSignedInternal,
+  displayName,
+  doc,
+  version,
+  stepsCount,
+  totalQuestionsPassed,
+  timeSpentSeconds,
+  onSaveExit,
+}) {
+  const [typed, setTyped] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Poll the input in SignPane. We can't easily share state with
+  // SignBlock without a lift, so the footer subscribes to the input.
+  useEffect(() => {
+    const el = document.querySelector(".opd-sgi");
+    if (!el) return;
+    const onInput = () => setTyped(el.value);
+    el.addEventListener("input", onInput);
+    setTyped(el.value || "");
+    return () => el.removeEventListener("input", onInput);
+  }, []);
+
+  const normExpected = String(displayName || "").trim().replace(/\s+/g, " ").toLowerCase();
+  const normTyped = String(typed || "").trim().replace(/\s+/g, " ").toLowerCase();
+  const matches = normExpected.length > 0 && normTyped === normExpected;
+
+  const attestationIdRef = useRef(newAttestationId());
+  const attestationText = useMemo(() => (
+    `I, ${displayName}, have read and understood ${doc?.title || doc?.id || "this document"}, version ${version || "?"}, and I will hold this standard at my sites.`
+  ), [displayName, doc?.title, doc?.id, version]);
+
+  async function sign() {
+    if (!matches || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/academy/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({
+          requirementId,
+          attestationId: attestationIdRef.current,
+          typedName: typed,
+          attestationText,
+          timeSpentSeconds: timeSpentSeconds(),
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) {
+        setSubmitting(false);
+        return;
+      }
+      onSignedInternal(body.attestation);
+    } catch {
+      setSubmitting(false);
+    }
+  }
+
+  const hint = matches
+    ? "Ready to sign."
+    : (typed.trim().length >= 3
+        ? `Type it exactly as it appears on your account: ${displayName}`
+        : "Your typed name must match your account.");
+
+  return (
+    <>
+      <button type="button" className="opd-bt opd-bt--gh" onClick={onBack}>Back</button>
+      <button type="button" className="opd-bt opd-bt--gh" onClick={onSaveExit}>Save &amp; exit</button>
+      <span className="opd-ufoot-hint">{hint}</span>
+      <button
+        type="button"
+        id="opd-sign-btn"
+        className="opd-bt"
+        disabled={!matches || submitting}
+        onClick={sign}
+      >
+        {submitting ? "Signing" : "Sign & record"}
+      </button>
+    </>
+  );
+}
+
+// ─── Rail item components ─────────────────────────────────────────
+function RailItem({ step, index, currentStepIdx, sectionsSeen, justDoneIdx, goToStep }) {
+  const done = sectionsSeen.has(step.key) && index < currentStepIdx;
+  const now = index === currentStepIdx;
+  const locked = index > currentStepIdx && !sectionsSeen.has(step.key);
   const clickable = !locked;
-  const cls = "opd-focus-rail-step"
-    + (done ? " opd-focus-rail-step--done" : "")
-    + (now ? " opd-focus-rail-step--now" : "")
-    + (locked ? " opd-focus-rail-step--locked" : "");
-  // Merged step: rail title stays the first anchor, but a +N chip
-  // signals the additional merged sections. Spec 18.5: never invent a
-  // synthesised title, never show section-number ranges in operator
-  // copy - the +N chip is the honest signal. Sub-headings render as
-  // inline sub-headings inside the step body when the step opens.
+  const cls = "opd-sr"
+    + (done ? " opd-sr--dn" : "")
+    + (now ? " opd-sr--nw" : "")
+    + (locked ? " opd-sr--lk" : "")
+    + (index === justDoneIdx ? " opd-sr--tick" : "");
   const extraSections = Math.max(0, (step.anchors?.length || 1) - 1);
   return (
     <li
-      key={step.key + i}
       className={cls}
       aria-current={now ? "step" : undefined}
     >
       <button
         type="button"
+        className="opd-sr-btn"
         disabled={!clickable}
-        onClick={() => { if (clickable) { goToStep(i); if (closeMobile) closeMobile(); } }}
-        className="opd-focus-rail-step-btn"
+        onClick={() => { if (clickable) goToStep(index); }}
       >
-        <span className="opd-focus-rail-step-num" aria-hidden="true">
-          {done ? "✓" : i + 1}
-        </span>
-        <span className="opd-focus-rail-step-tx">
-          <b>
+        <span className="opd-sr-b" aria-hidden="true">{done ? "✓" : index + 1}</span>
+        <span className="opd-sr-tx">
+          <span className="opd-sr-t">
             {step.anchor}
             {extraSections > 0 ? (
               <span
-                className="opd-focus-rail-step-plus"
+                className="opd-sr-plus"
                 aria-label={`plus ${extraSections} more section${extraSections === 1 ? "" : "s"}`}
               >
                 +{extraSections}
               </span>
             ) : null}
-          </b>
-          <span className="opd-focus-rail-step-meta">
-            <span>{step.estMinutes} min</span>
+          </span>
+          <span className="opd-sr-m">
+            {step.estMinutes} min
             {step.questionIds?.length ? (
-              <span className="opd-focus-rail-step-chk">
-                &middot; {step.questionIds.length} check{step.questionIds.length === 1 ? "" : "s"}
-              </span>
+              <> &middot; <em>{step.questionIds.length} check{step.questionIds.length === 1 ? "" : "s"}</em></>
             ) : null}
           </span>
         </span>
@@ -949,24 +1047,21 @@ function renderRailItem(step, i, currentStepIdx, sectionsSeen, goToStep, closeMo
   );
 }
 
-function renderSignRailItem(stepsCount, isSignStep, closeMobile, goToStep) {
+function SignRailItem({ stepsCount, isSignStep, goToStep }) {
   const now = isSignStep;
+  const cls = "opd-sr" + (now ? " opd-sr--nw" : " opd-sr--lk");
   return (
-    <li
-      key="sign"
-      className={"opd-focus-rail-step opd-focus-rail-step--sign" + (now ? " opd-focus-rail-step--now" : " opd-focus-rail-step--locked")}
-      aria-current={now ? "step" : undefined}
-    >
+    <li className={cls} aria-current={now ? "step" : undefined}>
       <button
         type="button"
+        className="opd-sr-btn"
         disabled={!now}
-        onClick={() => { if (now) { goToStep(stepsCount); if (closeMobile) closeMobile(); } }}
-        className="opd-focus-rail-step-btn"
+        onClick={() => { if (now) goToStep(stepsCount); }}
       >
-        <span className="opd-focus-rail-step-num" aria-hidden="true">&#9998;</span>
-        <span className="opd-focus-rail-step-tx">
-          <b>Sign</b>
-          <span className="opd-focus-rail-step-meta"><span>1 min</span></span>
+        <span className="opd-sr-b" aria-hidden="true">&#9998;</span>
+        <span className="opd-sr-tx">
+          <span className="opd-sr-t">Sign</span>
+          <span className="opd-sr-m">1 min</span>
         </span>
       </button>
     </li>

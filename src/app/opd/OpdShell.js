@@ -60,7 +60,7 @@ export default function OpdShell({ viewerEmail }) {
   const monthDay = today.toLocaleString("en-US", { month: "short", day: "numeric" }).toUpperCase();
 
   return (
-    <div className="opd-frame">
+    <div className="opd-frame opd-app">
       <div className="opd-shell">
 
         {/* ── Command bar (the lid) ────────────────────────────── */}

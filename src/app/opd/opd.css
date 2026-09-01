@@ -2416,478 +2416,818 @@
   .opd-crumb { font-size: 11.5px; }
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   Stepper (module-stepper PR, spec 18.5 amended)
-   -----------------------------------------------
-   One step on screen at a time. Fixed rail on the left listing
-   every section + a final Sign step. Module header at the top with
-   doc chip, title, minutes-remaining as the largest number, and a
-   progress bar. The page NEVER grows as the person progresses.
-   Below 900px the rail collapses to a single line + toggle.
-   ───────────────────────────────────────────────────────────────── */
 
-/* Module header sits above the grid, spans the full focus width. */
-.opd-focus-mhead {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+/* ═════════════════════════════════════════════════════════════════
+   Module composition (Academy Focus / stepper)
+   Built to OPD_Module_Final.html visual contract (spec 18.4 amended).
+   One card, hairlines instead of gaps. Capped reading pane. Motion
+   as a system. Scale layer matching KPI's .kpi-app and SC's .scv2.
+   ═════════════════════════════════════════════════════════════════ */
+
+/* ── Scale layer + motion tokens ─────────────────────────────────
+   --kf-scale is set ONCE on the module root. Every type + spacing
+   token is redeclared HERE as calc(Npx * var(--kf-scale)) so each
+   calc resolves against this module's own scale rather than :root's
+   (tokens.css:291-296 explains why :root can't hold module scales).
+   OPD is a READING surface: --kf-scale is 1 by design, not KPI's
+   0.9, which is a data-density surface. */
+.opd-app {
+  --kf-scale: 1;
+
+  /* Type scale */
+  --opd-t-label: calc(10px * var(--kf-scale));
+  --opd-t-meta:  calc(11px * var(--kf-scale));
+  --opd-t-ui:    calc(12px * var(--kf-scale));
+  --opd-t-ctl:   calc(13px * var(--kf-scale));
+  --opd-t-h3:    calc(14px * var(--kf-scale));
+  --opd-t-read:  calc(15px * var(--kf-scale));
+  --opd-t-hero:  calc(23px * var(--kf-scale));
+  --opd-t-h2:    calc(25px * var(--kf-scale));
+
+  /* Spacing scale */
+  --opd-sp-1:    calc(4px  * var(--kf-scale));
+  --opd-sp-2:    calc(9px  * var(--kf-scale));
+  --opd-sp-3:    calc(15px * var(--kf-scale));
+  --opd-sp-4:    calc(22px * var(--kf-scale));
+  --opd-sp-5:    calc(28px * var(--kf-scale));
+
+  /* Layout */
+  --opd-rail-w:  calc(242px * var(--kf-scale));
+  --opd-measure: calc(640px * var(--kf-scale));
+
+  /* Motion - one curve, three durations. Every transition names its
+     properties; none use `all`. */
+  --opd-ease: cubic-bezier(0.2, 0.9, 0.3, 1);
+  --opd-t-fast: 0.14s;
+  --opd-t-mid:  0.28s;
+  --opd-t-slow: 0.44s;
+
+  /* Local palette used by the module. Mirrors the render. */
+  --opd-n50:  #FAFBFC;
+  --opd-n100: #F5F7FA;
+  --opd-n200: #EEF1F5;
+  --opd-n300: #E5E7EB;
+  --opd-n400: #B8C2CF;
+  --opd-n500: #94A3B8;
+  --opd-n600: #64748B;
+  --opd-n700: #475569;
+  --opd-n800: #334155;
+  --opd-n900: #0A2548;
+
+  --opd-navy:   #153968;
+  --opd-navy50: #EEF3F9;
+
+  --opd-grn:    #16A34A;
+  --opd-grnbg:  #E8F6EE;
+  --opd-grnbd:  #BFE7CD;
+  --opd-grnfg:  #0B7A3E;
+
+  --opd-amb:    #D97706;
+  --opd-ambbg:  #FBF3E3;
+  --opd-ambbd:  #EFD9AC;
+  --opd-ambfg:  #8A5209;
+
+  --opd-gov:   #214E82;
+  --opd-govbg: rgba(33, 78, 130, 0.08);
+  --opd-govbd: rgba(33, 78, 130, 0.22);
+
+  --opd-mod-sh: 0 1px 2px rgba(10, 37, 72, 0.05),
+                0 6px 18px -6px rgba(10, 37, 72, 0.10);
+}
+
+/* Shared focus ring, matching the pattern in KPI (kpi.css:30-105).
+   Suppressed on mouse focus - :focus-visible only. */
+.opd-app :is(button, [role="button"], a, [tabindex="0"]):focus-visible {
+  outline: 2px solid var(--opd-navy);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+.opd-app :is(button, [role="button"], a, [tabindex="0"]):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Reduced motion - collapses every animation and transition to
+   near-zero. Not optional on a compliance surface. */
+@media (prefers-reduced-motion: reduce) {
+  .opd-app *,
+  .opd-app *::before,
+  .opd-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── The one card ─────────────────────────────────────────────── */
+.opd-uni {
+  margin: 13px 0 18px;
+  background: #fff;
+  border: 1px solid var(--opd-n300);
+  border-radius: 12px;
+  box-shadow: var(--opd-mod-sh);
+  overflow: hidden;
+}
+
+/* Header band: chip + title + minutes right, hairline below. */
+.opd-uhead {
+  display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px 22px 12px;
-  background: var(--surface-card, #fff);
-  border: 1px solid var(--surface-border, #e6e6e6);
-  border-radius: 12px 12px 0 0;
-  margin-top: 10px;
+  padding: 16px 22px 15px;
+  border-bottom: 1px solid var(--opd-n200);
 }
-.opd-focus-mhead-title h1 {
-  font-family: var(--font-ui);
-  font-size: 22px;
+.opd-uhead .opd-doc-chip {
+  font-size: var(--opd-t-label);
   font-weight: 700;
-  line-height: 1.15;
+  color: var(--opd-gov);
+  background: var(--opd-govbg);
+  border: 1px solid var(--opd-govbd);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.opd-uhead-title h1 {
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--opd-navy);
   letter-spacing: -0.015em;
   margin: 0;
-  color: var(--text-strong, #111);
+  line-height: 1.2;
 }
-.opd-focus-mhead-sub {
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--text-muted, #666);
+.opd-uhead-sub {
+  font-size: var(--opd-t-ui);
+  color: var(--opd-n600);
   margin-top: 2px;
 }
-.opd-focus-mhead-time {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+.opd-uhead-rt {
+  margin-left: auto;
+  text-align: right;
   line-height: 1;
 }
-.opd-focus-mhead-time b {
+.opd-uhead-rt b {
+  display: block;
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
-  font-size: 30px;
+  font-size: var(--opd-t-hero);
+  font-weight: 800;
+  color: var(--opd-navy);
+  line-height: 1;
+}
+.opd-uhead-rt s {
+  font-size: var(--opd-t-label);
+  color: var(--opd-n600);
   font-weight: 700;
-  color: var(--text-strong, #111);
+  letter-spacing: 0.05em;
+  text-decoration: none;
 }
-.opd-focus-mhead-time span {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted, #666);
-  margin-top: 4px;
+
+/* Progress rule - edge to edge, 3px, belongs to the module. */
+.opd-ubar {
+  height: 3px;
+  background: var(--opd-n200);
 }
-.opd-focus-mbar {
-  height: 4px;
-  background: var(--surface-inset, #eee);
-  border-radius: 0;
-  overflow: hidden;
-  border-left: 1px solid var(--surface-border, #e6e6e6);
-  border-right: 1px solid var(--surface-border, #e6e6e6);
-}
-.opd-focus-mbar > i {
+.opd-ubar > i {
   display: block;
   height: 100%;
-  background: var(--status-live, #2c8b62);
-  transition: width 260ms ease;
+  background: linear-gradient(90deg, #3ECF8E, var(--opd-grn));
+  transition: width var(--opd-t-slow) var(--opd-ease);
 }
 
-/* Mobile rail bar - hidden on desktop, shown below 900px. */
-.opd-focus-mrail { display: none; }
-
-/* Stepper grid: rail left, step card right.
-   align-items: start is load-bearing - without it the grid resolves
-   to stretch, matches the rail column's height to the card column's
-   height, and the rail can never scroll past its own bottom
-   (position:sticky needs range to work). */
-.opd-focus-grid--stepper {
-  grid-template-columns: 260px minmax(0, 1fr);
-  align-items: start;
-  margin-top: -1px; /* seal to the mhead + mbar */
+/* Body: two-col grid, rail hairline-separated from content. */
+.opd-ubody {
+  display: grid;
+  grid-template-columns: var(--opd-rail-w) minmax(0, 1fr);
 }
 
-/* ── Rail (desktop) ───────────────────────────────────────── */
-/* Sticky within the grid. Requires the parent grid to be
-   align-items:start (see .opd-focus-grid--stepper) - otherwise the
-   rail's column stretches to card height and sticky has no range. */
-.opd-focus-rail--stepper {
-  position: sticky;
-  top: 76px;
-  padding: 14px 12px 14px;
-  background: var(--surface-card, #fff);
-  border: 1px solid var(--surface-border, #e6e6e6);
-  border-radius: 12px;
-  max-height: calc(100vh - 96px);
-  overflow-y: auto;
+/* Rail (left, faintly tinted, right hairline) */
+.opd-urail {
+  border-right: 1px solid var(--opd-n200);
+  background: linear-gradient(180deg, #FCFDFE, #F8FAFC);
+  padding: 15px 0 16px;
 }
-.opd-focus-rail-header {
-  padding: 0 6px 8px;
-  border-bottom: 1px dashed var(--surface-border, #e6e6e6);
-  margin-bottom: 10px;
+.opd-urail-head {
+  padding: 0 18px 11px;
+  border-bottom: 1px solid var(--opd-n200);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: baseline;
 }
-.opd-focus-rail-steps {
+.opd-urail-head-k {
+  font-size: var(--opd-t-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--opd-n600);
+}
+.opd-urail-head-count {
+  margin-left: auto;
+  font-style: normal;
+  font-size: var(--opd-t-label);
+  color: var(--opd-n500);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.opd-urail-list {
   list-style: none;
   padding: 0;
   margin: 0;
+}
+.opd-sr {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.opd-focus-rail-step {
-  margin: 0;
-}
-.opd-focus-rail-step-btn {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 22px 1fr;
-  gap: 10px;
+  gap: 11px;
   align-items: flex-start;
-  text-align: left;
-  padding: 8px 8px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
+  padding: 9px 18px;
+  position: relative;
   cursor: pointer;
-  color: var(--text-strong, #111);
-  font: inherit;
-  transition: background-color 120ms ease;
+  transition: background-color var(--opd-t-fast) var(--opd-ease);
 }
-.opd-focus-rail-step-btn:hover:not(:disabled) {
-  background: var(--surface-inset, #f4f4f4);
+.opd-sr:hover { background: #F1F5FA; }
+.opd-sr--lk { cursor: default; opacity: 0.55; }
+.opd-sr--lk:hover { background: none; }
+.opd-sr-btn {
+  all: unset;
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  width: 100%;
+  cursor: inherit;
+  outline: none;
 }
-.opd-focus-rail-step-btn:disabled {
-  cursor: default;
-  color: var(--text-muted, #999);
-}
-.opd-focus-rail-step-num {
-  display: inline-flex;
+.opd-sr-b {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--surface-inset, #eee);
-  color: var(--text-muted, #666);
-  font-family: var(--font-ui);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 700;
-  margin-top: 2px;
+  border: 1.5px solid var(--opd-n300);
+  color: var(--opd-n500);
+  background: #fff;
+  margin-top: 1px;
+  transition:
+    background-color var(--opd-t-mid) var(--opd-ease),
+    border-color    var(--opd-t-mid) var(--opd-ease),
+    color           var(--opd-t-mid) var(--opd-ease),
+    transform       var(--opd-t-mid) var(--opd-ease);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-ui);
 }
-.opd-focus-rail-step--now .opd-focus-rail-step-num {
-  background: var(--status-live, #2c8b62);
-  color: #fff;
+.opd-sr--dn .opd-sr-b {
+  background: var(--opd-grnbg);
+  border-color: var(--opd-grn);
+  color: var(--opd-grnfg);
 }
-.opd-focus-rail-step--done .opd-focus-rail-step-num {
-  background: var(--surface-inset-strong, #d8d8d8);
-  color: var(--text-strong, #111);
+.opd-sr--nw {
+  background: var(--opd-navy50);
 }
-.opd-focus-rail-step-tx {
+.opd-sr--nw::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--opd-navy);
+}
+.opd-sr--nw .opd-sr-b {
+  border-color: var(--opd-navy);
+  color: var(--opd-navy);
+}
+.opd-sr--tick .opd-sr-b {
+  animation: opd-tick 0.5s cubic-bezier(0.2, 1.5, 0.3, 1);
+}
+@keyframes opd-tick {
+  0%   { transform: scale(0.6); }
+  60%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.opd-sr-tx {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.opd-focus-rail-step-tx b {
-  font-size: 13px;
+.opd-sr-t {
+  font-size: var(--opd-t-ui);
+  font-weight: 650;
+  color: var(--opd-n700);
+  line-height: 1.35;
+}
+.opd-sr--nw .opd-sr-t {
+  color: var(--opd-navy);
+  font-weight: 750;
+}
+.opd-sr-m {
+  font-size: 10.5px;
+  color: var(--opd-n500);
   font-weight: 600;
-  line-height: 1.25;
-  color: inherit;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.opd-focus-rail-step--locked .opd-focus-rail-step-tx b {
-  color: var(--text-muted, #999);
-  font-weight: 500;
-}
-.opd-focus-rail-step-meta {
-  display: flex;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-muted, #999);
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
-.opd-focus-rail-step-chk { color: var(--text-muted, #999); }
-.opd-focus-rail-step-plus {
+.opd-sr-m em {
+  font-style: normal;
+  color: var(--opd-ambfg);
+}
+.opd-sr--dn .opd-sr-m em { color: var(--opd-grnfg); }
+.opd-sr-plus {
   display: inline-block;
   margin-left: 6px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--surface-inset, #eee);
-  color: var(--text-muted, #666);
+  background: var(--opd-n200);
+  color: var(--opd-n600);
   font-variant-numeric: tabular-nums;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   vertical-align: middle;
 }
-.opd-focus-rail-step--sign .opd-focus-rail-step-num {
-  background: var(--surface-inset, #eee);
-  color: var(--text-muted, #666);
-}
-.opd-focus-rail-step--sign.opd-focus-rail-step--now .opd-focus-rail-step-num {
-  background: var(--status-live, #2c8b62);
-  color: #fff;
-}
-.opd-focus-rail-footer {
-  margin-top: 12px;
-  padding: 10px 8px 4px;
-  font-size: 11px;
-  color: var(--text-muted, #999);
-  border-top: 1px dashed var(--surface-border, #e6e6e6);
-  line-height: 1.35;
+.opd-urail-foot {
+  margin: 11px 18px 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--opd-n200);
+  font-size: 10.5px;
+  color: var(--opd-n600);
+  line-height: 1.55;
 }
 
-/* ── Step card (right column) ─────────────────────────────── */
-/* Card narrowed to the reading measure (~700px total) and centred
-   in its column - a 952px card with 600px of left-aligned prose reads
-   as a layout error. Long measures also hurt readability on a twelve-
-   minute doc. Do NOT stretch the prose to fill; narrow the card. */
-.opd-focus-step {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 28px 40px 26px;
-  background: var(--surface-card, #fff);
-  border: 1px solid var(--surface-border, #e6e6e6);
-  border-radius: 12px;
-  min-height: 60vh;
+/* Content column - flex so the footer meets short content. */
+.opd-ucont {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  min-width: 0;
 }
-.opd-focus-step-head {
-  border-bottom: 1px dashed var(--surface-border, #e6e6e6);
-  padding-bottom: 12px;
+
+/* Scroll container wraps the pane; hosts the fade signal. */
+.opd-usc {
+  position: relative;
+  flex: 1;
 }
-.opd-focus-step-kk {
-  display: block;
-  font-size: 11px;
-  letter-spacing: 0.06em;
+.opd-usc-fade {
+  position: absolute;
+  left: 0;
+  right: 11px;
+  bottom: 0;
+  height: 56px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 80%);
+  opacity: 0;
+  transition: opacity var(--opd-t-mid) var(--opd-ease);
+}
+.opd-usc--more .opd-usc-fade { opacity: 1; }
+
+/* Capped reading pane. Short content sits at natural height with no
+   scrollbar. Long content caps at the smaller of 620px or (viewport -
+   360px), then scrolls with a fade at the edge as the only signal.
+   Below 900px the cap is removed entirely (nested scroll on a phone
+   is worse than page scroll). */
+.opd-upane {
+  max-height: min(620px, calc(100vh - 360px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 26px 0 30px;
+  scrollbar-width: thin;
+  scrollbar-color: #CFD8E3 transparent;
+}
+.opd-upane::-webkit-scrollbar { width: 10px; }
+.opd-upane::-webkit-scrollbar-thumb {
+  background: #D5DDE7;
+  border-radius: 5px;
+  border: 3px solid #fff;
+}
+.opd-upane::-webkit-scrollbar-track { background: transparent; }
+
+/* Centred reading column - the 640px measure sits centred so a
+   narrow measure in a wide box reads as a deliberate column rather
+   than a layout error. Don't stretch the prose. */
+.opd-ucw {
+  max-width: var(--opd-measure);
+  margin: 0 auto;
+  padding: 0 var(--opd-sp-5);
+  animation: opd-stepin var(--opd-t-slow) var(--opd-ease);
+}
+@keyframes opd-stepin {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.opd-ucw-sk {
+  font-size: var(--opd-t-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--opd-n500);
   text-transform: uppercase;
-  color: var(--text-muted, #666);
-  margin-bottom: 6px;
 }
-.opd-focus-step-h2 {
+.opd-ucw h2 {
   font-family: var(--font-ui);
-  font-size: 26px;
-  font-weight: 750;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  margin: 0 0 4px;
-  color: var(--text-strong, #111);
+  font-size: var(--opd-t-h2);
+  font-weight: 800;
+  color: var(--opd-navy);
+  margin-top: 7px;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
   outline: none;
 }
-.opd-focus-step-h2:focus-visible {
-  box-shadow: 0 0 0 2px var(--focus-ring, rgba(44, 139, 98, 0.35));
-  border-radius: 4px;
+.opd-ucw-est {
+  font-size: var(--opd-t-ui);
+  color: var(--opd-n600);
+  margin-top: 6px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--opd-n200);
 }
-.opd-focus-step-est {
-  font-size: 12px;
-  color: var(--text-muted, #666);
-  margin: 0;
+.opd-ucw p {
+  font-size: var(--opd-t-read);
+  line-height: 1.72;
+  margin-top: 15px;
+  color: var(--opd-n700);
 }
-.opd-focus-step-body {
-  font-size: 15px;
-  line-height: 1.7;
-  color: var(--text-strong, #111);
+.opd-ucw p b {
+  color: var(--opd-navy);
+  font-weight: 650;
 }
-.opd-focus-step-check {
-  margin-top: 4px;
+.opd-ucw h3 {
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-h3);
+  font-weight: 750;
+  color: var(--opd-navy);
+  margin-top: 22px;
 }
-.opd-focus-step-past-checks {
+.opd-ucw ul, .opd-ucw ol {
+  margin: 8px 0 12px 22px;
+  font-size: var(--opd-t-read);
+  line-height: 1.72;
+}
+.opd-ucw li {
+  margin-bottom: 6px;
+  color: var(--opd-n700);
+}
+.opd-ucw .anchor,
+.opd-ucw .anch,
+.opd-ucw blockquote {
+  border-left: 3px solid var(--opd-navy);
+  background: #F4F7FB;
+  border-radius: 0 8px 8px 0;
+  padding: 13px 16px;
+  margin-top: 17px;
+  font-size: 14px;
+  line-height: 1.62;
+  color: var(--opd-n800);
+}
+.opd-ucw .anchor b,
+.opd-ucw .anch b,
+.opd-ucw blockquote b { color: var(--opd-navy); }
+.opd-anchor-flash {
+  animation: opd-flash 1.7s ease;
+}
+@keyframes opd-flash {
+  0%, 100% { background: #F4F7FB; }
+  28%, 62% { background: #FFF4DA; }
+}
+.opd-done-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  font-size: var(--opd-t-meta);
+  font-weight: 700;
+  color: var(--opd-grnfg);
+  background: var(--opd-grnbg);
+  border: 1px solid var(--opd-grnbd);
+  border-radius: 11px;
+  padding: 4px 11px;
+  animation: opd-rise var(--opd-t-mid) var(--opd-ease);
+}
+
+/* ── Check card - lives inside the pane at the section boundary ── */
+.opd-chk {
+  border: 1.5px solid var(--opd-navy);
+  border-radius: 11px;
+  padding: 17px 18px;
+  margin-top: 24px;
+  background: #FBFCFE;
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity   var(--opd-t-slow) var(--opd-ease),
+    transform var(--opd-t-slow) var(--opd-ease);
+}
+.opd-chk--seen {
+  opacity: 1;
+  transform: none;
+}
+.opd-chk-k {
+  font-size: var(--opd-t-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--opd-navy);
+  text-transform: uppercase;
+}
+.opd-chk h4 {
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  font-weight: 750;
+  color: var(--opd-navy);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.opd-opt {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  opacity: 0.65;
+  gap: 11px;
+  align-items: flex-start;
+  border: 1px solid var(--opd-n300);
+  border-radius: 9px;
+  padding: 12px 14px;
+  margin-top: 9px;
+  font-size: var(--opd-t-ctl);
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color     var(--opd-t-fast) var(--opd-ease),
+    box-shadow       var(--opd-t-fast) var(--opd-ease),
+    background-color var(--opd-t-fast) var(--opd-ease),
+    opacity          var(--opd-t-mid)  var(--opd-ease);
+  width: 100%;
+  text-align: left;
+  color: var(--opd-n700);
+  font-family: var(--font-ui);
 }
-.opd-focus-step-foot {
+.opd-opt:hover:not(:disabled) {
+  border-color: #B9C8DA;
+  box-shadow: var(--opd-mod-sh);
+}
+.opd-opt-lt {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--surface-border, #e6e6e6);
-  margin-top: auto;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1.5px solid var(--opd-n300);
+  color: var(--opd-n600);
+  transition:
+    border-color     var(--opd-t-fast) var(--opd-ease),
+    color            var(--opd-t-fast) var(--opd-ease),
+    background-color var(--opd-t-fast) var(--opd-ease);
+  font-family: var(--font-ui);
+}
+.opd-opt--miss { border-color: var(--opd-ambbd); background: var(--opd-ambbg); }
+.opd-opt--miss .opd-opt-lt { border-color: var(--opd-amb); color: var(--opd-ambfg); }
+.opd-opt--rt { border-color: var(--opd-grn); background: var(--opd-grnbg); }
+.opd-opt--rt .opd-opt-lt { border-color: var(--opd-grn); color: var(--opd-grnfg); }
+.opd-opt--dim { opacity: 0.4; }
+.opd-opt--lock { cursor: default; }
+.opd-opt--lock:hover { box-shadow: none; border-color: var(--opd-n300); }
+.opd-opt--rt.opd-opt--lock:hover { border-color: var(--opd-grn); }
+
+/* Feedback panels - amber (wrong, teaches) / green (right, brief). */
+.opd-fb {
+  border-radius: 9px;
+  padding: 13px 15px;
+  margin-top: 11px;
+  font-size: var(--opd-t-ctl);
+  line-height: 1.65;
+  animation: opd-rise var(--opd-t-mid) var(--opd-ease);
+}
+@keyframes opd-rise {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: none; }
+}
+.opd-fb--a { background: var(--opd-ambbg); border: 1px solid var(--opd-ambbd); color: #6E4207; }
+.opd-fb--g { background: var(--opd-grnbg); border: 1px solid var(--opd-grnbd); color: #0A5E31; }
+.opd-fb-vd { font-weight: 750; display: block; margin-bottom: 4px; }
+.opd-fb-bk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 11px;
+  font-size: var(--opd-t-ui);
+  font-weight: 700;
+  color: #6E4207;
+  background: #fff;
+  border: 1px solid var(--opd-ambbd);
+  border-radius: 8px;
+  padding: 7px 13px;
+  cursor: pointer;
+  transition:
+    background-color var(--opd-t-fast) var(--opd-ease),
+    border-color     var(--opd-t-fast) var(--opd-ease);
+}
+.opd-fb-bk:hover { background: #FFFBF0; }
+
+/* ── Footer ─────────────────────────────────────────────────── */
+.opd-ufoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 28px;
+  border-top: 1px solid var(--opd-n200);
+  background: #FBFCFD;
   flex-wrap: wrap;
 }
-.opd-focus-step-back,
-.opd-focus-step-exit {
-  padding: 10px 14px;
-  min-height: 40px;
-  background: transparent;
-  border: 1px solid var(--surface-border, #e6e6e6);
-  border-radius: 6px;
-  color: var(--text-strong, #111);
-  font: inherit;
+.opd-bt {
+  font-family: var(--font-ui);
+  font-size: var(--opd-t-ctl);
+  font-weight: 700;
+  color: #fff;
+  background: var(--opd-navy);
+  border: none;
+  border-radius: 9px;
+  padding: 11px 20px;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition:
+    background-color var(--opd-t-fast) var(--opd-ease),
+    transform        var(--opd-t-fast) var(--opd-ease);
 }
-.opd-focus-step-back:hover,
-.opd-focus-step-exit:hover {
-  background: var(--surface-inset, #f4f4f4);
+.opd-bt:hover:not(:disabled) { background: var(--opd-n900); }
+.opd-bt:active:not(:disabled) { transform: translateY(1px); }
+.opd-bt:disabled { background: var(--opd-n400); cursor: not-allowed; }
+.opd-bt--gh {
+  background: #fff;
+  color: var(--opd-n700);
+  border: 1px solid var(--opd-n300);
+  font-weight: 650;
 }
-.opd-focus-step-hint {
-  flex: 1 1 auto;
-  font-size: 12px;
-  color: var(--text-muted, #999);
-  text-align: right;
+.opd-bt--gh:hover:not(:disabled) { background: var(--opd-n50); color: var(--opd-navy); }
+.opd-ufoot-hint {
+  font-size: var(--opd-t-ui);
+  color: var(--opd-n600);
+  margin-left: auto;
 }
-.opd-focus-step-next {
-  padding: 10px 18px;
-  min-height: 40px;
-  background: var(--action-primary-bg, #111);
-  border: 1px solid var(--action-primary-bg, #111);
-  border-radius: 6px;
-  color: var(--action-primary-fg, #fff);
-  font: inherit;
+.opd-ufoot-saved {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--opd-grnfg);
+  opacity: 0;
+  transition: opacity var(--opd-t-mid) var(--opd-ease);
+  margin-left: auto;
+}
+.opd-ufoot-saved--on { opacity: 1; }
+.opd-kbd {
+  font-size: var(--opd-t-label);
+  color: var(--opd-n500);
   font-weight: 600;
-  cursor: pointer;
-  transition: background-color 120ms ease, opacity 120ms ease;
+  margin-left: 9px;
 }
-.opd-focus-step-next:hover:not(:disabled) {
-  background: var(--action-primary-bg-hover, #000);
-}
-.opd-focus-step-next--disabled,
-.opd-focus-step-next:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Anchor flash target within the current step. */
-.opd-step-anchor-flash {
-  animation: opd-step-flash 1.6s ease;
-}
-@keyframes opd-step-flash {
-  0%   { background: transparent; }
-  20%  { background: var(--status-amber-bg, rgba(219, 154, 4, 0.18)); }
-  100% { background: transparent; }
+.opd-kbd i {
+  font-style: normal;
+  border: 1px solid var(--opd-n300);
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: #fff;
+  font-size: 9.5px;
+  font-family: var(--font-mono);
 }
 
-/* Sign step recap tiles. */
-.opd-step-recap {
+/* ── Sign step (recap + attestation) ────────────────────────── */
+.opd-recap {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 9px;
+  margin-top: 17px;
 }
-.opd-step-recap-tile {
-  border: 1px solid var(--surface-border, #e6e6e6);
-  border-radius: 8px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--surface-inset, #fafafa);
+.opd-rc {
+  background: #FBFCFD;
+  border: 1px solid var(--opd-n200);
+  border-radius: 9px;
+  padding: 12px 10px;
+  text-align: center;
 }
-.opd-step-recap-tile b {
+.opd-rc b {
+  display: block;
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--text-strong, #111);
-  line-height: 1;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--opd-navy);
 }
-.opd-step-recap-tile span {
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--text-muted, #666);
+.opd-rc s {
+  font-size: var(--opd-t-label);
+  color: var(--opd-n600);
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.opd-att {
+  font-size: 15.5px;
+  line-height: 1.8;
+  color: var(--opd-n800);
+  font-family: Georgia, "Times New Roman", serif;
+  margin-top: 16px;
+}
+.opd-att b {
+  color: var(--opd-navy);
+  font-family: var(--font-ui);
+  font-weight: 700;
+}
+.opd-sgr {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.opd-sgi {
+  flex: 1;
+  border: 1.5px solid var(--opd-n300);
+  border-radius: 9px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  outline: none;
+  color: var(--opd-n800);
+  transition:
+    border-color var(--opd-t-fast) var(--opd-ease),
+    box-shadow   var(--opd-t-fast) var(--opd-ease);
+}
+.opd-sgi:focus {
+  border-color: var(--opd-navy);
+  box-shadow: 0 0 0 3px var(--opd-navy50);
+}
+.opd-earn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--opd-govbg);
+  border: 1px solid var(--opd-govbd);
+}
+.opd-earn-g {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--opd-govbd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.opd-earn b {
+  display: block;
+  font-size: 12.5px;
+  color: var(--opd-gov);
+  font-weight: 750;
+}
+.opd-earn s {
+  font-size: var(--opd-t-meta);
+  color: var(--opd-n600);
+  text-decoration: none;
 }
 
-/* ── Mobile rail (< 900px) ───────────────────────────────── */
+/* ── Below 900px: single column, cap removed ────────────────── */
 @media (max-width: 900px) {
-  .opd-focus-mhead {
-    grid-template-columns: 1fr auto;
-    padding: 14px 16px 10px;
-    gap: 10px;
-  }
-  .opd-focus-mhead .opd-doc-chip {
-    grid-column: 1 / -1;
-    justify-self: flex-start;
-  }
-  .opd-focus-mhead-title h1 { font-size: 19px; }
-  .opd-focus-mhead-time b { font-size: 24px; }
-  .opd-focus-grid--stepper {
+  .opd-ubody {
     grid-template-columns: 1fr;
   }
-  .opd-focus-rail--stepper {
-    display: none;
+  .opd-urail {
+    border-right: none;
+    border-bottom: 1px solid var(--opd-n200);
   }
-  .opd-focus-mrail {
-    display: block;
-    background: var(--surface-card, #fff);
-    border-left: 1px solid var(--surface-border, #e6e6e6);
-    border-right: 1px solid var(--surface-border, #e6e6e6);
-    padding: 10px 14px;
+  .opd-upane {
+    max-height: none;
+    overflow: visible;
+    padding: 22px 0 26px;
   }
-  .opd-focus-mrail-row {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 10px;
-    align-items: center;
+  .opd-usc-fade { display: none; }
+  .opd-ucw {
+    padding: 0 var(--opd-sp-3);
   }
-  .opd-focus-mrail-label {
-    font-size: 12px;
-    color: var(--text-muted, #666);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+  .opd-uni {
+    margin: 12px 0 14px;
   }
-  .opd-focus-mrail-bar {
-    display: block;
-    height: 4px;
-    background: var(--surface-inset, #eee);
-    border-radius: 2px;
-    overflow: hidden;
-    min-width: 60px;
+  .opd-uhead {
+    padding: 14px 16px 12px;
+    flex-wrap: wrap;
   }
-  .opd-focus-mrail-bar > i {
-    display: block;
-    height: 100%;
-    background: var(--status-live, #2c8b62);
-    transition: width 260ms ease;
+  .opd-uhead-rt {
+    margin-left: auto;
   }
-  .opd-focus-mrail-toggle {
-    background: transparent;
-    border: 1px solid var(--surface-border, #e6e6e6);
-    border-radius: 4px;
-    padding: 5px 8px;
-    font-size: 11.5px;
-    font-weight: 600;
-    color: var(--text-strong, #111);
-    cursor: pointer;
-    min-height: 32px;
+  .opd-ufoot {
+    padding: 13px 16px;
   }
-  .opd-focus-mrail-list {
-    list-style: none;
-    padding: 10px 0 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    border-top: 1px dashed var(--surface-border, #e6e6e6);
-    margin-top: 10px;
-  }
-  .opd-focus-step {
-    max-width: none;
-    margin: 0;
-    border-radius: 12px;
-    padding: 18px 18px 20px;
-  }
-  .opd-focus-step-h2 { font-size: 22px; }
-  /* Body kept at 15/1.7 on mobile too - it is a reading surface,
-     not UI chrome. Twelve minutes of prose at 13.5 is too small. */
-  .opd-focus-step-body { font-size: 15px; line-height: 1.7; }
-  .opd-step-recap {
+  .opd-recap {
     grid-template-columns: 1fr 1fr;
   }
-  .opd-focus-step-foot {
-    gap: 8px;
-  }
-  .opd-focus-step-hint {
+  .opd-ufoot-hint {
     order: 3;
     flex-basis: 100%;
+    margin-left: 0;
     text-align: left;
   }
-  .opd-focus-step-next {
-    flex: 1;
+  .opd-bt {
+    padding: 12px 18px;
+    min-height: 44px;
   }
 }
 @media (max-width: 430px) {
-  .opd-focus-mhead-title h1 { font-size: 17px; }
-  .opd-focus-mhead-time b { font-size: 22px; }
-  .opd-focus-step-h2 { font-size: 20px; }
+  .opd-uhead-title h1 { font-size: 16px; }
+  .opd-uhead-rt b { font-size: 20px; }
+  .opd-ucw h2 { font-size: calc(22px * var(--kf-scale)); }
 }
-
