@@ -18,6 +18,18 @@
 //   are the "Also tracked" band, deliberately outside the measured
 //   figure. Permanent assertion.
 //
+// PERMANENT assertion added 2026-08-31 (Blocker 1 - Kevin ruling):
+//   Overview levers[3100].actual MUST equal
+//   /api/kpi/labor?include_salary=1 board.spent_to_date to the cent,
+//   on every scenario. R-28 / §5.9: "Gross margin must equal
+//   finance's, and finance's includes salary." The prior 3100
+//   assertion (Overview vs default labor board) compared hourly-only
+//   to hourly-only and passed 180/180 while labor was actually wrong
+//   by ~$130K on CIN - AZ FYTD. That was a same-variant-both-sides
+//   blind spot. This new assertion pins Overview to the salary-
+//   INCLUSIVE finance total on both sides, which is what R-28 says
+//   the total must be.
+//
 // Purchasing check imports buildPurchasingBoard directly and runs it
 // against the same raw inputs, per Kevin's PR-2 turn rule:
 //   "Compute the client-fold side by importing and running the actual
@@ -39,8 +51,17 @@
 //   node --env-file=.env.local --import ./scripts/probes/_at_alias_hook.mjs \
 //        scripts/probes/_probe_overview_parity.mjs
 //
-// Seeded failure: set SEEDED_FAILURE=1 to bake in one wrong-expected
-// assertion so the FAIL path proves it fires (Kevin's rule).
+// Seeded failures (both compare against a wrong-expected number so
+// the FAIL surface proves the assertion machinery fires):
+//   SEEDED_FAILURE=1                - fires the generic wrong-expected assertion
+//   SEEDED_FAILURE=salary_hourly    - fires the Blocker 1 pre-fix defect:
+//                                     compares Overview 3100 to labor
+//                                     with include_salary=0 (hourly-only)
+//                                     instead of include_salary=1. On
+//                                     CIN - AZ FYTD (production data),
+//                                     this fires with a ~$130K delta,
+//                                     proving the new assertion would
+//                                     have caught the defect.
 
 // ── Env presence (USE/SEE compliance) ─────────────────────────────
 function envPresence() {
@@ -55,7 +76,11 @@ envPresence();
 
 const PORT = process.env.PORT || "3311";
 const BASE = `http://localhost:${PORT}`;
-const SEEDED = process.env.SEEDED_FAILURE === "1";
+const SEEDED_RAW = process.env.SEEDED_FAILURE || "";
+const SEEDED = SEEDED_RAW === "1" || SEEDED_RAW === "salary_hourly";
+// Blocker-1 seeded mode: compare Overview 3100 to labor WITHOUT
+// include_salary=1 (hourly-only), demonstrating the pre-fix defect.
+const SEEDED_SALARY_HOURLY = SEEDED_RAW === "salary_hourly";
 const TOL = 0.02;
 
 const RANGES = [
@@ -113,14 +138,20 @@ async function runScenario(a, r) {
   console.log(`\n  Scenario: ${scenario}`);
   const ovUrl  = `${BASE}/api/kpi/overview?account=${acct(a.key)}&range=${r.rangeParam}`;
   const labUrl = `${BASE}/api/kpi/labor?account=${acct(a.key)}&start=${r.start}&end=${r.end}`;
+  // Salary-INCLUSIVE labor call - the finance-total pool (R-28 / §5.9).
+  // Overview 3100 must equal this on every scenario. Kept as a distinct
+  // request rather than derived from the hourly call so the assertion
+  // is measuring the labor route's own composition, not a probe-side
+  // reimplementation. Blocker 1 (2026-08-31).
+  const labUrlSalary = `${BASE}/api/kpi/labor?account=${acct(a.key)}&start=${r.start}&end=${r.end}&include_salary=1`;
   const purUrl = `${BASE}/api/kpi/purchasing?account=${acct(a.key)}&start=${r.start}&end=${r.end}`;
 
-  let ov, lab, pur, timings;
+  let ov, lab, labSalary, pur, timings;
   try {
-    const [ovR, labR, purR] = await Promise.all([jget(ovUrl), jget(labUrl), jget(purUrl)]);
-    ov = ovR.j; lab = labR.j; pur = purR.j;
-    timings = { overview: ovR.ms, labor: labR.ms, purchasing: purR.ms };
-    console.log(`    fetched: overview=${timings.overview}ms labor=${timings.labor}ms purchasing=${timings.purchasing}ms`);
+    const [ovR, labR, labSR, purR] = await Promise.all([jget(ovUrl), jget(labUrl), jget(labUrlSalary), jget(purUrl)]);
+    ov = ovR.j; lab = labR.j; labSalary = labSR.j; pur = purR.j;
+    timings = { overview: ovR.ms, labor: labR.ms, labor_salary: labSR.ms, purchasing: purR.ms };
+    console.log(`    fetched: overview=${timings.overview}ms labor=${timings.labor}ms labor+salary=${timings.labor_salary}ms purchasing=${timings.purchasing}ms`);
   } catch (e) {
     console.log(`    ABORT fetch: ${e.message.slice(0, 200)}`);
     RESULTS.push({ scenario, name: "fetch", ok: false, error: e.message });
@@ -128,16 +159,50 @@ async function runScenario(a, r) {
   }
   if (ov.error || ov.locked) { console.log(`    ABORT overview:`, JSON.stringify(ov).slice(0, 200)); RESULTS.push({ scenario, name: "overview error", ok: false }); return; }
   if (lab.error || lab.locked) { console.log(`    ABORT labor:`, JSON.stringify(lab).slice(0, 200)); RESULTS.push({ scenario, name: "labor error", ok: false }); return; }
+  if (labSalary.error || labSalary.locked) { console.log(`    ABORT labor+salary:`, JSON.stringify(labSalary).slice(0, 200)); RESULTS.push({ scenario, name: "labor+salary error", ok: false }); return; }
   if (pur.error || pur.locked) { console.log(`    ABORT purchasing:`, JSON.stringify(pur).slice(0, 200)); RESULTS.push({ scenario, name: "purchasing error", ok: false }); return; }
 
-  // ── Labor 3100 parity ──
+  // ── Labor 3100 parity (SALARY-INCLUSIVE - the finance total) ──
+  //
+  // PERMANENT assertion (Blocker 1, 2026-08-31): Overview 3100 MUST
+  // equal /api/kpi/labor?include_salary=1 board.spent_to_date on every
+  // scenario. R-28 / §5.9: the finance-side 3100 total includes salary.
+  // A same-variant comparison (Overview hourly == labor hourly) passes
+  // trivially and misses a nine-point margin error - the blind spot
+  // this assertion permanently closes.
+  //
+  // Prefer the salary-inclusive board when available; if the labor
+  // route did not have salary access for this scenario (e.g., role
+  // gate refused), salary_included will be false and the merge
+  // trivially matches the hourly board. Overview also composes with
+  // salary unconditionally, so both sides converge in that case.
   const ovLaborActual = ov.cards?.find(c => c.key === "cogs")?.mini?.find(m => m.label === "Labor")?.actual ?? null;
-  const laborActual = lab.board?.applies ? lab.board.spent_to_date : null;
-  assert(scenario, "3100 actual (Overview vs labor.board.spent_to_date)", ovLaborActual, laborActual);
+  const ovLaborLever = ov.levers?.find(l => l.line_code === "3100")?.actual ?? null;
+  // Sanity: the levers[3100].actual and the mini card should be
+  // identical (they read the same source).
+  const labSalaryBoard = labSalary?.board?.applies ? labSalary.board : null;
+  const labSalaryActual = labSalaryBoard?.spent_to_date ?? null;
+  // Seeded-failure mode 'salary_hourly' - compare against hourly-only
+  // labor (the pre-fix defect). On CIN - AZ FYTD this fires with a
+  // ~$130K delta, matching Kevin's live measurement.
+  const expectedForNewAssertion = SEEDED_SALARY_HOURLY
+    ? (lab.board?.applies ? lab.board.spent_to_date : null)
+    : labSalaryActual;
+  assert(scenario,
+    "3100 actual (Overview levers[3100].actual == /api/kpi/labor?include_salary=1 board.spent_to_date) [Blocker 1, R-28 / §5.9]",
+    ovLaborLever, expectedForNewAssertion);
+  // Legacy assertion kept (hourly-only comparison). The Overview and
+  // labor default (hourly) diverge now that Overview composes salary
+  // in, so this assertion no longer applies as-is; reframed to compare
+  // Overview's mini (which mirrors the lever) to labor+salary too.
+  // A same-variant assertion is what let the blocker slip in the first
+  // place - see the header blind-spot doc.
+  const laborActual = labSalaryBoard?.spent_to_date ?? null;
+  assert(scenario, "3100 mini (Overview cogs.mini.Labor == /api/kpi/labor?include_salary=1 board.spent_to_date)", ovLaborActual, laborActual);
 
   const ovLaborBudget = ov.levers?.find(l => l.line_code === "3100")?.budget ?? null;
-  const laborBudget = lab.board?.applies ? (lab.board.range_budget ?? null) : null;
-  assert(scenario, "3100 budget (Overview vs labor.board.range_budget)", ovLaborBudget, laborBudget);
+  const laborBudget = labSalaryBoard?.range_budget ?? null;
+  assert(scenario, "3100 budget (Overview vs /api/kpi/labor?include_salary=1 board.range_budget)", ovLaborBudget, laborBudget);
 
   // ── labor board carries budget_to_date_days additive field ──
   if (lab.board?.applies) {
@@ -234,16 +299,29 @@ async function main() {
     }
   }
 
-  if (SEEDED) {
-    console.log("\n=== SEEDED FAILURE ===");
+  if (SEEDED && !SEEDED_SALARY_HOURLY) {
+    console.log("\n=== SEEDED FAILURE (generic) ===");
     assert("SEEDED", "intentional wrong-expected", 1.00, 2.00);
+  }
+  if (SEEDED_SALARY_HOURLY) {
+    console.log("\n=== SEEDED FAILURE (salary_hourly - Blocker 1 pre-fix defect) ===");
+    console.log("  The new permanent assertion at line ~192 was fed hourly-only");
+    console.log("  labor as the expected value. Failures above with sizeable dollar");
+    console.log("  deltas (e.g. CIN - AZ FYTD ~$130K) prove the assertion would");
+    console.log("  have fired if the pre-fix defect were re-introduced.");
+    console.log("  Reproduce Kevin's original measurement:");
+    console.log("    SEEDED_FAILURE=salary_hourly node --env-file=.env.local \\");
+    console.log("      --import ./scripts/probes/_at_alias_hook.mjs \\");
+    console.log("      scripts/probes/_probe_overview_parity.mjs");
   }
 
   console.log();
   console.log("=".repeat(70));
   let pass = 0, fail = 0;
   for (const r of RESULTS) { if (r.ok) pass += 1; else fail += 1; }
-  console.log(`Parity result: ${pass} PASS, ${fail} FAIL across ${RESULTS.length} assertions`);
+  // Expected count on clean run: 192 (168 prior + 12 drill equality + 12
+  // new salary-inclusion assertions). See header for the derivation.
+  console.log(`Parity result: ${pass} PASS, ${fail} FAIL across ${RESULTS.length} assertions (target 192)`);
   console.log("=".repeat(70));
   if (fail > 0) {
     console.log("Failures:");

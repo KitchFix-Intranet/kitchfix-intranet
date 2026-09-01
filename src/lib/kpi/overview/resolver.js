@@ -33,6 +33,14 @@ import { buildBoard } from "@/app/kpi/labor/lib/board.js";
 import { paginateActuals as paginateLaborActuals, resolveMemberBudget } from "@/lib/labor/loaders.js";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta.js";
 import { buildWorkerToEmail } from "@/lib/labor/personCount.js";
+// Salary-side loaders + merge helper. Overview ALWAYS composes labor
+// with salary included (R-28, §5.9): "Salary control reveals sub-lines
+// only; totals always include salary. Gross margin must equal
+// finance's, and finance's includes salary." The `includeSalary` flag
+// on this resolver is a DISCLOSURE toggle for the 3100.1 / 3100.2
+// sub-rows in the statement; it never changes the 3100 total or any
+// derived figure (COGS, gross margin, ticker, chart).
+import { load3100_2Budgets, loadSalaryActuals, mergeBudgetPeriods, shapeSalaryRow } from "@/lib/labor/salaryBoard.js";
 
 import { buildPurchasingBoard } from "@/app/kpi/purchasing/lib/resolver.js";
 import {
@@ -460,11 +468,17 @@ export async function resolveOverview({
     paginatePurchasingActuals(supa, { members, start: rng.start, end: rng.end }),
     loadPurchasingPending(supa, { members, start: rng.start, end: rng.end }),
     loadPurchasingBudgets(supa, members, FISCAL_YEAR),
+    // R-28 / §5.9 - salary is composed INTO 3100 unconditionally on
+    // both postures. These two loaders feed the merge in step 5
+    // (buildBoard) below.
+    load3100_2Budgets(supa, members),
+    loadSalaryActuals(supa, members, rng.start, rng.end),
   ]));
   const [
     periodStatusResp, accountFlagsResp, overviewBudgetsResp, pnlResp,
     scResp, laborActualsResp, memberBudgetResults,
     purchWeeklyResp, purchActualsResp, purchPendingResp, purchBudgetsResp,
+    salaryBudgetsResp, salaryActualsResp,
   ] = layer1;
 
   const errs = [];
@@ -481,6 +495,8 @@ export async function resolveOverview({
   if (purchActualsResp.error) errs.push({ scope: "purchasing_actuals", error: purchActualsResp.error });
   if (purchPendingResp.error) errs.push({ scope: "purchasing_pending", error: purchPendingResp.error });
   if (purchBudgetsResp.error) errs.push({ scope: "kpi_budgets_purchasing", error: purchBudgetsResp.error });
+  if (salaryBudgetsResp.error) errs.push({ scope: "kpi_budgets_3100_2", error: salaryBudgetsResp.error });
+  if (salaryActualsResp.error) errs.push({ scope: "labor_salary_actuals", error: salaryActualsResp.error });
   if (errs.length > 0) {
     return { error: errs[0].error, scope: errs[0].scope, all_errors: errs };
   }
@@ -499,38 +515,79 @@ export async function resolveOverview({
   const purchActuals = purchActualsResp.data;
   const purchPending = purchPendingResp.data;
   const purchBudgets = purchBudgetsResp.data;
+  // Salary side (§5.9 / R-28). Always composed - no toggle guard.
+  const salary3100_2Budgets = salaryBudgetsResp.byAccount || new Map();
+  const salaryRows = salaryActualsResp.rows || [];
 
   // 3. Layer-2: workerToEmail from laborActuals (dependency).
-  const workerIds = [...new Set((laborActuals || []).map(r => r.worker_id))];
+  //    Include salary worker_ids so distinct-people counts dedupe across
+  //    the hourly + salary merge (mirrors the labor route's
+  //    withSalary path, which resolves salary-only ids BEFORE the merge
+  //    for the same reason - see src/lib/labor/salaryBoard.js §
+  //    "2026-08-28 person-key fix").
+  const workerIds = [...new Set([
+    ...(laborActuals || []).map(r => r.worker_id),
+    ...salaryRows.map(r => r.worker_id),
+  ])];
   const workerMeta = await timeIt("resolveWorkerMeta", () => resolveWorkerMeta(supa, workerIds));
   const workerToEmail = buildWorkerToEmail(workerMeta.workerMeta);
 
   // 4. Aggregate labor budget_periods across members (mirrors labor
   //    route's aggregate branch's per-period sum). Also handles
   //    single-account case (memberBudgets has one entry).
-  const laborBudgetSumMap = new Map();  // p -> amount
+  //
+  //    R-28 / §5.9 (2026-08-31): Overview ALWAYS composes labor with
+  //    salary INCLUDED regardless of the `includeSalary` toggle. The
+  //    toggle is a DISCLOSURE control for the 3100.1 / 3100.2 sub-rows
+  //    in the statement; it never moves the 3100 total or any derived
+  //    figure. Rebuild the labor budget input by merging 3100.2 salary
+  //    budgets on top of the resolved hourly (3100.1 / SC-superseded)
+  //    budgets, mirroring what the labor route's withSalary does for
+  //    include_salary=1.
+  const laborBudgetSumMap = new Map();  // p -> amount (hourly)
   for (const [, list] of memberBudgets) {
     for (const bp of list || []) {
       laborBudgetSumMap.set(bp.period_no, (laborBudgetSumMap.get(bp.period_no) || 0) + Number(bp.amount));
     }
   }
-  const laborBudgetPeriods = [...laborBudgetSumMap.entries()]
+  const laborBudgetPeriodsHourly = [...laborBudgetSumMap.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([p, amt]) => ({ period_no: p, amount: r2(amt) }));
+  // Sum salary (3100.2) budget per period across members.
+  const salaryBudgetByPeriod = new Map();
+  for (const m of members) {
+    const inner = salary3100_2Budgets.get(m);
+    if (!inner) continue;
+    for (const [pn, amt] of inner) {
+      salaryBudgetByPeriod.set(pn, (salaryBudgetByPeriod.get(pn) || 0) + Number(amt || 0));
+    }
+  }
+  const mergedBudget = mergeBudgetPeriods(laborBudgetPeriodsHourly, salaryBudgetByPeriod);
+  const laborBudgetPeriods = mergedBudget.periods;
+  // Merged per-period map (hourly + salary) for downstream consumers
+  // (chart series per-period labor budget point). Kept as a Map to
+  // mirror laborBudgetSumMap's shape; chart consumers switch to this
+  // so the chart's per-period labor budget line matches the composed
+  // labor total (never hourly-only, matching R-28 §5.9).
+  const laborBudgetSumMapMerged = new Map();
+  for (const bp of laborBudgetPeriods) {
+    laborBudgetSumMapMerged.set(bp.period_no, Number(bp.amount || 0));
+  }
 
-  // 5. Call labor buildBoard as a library call. account_state we
-  //    determine from members - if all members are salaried_only
-  //    (CIN - KY, TBJ - NY only) buildBoard returns not-applicable.
-  //    For the Overview's aggregate ALL, at least one hourly member
-  //    exists so hourly_ok is correct. For a single salaried_only
-  //    account, we still call buildBoard for shape parity but expect
-  //    applies:false; costs come from purchasing only.
+  // 5. Call labor buildBoard as a library call, on the merged (hourly +
+  //    salary) inputs. account_state stays "hourly_ok" - the salaried-
+  //    only single accounts (CIN - KY, TBJ - NY) fall out with
+  //    applies:false when there are no hourly rows AND no salary rows;
+  //    when salary rows exist they get a real board (matches the labor
+  //    route's D26 salary-on branch, salaryBoard.js line 222-232).
+  const salaryActualsShaped = salaryRows.map(shapeSalaryRow);
+  const mergedLaborActuals = (laborActuals || []).concat(salaryActualsShaped);
   const laborBoard = await timeIt("buildBoard(labor)", async () => buildBoard({
     account: accountKey,
     start: rng.start,
     end: rng.end,
     today,
-    actuals: laborActuals,
+    actuals: mergedLaborActuals,
     budget_periods: laborBudgetPeriods,
     account_state: "hourly_ok",
     workerToEmail,
@@ -920,8 +977,10 @@ export async function resolveOverview({
       const pEnd = periodEndISO(p);
       const state = pEnd < today ? "closed" : (pStart <= today && today <= pEnd) ? "in_progress" : "not_started";
       // Period budget = sum of member budget + purchasing bucket
-      // budget for this one period.
-      const laborBudP = laborBudgetSumMap.get(p) || 0;
+      // budget for this one period. Labor budget is the MERGED
+      // (hourly + salary) figure per R-28 / §5.9 - the chart line
+      // matches the composed labor total the levers surface.
+      const laborBudP = laborBudgetSumMapMerged.get(p) || 0;
       // Purchasing per-period budget: sum through kpi_budgets purchase
       // lines. Not directly available on purchBoard.totals per-period,
       // but we can compute from purchBudgets map for the three
@@ -1006,22 +1065,25 @@ export async function resolveOverview({
     sources: ["labor_actuals"],
     flags: [],
   });
-  // Salary reveal (Phase 4, R-28): emit 3100.1 (hourly) + 3100.2
+  // Salary reveal (R-28 / §5.9): emit 3100.1 (hourly) + 3100.2
   // (salary) sub-rows under 3100 when the caller requested the salary
   // split AND the posture makes it visible. The rows carry
   // `parent_line_code: "3100"` so the client renders them indented
   // beneath the aggregate. The 3100 total row above is unchanged -
-  // the totals never move; the split just becomes visible. Sources:
-  // pnl_actuals (verified periods) + labor engine's own split when
-  // pnl_actuals is absent (open period).
+  // the totals never move; the split just becomes visible.
+  //
+  // 2026-08-31 (blocker 1 fix): salary is now composed into the 3100
+  // total ON EVERY REQUEST (see step 5 above where laborBoard is built
+  // on merged hourly + salary actuals + budgets). The `includeSalary`
+  // flag is purely a DISCLOSURE control here - toggle ON reveals the
+  // sub-rows, toggle OFF hides them; the 3100 total is byte-identical
+  // in both states. This is the fix for Kevin's live measurement
+  // (CIN - AZ FYTD showing 61.2% GM against a 54.4% target because
+  // labor was hourly-only, missing $129,615.58 of salary).
   //
   // Absence contract: reported=false on any sub-row we cannot ground
-  // in either source. The client renders "-" (missing) rather than
+  // in pnl_actuals. The client renders "-" (missing) rather than
   // guessing.
-  //
-  // Corporate posture always includes salary in the 3100 total
-  // (labor board sums both when include_salary=1 upstream); this
-  // reveal is the site-posture affordance per R-28.
   if (includeSalary && posture.salary_toggle_visible) {
     const sumSubLineFromPnl = (lineCode) => {
       let amt = 0;
