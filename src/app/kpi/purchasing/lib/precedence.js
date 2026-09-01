@@ -97,12 +97,22 @@ export const RULES_APPLIED_IN_VIEW = {
 // See docs/audits/F11_REPORT_ONLY_PENDING_500_2026-09-01.md.
 const REPORT_ONLY_TIMEOUT_MS = process.env.F11_TIMEOUT_MS ? Number(process.env.F11_TIMEOUT_MS) : 6000;
 
+// F-11 (d) shared-read (2026-09-01, PR): loadReportOnlyPending is
+// now the SOLE reader of REPORT_ONLY_PENDING_VIEW in the request path.
+// loadCardCharges used to fetch the view a second time; that read was
+// deleted and loadCardCharges now consumes rows from this loader via
+// a shared promise passed in from the route. Column set widened to
+// include category + work_location + amount so loadCardCharges has
+// what it needs to build enrichedReport rows from the same read.
+// See Kevin's ruling 2026-09-01: two loaders reading the same view
+// in the same Promise.all was paying materialisation cost twice.
 export async function loadReportOnlyPending(supa, { members, start, end, IN_CHUNK = 200, PS = 1000 }) {
   const t0 = Date.now();
   let amount = 0;
   let line_count = 0;
   const by_account = new Map();
   let max_purchased_at = null;
+  const rows = [];
 
   async function walk() {
     // Chunk the members set - PostgREST silent 1000-row cap, same
@@ -113,15 +123,15 @@ export async function loadReportOnlyPending(supa, { members, start, end, IN_CHUN
       while (true) {
         const q = await supa
           .from(REPORT_ONLY_PENDING_VIEW)
-          .select("parent_txn_id, amount, account_key, purchased_at")
+          .select("parent_txn_id, amount, account_key, purchased_at, category, work_location")
           .in("account_key", chunk)
           .gte("purchased_at", start)
           .lte("purchased_at", end)
           .order("parent_txn_id", { ascending: true })
           .range(from, from + PS - 1);
         if (q.error) return { error: q.error };
-        const rows = q.data || [];
-        for (const r of rows) {
+        const chunkRows = q.data || [];
+        for (const r of chunkRows) {
           const amt = Number(r.amount || 0);
           amount += amt;
           line_count += 1;
@@ -129,8 +139,9 @@ export async function loadReportOnlyPending(supa, { members, start, end, IN_CHUN
           if (r.purchased_at && (max_purchased_at == null || r.purchased_at > max_purchased_at)) {
             max_purchased_at = r.purchased_at;
           }
+          rows.push(r);
         }
-        if (rows.length < PS) break;
+        if (chunkRows.length < PS) break;
         from += PS;
       }
     }
@@ -152,6 +163,7 @@ export async function loadReportOnlyPending(supa, { members, start, end, IN_CHUN
         line_count: 0,
         by_account: {},
         max_purchased_at: null,
+        rows: [],
         unavailable: true,
         unavailable_reason: "timeout",
         unavailable_elapsed_ms: elapsed,
@@ -166,6 +178,12 @@ export async function loadReportOnlyPending(supa, { members, start, end, IN_CHUN
       line_count,
       by_account: Object.fromEntries([...by_account].map(([k, v]) => [k, Math.round(v * 100) / 100])),
       max_purchased_at,
+      // F-11 (d): raw rows passed through so loadCardCharges consumes
+      // the same read instead of firing a second view query. Rows are
+      // only for the loader-to-loader hand-off; they're stripped before
+      // the payload leaves the route via mergePending (which only
+      // forwards the aggregated shape).
+      rows,
       unavailable: false,
     },
   };

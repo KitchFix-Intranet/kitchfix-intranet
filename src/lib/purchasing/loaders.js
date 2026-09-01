@@ -581,7 +581,7 @@ export async function loadLedgerRows(supa, { members, start, end, glLineCode, gl
   };
 }
 
-export async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
+export async function loadCardCharges(supa, { members, start, end, cap = 50, reportOnlyPromise = null }) {
   // Uncoded card charges - rippling_spend rows with gl_line_code IS NULL
   // PLUS report-only pending rows (parents in rippling_report_only_pending_v1
   // that have not yet landed in purchasing_actuals).
@@ -598,6 +598,16 @@ export async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
   // No double-count risk: the report-only view excludes parents already
   // seen by the API (precedence rule, migration-8).  See
   // src/app/kpi/purchasing/lib/precedence.js for the invariant.
+  //
+  // F-11 (d) shared-read (Kevin's ruling 2026-09-01): the report-only
+  // view is no longer read here. loadReportOnlyPending is the sole
+  // reader in the request path; the route creates one shared promise
+  // and passes it via reportOnlyPromise. This function awaits that
+  // promise and consumes the raw rows already fetched. Previously both
+  // loaders paid full materialisation cost concurrently (~5s cold each,
+  // top-2 slowest of the 15 loaders). One read cuts the double cost.
+  // Timeout / unavailability still propagates cleanly - the shared
+  // promise's data.unavailable=true flows into this loader's return.
   const rows = [];
   const PS = V6_PAGE_DEFAULT;
   for (const memberChunk of chunk(members, IN_CHUNK)) {
@@ -621,56 +631,28 @@ export async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
       from += PS;
     }
   }
-  // R16 P0 - parallel walk of the report-only view.  Uses the same
-  // (account_key, date-window) chunking as loadReportOnlyPending, so the
-  // count/amount this produces exactly matches the aggregate that hero
-  // adds via mergePending().  CORP is filtered out at the site of the
-  // preamble Promise.all; we keep the same filter here for parity.
-  //
-  // F-11 (2026-09-01): guarded by the same 6s timeout as
-  // loadReportOnlyPending in precedence.js. If the view times out on
-  // either call site, this slice is empty and reportUnavailable=true
-  // is bubbled up so hero + list + drill agree AND the freshness pill
-  // surfaces it. See docs/audits/F11_REPORT_ONLY_PENDING_500_2026-09-01.md.
-  const REPORT_ONLY_TIMEOUT_MS = process.env.F11_TIMEOUT_MS ? Number(process.env.F11_TIMEOUT_MS) : 6000;
-  const t0Report = Date.now();
-  const reportRows = [];
+  // F-11 (d): consume the shared report-only read. If the shared
+  // promise is absent (no caller passed one), fall back to empty so
+  // no runtime error - the loader still produces a valid enriched
+  // list from the API side alone. All in-tree callers now pass the
+  // promise; the fallback is a safety net for tests and future callers.
+  let reportRows = [];
   let reportUnavailable = false;
-  const membersNoCorp = members.filter(m => m !== "CORP");
-
-  async function walkReport() {
-    for (const memberChunk of chunk(membersNoCorp, IN_CHUNK)) {
-      let from = 0;
-      while (true) {
-        const r = await supa.from("rippling_report_only_pending_v1")
-          .select("parent_txn_id, account_key, purchased_at, amount, category, work_location")
-          .in("account_key", memberChunk)
-          .gte("purchased_at", start)
-          .lte("purchased_at", end)
-          .order("parent_txn_id", { ascending: true })
-          .range(from, from + PS - 1);
-        if (r.error) return { error: r.error };
-        const data = r.data || [];
-        for (const row of data) reportRows.push(row);
-        if (data.length < PS) break;
-        from += PS;
-      }
+  if (reportOnlyPromise) {
+    const rr = await reportOnlyPromise;
+    if (rr?.error) {
+      // Real SQL error on the shared read - propagate. The route's
+      // reportPendingResp.error handler will also fire on the same
+      // error, but propagating here keeps the semantics of "loader
+      // errors surface once at the call site" intact.
+      return { error: rr.error };
     }
-    return { ok: true };
-  }
-
-  const timeoutSentinel = Symbol("card_charges_report_only_timeout");
-  const raced = await Promise.race([
-    walkReport(),
-    new Promise((resolve) => setTimeout(() => resolve(timeoutSentinel), REPORT_ONLY_TIMEOUT_MS)),
-  ]);
-  if (raced === timeoutSentinel) {
-    const elapsed = Date.now() - t0Report;
-    console.warn(`[F-11] loadCardCharges report-only-view TIMEOUT after ${elapsed}ms (limit ${REPORT_ONLY_TIMEOUT_MS}ms) members=${membersNoCorp.length} range=${start}..${end}`);
-    reportUnavailable = true;
-    reportRows.length = 0;
-  } else if (raced?.error) {
-    return { error: raced.error };
+    const rd = rr?.data || {};
+    if (rd.unavailable === true) {
+      reportUnavailable = true;
+    } else {
+      reportRows = Array.isArray(rd.rows) ? rd.rows : [];
+    }
   }
   const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0)
                     + reportRows.reduce((s, r) => s + Number(r.amount || 0), 0);
