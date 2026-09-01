@@ -59,8 +59,55 @@ function Pill({ pill }) {
 }
 
 function RevenueCard({ card, posture, range }) {
-  const isPeriod = range?.kind === "period";
   const rangeIsOpen = range?.period_state === "open" || range?.kind === "fytd";
+  const isSite = posture === "site_leader";
+  const isFytd = range?.kind === "fytd";
+  const isClosed = range?.period_state === "verified" || range?.period_state === "closed_awaiting";
+
+  // R-32 revenue-card sub-line rhythm for site posture: bold the
+  // PERIOD or FULL-YEAR budget, grey the descriptor. Match COGS +
+  // margin rhythm so all three cards share a shape. Bolding the
+  // to-date figure duplicates what the hero already anchors; bolding
+  // the horizon budget carries something the hero does not say.
+  //   Open period: "$118,130 budget this period · $88,598 expected by today"
+  //   FYTD:        "$1,572,700 full year budget · $1,371,266 expected by today"
+  //   Closed:      "$121,930 budget"
+  // Corporate keeps the existing to-date-first rhythm untouched.
+  const siteSubLine = (() => {
+    if (!isSite) return null;
+    if (isClosed) {
+      // Closed period: single line, bold the period budget only.
+      const closedBudget = card.budget_full_period_display || card.budget_to_date_display;
+      if (!closedBudget) return null;
+      return (
+        <div className="kpi-ov-kpi2">
+          <span>
+            <b style={{ fontSize: "var(--kpi-t-body)" }}>{closedBudget}</b>
+            {" "}budget
+          </span>
+        </div>
+      );
+    }
+    // Open period or FYTD: bold horizon budget, then descriptor, then
+    // "· expected by today".
+    const horizon = isFytd
+      ? card.budget_full_year_display
+      : card.budget_full_period_display;
+    const horizonLabel = isFytd ? "full year budget" : "budget this period";
+    if (!horizon) return null;
+    return (
+      <div className="kpi-ov-kpi2">
+        <span>
+          <b style={{ fontSize: "var(--kpi-t-body)" }}>{horizon}</b>
+          {" "}{horizonLabel}
+        </span>
+        {card.budget_to_date_display && (
+          <span>· {card.budget_to_date_display} expected by today</span>
+        )}
+      </div>
+    );
+  })();
+
   return (
     <div className={`kpi-ov-card ${CARD_BORDER.revenue}`} data-kpi-ov="card-revenue">
       <div className="kpi-ov-ch">
@@ -75,29 +122,31 @@ function RevenueCard({ card, posture, range }) {
         <div className="kpi-ov-hero kpi-ov-num" data-kpi-ov="hero-revenue">
           <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
         </div>
-        <div className="kpi-ov-kpi2">
-          {card.budget_to_date_display && (
-            <>
-              <span>
-                <b style={{ fontSize: "var(--kpi-t-body)" }}>{card.budget_to_date_display}</b>
-                {" "}budget{rangeIsOpen ? " to date" : ""}
+        {isSite ? siteSubLine : (
+          <div className="kpi-ov-kpi2">
+            {card.budget_to_date_display && (
+              <>
+                <span>
+                  <b style={{ fontSize: "var(--kpi-t-body)" }}>{card.budget_to_date_display}</b>
+                  {" "}budget{rangeIsOpen ? " to date" : ""}
+                </span>
+                <span>
+                  ·{" "}
+                  {range?.kind === "fytd" && card.budget_full_year_display
+                    ? `${card.budget_full_year_display} full year`
+                    : card.budget_full_period_display
+                      ? `${card.budget_full_period_display} period budget`
+                      : ""}
+                </span>
+              </>
+            )}
+            {card.delta_display && (
+              <span className={card.delta_direction === "good" ? "kpi-ov-good" : card.delta_direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb"}>
+                · {card.delta_display}
               </span>
-              <span>
-                ·{" "}
-                {range?.kind === "fytd" && card.budget_full_year_display
-                  ? `${card.budget_full_year_display} full year`
-                  : card.budget_full_period_display
-                    ? `${card.budget_full_period_display} period budget`
-                    : ""}
-              </span>
-            </>
-          )}
-          {card.delta_display && (
-            <span className={card.delta_direction === "good" ? "kpi-ov-good" : card.delta_direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb"}>
-              · {card.delta_display}
-            </span>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -141,7 +190,11 @@ function CogsCard({ card, posture }) {
             </span>
           </div>
         )}
-        {card.mini && card.mini.length > 0 && (
+        {/* R-32 site posture cuts the COGS mini breakdown. Labor
+            and food dollars each appear once - the drill buttons carry
+            the lever verdicts on the site posture. Corporate keeps
+            the mini for the same numbers-in-context reason. */}
+        {posture === "corporate" && card.mini && card.mini.length > 0 && (
           <div className="kpi-ov-mini">
             {card.mini.map((m) => (
               <span key={m.label}>

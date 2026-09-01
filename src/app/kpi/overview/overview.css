@@ -794,3 +794,67 @@
   border-top: 1px solid var(--n-400);
   font-weight: 800;
 }
+
+/* R-34 "What is left" strip. Site-leader posture only, open period
+   only. Rhythm mirrors the card family - white surface, subtle border,
+   3px navy left accent - so it lands as a peer of the three cards
+   above it. Three cells share the shape of the CardsRow kpi2 line:
+   grey label, hero number, grey sub-line with the verdict inline.
+   No progress bar; the verdict is the tail of cell 3 (R-32 cut). */
+.kpi-app .kpi-ov-pace {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-left: 3px solid var(--navy-700);
+  border-radius: var(--radius-container);
+  margin-top: var(--space-3);
+  padding: calc(14px * var(--kf-scale)) calc(16px * var(--kf-scale));
+}
+.kpi-app .kpi-ov-pace-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.kpi-app .kpi-ov-pace-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+@media (max-width: 720px) {
+  .kpi-app .kpi-ov-pace-grid { grid-template-columns: 1fr; }
+}
+.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-v {
+  font-size: calc(21px * var(--kf-scale));
+  font-weight: 800;
+  margin-top: 3px;
+  letter-spacing: -0.01em;
+}
+.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-per {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-n {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-n b { font-weight: 800; }
+
+/* R-32 drill button verdict tail. The gap-to-target beneath the
+   actual-percent value. Tone follows the direction word supplied by
+   the payload (cost axis: under=good, over=bad). */
+.kpi-app .kpi-ov-dr-gap {
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  margin-top: 2px;
+}

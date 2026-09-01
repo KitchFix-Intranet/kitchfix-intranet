@@ -1331,13 +1331,125 @@ export async function resolveOverview({
   // pct via pctOf's zero-denominator branch to null.
   const purchSpentActual = (food_actual || 0) + (packaging_actual || 0) + (vehicle_actual || 0);
   const purchSpentBudget = (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0);
+  const purchActualPct = pctOf(purchSpentActual, totalRevenue);
+  const purchTargetPct = pctOf(purchSpentBudget, revenue_budget_to_date);
+  const purchVariancePct = (purchActualPct != null && purchTargetPct != null)
+    ? r2(purchActualPct - purchTargetPct)
+    : null;
   const drill = {
     purchasing: {
       spent_display: formatMoneyWhole(purchSpentActual),
-      pct_of_revenue_display: formatPct(pctOf(purchSpentActual, totalRevenue)),
-      target_pct_display: formatPct(pctOf(purchSpentBudget, revenue_budget_to_date)),
+      pct_of_revenue_display: formatPct(purchActualPct),
+      target_pct_display: formatPct(purchTargetPct),
+      // Site posture drill button carries the verdict (R-32). "5.4%
+      // under target" pattern - cost axis, so under=good, over=bad.
+      variance_pct: purchVariancePct,
+      variance_pct_display: purchVariancePct != null ? gapPointsCost(purchVariancePct) : null,
+      direction: purchVariancePct != null ? directionOfDelta(purchVariancePct, "cost") : null,
     },
   };
+
+  // 18c. "What is left" (R-34, 2026-09-01).
+  //
+  // The one operator number that converts to a decision today. Open
+  // period only, site posture only, single-period range only.
+  // Absent on closed periods (a review surface does not steer) and
+  // absent on FYTD (applying an open period's remaining days to a year
+  // is wrong arithmetic - explicit R-34 rule).
+  //
+  // Three cells, all formatted server-side per §9B:
+  //   1. Cost of goods left to spend = period_budget - actual_to_date
+  //   2. Per day left = left / days_remaining
+  //      Comparison: per_day_so_far = actual / days_elapsed
+  //   3. Budget used pct = actual / period_budget
+  //      Compared to elapsed pct = days_elapsed / days_in_period
+  //      Verdict = "spending slower/faster than the clock"
+  //
+  // No projection ("at this pace margin closes at X%") - that is an
+  // identity under linear accrual, not a forecast (R-33). Never
+  // shipped from this resolver.
+  let whatIsLeft = null;
+  const isSitePosture = posture.posture === "site_leader";
+  const isSinglePeriodRange = rng.kind === "period";
+  const isOpenPeriod = displayPeriodState === "open";
+  if (isSitePosture && isSinglePeriodRange && isOpenPeriod && displayPeriodNo != null) {
+    // Compute period bounds + elapsed. Days elapsed = calendar days
+    // from period start through today (inclusive). Days remaining =
+    // period total - elapsed. Clamped so we never advertise negative
+    // days remaining or an elapsed larger than the period.
+    const pStart = periodStartISO(displayPeriodNo);
+    const pEnd = periodEndISO(displayPeriodNo);
+    const MSD = 24 * 60 * 60 * 1000;
+    const tS = new Date(`${pStart}T00:00:00Z`);
+    const tE = new Date(`${pEnd}T00:00:00Z`);
+    const tT = new Date(`${today}T00:00:00Z`);
+    const daysInPeriod = Math.max(1, Math.round((tE.getTime() - tS.getTime()) / MSD) + 1);
+    const rawElapsed = Math.round((tT.getTime() - tS.getTime()) / MSD) + 1;
+    const daysElapsed = Math.min(daysInPeriod, Math.max(0, rawElapsed));
+    const daysRemaining = Math.max(0, daysInPeriod - daysElapsed);
+    // Period-full COGS budget = sum of the four lever full-period
+    // budgets. cogsBudget above is the full-period figure (not the
+    // to-date-days-adjusted one).
+    const cogsBudgetFullPeriod = cogsBudget;
+    const cogsLeft = cogsBudgetFullPeriod != null && cogsActual != null
+      ? r2(cogsBudgetFullPeriod - cogsActual)
+      : null;
+    const perDayLeft = cogsLeft != null && daysRemaining > 0
+      ? r2(cogsLeft / daysRemaining)
+      : null;
+    const perDaySoFar = cogsActual != null && daysElapsed > 0
+      ? r2(cogsActual / daysElapsed)
+      : null;
+    const budgetUsedPct = cogsActual != null && cogsBudgetFullPeriod > 0
+      ? r2((cogsActual / cogsBudgetFullPeriod) * 100)
+      : null;
+    const elapsedPct = daysInPeriod > 0
+      ? r2((daysElapsed / daysInPeriod) * 100)
+      : null;
+    // Pace verdict: slower means the % of budget used is at or below
+    // the % of period elapsed. Faster means over. Copy fixed per the
+    // render of record.
+    const pace = (budgetUsedPct != null && elapsedPct != null)
+      ? (budgetUsedPct <= elapsedPct ? "slower" : "faster")
+      : null;
+    const paceCopy = pace === "slower"
+      ? "spending slower than the clock"
+      : (pace === "faster" ? "spending faster than the clock" : null);
+    whatIsLeft = {
+      // Machine values so probes can assert numerics without parsing
+      // display strings.
+      days_elapsed: daysElapsed,
+      days_remaining: daysRemaining,
+      days_in_period: daysInPeriod,
+      cogs_left: cogsLeft,
+      per_day_left: perDayLeft,
+      per_day_so_far: perDaySoFar,
+      budget_used_pct: budgetUsedPct,
+      elapsed_pct: elapsedPct,
+      pace,
+      // Display strings for the three cells.
+      cell_1: {
+        label: "Cost of goods left to spend",
+        value_display: formatMoneyWhole(cogsLeft),
+        sub_line: `for the ${daysRemaining} days remaining`,
+      },
+      cell_2: {
+        label: "Which is",
+        value_display: formatMoneyWhole(perDayLeft),
+        value_suffix: "a day",
+        sub_line: perDaySoFar != null
+          ? `you have averaged ${formatMoneyWhole(perDaySoFar)} a day so far`
+          : null,
+      },
+      cell_3: {
+        label: "Budget used",
+        value_display: formatPct(budgetUsedPct),
+        direction: pace === "slower" ? "good" : (pace === "faster" ? "bad" : "neutral"),
+        sub_line_prefix: elapsedPct != null ? `with ${formatPct(elapsedPct)} of the period gone` : null,
+        verdict: paceCopy,
+      },
+    };
+  }
 
   // 19. Sources line. Data-through dates for each source.
   //
@@ -1486,6 +1598,13 @@ export async function resolveOverview({
     statement_rows: statementRows,
     also_tracked: alsoTracked,
     drill,
+    // R-34 what-is-left. null on corporate posture, closed periods,
+    // and FYTD - client hides the strip when this field is null.
+    // Corporate payloads have never carried this field; adding it as
+    // null preserves the corporate shape at the type-checker level and
+    // makes the absence intentional rather than an accident of key
+    // ordering.
+    what_is_left: whatIsLeft,
     sources: sourcesLine,
     flags,
     freshness,
