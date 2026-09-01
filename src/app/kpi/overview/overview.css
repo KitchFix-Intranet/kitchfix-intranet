@@ -178,11 +178,24 @@
 .kpi-app .kpi-ov-cb {
   padding: var(--kpi-sp-2) var(--kpi-sp-4) var(--kpi-sp-4) var(--kpi-sp-4);
 }
+/* P2-2 (2026-09-01): card hero drops from --kpi-t-hero (28px) to
+   --kpi-t-value (20px) to converge on the labor board's card hero
+   (.kpi-hs-hero / .kpi-sig-hero-val at L2541 + L3963 in kpi.css,
+   V35-1 pattern). Kevin's DOM audit: "the Overview shows materially
+   less than labor in a 1680x1050 viewport" - three of the delta is
+   this hero size (28 -> 20 recovers ~8px per card row on 3 cards).
+   letter-spacing / line-height mirror labor's hero role (-0.01em /
+   1.08) so the tighter figure sits in the same lane on both boards.
+   The prototype's 30px --t-hero was authoritative for design intent
+   but not for cross-board size parity - Kevin's live-build ruling
+   is that "every size derives from --kf-scale and the six type
+   roles" (§5 charter 6). Labor's role choice for the card hero is
+   --kpi-t-value; Overview must match. */
 .kpi-app .kpi-ov-hero {
-  font-size: var(--kpi-t-hero);
+  font-size: var(--kpi-t-value);
   font-weight: 800;
-  letter-spacing: -.02em;
-  line-height: 1.05;
+  letter-spacing: -.01em;
+  line-height: 1.08;
   display: flex;
   align-items: baseline;
   gap: var(--kpi-sp-2);

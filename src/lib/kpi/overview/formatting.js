@@ -37,6 +37,25 @@ export function formatMoneyWhole(n) {
   return n < 0 ? "-" + s : s;
 }
 
+// P2-4a (2026-09-01): format an ISO YYYY-MM-DD as "Sun 08/30" to
+// match the Overview render of record's sources-line format. Labor
+// exports fmtDate which returns MM/DD/YY (no weekday); the Overview
+// sources line needs the day-of-week prefix for scanability.
+// Parses the ISO as a calendar date (UTC-anchored to avoid TZ drift
+// on client vs server) - the value in the payload is always a whole-
+// day date, never a timestamp.
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export function formatDayLabel(iso) {
+  if (!iso) return null;
+  const s = String(iso).slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(d.getTime())) return null;
+  const wd = WEEKDAYS[d.getUTCDay()];
+  return `${wd} ${m[2]}/${m[3]}`;
+}
+
 // One-decimal percent. Handles null (returns null) so callers can
 // distinguish "no data" from "0.0%".
 export function formatPct(n) {

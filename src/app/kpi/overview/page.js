@@ -47,6 +47,7 @@ import {
   inferRangeSelection,
   rangeForPeriod,
 } from "@/app/kpi/labor/lib/periods";
+import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "@/app/kpi/labor/components/FolioRail";
 import { ACCOUNTS, FY_START, STATIC_DIRECTORY, STATIC_RDO_DISPLAY } from "@/app/kpi/labor/lib/accounts";
@@ -297,13 +298,36 @@ export default function KpiOverviewPage() {
       const n = i + 1;
       return { period_no: n, start: periodStartISO(n), end: periodEndISO(n) };
     });
+    // P2-3 (2026-09-01): infer resolvedPreset from (start, end, today)
+    // so the range chip reads "FYTD" instead of "Custom 12/29/25 -
+    // 08/31/26" on the default landing. Mirrors labor page.js's
+    // resolvedPreset useMemo (L719). Same fix class as R14's
+    // `?preset=` silent-ignore: the range dates carry across the
+    // section hop but the preset identity did not. Server-side range
+    // classification is normalized separately in resolver.js
+    // (normalizeExplicitToPreset) so the FYTD full-year budget label
+    // (P2-5) also fires - two surfaces, same root cause.
+    let resolvedPreset = null;
+    if (start === FY_START && end === today) {
+      resolvedPreset = "fytd";
+    } else if (start === addDaysISO(today, -27) && end === today) {
+      resolvedPreset = "last_4wk";
+    } else {
+      const past = accountPeriods
+        .filter(p => p.start && p.end && p.start <= today)
+        .sort((a, b) => a.start.localeCompare(b.start));
+      const cur = past[past.length - 1];
+      const prev = past[past.length - 2];
+      if (cur && start === cur.start && end === cur.end) resolvedPreset = "this_period";
+      else if (prev && start === prev.start && end === prev.end) resolvedPreset = "last_period";
+    }
     return {
       startISO: start,
       endISO: end,
       todayISO: today,
       hasPeriods: true,
       accountPeriods,
-      resolvedPreset: null,
+      resolvedPreset,
       selectedPeriodNo: rangeSelection?.kind === "period" ? rangeSelection.value : null,
       selectedMonth: rangeSelection?.kind === "month" ? rangeSelection.value : null,
       urlLabel,
@@ -336,13 +360,22 @@ export default function KpiOverviewPage() {
   }, [data?.posture_details?.revenue_toggle_visible, urlRevSource, setRevSource]);
 
   // Posture-driven folio rail (corporate = show, site = hide).
+  // P2-1 (2026-09-01): prefer live accounts_directory + rdo display
+  // shipped by the resolver so all 11 rows render real descriptions
+  // ("St Louis Cardinals · Jupiter, FL") instead of the placeholder
+  // space STATIC_DIRECTORY resolved to (team_name / city / state
+  // null on 8 of 11 rows -> folioMemberDescription returned line:null
+  // -> FolioRail rendered " " to preserve row height). Fall back to
+  // STATIC_DIRECTORY on the cold paint so the folio still lays out
+  // in three grouped cards before the fetch lands (same fallback
+  // FolioRail itself carries via hasLive).
   const showFolioRail = data?.posture === "corporate";
   const folioRail = showFolioRail ? (
     <FolioRail
       activeAccount={account}
       onPickAccount={onPickAccount}
-      accountsDirectory={STATIC_DIRECTORY}
-      regionalDirectorsDisplay={STATIC_RDO_DISPLAY}
+      accountsDirectory={data?.accounts_directory || STATIC_DIRECTORY}
+      regionalDirectorsDisplay={data?.regional_directors_display || STATIC_RDO_DISPLAY}
     />
   ) : null;
 
@@ -403,7 +436,17 @@ export default function KpiOverviewPage() {
       <Shell
         account={account}
         fiscal={fiscal}
-        freshness={{ last_walk_at: null }}
+        /* P2-4d (2026-09-01): pass the composed last_walk_at the
+           resolver ships on freshness.last_walk_at (max of labor +
+           purchasing derive timestamps). Prior implementation
+           hard-coded null which the Shell's FreshnessChip renders
+           as red "No recent walk" - a false alarm on an account
+           where purchasing was simultaneously reading "Data current"
+           on its own board. Kevin's ruling: a false red alarm is
+           worse than no chip. When both pipes are fresh (< 30h
+           per freshnessTint) the chip flips to "Data current" and
+           the two boards agree. */
+        freshness={{ last_walk_at: data?.freshness?.last_walk_at || null }}
         dataLoading={loadState === "loading" || loadState === "refetching"}
         activeSection="pnl_overview"
         rangeProps={rangeProps}

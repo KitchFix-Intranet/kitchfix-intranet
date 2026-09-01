@@ -66,6 +66,17 @@ export default function SourcesLine({ sources, freshness }) {
           {sources.purchases.label}
         </span>
       )}
+      {/* P2-4c (2026-09-01): SC revenue line always renders as a
+          third source per the render of record
+          (docs/renders/overview-prototype.html:382). The prior
+          `sources.sc_revenue?.label &&` guard meant the line only
+          rendered when effRevSource==='sc' + scLiveAny; the resolver
+          now always ships an sc_revenue block with either a real
+          through_date (formatted "Sun 08/30") or a
+          "not yet reporting" label. The label carries the
+          disclosure regardless of the toggle - the toggle picks the
+          revenue-source NUMBERS, not whether the SC through-date
+          is advertised. */}
       {sources.sc_revenue?.label && (
         <span data-kpi-ov="src-sc">{sources.sc_revenue.label}</span>
       )}
