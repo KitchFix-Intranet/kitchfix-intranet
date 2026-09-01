@@ -502,6 +502,16 @@ export async function GET(request) {
   };
   const promiseAllT0 = Date.now();
 
+  // F-11 (d) shared read (Kevin's ruling 2026-09-01): the report-only
+  // view is expensive to materialise. Reading it twice concurrently
+  // (once here, once inside loadCardCharges) paid the cost twice and
+  // put both loaders in the top-2 slowest under Promise.all contention
+  // (5,232ms + 4,784ms cold locally). One shared promise, both
+  // consumers await it; loadCardCharges takes the raw rows from the
+  // shared read and skips its own fetch. Timeout/unavailability flow
+  // through the promise so the guard behaviour is unchanged.
+  const reportOnlyPromise = loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK });
+
   // PR-2 R4 Part A: [effStart, effEnd] pass so weekly view, actuals,
   // pending all describe the same fiscal-week footprint.
   const [
@@ -511,7 +521,7 @@ export async function GET(request) {
   ] = await Promise.all([
     timed("paginateWeekly",        paginateWeekly(supa, { members, start: effStart, end: effEnd })),
     timed("loadPending",           loadPending(supa, { members, start: effStart, end: effEnd })),
-    timed("loadReportOnlyPending", loadReportOnlyPending(supa, { members: members.filter(m => m !== "CORP"), start: effStart, end: effEnd, IN_CHUNK })),
+    timed("loadReportOnlyPending", reportOnlyPromise),
     timed("paginateActuals",       paginateActuals(supa, { members, start: effStart, end: effEnd, pageSize: pageSizeParam, includeLines })),
     timed("loadFreshness",         loadFreshness(supa)),
     timed("loadAccountsDirectory", loadAccountsDirectory(supa)),   // PR-2 R2 Fix 7
@@ -534,7 +544,7 @@ export async function GET(request) {
     timed("loadLedgerRows.equipment",     loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.5", cap: 25 })),
     timed("loadLedgerRows.repair",        loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLineCode: "5002.1", cap: 25 })),
     timed("loadLedgerRows.reimbursable",  loadLedgerRows(supa, { members, start: effStart, end: effEnd, glLikePrefix: "13%",    cap: 25 })),
-    timed("loadCardCharges",       loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50 })),
+    timed("loadCardCharges",       loadCardCharges(supa, { members, start: effStart, end: effEnd, cap: 50, reportOnlyPromise })),
     timed("loadVendorRollup",      loadVendorRollup(supa, { members, start: effStart, end: effEnd })),
   ]);
 
