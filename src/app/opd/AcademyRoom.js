@@ -66,10 +66,17 @@ function daysUntilISO(isoDate, todayISO) {
   if (Number.isNaN(then.getTime()) || Number.isNaN(today.getTime())) return null;
   return Math.round((then.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
 }
+// Accept EITHER a bare date ("2026-09-01") OR a full ISO timestamp
+// ("2026-09-01T16:37:26+00:00"). The "Signed null" bug on the
+// completed row (owner walk, 2026-09-01) was this function appending
+// T00:00:00 to a value that already carried a time, producing an
+// invalid parse. Slice to the date portion when a "T" is present.
 function formatMonthDay(iso) {
   if (!iso) return null;
+  const s = String(iso);
+  const dateOnly = s.length >= 10 ? s.slice(0, 10) : s;
   try {
-    const d = new Date(`${iso}T00:00:00`);
+    const d = new Date(`${dateOnly}T00:00:00`);
     if (Number.isNaN(d.getTime())) return null;
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   } catch { return null; }
@@ -157,9 +164,12 @@ function buildSets(queue) {
 }
 
 // ─── Rail sections ─────────────────────────────────────────────
-function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, todayISO, streakCycles, onOpenRecord, onOpenLibrary }) {
+function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, todayISO, streakCycles, nextCycle, onOpenRecord, onOpenLibrary }) {
   const displayName = viewer?.displayName || "";
-  const role = viewer?.roleTitle || (viewer?.isCorp ? "Corporate" : (viewer?.isSiteLeader ? "Site leader" : ""));
+  // Rail role = people.title only. Owner walk 2026-09-01 forbids
+  // substituting account_key or isCorp/isSiteLeader as a title -
+  // those are scope facts, not roles. Empty when title is missing.
+  const role = viewer?.roleTitle || "";
   const signedCount = (queue || []).filter((r) => r.signed).length;
   const totalCount = (queue || []).length;
   const openCount = totalCount - signedCount;
@@ -197,7 +207,7 @@ function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, tod
         <span className="opd-psec-k">This cycle</span>
         <div className="opd-stand">
           <b className="opd-stand-num num">{signedCount}</b>
-          <s className="opd-stand-of">of {totalCount} signed</s>
+          <span className="opd-stand-of">of {totalCount} signed</span>
         </div>
         <div className="opd-meter" aria-hidden="true">
           <i style={{ width: `${meterPct}%` }} />
@@ -223,7 +233,7 @@ function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, tod
                 </span>
                 <span className="opd-sg-tx">
                   <b>{c.doc_title}</b>
-                  <s>{c.serial ? `${c.serial} · ` : ""}{formatShortDate(c.signed_at) || ""}</s>
+                  <span className="opd-lb">{c.serial ? `${c.serial} · ` : ""}{formatShortDate(c.signed_at) || ""}</span>
                 </span>
               </div>
             ))
@@ -240,7 +250,7 @@ function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, tod
           <div className="opd-duebox">
             <div>
               <b className="opd-dnum-b num">{Math.max(0, daysLeft)}</b>
-              <s className="opd-dnum-s">days left</s>
+              <span className="opd-dnum-s">days left</span>
             </div>
             <div className="opd-dwhen">
               {dueDateLabel}
@@ -255,8 +265,19 @@ function PrimaryRail({ viewer, queueSummary, queue, cycleLabel, cycleEndISO, tod
         <div className="opd-nextline">
           <Calendar size={13} strokeWidth={1.75} />
           <div>
-            <b>Next cycle</b>
-            <s>Opens when this cycle closes</s>
+            {nextCycle?.label ? (
+              <>
+                <b>{nextCycle.label}</b>
+                <span className="opd-lb">
+                  opens {formatMonthDay(nextCycle.period_start) || "next cycle"}
+                </span>
+              </>
+            ) : (
+              <>
+                <b>Next cycle</b>
+                <span className="opd-lb">No cycle scheduled yet</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -328,13 +349,19 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
               : `${set.totalParts} parts, in order · ${set.minutesLeft} min`}
           </div>
         </div>
-        {started ? (
-          <span className="opd-setprog" aria-hidden="true">
+        {/* Owner walk 2026-09-01: unify the right edge. Every
+            multi-part set shows a progress bar; the zero state is
+            an empty track PLUS a muted "Not started" label beneath,
+            not INSTEAD of the bar. Three treatments in the same
+            column position read as broken. Single-part sets have
+            nothing here (they have no progress to show; the solo
+            branch above handles that). */}
+        <div className="opd-setend" aria-hidden="true">
+          <span className="opd-setprog">
             <i style={{ width: `${progressPct}%` }} />
           </span>
-        ) : (
-          <span className="opd-setnone">NOT STARTED</span>
-        )}
+          {!started ? <span className="opd-setend-lbl">Not started</span> : null}
+        </div>
       </div>
       {set.parts.map((p) => {
         const isLocked = p._locked;
@@ -342,6 +369,8 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
         const cls = "opd-pr"
           + (isLocked ? " opd-pr--lk" : "")
           + (isNext ? " opd-pr--nx" : "");
+        const rowTitle = partRowTitle(p.source_section, p.description);
+        const rowTitleFull = String(p.source_section || p.description || "").trim();
         return (
           <button
             key={p.requirement_id}
@@ -349,13 +378,14 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
             className={cls}
             onClick={() => { if (!isLocked) onOpen(p); }}
             disabled={isLocked}
+            title={rowTitleFull || undefined}
           >
             <i className="opd-spine" aria-hidden="true" />
             <span className="opd-pnum" aria-hidden="true">
               {isLocked ? <Lock size={11} strokeWidth={1.75} /> : p.part_number}
             </span>
             <div className="opd-pb2">
-              <h4>Part {p.part_number}{p.description ? ` · ${shortenTitle(p.description)}` : ""}</h4>
+              <h4>Part {p.part_number}{rowTitle ? ` · ${rowTitle}` : ""}</h4>
               {p.description ? <div className="opd-pb2-d">{p.description}</div> : null}
               {isLocked ? (
                 <span className="opd-lkn">
@@ -386,12 +416,28 @@ function SetBlock({ set, onOpen, onOpenCompleted }) {
   );
 }
 
-// Extract a short lead phrase from a description ("methods, sourcing,..." -> "Methods & sourcing").
-// Kept minimal - one word capped, else the first N chars.
-function shortenTitle(desc) {
-  if (!desc) return "";
-  const first = String(desc).split(/[,.·]/, 1)[0].trim();
-  return first.length > 40 ? first.slice(0, 38) + "…" : first;
+// Part-row title from the source_section, which the obligations
+// table stores as a semicolon-joined list of headings from the
+// document. Take the first heading only; drop the rest. If the
+// remaining string exceeds ~40 chars, truncate at a word boundary
+// with an ellipsis. Caller puts the full string on the row's
+// `title` attribute so hover reveals the whole list.
+//
+// Falls back to description when source_section is empty (e.g. the
+// single-part solo path where source_section may not be set) - and
+// in that fallback we truncate on the same rule to avoid the row
+// title running long.
+const TITLE_MAX_CHARS = 40;
+function partRowTitle(sourceSection, description) {
+  const src = String(sourceSection || "").trim();
+  const first = src ? src.split(/;/, 1)[0].trim() : "";
+  const raw = first || String(description || "").trim();
+  if (!raw) return "";
+  if (raw.length <= TITLE_MAX_CHARS) return raw;
+  const cut = raw.slice(0, TITLE_MAX_CHARS);
+  const lastSp = cut.lastIndexOf(" ");
+  const truncated = (lastSp > 20 ? cut.slice(0, lastSp) : cut).replace(/[\s,.·-]+$/, "");
+  return truncated + "…";
 }
 
 // ─── Completed section (leaves the set) ────────────────────────
@@ -403,9 +449,9 @@ function CompletedSection({ queue, onOpen }) {
       <div className="opd-cmplh">
         <Check size={14} strokeWidth={2.25} style={{ color: "var(--opd-grnfg)" }} />
         <span className="opd-cmplh-k">Completed this cycle</span>
-        <s className="opd-cmplh-s">
+        <span className="opd-cmplh-s">
           {done.length} lesson{done.length === 1 ? "" : "s"} · {done.length} certificate{done.length === 1 ? "" : "s"}
-        </s>
+        </span>
       </div>
       {done.map((r) => (
         <button
@@ -422,7 +468,10 @@ function CompletedSection({ queue, onOpen }) {
           <div className="opd-pb2">
             <h4>{r.doc_title}{r.total_parts > 1 ? ` · Part ${r.part_number}` : ""}</h4>
             <div className="opd-pb2-d">
-              {r.signed_at ? `Signed ${formatMonthDay(r.signed_at)}` : "Signed"}
+              {(() => {
+                const md = formatMonthDay(r.signed_at);
+                return md ? `Signed ${md}` : "Signed";
+              })()}
               {r.doc_version ? ` · version ${r.doc_version}` : ""}
             </div>
           </div>
@@ -452,7 +501,7 @@ function YearCard({ yearTrack, currentCycleLabel }) {
       <div className="opd-c2h">
         <Calendar size={14} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
         <span className="opd-c2h-k">Your year</span>
-        <s>one cycle per month</s>
+        <span className="opd-lb">one cycle per month</span>
       </div>
       <div className="opd-yr" role="list" aria-label="Year track">
         {cells.map((c, i) => (
@@ -493,34 +542,58 @@ function YearCard({ yearTrack, currentCycleLabel }) {
 }
 
 // ─── Record card ───────────────────────────────────────────────
-function RecordCard({ record }) {
+function RecordCard({ record, cycleLabel }) {
+  // record is now the server-side viewer.record (see api/academy/room:
+  // { signedAllTime, minutesReadThisCycle, checksPassed, retries,
+  //   cyclesClosedCount, firstRun }).
+  // Owner walk 2026-09-01: the tiles were four zeros, which is
+  // technically true but reads as broken. Three of the four now have
+  // real data. The "on-time cycles" tile has no honest number until
+  // at least one published cycle has closed, so we render a first-run
+  // state ("Record starts now") instead of "0 · Never missed".
+  const r = record || {
+    signedAllTime: 0, minutesReadThisCycle: 0, checksPassed: 0,
+    retries: 0, cyclesClosedCount: 0, firstRun: true,
+  };
   return (
     <div className="opd-card2">
       <div className="opd-c2h">
         <Award size={14} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
         <span className="opd-c2h-k">Your record</span>
-        <s>{record.since ? `since ${record.since}` : "all time"}</s>
+        <span className="opd-lb">{cycleLabel ? `since ${cycleLabel}` : "all time"}</span>
       </div>
       <div className="opd-rgrid">
         <div className="opd-rq">
-          <b className="num">{record.signedAllTime}</b>
-          <s>SIGNED</s>
+          <b className="num">{r.signedAllTime}</b>
+          <span className="opd-lb">SIGNED</span>
           <div className="opd-rq-sub">All time</div>
         </div>
         <div className="opd-rq">
-          <b className="num">{record.onTimeCycles}</b>
-          <s>ON-TIME CYCLES</s>
-          <div className="opd-rq-sub">{record.missed > 0 ? `${record.missed} missed` : "Never missed"}</div>
+          {r.firstRun ? (
+            <>
+              <b className="opd-rq-firstrun">Starts now</b>
+              <span className="opd-lb">ON-TIME CYCLES</span>
+              <div className="opd-rq-sub">No cycle has closed yet</div>
+            </>
+          ) : (
+            <>
+              <b className="num">{r.cyclesClosedCount - 0}</b>
+              <span className="opd-lb">ON-TIME CYCLES</span>
+              <div className="opd-rq-sub">of {r.cyclesClosedCount} closed</div>
+            </>
+          )}
         </div>
         <div className="opd-rq">
-          <b className="num">{record.minutesRead}</b>
-          <s>MINUTES READ</s>
+          <b className="num">{r.minutesReadThisCycle}</b>
+          <span className="opd-lb">MINUTES READ</span>
           <div className="opd-rq-sub">This cycle</div>
         </div>
         <div className="opd-rq">
-          <b className="num">{record.checksPassed}</b>
-          <s>CHECKS PASSED</s>
-          <div className="opd-rq-sub">{record.retries > 0 ? `${record.retries} retr${record.retries === 1 ? "y" : "ies"}` : "No retries"}</div>
+          <b className="num">{r.checksPassed}</b>
+          <span className="opd-lb">CHECKS PASSED</span>
+          <div className="opd-rq-sub">
+            {r.retries > 0 ? `${r.retries} retr${r.retries === 1 ? "y" : "ies"}` : "First try each"}
+          </div>
         </div>
       </div>
       <div className="opd-rfoot">
@@ -552,7 +625,7 @@ function StandingCard({ standing }) {
       <div className="opd-c2h">
         <Users size={14} strokeWidth={1.75} style={{ color: "var(--opd-navy)" }} />
         <span className="opd-c2h-k">Company standing</span>
-        <s>{siteCount} site{siteCount === 1 ? "" : "s"} · {cycleLabel}</s>
+        <span className="opd-lb">{siteCount} site{siteCount === 1 ? "" : "s"} · {cycleLabel}</span>
       </div>
       <div className="opd-leg">
         <span><i style={{ background: "var(--opd-amb)" }} />In progress</span>
@@ -596,7 +669,7 @@ function StandingCard({ standing }) {
                   <span className="opd-pp-av" aria-hidden="true">{initials(p.display_name)}</span>
                   <span className="opd-pp-pn">
                     <b>{p.display_name || " "}</b>
-                    <s>{p.is_salaried ? "Salaried" : "Hourly"}</s>
+                    <span className="opd-lb">{p.is_salaried ? "Salaried" : "Hourly"}</span>
                   </span>
                   <span className={"opd-pp-st " + (
                     p.status === "signed" ? "d" : (p.status === "in_progress" ? "p" : "n")
@@ -620,7 +693,7 @@ function StandingCard({ standing }) {
                     <b style={{ color: "var(--opd-n600)" }}>
                       {a.aggregateHourly} hourly team member{a.aggregateHourly === 1 ? "" : "s"}
                     </b>
-                    <s>Not in this cycle's audience</s>
+                    <span className="opd-lb">Not in this cycle's audience</span>
                   </span>
                   <span className="opd-pp-st n">Not enrolled</span>
                 </div>
@@ -630,7 +703,7 @@ function StandingCard({ standing }) {
                   <span className="opd-pp-av" aria-hidden="true">-</span>
                   <span className="opd-pp-pn">
                     <b>No named peers visible</b>
-                    <s>Empty account in scope</s>
+                    <span className="opd-lb">Empty account in scope</span>
                   </span>
                 </div>
               ) : null}
@@ -691,6 +764,8 @@ export default function AcademyRoom({ viewerEmail }) {
   const queue = state.data?.queue || EMPTY_ARR;
   const yearTrack = state.data?.yearTrack || EMPTY_ARR;
   const standing = state.data?.companyStanding || null;
+  const nextCycle = state.data?.nextCycle || null;
+  const viewerRecord = state.data?.viewer?.record || null;
   const todayISO = state.data?.today || new Date().toISOString().slice(0, 10);
 
   const cycleLabel = queue.find((r) => r.cycle_label)?.cycle_label || null;
@@ -743,18 +818,6 @@ export default function AcademyRoom({ viewerEmail }) {
   // Aggregate greeting numbers
   const nextOpenPart = sets.find((s) => s.parts.some((p) => !p._locked))?.parts.find((p) => !p._locked) || null;
 
-  // Record numbers (client-derived; no new endpoint). These are the
-  // honest minimum from the current room payload.
-  const record = {
-    since: cycleLabel || null,
-    signedAllTime: signedCount,
-    onTimeCycles: 0,          // requires records endpoint; placeholder
-    missed: 0,
-    minutesRead: 0,           // TBD from progress rows
-    checksPassed: 0,          // TBD from attempts rows
-    retries: 0,
-  };
-
   return (
     <div className="opd-room opd-room--v5" data-room="academy">
       {/* ── PRIMARY ── */}
@@ -799,17 +862,18 @@ export default function AcademyRoom({ viewerEmail }) {
             cycleEndISO={cycleEndISO}
             todayISO={todayISO}
             streakCycles={0}
+            nextCycle={nextCycle}
             onOpenRecord={() => { /* future */ }}
             onOpenLibrary={() => { /* future */ }}
           />
           <div className="opd-pq">
             <div className="opd-grph">
               <span className="opd-grph-k">Lessons</span>
-              <s className="opd-grph-s">
+              <span className="opd-grph-s">
                 {loading
                   ? "Loading"
                   : `${openCount} open · about ${openMinutes} min`}
-              </s>
+              </span>
             </div>
             {loading ? (
               <div className="opd-set" style={{ padding: 22 }}>
@@ -840,7 +904,7 @@ export default function AcademyRoom({ viewerEmail }) {
       <div className="opd-srow">
         <div className="opd-scol">
           <YearCard yearTrack={yearTrack} currentCycleLabel={cycleLabel} />
-          <RecordCard record={record} />
+          <RecordCard record={viewerRecord} cycleLabel={cycleLabel} />
         </div>
         <StandingCard standing={standing} />
       </div>

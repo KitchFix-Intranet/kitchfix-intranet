@@ -134,7 +134,7 @@ export async function resolveAcademyIdentity(sessionEmail, { supa } = {}) {
   const peopleQ = await db
     .from("people")
     .select(
-      "worker_id, display_name, account_key, is_corp, is_salaried, is_site_leader, status"
+      "worker_id, display_name, title, account_key, is_corp, is_salaried, is_site_leader, status"
     )
     .eq("status", "ACTIVE")
     .ilike("work_email", email);
@@ -296,6 +296,12 @@ export async function resolveAcademyIdentity(sessionEmail, { supa } = {}) {
     workerId,
     personId,
     displayName: p.display_name || null,
+    // people.title is the display role (e.g. "Director of Operations"),
+    // separate from account_key which is the site code. The rail needs
+    // this to render a role beneath the person's name; without it the
+    // rail was defaulting to account_key ("Corporate"), which reads
+    // as a job title but is not one.
+    roleTitle: p.title || null,
     eligible,
     isSalaried: !!p.is_salaried,
     accountKey: accountKey || null,
