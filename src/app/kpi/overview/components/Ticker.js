@@ -38,22 +38,27 @@ function directionClass(deltaPct, axis) {
   return "kpi-ov-nb";
 }
 
-export default function Ticker({ ticker }) {
+export default function Ticker({ ticker, posture }) {
   if (!ticker || !ticker.state) return null;
   const stateClass = STATE_CLASS[ticker.state] || "kpi-ov-ticker-ontrack";
+  // R-32 (site posture only): the state pill is already the margin
+  // verdict and the GM card carries the number - a GM segment in the
+  // ticker is a third rendering of the same idea. Corporate keeps it.
+  const showGmSegment = posture !== "site_leader";
 
   return (
     <div
       className={`kpi-ov-ticker ${stateClass}`}
       data-kpi-ov="ticker"
       data-kpi-ov-state={ticker.state}
+      data-kpi-ov-posture={posture || null}
     >
       <span className="kpi-ov-ticker-st" data-kpi-ov="ticker-state">
         {ticker.state_copy}
       </span>
 
-      {/* Gross margin segment - always present when gm % is available */}
-      {ticker.gm_pct_actual != null && ticker.gm_pct_target != null && (
+      {/* Gross margin segment - present on corporate, hidden on site */}
+      {showGmSegment && ticker.gm_pct_actual != null && ticker.gm_pct_target != null && (
         <span className="kpi-ov-ticker-tk" data-kpi-ov="ticker-gm">
           <span className="kpi-ov-ticker-tk-k">Gross margin</span>
           <span className="kpi-ov-ticker-tk-v kpi-ov-num">

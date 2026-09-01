@@ -47,7 +47,18 @@ function fmtDateShort(iso) {
   return `${m}/${d}`;
 }
 
-function LaborDrill({ href, laborLever, throughDate }) {
+function LaborDrill({ href, laborLever, throughDate, isSite }) {
+  // R-32 site posture requirement: the drill button carries the
+  // verdict - the gap-to-target beneath the actual percent. The
+  // lever's variance_pct_display is the "5.4% under target" pattern
+  // already computed server-side (cost axis: under=good, over=bad).
+  // Corporate keeps its existing seven-column lever table, so it
+  // doesn't need the tail here - render the variance ONLY on site
+  // posture to keep corporate visually byte-identical.
+  const variance = isSite ? (laborLever?.variance_pct_display || null) : null;
+  const varClass = laborLever?.direction === "good"
+    ? "kpi-ov-good"
+    : laborLever?.direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb";
   return (
     <Link href={href} className="kpi-ov-dr kpi-ov-dr-lab" data-kpi-ov="drill" data-kpi-ov-drill="labor">
       <div className="kpi-ov-dr-top">
@@ -66,8 +77,11 @@ function LaborDrill({ href, laborLever, throughDate }) {
           <div className="kpi-ov-dr-k">Of revenue</div>
           <div className="kpi-ov-dr-v kpi-ov-num">
             {laborLever?.actual_pct_display || "-"}
-            {laborLever?.target_pct_display && <> <small>target {laborLever.target_pct_display}</small></>}
+            {laborLever?.target_pct_display && <> <small>vs {laborLever.target_pct_display} target</small></>}
           </div>
+          {variance && (
+            <div className={`kpi-ov-dr-gap ${varClass}`} data-kpi-ov="drill-gap">{variance} target</div>
+          )}
         </div>
         <div>
           <div className="kpi-ov-dr-k">Inside</div>
@@ -78,16 +92,23 @@ function LaborDrill({ href, laborLever, throughDate }) {
   );
 }
 
-function PurchasingDrill({ href, purchasingDrill, throughDate }) {
+function PurchasingDrill({ href, purchasingDrill, throughDate, isSite }) {
   // Renders the combined-purchasing summary shipped by the resolver
   // on payload.drill.purchasing (engine follow-up PR #919). Three
   // fields, same shape as the Labor drill:
   //   - spent_display                                (dollars)
   //   - pct_of_revenue_display + target_pct_display  (percent)
+  //   - variance_pct_display + direction             (verdict, R-32)
   //   - Inside                                       (label only)
   // R-17b: the "Also tracked" band (5002.1 / 5002.5 / 5017.3) is
   // deliberately outside this measured figure - Kevin's ruling
   // 2026-08-31 on PR #919 resolver comment.
+  // Corporate keeps its lever table; render the verdict tail ONLY
+  // on site posture so corporate stays visually byte-identical.
+  const variance = isSite ? (purchasingDrill?.variance_pct_display || null) : null;
+  const varClass = purchasingDrill?.direction === "good"
+    ? "kpi-ov-good"
+    : purchasingDrill?.direction === "bad" ? "kpi-ov-bad" : "kpi-ov-nb";
   return (
     <Link href={href} className="kpi-ov-dr kpi-ov-dr-pur" data-kpi-ov="drill" data-kpi-ov-drill="purchasing">
       <div className="kpi-ov-dr-top">
@@ -107,9 +128,12 @@ function PurchasingDrill({ href, purchasingDrill, throughDate }) {
           <div className="kpi-ov-dr-v kpi-ov-num">
             {purchasingDrill?.pct_of_revenue_display || "-"}
             {purchasingDrill?.target_pct_display && (
-              <> <small>target {purchasingDrill.target_pct_display}</small></>
+              <> <small>vs {purchasingDrill.target_pct_display} target</small></>
             )}
           </div>
+          {variance && (
+            <div className={`kpi-ov-dr-gap ${varClass}`} data-kpi-ov="drill-gap">{variance} target</div>
+          )}
         </div>
         <div>
           <div className="kpi-ov-dr-k">Inside</div>
@@ -125,6 +149,7 @@ export default function DrillButtons({ payload, includeSalary = false }) {
   const filters = payload.filters;
   const laborLever = payload.levers?.find(l => l.line_code === "3100");
   const purchasingDrill = payload.drill?.purchasing || null;
+  const isSite = payload.posture === "site_leader";
 
   return (
     <div className="kpi-ov-drills" data-kpi-ov="drills">
@@ -132,11 +157,13 @@ export default function DrillButtons({ payload, includeSalary = false }) {
         href={buildDrillHref("/kpi/labor", filters, { includeSalary })}
         laborLever={laborLever}
         throughDate={payload.sources?.labor?.through_date}
+        isSite={isSite}
       />
       <PurchasingDrill
         href={buildDrillHref("/kpi/purchasing", filters)}
         purchasingDrill={purchasingDrill}
         throughDate={payload.sources?.purchases?.through_date}
+        isSite={isSite}
       />
     </div>
   );

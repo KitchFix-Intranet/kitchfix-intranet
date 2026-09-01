@@ -70,6 +70,7 @@ import Chart from "./components/Chart";
 import DrillButtons from "./components/DrillButtons";
 import PnlStatement from "./components/PnlStatement";
 import AlsoTracked from "./components/AlsoTracked";
+import WhatIsLeft from "./components/WhatIsLeft";
 import SkeletonBoard from "./components/SkeletonBoard";
 
 const LAST_ACCOUNT_KEY = "kpi:overview:lastAccount";
@@ -412,17 +413,37 @@ export default function KpiOverviewPage() {
           </div>
         )}
         <SourcesLine sources={data.sources} freshness={data.freshness} />
-        <Ticker ticker={data.ticker} />
+        <Ticker ticker={data.ticker} posture={data.posture} />
         <CardsRow cards={data.cards} posture={data.posture} rangeMeta={rangeMeta} />
-        <CogsLevers
-          levers={data.levers}
-          cogsCard={cogsCard}
-          open={data.period_state === "open"}
-          postureLabel={data.posture === "site_leader" ? "the levers behind gross margin" : "percent of revenue against target"}
-          title={data.posture === "site_leader" ? "Your cost of goods lines" : "Cost of goods lines"}
-        />
-        <Chart chart={data.chart} />
-        <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
+        {/* R-34 "What is left" - self-hides on corporate, closed
+            periods, and FYTD. Resolver returns null in those cases. */}
+        <WhatIsLeft whatIsLeft={data.what_is_left} />
+        {/* R-32 site posture drops the seven-column lever table -
+            the drill buttons carry the verdict instead. Corporate
+            keeps it. */}
+        {data.posture === "corporate" && (
+          <CogsLevers
+            levers={data.levers}
+            cogsCard={cogsCard}
+            open={data.period_state === "open"}
+            postureLabel={"percent of revenue against target"}
+            title={"Cost of goods lines"}
+          />
+        )}
+        {/* Site posture: drills before chart (matches the render's
+            operator ordering - "what is driving it" comes before the
+            week-by-week review). Corporate keeps chart then drills. */}
+        {data.posture === "site_leader" ? (
+          <>
+            <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
+            <Chart chart={data.chart} />
+          </>
+        ) : (
+          <>
+            <Chart chart={data.chart} />
+            <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
+          </>
+        )}
         <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
         <AlsoTracked payload={data} />
       </div>
