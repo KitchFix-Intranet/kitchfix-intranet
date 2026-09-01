@@ -68,7 +68,12 @@ function Row({ row, isOpen }) {
             {fmtMoney(Math.abs(variance))} {variance <= 0 ? "under" : "over"}
           </span>
         ) : (
-          <DashOrValue state="missing" />
+          /* 2026-09-01 defect fix: unreported actual against a real
+             budget can no longer render a phantom savings ($115 under
+             on a line with no measured spend). Server sets variance
+             to null when reported=false; client renders "no data" in
+             neutral so the operator sees the gap for what it is. */
+          <span className="kpi-ov-nb">no data</span>
         )}
       </td>
     </tr>
