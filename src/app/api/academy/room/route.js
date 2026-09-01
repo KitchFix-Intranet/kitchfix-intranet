@@ -133,10 +133,20 @@ export async function GET() {
   // 2. Kevin's requirements + the docs / obligations / cycles they
   //    reference, in parallel. The reqs table has an index on
   //    (worker_id, due_date) so this is a small point read.
+  //
+  // Waived requirements are FILTERED OUT server-side (spec 5.3). A
+  // waived requirement is not work: it is not in the queue, not in
+  // the count, and its minutes are not summed. Records is where the
+  // audit trail lives, and Records is the surface that renders
+  // waived requirements with the waive reason + waiver. Filtering
+  // at the query means a waive reason (which may contain an
+  // operational explanation) never reaches a surface that will not
+  // render it.
   const reqsQ = await supa
     .from("academy_requirements")
-    .select("requirement_id, worker_id, person_id, doc_id, obligation_key, doc_version, est_minutes, source, cycle_id, due_date, issued_at, waived_at, waive_reason")
+    .select("requirement_id, worker_id, person_id, doc_id, obligation_key, doc_version, est_minutes, source, cycle_id, due_date, issued_at")
     .eq("worker_id", identity.workerId)
+    .is("waived_at", null)
     .order("due_date", { ascending: true })
     .order("doc_id", { ascending: true })
     .order("obligation_key", { ascending: true });
@@ -242,7 +252,10 @@ export async function GET() {
       source: r.source,
       cycle_id: r.cycle_id,
       cycle_label: cyc?.label || null,
-      waived: r.waived_at != null,
+      // No `waived` field here - waived requirements are filtered
+      // out at the query above and do not reach the wire. A field
+      // that is always false is a trap for the next reader. When
+      // Records ships, waived rows land there directly.
       signed: att != null,
       signed_at: att?.signed_at || null,
       certificate_serial: att?.certificate_serial || null,

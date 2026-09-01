@@ -315,7 +315,7 @@ function QueueCard({ queue, loading, onOpen }) {
           aria-label={r.signed ? `View certificate for ${r.doc_title}` : `Open ${r.doc_title} - ${r.obligation_key}`}
         >
           <span
-            className={"opd-queue-dot opd-queue-dot--" + (r.waived ? "waived" : r.signed ? "done" : "open")}
+            className={"opd-queue-dot opd-queue-dot--" + (r.signed ? "done" : "open")}
             aria-hidden="true"
           />
           <div className="opd-queue-body">

@@ -276,6 +276,8 @@ Plus `manual` for one-off admin issuance. Every requirement stores its source, w
 
 A requirement may be waived, never deleted. Waiver stores who, when, and a required reason. Waived requirements remain visible in Records.
 
+**Queue-versus-Records split, ruled 2026-09-01.** A waived requirement is **not work**: it does not appear in the Academy queue, it is not counted in "N to go", and its minutes are not summed. The waiver filter runs server-side at `/api/academy/room` (`.is("waived_at", null)`) so the waive reason - which may carry an operational explanation - never reaches a surface that will not render it. Records is where the audit trail lives, and Records is the only surface that renders waived requirements, with the reason + waiver + waived_at inline. When the Records room ships, its queries drop the waiver filter and add columns for those fields.
+
 ---
 
 ## 6. Cycles

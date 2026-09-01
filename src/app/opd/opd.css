@@ -962,12 +962,9 @@
 }
 .opd-queue-dot--open { background: var(--status-upcoming-strong); }
 .opd-queue-dot--done { background: var(--status-entered-strong); }
-.opd-queue-dot--waived {
-  background: var(--surface-card);
-  border: 1.5px dashed var(--status-upcoming-strong);
-  width: 10px;
-  height: 10px;
-}
+/* No .opd-queue-dot--waived - waived requirements are filtered out
+   at /api/academy/room before reaching the wire. They render in
+   Records when that room ships, not in the queue. */
 /* Done row: muted, kept in the list as a completion receipt. */
 .opd-queue-row--done { opacity: 0.6; }
 .opd-queue-row--done .opd-queue-cta {
