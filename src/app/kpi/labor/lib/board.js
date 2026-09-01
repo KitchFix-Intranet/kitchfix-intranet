@@ -240,6 +240,14 @@ function parseISO(iso) {
 function sumRows(rows, workerToEmail = new Map()) {
   let amount = 0, hours = 0, ot = 0, unpriced_hrs = 0;
   let complete = 0, total = 0;
+  // R-38 (2026-09-01): the OT card was rebuilt from fiscal-year-avg
+  // to this-week-vs-last-week in hours. Per-week aggregates now carry
+  // ot_cost (1.5x dollars) and ot_workers (rows collected for
+  // person-key dedupe via workerToEmail). Range folds also carry
+  // them so the FY supporting line has the same numbers it had
+  // before the rebuild.
+  let ot_cost = 0;
+  const otRows = [];
   // V42 REVISED (C1 state model). Sum status-based approval signals
   // separately from the coverage-based unpriced_hrs. draft_hours can
   // include priced drafts and is NOT the money signal; the client
@@ -283,6 +291,8 @@ function sumRows(rows, workerToEmail = new Map()) {
     }
     if (Number(r.draft_hours || 0) > 0.004 && r.worker_id) approvalRows.push(r);
     if (r.coverage_state === "complete") complete += 1;
+    ot_cost += Number(r.dollars_overtime || 0);
+    if (Number(r.hours_overtime || 0) > 0.004 && r.worker_id) otRows.push(r);
   }
   return {
     amount: r2(amount), hours: r2(hours), ot: r2(ot), unpriced_hrs: r2(unpriced_hrs),
@@ -294,6 +304,10 @@ function sumRows(rows, workerToEmail = new Map()) {
     still_costing_hours: r2(still_costing_hours),
     oldest_draft_date,   // pass-through - MIN across rows, null when no drafts
     approval_people: countDistinctPeople(approvalRows, workerToEmail),
+    // R-38 additions: 1.5x OT cost sum + distinct OT-earning people
+    // (person-key dedupe via workerToEmail, matches approval_people).
+    ot_cost: r2(ot_cost),
+    ot_people: countDistinctPeople(otRows, workerToEmail),
   };
 }
 
@@ -314,6 +328,10 @@ function buildWeekAggregates(actuals, weekStarts, workerToEmail = new Map()) {
     out.push({
       week_start: wStart, week_end,
       amount: s.amount, hours: s.hours, ot_hours: s.ot,
+      // R-38 per-week additions (2026-09-01). Additive; existing
+      // consumers (chart, StoryBlock) untouched.
+      ot_cost: s.ot_cost,
+      ot_people: s.ot_people,
       unpriced_hrs: s.unpriced_hrs,
       complete_ww: s.complete, total_ww: s.total, worker_count: s.worker_count,
       coverage_states: [...new Set(rows.map(r => r.coverage_state))],
@@ -540,6 +558,11 @@ export function buildBoard({
       spent: w.amount,
       hours: w.hours,
       ot_hours: w.ot_hours,
+      // R-38 (2026-09-01) per-week OT cost + distinct OT people
+      // (person-key deduped). Additive; existing week consumers keep
+      // reading spent/hours/ot_hours as before.
+      ot_cost: w.ot_cost,
+      ot_people: w.ot_people,
       unpriced_hrs: w.unpriced_hrs,
       complete_ww: w.complete_ww,
       total_ww: w.total_ww,
@@ -672,6 +695,102 @@ export function buildBoard({
   }
   if (longest_ot_week && longest_ot_week.hours < 0.004) longest_ot_week = null;
 
+  // R-38 (2026-09-01): most recent CLOSED week within the selected
+  // range, plus the prior CLOSED week for comparison. Weeks are
+  // already scoped to [start, end] via weekStartsInRange up top;
+  // filter to state==='closed' and take the last two by week_start.
+  // Per R-36 the board stays period-organised but this card is the
+  // documented exception - overtime is a weekly scheduling decision.
+  //
+  // Salaried-only accounts return early above (line 413); this block
+  // only runs on hourly boards. Zero OT in the most recent week is a
+  // real zero (0.0 hrs) - the render distinguishes it from "no closed
+  // weeks in range" via applicable_reason.
+  const closedWeeks = weeksOut.filter(w => w.state === "closed");
+  const recentWeek = closedWeeks.length > 0 ? closedWeeks[closedWeeks.length - 1] : null;
+  const priorWeek  = closedWeeks.length >= 2 ? closedWeeks[closedWeeks.length - 2] : null;
+
+  // Format helpers scoped to this block. Server-side per §9B: the
+  // client renders these strings unchanged, never computes a delta.
+  const fmt$Whole = (n) => n == null ? null
+    : `$${Math.abs(Math.round(Number(n))).toLocaleString("en-US")}${n < 0 ? " (credit)" : ""}`;
+  const fmtHrs1 = (n) => n == null ? null : `${Number(n).toFixed(1)} hrs`;
+  const fmtDateShort = (iso) => {
+    if (!iso) return null;
+    const [, m, d] = iso.split("-");
+    return `${m}/${d}`;
+  };
+  const fmtWeekLabel = (w) => {
+    if (!w) return null;
+    return `${fmtDateShort(w.week_start)} – ${fmtDateShort(w.week_end)}`;
+  };
+
+  const recentPayload = recentWeek ? {
+    week_start: recentWeek.week_start,
+    week_end:   recentWeek.week_end,
+    period_no:  recentWeek.period_no,
+    ot_hours:   r2(recentWeek.ot_hours || 0),
+    ot_hours_display: fmtHrs1(recentWeek.ot_hours || 0),
+    ot_cost:    r2(recentWeek.ot_cost || 0),
+    ot_cost_display: fmt$Whole(recentWeek.ot_cost || 0),
+    ot_people:  recentWeek.ot_people || 0,
+    workers_total: recentWeek.worker_count || 0,
+    date_label: fmtWeekLabel(recentWeek),
+  } : null;
+
+  const priorPayload = priorWeek ? {
+    week_start: priorWeek.week_start,
+    week_end:   priorWeek.week_end,
+    period_no:  priorWeek.period_no,
+    ot_hours:   r2(priorWeek.ot_hours || 0),
+    ot_hours_display: fmtHrs1(priorWeek.ot_hours || 0),
+    date_label: fmtWeekLabel(priorWeek),
+  } : null;
+
+  // Direction word + delta. Kevin's rule: "no signed numbers"; delta
+  // is expressed as absolute magnitude paired with a direction word.
+  let deltaPayload = null;
+  if (recentPayload && priorPayload) {
+    const d = r2((recentPayload.ot_hours || 0) - (priorPayload.ot_hours || 0));
+    const direction = d > 0.05 ? "up" : d < -0.05 ? "down" : "flat";
+    const absMag = Math.abs(d);
+    deltaPayload = {
+      hours: d,
+      abs_hours: r2(absMag),
+      direction,
+      // "up 8.3 hrs from 4.1" / "down 2.2 hrs from 14.6" / "flat vs 4.1"
+      display: direction === "flat"
+        ? `flat vs ${priorPayload.ot_hours_display}`
+        : `${direction} ${absMag.toFixed(1)} hrs from ${priorPayload.ot_hours_display.replace(" hrs", "")}`,
+    };
+  }
+
+  // Applicable + reason. Client renders one of:
+  //   - full card (recent + prior + delta)
+  //   - "no prior week to compare" (recent only)
+  //   - "no closed weeks in range yet" (recent null)
+  // Salaried-only accounts don't reach this code path (buildBoard
+  // returns early at line 413); nothing renders here for them.
+  let applicable = true;
+  let applicable_reason = null;
+  if (!recentPayload) {
+    applicable = false;
+    applicable_reason = "no_closed_weeks";
+  } else if (!priorPayload) {
+    applicable = true;
+    applicable_reason = "no_prior_week";
+  }
+
+  // Neutral state until Kevin rules on the week-over-week thresholds.
+  // Prompt: "Until Kevin rules, ship the chip as neutral with the
+  // movement stated in words." The state key stays for downstream
+  // consumers; the client renders "movement" (direction word) instead
+  // of a good/bad tone.
+  const wow_state = "neutral";
+  const wow_state_copy = deltaPayload
+    ? (deltaPayload.direction === "flat" ? "Flat vs last week" : `${deltaPayload.direction === "up" ? "Up" : "Down"} vs last week`)
+    : (applicable_reason === "no_prior_week" ? "First closed week in range" : "No closed weeks in range yet");
+
   // V32-10 - payroll data. Weeks affected = count of weeks with any
   // unapproved hours (drafts in Rippling, priced or not).
   // HS FB1 hotfix 2026-08-25: keys off draft_hours per the same ruling
@@ -771,6 +890,30 @@ export function buildBoard({
       workers: otWorkerIds.size,
       workers_total: distinctWorkers,
       longest_week: longest_ot_week,
+      // R-38 (2026-09-01) rebuild - hero is week-over-week hours,
+      // FY figures above become the demoted supporting line. Every
+      // display string is formatted server-side (§9B). Client does
+      // NOT compute the delta.
+      recent_week: recentPayload,
+      prior_week:  priorPayload,
+      wow_delta:   deltaPayload,
+      applicable,
+      applicable_reason,
+      wow_state,
+      wow_state_copy,
+      // Supporting line: "1.3% of hours this year · peak week 03/09
+      // at 32.33 hrs" - assembled here so the client is presentational.
+      // Peak-week phrase drops when longest_week is null.
+      supporting_line: (() => {
+        const parts = [];
+        parts.push(`${ot_pct.toFixed(1)}% of hours this range`);
+        if (longest_ot_week) {
+          const iso = longest_ot_week.week_start;
+          const [, m, d] = iso.split("-");
+          parts.push(`peak week ${m}/${d} at ${Number(longest_ot_week.hours).toFixed(1)} hrs`);
+        }
+        return parts.join(" · ");
+      })(),
     },
     hours_vs_budget: {
       worked: r2(rangeTotals.hours),

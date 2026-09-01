@@ -194,81 +194,98 @@ function PaceCard({ board, approvalsHourly }) {
 // path uses it too; keep a local alias for any legacy callers here.
 const pillFor = _pillForShared;
 
-// ── Overtime ──────────────────────────────────────────────────────
-// V32-5..V32-7. Thresholds come from server config (never hardcoded).
-// V34 - state IS the pill tone: clear=good, watch=warn, alarm=bad.
-// Hrs to target carries the same tone as the state (headroom good,
-// close to limit watch, past limit bad).
+// ── Overtime (R-38, 2026-09-01 rebuild) ──────────────────────────
+// The card was fiscal-year avg vs 8% threshold - a portfolio-health
+// number on a board people use to run a week. R-38 rebases it on the
+// most recent CLOSED week within the selected range vs the prior
+// CLOSED week. Every dollar / hour / direction word arrives formatted
+// on board.overtime.{recent_week, prior_week, wow_delta,
+// supporting_line} (§9B: server computes, client renders).
+//
+// Chip: neutral until Kevin rules on WoW breakpoints - the copy is
+// stated in words ("Up vs last week" / "Down vs last week" / "Flat vs
+// last week" / "First closed week in range" / "No closed weeks in
+// range yet").
+//
+// Edge cases distinct-rendered:
+//   - applicable_reason='no_closed_weeks' -> hero says so, no
+//     comparison, no supporting line
+//   - applicable_reason='no_prior_week'   -> hero + week label +
+//     "no prior week to compare"
+//   - board.applies===false with reason='salaried_only' -> the
+//     board panel is a different render entirely; this function
+//     doesn't reach that code path (buildBoard returns early). We
+//     defensively render "not applicable · salaried account" if
+//     called anyway so the shape can't accidentally read "0.0 hrs".
 function OvertimeCard({ board, salary }) {
+  // Defensive: buildBoard returns applies=false for salaried_only
+  // and envelope. If a caller still renders this card, surface the
+  // exact copy the R-38 prompt requires. Prevents the F-8 shape
+  // ("every shift approved" on a zero-shift account) recurring here.
+  if (board?.applies === false && board?.reason === "salaried_only") {
+    return (
+      <SignalCard state="neutral">
+        <Head eyebrow="OVERTIME" state="neutral" label="—" help={<HelpPop id="qOvertime" title="Overtime" body={OVERTIME_BODY} />} />
+        <Hero>
+          <span className="kpi-sig-hero-val num">—</span>
+        </Hero>
+        <Sub>not applicable · salaried account</Sub>
+      </SignalCard>
+    );
+  }
+
   const ot = board?.overtime;
-  const pct = ot?.pct ?? 0;
-  const workedHours = board?.hours ?? 0;
-  const watch = ot?.watch_pct;
-  const alarm = ot?.alarm_pct;
-  const otState = ot?.state ?? "clear";
+  const recent = ot?.recent_week;
+  const prior  = ot?.prior_week;
+  const delta  = ot?.wow_delta;
+  const supporting = ot?.supporting_line;
+  const chipCopy = ot?.wow_state_copy || "Overtime";
+  const applicable = ot?.applicable !== false;
+  const reason = ot?.applicable_reason;
 
-  // V34 - one expression, both surfaces read it.
-  const state = otState === "alarm" ? "bad" : otState === "watch" ? "warn" : "good";
-  const label = state === "bad" ? "OVER" : state === "warn" ? "WATCH" : "ON TARGET";
-  const heroTone = state === "bad" ? "bad" : state === "warn" ? "warn" : null;
+  // Neutral tone across the board until Kevin rules on the WoW
+  // breakpoints. Passing state="neutral" gates the SignalCard chrome
+  // to the muted-navy dot; the direction word carries meaning in
+  // words rather than color.
+  const state = "neutral";
 
-  const otCost = ot?.cost;
-  const otWorkers = ot?.workers ?? 0;
-  const workersTotal = ot?.workers_total ?? 0;
-  const longest = ot?.longest_week;
+  // "No closed weeks in range yet" - render the reason as the hero
+  // sub-line and drop the supporting line + facts (no numbers to
+  // stand behind).
+  if (!applicable || !recent) {
+    return (
+      <SignalCard state={state}>
+        <Head eyebrow="OVERTIME" state={state} label={chipCopy} help={<HelpPop id="qOvertime" title="Overtime" body={OVERTIME_BODY} />} />
+        <Hero>
+          <span className="kpi-sig-hero-val num">—</span>
+        </Hero>
+        <Sub>no closed weeks in range yet</Sub>
+      </SignalCard>
+    );
+  }
 
-  const allowed = (alarm != null && workedHours > 0) ? (workedHours * alarm / 100) : null;
-  const remaining = (allowed != null) ? allowed - (ot?.hours ?? 0) : null;
-  const overTarget = remaining != null && remaining < 0;
-  // 2026-08-26 polish round 2 item 3 - "Hrs to target 27.83" at 0% OT
-  // reads like a goal to reach; an operator does not want to reach an
-  // overtime target. Label swap: "Headroom" when under, "Hrs over
-  // target" when over (unchanged - already correct on CIN-OH at
-  // 9.6%). Watch band still tones warn because the operator IS
-  // approaching the ceiling; only the label changed.
-  const hoursFact = remaining == null
-    ? { label: "Headroom", value: "—", muted: true }
-    : overTarget
-      ? { label: "Hrs over target", value: fmtHrs(Math.abs(remaining)), tone: "bad" }
-      : { label: "Headroom", value: `${fmtHrs(remaining)} hrs`, tone: state === "warn" ? "warn" : "good" };
+  // Hero = most recent closed week's OT hours. Zero is a real zero.
+  const heroDisplay = recent.ot_hours_display || fmtHrs(recent.ot_hours || 0);
+  const subLine = reason === "no_prior_week"
+    ? `${recent.date_label || "this week"} · no prior week to compare`
+    : (delta ? `${recent.date_label} · ${delta.display}` : recent.date_label);
 
-  // V34 sub-line copy. Salary PR 3 C2 - when salary is on, OT % is
-  // a share of HOURLY cost. 2026-08-27 polish sweep defect 3 - the
-  // prior "watch above 0% · off target above 8%" read as "zero
-  // overtime is the goal", which contradicts the homestand board's
-  // framing ("40-hour clock resets Monday - a packed week carries OT
-  // whatever you do"). Two surfaces on the same board disagreeing
-  // about whether OT is a failure. New line drops the "watch above X%"
-  // clause and states the framing directly.
-  const boundsCopy = salary
-    ? "share of hourly cost"
-    : alarm != null
-      ? `off target above ${alarm}% · some OT is normal`
-      : "of hours worked";
+  const facts = [
+    { label: "OT cost", value: recent.ot_cost_display || "—" },
+    { label: "People with OT", value: recent.workers_total > 0
+      ? `${recent.ot_people || 0} of ${recent.workers_total}`
+      : `${recent.ot_people || 0}` },
+  ];
 
-  // 2026-08-26 - "OT workers" -> "Week workers OT" per owner. Same
-  // figure (N with any OT / total distinct workers), clearer label.
-  const covers = buildCoversLine(board, "overtime");
   return (
     <SignalCard state={state}>
-      <Head eyebrow="OVERTIME" state={state} label={label} help={<HelpPop id="qOvertime" title="Overtime" body={OVERTIME_BODY} />} />
+      <Head eyebrow="OVERTIME" state={state} label={chipCopy} help={<HelpPop id="qOvertime" title="Overtime" body={OVERTIME_BODY} />} />
       <Hero>
-        <span className={`kpi-sig-hero-val num ${heroTone === "bad" ? "kpi-sig-hero-bad" : heroTone === "warn" ? "kpi-sig-hero-warn" : ""}`}>
-          {pct.toFixed(1)}%
-        </span>
+        <span className="kpi-sig-hero-val num">{heroDisplay}</span>
       </Hero>
-      <Sub>{boundsCopy}</Sub>
-      <Facts items={[
-        { label: "OT cost", value: otCost != null ? fmt$(otCost) : "—" },
-        hoursFact,
-        { label: "Week workers OT", value: workersTotal > 0 ? `${otWorkers} of ${workersTotal}` : "—" },
-        // 2026-08-26 polish round 2 item 3 - Peak OT week ABSENT (not
-        // dashed) when there is no OT. Standing rule: a fact whose
-        // premise does not hold is gone, not "—". Wrap in conditional
-        // spread so an empty pill collapses out of the grid.
-        ...(longest ? [{ label: "Peak OT week", value: `${longest.week_start.slice(5).replace("-", "/")} · ${fmtHrs(longest.hours)}` }] : []),
-      ]} />
-      <Covers text={covers} />
+      <Sub>{subLine}</Sub>
+      <Facts items={facts} />
+      {supporting && <Covers text={supporting} />}
     </SignalCard>
   );
 }
