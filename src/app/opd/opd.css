@@ -64,7 +64,11 @@
      tokens.css:201 (1520px) and read by KPI at kpi.css:205. OPD used
      to hardcode 1300px here. */
   max-width: var(--sc2-shell-max);
-  margin: 16px auto 60px;
+  /* margin-bottom dropped from 60px to 20px 2026-09-01. On a layout
+     whose point is fitting the viewport, 60px of unused space below
+     the card was doing nothing (owner ruling follow-up). --opd-chrome
+     is re-derived from the new sum below. */
+  margin: 16px auto 20px;
   padding: 0 20px;
   color: var(--text-default);
   font-family: var(--font-ui);
@@ -2565,22 +2569,23 @@
      ---
      18px    .opd-uni margin-bottom
      16px    .opd-sbody padding-bottom
-     60px    .opd-frame margin-bottom
+     20px    .opd-frame margin-bottom (dropped from 60 - owner
+             ruling follow-up 2026-09-01; on a viewport-fit layout
+             the extra 40 was doing nothing)
      ---
-     94px    below the card
+     54px    below the card
      ---
-   Total = 143 + 94 = 237px. Rounded to 252px because probe at
-   1520x900 shows document scrollHeight overflows viewport by 12px
-   at 240 (frame margin-bottom is 60, which extends the frame past
-   the viewport bottom even when the card fits). 252 gives page-
-   scroll = 0 with a small safety margin. The card also carries
+   Total = 143 + 54 = 197px. Rounded to 215 because probe at
+   1520x900 shows document scrollHeight overflows viewport by 7px
+   at 205 (kf-topnav sub-pixel rendering + rounding elsewhere).
+   215 gives page-scroll = 0 with a small floor. Card carries
    min-height: 440px so short viewports still render a usable
    module (page WILL scroll then). Below 960px the whole
    viewport-fit rule releases (see @media at end of module block).
 
    Owner ruling 2026-09-01: card capped at 1080px + centred. Held. */
 .opd-app {
-  --opd-chrome: 252px;
+  --opd-chrome: 215px;
 }
 .opd-uni {
   max-width: 1080px;
@@ -4772,18 +4777,31 @@
   cursor: default;
 }
 .opd-set:hover { box-shadow: var(--opd-sh-2); }
-/* Solo set: whole row is a button. Padding replaces the seth padding. */
+/* Solo set: whole button IS the row. Same flat grammar as .opd-pr
+   (direct children: .opd-lead + .opd-pb + .opd-pm + .opd-go) so the
+   right-column edges align pixel-for-pixel with multi-part rows.
+   Owner ruling 2026-09-01 follow-up: the previous solo used a
+   .opd-sright flex-gap wrapper that offset the due edge by 10px. */
 button.opd-set.opd-set--solo {
+  display: flex;
+  align-items: center;
+  gap: 0;
   padding: 11px 13px;
   cursor: pointer;
 }
 button.opd-set.opd-set--solo:hover {
   background: #F8FBFD;
 }
-.opd-set--solo .opd-seth {
-  padding: 0;
-  background: none;
-  border-bottom: none;
+button.opd-set.opd-set--solo:hover .opd-go {
+  background: var(--opd-navy);
+  color: #fff;
+  border-color: var(--opd-navy);
+}
+/* Solo title is a bit heavier than a part row's h4 to read as a
+   set-level header, not a subordinate part. */
+.opd-set--solo .opd-pb h4 {
+  font-size: var(--opd-t-row);
+  font-weight: 750;
 }
 .opd-seth {
   display: flex;
@@ -4980,6 +4998,12 @@ button.opd-set.opd-set--solo:hover {
   font-size: var(--opd-t-meta);
   font-weight: 700;
   color: var(--opd-n600);
+  /* Prevent wrap: the completed row's serial is elided in JS but
+     other cells ("Due Sep 30") also shouldn't wrap on narrow
+     viewports. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Due-urgency (spec 18.10): neutral outside the last 5 days, amber
    inside, red overdue. Amber overrides pr--dn's success color. */

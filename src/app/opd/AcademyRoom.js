@@ -113,10 +113,36 @@ function docClassFamily(docClass) {
   return "gov";
 }
 
-// Description precedence per prompt: card_line > obligation.description
-// > null. NEVER source_section. If neither exists, render nothing.
-function rowDescription(row) {
-  return (row.card_line || row.description || "").trim() || null;
+// Two description flavours - owner ruling 2026-09-01 follow-up:
+//
+// setHeaderDescription() is for a set HEADER (solo case; multi-part
+// set headers use status text instead). Prefer card_line (which
+// describes the whole document) then fall back to the obligation
+// description.
+//
+// partRowDescription() is for a PART row and returns the obligation's
+// description ONLY. card_line is a document-level line - printing it
+// on every part of a multi-part doc renders identical text on every
+// row. When the obligation description is empty, render nothing -
+// the fix for the empty state is authored content, not code
+// substituting a document-level string.
+function setHeaderDescription(row) {
+  return String(row.card_line || row.description || "").trim() || null;
+}
+function partRowDescription(row) {
+  return String(row.description || "").trim() || null;
+}
+// Certificate serials (KFA-YYYY-NNNNNN, 15 chars) wrap to two lines
+// in the fixed 96px .opd-pm column of the Completed row - the browser
+// breaks on the hyphens and each of the three chunks becomes its own
+// line. Elide the middle year so it renders as "KFA-...000004" and
+// fits on one line. Full string sits on the row's title attribute.
+// Owner ruling 2026-09-01 follow-up.
+function elideSerial(serial) {
+  const s = String(serial || "").trim();
+  if (!s) return "";
+  if (s.length <= 12) return s;
+  return `${s.slice(0, 4)}…${s.slice(-6)}`;
 }
 
 // ─── Sets: group queue rows by doc ─────────────────────────────
@@ -377,9 +403,14 @@ function SetBlock({ set, onOpen, todayISO }) {
 
   if (isSolo) {
     // Solo = set header only. No fake part row wearing a header icon.
-    // The header row IS the click target.
+    // Structure MATCHES the multi-part .opd-pr grammar: direct
+    // children are .opd-lead + .opd-pb + .opd-pm + .opd-go. Same
+    // shape means the right column aligns pixel-for-pixel with the
+    // multi-part rows (owner ruling 2026-09-01 - the .opd-sright
+    // flex-gap wrapper on solo was the 10px due-column artifact).
     const p = set.parts[0];
-    const desc = rowDescription(p);
+    // Solo IS a set header - card_line preferred, description fallback.
+    const desc = setHeaderDescription(p);
     const dueClass = dueUrgencyClass(p.due_date, todayISO);
     return (
       <button
@@ -387,24 +418,20 @@ function SetBlock({ set, onOpen, todayISO }) {
         className="opd-set opd-set--solo"
         onClick={() => onOpen(p)}
       >
-        <div className="opd-seth">
-          <span className="opd-lead" aria-hidden="true">
-            <span className={"opd-seti opd-seti--" + family}>
-              <FileText size={15} strokeWidth={1.75} />
-            </span>
+        <span className="opd-lead" aria-hidden="true">
+          <span className={"opd-seti opd-seti--" + family}>
+            <FileText size={15} strokeWidth={1.75} />
           </span>
-          <div className="opd-seth-tx">
-            <h3>{set.doc_title}</h3>
-            {desc ? <div className="opd-seth-mt">{desc}</div> : null}
-          </div>
-          <div className="opd-sright">
-            <div className="opd-pm">
-              <div className={"opd-pm-a " + dueClass}>{p.due_date ? `Due ${formatMonthDay(p.due_date)}` : ""}</div>
-              <div className="opd-pm-b num">{p.est_minutes} MIN</div>
-            </div>
-            <span className="opd-go" aria-hidden="true">Start <ArrowRight size={12} strokeWidth={2} /></span>
-          </div>
+        </span>
+        <div className="opd-pb">
+          <h4>{set.doc_title}</h4>
+          {desc ? <div className="opd-pb-d">{desc}</div> : null}
         </div>
+        <div className="opd-pm">
+          <div className={"opd-pm-a " + dueClass}>{p.due_date ? `Due ${formatMonthDay(p.due_date)}` : ""}</div>
+          <div className="opd-pm-b num">{p.est_minutes} MIN</div>
+        </div>
+        <span className="opd-go" aria-hidden="true">Start <ArrowRight size={12} strokeWidth={2} /></span>
       </button>
     );
   }
@@ -445,7 +472,11 @@ function SetBlock({ set, onOpen, todayISO }) {
         const cls = "opd-pr"
           + (isLocked ? " opd-pr--lk" : "")
           + (isNext ? " opd-pr--nx" : "");
-        const desc = rowDescription(p);
+        // Part rows use obligation.description ONLY - never card_line.
+        // When description is empty the row's second line renders
+        // nothing, and the fix is authoring content (not code
+        // substituting a document-level line).
+        const desc = partRowDescription(p);
         const shortTitle = partShortTitle(p.source_section);
         const dueClass = dueUrgencyClass(p.due_date, todayISO);
         return (
@@ -542,7 +573,9 @@ function CompletedBlock({ completed, onOpen }) {
               </div>
             </div>
             <div className="opd-pm">
-              <div className="opd-pm-a">{r.certificate_serial || ""}</div>
+              <div className="opd-pm-a" title={r.certificate_serial || undefined}>
+                {elideSerial(r.certificate_serial)}
+              </div>
               <div className="opd-pm-b">CERTIFICATE</div>
             </div>
             <span className="opd-go" aria-hidden="true">View</span>
