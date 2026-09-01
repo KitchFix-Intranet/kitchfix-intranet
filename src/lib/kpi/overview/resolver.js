@@ -822,6 +822,32 @@ export async function resolveOverview({
   const cogsBudget = (labor3100_budget || 0) + (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0);
   const cogsBudgetToDateDays = (labor3100_budget_to_date_days || 0) + (buckets_budget_to_date_days?.amount || 0);
 
+  // 2026-09-01 defect fix: target-% surfaces were composing the ratio
+  // as full-period-budget / to-date-revenue - CIN - AZ P9 showed
+  // COGS target 71.5% against actual 45.8% (25.7% "under"), when
+  // the correct same-window ratio is 56.2% (10.4% under). Ratio
+  // rule: target_pct = budget_to_date(line) / budget_to_date(revenue).
+  // Both sides on the same horizon.
+  //
+  // Purchasing exposes only an AGGREGATE `buckets_budget_to_date_days`
+  // (not per-bucket). Since all three buckets prorate against the
+  // same period-in-range grid, the per-bucket to-date is
+  //   bucket.budget * (agg_to_date / agg_full)
+  // The ratio is well-defined when the agg full is non-zero. When
+  // either operand is null (no data), the per-bucket to-date is
+  // null and downstream pctOf returns null.
+  const bucketsBudgetFullSum = (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0);
+  const bucketsToDateRatio = (buckets_budget_to_date_days?.amount != null && bucketsBudgetFullSum > 0)
+    ? buckets_budget_to_date_days.amount / bucketsBudgetFullSum
+    : null;
+  const prorateBucketToDate = (fullBudget) => {
+    if (fullBudget == null || bucketsToDateRatio == null) return null;
+    return r2(fullBudget * bucketsToDateRatio);
+  };
+  const food_budget_to_date_days      = prorateBucketToDate(food_budget);
+  const packaging_budget_to_date_days = prorateBucketToDate(packaging_budget);
+  const vehicle_budget_to_date_days   = prorateBucketToDate(vehicle_budget);
+
   // 11. Gross margin.
   const grossMargin = totalRevenue != null ? r2(totalRevenue - cogsActual) : null;
   const grossMarginBudget = totalRevenue != null ? r2((revenue_budget_to_date || 0) - cogsBudgetToDateDays) : null;
@@ -880,10 +906,13 @@ export async function resolveOverview({
   const isFeeAccount = !isAggregate && classifyForRevenue(accountKey) === "fee";
   const isPassThrough = flags.pass_through;
   const cogsLinesForTicker = [
-    { line_code: "3100", label: "Kitchen labor",           actual_pct: pctOf(labor3100_actual, totalRevenue), target_pct: pctOf(labor3100_budget, revenue_budget_to_date) },
-    { line_code: "3200", label: "Food purchased",          actual_pct: pctOf(food_actual, totalRevenue),      target_pct: pctOf(food_budget, revenue_budget_to_date) },
-    { line_code: "3400", label: "Packaging and supplies",  actual_pct: pctOf(packaging_actual, totalRevenue), target_pct: pctOf(packaging_budget, revenue_budget_to_date) },
-    { line_code: "3500", label: "Vehicle",                 actual_pct: pctOf(vehicle_actual, totalRevenue),   target_pct: pctOf(vehicle_budget, revenue_budget_to_date) },
+    // 2026-09-01 defect fix: target_pct uses per-line to-date budget
+    // against to-date revenue budget. Same window on both sides. See
+    // the bucketsToDateRatio block above for the per-bucket proration.
+    { line_code: "3100", label: "Kitchen labor",           actual_pct: pctOf(labor3100_actual, totalRevenue), target_pct: pctOf(labor3100_budget_to_date_days, revenue_budget_to_date) },
+    { line_code: "3200", label: "Food purchased",          actual_pct: pctOf(food_actual, totalRevenue),      target_pct: pctOf(food_budget_to_date_days,      revenue_budget_to_date) },
+    { line_code: "3400", label: "Packaging and supplies",  actual_pct: pctOf(packaging_actual, totalRevenue), target_pct: pctOf(packaging_budget_to_date_days, revenue_budget_to_date) },
+    { line_code: "3500", label: "Vehicle",                 actual_pct: pctOf(vehicle_actual, totalRevenue),   target_pct: pctOf(vehicle_budget_to_date_days,   revenue_budget_to_date) },
   ].filter(l => l.actual_pct != null && l.target_pct != null);
 
   // Weeks-closed for the through segment (single-period ranges).
@@ -959,15 +988,20 @@ export async function resolveOverview({
       budget_to_date_display: formatMoneyWhole(cogsBudgetToDateDays),
       pct_of_revenue: pctOf(cogsActual, totalRevenue),
       pct_of_revenue_display: formatPct(pctOf(cogsActual, totalRevenue)),
-      target_pct_of_revenue: pctOf(cogsBudget, revenue_budget_to_date),
-      target_pct_display: formatPct(pctOf(cogsBudget, revenue_budget_to_date)),
+      // 2026-09-01 defect fix: target_pct on COGS card uses TO-DATE
+      // budget on BOTH sides (was cogsBudget full-period / revenue
+      // to-date - mixed horizons produced a 71.5% target where 56.2%
+      // was correct on CIN - AZ P9, and a 25.7% "under" verdict when
+      // the honest gap was 10.4%).
+      target_pct_of_revenue: pctOf(cogsBudgetToDateDays, revenue_budget_to_date),
+      target_pct_display: formatPct(pctOf(cogsBudgetToDateDays, revenue_budget_to_date)),
       delta_dollars: r2(cogsDelta),
       delta_display: gapDollarsCost(cogsDelta),
       delta_direction: directionOfDelta(cogsDelta, "cost"),
-      delta_pct_display: gapPointsCost(pctOf(cogsActual, totalRevenue) - pctOf(cogsBudget, revenue_budget_to_date)),
+      delta_pct_display: gapPointsCost(pctOf(cogsActual, totalRevenue) - pctOf(cogsBudgetToDateDays, revenue_budget_to_date)),
       pill: (() => {
         const pa = pctOf(cogsActual, totalRevenue);
-        const pt = pctOf(cogsBudget, revenue_budget_to_date);
+        const pt = pctOf(cogsBudgetToDateDays, revenue_budget_to_date);
         if (pa == null || pt == null) return { label: "No data", tone: "neutral" };
         return pa <= pt
           ? { label: "Under target", tone: "good" }
@@ -1007,9 +1041,14 @@ export async function resolveOverview({
 
   // 16. Levers - the four COGS lines with actual + budget + variance +
   //     pct-of-rev + target-pct + vs-target.
-  const buildLever = (label, code, actual, budget) => {
+  // 2026-09-01 defect fix: buildLever takes budgetToDate for the
+  // target-pct denominator alignment. `budget` stays the full-period
+  // figure for the variance dollars + budget_display; `budgetToDate`
+  // is used exclusively for the target-pct ratio so both sides of
+  // the ratio share the same horizon.
+  const buildLever = (label, code, actual, budget, budgetToDate) => {
     const actualPct = pctOf(actual, totalRevenue);
-    const targetPct = pctOf(budget, revenue_budget_to_date);
+    const targetPct = pctOf(budgetToDate, revenue_budget_to_date);
     const dv = actual != null && budget != null ? r2(actual - budget) : null;
     return {
       line_code: code,
@@ -1031,10 +1070,10 @@ export async function resolveOverview({
     };
   };
   const levers = [
-    buildLever("Kitchen labor",          "3100", labor3100_actual,  labor3100_budget),
-    buildLever("Food purchased",         "3200", food_actual,       food_budget),
-    buildLever("Packaging and supplies", "3400", packaging_actual,  packaging_budget),
-    buildLever("Vehicle",                "3500", vehicle_actual,    vehicle_budget),
+    buildLever("Kitchen labor",          "3100", labor3100_actual,  labor3100_budget,  labor3100_budget_to_date_days),
+    buildLever("Food purchased",         "3200", food_actual,       food_budget,       food_budget_to_date_days),
+    buildLever("Packaging and supplies", "3400", packaging_actual,  packaging_budget,  packaging_budget_to_date_days),
+    buildLever("Vehicle",                "3500", vehicle_actual,    vehicle_budget,    vehicle_budget_to_date_days),
   ];
 
   // 17. Chart series. Period grain for FYTD; week grain for a single
@@ -1298,21 +1337,38 @@ export async function resolveOverview({
   });
 
   // Also-tracked rows
+  // 2026-09-01 defect fix: the tracked lines (5002.1 / 5002.5 /
+  // 5017.3) are Rippling-card spend that returns period_total=0 when
+  // no card rows exist for the line - operationally indistinguishable
+  // from "no data" (there is no reported-zero-vs-no-activity signal
+  // on the purchasing side). Prior code kept `reported = actual > 0`
+  // but STILL computed variance from the underlying 0, which rendered
+  // "$115 under" for a line with no measured spend - a saving that
+  // has not been measured.
+  //
+  // Absence-contract fix: when reported=false, variance is null so
+  // the client renders "no data" instead of a fake savings figure.
   const alsoTracked = [
     { line_code: "5002.1", label: "General repair and maintenance", actual: rm_actual, budget: rm_budget },
     { line_code: "5002.5", label: "Equipment",                     actual: equip_actual, budget: equip_budget },
     { line_code: "5017.3", label: "Perks",                         actual: perks_actual, budget: perks_budget },
-  ].map(r => ({
-    line_code: r.line_code,
-    label: r.label,
-    reported: r.actual != null && r.actual > 0,
-    actual: r.actual,
-    actual_display: formatMoneyWhole(r.actual),
-    budget: r.budget,
-    budget_display: formatMoneyWhole(r.budget),
-    variance: (r.actual != null && r.budget != null) ? r2(r.actual - r.budget) : null,
-    note: r.line_code === "5017.3" ? "Rippling card spend on perks" : null,
-  }));
+  ].map(r => {
+    const reported = r.actual != null && r.actual > 0;
+    return {
+      line_code: r.line_code,
+      label: r.label,
+      reported,
+      actual: r.actual,
+      actual_display: formatMoneyWhole(r.actual),
+      budget: r.budget,
+      budget_display: formatMoneyWhole(r.budget),
+      // Variance is only computed against a reported actual. An
+      // unreported line has null variance - the client renders
+      // "no data" instead of computing a delta from a phantom zero.
+      variance: (reported && r.budget != null) ? r2(r.actual - r.budget) : null,
+      note: r.line_code === "5017.3" ? "Rippling card spend on perks" : null,
+    };
+  });
 
   // 18b. Drill sub-object (2026-08-31, engine follow-up).
   //
@@ -1337,8 +1393,13 @@ export async function resolveOverview({
   // pct via pctOf's zero-denominator branch to null.
   const purchSpentActual = (food_actual || 0) + (packaging_actual || 0) + (vehicle_actual || 0);
   const purchSpentBudget = (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0);
+  // 2026-09-01 defect fix: target-pct denominator alignment. Use the
+  // aggregate to-date purchasing budget so both sides of the ratio
+  // share the same horizon. Falls back to null (drill.target hides)
+  // if buckets_budget_to_date_days is absent.
+  const purchSpentBudgetToDate = buckets_budget_to_date_days?.amount ?? null;
   const purchActualPct = pctOf(purchSpentActual, totalRevenue);
-  const purchTargetPct = pctOf(purchSpentBudget, revenue_budget_to_date);
+  const purchTargetPct = pctOf(purchSpentBudgetToDate, revenue_budget_to_date);
   const purchVariancePct = (purchActualPct != null && purchTargetPct != null)
     ? r2(purchActualPct - purchTargetPct)
     : null;
@@ -1383,10 +1444,17 @@ export async function resolveOverview({
   const isSinglePeriodRange = rng.kind === "period";
   const isOpenPeriod = displayPeriodState === "open";
   if (isSingleAccountScope && isSinglePeriodRange && isOpenPeriod && displayPeriodNo != null) {
-    // Compute period bounds + elapsed. Days elapsed = calendar days
-    // from period start through today (inclusive). Days remaining =
-    // period total - elapsed. Clamped so we never advertise negative
-    // days remaining or an elapsed larger than the period.
+    // Compute period bounds + elapsed. R-25: days elapsed is COUNTED
+    // THROUGH YESTERDAY, never through today - today is not closed.
+    //
+    // 2026-09-01 defect fix: prior implementation had `+ 1` on
+    // rawElapsed which included today in the count, producing
+    // days_elapsed=23 / days_remaining=5 / elapsed_pct=82.14% while
+    // the revenue card's budget_to_date was 22/28 (through yesterday)
+    // on the same page - two different day counts of the same period.
+    // Removes the +1 so this block agrees with the same formula in
+    // budget-to-date.js line 84 (daysThroughYesterday = floor((today
+    // - pStart) / MSD)). One number, one function.
     const pStart = periodStartISO(displayPeriodNo);
     const pEnd = periodEndISO(displayPeriodNo);
     const MSD = 24 * 60 * 60 * 1000;
@@ -1394,8 +1462,14 @@ export async function resolveOverview({
     const tE = new Date(`${pEnd}T00:00:00Z`);
     const tT = new Date(`${today}T00:00:00Z`);
     const daysInPeriod = Math.max(1, Math.round((tE.getTime() - tS.getTime()) / MSD) + 1);
-    const rawElapsed = Math.round((tT.getTime() - tS.getTime()) / MSD) + 1;
-    const daysElapsed = Math.min(daysInPeriod, Math.max(0, rawElapsed));
+    // Days elapsed = calendar days from period start THROUGH YESTERDAY
+    // inclusive. Formula: floor((today - pStart) / MSD).
+    //   today  =  pStart          -> 0 days elapsed (first day, nothing closed)
+    //   today  =  pStart + 1 day  -> 1 day elapsed  (yesterday closed)
+    //   today  =  pEnd            -> daysInPeriod - 1 days elapsed
+    //   today  =  pEnd + 1 day    -> daysInPeriod   days elapsed (all closed)
+    const daysThroughYesterday = Math.floor((tT.getTime() - tS.getTime()) / MSD);
+    const daysElapsed = Math.min(daysInPeriod, Math.max(0, daysThroughYesterday));
     const daysRemaining = Math.max(0, daysInPeriod - daysElapsed);
     // Period-full COGS budget = sum of the four lever full-period
     // budgets. cogsBudget above is the full-period figure (not the
