@@ -2546,8 +2546,15 @@
 }
 
 /* ── The one card ─────────────────────────────────────────────── */
+/* Capped at 1080px + centred (owner ruling 2026-09-01 follow-up).
+   The module is one prose column plus a rail; letting it span the
+   full 1520px shell leaves the reading column stranded in a very
+   wide box (margin either side grew to 435px at the density-drop
+   pass). The room card keeps full width - it has standing rows and
+   a two-column secondary tier that use it. */
 .opd-uni {
-  margin: 13px 0 18px;
+  max-width: 1080px;
+  margin: 13px auto 18px;
   background: #fff;
   border: 1px solid var(--opd-n300);
   border-radius: 12px;
