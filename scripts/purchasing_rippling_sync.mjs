@@ -674,24 +674,29 @@ async function deriveSpendLines({ rippling_ids }) {
 
   // ─── Ruling 6 seed: parent hexes with a CODED report row ────────────
   //
-  // Owner ruling 2026-08-28. Ruling 4 pairs same-(merchant,cents) rows
-  // WITHIN the API's own dataset within 5 days - it needs a partner on
-  // the API side to fire. When Rippling landed only the auth on the API
-  // and only the settled entry in the nightly report, Ruling 4 has no
-  // partner and does nothing. The API row sits on the board as pending
-  // even though the coder already dispositioned the underlying charge
-  // on the report side.
+  // Owner ruling 2026-08-28, scope restored 2026-09-01. Ruling 6
+  // excludes API rows whose report-side twin is coded, on the theory
+  // that the coder already dispositioned the underlying charge on the
+  // report side. Its scope is UNCODED-ON-OUR-SIDE ONLY - a stale-pending
+  // rule. The full population Kevin ruled on was 56 uncoded rows /
+  // $17,863.01. A coded API row is real spend and must never be
+  // excluded here; the predicate at line ~1039 pairs this set with
+  // !glLine to enforce that boundary.
   //
-  // Ruling 6 catches exactly that case. When a report row at the same
-  // parent_hex has a non-sentinel category (i.e. coded), the API row is
-  // a stale auth-record and gets excluded with reason='report_coded'.
-  // Exact-key match on the 24-char Mongo hex extracted from external_id
-  // (parentIdFromExternalId) against the report's parent_txn_id column;
-  // no site/amount/date fuzz.
+  // Mechanism: exact-key match on the 24-char Mongo hex extracted from
+  // external_id (parentIdFromExternalId) against the report's
+  // parent_txn_id column; no site/amount/date fuzz.
+  //
+  // Caveat (measured 2026-09-01): parent_txn_id matches only 47% of
+  // API parents (5,318 of 11,215) because Rippling assigns different
+  // hexes to auth and settlement on some charges. The key is exact
+  // where it exists and absent where it does not; do not build
+  // anything else on it without that caveat.
   //
   // See docs/GOTCHAS.md - "Ruling 4 pair-only scope" and "parent-hex vs
   // source_bill_id join-key trap" both describe the shape this rule
-  // completes.
+  // completes. See docs/audits/RULING6_FIX_DIRECTIVE_2026-09-01.md for
+  // the scope-restoration ruling.
   const reportCodedParents = new Set();
   {
     const PAGE = 1000;
@@ -1033,10 +1038,25 @@ async function deriveSpendLines({ rippling_ids }) {
     const zeroAmountHit       = parent ? zeroAmountParents.has(parent) : false;
     // INV-P12 truncation-pair stored ruling (Kevin 2026-08-27).
     const truncationPairHit   = parent ? truncationPairRuledParents.has(parent) : false;
-    // Ruling 6 (2026-08-28): a coded report row at the same parent_hex
-    // means the settled twin closed on the report side. The API row is
-    // stale; exclude it.
+    // Ruling 6 (2026-08-28, scope restored 2026-09-01): a coded report
+    // row at the same parent_hex means the settled twin closed on the
+    // report side. Ruling 6 excludes only rows UNCODED on our side; a
+    // coded row is real spend and must never be excluded here. The
+    // shipped rule pre-2026-09-01 lost the second half of that scope -
+    // reportCodedHit was a bare set-membership test that fired
+    // regardless of the API row's own coded state, excluding 4,215 rows
+    // / $991,456.39 when the ruling's own scope was 56 rows / $17,863.01
+    // (owner's population count, PR #885). The fix pairs the report-hit
+    // with !glLine below; a permanent guard probe
+    // (_probe_ruling6_scope_guard.mjs) asserts every row excluded with
+    // reason='report_coded' has gl_line_code IS NULL. See
+    // docs/audits/RULING6_FIX_DIRECTIVE_2026-09-01.md.
     const reportCodedHit      = parent ? reportCodedParents.has(parent) : false;
+
+    // glLine is required by the report_coded predicate below, so it
+    // must be computed BEFORE the reason chain. The uncoded/unattributed
+    // counters that reference it still fire after `excluded` is known.
+    const glLine = r.category_id ? (catMap.get(r.category_id) || null) : null;
 
     // Reason precedence for the recorded reason column. First hit wins.
     // The order below matches the exclusion causality:
@@ -1047,11 +1067,13 @@ async function deriveSpendLines({ rippling_ids }) {
     //                          labeled with the specific decision that put it here.
     //   4. dup_split         - Ruling 2 duplicate-split parent
     //   5. non_usd           - Ruling 3
-    //   6. report_coded      - Ruling 6 (2026-08-28). Report has a coded twin at
-    //                          the same parent_hex. Precedes auth_pair because it
-    //                          is a stronger statement: not "we suspect this is the
-    //                          earlier of a pair" but "the coder already closed the
-    //                          underlying charge on the report side."
+    //   6. report_coded      - Ruling 6 (2026-08-28, scope restored 2026-09-01).
+    //                          Fires ONLY when the API row is uncoded on our side
+    //                          (!glLine) AND the report has a coded twin at the same
+    //                          parent_hex. Scope-constraint form: a coded API row is
+    //                          real spend and must never be excluded here. Precedes
+    //                          auth_pair because when it fires it is a stronger
+    //                          statement than the earlier-of-pair guess.
     //   7. auth_pair         - Ruling 4 (earlier of pair; or later when earlier-in-report)
     //   8. zero_amount       - Ruling 5
     let reason = null;
@@ -1060,13 +1082,12 @@ async function deriveSpendLines({ rippling_ids }) {
     else if (truncationPairHit)   reason = "truncation_pair";
     else if (dupSplitHit)         reason = "dup_split";
     else if (currencyHit)         reason = "non_usd";
-    else if (reportCodedHit)      reason = "report_coded";
+    else if (reportCodedHit && !glLine) reason = "report_coded";
     else if (authPairEarlierHit || authPairLaterHit) reason = "auth_pair";
     else if (zeroAmountHit)       reason = "zero_amount";
 
     const excluded = reason !== null;
     const accountKey = excluded ? null : (wlRow?.account_key || null);
-    const glLine = r.category_id ? (catMap.get(r.category_id) || null) : null;
     if (!accountKey && !excluded) unattributed++;
     if (!glLine) uncoded++;
 

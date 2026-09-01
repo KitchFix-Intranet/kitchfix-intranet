@@ -1,0 +1,321 @@
+<meta charset="utf-8">
+<title>Overview - operator first</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+--navy-50:#F4F7FC;--navy-100:#EAF0FA;--navy-700:#153968;--navy-800:#092B55;
+--amber-50:#FFF2E2;--amber-500:#D97706;--amber-600:#B25800;
+--green-50:#E9FDEC;--green-500:#16A34A;--green-600:#008330;
+--red-50:#FFEDE7;--red-500:#DC2626;--red-600:#B9000C;
+--n-0:#FFFFFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;
+--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;--purple:#7c3aed;
+--s:0.9;
+--t-lab:calc(10px*var(--s));--t-met:calc(11px*var(--s));--t-bod:calc(12.5px*var(--s));
+--t-med:calc(15px*var(--s));--t-hero:calc(30px*var(--s));
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}
+.devbar button{font-size:11px;font-weight:600;padding:5px 12px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.nav{background:var(--n-0);border-bottom:1px solid var(--n-300);padding:0 24px;height:56px;display:flex;align-items:center}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:-.02em}
+.mark{width:26px;height:26px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.navlinks{display:flex;gap:22px;margin:0 auto}
+.navlinks span{font-size:13px;font-weight:600;color:var(--n-700)}
+.navlinks span.on{color:var(--navy-700);background:var(--navy-100);padding:6px 12px;border-radius:8px;margin:-6px -12px}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.wrap{padding:18px 22px 60px;max-width:1120px;margin:0 auto}
+.cmd{background:var(--navy-700);border-radius:12px 12px 0 0;padding:13px 18px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;position:relative}
+.cmd .ttl{color:#fff;font-size:var(--t-med);font-weight:700}
+.cmd .acct{color:#fff;font-size:var(--t-med);font-weight:800}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 11px;display:flex;align-items:center;gap:7px;cursor:pointer}
+.chip:hover{background:rgba(255,255,255,.17)}
+.chip .v{color:#fff;font-size:var(--t-bod);font-weight:600}
+.chip .d{color:#93a9c9;font-size:var(--t-bod);font-weight:500}
+.meta{color:#b9c8de;font-size:var(--t-met);font-weight:600}
+.meta b{color:#fff}
+.tog{display:flex;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:8px;overflow:hidden;margin-left:auto}
+.tog button{font-size:var(--t-bod);font-weight:700;padding:6px 12px;color:#cddbee;background:transparent;border:none}
+.tog button.on{background:#fff;color:var(--navy-700)}
+.rmenu{position:absolute;top:52px;left:18px;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px;z-index:40;box-shadow:0 8px 28px rgba(10,37,72,.16);display:none}
+.rmenu.on{display:block}
+.rmenu .row{display:flex;gap:5px;flex-wrap:wrap}
+.rmenu button{font-size:var(--t-met);font-weight:700;padding:5px 10px;border:1px solid var(--n-300);background:var(--n-0);border-radius:6px;color:var(--n-700)}
+.rmenu button.on{background:var(--navy-700);border-color:var(--navy-700);color:#fff}
+.body{background:var(--n-100);padding:16px;border-radius:0 0 12px 12px;border:1px solid var(--n-300);border-top:none}
+
+/* ticker */
+.ticker{display:flex;align-items:stretch;flex-wrap:wrap;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.ticker .st{display:flex;align-items:center;padding:0 18px;color:#fff;font-size:var(--t-met);font-weight:800;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.ticker.ahead .st{background:var(--green-600)}.ticker.ontrack .st{background:var(--navy-700)}
+.ticker.behind .st{background:var(--amber-500)}.ticker.risk .st{background:var(--red-600)}
+.ticker .tk{display:flex;flex-direction:column;justify-content:center;padding:11px 16px;border-right:1px solid var(--n-200)}
+.ticker .tk:last-child{border-right:none}
+.ticker .tk .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600)}
+.ticker .tk .v{font-size:var(--t-bod);font-weight:700;margin-top:3px;white-space:nowrap}
+.ticker .tk .v em{font-style:normal;font-weight:800;margin-left:6px}
+.ticker .tk.note{background:var(--amber-50)}
+.ticker .tk.note .v{color:var(--amber-600);font-weight:600;white-space:normal}
+
+/* three cards */
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px}
+.ag{border-left:3px solid var(--green-600)}.ab{border-left:3px solid var(--navy-700)}
+.ap{border-left:3px solid var(--purple)}.aa{border-left:3px solid var(--amber-500)}
+.ch{display:flex;align-items:center;gap:8px;padding:12px 15px 0}
+.ch .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;position:relative}
+.q:hover{background:var(--navy-700);color:#fff;border-color:var(--navy-700)}
+.q .tip{display:none;position:absolute;bottom:22px;left:-10px;width:250px;background:var(--n-900);color:#fff;font-size:var(--t-met);font-weight:500;line-height:1.55;padding:9px 11px;border-radius:8px;z-index:30;text-transform:none;letter-spacing:0;text-align:left}
+.q:hover .tip{display:block}
+.pill{margin-left:auto;font-size:var(--t-met);font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.pok{background:var(--green-50);color:var(--green-600)}.pwa{background:var(--amber-50);color:var(--amber-600)}
+.pba{background:var(--red-50);color:var(--red-600)}.pne{background:var(--n-100);color:var(--n-700)}
+.cb{padding:8px 15px 15px}
+.hero{font-size:var(--t-hero);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.hero small{font-size:var(--t-bod);font-weight:600;color:var(--n-600);letter-spacing:0;margin-left:6px}
+.kpi2{display:flex;align-items:baseline;gap:8px;margin-top:7px;flex-wrap:wrap;font-size:var(--t-bod);font-weight:600;color:var(--n-600)}
+.kpi2 b{font-size:calc(20px*var(--s));font-weight:800;color:var(--n-900)}
+.ok{color:var(--green-600)}.bad{color:var(--red-600)}
+.sub{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:6px}
+
+/* pace strip */
+.pace{background:var(--n-0);border:1px solid var(--n-300);border-left:3px solid var(--navy-700);border-radius:10px;margin-top:12px;padding:14px 16px}
+.pace .top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.pace .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.pace .grid2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.pace .cell .per{font-size:var(--t-bod);font-weight:600;color:var(--n-600)}
+.pace .cell .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600)}
+.pace .cell .v{font-size:calc(21px*var(--s));font-weight:800;margin-top:3px;letter-spacing:-.01em}
+.pace .cell .n{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:3px;line-height:1.5}
+.pace .cell .n b{font-weight:800}
+.bar{height:9px;border-radius:5px;background:var(--n-200);position:relative;margin-top:9px;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;display:block}
+.bar .mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--n-900)}
+.barlab{display:flex;justify-content:space-between;font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:5px}
+
+/* weeks */
+.bars2{display:flex;align-items:flex-end;gap:14px;height:104px;position:relative;padding-top:14px}
+.bars2 i{flex:1;border-radius:3px 3px 0 0;display:block;min-height:2px;position:relative}
+.bok{background:var(--green-500)}.bba{background:var(--red-500)}
+.bars2 .tgt{position:absolute;left:0;right:0;border-top:2px dashed var(--navy-700);z-index:2}
+.bars2 .tgt em{position:absolute;right:0;top:-15px;font-style:normal;font-size:var(--t-lab);font-weight:800;letter-spacing:.06em;color:var(--navy-700);text-transform:uppercase;background:var(--n-0);padding:0 4px}
+.bars2 i.dash{background:transparent;border-bottom:2px dashed var(--n-400);height:2px;align-self:flex-end;border-radius:0}
+.bars2 i .bt{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--n-900);color:#fff;border-radius:8px;padding:8px 10px;z-index:20;min-width:150px;text-align:left}
+.bars2 i:hover .bt{display:block}
+.bt .bth{font-size:var(--t-met);font-weight:800;margin-bottom:4px;color:#dbe6f5}
+.bt .btr{display:flex;justify-content:space-between;gap:14px;font-size:var(--t-met);font-weight:500;line-height:1.7}
+.axis2{display:flex;gap:14px;margin-top:6px}
+.axis2 span{flex:1;text-align:center;font-size:var(--t-bod);font-weight:700}
+.axis2 small{display:block;font-weight:500;color:var(--n-600);font-size:var(--t-met);margin-top:1px}
+.axis2 .amt{display:block;font-weight:700;font-size:var(--t-met);margin-top:2px}
+
+/* drills */
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.dr{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:13px 15px;cursor:pointer;display:flex;align-items:center;gap:14px}
+.dr:hover{border-color:var(--navy-700);background:var(--navy-50)}
+.dr .t1{font-size:calc(14px*var(--s));font-weight:800}
+.dr .t2{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:3px}
+.dr .rt{margin-left:auto;text-align:right}
+.dr .rt .p{font-size:calc(17px*var(--s));font-weight:800}
+.dr .rt .g{font-size:var(--t-met);font-weight:700;margin-top:2px}
+.dr .go{color:var(--navy-700);font-weight:800;font-size:15px;margin-left:10px}
+
+.fold{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-top:12px;padding:12px 15px;display:flex;align-items:center;gap:9px;cursor:pointer}
+.fold:hover{background:var(--n-50)}
+.fold .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.fold .hx{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.fold .cv{margin-left:auto;color:var(--n-600);font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:var(--t-bod)}
+th{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);text-align:right;padding:0 0 7px}
+th.l{text-align:left}
+td{padding:6px 0;border-top:1px solid var(--n-200);text-align:right;font-weight:600}
+td.l{text-align:left}
+tr.tot td{border-top:1px solid var(--n-400);font-weight:800}
+tr.gm td{border-top:2px solid var(--navy-700);font-weight:800;padding-top:9px}
+tr.sect td{border-top:none;padding:12px 0 3px;font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);text-align:left}
+.glc{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-right:6px;display:inline-block;min-width:36px}
+.nb{color:var(--n-600);font-weight:600}
+.note{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-top:10px;line-height:1.55}
+.cap{font-size:11px;color:var(--n-600);padding:12px 22px 0;max-width:1120px;margin:0 auto;line-height:1.6}
+.cap b{color:var(--n-900)}
+.cmp{max-width:1120px;margin:14px auto 0;padding:0 22px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cmp div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11px;line-height:1.65;color:var(--n-700)}
+.cmp h4{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.cmp s{color:var(--n-600)}
+</style>
+
+<div class="devbar">
+  <b>Overview - operator first</b>
+  <span class="h">Real P8 workbook · site leader posture · today Mon 08/31, 3 of 4 weeks closed</span>
+  <button id="b1" class="on" onclick="setR(1)">This period</button>
+  <button id="b2" onclick="setR(2)">Last period</button>
+  <button id="b0" onclick="setR(0)">This year</button>
+</div>
+<div class="nav">
+  <div class="brand"><span class="mark">KF</span>KitchFix</div>
+  <div class="navlinks"><span>Home</span><span>People</span><span>Ops Hub</span><span>Service</span><span class="on">KPI</span><span>Playbook</span><span>Sous</span><span>Directory</span></div>
+  <div class="avatar">JT</div>
+</div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+<div class="cmp">
+  <div><h4>Cut in this pass</h4>
+  <s>Gross margin in the ticker</s> - the state pill is already the margin verdict and the card carries the number. Three segments now do three different jobs.<br>
+  <s>"At this pace, margin closes at X%"</s> - it was arithmetically identical to the current margin every time. Linear cost over linear revenue returns the ratio you already have. Fake insight, cut.<br>
+  <s>Progress bar</s> - it drew two numbers that were stated in words directly above it. Replaced with the conclusion it was gesturing at.<br>
+  <s>Planned-revenue note</s> - mechanism stays, but it goes dark once counts are live.<br>
+  <s>Pace strip on This year</s> - it was applying the open period's remaining days to a year. Year-to-date is review, not steering.</div>
+  <div><h4>What survives, and why</h4>
+  <b>What is left.</b> $18,981 for 7 days, $2,712 a day, against the $2,258 a day averaged so far. The only figure on the page that converts to a Tuesday decision.<br><br>
+  <b>Pace as a sentence</b>, not a bar - spending slower or faster than the clock, with both percentages behind it.<br><br>
+  <b>A note on the percentages.</b> COGS% and margin% are to-date over to-date. While revenue is planned, revenue-to-date equals budget-to-date, so the percentage is the dollar variance rescaled - not a second signal. Once Service Calendar counts are live the denominators separate and the percentage starts earning its place.</div>
+</div>
+
+</div>
+
+<script>
+const D={
+ 1:{lab:"This period",sub:"P9 · 08/10 – 09/06",open:true,
+    rev:88598,revB:88598,revPB:118130,cogs:47410,cogsB:49793,cogsPB:66391,
+    labor:18288,laborB:23911,laborPB:31881,pur:29122,purB:25882,purPB:34510,
+    wk:[14697,17068,15645],wkB:16598,elapsed:21,days:28,
+    st:["ahead","Ahead of target"],gmA:46.5,gmB:43.8,
+    drivers:[["Labor",20.6,27.0],["Food purchased",24.7,24.7]]},
+ 2:{lab:"Last period",sub:"P8 · 07/13 – 08/09",open:false,
+    rev:121930,revB:121930,revPB:121930,cogs:57467,cogsB:69964,cogsPB:69964,
+    labor:26466,laborB:32356,laborPB:32356,pur:31001,purB:37608,purPB:37608,
+    wk:[13704,15914,14588,13261],wkB:17491,elapsed:28,days:28,
+    st:["ahead","Ahead of target"],gmA:52.9,gmB:42.6,
+    drivers:[["Food purchased",21.5,26.4],["Labor",21.7,26.5]]},
+ 0:{lab:"This year so far",sub:"12/29/25 – 08/30/26",open:true,
+    rev:1368986,revB:1371266,revPB:1572700,cogs:660776,cogsB:745488,cogsPB:869414,
+    labor:308382,laborB:335638,laborPB:391578,pur:352393,purB:409850,purPB:477836,
+    wk:[14697,17068,15645],wkB:16598,elapsed:245,days:252,
+    st:["ahead","Ahead of target"],gmA:51.7,gmB:43.4,
+    drivers:[["Food purchased",23.6,28.6],["Labor",22.5,24.5]]}
+};
+let R=1;
+const $=i=>document.getElementById(i);
+const m=n=>(n<0?"−$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const pf=x=>x.toFixed(1)+"%";
+const gap=(x,g,b)=>Math.abs(x).toFixed(1)+"% "+(x>=0?g:b);
+function tip(t){return '<span class="q">?<span class="tip">'+t+'</span></span>'}
+
+function view(){
+ const d=D[R], pro=d.elapsed/d.days;
+ const gm=d.rev-d.cogs, gmPct=gm/d.rev*100, gmT=d.gmB;
+ const cogsPct=d.cogs/d.rev*100, cogsT=d.cogsB/d.revB*100;
+ // pace: run rate to period end
+ const projCogs = d.open ? d.cogs/pro : d.cogs;
+ const projRev  = d.open ? d.revPB : d.rev;
+ const projGm   = (projRev-projCogs)/projRev*100;
+ const left     = d.cogsPB - d.cogs;
+ const daysLeft = d.days - d.elapsed;
+
+ let h='<div class="cmd"><span class="ttl">My numbers ·</span><span class="acct">CIN - AZ</span>';
+ h+='<span class="chip" onclick="tglR(event)"><span class="v">'+d.lab+'</span><span class="d">'+d.sub+'</span><span class="d">▾</span></span>';
+ h+='<span class="meta">TODAY <b>08/31</b> · WEEK <b>4</b> of 4</span>';
+ h+='<span class="tog"><button class="on">Hourly</button><button>+ Salary</button></span>';
+ h+='<div class="rmenu" id="rm"><div class="row">'+[1,2,0].map(i=>'<button class="'+(R===i?"on":"")+'" onclick="setR('+i+')">'+D[i].lab+'</button>').join('')+'</div></div></div>';
+
+ h+='<div class="body">';
+
+ /* ── 1. am I okay ── */
+ h+='<div class="ticker '+d.st[0]+'"><span class="st">'+d.st[1]+'</span>';
+  h+='<span class="tk"><span class="k">Biggest lever</span><span class="v">'+d.drivers[0][0]+'<em class="'+(d.drivers[0][1]<=d.drivers[0][2]?"ok":"bad")+'">'+gap(d.drivers[0][2]-d.drivers[0][1],"under","over")+'</em></span></span>';
+ h+='<span class="tk"><span class="k">'+(d.open?"Through 08/30":"Period closed")+'</span><span class="v">'+(d.open?(R===1?"3 of 4 weeks closed":"P9 running"):"Verified against P&L 08/20")+'</span></span>';
+ h+='</div>';
+
+ /* ── 2. the three numbers, once each ── */
+ h+='<div class="g3">';
+ h+='<div class="card ag"><div class="ch"><span class="eb">Revenue</span>'+tip("What your account bills for the food and service you provide. Everything below is judged as a percent of this.")+'<span class="pill pne">Planned</span></div><div class="cb">'+
+    '<div class="hero num">'+m(d.rev)+'</div>'+
+    '<div class="kpi2">'+(d.open
+      ? '<b>'+m(d.revPB)+'</b><span>'+(R===0?'full year budget':'budget this period')+'</span><span>· '+m(d.revB)+' expected by today</span>'
+      : '<b>'+m(d.revB)+'</b><span>budget</span>')+'</div></div></div>';
+ h+='<div class="card ab"><div class="ch"><span class="eb">Cost of goods sold</span>'+tip("Labor, food purchased, packaging and supplies, vehicle - the lines you control. Finance calls this COGS.")+'<span class="pill '+(cogsPct<=cogsT?"pok":"pba")+'">'+(cogsPct<=cogsT?"Under target":"Over target")+'</span></div><div class="cb">'+
+    '<div class="hero num '+(cogsPct<=cogsT?"ok":"bad")+'">'+m(d.cogs)+'<small>spent</small></div>'+
+    '<div class="kpi2"><b>'+pf(cogsPct)+'</b><span>of revenue vs '+pf(cogsT)+' target</span><span class="ok" style="font-weight:800">'+gap(cogsT-cogsPct,"under","over")+'</span></div></div></div>';
+ h+='<div class="card ap"><div class="ch"><span class="eb">Gross margin</span>'+tip("Revenue minus cost of goods sold. This is the number your account is measured on. It is before company overhead, so it is not profit.")+'<span class="pill pok">Ahead</span></div><div class="cb">'+
+    '<div class="hero num">'+m(gm)+'</div>'+
+    '<div class="kpi2"><b>'+pf(gmPct)+'</b><span>of revenue vs '+pf(gmT)+' target</span><span class="ok" style="font-weight:800">'+gap(gmPct-gmT,"ahead","behind")+'</span></div></div></div>';
+ h+='</div>';
+
+ /* ── 3. where you land — the new part ── */
+ if(d.open && R!==0){
+  const pct=d.cogs/d.cogsPB*100, elapsedPct=pro*100;
+  const slower = pct<=elapsedPct;
+  h+='<div class="pace"><div class="top"><span class="eb">What is left</span>'+tip("What remains of your cost of goods budget for this period, and what that leaves you a day. This is the number that converts to a decision today.")+'</div>';
+  h+='<div class="grid2">';
+  h+='<div class="cell"><div class="k">Cost of goods left to spend</div><div class="v">'+m(left)+'</div><div class="n">for the '+daysLeft+' days remaining</div></div>';
+  h+='<div class="cell"><div class="k">Which is</div><div class="v">'+m(left/daysLeft)+'<span class="per"> a day</span></div><div class="n">you have averaged '+m(d.cogs/d.elapsed)+' a day so far</div></div>';
+  h+='<div class="cell"><div class="k">Budget used</div><div class="v '+(slower?"ok":"bad")+'">'+pf(pct)+'</div><div class="n">with '+pf(elapsedPct)+' of the period gone · <b class="'+(slower?"ok":"bad")+'">'+(slower?"spending slower than the clock":"spending faster than the clock")+'</b></div></div>';
+  h+='</div></div>';
+ }
+
+ /* ── 4. what is driving it — the two levers, as drills ── */
+ h+='<div class="g2">';
+ const dr=(name,acc,sp,pa,ta,inside)=>'<div class="dr" style="border-left:3px solid '+acc+'"><div><div class="t1">'+name+'</div><div class="t2">'+m(sp)+' · '+inside+'</div></div>'+
+   '<div class="rt"><div class="p num">'+pf(pa)+'</div><div class="g '+(pa<=ta?"ok":"bad")+'">'+gap(ta-pa,"under","over")+' target</div></div><span class="go">→</span></div>';
+ h+=dr("Labor","var(--navy-700)",d.labor,d.labor/d.rev*100,d.laborB/d.revB*100,"hours, overtime, approvals");
+ h+=dr("Purchasing","var(--green-600)",d.pur,d.pur/d.rev*100,d.purB/d.revB*100,"food, packaging, every purchase");
+ h+='</div>';
+
+ /* ── 5. how the weeks went ── */
+ const mx=Math.max(d.wkB,...d.wk)*1.15;
+ h+='<div class="card ab" style="margin-top:12px"><div class="ch"><span class="eb">'+(R===0?"Cost of goods, last four weeks":"Cost of goods, week by week")+'</span>'+tip("Bars are what you spent each week. The dashed line is the weekly budget. Below the line is under budget.")+'<span class="pill '+(d.open?"pwa":"pne")+'">'+(d.open?"3 of 4 weeks closed":"4 of 4 closed")+'</span></div><div class="cb">';
+ h+='<div class="bars2"><div class="tgt" style="bottom:'+(d.wkB/mx*100)+'%"><em>budget '+m(d.wkB)+' / wk</em></div>';
+ const dates=R===2?["07/13 – 07/19","07/20 – 07/26","07/27 – 08/02","08/03 – 08/09"]:["08/10 – 08/16","08/17 – 08/23","08/24 – 08/30","08/31 – 09/06"];
+ for(let i=0;i<4;i++){
+   if(i<d.wk.length){const v=d.wk[i],over=v-d.wkB;
+     h+='<i class="'+(v<=d.wkB?"bok":"bba")+'" style="height:'+(v/mx*100)+'%"><span class="bt"><div class="bth">Week '+(i+1)+'</div><div class="btr"><span>Spent</span><b>'+m(v)+'</b></div><div class="btr"><span>Budget</span><b>'+m(d.wkB)+'</b></div><div class="btr"><span>'+(over<=0?"Under":"Over")+'</span><b>'+m(Math.abs(over))+'</b></div></span></i>';}
+   else h+='<i class="dash"><span class="bt"><div class="bth">Week 4</div><div class="btr"><span>Starts today</span><b>no data yet</b></div></span></i>';
+ }
+ h+='</div><div class="axis2">';
+ for(let i=0;i<4;i++)h+='<span>Week '+(i+1)+'<small>'+dates[i]+'</small><span class="amt '+(i<d.wk.length?(d.wk[i]<=d.wkB?"ok":"bad"):"nb")+'">'+(i<d.wk.length?m(d.wk[i]):"— starts today")+'</span></span>';
+ h+='</div></div></div>';
+
+ /* ── 6. depth, folded ── */
+ h+='<div class="fold" onclick="tglS()"><span class="eb">Full profit and loss</span><span class="hx">every line the way finance sees it, with percent of revenue</span><span class="cv" id="cv">▾</span></div>';
+ h+='<div id="stmt" style="display:none"><div class="card ab" style="margin-top:12px"><div class="cb"><table>'+
+   '<tr><th class="l">Line</th><th>Budget</th><th>Actual</th><th>Variance</th><th style="width:70px">% of rev</th></tr>'+
+   '<tr class="sect"><td colspan="5">Revenue</td></tr>'+
+   '<tr><td class="l"><span class="glc num">2400.1</span>Meal service</td><td class="num">'+m(d.revB*0.7)+'</td><td class="num">'+m(d.rev*0.7)+'</td><td class="nb">on budget</td><td class="num nb">70.0%</td></tr>'+
+   '<tr><td class="l"><span class="glc num">2300</span>Service charges</td><td class="num">'+m(d.revB*0.3)+'</td><td class="num">'+m(d.rev*0.3)+'</td><td class="nb">on budget</td><td class="num nb">30.0%</td></tr>'+
+   '<tr class="tot"><td class="l">Total revenue</td><td class="num">'+m(d.revB)+'</td><td class="num">'+m(d.rev)+'</td><td class="nb">on budget</td><td class="num nb">100%</td></tr>'+
+   '<tr class="sect"><td colspan="5">Cost of goods sold</td></tr>'+
+   '<tr><td class="l"><span class="glc num">3100</span>Kitchen labor</td><td class="num">'+m(d.laborB)+'</td><td class="num">'+m(d.labor)+'</td><td class="num ok">'+m(d.laborB-d.labor)+' under</td><td class="num nb">'+pf(d.labor/d.rev*100)+'</td></tr>'+
+   '<tr><td class="l"><span class="glc num">3200</span>Food purchased</td><td class="num">'+m(d.purB*0.8)+'</td><td class="num">'+m(d.pur*0.8)+'</td><td class="num ok">'+m((d.purB-d.pur)*0.8)+' under</td><td class="num nb">'+pf(d.pur*0.8/d.rev*100)+'</td></tr>'+
+   '<tr><td class="l"><span class="glc num">3400</span>Packaging and supplies</td><td class="num">'+m(d.purB*0.2)+'</td><td class="num">'+m(d.pur*0.2)+'</td><td class="num ok">'+m((d.purB-d.pur)*0.2)+' under</td><td class="num nb">'+pf(d.pur*0.2/d.rev*100)+'</td></tr>'+
+   '<tr class="tot"><td class="l">Total cost of goods sold</td><td class="num">'+m(d.cogsB)+'</td><td class="num">'+m(d.cogs)+'</td><td class="num ok">'+m(d.cogsB-d.cogs)+' under</td><td class="num nb">'+pf(cogsPct)+'</td></tr>'+
+   '<tr class="gm"><td class="l">Gross margin</td><td class="num">'+m(d.revB-d.cogsB)+'</td><td class="num">'+m(gm)+'</td><td class="num ok">'+m(gm-(d.revB-d.cogsB))+' ahead</td><td class="num nb">'+pf(gmPct)+'</td></tr>'+
+   '</table><p class="note"><b>Food purchased</b> is what was bought in this range. Finance adjusts food cost for inventory at close, so the closed number can differ.</p></div></div></div>';
+
+ h+='<div class="fold" onclick="tglT()"><span class="eb">Also tracked</span><span class="hx">repair, equipment and perks - not part of gross margin, watched together</span><span class="cv" id="cvt">▾</span></div>';
+ h+='<div id="trk" style="display:none"><div class="card aa" style="margin-top:12px"><div class="cb"><table>'+
+   '<tr><th class="l">Line</th><th>Budget</th><th>Actual</th><th style="width:110px">vs budget</th></tr>'+
+   '<tr><td class="l"><span class="glc num">5002.1</span>General repair and maintenance</td><td class="num">$86</td><td class="num">$73</td><td class="num ok">$13 under</td></tr>'+
+   '<tr><td class="l"><span class="glc num">5002.5</span>Equipment</td><td class="num">$461</td><td class="num">$126</td><td class="num ok">$336 under</td></tr>'+
+   '<tr><td class="l"><span class="glc num">5017.3</span>Perks</td><td class="num">$124</td><td class="num">$113</td><td class="num ok">$10 under</td></tr>'+
+   '</table><p class="note">Perks is the budget for celebrating your team - parties, recognitions, the Friday doughnuts. Spent on the Rippling card.</p></div></div></div>';
+
+ h+='</div>';
+ return h;
+}
+const CAP={1:'<b>This period, still open.</b> Ticker: state, the lever to look at, and how far in you are - three segments doing three jobs. Three cards, each number once. <b>What is left</b> is the only genuinely new figure: budget remaining, per day, and whether you are ahead of the clock. Then the two levers, then the weeks.',
+2:'<b>Last period, closed and verified.</b> No pace strip - the period is done. The ticker swaps the through-date for the verification date.',
+0:'<b>This year so far.</b> No pace strip either: year-to-date is a review surface, not a steering surface. Revenue card carries the full-year budget.'};
+function setR(i){R=i;[0,1,2].forEach(x=>$("b"+x).className=(x===i?"on":""));$("app").innerHTML=view();$("cap").innerHTML=CAP[i];window.scrollTo(0,0);}
+function tglS(){const s=$("stmt");const o=s.style.display==="none";s.style.display=o?"block":"none";$("cv").textContent=o?"▴":"▾";}
+function tglT(){const s=$("trk");const o=s.style.display==="none";s.style.display=o?"block":"none";$("cvt").textContent=o?"▴":"▾";}
+function tglR(e){e.stopPropagation();const r=$("rm");r.classList.toggle("on");}
+document.addEventListener("click",()=>{const r=$("rm");if(r)r.classList.remove("on");});
+setR(1);
+</script>
