@@ -812,6 +812,13 @@ export default function KpiPurchasingPage() {
   const reportISO = data?.freshness?.last_report_ingest_at || null;
   const reportStale = data?.freshness?.report_stale === true;
   const reportAgeH = data?.freshness?.report_age_hours;
+  // F-11 (2026-09-01): the report-only-pending view has 500'd on
+  // ALL/FYTD four times. The route now guards the view read with a
+  // 6s timeout - on trip, this flag is true and the popover surfaces
+  // it so the operator knows the report-only slice is missing from
+  // the board (vs genuinely empty). Silent fallback would be a lie
+  // by omission.
+  const reportOnlyUnavailable = data?.freshness?.report_only_unavailable === true;
   const _sourceRows = [
     { key: "billcom",  label: "bill.com sync",         iso: billcomISO },
     { key: "rippling", label: "Rippling card sync",    iso: ripplingISO },
@@ -833,9 +840,13 @@ export default function KpiPurchasingPage() {
   // When Data slow / Data stale: point at the lane that's behind.
   const _stateIntro = (() => {
     if (loadState !== "ok" || !data) return null;
+    // F-11: unavailable takes precedence in the intro. An operator
+    // reading the popover needs to know the report-only slice is
+    // missing before the freshness lane story.
+    if (reportOnlyUnavailable) return "Report-only pending view timed out on this request. The board's hero, list and drill are all showing the API-side pending only; the report-only slice will return on the next refresh.";
     if (worstHours == null) return "No recent walk on any source.";
     const worstName = _worst?.label || "one source";
-    if (worstHours >= 54) return `${worstName} is behind — the pill reflects that source.`;
+    if (worstHours >= 54) return `${worstName} is behind - the pill reflects that source.`;
     if (worstHours >= 30) return `${worstName} is running slow. Bills and cards land nightly around 2 AM CT.`;
     return "All three sources landed within the last day.";
   })();
@@ -862,6 +873,12 @@ export default function KpiPurchasingPage() {
         <div className="kpi-fresh-pop-row">
           <span>Report age</span>
           <b>{reportAgeH != null ? `${reportAgeH}h (SLA 36h)` : "not started"}</b>
+        </div>
+      )}
+      {reportOnlyUnavailable && (
+        <div className="kpi-fresh-pop-row">
+          <span>Report-only pending</span>
+          <b>temporarily unavailable</b>
         </div>
       )}
       <div className="kpi-fresh-pop-sep" aria-hidden="true" />

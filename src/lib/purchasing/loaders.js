@@ -626,24 +626,51 @@ export async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
   // count/amount this produces exactly matches the aggregate that hero
   // adds via mergePending().  CORP is filtered out at the site of the
   // preamble Promise.all; we keep the same filter here for parity.
+  //
+  // F-11 (2026-09-01): guarded by the same 6s timeout as
+  // loadReportOnlyPending in precedence.js. If the view times out on
+  // either call site, this slice is empty and reportUnavailable=true
+  // is bubbled up so hero + list + drill agree AND the freshness pill
+  // surfaces it. See docs/audits/F11_REPORT_ONLY_PENDING_500_2026-09-01.md.
+  const REPORT_ONLY_TIMEOUT_MS = process.env.F11_TIMEOUT_MS ? Number(process.env.F11_TIMEOUT_MS) : 6000;
+  const t0Report = Date.now();
   const reportRows = [];
+  let reportUnavailable = false;
   const membersNoCorp = members.filter(m => m !== "CORP");
-  for (const memberChunk of chunk(membersNoCorp, IN_CHUNK)) {
-    let from = 0;
-    while (true) {
-      const r = await supa.from("rippling_report_only_pending_v1")
-        .select("parent_txn_id, account_key, purchased_at, amount, category, work_location")
-        .in("account_key", memberChunk)
-        .gte("purchased_at", start)
-        .lte("purchased_at", end)
-        .order("parent_txn_id", { ascending: true })
-        .range(from, from + PS - 1);
-      if (r.error) return { error: r.error };
-      const data = r.data || [];
-      for (const row of data) reportRows.push(row);
-      if (data.length < PS) break;
-      from += PS;
+
+  async function walkReport() {
+    for (const memberChunk of chunk(membersNoCorp, IN_CHUNK)) {
+      let from = 0;
+      while (true) {
+        const r = await supa.from("rippling_report_only_pending_v1")
+          .select("parent_txn_id, account_key, purchased_at, amount, category, work_location")
+          .in("account_key", memberChunk)
+          .gte("purchased_at", start)
+          .lte("purchased_at", end)
+          .order("parent_txn_id", { ascending: true })
+          .range(from, from + PS - 1);
+        if (r.error) return { error: r.error };
+        const data = r.data || [];
+        for (const row of data) reportRows.push(row);
+        if (data.length < PS) break;
+        from += PS;
+      }
     }
+    return { ok: true };
+  }
+
+  const timeoutSentinel = Symbol("card_charges_report_only_timeout");
+  const raced = await Promise.race([
+    walkReport(),
+    new Promise((resolve) => setTimeout(() => resolve(timeoutSentinel), REPORT_ONLY_TIMEOUT_MS)),
+  ]);
+  if (raced === timeoutSentinel) {
+    const elapsed = Date.now() - t0Report;
+    console.warn(`[F-11] loadCardCharges report-only-view TIMEOUT after ${elapsed}ms (limit ${REPORT_ONLY_TIMEOUT_MS}ms) members=${membersNoCorp.length} range=${start}..${end}`);
+    reportUnavailable = true;
+    reportRows.length = 0;
+  } else if (raced?.error) {
+    return { error: raced.error };
   }
   const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0)
                     + reportRows.reduce((s, r) => s + Number(r.amount || 0), 0);
@@ -712,6 +739,11 @@ export async function loadCardCharges(supa, { members, start, end, cap = 50 }) {
       cap,
       total_count: totalCount,
       total_amount: Math.round(totalAmount * 100) / 100,
+      // F-11: bubble the guard state up so the payload can honestly say
+      // whether the report-only slice was omitted vs empty. hero/list/
+      // drill parity holds either way because reportRows is empty in
+      // both cases; the distinguishing signal is this field.
+      report_only_unavailable: reportUnavailable,
     },
   };
 }

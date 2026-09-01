@@ -88,47 +88,85 @@ export const RULES_APPLIED_IN_VIEW = {
  *   - Never returns a row the operator wouldn't see attributed on the
  *     board (attribution unresolved -> dropped in the view).
  */
+// F-11 (2026-09-01, PR): the view has 500'd on ALL/FYTD four times.
+// Root cause not proven yet (measurement showed cold-start under
+// Promise.all contention as the most likely candidate; unproven).
+// Guard: race the view read against a 6s timeout. On timeout, return
+// an unavailable shape so the route doesn't 500 and the surface can
+// say so honestly. Firing counter logged for reproduction data.
+// See docs/audits/F11_REPORT_ONLY_PENDING_500_2026-09-01.md.
+const REPORT_ONLY_TIMEOUT_MS = process.env.F11_TIMEOUT_MS ? Number(process.env.F11_TIMEOUT_MS) : 6000;
+
 export async function loadReportOnlyPending(supa, { members, start, end, IN_CHUNK = 200, PS = 1000 }) {
+  const t0 = Date.now();
   let amount = 0;
   let line_count = 0;
   const by_account = new Map();
   let max_purchased_at = null;
 
-  // Chunk the members set - PostgREST silent 1000-row cap, same
-  // pattern as loadPending in the route.
-  for (let i = 0; i < members.length; i += IN_CHUNK) {
-    const chunk = members.slice(i, i + IN_CHUNK);
-    let from = 0;
-    while (true) {
-      const q = await supa
-        .from(REPORT_ONLY_PENDING_VIEW)
-        .select("parent_txn_id, amount, account_key, purchased_at")
-        .in("account_key", chunk)
-        .gte("purchased_at", start)
-        .lte("purchased_at", end)
-        .order("parent_txn_id", { ascending: true })
-        .range(from, from + PS - 1);
-      if (q.error) return { error: q.error };
-      const rows = q.data || [];
-      for (const r of rows) {
-        const amt = Number(r.amount || 0);
-        amount += amt;
-        line_count += 1;
-        by_account.set(r.account_key, (by_account.get(r.account_key) || 0) + amt);
-        if (r.purchased_at && (max_purchased_at == null || r.purchased_at > max_purchased_at)) {
-          max_purchased_at = r.purchased_at;
+  async function walk() {
+    // Chunk the members set - PostgREST silent 1000-row cap, same
+    // pattern as loadPending in the route.
+    for (let i = 0; i < members.length; i += IN_CHUNK) {
+      const chunk = members.slice(i, i + IN_CHUNK);
+      let from = 0;
+      while (true) {
+        const q = await supa
+          .from(REPORT_ONLY_PENDING_VIEW)
+          .select("parent_txn_id, amount, account_key, purchased_at")
+          .in("account_key", chunk)
+          .gte("purchased_at", start)
+          .lte("purchased_at", end)
+          .order("parent_txn_id", { ascending: true })
+          .range(from, from + PS - 1);
+        if (q.error) return { error: q.error };
+        const rows = q.data || [];
+        for (const r of rows) {
+          const amt = Number(r.amount || 0);
+          amount += amt;
+          line_count += 1;
+          by_account.set(r.account_key, (by_account.get(r.account_key) || 0) + amt);
+          if (r.purchased_at && (max_purchased_at == null || r.purchased_at > max_purchased_at)) {
+            max_purchased_at = r.purchased_at;
+          }
         }
+        if (rows.length < PS) break;
+        from += PS;
       }
-      if (rows.length < PS) break;
-      from += PS;
     }
+    return { ok: true };
   }
+
+  const timeoutSentinel = Symbol("report_only_timeout");
+  const raced = await Promise.race([
+    walk(),
+    new Promise((resolve) => setTimeout(() => resolve(timeoutSentinel), REPORT_ONLY_TIMEOUT_MS)),
+  ]);
+
+  if (raced === timeoutSentinel) {
+    const elapsed = Date.now() - t0;
+    console.warn(`[F-11] loadReportOnlyPending TIMEOUT after ${elapsed}ms (limit ${REPORT_ONLY_TIMEOUT_MS}ms) members=${members.length} range=${start}..${end}`);
+    return {
+      data: {
+        amount: 0,
+        line_count: 0,
+        by_account: {},
+        max_purchased_at: null,
+        unavailable: true,
+        unavailable_reason: "timeout",
+        unavailable_elapsed_ms: elapsed,
+      },
+    };
+  }
+  if (raced?.error) return { error: raced.error };
+
   return {
     data: {
       amount:     Math.round(amount * 100) / 100,
       line_count,
       by_account: Object.fromEntries([...by_account].map(([k, v]) => [k, Math.round(v * 100) / 100])),
       max_purchased_at,
+      unavailable: false,
     },
   };
 }
@@ -150,6 +188,12 @@ export function mergePending(apiPending, reportOnlyPending) {
       line_count:        reportOnlyPending?.line_count || 0,
       by_account:        reportOnlyPending?.by_account || {},
       max_purchased_at:  reportOnlyPending?.max_purchased_at || null,
+      // F-11: preserve the unavailable signal so the freshness pill
+      // and every consumer can distinguish "empty because zero rows"
+      // from "empty because the view timed out". Silent fallback would
+      // be a lie by omission.
+      unavailable:        reportOnlyPending?.unavailable === true,
+      unavailable_reason: reportOnlyPending?.unavailable_reason || null,
     },
   };
 }
