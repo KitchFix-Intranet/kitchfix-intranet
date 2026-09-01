@@ -764,6 +764,36 @@
   border-color: var(--border-default);
   color: var(--text-subtle);
 }
+/* Earned badge lights up. Uses status-entered family (green) as the
+   base tone so the state reads as "current, on the record" - the
+   class-family variants below layer their color on top. */
+.opd-bdge--earned {
+  background: var(--status-entered-subtle);
+  border-color: var(--status-entered-strong);
+  color: var(--text-success);
+  opacity: 1;
+}
+.opd-bdge--earned .opd-bdge-glyph { opacity: 1; }
+/* When a badge is BOTH earned AND has a class-family class, the
+   class family wins the border + text color (identity), the green
+   subtle backfills only the background so the "current" state is
+   still legible. Order in JSX puts --class-{fam} last so specificity
+   ties are broken by source order. */
+.opd-bdge--earned.opd-bdge--class-gov   { border-color: var(--opd-class-gov-fg); }
+.opd-bdge--earned.opd-bdge--class-proc  { border-color: var(--opd-class-proc-fg); }
+.opd-bdge--earned.opd-bdge--class-tool  { border-color: var(--opd-class-tool-fg); }
+.opd-bdge--earned.opd-bdge--class-ref   { border-color: var(--opd-class-ref-fg); }
+.opd-bwall-swatch--earned {
+  background: var(--status-entered-subtle);
+  border: 1px solid var(--status-entered-strong);
+}
+/* Standing pct chip beside the count. */
+.opd-standing-pct {
+  font-size: 11px;
+  color: var(--text-success);
+  font-weight: 700;
+  margin-left: 4px;
+}
 /* Doc-class family tints (P1-2). Reuses the Playbook chip families
    from playbook.css so /opd and /playbook read from the same visual
    vocabulary. Awaiting-state keeps the muted register - the tint
@@ -931,12 +961,22 @@
   display: inline-block;
 }
 .opd-queue-dot--open { background: var(--status-upcoming-strong); }
+.opd-queue-dot--done { background: var(--status-entered-strong); }
 .opd-queue-dot--waived {
   background: var(--surface-card);
   border: 1.5px dashed var(--status-upcoming-strong);
   width: 10px;
   height: 10px;
 }
+/* Done row: muted, kept in the list as a completion receipt. */
+.opd-queue-row--done { opacity: 0.6; }
+.opd-queue-row--done .opd-queue-cta {
+  background: var(--surface-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+}
+.opd-queue-row--done:hover { opacity: 0.85; }
+.opd-queue-due--done { color: var(--text-success); }
 .opd-queue-body { min-width: 0; }
 /* .opd-queue-kick inherits from .opd-k (see canonical eyebrow
    rule above) - one kicker treatment for the whole surface. */
@@ -1762,6 +1802,436 @@
   padding: 16px 20px;
 }
 
+/* ═════════════════════════════════════════════════════════════
+ * READ-CHECK-SIGN FLOW (PR: signature flow)
+ * Focus view extensions: section-at-a-time reveal, inline check
+ * cards, serif sign block, completion certificate.
+ * ═════════════════════════════════════════════════════════════ */
+
+/* Section wrapper - each reveal is one <section>. flash class is
+   applied briefly when the wrong-answer "back to section" button is
+   clicked so the operator can find the reference. */
+.opd-focus-section {
+  scroll-margin-top: 20px;
+}
+.opd-focus-section--flash {
+  animation: opd-focus-flash 1.6s ease;
+}
+@keyframes opd-focus-flash {
+  0%, 100% { background: transparent; }
+  25%, 60% { background: var(--status-needs-subtle); }
+}
+
+/* Continue button between narrative sections that carry no check. */
+.opd-focus-continue {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+.opd-focus-continue-btn {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-link);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  padding: 10px 20px;
+  min-height: 44px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.opd-focus-continue-btn:hover {
+  background: var(--opd-chip-bg);
+  border-color: var(--text-link);
+}
+
+/* ── Check card (spec 18.6, 18.7, 18.8) ─────────────────────── */
+.opd-check {
+  margin-top: 22px;
+  padding: 15px 18px 16px;
+  border: 1.5px solid var(--text-link);
+  border-radius: var(--radius-container);
+  background: var(--surface-card);
+  max-width: 64ch;
+  animation: opd-check-rise 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes opd-check-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.opd-check--done {
+  border: 1px solid var(--status-entered-bd);
+  background: var(--status-entered-subtle);
+  padding: 11px 16px 12px;
+}
+.opd-check-prompt {
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--text-heading);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.opd-check-passed-line {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.5;
+  font-style: italic;
+}
+.opd-check-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.opd-check-opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 13px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-default);
+  line-height: 1.5;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  min-height: 44px;
+}
+.opd-check-opt:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  box-shadow: var(--elevation-card);
+}
+.opd-check-opt:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+.opd-check-opt:disabled {
+  cursor: default;
+}
+/* Wrong answer: AMBER only. Spec 18.7: never red. */
+.opd-check-opt--miss {
+  border-color: var(--status-needs-bd);
+  background: var(--status-needs-subtle);
+}
+.opd-check-opt--right {
+  border-color: var(--status-entered-strong);
+  background: var(--status-entered-subtle);
+}
+.opd-check-opt--dim {
+  opacity: 0.45;
+}
+.opd-check-opt-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex: none;
+  align-self: flex-start;
+}
+.opd-check-opt-text { flex: 1; min-width: 0; }
+/* Feedback card - amber for wrong, green for right. */
+.opd-check-fb {
+  border-radius: var(--radius-control);
+  padding: 11px 14px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  animation: opd-check-rise 0.3s ease;
+}
+.opd-check-fb--amber {
+  background: var(--status-needs-subtle);
+  border: 1px solid var(--status-needs-bd);
+  color: var(--status-needs-fg);
+}
+.opd-check-fb--green {
+  background: var(--status-entered-subtle);
+  border: 1px solid var(--status-entered-bd);
+  color: var(--text-success);
+}
+.opd-check-fb b { font-weight: 750; }
+.opd-check-fb-body {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.opd-check-back {
+  display: inline-flex;
+  margin-top: 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--status-needs-fg);
+  background: var(--surface-card);
+  border: 1px solid var(--status-needs-bd);
+  border-radius: var(--radius-control);
+  padding: 8px 13px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.opd-check-back:hover {
+  background: var(--status-needs-subtle);
+}
+.opd-check-cont {
+  display: inline-flex;
+  margin-top: 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--surface-card);
+  background: var(--text-success);
+  border: none;
+  border-radius: var(--radius-control);
+  padding: 9px 15px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.opd-check-cont:hover { filter: brightness(0.94); }
+
+/* ── Sign block (spec 18.9) ─────────────────────────────────── */
+.opd-sign {
+  border: 1.5px solid var(--text-link);
+  border-radius: var(--radius-container);
+  padding: 22px 24px;
+  margin-top: 26px;
+  max-width: 64ch;
+  background: linear-gradient(180deg, var(--surface-sunken), var(--surface-card));
+  animation: opd-check-rise 0.5s ease;
+}
+/* Attestation renders in serif so it reads as a document, not
+   interface (spec 18.9). Everywhere else stays Inter. */
+.opd-sign-text {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text-strong);
+  margin-top: 12px;
+}
+.opd-sign-text b {
+  color: var(--text-heading);
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+.opd-sign-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.opd-sign-input {
+  flex: 1;
+  min-width: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--text-strong);
+  background: var(--surface-card);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-control);
+  padding: 12px 14px;
+  min-height: 44px;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.opd-sign-input:focus {
+  border-color: var(--text-link);
+  box-shadow: 0 0 0 3px var(--opd-chip-bg);
+}
+.opd-sign-btn {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--surface-card);
+  background: var(--border-strong);
+  border: none;
+  border-radius: var(--radius-control);
+  padding: 12px 22px;
+  min-height: 44px;
+  cursor: not-allowed;
+  transition: background 0.25s;
+  white-space: nowrap;
+}
+.opd-sign-btn--ready {
+  background: var(--action-primary-bg);
+  cursor: pointer;
+}
+.opd-sign-btn--ready:hover { background: var(--action-primary-bg-hover); }
+.opd-sign-hint {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  margin-top: 8px;
+}
+.opd-sign-earn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 11px 14px;
+  border-radius: var(--radius-control);
+  background: var(--opd-class-gov-bg);
+  border: 1px solid var(--opd-class-gov-bd);
+}
+.opd-sign-earn-glyph {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-cell);
+  background: var(--surface-card);
+  border: 1px solid var(--opd-class-gov-bd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex: none;
+}
+.opd-sign-earn b {
+  display: block;
+  font-size: 12.5px;
+  color: var(--opd-class-gov-fg);
+  font-weight: 750;
+}
+.opd-sign-earn span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* ── Time-left rail card (spec 18.4: largest number on screen) ── */
+.opd-focus-timeleft {
+  padding: 15px 16px;
+  text-align: center;
+}
+.opd-focus-timeleft b {
+  display: block;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.opd-focus-timeleft span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* ── "No rush" card ─────────────────────────────────────────── */
+.opd-focus-norush {
+  padding: 13px 14px;
+}
+.opd-focus-norush-body {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-top: 6px;
+}
+
+/* Step done state on the rail (adds to existing --dim + --now). */
+.opd-focus-step--done .opd-focus-step-num {
+  background: var(--status-entered-subtle);
+  border-color: var(--status-entered-strong);
+  color: var(--text-success);
+}
+
+/* ── Completion screen (spec 18.11 applied to a single module - the
+      cycle celebration is separate) ──────────────────────────── */
+.opd-focus-done {
+  display: block;
+}
+.opd-cert {
+  max-width: 620px;
+  margin: 10px auto 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-container-lg);
+  box-shadow: var(--elevation-raised);
+  overflow: hidden;
+}
+.opd-cert-top {
+  background: linear-gradient(135deg, var(--n-900), var(--text-link));
+  color: var(--surface-card);
+  padding: 24px 26px 22px;
+  text-align: center;
+  position: relative;
+}
+.opd-cert-seal {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin: 0 auto 12px;
+  animation: opd-cert-seal 0.7s cubic-bezier(0.2, 1.5, 0.3, 1);
+}
+@keyframes opd-cert-seal {
+  0%   { transform: scale(0.5) rotate(-12deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.opd-cert-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--surface-card);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.opd-cert-sub {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.72);
+  margin-top: 4px;
+}
+.opd-cert-serial {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 10px;
+  font-weight: 600;
+}
+.opd-cert-body {
+  padding: 16px 24px 20px;
+}
+.opd-cert-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.opd-cert-line:last-of-type { border-bottom: none; }
+.opd-cert-line-k { color: var(--text-muted); }
+.opd-cert-line-v {
+  color: var(--text-heading);
+  font-weight: 650;
+}
+.opd-focus-done-back {
+  display: block;
+  margin: 18px auto 0;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 10px 16px;
+  min-height: 40px;
+}
+.opd-focus-done-back:hover { color: var(--text-link); }
+
 /* ─────────────────────────────────────────────────────────────
  * Mobile behaviour - ships in this PR per spec Section 14.
  * Two breakpoints:
@@ -1842,6 +2312,17 @@
     padding: 22px 20px 26px;
   }
   .opd-focus-body { max-width: 100%; }
+
+  /* Read-check-sign: cards go full-width; buttons stay 44px+;
+     serif input keeps generous padding so the mobile keyboard does
+     not clip the caret. */
+  .opd-check { max-width: 100%; padding: 14px 14px 15px; }
+  .opd-check-opt { padding: 12px 14px; min-height: 48px; }
+  .opd-sign { max-width: 100%; padding: 18px 16px; }
+  .opd-sign-row { flex-direction: column; gap: 10px; }
+  .opd-sign-input { min-height: 48px; }
+  .opd-sign-btn { min-height: 48px; width: 100%; }
+  .opd-cert { max-width: 100%; margin: 0; }
   .opd-queue-row {
     grid-template-columns: 12px minmax(0, 1fr) auto;
     grid-template-rows: auto auto auto;

@@ -159,7 +159,11 @@ export async function GET() {
   // Cycles: we always load the full known set (calendar-year, no
   // pagination needed - one cycle per month, tiny). Powers both the
   // year track and the queue's cycle-label lookup.
-  const [docsQ, obligationsQ, cyclesQ] = await Promise.all([
+  //
+  // Attestations: viewer's signed record. Used to mark done queue
+  // rows + light credentials + fill year segments + gate the
+  // percentage (spec 18.1 principle 5: no percentage without history).
+  const [docsQ, obligationsQ, cyclesQ, attestationsQ] = await Promise.all([
     distinctDocIds.length > 0
       ? supa.from("documents").select("id, title, shelf, doc_class, version").in("id", distinctDocIds)
       : Promise.resolve({ data: [], error: null }),
@@ -173,6 +177,11 @@ export async function GET() {
       .from("academy_cycles")
       .select("cycle_id, label, period_start, period_end, status, fiscal_year, fiscal_period_no, audience_scope, published_at")
       .order("period_start", { ascending: true }),
+    supa
+      .from("academy_attestations")
+      .select("attestation_id, requirement_id, doc_id, obligation_key, doc_version, signed_at, certificate_serial, supersedes")
+      .eq("worker_id", identity.workerId)
+      .order("signed_at", { ascending: false }),
   ]);
   if (docsQ.error) {
     console.error("[api/academy/room] documents:", docsQ.error.message);
@@ -186,6 +195,10 @@ export async function GET() {
     console.error("[api/academy/room] cycles:", cyclesQ.error.message);
     return NextResponse.json({ error: "server_error", scope: "cycles" }, { status: 500 });
   }
+  if (attestationsQ.error) {
+    console.error("[api/academy/room] attestations:", attestationsQ.error.message);
+    return NextResponse.json({ error: "server_error", scope: "attestations" }, { status: 500 });
+  }
 
   const docsById = new Map();
   for (const d of docsQ.data || []) docsById.set(d.id, d);
@@ -197,11 +210,21 @@ export async function GET() {
   const cycles = cyclesQ.data || [];
   for (const c of cycles) cyclesById.set(c.cycle_id, c);
 
+  // Index the viewer's attestations by requirement_id. A NOT EXISTS
+  // check for "is this attestation the current one?" would use the
+  // supersedes column; in v1 there are no super-seding rows so a
+  // simple by-requirement lookup answers "signed?" honestly.
+  const attestationsByReq = new Map();
+  for (const att of attestationsQ.data || []) {
+    if (att.requirement_id) attestationsByReq.set(att.requirement_id, att);
+  }
+
   // 3. Enrich the queue.
   const queue = reqs.map((r) => {
     const doc = docsById.get(r.doc_id) || null;
     const ob = obligationsByKey.get(`${r.doc_id}|${r.obligation_key}`) || null;
     const cyc = r.cycle_id != null ? cyclesById.get(r.cycle_id) || null : null;
+    const att = attestationsByReq.get(r.requirement_id) || null;
     return {
       requirement_id: r.requirement_id,
       doc_id: r.doc_id,
@@ -220,11 +243,28 @@ export async function GET() {
       cycle_id: r.cycle_id,
       cycle_label: cyc?.label || null,
       waived: r.waived_at != null,
+      signed: att != null,
+      signed_at: att?.signed_at || null,
+      certificate_serial: att?.certificate_serial || null,
     };
   });
+  const signedCount = queue.filter((q) => q.signed).length;
+  // Cycle-open minutes = sum of unsigned est_minutes (spec 18.2:
+  // total minutes reflects the work ahead, not the work done).
+  const totalMinutesRemaining = queue
+    .filter((q) => !q.signed)
+    .reduce((acc, q) => acc + (q.est_minutes || 0), 0);
+  const totalMinutes = queue.reduce((acc, q) => acc + (q.est_minutes || 0), 0);
   const queueSummary = {
     count: queue.length,
-    totalMinutes: queue.reduce((acc, q) => acc + (q.est_minutes || 0), 0),
+    signedCount,
+    remainingCount: queue.length - signedCount,
+    totalMinutes,
+    totalMinutesRemaining,
+    // Percentage appears only once history exists (spec 18.1 principle 5).
+    percentCurrent: signedCount > 0 && queue.length > 0
+      ? Math.round((signedCount / queue.length) * 100)
+      : null,
   };
 
   // 4. Year track - always the current calendar year on the server.
