@@ -161,7 +161,7 @@ export default function KpiPurchasingPage() {
   const presetResolved = (() => {
     if (!urlPreset || urlStart || urlEnd) return null;
     if (urlPreset === "fytd")     return { startISO: FY_START_ISO,          endISO: today };
-    if (urlPreset === "last_4wk") return { startISO: addDaysISO(today, -27), endISO: today };
+    // 2026-09-02: last_4wk preset retired.
     if (urlPreset === "this_period") {
       const r = rangeForPeriod(curPeriod);
       return r ? { startISO: r.startISO, endISO: r.endISO } : null;
@@ -725,10 +725,12 @@ export default function KpiPurchasingPage() {
   // 12/29/25 - 08/24/26`. Mirrors labor's inference exactly.
   const resolvedPreset = useMemo(() => {
     if (start === FY_START_ISO && end === today) return "fytd";
-    if (start === addDaysISO(today, -27) && end === today) return "last_4wk";
-    // Range PR-2 2026-08-24: last_13wk inference retired alongside
-    // the labor picker sweep. A hand-crafted URL landing on the exact
-    // today-90..today window now infers as a custom range, matching
+    // 2026-09-02 retire-custom PR: last_4wk inference removed (preset
+    // retired). last_13wk was retired 2026-08-24 for the same reason:
+    // rolling windows straddle periods and produce the grain-mismatch
+    // defect Kevin measured. A hand-crafted URL landing on today-27
+    // now snaps server-side to the containing period; the chip
+    // reads "Period N · snapped from a custom range".
     // what the picker itself can produce.
     if (accountPeriods.length) {
       const past = [...accountPeriods]
@@ -954,7 +956,7 @@ export default function KpiPurchasingPage() {
       const weeksInPeriodDenom = board.weeksInPeriod || board.weeksInRange || null;
       const cardTitle = (() => {
         if (resolvedPreset === "fytd") return "FISCAL YEAR TO DATE";
-        if (resolvedPreset === "last_4wk") return "THE LAST 4 WEEKS";
+        // 2026-09-02: last_4wk retired.
         if (resolvedPreset === "this_period" || resolvedPreset === "last_period" || rangePeriodNo != null) {
           return `PERIOD ${rangePeriodNo}`;
         }
@@ -1089,9 +1091,7 @@ export default function KpiPurchasingPage() {
     // correct when the range EQUALS a single fiscal period.
     const cardTitle = (() => {
       if (resolvedPreset === "fytd") return "FISCAL YEAR TO DATE";
-      if (resolvedPreset === "last_4wk") return "THE LAST 4 WEEKS";
-      // Range PR-2 2026-08-24: last_13wk band label retired alongside
-      // the inference above and the preset itself.
+      // 2026-09-02: last_4wk retired.
       if (resolvedPreset === "this_period" || resolvedPreset === "last_period" || rangePeriodNo != null) {
         return `PERIOD ${rangePeriodNo}`;
       }
@@ -1358,6 +1358,8 @@ export default function KpiPurchasingPage() {
             resolvedPreset,
             selectedPeriodNo: rangeSelectionEarly?.kind === "period" ? rangeSelectionEarly.value : null,
             selectedMonth: rangeSelectionEarly?.kind === "month" ? rangeSelectionEarly.value : null,
+            /* 2026-09-02 retire-custom PR: server-driven snap chip. */
+            rangeSnap: data?.range_snap || null,
             onCommit: onRangeCommit,
           } : null}
           // PR 2 R8 Gap 2 - Export what is on screen at the displayed

@@ -19,7 +19,8 @@ import { getServiceClient } from "@/lib/supabase";
 
 // Range PR-2 2026-08-24: last_13wk retired. See sibling route.js
 // for the migration reference.
-const VALID_PRESETS = new Set(["this_period", "last_period", "last_4wk", "fytd"]);
+// 2026-09-02: last_4wk retired platform-wide. See sibling route.js.
+const VALID_PRESETS = new Set(["this_period", "last_period", "fytd"]);
 
 function isYmd(s) {
   return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);

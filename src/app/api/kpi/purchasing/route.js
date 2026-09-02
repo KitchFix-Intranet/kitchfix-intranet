@@ -101,6 +101,7 @@ import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST } from "@/lib/kpi/roleGate";
 import { loadRoleGate } from "@/lib/kpi/roleGate.js";
 import { resolvePreviewAccess } from "@/lib/kpi/previewAccess.js";
 import { getServiceClient } from "@/lib/supabase";
+import { snapRange } from "@/lib/kpi/rangeSnap.js";
 import {
   FY_START_ISO, periodOf, periodStartISO, periodEndISO,
   weekStartsInRange, inferRangeSelection, currentPeriodNo,
@@ -346,8 +347,16 @@ export async function GET(request) {
   // value when preview intersects real access.
   let account = (searchParams.get("account") || "").trim();
   const previewParam = (searchParams.get("preview") || "").trim();
-  const start = searchParams.get("start") || FY_START_ISO;
-  const end = searchParams.get("end") || today;
+  let start = searchParams.get("start") || FY_START_ISO;
+  let end = searchParams.get("end") || today;
+  // 2026-09-02 "retire custom + rolling" PR: snap any non-aligned
+  // (start, end) to the containing period per Kevin's rule 4. Same
+  // reasoning as labor: /api/kpi/purchasing is a front door too.
+  const _purSnap = snapRange(start, end, today);
+  const _purSnapped = _purSnap.snapped;
+  const _purSnappedFrom = _purSnap.snapped_from;
+  start = _purSnap.start;
+  end = _purSnap.end;
   const drill = (searchParams.get("drill") || "").trim().toLowerCase();
   const includeLines = drill === "lines";
   // PR 4 - drill-down table. Lazy source-split aggregate for the SHOW
@@ -1326,6 +1335,16 @@ export async function GET(request) {
       const { vendor_or_merchant: _drop, ...rest } = r;
       return { ...rest, vendor };
     });
+  }
+
+  // 2026-09-02: snap disclosure - the client chip reads "Period N ·
+  // snapped from a custom range" when set.
+  if (_purSnapped) {
+    payload.range_snap = {
+      snapped: true,
+      snapped_from: _purSnappedFrom,
+      snapped_to: { start, end },
+    };
   }
 
   return NextResponse.json(payload);

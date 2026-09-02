@@ -50,6 +50,7 @@ import { proRateBudget } from "@/lib/labor/budgetProRate.js";
 // it in-process against real Supabase (no HTTP, no auth session).
 // See src/lib/labor/dailyRangeBody.js.
 import { buildDailyRangeBody } from "@/lib/labor/dailyRangeBody.js";
+import { snapRange } from "@/lib/kpi/rangeSnap.js";
 // homestand PR-1 - MLB clubhouse view. Six accounts get a homestand
 // tab (CIN - OH, STL - MO, TXR - TX - H, TXR - TX - V, CIN - KY,
 // TBJ - NY); every other account gets an empty list -> tab absent.
@@ -172,6 +173,16 @@ export async function GET(request) {
   // the window as if it had been requested directly.
   let start = searchParams.get("start") || "2025-12-29";  // FY2026 opens
   let end = searchParams.get("end") || today;
+  // 2026-09-02 "retire custom + rolling" PR: snap any non-aligned
+  // (start, end) to the fiscal period containing `end` per Kevin's
+  // rule 4. The client's range menu emits aligned URLs, but /api/
+  // is a front door too and the grain-mismatch defect Kevin
+  // measured (65.7% GM on 08/03-08/30) fires the same way here.
+  const _labSnap = snapRange(start, end, today);
+  const _labSnapped = _labSnap.snapped;
+  const _labSnappedFrom = _labSnap.snapped_from;
+  start = _labSnap.start;
+  end = _labSnap.end;
   // Future-range flag (owner ruling 2026-08-24, corrected HS PR-A).
   // True when the requested RESOLVED range starts strictly after
   // today. Homestand requests carry `?homestand=<game_start>` and
@@ -1367,6 +1378,17 @@ export async function GET(request) {
   if (homestandBank) bodySingle.homestand_bank = homestandBank;
   if (homestandSplice) Object.assign(bodySingle, homestandSplice);
   bodySingle.is_future_range = is_future_range;
+  // 2026-09-02: snap disclosure - the client chip reads "Period N ·
+  // snapped from a custom range" when set. Homestand requests carry
+  // a game-window range that isn't period-aligned by design; skip
+  // the snap disclosure when a homestand override took effect.
+  if (_labSnapped && !homestandParam) {
+    bodySingle.range_snap = {
+      snapped: true,
+      snapped_from: _labSnappedFrom,
+      snapped_to: { start, end },
+    };
+  }
   return NextResponse.json(bodySingle);
 }
 

@@ -51,6 +51,23 @@ export default function StatusLine({ statusLine }) {
 
   const segments = [gm, lever, progress].filter(Boolean);
 
+  // 2026-09-02 item 6 guard (Kevin): the retire-custom PR removes
+  // every path that reaches has_target=false + no biggest_lever, but
+  // "a state that renders nothing is how a defect hides" - keep the
+  // branch and give it a sentence. Fires only when the state pill is
+  // "No target" and there is no lever to compare - a defensive
+  // sentence rather than an empty white band.
+  const isNoTargetState = statusLine.state_copy === "No target";
+  const emptyGuardSentence = (segments.length === 0 || (isNoTargetState && !lever))
+    ? (
+      <span data-kpi-ov="status-empty-guard">
+        {statusLine.gm_actual_display
+          ? <>Gross margin <b>{statusLine.gm_actual_display}</b>; no target to compare against on this range.</>
+          : <>No target on this range.</>}
+      </span>
+    )
+    : null;
+
   return (
     <div
       className={`kpi-ov-status ${stateClass}`}
@@ -61,7 +78,7 @@ export default function StatusLine({ statusLine }) {
         {statusLine.state_copy}
       </span>
       <span className="kpi-ov-status-say">
-        {segments.map((seg, i) => (
+        {emptyGuardSentence || segments.map((seg, i) => (
           <span key={i}>
             {i > 0 && <span className="kpi-ov-status-sep" aria-hidden="true"> · </span>}
             {seg}

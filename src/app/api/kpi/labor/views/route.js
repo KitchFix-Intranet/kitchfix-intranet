@@ -16,7 +16,7 @@
 //   account_key  string, must be one of ACCOUNTS
 //   tab          "labor" (only tab supported today)
 //   date_mode    "preset" | "absolute"
-//   date_preset  one of this_period | last_period | last_4wk | fytd  (required when date_mode=preset)
+//   date_preset  one of this_period | last_period | fytd  (required when date_mode=preset)
 //   date_from    YYYY-MM-DD  (required when date_mode=absolute)
 //   date_to      YYYY-MM-DD  (required when date_mode=absolute; must be >= date_from)
 //   worker_ids   string[] | null  (null = all workers; empty array = no workers)
@@ -38,7 +38,13 @@ import { getServiceClient } from "@/lib/supabase";
 // constraint on kpi_saved_views.date_preset to match. Zero rows used
 // the value (verified pre-PR), so the migration is a pure schema
 // change with no data migration step.
-const VALID_PRESETS = new Set(["this_period", "last_period", "last_4wk", "fytd"]);
+// 2026-09-02: last_4wk retired platform-wide alongside the calendar
+// popover and the rolling-window preset - both produced the grain-
+// mismatch defect on partial-period ranges. Existing saved views
+// with date_preset='last_4wk' are grandfathered (read-only) until
+// their owner re-saves; the CHECK constraint is loosened by that
+// PR's migration.
+const VALID_PRESETS = new Set(["this_period", "last_period", "fytd"]);
 const VALID_TABS = new Set(["labor"]);
 
 function isYmd(s) {
