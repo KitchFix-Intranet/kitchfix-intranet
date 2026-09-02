@@ -93,6 +93,13 @@ export default function RevenueLines({ payload }) {
   // range_composition is the single source of truth; render its
   // counts. Bare LIVE only survives on a range whose EVERY period is
   // live; bare VERIFIED only on a range whose every period is verified.
+  // Kevin 2026-09-02 PR-1 of language pass: FYTD is now closed-only,
+  // so range_composition on FYTD reads verified=N with live=0 and
+  // planned=0 - a single-kind multi-period range. Kevin's ruling:
+  // "The pill reads `8 verified`". So the composition pill fires on
+  // every multi-period range regardless of kind mix; only true
+  // single-period ranges (periods_total===1) fall through to the
+  // bare "Verified" / "Live" / "Planned" pill.
   const rc = payload.range_composition;
   const compositionPill = (() => {
     if (!rc || rc.periods_total <= 1) return null;
@@ -100,7 +107,7 @@ export default function RevenueLines({ payload }) {
     if (rc.verified.count) parts.push(`${rc.verified.count} verified`);
     if (rc.live.count) parts.push(`${rc.live.count} live`);
     if (rc.planned.count) parts.push(`${rc.planned.count} planned`);
-    if (parts.length <= 1) return null;   // single-kind range: keep the flat pill
+    if (parts.length === 0) return null;
     return parts.join(" · ");
   })();
   const flatPill = isRevPlanned ? "Planned" : (periodState === "verified" ? "Verified" : "Live");

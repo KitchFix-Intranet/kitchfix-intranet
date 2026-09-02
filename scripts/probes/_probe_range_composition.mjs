@@ -89,10 +89,12 @@ async function checkOne(c) {
   if (!!rc.will_change_at_close !== wantWillChange) {
     fail(c.name, `will_change_at_close=${rc.will_change_at_close}, expected ${wantWillChange}`);
   }
-  // A4: summary shape on TBJ - FL FYTD
+  // A4: summary shape on TBJ - FL FYTD. Kevin ruling 2026-09-02
+  // (PR-1 of language pass): FYTD ends at the last closed period, so
+  // the summary is just "P1-P8 verified" - no still-running tail.
   if (c.name === "TBJ - FL FYTD") {
-    if (rc.summary !== "P1-P8 verified · P9 still running") {
-      fail(c.name, `summary=${JSON.stringify(rc.summary)} not the P1-P8 verified · P9 still running form`);
+    if (rc.summary !== "P1-P8 verified") {
+      fail(c.name, `summary=${JSON.stringify(rc.summary)} not "P1-P8 verified" (FYTD closed-only)`);
     }
   }
   if (rc.periods_total > 0 && !rc.summary) {

@@ -72,18 +72,22 @@ async function scrape(page, url) {
   return { chipPrimary, revLinePill, revComposition, statusProgress, popRevenueRow, popConsequence };
 }
 
+// Kevin 2026-09-02 PR-1 of language pass: FYTD ends at last closed
+// period. Composition on FYTD is all-verified; no still-running tail,
+// no consequence sentence, no "N of M periods verified" third clause
+// (the range is closed, not partially closed). Chip reads "P1-P8".
 const CASES = [
   {
     name: "TBJ - FL FYTD",
     url: (a) => `${BASE}/kpi/overview?account=${a}`,
     acct: "TBJ - FL",
     expect: {
-      chipPrimaryContains: "FYTD · P1-P9",
-      revLinePill: "8 verified · 1 live",
+      chipPrimaryContains: "FYTD · P1-P8",
+      revLinePill: "8 verified",
       revCompositionContains: "P1-P8 verified",
-      statusProgressContains: "8 of 9 periods verified",
-      popRevenueRowContains: ["P1-P8 verified against the finance P&L", "P9 live from Service Calendar"],
-      popConsequenceContains: "will change when the period closes",
+      statusProgressAbsent: true,
+      popRevenueRowContains: ["P1-P8 verified against the finance P&L"],
+      popConsequenceAbsent: true,
     },
   },
   {
@@ -91,12 +95,12 @@ const CASES = [
     url: (a) => `${BASE}/kpi/overview?account=${a}`,
     acct: "TBR - FL",
     expect: {
-      chipPrimaryContains: "FYTD · P1-P9",
-      revLinePill: "8 verified · 1 planned",
+      chipPrimaryContains: "FYTD · P1-P8",
+      revLinePill: "8 verified",
       revCompositionContains: "P1-P8 verified",
-      statusProgressContains: "8 of 9 periods verified",
-      popRevenueRowContains: ["P1-P8 verified against the finance P&L", "P9 planned from budget"],
-      popConsequenceContains: "will change when the period closes",
+      statusProgressAbsent: true,
+      popRevenueRowContains: ["P1-P8 verified against the finance P&L"],
+      popConsequenceAbsent: true,
     },
   },
   {
@@ -160,6 +164,14 @@ async function main() {
     }
     if (e.statusProgressContains && !(scraped.statusProgress || "").includes(e.statusProgressContains)) {
       fail(c.name, `status progress missing "${e.statusProgressContains}"`);
+    }
+    if (e.statusProgressAbsent) {
+      // The third clause pattern is "N of M periods verified" or "N of
+      // M weeks closed". Assert neither appears - FYTD closed-only
+      // shouldn't advertise progress.
+      if (/periods verified|weeks closed/.test(scraped.statusProgress || "")) {
+        fail(c.name, `status progress should NOT contain a periods/weeks clause; got: ${JSON.stringify(scraped.statusProgress)}`);
+      }
     }
     if (e.popRevenueRowContains) {
       for (const s of e.popRevenueRowContains) {
