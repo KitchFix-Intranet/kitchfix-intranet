@@ -525,6 +525,8 @@ Manager usage is roughly **50/50 desktop and mobile**, and the intranet has been
 
 ## 16. Status ledger
 
+> **Paused 2026-09-01.** Current state, open rulings, and resume order: [`docs/opd/ACADEMY_PAUSE_HANDOFF.md`](./ACADEMY_PAUSE_HANDOFF.md).
+
 Updated with every merged PR. This is the living section.
 
 ### 16.1 Migration split
@@ -579,10 +581,23 @@ Five migrations. The identity foundation split off first, then the RDO region-le
 | 17.3 | Overdue consequence ladder and any lockout policy | Minimum: a "not current" chip plus a lead nudge on day 8 | Notifications |
 | 17.4 | Spanish parity: `PB-004-ES` is Retired and hourly needs it most | Restore before the hourly pilot | Hourly portal |
 | 17.10 | **The full learner experience, landing through recognition.** See Section 18. | Design before build. | Everything downstream |
+| 17.11 | **`academy-12` question-to-section matching.** Annual re-sign carries the same questions as the on-hire module; questions attach to (doc, section) not (doc, obligation) so a correction lands once. See [handoff §4 ruling A](./ACADEMY_PAUSE_HANDOFF.md). | Land alongside 17.12 | All remaining question seeding (`AGR-001` 13-14 questions, `PB-006` 11 questions) |
+| 17.12 | **Obligation `sort_order`.** Part order is currently alphabetical by coincidence. The projection should write authoring order and every consumer should read it. See [handoff §4 ruling B](./ACADEMY_PAUSE_HANDOFF.md). | Fold into `academy-12` | Correct part ordering for any doc where alphabetical is wrong (`big-rules-annual < big-rules-onboarding` would be backwards today). |
+| 17.13 | **Two resolver rules unbuilt.** (a) Never issue an annual obligation to someone with no prior signature on the same content. (b) Refuse to publish a cycle containing two obligations that deliver the same content to the same person. Both surfaced from the eight-versus-five queue problem. See [handoff §6](./ACADEMY_PAUSE_HANDOFF.md). | Same class as the zero-population refusal already in the engine | Publishing a cycle without manual review; annual audiences |
 
 ### Closed
 
 Stints versus persons (2.1). Scope by region (3.1). Eligibility exceptions (2.6). Hourly identity and the `personal_email` policy (2.5). Calendar months (6). Pilot document set (4.3). v1 audience (15). Peer visibility (3.4). Hourly roster visibility (3.4). Admin permission split (12.2) - **superseded 2026-09-01: Josh and Joe hold both grants; no separate standing-viewer type is needed.** "% current" denominator as signed-of-assigned-this-cycle. Document-open pattern (Focus for requirements, modal for Library peeks, inline for single-check refreshers). Sous freeze scope (12.4). Shelf taxonomy (4.1). Frontmatter obligations extension (17.6). `supersedes` direction inversion (17.7). `satisfied_by` omission (17.8). **Academy replaces Rippling for document signing (1). Witness countersignature retired (1). Culture OS check scope (17.9) - closed 2026-09-01: `culture-os-standard` gets checks, `culture-os-origin` does not. Origin is company history; a comprehension test on it is trivia. Origin's signature is a straight acknowledgment.** **Pre-signature corrections do not bump the version (12.3).**
+
+**Closed 2026-09-01** (pause handoff pass, each dated 2026-09-01):
+
+- **Academy replaces Rippling for document distribution and signature.** Signatures land in `academy_attestations`; the Rippling signing event is retired for Academy-managed documents.
+- **Witness countersignature retired.** The `KitchFix Witness Name, Signature, Date` fields are no longer captured. `AGR-001`'s Acknowledgement section still references the old fields; see `docs/opd/questions/CONTENT_FINDINGS.md` for the required content edit before AGR-001 is onboarded.
+- **Josh and Joe hold both grants; no separate standing-viewer grant type needed.** Supersedes the earlier admin permission split.
+- **Annual re-sign carries the same questions as the on-hire module.** A correction should land once, not twice. This is what motivates 17.11 (`academy-12` question-to-section matching).
+- **Origin gets no comprehension checks - straight acknowledgment.** See 17.9.
+- **Cycles are calendar months.** Confirmed (was already implicit; recorded here as explicit).
+- **A check must never quote a `<Fact>` value.** Mission, Vision and the brand promise are interpolated components, not body text. A check that tests an interpolated value becomes wrong the moment that value is edited - and wrong for people who were already graded on it. Checks test the standard and the surrounding commentary, never the interpolated value. Already reflected in Section 18.6.
 
 ---
 
