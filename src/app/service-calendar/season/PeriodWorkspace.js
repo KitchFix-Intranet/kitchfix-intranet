@@ -266,6 +266,11 @@ export default function PeriodWorkspace({
       throw err;
     }
     setFinalizeReloadTick((n) => n + 1);
+    // sc-38 (2026-09-02): surface invoiceRecords from effects so the
+    // toast can report the actual count (TBJ produces 3-8 invoices per
+    // week). Shape: { pushed:true, invoiceRecords:[...], n1:{...} } |
+    // { pushed:false, ... }.
+    return { invoiceRecords: body?.effects?.invoiceRecords || [] };
   }, []);
 
   const handleRevert = useCallback(async ({ accountKey: acctK, weekStart, reason }) => {

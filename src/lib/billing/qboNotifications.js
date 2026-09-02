@@ -126,7 +126,11 @@ function n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords
   const kickText = isTest ? "TEST - READY FOR REVIEW" : "READY FOR REVIEW";
   const kickBg   = isTest ? "#FDF6EC" : "#E8F5EC";
   const kickFg   = isTest ? "#8A5A16" : "#2F7D4F";
-  const qboLink  = invoiceRecords.find((r) => r.qboLink)?.qboLink || "";
+  // sc-38 (2026-09-02): TBJ produces 3-8 invoices per week. Enumerate
+  // each invoice's deep-link labeled by slot so AP can jump to any
+  // draft, not just the first one (prior code did
+  // `find((r) => r.qboLink)?.qboLink` and surfaced only one link).
+  const invoicesWithLink = invoiceRecords.filter((r) => r.qboLink);
   const testLine = isTest
     ? `<tr><td style="padding-top:16px;font-size:12px;color:#8A5A16;font-weight:bold">*** TEST - not a real invoice; no client will be billed ***</td></tr>`
     : "";
@@ -159,8 +163,13 @@ function n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords
   <tr><td style="padding-top:20px">
     <a href="${escapeHtml(scWeekLink || "#")}" style="display:inline-block;padding:10px 18px;background:#153968;color:#ffffff;text-decoration:none;border-radius:6px;font-size:13px;font-weight:bold">Open the week in the Service Calendar</a>
   </td></tr>
-  ${qboLink ? `<tr><td style="padding-top:8px;font-size:12px;color:#64748B">
-    <a href="${escapeHtml(qboLink)}" style="color:#153968">AP and leadership: open the draft in QuickBooks</a>
+  ${invoicesWithLink.length === 1 ? `<tr><td style="padding-top:8px;font-size:12px;color:#64748B">
+    <a href="${escapeHtml(invoicesWithLink[0].qboLink)}" style="color:#153968">AP and leadership: open the draft in QuickBooks</a>
+  </td></tr>` : invoicesWithLink.length > 1 ? `<tr><td style="padding-top:8px;font-size:12px;color:#64748B">
+    AP and leadership: open each draft -
+    ${invoicesWithLink.map((r, i) =>
+      `<a href="${escapeHtml(r.qboLink)}" style="color:#153968">${escapeHtml(r.invoiceSlot || `#${i+1}`)}</a>`
+    ).join(" &middot; ")}
   </td></tr>` : ""}
   ${testLine}
   <tr><td style="padding-top:16px;font-size:11px;color:#64748B;line-height:1.5;border-top:1px solid #E2E8F0;padding-top:12px;margin-top:12px">
