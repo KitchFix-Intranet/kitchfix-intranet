@@ -16,6 +16,21 @@ space in the parent folder name). One section per `account_key`, sorted
 alphabetically. No import script is included; this is a mapping reference
 only.
 
+**Pinned workbook hashes** (2026-09-02, for the seed + fill scripts in
+`scripts/billing/`; workbooks copied into `scripts/billing/inputs/`):
+
+- TBJ - FL (`tbj-fl-sc-2026-v5.xlsx`):
+  `d153c4c6f52ec408185693d4b4489efe7a5df857d2ad45c573b7c50ee581e15a`
+- TBR - FL (`tbr-fl-sc-2026-v5.xlsx`, **post-Kevin-rename of Projections tab
+  Y2/AA2**):
+  `540b9b7839c385a1dc1d1aa615251fcab1ba47b5d6f66734e4dbed55f1820fc5`
+  (previous pre-rename value `c3466de84ffb42e104982d7e7aafdd9d7f8f99f461bebfef5fab9c37fa843dec` is stale)
+
+Any script reading these workbooks must hash-gate on the pinned value and halt
+on mismatch. If Kevin edits either workbook again (spreadsheet renames,
+column shifts, cell corrections), the hash changes and the pinned constant
+in the script must be bumped in the same PR that lands the edit.
+
 ## Conventions used throughout this doc
 
 - Column letters refer to the Excel column letter (A, B, ..., AJ, AK, ...).
@@ -590,15 +605,36 @@ Actuals tab (58 cols total):
 
 ### 2. Header structure
 
-- Row 1: group headers (`Major League`, `Minor League`, `Other`, `TOTALS`).
-  Title `Tampa Bay Rays @ Port Charlotte, FL`.
-- Row 2: service names + prices.
-- Row 3: first data row.
-- Total header rows: 2.
+- **Projections tab: 2 header rows.** Row 1 = group headers (`Major League`,
+  `Minor League`, `Other`, `TOTALS`). Title `Tampa Bay Rays @ Port Charlotte,
+  FL`. Row 2 = service names + prices interleaved. Row 3 = first data row.
+- **Actuals tab: 3 header rows** (amendment 2026-09-02). Row 1 = group
+  headers (same as projections). Row 2 = a stray real data row (a single
+  out-of-order date sitting above the header block; Kevin ruled skip during
+  the PR-S seed but the row IS real service data, so PR-V's fill loaded it
+  explicitly for 2026-08-03). Row 3 = service names + prices (this is the
+  header row the parser reads for name-to-column lookup). Row 4 = first
+  normal-order data row (2025-12-29 Mon Week 1).
+- **Actuals tab uses column A for Date, not column B**, and the Title text
+  sits in C1, shifting all data left by 1 column compared to the Projections
+  tab. Importer must use column-by-name lookup per tab AND must skip the
+  right number of header rows per tab (2 for Projections, 3 for Actuals).
+  The stray row 2 on the actuals tab is legitimate data - if a future re-import
+  wants full coverage it needs a per-row date scan, not a "skip N header rows"
+  shortcut.
 
-**Anomaly:** the Actuals tab has its `Date` column in **column A** (not B) and
-the Title text in C1, shifting all data left by 1 column compared to the
-Projections tab. Importer must use column-by-name lookup per tab.
+**Amendment 2026-09-02 (Kevin's rename):** the Projections tab columns Y and
+AA were originally labeled `Breakfast - MiLB ST` and `Lunch - MiLB ST` and
+fed distinct "ST twin" `sc_services` rows. The ST twins were an import
+artifact: the June 2026 bulk loader read the projections tab's names verbatim
+and created `Breakfast - MiLB ST` + `Lunch - MiLB ST` alongside the actuals
+tab's `Breakfast - MiLB` + `Lunch - MiLB`. The twins never received a field
+count (actuals only ever flow to the non-ST rows). Kevin renamed the
+Projections tab headers on 2026-09-02 - `Y2 = "Breakfast - MiLB"` at
+`$17.8275`, `AA2 = "Lunch - MiLB"` at `$21.675` - so both tabs feed one
+service per column. The ST twin `sc_services` rows are archived
+(`active_until = 2026-01-01`) and their 714 orphaned `sc_daily_projections`
+rows deleted 2026-09-02. Never re-create the twins on a future re-import.
 
 ### 3. Metadata columns (Projections tab)
 
