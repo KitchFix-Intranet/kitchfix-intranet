@@ -86,6 +86,28 @@ export default function RevenueLines({ payload }) {
   const rng = payload.range;
   const periodState = payload.period_state;
   const isRevPlanned = payload.revenue_source_state === "planned";
+  // Kevin 2026-09-02 blocker Item 2: on a range containing more than
+  // one kind of period the LIVE / VERIFIED / PLANNED pill lied - it
+  // named the SINGLE source picker for the range but never disclosed
+  // that eight of nine periods were verified while one was live.
+  // range_composition is the single source of truth; render its
+  // counts. Bare LIVE only survives on a range whose EVERY period is
+  // live; bare VERIFIED only on a range whose every period is verified.
+  const rc = payload.range_composition;
+  const compositionPill = (() => {
+    if (!rc || rc.periods_total <= 1) return null;
+    const parts = [];
+    if (rc.verified.count) parts.push(`${rc.verified.count} verified`);
+    if (rc.live.count) parts.push(`${rc.live.count} live`);
+    if (rc.planned.count) parts.push(`${rc.planned.count} planned`);
+    if (parts.length <= 1) return null;   // single-kind range: keep the flat pill
+    return parts.join(" · ");
+  })();
+  const flatPill = isRevPlanned ? "Planned" : (periodState === "verified" ? "Verified" : "Live");
+  const pillText = compositionPill || flatPill;
+  const pillToneCls = compositionPill
+    ? "kpi-ov-pill-neutral"
+    : (isRevPlanned ? "kpi-ov-pill-neutral" : "kpi-ov-pill-good");
   // Item 11: on a closed period btd equals period_budget - collapse
   // to one budget column. Open single-period ranges show both btd
   // and the period budget.
@@ -118,8 +140,11 @@ export default function RevenueLines({ payload }) {
             </p>
           }
         />
-        <span className={`kpi-ov-pill ${isRevPlanned ? "kpi-ov-pill-neutral" : "kpi-ov-pill-good"}`}>
-          {isRevPlanned ? "Planned" : (periodState === "verified" ? "Verified" : "Live")}
+        <span
+          className={`kpi-ov-pill ${pillToneCls}`}
+          data-kpi-ov="revenue-lines-pill"
+        >
+          {pillText}
         </span>
       </div>
       <div className="kpi-ov-cb">

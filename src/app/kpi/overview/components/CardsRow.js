@@ -65,7 +65,7 @@ function labelBudget(range, periodState) {
   return "Period budget";
 }
 
-function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars }) {
+function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars, rangeComposition }) {
   const ptd = labelPtd(range, periodState);
   const budgetLabel = labelBudget(range, periodState);
   const dates = scCountsWithoutDollars?.dates_covered;
@@ -161,6 +161,19 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
             </div>
           </div>
         </div>
+        {/* Kevin 2026-09-02 blocker Item 3: composition summary. Beneath
+            the budget pair; absent on single-period ranges (where it
+            would restate the pill). Reads range_composition.summary
+            verbatim - server owns the sentence, so the four surfaces
+            can't drift. */}
+        {rangeComposition && rangeComposition.periods_total > 1 && rangeComposition.summary && (
+          <div
+            className="kpi-ov-sub kpi-ov-rev-composition"
+            data-kpi-ov="revenue-composition-summary"
+          >
+            {rangeComposition.summary}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -276,7 +289,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra }) {
   );
 }
 
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
@@ -292,6 +305,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           periodState={periodState}
           revenuePacePct={revenuePacePct}
           scCountsWithoutDollars={scCountsWithoutDollars}
+          rangeComposition={rangeComposition}
         />
       )}
       {cogs && (
