@@ -61,6 +61,18 @@ function initials(name) {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+// Company Standing name column. The code (team_key) is already shown
+// in column 1, so the name column must never repeat it. CORP's region
+// value is literally "CORP", which duped the row pre-fix. Map CORP to
+// its display name; for any other row whose region value equals its
+// code, render nothing rather than repeat.
+function accountDisplayName(teamKey, region) {
+  if (teamKey === "CORP") return "Corporate";
+  const r = (region || "").trim();
+  if (!r) return "";
+  if (r === teamKey) return "";
+  return r;
+}
 function daysUntilISO(isoDate, todayISO) {
   if (!isoDate) return null;
   const dateOnly = String(isoDate).length >= 10 ? String(isoDate).slice(0, 10) : String(isoDate);
@@ -100,6 +112,36 @@ function DashedBrick({ scope, message, onRetry }) {
       {onRetry ? (
         <button type="button" className="opd-brick-retry" onClick={onRetry}>Retry</button>
       ) : null}
+    </div>
+  );
+}
+
+// Lessons card loading state. Header bar + three set-block placeholders,
+// each with an icon chip and two bars. Mirrors LibraryRoom's shelf
+// skeleton pattern (spec law - never render an empty card during load).
+// Reuses existing .opd-skel* classes and the opd-skel-shine keyframe;
+// no new skeleton CSS.
+function LessonsSkeleton() {
+  return (
+    <div className="opd-card opd-lcard opd-lcard--skel" aria-busy="true" aria-label="Loading lessons">
+      <div className="opd-lh">
+        <span className="opd-skel opd-skel--bar opd-skel--w40" />
+      </div>
+      <div className="opd-lbody">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="opd-set opd-set--skel">
+            <div className="opd-seth">
+              <span className="opd-lead" aria-hidden="true">
+                <span className="opd-skel opd-skel--chip" />
+              </span>
+              <div className="opd-seth-tx">
+                <span className="opd-skel opd-skel--bar opd-skel--w60" />
+                <span className="opd-skel opd-skel--bar opd-skel--w40" style={{ marginTop: 6 }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -658,32 +700,32 @@ function RecordCard({ record, cycleLabel }) {
         <div className="opd-rq">
           <b className="num">{r.signedAllTime}</b>
           <span className="opd-lb">SIGNED</span>
-          <em>All time</em>
+          <em className="opd-rq-sub">All time</em>
         </div>
         <div className="opd-rq">
           {r.firstRun ? (
             <>
               <div className="opd-rq-fr">Starts now</div>
               <span className="opd-lb" style={{ marginTop: 6 }}>ON-TIME CYCLES</span>
-              <em>No cycle has closed yet</em>
+              <em className="opd-rq-sub">No cycle has closed yet</em>
             </>
           ) : (
             <>
               <b className="num">{r.cyclesClosedCount}</b>
               <span className="opd-lb">ON-TIME CYCLES</span>
-              <em>of {r.cyclesClosedCount} closed</em>
+              <em className="opd-rq-sub">of {r.cyclesClosedCount} closed</em>
             </>
           )}
         </div>
         <div className="opd-rq">
           <b className="num">{r.minutesReadThisCycle}</b>
           <span className="opd-lb">MINUTES READ</span>
-          <em>This cycle</em>
+          <em className="opd-rq-sub">This cycle</em>
         </div>
         <div className="opd-rq">
           <b className="num">{r.checksPassed}</b>
           <span className="opd-lb">CHECKS PASSED</span>
-          <em>{r.retries > 0 ? `${r.retries} retr${r.retries === 1 ? "y" : "ies"}` : "First try each"}</em>
+          <em className="opd-rq-sub">{r.retries > 0 ? `${r.retries} retr${r.retries === 1 ? "y" : "ies"}` : "First try each"}</em>
         </div>
       </div>
       <div className="opd-rfoot">
@@ -741,7 +783,7 @@ function StandingCard({ standing }) {
             >
               <ChevronRight size={13} strokeWidth={2} className="opd-cr-chv" />
               <span className="opd-cr-kk">{a.team_key}</span>
-              <span className="opd-cr-nm">{a.region || a.team_key}</span>
+              <span className="opd-cr-nm">{accountDisplayName(a.team_key, a.region)}</span>
               <span className={"opd-tone " + tone}>
                 <i />
                 {toneLabel}
@@ -923,9 +965,7 @@ export default function AcademyRoom({ viewerEmail }) {
           nextCycle={nextCycle}
         />
         {loading ? (
-          <div className="opd-card opd-lcard" style={{ padding: 22 }} aria-busy="true">
-            <span className="opd-skel opd-skel--bar opd-skel--w40" />
-          </div>
+          <LessonsSkeleton />
         ) : (
           <LessonsCard
             sets={sets}
