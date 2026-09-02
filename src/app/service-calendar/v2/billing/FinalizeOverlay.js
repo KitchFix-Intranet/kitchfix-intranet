@@ -29,10 +29,15 @@
 
 import { useEffect, useRef } from "react";
 
+// sc-38 (2026-09-02): pluralized copy for accounts that produce
+// multiple invoices per week (TBJ 3-8, TBR 1-2). Confirm mode does
+// not yet know the exact count (that requires a preview API); the
+// generic plural is honest for any account. The toast reflects the
+// exact count from the finalize response.
 const WORKING_STEPS = [
   { id: 1, label: "Locking the week" },
-  { id: 2, label: "Building the invoice" },
-  { id: 3, label: "Creating the draft in QuickBooks" },
+  { id: 2, label: "Building the invoices" },
+  { id: 3, label: "Creating the drafts in QuickBooks" },
   { id: 4, label: "Telling billing" },
 ];
 
@@ -170,7 +175,7 @@ export default function FinalizeOverlay({
   const titleConfirm = `Finalize the week of ${fmtWeekTitle(weekStart)}?`;
   const titleWorking = `Finalizing the week of ${fmtWeekTitle(weekStart)}`;
   const subConfirm = "Send finals to QuickBooks for AP review and billing to client.";
-  const subWorking = "Creating the invoice in QuickBooks. AP will review and send to client.";
+  const subWorking = "Creating the drafts in QuickBooks. AP will review and send to client.";
 
   const title = mode === "working" ? titleWorking : titleConfirm;
   const sub = mode === "working" ? subWorking : subConfirm;

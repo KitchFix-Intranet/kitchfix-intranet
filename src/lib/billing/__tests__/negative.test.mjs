@@ -362,6 +362,80 @@ test("plain_name description emits mapping.qbo_line_description (Fountain Bev ca
   }
 });
 
+// sc-38 (2026-09-02): export_excluded rows drop from line emission
+// but the row must NOT throw the unmapped-service guard. B&G Lunch on
+// TBR - FL is the first case (Sebastian bills B&G outside the system;
+// B&G revenue stays in TBR account totals per Kevin's kitchen-margin
+// rule, but the line is suppressed from the QBO invoice).
+test("negative: export_excluded row does NOT throw and produces NO invoice line", () => {
+  const bgServiceId = "35bc73d2-c465-4c3d-bf30-908da81d54fa"; // TBR B&G Lunch
+  const bfstMilbId  = "1318c319-1844-410a-ace5-8f8812eebd23"; // TBR Bfst-MiLB
+  const tbrAccountMap = {
+    account_key: "TBR - FL",
+    qbo_customer_id: "17860",
+    qbo_customer_name: "Tampa Bay Rays (Port Charlotte, FL)",
+    qbo_taxcode_id: "26",
+    cadence: "weekly",
+    biweekly_anchor: null,
+    active: true,
+  };
+  const tbrServiceMap = [
+    // B&G excluded row: mapping present so unmapped-throw does NOT fire,
+    // export_excluded=true so line emission is suppressed.
+    { service_id: bgServiceId, account_key: "TBR - FL",
+      qbo_item_id: null, qbo_line_description: null,
+      aggregate_group: null, invoice_slot: "main",
+      tax_override: null, line_desc_style: null,
+      export_excluded: true },
+    // MiLB Breakfast: normal mapping, will produce a real line.
+    { service_id: bfstMilbId, account_key: "TBR - FL",
+      qbo_item_id: "3293", qbo_line_description: "TBR MiLB - Breakfast",
+      aggregate_group: null, invoice_slot: "milb",
+      tax_override: null, line_desc_style: null,
+      export_excluded: false },
+  ];
+  // Same day: B&G Lunch 120 (would be $780 revenue but is excluded)
+  // + MiLB Breakfast 80 (produces a real line).
+  const rows = [
+    scRow({
+      service_date: "2026-07-27",
+      service_id: bgServiceId,
+      service_name: "B&G Lunch",
+      account_key: "TBR - FL",
+      actual_count: 120, price: 6.50,
+    }),
+    scRow({
+      service_date: "2026-07-27",
+      service_id: bfstMilbId,
+      service_name: "Breakfast - MiLB",
+      account_key: "TBR - FL",
+      actual_count: 80, price: 17.83,
+    }),
+  ];
+  const result = buildInvoicePayload({
+    accountKey: "TBR - FL",
+    weekStart: "2026-07-27",   // Monday
+    rows, accountMap: tbrAccountMap, serviceMap: tbrServiceMap,
+  });
+  // Exactly one invoice (milb slot). B&G lives on 'main' but produces
+  // no lines so no 'main' invoice appears.
+  assert.equal(result.invoices.length, 1, "expected exactly one invoice (milb slot)");
+  assert.equal(result.invoices[0]._slot, "milb");
+  // Exactly one line: MiLB Breakfast. B&G suppressed.
+  assert.equal(result.invoices[0].Line.length, 1, "expected exactly one line (MiLB Bfst)");
+  const line = result.invoices[0].Line[0];
+  assert.equal(line.SalesItemLineDetail.ItemRef.value, "3293");
+  assert.equal(line.SalesItemLineDetail.Qty, 80);
+  // Verify no B&G item id or description leaked into the line.
+  assert.notEqual(line.SalesItemLineDetail.ItemRef.value, null);
+  assert.ok(!/B&G/.test(line.Description || ""));
+  // Verify no warning about unmapped B&G - it's mapped, just excluded.
+  assert.ok(
+    !result.warnings.some((w) => /B&G/.test(w)),
+    `expected no warning about B&G; got: ${JSON.stringify(result.warnings)}`
+  );
+});
+
 // Bonus: P13 hard-fails on bi-weekly (owner amendment 2026-08-06).
 test("negative: P13 biweekly build hard-fails with named error", () => {
   const rows = [

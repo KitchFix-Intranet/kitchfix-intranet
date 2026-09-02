@@ -113,6 +113,11 @@ export default function WeekFinalizeControl({
   const [overlayMode, setOverlayMode] = useState("idle");
   const [workingStepIndex, setWorkingStepIndex] = useState(0);
   const [toastOpen, setToastOpen] = useState(false);
+  // sc-38 (2026-09-02): dynamic invoice count from finalize response.
+  // TBJ produces 3-8 invoices per week; the toast reflects the actual
+  // count. Confirm mode is unaware of the count (would need a preview
+  // endpoint); overlay working-step copy uses generic plural.
+  const [toastInvoiceCount, setToastInvoiceCount] = useState(1);
   const openButtonRef = useRef(null);
 
   // PR-E: prefer server-authoritative completeness. Falls back to
@@ -249,9 +254,19 @@ export default function WeekFinalizeControl({
     }, 700);
 
     try {
-      await onFinalize?.({ accountKey, weekStart });
+      const finalizeResult = await onFinalize?.({ accountKey, weekStart });
       clearInterval(tickTimer);
       setWorkingStepIndex(4);
+      // sc-38 (2026-09-02): capture invoiceRecords.length from the
+      // response so the toast can render "AP has N invoices for
+      // review." for accounts producing multiple invoices per week
+      // (TBJ 3-8 typical). Falls back to 1 if the shape is legacy
+      // or the response is malformed - matches prior behaviour.
+      const count =
+        Array.isArray(finalizeResult?.invoiceRecords)
+          ? finalizeResult.invoiceRecords.length
+          : (Number.isFinite(finalizeResult?.invoiceCount) ? finalizeResult.invoiceCount : 1);
+      setToastInvoiceCount(count > 0 ? count : 1);
       // Small settle to render the "Telling billing" step before
       // toast + close.
       await new Promise((r) => setTimeout(r, 250));
@@ -391,6 +406,7 @@ export default function WeekFinalizeControl({
 
       <FinalizeToast
         open={toastOpen}
+        invoiceCount={toastInvoiceCount}
         onDismiss={() => setToastOpen(false)}
       />
     </div>

@@ -17,6 +17,13 @@
 //      as a MEAL line. `is_flat_fee` services with ANY actual row on
 //      the week emit one weekly line at qty=1 (see rule 6).
 //   2. `is_non_revenue` rows are dropped silently.
+//   2b. `export_excluded` rows (mapping-side flag from sc-38) are
+//       dropped from line emission but the row's revenue stays in
+//       sc_daily_revenue. Distinct from rule 2: is_non_revenue drops
+//       from revenue math itself; export_excluded drops from invoice
+//       lines only. TBR B&G Lunch is the first case (Sebastian bills
+//       B&G outside the system; B&G revenue must remain in TBR
+//       account totals per Kevin's kitchen-margin rule).
 //   3. Unmapped service handling (owner ruling 2026-08-10, retro-
 //      shadow round 1 finding B):
 //        actual_count > 0  and  unmapped -> THROW (real data being
@@ -237,11 +244,22 @@ export function buildInvoicePayload({
   };
 
   for (const r of inSpan) {
-    // is_non_revenue drop.
+    // is_non_revenue drop (rule 2).
     if (r.is_non_revenue) continue;
     // No actual_count = no operational data; skip (would be a
     // no-service day or unentered day; either way not billable).
     if (r.actual_count == null) continue;
+
+    // Lookup mapping here so both rule 2b + the unmapped-service
+    // policy below can read it without re-fetching.
+    const mapping = svcMapById.get(r.service_id);
+
+    // export_excluded drop (rule 2b, sc-38 2026-09-02): mapping row
+    // asserts the service is billed outside the system. Line emission
+    // is suppressed; revenue in sc_daily_revenue is unchanged (the
+    // row already contributed to actual_revenue via the view's
+    // LATERAL price join). B&G Lunch on TBR - FL is the first case.
+    if (mapping && mapping.export_excluded) continue;
 
     // Unmapped-service policy (owner ruling 2026-08-10):
     //   actual_count > 0  and unmapped -> THROW (real data lost if
@@ -250,7 +268,6 @@ export function buildInvoicePayload({
     //                                     produced anyway; only
     //                                     surface so ops can see
     //                                     the unmapped row).
-    const mapping = svcMapById.get(r.service_id);
     const qty = Number(r.actual_count);
     if (r.is_flat_fee) {
       if (!mapping) {
