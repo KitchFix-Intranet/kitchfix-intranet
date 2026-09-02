@@ -13,10 +13,12 @@
 //   Walks TBR - FL on three ranges (FYTD, P8 closed, P9 open) and
 //   asserts:
 //     - resolveOverview does not throw
-//     - revenue_source_state === "live" on every range
+//     - revenue_source_state === "live" on every range (or "verified"
+//       on verified closed periods)
 //     - sources.sc_revenue.through_date <= min(range.end, today - 1)
 //     - hero_actual is a finite non-negative number
-//     - what_is_left is defined on the open range (P9)
+//   (R-52 2026-09-02: pace card + what_is_left retired; probe drops
+//   the what_is_left presence check.)
 //
 // ─── Env preflight (rule: PRESENT/ABSENT only) ──────────────────────
 //
@@ -136,9 +138,6 @@ async function walkOne(supa, r) {
   if (hero == null || !Number.isFinite(Number(hero)) || Number(hero) < 0) {
     fails.push(`revenue.hero_actual=${hero} (want finite >=0)`);
   }
-  if (r.range.kind === "period" && r.range.period_no === 9 && !p.what_is_left) {
-    fails.push(`what_is_left missing on open period`);
-  }
   return {
     tag: r.tag,
     ok: fails.length === 0,
@@ -149,7 +148,6 @@ async function walkOne(supa, r) {
       range_end: rangeEnd,
       hero_actual: hero,
       period_state: p.period_state,
-      has_wil: !!p.what_is_left,
       sc_counts_without_dollars: !!p.sc_counts_without_dollars,
     },
   };
@@ -166,7 +164,7 @@ async function main() {
   for (const r of RANGES) {
     const res = await walkOne(supa, r);
     if (res.ok) {
-      console.log(`  OK   ${res.tag}  src=${res.stats.revenue_source_state}  through=${res.stats.through}  hero=${res.stats.hero_actual}  state=${res.stats.period_state}  wil=${res.stats.has_wil}  countsNoDollars=${res.stats.sc_counts_without_dollars}`);
+      console.log(`  OK   ${res.tag}  src=${res.stats.revenue_source_state}  through=${res.stats.through}  hero=${res.stats.hero_actual}  state=${res.stats.period_state}  countsNoDollars=${res.stats.sc_counts_without_dollars}`);
     } else {
       failed++;
       console.log(`  FAIL ${res.tag}`);

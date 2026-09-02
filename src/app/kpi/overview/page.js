@@ -67,7 +67,6 @@ import CardsRow from "./components/CardsRow";
 import Chart from "./components/Chart";
 import CostLines from "./components/CostLines";
 import RevenueLines from "./components/RevenueLines";
-import PacePanel from "./components/PacePanel";
 import PnlStatement from "./components/PnlStatement";
 import AlsoTracked from "./components/AlsoTracked";
 import SkeletonBoard from "./components/SkeletonBoard";
@@ -444,10 +443,12 @@ export default function KpiOverviewPage() {
           </>
         ) : (
           /* PR-2 items 1 + 2 + 4 (Kevin, 2026-09-02): single-account
-              two-column split. Left: chart, cost lines. Right: pace,
-              revenue lines, tracked. Full-width below: P&L fold.
-              DrillButtons retired (item 4) - cost-line rows are the
-              clickable surface now. */
+              two-column split. Left: chart, cost lines. Right:
+              revenue lines, also tracked. Full-width below: P&L fold.
+              PacePanel removed 2026-09-02 (R-52): the Overview is a
+              scoreboard, not a forecast. Counts-without-dollars is
+              rehomed to the Revenue card - hero em-dash + pill "Not
+              yet reporting" + sub-line row count and dates. */
           <>
             <div className="kpi-ov-split" data-kpi-ov="single-account-split">
               <div className="kpi-ov-split-left">
@@ -455,7 +456,6 @@ export default function KpiOverviewPage() {
                 <CostLines payload={data} previewAccount={data.preview_account} />
               </div>
               <div className="kpi-ov-split-right">
-                <PacePanel payload={data} />
                 <RevenueLines payload={data} />
                 <AlsoTracked payload={data} />
               </div>
