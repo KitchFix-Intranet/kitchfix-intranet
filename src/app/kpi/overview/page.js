@@ -318,6 +318,19 @@ export default function KpiOverviewPage() {
       if (cur && start === cur.start && end === cur.end) resolvedPreset = "this_period";
       else if (prev && start === prev.start && end === prev.end) resolvedPreset = "last_period";
     }
+    // Kevin 2026-09-02 blocker Item 1: on FYTD the chip primary reads
+    // "FYTD · P1-P9" so the reader sees the periods included instead
+    // of the anonymous "FYTD". Single-period ranges are unchanged
+    // (chipOverride only fires when composition spans more than one
+    // period). Composition-driven; the payload's range_composition is
+    // the source of truth.
+    const rc = data?.range_composition;
+    let chipOverride = null;
+    if (resolvedPreset === "fytd" && rc && rc.periods_total > 1) {
+      const first = 1;
+      const last = rc.periods_total;
+      chipOverride = { primary: `FYTD · P${first}-P${last}` };
+    }
     return {
       startISO: start,
       endISO: end,
@@ -328,9 +341,10 @@ export default function KpiOverviewPage() {
       selectedPeriodNo: rangeSelection?.kind === "period" ? rangeSelection.value : null,
       urlLabel,
       rangeSnap: data?.range_snap || null,
+      chipOverride,
       onCommit: onCommitRange,
     };
-  }, [start, end, today, rangeSelection, urlLabel, onCommitRange, data?.range_snap]);
+  }, [start, end, today, rangeSelection, urlLabel, onCommitRange, data?.range_snap, data?.range_composition]);
 
   // R-40 polish (2026-09-01): revenue-source toggle retired
   // end-to-end. Nothing to render.
@@ -410,6 +424,7 @@ export default function KpiOverviewPage() {
           hasTarget={data.has_target}
           revenuePacePct={data.revenue_pace_pct}
           revenueSourceState={data.revenue_source_state}
+          rangeComposition={data.range_composition}
         />
         {/* PR-2 layout branch: two-column single-account grid ONLY
             when the EFFECTIVE account is a single site. A corporate

@@ -24,15 +24,31 @@ const NIGHTLY_NOTE =
 
 export default function DataCurrentPop({ sources }) {
   if (!sources) return null;
+  // Kevin 2026-09-02 blocker Item 4: the Revenue row must name every
+  // source the payload used (verified first), not only the smaller
+  // Service Calendar source. `sources.revenue.parts` is composed by
+  // the resolver from range_composition; fall back to the legacy
+  // sc_revenue label when the resolver hasn't shipped the field yet.
+  const revenueRow = sources.revenue?.parts?.length
+    ? { k: "Revenue", v: sources.revenue.parts.join(" · ") }
+    : sources.sc_revenue?.label
+      ? { k: "Revenue · Service Calendar", v: valueOnly(sources.sc_revenue.label, "Revenue from Service Calendar through") }
+      : null;
+
   const rows = [
     sources.labor?.label ? { k: "Labor", v: valueOnly(sources.labor.label, "Labor through") } : null,
     sources.purchases?.label ? { k: "Purchases · bills and cards", v: valueOnly(sources.purchases.label, "Purchases through") } : null,
-    sources.sc_revenue?.label ? { k: "Revenue · Service Calendar", v: valueOnly(sources.sc_revenue.label, "Revenue from Service Calendar through") } : null,
+    revenueRow,
   ].filter(Boolean);
 
   const stateCopy = sources.period_state_display
     || STATE_COPY[sources.period_state]
     || null;
+
+  // Kevin 2026-09-02 blocker Item 5: consequence sentence when a
+  // period in range is still running. Reads directly from the
+  // composed field so the four surfaces agree on the wording.
+  const consequence = sources.revenue?.consequence || null;
 
   return (
     <div className="kpi-fresh-pop-body" data-kpi-ov="data-current-pop">
@@ -48,6 +64,17 @@ export default function DataCurrentPop({ sources }) {
           <div className="kpi-fresh-pop-row">
             <span>Period state</span>
             <b>{stateCopy}</b>
+          </div>
+        </>
+      )}
+      {consequence && (
+        <>
+          <div className="kpi-fresh-pop-sep" aria-hidden="true" />
+          <div
+            className="kpi-fresh-pop-contract"
+            data-kpi-ov="revenue-consequence"
+          >
+            {consequence}
           </div>
         </>
       )}

@@ -756,6 +756,35 @@ export async function resolveOverview({
     lineCodes: REVENUE_LINE_CODES,
   });
 
+  // 7b. Range composition (Kevin 2026-09-02 blocker). Every period in
+  //     the range is exactly one of verified / live / planned. The
+  //     board's four disclosure surfaces (range chip, revenue-lines
+  //     pill, revenue card sub-line, sources popover) read from THIS
+  //     one field so each surface can't derive its own version - the
+  //     same defect class as the two "year budget" figures on one
+  //     screen. Classification rule (per period):
+  //       - state === "verified"           -> verified
+  //       - any member picked sc_daily_revenue -> live
+  //       - otherwise (open non-SC, closed_awaiting, fee) -> planned
+  //     Invariant: verified.count + live.count + planned.count ===
+  //     periods_total on every range. Enforced at build time; the
+  //     verify probe reasserts on live payloads.
+  const rangeComposition = buildRangeComposition({ periods, perPeriodRevenue });
+  // Build-time invariant: every period is exactly one kind. If this
+  // ever throws, the classifier lost track and a downstream surface
+  // (pill / popover / status) will lie.
+  {
+    const sum = rangeComposition.verified.count
+      + rangeComposition.live.count
+      + rangeComposition.planned.count;
+    if (sum !== rangeComposition.periods_total) {
+      throw new Error(
+        `overview-range-composition invariant: ${sum} categorized ` +
+        `vs ${rangeComposition.periods_total} periods_total (periods=${periods.join(",")})`,
+      );
+    }
+  }
+
   // 8. Revenue TOTAL: sum across the 5 revenue lines. reported = any
   //    line reported. sources = union of sources across lines.
   let totalRevenueAmount = 0;
@@ -1966,6 +1995,51 @@ export async function resolveOverview({
     const day = iso ? formatDayLabel(iso) : null;
     return day ? `${base} ${day}` : (fallback || `${base} (not yet reporting)`);
   };
+  // Kevin 2026-09-02 blocker Item 4+5: the popover revenue row must
+  // name every source the payload used (verified first), and when the
+  // range contains a still-running period the consequence sentence
+  // must fire. `sources_used` echoes the union of statement_rows
+  // revenue sources so the probe can assert
+  // popover.sources_used == union(statement_rows.revenue.sources)
+  // - the popover cannot omit a source the payload used.
+  const revenueSourcesUsed = (() => {
+    const set = new Set();
+    for (const r of statementRows) {
+      if (r.section !== "revenue") continue;
+      const srcs = Array.isArray(r.sources) ? r.sources : [];
+      for (const s of srcs) set.add(s);
+    }
+    return [...set];
+  })();
+  const revenueRowParts = (() => {
+    const parts = [];
+    if (rangeComposition.verified.count) {
+      parts.push(`${rangeComposition.verified.label} verified against the finance P&L`);
+    }
+    if (rangeComposition.live.count) {
+      const dayLbl = scMaxDate ? formatDayLabel(scMaxDate) : null;
+      const tail = dayLbl ? ` through ${dayLbl}` : "";
+      parts.push(`${rangeComposition.live.label} live from Service Calendar${tail}`);
+    }
+    if (rangeComposition.planned.count) {
+      // Fee accounts read from a contract; per-meal flag-off + closed_
+      // awaiting per-meal read from budget. Name it what it is so the
+      // popover doesn't lump the two together. The union of used
+      // sources tells us which noun to pick.
+      const usesContract = revenueSourcesUsed.some(s => s === "kpi_budgets_2400_1_contractual");
+      const usesTracked = revenueSourcesUsed.some(s => s === "kpi_budgets_2400_1_tracked");
+      const noun = usesContract ? "the fee contract"
+        : usesTracked ? "the tracked budget"
+        : "budget";
+      parts.push(`${rangeComposition.planned.label} planned from ${noun}`);
+    }
+    return parts;
+  })();
+  const revenueConsequence = rangeComposition.will_change_at_close && rangeComposition.live.count
+    ? `The ${rangeComposition.live.label} figure is a live estimate and will change when the period closes and is verified against the finance P&L.`
+    : (rangeComposition.will_change_at_close && rangeComposition.planned.count
+      ? `The ${rangeComposition.planned.label} figure is a planned estimate and will change when the period closes and is verified against the finance P&L.`
+      : null);
   const sourcesLine = {
     labor: {
       through_date: laborLastClosed,
@@ -1982,6 +2056,13 @@ export async function resolveOverview({
         scMaxDate,
         "Service Calendar revenue not yet reporting",
       ),
+    },
+    // Composed revenue row (Item 4+5). Parts joined by " · " in the
+    // popover; consequence rendered as a trailing note when set.
+    revenue: {
+      parts: revenueRowParts,
+      sources_used: revenueSourcesUsed,
+      consequence: revenueConsequence,
     },
     period_state: displayPeriodState,
     period_state_display: (() => {
@@ -2049,6 +2130,14 @@ export async function resolveOverview({
       period_no: rng.period_no,
       periods_in_range: periods,
     },
+    // Kevin 2026-09-02 blocker: FYTD hides that it is N verified
+    // periods plus one still running. See step 7b for the
+    // classification rule. Every board surface that names composition
+    // (range chip / revenue-lines pill / revenue card sub-line /
+    // sources popover / status line third clause) reads from this
+    // field. Invariant asserted at build:
+    //   verified.count + live.count + planned.count === periods_total
+    range_composition: rangeComposition,
     // R-40 (2026-09-01): posture retired as a layout switch. Access
     // flags only, named for what they do.
     //
@@ -2123,6 +2212,8 @@ export async function resolveOverview({
       weeks_total,
       period_state: displayPeriodState,
       has_target,
+      range_composition: rangeComposition,
+      range_kind: rng.kind,
     }),
     sources: sourcesLine,
     flags,
@@ -2159,7 +2250,7 @@ export async function resolveOverview({
 //
 // State + state_copy come from the ticker computation - the classifier
 // logic is the same, only the render shape changed.
-function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_state, has_target }) {
+function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_state, has_target, range_composition, range_kind }) {
   if (!ticker) return null;
   const gmActualPct = ticker.gm_pct_actual;
   const gmTargetPct = ticker.gm_pct_target;
@@ -2183,9 +2274,17 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     };
   }
 
-  const progress_display = (period_state === "open" && weeks_closed != null && weeks_total != null)
-    ? `${weeks_closed} of ${weeks_total} weeks closed`
-    : null;
+  // Kevin 2026-09-02 blocker Item 6: FYTD mixed ranges gain a third
+  // clause "8 of 9 periods verified". Prior code left FYTD progress
+  // null because weeks_closed/weeks_total are only set on single-
+  // period ranges - the bar ended abruptly after two clauses.
+  // Single-period open ranges keep the weeks-closed clause.
+  let progress_display = null;
+  if (period_state === "open" && weeks_closed != null && weeks_total != null) {
+    progress_display = `${weeks_closed} of ${weeks_total} weeks closed`;
+  } else if (range_kind === "fytd" && range_composition && range_composition.periods_total > 1 && range_composition.verified.count < range_composition.periods_total) {
+    progress_display = `${range_composition.verified.count} of ${range_composition.periods_total} periods verified`;
+  }
 
   return {
     // PR-1 item 1: "No target" state pill on rolling windows. Neutral
@@ -2196,6 +2295,85 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     gm_target_display,
     biggest_lever,
     progress_display,
+  };
+}
+
+// Range composition (Kevin 2026-09-02 blocker). One field, one truth,
+// four consumers. See the callsite at step 7b for the classification
+// rule and the invariant every range must satisfy.
+//
+// Shape:
+//   {
+//     periods_total: 9,
+//     verified: { count, first, last, label },
+//     live:     { count, first, last, label },
+//     planned:  { count, first, last, label },
+//     will_change_at_close: bool,
+//     summary: "P1-P8 verified · P9 still running"
+//   }
+//
+// The Sheets audit was clear that composition matters more than any
+// single-source label ("Revenue · Service Calendar · Tue 09/01" named
+// the 7% while omitting the 93%). This function is the single
+// authority - do NOT reproduce its logic on the client.
+function buildRangeComposition({ periods, perPeriodRevenue }) {
+  const verifiedNos = [];
+  const liveNos = [];
+  const plannedNos = [];
+  for (const p of periods) {
+    const entry = perPeriodRevenue.get(p);
+    if (!entry) {
+      // Should not happen for periods that came from periodsInRangeFor,
+      // but guard for the corporate/empty case. Treat as planned so
+      // the invariant holds.
+      plannedNos.push(p);
+      continue;
+    }
+    const state = entry.state;
+    // Union of sources this period saw across every revenue line +
+    // every member. If any member picked sc_daily_revenue this period,
+    // the period reads as "live" (verified always wins).
+    let sawSc = false;
+    for (const [key, v] of Object.entries(entry)) {
+      if (key === "state") continue;
+      if (v && Array.isArray(v.sources)) {
+        for (const s of v.sources) {
+          if (s === "sc_daily_revenue") { sawSc = true; break; }
+        }
+      }
+      if (sawSc) break;
+    }
+    if (state === "verified") verifiedNos.push(p);
+    else if (sawSc) liveNos.push(p);
+    else plannedNos.push(p);
+  }
+  const shape = (arr) => {
+    if (arr.length === 0) return { count: 0, first: null, last: null, label: null };
+    const first = arr[0];
+    const last = arr[arr.length - 1];
+    return {
+      count: arr.length,
+      first,
+      last,
+      label: first === last ? `P${first}` : `P${first}-P${last}`,
+    };
+  };
+  const verified = shape(verifiedNos);
+  const live = shape(liveNos);
+  const planned = shape(plannedNos);
+  const willChange = verified.count < periods.length;
+  const parts = [];
+  if (verified.count) parts.push(`${verified.label} verified`);
+  if (live.count) parts.push(`${live.label} still running`);
+  if (planned.count) parts.push(`${planned.label} planned`);
+  const summary = parts.length ? parts.join(" · ") : null;
+  return {
+    periods_total: periods.length,
+    verified,
+    live,
+    planned,
+    will_change_at_close: willChange,
+    summary,
   };
 }
 
