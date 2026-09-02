@@ -594,13 +594,17 @@ function CompletedBlock({ completed, onOpen }) {
       </div>
       {completed.map((r) => {
         const md = formatMonthDay(r.signed_at);
-        return (
-          <button
-            key={r.requirement_id}
-            type="button"
-            className="opd-pr opd-pr--dn"
-            onClick={() => onOpen(r)}
-          >
+        // Row is a link to the certificate PDF when the attestation
+        // id is on the wire; otherwise falls back to the old open-
+        // module behaviour. Browser handles the download using the
+        // server's Content-Disposition filename.
+        const hasCert = !!r.attestation_id;
+        const commonProps = {
+          key: r.requirement_id,
+          className: "opd-pr opd-pr--dn",
+        };
+        const innards = (
+          <>
             <i className="opd-spine" aria-hidden="true" />
             <span className="opd-lead" aria-hidden="true">
               <span className="opd-pnum">
@@ -620,7 +624,20 @@ function CompletedBlock({ completed, onOpen }) {
               </div>
               <div className="opd-pm-b">CERTIFICATE</div>
             </div>
-            <span className="opd-go" aria-hidden="true">View</span>
+            <span className="opd-go" aria-hidden="true">Certificate</span>
+          </>
+        );
+        return hasCert ? (
+          <a
+            {...commonProps}
+            href={`/api/academy/certificate/${encodeURIComponent(r.attestation_id)}`}
+            download
+          >
+            {innards}
+          </a>
+        ) : (
+          <button {...commonProps} type="button" onClick={() => onOpen(r)}>
+            {innards}
           </button>
         );
       })}
