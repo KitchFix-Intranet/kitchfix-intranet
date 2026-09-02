@@ -132,7 +132,7 @@
   border-radius: 6px;
   min-height: 32px;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--opd-t-fast) var(--opd-ease), color var(--opd-t-fast) var(--opd-ease);
 }
 .opd-tab:hover:not(.opd-tab--inert) {
   color: rgba(255, 255, 255, 0.9);
@@ -239,7 +239,7 @@
   font-size: 12.5px;
   color: var(--text-default);
   text-align: left;
-  transition: background 0.12s;
+  transition: background var(--opd-t-fast) var(--opd-ease);
   min-height: 36px;
 }
 .opd-rail-item:hover { background: var(--surface-sunken); }
@@ -397,7 +397,7 @@
   padding: 11px 16px;
   border-top: 1px solid var(--border-subtle);
   min-height: 44px;
-  transition: background 0.12s;
+  transition: background var(--opd-t-fast) var(--opd-ease);
 }
 .opd-doc-row:first-child { border-top: none; }
 .opd-doc-row:hover { background: var(--surface-sunken); }
@@ -766,7 +766,7 @@
   color: var(--text-subtle);
   padding: 4px;
   min-height: 44px;
-  transition: transform 0.12s, box-shadow 0.12s;
+  transition: transform var(--opd-t-mid) var(--opd-ease), box-shadow var(--opd-t-fast) var(--opd-ease);
 }
 .opd-bdge:hover {
   transform: translateY(-1px);
@@ -950,7 +950,7 @@
   width: 100%;
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background var(--opd-t-fast) var(--opd-ease);
   min-height: 60px;
   font-family: var(--font-ui);
   color: var(--text-default);
@@ -1106,7 +1106,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.12s;
+  transition: transform var(--opd-t-mid) var(--opd-ease);
 }
 .opd-year-seg:hover { transform: translateY(-1.5px); }
 /* Months with no cycle render neutral - NEVER "current". Green would
@@ -1314,7 +1314,7 @@
   padding: 11px 16px;
   border-top: 1px solid var(--border-subtle);
   min-height: 44px;
-  transition: background 0.12s;
+  transition: background var(--opd-t-fast) var(--opd-ease);
 }
 .opd-comp-row:first-child { border-top: none; }
 .opd-comp-row:hover { background: var(--surface-sunken); }
@@ -1849,7 +1849,7 @@
   padding: 10px 20px;
   min-height: 44px;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background var(--opd-t-fast) var(--opd-ease), border-color var(--opd-t-fast) var(--opd-ease);
 }
 .opd-focus-continue-btn:hover {
   background: var(--opd-chip-bg);
@@ -1909,7 +1909,7 @@
   font-size: 13px;
   color: var(--text-default);
   line-height: 1.5;
-  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  transition: border-color var(--opd-t-fast) var(--opd-ease), background var(--opd-t-fast) var(--opd-ease), box-shadow var(--opd-t-fast) var(--opd-ease);
   min-height: 44px;
 }
 .opd-check-opt:hover:not(:disabled) {
@@ -2047,7 +2047,7 @@
   padding: 12px 14px;
   min-height: 44px;
   outline: none;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition: border-color var(--opd-t-fast) var(--opd-ease), box-shadow var(--opd-t-fast) var(--opd-ease);
 }
 .opd-sign-input:focus {
   border-color: var(--text-link);
@@ -2064,7 +2064,7 @@
   padding: 12px 22px;
   min-height: 44px;
   cursor: not-allowed;
-  transition: background 0.25s;
+  transition: background var(--opd-t-fast) var(--opd-ease);
   white-space: nowrap;
 }
 .opd-sign-btn--ready {
@@ -3798,6 +3798,7 @@
   font-size: var(--opd-t-meta);
   color: var(--opd-n600);
   margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
 /* One right-edge grammar (owner walk 2026-09-01): every multi-part
    set shows a progress bar; the zero state adds a muted "Not
@@ -3896,7 +3897,11 @@
   border-color: var(--opd-navy);
   color: var(--opd-navy);
 }
-.opd-pr--lk { opacity: 0.62; }
+/* Locked rows dim per-property, never with a blanket opacity. A
+   row-level opacity dimmed the block's own border, the row divider,
+   and the spine along with the content, which read as broken chrome.
+   Content properties dim; chrome stays at full strength. */
+.opd-pr--lk { opacity: 1; }
 .opd-pb2 { flex: 1; min-width: 0; }
 .opd-pb2 h4 {
   font-family: var(--font-ui);
@@ -3905,7 +3910,7 @@
   color: var(--opd-navy);
   line-height: 1.3;
 }
-.opd-pr--lk .opd-pb2 h4 { color: var(--opd-n600); }
+.opd-pr--lk .opd-pb2 h4 { color: var(--opd-n500); }
 .opd-pb2-d {
   font-size: var(--opd-t-ui);
   color: var(--opd-n600);
@@ -4050,6 +4055,11 @@
   text-transform: uppercase;
   color: var(--opd-navy);
 }
+/* .opd-lb carries numbers in most of its contexts (site count, cycle
+   counts, "of N", hourly aggregates). Base tabular-nums keeps the
+   figures column-aligned when they update. Harmless on text-only
+   labels. */
+.opd-lb { font-variant-numeric: tabular-nums; }
 .opd-c2h .opd-lb {
   margin-left: auto;
   font-size: var(--opd-t-meta);
@@ -4170,8 +4180,11 @@
   margin-top: 5px;
 }
 .opd-rq-sub {
+  display: block;
   font-size: var(--opd-t-meta);
+  font-weight: 650;
   color: var(--opd-n500);
+  font-style: normal;
   margin-top: 3px;
 }
 /* First-run state for a tile whose honest number is not "0". Text
@@ -4183,10 +4196,10 @@
 .opd-rq-fr {
   display: block;
   font-family: var(--font-ui);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 750;
   color: var(--opd-navy);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.2px;
   line-height: 1.05;
 }
 .opd-rfoot {
@@ -4499,6 +4512,16 @@
   background: #fff;
 }
 .opd-psec--tint { background: #FBFCFE; }
+/* Tint variant carries its full four-sided border even when it lands
+   as the last block in the profile rail. The generic
+   `.opd-psec:last-of-type { border-bottom: none }` rule earlier in the
+   sheet was stripping the bottom edge from "Coming up", which is
+   always last, and made the block look unbounded. */
+.opd-psec.opd-psec--tint,
+.opd-psec.opd-psec--tint:last-of-type,
+.opd-psec.opd-psec--tint:last-child {
+  border: 1px solid var(--opd-n300);
+}
 .opd-psec--row {
   display: flex;
   align-items: center;
@@ -4544,6 +4567,7 @@
   font-size: var(--opd-t-ui);
   color: var(--opd-n600);
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 .opd-cyc-min {
   margin-left: auto;
@@ -4588,6 +4612,7 @@
   font-size: var(--opd-t-meta);
   color: var(--opd-n500);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 /* Signed certificates list inside the Your Certificates block. */
 .opd-sg {
@@ -4689,6 +4714,7 @@
   font-size: var(--opd-t-meta);
   color: var(--opd-n600);
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 .opd-lh-cta {
   margin-left: auto;
@@ -4824,7 +4850,13 @@ button.opd-set.opd-set--solo:hover .opd-go {
   padding: 9px 13px;
   background: #FBFCFE;
   border-bottom: 1px solid var(--opd-n200);
+  transition: background-color var(--opd-t-fast) var(--opd-ease);
 }
+/* Same hover tint as part rows (.opd-pr:not(.opd-pr--lk):hover). Set
+   headers were the only interactive-adjacent row in the lessons list
+   with no hover response, which read as inert even where the header
+   is not itself clickable. */
+.opd-seth:hover { background-color: #F8FBFD; }
 /* One leading column for every row type - governs the text left-edge
    so set headers, part rows and the solo header all line up. Icons +
    bubbles centre within it at their own sizes. */
@@ -4873,6 +4905,7 @@ button.opd-set.opd-set--solo:hover .opd-go {
   font-size: var(--opd-t-meta);
   color: var(--opd-n600);
   margin-top: 1px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4967,7 +5000,10 @@ button.opd-set.opd-set--solo:hover .opd-go {
   border-color: var(--opd-navy);
   color: var(--opd-navy);
 }
-.opd-pr--lk { opacity: 0.6; }
+/* Locked rows dim per-property, never with a blanket opacity. Chrome
+   (block border, row divider, spine) stays at full strength; only
+   the content dims. See sibling .opd-pr--lk block above line ~3899. */
+.opd-pr--lk { opacity: 1; }
 .opd-pb {
   flex: 1;
   min-width: 0;
@@ -4982,7 +5018,7 @@ button.opd-set.opd-set--solo:hover .opd-go {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.opd-pr--lk .opd-pb h4 { color: var(--opd-n600); }
+.opd-pr--lk .opd-pb h4 { color: var(--opd-n500); }
 .opd-pb-d {
   font-size: var(--opd-t-ui);
   color: var(--opd-n600);
@@ -5000,6 +5036,20 @@ button.opd-set.opd-set--solo:hover .opd-go {
   font-weight: 650;
   margin-top: 2px;
 }
+/* Locked-row content dims (paired with .opd-pr--lk opacity:1 above).
+   Description and the "Opens when you finish" note read as muted
+   copy without touching the row's border, spine, or number-bubble
+   chrome. */
+.opd-pr--lk .opd-pb-d { color: var(--opd-n500); }
+.opd-pr--lk .opd-lkn { color: var(--opd-n500); }
+/* Locked number bubble: keep the border visible, mute the background
+   and icon so the row still reads as "part row, disabled" not "row
+   drawing itself out". */
+.opd-pr--lk .opd-pnum {
+  background: var(--opd-n50);
+  border-color: var(--opd-n300);
+  color: var(--opd-n400);
+}
 /* Fixed-width right column so the numerics align exactly across
    rows. Was measurably 18px of wobble pre-fix. */
 .opd-pm {
@@ -5012,6 +5062,7 @@ button.opd-set.opd-set--solo:hover .opd-go {
   font-size: var(--opd-t-meta);
   font-weight: 700;
   color: var(--opd-n600);
+  font-variant-numeric: tabular-nums;
   /* Prevent wrap: the completed row's serial is elided in JS but
      other cells ("Due Sep 30") also shouldn't wrap on narrow
      viewports. */
