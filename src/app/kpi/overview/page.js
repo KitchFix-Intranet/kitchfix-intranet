@@ -325,7 +325,6 @@ export default function KpiOverviewPage() {
       accountPeriods,
       resolvedPreset,
       selectedPeriodNo: rangeSelection?.kind === "period" ? rangeSelection.value : null,
-      selectedMonth: rangeSelection?.kind === "month" ? rangeSelection.value : null,
       urlLabel,
       rangeSnap: data?.range_snap || null,
       onCommit: onCommitRange,

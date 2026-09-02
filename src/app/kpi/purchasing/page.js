@@ -1357,7 +1357,6 @@ export default function KpiPurchasingPage() {
             accountPeriods,
             resolvedPreset,
             selectedPeriodNo: rangeSelectionEarly?.kind === "period" ? rangeSelectionEarly.value : null,
-            selectedMonth: rangeSelectionEarly?.kind === "month" ? rangeSelectionEarly.value : null,
             /* 2026-09-02 retire-custom PR: server-driven snap chip. */
             rangeSnap: data?.range_snap || null,
             onCommit: onRangeCommit,
