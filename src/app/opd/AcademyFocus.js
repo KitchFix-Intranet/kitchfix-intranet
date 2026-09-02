@@ -276,13 +276,22 @@ function SignBlock({
 }
 
 // ─── Completion cert ─────────────────────────────────────────────
+// Owner ruling 2026-09-02: the transition from Sign to this screen
+// must be a single visual event. The parent room now refreshes
+// silently in the background (AcademyRoom.refreshSilent) so this
+// screen is NOT unmounted and remounted; it renders once, directly
+// from the /api/academy/sign response payload. The entrance animation
+// - opd-rise on the wrapper - is a short in-place fade + lift on the
+// existing card. The seal keeps its opd-cert-seal keyframe. Both
+// keyframes were already defined for the check-card flow and are
+// reused here rather than authoring new ones.
 function CompletionScreen({ doc, version, attestation, onBack }) {
   const cert = attestation?.certificate_serial || "";
   const attempts = attestation?.attempts_count ?? 0;
   const timeSec = attestation?.time_spent_seconds ?? 0;
   const minutes = timeSec > 0 ? Math.max(1, Math.round(timeSec / 60)) : null;
   return (
-    <div className="opd-focus-done">
+    <div className="opd-focus-done opd-focus-done--enter">
       <div className="opd-cert">
         <div className="opd-cert-top">
           <div className="opd-cert-seal" aria-hidden="true">&#127942;</div>
@@ -319,6 +328,17 @@ function CompletionScreen({ doc, version, attestation, onBack }) {
           ) : null}
         </div>
       </div>
+      {/* Ghost-button treatment matches the module footer's Back and
+          Save & exit buttons (AcademyFocus.js:891 / 893). The
+          .opd-focus-done-back marker class is preserved for the
+          Playwright selector in tests/academy-signature-flow.spec.ts. */}
+      <button
+        type="button"
+        className="opd-bt opd-bt--gh opd-focus-done-back"
+        onClick={onBack}
+      >
+        Back to Academy &rsaquo;
+      </button>
       <div className="opd-focus-done-actions">
         {attestation?.attestation_id ? (
           // Plain <a href download> - the server sets Content-Disposition
