@@ -41,11 +41,18 @@ const CONTENT_W = PAGE_W - MARGIN_X * 2;
  *   attempts_count, time_spent_seconds, certificate_serial,
  *   attestation_text.
  * @param {object} [input.doc]  - optional documents row: { id, title,
- *   doc_class }. Used for the module title line. If absent, doc_id is
- *   shown alone.
+ *   doc_class, version }. Used for the document-context subline.
+ * @param {object} [input.obligation]  - optional academy_obligations
+ *   row for this (doc_id, obligation_key), with source_section. Used
+ *   to derive the MODULE title (the large "has completed" line) via
+ *   the exact same partShortTitle logic AcademyRoom uses. If absent
+ *   or empty, the document title stands in - the certificate NEVER
+ *   prints obligation_key. Spec 18.3 prohibits obligation_key in
+ *   operator-facing copy, and a printed certificate is the strongest
+ *   case of operator-facing.
  * @returns {Promise<Uint8Array>} the PDF bytes.
  */
-export async function createCertificatePdf({ attestation, doc } = {}) {
+export async function createCertificatePdf({ attestation, doc, obligation } = {}) {
   if (!attestation) {
     throw new Error("createCertificatePdf: attestation is required");
   }
@@ -125,7 +132,14 @@ export async function createCertificatePdf({ attestation, doc } = {}) {
   });
   cursor -= 26;
 
-  const moduleTitle = doc?.title || attestation.doc_id || "-";
+  // The large "has completed" line is the MODULE title, derived from
+  // the obligation's source_section by the exact same partShortTitle
+  // logic AcademyRoom uses (src/app/opd/AcademyRoom.js:572). If no
+  // module title can be derived (missing obligation row or empty
+  // source_section), the document title stands in. Never the key.
+  const derivedModule = partShortTitle(obligation?.source_section);
+  const docTitle = String(doc?.title || "").trim();
+  const moduleTitle = derivedModule || docTitle || attestation.doc_id || "-";
   const modSize = 15;
   const modW = fontBold.widthOfTextAtSize(moduleTitle, modSize);
   page.drawText(moduleTitle, {
@@ -137,12 +151,15 @@ export async function createCertificatePdf({ attestation, doc } = {}) {
   });
   cursor -= 16;
 
+  // Document context beneath: "Culture OS Handbook - PB-014 - version 1.0".
+  // Only include the doc title if we actually used a derived module
+  // title above (otherwise the two lines would repeat the same string).
+  // Never obligation_key.
   const docSubParts = [];
+  if (derivedModule && docTitle) docSubParts.push(docTitle);
   if (attestation.doc_id) docSubParts.push(attestation.doc_id);
-  if (doc?.doc_class) docSubParts.push(doc.doc_class);
-  if (attestation.obligation_key && attestation.obligation_key !== "standard") {
-    docSubParts.push(attestation.obligation_key);
-  }
+  const subVersion = attestation.doc_version || doc?.version;
+  if (subVersion) docSubParts.push(`version ${subVersion}`);
   const docSub = docSubParts.join("  -  ");
   if (docSub) {
     const docSubW = fontRegular.widthOfTextAtSize(docSub, 9);
@@ -280,6 +297,27 @@ export async function createCertificatePdf({ attestation, doc } = {}) {
 }
 
 // ── Helpers ──
+
+// Duplicated verbatim from src/app/opd/AcademyRoom.js:572 (partShortTitle).
+// The two surfaces must derive a module title the exact same way, or
+// the certificate would name something the operator never saw in the
+// room. If this logic ever moves to a shared helper, both call sites
+// should switch together in the same PR.
+//
+// First section from source_section, truncated to ~40 chars at a word
+// boundary. Used as an internal navigation aid ("Part 2 · Culinary
+// Defined"), NOT as the description.
+function partShortTitle(sourceSection) {
+  const src = String(sourceSection || "").trim();
+  if (!src) return "";
+  const first = src.split(/;/, 1)[0].trim();
+  if (!first) return "";
+  const MAX = 40;
+  if (first.length <= MAX) return first;
+  const cut = first.slice(0, MAX);
+  const lastSp = cut.lastIndexOf(" ");
+  return (lastSp > 20 ? cut.slice(0, lastSp) : cut).replace(/[\s,.·-]+$/, "") + "…";
+}
 
 function formatSigned(d) {
   try {

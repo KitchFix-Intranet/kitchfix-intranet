@@ -113,13 +113,13 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Load doc title for the module line. Absence is not fatal - the
-  // generator falls back to doc_id.
+  // Load doc row for the document-context subline (title + version).
+  // Absence is not fatal - the generator falls back to doc_id.
   let doc = null;
   if (attestation.doc_id) {
     const docQ = await supa
       .from("documents")
-      .select("id, title, doc_class")
+      .select("id, title, doc_class, version")
       .eq("id", attestation.doc_id)
       .maybeSingle();
     if (docQ.error) {
@@ -129,9 +129,29 @@ export async function GET(request, { params }) {
     }
   }
 
+  // Load the obligation row so the generator can derive the MODULE
+  // title (the large "has completed" line) from source_section, the
+  // same way AcademyRoom derives its part titles. Absence is not
+  // fatal - the generator falls back to the document title. NEVER to
+  // obligation_key (spec 18.3).
+  let obligation = null;
+  if (attestation.doc_id && attestation.obligation_key) {
+    const oblQ = await supa
+      .from("academy_obligations")
+      .select("doc_id, obligation_key, source_section")
+      .eq("doc_id", attestation.doc_id)
+      .eq("obligation_key", attestation.obligation_key)
+      .maybeSingle();
+    if (oblQ.error) {
+      console.warn("[api/academy/certificate] obligation lookup:", oblQ.error.message);
+    } else if (oblQ.data) {
+      obligation = oblQ.data;
+    }
+  }
+
   let pdfBytes;
   try {
-    pdfBytes = await createCertificatePdf({ attestation, doc });
+    pdfBytes = await createCertificatePdf({ attestation, doc, obligation });
   } catch (err) {
     console.error("[api/academy/certificate] pdf gen threw:", err?.message || err);
     return NextResponse.json({ error: "server_error", scope: "pdf_gen" }, { status: 500 });
