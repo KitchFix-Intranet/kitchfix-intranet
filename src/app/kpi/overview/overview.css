@@ -41,10 +41,12 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
-.kpi-app .kpi-ov-status-ahead    .kpi-ov-status-st { background: var(--green-600); }
-.kpi-app .kpi-ov-status-ontrack  .kpi-ov-status-st { background: var(--navy-700); }
-.kpi-app .kpi-ov-status-behind   .kpi-ov-status-st { background: var(--amber-600); }
-.kpi-app .kpi-ov-status-critical .kpi-ov-status-st { background: var(--red-600); }
+/* Kevin 2026-09-02 language pass Items 2+3: two-tone status pill.
+   On target or better = green; off by any amount = red. No amber,
+   no neutral except "No target" fall-through. */
+.kpi-app .kpi-ov-status-good    .kpi-ov-status-st { background: var(--green-600); }
+.kpi-app .kpi-ov-status-bad     .kpi-ov-status-st { background: var(--red-600); }
+.kpi-app .kpi-ov-status-neutral .kpi-ov-status-st { background: var(--n-500); }
 .kpi-app .kpi-ov-status-say {
   padding: var(--kpi-sp-3) var(--kpi-sp-4);
   font-size: var(--kpi-t-body);
@@ -1046,6 +1048,13 @@
 .kpi-app .kpi-ov-hz-note {
   color: var(--n-600);
   font-weight: 600;
+}
+/* Kevin 2026-09-02 language pass Item 10: envelope delta is neutral,
+   not a verdict. Purple with arrow + more/less. Contrast against
+   white measured 6.7:1 (WCAG AA >= 4.5:1). */
+.kpi-app .kpi-ov-hz-v .kpi-ov-envelope-note {
+  color: var(--kpi-purple-600);
+  font-weight: 700;
 }
 
 /* ── Item 5: cost lines table (primary surface on the left) ─── */

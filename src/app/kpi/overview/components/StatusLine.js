@@ -17,28 +17,41 @@
 //     progress_display,                          // "3 of 4 weeks closed" or null
 //   }
 
-const STATE_CLASS = {
-  ahead: "kpi-ov-status-ahead",
-  on_track_above: "kpi-ov-status-ontrack",
-  on_track_below: "kpi-ov-status-ontrack",
-  behind: "kpi-ov-status-behind",
-  critical: "kpi-ov-status-critical",
+// Kevin 2026-09-02 language pass Items 2+3: colour rule collapses
+// state class to two tones. On target or better is green; off by
+// any amount is red. No amber, no neutral (except "No target" fall-
+// through). Server ships `tone` on status_line; client keys off it.
+const TONE_CLASS = {
+  good:    "kpi-ov-status-good",
+  bad:     "kpi-ov-status-bad",
+  neutral: "kpi-ov-status-neutral",
 };
 
 export default function StatusLine({ statusLine }) {
   if (!statusLine || !statusLine.state) return null;
-  const stateClass = STATE_CLASS[statusLine.state] || "kpi-ov-status-ontrack";
+  const toneClass = TONE_CLASS[statusLine.tone] || TONE_CLASS.neutral;
 
+  // Item 2: GM percentage takes the colour rule. Item 3: biggest-lever
+  // direction takes the same rule. Tones come from server-computed
+  // signals (statusLine.gm_tone / biggest_lever.tone).
+  const gmToneCls = statusLine.gm_tone === "good" ? "kpi-ov-good"
+    : statusLine.gm_tone === "bad" ? "kpi-ov-bad"
+    : "";
   const gm = (statusLine.gm_actual_display && statusLine.gm_target_display) ? (
     <span data-kpi-ov="status-gm">
-      Gross margin <b>{statusLine.gm_actual_display}</b> vs {statusLine.gm_target_display} target
+      Gross margin{" "}
+      <b className={gmToneCls} data-kpi-ov="status-gm-actual">{statusLine.gm_actual_display}</b>
+      {" "}vs {statusLine.gm_target_display} target
     </span>
   ) : null;
 
+  const leverToneCls = statusLine.biggest_lever?.tone === "good" ? "kpi-ov-good"
+    : statusLine.biggest_lever?.tone === "bad" ? "kpi-ov-bad"
+    : "";
   const lever = statusLine.biggest_lever ? (
     <span data-kpi-ov="status-lever">
       {statusLine.biggest_lever.label} is{" "}
-      <b>
+      <b className={leverToneCls} data-kpi-ov="status-lever-dev">
         {statusLine.biggest_lever.dev_display} {statusLine.biggest_lever.direction}
       </b>{" "}
       its target
@@ -70,9 +83,10 @@ export default function StatusLine({ statusLine }) {
 
   return (
     <div
-      className={`kpi-ov-status ${stateClass}`}
+      className={`kpi-ov-status ${toneClass}`}
       data-kpi-ov="status-line"
       data-kpi-ov-state={statusLine.state}
+      data-kpi-ov-tone={statusLine.tone}
     >
       <span className="kpi-ov-status-st" data-kpi-ov="status-state">
         {statusLine.state_copy}

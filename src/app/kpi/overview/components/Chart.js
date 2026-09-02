@@ -27,49 +27,35 @@ function fmtMoney(n) {
   return n < 0 ? "-" + s : s;
 }
 
-// C13 (2026-09-01): the tooltip header is now two lines - the period
-// + week identifier on line 1, the date range on line 2 - then rows,
-// then the under/over result row. Prior tooltip inlined the date range
-// into the header which made the period identifier easy to miss on a
-// screenshot.
-function BarTip({ title, dates, rows, res }) {
-  return (
-    <span className="kpi-ov-bt">
-      <div className="kpi-ov-bt-h">{title}</div>
-      {dates && <div className="kpi-ov-bt-d">{dates}</div>}
-      {rows.map((r, i) => (
-        <div key={i} className="kpi-ov-bt-r">
-          <span>{r[0]}</span>
-          <b>{r[1]}</b>
-        </div>
-      ))}
-      {res && (
-        <div className="kpi-ov-bt-r res">
-          <span>{res[0]}</span>
-          <b>{res[1]}</b>
-        </div>
-      )}
-    </span>
-  );
-}
+// Kevin 2026-09-02 language pass Item 13: hover tooltip removed
+// from the chart entirely. The axis labels + bar height carry the
+// signal; a tooltip that duplicates them is noise.
 
 function ChartPeriodGrain({ series }) {
+  // Kevin 2026-09-02 language pass Item 15: each period's dash is
+  // that period's ADJUSTED budget (period actual revenue × target
+  // cost pct). Falls back to the static `budget` when adjusted is
+  // null (a period with $0 revenue can't be adjusted; use the plan).
+  const dashValue = (s) => {
+    const adj = s.adjusted_budget;
+    if (adj != null) return Number(adj);
+    return Number(s.budget || 0);
+  };
   const spends = series.map(s => Number(s.spent || 0));
-  const budgets = series.map(s => Number(s.budget || 0));
-  // PR-2 item 17 (2026-09-02): scale to max(budget, tallest bar) *
-  // 1.16 so a bar with $29,731 against a $23,565 budget renders
-  // fully above the dashed budget line without clipping.
-  const mx = Math.max(...spends, ...budgets, 1) * 1.16;
+  const dashes = series.map(s => Number(dashValue(s) || 0));
+  // Scale to max * 1.16 so a bar rendering fully above its dash
+  // doesn't clip.
+  const mx = Math.max(...spends, ...dashes, 1) * 1.16;
 
   return (
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="period">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">Cost of goods sold, period by period</span>
-        <span className="kpi-ov-gl">bars are spend · line is budget</span>
+        <span className="kpi-ov-gl">bars are spend · line is adjusted budget</span>
         <HelpPop
           id="overview-chart-period"
           title="Cost of goods sold by period"
-          body={<p>Each period&rsquo;s cost of goods sold against its budget. Below the line is under budget. The running period is hatched. Hover a bar for the numbers.</p>}
+          body={<p>Each period&rsquo;s cost of goods sold against its adjusted budget (revenue times the target cost percentage). Below the line is under budget. The running period is hatched.</p>}
         />
         <span className="kpi-ov-pill kpi-ov-pill-neutral">{series.length} periods</span>
       </div>
@@ -77,10 +63,9 @@ function ChartPeriodGrain({ series }) {
         <div className="kpi-ov-bars kpi-ov-bars-inset">
           {series.map((s, i) => {
             const val = Number(s.spent || 0);
-            const bud = Number(s.budget || 0);
+            const bud = Number(dashValue(s) || 0);
             const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
             const budPct = bud > 0 ? (bud / mx) * 100 : null;
-            const over = val - bud;
             const classSuffix =
               s.state === "in_progress" ? "kpi-ov-bar-hatch"
               : s.state === "not_started" ? "kpi-ov-bar-dash"
@@ -93,33 +78,31 @@ function ChartPeriodGrain({ series }) {
                 style={{ height: `${hgt}%` }}
                 data-kpi-ov-bar-state={s.state}
                 data-kpi-ov-period={s.period_no}
+                data-kpi-ov-bar-val={val}
+                data-kpi-ov-bar-bud={bud}
               >
-                {/* PR-2 item 20 (2026-09-02): FYTD uses period grain
-                    and each period carries its OWN dashed budget line
-                    (period budgets differ by a factor of seven across
-                    the year, so a single target line lies). The dashed
-                    span is anchored to the bar and offset by (bud-val)
-                    so it sits at the period's own budget height in the
-                    chart's coordinate space. */}
+                {/* Item 14 fix (Kevin 2026-09-02): dash sits at each
+                    period's OWN budget height. Prior formula
+                    ((budPct - hgt) / hgt) * 100 anchored the dash to
+                    (budget - value) above bar bottom rather than to
+                    the budget value itself - so on a period where
+                    revenue was much larger than spend the dash
+                    collapsed to the bottom of the bar. Correct
+                    formula: (budPct / hgt) * 100 places the dash at
+                    `budPct%` of the chart, regardless of bar height. */}
                 {budPct != null && (
                   <span
                     className="kpi-ov-bar-perbud"
                     style={{
                       left: "-5%",
                       right: "-5%",
-                      bottom: hgt > 0 ? `${((budPct - hgt) / hgt) * 100}%` : "0%",
+                      bottom: hgt > 0 ? `${(budPct / hgt) * 100}%` : "0%",
                     }}
                     aria-hidden="true"
+                    data-kpi-ov="bar-budget-dash"
+                    data-kpi-ov-dash-val={bud}
                   />
                 )}
-                <BarTip
-                  title={`Period ${s.period_no}${s.state === "in_progress" ? " · running" : ""}`}
-                  rows={[
-                    ["Spent", val > 0 || s.state !== "not_started" ? fmtMoney(val) : "-"],
-                    ["Budget", fmtMoney(bud) || "-"],
-                  ]}
-                  res={s.state === "in_progress" || s.state === "not_started" ? null : [over <= 0 ? "Under" : "Over", fmtMoney(Math.abs(over))]}
-                />
               </i>
             );
           })}
@@ -128,7 +111,7 @@ function ChartPeriodGrain({ series }) {
           {series.map((s, i) => (
             <span key={i}>
               P{s.period_no}
-              <span className={`kpi-ov-amt ${s.state === "in_progress" || s.state === "not_started" ? "kpi-ov-nb" : (Number(s.spent || 0) <= Number(s.budget || 0) ? "kpi-ov-good" : "kpi-ov-bad")}`}>
+              <span className={`kpi-ov-amt ${s.state === "in_progress" || s.state === "not_started" ? "kpi-ov-nb" : (Number(s.spent || 0) <= Number(dashValue(s) || 0) ? "kpi-ov-good" : "kpi-ov-bad")}`}>
                 {s.state === "in_progress" ? "running" : s.state === "not_started" ? "not started" : fmtMoney(Number(s.spent || 0))}
               </span>
             </span>
@@ -159,16 +142,8 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
     return `${wm}/${wd} – ${em}/${ed}`;
   };
 
-  // C13 (2026-09-01): tooltip header names the period first, the
-  // week second: "Period 9 · Week 2". The date range moves to line 2.
-  // Prior header was "Week 2 · 08/17 – 08/23" which read as a
-  // standalone week - the period was implicit in the URL.
-  const titleFor = (i, state) => {
-    const periodPart = periodNo != null ? `Period ${periodNo} · ` : "";
-    const weekPart = `Week ${i + 1}`;
-    const running = state === "in_progress" ? " · running" : "";
-    return `${periodPart}${weekPart}${running}`;
-  };
+  // Item 13 (Kevin 2026-09-02 language pass): tooltip removed. The
+  // axis + bar colour carry the signal.
 
   return (
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="week">
@@ -207,17 +182,15 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
             const val = Number(s.spent || 0);
             if (s.state === "not_started") {
               return (
-                <i key={i} className="kpi-ov-bar kpi-ov-bar-dash" data-kpi-ov-bar-state="not_started" data-kpi-ov-week-start={s.week_start}>
-                  <BarTip
-                    title={titleFor(i, s.state)}
-                    dates={fmtWeekLabel(s.week_start, s.week_end)}
-                    rows={[["Not started", "no data yet"]]}
-                  />
-                </i>
+                <i
+                  key={i}
+                  className="kpi-ov-bar kpi-ov-bar-dash"
+                  data-kpi-ov-bar-state="not_started"
+                  data-kpi-ov-week-start={s.week_start}
+                />
               );
             }
             const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
-            const over = val - wkB;
             const classSuffix =
               s.state === "in_progress" ? "kpi-ov-bar-hatch"
               : val <= wkB ? "kpi-ov-bar-good"
@@ -229,17 +202,7 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
                 style={{ height: `${hgt}%` }}
                 data-kpi-ov-bar-state={s.state}
                 data-kpi-ov-week-start={s.week_start}
-              >
-                <BarTip
-                  title={titleFor(i, s.state)}
-                  dates={fmtWeekLabel(s.week_start, s.week_end)}
-                  rows={[
-                    ["Spent", fmtMoney(val)],
-                    ["Budget", fmtMoney(wkB) || "-"],
-                  ]}
-                  res={s.state === "in_progress" ? null : [over <= 0 ? "Under" : "Over", fmtMoney(Math.abs(over))]}
-                />
-              </i>
+              />
             );
           })}
         </div>

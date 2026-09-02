@@ -62,6 +62,25 @@ function Row({ row }) {
 export default function AlsoTracked({ payload }) {
   if (!payload?.also_tracked || payload.also_tracked.length === 0) return null;
   const isOpen = payload.period_state === "open";
+  // Kevin 2026-09-02 language pass Items 21-22: "Period to date" ->
+  // "Spend thru P8"; "Budget to date" -> "Budget thru P8". On
+  // verified closed, "Actual" stays; on single open, "Spend period
+  // to date" per range_labels.through. Ranges without a period label
+  // fall back to the classic strings.
+  const rl = payload.range_labels;
+  // Kevin 2026-09-02 language pass Items 21-22: FYTD + open ranges
+  // render "Spend thru P8" / "Budget thru P8". Verified single
+  // period keeps its "Actual"/"Budget" nouns since range_labels.through
+  // reads "thru P8" and the classic finance verb "Actual" still works.
+  // But Kevin's rule applies to FYTD explicitly; make FYTD use the
+  // "Spend"/"Budget" form.
+  const useThruLabels = isOpen || (rl?.kind === "fytd");
+  const actualHeader = useThruLabels && rl?.through
+    ? `Spend ${rl.through}`
+    : "Actual";
+  const budgetHeader = useThruLabels && rl?.through
+    ? `Budget ${rl.through}`
+    : "Budget";
 
   return (
     <div className="kpi-ov-card kpi-ov-card-tracked" data-kpi-ov="also-tracked">
@@ -93,8 +112,8 @@ export default function AlsoTracked({ payload }) {
           <thead>
             <tr>
               <th className="l">Line</th>
-              <th>{isOpen ? "Period to date" : "Actual"}</th>
-              <th>{isOpen ? "Budget to date" : "Budget"}</th>
+              <th>{actualHeader}</th>
+              <th>{budgetHeader}</th>
               <th style={{ width: 100 }}>vs budget</th>
             </tr>
           </thead>

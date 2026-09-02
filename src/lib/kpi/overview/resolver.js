@@ -1278,10 +1278,12 @@ export async function resolveOverview({
         if (gmPctActual == null || gmPctBudget == null) return { label: "No data", tone: "neutral" };
         // B6 (2026-09-01): the gap moves INTO the pill. Same pattern
         // as COGS above - one statement, not two.
+        // Kevin 2026-09-02 language pass Item 11: red or green only.
+        // 0.01% below target is red - no amber "behind" band.
         const absPct = Math.abs(Number(gmPctActual) - Number(gmPctBudget)).toFixed(1);
         return gmPctActual >= gmPctBudget
           ? { label: `${absPct}% AHEAD`, tone: "good" }
-          : { label: `${absPct}% BEHIND`, tone: "warn" };
+          : { label: `${absPct}% BEHIND`, tone: "bad" };
       })(),
     },
   ];
@@ -1393,6 +1395,16 @@ export async function resolveOverview({
         if (p != null) purchByPeriod.set(p, (purchByPeriod.get(p) || 0) + Number(w.amount || 0));
       }
     }
+    // Kevin 2026-09-02 language pass Item 15: each period's budget
+    // line is that period's ADJUSTED budget - period actual revenue
+    // times the target cost percentage. Same rule as the COGS card's
+    // "Adjusted budget" figure. A period where revenue missed gets a
+    // lower budget line. Ratio is account-wide (cogsBudget / rev
+    // budget across the range); applied per period to per-period
+    // revenue.
+    const targetCostRatio = (revenue_budget_full_period && revenue_budget_full_period > 0)
+      ? cogsBudget / revenue_budget_full_period
+      : null;
     const series = periods.map(p => {
       const pStart = periodStartISO(p);
       const pEnd = periodEndISO(p);
@@ -1421,11 +1433,28 @@ export async function resolveOverview({
           if (v != null) purchBudP += Number(v);
         }
       }
+      // Per-period revenue: sum across the 5 revenue lines from
+      // perPeriodRevenue map. reported=false rows contribute 0.
+      const pRev = perPeriodRevenue.get(p);
+      let periodRevenueActual = 0;
+      if (pRev) {
+        for (const line of REVENUE_LINE_CODES) {
+          const rec = pRev[line];
+          if (rec?.reported && rec.amount != null) periodRevenueActual += Number(rec.amount);
+        }
+      }
+      const adjustedBudget = (targetCostRatio != null && periodRevenueActual > 0)
+        ? r2(periodRevenueActual * targetCostRatio)
+        : null;
       return {
         period_no: p,
         state,
         spent: state === "not_started" ? null : r2((laborByPeriod.get(p) || 0) + (purchByPeriod.get(p) || 0)),
         budget: r2(laborBudP + purchBudP),
+        // Item 15: adjusted per-period budget for the chart's target
+        // line. `budget` above is retained for legacy consumers.
+        revenue_actual: r2(periodRevenueActual),
+        adjusted_budget: adjustedBudget,
       };
     });
     chart = { grain: "period", series };
@@ -2030,6 +2059,14 @@ export async function resolveOverview({
     // field. Invariant asserted at build:
     //   verified.count + live.count + planned.count === periods_total
     range_composition: rangeComposition,
+    // Kevin 2026-09-02 language pass: every "thru P#" / "P1-P8" label
+    // on the board comes from this one object. See buildRangeLabels
+    // for the shape. Client reads verbatim.
+    range_labels: buildRangeLabels({
+      range: { start: rng.start, end: rng.end, kind: rng.kind, period_no: rng.period_no },
+      rangeComposition,
+      periodState: displayPeriodState,
+    }),
     // R-40 (2026-09-01): posture retired as a layout switch. Access
     // flags only, named for what they do.
     //
@@ -2171,15 +2208,95 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     progress_display = `${range_composition.verified.count} of ${range_composition.periods_total} periods verified`;
   }
 
+  // Kevin 2026-09-02 language pass Items 2-3: colour rule collapses
+  // the four-tier state (ahead / on_track_above / on_track_below /
+  // behind / critical) to a two-tone (good / bad) tone key. On target
+  // or better is green; off target by any amount is red. No amber,
+  // no neutral except the "No target" fall-through. Copy is unchanged
+  // ("On track", "Behind target", "At risk" all still read as before)
+  // - only colour flips. Client keys pill background + segment
+  // colours off `tone`, not `state`.
+  const gmDeltaForTone = (gmActualPct != null && gmTargetPct != null)
+    ? Number(gmActualPct) - Number(gmTargetPct)
+    : null;
+  const statusTone = !has_target
+    ? "neutral"
+    : gmDeltaForTone == null
+      ? "neutral"
+      : gmDeltaForTone >= 0 ? "good" : "bad";
+  const leverTone = biggest_lever
+    ? (biggest_lever.direction === "under" ? "good" : "bad")
+    : null;
+
   return {
     // PR-1 item 1: "No target" state pill on rolling windows. Neutral
     // tone, no verdict.
     state: has_target ? ticker.state : "on_track_below",
     state_copy: has_target ? ticker.state_copy : "No target",
+    tone: statusTone,
     gm_actual_display,
     gm_target_display,
-    biggest_lever,
+    gm_tone: statusTone,      // same tone drives both status pill and GM bold in sentence
+    biggest_lever: biggest_lever ? { ...biggest_lever, tone: leverTone } : null,
     progress_display,
+  };
+}
+
+// Kevin 2026-09-02 language pass: one helper emits every "thru P#"
+// / "P1-P8" / period-descriptor label the board renders. Client reads
+// verbatim - no per-surface rewrite. `P#` is dynamic:
+//   FYTD                -> last closed period (PR-1 boundary)
+//   Single closed range -> that period
+//   Single open range   -> "period to date" (the period isn't "through"
+//                          anything yet, per the ruling)
+//
+// Shape:
+//   {
+//     kind: "fytd" | "single_open" | "single_closed" | "explicit",
+//     through: "thru P8" | "period to date" | "final" | "to date",
+//     period_span: "P1-P8" | "P8" | null,
+//     period_last: "P8" | null,
+//   }
+function buildRangeLabels({ range, rangeComposition, periodState }) {
+  const rc = rangeComposition;
+  const isFytd = range.kind === "fytd";
+  const isSinglePeriod = range.kind === "period";
+  const isSingleOpen = isSinglePeriod && periodState === "open";
+  const isSingleClosed = isSinglePeriod && !isSingleOpen;
+
+  if (isFytd) {
+    const first = rc?.verified?.first ?? 1;
+    const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
+    return {
+      kind: "fytd",
+      through: `thru P${last}`,
+      period_span: first === last ? `P${last}` : `P${first}-P${last}`,
+      period_last: `P${last}`,
+    };
+  }
+  if (isSingleOpen) {
+    const n = range.period_no;
+    return {
+      kind: "single_open",
+      through: "period to date",
+      period_span: n != null ? `P${n}` : null,
+      period_last: n != null ? `P${n}` : null,
+    };
+  }
+  if (isSingleClosed) {
+    const n = range.period_no;
+    return {
+      kind: "single_closed",
+      through: `thru P${n}`,
+      period_span: `P${n}`,
+      period_last: `P${n}`,
+    };
+  }
+  return {
+    kind: "explicit",
+    through: "to date",
+    period_span: null,
+    period_last: null,
   };
 }
 

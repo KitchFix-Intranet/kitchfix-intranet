@@ -31,14 +31,23 @@ function fmtPct(n) {
   return `${Number(n).toFixed(1)}%`;
 }
 
-function labelPtd(rangeKind, periodState) {
-  if (rangeKind === "fytd") return "Year to date";
-  if (periodState === "verified") return "Final";
-  return "Period to date";
+// Kevin 2026-09-02 language pass: labels come from payload.range_labels
+// (the server-side helper). "thru P8" on FYTD + verified single;
+// "period to date" on open single. Capitalize for header cell.
+function labelPtd(rangeLabels, periodState) {
+  const through = rangeLabels?.through || "period to date";
+  // "Actuals thru P8" / "Actuals period to date" / "Final" (verified
+  // one-period keeps its own noun).
+  if (rangeLabels?.kind === "single_closed" && periodState === "verified") {
+    return `Final ${rangeLabels.period_last || ""}`.trim();
+  }
+  // Uppercase first letter for column header.
+  return through.charAt(0).toUpperCase() + through.slice(1);
 }
 
-function labelBudget(rangeKind, rng) {
-  if (rng?.period_no != null) return `P${rng.period_no} budget`;
+function labelBudget(rangeLabels, rng) {
+  const last = rangeLabels?.period_last;
+  if (last) return `${last} budget`;
   return "Period budget";
 }
 
@@ -77,7 +86,19 @@ function Row({ row, totalRevenue, showBudgetToDate, showPeriodBudget }) {
 
 export default function RevenueLines({ payload }) {
   if (!payload?.statement_rows) return null;
-  const rows = payload.statement_rows.filter(r => r.section === "revenue");
+  // Kevin 2026-09-02 language pass Item 16: hide inactive lines
+  // entirely. A service the account does not run (no data + no
+  // budget) is removed from the table, not rendered as "not active".
+  // On TBJ - FL this removes 2400.2 (Meal service (away)). The
+  // resolver already sets flags:["inactive"] on such rows - we just
+  // filter them out here. sc_counts_without_dollars stays (it's an
+  // absence-of-data on an ACTIVE line, still worth showing).
+  const rows = payload.statement_rows.filter(r => {
+    if (r.section !== "revenue") return false;
+    const flags = Array.isArray(r.flags) ? r.flags : [];
+    if (flags.includes("inactive")) return false;
+    return true;
+  });
   if (rows.length === 0) return null;
   const totalRevenue = payload.cards?.find(c => c.key === "revenue")?.hero_actual;
   const revBudTd = payload.statement_totals?.revenue?.budget_to_date;
@@ -127,10 +148,21 @@ export default function RevenueLines({ payload }) {
   // figure. Drop the column on FYTD entirely - the card carries
   // year budget with its % recognised now; the table stays honest
   // with just budget-to-date + % of rev.
-  const showBudgetToDate = periodState !== "verified";
+  // Kevin 2026-09-02 language pass Item 17: "Budget thru P8" column
+  // renders on FYTD as well as open ranges. FYTD is now closed-only
+  // and its budget-to-date sum equals the period-budget sum, but the
+  // column is still a meaningful "Budget thru P8" comparison Kevin
+  // wants visible.
+  const showBudgetToDate = periodState !== "verified" || rangeKind === "fytd";
   const showPeriodBudget = rangeKind !== "fytd";
-  const ptdLabel = labelPtd(rangeKind, periodState);
-  const pdLabel = labelBudget(rangeKind, rng);
+  const rangeLabels = payload.range_labels;
+  const ptdLabel = labelPtd(rangeLabels, periodState);
+  const pdLabel = labelBudget(rangeLabels, rng);
+  // Item 17: "Budget to date" -> "Budget thru P8" (or "Budget period
+  // to date" on single-open).
+  const budgetToDateLabel = rangeLabels?.through
+    ? `Budget ${rangeLabels.through}`
+    : "Budget to date";
 
   return (
     <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="revenue-lines">
@@ -143,7 +175,7 @@ export default function RevenueLines({ payload }) {
             <p>
               What makes up the revenue figure. Every line is shown against
               its budget, then as a percent of total revenue for this range.
-              Lines the account does not run read &ldquo;not active&rdquo;.
+              Lines the account does not run are omitted.
             </p>
           }
         />
@@ -160,7 +192,7 @@ export default function RevenueLines({ payload }) {
             <tr>
               <th className="l">Line</th>
               <th>{ptdLabel}</th>
-              {showBudgetToDate && <th>Budget to date</th>}
+              {showBudgetToDate && <th>{budgetToDateLabel}</th>}
               {showPeriodBudget && <th>{pdLabel}</th>}
               <th style={{ width: 60 }}>% of rev</th>
             </tr>
