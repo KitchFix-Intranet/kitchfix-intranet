@@ -18,10 +18,22 @@
 //   sum(rows.actual) == statement_totals.cogs.actual          (server sum)
 // Plus a no-half-nulls guard for scored rows.
 //
+// PR-2 defect follow-up (Kevin, 2026-09-02): the cost-lines vs-
+// target cell was rendering -envelope_delta as the dollar variance,
+// which is a card-level concept and disagrees with the per-row
+// percent verdict. A row read "3.5% under" on percent AND "$3,596
+// over" in dollars simultaneously. Sign-agreement assertion added:
+//
+//   For every scored cost row and for the total row: if the row's
+//   percent variance says UNDER, the row's dollar variance must also
+//   say UNDER. A row saying "under" on percent and "over" in dollars
+//   catches this class.
+//
 // SEEDED FAILURE
-//   SEEDED_FAILURE=1 fabricates a row where envelope_delta doesn't
-//   equal btd - batr, and a row where variance_pct doesn't equal
-//   actual_pct - target_pct. Both must fire.
+//   SEEDED_FAILURE=1 fabricates (a) envelope_delta != btd - batr,
+//   (b) variance_pct != actual_pct - target_pct, and
+//   (c) variance vs variance_pct sign disagreement. All three must
+//   fire.
 //
 // USAGE
 //   TEST_MODE=true PORT=3311 npm run dev &
@@ -82,12 +94,44 @@ async function checkPayload(a, r) {
         fail(`${a} ${r.tag} ${row.line_code}`, `variance_pct ${row.variance_pct} != actual_pct - target_pct ${derived.toFixed(4)}`);
       }
     }
+    // Sign-agreement: dollar variance direction MUST match percent
+    // variance direction. Rendering envelope_delta as the dollar cell
+    // (PR-2 defect) tripped this because envelope is a card concept
+    // that can flip the other way from a per-row variance.
+    if (row.variance != null && row.variance_pct != null) {
+      const dollarUnder = row.variance <= 0;
+      const pctUnder = row.variance_pct <= 0;
+      if (dollarUnder !== pctUnder) {
+        fail(`${a} ${r.tag} ${row.line_code}`,
+          `sign disagreement: dollar variance=${row.variance} says ${dollarUnder ? "under" : "over"} but variance_pct=${row.variance_pct} says ${pctUnder ? "under" : "over"}`);
+      }
+    }
   }
 
   const sumActual = cogsRows.reduce((s, r) => s + Number(r.actual || 0), 0);
   const totActual = j.statement_totals?.cogs?.actual;
   if (totActual != null && Math.abs(sumActual - totActual) > CENT) {
     fail(`${a} ${r.tag}`, `sum(rows.actual) ${sumActual.toFixed(2)} != total.actual ${Number(totActual).toFixed(2)}`);
+  }
+
+  // Total-row sign agreement: sum(scored row variances) direction
+  // must match (cogsCard.pct - cogsCard.target_pct) direction. This
+  // is what the operator sees on the total row in the cost-lines
+  // table (dollar cell and percent cell must agree).
+  const scoredRows = cogsRows.filter(r => !isSuppressed(r));
+  const scoredSumBtd = scoredRows.reduce((s, r) => s + Number(r.budget_to_date || 0), 0);
+  const scoredSumActual = scoredRows.reduce((s, r) => s + Number(r.actual || 0), 0);
+  const totalVariance = scoredSumBtd > 0 ? scoredSumActual - scoredSumBtd : null;
+  const cogsCard = (j.cards || []).find(c => c.key === "cogs");
+  const cogsPct = cogsCard?.pct_of_revenue;
+  const cogsTargetPct = cogsCard?.target_pct_of_revenue;
+  if (totalVariance != null && cogsPct != null && cogsTargetPct != null) {
+    const dollarUnder = totalVariance <= 0;
+    const pctUnder = (cogsPct - cogsTargetPct) <= 0;
+    if (dollarUnder !== pctUnder) {
+      fail(`${a} ${r.tag}`,
+        `total sign disagreement: total variance=${totalVariance.toFixed(2)} says ${dollarUnder ? "under" : "over"} but cogs pct-diff=${(cogsPct - cogsTargetPct).toFixed(2)} says ${pctUnder ? "under" : "over"}`);
+    }
   }
 }
 
@@ -116,8 +160,17 @@ async function main() {
     console.log(`  ${fired2 ? "PASS" : "FAIL"}  variance_pct ${seedRow2.variance_pct} vs derived ${dPct}: check ${fired2 ? "fires" : "silent"}`);
 
     console.log("");
-    console.log(fired1 && fired2 ? "Seeded failure axis: PASS" : "Seeded failure axis: FAIL");
-    process.exit(fired1 && fired2 ? 0 : 1);
+    console.log("## Seeded failure axis - dollar variance direction disagrees with percent direction must fire");
+    const seedRow3 = { line_code: "3100", variance: -35587, variance_pct: 3 };
+    const dollarUnder3 = seedRow3.variance <= 0;
+    const pctUnder3 = seedRow3.variance_pct <= 0;
+    const fired3 = dollarUnder3 !== pctUnder3;
+    console.log(`  ${fired3 ? "PASS" : "FAIL"}  dollar=${seedRow3.variance} (${dollarUnder3 ? "under" : "over"}) vs pct=${seedRow3.variance_pct} (${pctUnder3 ? "under" : "over"}): check ${fired3 ? "fires" : "silent"}`);
+
+    console.log("");
+    const allSeedPass = fired1 && fired2 && fired3;
+    console.log(allSeedPass ? "Seeded failure axis: PASS" : "Seeded failure axis: FAIL");
+    process.exit(allSeedPass ? 0 : 1);
   }
 
   for (const a of ACCOUNTS) {
