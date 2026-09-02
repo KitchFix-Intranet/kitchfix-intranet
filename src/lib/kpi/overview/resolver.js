@@ -1788,149 +1788,16 @@ export async function resolveOverview({
     },
   };
 
-  // 18c. "What is left" (R-34, 2026-09-01).
+  // 18c. R-52 (Kevin, 2026-09-02): pace card removed from the Overview.
   //
-  // The one operator number that converts to a decision today. Open
-  // period only, site posture only, single-period range only.
-  // Absent on closed periods (a review surface does not steer) and
-  // absent on FYTD (applying an open period's remaining days to a year
-  // is wrong arithmetic - explicit R-34 rule).
+  // "The Overview is a scoreboard, not a forecast. The board's
+  // credibility rests on stating what is measured, and a projection
+  // invites an operator to argue with the prediction instead of
+  // looking at their spend." what_is_left, its runway math, the pace-
+  // vs-clock verdict, and the two-card composition are all retired.
   //
-  // Three cells, all formatted server-side per §9B:
-  //   1. Cost of goods left to spend = period_budget - actual_to_date
-  //   2. Per day left = left / days_remaining
-  //      Comparison: per_day_so_far = actual / days_elapsed
-  //   3. Budget used pct = actual / period_budget
-  //      Compared to elapsed pct = days_elapsed / days_in_period
-  //      Verdict = "spending slower/faster than the clock"
-  //
-  // No projection ("at this pace margin closes at X%") - that is an
-  // identity under linear accrual, not a forecast (R-33). Never
-  // shipped from this resolver.
-  // R-40 (2026-09-01): what_is_left gate is SCOPE-based, not role-
-  // based. Everyone at single-account scope on an open period sees
-  // it. Portfolio scope (ALL / EAST / WEST) and closed periods and
-  // FYTD do not - unchanged from before.
-  let whatIsLeft = null;
-  const isSingleAccountScope = !isAggregate;
-  const isSinglePeriodRange = rng.kind === "period";
-  const isOpenPeriod = displayPeriodState === "open";
-  if (isSingleAccountScope && isSinglePeriodRange && isOpenPeriod && displayPeriodNo != null) {
-    // Compute period bounds + elapsed. R-25: days elapsed is COUNTED
-    // THROUGH YESTERDAY, never through today - today is not closed.
-    //
-    // 2026-09-01 defect fix: prior implementation had `+ 1` on
-    // rawElapsed which included today in the count, producing
-    // days_elapsed=23 / days_remaining=5 / elapsed_pct=82.14% while
-    // the revenue card's budget_to_date was 22/28 (through yesterday)
-    // on the same page - two different day counts of the same period.
-    // Removes the +1 so this block agrees with the same formula in
-    // budget-to-date.js line 84 (daysThroughYesterday = floor((today
-    // - pStart) / MSD)). One number, one function.
-    const pStart = periodStartISO(displayPeriodNo);
-    const pEnd = periodEndISO(displayPeriodNo);
-    const MSD = 24 * 60 * 60 * 1000;
-    const tS = new Date(`${pStart}T00:00:00Z`);
-    const tE = new Date(`${pEnd}T00:00:00Z`);
-    const tT = new Date(`${today}T00:00:00Z`);
-    const daysInPeriod = Math.max(1, Math.round((tE.getTime() - tS.getTime()) / MSD) + 1);
-    // Days elapsed = calendar days from period start THROUGH YESTERDAY
-    // inclusive. Formula: floor((today - pStart) / MSD).
-    //   today  =  pStart          -> 0 days elapsed (first day, nothing closed)
-    //   today  =  pStart + 1 day  -> 1 day elapsed  (yesterday closed)
-    //   today  =  pEnd            -> daysInPeriod - 1 days elapsed
-    //   today  =  pEnd + 1 day    -> daysInPeriod   days elapsed (all closed)
-    const daysThroughYesterday = Math.floor((tT.getTime() - tS.getTime()) / MSD);
-    const daysElapsed = Math.min(daysInPeriod, Math.max(0, daysThroughYesterday));
-    const daysRemaining = Math.max(0, daysInPeriod - daysElapsed);
-    // Period-full COGS budget = sum of the four lever full-period
-    // budgets. cogsBudget above is the full-period figure (not the
-    // to-date-days-adjusted one).
-    const cogsBudgetFullPeriod = cogsBudget;
-    const cogsLeft = cogsBudgetFullPeriod != null && cogsActual != null
-      ? r2(cogsBudgetFullPeriod - cogsActual)
-      : null;
-    const perDayLeft = cogsLeft != null && daysRemaining > 0
-      ? r2(cogsLeft / daysRemaining)
-      : null;
-    const perDaySoFar = cogsActual != null && daysElapsed > 0
-      ? r2(cogsActual / daysElapsed)
-      : null;
-    const budgetUsedPct = cogsActual != null && cogsBudgetFullPeriod > 0
-      ? r2((cogsActual / cogsBudgetFullPeriod) * 100)
-      : null;
-    const elapsedPct = daysInPeriod > 0
-      ? r2((daysElapsed / daysInPeriod) * 100)
-      : null;
-    // Pace verdict: slower means the % of budget used is at or below
-    // the % of period elapsed. Faster means over. Copy fixed per the
-    // render of record.
-    const pace = (budgetUsedPct != null && elapsedPct != null)
-      ? (budgetUsedPct <= elapsedPct ? "slower" : "faster")
-      : null;
-    const paceCopy = pace === "slower"
-      ? "spending slower than the clock"
-      : (pace === "faster" ? "spending faster than the clock" : null);
-    // B8+B9 (2026-09-01): two cards, not three. "Which is" retired -
-    // it was left ÷ days, a restatement of the card beside it. The
-    // per-day figure moves onto Left to spend. Both cards use the
-    // .split layout (headline left, two labelled stats right-aligned).
-    whatIsLeft = {
-      // Machine values so probes can assert numerics without parsing
-      // display strings.
-      days_elapsed: daysElapsed,
-      days_remaining: daysRemaining,
-      days_in_period: daysInPeriod,
-      cogs_left: cogsLeft,
-      per_day_left: perDayLeft,
-      per_day_so_far: perDaySoFar,
-      budget_used_pct: budgetUsedPct,
-      elapsed_pct: elapsedPct,
-      pace,
-      // Card 1: Left to spend. Headline dollars remaining, two stats
-      // right-aligned. "A day available" is what today's remaining
-      // budget would buy per day if spent linearly through period end.
-      // "Averaging" is what has actually been spent per day so far -
-      // the reality check on the plan.
-      left_card: {
-        days_left_pill: `${daysRemaining} days left`,
-        hero_display: formatMoneyWhole(cogsLeft),
-        stats: [
-          {
-            label: "A day available",
-            value_display: formatMoneyWhole(perDayLeft),
-          },
-          {
-            label: "Averaging",
-            value_display: formatMoneyWhole(perDaySoFar),
-            value_suffix: perDaySoFar != null ? "a day" : null,
-          },
-        ],
-      },
-      // Card 2: Budget used. Headline pct of budget consumed, colored
-      // by pace. Two stats right-aligned. Behind-the-clock is good.
-      used_card: {
-        pace_pill: paceCopy
-          ? (pace === "slower" ? "Slower than the clock" : "Faster than the clock")
-          : null,
-        pace_direction: pace === "slower" ? "good" : (pace === "faster" ? "bad" : "neutral"),
-        hero_display: formatPct(budgetUsedPct),
-        stats: [
-          {
-            label: "Period gone",
-            value_display: formatPct(elapsedPct),
-          },
-          {
-            label: "Spent of budget",
-            value_display: formatMoneyWhole(cogsActual),
-            value_suffix: cogsBudgetFullPeriod != null
-              ? `of ${formatMoneyWhole(cogsBudgetFullPeriod)}`
-              : null,
-          },
-        ],
-      },
-    };
-  }
+  // The future-period planning view (R-47 / R-48) is a separate
+  // surface, not yet built, and is not affected by this ruling.
 
   // 19. Sources line. Data-through dates for each source.
   //
@@ -2191,13 +2058,6 @@ export async function resolveOverview({
     sc_counts_without_dollars,
     also_tracked: alsoTracked,
     drill,
-    // R-34 what-is-left. null on corporate posture, closed periods,
-    // and FYTD - client hides the strip when this field is null.
-    // Corporate payloads have never carried this field; adding it as
-    // null preserves the corporate shape at the type-checker level and
-    // makes the absence intentional rather than an accident of key
-    // ordering.
-    what_is_left: whatIsLeft,
     // A3+A4 (2026-09-01): the ticker retired. A single status line
     // replaces it - fixed shape on every account. The pass-through /
     // fee / planned notes were three restatements of a fact already

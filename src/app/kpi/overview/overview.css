@@ -88,15 +88,11 @@
 .kpi-app .kpi-ov-card-cogs { border-top: 3px solid var(--navy-700); }
 .kpi-app .kpi-ov-card-gm   { border-top: 3px solid var(--kpi-purple-600); }
 .kpi-app .kpi-ov-card-aa   { border-top: 3px solid var(--amber-500); }
-/* PR-2 (2026-09-02) additions - cost-lines + tracked + pace card
-   variants pick their accent tone from state, not from position. */
+/* PR-2 (2026-09-02) additions - cost-lines + tracked accent tones.
+   R-52 (2026-09-02): .kpi-ov-card-pace-* removed alongside PacePanel. */
 .kpi-app .kpi-ov-card-cost-over    { border-top: 3px solid var(--red-600); }
 .kpi-app .kpi-ov-card-cost-under   { border-top: 3px solid var(--navy-700); }
 .kpi-app .kpi-ov-card-tracked      { border-top: 3px solid var(--amber-500); }
-.kpi-app .kpi-ov-card-pace-good    { border-top: 3px solid var(--green-600); }
-.kpi-app .kpi-ov-card-pace-tight   { border-top: 3px solid var(--red-600); }
-.kpi-app .kpi-ov-card-pace-past    { border-top: 3px solid var(--red-600); }
-.kpi-app .kpi-ov-card-pace-neutral { border-top: 3px solid var(--n-400); }
 
 /* Pill-right card header (R-7). Adopt shared .kpi-hs-qwrap for the ?
    affordance so HelpPop primitive works unforked. */
@@ -934,60 +930,8 @@
   font-weight: 800;
 }
 
-/* R-34 "What is left" strip. Site-leader posture only, open period
-   only. Rhythm mirrors the card family - white surface, subtle border,
-   3px navy left accent - so it lands as a peer of the three cards
-   above it. Three cells share the shape of the CardsRow kpi2 line:
-   grey label, hero number, grey sub-line with the verdict inline.
-   No progress bar; the verdict is the tail of cell 3 (R-32 cut). */
-.kpi-app .kpi-ov-pace {
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  border-left: 3px solid var(--navy-700);
-  border-radius: var(--radius-container);
-  margin-top: var(--space-3);
-  padding: calc(14px * var(--kf-scale)) calc(16px * var(--kf-scale));
-}
-.kpi-app .kpi-ov-pace-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.kpi-app .kpi-ov-pace-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-@media (max-width: 720px) {
-  .kpi-app .kpi-ov-pace-grid { grid-template-columns: 1fr; }
-}
-.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-k {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-v {
-  font-size: calc(21px * var(--kf-scale));
-  font-weight: 800;
-  margin-top: 3px;
-  letter-spacing: -0.01em;
-}
-.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-per {
-  font-size: var(--kpi-t-body);
-  font-weight: 600;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-n {
-  font-size: var(--kpi-t-meta);
-  color: var(--n-600);
-  font-weight: 600;
-  margin-top: 3px;
-  line-height: 1.5;
-}
-.kpi-app .kpi-ov-pace-cell .kpi-ov-pace-n b { font-weight: 800; }
+/* R-52 (Kevin, 2026-09-02): the R-34 "What is left" strip and its PR-2
+   pace card successor have been removed from the Overview. */
 
 /* R-32 drill button verdict tail. The gap-to-target beneath the
    actual-percent value. Tone follows the direction word supplied by
@@ -1189,115 +1133,6 @@
   background: var(--n-900);
 }
 .kpi-app .kpi-ov-meter-tk-pd { background: var(--n-400); }
-
-/* ── Pace panel (items 14 + 15) ──────────────────────────────── */
-.kpi-app .kpi-ov-pace .kpi-ov-heroline {
-  display: flex;
-  align-items: baseline;
-  gap: var(--kpi-sp-2);
-  flex-wrap: wrap;
-}
-.kpi-app .kpi-ov-pace-say {
-  font-size: var(--kpi-t-body);
-  line-height: 1.6;
-  margin-top: 8px;
-  color: var(--n-700);
-}
-.kpi-app .kpi-ov-pace-say b { color: var(--n-900); font-weight: 800; }
-
-/* Verified variant - two-cell row + "how it closed" runway box. */
-.kpi-app .kpi-ov-pace-row2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding: 12px 16px 0;
-}
-.kpi-app .kpi-ov-pace-cell-k {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-pace-cell-v {
-  font-size: var(--kpi-t-value);
-  font-weight: 800;
-  margin-top: 3px;
-  letter-spacing: -.01em;
-}
-.kpi-app .kpi-ov-pace-cell-n {
-  font-size: var(--kpi-t-meta);
-  color: var(--n-600);
-  font-weight: 600;
-  margin-top: 2px;
-}
-.kpi-app .kpi-ov-pace-runwaybox {
-  margin: 12px 16px 0;
-  padding: 12px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--n-300);
-  background: var(--n-50);
-}
-.kpi-app .kpi-ov-pace-runwaybox-good {
-  background: var(--green-50);
-  border-color: #B5EAC8;
-}
-.kpi-app .kpi-ov-pace-runwaybox-bad {
-  background: var(--red-50);
-  border-color: #F3C4C4;
-}
-.kpi-app .kpi-ov-pace-runwaybox-k {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-pace-runwaybox-good .kpi-ov-pace-runwaybox-k { color: var(--green-600); }
-.kpi-app .kpi-ov-pace-runwaybox-bad .kpi-ov-pace-runwaybox-k { color: var(--red-600); }
-.kpi-app .kpi-ov-pace-runwaybox-v {
-  font-size: calc(22px * var(--kf-scale));
-  font-weight: 800;
-  letter-spacing: -.02em;
-  margin-top: 2px;
-  color: var(--n-900);
-}
-.kpi-app .kpi-ov-pace-runwaybox-good .kpi-ov-pace-runwaybox-v { color: var(--green-600); }
-.kpi-app .kpi-ov-pace-runwaybox-bad .kpi-ov-pace-runwaybox-v { color: var(--red-600); }
-.kpi-app .kpi-ov-pace-runwaybox-n {
-  font-size: var(--kpi-t-meta);
-  color: var(--n-700);
-  font-weight: 600;
-  margin-top: 5px;
-  line-height: 1.55;
-}
-.kpi-app .kpi-ov-pace-usedbar {
-  position: relative;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--n-200);
-  margin: 14px 16px 6px;
-}
-.kpi-app .kpi-ov-pace-usedbar i {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  border-radius: 4px;
-}
-.kpi-app .kpi-ov-pace-usedbar-tk {
-  position: absolute;
-  top: -4px; bottom: -4px;
-  width: 2px;
-  background: var(--n-900);
-}
-.kpi-app .kpi-ov-pace-usedbar-lab {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--kpi-t-meta);
-  color: var(--n-600);
-  font-weight: 600;
-  margin: 0 16px 16px;
-}
-.kpi-app .kpi-ov-pace-usedbar-lab b { color: var(--n-900); font-weight: 800; }
 
 /* ── Revenue lines compact table (right rail, item 12 companion) ── */
 .kpi-app .kpi-ov-revlines {
