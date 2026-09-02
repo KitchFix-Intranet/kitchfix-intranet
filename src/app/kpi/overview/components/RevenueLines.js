@@ -37,14 +37,12 @@ function labelPtd(rangeKind, periodState) {
   return "Period to date";
 }
 
-function labelBudget(rangeKind, rng, periodState) {
-  if (rangeKind === "fytd") return "Year budget";
+function labelBudget(rangeKind, rng) {
   if (rng?.period_no != null) return `P${rng.period_no} budget`;
   return "Period budget";
 }
 
-function Row({ row, totalRevenue, isRevOpen, showBudgetToDate, budgetLabel }) {
-  const isContractual = Array.isArray(row.flags) && row.flags.includes("contractual");
+function Row({ row, totalRevenue, showBudgetToDate, showPeriodBudget }) {
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   const isScAbsent = Array.isArray(row.flags) && row.flags.includes("sc_counts_without_dollars");
   const actualPct = row.reported && totalRevenue ? (row.actual / totalRevenue) * 100 : null;
@@ -65,9 +63,11 @@ function Row({ row, totalRevenue, isRevOpen, showBudgetToDate, budgetLabel }) {
           {isInactive ? "—" : (row.budget_to_date != null ? fmtMoney(row.budget_to_date) : "—")}
         </td>
       )}
-      <td className="kpi-ov-num kpi-ov-nb">
-        {isInactive ? "—" : (row.period_budget != null ? fmtMoney(row.period_budget) : "—")}
-      </td>
+      {showPeriodBudget && (
+        <td className="kpi-ov-num kpi-ov-nb">
+          {isInactive ? "—" : (row.period_budget != null ? fmtMoney(row.period_budget) : "—")}
+        </td>
+      )}
       <td className="kpi-ov-num kpi-ov-nb">
         {isInactive || actualPct == null ? "—" : fmtPct(actualPct)}
       </td>
@@ -85,14 +85,23 @@ export default function RevenueLines({ payload }) {
   const rangeKind = payload.range?.kind;
   const rng = payload.range;
   const periodState = payload.period_state;
-  const isRevOpen = periodState === "open";
   const isRevPlanned = payload.revenue_source_state === "planned";
-  // Item 11: collapse to one budget column when budget-to-date equals
-  // period_budget - true on closed periods (period fully elapsed).
-  // FYTD keeps both because the running period changes budget-to-date.
+  // Item 11: on a closed period btd equals period_budget - collapse
+  // to one budget column. Open single-period ranges show both btd
+  // and the period budget.
+  //
+  // 2026-09-02 (Kevin): on FYTD the "Year budget" column previously
+  // shown here was the SUM of period_budget across periods in range
+  // (P1-P9 on FYTD) - not the full-year budget the CARD displays
+  // as "Year budget". Two figures labelled the same on one screen,
+  // and the card's % recognised was derived from this table's
+  // figure. Drop the column on FYTD entirely - the card carries
+  // year budget with its % recognised now; the table stays honest
+  // with just budget-to-date + % of rev.
   const showBudgetToDate = periodState !== "verified";
+  const showPeriodBudget = rangeKind !== "fytd";
   const ptdLabel = labelPtd(rangeKind, periodState);
-  const pdLabel = labelBudget(rangeKind, rng, periodState);
+  const pdLabel = labelBudget(rangeKind, rng);
 
   return (
     <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="revenue-lines">
@@ -120,7 +129,7 @@ export default function RevenueLines({ payload }) {
               <th className="l">Line</th>
               <th>{ptdLabel}</th>
               {showBudgetToDate && <th>Budget to date</th>}
-              <th>{pdLabel}</th>
+              {showPeriodBudget && <th>{pdLabel}</th>}
               <th style={{ width: 60 }}>% of rev</th>
             </tr>
           </thead>
@@ -130,9 +139,8 @@ export default function RevenueLines({ payload }) {
                 key={r.line_code}
                 row={r}
                 totalRevenue={totalRevenue}
-                isRevOpen={isRevOpen}
                 showBudgetToDate={showBudgetToDate}
-                budgetLabel={pdLabel}
+                showPeriodBudget={showPeriodBudget}
               />
             ))}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="revenue-lines-total">
@@ -143,7 +151,9 @@ export default function RevenueLines({ payload }) {
               {showBudgetToDate && (
                 <td className="kpi-ov-num kpi-ov-nb">{revBudTd != null ? fmtMoney(revBudTd) : "—"}</td>
               )}
-              <td className="kpi-ov-num kpi-ov-nb">{revBudFull != null ? fmtMoney(revBudFull) : "—"}</td>
+              {showPeriodBudget && (
+                <td className="kpi-ov-num kpi-ov-nb">{revBudFull != null ? fmtMoney(revBudFull) : "—"}</td>
+              )}
               <td className="kpi-ov-num kpi-ov-nb">{totalRevenue != null ? "100%" : "—"}</td>
             </tr>
           </tbody>

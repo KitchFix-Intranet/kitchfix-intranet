@@ -78,8 +78,15 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
   const revBudFull = card.budget_full_period;
   const revBudFullYear = card.budget_full_year;
   const revActual = card.hero_actual;
-  const pctRecognised = (revActual != null && revBudFull != null && revBudFull > 0)
-    ? (revActual / revBudFull) * 100 : null;
+  // Kevin ruling 2026-09-02: pctRecognised must be computed against
+  // the SAME figure the card displays as its denominator. On FYTD
+  // the card shows budget_full_year ($1.92M on TBJ - FL) but the
+  // percent was previously derived from budget_full_period ($1.68M),
+  // giving 106.5% recognised when the honest ratio is 93.1%. Pick
+  // the denominator to match what the card shows.
+  const pctRecognisedDenom = range?.kind === "fytd" ? revBudFullYear : revBudFull;
+  const pctRecognised = (revActual != null && pctRecognisedDenom != null && pctRecognisedDenom > 0)
+    ? (revActual / pctRecognisedDenom) * 100 : null;
   // Item 12: closed period collapses to one budget column (period_
   // budget only); open period + FYTD carry both budget-to-date and
   // full-period.
