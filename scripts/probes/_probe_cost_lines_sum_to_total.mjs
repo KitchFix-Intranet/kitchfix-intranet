@@ -47,11 +47,14 @@ const SEEDED = process.env.SEEDED_FAILURE === "1";
 const acct = (k) => encodeURIComponent(k);
 const CENT = 0.02;
 const PCT_TOL = 0.05;
-// pct-gap * revenue = variance-vs-batr. Rounding of pct at 4dp on
-// large revenue values (~$2M) can drift by up to about $200 while
-// still being algebraically correct. Cap the tolerance well below
-// the smallest legitimate dollar disagreement Kevin would care about.
-const PCT_TIMES_REV_TOL = 300;
+// Algebraic identity check: (actual - batr) == (actual_pct - target_pct)/100 * revenue.
+// The payload carries actual_pct + target_pct at full float precision;
+// variance_pct is a rounded convenience field. Derive the pct gap
+// from the full-precision pair so the tolerance can stay at $0.01.
+// A fixed dollar tolerance is not portable across accounts differing
+// by two orders of magnitude ($2M vs $28K) - $0.01 is what "the
+// numbers agree" means in a currency context.
+const ALG_TOL = 0.01;
 
 const ACCOUNTS = [
   "TBR - FL", "TBJ - FL", "TXR - AZ", "CIN - AZ",
@@ -102,29 +105,29 @@ async function checkPayload(a, r) {
         fail(`${a} ${r.tag} ${row.line_code}`, `variance_pct ${row.variance_pct} != actual_pct - target_pct ${derived.toFixed(4)}`);
       }
     }
-    // Sign-agreement (correct-operand form): (actual - batr) direction
-    // must match variance_pct direction. Holds by construction after
-    // the operand fix; the assertion catches drift.
-    if (row.actual != null && row.budget_at_this_revenue != null && row.variance_pct != null) {
+    // Sign + algebraic identity (Kevin ruling, second-pass):
+    //   (actual - batr) direction matches percent gap direction
+    //   (actual - batr) equals (actual_pct - target_pct)/100 * revenue
+    // Derived from the FULL-PRECISION pair (actual_pct, target_pct),
+    // not from variance_pct which is rounded to 2dp in the payload.
+    // With full precision both operands trace to the same server
+    // arithmetic, so a $0.01 tolerance is the right bar - it catches
+    // drift on a $28K account (CIN - KY FYTD) that a percent-scaled
+    // fixed dollar tolerance would miss.
+    if (row.actual != null && row.budget_at_this_revenue != null
+        && row.actual_pct != null && row.target_pct != null && totalRevenue != null) {
       const varianceVsBatr = row.actual - row.budget_at_this_revenue;
+      const pctGap = row.actual_pct - row.target_pct;
       const dollarUnder = varianceVsBatr <= 0;
-      const pctUnder = row.variance_pct <= 0;
+      const pctUnder = pctGap <= 0;
       if (dollarUnder !== pctUnder) {
         fail(`${a} ${r.tag} ${row.line_code}`,
-          `sign disagreement: actual-batr=${varianceVsBatr.toFixed(2)} says ${dollarUnder ? "under" : "over"} but variance_pct=${row.variance_pct} says ${pctUnder ? "under" : "over"}`);
+          `sign disagreement: actual-batr=${varianceVsBatr.toFixed(2)} says ${dollarUnder ? "under" : "over"} but pct gap=${pctGap.toFixed(6)} says ${pctUnder ? "under" : "over"}`);
       }
-    }
-    // Algebraic identity: (actual - batr) equals (variance_pct / 100)
-    // * total_revenue. Same comparison expressed in two units - dollars
-    // vs percentage points. The tolerance absorbs pct rounding at 4dp
-    // against large revenues.
-    if (row.actual != null && row.budget_at_this_revenue != null
-        && row.variance_pct != null && totalRevenue != null) {
-      const varianceVsBatr = row.actual - row.budget_at_this_revenue;
-      const derivedFromPct = (row.variance_pct / 100) * totalRevenue;
-      if (Math.abs(varianceVsBatr - derivedFromPct) > PCT_TIMES_REV_TOL) {
+      const derivedFromPct = (pctGap / 100) * totalRevenue;
+      if (Math.abs(varianceVsBatr - derivedFromPct) > ALG_TOL) {
         fail(`${a} ${r.tag} ${row.line_code}`,
-          `algebraic drift: actual-batr=${varianceVsBatr.toFixed(2)} vs pct*rev=${derivedFromPct.toFixed(2)} (diff=${(varianceVsBatr - derivedFromPct).toFixed(2)})`);
+          `algebraic drift: actual-batr=${varianceVsBatr.toFixed(4)} vs pct*rev=${derivedFromPct.toFixed(4)} (diff=${(varianceVsBatr - derivedFromPct).toFixed(4)})`);
       }
     }
   }
@@ -192,8 +195,8 @@ async function main() {
     const seedRow4 = { actual: 30000, budget_at_this_revenue: 34000, variance_pct: -1, revenue: 100000 };
     const va = seedRow4.actual - seedRow4.budget_at_this_revenue;   // -4000
     const derivedFromPct = (seedRow4.variance_pct / 100) * seedRow4.revenue;  // -1000
-    const fired4 = Math.abs(va - derivedFromPct) > PCT_TIMES_REV_TOL;
-    console.log(`  ${fired4 ? "PASS" : "FAIL"}  actual-batr=${va} vs pct*rev=${derivedFromPct}: diff ${(va - derivedFromPct).toFixed(2)} > ${PCT_TIMES_REV_TOL}: check ${fired4 ? "fires" : "silent"}`);
+    const fired4 = Math.abs(va - derivedFromPct) > ALG_TOL;
+    console.log(`  ${fired4 ? "PASS" : "FAIL"}  actual-batr=${va} vs pct*rev=${derivedFromPct}: diff ${(va - derivedFromPct).toFixed(2)} > ${ALG_TOL}: check ${fired4 ? "fires" : "silent"}`);
 
     console.log("");
     const allSeedPass = fired1 && fired2 && fired3 && fired4;
