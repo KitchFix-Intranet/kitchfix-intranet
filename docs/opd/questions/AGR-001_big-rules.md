@@ -1,13 +1,18 @@
 # AGR-001 The Big Rules - approved comprehension checks
 
 - **Document:** AGR-001 The Big Rules (current version)
-- **Modules covered:** `big-rules-onboarding` (all checks); `big-rules-annual` (open ruling - see below)
+- **Modules covered:** `big-rules-onboarding` (all approved checks); `big-rules-annual` (open ruling - see below)
 - **Approved:** 2026-09-01 (Q1-Q8 from the initial draft; Q9-Q14 from the six-clubhouse-rules addendum)
-- **Seeded:** **no.** Blocked on ruling A (`academy-12` question-to-section matching + obligation `sort_order`).
+- **Seeded:** **no.** Blocked on ruling 17.11 (`academy-12` question-to-section matching + obligation `sort_order`).
+- **Count:** **13 approved, 1 removed, 14 documented.**
 
 ## Count reconciliation
 
-The pause handoff records **13 approved, not seeded** for AGR-001. The two source review documents (`BIG_RULES_QUESTIONS_DRAFT.md` and `BIG_RULES_QUESTIONS_ADDENDUM.md`) together carry **14** questions - Q1-Q8 in the draft and Q9-Q14 in the addendum. All 14 are documented below **verbatim** because owner-corrected phrasing must not be re-written; the authoring team should reconcile which one, if any, was retracted between the addendum author's "AGR-001 now carries 14 checks" and the handoff's "13 approved" before seeding.
+The pause handoff records **13 approved, not seeded**. The two source review documents together drafted 14 (Q1-Q8 in `BIG_RULES_QUESTIONS_DRAFT.md`, Q9-Q14 in `BIG_RULES_QUESTIONS_ADDENDUM.md`). The addendum footer's "AGR-001 now carries 14 checks" line was written before the owner removed one during subsequent review; it is stale.
+
+**Q12 (`clubhouse-inside-info`) was removed by the owner as redundant to Q1** (`confid-no-inner-circle`), which already covers confidentiality including group chats and the no-inner-circle rule. Q12 is documented at the bottom of this file under **Removed** with the reason and date, not deleted - a question the owner considered and rejected is useful context, and dropping it entirely means someone will re-draft it later.
+
+Q13 and Q14 keep their numbering; the `question_key` is the stable identifier for seeding and any downstream mapping, and renumbering would break the mapping back to this review.
 
 Recorded verbatim per prompt: **do not re-word.** The owner corrected specific phrasing ("there is a better answer here" rather than "it is the wrong one", "the same hearing for everyone" rather than "a hearing") and those edits are deliberate.
 
@@ -16,8 +21,8 @@ Recorded verbatim per prompt: **do not re-word.** The owner corrected specific p
 **Prerequisite content edit before AGR-001 is onboarded:** the Acknowledgement section still references a witness countersignature captured in Rippling. See `CONTENT_FINDINGS.md` for the retirement ruling + suggested replacement.
 
 **Open decision** (addendum footer):
-1. `est_minutes` on both obligations should move from **12 to about 17** to reflect ~5 minutes of checking on top of ~12 of reading.
-2. Whether the annual re-sign carries all 14 or a highest-consequence subset (Rule 21 + confidentiality + dietary advice). Genuine question, not a recommendation.
+1. `est_minutes` on both obligations should move from **12 to about 17** to reflect ~5 minutes of checking on top of ~12 of reading. (Update against 13 checks, not 14.)
+2. Whether the annual re-sign carries all 13 or a highest-consequence subset (Rule 21 + confidentiality + dietary advice). Genuine question, not a recommendation.
 
 ---
 
@@ -168,19 +173,6 @@ Note: like Q6, this check quotes MLB Rule 21 directly. External dependency.
 
 ---
 
-## Q12 - `clubhouse-inside-info`
-
-- **section_anchor:** `The Clubhouse Rules`
-- **prompt:** You hear about a trade that has not been announced. Can you mention it in a private group chat with friends?
-- **options:**
-  - **A.** No. Private channels are named in the rule.
-  - **B.** Yes, as long as it is not public and nobody outside the chat sees it.
-- **correct:** A
-- **wrong:** The rule lists the channels specifically so this gap cannot be argued: *you do not share this information privately, in group chats, on social media, in DMs, or anywhere else.* And trade discussions are one of the named categories, alongside lineup decisions, injury status, contract talks, prospect evaluations, and travel logistics.
-- **right:** Right - private group chats and DMs are named in the rule. And if the sharing is connected to betting, that is a separate and more serious offense under Rule 21.
-
----
-
 ## Q13 - `clubhouse-relationships`
 
 - **section_anchor:** `The Clubhouse Rules`
@@ -204,3 +196,22 @@ Note: like Q6, this check quotes MLB Rule 21 directly. External dependency.
 - **correct:** A
 - **wrong:** The rule covers exactly this: *do not offer your services - culinary, personal chef, catering, training, or anything else - to players, coaches, or Club staff independently of KitchFix.* Your own time does not separate it, because the relationship that produced the offer came from the job.
 - **right:** Correct. Culinary, personal chef, catering, training, anything - not independently of KitchFix, on your time or otherwise.
+
+---
+
+## Removed
+
+Questions the owner considered and rejected. Kept here as context so they are not re-drafted later; do not seed.
+
+### Q12 - `clubhouse-inside-info` (REMOVED 2026-09-01)
+
+**Reason for removal:** redundant to Q1 (`confid-no-inner-circle`). Q1 already covers confidentiality including group chats and the no-inner-circle rule; testing the same behaviour twice would double-count without adding a distinct rule.
+
+- **section_anchor:** `The Clubhouse Rules`
+- **prompt:** You hear about a trade that has not been announced. Can you mention it in a private group chat with friends?
+- **options:**
+  - **A.** No. Private channels are named in the rule.
+  - **B.** Yes, as long as it is not public and nobody outside the chat sees it.
+- **correct:** A
+- **wrong:** The rule lists the channels specifically so this gap cannot be argued: *you do not share this information privately, in group chats, on social media, in DMs, or anywhere else.* And trade discussions are one of the named categories, alongside lineup decisions, injury status, contract talks, prospect evaluations, and travel logistics.
+- **right:** Right - private group chats and DMs are named in the rule. And if the sharing is connected to betting, that is a separate and more serious offense under Rule 21.
