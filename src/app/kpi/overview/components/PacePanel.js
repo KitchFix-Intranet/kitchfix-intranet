@@ -61,6 +61,21 @@ function fmtDatesCovered(dc) {
 
 // Open runway variant. Hero: days of spend left. Sentence: what's
 // left at what daily rate, whether it covers, where the period closes.
+//
+// Three states:
+//   good  - runway >= days_remaining. Green.
+//   tight - runway < days_remaining but cogs_left > 0. Amber.
+//   past  - cogs_left <= 0 already. The whole "days-of-spend-left"
+//           framing inverts: no negative dollar in a "left" slot.
+//           Hero becomes the dollar past budget; sentence names how
+//           much past and where the period will close (Kevin 2026-
+//           09-02 Fix A).
+//
+// Budget-name disambiguation (Kevin 2026-09-02 Fix B): the cost-
+// lines total row shows BATR ($63,779 on TBJ - FL P9), the pace
+// card historically read "$62,980 budget" - two nearby figures with
+// the same word. Pace card now names it "P9 budget" (or "period
+// budget" on ranges without a numeric period).
 function RunwayPanel({ payload }) {
   const wil = payload.what_is_left;
   const cogsBudgetFullPeriod = payload.statement_totals?.cogs?.period_budget;
@@ -79,15 +94,28 @@ function RunwayPanel({ payload }) {
   const projClose = (cogsActual != null && per_day_so_far != null && days_remaining != null)
     ? cogsActual + per_day_so_far * days_remaining
     : null;
-  const tight = runway != null && days_remaining != null && runway < days_remaining;
+  const past = cogs_left != null && cogs_left <= 0;
+  const tight = !past && runway != null && days_remaining != null && runway < days_remaining;
   const daysEarly = tight ? (days_remaining - runway) : 0;
   const runwayDisplay = runway != null ? runway.toFixed(1) : "—";
+  const overBy = past ? Math.abs(cogs_left) : null;
+  const projOverBudget = (projClose != null && cogsBudgetFullPeriod != null)
+    ? projClose - cogsBudgetFullPeriod
+    : null;
+  const periodBudgetLabel = payload.range?.period_no != null
+    ? `P${payload.range.period_no} budget`
+    : "period budget";
+  const toneCls = past ? "kpi-ov-card-pace-past"
+    : tight ? "kpi-ov-card-pace-tight"
+    : "kpi-ov-card-pace-good";
+  const pillTone = past || tight ? "kpi-ov-pill-bad" : "kpi-ov-pill-good";
+  const pillText = past ? "Past budget" : `${days_remaining} days left`;
 
   return (
     <div
-      className={`kpi-ov-card ${tight ? "kpi-ov-card-pace-tight" : "kpi-ov-card-pace-good"} kpi-ov-pace`}
+      className={`kpi-ov-card ${toneCls} kpi-ov-pace`}
       data-kpi-ov="pace-panel"
-      data-kpi-ov-pace-variant="runway"
+      data-kpi-ov-pace-variant={past ? "past" : "runway"}
     >
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">Will the budget last</span>
@@ -98,35 +126,57 @@ function RunwayPanel({ payload }) {
             <p>
               What is left of the period&rsquo;s cost-of-goods budget, and
               whether the current daily spend covers the days remaining. If
-              it runs out early, the sentence names when.
+              it runs out early, the sentence names when. Once spend passes
+              the period budget the framing flips: the hero names how far
+              past, and the projection names where the period closes.
             </p>
           }
         />
-        <span className={`kpi-ov-pill ${tight ? "kpi-ov-pill-bad" : "kpi-ov-pill-good"}`}>
-          {days_remaining} days left
+        <span className={`kpi-ov-pill ${pillTone}`}>
+          {pillText}
         </span>
       </div>
       <div className="kpi-ov-cb">
         <div className="kpi-ov-heroline">
-          <span className={`kpi-ov-hero kpi-ov-num ${tight ? "kpi-ov-bad" : "kpi-ov-good"}`}>
-            {runwayDisplay}
-          </span>
-          <span className="kpi-ov-htd">days of spend left</span>
-        </div>
-        <div className="kpi-ov-pace-say" data-kpi-ov="pace-sentence">
-          <b>{fmtMoney(cogs_left)}</b> left at <b>{fmtMoney(per_day_so_far)}</b> a day.
-          {" "}
-          {tight ? (
+          {past ? (
             <>
-              That runs out <b className="kpi-ov-bad">{daysEarly.toFixed(1)} days early</b>
-              {" "}- the period closes around <b>{fmtMoney(projClose)}</b> against a
-              {" "}<b>{fmtMoney(cogsBudgetFullPeriod)}</b> budget.
+              <span className="kpi-ov-hero kpi-ov-num kpi-ov-bad">
+                {fmtMoney(overBy)}
+              </span>
+              <span className="kpi-ov-htd">past the {periodBudgetLabel}</span>
             </>
           ) : (
             <>
-              That covers all <b className="kpi-ov-good">{days_remaining} days</b>
-              {" "}- the period closes around <b>{fmtMoney(projClose)}</b> against a
-              {" "}<b>{fmtMoney(cogsBudgetFullPeriod)}</b> budget.
+              <span className={`kpi-ov-hero kpi-ov-num ${tight ? "kpi-ov-bad" : "kpi-ov-good"}`}>
+                {runwayDisplay}
+              </span>
+              <span className="kpi-ov-htd">days of spend left</span>
+            </>
+          )}
+        </div>
+        <div className="kpi-ov-pace-say" data-kpi-ov="pace-sentence">
+          {past ? (
+            <>
+              <b className="kpi-ov-bad">{fmtMoney(overBy)} past the {periodBudgetLabel}</b> with
+              {" "}<b>{days_remaining} days</b> still to run. At <b>{fmtMoney(per_day_so_far)}</b> a day
+              {" "}the period closes around <b>{fmtMoney(projClose)}</b>
+              {projOverBudget != null && projOverBudget > 0 ? (
+                <> - <b className="kpi-ov-bad">{fmtMoney(projOverBudget)} over</b>.</>
+              ) : "."}
+            </>
+          ) : tight ? (
+            <>
+              <b>{fmtMoney(cogs_left)}</b> left at <b>{fmtMoney(per_day_so_far)}</b> a day.
+              {" "}That runs out <b className="kpi-ov-bad">{daysEarly.toFixed(1)} days early</b>
+              {" "}- the period closes around <b>{fmtMoney(projClose)}</b> against the
+              {" "}<b>{fmtMoney(cogsBudgetFullPeriod)} {periodBudgetLabel}</b>.
+            </>
+          ) : (
+            <>
+              <b>{fmtMoney(cogs_left)}</b> left at <b>{fmtMoney(per_day_so_far)}</b> a day.
+              {" "}That covers all <b className="kpi-ov-good">{days_remaining} days</b>
+              {" "}- the period closes around <b>{fmtMoney(projClose)}</b> against the
+              {" "}<b>{fmtMoney(cogsBudgetFullPeriod)} {periodBudgetLabel}</b>.
             </>
           )}
         </div>

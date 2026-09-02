@@ -64,6 +64,7 @@ import {
   loadOverviewBudgets,
   loadScDailyRevenue,
   derivePeriodState,
+  capBeforeToday,
 } from "./pnl-loader.js";
 import { resolveRevenueSource, classifyForRevenue, assertScReadAllowed } from "./revenue-source.js";
 import {
@@ -575,7 +576,13 @@ export async function resolveOverview({
     // guard is what prevents contamination from surfacing in the
     // per-account picker. Aggregates that don't need it just pass
     // through zero-summed maps.
-    loadScDailyRevenue(supa, { members, start: rng.start, end: rng.end }),
+    // 2026-09-02 blocker fix: loader now takes `today` and caps
+    // its own upper bound at today - 1. Prior implementation summed
+    // Service Calendar rows for future service days, inflating
+    // revenue on open periods (TBJ - FL P9: 26 days vs 22 days of
+    // budget). Same helper the sources-line label uses below -
+    // label and query derive from one value.
+    loadScDailyRevenue(supa, { members, start: rng.start, end: rng.end, today }),
     paginateLaborActuals(supa, { members, start: rng.start, end: rng.end }),
     Promise.all(members.map(m => resolveMemberBudget(supa, m))),
     paginatePurchasingWeekly(supa, { members, start: rng.start, end: rng.end }),
@@ -1929,18 +1936,12 @@ export async function resolveOverview({
   // state==='closed' filter (the week has to be closed for its
   // week_end to count). Purchases + SC use raw last-observed values
   // from their loaders and can slip past midnight - cap them here.
-  const capBeforeToday = (iso) => {
-    if (!iso) return null;
-    if (iso < today) return iso;
-    // Fall back to today - 1. Cheaper than parsing the ISO and
-    // stepping back a day - today is already an ISO YYYY-MM-DD string
-    // computed against the request's timezone in step 1 of the
-    // resolver; subtracting one day from an ISO date is a
-    // well-defined arithmetic on the Date wrapper.
-    const t = new Date(`${today}T00:00:00Z`);
-    t.setUTCDate(t.getUTCDate() - 1);
-    return t.toISOString().slice(0, 10);
-  };
+  // 2026-09-02: capBeforeToday moved to pnl-loader.js so the
+  // sc_daily_revenue reader and the sources-line label call the
+  // SAME function. Kevin's rule: "one function owns 'through when',
+  // and the sources line already calls it". Locally alias the
+  // imported helper so the callsites below stay legible.
+  const capBefore = (iso) => capBeforeToday(iso, today);
   const laborLastClosed = (() => {
     const weeks = laborBoard?.weeks || [];
     let max = null;
@@ -1948,7 +1949,7 @@ export async function resolveOverview({
       if (w.state !== "closed") continue;
       if (max == null || w.week_end > max) max = w.week_end;
     }
-    return capBeforeToday(max);
+    return capBefore(max);
   })();
   const scMaxDate = (() => {
     let max = null;
@@ -1957,9 +1958,9 @@ export async function resolveOverview({
         if (max == null || day > max) max = day;
       }
     }
-    return capBeforeToday(max);
+    return capBefore(max);
   })();
-  const cardsThrough = capBeforeToday(purchFreshness?.cards_through || null);
+  const cardsThrough = capBefore(purchFreshness?.cards_through || null);
 
   const labelWithThrough = (base, iso, fallback) => {
     const day = iso ? formatDayLabel(iso) : null;

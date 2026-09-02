@@ -185,6 +185,26 @@ export async function loadOverviewBudgets(supa, { members, fiscalYear = 2026 }) 
   return { data: out };
 }
 
+// The ONE function that owns "through when" - "revenue to date and
+// budget to date must mean the same day, or every percentage built
+// on them lies". Both the sc_daily_revenue reader and the sources-
+// line label call this. Prior to 2026-09-02 the sources line was
+// capped (visibly) but the reader was not, so on an open period
+// the reader summed future service days (Service Calendar carries
+// projected counts) - TBJ - FL P9 was summing 26 days of revenue
+// against 22 days of budget and reporting 23.3% over pace.
+//
+// Cap rule: strictly less than today. Today is not closed; a same-
+// day count can still shift as the day runs. Falls back to today - 1
+// via Date arithmetic. Returns null on null input.
+export function capBeforeToday(iso, today) {
+  if (!iso) return null;
+  if (iso < today) return iso;
+  const t = new Date(`${today}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() - 1);
+  return t.toISOString().slice(0, 10);
+}
+
 // ─── sc_daily_revenue reader (per-meal accounts, sc_revenue_live=true) ─
 //
 // Reads sc_daily_revenue for the requested date range, filtered to
@@ -199,8 +219,20 @@ export async function loadOverviewBudgets(supa, { members, fiscalYear = 2026 }) 
 // enforces those preconditions BEFORE calling this function.
 // Passing a fee account here is a caller bug - we don't re-check,
 // but the resolver's guard does.
-export async function loadScDailyRevenue(supa, { members, start, end }) {
+//
+// UPPER BOUND (Kevin 2026-09-02 blocker): the effective end is
+// min(end, today - 1). The Service Calendar carries projected
+// counts for future days; without this cap, on an open period the
+// reader sums those days and every downstream percentage is off.
+// `today` is required so the loader can share the cap with the
+// resolver's sources-line label - one function, one truth.
+export async function loadScDailyRevenue(supa, { members, start, end, today }) {
   if (!members || members.length === 0) return { data: new Map() };
+  // Cap end at today - 1. When today is not passed (legacy caller),
+  // fall back to the raw end so behavior is a strict extension.
+  // Every current caller in the Overview resolver passes today.
+  const effectiveEnd = today ? capBeforeToday(end, today) : end;
+  if (!effectiveEnd || effectiveEnd < start) return { data: new Map() };
   const out = new Map();
   for (const memberChunk of chunk(members, IN_CHUNK)) {
     let from = 0;
@@ -210,7 +242,7 @@ export async function loadScDailyRevenue(supa, { members, start, end }) {
         .select("account_key, service_date, service_id, actual_revenue, is_non_revenue")
         .in("account_key", memberChunk)
         .gte("service_date", start)
-        .lte("service_date", end)
+        .lte("service_date", effectiveEnd)
         .not("is_non_revenue", "is", true)   // §5.10: NOT is_non_revenue always
         // Order chain must uniquely order rows across the 1000-row page
         // boundary. sc_daily_revenue is grained per

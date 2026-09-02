@@ -43,5 +43,19 @@ export async function resolve(specifier, context, nextResolve) {
         `Specifier: "${specifier}". Tried: ${candidates.join(", ")}`
     );
   }
+  // Extensionless relative imports (Next allows them; Node ESM does not).
+  // Try `.js`, `.mjs`, `/index.js` against the parent URL, same as the
+  // @/-alias path.
+  if ((specifier.startsWith("./") || specifier.startsWith("../")) && !path.extname(specifier) && context.parentURL) {
+    const parentDir = path.dirname(fileURLToPath(context.parentURL));
+    const target = path.resolve(parentDir, specifier);
+    const candidates = [`${target}.js`, `${target}.mjs`, `${target}/index.js`];
+    for (const c of candidates) {
+      if (existsSync(c)) {
+        return nextResolve(pathToFileURL(c).href, context);
+      }
+    }
+    // Fall through to nextResolve so Node can produce its own error.
+  }
   return nextResolve(specifier, context);
 }

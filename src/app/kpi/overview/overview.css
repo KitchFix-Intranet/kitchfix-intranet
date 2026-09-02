@@ -95,6 +95,7 @@
 .kpi-app .kpi-ov-card-tracked      { border-top: 3px solid var(--amber-500); }
 .kpi-app .kpi-ov-card-pace-good    { border-top: 3px solid var(--green-600); }
 .kpi-app .kpi-ov-card-pace-tight   { border-top: 3px solid var(--red-600); }
+.kpi-app .kpi-ov-card-pace-past    { border-top: 3px solid var(--red-600); }
 .kpi-app .kpi-ov-card-pace-neutral { border-top: 3px solid var(--n-400); }
 
 /* Pill-right card header (R-7). Adopt shared .kpi-hs-qwrap for the ?
