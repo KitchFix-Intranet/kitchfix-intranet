@@ -188,10 +188,16 @@ function elideSerial(serial) {
 }
 
 // ─── Sets: group queue rows by doc ─────────────────────────────
+// Owner ruling 2026-09-02: signed parts stay inside their document
+// set (rendered in the signed state - green spine, check bubble,
+// serial, view-cert). A prior fix moved signed rows OUT of the set
+// to prevent duplicate renders; the correct fix is to remove the
+// duplication, not to break the packet. A document that is FULLY
+// signed (every part) moves down as one unit into "Completed this
+// cycle" - see the fullyCompletedDocs derivation below.
 function buildSets(queue) {
   const byDoc = new Map();
   for (const r of queue || []) {
-    if (r.signed) continue; // completed lessons leave their set
     if (!byDoc.has(r.doc_id)) byDoc.set(r.doc_id, []);
     byDoc.get(r.doc_id).push(r);
   }
@@ -199,25 +205,70 @@ function buildSets(queue) {
   for (const [docId, rows] of byDoc) {
     rows.sort((a, b) => (a.part_number || 1) - (b.part_number || 1));
     const totalParts = rows[0]?.total_parts || rows.length;
-    const parts = rows.map((r, i) => ({
-      ...r,
-      _locked: i > 0,
-    }));
-    const completedPriorCount = totalParts - rows.length;
-    const minutesLeft = rows.reduce((acc, r) => acc + (r.est_minutes || 0), 0);
-    const nextIdx = parts.findIndex((r) => !r._locked);
-    if (nextIdx >= 0) parts[nextIdx]._next = true;
+    const allSigned = rows.length > 0 && rows.every((r) => r.signed);
+    // A fully-signed document is not a set - it belongs in
+    // "Completed this cycle" as one unit.
+    if (allSigned) continue;
+    // Signed parts are visible in their set; unsigned parts stack
+    // beneath in order. Locking gates the next UNSIGNED part on the
+    // completion of the prior part.
+    let firstUnsignedIndex = -1;
+    const parts = rows.map((r, i) => {
+      const signed = !!r.signed;
+      if (!signed && firstUnsignedIndex < 0) firstUnsignedIndex = i;
+      // A signed row is never locked; an unsigned row is locked if
+      // any earlier part is unsigned (except the first unsigned,
+      // which is the next-open row).
+      const locked = signed
+        ? false
+        : (firstUnsignedIndex >= 0 && i > firstUnsignedIndex);
+      return {
+        ...r,
+        _signed: signed,
+        _locked: locked,
+      };
+    });
+    if (firstUnsignedIndex >= 0) parts[firstUnsignedIndex]._next = true;
+    const completedPriorCount = parts.filter((p) => p._signed).length;
+    const openParts = parts.filter((p) => !p._signed);
+    const minutesLeft = openParts.reduce((acc, r) => acc + (r.est_minutes || 0), 0);
     sets.push({
       doc_id: docId,
       doc_title: rows[0].doc_title,
       doc_class: rows[0].doc_class,
       totalParts,
       completedPriorCount,
+      openPartsCount: openParts.length,
       minutesLeft,
       parts,
     });
   }
   return sets;
+}
+
+// A "fully-completed document" is one where every part is signed.
+// This is what "Completed this cycle" surfaces - a document as one
+// unit, with a certificate row per signed part.
+function buildFullyCompletedDocs(queue) {
+  const byDoc = new Map();
+  for (const r of queue || []) {
+    if (!byDoc.has(r.doc_id)) byDoc.set(r.doc_id, []);
+    byDoc.get(r.doc_id).push(r);
+  }
+  const docs = [];
+  for (const [docId, rows] of byDoc) {
+    if (rows.length === 0) continue;
+    if (!rows.every((r) => r.signed)) continue;
+    rows.sort((a, b) => (a.part_number || 1) - (b.part_number || 1));
+    docs.push({
+      doc_id: docId,
+      doc_title: rows[0].doc_title,
+      doc_class: rows[0].doc_class,
+      totalParts: rows[0].total_parts || rows.length,
+      parts: rows,
+    });
+  }
+  return docs;
 }
 
 // ─── Profile rail (block grammar) ──────────────────────────────
@@ -346,7 +397,7 @@ function PrimaryRail({ viewer, queue, cycleLabel, cycleEndISO, todayISO, streakC
 }
 
 // ─── Lessons list wrapper (capped, cued) ───────────────────────
-function LessonsCard({ sets, completed, openCount, openMinutes, cycleEndDate, onOpen, todayISO, nextOpenPart }) {
+function LessonsCard({ sets, completedDocs, openCount, openMinutes, cycleEndDate, onOpen, todayISO, nextOpenPart }) {
   const wrapRef = useRef(null);
   const bodyRef = useRef(null);
   const [belowCount, setBelowCount] = useState(0);
@@ -380,7 +431,7 @@ function LessonsCard({ sets, completed, openCount, openMinutes, cycleEndDate, on
       body.removeEventListener("scroll", recompute);
       window.removeEventListener("resize", recompute);
     };
-  }, [recompute, sets, completed]);
+  }, [recompute, sets, completedDocs]);
 
   const scrollDown = () => {
     const body = bodyRef.current;
@@ -412,13 +463,13 @@ function LessonsCard({ sets, completed, openCount, openMinutes, cycleEndDate, on
           {sets.map((s) => (
             <SetBlock key={s.doc_id} set={s} onOpen={onOpen} todayISO={todayISO} />
           ))}
-          {sets.length === 0 && completed.length === 0 ? (
+          {sets.length === 0 && completedDocs.length === 0 ? (
             <div className="opd-set" style={{ padding: 22, textAlign: "center" }}>
               <div className="opd-lh-meta">Nothing needs you this cycle.</div>
             </div>
           ) : null}
-          {completed.length > 0 ? (
-            <CompletedBlock completed={completed} onOpen={onOpen} />
+          {completedDocs.length > 0 ? (
+            <CompletedBlock docs={completedDocs} onOpen={onOpen} />
           ) : null}
         </div>
         <div className="opd-lfade" aria-hidden="true" />
@@ -480,6 +531,7 @@ function SetBlock({ set, onOpen, todayISO }) {
 
   // Multi-part set: header + numbered part rows on a connecting spine.
   const completedSetParts = set.completedPriorCount;
+  const openPartsCount = set.openPartsCount ?? (set.parts.length - completedSetParts);
   const progressPct = set.totalParts === 0 ? 0 : Math.round((completedSetParts / set.totalParts) * 100);
   const started = completedSetParts > 0;
 
@@ -495,7 +547,7 @@ function SetBlock({ set, onOpen, todayISO }) {
           <h3>{set.doc_title}</h3>
           <div className="opd-seth-mt">
             {started
-              ? `Part ${completedSetParts} complete · ${set.parts.length} part${set.parts.length === 1 ? "" : "s"} left · ${set.minutesLeft} min`
+              ? `Part ${completedSetParts} complete · ${openPartsCount} part${openPartsCount === 1 ? "" : "s"} left · ${set.minutesLeft} min`
               : `${set.totalParts} parts, in order · ${set.minutesLeft} min`}
           </div>
         </div>
@@ -509,9 +561,18 @@ function SetBlock({ set, onOpen, todayISO }) {
         </div>
       </div>
       {set.parts.map((p) => {
+        const isSigned = p._signed;
         const isLocked = p._locked;
         const isNext = p._next;
+        // Signed rows reuse the same signed state the Completed
+        // block renders - .opd-pr--dn - so a signed part inside a
+        // packet is visually the same as a signed part inside the
+        // Completed block (green spine, check bubble, serial +
+        // "CERTIFICATE" in the meta column, "View" go). The class
+        // + row content already exist; the difference is only
+        // WHERE the row renders.
         const cls = "opd-pr"
+          + (isSigned ? " opd-pr--dn" : "")
           + (isLocked ? " opd-pr--lk" : "")
           + (isNext ? " opd-pr--nx" : "");
         // Part rows use obligation.description ONLY - never card_line.
@@ -521,6 +582,39 @@ function SetBlock({ set, onOpen, todayISO }) {
         const desc = partRowDescription(p);
         const shortTitle = partShortTitle(p.source_section);
         const dueClass = dueUrgencyClass(p.due_date, todayISO);
+        if (isSigned) {
+          const md = formatMonthDay(p.signed_at);
+          return (
+            <button
+              key={p.requirement_id}
+              type="button"
+              className={cls}
+              onClick={() => onOpen(p)}
+              title={p.source_section || undefined}
+            >
+              <i className="opd-spine" aria-hidden="true" />
+              <span className="opd-lead" aria-hidden="true">
+                <span className="opd-pnum">
+                  <Check size={11} strokeWidth={2.25} />
+                </span>
+              </span>
+              <div className="opd-pb">
+                <h4>Part {p.part_number}{shortTitle ? ` · ${shortTitle}` : ""}</h4>
+                <div className="opd-pb-d">
+                  {md ? `Signed ${md}` : "Signed"}
+                  {p.doc_version ? ` · version ${p.doc_version}` : ""}
+                </div>
+              </div>
+              <div className="opd-pm">
+                <div className="opd-pm-a" title={p.certificate_serial || undefined}>
+                  {elideSerial(p.certificate_serial)}
+                </div>
+                <div className="opd-pm-b">CERTIFICATE</div>
+              </div>
+              <span className="opd-go" aria-hidden="true">View</span>
+            </button>
+          );
+        }
         return (
           <button
             key={p.requirement_id}
@@ -582,48 +676,58 @@ function partShortTitle(sourceSection) {
 }
 
 // ─── Completed block ───────────────────────────────────────────
-function CompletedBlock({ completed, onOpen }) {
+// Owner ruling 2026-09-02: "Completed this cycle" surfaces fully
+// completed DOCUMENTS only. A doc is fully complete when every part
+// is signed - at that point the whole packet moves down as one unit
+// with its certificates. Partially-signed docs stay in Lessons with
+// the signed parts inline in their set. If nothing is fully
+// complete, this block does not render (see the render gate at the
+// callsite).
+function CompletedBlock({ docs, onOpen }) {
+  const partCount = docs.reduce((acc, d) => acc + d.parts.length, 0);
   return (
     <div className="opd-cmpl">
       <div className="opd-cmplh">
         <Check size={13} strokeWidth={2.25} style={{ color: "var(--opd-grnfg)" }} />
         <span className="opd-cmplh-k">Completed this cycle</span>
         <span className="opd-cmplh-s">
-          {completed.length} lesson{completed.length === 1 ? "" : "s"} · {completed.length} certificate{completed.length === 1 ? "" : "s"}
+          {docs.length} document{docs.length === 1 ? "" : "s"} · {partCount} certificate{partCount === 1 ? "" : "s"}
         </span>
       </div>
-      {completed.map((r) => {
-        const md = formatMonthDay(r.signed_at);
-        return (
-          <button
-            key={r.requirement_id}
-            type="button"
-            className="opd-pr opd-pr--dn"
-            onClick={() => onOpen(r)}
-          >
-            <i className="opd-spine" aria-hidden="true" />
-            <span className="opd-lead" aria-hidden="true">
-              <span className="opd-pnum">
-                <Check size={11} strokeWidth={2.25} />
+      {docs.map((d) => (
+        d.parts.map((r) => {
+          const md = formatMonthDay(r.signed_at);
+          return (
+            <button
+              key={r.requirement_id}
+              type="button"
+              className="opd-pr opd-pr--dn"
+              onClick={() => onOpen(r)}
+            >
+              <i className="opd-spine" aria-hidden="true" />
+              <span className="opd-lead" aria-hidden="true">
+                <span className="opd-pnum">
+                  <Check size={11} strokeWidth={2.25} />
+                </span>
               </span>
-            </span>
-            <div className="opd-pb">
-              <h4>{r.doc_title}{r.total_parts > 1 ? ` · Part ${r.part_number}` : ""}</h4>
-              <div className="opd-pb-d">
-                {md ? `Signed ${md}` : "Signed"}
-                {r.doc_version ? ` · version ${r.doc_version}` : ""}
+              <div className="opd-pb">
+                <h4>{r.doc_title}{r.total_parts > 1 ? ` · Part ${r.part_number}` : ""}</h4>
+                <div className="opd-pb-d">
+                  {md ? `Signed ${md}` : "Signed"}
+                  {r.doc_version ? ` · version ${r.doc_version}` : ""}
+                </div>
               </div>
-            </div>
-            <div className="opd-pm">
-              <div className="opd-pm-a" title={r.certificate_serial || undefined}>
-                {elideSerial(r.certificate_serial)}
+              <div className="opd-pm">
+                <div className="opd-pm-a" title={r.certificate_serial || undefined}>
+                  {elideSerial(r.certificate_serial)}
+                </div>
+                <div className="opd-pm-b">CERTIFICATE</div>
               </div>
-              <div className="opd-pm-b">CERTIFICATE</div>
-            </div>
-            <span className="opd-go" aria-hidden="true">View</span>
-          </button>
-        );
-      })}
+              <span className="opd-go" aria-hidden="true">View</span>
+            </button>
+          );
+        })
+      ))}
     </div>
   );
 }
@@ -886,6 +990,29 @@ export default function AcademyRoom({ viewerEmail }) {
     }
   }, []);
 
+  // Background refresh - does NOT flip status to "loading" and does
+  // NOT clear data. Used after sign so the room's data (queue,
+  // certificate list, record counters) refreshes silently BEHIND the
+  // completion screen already rendered inside AcademyFocus. The
+  // completion screen must not be unmounted by a parent state churn
+  // (owner ruling 2026-09-02: skeleton flash between sign and cert
+  // was the room re-rendering, which unmounted AcademyFocus, which
+  // remounted with its own loading skeleton before the completion
+  // cert came back).
+  const refreshSilent = useCallback(async function refreshSilent() {
+    try {
+      const res = await fetch("/api/academy/room", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data || !data.ok) return;
+      setState((prev) => ({ status: "ready", data, error: null }));
+    } catch { /* best-effort - the visible surface is the completion cert */ }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     queueMicrotask(() => { if (!cancelled) load(); });
@@ -909,10 +1036,10 @@ export default function AcademyRoom({ viewerEmail }) {
   const cycleEndDate = cycleEndISO ? formatMonthDay(cycleEndISO) : null;
 
   const sets = useMemo(() => buildSets(queue), [queue]);
-  const completed = useMemo(
-    () => (queue || []).filter((r) => r.signed),
-    [queue]
-  );
+  // "Completed this cycle" = fully-signed DOCUMENTS only. A doc with
+  // one signed part and one unsigned part stays in Lessons; the
+  // signed part renders inside its set in the signed state.
+  const completedDocs = useMemo(() => buildFullyCompletedDocs(queue), [queue]);
   const openCount = queue.filter((r) => !r.signed).length;
   const openMinutes = queue.filter((r) => !r.signed).reduce((a, r) => a + (r.est_minutes || 0), 0);
 
@@ -938,7 +1065,7 @@ export default function AcademyRoom({ viewerEmail }) {
         partNumber={focus.partNumber}
         totalParts={focus.totalParts}
         onBack={() => { setFocus(null); load(); }}
-        onSigned={() => { load(); }}
+        onSigned={() => { refreshSilent(); }}
       />
     );
   }
@@ -949,7 +1076,10 @@ export default function AcademyRoom({ viewerEmail }) {
     );
   }
 
-  const nextOpenPart = sets.find((s) => s.parts.some((p) => !p._locked))?.parts.find((p) => !p._locked) || null;
+  // Next open = the flagged _next part in the first set that has one.
+  // Signed parts inside a set are visible in the signed state; they
+  // are never "next-open".
+  const nextOpenPart = sets.find((s) => s.parts.some((p) => p._next))?.parts.find((p) => p._next) || null;
 
   return (
     <div className="opd-room opd-room--dense" data-room="academy">
@@ -969,7 +1099,7 @@ export default function AcademyRoom({ viewerEmail }) {
         ) : (
           <LessonsCard
             sets={sets}
-            completed={completed}
+            completedDocs={completedDocs}
             openCount={openCount}
             openMinutes={openMinutes}
             cycleEndDate={cycleEndDate}

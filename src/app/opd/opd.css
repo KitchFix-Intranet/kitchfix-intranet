@@ -2227,20 +2227,25 @@
   color: var(--text-heading);
   font-weight: 650;
 }
+/* .opd-focus-done-back is a marker class for the Playwright selector
+   in tests/academy-signature-flow.spec.ts. The visual treatment now
+   comes from .opd-bt.opd-bt--gh (ghost button - matches module
+   footer's Back and Save & exit). This shim only positions the
+   button (centred, breathing room above); it must not restate any
+   visual property that .opd-bt / .opd-bt--gh already own. */
 .opd-focus-done-back {
   display: block;
   margin: 18px auto 0;
-  font-family: var(--font-ui);
-  font-size: 12.5px;
-  font-weight: 650;
-  color: var(--text-muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 10px 16px;
-  min-height: 40px;
 }
-.opd-focus-done-back:hover { color: var(--text-link); }
+
+/* Entrance for the completion card. Runs once on mount. Reuses
+   the existing --opd-t-mid duration and the existing opd-rise
+   keyframe (defined near opd-fb, line ~3098) so this block adds
+   no new keyframes. The seal circle keeps its opd-cert-seal
+   animation defined at line ~2190. */
+.opd-focus-done--enter {
+  animation: opd-rise var(--opd-t-mid) var(--opd-ease);
+}
 
 /* ─────────────────────────────────────────────────────────────
  * Mobile behaviour - ships in this PR per spec Section 14.
