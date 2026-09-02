@@ -56,7 +56,10 @@ function BarTip({ title, dates, rows, res }) {
 function ChartPeriodGrain({ series }) {
   const spends = series.map(s => Number(s.spent || 0));
   const budgets = series.map(s => Number(s.budget || 0));
-  const mx = Math.max(...spends, ...budgets, 1);
+  // PR-2 item 17 (2026-09-02): scale to max(budget, tallest bar) *
+  // 1.16 so a bar with $29,731 against a $23,565 budget renders
+  // fully above the dashed budget line without clipping.
+  const mx = Math.max(...spends, ...budgets, 1) * 1.16;
 
   return (
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="period">
@@ -71,11 +74,12 @@ function ChartPeriodGrain({ series }) {
         <span className="kpi-ov-pill kpi-ov-pill-neutral">{series.length} periods</span>
       </div>
       <div className="kpi-ov-cb">
-        <div className="kpi-ov-bars">
+        <div className="kpi-ov-bars kpi-ov-bars-inset">
           {series.map((s, i) => {
             const val = Number(s.spent || 0);
             const bud = Number(s.budget || 0);
             const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
+            const budPct = bud > 0 ? (bud / mx) * 100 : null;
             const over = val - bud;
             const classSuffix =
               s.state === "in_progress" ? "kpi-ov-bar-hatch"
@@ -90,6 +94,24 @@ function ChartPeriodGrain({ series }) {
                 data-kpi-ov-bar-state={s.state}
                 data-kpi-ov-period={s.period_no}
               >
+                {/* PR-2 item 20 (2026-09-02): FYTD uses period grain
+                    and each period carries its OWN dashed budget line
+                    (period budgets differ by a factor of seven across
+                    the year, so a single target line lies). The dashed
+                    span is anchored to the bar and offset by (bud-val)
+                    so it sits at the period's own budget height in the
+                    chart's coordinate space. */}
+                {budPct != null && (
+                  <span
+                    className="kpi-ov-bar-perbud"
+                    style={{
+                      left: "-5%",
+                      right: "-5%",
+                      bottom: hgt > 0 ? `${((budPct - hgt) / hgt) * 100}%` : "0%",
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
                 <BarTip
                   title={`Period ${s.period_no}${s.state === "in_progress" ? " · running" : ""}`}
                   rows={[
@@ -125,7 +147,9 @@ function ChartPeriodGrain({ series }) {
 function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
   const wkB = Number(weeklyBudget || 0);
   const spends = series.map(s => Number(s.spent || 0));
-  const mx = Math.max(wkB, ...spends, 1);
+  // PR-2 item 17 (2026-09-02): scale to max * 1.16. See period-grain
+  // Chart for the reasoning; week-grain applies the same rule.
+  const mx = Math.max(wkB, ...spends, 1) * 1.16;
   const totalWeeks = series.length;
   const closedCount = series.filter(s => s.state === "closed").length;
 

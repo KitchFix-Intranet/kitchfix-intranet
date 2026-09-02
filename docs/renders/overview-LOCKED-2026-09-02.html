@@ -1,0 +1,365 @@
+<meta charset="utf-8"><title>Overview - horizon pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy-50:#F4F7FC;--navy-100:#EAF0FA;--navy-700:#153968;
+--amber-50:#FFF2E2;--amber-500:#D97706;--amber-600:#B25800;
+--green-50:#E9FDEC;--green-500:#16A34A;--green-600:#008330;
+--red-50:#FFEDE7;--red-500:#DC2626;--red-600:#B9000C;
+--n-0:#FFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;--purple:#7c3aed;--s:.9;
+--t-lab:calc(10px*var(--s));--t-met:calc(11px*var(--s));--t-bod:calc(12.5px*var(--s));--t-med:calc(15px*var(--s));--t-val:calc(20px*var(--s));--t-hero:calc(28px*var(--s));}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}
+.devbar button{font-size:11px;font-weight:600;padding:5px 12px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.nav{background:var(--n-0);border-bottom:1px solid var(--n-300);padding:0 24px;height:56px;display:flex;align-items:center}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:-.02em}
+.mark{width:26px;height:26px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.navlinks{display:flex;gap:22px;margin:0 auto}.navlinks span{font-size:13px;font-weight:600;color:var(--n-700)}
+.navlinks span.on{color:var(--navy-700);background:var(--navy-100);padding:6px 12px;border-radius:8px;margin:-6px -12px}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.wrap{max-width:1520px;margin:0 auto;padding:20px 24px 44px}
+.pv{background:var(--amber-50);border:1px solid #F7C299;border-radius:10px;padding:9px 14px;display:flex;align-items:center;font-size:var(--t-bod);font-weight:600;color:var(--amber-600);margin-bottom:12px}
+.pv a{margin-left:auto;color:var(--amber-600);font-weight:700}
+.cmd{background:var(--navy-700);border-radius:12px 12px 0 0;padding:0 20px;min-height:52px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;position:relative}
+.cmd .ttl{color:#fff;font-size:var(--t-med);font-weight:700}.cmd .acct{color:#fff;font-size:var(--t-med);font-weight:800}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 11px;display:flex;align-items:center;gap:7px;cursor:pointer}
+.chip .k{color:#93a9c9;font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.chip .v{color:#fff;font-size:var(--t-bod);font-weight:600}.chip .d{color:#93a9c9;font-size:var(--t-bod);font-weight:500}
+.meta{color:#b9c8de;font-size:var(--t-met);font-weight:600}.meta b{color:#fff}
+.tog{display:flex;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:8px;overflow:hidden;margin-left:auto}
+.tog button{font-size:var(--t-bod);font-weight:700;padding:6px 12px;color:#cddbee;background:transparent;border:none}
+.tog button.on{background:#fff;color:var(--navy-700)}
+.fresh{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;color:#dbe6f5;font-size:var(--t-met);font-weight:600;cursor:pointer;position:relative;margin-left:9px}
+.dot{width:7px;height:7px;border-radius:50%;background:#54B56B}
+.pop{display:none;position:absolute;top:34px;right:0;width:320px;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;box-shadow:0 10px 30px rgba(10,37,72,.18);padding:13px 15px;z-index:50;text-align:left;cursor:default}
+.pop.on{display:block}
+.pop h4{font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);margin-bottom:9px}
+.pop .row{display:flex;justify-content:space-between;gap:14px;font-size:var(--t-bod);font-weight:600;color:var(--n-700);padding:5px 0;border-top:1px solid var(--n-200)}
+.pop .row:first-of-type{border-top:none}.pop .row b{color:var(--n-900)}
+.pop .note{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-top:9px;padding-top:9px;border-top:1px solid var(--n-200);line-height:1.55}
+.board{background:var(--n-100);padding:16px;border-radius:0 0 12px 12px;border:1px solid var(--n-300);border-top:none}
+.status{display:flex;align-items:stretch;background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.status .st{display:flex;align-items:center;padding:0 18px;color:#fff;font-size:var(--t-met);font-weight:800;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.status.ahead .st{background:var(--green-600)}.status.ontrack .st{background:var(--navy-700)}
+.status.behind .st{background:var(--amber-500)}.status.risk .st{background:var(--red-600)}
+.status .say{padding:12px 18px;font-size:var(--t-bod);font-weight:600;color:var(--n-700);display:flex;align-items:center;flex-wrap:wrap}
+.status .say b{color:var(--n-900);font-weight:800}
+.status .say .lead{color:var(--n-900);font-weight:800}
+.status .say .sep{color:var(--n-400);margin:0 10px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:14px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px}
+.ag{border-top:3px solid var(--green-600)}.ab{border-top:3px solid var(--navy-700)}
+.ap{border-top:3px solid var(--purple)}.aa{border-top:3px solid var(--amber-500)}.ar{border-top:3px solid var(--red-600)}
+.ch{display:flex;align-items:center;gap:8px;padding:12px 16px 0}
+.ch .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.ch .hx{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;position:relative;flex:none}
+.q:hover{background:var(--navy-700);color:#fff;border-color:var(--navy-700)}
+.q .tip{display:none;position:absolute;bottom:22px;left:-10px;width:268px;background:var(--n-900);color:#fff;font-size:var(--t-met);font-weight:500;line-height:1.6;padding:10px 12px;border-radius:8px;z-index:40;text-transform:none;letter-spacing:0;text-align:left}
+.q:hover .tip{display:block}
+.pill{margin-left:auto;font-size:var(--t-met);font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.pok{background:var(--green-50);color:var(--green-600)}.pwa{background:var(--amber-50);color:var(--amber-600)}
+.pba{background:var(--red-50);color:var(--red-600)}.pne{background:var(--n-100);color:var(--n-700)}
+.cb{padding:9px 16px 16px}
+.heroline{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.hero{font-size:var(--t-hero);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.htd{font-size:var(--t-bod);color:var(--n-600);font-weight:600}
+.sec{font-size:var(--t-val);font-weight:800;letter-spacing:-.01em}
+.sec small{font-size:var(--t-bod);font-weight:600;color:var(--n-600);margin-left:4px}
+.dv{color:var(--n-400)}
+.hz{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;padding-top:9px;border-top:1px dashed var(--n-300)}
+.hz .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600)}
+.hz .v{font-size:var(--t-bod);font-weight:800;margin-top:2px}
+.hz .v span{font-weight:600;color:var(--n-600)}
+.ok{color:var(--green-600)}.bad{color:var(--red-600)}.wa{color:var(--amber-600)}.nb{color:var(--n-600);font-weight:600}
+.split{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:14px;align-items:start}
+.stack>*+*{margin-top:14px}
+.lev{width:100%;border-collapse:collapse;font-size:var(--t-bod)}
+.lev th{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600);text-align:right;padding:0 0 8px}
+.lev th.l{text-align:left}
+.lev td{padding:9px 0;border-top:1px solid var(--n-200);text-align:right;font-weight:700}
+.lev td.l{text-align:left}
+.lev tr.clk{cursor:pointer}.lev tr.clk:hover{background:var(--navy-50)}
+.lev tr.clk:hover td.l .lbl{color:var(--navy-700)}
+.lev td .glc{font-size:var(--t-met);color:var(--n-600);font-weight:600;display:block;margin-bottom:1px}
+.lev td .lbl{font-weight:700}
+.lev td .go{color:var(--navy-700);font-weight:800;margin-left:6px;opacity:0;transition:opacity .1s}
+.lev tr.clk:hover td.l .go{opacity:1}
+.lev tr.tot td{border-top:1px solid var(--n-400);font-weight:800}
+.meter{position:relative;height:6px;border-radius:3px;background:var(--n-200);margin-top:7px;max-width:280px}
+.meter i{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.meter .tk{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--n-900)}
+.meter .tk.pd{background:var(--n-400)}
+.sm{font-size:var(--t-met);font-weight:600;color:var(--n-600)}
+.pace .row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:12px 16px 0}
+.pace .cell .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600)}
+.pace .cell .v{font-size:var(--t-val);font-weight:800;margin-top:3px;letter-spacing:-.01em}
+.pace .cell .n{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-top:2px}
+.runway{margin:12px 16px 0;padding:12px 14px;border-radius:8px;background:var(--red-50);border:1px solid #F3C4C4}
+.runway.okr{background:var(--green-50);border-color:#B5EAC8}
+.runway.neu{background:var(--n-50);border-color:var(--n-300)}
+.runway .k{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--red-600)}
+.runway.okr .k{color:var(--green-600)}.runway.neu .k{color:var(--n-600)}
+.runway .v{font-size:calc(22px*var(--s));font-weight:800;letter-spacing:-.02em;margin-top:2px;color:var(--red-600)}
+.runway.okr .v{color:var(--green-600)}.runway.neu .v{color:var(--n-900);font-size:calc(15px*var(--s));line-height:1.45}
+.runway .n{font-size:var(--t-met);color:var(--n-700);font-weight:600;margin-top:5px;line-height:1.55}
+.bar2{height:8px;border-radius:4px;background:var(--n-200);position:relative;margin:14px 16px 6px}
+.bar2 i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.bar2 .tk{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--n-900)}
+.bar2lab{display:flex;justify-content:space-between;font-size:var(--t-met);color:var(--n-600);font-weight:600;margin:0 16px 16px}
+.bar2lab b{color:var(--n-900);font-weight:800}
+.bars{display:flex;align-items:flex-end;gap:14px;height:128px;position:relative;padding-top:22px;margin:0 16px}
+.bars i{flex:1;border-radius:3px 3px 0 0;display:block;min-height:2px;position:relative}
+.bok{background:var(--green-500)}.bba{background:var(--red-500)}
+.bpr{background:repeating-linear-gradient(45deg,var(--navy-700),var(--navy-700) 3px,transparent 3px,transparent 7px);border:1px solid var(--navy-700);border-bottom:none}
+.tgt{position:absolute;left:0;right:0;border-top:2px dashed var(--navy-700);z-index:3}
+.tgt em{position:absolute;left:0;top:-15px;font-style:normal;font-size:var(--t-lab);font-weight:800;letter-spacing:.06em;color:var(--navy-700);text-transform:uppercase;background:var(--n-0);padding:0 5px}
+.bars i .bt{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--n-900);color:#fff;border-radius:8px;padding:9px 11px;z-index:20;min-width:196px;text-align:left}
+.bars i:hover .bt{display:block}
+.bt .bth{font-size:var(--t-met);font-weight:800;color:#fff}.bt .btd{font-size:var(--t-met);font-weight:500;color:#93a9c9;margin-bottom:6px}
+.bt .btr{display:flex;justify-content:space-between;gap:16px;font-size:var(--t-met);font-weight:500;line-height:1.7}
+.bt .btr.res{border-top:1px solid rgba(255,255,255,.2);margin-top:3px;padding-top:4px;font-weight:800}
+.axis{display:flex;gap:14px;margin:8px 16px 16px}
+.axis span{flex:1;text-align:center;font-size:var(--t-bod);font-weight:700}
+.axis small{display:block;font-weight:500;color:var(--n-600);font-size:var(--t-met);margin-top:1px}
+.axis .amt{display:block;font-weight:700;font-size:var(--t-met);margin-top:2px}
+.fold{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;overflow:hidden;margin-top:14px}
+.fold .fh{padding:13px 16px;display:flex;align-items:center;gap:9px;cursor:pointer}
+.fold .fh:hover{background:var(--n-50)}
+.fold .eb{font-size:var(--t-lab);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.fold .hx{font-size:var(--t-met);color:var(--n-600);font-weight:500}
+.fold .cv{margin-left:auto;color:var(--n-600);font-weight:700}.fold.open .cv{transform:rotate(180deg)}
+.fold .fb{display:none;border-top:1px solid var(--n-200);padding:14px 16px 16px}.fold.open .fb{display:block}
+table.pl{width:100%;border-collapse:collapse;font-size:var(--t-bod)}
+table.pl th{font-size:var(--t-lab);font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600);text-align:right;padding:0 0 8px}
+table.pl th.l{text-align:left}
+table.pl td{padding:6px 0;border-top:1px solid var(--n-200);text-align:right;font-weight:600}table.pl td.l{text-align:left}
+table.pl tr.sect td{border-top:none;padding:12px 0 3px;font-size:var(--t-lab);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);text-align:left}
+table.pl tr.tot td{border-top:1px solid var(--n-400);font-weight:800}
+table.pl tr.gm td{border-top:2px solid var(--navy-700);font-weight:800;padding-top:8px}
+.glc2{font-size:var(--t-met);color:var(--n-600);font-weight:600;margin-right:6px;display:inline-block;min-width:36px}
+.note{font-size:var(--t-met);color:var(--n-600);font-weight:500;margin-top:11px;line-height:1.55}
+.cap{font-size:11px;color:var(--n-600);padding:12px 24px 0;max-width:1520px;margin:0 auto;line-height:1.65}.cap b{color:var(--n-900)}
+.chg{max-width:1520px;margin:16px auto 0;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.chg div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:13px 15px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.chg h4{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:7px}
+.chg b{color:var(--n-900)}
+</style>
+<div class="devbar"><b>Overview · horizon pass</b><span class="h">TBR - FL · every figure names its horizon</span>
+<button id="r1" class="on" onclick="setR(1)">This period</button><button id="r2" onclick="setR(2)">Last period</button><button id="r3" onclick="setR(3)">Last 4 weeks</button><button id="r0" onclick="setR(0)">FYTD</button>
+<span style="width:12px"></span><button id="b1" class="on" onclick="setW(1680)">1680</button><button id="b2" onclick="setW(1366)">1366</button></div>
+<div class="nav"><div class="brand"><span class="mark">KF</span>KitchFix</div>
+<div class="navlinks"><span>Home</span><span>People</span><span>Ops Hub</span><span>Service</span><span class="on">KPI</span><span>Playbook</span><span>Sous</span><span>Directory</span></div><div class="avatar">KF</div></div>
+<p class="cap" id="cap"></p>
+<div class="wrap" id="wrap"><div id="app"></div></div>
+<div class="chg">
+<div><h4>The horizon rule, applied everywhere</h4>
+<b>No money figure renders without its horizon named.</b> Every card now shows <b>to date</b> and <b>period total</b> together, never one alone. Revenue, COGS and Gross margin all carry "period to date" on the hero.<br><br>
+<b>Card sub-lines became a two-up grid:</b> left is the to-date pair, right is the period pair. Same shape on all three cards, so the eye compares like with like.<br><br>
+<b>"Actual" is now "Actual spent"</b> in the P&L. <b>"Budget to date"</b> and <b>"P9 budget"</b> are used consistently and never interchangeably.<br><br>
+This is not cosmetic. Four money defects this month were the same mistake - a full-period number divided by a to-date number - and each was invisible because nothing said which was which.</div>
+<div><h4>Wording pass</h4><b>Earned envelope</b> is now <b>Budget at this revenue</b> - it is the cost your target percent buys at the revenue you actually made, and the sub-line says how much more or less that is than planned.<br><b>budget ÷ budget</b> is now <b>does not move with revenue</b> - the operator-relevant fact rather than the formula.<br><b>Points behind</b> is now <b>Amount behind</b>, with dollars leading and the percent as context.<br><b>Pace</b> became <b>Will the budget last</b> - one number and one sentence. The two-cell row and the progress bar are gone.<br><b>To date</b> reads <b>period to date</b> everywhere.<br><br><h4>Percent is the KPI</h4><b>Target percent is budgeted cost over budgeted revenue.</b> It no longer divides by actual revenue, so it does not move when revenue moves. It is also horizon-independent - prorating both sides cancels, so the target is the same on day 1 and day 28.<br><br><b>What that fixed:</b> on P8 the board showed COGS 60.9% vs a 60.9% target - <i>0.8% under</i>. The true target is 56.0%, so the account was <b>4.1% over</b>. Dividing the budget by a revenue shortfall had quietly lowered the bar to meet the result. Margin flips the same way: 39.9% against 44.0%, <b>behind</b>, not ahead.<br><br><b>Earned envelope</b> is the new number. At the revenue actually made, the target percent buys $87,356 of cost - <b>$7,726 less than the plan allowed</b>, because revenue came in 8.1% short. That is the sentence an operator needs: revenue dropped, so your cost budget dropped with it.<br><br><h4>Simplification pass</h4><b>Two budget horizons appear only where they differ.</b> On a closed period or a rolling window, budget to date <i>is</i> the period budget - showing both was noise. Those ranges now carry one budget column everywhere: cards, tables and the P&L.<br><br><b>The period budget has one home per surface.</b> It was appearing three times on the cost side - card, lever table and Pace. The card carries the pair, the lever table judges against budget to date only, and <b>Pace owns the period envelope</b> because runway is the question the envelope answers.<br><br>Same information, roughly a third fewer figures on an open period and half as many on a closed one.<br><br><h4>Defect fixed in the previous render</h4>
+<b>The cost-lines table compared rows against period budgets and its total against budget to date.</b> The rows summed to $12,120 under; the total said $8,078 over. A $20,198 disagreement inside one table.<br><br>
+<b>Vehicle is 87.7% over, not 47.5%.</b> Against a prorated $1,925 rather than the full $2,450. The status line inherited the same error.<br><br>
+<b>All four lines are over budget to date</b>, not two. The corrected prorated budgets sum to $74,060.74 against the payload's $74,060.75 - rows and total now agree to the cent.<br><br>
+Also: chart moved above the cost lines, Go deeper removed with the lines made clickable, tracked note moved into its help bubble, and revenue variance renders amber while the period is open.</div>
+</div>
+<script>
+const PRO=22/28;
+const R={
+1:{key:"P9",label:"This period",sub:"P9 · 08/10 – 09/06",state:"open",grain:"weeks",
+ rev:130082.86,revPB:165560,cogsPB:94259.13,
+ lev:[["Kitchen labor","3100",41756.17,48982.97],["Food purchased","3200",30234.77,36374],["Packaging and supplies","3400",6535.15,6452.16],["Vehicle","3500",3612.75,2450]],
+ revLines:[["Meal service","2400.1",94360.54,120095.23],["Service charges","2300",32147.32,40914.77],["Catering","2200",3575,4550]],
+ bars:[["Week 1","08/10 – 08/16",29730.72,23564.78,"closed"],["Week 2","08/17 – 08/23",23934.89,23564.78,"closed"],["Week 3","08/24 – 08/30",23400.88,23564.78,"closed"],["Week 4","08/31 – 09/06",5072.35,23564.78,"running"]],
+ elapsed:22,days:28,left:6,planned:true,pro:PRO},
+2:{key:"P8",label:"Last period",sub:"P8 · 07/13 – 08/09",state:"verified",grain:"weeks",
+ rev:156103.94,revPB:169911,cogsPB:95082,
+ lev:[["Kitchen labor","3100",46482.63,48983],["Food purchased","3200",40884.06,37076],["Packaging and supplies","3400",5897.76,6573],["Vehicle","3500",536.36,2450]],
+ revLines:[["Meal service","2400.1",113142.94,126950],["Service charges","2300",42961,42961],["Catering","2200",0,0]],
+ bars:[["Week 1","07/13 – 07/19",24118,23770,"closed"],["Week 2","07/20 – 07/26",25402,23770,"closed"],["Week 3","07/27 – 08/02",22841,23770,"closed"],["Week 4","08/03 – 08/09",21440,23770,"closed"]],
+ elapsed:28,days:28,left:0,planned:false,pro:1},
+3:{key:"L4W",label:"Last 4 weeks",sub:"08/03 – 08/30 · spans P8 and P9",state:"rolling",grain:"weeks",
+ rev:170495,revPB:null,cogsPB:null,
+ lev:[["Kitchen labor","3100",50218,52540],["Food purchased","3200",36104,38200],["Packaging and supplies","3400",8021,7020],["Vehicle","3500",4164,2499]],
+ revLines:[["Meal service","2400.1",123510,null],["Service charges","2300",42150,null],["Catering","2200",4835,null]],
+ bars:[["Week 1","08/03 – 08/09",21440,23770,"closed"],["Week 2","08/10 – 08/16",29730.72,23564.78,"closed"],["Week 3","08/17 – 08/23",23934.89,23564.78,"closed"],["Week 4","08/24 – 08/30",23400.88,23564.78,"closed"]],
+ elapsed:28,days:28,left:0,planned:true,pro:1},
+0:{key:"FYTD",label:"This year so far",sub:"12/29/25 – 08/30/26",state:"open",grain:"periods",
+ rev:1818351.58,revPB:2412000,cogsPB:1301355,
+ lev:[["Kitchen labor","3100",500461.43,657000],["Food purchased","3200",446802.30,538500],["Packaging and supplies","3400",66041.84,89500],["Vehicle","3500",14382.80,25200]],
+ revLines:[["Meal service","2400.1",1428265.08,1890000],["Service charges","2300",342799,457000],["Catering","2200",47287.50,65000]],
+ bars:[["P1","12/29 – 01/25",47391,47629,"closed"],["P2","01/26 – 02/22",187100,176673,"closed"],["P3","02/23 – 03/22",290373,323164,"closed"],["P4","03/23 – 04/19",123522,108964,"closed"],["P5","04/20 – 05/17",97411,95957,"closed"],["P6","05/18 – 06/14",96313,93698,"closed"],["P7","06/15 – 07/12",91777,93081,"closed"],["P8","07/13 – 08/09",93801,95082,"closed"],["P9","08/10 – 09/06",82139,94259,"running"]],
+ elapsed:245,days:364,left:119,planned:true,pro:245/364}};
+let RG=1,W=1680,pop=false,fo=false;
+const D=()=>R[RG];
+const $=i=>document.getElementById(i);
+const m=n=>(n<0?"−$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const pf=x=>(x===null||x===undefined||isNaN(x))?"\u2014":x.toFixed(1)+"%";
+const gp=(x,g,b)=>(x===null||x===undefined||isNaN(x))?"\u2014":Math.abs(x).toFixed(1)+"% "+(x>=0?g:b);
+const gd=(x,g,b)=>m(Math.abs(x))+" "+(x>=0?g:b);
+const tip=t=>'<span class="q">?<span class="tip">'+t+'</span></span>';
+const HZ='<b>Budget to date</b> is the period budget prorated for the days elapsed. <b>Period budget</b> is the whole period. Every figure on this board names which one it is.';
+
+function view(){
+ const d=D(),rev=d.rev,open=d.state==="open",rolling=d.state==="rolling",verified=d.state==="verified";
+ const levBTD=d.lev.map(l=>[l[0],l[1],l[2],l[3]*d.pro,l[3]]);          /* name, gl, spent, budgetToDate, periodBudget */
+ const cogs=levBTD.reduce((a,l)=>a+l[2],0), cogsBTD=levBTD.reduce((a,l)=>a+l[3],0);
+ const gm=rev-cogs, gmBTD=rev-cogsBTD;
+ /* TARGET % IS BUDGET OVER BUDGET - horizon independent, and it does not move when revenue moves. */
+ const hasTarget=!!(d.cogsPB&&d.revPB);   /* a target percent needs both budgets */
+ const cpB=hasTarget? d.cogsPB/d.revPB*100 : null;
+ const gpB=hasTarget?100-cpB:null;
+ const cpA=cogs/rev*100, gpA=gm/rev*100;
+ const dev=hasTarget?gpA-gpB:null;
+ /* what the revenue result did to the cost envelope */
+ const revPace=d.revPB? rev/(d.revPB*d.pro)*100 : 100;              /* revenue vs revenue budget to date */
+ const earned=hasTarget?rev*cpB/100:null;                                          /* COGS you may spend at the actual revenue */
+ const envDelta=hasTarget?cogsBTD-earned:null;                                     /* how much the envelope shrank or grew */
+ const st=!hasTarget?["ontrack","No target"]:dev>=1?["ahead","Ahead of target"]:dev>=-1?["ontrack","On track"]:dev>=-3?["behind","Behind target"]:["risk","At risk"];
+ const worst=levBTD.map(l=>{const tp=l[4]/(d.revPB||rev/d.pro)*100, ap=l[2]/rev*100; return {n:l[0],devPts:ap-tp};}).sort((a,b)=>b.devPts-a.devPts)[0];
+ const overN=levBTD.filter(l=>l[2]>l[3]).length;
+ const closedBars=d.bars.filter(b=>b[4]==="closed").length;
+ const td=verified?"final":rolling?"in this window":(RG===0?"year to date":"period to date");
+ let h='<div class="pv">Previewing as <b style="margin-left:5px">TBR - FL</b><a href="#">exit</a></div>';
+ h+='<div class="cmd"><span class="ttl">KPI Dashboard ·</span><span class="acct">TBR - FL</span>'+
+  '<span class="chip"><span class="k">Section</span><span class="v">P&L Overview</span><span class="d">▾</span></span>'+
+  '<span class="chip"><span class="v">'+d.label+'</span><span class="d">'+d.sub+'</span><span class="d">▾</span></span>'+
+  '<span class="meta">TODAY <b>09/01</b> · WEEK <b>4</b> of 4</span>'+
+  '<span class="tog"><button class="on">Hourly</button><button>+ Salary</button></span>'+
+  '<span class="fresh" onclick="tglPop(event)"><span class="dot"></span>'+(verified?"Verified":"Data current")+'<span class="pop'+(pop?" on":"")+'">'+
+  '<h4>Where these numbers come from</h4><div class="row"><span>Labor</span><b>through Sun 08/30</b></div>'+
+  '<div class="row"><span>Purchases · bills and cards</span><b>through Sun 08/30</b></div>'+
+  '<div class="row"><span>Revenue</span><b>'+(verified?"finance P&L":"Service Calendar · Sun 08/30")+'</b></div>'+
+  '<div class="row"><span>Period state</span><b>'+(verified?"verified 08/20":rolling?"rolling window":"open · live estimate")+'</b></div>'+
+  '<p class="note">Sources sync nightly around 2 AM CT. Nothing is final until the period closes and is verified against the finance P&L.</p></span></span></div>';
+ h+='<div class="board">';
+ h+='<div class="status '+st[0]+'"><span class="st">'+st[1]+'</span><span class="say">'+
+  '<span class="lead">Gross margin '+pf(gpA)+(hasTarget?' vs '+pf(gpB)+' target':' · no target on a rolling window')+'</span><span class="sep">·</span>'+
+  (hasTarget?worst.n+' is <b>'+pf(Math.abs(worst.devPts))+' '+(worst.devPts>=0?"over":"under")+'</b> its percent target':'4 closed weeks across two periods')+
+  (hasTarget&&Math.abs(revPace-100)>1.5?'<span class="sep">·</span>revenue is <b>'+pf(Math.abs(revPace-100))+' '+(revPace<100?"under":"over")+'</b> budget, so the cost envelope '+(revPace<100?"shrank":"grew")+' by <b>'+m(Math.abs(envDelta))+'</b>':'')+
+  '</span></div>';
+ /* ---- KPI cards: horizon pairs ---- */
+ const splitH=open&&d.cogsPB;   /* only an open period has two different budget horizons */
+ const hzCard=(tdK,tdV,pdK,pdV)=>splitH
+  ? '<div class="hz"><div><div class="k">'+tdK+'</div><div class="v num">'+tdV+'</div></div><div><div class="k">'+pdK+'</div><div class="v num">'+pdV+'</div></div></div>'
+  : '<div class="hz" style="grid-template-columns:1fr"><div><div class="k">'+(rolling?"Window budget":d.key+" budget")+'</div><div class="v num">'+pdV+'</div></div></div>';
+ h+='<div class="kpis">';
+ h+='<div class="card ag"><div class="ch"><span class="eb">Revenue</span>'+tip("What your account bills. Everything below is judged as a percent of this. "+HZ)+'<span class="pill '+(d.planned?"pne":"pok")+'">'+(d.planned?"Planned":"Verified")+'</span></div><div class="cb">'+
+  '<div class="heroline"><span class="hero num">'+m(rev)+'</span><span class="htd">'+td+'</span></div>'+
+  '<div class="hz"'+(splitH?'':' style="grid-template-columns:1fr"')+'>'+
+   (splitH?'<div><div class="k">Revenue budget to date</div><div class="v num">'+m(d.revPB*d.pro)+' <span class="'+(revPace>=100?"ok":"bad")+'">· '+pf(Math.abs(revPace-100))+' '+(revPace>=100?"over":"under")+'</span></div></div>':'')+
+   '<div><div class="k">'+(rolling?"Window budget":d.key+" budget")+'</div><div class="v num">'+(d.revPB?m(d.revPB)+' <span>· '+pf(rev/d.revPB*100)+' recognised</span>':'<span class="nb">not a period</span>')+'</div></div></div></div></div>';
+ h+='<div class="card '+(cpA>cpB?"ar":"ab")+'"><div class="ch"><span class="eb">Cost of goods sold</span>'+tip("Labor, food, packaging and vehicle - the lines you control. "+HZ)+'<span class="pill '+(!hasTarget?"pne":(cpA<=cpB?"pok":"pba"))+'">'+(hasTarget?gp(cpB-cpA,"under target","over target"):"No target")+'</span></div><div class="cb">'+
+  '<div class="heroline"><span class="hero num '+(cpA<=cpB?"ok":"bad")+'">'+pf(cpA)+'</span><span class="htd">of revenue '+td+'</span><span class="dv">·</span><span class="sec num">'+m(cogs)+'<small>spent</small></span></div>'+
+  '<div class="hz"><div><div class="k">Target percent</div><div class="v num">'+(hasTarget?pf(cpB)+' <span>does not move with revenue</span>':'<span class="nb">no target - rolling window</span>')+'</div></div>'+
+  '<div><div class="k">Budget at this revenue</div><div class="v num">'+(!hasTarget?'<span class="nb">—</span>':m(earned)+(Math.abs(envDelta)<1?' <span>matches plan · revenue is planned</span>':' <span class="'+(envDelta>=0?"bad":"ok")+'">· '+gd(-envDelta,"more","less")+' than planned</span>'))+'</div></div></div></div></div>';
+ h+='<div class="card ap"><div class="ch"><span class="eb">Gross margin</span>'+tip("Revenue minus cost of goods sold. The number this account is measured on. "+HZ)+'<span class="pill '+(!hasTarget?"pne":(dev>=0?"pok":"pba"))+'">'+(hasTarget?gp(dev,"ahead","behind"):"No target")+'</span></div><div class="cb">'+
+  '<div class="heroline"><span class="hero num '+(gpA>=gpB?"ok":"bad")+'">'+pf(gpA)+'</span><span class="htd">of revenue '+td+'</span><span class="dv">·</span><span class="sec num">'+m(gm)+'<small>margin</small></span></div>'+
+  '<div class="hz"><div><div class="k">Target percent</div><div class="v num">'+(hasTarget?pf(gpB)+' <span>does not move with revenue</span>':'<span class="nb">no target - rolling window</span>')+'</div></div>'+
+  '<div><div class="k">'+(hasTarget?'Amount '+(dev>=0?"ahead":"behind"):'Margin made')+'</div><div class="v num '+(!hasTarget?"":(dev>=0?"ok":"bad"))+'">'+(hasTarget?m(Math.abs(dev/100*rev))+' <span>· '+pf(Math.abs(dev))+' of revenue</span>':m(gm)+' <span>· no target to compare</span>')+'</div></div></div></div></div>';
+ h+='</div>';
+ h+='<div class="split"><div class="stack">';
+ /* ---- chart first ---- */
+ const mx=Math.max(...d.bars.map(b=>Math.max(b[2],b[3])))*1.16;
+ const uni=d.bars.every(b=>b[3]===d.bars[0][3]);
+ h+='<div class="card ab"><div class="ch"><span class="eb">'+(d.grain==="weeks"?"Week by week":"Period by period")+'</span><span class="hx">bars are spend · '+(uni?"line is the budget":"each period carries its own budget")+'</span>'+tip("Spend for each "+(d.grain==="weeks"?"week":"period")+" against its budget. Below the line is under. Hover a bar for the numbers.")+'<span class="pill '+(closedBars<d.bars.length?"pwa":"pne")+'">'+closedBars+' of '+d.bars.length+' closed</span></div>'+
+  '<div class="bars">'+(uni?'<div class="tgt" style="bottom:'+(d.bars[0][3]/mx*100)+'%"><em>budget '+m(d.bars[0][3])+' / '+(d.grain==="weeks"?"wk":"period")+'</em></div>':'');
+ d.bars.forEach(b=>{const v=b[2],bg=b[3],run=b[4]==="running",ov=v-bg;
+  h+='<i class="'+(run?"bpr":(v<=bg?"bok":"bba"))+'" style="height:'+(v/mx*100)+'%">'+
+   (uni?'':'<span style="position:absolute;left:-5%;right:-5%;bottom:'+((bg-v)/v*100)+'%;border-top:2px dashed var(--navy-700);z-index:4"></span>')+
+   '<span class="bt"><div class="bth">'+b[0]+'</div><div class="btd">'+b[1]+'</div>'+
+   '<div class="btr"><span>Spent</span><b>'+m(v)+'</b></div><div class="btr"><span>Budget</span><b>'+m(bg)+'</b></div>'+
+   (run?'<div class="btr res"><span>Running</span><b>'+(d.grain==="weeks"?"2 of 7 days":"22 of 28 days")+'</b></div>':'<div class="btr res"><span>'+(ov<=0?"Under":"Over")+'</span><b>'+m(Math.abs(ov))+'</b></div>')+'</span></i>';});
+ h+='</div><div class="axis">';
+ d.bars.forEach(b=>{const run=b[4]==="running";
+  h+='<span>'+b[0]+'<small>'+b[1]+'</small><span class="amt '+(run?"nb":(b[2]<=b[3]?"ok":"bad"))+'">'+m(b[2])+(run?' · running':'')+'</span></span>';});
+ h+='</div></div>';
+ /* ---- cost lines, clickable ---- */
+ h+='<div class="card '+(overN?"ar":"ab")+'"><div class="ch"><span class="eb">Where the money is going</span><span class="hx">click a line to open it</span>'+tip("Each line as a percent of revenue against its budget percent. The target percent is the budgeted line as a share of budgeted revenue - it is fixed at budget and does not move when revenue moves. Earned at this revenue is what that percent buys at the revenue you actually made.")+'<span class="pill '+(overN?"pba":"pok")+'">'+(overN?overN+" of "+levBTD.length+" over":"all under")+'</span></div><div class="cb">'+
+  '<table class="lev"><tr><th class="l">Line</th><th>Spent period to date</th>'+(hasTarget?"<th>Budget at this revenue</th>":"<th>Window budget</th>")+'<th style="width:62px">% of rev</th><th style="width:62px">Target %</th><th style="width:104px">vs target</th></tr>';
+ levBTD.forEach(l=>{const a=l[2],pb=l[4],tp=hasTarget?pb/d.revPB*100:null, ap=a/rev*100, earn=hasTarget?rev*tp/100:l[3], over=a-earn, devP=hasTarget?ap-tp:null, pct=a/Math.max(a,earn)*100;
+  h+='<tr class="clk"><td class="l"><span class="glc num">'+l[1]+'</span><span class="lbl">'+l[0]+'<span class="go">→</span></span>'+
+   '<div class="meter"><i style="width:'+pct+'%;background:'+(over<=0?"var(--green-500)":"var(--red-500)")+'"></i>'+
+   '<span class="tk" style="left:'+(earn/Math.max(a,earn)*100)+'%"></span></div></td>'+
+   '<td class="num">'+m(a)+'</td><td class="num nb">'+m(earn)+'</td><td class="num '+(!hasTarget?"":(devP<=0?"ok":"bad"))+'">'+pf(ap)+'</td><td class="num nb">'+(hasTarget?pf(tp):"—")+'</td>'+
+   '<td class="num '+(over<=0?"ok":"bad")+'">'+(hasTarget?pf(Math.abs(devP))+' '+(devP<=0?"under":"over"):gd(-over,"under","over"))+'<div class="sm '+(over<=0?"ok":"bad")+'">'+(hasTarget?gd(-over,"under","over"):"vs window budget")+'</div></td></tr>';});
+ h+='<tr class="tot"><td class="l">Total cost of goods sold</td><td class="num">'+m(cogs)+'</td><td class="num nb">'+m(hasTarget?earned:cogsBTD)+'</td><td class="num '+(cpA<=cpB?"ok":"bad")+'">'+pf(cpA)+'</td><td class="num nb">'+pf(cpB)+'</td><td class="num '+(cpA<=cpB?"ok":"bad")+'">'+(hasTarget?pf(Math.abs(cpA-cpB)):"")+' '+(cpA<=cpB?"under":"over")+'<div class="sm '+(cogs<=earned?"ok":"bad")+'">'+gd(earned-cogs,"under","over")+'</div></td></tr>';
+ h+='</table></div></div></div>';
+ /* ---- right column ---- */
+ h+='<div class="stack">';
+ if(open&&d.cogsPB){
+  const left=d.cogsPB-cogs, perDayAvail=left/d.left, perDaySoFar=cogs/d.elapsed;
+  const runway=left/perDaySoFar, projClose=cogs+perDaySoFar*d.left, projVar=projClose-d.cogsPB;
+  const usedPct=cogs/d.cogsPB*100, elapPct=d.elapsed/d.days*100, tight=runway<d.left;
+  h+='<div class="card '+(tight?"ar":"ag")+' pace"><div class="ch"><span class="eb">Will the budget last</span>'+tip("What is left of the "+d.key+" budget, and whether your current daily spend covers the days remaining.")+'<span class="pill '+(tight?"pba":"pok")+'">'+d.left+' days left</span></div><div class="cb">'+
+   '<div class="heroline"><span class="hero num '+(tight?"bad":"ok")+'">'+runway.toFixed(1)+'</span><span class="htd">days of spend left</span></div>'+
+   '<div class="sub" style="font-size:var(--t-bod);line-height:1.6;margin-top:8px"><b>'+m(left)+'</b> left at <b>'+m(perDaySoFar)+'</b> a day. '+
+   (tight?'That runs out <b class="bad">'+(d.left-runway).toFixed(1)+' days early</b> - the period closes around '+m(projClose)+' against a '+m(d.cogsPB)+' budget.'
+         :'That covers all <b class="ok">'+d.left+' days</b> - the period closes around '+m(projClose)+' against a '+m(d.cogsPB)+' budget.')+
+   '</div></div></div>';
+
+ } else if(verified){
+  const varr=cogsBTD-cogs, revVar=rev-d.revPB;
+  h+='<div class="card ag pace"><div class="ch"><span class="eb">How it closed</span>'+tip("The final result for this period, verified against the finance P&L on 08/20.")+'<span class="pill pok">Verified</span></div>'+
+   '<div class="row2"><div class="cell"><div class="k">Cost of goods</div><div class="v num ok">'+gd(varr,"under","over")+'</div><div class="n">'+m(cogs)+' of '+m(d.cogsPB)+' '+d.key+' budget</div></div>'+
+   '<div class="cell"><div class="k">Revenue</div><div class="v num bad">'+gd(revVar,"above","below")+'</div><div class="n">'+m(rev)+' of '+m(d.revPB)+' '+d.key+' budget</div></div></div>'+
+   '<div class="runway okr"><div class="k">Gross margin closed at</div><div class="v">'+pf(gpA)+'</div>'+
+   '<div class="n">Against a '+pf(gpB)+' target - <b>'+gp(dev,"ahead","behind")+'</b>. Costs came in under; revenue landed '+m(Math.abs(revVar))+' short, and the revenue miss is what moved the margin.</div></div>'+
+   '<div class="bar2"><i style="width:'+Math.min(100,cogs/d.cogsPB*100)+'%;background:var(--green-500)"></i><span class="tk" style="left:100%"></span></div>'+
+   '<div class="bar2lab"><span><b>'+pf(cogs/d.cogsPB*100)+'</b> of '+d.key+' budget used</span><span><b>100%</b> of the period gone</span></div></div>';
+ } else {
+  h+='<div class="card ab pace"><div class="ch"><span class="eb">Rolling window</span>'+tip("A rolling window is not a fiscal period, so there is no period budget and no runway. Budget to date is the sum of the weeks it covers.")+'<span class="pill pne">Not a period</span></div>'+
+   '<div class="row2"><div class="cell"><div class="k">Weeks covered</div><div class="v num">4</div><div class="n">spanning P8 and P9</div></div>'+
+   '<div class="cell"><div class="k">Spending a day</div><div class="v num">'+m(cogs/28)+'</div><div class="n">across the window</div></div></div>'+
+   '<div class="runway neu"><div class="k">No runway on a rolling window</div><div class="v">Pace needs a period boundary to count down to.</div>'+
+   '<div class="n">Switch to <b>This period</b> for days remaining, budget left and where the period closes at this rate.</div></div></div>';
+ }
+ h+='<div class="card ag"><div class="ch"><span class="eb">Revenue lines</span>'+tip("What makes up the revenue figure. "+HZ)+'<span class="pill '+(d.planned?"pne":"pok")+'">'+(d.planned?"Planned":"Verified")+'</span></div><div class="cb"><table class="lev">'+
+  '<tr><th class="l">Line</th><th>Period to date</th><th>'+(splitH?d.key+" budget":(rolling?"—":d.key+" budget"))+'</th><th style="width:56px">% of rev</th></tr>';
+ d.revLines.forEach(r=>{ if(r[2]===0&&(r[3]===0||r[3]===null)){h+='<tr><td class="l"><span class="glc num">'+r[1]+'</span><span class="lbl">'+r[0]+'</span></td><td class="nb">not active</td><td class="nb">—</td><td class="nb">—</td></tr>';return;}
+  h+='<tr><td class="l"><span class="glc num">'+r[1]+'</span><span class="lbl">'+r[0]+'</span></td><td class="num">'+m(r[2])+'</td><td class="num nb">'+(r[3]==null?"—":m(r[3]))+'</td><td class="num nb">'+pf(r[2]/rev*100)+'</td></tr>';});
+ h+='<tr class="tot"><td class="l">Total revenue</td><td class="num">'+m(rev)+'</td><td class="num nb">'+(d.revPB?m(d.revPB):"—")+'</td><td class="num nb">100%</td></tr></table></div></div>';
+ h+='<div class="card aa"><div class="ch"><span class="eb">Also tracked</span>'+tip("Repair and maintenance, equipment and perks sit outside gross margin and cost of goods sold. They are not part of how this account is measured - watched together because you influence them. Perks is your team budget: parties, recognitions, the Friday doughnuts, spent on the Rippling card.")+'<span class="pill pne">Not scored</span></div><div class="cb"><table class="lev">'+
+  '<tr><th class="l">Line</th><th>Period to date</th><th>Budget to date</th><th style="width:92px">vs budget</th></tr>'+
+  '<tr><td class="l"><span class="glc num">5002.1</span><span class="lbl">Repair and maintenance</span></td><td class="num">$987</td><td class="num nb">$1,006</td><td class="num ok">$19 under</td></tr>'+
+  '<tr><td class="l"><span class="glc num">5002.5</span><span class="lbl">Equipment</span></td><td class="num">$5,967</td><td class="num nb">$5,381</td><td class="num bad">$586 over</td></tr>'+
+  '<tr><td class="l"><span class="glc num">5017.3</span><span class="lbl">Perks</span></td><td class="num">$1,433</td><td class="num nb">$1,444</td><td class="num ok">$11 under</td></tr>'+
+  '</table></div></div>';
+ h+='</div></div>';
+ /* ---- full P&L ---- */
+ h+='<div class="fold'+(fo?" open":"")+'"><div class="fh" onclick="tglFo()"><span class="eb">Full profit and loss</span><span class="hx">every line the way finance sees it, with percent of revenue</span><span class="cv">▾</span></div><div class="fb"><table class="pl">'+
+  '<tr><th class="l">Line</th>'+(splitH?'<th>'+d.key+' budget</th><th>Budget to date</th>':'<th>'+(rolling?"Window budget":d.key+" budget")+'</th>')+'<th>Actual spent</th><th>vs budget'+(splitH?" to date":"")+'</th><th style="width:72px">% of rev</th><th style="width:72px">Target %</th></tr>'+
+  '<tr class="sect"><td colspan="'+(splitH?7:6)+'">Revenue</td></tr>'+
+  d.revLines.map(r=>{ if(r[2]===0&&(r[3]===0||r[3]===null))return '<tr><td class="l"><span class="glc2 num">'+r[1]+'</span>'+r[0]+'</td>'+(splitH?'<td class="nb">not active</td>':'')+'<td class="nb">not active</td><td class="nb">not active</td><td class="nb">—</td><td class="nb">—</td><td class="nb">—</td></tr>';
+   const btd=r[3]==null?null:r[3]*d.pro, v=r[2]-(btd||0);
+   return '<tr><td class="l"><span class="glc2 num">'+r[1]+'</span>'+r[0]+'</td>'+(splitH?'<td class="num nb">'+(r[3]==null?"—":m(r[3]))+'</td>':'')+'<td class="num nb">'+(btd==null?"—":m(btd))+'</td><td class="num">'+m(r[2])+'</td><td class="num '+(btd==null?"nb":(open?"wa":(v>=0?"ok":"bad")))+'">'+(btd==null?"—":gd(v,"above","below")+(open?" · provisional":""))+'</td><td class="num">'+pf(r[2]/rev*100)+'</td><td class="num nb">'+(r[3]==null||!d.revPB?"—":pf(r[3]/d.revPB*100))+'</td></tr>';}).join('')+
+  '<tr class="tot"><td class="l">Total revenue</td>'+(splitH?'<td class="num nb">'+(d.revPB?m(d.revPB):"—")+'</td>':'')+'<td class="num nb">'+(d.revPB?m(d.revPB*d.pro):"—")+'</td><td class="num">'+m(rev)+'</td><td class="num '+(open?"wa":"nb")+'">'+(open?"provisional":"final")+'</td><td class="num">100%</td><td class="num nb">100%</td></tr>'+
+  '<tr class="sect"><td colspan="'+(splitH?7:6)+'">Cost of goods sold</td></tr>'+
+  levBTD.map(l=>{const ov=l[2]-l[3];
+   return '<tr><td class="l"><span class="glc2 num">'+l[1]+'</span>'+l[0]+'</td>'+(splitH?'<td class="num nb">'+m(l[4])+'</td>':'')+'<td class="num nb">'+m(l[3])+'</td><td class="num">'+m(l[2])+'</td><td class="num '+(ov<=0?"ok":"bad")+'">'+gd(-ov,"under","over")+'</td><td class="num">'+pf(l[2]/rev*100)+'</td><td class="num nb">'+pf(l[3]/rev*100)+'</td></tr>';}).join('')+
+  '<tr class="tot"><td class="l">Total cost of goods sold</td>'+(splitH?'<td class="num nb">'+(d.cogsPB?m(d.cogsPB):"—")+'</td>':'')+'<td class="num nb">'+m(cogsBTD)+'</td><td class="num">'+m(cogs)+'</td><td class="num '+(cogs<=cogsBTD?"ok":"bad")+'">'+gd(cogsBTD-cogs,"under","over")+'</td><td class="num">'+pf(cpA)+'</td><td class="num nb">'+pf(cpB)+'</td></tr>'+
+  '<tr class="gm"><td class="l">Gross margin</td>'+(splitH?'<td class="num nb">'+(d.revPB&&d.cogsPB?m(d.revPB-d.cogsPB):"—")+'</td>':'')+'<td class="num nb">'+m(gmBTD)+'</td><td class="num">'+m(gm)+'</td><td class="num '+(open?"wa":(gm>=gmBTD?"ok":"bad"))+'">'+gd(gm-gmBTD,"ahead","behind")+(open?" · provisional":"")+'</td><td class="num">'+pf(gpA)+'</td><td class="num nb">'+pf(gpB)+'</td></tr>'+
+  '</table><p class="note"><b>Revenue variance renders amber while the period is open.</b> Meal counts are planned until the period closes, so a revenue figure below budget is a forecast, not a shortfall - only the close tells you which. Cost variances are settled spend and read red or green. <b>Food purchased</b> is what was bought in this range; finance adjusts food cost for inventory at close.</p></div></div>';
+ h+='</div>';
+ return h;
+}
+const CAPS={
+1:'<b>This period · P9, open.</b> Every card carries its horizon: to date on the left, '+ '<b>P9 budget</b> on the right. The cost-lines table now compares every row against <b>budget to date</b> - rows and total agree to the cent, and all four lines are over, with <b>Vehicle 87.7% over</b> rather than the 47.5% the previous render showed against the wrong base.',
+2:'<b>Last period · P8, closed and verified.</b> No proration - budget to date and P8 budget are the same number, and the board says so. Revenue reads Verified and its variance is settled, so it renders red rather than amber.',
+3:'<b>Last 4 weeks · rolling window.</b> No period budget exists, so every period-budget cell reads <b>not a period</b> rather than borrowing one. Pace is replaced by an explanation.',
+0:'<b>This year so far.</b> Budget to date prorates 245 of 364 days. The chart switches to periods with each period carrying its own budget. Pace still applies - 119 days remain in the fiscal year.'};
+function render(){$("app").innerHTML=view();$("cap").innerHTML=CAPS[RG];$("wrap").style.maxWidth=W+"px";
+ [0,1,2,3].forEach(i=>{const b=$("r"+i);if(b)b.className=(RG===i?"on":"");});
+ $("b1").className=W===1680?"on":"";$("b2").className=W===1366?"on":"";}
+function setR(r){RG=r;pop=false;fo=false;render();window.scrollTo(0,0);}
+function setW(w){W=w;render();}
+function tglPop(e){e.stopPropagation();pop=!pop;render();}
+function tglFo(){fo=!fo;render();}
+document.addEventListener("click",()=>{if(pop){pop=false;render();}});
+render();
+</script>

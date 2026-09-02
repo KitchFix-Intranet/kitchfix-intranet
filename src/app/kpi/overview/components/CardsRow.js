@@ -1,22 +1,20 @@
 "use client";
 // src/app/kpi/overview/components/CardsRow.js
 //
-// Element 4. Three cards in P&L order: Revenue, Cost of goods sold,
-// Gross margin. Every dollar / percent / direction word arrives
-// formatted on the payload's cards[] array (server-side per §9B).
+// Three KPI cards in P&L order: Revenue, COGS, Gross margin.
 //
-// PR 2 polish (2026-09-01) layout of record: see
-// docs/renders/overview-polish-LOCKED.html:262-272.
+// PR-2 items 12+13 (Kevin, 2026-09-02):
+//   Revenue - hero = dollars + "period to date"; sub-pair = revenue
+//     budget to date + pace (open), and period budget + % recognised.
+//     Hero appears exactly once (an earlier render repeated it).
+//   COGS    - percent LEADS the hero. Heroline: pct + "of revenue ..."
+//     · divider · dollars + "spent". Sub-pair: Target percent + "does
+//     not move with revenue"; Budget at this revenue + envelope delta.
+//   GM      - percent leads the same way. Sub-pair: Target percent;
+//     Amount ahead/behind ($ leading, % as context).
 //
-//   Revenue     - hero ($amount period to date) · sub "vs $X P9 budget"
-//                 (B5: dropped the "expected by today" figure, it was
-//                 the same number as the hero while revenue was planned)
-//   COGS        - heroline "$X · N% of revenue" (dollars + pct side by
-//                 side with a divider) · sub "56.2% target · $Y budget
-//                 to date" (B7: two rows collapsed to one hero + one
-//                 sub); pill carries the gap (B6, server-side)
-//   Gross marg  - same heroline + sub shape as COGS (B7). Dollar delta
-//                 dropped - the pill already says "10.4% AHEAD".
+// PR-1 item 6 preserved: sc_counts_without_dollars flips revenue
+// hero to an em-dash with an "N service days ..." sub-line.
 
 import HelpPop from "@/app/kpi/labor/components/HelpPop";
 import DashOrValue from "./DashOrValue";
@@ -28,198 +26,285 @@ const PILL_TONE = {
   neutral: "kpi-ov-pill-neutral",
 };
 
-const CARD_BORDER = {
-  revenue: "kpi-ov-card-rev",
-  cogs: "kpi-ov-card-cogs",
-  gross_margin: "kpi-ov-card-gm",
-};
-
 const HELP_BODIES = {
-  revenue: {
-    title: "Revenue",
-    body: <p>What this account bills for the food and service delivered. Every cost below is judged as a percent of this number.</p>,
-  },
-  cogs: {
-    title: "Cost of goods sold",
-    body: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Finance calls this COGS. Judged as a percent of revenue.</p>,
-  },
-  gross_margin: {
-    title: "Gross margin",
-    body: <p>Revenue minus cost of goods sold. This is the account-level measure. Stops here - SG&A is not part of it, so this is not profit.</p>,
-  },
+  revenue: <p>What this account bills for the food and service delivered. Every cost below is judged as a percent of this number.</p>,
+  cogs: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Judged as a percent of revenue. Target percent is set at budget and does not move when revenue moves.</p>,
+  gross_margin: <p>Revenue minus cost of goods sold. This is the account-level measure. Stops here - SG&A is not part of it, so this is not profit.</p>,
 };
 
 function Pill({ pill }) {
   if (!pill) return null;
   const tone = PILL_TONE[pill.tone] || "kpi-ov-pill-neutral";
   return (
-    <span
-      className={`kpi-ov-pill ${tone}`}
-      data-kpi-ov="pill"
-      data-kpi-ov-tone={pill.tone}
-    >
+    <span className={`kpi-ov-pill ${tone}`} data-kpi-ov="pill" data-kpi-ov-tone={pill.tone}>
       {pill.label}
     </span>
   );
 }
 
-// B5 (2026-09-01): revenue card sub-line reads "vs $118,130 P9 budget".
-// Drops the "expected by today" figure - it was the same number as the
-// hero while revenue was planned (0.5x zero relationship = same).
-//   Open period: "vs $118,130 P9 budget"
-//   FYTD:        "vs $1,572,700 full-year budget"
-//   Closed:      "vs $121,930 budget"
-function RevenueCard({ card, range, scCountsWithoutDollars }) {
-  const isFytd = range?.kind === "fytd";
-  const isClosed = range?.period_state === "verified" || range?.period_state === "closed_awaiting";
-  // "P9 budget" copy for the open-period case. The payload's range
-  // carries period_no as a number; the card copy prefers "P9" over
-  // "period 9" to match the command bar's Range chip vocabulary
-  // ("This period · P9 · 08/10 – 09/06").
-  const periodLabel = range?.period_no != null ? `P${range.period_no}` : null;
+function fmtMoney(n) {
+  if (n == null || Number.isNaN(Number(n))) return null;
+  const v = Number(n);
+  const abs = Math.abs(Math.round(v));
+  const s = "$" + abs.toLocaleString("en-US");
+  return v < 0 ? "-" + s : s;
+}
+function fmtPct(n) {
+  if (n == null || Number.isNaN(Number(n))) return null;
+  return `${Number(n).toFixed(1)}%`;
+}
 
-  // PR-1 item 6 (2026-09-02): sc_counts_without_dollars replaces the
-  // "vs $X budget" sub-line with a specific absence message.
-  // Otherwise the hero already renders "—" via DashOrValue, and the
-  // pill reads "Not yet reporting" from the server - but the operator
-  // needs the sentence "counts landed, dollars have not" spelled out,
-  // not just an absence glyph.
-  const subLine = (() => {
-    if (scCountsWithoutDollars) {
-      return (
-        <div className="kpi-ov-sub" data-kpi-ov="revenue-sub-sc-absent">
-          <b>{scCountsWithoutDollars.row_count}</b> service days on the calendar; no meal counts entered yet.
-        </div>
-      );
-    }
-    if (isClosed) {
-      const closedBudget = card.budget_full_period_display || card.budget_to_date_display;
-      if (!closedBudget) return null;
-      return (
-        <div className="kpi-ov-sub" data-kpi-ov="revenue-sub">
-          vs <b className="kpi-ov-num">{closedBudget}</b> budget
-        </div>
-      );
-    }
-    if (isFytd) {
-      const horizon = card.budget_full_year_display;
-      if (!horizon) return null;
-      return (
-        <div className="kpi-ov-sub" data-kpi-ov="revenue-sub">
-          vs <b className="kpi-ov-num">{horizon}</b> full-year budget
-        </div>
-      );
-    }
-    // Open period (default): "vs $X P9 budget" with the period label
-    // pulled from the range meta when present.
-    const horizon = card.budget_full_period_display;
-    if (!horizon) return null;
-    const suffix = periodLabel ? `${periodLabel} budget` : "period budget";
+function labelPtd(range, periodState) {
+  if (range?.kind === "fytd") return "year to date";
+  if (periodState === "verified") return "final";
+  return "period to date";
+}
+function labelBudget(range, periodState) {
+  if (range?.kind === "fytd") return "Year budget";
+  if (range?.period_no != null) return `P${range.period_no} budget`;
+  return "Period budget";
+}
+
+function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars }) {
+  const ptd = labelPtd(range, periodState);
+  const budgetLabel = labelBudget(range, periodState);
+  const dates = scCountsWithoutDollars?.dates_covered;
+  const scRowCount = scCountsWithoutDollars?.row_count;
+  const isOpenRange = periodState === "open";
+  const paceDirection = revenuePacePct != null ? (revenuePacePct >= 100 ? "good" : "bad") : null;
+  const paceMag = revenuePacePct != null ? Math.abs(revenuePacePct - 100).toFixed(1) : null;
+  const paceWord = revenuePacePct != null ? (revenuePacePct >= 100 ? "over" : "under") : null;
+  const revBudTd = card.budget_to_date;
+  const revBudFull = card.budget_full_period;
+  const revBudFullYear = card.budget_full_year;
+  const revActual = card.hero_actual;
+  const pctRecognised = (revActual != null && revBudFull != null && revBudFull > 0)
+    ? (revActual / revBudFull) * 100 : null;
+  // Item 12: closed period collapses to one budget column (period_
+  // budget only); open period + FYTD carry both budget-to-date and
+  // full-period.
+  const showBudgetToDate = periodState !== "verified";
+  // FYTD: right budget cell is "Year budget"; open period: period
+  // budget. Content the same shape.
+
+  // sc_counts_without_dollars: hero em dash, sub names row count +
+  // dates (item 15b).
+  if (scCountsWithoutDollars) {
     return (
-      <div className="kpi-ov-sub" data-kpi-ov="revenue-sub">
-        vs <b className="kpi-ov-num">{horizon}</b> {suffix}
+      <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="card-revenue">
+        <div className="kpi-ov-ch">
+          <span className="kpi-ov-eb">{card.label}</span>
+          <HelpPop id="overview-card-revenue" title="Revenue" body={HELP_BODIES.revenue} />
+          <Pill pill={card.pill} />
+        </div>
+        <div className="kpi-ov-cb">
+          <div className="kpi-ov-hero kpi-ov-num kpi-ov-nb" data-kpi-ov="hero-revenue">
+            <span>—</span>
+            <small>{ptd}</small>
+          </div>
+          <div className="kpi-ov-sub" data-kpi-ov="revenue-sub-sc-absent">
+            <b>{scRowCount}</b> service days
+            {dates?.first && dates?.last && (
+              <> ({String(dates.first).slice(5)} – {String(dates.last).slice(5)})</>
+            )}
+            {" "}on the calendar; no meal counts entered yet.
+          </div>
+        </div>
       </div>
     );
-  })();
+  }
 
   return (
-    <div className={`kpi-ov-card ${CARD_BORDER.revenue}`} data-kpi-ov="card-revenue">
+    <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="card-revenue">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">{card.label}</span>
-        <HelpPop id="overview-card-revenue" title={HELP_BODIES.revenue.title} body={HELP_BODIES.revenue.body} />
+        <HelpPop id="overview-card-revenue" title="Revenue" body={HELP_BODIES.revenue} />
         <Pill pill={card.pill} />
       </div>
       <div className="kpi-ov-cb">
         <div className="kpi-ov-hero kpi-ov-num" data-kpi-ov="hero-revenue">
           <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
-          <small>period to date</small>
+          <small>{ptd}</small>
         </div>
-        {subLine}
+        <div className={`kpi-ov-hz ${showBudgetToDate ? "" : "kpi-ov-hz-one"}`} data-kpi-ov="card-hz">
+          {showBudgetToDate && (
+            <div>
+              <div className="kpi-ov-hz-k">Revenue budget to date</div>
+              <div className="kpi-ov-hz-v kpi-ov-num">
+                {revBudTd != null ? fmtMoney(revBudTd) : "—"}
+                {paceMag != null && (
+                  <span className={paceDirection === "good" ? " kpi-ov-good" : " kpi-ov-bad"}>
+                    {" · "}{paceMag}% {paceWord}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          <div>
+            <div className="kpi-ov-hz-k">{budgetLabel}</div>
+            <div className="kpi-ov-hz-v kpi-ov-num">
+              {range?.kind === "fytd"
+                ? (revBudFullYear != null ? fmtMoney(revBudFullYear) : "—")
+                : (revBudFull != null ? fmtMoney(revBudFull) : "—")}
+              {pctRecognised != null && (
+                <span className="kpi-ov-hz-note">
+                  {" · "}{pctRecognised.toFixed(1)}% recognised
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// B7 (2026-09-01): COGS + GM cards use a heroline (dollars + pct side
-// by side with a divider) + one sub-line ("56.2% target · $52,165
-// budget to date"). GM drops the dollar-gap sub - the pill states it.
-function HeroLineWithPct({ card, dataAttr, colorHero }) {
-  const heroColor = colorHero
+// COGS + GM share a heroline shape: pct leads, dollars trail after
+// a divider. Sub-pair varies by card.
+function PercentLeadCard({ card, range, periodState, kind, extra }) {
+  const ptd = labelPtd(range, periodState);
+  const heroPctText = card.pct_of_revenue_display;
+  const heroActualText = card.hero_actual_display;
+  const isCogs = kind === "cogs";
+  const hasTarget = extra?.hasTarget;
+  const targetPctText = card.target_pct_display;
+  const batrText = fmtMoney(card.budget_at_this_revenue);
+  const envDelta = card.envelope_delta;
+  const revenueIsPlanned = extra?.revenueIsPlanned;
+  // heroClass: percent color derived from delta_direction; the pct is
+  // the hero on both cards.
+  const heroColorClass = hasTarget
     ? (card.pill?.tone === "good" ? "kpi-ov-good" : card.pill?.tone === "bad" ? "kpi-ov-bad" : "")
     : "";
+  // GM sub-pair "Amount ahead/behind" - dollars leading, percent as
+  // context. Read from delta_display (dollars) + card.pct_of_revenue -
+  // card.target_pct_of_revenue.
+  const gmDev = (!isCogs && card.pct_of_revenue != null && card.target_pct_of_revenue != null)
+    ? card.pct_of_revenue - card.target_pct_of_revenue : null;
+  const gmAhead = gmDev != null && gmDev >= 0;
+  const gmDollarText = (!isCogs && gmDev != null && card.hero_actual != null)
+    ? fmtMoney(Math.abs((gmDev / 100) * (card.hero_actual / (card.pct_of_revenue || 1) * 100)))
+    : null;
+  // Simpler: dollar amount ahead/behind = |delta_dollars| when
+  // available on the card. Fall back to the derived form above.
+  const gmDollarPreferred = (!isCogs && card.delta_dollars != null)
+    ? fmtMoney(Math.abs(card.delta_dollars)) : gmDollarText;
+
   return (
-    <div className="kpi-ov-heroline" data-kpi-ov={dataAttr}>
-      <span className={`kpi-ov-hero kpi-ov-num ${heroColor}`}>
-        <DashOrValue value={card.hero_actual_display} reported={card.hero_reported} />
-      </span>
-      {card.pct_of_revenue_display && (
-        <>
+    <div className={`kpi-ov-card ${isCogs ? "kpi-ov-card-cogs" : "kpi-ov-card-gm"}`} data-kpi-ov={`card-${kind}`}>
+      <div className="kpi-ov-ch">
+        <span className="kpi-ov-eb">{card.label}</span>
+        <HelpPop id={`overview-card-${kind}`} title={card.label} body={HELP_BODIES[kind]} />
+        <Pill pill={card.pill} />
+      </div>
+      <div className="kpi-ov-cb">
+        <div className="kpi-ov-heroline">
+          <span className={`kpi-ov-hero kpi-ov-num ${heroColorClass}`} data-kpi-ov={`hero-${kind}`}>
+            {heroPctText || "—"}
+          </span>
+          <span className="kpi-ov-htd">of revenue {ptd}</span>
           <span className="kpi-ov-heroline-dv" aria-hidden="true">·</span>
           <span className="kpi-ov-heroline-sec kpi-ov-num">
-            {card.pct_of_revenue_display}
-            <small>of revenue</small>
+            {heroActualText || "—"}
+            <small>{isCogs ? "spent" : "margin"}</small>
           </span>
-        </>
-      )}
+        </div>
+        <div className="kpi-ov-hz" data-kpi-ov="card-hz">
+          <div>
+            <div className="kpi-ov-hz-k">Target percent</div>
+            <div className="kpi-ov-hz-v kpi-ov-num">
+              {hasTarget ? (
+                <>
+                  {targetPctText || "—"}
+                  <span className="kpi-ov-hz-note"> does not move with revenue</span>
+                </>
+              ) : (
+                <span className="kpi-ov-nb">no target on this range</span>
+              )}
+            </div>
+          </div>
+          <div>
+            {isCogs ? (
+              <>
+                <div className="kpi-ov-hz-k">Budget at this revenue</div>
+                <div className="kpi-ov-hz-v kpi-ov-num">
+                  {!hasTarget ? <span className="kpi-ov-nb">—</span>
+                    : batrText == null ? "—"
+                    : (
+                      <>
+                        {batrText}
+                        {envDelta != null && Math.abs(envDelta) >= 1 && (
+                          <span className={envDelta >= 0 ? " kpi-ov-good" : " kpi-ov-bad"}>
+                            {" · "}{fmtMoney(Math.abs(envDelta))} {envDelta >= 0 ? "less" : "more"} than planned
+                          </span>
+                        )}
+                        {envDelta != null && Math.abs(envDelta) < 1 && revenueIsPlanned && (
+                          <span className="kpi-ov-hz-note"> matches plan · revenue is planned</span>
+                        )}
+                      </>
+                    )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="kpi-ov-hz-k">{hasTarget ? `Amount ${gmAhead ? "ahead" : "behind"}` : "Margin made"}</div>
+                <div className={`kpi-ov-hz-v kpi-ov-num ${hasTarget ? (gmAhead ? "kpi-ov-good" : "kpi-ov-bad") : ""}`}>
+                  {hasTarget && gmDollarPreferred != null ? (
+                    <>
+                      {gmDollarPreferred}
+                      {gmDev != null && (
+                        <span className="kpi-ov-hz-note"> · {Math.abs(gmDev).toFixed(1)}% of revenue</span>
+                      )}
+                    </>
+                  ) : (
+                    <>{heroActualText || "—"}<span className="kpi-ov-hz-note"> · no target to compare</span></>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function TargetAndBudgetLine({ card }) {
-  const targetTxt = card.target_pct_display ? `${card.target_pct_display} target` : null;
-  const budgetTxt = card.budget_to_date_display ? `${card.budget_to_date_display} budget to date` : null;
-  if (!targetTxt && !budgetTxt) return null;
-  return (
-    <div className="kpi-ov-sub" data-kpi-ov="card-sub">
-      {targetTxt}
-      {targetTxt && budgetTxt && <span className="kpi-ov-sub-sep"> · </span>}
-      {budgetTxt}
-    </div>
-  );
-}
-
-function CogsCard({ card }) {
-  return (
-    <div className={`kpi-ov-card ${CARD_BORDER.cogs}`} data-kpi-ov="card-cogs">
-      <div className="kpi-ov-ch">
-        <span className="kpi-ov-eb">{card.label}</span>
-        <HelpPop id="overview-card-cogs" title={HELP_BODIES.cogs.title} body={HELP_BODIES.cogs.body} />
-        <Pill pill={card.pill} />
-      </div>
-      <div className="kpi-ov-cb">
-        <HeroLineWithPct card={card} dataAttr="hero-cogs" colorHero />
-        <TargetAndBudgetLine card={card} />
-      </div>
-    </div>
-  );
-}
-
-function GrossMarginCard({ card }) {
-  return (
-    <div className={`kpi-ov-card ${CARD_BORDER.gross_margin}`} data-kpi-ov="card-gm">
-      <div className="kpi-ov-ch">
-        <span className="kpi-ov-eb">{card.label}</span>
-        <HelpPop id="overview-card-gm" title={HELP_BODIES.gross_margin.title} body={HELP_BODIES.gross_margin.body} />
-        <Pill pill={card.pill} />
-      </div>
-      <div className="kpi-ov-cb">
-        <HeroLineWithPct card={card} dataAttr="hero-gm" colorHero={false} />
-        <TargetAndBudgetLine card={card} />
-      </div>
-    </div>
-  );
-}
-
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
   const gm      = cards.find(c => c.key === "gross_margin");
+  const periodState = rangeMeta?.period_state;
+  const revenueIsPlanned = revenueSourceState === "planned";
   return (
     <div className="kpi-ov-cards" data-kpi-ov="cards-row">
-      {revenue && <RevenueCard card={revenue} range={rangeMeta} scCountsWithoutDollars={scCountsWithoutDollars} />}
-      {cogs    && <CogsCard    card={cogs} />}
-      {gm      && <GrossMarginCard card={gm} />}
+      {revenue && (
+        <RevenueCard
+          card={revenue}
+          range={rangeMeta}
+          periodState={periodState}
+          revenuePacePct={revenuePacePct}
+          scCountsWithoutDollars={scCountsWithoutDollars}
+        />
+      )}
+      {cogs && (
+        <PercentLeadCard
+          card={cogs}
+          range={rangeMeta}
+          periodState={periodState}
+          kind="cogs"
+          extra={{ hasTarget, revenueIsPlanned }}
+        />
+      )}
+      {gm && (
+        <PercentLeadCard
+          card={gm}
+          range={rangeMeta}
+          periodState={periodState}
+          kind="gross_margin"
+          extra={{ hasTarget }}
+        />
+      )}
     </div>
   );
 }

@@ -237,10 +237,15 @@ export default function PnlStatement({ payload, open, onToggle }) {
             <table className="kpi-ov-stmt">
               <thead>
                 <tr>
+                  {/* PR-2 items 9 + 22 (2026-09-02):
+                       "Actual" → "Actual spent" per the horizon-
+                       vocabulary rule (no bare "Actual" headers). Column
+                       collapse: closed period only (isOpen=false → 6
+                       cols); This period + FYTD both open → 7 cols. */}
                   <th className="l">Line</th>
                   {isOpen && <th>Period budget</th>}
                   <th>{isOpen ? "Budget to date" : "Budget"}</th>
-                  <th>{isOpen ? "Actual to date" : "Actual"}</th>
+                  <th>Actual spent</th>
                   <th>Variance</th>
                   <th style={{ width: 66 }}>Actual %</th>
                   <th style={{ width: 90 }}>Target %</th>
