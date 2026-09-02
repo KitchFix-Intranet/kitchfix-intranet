@@ -369,6 +369,11 @@ export async function GET() {
       signed: att != null,
       signed_at: att?.signed_at || null,
       certificate_serial: att?.certificate_serial || null,
+      // attestation_id powers the completed-row "View" link into
+      // /api/academy/certificate/[attestationId]. Not sensitive on its
+      // own - the endpoint enforces ownership and returns 404 on
+      // mismatch so this id cannot be used to probe existence.
+      attestation_id: att?.attestation_id || null,
     };
   });
   const signedCount = queue.filter((q) => q.signed).length;
