@@ -762,7 +762,9 @@ export async function resolveOverview({
     }
     for (const s of r?.sources || []) totalRevSources.add(s);
   }
-  const totalRevenue = totalRevReported ? r2(totalRevenueAmount) : null;
+  // let (not const) so the sc_counts_without_dollars pass below can
+  // override this to null when the SC path returned rows summing to 0.
+  let totalRevenue = totalRevReported ? r2(totalRevenueAmount) : null;
 
   // 9. Revenue BUDGET to date + full-period + full-year. Sum over the
   //    5 revenue lines' budgets. Fee accounts + tracked accounts only
@@ -856,11 +858,122 @@ export async function resolveOverview({
   const packaging_budget_to_date_days = prorateBucketToDate(packaging_budget);
   const vehicle_budget_to_date_days   = prorateBucketToDate(vehicle_budget);
 
+  // PR-1 item 1 (2026-09-02). has_target is the invariant "there is a
+  // real target to compare against on this range". Rules:
+  //   - Single fiscal period (kind === "period")     -> true
+  //   - FYTD (kind === "fytd")                       -> true
+  //   - Rolling window (kind === "explicit")         -> false
+  // Plus a guard: both budgets must actually be present. An account
+  // with no budget file (or a period with no matching budget row)
+  // trips false regardless of range kind.
+  //
+  // When false, every target_pct, variance_pct, envelope_delta and
+  // budget_at_this_revenue field on every surface (cards, levers,
+  // statement rows, drill.purchasing, statement_totals) is null. The
+  // COGS + GM pills read "No target" (neutral tone). Cost variances
+  // remain (dollars are honest without a target); cost pcts of
+  // revenue remain (a ratio of two actuals, not a comparison).
+  const has_target = (rng.kind === "period" || rng.kind === "fytd")
+    && revenue_budget_full_period != null && revenue_budget_full_period > 0
+    && cogsBudget > 0;
+
+  // 10b. sc_counts_without_dollars diagnostic (PR-1 item 6, Kevin
+  // 2026-09-02). When the range is open and the effective revenue
+  // source is sc_daily_revenue, and rows landed but every
+  // actual_revenue is 0, the operator is looking at service days on
+  // the calendar with no meal counts entered - revenue is an absence,
+  // not a zero. Compute here so we can null totalRevenue below and
+  // cascade the null through downstream verdicts rather than lying
+  // "$0" into the payload. Kevin's SC thread: seeding must write
+  // sc_daily_actuals.actual_count. Prices are resolved in the sc-8b
+  // view via double COALESCE (actual price -> projected price -> 0),
+  // so counts alone drive dollars; a row without a count contributes
+  // exactly 0.
+  //
+  // Single-account per-meal only. Aggregates + fee + tracked accounts
+  // never read sc_daily_revenue and stay null.
+  //
+  // We derive displayPeriodState locally (it's computed formally
+  // below) so the totalRevenue override can happen before the gross-
+  // margin math.
+  const displayPeriodStateForSc = (() => {
+    let n = null;
+    if (rng.kind === "period") n = rng.period_no;
+    else if (periods.length > 0) n = periods[periods.length - 1];
+    if (n == null) return "open";
+    return derivePeriodState({
+      periodNo: n,
+      todayISO: today,
+      periodStatusRow: periodStatus.get(n) || null,
+    });
+  })();
+  let sc_counts_without_dollars = null;
+  if (!isAggregate && classifyForRevenue(accountKey) === "per_meal"
+      && displayPeriodStateForSc === "open") {
+    const acctFlags = accountFlags.get(accountKey) || null;
+    if (acctFlags && acctFlags.sc_revenue_live === true) {
+      const byDate = scByAcct.get(accountKey);
+      if (byDate) {
+        // Sum over the DISPLAY PERIOD, not the whole range. On FYTD
+        // the display period is the running period; only its counts
+        // (or lack thereof) determine the diagnostic. Prior periods
+        // in FYTD read pnl_actuals via the picker.
+        const pn = rng.kind === "period" ? rng.period_no
+          : (periods.length > 0 ? periods[periods.length - 1] : null);
+        const pStart = pn != null ? periodStartISO(pn) : rng.start;
+        const pEnd = pn != null ? periodEndISO(pn) : rng.end;
+        let rowCount = 0;
+        let sumRev = 0;
+        let firstDate = null;
+        let lastDate = null;
+        for (const [day, amt] of byDate) {
+          if (day >= pStart && day <= pEnd) {
+            rowCount += 1;
+            sumRev += Number(amt);
+            if (firstDate == null || day < firstDate) firstDate = day;
+            if (lastDate == null || day > lastDate) lastDate = day;
+          }
+        }
+        if (rowCount > 0 && sumRev === 0) {
+          sc_counts_without_dollars = {
+            row_count: rowCount,
+            dates_covered: { first: firstDate, last: lastDate },
+          };
+        }
+      }
+    }
+  }
+  // Absence, not zero. Every downstream cogs pct + verdict already
+  // cascades from null revenue. See statement row 2400.1 override
+  // further down for the per-row absence patch.
+  if (sc_counts_without_dollars) {
+    totalRevReported = false;
+    totalRevenue = null;
+  }
+
   // 11. Gross margin.
+  // grossMargin (dollars) depends on totalRevenue - under
+  // sc_counts_without_dollars it correctly nulls out. grossMarginBudget
+  // (dollars) is budget-vs-budget: revenue_budget_to_date minus
+  // cogsBudgetToDateDays. Previously gated on totalRevenue != null,
+  // which was wrong - a target is a budget concept, not an actual one.
+  // On sc_counts_without_dollars the target-side stays intact (a real
+  // "here's what you should be spending" number the operator can
+  // still see), only actual-derived figures null out.
+  //
+  // PR-1 item 1 (2026-09-02): gmPctBudget is the FULL-PERIOD target
+  // ratio, not to-date. Kevin's rule: "target percent is identical on
+  // day 1 and day 28". On single-period ranges the two are identical
+  // (proration cancels); on FYTD the to-date form drifts as the
+  // running period elapses. Full-period is invariant across the year.
   const grossMargin = totalRevenue != null ? r2(totalRevenue - cogsActual) : null;
-  const grossMarginBudget = totalRevenue != null ? r2((revenue_budget_to_date || 0) - cogsBudgetToDateDays) : null;
+  const grossMarginBudget = (revenue_budget_to_date != null)
+    ? r2(revenue_budget_to_date - cogsBudgetToDateDays)
+    : null;
   const gmPctActual = pctOf(grossMargin, totalRevenue);
-  const gmPctBudget = pctOf(grossMarginBudget, revenue_budget_to_date);
+  const gmPctBudget = (revenue_budget_full_period != null && revenue_budget_full_period > 0)
+    ? pctOf(revenue_budget_full_period - cogsBudget, revenue_budget_full_period)
+    : null;
 
   // 12. Period state chip - the range's chip is the state of the
   //     current period in the range, or the terminal period for a
@@ -910,17 +1023,50 @@ export async function resolveOverview({
   // aggregates too.
   flags.planned = perMealPlanned;
 
+  // PR-1 item 5 (2026-09-02). revenue_source_state names WHY the
+  // revenue variance carries a suffix, so the client keys "provisional"
+  // off source, not off period_state. Once sc_revenue_live=true for an
+  // account, revenue to date is real actual and the variance is a
+  // settled comparison; the amber suffix belongs only on planned
+  // revenue. Verified periods are also settled (finance P&L).
+  //   planned  - open period, sc_revenue_live=false OR no live counts
+  //   live     - open period, sc_revenue_live=true (real actual)
+  //   verified - period closed (verified or awaiting finance)
+  const revenue_source_state = (() => {
+    if (displayPeriodState === "verified") return "verified";
+    if (displayPeriodState === "closed_awaiting") return "verified";
+    if (isAggregate) return flags.planned ? "planned" : "live";
+    const acctFlags = accountFlags.get(accountKey) || null;
+    return (acctFlags && acctFlags.sc_revenue_live === true) ? "live" : "planned";
+  })();
+
+  // PR-1 item 2 (2026-09-02). Envelope + pace helpers.
+  // revenue_pace_pct: how far revenue came in against its own budget-
+  //   to-date. Not a target percent - a pace measurement on revenue.
+  // budget_at_this_revenue: the cost the target percent buys at the
+  //   revenue actually earned (line_target_pct * actual_revenue).
+  // envelope_delta: budget_to_date - budget_at_this_revenue. Positive
+  //   means the envelope shrank (revenue short); negative grew.
+  const revenue_pace_pct = (totalRevenue != null && revenue_budget_to_date != null && revenue_budget_to_date > 0)
+    ? r2((totalRevenue / revenue_budget_to_date) * 100) : null;
+  const budgetAtThisRevenue = (lineBudget) => {
+    if (!has_target || totalRevenue == null || lineBudget == null) return null;
+    const lineTarget = lineBudget / revenue_budget_full_period; // ratio, not pct
+    return r2(totalRevenue * lineTarget);
+  };
+  const envelopeDelta = (btd, batr) => (btd == null || batr == null) ? null : r2(btd - batr);
+
   // 14. Ticker.
   const isFeeAccount = !isAggregate && classifyForRevenue(accountKey) === "fee";
   const isPassThrough = flags.pass_through;
   const cogsLinesForTicker = [
-    // 2026-09-01 defect fix: target_pct uses per-line to-date budget
-    // against to-date revenue budget. Same window on both sides. See
-    // the bucketsToDateRatio block above for the per-bucket proration.
-    { line_code: "3100", label: "Kitchen labor",           actual_pct: pctOf(labor3100_actual, totalRevenue), target_pct: pctOf(labor3100_budget_to_date_days, revenue_budget_to_date) },
-    { line_code: "3200", label: "Food purchased",          actual_pct: pctOf(food_actual, totalRevenue),      target_pct: pctOf(food_budget_to_date_days,      revenue_budget_to_date) },
-    { line_code: "3400", label: "Packaging and supplies",  actual_pct: pctOf(packaging_actual, totalRevenue), target_pct: pctOf(packaging_budget_to_date_days, revenue_budget_to_date) },
-    { line_code: "3500", label: "Vehicle",                 actual_pct: pctOf(vehicle_actual, totalRevenue),   target_pct: pctOf(vehicle_budget_to_date_days,   revenue_budget_to_date) },
+    // PR-1 item 1 (2026-09-02): target_pct = line_budget_full_period /
+    // revenue_budget_full_period. Horizon-invariant across FYTD too.
+    // See card + lever + statement-row treatment for the same rule.
+    { line_code: "3100", label: "Kitchen labor",           actual_pct: pctOf(labor3100_actual, totalRevenue), target_pct: pctOf(labor3100_budget, revenue_budget_full_period) },
+    { line_code: "3200", label: "Food purchased",          actual_pct: pctOf(food_actual, totalRevenue),      target_pct: pctOf(food_budget,      revenue_budget_full_period) },
+    { line_code: "3400", label: "Packaging and supplies",  actual_pct: pctOf(packaging_actual, totalRevenue), target_pct: pctOf(packaging_budget, revenue_budget_full_period) },
+    { line_code: "3500", label: "Vehicle",                 actual_pct: pctOf(vehicle_actual, totalRevenue),   target_pct: pctOf(vehicle_budget,   revenue_budget_full_period) },
   ].filter(l => l.actual_pct != null && l.target_pct != null);
 
   // Weeks-closed for the through segment (single-period ranges).
@@ -973,8 +1119,19 @@ export async function resolveOverview({
       delta_dollars: revenueDelta,
       delta_display: revenueDelta != null ? gapDollarsRevenue(revenueDelta) : null,
       delta_direction: revenueDelta != null ? directionOfDelta(revenueDelta, "revenue") : null,
+      // PR-1 item 2 (2026-09-02): revenue_pace_pct on the revenue card
+      // so the status line and card sub-line can name how far revenue
+      // came in against its own budget-to-date - the sentence Kevin
+      // wants operators to see when SC counts arrive short: "revenue
+      // came in 8.1% short, so your cost budget dropped with it".
+      revenue_pace_pct,
       pill: (() => {
         if (isFeeAccount) return { label: "Contractual", tone: "neutral" };
+        // PR-1 item 6 (2026-09-02): sc_counts_without_dollars is an
+        // absence, not a comparison. "Not yet reporting" beats "Below
+        // budget" because the second reads as a shortfall when the
+        // truth is the counts have not been entered.
+        if (sc_counts_without_dollars) return { label: "Not yet reporting", tone: "neutral" };
         if (flags.planned) return { label: "Planned", tone: "warn" };
         if (revenueDelta == null) return { label: "No data", tone: "neutral" };
         return revenueDelta >= 0
@@ -996,20 +1153,31 @@ export async function resolveOverview({
       budget_to_date_display: formatMoneyWhole(cogsBudgetToDateDays),
       pct_of_revenue: pctOf(cogsActual, totalRevenue),
       pct_of_revenue_display: formatPct(pctOf(cogsActual, totalRevenue)),
-      // 2026-09-01 defect fix: target_pct on COGS card uses TO-DATE
-      // budget on BOTH sides (was cogsBudget full-period / revenue
-      // to-date - mixed horizons produced a 71.5% target where 56.2%
-      // was correct on CIN - AZ P9, and a 25.7% "under" verdict when
-      // the honest gap was 10.4%).
-      target_pct_of_revenue: pctOf(cogsBudgetToDateDays, revenue_budget_to_date),
-      target_pct_display: formatPct(pctOf(cogsBudgetToDateDays, revenue_budget_to_date)),
+      // PR-1 item 1 (2026-09-02): target_pct is budget/budget on the
+      // FULL-PERIOD sums, not to-date sums. Within a single period the
+      // two are identical (proration cancels), but on FYTD the to-date
+      // form drifts as the running period elapses. Kevin's rule "the
+      // target is identical on day 1 and day 28" applies to every range
+      // that has a target; using full-period sums makes it invariant
+      // across the fiscal year too. Cost pcts of revenue remain (ratio
+      // of two actuals - honest without a target); the target does not
+      // when !has_target (rolling window).
+      target_pct_of_revenue: has_target ? pctOf(cogsBudget, revenue_budget_full_period) : null,
+      target_pct_display: has_target ? formatPct(pctOf(cogsBudget, revenue_budget_full_period)) : null,
+      // PR-1 item 2 (2026-09-02): envelope + pace on the COGS card.
+      // budget_at_this_revenue = cost the target buys at actual rev.
+      // envelope_delta = budget_to_date - budget_at_this_revenue.
+      budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
+      envelope_delta: envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
       delta_dollars: r2(cogsDelta),
       delta_display: gapDollarsCost(cogsDelta),
       delta_direction: directionOfDelta(cogsDelta, "cost"),
-      delta_pct_display: gapPointsCost(pctOf(cogsActual, totalRevenue) - pctOf(cogsBudgetToDateDays, revenue_budget_to_date)),
+      delta_pct_display: has_target ? gapPointsCost(pctOf(cogsActual, totalRevenue) - pctOf(cogsBudget, revenue_budget_full_period)) : null,
       pill: (() => {
+        // PR-1 item 1: rolling window -> "No target", neutral tone.
+        if (!has_target) return { label: "No target", tone: "neutral" };
         const pa = pctOf(cogsActual, totalRevenue);
-        const pt = pctOf(cogsBudgetToDateDays, revenue_budget_to_date);
+        const pt = pctOf(cogsBudget, revenue_budget_full_period);
         if (pa == null || pt == null) return { label: "No data", tone: "neutral" };
         // B6 (2026-09-01): the gap moves INTO the pill. Prior copy was
         // "Under target" plus a separate "10.4% under" below - two
@@ -1036,13 +1204,16 @@ export async function resolveOverview({
       budget_to_date_display: formatMoneyWhole(grossMarginBudget),
       pct_of_revenue: gmPctActual,
       pct_of_revenue_display: formatPct(gmPctActual),
-      target_pct_of_revenue: gmPctBudget,
-      target_pct_display: formatPct(gmPctBudget),
+      // PR-1 item 1: null target when !has_target.
+      target_pct_of_revenue: has_target ? gmPctBudget : null,
+      target_pct_display: has_target ? formatPct(gmPctBudget) : null,
       delta_dollars: gmDelta,
       delta_display: gmDelta != null ? gapDollarsMargin(gmDelta) : null,
       delta_direction: gmDelta != null ? directionOfDelta(gmDelta, "margin") : null,
-      delta_pct_display: (gmPctActual != null && gmPctBudget != null) ? gapPointsMargin(gmPctActual - gmPctBudget) : null,
+      delta_pct_display: (has_target && gmPctActual != null && gmPctBudget != null) ? gapPointsMargin(gmPctActual - gmPctBudget) : null,
       pill: (() => {
+        // PR-1 item 1: rolling window -> "No target", neutral tone.
+        if (!has_target) return { label: "No target", tone: "neutral" };
         if (gmPctActual == null || gmPctBudget == null) return { label: "No data", tone: "neutral" };
         // B6 (2026-09-01): the gap moves INTO the pill. Same pattern
         // as COGS above - one statement, not two.
@@ -1063,8 +1234,13 @@ export async function resolveOverview({
   // the ratio share the same horizon.
   const buildLever = (label, code, actual, budget, budgetToDate) => {
     const actualPct = pctOf(actual, totalRevenue);
-    const targetPct = pctOf(budgetToDate, revenue_budget_to_date);
+    // PR-1 item 1 (2026-09-02): target_pct = budget/budget on full-
+    // period sums. Horizon-invariant across FYTD.
+    const targetPct = has_target ? pctOf(budget, revenue_budget_full_period) : null;
     const dv = actual != null && budget != null ? r2(actual - budget) : null;
+    // PR-1 item 2 (2026-09-02): envelope + budget-at-this-revenue per
+    // lever so PR-2's cost-lines table can render them per row.
+    const batr = budgetAtThisRevenue(budget);
     return {
       line_code: code,
       label,
@@ -1077,9 +1253,11 @@ export async function resolveOverview({
       actual_pct: actualPct,
       actual_pct_display: formatPct(actualPct),
       target_pct: targetPct,
-      target_pct_display: formatPct(targetPct),
-      variance_pct: (actualPct != null && targetPct != null) ? r2(actualPct - targetPct) : null,
-      variance_pct_display: (actualPct != null && targetPct != null) ? gapPointsCost(actualPct - targetPct) : null,
+      target_pct_display: has_target ? formatPct(targetPct) : null,
+      variance_pct: (has_target && actualPct != null && targetPct != null) ? r2(actualPct - targetPct) : null,
+      variance_pct_display: (has_target && actualPct != null && targetPct != null) ? gapPointsCost(actualPct - targetPct) : null,
+      budget_at_this_revenue: batr,
+      envelope_delta: envelopeDelta(budgetToDate, batr),
       direction: dv != null ? directionOfDelta(dv, "cost") : null,
       flag: code === "3400" && flags.packaging_gap ? "mapping_gap" : null,
     };
@@ -1224,25 +1402,37 @@ export async function resolveOverview({
     const noBudget = fp == null || fp === 0;
     const noActual = !rev.reported || rev.amount == null || rev.amount === 0;
     const inactive = !isContractual && noBudget && noActual;
+    // PR-1 item 6 (2026-09-02): on the sc_counts_without_dollars
+    // path, the 2400.1 line is an absence (service days on the
+    // calendar, no counts entered). Override reported/actual to
+    // null with the diagnostic flag so the P&L reads honestly.
+    const scAbsent = sc_counts_without_dollars && line === "2400.1";
     const suppress = inactive;
-    const rowActualPct = (!inactive && rev.reported) ? pctOf(rev.amount, totalRevenue) : null;
+    const rowActualPct = (!inactive && !scAbsent && rev.reported) ? pctOf(rev.amount, totalRevenue) : null;
     const rowTargetPct = (!inactive && bto.amount != null) ? pctOf(bto.amount, revenue_budget_to_date) : null;
     statementRows.push({
       line_code: line,
       section: "revenue",
       label: labelForLine(line),
-      reported: !inactive && rev.reported,
-      actual: (!inactive && rev.reported) ? rev.amount : null,
+      reported: !inactive && !scAbsent && rev.reported,
+      actual: (!inactive && !scAbsent && rev.reported) ? rev.amount : null,
       budget_to_date: inactive ? null : bto.amount,
       period_budget: inactive ? null : fp,
-      variance: (!suppress && rev.reported && bto.amount != null) ? r2(rev.amount - bto.amount) : null,
-      variance_pct: (!suppress && rev.reported && bto.amount != null && bto.amount > 0) ? r2(((rev.amount - bto.amount) / bto.amount) * 100) : null,
+      variance: (!suppress && !scAbsent && rev.reported && bto.amount != null) ? r2(rev.amount - bto.amount) : null,
+      variance_pct: (!suppress && !scAbsent && rev.reported && bto.amount != null && bto.amount > 0) ? r2(((rev.amount - bto.amount) / bto.amount) * 100) : null,
       actual_pct: rowActualPct,
       target_pct: rowTargetPct,
+      // PR-1 item 5 (2026-09-02): provisional flag keyed on
+      // revenue_source_state, not period_state. Once counts are live
+      // for an account, revenue to date is real actual and the
+      // variance is settled - no "provisional" suffix. Verified
+      // periods are also settled. Only the planned path is amber.
+      provisional: revenue_source_state === "planned",
       sources: rev.sources,
       flags: [
         ...(isContractual ? ["contractual"] : []),
         ...(inactive ? ["inactive"] : []),
+        ...(scAbsent ? ["sc_counts_without_dollars"] : []),
       ],
     });
   }
@@ -1255,19 +1445,32 @@ export async function resolveOverview({
   const labor3100_inactive =
     (labor3100_actual == null || labor3100_actual === 0) &&
     (labor3100_budget == null || labor3100_budget === 0);
-  statementRows.push({
-    line_code: "3100",
-    section: "cogs",
-    label: "Kitchen labor",
-    reported: !labor3100_inactive && laborBoard?.applies === true,
-    actual: labor3100_actual,
-    budget_to_date: labor3100_budget_to_date_days,
-    period_budget: labor3100_budget,
-    variance: (!labor3100_inactive && labor3100_actual != null && labor3100_budget_to_date_days != null) ? r2(labor3100_actual - labor3100_budget_to_date_days) : null,
-    variance_pct: null,
-    sources: ["labor_actuals"],
-    flags: labor3100_inactive ? ["inactive"] : [],
-  });
+  {
+    // PR-1 item 3 (2026-09-02): backfill actual_pct + target_pct on
+    // the 3100 statement row so the P&L Target % column stops
+    // rendering dashes. Same budget/budget rule the cards use.
+    const _actPct = pctOf(labor3100_actual, totalRevenue);
+    // PR-1 item 1: budget/budget on full-period sums (horizon-invariant).
+    const _tgtPct = has_target ? pctOf(labor3100_budget, revenue_budget_full_period) : null;
+    const _batr = budgetAtThisRevenue(labor3100_budget);
+    statementRows.push({
+      line_code: "3100",
+      section: "cogs",
+      label: "Kitchen labor",
+      reported: !labor3100_inactive && laborBoard?.applies === true,
+      actual: labor3100_actual,
+      budget_to_date: labor3100_budget_to_date_days,
+      period_budget: labor3100_budget,
+      variance: (!labor3100_inactive && labor3100_actual != null && labor3100_budget_to_date_days != null) ? r2(labor3100_actual - labor3100_budget_to_date_days) : null,
+      variance_pct: (has_target && !labor3100_inactive && _actPct != null && _tgtPct != null) ? r2(_actPct - _tgtPct) : null,
+      actual_pct: labor3100_inactive ? null : _actPct,
+      target_pct: labor3100_inactive ? null : _tgtPct,
+      budget_at_this_revenue: labor3100_inactive ? null : _batr,
+      envelope_delta: labor3100_inactive ? null : envelopeDelta(labor3100_budget_to_date_days, _batr),
+      sources: ["labor_actuals"],
+      flags: labor3100_inactive ? ["inactive"] : [],
+    });
+  }
   // Salary reveal (R-28 / §5.9): emit 3100.1 (hourly) + 3100.2
   // (salary) sub-rows under 3100 when the caller requested the salary
   // split AND the posture makes it visible. The rows carry
@@ -1366,6 +1569,16 @@ export async function resolveOverview({
     const noActual = actual == null || actual === 0;
     return noBudget && noActual;
   };
+  // PR-1 item 3 (2026-09-02): map line_code to its per-bucket
+  // budget-to-date-days so the cost row can ship actual_pct +
+  // target_pct without dashes. buildCostRow already runs for 3200 /
+  // 3400 / 3500, each with a full-period `budget`; the resolver
+  // already prorates each via bucketsToDateRatio above. Reuse those.
+  const perBucketBudgetToDate = {
+    "3200": food_budget_to_date_days,
+    "3400": packaging_budget_to_date_days,
+    "3500": vehicle_budget_to_date_days,
+  };
   const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [] }) => {
     const billed_back = isPassThrough;
     // inactive takes precedence over billed_back only when there is
@@ -1373,16 +1586,28 @@ export async function resolveOverview({
     // accounts with real spend against $0 budget remain billed_back.
     const inactive = !billed_back && isCostInactive(actual, budget);
     const suppress = billed_back || inactive;
+    // PR-1 item 2 + 3: envelope + pct fields per row. Suppressed rows
+    // (billed_back / inactive) still emit null everywhere - the
+    // absence-contract cascade holds.
+    const btd = perBucketBudgetToDate[line_code] || null;
+    const _actPct = suppress ? null : pctOf(actual, totalRevenue);
+    // PR-1 item 1: budget/budget on full-period sums (horizon-invariant).
+    const _tgtPct = (suppress || !has_target) ? null : pctOf(budget, revenue_budget_full_period);
+    const _batr = suppress ? null : budgetAtThisRevenue(budget);
     return {
       line_code,
       section: "cogs",
       label,
       reported: !inactive,
       actual,
-      budget_to_date: null,
+      budget_to_date: suppress ? null : btd,
       period_budget: budget,
-      variance: (!suppress && actual != null && budget != null) ? r2(actual - budget) : null,
-      variance_pct: null,
+      variance: (!suppress && actual != null && btd != null) ? r2(actual - btd) : null,
+      variance_pct: (has_target && !suppress && _actPct != null && _tgtPct != null) ? r2(_actPct - _tgtPct) : null,
+      actual_pct: _actPct,
+      target_pct: _tgtPct,
+      budget_at_this_revenue: _batr,
+      envelope_delta: suppress ? null : envelopeDelta(btd, _batr),
       sources: ["purchasing_actuals"],
       flags: [
         ...(billed_back ? ["billed_back"] : []),
@@ -1481,8 +1706,12 @@ export async function resolveOverview({
   // if buckets_budget_to_date_days is absent.
   const purchSpentBudgetToDate = buckets_budget_to_date_days?.amount ?? null;
   const purchActualPct = pctOf(purchSpentActual, totalRevenue);
-  const purchTargetPct = pctOf(purchSpentBudgetToDate, revenue_budget_to_date);
-  const purchVariancePct = (purchActualPct != null && purchTargetPct != null)
+  // PR-1 item 1 (2026-09-02): budget/budget on full-period sums so
+  // the drill target is horizon-invariant across FYTD too. Null on
+  // rolling windows.
+  const purchSpentBudgetFull = (food_budget || 0) + (packaging_budget || 0) + (vehicle_budget || 0);
+  const purchTargetPct = has_target ? pctOf(purchSpentBudgetFull, revenue_budget_full_period) : null;
+  const purchVariancePct = (has_target && purchActualPct != null && purchTargetPct != null)
     ? r2(purchActualPct - purchTargetPct)
     : null;
   // E16 (2026-09-01): on pass-through accounts the purchasing spend
@@ -1492,18 +1721,27 @@ export async function resolveOverview({
   // client hides the percentage and renders a tag. No variance,
   // no direction, no verdict.
   const drillBilledBack = isPassThrough;
+  // PR-1 item 2 (2026-09-02): envelope on the drill so PR-2's card
+  // can render "$X less than the plan allowed" beside the total.
+  // purchTargetPct is a percent number; convert to ratio for the
+  // envelope math (batr = actual_revenue * ratio).
+  const drillBudgetAtThisRevenue = (has_target && totalRevenue != null && purchTargetPct != null)
+    ? r2(totalRevenue * purchTargetPct / 100) : null;
+  const drillEnvelopeDelta = envelopeDelta(purchSpentBudgetToDate, drillBudgetAtThisRevenue);
   const drill = {
     purchasing: {
       spent_display: formatMoneyWhole(purchSpentActual),
       pct_of_revenue_display: drillBilledBack ? null : formatPct(purchActualPct),
-      target_pct_display: drillBilledBack ? null : formatPct(purchTargetPct),
+      target_pct_display: (drillBilledBack || !has_target) ? null : formatPct(purchTargetPct),
       // Site posture drill button carries the verdict (R-32). "5.4%
       // under target" pattern - cost axis, so under=good, over=bad.
-      // Billed-back accounts get null on all three so the client
-      // cannot accidentally render a verdict.
-      variance_pct: drillBilledBack ? null : purchVariancePct,
-      variance_pct_display: (drillBilledBack || purchVariancePct == null) ? null : gapPointsCost(purchVariancePct),
-      direction: (drillBilledBack || purchVariancePct == null) ? null : directionOfDelta(purchVariancePct, "cost"),
+      // Billed-back accounts + rolling windows get null on all three
+      // so the client cannot accidentally render a verdict.
+      variance_pct: (drillBilledBack || !has_target) ? null : purchVariancePct,
+      variance_pct_display: (drillBilledBack || !has_target || purchVariancePct == null) ? null : gapPointsCost(purchVariancePct),
+      direction: (drillBilledBack || !has_target || purchVariancePct == null) ? null : directionOfDelta(purchVariancePct, "cost"),
+      budget_at_this_revenue: drillBilledBack ? null : drillBudgetAtThisRevenue,
+      envelope_delta: drillBilledBack ? null : drillEnvelopeDelta,
       billed_back: drillBilledBack,
     },
   };
@@ -1828,6 +2066,9 @@ export async function resolveOverview({
     // budget in the statement, so Total COGS rendered as a dash next
     // to Total revenue's actual dollar figure - two different shapes
     // for two total rows on one page.
+    // PR-1 item 2 (2026-09-02): envelope + pace on the COGS total so
+    // the PR-2 lever-table row-and-total agreement probe has a
+    // reconciled number to check against per line.
     statement_totals: {
       revenue: {
         period_budget: revenue_budget_full_period,
@@ -1838,6 +2079,8 @@ export async function resolveOverview({
         period_budget: r2(cogsBudget),
         budget_to_date: r2(cogsBudgetToDateDays),
         actual: r2(cogsActual),
+        budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
+        envelope_delta: envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
       },
       gross_margin: {
         period_budget: (revenue_budget_full_period != null) ? r2(revenue_budget_full_period - cogsBudget) : null,
@@ -1845,6 +2088,11 @@ export async function resolveOverview({
         actual: grossMargin,
       },
     },
+    // PR-1 payload additions (2026-09-02).
+    has_target,
+    revenue_source_state,
+    revenue_pace_pct,
+    sc_counts_without_dollars,
     also_tracked: alsoTracked,
     drill,
     // R-34 what-is-left. null on corporate posture, closed periods,
@@ -1867,6 +2115,7 @@ export async function resolveOverview({
       weeks_closed,
       weeks_total,
       period_state: displayPeriodState,
+      has_target,
     }),
     sources: sourcesLine,
     flags,
@@ -1903,17 +2152,22 @@ export async function resolveOverview({
 //
 // State + state_copy come from the ticker computation - the classifier
 // logic is the same, only the render shape changed.
-function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_state }) {
+function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_state, has_target }) {
   if (!ticker) return null;
   const gmActualPct = ticker.gm_pct_actual;
   const gmTargetPct = ticker.gm_pct_target;
   const gm_actual_display = gmActualPct != null ? `${Number(gmActualPct).toFixed(1)}%` : null;
-  const gm_target_display = gmTargetPct != null ? `${Number(gmTargetPct).toFixed(1)}%` : null;
+  // PR-1 item 1 (2026-09-02): drop the target display + biggest-lever
+  // segment when has_target is false. State pill flips to "No target"
+  // neutral. Cost pcts of revenue remain (ticker keeps them for the
+  // internal state classifier), but the sentence renders no target
+  // comparison because there isn't one.
+  const gm_target_display = (has_target && gmTargetPct != null) ? `${Number(gmTargetPct).toFixed(1)}%` : null;
 
   // Biggest lever: ticker already ranked levers by |dev_pct|; we take
   // the top one. Direction is cost-axis: dev_pct > 0 means over target.
   let biggest_lever = null;
-  if (ticker.biggest_lever && ticker.biggest_lever.dev_pct != null) {
+  if (has_target && ticker.biggest_lever && ticker.biggest_lever.dev_pct != null) {
     const dev = Number(ticker.biggest_lever.dev_pct);
     biggest_lever = {
       label: ticker.biggest_lever.label,
@@ -1927,8 +2181,10 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     : null;
 
   return {
-    state: ticker.state,
-    state_copy: ticker.state_copy,
+    // PR-1 item 1: "No target" state pill on rolling windows. Neutral
+    // tone, no verdict.
+    state: has_target ? ticker.state : "on_track_below",
+    state_copy: has_target ? ticker.state_copy : "No target",
     gm_actual_display,
     gm_target_display,
     biggest_lever,

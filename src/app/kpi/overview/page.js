@@ -394,7 +394,7 @@ export default function KpiOverviewPage() {
             below). The ticker retired - a single-sentence StatusLine
             with a fixed shape (no account-model notes) replaces it. */}
         <StatusLine statusLine={data.status_line} />
-        <CardsRow cards={data.cards} rangeMeta={rangeMeta} />
+        <CardsRow cards={data.cards} rangeMeta={rangeMeta} scCountsWithoutDollars={data.sc_counts_without_dollars} />
         {/* R-34 "What is left" - self-hides on portfolio scope,
             closed periods, and FYTD (server sets what_is_left=null in
             those cases). */}

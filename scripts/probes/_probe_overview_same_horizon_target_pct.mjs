@@ -3,25 +3,25 @@
 //
 // Permanent assertion. Read-only.
 //
-// Rule (Kevin 2026-09-01): for every surface carrying an actual %
-// and a target %, the target must equal `budget ÷ revenue_budget`
-// on the SAME window as the actual. If the actual is to-date, the
-// target denominator is revenue budget to-date. Mixing windows
-// produces the 71.5% target / 25.7% "under" defect on CIN - AZ P9
-// where 56.2% / 10.4% was the honest verdict.
+// Rule updated PR-1 (Kevin 2026-09-02): target percent is budget/
+// budget on FULL-PERIOD sums, not to-date. Kevin's rule "target is
+// identical on day 1 and day 28" applies across FYTD too - to-date
+// on both sides is invariant WITHIN a single period (proration
+// cancels) but drifts on multi-period ranges as the running period
+// elapses. Full-period is invariant across the fiscal year.
+//
+// Rule superseded (pre PR-1): target_pct = budget_to_date /
+// revenue_budget_to_date. That form is still correct on single-
+// period ranges but drifts on FYTD.
 //
 // Surfaces asserted per (account, range):
 //   - cards.cogs.target_pct_of_revenue
 //   - cards.gross_margin.target_pct_of_revenue
-//   - drill.purchasing.target_pct_display
 //   - levers[*].target_pct
 //
-// Denominator invariants:
-//   - Each surface's target % is computed against
-//     revenue.budget_to_date (payload's revenue card).
-//   - Each surface's target % numerator, when reconstructed from the
-//     other payload fields, resolves to the SAME-WINDOW budget-to-
-//     date (not the full-period budget).
+// Invariant:
+//   target_pct = cogs_period_budget / revenue_period_budget * 100
+//   (using statement_totals.{cogs,revenue}.period_budget)
 //
 // SEEDED FAILURE
 //   SEEDED_FAILURE=1 asserts a wrong target % against a full-period
@@ -61,56 +61,48 @@ async function main() {
 
   for (const c of cases) {
     const d = await fetchPayload(c.acct, c.range);
-    const rev = (d.cards || []).find(x => x.key === "revenue") || {};
     const cogs = (d.cards || []).find(x => x.key === "cogs") || {};
     const gm = (d.cards || []).find(x => x.key === "gross_margin") || {};
-    const revBudTd = rev.budget_to_date;
-    if (revBudTd == null || revBudTd <= 0) {
-      console.log(`  SKIP  ${fmtCase(c)}  revenue.budget_to_date null or zero`);
+    // PR-1 (2026-09-02): use full-period sums for the invariant.
+    const revBudFull = d.statement_totals?.revenue?.period_budget;
+    const cogsBudFull = d.statement_totals?.cogs?.period_budget;
+    if (revBudFull == null || revBudFull <= 0) {
+      console.log(`  SKIP  ${fmtCase(c)}  statement_totals.revenue.period_budget null or zero`);
       continue;
     }
 
-    // COGS card: target% * revBudTd should equal cogs.budget_to_date.
-    // The seed injects the wrong ratio (full-period-cogs/to-date-rev
-    // instead of to-date/to-date), so we reconstruct that mismatch
-    // and expect it to DIFFER from the payload's target%.
-    const cogsBTD = cogs.budget_to_date;
+    // COGS card: target% == cogs_full / rev_full * 100.
     const cogsTargetPct = cogs.target_pct_of_revenue;
-    const derivedCogsBudget = (cogsTargetPct / 100) * revBudTd;
-    const seededDefectPct = cogsBTD != null && cogsBTD > 0
-      ? (cogsBTD * 4 / revBudTd) * 100    // wrong: multiplies to-date by ~4 as a full-period approximation
-      : null;
-    const cogsExpectedPct = (cogsBTD / revBudTd) * 100;
+    const cogsExpectedPct = (cogsBudFull / revBudFull) * 100;
+    const seededDefectPct = SEEDED ? cogsExpectedPct + 5 : null;
     const cogsPctToCheck = SEEDED ? seededDefectPct : cogsExpectedPct;
     const cogsOk = cogsPctToCheck != null && approxEq(cogsTargetPct, cogsPctToCheck, TOL_PCT);
-    const cogsLabel = SEEDED ? "cogs (seed WRONG ratio)" : "cogs";
+    const cogsLabel = SEEDED ? "cogs (seed OFFSET)" : "cogs";
     if (cogsOk) pass += 1; else fail += 1;
-    console.log(`  ${cogsOk ? "PASS" : "FAIL"}  ${fmtCase(c)}  ${cogsLabel}  target=${cogsTargetPct?.toFixed(2)}%  expected=${cogsPctToCheck?.toFixed(2)}%  (revBudTd=${revBudTd}  cogsBudTd=${cogsBTD}  derivedNumerator=${derivedCogsBudget?.toFixed(2)})`);
+    console.log(`  ${cogsOk ? "PASS" : "FAIL"}  ${fmtCase(c)}  ${cogsLabel}  target=${cogsTargetPct?.toFixed(2)}%  expected=${cogsPctToCheck?.toFixed(2)}%  (revBudFull=${revBudFull}  cogsBudFull=${cogsBudFull})`);
 
-    // GM card: target% = (revBudTd - cogsBudTd) / revBudTd
-    if (gm.target_pct_of_revenue != null && cogsBTD != null) {
-      const gmExpected = ((revBudTd - cogsBTD) / revBudTd) * 100;
+    // GM card: target% == (rev_full - cogs_full) / rev_full * 100.
+    if (gm.target_pct_of_revenue != null && cogsBudFull != null) {
+      const gmExpected = ((revBudFull - cogsBudFull) / revBudFull) * 100;
       const gmToCheck = SEEDED ? gmExpected - 15 : gmExpected;
       const gmOk = approxEq(gm.target_pct_of_revenue, gmToCheck, TOL_PCT);
       if (gmOk) pass += 1; else fail += 1;
       console.log(`  ${gmOk ? "PASS" : "FAIL"}  ${fmtCase(c)}  ${SEEDED ? "gm (seed offset)" : "gm"}    target=${gm.target_pct_of_revenue.toFixed(2)}%  expected=${gmToCheck.toFixed(2)}%`);
     }
 
-    // Levers: each lever's target_pct * revBudTd must reconstruct to
-    // its own budget_to_date, not to its full-period budget. We
-    // don't have per-line budget_to_date on the lever payload, but
-    // we can assert the LEVER SUM equals cogsBudTd (within tol).
+    // Levers: each lever's target_pct == line_budget_full / rev_full.
+    // Sum across levers: sum(target_pct) * rev_full / 100 == cogs_full.
     const levers = d.levers || [];
     let leverSumBudDerived = 0;
     let leverAnyNull = false;
     for (const L of levers) {
       if (L.target_pct == null) { leverAnyNull = true; break; }
-      leverSumBudDerived += (L.target_pct / 100) * revBudTd;
+      leverSumBudDerived += (L.target_pct / 100) * revBudFull;
     }
-    if (!leverAnyNull && cogsBTD != null) {
-      const okLevers = approxEq(leverSumBudDerived, cogsBTD, 5);
+    if (!leverAnyNull && cogsBudFull != null) {
+      const okLevers = approxEq(leverSumBudDerived, cogsBudFull, 5);
       if (okLevers) pass += 1; else fail += 1;
-      console.log(`  ${okLevers ? "PASS" : "FAIL"}  ${fmtCase(c)}  levers sum  derived_sum=${leverSumBudDerived.toFixed(2)}  cogsBudTd=${cogsBTD}`);
+      console.log(`  ${okLevers ? "PASS" : "FAIL"}  ${fmtCase(c)}  levers sum  derived_sum=${leverSumBudDerived.toFixed(2)}  cogsBudFull=${cogsBudFull}`);
     }
   }
   console.log("");
