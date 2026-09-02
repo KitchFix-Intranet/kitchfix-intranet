@@ -49,7 +49,13 @@ const INPUTS = {
   },
   TBR: {
     path: path.join(__dirname, "inputs", "tbr-fl-sc-2026-v5.xlsx"),
-    sha256: "c3466de84ffb42e104982d7e7aafdd9d7f8f99f461bebfef5fab9c37fa843dec",
+    // Bumped 2026-09-02 from c3466de8... after Kevin renamed the
+    // Projections TBR-2026 headers Y2 "Breakfast - MiLB" (was ST) at
+    // price 17.8275 and AA2 "Lunch - MiLB" (was ST) at 21.675 - the
+    // header rename that made the projections tab feed the live non-ST
+    // service ids instead of resurrecting archived twins. The bytes
+    // changed; the file is correct. This is the hash of the correct file.
+    sha256: "540b9b7839c385a1dc1d1aa615251fcab1ba47b5d6f66734e4dbed55f1820fc5",
   },
 };
 
