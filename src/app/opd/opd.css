@@ -5156,3 +5156,325 @@ button.opd-set.opd-set--solo:hover .opd-go {
   .opd-pm { width: 84px; }
   .opd-go { width: 84px; }
 }
+
+/* ═════════════════════════════════════════════════════════════
+   Records room. Ledger surface (Mine + Company). Composed from
+   existing patterns: opd-card, opd-brick, opd-empty, opd-skel.
+   Additions in this block are Records-specific.
+   ═════════════════════════════════════════════════════════════ */
+
+/* Room header (title + optional Mine/Company scope toggle). */
+.opd-rec-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 0 12px 0;
+}
+.opd-rec-head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-link);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.opd-rec-scope {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 3px;
+}
+.opd-rec-scope-tab {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  min-height: 32px;
+  transition: background var(--opd-t-fast) var(--opd-ease), color var(--opd-t-fast) var(--opd-ease);
+}
+.opd-rec-scope-tab:hover {
+  color: var(--text-default);
+}
+.opd-rec-scope-tab--on {
+  background: var(--surface-card);
+  color: var(--text-heading);
+  box-shadow: var(--elevation-card);
+}
+
+/* Content column. Reuses .opd-content flex grammar. */
+.opd-rec-content {
+  gap: 14px;
+}
+
+/* Section card. Header + rows. */
+.opd-rec-sec {
+  overflow: hidden;
+}
+.opd-rec-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.opd-rec-sec-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-link);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.opd-rec-sec-count {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+}
+.opd-rec-sec--waived .opd-rec-sec-title {
+  color: var(--opd-n500, var(--text-subtle));
+}
+
+/* Row. Grid: chip | body | action. */
+.opd-rec-row {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) 128px;
+  gap: 14px;
+  align-items: start;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  min-height: 44px;
+  transition: background var(--opd-t-fast) var(--opd-ease);
+}
+.opd-rec-row:first-of-type { border-top: none; }
+.opd-rec-row:hover { background: var(--surface-sunken); }
+.opd-rec-row--empty {
+  grid-template-columns: 1fr;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  padding: 16px;
+}
+.opd-rec-row--waived {
+  background: color-mix(in srgb, var(--surface-sunken) 55%, transparent);
+}
+.opd-rec-row--waived:hover {
+  background: var(--surface-sunken);
+}
+
+.opd-rec-chip {
+  /* Doc id chip - mono is semantic (it reads as a coded id). */
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--opd-chip-fg);
+  background: var(--opd-chip-bg);
+  border-radius: 4px;
+  padding: 4px 6px;
+  text-align: center;
+  letter-spacing: 0.02em;
+  align-self: start;
+  margin-top: 2px;
+}
+
+.opd-rec-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.opd-rec-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.opd-rec-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+}
+.opd-rec-ver {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+}
+.opd-rec-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.opd-rec-module { font-weight: 600; }
+.opd-rec-cycle {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+}
+.opd-rec-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+.opd-rec-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.opd-rec-meta-mono { font-family: var(--font-mono); }
+
+/* Waived reason - IN FULL, never truncated. */
+.opd-rec-waive-reason {
+  margin: 4px 0 0 0;
+  padding: 8px 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-default);
+}
+.opd-rec-waive-lead {
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  margin-right: 6px;
+}
+
+/* Certificate link. */
+.opd-rec-act {
+  display: flex;
+  justify-content: flex-end;
+  align-self: start;
+  margin-top: 2px;
+}
+.opd-rec-cert-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-link);
+  text-decoration: none;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-card);
+  transition: background var(--opd-t-fast) var(--opd-ease), border-color var(--opd-t-fast) var(--opd-ease);
+  white-space: nowrap;
+  min-height: 32px;
+}
+.opd-rec-cert-link:hover {
+  background: var(--surface-sunken);
+  border-color: var(--border-default);
+}
+
+/* Skeleton variant of a section. */
+.opd-rec-sec--skel { opacity: 0.75; }
+.opd-rec-row--skel {
+  grid-template-columns: 68px 1fr 128px;
+}
+
+/* Filter bar (Company view). */
+.opd-rec-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+.opd-rec-fb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.opd-rec-fb-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.opd-rec-fb-select {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--text-default);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 34px;
+  min-width: 160px;
+}
+.opd-rec-fb-count {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Empty state adjustments (Records-specific). */
+.opd-rec-empty {
+  text-align: left;
+  padding: 24px 20px;
+}
+.opd-rec-empty p {
+  margin: 0 0 8px 0;
+  line-height: 1.55;
+  color: var(--text-default);
+  font-size: 12.5px;
+}
+.opd-rec-empty p:last-child { margin-bottom: 0; }
+.opd-rec-empty p b { color: var(--text-heading); font-weight: 700; }
+
+/* Below 720: row stacks (chip on top, actions inline). Keeps 390px
+   read honest without truncating anything. */
+@media (max-width: 720px) {
+  .opd-rec-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .opd-rec-row--skel {
+    grid-template-columns: 1fr;
+  }
+  .opd-rec-act {
+    justify-content: flex-start;
+  }
+  .opd-rec-meta { gap: 10px 14px; }
+  .opd-rec-filterbar { gap: 10px; }
+  .opd-rec-fb-select { min-width: 140px; }
+  .opd-rec-fb-count { flex-basis: 100%; margin-left: 0; }
+}

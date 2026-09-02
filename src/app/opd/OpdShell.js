@@ -23,11 +23,12 @@
 import { useState } from "react";
 import LibraryRoom from "./LibraryRoom";
 import AcademyRoom from "./AcademyRoom";
+import RecordsRoom from "./RecordsRoom";
 
 const TABS = [
   { id: "academy",  label: "Academy", ready: true  },
   { id: "library",  label: "Library", ready: true  },
-  { id: "records",  label: "Records", ready: false },
+  { id: "records",  label: "Records", ready: true  },
   { id: "admin",    label: "Admin",   ready: false },
 ];
 
@@ -100,6 +101,8 @@ export default function OpdShell({ viewerEmail }) {
             <LibraryRoom viewerEmail={viewerEmail} />
           ) : tab === "academy" ? (
             <AcademyRoom viewerEmail={viewerEmail} />
+          ) : tab === "records" ? (
+            <RecordsRoom viewerEmail={viewerEmail} />
           ) : (
             <InertRoom
               label={TABS.find((t) => t.id === tab)?.label || "This"}
