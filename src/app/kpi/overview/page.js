@@ -65,10 +65,11 @@ import StatusLine from "./components/StatusLine";
 import DataCurrentPop from "./components/DataCurrentPop";
 import CardsRow from "./components/CardsRow";
 import Chart from "./components/Chart";
-import DrillButtons from "./components/DrillButtons";
+import CostLines from "./components/CostLines";
+import RevenueLines from "./components/RevenueLines";
+import PacePanel from "./components/PacePanel";
 import PnlStatement from "./components/PnlStatement";
 import AlsoTracked from "./components/AlsoTracked";
-import WhatIsLeft from "./components/WhatIsLeft";
 import SkeletonBoard from "./components/SkeletonBoard";
 
 const LAST_ACCOUNT_KEY = "kpi:overview:lastAccount";
@@ -356,9 +357,15 @@ export default function KpiOverviewPage() {
 
   // ── Board content selector ──────────────────────────────────
   let mainContent;
+  // PR-2 item 20b: the skeleton must match the loaded layout so the
+  // page does not reflow when data arrives. Portfolio and single-
+  // account paint different shapes; the skeleton follows the shape
+  // driven by the URL account, since the landing_account isn't
+  // known yet on the very first cold load.
+  const skelIsPortfolio = PORTFOLIO_KEYS.includes(urlAccount || "");
 
   if (status === "loading" && !data) {
-    mainContent = <SkeletonBoard />;
+    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
   } else if (loadState === "auth") {
     mainContent = authError === "expired"
       ? <StateSessionExpired />
@@ -368,9 +375,9 @@ export default function KpiOverviewPage() {
   } else if (data?.locked) {
     mainContent = <LockedPanel />;
   } else if (loadState === "loading" && !data) {
-    mainContent = <SkeletonBoard />;
+    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
   } else if (!data || (!data.cards && !data.landing_account)) {
-    mainContent = <SkeletonBoard />;
+    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
   } else if (data && data.cards) {
     const rangeMeta = { ...data.range, period_state: data.period_state };
     // Ghost the prior board at reduced opacity during warm refetch.
@@ -396,19 +403,55 @@ export default function KpiOverviewPage() {
             below). The ticker retired - a single-sentence StatusLine
             with a fixed shape (no account-model notes) replaces it. */}
         <StatusLine statusLine={data.status_line} />
-        <CardsRow cards={data.cards} rangeMeta={rangeMeta} scCountsWithoutDollars={data.sc_counts_without_dollars} />
-        {/* R-34 "What is left" - self-hides on portfolio scope,
-            closed periods, and FYTD (server sets what_is_left=null in
-            those cases). */}
-        <WhatIsLeft whatIsLeft={data.what_is_left} />
-        <DrillButtons payload={data} includeSalary={urlIncludeSalary} />
-        <Chart chart={data.chart} />
-        <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
-        <AlsoTracked payload={data} />
+        <CardsRow
+          cards={data.cards}
+          rangeMeta={rangeMeta}
+          scCountsWithoutDollars={data.sc_counts_without_dollars}
+          hasTarget={data.has_target}
+          revenuePacePct={data.revenue_pace_pct}
+          revenueSourceState={data.revenue_source_state}
+        />
+        {/* PR-2 layout branch: two-column single-account grid ONLY
+            when the EFFECTIVE account is a single site. A corporate
+            user with landing_account=ALL who drilled into TBR - FL
+            gets the single-account layout for TBR - FL - the
+            portfolio branch belongs to ALL / EAST / WEST scope
+            itself (the aggregated view). */}
+        {PORTFOLIO_KEYS.includes(account) ? (
+          /* Portfolio scope (account ∈ ALL / EAST / WEST) keeps the
+              pre-PR-2 single-column layout. PR-2 explicitly scoped
+              its two-column reorg to single-account only - portfolio
+              byte-diff test guards against drift. */
+          <>
+            <Chart chart={data.chart} />
+            <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
+            <AlsoTracked payload={data} />
+          </>
+        ) : (
+          /* PR-2 items 1 + 2 + 4 (Kevin, 2026-09-02): single-account
+              two-column split. Left: chart, cost lines. Right: pace,
+              revenue lines, tracked. Full-width below: P&L fold.
+              DrillButtons retired (item 4) - cost-line rows are the
+              clickable surface now. */
+          <>
+            <div className="kpi-ov-split" data-kpi-ov="single-account-split">
+              <div className="kpi-ov-split-left">
+                <Chart chart={data.chart} />
+                <CostLines payload={data} previewAccount={data.preview_account} />
+              </div>
+              <div className="kpi-ov-split-right">
+                <PacePanel payload={data} />
+                <RevenueLines payload={data} />
+                <AlsoTracked payload={data} />
+              </div>
+            </div>
+            <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
+          </>
+        )}
       </div>
     );
   } else {
-    mainContent = <SkeletonBoard />;
+    mainContent = <SkeletonBoard portfolio={skelIsPortfolio} />;
   }
 
   return (

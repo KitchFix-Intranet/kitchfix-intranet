@@ -1593,7 +1593,13 @@ export async function resolveOverview({
     const _actPct = suppress ? null : pctOf(actual, totalRevenue);
     // PR-1 item 1: budget/budget on full-period sums (horizon-invariant).
     const _tgtPct = (suppress || !has_target) ? null : pctOf(budget, revenue_budget_full_period);
-    const _batr = suppress ? null : budgetAtThisRevenue(budget);
+    // PR-2 (2026-09-02) half-null guard: batr + envelope_delta are
+    // a matched trio with btd. If we can't ship btd (per-bucket
+    // proration returned null), suppress batr + envelope too so the
+    // row never emits {btd:null, batr:0, envelope:null}. The cost-
+    // lines row-consistency probe asserts this trio is all-null or
+    // all-present per scored row.
+    const _batr = (suppress || btd == null) ? null : budgetAtThisRevenue(budget);
     return {
       line_code,
       section: "cogs",
@@ -1607,7 +1613,7 @@ export async function resolveOverview({
       actual_pct: _actPct,
       target_pct: _tgtPct,
       budget_at_this_revenue: _batr,
-      envelope_delta: suppress ? null : envelopeDelta(btd, _batr),
+      envelope_delta: (suppress || btd == null) ? null : envelopeDelta(btd, _batr),
       sources: ["purchasing_actuals"],
       flags: [
         ...(billed_back ? ["billed_back"] : []),

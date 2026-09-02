@@ -79,10 +79,23 @@
   border: 1px solid var(--n-300);
   border-radius: var(--kpi-card-r);
 }
-.kpi-app .kpi-ov-card-rev  { border-left: 3px solid var(--green-600); }
-.kpi-app .kpi-ov-card-cogs { border-left: 3px solid var(--navy-700); }
-.kpi-app .kpi-ov-card-gm   { border-left: 3px solid var(--kpi-purple-600); }
-.kpi-app .kpi-ov-card-aa   { border-left: 3px solid var(--amber-500); }
+/* PR-2 item 3 (2026-09-02): card accents move to the top edge.
+   Left-border accents were a leftover from the single-column layout;
+   in the two-column single-account layout the top edge is where the
+   eye starts, and top borders read as a category label rather than a
+   decorative rail. */
+.kpi-app .kpi-ov-card-rev  { border-top: 3px solid var(--green-600); }
+.kpi-app .kpi-ov-card-cogs { border-top: 3px solid var(--navy-700); }
+.kpi-app .kpi-ov-card-gm   { border-top: 3px solid var(--kpi-purple-600); }
+.kpi-app .kpi-ov-card-aa   { border-top: 3px solid var(--amber-500); }
+/* PR-2 (2026-09-02) additions - cost-lines + tracked + pace card
+   variants pick their accent tone from state, not from position. */
+.kpi-app .kpi-ov-card-cost-over    { border-top: 3px solid var(--red-600); }
+.kpi-app .kpi-ov-card-cost-under   { border-top: 3px solid var(--navy-700); }
+.kpi-app .kpi-ov-card-tracked      { border-top: 3px solid var(--amber-500); }
+.kpi-app .kpi-ov-card-pace-good    { border-top: 3px solid var(--green-600); }
+.kpi-app .kpi-ov-card-pace-tight   { border-top: 3px solid var(--red-600); }
+.kpi-app .kpi-ov-card-pace-neutral { border-top: 3px solid var(--n-400); }
 
 /* Pill-right card header (R-7). Adopt shared .kpi-hs-qwrap for the ?
    affordance so HelpPop primitive works unforked. */
@@ -1025,4 +1038,385 @@
   font-size: var(--kpi-t-meta);
   font-weight: 700;
   margin-top: 2px;
+}
+
+/* ═════════════════════════════════════════════════════════════════
+ * PR-2 additions (2026-09-02) - two-column single-account layout
+ * ═════════════════════════════════════════════════════════════════ */
+
+/* ── Item 1: two-column grid ─────────────────────────────────────
+   minmax(0,7fr) / minmax(0,5fr), gap 14, align-items:start. At
+   1200px board width the grid collapses to one column and the
+   right stack falls beneath the left in its rendered order. */
+.kpi-app .kpi-ov-split {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 14px;
+  align-items: start;
+  margin-top: var(--kpi-sp-3);
+}
+.kpi-app .kpi-ov-split-left,
+.kpi-app .kpi-ov-split-right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+@media (max-width: 1199px) {
+  .kpi-app .kpi-ov-split { grid-template-columns: 1fr; }
+}
+
+/* ── Card hero-line for percent-leads (items 12 + 13) ───────────── */
+.kpi-app .kpi-ov-htd {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-600);
+}
+/* Sub-pair grid on cards (Revenue, COGS, GM). Two cells on the open
+   path (item 11 keeps them split); one cell collapse on verified. */
+.kpi-app .kpi-ov-hz {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--n-300);
+}
+.kpi-app .kpi-ov-hz-one { grid-template-columns: 1fr; }
+.kpi-app .kpi-ov-hz-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-hz-v {
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  margin-top: 2px;
+}
+.kpi-app .kpi-ov-hz-v span { font-weight: 600; color: var(--n-600); }
+.kpi-app .kpi-ov-hz-v .kpi-ov-good { color: var(--green-600); }
+.kpi-app .kpi-ov-hz-v .kpi-ov-bad { color: var(--red-600); }
+.kpi-app .kpi-ov-hz-note {
+  color: var(--n-600);
+  font-weight: 600;
+}
+
+/* ── Item 5: cost lines table (primary surface on the left) ─── */
+.kpi-app .kpi-ov-cl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--kpi-t-body);
+}
+.kpi-app .kpi-ov-cl th {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+  text-align: right;
+  padding: 0 0 8px;
+}
+.kpi-app .kpi-ov-cl th.l { text-align: left; }
+.kpi-app .kpi-ov-cl td {
+  padding: 9px 0;
+  border-top: 1px solid var(--n-200);
+  text-align: right;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.kpi-app .kpi-ov-cl td.l { text-align: left; }
+.kpi-app .kpi-ov-cl .kpi-ov-cl-line { width: 45%; }
+/* Row is a hover surface for the clickable link inside its label cell. */
+.kpi-app .kpi-ov-cl-row:hover { background: var(--navy-50); }
+.kpi-app .kpi-ov-cl-row:hover .kpi-ov-cl-go { opacity: 1; }
+.kpi-app .kpi-ov-cl-row:hover .kpi-ov-cl-lbl { color: var(--navy-700); }
+.kpi-app .kpi-ov-cl-linkarea {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+}
+/* Item 6 acceptance: visible focus ring on keyboard navigation. */
+.kpi-app .kpi-ov-cl-linkarea:focus-visible {
+  outline: 2px solid var(--navy-700);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.kpi-app .kpi-ov-cl-lbl { font-weight: 700; }
+.kpi-app .kpi-ov-cl-go {
+  color: var(--navy-700);
+  font-weight: 800;
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity .1s;
+}
+.kpi-app .kpi-ov-cl-tot td {
+  border-top: 1px solid var(--n-400);
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-cl-vs { min-width: 108px; }
+.kpi-app .kpi-ov-cl-vs-pct { font-weight: 800; }
+.kpi-app .kpi-ov-cl-vs-usd {
+  font-size: var(--kpi-t-meta);
+  font-weight: 700;
+  color: inherit;
+  margin-top: 1px;
+}
+
+/* ── Item 7: meter per line (fill + notches) ─────────────────── */
+.kpi-app .kpi-ov-meter {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--n-200);
+  margin-top: 7px;
+  max-width: 280px;
+}
+.kpi-app .kpi-ov-meter i {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  border-radius: 3px;
+}
+.kpi-app .kpi-ov-meter-tk {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  width: 2px;
+  background: var(--n-900);
+}
+.kpi-app .kpi-ov-meter-tk-pd { background: var(--n-400); }
+
+/* ── Pace panel (items 14 + 15) ──────────────────────────────── */
+.kpi-app .kpi-ov-pace .kpi-ov-heroline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kpi-sp-2);
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-ov-pace-say {
+  font-size: var(--kpi-t-body);
+  line-height: 1.6;
+  margin-top: 8px;
+  color: var(--n-700);
+}
+.kpi-app .kpi-ov-pace-say b { color: var(--n-900); font-weight: 800; }
+
+/* Verified variant - two-cell row + "how it closed" runway box. */
+.kpi-app .kpi-ov-pace-row2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 12px 16px 0;
+}
+.kpi-app .kpi-ov-pace-cell-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-pace-cell-v {
+  font-size: var(--kpi-t-value);
+  font-weight: 800;
+  margin-top: 3px;
+  letter-spacing: -.01em;
+}
+.kpi-app .kpi-ov-pace-cell-n {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.kpi-app .kpi-ov-pace-runwaybox {
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--n-300);
+  background: var(--n-50);
+}
+.kpi-app .kpi-ov-pace-runwaybox-good {
+  background: var(--green-50);
+  border-color: #B5EAC8;
+}
+.kpi-app .kpi-ov-pace-runwaybox-bad {
+  background: var(--red-50);
+  border-color: #F3C4C4;
+}
+.kpi-app .kpi-ov-pace-runwaybox-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-pace-runwaybox-good .kpi-ov-pace-runwaybox-k { color: var(--green-600); }
+.kpi-app .kpi-ov-pace-runwaybox-bad .kpi-ov-pace-runwaybox-k { color: var(--red-600); }
+.kpi-app .kpi-ov-pace-runwaybox-v {
+  font-size: calc(22px * var(--kf-scale));
+  font-weight: 800;
+  letter-spacing: -.02em;
+  margin-top: 2px;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-pace-runwaybox-good .kpi-ov-pace-runwaybox-v { color: var(--green-600); }
+.kpi-app .kpi-ov-pace-runwaybox-bad .kpi-ov-pace-runwaybox-v { color: var(--red-600); }
+.kpi-app .kpi-ov-pace-runwaybox-n {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-700);
+  font-weight: 600;
+  margin-top: 5px;
+  line-height: 1.55;
+}
+.kpi-app .kpi-ov-pace-usedbar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--n-200);
+  margin: 14px 16px 6px;
+}
+.kpi-app .kpi-ov-pace-usedbar i {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  border-radius: 4px;
+}
+.kpi-app .kpi-ov-pace-usedbar-tk {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  width: 2px;
+  background: var(--n-900);
+}
+.kpi-app .kpi-ov-pace-usedbar-lab {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  margin: 0 16px 16px;
+}
+.kpi-app .kpi-ov-pace-usedbar-lab b { color: var(--n-900); font-weight: 800; }
+
+/* ── Revenue lines compact table (right rail, item 12 companion) ── */
+.kpi-app .kpi-ov-revlines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--kpi-t-body);
+}
+.kpi-app .kpi-ov-revlines th {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--n-600);
+  text-align: right;
+  padding: 0 0 8px;
+}
+.kpi-app .kpi-ov-revlines th.l { text-align: left; }
+.kpi-app .kpi-ov-revlines td {
+  padding: 7px 0;
+  border-top: 1px solid var(--n-200);
+  text-align: right;
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-revlines td.l { text-align: left; font-weight: 700; }
+
+/* ── Item 20 (FYTD per-period dashed budget line inside each bar) ── */
+.kpi-app .kpi-ov-bar-perbud {
+  position: absolute;
+  border-top: 2px dashed var(--navy-700);
+  z-index: 4;
+}
+
+/* ── Item 20b: skeleton matching two-column layout ──────────────── */
+.kpi-app .kpi-ov-skel-board {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.kpi-app .kpi-ov-skel-status {
+  display: flex;
+  height: 44px;
+  border-radius: var(--kpi-card-r);
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  overflow: hidden;
+}
+.kpi-app .kpi-ov-skel-status-state {
+  width: 130px;
+  background: var(--n-200);
+}
+.kpi-app .kpi-ov-skel-status-say {
+  flex: 1;
+  align-self: center;
+  margin: 0 16px;
+  height: 12px;
+  background: var(--n-100);
+  border-radius: 4px;
+}
+.kpi-app .kpi-ov-skel-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.kpi-app .kpi-ov-skel-card {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  padding: 14px 16px;
+  min-height: 108px;
+}
+.kpi-app .kpi-ov-skel-rev { border-top: 3px solid var(--n-200); }
+.kpi-app .kpi-ov-skel-cogs { border-top: 3px solid var(--n-200); }
+.kpi-app .kpi-ov-skel-gm { border-top: 3px solid var(--n-200); }
+.kpi-app .kpi-ov-skel-chart { min-height: 190px; }
+.kpi-app .kpi-ov-skel-costlines { min-height: 220px; }
+.kpi-app .kpi-ov-skel-pace { min-height: 130px; }
+.kpi-app .kpi-ov-skel-revlines { min-height: 150px; }
+.kpi-app .kpi-ov-skel-tracked { min-height: 130px; }
+.kpi-app .kpi-ov-skel-split {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1199px) {
+  .kpi-app .kpi-ov-skel-split { grid-template-columns: 1fr; }
+  .kpi-app .kpi-ov-skel-cards { grid-template-columns: 1fr; }
+}
+.kpi-app .kpi-ov-skel-col-left,
+.kpi-app .kpi-ov-skel-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.kpi-app .kpi-ov-skel-chart-bars {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  height: 90px;
+  margin-top: 14px;
+}
+.kpi-app .kpi-ov-skel-chart-bars div {
+  flex: 1;
+  background: var(--n-200);
+  border-radius: 3px 3px 0 0;
+}
+.kpi-app .kpi-ov-skel-chart-bars div:nth-child(1) { height: 70%; }
+.kpi-app .kpi-ov-skel-chart-bars div:nth-child(2) { height: 90%; }
+.kpi-app .kpi-ov-skel-chart-bars div:nth-child(3) { height: 80%; }
+.kpi-app .kpi-ov-skel-chart-bars div:nth-child(4) { height: 40%; }
+.kpi-app .kpi-ov-skel-fold {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  padding: 14px 16px;
+  min-height: 48px;
+}
+
+/* ── Chart bars inset (per PR 2 polish, applies to period grain too) ── */
+.kpi-app .kpi-ov-bars-inset {
+  padding-left: 8px;
+  padding-right: 8px;
 }
