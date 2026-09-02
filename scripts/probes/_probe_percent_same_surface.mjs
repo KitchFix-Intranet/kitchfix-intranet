@@ -126,12 +126,21 @@ async function walkOne(page, c, fails) {
     function pickCard(sel) {
       const el = document.querySelector(sel);
       if (!el) return null;
+      // Extract the dollar figure from a node, ignoring <small>
+      // descriptors (which after PR-2 language pass contain "thru P8"
+      // and would otherwise poison the digit-only parser with the 8).
+      function moneyText(node) {
+        if (!node) return null;
+        const clone = node.cloneNode(true);
+        clone.querySelectorAll("small").forEach(s => s.remove());
+        return clone.innerText.trim();
+      }
       // Hero text - first .kpi-ov-hero within the card
       const hero = el.querySelector(".kpi-ov-hero");
-      const heroText = hero ? hero.innerText.trim() : null;
+      const heroText = moneyText(hero);
       // Secondary in heroline (dollars after divider) - .kpi-ov-heroline-sec
       const sec = el.querySelector(".kpi-ov-heroline-sec");
-      const secText = sec ? sec.innerText.trim() : null;
+      const secText = moneyText(sec);
       // Sub-pair values (.kpi-ov-hz-v). We take up to two.
       const hzs = Array.from(el.querySelectorAll(".kpi-ov-hz-v")).map(n => n.innerText.trim());
       return { heroText, secText, hzs };

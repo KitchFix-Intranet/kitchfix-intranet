@@ -188,7 +188,7 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
 //
 // actual: even suppressed rows show a $ value (billed_back rows can
 // have $37 packaging etc.), so total.actual sums ALL rows.
-function TotalRow({ rows, hasTarget, cogsCard }) {
+function TotalRow({ rows, hasTarget, cogsCard, totalLabel }) {
   const isSuppressed = (r) => {
     const flags = Array.isArray(r.flags) ? r.flags : [];
     return flags.includes("billed_back") || flags.includes("inactive");
@@ -220,7 +220,7 @@ function TotalRow({ rows, hasTarget, cogsCard }) {
   const varianceText = totalVarianceVsBatr != null ? gapDollars(totalVarianceVsBatr, "under", "over") : null;
   return (
     <tr className="kpi-ov-cl-tot" data-kpi-ov="cost-lines-total">
-      <td className="l">Total cost of goods sold</td>
+      <td className="l">{totalLabel || "Total cost of goods sold"}</td>
       <td className="kpi-ov-num">{totalActual || "—"}</td>
       <td className="kpi-ov-num kpi-ov-nb">{hasTarget && totalBatr ? totalBatr : "—"}</td>
       <td className={`kpi-ov-num ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : ""}`}>
@@ -249,6 +249,21 @@ export default function CostLines({ payload, previewAccount = null }) {
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
   if (cogsRows.length === 0) return null;
   const cogsCard = payload.cards?.find(c => c.key === "cogs");
+  // Kevin 2026-09-02 language pass Items 18-20: header + total labels
+  // use the server-side range_labels. "Spent thru P8" / "Budget
+  // adjusted P8" / "Total cost of goods sold thru P8" on FYTD +
+  // verified single; "Spent period to date" / "Total ... period to
+  // date" on single open (Kevin: "the period is not 'through'
+  // anything yet"). Item 19: "Budget at this revenue" -> "Budget
+  // adjusted P8" (naming the period the adjustment corresponds to).
+  const rl = payload.range_labels;
+  const spentLabel = rl?.through ? `Spent ${rl.through}` : "Spent period to date";
+  const adjustedLabel = rl?.period_last
+    ? `Budget adjusted ${rl.period_last}`
+    : "Budget at this revenue";
+  const totalLabel = rl?.through
+    ? `Total cost of goods sold ${rl.through}`
+    : "Total cost of goods sold";
   // Header "N of M over" count uses the SAME dollar operand the
   // rows show: actual - budget_at_this_revenue. > 0 = over. This
   // agrees with the per-row percent verdict by construction (Kevin
@@ -290,8 +305,8 @@ export default function CostLines({ payload, previewAccount = null }) {
           <thead>
             <tr>
               <th className="l">Line</th>
-              <th>Spent period to date</th>
-              <th>Budget at this revenue</th>
+              <th>{spentLabel}</th>
+              <th>{adjustedLabel}</th>
               <th style={{ width: 68 }}>% of rev</th>
               <th style={{ width: 68 }}>Target %</th>
               <th style={{ width: 108 }}>vs target</th>
@@ -309,7 +324,7 @@ export default function CostLines({ payload, previewAccount = null }) {
                 revBudFull={payload.statement_totals?.revenue?.period_budget}
               />
             ))}
-            <TotalRow rows={cogsRows} hasTarget={hasTarget} cogsCard={cogsCard} />
+            <TotalRow rows={cogsRows} hasTarget={hasTarget} cogsCard={cogsCard} totalLabel={totalLabel} />
           </tbody>
         </table>
       </div>

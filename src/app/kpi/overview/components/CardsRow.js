@@ -54,20 +54,41 @@ function fmtPct(n) {
   return `${Number(n).toFixed(1)}%`;
 }
 
-function labelPtd(range, periodState) {
-  if (range?.kind === "fytd") return "year to date";
+// Kevin 2026-09-02 language pass Items 5, 8, 12: hero descriptor
+// reads range_labels.through verbatim ("thru P8" on FYTD + single
+// verified, "period to date" on single open). No per-surface
+// rewrite; the server helper owns the string.
+function labelPtd(rangeLabels, periodState) {
+  const through = rangeLabels?.through;
+  if (through) return through;
+  // Legacy fallback if range_labels not shipped yet.
   if (periodState === "verified") return "final";
   return "period to date";
 }
+// The right-hand budget label on the Revenue card. Item 7: `Year
+// budget` stays on FYTD (full-year context is still useful). Item 6
+// applies to the LEFT sub-pair (below).
 function labelBudget(range, periodState) {
   if (range?.kind === "fytd") return "Year budget";
   if (range?.period_no != null) return `P${range.period_no} budget`;
   return "Period budget";
 }
 
-function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars, rangeComposition }) {
-  const ptd = labelPtd(range, periodState);
+function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars, rangeComposition, rangeLabels }) {
+  const ptd = labelPtd(rangeLabels, periodState);
   const budgetLabel = labelBudget(range, periodState);
+  // Item 4: eyebrow "Revenue actuals P1-P8" on FYTD; on a single
+  // period "Revenue actuals P8"; on single open (no period suffix
+  // makes sense) keep the classic "Revenue" label from card.label.
+  const eyebrowLabel = (rangeLabels?.kind === "fytd" || rangeLabels?.kind === "single_closed")
+    ? (rangeLabels.period_span ? `Revenue actuals ${rangeLabels.period_span}` : card.label)
+    : card.label;
+  // Item 6: LEFT sub-pair "Revenue budget P1-P8" replacing "Revenue
+  // budget to date". On single closed: "Revenue budget P8". On
+  // single open: "Revenue budget period to date".
+  const leftBudgetLabel = rangeLabels?.period_span
+    ? `Revenue budget ${rangeLabels.period_span}`
+    : (rangeLabels?.through ? `Revenue budget ${rangeLabels.through}` : "Revenue budget to date");
   const dates = scCountsWithoutDollars?.dates_covered;
   const scRowCount = scCountsWithoutDollars?.row_count;
   const isOpenRange = periodState === "open";
@@ -89,8 +110,11 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
     ? (revActual / pctRecognisedDenom) * 100 : null;
   // Item 12: closed period collapses to one budget column (period_
   // budget only); open period + FYTD carry both budget-to-date and
-  // full-period.
-  const showBudgetToDate = periodState !== "verified";
+  // full-period. FYTD (now closed-only) still shows the LEFT sub-
+  // pair because the "Revenue budget P1-P8" label + "Year budget"
+  // are two distinct comparisons Kevin wants side-by-side (Item 6
+  // vs Item 7).
+  const showBudgetToDate = periodState !== "verified" || range?.kind === "fytd";
   // FYTD: right budget cell is "Year budget"; open period: period
   // budget. Content the same shape.
 
@@ -100,7 +124,7 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
     return (
       <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="card-revenue">
         <div className="kpi-ov-ch">
-          <span className="kpi-ov-eb">{card.label}</span>
+          <span className="kpi-ov-eb">{eyebrowLabel}</span>
           <HelpPop id="overview-card-revenue" title="Revenue" body={HELP_BODIES.revenue} />
           <Pill pill={card.pill} />
         </div>
@@ -124,7 +148,7 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
   return (
     <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="card-revenue">
       <div className="kpi-ov-ch">
-        <span className="kpi-ov-eb">{card.label}</span>
+        <span className="kpi-ov-eb">{eyebrowLabel}</span>
         <HelpPop id="overview-card-revenue" title="Revenue" body={HELP_BODIES.revenue} />
         <Pill pill={card.pill} />
       </div>
@@ -136,7 +160,7 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
         <div className={`kpi-ov-hz ${showBudgetToDate ? "" : "kpi-ov-hz-one"}`} data-kpi-ov="card-hz">
           {showBudgetToDate && (
             <div>
-              <div className="kpi-ov-hz-k">Revenue budget to date</div>
+              <div className="kpi-ov-hz-k">{leftBudgetLabel}</div>
               <div className="kpi-ov-hz-v kpi-ov-num">
                 {revBudTd != null ? fmtMoney(revBudTd) : "—"}
                 {paceMag != null && (
@@ -181,8 +205,8 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
 
 // COGS + GM share a heroline shape: pct leads, dollars trail after
 // a divider. Sub-pair varies by card.
-function PercentLeadCard({ card, range, periodState, kind, extra }) {
-  const ptd = labelPtd(range, periodState);
+function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels }) {
+  const ptd = labelPtd(rangeLabels, periodState);
   const heroPctText = card.pct_of_revenue_display;
   const heroActualText = card.hero_actual_display;
   const isCogs = kind === "cogs";
@@ -246,7 +270,12 @@ function PercentLeadCard({ card, range, periodState, kind, extra }) {
           <div>
             {isCogs ? (
               <>
-                <div className="kpi-ov-hz-k">Budget at this revenue</div>
+                {/* Item 9: "Budget at this revenue" -> "Adjusted budget".
+                    Item 10: envelope delta is NEUTRAL, not a verdict -
+                    render in purple with a direction arrow and the word
+                    more or less. Revenue moving the envelope is a
+                    consequence, not performance. */}
+                <div className="kpi-ov-hz-k">Adjusted budget</div>
                 <div className="kpi-ov-hz-v kpi-ov-num">
                   {!hasTarget ? <span className="kpi-ov-nb">—</span>
                     : batrText == null ? "—"
@@ -254,8 +283,11 @@ function PercentLeadCard({ card, range, periodState, kind, extra }) {
                       <>
                         {batrText}
                         {envDelta != null && Math.abs(envDelta) >= 1 && (
-                          <span className={envDelta >= 0 ? " kpi-ov-good" : " kpi-ov-bad"}>
-                            {" · "}{fmtMoney(Math.abs(envDelta))} {envDelta >= 0 ? "less" : "more"} than planned
+                          <span
+                            className="kpi-ov-envelope-note"
+                            data-kpi-ov="envelope-delta"
+                          >
+                            {" · "}{envDelta < 0 ? "↑" : "↓"} {fmtMoney(Math.abs(envDelta))} {envDelta < 0 ? "more" : "less"}
                           </span>
                         )}
                         {envDelta != null && Math.abs(envDelta) < 1 && revenueIsPlanned && (
@@ -289,7 +321,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra }) {
   );
 }
 
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition, rangeLabels }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
@@ -306,6 +338,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           revenuePacePct={revenuePacePct}
           scCountsWithoutDollars={scCountsWithoutDollars}
           rangeComposition={rangeComposition}
+          rangeLabels={rangeLabels}
         />
       )}
       {cogs && (
@@ -315,6 +348,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           periodState={periodState}
           kind="cogs"
           extra={{ hasTarget, revenueIsPlanned }}
+          rangeLabels={rangeLabels}
         />
       )}
       {gm && (
@@ -324,6 +358,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           periodState={periodState}
           kind="gross_margin"
           extra={{ hasTarget }}
+          rangeLabels={rangeLabels}
         />
       )}
     </div>

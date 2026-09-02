@@ -169,6 +169,20 @@ export default function PnlStatement({ payload, open, onToggle }) {
 
   const rows = payload.statement_rows;
   const isOpen = payload.period_state === "open";
+  // Kevin 2026-09-02 language pass Item 23: on FYTD, drop `Period
+  // budget` column (already dropped when period_state !== "open",
+  // which is now the case since FYTD ends at last closed period).
+  // Rename column headers to name the range they cover: "Budget
+  // thru P8" and "Actuals thru P8". Single-period ranges keep their
+  // existing labels ("Budget"/"Budget to date", "Actual spent").
+  const rl = payload.range_labels;
+  const isFytd = payload.range?.kind === "fytd";
+  const budgetHeader = isFytd && rl?.through
+    ? `Budget ${rl.through}`
+    : (isOpen ? "Budget to date" : "Budget");
+  const actualsHeader = isFytd && rl?.through
+    ? `Actuals ${rl.through}`
+    : "Actual spent";
   const revenueRows = rows.filter(r => r.section === "revenue");
   const cogsRows = rows.filter(r => r.section === "cogs");
   const revenueCard = payload.cards?.find(c => c.key === "revenue");
@@ -244,8 +258,8 @@ export default function PnlStatement({ payload, open, onToggle }) {
                        cols); This period + FYTD both open → 7 cols. */}
                   <th className="l">Line</th>
                   {isOpen && <th>Period budget</th>}
-                  <th>{isOpen ? "Budget to date" : "Budget"}</th>
-                  <th>Actual spent</th>
+                  <th>{budgetHeader}</th>
+                  <th>{actualsHeader}</th>
                   <th>Variance</th>
                   <th style={{ width: 66 }}>Actual %</th>
                   <th style={{ width: 90 }}>Target %</th>
