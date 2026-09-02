@@ -83,8 +83,12 @@ const SEEDED = SEEDED_RAW === "1" || SEEDED_RAW === "salary_hourly";
 const SEEDED_SALARY_HOURLY = SEEDED_RAW === "salary_hourly";
 const TOL = 0.02;
 
+// Kevin ruling 2026-09-02 (PR-1 of language pass): FYTD ends at the
+// last closed period, not `today`. Labor + purchasing calls in the
+// parity probe use that same end so the grain matches - if they used
+// end=today the probe would fire the mismatch it was built to catch.
 const RANGES = [
-  { key: "FYTD", rangeParam: "fytd",     start: "2025-12-29", end: new Date().toISOString().slice(0, 10) },
+  { key: "FYTD", rangeParam: "fytd",     start: "2025-12-29", end: "2026-08-09" },
   { key: "P8",   rangeParam: "period:8", start: "2026-07-13", end: "2026-08-09" },
   { key: "P9",   rangeParam: "period:9", start: "2026-08-10", end: "2026-09-06" },
 ];

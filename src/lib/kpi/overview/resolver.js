@@ -261,15 +261,40 @@ function normalizeExplicitToPreset({ start, end, today }) {
   return null;
 }
 
+// Kevin 2026-09-02 (PR-1 of language pass): FYTD ends at the last
+// CLOSED period's end - not `today`. The Overview is a scoreboard,
+// so its year-to-date figure must not roll in a live partial period
+// alongside eight closed ones. Both revenue and cost derive from
+// this end date, so both sides move together at the same grain -
+// the exact defect class that produced the rolling-window 65.7% GM
+// and the 23% revenue "beat" on future service days. "Closed"
+// here means calendar-closed: the period whose end < today.
+// Fee accounts, salaried, per-meal - all treated identically.
+// The running period stays reachable through the "This period"
+// preset and the P{N} picker.
+function lastClosedPeriodNoBefore(today) {
+  let last = null;
+  for (let p = 1; p <= 13; p += 1) {
+    const pe = periodEndISO(p);
+    if (pe && pe < today) last = p;
+  }
+  return last;
+}
+
 // Range resolution. `range` inputs:
 //   - { kind: 'fytd' }
 //   - { kind: 'period', period_no: N }
 //   - { kind: 'explicit', start, end }
 function resolveRange({ range, today }) {
   if (!range || range.kind === "fytd") {
+    const lastClosed = lastClosedPeriodNoBefore(today);
+    // Fall back to `today` if the FY hasn't got a single closed period
+    // yet (e.g. day one of a new FY). Downstream still works but the
+    // payload will just carry zero contributing periods.
+    const end = lastClosed != null ? periodEndISO(lastClosed) : today;
     return {
       start: FY_START_ISO,
-      end: today,
+      end,
       kind: "fytd",
       period_no: null,
     };
