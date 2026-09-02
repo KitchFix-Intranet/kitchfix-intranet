@@ -90,15 +90,35 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
   const targetPctText = fmtPct(row.target_pct);
   const batrText = fmtMoney(row.budget_at_this_revenue);
   const actualText = fmtMoney(row.actual);
-  // vs target cell: percent-point gap on top, dollar delta beneath.
-  // Suppressed for billed_back + inactive (their verdicts are null).
+  // vs-target cell (Kevin ruling 2026-09-02): percent-point gap on
+  // top, dollar VARIANCE VS BATR beneath.
+  //
+  // The operand matters. Two prior attempts were wrong:
+  //   (a) envelope_delta (btd - batr) - a card-level concept that
+  //       flipped sign relative to the row's own percent verdict.
+  //   (b) actual - budget_to_date - a real per-row variance but
+  //       against a denominator the CELL isn't showing (the column
+  //       to the left is "Budget at this revenue", not "Budget to
+  //       date") and semantically disagreed with the percent gap
+  //       on revenue-shortfall periods.
+  //
+  // Correct operand: actual - budget_at_this_revenue. Algebraically
+  // this equals (percent_gap * revenue) - the same comparison
+  // expressed in dollars. Sign-agreement with the percent gap holds
+  // by construction. And it says the right thing operationally:
+  // "$27,506 over what your revenue earned you", not "$X under your
+  // original budget" - on a shortfall period the first is the fact
+  // that matters.
   const suppressVerdict = isBilledBack || isInactive || !hasTarget;
-  const over = row.envelope_delta != null && row.envelope_delta < 0;
+  const varianceVsBatr = (row.actual != null && row.budget_at_this_revenue != null)
+    ? row.actual - row.budget_at_this_revenue
+    : null;
+  const over = varianceVsBatr != null && varianceVsBatr > 0;
   const varPctText = row.variance_pct != null
     ? `${Math.abs(Number(row.variance_pct)).toFixed(1)}% ${row.variance_pct <= 0 ? "under" : "over"}`
     : null;
-  const envelopeText = row.envelope_delta != null
-    ? gapDollars(-row.envelope_delta, "under", "over")
+  const varianceText = varianceVsBatr != null
+    ? gapDollars(varianceVsBatr, "under", "over")
     : null;
 
   return (
@@ -149,7 +169,7 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
         ) : (
           <>
             <div className="kpi-ov-cl-vs-pct">{varPctText || "—"}</div>
-            <div className="kpi-ov-cl-vs-usd">{envelopeText || ""}</div>
+            <div className="kpi-ov-cl-vs-usd">{varianceText || ""}</div>
           </>
         )}
       </td>
@@ -173,28 +193,31 @@ function TotalRow({ rows, hasTarget, cogsCard }) {
     const flags = Array.isArray(r.flags) ? r.flags : [];
     return flags.includes("billed_back") || flags.includes("inactive");
   };
-  let sumActual = 0;
-  let sumBtd = 0;
+  // Sum SCORED actual + BATR. The total's dollar variance is
+  // (scored_actual - scored_batr), same operand as the per-row cell
+  // (Kevin ruling 2026-09-02). Full-payload actual displays on the
+  // Spent column includes billed-back rows.
+  let sumActualAll = 0;
+  let sumActualScored = 0;
   let sumBatr = 0;
   for (const r of rows) {
-    if (r.actual != null) sumActual += Number(r.actual);
+    if (r.actual != null) sumActualAll += Number(r.actual);
     if (!isSuppressed(r)) {
-      if (r.budget_to_date != null) sumBtd += Number(r.budget_to_date);
+      if (r.actual != null) sumActualScored += Number(r.actual);
       if (r.budget_at_this_revenue != null) sumBatr += Number(r.budget_at_this_revenue);
     }
   }
-  // Only round for display; store the raw sum for envelope math.
-  const totalActual = fmtMoney(sumActual);
+  const totalActual = fmtMoney(sumActualAll);
   const totalBatr = sumBatr > 0 ? fmtMoney(sumBatr) : null;
-  const envDelta = sumBatr > 0 ? sumBtd - sumBatr : null;
+  const totalVarianceVsBatr = sumBatr > 0 ? sumActualScored - sumBatr : null;
   const cogsPct = cogsCard?.pct_of_revenue;
   const cogsTargetPct = cogsCard?.target_pct_of_revenue;
   const varPct = (cogsPct != null && cogsTargetPct != null) ? (cogsPct - cogsTargetPct) : null;
-  const over = envDelta != null && envDelta < 0;
+  const over = totalVarianceVsBatr != null && totalVarianceVsBatr > 0;
   const varPctText = varPct != null
     ? `${Math.abs(varPct).toFixed(1)}% ${varPct <= 0 ? "under" : "over"}`
     : null;
-  const envText = envDelta != null ? gapDollars(-envDelta, "under", "over") : null;
+  const varianceText = totalVarianceVsBatr != null ? gapDollars(totalVarianceVsBatr, "under", "over") : null;
   return (
     <tr className="kpi-ov-cl-tot" data-kpi-ov="cost-lines-total">
       <td className="l">Total cost of goods sold</td>
@@ -208,7 +231,7 @@ function TotalRow({ rows, hasTarget, cogsCard }) {
         {hasTarget ? (
           <>
             <div className="kpi-ov-cl-vs-pct">{varPctText || "—"}</div>
-            <div className="kpi-ov-cl-vs-usd">{envText || ""}</div>
+            <div className="kpi-ov-cl-vs-usd">{varianceText || ""}</div>
           </>
         ) : "—"}
       </td>
@@ -226,10 +249,16 @@ export default function CostLines({ payload, previewAccount = null }) {
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
   if (cogsRows.length === 0) return null;
   const cogsCard = payload.cards?.find(c => c.key === "cogs");
-  const overCount = cogsRows.filter(r =>
-    r.envelope_delta != null && r.envelope_delta < 0
-    && !(Array.isArray(r.flags) && (r.flags.includes("billed_back") || r.flags.includes("inactive")))
-  ).length;
+  // Header "N of M over" count uses the SAME dollar operand the
+  // rows show: actual - budget_at_this_revenue. > 0 = over. This
+  // agrees with the per-row percent verdict by construction (Kevin
+  // ruling 2026-09-02).
+  const overCount = cogsRows.filter(r => {
+    const flags = Array.isArray(r.flags) ? r.flags : [];
+    if (flags.includes("billed_back") || flags.includes("inactive")) return false;
+    if (r.actual == null || r.budget_at_this_revenue == null) return false;
+    return (r.actual - r.budget_at_this_revenue) > 0;
+  }).length;
 
   return (
     <div
