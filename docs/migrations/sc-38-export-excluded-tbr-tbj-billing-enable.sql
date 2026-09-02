@@ -127,9 +127,14 @@ INSERT INTO sc_qbo_account_map
   (account_key, qbo_customer_id, qbo_customer_name, qbo_taxcode_id,
    cadence, qbo_mode, salaried_manager_emails, rdo_email)
 VALUES
-  ('TBR - FL', '17860', 'Tampa Bay Rays (Port Charlotte, FL)', '26',
+  -- qbo_customer_name is the exact DisplayName QBO returns for the
+  -- customer id. QBO validates the CustomerRef {value, name} pair at
+  -- POST time; a descriptive-but-wrong name will make QBO reject the
+  -- invoice. Values below pulled live from QBO by Chat-Claude
+  -- 2026-09-02, not derived from the SC's account_key.
+  ('TBR - FL', '17860', 'Tampa Bay Rays MiLB/MLB',                '26',
    'weekly', 'test', ARRAY[]::text[], NULL),
-  ('TBJ - FL', '16971', 'Toronto Blue Jays (Dunedin, FL)',      '26',
+  ('TBJ - FL', '16971', 'Rogers Blue Jays Baseball Partnership',  '26',
    'weekly', 'test', ARRAY[]::text[], NULL);
 
 -- ═══════════════════════════════════════════════════════════════════
@@ -141,10 +146,17 @@ VALUES
 --   (id 3298). MLB Dinner mapped preemptively (0 season units) so a
 --   future ST day does not throw.
 -- MiLB Bfst: own QBO item (id 3293).
--- MiLB Lunch + Dinner: aggregated under 'TBR MiLB - Lunch/Dinner'
---   (id 3294). Rates match at $21.68 post the 2026-09-02 precision
---   recon so the aggregate-group merge produces one line per day
---   (Sebastian's shape).
+-- MiLB Lunch + Dinner: both mapped under 'TBR MiLB - Lunch/Dinner'
+--   (id 3294) with aggregate_group='tbr-milb-ld'. Rates DIFFER:
+--   Lunch - MiLB is $21.68 and Minor League / Dinner is $20.96
+--   (verified against the 2026-09-02 precision recon output). The
+--   builder's rate-guard at buildInvoicePayload.js:320-330 will SPLIT
+--   these into two lines per day when both carry qty (same aggregate,
+--   different rate = split). Safe today because Dinner has 0 season
+--   units - only Lunch produces a line. If a future actual lands on
+--   Dinner, Sebastian will see two lines under the same QBO item on
+--   the same day (Lunch qty at $21.68 + Dinner qty at $20.96),
+--   NOT one blended line. Kevin's ruling if that presents wrong.
 -- MiLB Road Sandwiches: own QBO item (id 3389).
 -- MiLB Extra Protein - Chicken/Pork: own line (id 3369), 'milb' slot
 --   per Kevin ruling (same document as MiLB meals). is_flat_fee=true
