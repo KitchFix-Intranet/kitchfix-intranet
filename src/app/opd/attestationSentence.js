@@ -17,11 +17,21 @@
 //
 // Module title derives from obligation.source_section via
 // partShortTitle - same derivation the room and certificate use.
+//
+// partShortTitle returns the display string INCLUDING the part prefix
+// ("Part N · Something"). "Part N ·" is a list prefix and the middle
+// dot (U+00B7) is a UI separator; neither belongs inside a sentence a
+// person is legally attesting to. Strip the prefix here so all callers
+// get a clean module title. Do NOT strip in the room or on the
+// certificate - the prefix is correct there.
+
+const PART_PREFIX = /^Part\s+\d+\s*·\s*/;
 
 export function buildAttestationSentence({ displayName, moduleTitle, documentTitle, version }) {
   const name = String(displayName || "").trim();
   const doc = String(documentTitle || "").trim() || "this document";
-  const mod = String(moduleTitle || "").trim();
+  const modRaw = String(moduleTitle || "").trim();
+  const mod = modRaw.replace(PART_PREFIX, "").trim();
   const ver = String(version || "").trim() || "?";
   if (mod && mod !== doc) {
     return `I, ${name}, have read and understood ${mod}, from the ${doc}, version ${ver}, and I will hold this standard at my sites.`;
