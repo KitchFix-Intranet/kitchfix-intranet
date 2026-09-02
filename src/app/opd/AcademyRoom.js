@@ -694,38 +694,24 @@ function CompletedBlock({ docs, onOpen }) {
           {docs.length} document{docs.length === 1 ? "" : "s"} · {partCount} certificate{partCount === 1 ? "" : "s"}
         </span>
       </div>
-      {docs.map((d) => (
+      {docs.map((d) =>
         d.parts.map((r) => {
           const md = formatMonthDay(r.signed_at);
-          return (
-            <button
-              key={r.requirement_id}
-              type="button"
-              className="opd-pr opd-pr--dn"
-              onClick={() => onOpen(r)}
-            >
+          // Links to the certificate PDF when the attestation id is on the
+          // wire; falls back to opening the module when it is not. The
+          // browser uses the server's Content-Disposition filename.
+          const hasCert = !!r.attestation_id;
+          const commonProps = {
+            key: r.requirement_id,
+            className: "opd-pr opd-pr--dn",
+          };
+          const innards = (
+            <>
               <i className="opd-spine" aria-hidden="true" />
               <span className="opd-lead" aria-hidden="true">
                 <span className="opd-pnum">
                   <Check size={11} strokeWidth={2.25} />
                 </span>
-      {completed.map((r) => {
-        const md = formatMonthDay(r.signed_at);
-        // Row is a link to the certificate PDF when the attestation
-        // id is on the wire; otherwise falls back to the old open-
-        // module behaviour. Browser handles the download using the
-        // server's Content-Disposition filename.
-        const hasCert = !!r.attestation_id;
-        const commonProps = {
-          key: r.requirement_id,
-          className: "opd-pr opd-pr--dn",
-        };
-        const innards = (
-          <>
-            <i className="opd-spine" aria-hidden="true" />
-            <span className="opd-lead" aria-hidden="true">
-              <span className="opd-pnum">
-                <Check size={11} strokeWidth={2.25} />
               </span>
               <div className="opd-pb">
                 <h4>{r.doc_title}{r.total_parts > 1 ? ` · Part ${r.part_number}` : ""}</h4>
@@ -740,30 +726,24 @@ function CompletedBlock({ docs, onOpen }) {
                 </div>
                 <div className="opd-pm-b">CERTIFICATE</div>
               </div>
-              <span className="opd-go" aria-hidden="true">View</span>
+              <span className="opd-go" aria-hidden="true">Certificate</span>
+            </>
+          );
+          return hasCert ? (
+            <a
+              {...commonProps}
+              href={`/api/academy/certificate/${encodeURIComponent(r.attestation_id)}`}
+              download
+            >
+              {innards}
+            </a>
+          ) : (
+            <button {...commonProps} type="button" onClick={() => onOpen(r)}>
+              {innards}
             </button>
           );
         })
-      ))}
-              <div className="opd-pm-b">CERTIFICATE</div>
-            </div>
-            <span className="opd-go" aria-hidden="true">Certificate</span>
-          </>
-        );
-        return hasCert ? (
-          <a
-            {...commonProps}
-            href={`/api/academy/certificate/${encodeURIComponent(r.attestation_id)}`}
-            download
-          >
-            {innards}
-          </a>
-        ) : (
-          <button {...commonProps} type="button" onClick={() => onOpen(r)}>
-            {innards}
-          </button>
-        );
-      })}
+      )}
     </div>
   );
 }
