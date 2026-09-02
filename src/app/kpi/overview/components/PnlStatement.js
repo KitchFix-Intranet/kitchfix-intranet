@@ -125,8 +125,20 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
         ) : isFee ? (
           <span className="kpi-ov-chip-fixed">contractual</span>
         ) : row.variance != null ? (
-          <span className={row.section === "revenue" ? (row.variance >= 0 ? "kpi-ov-good" : "kpi-ov-bad") : (row.variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad")}>
-            {fmtMoney(Math.abs(row.variance))} {row.section === "revenue" ? (row.variance >= 0 ? "above" : "below") : (row.variance <= 0 ? "under" : "over")}
+          /* PR-1 item 5 (2026-09-02): revenue variance renders amber
+             with a "provisional" suffix when the server flags the row
+             as such (revenue_source_state="planned"). Server keys the
+             flag off SOURCE not period state, so an sc_revenue_live=
+             true open period reads red/green like every other settled
+             comparison. Cost rows never carry provisional - they are
+             always settled spend. */
+          <span className={row.section === "revenue"
+            ? (row.provisional ? "kpi-ov-warn" : (row.variance >= 0 ? "kpi-ov-good" : "kpi-ov-bad"))
+            : (row.variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad")}>
+            {fmtMoney(Math.abs(row.variance))}
+            {" "}
+            {row.section === "revenue" ? (row.variance >= 0 ? "above" : "below") : (row.variance <= 0 ? "under" : "over")}
+            {row.section === "revenue" && row.provisional && " · provisional"}
           </span>
         ) : (
           <DashOrValue value={null} reported={false} />
@@ -266,8 +278,14 @@ export default function PnlStatement({ payload, open, onToggle }) {
                       {revenueCard.pill?.label === "Contractual" ? (
                         <span className="kpi-ov-chip-fixed">contractual</span>
                       ) : revenueCard.delta_display ? (
-                        <span className={revenueCard.delta_direction === "good" ? "kpi-ov-good" : "kpi-ov-bad"}>
+                        /* PR-1 item 5 (2026-09-02): total-revenue
+                           variance shares the row-level provisional
+                           rule. When revenue_source_state="planned"
+                           the total renders amber + suffix; otherwise
+                           it stays green/red. */
+                        <span className={payload.revenue_source_state === "planned" ? "kpi-ov-warn" : (revenueCard.delta_direction === "good" ? "kpi-ov-good" : "kpi-ov-bad")}>
                           {revenueCard.delta_display}
+                          {payload.revenue_source_state === "planned" && " · provisional"}
                         </span>
                       ) : (
                         <DashOrValue value={null} reported={false} />
@@ -362,8 +380,11 @@ export default function PnlStatement({ payload, open, onToggle }) {
               {payload.flags?.packaging_gap && (
                 <> <b>Packaging on this account has a known mapping gap</b> - our figure is incomplete.</>
               )}
-              {payload.flags?.planned && (
+              {payload.revenue_source_state === "planned" && (
                 <> <b>Revenue for the open period is planned</b> until this site&rsquo;s meal counts are live in the Service Calendar; closed periods use finance actuals.</>
+              )}
+              {payload.sc_counts_without_dollars && (
+                <> <b>Revenue is not yet reporting</b> - {payload.sc_counts_without_dollars.row_count} service days are on the calendar for this period but no meal counts have been entered, so there are no dollars to show yet.</>
               )}
             </p>
           </div>

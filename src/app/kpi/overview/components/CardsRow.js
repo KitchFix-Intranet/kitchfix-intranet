@@ -69,7 +69,7 @@ function Pill({ pill }) {
 //   Open period: "vs $118,130 P9 budget"
 //   FYTD:        "vs $1,572,700 full-year budget"
 //   Closed:      "vs $121,930 budget"
-function RevenueCard({ card, range }) {
+function RevenueCard({ card, range, scCountsWithoutDollars }) {
   const isFytd = range?.kind === "fytd";
   const isClosed = range?.period_state === "verified" || range?.period_state === "closed_awaiting";
   // "P9 budget" copy for the open-period case. The payload's range
@@ -78,7 +78,20 @@ function RevenueCard({ card, range }) {
   // ("This period · P9 · 08/10 – 09/06").
   const periodLabel = range?.period_no != null ? `P${range.period_no}` : null;
 
+  // PR-1 item 6 (2026-09-02): sc_counts_without_dollars replaces the
+  // "vs $X budget" sub-line with a specific absence message.
+  // Otherwise the hero already renders "—" via DashOrValue, and the
+  // pill reads "Not yet reporting" from the server - but the operator
+  // needs the sentence "counts landed, dollars have not" spelled out,
+  // not just an absence glyph.
   const subLine = (() => {
+    if (scCountsWithoutDollars) {
+      return (
+        <div className="kpi-ov-sub" data-kpi-ov="revenue-sub-sc-absent">
+          <b>{scCountsWithoutDollars.row_count}</b> service days on the calendar; no meal counts entered yet.
+        </div>
+      );
+    }
     if (isClosed) {
       const closedBudget = card.budget_full_period_display || card.budget_to_date_display;
       if (!closedBudget) return null;
@@ -197,14 +210,14 @@ function GrossMarginCard({ card }) {
   );
 }
 
-export default function CardsRow({ cards, rangeMeta }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
   const gm      = cards.find(c => c.key === "gross_margin");
   return (
     <div className="kpi-ov-cards" data-kpi-ov="cards-row">
-      {revenue && <RevenueCard card={revenue} range={rangeMeta} />}
+      {revenue && <RevenueCard card={revenue} range={rangeMeta} scCountsWithoutDollars={scCountsWithoutDollars} />}
       {cogs    && <CogsCard    card={cogs} />}
       {gm      && <GrossMarginCard card={gm} />}
     </div>

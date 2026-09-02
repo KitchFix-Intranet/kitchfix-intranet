@@ -30,5 +30,23 @@ export async function resolve(specifier, context, nextResolve) {
     }
     throw new Error(`_at_alias_resolver: cannot resolve ${specifier} in ${SRC_ROOT}`);
   }
+  // Next lets bare specifiers omit the .js extension on relative
+  // imports (e.g. `import "./resolveName"`); node's strict ESM does
+  // not. Rewrite relative imports missing an extension to add .js so
+  // probes can import into the same modules Next serves.
+  if ((specifier.startsWith("./") || specifier.startsWith("../")) &&
+      !/\.[a-z0-9]+$/i.test(specifier) && context.parentURL) {
+    const parentDir = dirname(fileURLToPath(context.parentURL));
+    const candidates = [
+      pathResolve(parentDir, specifier + ".js"),
+      pathResolve(parentDir, specifier + ".mjs"),
+      pathResolve(parentDir, specifier, "index.js"),
+    ];
+    for (const p of candidates) {
+      if (existsSync(p)) {
+        return { url: pathToFileURL(p).href, format: "module", shortCircuit: true };
+      }
+    }
+  }
   return nextResolve(specifier, context);
 }
