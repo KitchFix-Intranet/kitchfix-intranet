@@ -154,7 +154,7 @@ export async function GET() {
     console.error("[api/academy/room] requirements:", reqsQ.error.message);
     return NextResponse.json({ error: "server_error", scope: "requirements" }, { status: 500 });
   }
-  const reqs = reqsQ.data || [];
+  let reqs = reqsQ.data || [];
 
   // Distinct sets to hydrate. We enrich each requirement with its doc
   // title + shelf and its obligation's source_section + description +
@@ -177,7 +177,7 @@ export async function GET() {
   // Added 2026-09-01 (owner walk): the tiles were rendering four
   // zeros, which is technically true but reads as broken since the
   // data exists in academy_check_attempts + academy_module_progress.
-  const [docsQ, obligationsQ, cyclesQ, attestationsQ, viewerAttemptsQ, viewerProgressQ] = await Promise.all([
+  const [docsQ, obligationsQ, cyclesQ, cycleModulesQ, attestationsQ, viewerAttemptsQ, viewerProgressQ] = await Promise.all([
     distinctDocIds.length > 0
       ? supa.from("documents").select("id, title, shelf, doc_class, version, card_line").in("id", distinctDocIds)
       : Promise.resolve({ data: [], error: null }),
@@ -191,6 +191,18 @@ export async function GET() {
       .from("academy_cycles")
       .select("cycle_id, label, period_start, period_end, status, fiscal_year, fiscal_period_no, audience_scope, published_at")
       .order("period_start", { ascending: true }),
+    // Cycle module ordering. Curriculum authors sort_order in the
+    // Cycle Builder; we key by (cycle_id, doc_id, obligation_key) so
+    // requirements that came from a cycle honor that order. Rows with
+    // no matching module (onboarding + rehire sources have no cycle)
+    // fall through to the existing due_date, doc_id, obligation_key
+    // tie-breaker. Closes open ruling 17.12.
+    distinctCycleIds.length > 0
+      ? supa
+          .from("academy_cycle_modules")
+          .select("cycle_id, doc_id, obligation_key, sort_order")
+          .in("cycle_id", distinctCycleIds)
+      : Promise.resolve({ data: [], error: null }),
     supa
       .from("academy_attestations")
       .select("attestation_id, requirement_id, doc_id, obligation_key, doc_version, signed_at, certificate_serial, supersedes")
@@ -217,6 +229,10 @@ export async function GET() {
     console.error("[api/academy/room] cycles:", cyclesQ.error.message);
     return NextResponse.json({ error: "server_error", scope: "cycles" }, { status: 500 });
   }
+  if (cycleModulesQ.error) {
+    console.error("[api/academy/room] cycle modules:", cycleModulesQ.error.message);
+    return NextResponse.json({ error: "server_error", scope: "cycle_modules" }, { status: 500 });
+  }
   if (attestationsQ.error) {
     console.error("[api/academy/room] attestations:", attestationsQ.error.message);
     return NextResponse.json({ error: "server_error", scope: "attestations" }, { status: 500 });
@@ -240,6 +256,37 @@ export async function GET() {
   const cycles = cyclesQ.data || [];
   for (const c of cycles) cyclesById.set(c.cycle_id, c);
 
+  // Curriculum-authored sort_order per (cycle_id, doc_id, obligation_key).
+  // Requirements from a cycle module honor this ordering; requirements
+  // without a matching module (onboarding, rehire) sort to the end and
+  // fall back to the SQL tie-breaker (due_date, doc_id, obligation_key).
+  const cycleModules = cycleModulesQ.data || [];
+  const sortOrderByCycleReq = new Map();
+  for (const m of cycleModules) {
+    sortOrderByCycleReq.set(`${m.cycle_id}|${m.doc_id}|${m.obligation_key}`, m.sort_order);
+  }
+  const sortOrderForReq = (r) => {
+    if (r.cycle_id == null) return Infinity;
+    const v = sortOrderByCycleReq.get(`${r.cycle_id}|${r.doc_id}|${r.obligation_key}`);
+    return v == null ? Infinity : v;
+  };
+  // Re-sort reqs by (cycle sort_order, then existing SQL tie-breakers).
+  // The SQL .order() chain returns rows in due_date -> doc_id ->
+  // obligation_key order; a stable sort keyed on sort_order preserves
+  // those tie-breakers for equal-order rows (and for reqs with no
+  // matching cycle module). Fix for open ruling 17.12.
+  reqs = [...reqs].sort((a, b) => {
+    const so = sortOrderForReq(a) - sortOrderForReq(b);
+    if (so !== 0) return so;
+    // Preserve the SQL tie-breaker order explicitly so the sort is
+    // deterministic even if the JS engine's sort is not stable.
+    const ad = a.due_date || "";
+    const bd = b.due_date || "";
+    if (ad !== bd) return ad < bd ? -1 : 1;
+    if (a.doc_id !== b.doc_id) return a.doc_id.localeCompare(b.doc_id);
+    return String(a.obligation_key || "").localeCompare(String(b.obligation_key || ""));
+  });
+
   // Index the viewer's attestations by requirement_id. A NOT EXISTS
   // check for "is this attestation the current one?" would use the
   // supersedes column; in v1 there are no super-seding rows so a
@@ -251,16 +298,24 @@ export async function GET() {
 
   // Group requirements by doc_id so a doc with multiple visible
   // obligations (e.g. PB-014 has origin + standard) can render each
-  // row with a "part N of M" suffix. Ordering within a doc is by
-  // obligation_key alphabetically - deterministic, no additional
-  // fields needed. When a doc has only one visible obligation for
-  // this worker, no suffix is added.
+  // row with a "part N of M" suffix. Ordering within a doc follows
+  // the same cycle sort_order as the top-level list; obligation_key
+  // is the tie-breaker for parts that share a sort_order or whose
+  // requirement has no matching cycle module. Previously this sorted
+  // by obligation_key alone, which would have rendered
+  // big-rules-annual as Part 1 (open ruling 17.12).
   const byDoc = new Map();
   for (const r of reqs) {
     if (!byDoc.has(r.doc_id)) byDoc.set(r.doc_id, []);
     byDoc.get(r.doc_id).push(r);
   }
-  for (const [, list] of byDoc) list.sort((a, b) => a.obligation_key.localeCompare(b.obligation_key));
+  for (const [, list] of byDoc) {
+    list.sort((a, b) => {
+      const so = sortOrderForReq(a) - sortOrderForReq(b);
+      if (so !== 0) return so;
+      return String(a.obligation_key || "").localeCompare(String(b.obligation_key || ""));
+    });
+  }
   const partIndex = new Map(); // requirement_id -> { partNumber, totalParts }
   for (const [, list] of byDoc) {
     list.forEach((r, i) => {
