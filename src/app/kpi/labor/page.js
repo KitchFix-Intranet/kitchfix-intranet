@@ -157,8 +157,8 @@ export default function KpiLaborPage() {
   );
   // V6-5/V6-7 - inference computed EARLY so the grouped memo can key
   // its grouping mode on it (month vs period). Downstream aliases
-  // (selectedPeriodNo, selectedMonth, rangeSelection) are declared
-  // near the RangeMenu wiring for readability.
+  // (selectedPeriodNo, rangeSelection) are declared near the
+  // RangeMenu wiring for readability.
   const rangeSelectionEarly = useMemo(() => inferRangeSelection(start, end), [start, end]);
   // Track how the current dates were arrived at (last preset click).
   // Used by the hero suffix inference.
@@ -789,7 +789,11 @@ export default function KpiLaborPage() {
   // (See earlier declaration of rangeSelectionEarly for the grouped
   // dependency; this line is intentionally a re-export for readers.)
   const selectedPeriodNo = rangeSelectionEarly?.kind === "period" ? rangeSelectionEarly.value : null;
-  const selectedMonth    = rangeSelectionEarly?.kind === "month"  ? rangeSelectionEarly.value : null;
+  // 2026-09-02 MONTHS-retirement follow-up: `selectedMonth` was
+  // consumed only by the range menu prop, which is gone. Internal
+  // month-grouping code (grouped memo, groupHint) still keys off
+  // rangeSelectionEarly.kind === "month" for stale-URL defensive
+  // fallback but produces no user-facing month labels.
   const rangeSelection = rangeSelectionEarly;
 
   function exportHref() {
@@ -1353,7 +1357,6 @@ export default function KpiLaborPage() {
             accountPeriods: data?.account_periods || [],
             resolvedPreset,
             selectedPeriodNo,
-            selectedMonth,
             urlLabel,
             /* 2026-09-02 retire-custom PR: the server snaps any non-
                aligned (start,end) URL to the containing period; the
