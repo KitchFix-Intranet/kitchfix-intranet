@@ -21,8 +21,32 @@
 // The visual contract lives at docs/opd/OPD_Module_Final.html.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildAttestationSentence } from "./attestationSentence";
 
 // ─── helpers ─────────────────────────────────────────────────────
+// Module short-title derivation. DUPLICATED from AcademyRoom.js:572-582
+// (and matches the derivation certificatePdf.js uses on branch
+// opd-certificate-pdf / PR #965). Three sites hold this logic today:
+//   1. src/app/opd/AcademyRoom.js (partShortTitle)
+//   2. src/app/opd/AcademyFocus.js (this file, below)
+//   3. src/app/opd/certificatePdf.js (PR #965 branch)
+// Consolidation into a shared helper is deferred to a follow-up PR
+// to avoid cross-branch conflict with PR #965; when that merges, fold
+// all three call sites onto a single helper. Drift risk is real -
+// any edit here must be mirrored across the other two sites until
+// consolidation lands.
+function partShortTitle(sourceSection) {
+  const src = String(sourceSection || "").trim();
+  if (!src) return "";
+  const first = src.split(/;/, 1)[0].trim();
+  if (!first) return "";
+  const MAX = 40;
+  if (first.length <= MAX) return first;
+  const cut = first.slice(0, MAX);
+  const lastSp = cut.lastIndexOf(" ");
+  return (lastSp > 20 ? cut.slice(0, lastSp) : cut).replace(/[\s,.·-]+$/, "") + "…";
+}
+
 function formatSignedAt(iso) {
   if (!iso) return null;
   try {
@@ -203,14 +227,20 @@ function CheckCard({
 function SignBlock({
   doc,
   version,
+  moduleTitle,
   displayName,
   timeSpentSeconds,
   stepsCount,
   totalQuestionsPassed,
 }) {
   const attestationText = useMemo(() => (
-    `I, ${displayName}, have read and understood ${doc?.title || doc?.id || "this document"}, version ${version || "?"}, and I will hold this standard at my sites.`
-  ), [displayName, doc?.title, doc?.id, version]);
+    buildAttestationSentence({
+      displayName,
+      moduleTitle,
+      documentTitle: doc?.title || doc?.id,
+      version,
+    })
+  ), [displayName, moduleTitle, doc?.title, doc?.id, version]);
 
   const minutes = timeSpentSeconds > 0 ? Math.max(1, Math.round(timeSpentSeconds / 60)) : null;
 
@@ -358,6 +388,10 @@ export default function AcademyFocus({
   const viewer = state.data?.viewer || null;
 
   const version = doc?.version || req?.doc_version || null;
+  // Module short-title from obligation.source_section. Empty when the
+  // document has no module split; the attestation builder falls back
+  // to naming the document alone in that case.
+  const moduleTitle = partShortTitle(ob?.source_section);
 
   const questionsById = useMemo(() => {
     const m = new Map();
@@ -689,6 +723,7 @@ export default function AcademyFocus({
                       passedChecks={passedChecks}
                       doc={doc}
                       version={version}
+                      moduleTitle={moduleTitle}
                       viewer={viewer}
                       timeSpentSeconds={timeSpentSeconds}
                     />
@@ -726,6 +761,7 @@ export default function AcademyFocus({
                   displayName={viewer?.displayName || ""}
                   doc={doc}
                   version={version}
+                  moduleTitle={moduleTitle}
                   stepsCount={steps.length}
                   totalQuestionsPassed={passedChecks}
                   timeSpentSeconds={timeSpentSeconds}
@@ -820,6 +856,7 @@ function SignPane({
   passedChecks,
   doc,
   version,
+  moduleTitle,
   viewer,
   timeSpentSeconds,
 }) {
@@ -835,6 +872,7 @@ function SignPane({
         <SignBlock
           doc={doc}
           version={version}
+          moduleTitle={moduleTitle}
           displayName={viewer.displayName}
           timeSpentSeconds={timeSpentSeconds()}
           stepsCount={steps.length}
@@ -910,6 +948,7 @@ function SignFooter({
   displayName,
   doc,
   version,
+  moduleTitle,
   stepsCount,
   totalQuestionsPassed,
   timeSpentSeconds,
@@ -935,8 +974,13 @@ function SignFooter({
 
   const attestationIdRef = useRef(newAttestationId());
   const attestationText = useMemo(() => (
-    `I, ${displayName}, have read and understood ${doc?.title || doc?.id || "this document"}, version ${version || "?"}, and I will hold this standard at my sites.`
-  ), [displayName, doc?.title, doc?.id, version]);
+    buildAttestationSentence({
+      displayName,
+      moduleTitle,
+      documentTitle: doc?.title || doc?.id,
+      version,
+    })
+  ), [displayName, moduleTitle, doc?.title, doc?.id, version]);
 
   async function sign() {
     if (!matches || submitting) return;
