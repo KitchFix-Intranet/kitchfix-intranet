@@ -301,11 +301,13 @@ export default function KpiOverviewPage() {
     // classification is normalized separately in resolver.js
     // (normalizeExplicitToPreset) so the FYTD full-year budget label
     // (P2-5) also fires - two surfaces, same root cause.
+    // 2026-09-02 retire-custom PR: `last_4wk` inference removed - the
+    // preset itself is retired. Any URL with dates that don't fold
+    // into a period boundary gets snapped server-side; the returned
+    // payload.range_snap drives the chip disclosure.
     let resolvedPreset = null;
     if (start === FY_START && end === today) {
       resolvedPreset = "fytd";
-    } else if (start === addDaysISO(today, -27) && end === today) {
-      resolvedPreset = "last_4wk";
     } else {
       const past = accountPeriods
         .filter(p => p.start && p.end && p.start <= today)
@@ -325,9 +327,10 @@ export default function KpiOverviewPage() {
       selectedPeriodNo: rangeSelection?.kind === "period" ? rangeSelection.value : null,
       selectedMonth: rangeSelection?.kind === "month" ? rangeSelection.value : null,
       urlLabel,
+      rangeSnap: data?.range_snap || null,
       onCommit: onCommitRange,
     };
-  }, [start, end, today, rangeSelection, urlLabel, onCommitRange]);
+  }, [start, end, today, rangeSelection, urlLabel, onCommitRange, data?.range_snap]);
 
   // R-40 polish (2026-09-01): revenue-source toggle retired
   // end-to-end. Nothing to render.

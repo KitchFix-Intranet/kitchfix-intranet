@@ -676,7 +676,7 @@ export default function KpiLaborPage() {
     if (autoOpenAccountRef.current === account) return;
     autoOpenAccountRef.current = account;
     // V25-18 - only single-period ranges auto-open; multi-period
-    // ranges (FYTD, month, custom, last_4wk, PR-2 multi-select)
+    // ranges (FYTD, month, PR-2 multi-select)
     // land collapsed.
     if (rangeSelectionEarly?.kind !== "period") {
       setExpandedPeriods(new Set());
@@ -719,11 +719,10 @@ export default function KpiLaborPage() {
   const resolvedPreset = useMemo(() => {
     if (lastPreset) return lastPreset; // user clicked one this session
     if (start === FY_START && end === today) return "fytd";
-    if (start === addDaysISO(today, -27)  && end === today) return "last_4wk";
-    // Range PR-2 2026-08-24: last_13wk preset retired. The inference
-    // for start === today-90 dropped with it - a hand-crafted URL
-    // that lands on those exact dates now reads as a custom range,
-    // not as a preset that no longer exists in the picker.
+    // 2026-09-02 retire-custom PR: last_4wk inference removed - the
+    // preset itself is retired (rolling window straddles periods and
+    // produced the grain-mismatch defect Kevin measured on TBR - FL).
+    // last_13wk was retired 2026-08-24 for the same reason.
     // this_period / last_period rely on account_periods bounds
     const periods = data?.account_periods || [];
     if (periods.length) {
@@ -740,7 +739,7 @@ export default function KpiLaborPage() {
   function applyPreset(kind) {
     const t = today;
     setLastPreset(kind);
-    if (kind === "last_4wk")  return setParams({ start: addDaysISO(t, -27), end: t });
+    // 2026-09-02: last_4wk preset retired.
     if (kind === "fytd")      return setParams({ start: FY_START,           end: t });
     const periods = data?.account_periods || [];
     if (!periods.length) return;
@@ -922,7 +921,7 @@ export default function KpiLaborPage() {
       return `${months[rangeSelectionEarly.value.monthIndex]} ${rangeSelectionEarly.value.year}`;
     }
     if (resolvedPreset === "fytd") return "fiscal year to date";
-    if (resolvedPreset === "last_4wk") return "the last 4 weeks";
+    // 2026-09-02: last_4wk retired.
     if (resolvedPreset === "this_period" || resolvedPreset === "last_period") return `Period ${data?.board?.period_no ?? ""}`.trim();
     return `${start} to ${end}`;
   })();
@@ -1356,6 +1355,11 @@ export default function KpiLaborPage() {
             selectedPeriodNo,
             selectedMonth,
             urlLabel,
+            /* 2026-09-02 retire-custom PR: the server snaps any non-
+               aligned (start,end) URL to the containing period; the
+               chip reads "Period N · snapped from a custom range"
+               when it fires. */
+            rangeSnap: data?.range_snap || null,
             /* HS PR-C 2026-08-24: on homestand view the range chip
                names the selected stand instead of reading FYTD
                defaults. Same principle PR-2 shipped for periods and

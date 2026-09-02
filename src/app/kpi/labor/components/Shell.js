@@ -285,6 +285,7 @@ export function Shell({
             selectedMonth={rangeProps.selectedMonth}
             urlLabel={rangeProps.urlLabel}
             chipOverride={rangeProps.chipOverride}
+            rangeSnap={rangeProps.rangeSnap}
             onCommit={rangeProps.onCommit}
           />
         )}

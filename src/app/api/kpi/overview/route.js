@@ -37,6 +37,8 @@ import { KPI_PREVIEW_ONLY, KPI_PREVIEW_ALLOWLIST, loadRoleGate } from "@/lib/kpi
 import { resolvePreviewAccess } from "@/lib/kpi/previewAccess.js";
 import { isKnownAccount } from "@/lib/accountModels.js";
 import { resolveOverview } from "@/lib/kpi/overview/resolver.js";
+import { snapRange } from "@/lib/kpi/rangeSnap.js";
+import { periodStartISO, periodEndISO } from "@/app/kpi/labor/lib/periods";
 
 const V6_PSEUDO_KEYS = new Set(["ALL", "EAST", "WEST"]);
 
@@ -45,19 +47,39 @@ function safeError(scope, err) {
   return { error: "server_error", scope };
 }
 
-function parseRange(searchParams) {
+// Range resolution (2026-09-02, cross-board "period-aligned only"
+// PR): every range must be FYTD or aligned to fiscal-period
+// boundaries. snapRange enforces the rule and reports whether it
+// snapped. Non-aligned URL inputs land on the period containing
+// `end` per Kevin's rule 4 - a bookmarked custom URL lands
+// somewhere sane rather than on a blank board or a computed
+// grain-mismatch.
+function parseRange(searchParams, today) {
   const rangeParam = (searchParams.get("range") || "").trim();
   const startParam = (searchParams.get("start") || "").trim();
   const endParam   = (searchParams.get("end")   || "").trim();
 
-  if (rangeParam === "fytd") return { kind: "fytd" };
+  // ?range=fytd / ?range=period:N take precedence when set - clean
+  // aliases the client can emit. Everything else routes through
+  // snapRange.
+  if (rangeParam === "fytd") return { snap: snapRange("", "", today), rangeParamSeen: "fytd" };
   if (rangeParam.startsWith("period:")) {
     const n = Number(rangeParam.slice("period:".length));
-    if (Number.isInteger(n) && n >= 1 && n <= 13) return { kind: "period", period_no: n };
+    if (Number.isInteger(n) && n >= 1 && n <= 13) {
+      // Build the aligned range for the requested period directly -
+      // snapRange handles start/end input; ?range=period:N is a
+      // shorthand.
+      return {
+        snap: {
+          start: periodStartISO(n), end: periodEndISO(n),
+          kind: "period", period_no: n,
+          start_period_no: n, end_period_no: n,
+          snapped: false, snapped_from: null,
+        },
+      };
+    }
   }
-  if (startParam && endParam) return { kind: "explicit", start: startParam, end: endParam };
-  // Default to FYTD when nothing is specified.
-  return { kind: "fytd" };
+  return { snap: snapRange(startParam, endParam, today) };
 }
 
 export async function GET(request) {
@@ -181,9 +203,19 @@ export async function GET(request) {
   const includeSalary = includeSalaryReq && salaryAvailable;
 
   // Range resolution.
-  let range;
-  try { range = parseRange(searchParams); }
+  let parsed;
+  try { parsed = parseRange(searchParams, today); }
   catch (e) { return NextResponse.json(safeError("range", e), { status: 400 }); }
+  const { snap } = parsed;
+  // Build the resolveOverview-compatible range from the snap output.
+  // Multi-period (kind === "periods") is expressed to the resolver
+  // as an explicit range on the aligned boundaries so no downstream
+  // math changes; single-period + fytd get their existing shapes.
+  const range = snap.kind === "fytd"
+    ? { kind: "fytd" }
+    : snap.kind === "period"
+      ? { kind: "period", period_no: snap.period_no }
+      : { kind: "explicit", start: snap.start, end: snap.end };
 
   // Resolve the Overview payload.
   let payload;
@@ -205,5 +237,15 @@ export async function GET(request) {
   }
   payload.preview_account = preview_account;
   payload.landing_account = landing_account;
+  // Snap disclosure - the chip on the client reads "Period N ·
+  // snapped from a custom range" when set. Absent by default so
+  // aligned requests carry no extra bytes.
+  if (snap.snapped) {
+    payload.range_snap = {
+      snapped: true,
+      snapped_from: snap.snapped_from,
+      snapped_to: { start: snap.start, end: snap.end, period_no: snap.period_no },
+    };
+  }
   return NextResponse.json(payload);
 }
