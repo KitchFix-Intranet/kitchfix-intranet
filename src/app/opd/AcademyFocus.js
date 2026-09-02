@@ -319,9 +319,22 @@ function CompletionScreen({ doc, version, attestation, onBack }) {
           ) : null}
         </div>
       </div>
-      <button type="button" className="opd-focus-done-back" onClick={onBack}>
-        Back to Academy &rsaquo;
-      </button>
+      <div className="opd-focus-done-actions">
+        {attestation?.attestation_id ? (
+          // Plain <a href download> - the server sets Content-Disposition
+          // and supplies the filename (serial + safe title).
+          <a
+            className="opd-focus-done-dl"
+            href={`/api/academy/certificate/${encodeURIComponent(attestation.attestation_id)}`}
+            download
+          >
+            Download PDF
+          </a>
+        ) : null}
+        <button type="button" className="opd-focus-done-back" onClick={onBack}>
+          Back to Academy &rsaquo;
+        </button>
+      </div>
     </div>
   );
 }
