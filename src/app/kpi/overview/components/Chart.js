@@ -43,8 +43,13 @@ function ChartPeriodGrain({ series }) {
   };
   const spends = series.map(s => Number(s.spent || 0));
   const dashes = series.map(s => Number(dashValue(s) || 0));
-  // Scale to max * 1.16 so a bar rendering fully above its dash
-  // doesn't clip.
+  // Kevin ruling 2026-09-02: the scale is the maximum of EVERYTHING
+  // drawn, never a subset of it. Bars AND dashes both contribute to
+  // mx so a period whose adjusted budget exceeds spend still fits
+  // inside the plot area. Same rule as the earlier bar-clipping fix.
+  // Permanent probe: scripts/probes/_probe_chart_scale.mjs asserts
+  // every bar + dash lands in [0,100]% of the plot area, and its
+  // seeded axis fires when the max is computed from bars alone.
   const mx = Math.max(...spends, ...dashes, 1) * 1.16;
 
   return (

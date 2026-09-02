@@ -354,44 +354,8 @@
   padding: 0 var(--kpi-sp-1);
 }
 
-/* Bar hover tooltip */
-.kpi-app .kpi-ov-bt {
-  display: none;
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--n-900);
-  color: var(--n-0);
-  border-radius: var(--kpi-ctl-r);
-  padding: var(--kpi-sp-2) var(--kpi-sp-3);
-  z-index: 20;
-  min-width: calc(170px * var(--kf-scale));
-  text-align: left;
-}
-.kpi-app .kpi-ov-bar:hover .kpi-ov-bt { display: block; }
-.kpi-app .kpi-ov-bt-h {
-  font-size: var(--kpi-t-meta);
-  font-weight: 800;
-  letter-spacing: .04em;
-  margin-bottom: var(--kpi-sp-1);
-  color: var(--n-200);
-}
-.kpi-app .kpi-ov-bt-r {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--kpi-sp-3);
-  font-size: var(--kpi-t-meta);
-  font-weight: 500;
-  line-height: 1.7;
-}
-.kpi-app .kpi-ov-bt-r b { font-weight: 700; }
-.kpi-app .kpi-ov-bt-r.res {
-  border-top: 1px solid var(--n-700);
-  margin-top: 3px;
-  padding-top: var(--kpi-sp-1);
-  font-weight: 800;
-}
+/* Bar hover tooltip retired 2026-09-02 (language pass item 13):
+   BarTip component was deleted, .kpi-ov-bt* rules had no consumer. */
 
 .kpi-app .kpi-ov-axis {
   display: flex;
@@ -810,13 +774,6 @@
  * on the bars container so the top of the tallest bar reads clean. */
 .kpi-app .kpi-ov-bars-inset { padding-top: var(--kpi-sp-2); }
 
-/* ── C13 bar hover: date range on line 2 ────────────────────────── */
-.kpi-app .kpi-ov-bt-d {
-  font-size: var(--kpi-t-meta);
-  font-weight: 500;
-  color: var(--n-400);
-  margin-bottom: var(--kpi-sp-1);
-}
 
 /* ── D14 + D15 fold cards: one card, header trigger, rotating cv ──
  * The fold trigger lives inside the card as a header row; body
