@@ -41,10 +41,15 @@ import { _internals as qboInternals, TEST_SLACK_FOOTER } from "./qboNotification
 
 const { emailShell, escapeHtml, sendSlack, fmtWeekTitle, fmtWeekRange } = qboInternals;
 
-// Sender identity matches qboNotifications (support@kitchfix.com is
-// the Gmail SA DWD-allowed address; ops-hub@kitchfix.com failed auth
-// on 2026-08-13). Display name keeps the Ops Hub brand.
-const EMAIL_SENDER       = "support@kitchfix.com";
+// Sender identity matches qboNotifications. Switched 2026-09-03
+// from support@ to kitchfix.admin@ after support@kitchfix.com was
+// identified as deactivated. See qboNotifications.js:46 for the
+// full sender history + Gmail SA deactivated-target failure mode.
+// N3.1 + N3.2 had been silently failing since chase-ladder merge
+// because they are email-only (no Slack redundancy). Rotation
+// restores delivery; consider adding Slack to N3.1 + N3.2 as a
+// separate PR (parallel to what fireN1 gained 2026-09-03).
+const EMAIL_SENDER       = "kitchfix.admin@kitchfix.com";
 const EMAIL_DISPLAY_NAME = "KitchFix Ops Hub";
 
 // ─── Copy helpers ─────────────────────────────────────────────────

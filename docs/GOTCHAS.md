@@ -350,6 +350,22 @@ When Vendor Portal Slack notifications were first written, deactivate/reactivate
 
 A Slack message like "vendor deactivated" tells you nothing in 2 days when you're trying to figure out what happened.
 
+### `invalid_grant: Invalid email or User ID` from a deactivated impersonation target
+
+Gmail service-account impersonation via `google.auth.JWT({subject: "<mailbox>"})` returns `invalid_grant: Invalid email or User ID` from Google's OAuth endpoint when the `subject` mailbox is **deactivated** at the Workspace level. The error text reads like a DWD authorization problem ("the SA is not authorized to impersonate this user") but it is actually a target-mailbox existence problem ("the mailbox you asked to impersonate is not an active user account"). The two look identical from the caller side.
+
+**Realised on 2026-09-03.** After weeks of silent N1 misses, an isolated probe (`scripts/probes/_probe_n1_gmail_sa.mjs`) surfaced the error string. Every operator-side hypothesis first went to DWD - "check the Workspace admin console for the SA's client_id, verify `gmail.send` is listed for the domain" - and the DWD row was intact. The actual cause: `support@kitchfix.com` had been deactivated at some earlier date. `sendEmailSA` (`src/lib/gmail.js:411-450`) swallows the error in `catch` and returns `"failed"`, so N1 + N2 + N3.1 + N3.2 + N3.3 all silently failed for weeks. N2 and N3.3 reached Kevin via their redundant Slack channel; N1, N3.1, N3.2 had no redundant channel and produced zero operator signal.
+
+**The rule.** When `invalid_grant: Invalid email or User ID` shows up on a Gmail SA impersonation call, check whether the impersonated mailbox still exists as an active Workspace user *before* investigating DWD. Order of investigation:
+
+1. Workspace admin -> Directory -> Users -> search the impersonation target. If deactivated or missing, that is the fix.
+2. If active, verify the SA's numeric `client_id` is in Workspace admin -> Security -> API controls -> Domain Wide Delegation with the required scope (`https://www.googleapis.com/auth/gmail.send`). The `client_id` can be fetched via `scripts/probes/_probe_gmail_sa_client_id.mjs`.
+3. If both check out, look at the SA itself in GCP console for disabled/suspended state.
+
+**Sender rotation is not a one-file edit.** As of 2026-09-03 the codebase had six hardcoded / env-fallback sites referencing `support@kitchfix.com` as a sender: `qboNotifications.js`, `chaseNotifications.js`, `people/route.js`, `incident-reminders/route.js`, and env-default sites in `daily/route.js` + `emailShared.js`. Rotating the sender means editing every site or introducing a shared constant. When adding a new sendEmailSA call site, prefer a shared constant over a new local declaration so the next rotation is one edit.
+
+**The general lesson.** An error message that names the wrong root cause is the durable failure shape. `invalid_grant` sounds like a grant problem. The class matches `NULL <> value` "silently pass on the state it exists to catch" from the Postgres section - a signal that reads like something else long enough for the real problem to hide.
+
 ---
 
 ## AI / Claude API

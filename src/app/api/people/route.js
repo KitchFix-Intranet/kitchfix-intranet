@@ -71,8 +71,12 @@ STATUS_COL: 9,   // Column I (1-indexed)
   ADMIN_ACTION_COL: 11, // Column K (1-indexed)
 };
 
-// Gmail API: send as support@kitchfix.com via domain-wide delegation
-const GMAIL_SENDER = "support@kitchfix.com";
+// Gmail API: send as kitchfix.admin@kitchfix.com via domain-wide
+// delegation. Rotated 2026-09-03 from support@ (deactivated) - same
+// change as qboNotifications.js:54 and chaseNotifications.js:47. See
+// docs/GOTCHAS.md "invalid_grant from a deactivated impersonation
+// target" for the failure mode this fixed.
+const GMAIL_SENDER = "kitchfix.admin@kitchfix.com";
 const GMAIL_SENDER_NAME = "KitchFix People Ops";
 
 // ═══════════════════════════════════════

@@ -587,11 +587,26 @@ export async function runFinalizeEffects(ctx, deps = {}) {
     scWeekLink: buildScWeekLink(accountKey, weekStart),
     accountMap: resolverAccountMap,
   });
-  log.info("[N1 fired]", {
-    subject: n1.subject, to: n1.recipients?.to,
+  // Ruling 2 (2026-09-03): warn on ANY delivery failure so a silent
+  // Gmail SA break surfaces in operator logs. Both channels sent =>
+  // info. Either failed => warn with both channels' status in the
+  // payload for post-hoc grep. The redundant Slack channel means one
+  // silent-fail still gets the operator a signal, but log tier still
+  // flags the underlying broken path.
+  const n1EmailOk = n1.email?.result === "sent";
+  const n1SlackOk = n1.slack?.result?.sent === true;
+  const n1Payload = {
+    subject: n1.subject,
+    to: n1.recipients?.to,
     invoices: invoiceRecords.length,
-    emailResult: n1.emailResult,
-  });
+    email: n1.email?.result,
+    slack: n1.slack?.result,
+  };
+  if (n1EmailOk && n1SlackOk) {
+    log.info("[N1 fired]", n1Payload);
+  } else {
+    log.warn("[N1 delivery incomplete]", n1Payload);
+  }
 
   return { pushed: true, invoiceRecords, n1 };
 }
