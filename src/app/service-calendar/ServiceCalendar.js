@@ -510,8 +510,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // Initial scope=year so the SeasonShell skeleton renders during
   // the brief mount-to-accounts-loaded window; computeInitialView
   // overrides this once roles arrive (floor users land on Period).
+  // 2026-09-03 ruling: mount default flipped from lens="calendar" to
+  // lens="period" so the pre-computeInitialView flash matches the
+  // post-init default for leadership + unknown users.
   const [scope, setScope] = useState("year");
-  const [lens, setLens]   = useState("calendar");
+  const [lens, setLens]   = useState("period");
   const [isAdminView, setIsAdminView] = useState(false);
   const [roleTier, setRoleTier] = useState("unknown");
   // F2: raw contacts.role strings kept alongside the derived tier so
@@ -3813,11 +3816,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
                     showDayNight={true}
-                    /* DP2-05 (2026-07-20): scv2 drill legend bar
-                       carries the FIGURES trailer. v1 fallback mount
-                       below (:2917) leaves the prop off - v1 legend
-                       stays untouched.
-                       Bundle-A #10 (2026-07-21): drop the game-day
+                    /* Bundle-A #10 (2026-07-21): drop the game-day
                        + spring-training markers on drill (they paint
                        on sm overview tiles, not lg drill tiles).
                        Bundle-B follow-up (2026-07-22): drill also
@@ -3826,8 +3825,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                        Coverage split (2026-07-22): three
                        independent flags because overview wants a
                        different subset (day/night only). Popup keeps
-                       every category explained. */
-                    showFigures={true}
+                       every category explained.
+                       2026-09-03 (Kevin ruling): showFigures prop
+                       dropped. Prior DP2-05 trailer "$3K entered
+                       ~$3K projected" removed as noise next to the
+                       state spine. */
                     dropMarkers={true}
                     dropExhibition={true}
                     dropDayNight={true}
@@ -4031,11 +4033,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                     isFeeAccount={isFeeAccount}
                     isMilb={isMilb}
                     showDayNight={true}
-                    /* DP2-05 (2026-07-20): scv2 drill legend bar
-                       carries the FIGURES trailer. v1 fallback mount
-                       below (:2917) leaves the prop off - v1 legend
-                       stays untouched.
-                       Bundle-A #10 (2026-07-21): drop the game-day
+                    /* Bundle-A #10 (2026-07-21): drop the game-day
                        + spring-training markers on drill (they paint
                        on sm overview tiles, not lg drill tiles).
                        Bundle-B follow-up (2026-07-22): drill also
@@ -4044,8 +4042,11 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                        Coverage split (2026-07-22): three
                        independent flags because overview wants a
                        different subset (day/night only). Popup keeps
-                       every category explained. */
-                    showFigures={true}
+                       every category explained.
+                       2026-09-03 (Kevin ruling): showFigures prop
+                       dropped. Prior DP2-05 trailer "$3K entered
+                       ~$3K projected" removed as noise next to the
+                       state spine. */
                     dropMarkers={true}
                     dropExhibition={true}
                     dropDayNight={true}

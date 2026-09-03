@@ -24,16 +24,15 @@ export default function StateLegend({
   isFeeAccount = false,
   isMilb = false,
   showDayNight = false,
-  // DP2-05 (2026-07-20): compact FIGURES trailer in the drill legend
-  // bar. Off by default (v1 + overview call sites don't set it);
-  // scv2 drill mounts opt in. Matches the tile figure grammar the
-  // popup already teaches (LegendInfoPopup.js:125-138): per-meal /
-  // MiLB carry the $ triad ($3K entered · est. $3K awaiting · ~$3K
-  // projected); fee/homestand carry just ~180 meals projected
-  // (fee tiles encode meals, not $). DP1-20's popup-side scoping
-  // deferral is separate; this addition targets the always-visible
-  // bar per the DP1-20 owner ask.
-  showFigures = false,
+  // 2026-09-03 (Kevin ruling): the compact FIGURES trailer
+  // ("$3K entered ~$3K projected") that used to render on the drill
+  // legend bar is REMOVED. Kevin: "the legend teaches state, not
+  // sample values; sample values on a compact bar next to real
+  // values invite pattern-matching noise." No caller opted in after
+  // the two drill mounts were removed in the same PR, so the whole
+  // trailer + its CSS class are dead code below. Kept as a comment
+  // anchor so a future re-request has a home.
+  //
   // Bar-coverage split (2026-07-22): three independent drop flags,
   // one per category. Prior single dropMarkers prop bundled three
   // categories into one flag, which broke down when the overview
@@ -103,39 +102,11 @@ export default function StateLegend({
             </li>
           ))}
         </ul>
-        {/* FIGURES trailer - drill-only opt-in via showFigures. Effective
-           meaning after the 2026-07-22 owner ruling: "show the per-meal
-           two-notation figures key" ($3K entered · ~$3K projected). The
-           prior single-item branch (~180 meals projected) for HOMESTAND
-           / FEE was dropped - one item explaining one notation doesn't
-           earn its space next to the state spine (whereas the per-meal
-           pair encodes a real actual-vs-projected distinction).
-           Effect on the four rendering shapes:
-             - PDC per-meal (PER_MEAL)              -> two-notation key.
-             - MiLB regular (MILB non-AAA)          -> two-notation key
-               (per-meal financially; hits the same branch).
-             - MLB fee (HOMESTAND) + MiLB AAA       -> no FIGURES block.
-             - STL-FL (FEE)                         -> no FIGURES block.
-           No separator artifact when the block is absent: the "|"
-           divider comes from .sc-state-legend-figures {border-left}
-           (stateLegend.css:84); removing the entire outer <span>
-           removes the border with it. */}
-        {showFigures && !hasHomestandSchedule && !isFeeAccount && (
-          <span className="sc-state-legend-figures" aria-label="Tile figures key">
-            <span className="sc-state-legend-figures-title">Figures</span>
-            <span className="sc-state-legend-figures-item">
-              <span className="sc-state-legend-figures-chip">$3K</span>
-              <span className="sc-state-legend-figures-word">entered</span>
-            </span>
-            {/* Bundle-A #12 (2026-07-21): middle "est. $3K awaiting"
-                item REMOVED per owner. Kept entered + projected as
-                the concise pair. */}
-            <span className="sc-state-legend-figures-item">
-              <span className="sc-state-legend-figures-chip">~$3K</span>
-              <span className="sc-state-legend-figures-word">projected</span>
-            </span>
-          </span>
-        )}
+        {/* FIGURES trailer removed 2026-09-03 (Kevin ruling). Prior
+            block rendered "$3K entered ~$3K projected" as sample chips
+            when showFigures={true} was passed by the drill mounts.
+            Both drill mount call sites dropped the prop in the same
+            PR; feature is dead. */}
         <button
           ref={infoBtnRef}
           type="button"

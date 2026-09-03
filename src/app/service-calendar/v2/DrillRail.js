@@ -224,14 +224,13 @@ export default function DrillRail({
   /* R2-1 (2026-07-31) - drill hero reframe, one level down from R1-2
      on the overview. WAS (DP1-14): value + label + "of $X" inline on
      one baseline, with the fraction reading as a target the operator
-     is not measured against. NOW: value + label only on the top line;
-     projection appears once as a labelled caption BELOW the days
-     caption (see the ringbox block in the RailShell body). Scope-
-     aware label because drill scope is period or month, not season.
-     Uses `fmt$` (exact 2dp) to preserve the drill's billing precision
-     - the drill hero is scope-scale, not season-scale, so no rounding
-     to K/M like the overview did. */
-  const heroProjectionCaption = `${scope === "month" ? "Month" : "Period"} projected ${fmt$(heroProjRev)}`;
+     is not measured against. NOW: value + label only on the top line.
+     2026-09-03: the labelled "Period projected $X" / "Month projected
+     $X" caption removed per Kevin ruling - an estimate sitting next
+     to an actual invites a comparison nobody asked for. The
+     projection is still available via the ring's visual + the
+     detailed rail sections below; it just doesn't render as a
+     stand-alone caption. */
   const heroBlock = incomplete ? (
     <div className="sc-rail-hero sc-rail-hero--incomplete">
       <span className="sc-rail-hero-value">-- data incomplete</span>
@@ -283,15 +282,11 @@ export default function DrillRail({
           ariaLabel={ringData.caption}
         />
       )}
-      {/* R2-1 - projection caption sits BELOW the days caption. Same
-          class + treatment as the overview's post-R1-2 pattern; scope-
-          aware wording per the drill. Gated on !incomplete && m to
-          avoid a second ref-derived access (see the ringData
-          computation above); m is a prop, incomplete is a prop, so
-          this branch does not add to the react-hooks/refs lint count. */}
-      {!incomplete && m && (
-        <div className="sc-rail-hero-projection-caption">{heroProjectionCaption}</div>
-      )}
+      {/* R2-1 caption removed 2026-09-03 (Kevin ruling): "Period/
+          Month projected $X" invited a comparison with the ENTERED
+          hero above it that nobody asked for. Projection is still
+          visible in the ring + rail body; the free-standing caption
+          was noise. */}
       <SessionStrip />
 
 
