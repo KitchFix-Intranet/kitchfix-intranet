@@ -16,6 +16,11 @@ import "./ops-sc.css";
 import "./dayDetail.css";
 import "./toast/toast.css";
 import "./v2/accentRail.css";
+// 2026-09-03 (SC cleanup item 4): account-switch skeleton styles.
+// Loaded at page level so shimmer + skeleton-shape classes are
+// available before ServiceCalendar mounts + so Ribbon's inline
+// .sc-skel-bar-ribbon has its animation defined even on initial paint.
+import "./skeleton/skeleton.css";
 
 // Page-level gate. Currently identical to SC_ADMINS - only the two
 // listed emails see the live tool; everyone else gets the Coming Soon
