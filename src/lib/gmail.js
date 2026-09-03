@@ -400,7 +400,7 @@ function encodeSubjectSA(subject) {
  * cron/incident-reminders (google.auth.JWT + googleapis client).
  *
  * @param {Object} args
- * @param {string} args.sender - impersonated mailbox (e.g. "support@kitchfix.com"). Must be on the SA's domain-wide-delegation list.
+ * @param {string} args.sender - impersonated mailbox (e.g. "kitchfix.admin@kitchfix.com"). Must be on the SA's domain-wide-delegation list AND be an ACTIVE Workspace user. A deactivated mailbox returns `invalid_grant: Invalid email or User ID` from Google's OAuth endpoint - see docs/GOTCHAS.md "invalid_grant from a deactivated impersonation target".
  * @param {string} args.displayName - From header display name (e.g. "KitchFix People Ops")
  * @param {string|string[]} args.to - recipient(s)
  * @param {string} args.subject - subject (auto-RFC-2047-encoded for non-ASCII via encodeSubjectSA)
