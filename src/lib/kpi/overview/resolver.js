@@ -2167,6 +2167,40 @@ export async function resolveOverview({
         default: return null;
       }
     })(),
+    // Kevin ruling 2026-09-03 (top-simplify) item 3: two disclosures
+    // move here from the Revenue card. `Periods verified` (was the
+    // range-composition sub-line) + `Inventory` (was the badge). These
+    // are trust statements about the numbers, not metrics; the
+    // Data-current popover is where an operator asks "where do these
+    // numbers come from".
+    periods_display: (() => {
+      if (!rangeComposition) return null;
+      const v = rangeComposition.verified;
+      if (!v || !v.count) return null;
+      return `${v.label} verified`;
+    })(),
+    // Inventory: "actualized" when every finalised period has a JE;
+    // "pending · P6" (or "P6, P7") when one or more are outstanding;
+    // "lands at close" on an open range where the badge would
+    // otherwise vanish (Kevin's item 3: the operator should know the
+    // adjustment is coming, not wonder why the row disappeared).
+    inventory_display: (() => {
+      // Only relevant on inventory-carrying accounts. `inventoryApplicable`
+      // is true for SC-driven / sales-based sites; MF + pass-through
+      // accounts stay null.
+      if (!inventoryApplicable) return null;
+      if (displayPeriodState === "open" && (!inventory_status || inventory_status.finalised_periods?.length === 0)) {
+        return "lands at close";
+      }
+      if (!inventory_status) return null;
+      if (inventory_status.status === "actualized") return "actualized";
+      if (inventory_status.status === "pending") {
+        const pp = inventory_status.pending_periods || [];
+        if (pp.length === 0) return "pending";
+        return `pending · ${pp.map(p => "P" + p).join(", ")}`;
+      }
+      return null;
+    })(),
   };
 
   // 20. Freshness echo. cards_through comes from the purchasing
@@ -2346,16 +2380,16 @@ export async function resolveOverview({
     // fee / planned notes were three restatements of a fact already
     // carried by the Revenue card's pill and the billed-back tags,
     // and the longest one forced the ticker to wrap on fee accounts.
-    // status_line has NO account-model notes; every account renders
-    // the same three segments (GM · lever · progress).
+    //
+    // Kevin ruling 2026-09-03 (top-simplify): the status line becomes
+    // a single pill - state_copy + tone. Every segment beneath
+    // (GM vs target, biggest lever, weeks-closed progress) was a
+    // restatement of what the three cards below already say. See
+    // buildStatusLine below - trimmed to { state, state_copy, tone }.
     status_line: buildStatusLine({
       ticker,
-      cogsLines: cogsLinesForTicker,
-      weeks_closed,
-      weeks_total,
       period_state: displayPeriodState,
       has_target,
-      range_composition: rangeComposition,
       range_kind: rng.kind,
     }),
     sources: sourcesLine,
@@ -2387,56 +2421,22 @@ export async function resolveOverview({
 // by " · " on the client. No notes, no account-model clauses.
 //
 // Segments:
-//   1. "Gross margin <X%> vs <Y%> target"        - always renders when both pcts known
-//   2. "<Lever> is <N.N%> under|over its target" - biggest lever, dropped if unknown
-//   3. "N of M weeks closed"                     - open period only, dropped otherwise
 //
-// State + state_copy come from the ticker computation - the classifier
-// logic is the same, only the render shape changed.
-function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_state, has_target, range_composition, range_kind }) {
+// Kevin ruling 2026-09-03 (top-simplify): status_line collapses to a
+// single pill - `state`, `state_copy`, `tone`. The GM-vs-target
+// segment, biggest-lever segment and weeks-closed segment all restated
+// what the three cards below already say. Sentence-building fields
+// (gm_actual_display / gm_target_display / biggest_lever /
+// progress_display / gm_tone) removed. Card face is now the
+// comparison; the pill states the state alone.
+function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
   if (!ticker) return null;
   const gmActualPct = ticker.gm_pct_actual;
   const gmTargetPct = ticker.gm_pct_target;
-  const gm_actual_display = gmActualPct != null ? `${Number(gmActualPct).toFixed(1)}%` : null;
-  // PR-1 item 1 (2026-09-02): drop the target display + biggest-lever
-  // segment when has_target is false. State pill flips to "No target"
-  // neutral. Cost pcts of revenue remain (ticker keeps them for the
-  // internal state classifier), but the sentence renders no target
-  // comparison because there isn't one.
-  const gm_target_display = (has_target && gmTargetPct != null) ? `${Number(gmTargetPct).toFixed(1)}%` : null;
 
-  // Biggest lever: ticker already ranked levers by |dev_pct|; we take
-  // the top one. Direction is cost-axis: dev_pct > 0 means over target.
-  let biggest_lever = null;
-  if (has_target && ticker.biggest_lever && ticker.biggest_lever.dev_pct != null) {
-    const dev = Number(ticker.biggest_lever.dev_pct);
-    biggest_lever = {
-      label: ticker.biggest_lever.label,
-      dev_display: `${Math.abs(dev).toFixed(1)}%`,
-      direction: dev > 0 ? "over" : "under",
-    };
-  }
-
-  // Kevin 2026-09-02 blocker Item 6: FYTD mixed ranges gain a third
-  // clause "8 of 9 periods verified". Prior code left FYTD progress
-  // null because weeks_closed/weeks_total are only set on single-
-  // period ranges - the bar ended abruptly after two clauses.
-  // Single-period open ranges keep the weeks-closed clause.
-  let progress_display = null;
-  if (period_state === "open" && weeks_closed != null && weeks_total != null) {
-    progress_display = `${weeks_closed} of ${weeks_total} weeks closed`;
-  } else if (range_kind === "fytd" && range_composition && range_composition.periods_total > 1 && range_composition.verified.count < range_composition.periods_total) {
-    progress_display = `${range_composition.verified.count} of ${range_composition.periods_total} periods verified`;
-  }
-
-  // Kevin 2026-09-02 language pass Items 2-3: colour rule collapses
-  // the four-tier state (ahead / on_track_above / on_track_below /
-  // behind / critical) to a two-tone (good / bad) tone key. On target
-  // or better is green; off target by any amount is red. No amber,
-  // no neutral except the "No target" fall-through. Copy is unchanged
-  // ("On track", "Behind target", "At risk" all still read as before)
-  // - only colour flips. Client keys pill background + segment
-  // colours off `tone`, not `state`.
+  // Two-tone rule (Kevin 2026-09-02 items 2-3). GM at or above target
+  // is green; below is red. Rolling windows (has_target=false) are
+  // neutral.
   const gmDeltaForTone = (gmActualPct != null && gmTargetPct != null)
     ? Number(gmActualPct) - Number(gmTargetPct)
     : null;
@@ -2445,15 +2445,11 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     : gmDeltaForTone == null
       ? "neutral"
       : gmDeltaForTone >= 0 ? "good" : "bad";
-  const leverTone = biggest_lever
-    ? (biggest_lever.direction === "under" ? "good" : "bad")
-    : null;
 
-  // Kevin PR-B item 6 (2026-09-03): status pill on a closed period
-  // says the period is closed. "ON TRACK" reads as though the period
-  // is still running. On single closed: PERIOD CLOSED · ON TARGET /
-  // OFF TARGET. FYTD (now closed-only after R-52) reads the same.
-  // Open ranges keep the running wording.
+  // "Period closed · on target / off target" on any closed range
+  // (single closed or FYTD). Open ranges keep the ticker's running
+  // copy ("On track" / "Behind target" / "At risk"). No-target ranges
+  // read "No target" (neutral).
   const rangeIsClosed = range_kind === "period" && period_state !== "open";
   const rangeIsFytdClosed = range_kind === "fytd";
   const closedCopyOverride = (has_target && (rangeIsClosed || rangeIsFytdClosed))
@@ -2463,16 +2459,9 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     || (has_target ? ticker.state_copy : "No target");
 
   return {
-    // PR-1 item 1: "No target" state pill on rolling windows. Neutral
-    // tone, no verdict.
     state: has_target ? ticker.state : "on_track_below",
     state_copy: finalStateCopy,
     tone: statusTone,
-    gm_actual_display,
-    gm_target_display,
-    gm_tone: statusTone,      // same tone drives both status pill and GM bold in sentence
-    biggest_lever: biggest_lever ? { ...biggest_lever, tone: leverTone } : null,
-    progress_display,
   };
 }
 

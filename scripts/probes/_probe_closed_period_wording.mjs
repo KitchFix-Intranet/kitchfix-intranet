@@ -109,22 +109,27 @@ async function auditDom() {
   if (thruMatches.length > 0) {
     fail("W3", `${thruMatches.length} 'thru P#' strings on single_closed DOM: ${thruMatches.slice(0, 5).map(m => m[0]).join(", ")}`);
   }
-  // W4: revenue hero + COGS heroline
+  // W4: Kevin ruling 2026-09-03 (top-simplify) item 4. Horizon
+  // moved from the hero small / heroline descriptor onto the ROW
+  // LABELS. Closed range -> "Actual" and "Budget" on Revenue,
+  // "Actual" / "Target" on COGS. Open range -> "Actual to date" /
+  // "Budget to date" / "Target".
   const info = await page.evaluate(() => {
     const revCard = document.querySelector('[data-kpi-ov="card-revenue"]');
-    const revHero = revCard ? revCard.querySelector('[data-kpi-ov="hero-revenue"]')?.innerText.trim() : null;
+    const revActualK = revCard?.querySelector('[data-kpi-ov="card-actual"] .kpi-ov-pair-k')?.innerText.trim() || null;
+    const revRefK = revCard?.querySelector('[data-kpi-ov="card-reference"] .kpi-ov-pair-k')?.innerText.trim() || null;
     const cogsCard = document.querySelector('[data-kpi-ov="card-cogs"]');
-    const cogsHtd = cogsCard ? cogsCard.querySelector('.kpi-ov-htd')?.innerText.trim() : null;
-    return { revHero, cogsHtd };
+    const cogsActualK = cogsCard?.querySelector('[data-kpi-ov="card-actual"] .kpi-ov-pair-k')?.innerText.trim() || null;
+    const cogsRefK = cogsCard?.querySelector('[data-kpi-ov="card-reference"] .kpi-ov-pair-k')?.innerText.trim() || null;
+    return { revActualK, revRefK, cogsActualK, cogsRefK };
   });
-  console.log(`  revenue hero: ${JSON.stringify(info.revHero)}`);
-  console.log(`  cogs heroline descriptor: ${JSON.stringify(info.cogsHtd)}`);
-  if (!/Final P\d+/i.test(info.revHero || "")) {
-    fail("W4", `revenue hero does not carry "Final P#": ${JSON.stringify(info.revHero)}`);
-  }
-  if (!/of revenue in P\d+/i.test(info.cogsHtd || "")) {
-    fail("W4", `cogs descriptor does not read "of revenue in P#": ${JSON.stringify(info.cogsHtd)}`);
-  }
+  console.log(`  Revenue rows: ${JSON.stringify(info.revActualK)} / ${JSON.stringify(info.revRefK)}`);
+  console.log(`  COGS rows:    ${JSON.stringify(info.cogsActualK)} / ${JSON.stringify(info.cogsRefK)}`);
+  // On P8 (closed): row labels must be the plain forms.
+  if (info.revActualK !== "Actual")    fail("W4", `Revenue actual label = ${JSON.stringify(info.revActualK)}, want "Actual"`);
+  if (info.revRefK    !== "Budget")    fail("W4", `Revenue reference label = ${JSON.stringify(info.revRefK)}, want "Budget"`);
+  if (info.cogsActualK !== "Actual")   fail("W4", `COGS actual label = ${JSON.stringify(info.cogsActualK)}, want "Actual"`);
+  if (info.cogsRefK    !== "Target")   fail("W4", `COGS reference label = ${JSON.stringify(info.cogsRefK)}, want "Target"`);
   await browser.close();
   console.log(`  ${FAILS.length === 0 ? "OK" : `FAIL (${FAILS.length})`}`);
   console.log("");

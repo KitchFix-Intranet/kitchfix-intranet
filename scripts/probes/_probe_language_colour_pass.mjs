@@ -292,39 +292,19 @@ async function auditDom() {
     }
   }
 
-  // D7: COGS card sub-line "Adjusted budget" + purple envelope note
-  const cogsInfo = await page.evaluate(() => {
-    const card = document.querySelector('[data-kpi-ov="card-cogs"]');
-    if (!card) return null;
-    const hzKs = [...card.querySelectorAll(".kpi-ov-hz-k")].map(k => k.innerText.trim());
-    const envSpan = card.querySelector('[data-kpi-ov="envelope-delta"]');
-    const envText = envSpan ? envSpan.innerText.trim() : null;
-    const envColor = envSpan ? getComputedStyle(envSpan).color : null;
-    return { hzKs, envText, envColor };
-  });
-  if (cogsInfo) {
-    if (!has(cogsInfo.hzKs, "Adjusted budget")) fail("D7", `COGS card missing "Adjusted budget" sub-label: ${JSON.stringify(cogsInfo.hzKs)}`);
-    if (cogsInfo.envText) {
-      if (!/[↑↓]/.test(cogsInfo.envText)) fail("D7", `envelope note missing arrow: ${JSON.stringify(cogsInfo.envText)}`);
-      if (!/(more|less)/.test(cogsInfo.envText)) fail("D7", `envelope note missing more/less: ${JSON.stringify(cogsInfo.envText)}`);
-      // Purple = rgb(122, 62, 157). Allow slight rounding.
-      if (cogsInfo.envColor && !/rgb\(12[12], ?6[12], ?15[6-8]\)/.test(cogsInfo.envColor)) {
-        fail("D7", `envelope colour is ${cogsInfo.envColor}, expected purple ~rgb(122,62,157)`);
-      }
-    }
-  }
-
-  // D8+D9: Revenue card eyebrow + LEFT budget label
+  // Kevin ruling 2026-09-03 (top-simplify): D7 retired. Envelope
+  // delta moved off the card face into the COGS tooltip. New probe
+  // `_probe_top_simplify.mjs` asserts the tooltip carries the live
+  // sentence. D9 also retired: Revenue card's "Revenue budget P1-P8"
+  // sub-line is gone; the eyebrow-based D8 test remains.
   const revInfo = await page.evaluate(() => {
     const card = document.querySelector('[data-kpi-ov="card-revenue"]');
     if (!card) return null;
     const eb = card.querySelector(".kpi-ov-eb");
-    const hzKs = [...card.querySelectorAll(".kpi-ov-hz-k")].map(k => k.innerText.trim());
-    return { eb: eb ? eb.innerText.trim() : null, hzKs };
+    return { eb: eb ? eb.innerText.trim() : null };
   });
   if (revInfo) {
     if (!eq(revInfo.eb, "Revenue actuals P1-P8")) fail("D8", `revenue eyebrow=${JSON.stringify(revInfo.eb)} (want "Revenue actuals P1-P8")`);
-    if (!has(revInfo.hzKs, "Revenue budget P1-P8")) fail("D9", `revenue card missing left "Revenue budget P1-P8": ${JSON.stringify(revInfo.hzKs)}`);
   }
 
   await browser.close();

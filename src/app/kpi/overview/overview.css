@@ -21,44 +21,29 @@
  * as a single sentence in a fixed shape on every account. See
  * docs/renders/overview-polish-LOCKED.html:60-68 for the render
  * ruling. */
+/* Kevin ruling 2026-09-03 (top-simplify): status line collapses to
+   a single pill on its own row above the cards. Two-tone: on-target
+   or better = green; off = red; No-target = neutral. Every sentence
+   segment retired to the cards below. */
 .kpi-app .kpi-ov-status {
-  display: flex;
-  align-items: stretch;
-  background: var(--n-0);
-  border: 1px solid var(--n-300);
-  border-radius: var(--kpi-card-r);
   margin-bottom: var(--kpi-sp-3);
-  overflow: hidden;
 }
+.kpi-app .kpi-ov-status-pill { display: inline-flex; }
 .kpi-app .kpi-ov-status-st {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  padding: 0 var(--kpi-sp-4);
+  padding: var(--kpi-sp-2) var(--kpi-sp-4);
   color: var(--n-0);
   font-size: var(--kpi-t-meta);
   font-weight: 800;
   letter-spacing: .07em;
   text-transform: uppercase;
   white-space: nowrap;
+  border-radius: 999px;
 }
-/* Kevin 2026-09-02 language pass Items 2+3: two-tone status pill.
-   On target or better = green; off by any amount = red. No amber,
-   no neutral except "No target" fall-through. */
 .kpi-app .kpi-ov-status-good    .kpi-ov-status-st { background: var(--green-600); }
 .kpi-app .kpi-ov-status-bad     .kpi-ov-status-st { background: var(--red-600); }
 .kpi-app .kpi-ov-status-neutral .kpi-ov-status-st { background: var(--n-500); }
-.kpi-app .kpi-ov-status-say {
-  padding: var(--kpi-sp-3) var(--kpi-sp-4);
-  font-size: var(--kpi-t-body);
-  font-weight: 600;
-  color: var(--n-700);
-  line-height: 1.55;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.kpi-app .kpi-ov-status-say b { color: var(--n-900); font-weight: 800; }
-.kpi-app .kpi-ov-status-sep { color: var(--n-400); margin: 0 var(--kpi-sp-2); }
 
 /* Direction words on the ticker */
 .kpi-app .kpi-ov-good { color: var(--green-600); }
@@ -672,36 +657,44 @@
  * PR 2 polish additions (2026-09-01)
  * ═════════════════════════════════════════════════════════════════ */
 
-/* ── B7 hero row: dollars + pct side by side with a divider ─────── */
-.kpi-app .kpi-ov-heroline {
+/* Kevin ruling 2026-09-03 (top-simplify): two-row card layout.
+   Actual on top (verdict colour), dashed rule, Reference underneath
+   (grey, one size smaller). The pill in the header carries the gap.
+   Retired: .kpi-ov-heroline (+ .-dv, .-sec), .kpi-ov-inv-badge
+   (+ .-actualized, .-pending), .kpi-ov-sub-sep, .kpi-ov-rev-
+   composition. Inventory status + range composition moved into the
+   DataCurrentPop; envelope delta moved into the COGS card tooltip. */
+.kpi-app .kpi-ov-pair {
   display: flex;
   align-items: baseline;
-  gap: var(--kpi-sp-2);
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--kpi-sp-3);
 }
-.kpi-app .kpi-ov-heroline .kpi-ov-hero {
-  margin-bottom: 0;
+.kpi-app .kpi-ov-pair-k {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-600);
 }
-.kpi-app .kpi-ov-heroline-dv {
-  color: var(--n-400);
+.kpi-app .kpi-ov-pair-v {
   font-size: var(--kpi-t-value);
-  font-weight: 400;
-}
-.kpi-app .kpi-ov-heroline-sec {
-  font-size: var(--kpi-t-medium);
   font-weight: 800;
   letter-spacing: -.01em;
-  color: var(--n-900);
+  line-height: 1.08;
 }
-.kpi-app .kpi-ov-heroline-sec small {
-  font-size: var(--kpi-t-body);
-  font-weight: 600;
+.kpi-app .kpi-ov-pair-rule {
+  border-top: 2px dashed var(--n-300);
+  margin: var(--kpi-sp-3) 0;
+}
+.kpi-app .kpi-ov-pair-ref .kpi-ov-pair-v {
+  font-size: var(--kpi-t-medium);
+  font-weight: 700;
   color: var(--n-600);
-  margin-left: var(--kpi-sp-1);
-  letter-spacing: 0;
+}
+.kpi-app .kpi-ov-pair-ref .kpi-ov-pair-k {
+  color: var(--n-600);
 }
 
-/* ── B5 / B7 one-line sub under cards (vs $X · $Y budget) ───────── */
+/* SC-absent branch keeps the em-dash hero + service-days sub-line. */
 .kpi-app .kpi-ov-sub {
   font-size: var(--kpi-t-meta);
   color: var(--n-600);
@@ -710,18 +703,6 @@
   line-height: 1.55;
 }
 .kpi-app .kpi-ov-sub b { color: var(--n-900); font-weight: 800; }
-.kpi-app .kpi-ov-sub-sep { color: var(--n-400); }
-/* Kevin R-61 (2026-09-03): inventory-status badge on the Revenue
-   card. Actualized reads green (finance-tied); pending reads amber
-   (a JE is outstanding for one or more finalised periods). Kevin's
-   green/red rule applies to VERDICTS, not to source-state signals -
-   inventory status is a source-state (like the "Planned" revenue
-   pill), so amber is legitimate here. */
-.kpi-app .kpi-ov-inv-badge {
-  font-weight: 700;
-}
-.kpi-app .kpi-ov-inv-badge-actualized { color: var(--green-600); }
-.kpi-app .kpi-ov-inv-badge-pending    { color: var(--amber-600); }
 
 /* ── B8+B9 What is left: two cards with split layout ─────────────
  * Headline on the left, two labelled stats right-aligned. Both
@@ -1007,51 +988,15 @@
   font-weight: 600;
   color: var(--n-600);
 }
-/* Sub-pair grid on cards (Revenue, COGS, GM). Two cells on the open
-   path (item 11 keeps them split); one cell collapse on verified. */
-.kpi-app .kpi-ov-hz {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px dashed var(--n-300);
-}
-.kpi-app .kpi-ov-hz-one { grid-template-columns: 1fr; }
-.kpi-app .kpi-ov-hz-k {
-  font-size: var(--kpi-t-label);
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--n-600);
-}
-.kpi-app .kpi-ov-hz-v {
-  font-size: var(--kpi-t-body);
-  font-weight: 800;
-  margin-top: 2px;
-}
-.kpi-app .kpi-ov-hz-v span { font-weight: 600; color: var(--n-600); }
-.kpi-app .kpi-ov-hz-v .kpi-ov-good { color: var(--green-600); }
-.kpi-app .kpi-ov-hz-v .kpi-ov-bad { color: var(--red-600); }
-.kpi-app .kpi-ov-hz-note {
-  color: var(--n-600);
-  font-weight: 600;
-}
-/* Kevin R-61 (2026-09-03): inventory JE trio inside cost-line cells.
-   Meta text, muted. The equals sign + adjusted total render bold to
-   pull the reader's eye to the finance-side figure. */
+/* Kevin ruling 2026-09-03 (top-simplify): .kpi-ov-hz sub-pair grid
+   retired - cards now render as .kpi-ov-pair rows (above). Envelope
+   note moved into COGS card tooltip. Kept: .kpi-ov-inv-je (used by
+   cost-lines table, not cards). */
 .kpi-app .kpi-ov-inv-je {
   color: var(--n-600);
   font-weight: 600;
   font-size: var(--kpi-t-meta);
   white-space: nowrap;
-}
-/* Kevin 2026-09-02 language pass Item 10: envelope delta is neutral,
-   not a verdict. Purple with arrow + more/less. Contrast against
-   white measured 6.7:1 (WCAG AA >= 4.5:1). */
-.kpi-app .kpi-ov-hz-v .kpi-ov-envelope-note {
-  color: var(--kpi-purple-600);
-  font-weight: 700;
 }
 
 /* ── Item 5: cost lines table (primary surface on the left) ─── */

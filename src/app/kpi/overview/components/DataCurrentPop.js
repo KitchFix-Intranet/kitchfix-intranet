@@ -39,6 +39,13 @@ export default function DataCurrentPop({ sources }) {
     sources.labor?.label ? { k: "Labor", v: valueOnly(sources.labor.label, "Labor through") } : null,
     sources.purchases?.label ? { k: "Purchases · bills and cards", v: valueOnly(sources.purchases.label, "Purchases through") } : null,
     revenueRow,
+    // Kevin ruling 2026-09-03 (top-simplify) item 3: two trust
+    // statements moved off the Revenue card into the popover. Periods
+    // + Inventory. Periods is always shown when the range has any
+    // verified content; inventory only when the account carries it,
+    // and reads "lands at close" on open ranges rather than vanishing.
+    sources.periods_display ? { k: "Periods", v: sources.periods_display, testId: "data-current-periods" } : null,
+    sources.inventory_display ? { k: "Inventory", v: sources.inventory_display, testId: "data-current-inventory" } : null,
   ].filter(Boolean);
 
   const stateCopy = sources.period_state_display
@@ -53,7 +60,11 @@ export default function DataCurrentPop({ sources }) {
   return (
     <div className="kpi-fresh-pop-body" data-kpi-ov="data-current-pop">
       {rows.map((r, i) => (
-        <div key={i} className="kpi-fresh-pop-row">
+        <div
+          key={i}
+          className="kpi-fresh-pop-row"
+          {...(r.testId ? { "data-kpi-ov": r.testId } : {})}
+        >
           <span>{r.k}</span>
           <b>{r.v}</b>
         </div>
