@@ -810,26 +810,43 @@ export async function resolveOverview({
       salaryBudgetByPeriod.set(pn, (salaryBudgetByPeriod.get(pn) || 0) + Number(amt || 0));
     }
   }
+  // Kevin ruling this-period (2026-09-03) item 4: 3100 lever must
+  // equal the labour board's spent_to_date at the same dates AND
+  // the same salary state. This means the Overview's parent 3100
+  // now respects the include_salary toggle (default hourly), rather
+  // than the R-28 §5.9 "always compose salary" behavior that made
+  // the row disagree with the drill target when the toggle was off.
+  //
+  // The 3100.1/3100.2 sub-rows are still gated by include_salary
+  // (they only render when the operator has explicitly toggled them
+  // on); the DIFFERENCE now is that the parent 3100 also reflects
+  // that toggle. laborBudgetPeriods + mergedLaborActuals branch on
+  // includeSalary. Drill URL from cost-lines row now passes
+  // include_salary + end=range_effective_end so the labour board is
+  // queried at the same window.
   const mergedBudget = mergeBudgetPeriods(laborBudgetPeriodsHourly, salaryBudgetByPeriod);
-  const laborBudgetPeriods = mergedBudget.periods;
-  // Merged per-period map (hourly + salary) for downstream consumers
-  // (chart series per-period labor budget point). Kept as a Map to
-  // mirror laborBudgetSumMap's shape; chart consumers switch to this
-  // so the chart's per-period labor budget line matches the composed
-  // labor total (never hourly-only, matching R-28 §5.9).
+  const laborBudgetPeriods = includeSalary
+    ? mergedBudget.periods
+    : laborBudgetPeriodsHourly;
+  // Merged per-period map for downstream consumers (chart per-period
+  // labor budget point). Mirrors the parent's toggle so chart bars +
+  // 3100 lever + drill target all agree.
   const laborBudgetSumMapMerged = new Map();
   for (const bp of laborBudgetPeriods) {
     laborBudgetSumMapMerged.set(bp.period_no, Number(bp.amount || 0));
   }
 
-  // 5. Call labor buildBoard as a library call, on the merged (hourly +
-  //    salary) inputs. account_state stays "hourly_ok" - the salaried-
-  //    only single accounts (CIN - KY, TBJ - NY) fall out with
-  //    applies:false when there are no hourly rows AND no salary rows;
-  //    when salary rows exist they get a real board (matches the labor
-  //    route's D26 salary-on branch, salaryBoard.js line 222-232).
+  // 5. Call labor buildBoard as a library call, on the (possibly
+  //    hourly-only) inputs. account_state stays "hourly_ok" - the
+  //    salaried-only single accounts (CIN - KY, TBJ - NY) fall out
+  //    with applies:false when there are no hourly rows AND no salary
+  //    rows; when salary rows exist they get a real board (matches
+  //    the labor route's D26 salary-on branch, salaryBoard.js line
+  //    222-232).
   const salaryActualsShaped = salaryRows.map(shapeSalaryRow);
-  const mergedLaborActuals = (laborActuals || []).concat(salaryActualsShaped);
+  const mergedLaborActuals = includeSalary
+    ? (laborActuals || []).concat(salaryActualsShaped)
+    : (laborActuals || []);
   // R-63 (Kevin 2026-09-03): pass effectiveEndISO as the range end AND
   // as throughISO so labor's budget-to-date days proration stops at
   // the same edge as revenue + purchasing. On closed ranges this is
@@ -1322,9 +1339,18 @@ export async function resolveOverview({
         if (sc_counts_without_dollars) return { label: "Not yet reporting", tone: "neutral" };
         if (flags.planned) return { label: "Planned", tone: "warn" };
         if (revenueDelta == null) return { label: "No data", tone: "neutral" };
-        // Kevin ruling 2026-09-03 follow-up: Revenue reads Forecast,
-        // not Budget. Pill echoes the row label the same way COGS pill
-        // echoes "target".
+        // Kevin ruling this-period (2026-09-03) item 2: on an open
+        // range the comparison is prorated (revenue running against
+        // forecast-to-date, not the settled period budget), so the
+        // pill reads TRENDING ABOVE / TRENDING BELOW with a neutral
+        // tone. Green on an AT-RISK card would read as good news
+        // mid-period. Closed ranges keep the settled verdict.
+        const openRange = displayPeriodState === "open";
+        if (openRange) {
+          return revenueDelta >= 0
+            ? { label: "Trending above", tone: "neutral" }
+            : { label: "Trending below", tone: "neutral" };
+        }
         return revenueDelta >= 0
           ? { label: "Above forecast", tone: "good" }
           : { label: "Below forecast", tone: "bad" };
@@ -1522,13 +1548,50 @@ export async function resolveOverview({
         budget: wkBudget,
       };
     });
+    // Kevin ruling this-period (2026-09-03) item 5: the RUNNING week
+    // draws hatched with its partial cost from labor + purchasing
+    // (Service Calendar deliberately does not carry data past effective
+    // end; labor + purchasing do). The cost card stays at closed-weeks
+    // only via R-63 effectiveEndISO capping - so this partial sits
+    // OUTSIDE the tie between closed-bar sum and cost card actual.
+    // Targeted secondary query for the running week only; keeps every
+    // other loader capped and the tie invariant load-bearing.
+    const runningIdx = series.findIndex(s => s.state === "in_progress");
+    if (runningIdx >= 0 && lastCompleteWk && effectiveEndISO < rng.end) {
+      const rw = series[runningIdx];
+      const [rwLabor, rwPurch, rwSalary] = await Promise.all([
+        paginateLaborActuals(supa, { members, start: rw.week_start, end: rw.week_end }),
+        paginatePurchasingWeekly(supa, { members, start: rw.week_start, end: rw.week_end }),
+        includeSalary
+          ? loadSalaryActuals(supa, members, rw.week_start, rw.week_end)
+          : Promise.resolve({ rows: [] }),
+      ]);
+      let laborSum = 0;
+      for (const r of (rwLabor.data || [])) laborSum += Number(r.amount || 0);
+      let purchSum = 0;
+      for (const r of (rwPurch.data || [])) {
+        const b = String(r.gl_bucket || "");
+        if (b === "3200" || b === "3400" || b === "3500") {
+          purchSum += Number(r.amount || 0);
+        }
+      }
+      let salarySum = 0;
+      if (includeSalary) {
+        for (const r of (rwSalary.rows || [])) salarySum += Number(r.amount || 0);
+      }
+      series[runningIdx] = { ...rw, spent: r2(laborSum + purchSum + salarySum) };
+    }
     // C13 (2026-09-01): bar hover leads with the period + its dates.
     // The chart carries the period_no so the tooltip header can read
     // "Period 9 · Week 2" rather than the standalone "Week 2" the
     // prior render used - naming the period + the week is what makes
     // the tooltip legible on FYTD screenshots where the period is
     // otherwise off-screen.
-    chart = { grain: "week", series, weekly_budget: wkBudget, period_no: rng.period_no };
+    // Item 5 tail: expose the running week's 1-based index so the
+    // chart header can say "week N in progress, not yet counted"
+    // beside the weeks-closed pill.
+    const runningWeekNo = runningIdx >= 0 ? runningIdx + 1 : null;
+    chart = { grain: "week", series, weekly_budget: wkBudget, period_no: rng.period_no, running_week_no: runningWeekNo };
   } else {
     // Period grain for FYTD or explicit range - build one point per
     // fiscal period in the range.
@@ -2606,20 +2669,34 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
   // one string in one place.
   const fmtMMDD = (iso) => iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}` : null;
   let horizon = null;
+  // Kevin ruling this-period (2026-09-03) item 3: revenue table's
+  // forecast column header names the span. On open the range is
+  // partial - "WK 1 – WK 3 FORECAST" - since there is no complete
+  // period. On closed the range IS the period - "P8 FORECAST" (or
+  // "P1-P8 FORECAST" on FYTD).
+  let forecastHeader = "FORECAST";
   if (isSingleOpen) {
     if (lastCompleteWk) {
-      horizon = `through week ${lastCompleteWk.weekNo} · ${fmtMMDD(lastCompleteWk.weekStartISO)} – ${fmtMMDD(lastCompleteWk.weekEndISO)}`;
+      horizon = `through week ${lastCompleteWk.weekNo} · ${fmtMMDD(range.start)} – ${fmtMMDD(lastCompleteWk.weekEndISO)}`;
+      forecastHeader = lastCompleteWk.weekNo === 1
+        ? "WK 1 FORECAST"
+        : `WK 1 – WK ${lastCompleteWk.weekNo} FORECAST`;
     } else {
       horizon = "no complete weeks yet";
+      forecastHeader = "FORECAST";
     }
   } else if (isSingleClosed && range.period_no != null) {
     horizon = `P${range.period_no} · closed and verified`;
+    forecastHeader = `P${range.period_no} FORECAST`;
   } else if (isFytd) {
     const first = rc?.verified?.first ?? 1;
     const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
     horizon = first === last
       ? `P${last} · closed and verified`
       : `P${first}-P${last} · closed and verified`;
+    forecastHeader = first === last
+      ? `P${last} FORECAST`
+      : `P${first}-P${last} FORECAST`;
   }
 
   // Kevin R-60 + PR-B items 1-5 (2026-09-03): a closed period is not
@@ -2645,6 +2722,7 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       period_span: first === last ? `P${last}` : `P${first}-P${last}`,
       period_last: `P${last}`,
       horizon,
+      forecast_header: forecastHeader,
       effective_end_iso: effectiveEndISO,
     };
   }
@@ -2657,6 +2735,7 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       period_span: n != null ? `P${n}` : null,
       period_last: n != null ? `P${n}` : null,
       horizon,
+      forecast_header: forecastHeader,
       effective_end_iso: effectiveEndISO,
     };
   }
@@ -2669,6 +2748,7 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       period_span: `P${n}`,
       period_last: `P${n}`,
       horizon,
+      forecast_header: forecastHeader,
       effective_end_iso: effectiveEndISO,
     };
   }
@@ -2679,6 +2759,7 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
     period_span: null,
     period_last: null,
     horizon,
+    forecast_header: forecastHeader,
     effective_end_iso: effectiveEndISO,
   };
 }
