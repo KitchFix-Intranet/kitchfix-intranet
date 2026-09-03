@@ -44,16 +44,26 @@ function gapDollars(delta, goodWord, badWord) {
   return `${abs} ${delta <= 0 ? goodWord : badWord}`;
 }
 
-// Build the destination href for a cost line. Mirrors the carry set
-// buildSectionHref uses (account, start, end, preview) so a
-// preview-mode operator clicking a cost row stays in preview on the
-// destination board.
-function rowHref({ lineCode, filters, previewAccount }) {
+// Build the destination href for a cost line. Kevin ruling this-
+// period (2026-09-03) item 4: the drill URL passes
+//   end = range_effective_end (not range.end)
+// so the Labor / Purchasing board queries the SAME window R-63 used
+// for the row. Without this, on P9 open the row shows "through week
+// 3" ($30,082) but drills to $37,294 (through week 4 in-progress) -
+// the classic drill-through disagrees with the row that opens it.
+// Also carries `include_salary` when the current toggle is on, so
+// the drill target matches the row's salary state.
+function rowHref({ lineCode, filters, previewAccount, rangeEffectiveEnd, includeSalary }) {
   const params = new URLSearchParams();
   if (filters?.account) params.set("account", filters.account);
   if (filters?.range?.start) params.set("start", filters.range.start);
-  if (filters?.range?.end) params.set("end", filters.range.end);
+  // Prefer the effective end shipped in the payload (R-63) so the
+  // drill queries the exact window the row read. Fall back to the
+  // range end on closed ranges where effective_end == range.end.
+  const endToUse = rangeEffectiveEnd || filters?.range?.end;
+  if (endToUse) params.set("end", endToUse);
   if (previewAccount) params.set("preview", previewAccount);
+  if (includeSalary && lineCode === "3100") params.set("include_salary", "1");
   const base = lineCode === "3100" ? "/kpi/labor" : "/kpi/purchasing";
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
@@ -63,8 +73,8 @@ function rowHref({ lineCode, filters, previewAccount }) {
 // The red/green bar beneath each cost line was noise - the percentages
 // and the verdict colour on % of rev already carry the story.
 
-function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull }) {
-  const href = rowHref({ lineCode: row.line_code, filters, previewAccount });
+function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull, rangeEffectiveEnd, includeSalary }) {
+  const href = rowHref({ lineCode: row.line_code, filters, previewAccount, rangeEffectiveEnd, includeSalary });
   const isBilledBack = Array.isArray(row.flags) && row.flags.includes("billed_back");
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   const actualPctText = fmtPct(row.actual_pct);
@@ -241,6 +251,8 @@ export default function CostLines({ payload, previewAccount = null }) {
   const filters = payload.filters;
   const hasTarget = !!payload.has_target;
   const isOpenRange = payload.period_state === "open";
+  const rangeEffectiveEnd = payload.range_effective_end || null;
+  const includeSalary = !!filters?.include_salary;
   const cogsRows = payload.statement_rows
     .filter(r => r.section === "cogs" && !r.parent_line_code)
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
@@ -324,6 +336,8 @@ export default function CostLines({ payload, previewAccount = null }) {
                 isOpenRange={isOpenRange}
                 filters={filters}
                 previewAccount={previewAccount}
+                rangeEffectiveEnd={rangeEffectiveEnd}
+                includeSalary={includeSalary}
                 revBudFull={payload.statement_totals?.revenue?.period_budget}
               />
             ))}

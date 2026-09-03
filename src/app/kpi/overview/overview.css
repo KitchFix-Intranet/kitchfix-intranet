@@ -80,6 +80,11 @@
   background: var(--n-0);
   border: 1px solid var(--n-300);
   border-radius: var(--kpi-card-r);
+  /* Kevin ruling this-period (2026-09-03) item 6: adopt Labor's
+     --card-shadow token at rest on every Overview card. No hover on
+     the card itself - hover is reserved for interactive surfaces
+     (cost-line rows, fold trigger) so a lift never leads nowhere. */
+  box-shadow: var(--card-shadow);
 }
 /* PR-2 item 3 (2026-09-02): card accents move to the top edge.
    Left-border accents were a leftover from the single-column layout;
@@ -1072,13 +1077,18 @@
   color: inherit;
   font: inherit;
 }
+/* Item 6 (2026-09-03): fold trigger is interactive; adopt Labor's
+   --duration-fast + --ease-standard tokens for its hover fade. */
+.kpi-app .kpi-ov-fold-trigger {
+  transition: background var(--duration-fast) var(--ease-standard);
+}
 .kpi-app .kpi-ov-fold-trigger:hover { background: var(--n-50); }
 .kpi-app .kpi-ov-fold-trigger .kpi-ov-fold-cv {
   margin-left: auto;
   color: var(--n-600);
   font-size: var(--kpi-t-body);
   font-weight: 700;
-  transition: transform .15s ease;
+  transition: transform var(--duration-fast) var(--ease-standard);
 }
 .kpi-app .kpi-ov-fold-card[data-kpi-ov-open="1"] .kpi-ov-fold-cv {
   transform: rotate(180deg);
@@ -1311,7 +1321,17 @@
 .kpi-app .kpi-ov-cl td.l { text-align: left; padding-left: 0; }
 .kpi-app .kpi-ov-cl td:last-child { padding-right: 0; }
 .kpi-app .kpi-ov-cl .kpi-ov-cl-line { width: 45%; }
-/* Row is a hover surface for the clickable link inside its label cell. */
+/* Row is a hover surface for the clickable link inside its label cell.
+   Item 6 (2026-09-03): adopt Labor's --duration-fast + --ease-standard
+   motion tokens so hover fades in/out rather than snapping. */
+.kpi-app .kpi-ov-cl-row {
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.kpi-app .kpi-ov-cl-row .kpi-ov-cl-go,
+.kpi-app .kpi-ov-cl-row .kpi-ov-cl-lbl {
+  transition: opacity var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
 .kpi-app .kpi-ov-cl-row:hover { background: var(--navy-50); }
 .kpi-app .kpi-ov-cl-row:hover .kpi-ov-cl-go { opacity: 1; }
 .kpi-app .kpi-ov-cl-row:hover .kpi-ov-cl-lbl { color: var(--navy-700); }
@@ -1505,4 +1525,17 @@
 .kpi-app .kpi-ov-bars-inset {
   padding-left: 8px;
   padding-right: 8px;
+}
+
+/* Item 6 (2026-09-03): respect prefers-reduced-motion. Hover visuals
+   still fire, just without the fade. Same treatment kpi.css applies to
+   .kpi-acct at line 966. */
+@media (prefers-reduced-motion: reduce) {
+  .kpi-app .kpi-ov-cl-row,
+  .kpi-app .kpi-ov-cl-row .kpi-ov-cl-go,
+  .kpi-app .kpi-ov-cl-row .kpi-ov-cl-lbl,
+  .kpi-app .kpi-ov-fold-trigger,
+  .kpi-app .kpi-ov-fold-trigger .kpi-ov-fold-cv {
+    transition: none;
+  }
 }

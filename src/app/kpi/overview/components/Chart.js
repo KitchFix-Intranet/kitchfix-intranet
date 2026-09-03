@@ -169,7 +169,7 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
   );
 }
 
-function ChartWeekGrain({ series, weeklyBudget, periodNo, bare = false }) {
+function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = false }) {
   const wkB = Number(weeklyBudget || 0);
   const spends = series.map(s => Number(s.spent || 0));
   // PR-2 item 17 (2026-09-02): scale to max * 1.16. See period-grain
@@ -177,6 +177,7 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, bare = false }) {
   const mx = Math.max(wkB, ...spends, 1) * 1.16;
   const totalWeeks = series.length;
   const closedCount = series.filter(s => s.state === "closed").length;
+  const hasRunning = series.some(s => s.state === "in_progress");
 
   const fmtWeekLabel = (ws, we) => {
     const [wy, wm, wd] = ws.split("-");
@@ -243,9 +244,15 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, bare = false }) {
       ))}
     </div>
   );
+  const runningNote = hasRunning && runningWeekNo != null ? (
+    <div className="kpi-ov-gl" data-kpi-ov="chart-running-note">
+      week {runningWeekNo} in progress, not yet counted
+    </div>
+  ) : null;
   if (bare) {
     return (
       <div className="kpi-ov-cb" data-kpi-ov="chart" data-kpi-ov-grain="week">
+        {runningNote}
         {budgetLabelStrip}
         {bars}
         {axis}
@@ -269,6 +276,11 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, bare = false }) {
         <span className={`kpi-ov-pill ${closedCount < totalWeeks ? "kpi-ov-pill-warn" : "kpi-ov-pill-neutral"}`}>
           {closedCount} of {totalWeeks} weeks closed
         </span>
+        {hasRunning && runningWeekNo != null && (
+          <span className="kpi-ov-gl" data-kpi-ov="chart-running-note">
+            week {runningWeekNo} in progress, not yet counted
+          </span>
+        )}
       </div>
       <div className="kpi-ov-cb">
         {budgetLabelStrip}
@@ -292,11 +304,11 @@ export default function Chart({ chart, revenueModel, open, onToggle }) {
   if (typeof onToggle !== "function") {
     return chart.grain === "period"
       ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} />
-      : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} />;
+      : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} />;
   }
   const body = chart.grain === "period"
     ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} bare />
-    : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} bare />;
+    : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} bare />;
 
   const grainLabel = chart.grain === "period"
     ? "period by period"
