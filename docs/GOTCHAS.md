@@ -236,6 +236,16 @@ Same session, same class: `if (!periodDays.error) { populate periodBounds }` at 
 
 The Sheets `catch { return { headers: [], rows: [] } }` sites (`src/lib/sheets.js`) are a deliberate exception - Sheets errors happen legitimately (retry-able network, quota) and every caller tolerates the empty shape as "not available right now". Not every swallow is a bug; distinguish the ones where empty is a legitimate answer from the ones where empty is a lie.
 
+### Postflight `<>` against a nullable column silently passes on the state it exists to catch
+
+sc-40 (2026-09-03) shipped a postflight of the form `WHERE rdo_email <> 's.lynch@kitchfix.com'`. If a WHERE-guarded UPDATE didn't fire and the row stayed `rdo_email = NULL`, the postflight evaluated `NULL <> 's.lynch@kitchfix.com'` which returns `NULL`, not `TRUE`. The `WHERE` filter drops NULL-predicate rows, so the failure-check counted zero bad rows and the postflight passed on the exact state it was written to detect. Empty arrays are the same class: `array_length(ARRAY[]::text[], 1)` returns `NULL`, so `array_length(...) <> 3` is also `NULL` and never fires.
+
+**The rule.** Postflights on nullable columns use `IS DISTINCT FROM`, not `<>`. `IS DISTINCT FROM` treats `NULL` as a real value and returns `TRUE` on the mismatch. For array-length predicates, wrap the call: `COALESCE(array_length(col, 1), 0) IS DISTINCT FROM N`. `array_length` on an empty array returns `NULL` regardless of the underlying element type.
+
+**Second failure in two days, same outcome.** The 2026-09-02 precision-recon verify block reported "no variance" while pointed at the wrong price row (JAN canonical vs latest-per-service). Different mechanism - a wrong join instead of a NULL comparison - but the same durable failure shape: a check that says "PASS" while looking at data that cannot answer the question. When a verify block is written, ask both "does this check the intended state" AND "would this check still pass if the state was wrong in the way I most fear."
+
+**When sweeping for this class**, grep migration files for `<>` inside a `WHERE` clause that references a nullable column (rdo_email, salaried_manager_emails, any recently-added column that hasn't been backfilled). Any `<>` against a column that can be NULL is a candidate for rewrite to `IS DISTINCT FROM`. Same for `=` inside `NOT (...)` expressions - `NOT (col = 'x')` is `NULL` when `col IS NULL`.
+
 ---
 
 ## Purchasing engine (Rippling + BillCom)
@@ -705,6 +715,21 @@ Six PR 8a files were written, tested-in-thought, reported as delivered in the se
 **The rule:** any file worth reporting as done is worth committing to a branch immediately. Draft PR, WIP commit, `git stash push -m` - anything that produces a SHA. Commit incrementally: after each file, not at the end. A WIP commit is cheaper than a lost file. "It is in the working tree" survives nothing that touches HEAD.
 
 **Branch drift is a real failure mode.** During PR 8a's rebuild a parallel commit on `fix/sc-admin-price-lock` (Kevin working in another worktree) flipped this worktree's branch between the branch cut and the first commit; one PR-8a commit landed on the wrong branch before it was noticed. The ad-hoc guard `test "$(git branch --show-current)" = <expected> && git add ... && git commit ...` catches this when you remember to type it, but only then. A standing pre-commit hook was tried and reverted: any hook file lives in the working tree, so a checkout to a branch without the file (`main`, an unrelated feature branch) silently disables the guard - a hook that vanishes when you switch branches is not a guard. If a standing enforcement is wanted, it needs an install location outside the working tree; that is its own decision, not a piece of PR 8a.
+
+### Applied-in-Studio-before-committed leaves production ahead of the repo
+
+sc-39 (2026-09-03), sc-40 (2026-09-03), and sc-41 (2026-09-03) were all pasted into Studio and executed against production from a local file that had never been committed to any branch. `git log --all -- docs/migrations/sc-4?-*.sql` returned zero commits. Anyone cloning `main` in that window got a schema that did not match production and, in sc-41's case, a builder that would throw on the missing column because the code changes were uncommitted too. The migration gate CI workflow (`.github/workflows/migration-gate.yml`) exists to stop merging code before applying the migration - it does NOT stop applying a migration before committing it, which is the failure that hit three times in one session.
+
+**Realised on 2026-09-03.** Kevin's question "what PR carries the sc-40 + sc-41 changes?" surfaced the state - both migrations live in production, neither had a PR, neither had a commit. Same drift pattern as the "Authored-but-uncommitted is not a state" entry above, one class harder to catch: a working file that got EXECUTED against a real system does not leave a git artifact behind.
+
+**The rule.** Once you paste a migration into Studio, before running any other command:
+1. `git add docs/migrations/sc-XX-*.sql`
+2. `git commit -m "sc-XX: <what the migration does>"` on the current feature branch. WIP commit is fine.
+3. Only then paste and execute in Studio.
+
+If you have already applied without committing, the recovery is the same three steps - the untracked file is still on disk, just add it, commit it, push it. The production state is unaffected. The archive is what needs the fix.
+
+**Do NOT wait for "the PR" to include the migration.** The PR is downstream of the commit. A file that was executed against production but exists only in the working tree is one `git reset` or worktree flip away from becoming a phantom migration - real in production, invisible in git, no record of who applied it or why. `git blame` returns nothing for a file that never got committed.
 
 ---
 

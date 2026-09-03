@@ -16,6 +16,7 @@ const TXR_MAP = {
   qbo_customer_id: "19000",
   qbo_customer_name: "Texas Rangers - Surprise, AZ",
   qbo_taxcode_id: "36",
+  qbo_class_id: "1200000000000411132",  // PFS:TXR - AZ (sc-41)
   cadence: "weekly",
   qbo_mode: "test",
   salaried_manager_emails: [],
@@ -29,6 +30,7 @@ const CIN_MAP = {
   qbo_customer_id: "17752",
   qbo_customer_name: "Cincinnati Reds (Goodyear, AZ)",
   qbo_taxcode_id: "37",
+  qbo_class_id: "1200000000000130911",  // PFS:CIN - AZ (REDS) (sc-41)
   cadence: "biweekly",
   biweekly_anchor: "2026-05-31",
 };

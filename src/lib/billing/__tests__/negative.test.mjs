@@ -373,8 +373,9 @@ test("negative: export_excluded row does NOT throw and produces NO invoice line"
   const tbrAccountMap = {
     account_key: "TBR - FL",
     qbo_customer_id: "17860",
-    qbo_customer_name: "Tampa Bay Rays (Port Charlotte, FL)",
+    qbo_customer_name: "Tampa Bay Rays MiLB/MLB",
     qbo_taxcode_id: "26",
+    qbo_class_id: "1200000000000091984",  // PFS:TBR - FL (sc-41)
     cadence: "weekly",
     biweekly_anchor: null,
     active: true,
@@ -434,6 +435,67 @@ test("negative: export_excluded row does NOT throw and produces NO invoice line"
     !result.warnings.some((w) => /B&G/.test(w)),
     `expected no warning about B&G; got: ${JSON.stringify(result.warnings)}`
   );
+});
+
+// sc-41: buildInvoicePayload throws when accountMap.qbo_class_id is
+// missing. Parity with the existing qbo_customer_id required-field
+// pattern. Class is per-account and every line carries it.
+test("negative: buildInvoicePayload throws when accountMap.qbo_class_id is missing", () => {
+  const rows = [
+    scRow({
+      service_date: "2026-07-27",
+      service_id: "5d626ec9-2505-470f-abe6-d7f3168ddf8f",
+      service_name: "Breakfast",
+      account_key: "TXR - AZ",
+      actual_count: 10, price: 14.29,
+      period: "8", week_label: "Week 3",
+    }),
+  ];
+  const mapWithoutClass = { ...TXR_AZ_ACCOUNT_MAP };
+  delete mapWithoutClass.qbo_class_id;
+  assert.throws(
+    () => buildInvoicePayload({
+      accountKey: "TXR - AZ", weekStart: "2026-07-27",
+      rows, accountMap: mapWithoutClass, serviceMap: TXR_AZ_SERVICE_MAP,
+    }),
+    /qbo_class_id missing for TXR - AZ/,
+  );
+});
+
+// sc-41: builder emits ClassRef on every line. Positive assertion so
+// a future refactor that drops the emit is caught immediately, not
+// at deploy time when unclassed invoices land in QBO.
+test("positive: buildInvoicePayload emits ClassRef.value on every line", () => {
+  const rows = [
+    scRow({
+      service_date: "2026-07-27",
+      service_id: "5d626ec9-2505-470f-abe6-d7f3168ddf8f",
+      service_name: "Breakfast",
+      account_key: "TXR - AZ",
+      actual_count: 10, price: 14.29,
+      period: "8", week_label: "Week 3",
+    }),
+    scRow({
+      service_date: "2026-07-27",
+      service_id: "b5b0d24b-1162-4a80-a546-42bb6231470d",
+      service_name: "Regular Snack",
+      account_key: "TXR - AZ",
+      actual_count: 20, price: 5.89,
+      period: "8", week_label: "Week 3",
+    }),
+  ];
+  const { invoices } = buildInvoicePayload({
+    accountKey: "TXR - AZ", weekStart: "2026-07-27",
+    rows, accountMap: TXR_AZ_ACCOUNT_MAP, serviceMap: TXR_AZ_SERVICE_MAP,
+  });
+  assert.equal(invoices.length, 1, "one invoice for main slot");
+  for (const ln of invoices[0].Line) {
+    assert.equal(
+      ln.SalesItemLineDetail.ClassRef?.value,
+      "1200000000000411132",
+      `line ${ln.SalesItemLineDetail.ItemRef.value} on ${ln.SalesItemLineDetail.ServiceDate} carries the TXR class id`,
+    );
+  }
 });
 
 // Bonus: P13 hard-fails on bi-weekly (owner amendment 2026-08-06).

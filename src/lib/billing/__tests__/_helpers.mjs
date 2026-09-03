@@ -26,11 +26,15 @@ export function loadFixture(name) {
 }
 
 // ─── Pilot maps mirror sc-31 seeds exactly ────────────────────────
+// qbo_class_id added 2026-09-03 (sc-41) to match production seed;
+// fixtures show ClassRef on every line and buildInvoicePayload
+// asserts accountMap.qbo_class_id at entry.
 export const TXR_AZ_ACCOUNT_MAP = {
   account_key:       "TXR - AZ",
   qbo_customer_id:   "19000",
   qbo_customer_name: "Texas Rangers - Surprise, AZ",
   qbo_taxcode_id:    "36",
+  qbo_class_id:      "1200000000000411132",  // PFS:TXR - AZ
   cadence:           "weekly",
   biweekly_anchor:   null,
   active:            true,
@@ -53,6 +57,7 @@ export const CIN_AZ_ACCOUNT_MAP = {
   qbo_customer_id:   "17752",
   qbo_customer_name: "Cincinnati Reds (Goodyear, AZ)",
   qbo_taxcode_id:    "37",
+  qbo_class_id:      "1200000000000130911",  // PFS:CIN - AZ (REDS)
   cadence:           "biweekly",
   biweekly_anchor:   "2026-05-31",
   active:            true,
@@ -283,13 +288,15 @@ export function synthRowsFromInvoice(fixture, {
 }
 
 // Extract the fixture's SalesItemLineDetail lines into a canonical
-// comparable shape.
+// comparable shape. Includes ClassRef (sc-41) so parity tests catch
+// missing / mismatched class ids alongside the pre-existing fields.
 export function normaliseLines(source) {
   const items = (source.Line || []).filter((l) => l.DetailType === "SalesItemLineDetail");
   const shaped = items.map((l) => ({
     ServiceDate: l.SalesItemLineDetail.ServiceDate,
     ItemRefId:   l.SalesItemLineDetail.ItemRef.value,
     ItemRefName: l.SalesItemLineDetail.ItemRef.name,
+    ClassRefId:  l.SalesItemLineDetail.ClassRef?.value || null,
     UnitPrice:   Number(l.SalesItemLineDetail.UnitPrice),
     Qty:         Number(l.SalesItemLineDetail.Qty),
     Amount:      Number(l.Amount),
