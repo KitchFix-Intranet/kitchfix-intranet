@@ -240,11 +240,17 @@ async function auditDom() {
   const has = (arr, want) => arr.some(t => t.toLowerCase() === want.toLowerCase());
   const eq = (got, want) => (got || "").toLowerCase() === want.toLowerCase();
   if (clHeaders) {
-    const wantSpent = "Spent thru P8";
-    const wantAdj = "Budget adjusted P8";
+    // Kevin ruling 2026-09-03 (simplified-layout): cost table headers
+    // become universal `Line · Budget* · Actual · % of rev · Target %`.
+    // The per-range verb ("Spent thru P8") and per-range adjusted
+    // label ("Budget adjusted P8") both retire; new _probe_simplified_
+    // layout.mjs asserts the universal shape. The total label keeps
+    // the range suffix ("Total cost of goods sold thru P8").
     const wantTot = "Total cost of goods sold thru P8";
-    if (!has(clHeaders.ths, wantSpent)) fail("D3", `cost lines header missing "${wantSpent}": ${JSON.stringify(clHeaders.ths)}`);
-    if (!has(clHeaders.ths, wantAdj)) fail("D3", `cost lines header missing "${wantAdj}"`);
+    // Header text is "Budget*" (asterisk marks a footnote).
+    const hasBudget = clHeaders.ths.some(t => /^budget\*?$/i.test(t));
+    if (!hasBudget) fail("D3", `cost lines header missing "Budget" column: ${JSON.stringify(clHeaders.ths)}`);
+    if (!has(clHeaders.ths, "Actual")) fail("D3", `cost lines header missing "Actual" column`);
     if (!eq(clHeaders.totLabel, wantTot)) fail("D3", `cost lines total label = ${JSON.stringify(clHeaders.totLabel)} (want ${JSON.stringify(wantTot)})`);
   }
 

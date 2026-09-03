@@ -264,8 +264,12 @@ export default function KpiOverviewPage() {
     setParams({ include_salary: next ? "1" : "" });
   }, [setParams]);
 
-  // ── Statement fold state ────────────────────────────────────
+  // ── Fold state ──────────────────────────────────────────────
+  // Both folds default closed per Kevin ruling 2026-09-03: the P&L
+  // and the trajectory chart both sit below the primary comparison
+  // surfaces.
   const [pnlOpen, setPnlOpen] = useState(false);
+  const [chartOpen, setChartOpen] = useState(false);
 
   // ── Fiscal context (today / period / week) ──────────────────
   const fiscal = useMemo(() => {
@@ -438,25 +442,34 @@ export default function KpiOverviewPage() {
             <AlsoTracked payload={data} />
           </>
         ) : (
-          /* PR-2 items 1 + 2 + 4 (Kevin, 2026-09-02): single-account
-              two-column split. Left: chart, cost lines. Right:
-              revenue lines, also tracked. Full-width below: P&L fold.
+          /* Kevin ruling 2026-09-03 (simplified-layout): the split
+              columns swap. Cost of goods sold moves to the RIGHT and
+              carries the wider column (7fr) because it has four number
+              columns and five rows. Revenue lines + Also tracked move
+              to the LEFT at 5fr. The trajectory chart moves to the
+              bottom as a fold beneath the P&L fold; both folds are
+              closed by default (they explain the top-of-board
+              comparison, not lead it).
               PacePanel removed 2026-09-02 (R-52): the Overview is a
               scoreboard, not a forecast. Counts-without-dollars is
-              rehomed to the Revenue card - hero em-dash + pill "Not
-              yet reporting" + sub-line row count and dates. */
+              rehomed to the Revenue card. */
           <>
             <div className="kpi-ov-split" data-kpi-ov="single-account-split">
               <div className="kpi-ov-split-left">
-                <Chart chart={data.chart} revenueModel={data.revenue_model} />
-                <CostLines payload={data} previewAccount={data.preview_account} />
-              </div>
-              <div className="kpi-ov-split-right">
                 <RevenueLines payload={data} />
                 <AlsoTracked payload={data} />
               </div>
+              <div className="kpi-ov-split-right">
+                <CostLines payload={data} previewAccount={data.preview_account} />
+              </div>
             </div>
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
+            <Chart
+              chart={data.chart}
+              revenueModel={data.revenue_model}
+              open={chartOpen}
+              onToggle={() => setChartOpen(o => !o)}
+            />
           </>
         )}
       </div>

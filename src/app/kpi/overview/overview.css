@@ -949,13 +949,15 @@
  * PR-2 additions (2026-09-02) - two-column single-account layout
  * ═════════════════════════════════════════════════════════════════ */
 
-/* ── Item 1: two-column grid ─────────────────────────────────────
-   minmax(0,7fr) / minmax(0,5fr), gap 14, align-items:start. At
-   1200px board width the grid collapses to one column and the
-   right stack falls beneath the left in its rendered order. */
+/* Kevin ruling 2026-09-03 (simplified-layout): split ratio flips
+   from 7fr/5fr to 5fr/7fr. LEFT now carries Revenue lines + Also
+   tracked (narrower); RIGHT carries Cost of goods sold (wider - four
+   number columns + five rows). At 1200px board width the grid
+   collapses to one column and the right stack falls beneath the left
+   in its rendered order. */
 .kpi-app .kpi-ov-split {
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   gap: 14px;
   align-items: start;
   margin-top: var(--kpi-sp-3);
@@ -1061,14 +1063,36 @@
   border-top: 1px solid var(--n-400);
   font-weight: 800;
 }
-.kpi-app .kpi-ov-cl-vs { min-width: 108px; }
-.kpi-app .kpi-ov-cl-vs-pct { font-weight: 800; }
-.kpi-app .kpi-ov-cl-vs-usd {
+/* Kevin ruling 2026-09-03 (simplified-layout): dollar gap stacks
+   beneath the actual figure in the total row (one cell, added back
+   after the vs-target column was dropped). Meta-weight so the reader
+   lands on the total first and the gap reads as a secondary. */
+.kpi-app .kpi-ov-cl-tot-gap {
   font-size: var(--kpi-t-meta);
   font-weight: 700;
-  color: inherit;
   margin-top: 1px;
 }
+/* Footnote below the cost-lines table: explains the * on Budget. */
+.kpi-app .kpi-ov-cl-fn-mark {
+  font-size: 0.65em;
+  font-weight: 800;
+  vertical-align: super;
+  margin-left: 1px;
+}
+.kpi-app .kpi-ov-cl-footnote {
+  margin-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+  line-height: 1.55;
+}
+.kpi-app .kpi-ov-cl-footnote sup {
+  font-weight: 800;
+  margin-right: 2px;
+}
+/* Kevin ruling 2026-09-03 (simplified-layout): .kpi-ov-cl-vs
+   (.-pct, .-usd) retired - the vs-target column is dropped from
+   both the per-row bodies and the total row. Grepped, no consumers. */
 
 /* ── Item 7: meter per line (fill + notches) ─────────────────── */
 .kpi-app .kpi-ov-meter {

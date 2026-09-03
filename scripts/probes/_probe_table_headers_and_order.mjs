@@ -47,20 +47,20 @@ const TABLES = [
   {
     key: "cost-lines",
     sel: '[data-kpi-ov="cost-lines-table"]',
-    // Kevin R-58/R-59 (2026-09-03): management-fee accounts read
-    // "P{N} budget" instead of "Budget adjusted P{N}" - revenue is
-    // contractual so no adjustment applies. Accepted patterns cover
-    // both shapes.
+    // Kevin ruling 2026-09-03 (simplified-layout): cost table headers
+    // become universal `Line · Budget* · Actual · % of rev · Target %`
+    // across FYTD, single_closed, single_open. The per-model split
+    // (MF `P{N} budget` vs SC `Budget adjusted P{N}`) and the
+    // per-range verb (`Spent thru P#` / `Final P#` / `Spent period
+    // to date`) both retire on this table. Reasons live in the
+    // footnote below and the COGS card tooltip. `vs target` column
+    // dropped entirely (the two percentages sit adjacent).
+    // Note: rendered header text is "Budget*" (asterisk marks a
+    // footnote), which the DOM reads as "BUDGET*".
     expectedOrder: {
-      // Merged 2026-09-03: PR-A (R-58/R-59) added the "P{N} budget"
-      // alternation on the budget column for management-fee accounts;
-      // PR-B (item 4) added the "Final P#" actuals header on closed
-      // periods. Both survive: budget takes main's alternation on all
-      // three range kinds, actuals takes the branch's FINAL P# on
-      // single_closed only.
-      fytd:          ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_closed: ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /FINAL P\d+/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_open:   ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET|PERIOD BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      fytd:          ["LINE", /^BUDGET\*?$/i, "ACTUAL", "% OF REV", "TARGET %"],
+      single_closed: ["LINE", /^BUDGET\*?$/i, "ACTUAL", "% OF REV", "TARGET %"],
+      single_open:   ["LINE", /^BUDGET\*?$/i, "ACTUAL", "% OF REV", "TARGET %"],
     },
   },
   {

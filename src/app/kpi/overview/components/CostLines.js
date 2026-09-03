@@ -182,16 +182,9 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
       <td className="kpi-ov-num kpi-ov-nb">
         {suppressVerdict ? "—" : (targetPctText != null ? targetPctText : "—")}
       </td>
-      <td className={`kpi-ov-num kpi-ov-cl-vs ${suppressVerdict ? "kpi-ov-nb" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`}>
-        {suppressVerdict ? (
-          <span className="kpi-ov-nb">—</span>
-        ) : (
-          <>
-            <div className="kpi-ov-cl-vs-pct">{varPctText || "—"}</div>
-            <div className="kpi-ov-cl-vs-usd">{varianceText || ""}</div>
-          </>
-        )}
-      </td>
+      {/* Kevin ruling 2026-09-03 (simplified-layout): `vs target`
+          column dropped. The two percentages sit adjacent and the
+          reader sees the gap; the card pill already carries it. */}
     </tr>
   );
 }
@@ -242,19 +235,25 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel }) {
       <td className="l">{totalLabel || "Total cost of goods sold"}</td>
       {/* Item 3 (Kevin 2026-09-03): budget before actual, total row. */}
       <td className="kpi-ov-num kpi-ov-nb">{hasTarget && totalBatr ? totalBatr : "—"}</td>
-      <td className="kpi-ov-num">{totalActual || "—"}</td>
+      {/* Kevin ruling 2026-09-03 (simplified-layout): dropped the
+          `vs target` column. The dollar gap moves BENEATH the actual
+          in the total row - one cell, the only figure added back
+          after the column drop. */}
+      <td className="kpi-ov-num" data-kpi-ov="cost-lines-total-actual">
+        <div>{totalActual || "—"}</div>
+        {hasTarget && varianceText && (
+          <div
+            className={`kpi-ov-cl-tot-gap ${over ? "kpi-ov-bad" : "kpi-ov-good"}`}
+            data-kpi-ov="cost-lines-total-gap"
+          >
+            {varianceText}
+          </div>
+        )}
+      </td>
       <td className={`kpi-ov-num ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : ""}`}>
         {fmtPct(cogsPct) || "—"}
       </td>
       <td className="kpi-ov-num kpi-ov-nb">{hasTarget ? (fmtPct(cogsTargetPct) || "—") : "—"}</td>
-      <td className={`kpi-ov-num kpi-ov-cl-vs ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : "kpi-ov-nb"}`}>
-        {hasTarget ? (
-          <>
-            <div className="kpi-ov-cl-vs-pct">{varPctText || "—"}</div>
-            <div className="kpi-ov-cl-vs-usd">{varianceText || ""}</div>
-          </>
-        ) : "—"}
-      </td>
     </tr>
   );
 }
@@ -269,33 +268,14 @@ export default function CostLines({ payload, previewAccount = null }) {
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
   if (cogsRows.length === 0) return null;
   const cogsCard = payload.cards?.find(c => c.key === "cogs");
-  // Kevin 2026-09-02 language pass Items 18-20: header + total labels
-  // use the server-side range_labels. "Spent thru P8" / "Budget
-  // adjusted P8" / "Total cost of goods sold thru P8" on FYTD +
-  // verified single; "Spent period to date" / "Total ... period to
-  // date" on single open (Kevin: "the period is not 'through'
-  // anything yet"). Item 19: "Budget at this revenue" -> "Budget
-  // adjusted P8" (naming the period the adjustment corresponds to).
-  // Item 4 (Kevin 2026-09-03): on a closed period the actuals header
-  // is just `Final P#` (no verb) - `Spent` implies partway. FYTD +
-  // open keep the verb form (`Spent thru P#` / `Spent period to
-  // date`). Total row uses the same fork: "in P8" preposition on
-  // single_closed matches the COGS card's descriptor.
+  // Kevin ruling 2026-09-03 (simplified-layout): cost table headers
+  // become universal. `Line · Budget* · Actual · % of rev · Target %`.
+  // The per-range language (Spent thru P8 / Budget adjusted P8) and
+  // the per-model split (MF P{N} budget vs SC Budget adjusted P{N})
+  // both retire on this table. Reasons live in the footnote below
+  // the table and in the COGS card tooltip (both already carry the
+  // "adjusted at this revenue" concept per the top-simplify PR).
   const rl = payload.range_labels;
-  // Merged 2026-09-03: PR-B took spent by period state (Final P# on
-  // single_closed, Spent thru P# on FYTD/open); PR-A took adjusted
-  // by revenue model (P{N} budget on management-fee, Budget adjusted
-  // P{N} on SC/sales). Both survive - one axis each, no collision.
-  const isSingleClosed = rl?.kind === "single_closed";
-  const spentLabel = isSingleClosed
-    ? rl.actuals
-    : (rl?.through ? `Spent ${rl.through}` : "Spent period to date");
-  const isManagementFee = payload.revenue_model === "management_fee";
-  const adjustedLabel = isManagementFee
-    ? (rl?.period_last ? `${rl.period_last} budget` : "Period budget")
-    : (rl?.period_last
-      ? `Budget adjusted ${rl.period_last}`
-      : "Budget at this revenue");
   const totalLabel = rl?.through
     ? `Total cost of goods sold ${rl.through}`
     : "Total cost of goods sold";
@@ -344,11 +324,12 @@ export default function CostLines({ payload, previewAccount = null }) {
                   actual is judged against; a reader scans left to
                   right so the answer should not precede the question. */}
               <th className="l">Line</th>
-              <th>{adjustedLabel}</th>
-              <th>{spentLabel}</th>
+              <th>
+                Budget<sup className="kpi-ov-cl-fn-mark">*</sup>
+              </th>
+              <th>Actual</th>
               <th style={{ width: 68 }}>% of rev</th>
               <th style={{ width: 68 }}>Target %</th>
-              <th style={{ width: 108 }}>vs target</th>
             </tr>
           </thead>
           <tbody>
@@ -366,6 +347,15 @@ export default function CostLines({ payload, previewAccount = null }) {
             <TotalRow rows={cogsRows} hasTarget={hasTarget} cogsCard={cogsCard} totalLabel={totalLabel} />
           </tbody>
         </table>
+        {/* Kevin ruling 2026-09-03 (simplified-layout): footnote below
+            the table explains what the * on "Budget" refers to. The
+            longer explanation still lives in the COGS card tooltip. */}
+        <p
+          className="kpi-ov-cl-footnote"
+          data-kpi-ov="cost-lines-footnote"
+        >
+          <sup>*</sup> Adjusted — what the target percent buys at the revenue actually earned.
+        </p>
       </div>
     </div>
   );

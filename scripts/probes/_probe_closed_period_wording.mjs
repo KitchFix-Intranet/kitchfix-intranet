@@ -127,7 +127,9 @@ async function auditDom() {
   console.log(`  COGS rows:    ${JSON.stringify(info.cogsActualK)} / ${JSON.stringify(info.cogsRefK)}`);
   // On P8 (closed): row labels must be the plain forms.
   if (info.revActualK !== "Actual")    fail("W4", `Revenue actual label = ${JSON.stringify(info.revActualK)}, want "Actual"`);
-  if (info.revRefK    !== "Budget")    fail("W4", `Revenue reference label = ${JSON.stringify(info.revRefK)}, want "Budget"`);
+  // Kevin ruling 2026-09-03 follow-up: Revenue reference reads
+  // Forecast (not Budget) on every account, every range.
+  if (info.revRefK    !== "Forecast")  fail("W4", `Revenue reference label = ${JSON.stringify(info.revRefK)}, want "Forecast"`);
   if (info.cogsActualK !== "Actual")   fail("W4", `COGS actual label = ${JSON.stringify(info.cogsActualK)}, want "Actual"`);
   if (info.cogsRefK    !== "Target")   fail("W4", `COGS reference label = ${JSON.stringify(info.cogsRefK)}, want "Target"`);
   await browser.close();
