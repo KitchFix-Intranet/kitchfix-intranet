@@ -116,6 +116,44 @@ export function periodDateShort(periodNo) {
   return `${s.slice(5, 7)}/${s.slice(8, 10)} – ${e.slice(5, 7)}/${e.slice(8, 10)}`;
 }
 
+// Kevin ruling R-63 (2026-09-03). The Service Calendar is committed
+// a week ahead; revenue counts complete weeks. Cost cannot follow -
+// week 4 spend is not known on a Wednesday. So both sides stop at
+// the end of the last complete week in the range. A week is complete
+// when its end date is STRICTLY before today. Reused by the resolver
+// as the "effective end" for every SC + labor + purchasing pull, plus
+// budget-to-date proration.
+//
+// Returns:
+//   { effectiveEndISO, weekNo, weekStartISO, weekEndISO }
+//     - effectiveEndISO: the last complete week's end, or null if none
+//     - weekNo:          1..N index of the last complete week within
+//                        the range's weeks (1-based)
+//     - weekStartISO/EndISO: the identifying week for the horizon line
+//
+// Closed ranges (every week complete) return the last week in range
+// as expected - callers use that value unchanged. Open ranges with
+// no complete weeks yet return null; caller decides how to handle.
+export function endOfLastCompleteWeek(rangeStartISO, rangeEndISO, todayISO) {
+  const weeks = weekStartsInRange(rangeStartISO, rangeEndISO);
+  if (weeks.length === 0 || !todayISO) return null;
+  let last = null;
+  for (let i = 0; i < weeks.length; i += 1) {
+    const ws = weeks[i];
+    const wStartMs = parseISO(ws).getTime();
+    const weISO = new Date(wStartMs + 6 * MS_PER_DAY).toISOString().slice(0, 10);
+    // Complete = end date strictly before today. Matches the existing
+    // week-state logic (resolver's chart series: wEnd < today -> closed).
+    if (weISO < todayISO) {
+      last = { weekNo: i + 1, weekStartISO: ws, weekEndISO: weISO };
+    } else {
+      break; // weeks are ordered; once we hit an incomplete week, done
+    }
+  }
+  if (!last) return null;
+  return { effectiveEndISO: last.weekEndISO, ...last };
+}
+
 // V6-1 - week-of-period (1..4) for the given ISO date within its
 // containing fiscal period. Used in the command bar fiscal context.
 // Returns null when the date falls outside FY2026.

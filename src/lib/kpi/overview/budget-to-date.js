@@ -45,13 +45,24 @@ function parseISOUTC(iso) {
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
 }
 
-export function computeBudgetToDateForLine({ budgetByPeriod, periodsInRange, today }) {
+// Kevin ruling R-63 (2026-09-03): optional `throughISO` overrides the
+// proration edge. When present, the current period contributes
+// (days_from_start_through_throughISO_inclusive / days_in_period);
+// when absent, the existing "today - 1" (days_through_yesterday)
+// behavior stands. The Overview resolver passes throughISO =
+// effectiveEndISO so revenue budget-to-date and cost budget-to-date
+// both stop at the same edge.
+export function computeBudgetToDateForLine({ budgetByPeriod, periodsInRange, today, throughISO }) {
   const empty = { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
   if (!budgetByPeriod || (typeof budgetByPeriod.size === "number" && budgetByPeriod.size === 0)) {
     return empty;
   }
   const todayD = parseISOUTC(today);
   if (!todayD) return empty;
+  // throughISO is the last date to include, inclusive. Effectively
+  // becomes "today+1" for the arithmetic so (todayD - pStart) yields
+  // days_through_(effectiveEnd) inclusive.
+  const throughD = throughISO ? parseISOUTC(throughISO) : null;
   const getBudget = (p) => {
     if (typeof budgetByPeriod.get === "function") {
       const v = budgetByPeriod.get(Number(p));
@@ -81,8 +92,19 @@ export function computeBudgetToDateForLine({ budgetByPeriod, periodsInRange, tod
       currentPeriodNo = p;
       const daysInclusive = Math.floor((pEnd.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
       daysInCurrent = daysInclusive;
-      const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
-      daysElapsedCurrent = Math.min(daysThroughYesterday, daysInclusive);
+      // R-63: when throughISO is passed AND falls inside the current
+      // period, prorate through that date inclusive. Otherwise keep
+      // the existing days_through_yesterday behavior.
+      let daysElapsed;
+      if (throughD && throughD >= pStart && throughD <= pEnd) {
+        daysElapsed = Math.floor((throughD.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
+      } else if (throughD && throughD < pStart) {
+        daysElapsed = 0;
+      } else {
+        const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
+        daysElapsed = Math.min(daysThroughYesterday, daysInclusive);
+      }
+      daysElapsedCurrent = Math.max(0, Math.min(daysElapsed, daysInclusive));
       if (amt != null) {
         total += amt * (daysElapsedCurrent / daysInclusive);
         anyContribution = true;

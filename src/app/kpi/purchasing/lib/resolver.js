@@ -220,11 +220,17 @@ const MS_PER_DAY = 86400000;
 
 // Compute for ONE gl_line_code across members - closed-full + current-
 // prorated. Returned amount is the sum across the members set.
-function budgetToDateDaysForLine({ budgetMap, glLineCode, members, periodsInRange, today }) {
+// Kevin ruling R-63 (2026-09-03): optional `throughISO` overrides the
+// proration edge for the current period. When absent, the existing
+// days_through_yesterday behavior stands so the Purchasing page keeps
+// current semantics. Overview passes throughISO so revenue + cost
+// share one window.
+function budgetToDateDaysForLine({ budgetMap, glLineCode, members, periodsInRange, today, throughISO }) {
   const perLine = budgetLookup(budgetMap, glLineCode);
   if (!perLine) return { amount: 0, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
   const todayD = parseISOUTC(today);
   if (!todayD) return { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
+  const throughD = throughISO ? parseISOUTC(throughISO) : null;
   let total = 0;
   let anyContribution = false;
   const closed = [];
@@ -256,8 +262,17 @@ function budgetToDateDaysForLine({ budgetMap, glLineCode, members, periodsInRang
       currentPeriodNo = p;
       const daysInclusive = Math.floor((pEnd.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
       daysInCurrent = daysInclusive;
-      const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
-      daysElapsedCurrent = Math.min(daysThroughYesterday, daysInclusive);
+      // R-63: throughISO drives proration when set.
+      let daysElapsed;
+      if (throughD && throughD >= pStart && throughD <= pEnd) {
+        daysElapsed = Math.floor((throughD.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
+      } else if (throughD && throughD < pStart) {
+        daysElapsed = 0;
+      } else {
+        const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
+        daysElapsed = Math.min(daysThroughYesterday, daysInclusive);
+      }
+      daysElapsedCurrent = Math.max(0, Math.min(daysElapsed, daysInclusive));
       total += periodSum * (daysElapsedCurrent / daysInclusive);
       anyContribution = true;
     }
@@ -275,7 +290,7 @@ function budgetToDateDaysForLine({ budgetMap, glLineCode, members, periodsInRang
 // Aggregate over every GL in budgetMap that matches the predicate.
 // Returns aggregate amount + a single days_* context (they're all the
 // same today's calendar - one current period, one closed set).
-function budgetToDateDaysForPredicate({ budgetMap, predicate, members, periodsInRange, today }) {
+function budgetToDateDaysForPredicate({ budgetMap, predicate, members, periodsInRange, today, throughISO }) {
   let total = 0;
   let anyLine = false;
   let ctx = { days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
@@ -284,7 +299,7 @@ function budgetToDateDaysForPredicate({ budgetMap, predicate, members, periodsIn
     : Object.keys(budgetMap || {});
   for (const gl of keys) {
     if (!predicate(gl)) continue;
-    const r = budgetToDateDaysForLine({ budgetMap, glLineCode: gl, members, periodsInRange, today });
+    const r = budgetToDateDaysForLine({ budgetMap, glLineCode: gl, members, periodsInRange, today, throughISO });
     if (r.amount != null) {
       total += r.amount;
       anyLine = true;
@@ -327,10 +342,11 @@ export function buildPurchasingBoard({
   members,
   start,
   end,
-  today,           // reserved - not read by this resolver but kept in
-                   // the signature per Kevin's brief; closed-week
-                   // accounting is a rendering-layer decision the
-                   // Overview seat owns.
+  today,
+  throughISO,      // R-63 (Kevin 2026-09-03): Overview passes this so
+                   // the buckets_/tracked_ budget-to-date days proration
+                   // stops at the same edge as the SC + labor loaders.
+                   // Absent -> existing days_through_yesterday behavior.
   actualsRows,     // reserved for future card-level (pending / uncoded)
                    // rollups; the current buckets + tracked contract
                    // consumes weeklyRows + budgetMap only.
@@ -421,6 +437,7 @@ export function buildPurchasingBoard({
     members,
     periodsInRange,
     today: today || null,
+    throughISO: throughISO || null,
   });
   const tracked_budget_to_date_days = budgetToDateDaysForPredicate({
     budgetMap,
@@ -428,6 +445,7 @@ export function buildPurchasingBoard({
     members,
     periodsInRange,
     today: today || null,
+    throughISO: throughISO || null,
   });
 
   return {

@@ -145,7 +145,12 @@ export function buildAggregateWeekBudgets({ start, end, member_budgets }) {
 // range enumerates zero fiscal weeks (empty range). Callers surface
 // the null; NEVER 0 (0 is a valid amount when nothing has elapsed +
 // no closed periods have budget).
-export function computeBudgetToDateDays({ budget_periods, start, end, today }) {
+// Kevin ruling R-63 (2026-09-03): optional `throughISO` overrides the
+// proration edge for the current period. When absent (default), the
+// existing days_through_yesterday behavior stands, so the Labor page
+// keeps its current semantics. The Overview passes throughISO to keep
+// labour + purchasing + revenue on the same window.
+export function computeBudgetToDateDays({ budget_periods, start, end, today, throughISO }) {
   const weeks = weekStartsInRange(start, end);
   if (weeks.length === 0) {
     return { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
@@ -159,6 +164,7 @@ export function computeBudgetToDateDays({ budget_periods, start, end, today }) {
   if (!todayD) {
     return { amount: null, days_elapsed_current: null, days_in_current: null, current_period_no: null, closed_period_nos: [] };
   }
+  const throughD = throughISO ? parseISO(throughISO) : null;
   let total = 0;
   let anyContribution = false;
   const closed = [];
@@ -181,14 +187,22 @@ export function computeBudgetToDateDays({ budget_periods, start, end, today }) {
         anyContribution = true;
       }
     } else if (pStart <= todayD && todayD <= pEnd) {
-      // Current period. days_elapsed_through_yesterday inclusive.
-      // On day 1 of the period, yesterday is BEFORE pStart -> 0 days.
-      // On day D of the period, yesterday is D-1 days after pStart.
+      // Current period.
       currentPeriodNo = p;
       const daysInclusive = Math.floor((pEnd.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
       daysInCurrent = daysInclusive;
-      const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
-      daysElapsedCurrent = Math.min(daysThroughYesterday, daysInclusive);
+      // R-63: if throughISO is inside the current period, prorate to
+      // that date inclusive. Otherwise days_through_yesterday.
+      let daysElapsed;
+      if (throughD && throughD >= pStart && throughD <= pEnd) {
+        daysElapsed = Math.floor((throughD.getTime() - pStart.getTime()) / MS_PER_DAY) + 1;
+      } else if (throughD && throughD < pStart) {
+        daysElapsed = 0;
+      } else {
+        const daysThroughYesterday = Math.max(0, Math.floor((todayD.getTime() - pStart.getTime()) / MS_PER_DAY));
+        daysElapsed = Math.min(daysThroughYesterday, daysInclusive);
+      }
+      daysElapsedCurrent = Math.max(0, Math.min(daysElapsed, daysInclusive));
       if (amt != null) {
         const prorated = amt * (daysElapsedCurrent / daysInclusive);
         total += prorated;
@@ -398,16 +412,15 @@ export function buildBoard({
   start,                // range start ISO
   end,                  // range end ISO
   today,                // ISO YYYY-MM-DD
+  throughISO,           // R-63 (Kevin 2026-09-03): Overview passes this
+                        // so budget-to-date days proration stops at the
+                        // same edge as revenue + purchasing. Absent ->
+                        // existing days_through_yesterday behavior, so
+                        // the Labor page keeps its current semantics.
   actuals,              // all worker-week rows in [start, end]
   budget_periods,       // [{ period_no, amount, ... }]  (may be empty)
   account_state,        // "hourly_ok" | "salaried_only" | "envelope"
   ot_thresholds = { watch_pct: 0, alarm_pct: 8 },
-  // 2026-08-28 person-key fix - workerToEmail Map (worker_id -> email)
-  // built from resolveWorkerMeta. When present, distinct-people counts
-  // (worker_count, approval_people, distinct_workers) dedupe by email
-  // instead of by worker_id. Absent/empty preserves the legacy
-  // worker_id-based count (unmapped ids count as themselves). See
-  // src/lib/labor/personCount.js.
   workerToEmail = new Map(),
 }) {
   if (account_state === "salaried_only" || account_state === "envelope") {
@@ -839,7 +852,7 @@ export function buildBoard({
     // range enumerates zero fiscal weeks. Callers surface the null.
     // See computeBudgetToDateDays above for the exact contract.
     budget_to_date_days: computeBudgetToDateDays({
-      budget_periods, start, end, today,
+      budget_periods, start, end, today, throughISO,
     }),
     // V37-4 - basis of the money above. Single period reads its one
     // basis; multi-period agrees only if every touched period has
