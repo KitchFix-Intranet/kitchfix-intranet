@@ -52,6 +52,49 @@ function fmtPct(n) {
   return Number(n).toFixed(1) + "%";
 }
 
+// Kevin ruling 2026-09-02: in the P&L table ONLY, variance cells
+// render `↑ $X` / `↓ $X` (arrow = direction) with colour carrying
+// the verdict. Elsewhere (status line, card pills, cost-lines table,
+// Also tracked) keeps the word form. Scope this precisely - a dense
+// reconciliation reads better with a glyph; a sentence does not.
+//
+// aria-label carries the direction word for screen readers since
+// colour + glyph together would otherwise miss the meaning.
+//
+// section: "revenue" | "cogs" | "margin". aboveWord/belowWord differ
+// by axis:
+//   revenue -> above / below
+//   cogs    -> over  / under
+//   margin  -> ahead / behind
+function ArrowVariance({ variance, section, colorClass, provisional }) {
+  if (variance == null || Number.isNaN(Number(variance))) return null;
+  if (Math.abs(Number(variance)) < 1) {
+    return <span className="kpi-ov-nb">on budget</span>;
+  }
+  const up = Number(variance) > 0;
+  const arrow = up ? "↑" : "↓";
+  const wordPairs = {
+    revenue: ["above", "below"],
+    cogs: ["over", "under"],
+    margin: ["ahead", "behind"],
+  };
+  const [wUp, wDown] = wordPairs[section] || ["up", "down"];
+  const ariaWord = up ? wUp : wDown;
+  const amount = fmtMoney(Math.abs(Number(variance)));
+  const provSuffix = provisional ? " · provisional" : "";
+  const ariaProvSuffix = provisional ? " provisional" : "";
+  return (
+    <span
+      className={colorClass}
+      aria-label={`${amount} ${ariaWord}${ariaProvSuffix}`}
+      data-kpi-ov="pnl-variance-arrow"
+      data-kpi-ov-arrow={up ? "up" : "down"}
+    >
+      <span aria-hidden="true">{arrow}</span> {amount}{provSuffix}
+    </span>
+  );
+}
+
 function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
   const isFee = Array.isArray(row.flags) && row.flags.includes("contractual");
   // E16 (2026-09-01): server flag renamed from "pass_through" to
@@ -131,15 +174,17 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
              flag off SOURCE not period state, so an sc_revenue_live=
              true open period reads red/green like every other settled
              comparison. Cost rows never carry provisional - they are
-             always settled spend. */
-          <span className={row.section === "revenue"
-            ? (row.provisional ? "kpi-ov-warn" : (row.variance >= 0 ? "kpi-ov-good" : "kpi-ov-bad"))
-            : (row.variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad")}>
-            {fmtMoney(Math.abs(row.variance))}
-            {" "}
-            {row.section === "revenue" ? (row.variance >= 0 ? "above" : "below") : (row.variance <= 0 ? "under" : "over")}
-            {row.section === "revenue" && row.provisional && " · provisional"}
-          </span>
+             always settled spend.
+             Kevin 2026-09-02: P&L variance renders as arrow + amount
+             (word form is dropped in this table only). */
+          <ArrowVariance
+            variance={row.variance}
+            section={row.section === "revenue" ? "revenue" : "cogs"}
+            colorClass={row.section === "revenue"
+              ? (row.provisional ? "kpi-ov-warn" : (row.variance >= 0 ? "kpi-ov-good" : "kpi-ov-bad"))
+              : (row.variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad")}
+            provisional={row.section === "revenue" && row.provisional}
+          />
         ) : (
           <DashOrValue value={null} reported={false} />
         )}
@@ -296,16 +341,13 @@ export default function PnlStatement({ payload, open, onToggle }) {
                     <td className="kpi-ov-num">
                       {revenueCard.pill?.label === "Contractual" ? (
                         <span className="kpi-ov-chip-fixed">contractual</span>
-                      ) : revenueCard.delta_display ? (
-                        /* PR-1 item 5 (2026-09-02): total-revenue
-                           variance shares the row-level provisional
-                           rule. When revenue_source_state="planned"
-                           the total renders amber + suffix; otherwise
-                           it stays green/red. */
-                        <span className={payload.revenue_source_state === "planned" ? "kpi-ov-warn" : (revenueCard.delta_direction === "good" ? "kpi-ov-good" : "kpi-ov-bad")}>
-                          {revenueCard.delta_display}
-                          {payload.revenue_source_state === "planned" && " · provisional"}
-                        </span>
+                      ) : revenueCard.delta_dollars != null ? (
+                        <ArrowVariance
+                          variance={revenueCard.delta_dollars}
+                          section="revenue"
+                          colorClass={payload.revenue_source_state === "planned" ? "kpi-ov-warn" : (revenueCard.delta_direction === "good" ? "kpi-ov-good" : "kpi-ov-bad")}
+                          provisional={payload.revenue_source_state === "planned"}
+                        />
                       ) : (
                         <DashOrValue value={null} reported={false} />
                       )}
@@ -353,8 +395,16 @@ export default function PnlStatement({ payload, open, onToggle }) {
                     <td className="kpi-ov-num">
                       <DashOrValue value={cogsCard.hero_actual_display} reported={cogsCard.hero_reported} />
                     </td>
-                    <td className={`kpi-ov-num ${cogsCard.delta_direction === "good" ? "kpi-ov-good" : cogsCard.delta_direction === "bad" ? "kpi-ov-bad" : ""}`}>
-                      {cogsCard.delta_display || <DashOrValue value={null} reported={false} />}
+                    <td className="kpi-ov-num">
+                      {cogsCard.delta_dollars != null ? (
+                        <ArrowVariance
+                          variance={cogsCard.delta_dollars}
+                          section="cogs"
+                          colorClass={cogsCard.delta_direction === "good" ? "kpi-ov-good" : cogsCard.delta_direction === "bad" ? "kpi-ov-bad" : ""}
+                        />
+                      ) : (
+                        <DashOrValue value={null} reported={false} />
+                      )}
                     </td>
                     <td className="kpi-ov-num">
                       <DashOrValue value={cogsCard.pct_of_revenue_display} reported={cogsCard.pct_of_revenue != null} />
@@ -381,8 +431,16 @@ export default function PnlStatement({ payload, open, onToggle }) {
                     <td className="kpi-ov-num">
                       <DashOrValue value={gmCard.hero_actual_display} reported={gmCard.hero_reported} />
                     </td>
-                    <td className={`kpi-ov-num ${gmCard.delta_direction === "good" ? "kpi-ov-good" : gmCard.delta_direction === "bad" ? "kpi-ov-bad" : ""}`}>
-                      {gmCard.delta_display || <DashOrValue value={null} reported={false} />}
+                    <td className="kpi-ov-num">
+                      {gmCard.delta_dollars != null ? (
+                        <ArrowVariance
+                          variance={gmCard.delta_dollars}
+                          section="margin"
+                          colorClass={gmCard.delta_direction === "good" ? "kpi-ov-good" : gmCard.delta_direction === "bad" ? "kpi-ov-bad" : ""}
+                        />
+                      ) : (
+                        <DashOrValue value={null} reported={false} />
+                      )}
                     </td>
                     <td className="kpi-ov-num">
                       <DashOrValue value={gmCard.pct_of_revenue_display} reported={gmCard.pct_of_revenue != null} />

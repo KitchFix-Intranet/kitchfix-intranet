@@ -12,8 +12,13 @@
 //   L3  status_line carries `tone` and `gm_tone`; biggest_lever
 //       carries `tone`. All tones are "good" / "bad" / "neutral" - no
 //       "warn".
-//   L4  no card pill emits `tone === "warn"` on any range. Amber is
-//       retired.
+//   L4  no PERFORMANCE-verdict card pill emits `tone === "warn"` on
+//       any range. Amber is retired for verdicts. Source-state pills
+//       (revenue "Planned" for accounts on planned revenue) legitimately
+//       use warn - planned is a source state, not a performance
+//       comparison, so the green-or-red rule does not apply. That
+//       pill is excluded explicitly. It will fire the moment TXR - AZ
+//       or CIN - AZ goes live on planned revenue without the exclusion.
 //   L5  chart.series carries `revenue_actual` + `adjusted_budget` for
 //       every period. For each closed period, adjusted_budget ==
 //       revenue_actual * (cogs_budget_full_period / rev_budget_full_
@@ -105,11 +110,16 @@ async function auditPayload() {
           fail(`${a} ${r.name}`, `biggest_lever.tone=${sl.biggest_lever.tone}`);
         }
       }
-      // L4: no card pill emits warn tone
+      // L4: no PERFORMANCE-verdict card pill emits warn tone. The
+      // revenue card's "Planned" pill is a SOURCE state, not a
+      // performance verdict - it correctly ships tone=warn to
+      // signal the revenue figure comes from planned budget, not
+      // measured actuals. Exclude that pill explicitly.
+      const SOURCE_STATE_PILL_LABELS = new Set(["Planned"]);
       for (const c of (j.cards || [])) {
-        if (c.pill?.tone === "warn") {
-          fail(`${a} ${r.name}`, `card ${c.key} pill.tone === "warn" (amber retired): ${JSON.stringify(c.pill)}`);
-        }
+        if (c.pill?.tone !== "warn") continue;
+        if (SOURCE_STATE_PILL_LABELS.has(c.pill?.label)) continue;
+        fail(`${a} ${r.name}`, `card ${c.key} pill.tone === "warn" on a performance verdict (amber retired): ${JSON.stringify(c.pill)}`);
       }
       // L5: chart series adjusted_budget correctness
       const cogsCard = (j.cards || []).find(c => c.key === "cogs");
