@@ -983,6 +983,45 @@ The gap surfaced during the R13 -> R14 arc when an S2-mandated dual-URL screensh
 
 Related: the SSR hydration mismatch on every preset URL (`Hydration failed because the server rendered text didn't match the client`) is a separate defect - `today = new Date()` differs SSR vs CSR - and was NOT resolved by the preset canonicalization. Independent.
 
+### Supabase Studio parses a whole batch before executing it (sc-38 lesson, 2026-09-02)
+
+Studio's SQL editor parses the entire pasted batch before it starts executing statements. A migration that `ADD COLUMN foo` in statement 1 and references `foo` in an `INSERT` or a `DO $$ ... $$` block later in the same paste fails with `column "foo" does not exist` even though the ALTER precedes the INSERT lexically. The parser resolves column references at parse time, not at execution time.
+
+sc-38 hit this: the DO block postflight referenced `export_excluded` in a `WHERE export_excluded = false` predicate. Parser bound the identifier before the ALTER ran; whole batch rejected. Had to apply in three paste-and-run steps: (1) ALTER + constraints, (2) INSERTs, (3) DO block.
+
+**Rule:** any migration that adds a column and then uses that column (in a WHERE, an INSERT payload, another CHECK, or a DO block) must ship as **separate paste-blocks with a checkpoint between**. Header comments should mark each block explicitly (`-- STEP 1: paste + run` / `-- STEP 2: paste + run`) so Kevin doesn't grab the whole file at once. The file itself can still contain the full sequence for readability, but the apply protocol is stepwise.
+
+### `sc_config_changelog` is not a substitute for `sc_service_prices` when computing price windows
+
+The 2026-09-02 precision recon's verify block used `LEAD(effective_date) OVER (PARTITION BY entity_id ORDER BY effective_date)` on `sc_config_changelog` to compute the window each rounded price row was operative for. **The changelog only carries rows the recon changed.** Boundary rows that already sat at 2dp (never rounded → never inserted into the changelog) were invisible to `LEAD`, so windows extended past the real boundary and captured actuals that belonged to a different (untouched) price era.
+
+Concrete cases: (a) CIN - OH has JAN sticker rows at `$25.95422` but a JUN override at `$0` (2dp, not in changelog). Verify block extended JAN's window to end-of-history, attributed all-year actuals to JAN, over-counted by $10.68. (b) TBJ Fun $$$$ Allocated has JAN at 5dp but a JUN row at 2dp; same mechanism, over-counted by $29.32. (c) CIN - AZ MLB Breakfast has a 4th 2dp price row on 2026-06-18; JUN17's window extended past it, captured 224 units that belonged to the JUN18 row, over-counted by $0.85.
+
+**Rule:** window math over price history reads `sc_service_prices` (all rows for the service, regardless of whether they'd be touched by the current operation), not `sc_config_changelog` (change log only). The changelog is an audit trail; it's not the source of truth for effective-dated pricing state.
+
+### Latest-effective-price is not the same question as canonical-January-price
+
+The 2026-09-02 precision recon initially read `SELECT DISTINCT ON (sp.service_id) sp.price FROM sc_service_prices WHERE effective_date <= CURRENT_DATE ORDER BY sp.service_id, sp.effective_date DESC` - the "latest operative price per service" pattern. Kevin's preflight predicate was `WHERE effective_date = '2026-01-01' AND price_kind = 'projected'` - the "canonical January row" pattern. The two answer different questions.
+
+They diverge on the 52 of 105 services that carry **two projected rows** - a January projection rate + a June cost-basis rate (see next entry for the reason). "Latest" returns the June row; "January canonical" returns the January row. Different prices, different revenue-delta impact numbers.
+
+The recon's report reversed the direction of the season-revenue delta on CIN-AZ (predicted `+$274.87`, actual `-$54.60`) and TXR-AZ (predicted `-$87.64`, actual `+$148.75`), and omitted the 4 MLB projections-driven accounts entirely because their operative-latest price is `$0` and got filtered out by the sub-cent predicate. Kevin caught it at preflight time when the row count (71) diverged from the recon's (55).
+
+**Rule:** when writing a recon of a change that targets a specific `effective_date`, match the recon's query predicate to the mutation's predicate. Don't use "latest per service" if the mutation touches a specific date; use the same `WHERE effective_date = ...` filter. Read what the mutation will write, not what the view is currently returning.
+
+### Two-rate price model: January = full projection; June = actuals after service-fee net
+
+`sc_service_prices` carries **two projected rows per service on the CIN-AZ / TXR-AZ / TBR-FL MiLB stack** (52 of 105 services total). This is by design, not drift:
+
+- **`effective_date = '2026-01-01'`, `price_kind = 'projected'`**: the FULL projection rate (Sebastian's sticker rate; what appears on projection reports).
+- **`effective_date = '2026-06-16'`, `price_kind = 'projected'`**: the ACTUALS rate with the account-specific service-fee percentage NETTED OUT (CIN-AZ 70%, TXR-AZ 80%, TBR-FL MiLB 75%). This is what invoices bill at.
+
+Both rows are correct. The `sc_daily_revenue` view's LATERAL joins the latest applicable price per date, so pre-Jun-16 actuals bill at the sticker rate and Jun-16-onward actuals bill at the net rate. Historical revenue self-heals through the view.
+
+The MLB projections-driven accounts (CIN-OH, STL-MO, TXR-TX-H, TXR-TX-V) carry a similar two-row pattern but with the June row at `$0` because per-meal actuals-side pricing is not billed on those accounts (they invoice via projected_count × sticker rate; actuals are unused for revenue).
+
+**Do not "fix" the two-row pattern as if it were drift.** Do not delete the June rows to consolidate. The pattern is documented at `SC_MONEY_MODEL.md`; the 2026-06-16 correction batch that created these rows is at `docs/GOTCHAS.md` "Out-of-band Supabase corrections" (2026-06-16 note) and `_seed_sc_from_xlsx.mjs:440-450`. If a future recon reads only one of the two rows and reports a "gap", that's the recon at fault, not the data.
+
 ---
 
 ## Captain's log
