@@ -31,7 +31,16 @@ function fmtMoney(n) {
 // from the chart entirely. The axis labels + bar height carry the
 // signal; a tooltip that duplicates them is noise.
 
-function ChartPeriodGrain({ series }) {
+function ChartPeriodGrain({ series, revenueModel }) {
+  // Kevin PR-B item 10 (2026-09-03): caption + tooltip vary by
+  // revenue model. SC-driven + sales-based accounts draw dashes at
+  // ADJUSTED budget; management-fee accounts draw them at PERIOD
+  // budget (revenue is contractual, no adjustment applies).
+  const isManagementFee = revenueModel === "management_fee";
+  const captionSuffix = isManagementFee ? "period budget" : "adjusted budget";
+  const helpBody = isManagementFee
+    ? <p>Each period&rsquo;s cost of goods sold against its period budget. Revenue is contractual on this account, so no revenue adjustment applies. Below the line is under budget. The running period is hatched.</p>
+    : <p>Each period&rsquo;s cost of goods sold against its adjusted budget (revenue times the target cost percentage). Below the line is under budget. The running period is hatched.</p>;
   // Kevin 2026-09-02 language pass Item 15: each period's dash is
   // that period's ADJUSTED budget (period actual revenue × target
   // cost pct). Falls back to the static `budget` when adjusted is
@@ -56,11 +65,11 @@ function ChartPeriodGrain({ series }) {
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="period">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">Cost of goods sold, period by period</span>
-        <span className="kpi-ov-gl">bars are spend · line is adjusted budget</span>
+        <span className="kpi-ov-gl">bars are spend · line is {captionSuffix}</span>
         <HelpPop
           id="overview-chart-period"
           title="Cost of goods sold by period"
-          body={<p>Each period&rsquo;s cost of goods sold against its adjusted budget (revenue times the target cost percentage). Below the line is under budget. The running period is hatched.</p>}
+          body={helpBody}
         />
         <span className="kpi-ov-pill kpi-ov-pill-neutral">{series.length} periods</span>
       </div>
@@ -229,12 +238,12 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
   );
 }
 
-export default function Chart({ chart }) {
+export default function Chart({ chart, revenueModel }) {
   if (!chart || !Array.isArray(chart.series) || chart.series.length === 0) {
     return null;
   }
   if (chart.grain === "period") {
-    return <ChartPeriodGrain series={chart.series} />;
+    return <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} />;
   }
   return <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} />;
 }

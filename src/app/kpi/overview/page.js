@@ -439,7 +439,7 @@ export default function KpiOverviewPage() {
               its two-column reorg to single-account only - portfolio
               byte-diff test guards against drift. */
           <>
-            <Chart chart={data.chart} />
+            <Chart chart={data.chart} revenueModel={data.revenue_model} />
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
             <AlsoTracked payload={data} />
           </>
@@ -454,7 +454,7 @@ export default function KpiOverviewPage() {
           <>
             <div className="kpi-ov-split" data-kpi-ov="single-account-split">
               <div className="kpi-ov-split-left">
-                <Chart chart={data.chart} />
+                <Chart chart={data.chart} revenueModel={data.revenue_model} />
                 <CostLines payload={data} previewAccount={data.preview_account} />
               </div>
               <div className="kpi-ov-split-right">

@@ -64,10 +64,20 @@ function fmtPct(n) {
 // reads range_labels.through verbatim ("thru P8" on FYTD + single
 // verified, "period to date" on single open). No per-surface
 // rewrite; the server helper owns the string.
-function labelPtd(rangeLabels, periodState) {
+//
+// Kevin R-60 / PR-B items 1-3 (2026-09-03): fork by callsite. Revenue
+// hero uses `actuals` ("Final P8" on single_closed); COGS/GM heroline
+// uses `through` ("of revenue in P8" on single_closed). Same
+// horizon, different preposition/noun.
+function labelActuals(rangeLabels, periodState) {
+  const actuals = rangeLabels?.actuals;
+  if (actuals) return actuals;
+  if (periodState === "verified") return "final";
+  return "period to date";
+}
+function labelThrough(rangeLabels, periodState) {
   const through = rangeLabels?.through;
   if (through) return through;
-  // Legacy fallback if range_labels not shipped yet.
   if (periodState === "verified") return "final";
   return "period to date";
 }
@@ -81,7 +91,10 @@ function labelBudget(range, periodState) {
 }
 
 function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars, rangeComposition, rangeLabels }) {
-  const ptd = labelPtd(rangeLabels, periodState);
+  // Item 1 (Kevin 2026-09-03): Revenue hero uses `actuals` -
+  // "Final P8" on single_closed, "thru P8" on FYTD, "period to
+  // date" on single_open.
+  const ptd = labelActuals(rangeLabels, periodState);
   const budgetLabel = labelBudget(range, periodState);
   // Item 4: eyebrow "Revenue actuals P1-P8" on FYTD; on a single
   // period "Revenue actuals P8"; on single open (no period suffix
@@ -183,11 +196,22 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
               {range?.kind === "fytd"
                 ? (revBudFullYear != null ? fmtMoney(revBudFullYear) : "—")
                 : (revBudFull != null ? fmtMoney(revBudFull) : "—")}
-              {pctRecognised != null && (
-                <span className="kpi-ov-hz-note">
-                  {" · "}{pctRecognised.toFixed(1)}% recognised
-                </span>
-              )}
+              {/* Kevin PR-B item 8 (2026-09-03): "N.N% recognised" is
+                  finance jargon on an operator surface. Show the
+                  dollar gap and the direction word instead - that's
+                  what the operator acts on; the percentage is
+                  derivable. Kevin proposed "$4,193 under the P8
+                  budget"; wording rules with him. */}
+              {pctRecognised != null && pctRecognisedDenom != null && (() => {
+                const delta = revActual - pctRecognisedDenom;
+                if (Math.abs(delta) < 1) return null;
+                const dir = delta < 0 ? "under" : "over";
+                return (
+                  <span className="kpi-ov-hz-note">
+                    {" · "}{fmtMoney(Math.abs(delta))} {dir} the {budgetLabel.toLowerCase()}
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -211,8 +235,17 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
 
 // COGS + GM share a heroline shape: pct leads, dollars trail after
 // a divider. Sub-pair varies by card.
+// Merged 2026-09-03: PR-A added the `revenueModel` prop for the
+// management-fee "P{N} budget" fork below; PR-B split labelPtd into
+// labelActuals + labelThrough (Item 1-3). Keep BOTH the branch's
+// labelThrough call AND main's revenueModel parameter. Taking main's
+// labelPtd verbatim would break the build because that helper no
+// longer exists.
 function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel }) {
-  const ptd = labelPtd(rangeLabels, periodState);
+  // Items 2+3 (Kevin 2026-09-03): COGS/GM heroline "of revenue
+  // {through}" - "of revenue thru P8" on FYTD, "of revenue in P8"
+  // on single_closed, "of revenue period to date" on single_open.
+  const ptd = labelThrough(rangeLabels, periodState);
   const heroPctText = card.pct_of_revenue_display;
   const heroActualText = card.hero_actual_display;
   const isCogs = kind === "cogs";
@@ -270,7 +303,9 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
           <span className="kpi-ov-heroline-dv" aria-hidden="true">·</span>
           <span className="kpi-ov-heroline-sec kpi-ov-num">
             {heroActualText || "—"}
-            <small>{isCogs ? "spent" : "margin"}</small>
+            {/* Item 9 (Kevin 2026-09-03): "margin" -> "gross margin" -
+                the account-level noun the P&L uses. */}
+            <small>{isCogs ? "spent" : "gross margin"}</small>
           </span>
         </div>
         <div className="kpi-ov-hz" data-kpi-ov="card-hz">

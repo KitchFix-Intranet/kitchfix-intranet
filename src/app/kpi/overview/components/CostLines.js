@@ -258,13 +258,20 @@ export default function CostLines({ payload, previewAccount = null }) {
   // date" on single open (Kevin: "the period is not 'through'
   // anything yet"). Item 19: "Budget at this revenue" -> "Budget
   // adjusted P8" (naming the period the adjustment corresponds to).
+  // Item 4 (Kevin 2026-09-03): on a closed period the actuals header
+  // is just `Final P#` (no verb) - `Spent` implies partway. FYTD +
+  // open keep the verb form (`Spent thru P#` / `Spent period to
+  // date`). Total row uses the same fork: "in P8" preposition on
+  // single_closed matches the COGS card's descriptor.
   const rl = payload.range_labels;
-  const spentLabel = rl?.through ? `Spent ${rl.through}` : "Spent period to date";
-  // Kevin R-58/R-59 (2026-09-03): management-fee accounts show
-  // "P{N} budget" rather than "Budget adjusted P{N}" because their
-  // revenue is contractual - the adjusted budget always equals the
-  // period budget by construction. SC-driven + sales-based keep the
-  // adjusted framing.
+  // Merged 2026-09-03: PR-B took spent by period state (Final P# on
+  // single_closed, Spent thru P# on FYTD/open); PR-A took adjusted
+  // by revenue model (P{N} budget on management-fee, Budget adjusted
+  // P{N} on SC/sales). Both survive - one axis each, no collision.
+  const isSingleClosed = rl?.kind === "single_closed";
+  const spentLabel = isSingleClosed
+    ? rl.actuals
+    : (rl?.through ? `Spent ${rl.through}` : "Spent period to date");
   const isManagementFee = payload.revenue_model === "management_fee";
   const adjustedLabel = isManagementFee
     ? (rl?.period_last ? `${rl.period_last} budget` : "Period budget")

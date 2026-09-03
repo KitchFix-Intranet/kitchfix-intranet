@@ -49,12 +49,17 @@ function Row({ row }) {
           : <DashOrValue value={actual_display} reported={row.reported} />}
       </td>
       <td className="kpi-ov-num">
+        {/* Kevin PR-B item 7 (2026-09-03): empty tracked lines all
+            read "no activity". Prior logic branched to "no data" when
+            variance was null despite the row also being empty - two
+            wordings for the identical state (5002.1 vs 5017.3 on the
+            same account). One wording. */}
         {bothNullish ? <span className="kpi-ov-dash">no activity</span>
           : noBudget ? <DashOrValue state="missing" />
           : variance != null && Math.abs(variance) < 1 ? <span className="kpi-ov-nb">on budget</span>
           : variance != null
             ? <span className={variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad"}>{fmtMoney(Math.abs(variance))} {variance <= 0 ? "under" : "over"}</span>
-            : <span className="kpi-ov-nb">no data</span>}
+            : <span className="kpi-ov-dash">no activity</span>}
       </td>
     </tr>
   );
@@ -69,19 +74,20 @@ export default function AlsoTracked({ payload }) {
   // to date" per range_labels.through. Ranges without a period label
   // fall back to the classic strings.
   const rl = payload.range_labels;
-  // Kevin 2026-09-02 language pass Items 21-22: FYTD + open ranges
-  // render "Spend thru P8" / "Budget thru P8". Verified single
-  // period keeps its "Actual"/"Budget" nouns since range_labels.through
-  // reads "thru P8" and the classic finance verb "Actual" still works.
-  // But Kevin's rule applies to FYTD explicitly; make FYTD use the
-  // "Spend"/"Budget" form.
-  const useThruLabels = isOpen || (rl?.kind === "fytd");
-  const actualHeader = useThruLabels && rl?.through
-    ? `Spend ${rl.through}`
-    : "Actual";
-  const budgetHeader = useThruLabels && rl?.through
-    ? `Budget ${rl.through}`
-    : "Budget";
+  // Kevin PR-B item 5 (2026-09-03): also-tracked was reverting to
+  // generic "Actual" / "Budget" on single closed periods, while the
+  // other tables on the same screen carried the period. Fork per
+  // range kind:
+  //   FYTD           -> "Spend thru P8"  / "Budget thru P8"
+  //   single_closed  -> "Final P8"       / "P8 budget"
+  //   single_open    -> "Spend period to date" / "Budget period to date"
+  const isSingleClosed = rl?.kind === "single_closed";
+  const actualHeader = isSingleClosed
+    ? rl.actuals
+    : (rl?.through ? `Spend ${rl.through}` : "Actual");
+  const budgetHeader = isSingleClosed
+    ? `${rl.period_last} budget`
+    : (rl?.through ? `Budget ${rl.through}` : "Budget");
 
   return (
     <div className="kpi-ov-card kpi-ov-card-tracked" data-kpi-ov="also-tracked">

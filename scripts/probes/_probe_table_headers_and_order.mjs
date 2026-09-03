@@ -52,8 +52,14 @@ const TABLES = [
     // contractual so no adjustment applies. Accepted patterns cover
     // both shapes.
     expectedOrder: {
+      // Merged 2026-09-03: PR-A (R-58/R-59) added the "P{N} budget"
+      // alternation on the budget column for management-fee accounts;
+      // PR-B (item 4) added the "Final P#" actuals header on closed
+      // periods. Both survive: budget takes main's alternation on all
+      // three range kinds, actuals takes the branch's FINAL P# on
+      // single_closed only.
       fytd:          ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_closed: ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      single_closed: ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /FINAL P\d+/i, "% OF REV", "TARGET %", "VS TARGET"],
       single_open:   ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET|PERIOD BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
     },
   },
@@ -79,7 +85,9 @@ const TABLES = [
     sel: '[data-kpi-ov="also-tracked"] table',
     expectedOrder: {
       fytd:          ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /SPEND (THRU P\d+|PERIOD TO DATE)/i, "VS BUDGET"],
-      single_closed: ["LINE", "BUDGET", "ACTUAL", "VS BUDGET"],
+      // Kevin PR-B item 5 (2026-09-03): also-tracked on single closed
+      // uses `P# budget` + `Final P#` - matches the other tables.
+      single_closed: ["LINE", /P\d+ BUDGET/i, /FINAL P\d+/i, "VS BUDGET"],
       single_open:   ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /SPEND (THRU P\d+|PERIOD TO DATE)/i, "VS BUDGET"],
     },
   },

@@ -32,17 +32,12 @@ function fmtPct(n) {
 }
 
 // Kevin 2026-09-02 language pass: labels come from payload.range_labels
-// (the server-side helper). "thru P8" on FYTD + verified single;
-// "period to date" on open single. Capitalize for header cell.
+// (the server-side helper). PR-B item 1 (2026-09-03) added the
+// `actuals` field to distinguish "Final P8" (single_closed) from
+// "thru P8" (FYTD) - use it verbatim, uppercase-first for the header.
 function labelPtd(rangeLabels, periodState) {
-  const through = rangeLabels?.through || "period to date";
-  // "Actuals thru P8" / "Actuals period to date" / "Final" (verified
-  // one-period keeps its own noun).
-  if (rangeLabels?.kind === "single_closed" && periodState === "verified") {
-    return `Final ${rangeLabels.period_last || ""}`.trim();
-  }
-  // Uppercase first letter for column header.
-  return through.charAt(0).toUpperCase() + through.slice(1);
+  const actuals = rangeLabels?.actuals || rangeLabels?.through || "period to date";
+  return actuals.charAt(0).toUpperCase() + actuals.slice(1);
 }
 
 function labelBudget(rangeLabels, rng) {
