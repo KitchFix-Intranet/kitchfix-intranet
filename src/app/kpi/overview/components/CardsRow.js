@@ -28,7 +28,13 @@ const PILL_TONE = {
 
 const HELP_BODIES = {
   revenue: <p>What this account bills for the food and service delivered. Every cost below is judged as a percent of this number.</p>,
-  cogs: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Judged as a percent of revenue. Target percent is set at budget and does not move when revenue moves.</p>,
+  // Kevin R-58/R-59 (2026-09-03): COGS tooltip varies by revenue
+  // model. SC-driven / sales-based accounts explain the revenue-
+  // adjusted allowance (adjusted budget = revenue × target %).
+  // Management-fee accounts have contractual revenue - no adjustment
+  // is possible, so the tooltip names that explicitly.
+  cogs_sc: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Judged as a percent of revenue. Target percent is set at budget and does not move when revenue moves. Adjusted budget is what that percent buys at the revenue actually earned.</p>,
+  cogs_fee: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Judged as a percent of revenue. Revenue on this account is contractual, so the period budget is fixed - the target percent buys the same dollars every period.</p>,
   gross_margin: <p>Revenue minus cost of goods sold. This is the account-level measure. Stops here - SG&A is not part of it, so this is not profit.</p>,
 };
 
@@ -58,10 +64,20 @@ function fmtPct(n) {
 // reads range_labels.through verbatim ("thru P8" on FYTD + single
 // verified, "period to date" on single open). No per-surface
 // rewrite; the server helper owns the string.
-function labelPtd(rangeLabels, periodState) {
+//
+// Kevin R-60 / PR-B items 1-3 (2026-09-03): fork by callsite. Revenue
+// hero uses `actuals` ("Final P8" on single_closed); COGS/GM heroline
+// uses `through` ("of revenue in P8" on single_closed). Same
+// horizon, different preposition/noun.
+function labelActuals(rangeLabels, periodState) {
+  const actuals = rangeLabels?.actuals;
+  if (actuals) return actuals;
+  if (periodState === "verified") return "final";
+  return "period to date";
+}
+function labelThrough(rangeLabels, periodState) {
   const through = rangeLabels?.through;
   if (through) return through;
-  // Legacy fallback if range_labels not shipped yet.
   if (periodState === "verified") return "final";
   return "period to date";
 }
@@ -75,7 +91,10 @@ function labelBudget(range, periodState) {
 }
 
 function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars, rangeComposition, rangeLabels, inventoryStatus }) {
-  const ptd = labelPtd(rangeLabels, periodState);
+  // Item 1 (Kevin 2026-09-03): Revenue hero uses `actuals` -
+  // "Final P8" on single_closed, "thru P8" on FYTD, "period to
+  // date" on single_open.
+  const ptd = labelActuals(rangeLabels, periodState);
   const budgetLabel = labelBudget(range, periodState);
   // Item 4: eyebrow "Revenue actuals P1-P8" on FYTD; on a single
   // period "Revenue actuals P8"; on single open (no period suffix
@@ -177,11 +196,22 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
               {range?.kind === "fytd"
                 ? (revBudFullYear != null ? fmtMoney(revBudFullYear) : "—")
                 : (revBudFull != null ? fmtMoney(revBudFull) : "—")}
-              {pctRecognised != null && (
-                <span className="kpi-ov-hz-note">
-                  {" · "}{pctRecognised.toFixed(1)}% recognised
-                </span>
-              )}
+              {/* Kevin PR-B item 8 (2026-09-03): "N.N% recognised" is
+                  finance jargon on an operator surface. Show the
+                  dollar gap and the direction word instead - that's
+                  what the operator acts on; the percentage is
+                  derivable. Kevin proposed "$4,193 under the P8
+                  budget"; wording rules with him. */}
+              {pctRecognised != null && pctRecognisedDenom != null && (() => {
+                const delta = revActual - pctRecognisedDenom;
+                if (Math.abs(delta) < 1) return null;
+                const dir = delta < 0 ? "under" : "over";
+                return (
+                  <span className="kpi-ov-hz-note">
+                    {" · "}{fmtMoney(Math.abs(delta))} {dir} the {budgetLabel.toLowerCase()}
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -221,11 +251,28 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
 
 // COGS + GM share a heroline shape: pct leads, dollars trail after
 // a divider. Sub-pair varies by card.
-function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels }) {
-  const ptd = labelPtd(rangeLabels, periodState);
+// Merged 2026-09-03: PR-A added the `revenueModel` prop for the
+// management-fee "P{N} budget" fork below; PR-B split labelPtd into
+// labelActuals + labelThrough (Item 1-3). Keep BOTH the branch's
+// labelThrough call AND main's revenueModel parameter. Taking main's
+// labelPtd verbatim would break the build because that helper no
+// longer exists.
+function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel }) {
+  // Items 2+3 (Kevin 2026-09-03): COGS/GM heroline "of revenue
+  // {through}" - "of revenue thru P8" on FYTD, "of revenue in P8"
+  // on single_closed, "of revenue period to date" on single_open.
+  const ptd = labelThrough(rangeLabels, periodState);
   const heroPctText = card.pct_of_revenue_display;
   const heroActualText = card.hero_actual_display;
   const isCogs = kind === "cogs";
+  // Kevin R-58/R-59 (2026-09-03): management-fee accounts have
+  // contractual revenue, so adjusted budget equals period budget and
+  // the delta is always $0. Drop the "Adjusted budget" framing and
+  // read "P{N} budget" instead; suppress the envelope note.
+  const isManagementFee = revenueModel === "management_fee";
+  const cogsBudgetLabel = isManagementFee
+    ? (rangeLabels?.period_last ? `${rangeLabels.period_last} budget` : "Period budget")
+    : "Adjusted budget";
   const hasTarget = extra?.hasTarget;
   const targetPctText = card.target_pct_display;
   const batrText = fmtMoney(card.budget_at_this_revenue);
@@ -254,7 +301,13 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
     <div className={`kpi-ov-card ${isCogs ? "kpi-ov-card-cogs" : "kpi-ov-card-gm"}`} data-kpi-ov={`card-${kind}`}>
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">{card.label}</span>
-        <HelpPop id={`overview-card-${kind}`} title={card.label} body={HELP_BODIES[kind]} />
+        <HelpPop
+          id={`overview-card-${kind}`}
+          title={card.label}
+          body={isCogs
+            ? (isManagementFee ? HELP_BODIES.cogs_fee : HELP_BODIES.cogs_sc)
+            : HELP_BODIES[kind]}
+        />
         <Pill pill={card.pill} />
       </div>
       <div className="kpi-ov-cb">
@@ -266,7 +319,9 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
           <span className="kpi-ov-heroline-dv" aria-hidden="true">·</span>
           <span className="kpi-ov-heroline-sec kpi-ov-num">
             {heroActualText || "—"}
-            <small>{isCogs ? "spent" : "margin"}</small>
+            {/* Item 9 (Kevin 2026-09-03): "margin" -> "gross margin" -
+                the account-level noun the P&L uses. */}
+            <small>{isCogs ? "spent" : "gross margin"}</small>
           </span>
         </div>
         <div className="kpi-ov-hz" data-kpi-ov="card-hz">
@@ -290,8 +345,12 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
                     Item 10: envelope delta is NEUTRAL, not a verdict -
                     render in purple with a direction arrow and the word
                     more or less. Revenue moving the envelope is a
-                    consequence, not performance. */}
-                <div className="kpi-ov-hz-k">Adjusted budget</div>
+                    consequence, not performance.
+                    R-58/R-59 (Kevin 2026-09-03): management-fee accounts
+                    have contractual revenue, so the label becomes
+                    "P{N} budget" and the envelope note is suppressed
+                    (server ships envelope_delta as null for MF). */}
+                <div className="kpi-ov-hz-k">{cogsBudgetLabel}</div>
                 <div className="kpi-ov-hz-v kpi-ov-num">
                   {!hasTarget ? <span className="kpi-ov-nb">—</span>
                     : batrText == null ? "—"
@@ -337,7 +396,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
   );
 }
 
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition, rangeLabels, inventoryStatus }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition, rangeLabels, revenueModel, inventoryStatus }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
@@ -366,6 +425,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           kind="cogs"
           extra={{ hasTarget, revenueIsPlanned }}
           rangeLabels={rangeLabels}
+          revenueModel={revenueModel}
         />
       )}
       {gm && (
@@ -376,6 +436,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           kind="gross_margin"
           extra={{ hasTarget }}
           rangeLabels={rangeLabels}
+          revenueModel={revenueModel}
         />
       )}
     </div>

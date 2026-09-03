@@ -229,6 +229,31 @@ function ovRdoDisplayName(email) {
 
 const FY_START_ISO = "2025-12-29";
 
+// Kevin R-58 (2026-09-03): every account belongs to one of three
+// revenue models. Source of truth is kpi_account_flags.revenue_model
+// (migration docs/migrations/pnl-2-revenue-model.sql). This map is a
+// PRE-MIGRATION FALLBACK ONLY - dev environments or a fresh row can
+// return null revenue_model. In production the column is populated
+// per Kevin's ruling and the fallback is never consulted. Kept in
+// sync with the SQL backfill; if either changes, both change.
+const REVENUE_MODEL_FALLBACK = {
+  "TBR - FL": "sc_driven",
+  "TBJ - FL": "sc_driven",
+  "TBJ - NY": "sc_driven",
+  "CIN - AZ": "sc_driven",
+  "CIN - KY": "sc_driven",
+  "TXR - AZ": "sc_driven",
+  "STL - FL": "management_fee",
+  "STL - MO": "management_fee",
+  "CIN - OH": "management_fee",
+  "TXR - TX - H": "management_fee",
+  "TXR - TX - V": "sales_based",
+};
+function accountRevenueModel(accountKey, flagRow) {
+  if (flagRow && flagRow.revenue_model) return flagRow.revenue_model;
+  return REVENUE_MODEL_FALLBACK[accountKey] || null;
+}
+
 // P2-3 / P2-5 (2026-09-01): normalize an `explicit` (start, end) that
 // matches a known preset window to that preset's canonical kind so
 // downstream consumers (range chip label, revenue card full-year
@@ -1157,6 +1182,18 @@ export async function resolveOverview({
     return (acctFlags && acctFlags.sc_revenue_live === true) ? "live" : "planned";
   })();
 
+  // Kevin R-58 (2026-09-03): revenue_model on payload root. Cards,
+  // cost lines, help copy and probes read this to gate the "adjusted
+  // budget" surface. Portfolio scope has no single model; the value
+  // is null there and downstream surfaces default to the SC-driven
+  // shape (the corporate rollup mixes all three models). Single-
+  // account: read from kpi_account_flags.revenue_model (fallback to
+  // the pre-migration map).
+  const revenue_model = isAggregate
+    ? null
+    : accountRevenueModel(accountKey, accountFlags.get(accountKey) || null);
+  const isManagementFee = revenue_model === "management_fee";
+
   // PR-1 item 2 (2026-09-02). Envelope + pace helpers.
   // revenue_pace_pct: how far revenue came in against its own budget-
   //   to-date. Not a target percent - a pace measurement on revenue.
@@ -1285,7 +1322,13 @@ export async function resolveOverview({
       // budget_at_this_revenue = cost the target buys at actual rev.
       // envelope_delta = budget_to_date - budget_at_this_revenue.
       budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
-      envelope_delta: envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
+      // Kevin R-58/R-59 (2026-09-03): management-fee accounts have
+      // contractual revenue, so budget_at_this_revenue equals the
+      // period budget by construction and the delta is $0 in
+      // perpetuity. Emit envelope_delta as null on those accounts so
+      // the card + cost-lines can suppress the "$0 more than planned"
+      // line rather than render a figure that can never move.
+      envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
       delta_dollars: r2(cogsDelta),
       delta_display: gapDollarsCost(cogsDelta),
       delta_direction: directionOfDelta(cogsDelta, "cost"),
@@ -1376,7 +1419,8 @@ export async function resolveOverview({
       variance_pct: (has_target && actualPct != null && targetPct != null) ? r2(actualPct - targetPct) : null,
       variance_pct_display: (has_target && actualPct != null && targetPct != null) ? gapPointsCost(actualPct - targetPct) : null,
       budget_at_this_revenue: batr,
-      envelope_delta: envelopeDelta(budgetToDate, batr),
+      // R-58/R-59: MF accounts get null envelope (contractual revenue).
+      envelope_delta: isManagementFee ? null : envelopeDelta(budgetToDate, batr),
       direction: dv != null ? directionOfDelta(dv, "cost") : null,
       flag: code === "3400" && flags.packaging_gap ? "mapping_gap" : null,
     };
@@ -1616,7 +1660,8 @@ export async function resolveOverview({
       actual_pct: labor3100_inactive ? null : _actPct,
       target_pct: labor3100_inactive ? null : _tgtPct,
       budget_at_this_revenue: labor3100_inactive ? null : _batr,
-      envelope_delta: labor3100_inactive ? null : envelopeDelta(labor3100_budget_to_date_days, _batr),
+      // R-58/R-59: MF accounts null out envelope (contractual revenue).
+      envelope_delta: (labor3100_inactive || isManagementFee) ? null : envelopeDelta(labor3100_budget_to_date_days, _batr),
       sources: ["labor_actuals"],
       flags: labor3100_inactive ? ["inactive"] : [],
     });
@@ -1658,6 +1703,24 @@ export async function resolveOverview({
     };
     const hourly = sumSubLineFromPnl("3100.1");
     const salary = sumSubLineFromPnl("3100.2");
+    // Kevin PR-B item 12 (2026-09-03): the salary reveal sub-rows
+    // were shipped with `budget_to_date: null` and `period_budget:
+    // null` in the initial R-28 build, so the P&L rendered a dash
+    // in the budget column for 3100.1 / 3100.2 even though the
+    // underlying kpi_budgets rows exist ($282,193.64 hourly and
+    // $131,089.20 salary on TBJ - FL P1-P8, matching the finance
+    // workbook to the dollar). The data is loaded already
+    // (loadOverviewBudgets pulls 3100.1 + 3100.2 into overviewBudgets)
+    // - the sub-row builder just wasn't reading it. Look up per-line
+    // budget-to-date + period-budget via the same helpers every
+    // other statement row uses. No new loader needed; the read shape
+    // is unchanged.
+    const hourlyBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.1", members });
+    const hourlyBTD = computeBudgetToDateForLine({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods, today });
+    const hourlyPB = computeFullPeriodBudget({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods });
+    const salaryBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.2", members });
+    const salaryBTD = computeBudgetToDateForLine({ budgetByPeriod: salaryBudPerP, periodsInRange: periods, today });
+    const salaryPB = computeFullPeriodBudget({ budgetByPeriod: salaryBudPerP, periodsInRange: periods });
     statementRows.push({
       line_code: "3100.1",
       section: "cogs",
@@ -1665,8 +1728,8 @@ export async function resolveOverview({
       label: "Hourly wages",
       reported: hourly != null,
       actual: hourly,
-      budget_to_date: null,
-      period_budget: null,
+      budget_to_date: hourlyBTD.amount,
+      period_budget: hourlyPB,
       variance: null,
       variance_pct: null,
       actual_pct: pctOf(hourly, totalRevenue),
@@ -1681,8 +1744,8 @@ export async function resolveOverview({
       label: "Salary wages",
       reported: salary != null,
       actual: salary,
-      budget_to_date: null,
-      period_budget: null,
+      budget_to_date: salaryBTD.amount,
+      period_budget: salaryPB,
       variance: null,
       variance_pct: null,
       actual_pct: pctOf(salary, totalRevenue),
@@ -1795,13 +1858,14 @@ export async function resolveOverview({
       actual_pct: _actPct,
       target_pct: _tgtPct,
       budget_at_this_revenue: _batr,
-      envelope_delta: (suppress || btd == null) ? null : envelopeDelta(btd, _batr),
+      // R-58/R-59: MF accounts null envelope (contractual revenue).
       // Kevin R-61 (2026-09-03): inventory adjustment on 3200/3400.
       // `actual` above is the ADJUSTED figure (purchases - JE) so
       // every downstream calc uses the finance-side number; the raw
       // purchases figure ships alongside for the cost-lines trio
       // display. Non-adjustable rows (3100 labor, 3500 vehicle) emit
       // inventory_je=null so the client knows to skip the trio.
+      envelope_delta: (suppress || btd == null || isManagementFee) ? null : envelopeDelta(btd, _batr),
       inventory_je: (line_code === "3200" || line_code === "3400") ? r2(inventoryJe) : null,
       actual_purchased: (line_code === "3200" || line_code === "3400") ? actualPurchased : null,
       sources: ["purchasing_actuals"],
@@ -2229,7 +2293,8 @@ export async function resolveOverview({
         // reference: variance = actual - budget_at_this_revenue,
         // pcts = actual/revenue vs cogs_budget/rev_budget.
         budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
-        envelope_delta: envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
+        // R-58/R-59: MF accounts null envelope (contractual revenue).
+        envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
         variance: (cogsActual != null && budgetAtThisRevenue(cogsBudget) != null)
           ? r2(cogsActual - budgetAtThisRevenue(cogsBudget)) : null,
         actual_pct: pctOf(cogsActual, totalRevenue),
@@ -2263,6 +2328,10 @@ export async function resolveOverview({
     // PR-1 payload additions (2026-09-02).
     has_target,
     revenue_source_state,
+    // Kevin R-58 (2026-09-03): three-way account model - source of
+    // truth for gating "adjusted budget" copy on cards + cost lines.
+    // Null on portfolio scope (mixed models across members).
+    revenue_model,
     revenue_pace_pct,
     sc_counts_without_dollars,
     // Kevin R-61 (2026-09-03): inventory adjustment status. Card 1
@@ -2380,11 +2449,24 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     ? (biggest_lever.direction === "under" ? "good" : "bad")
     : null;
 
+  // Kevin PR-B item 6 (2026-09-03): status pill on a closed period
+  // says the period is closed. "ON TRACK" reads as though the period
+  // is still running. On single closed: PERIOD CLOSED · ON TARGET /
+  // OFF TARGET. FYTD (now closed-only after R-52) reads the same.
+  // Open ranges keep the running wording.
+  const rangeIsClosed = range_kind === "period" && period_state !== "open";
+  const rangeIsFytdClosed = range_kind === "fytd";
+  const closedCopyOverride = (has_target && (rangeIsClosed || rangeIsFytdClosed))
+    ? (statusTone === "good" ? "Period closed · on target" : "Period closed · off target")
+    : null;
+  const finalStateCopy = closedCopyOverride
+    || (has_target ? ticker.state_copy : "No target");
+
   return {
     // PR-1 item 1: "No target" state pill on rolling windows. Neutral
     // tone, no verdict.
     state: has_target ? ticker.state : "on_track_below",
-    state_copy: has_target ? ticker.state_copy : "No target",
+    state_copy: finalStateCopy,
     tone: statusTone,
     gm_actual_display,
     gm_target_display,
@@ -2416,12 +2498,26 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
   const isSingleOpen = isSinglePeriod && periodState === "open";
   const isSingleClosed = isSinglePeriod && !isSingleOpen;
 
+  // Kevin R-60 + PR-B items 1-5 (2026-09-03): a closed period is not
+  // "through" anything - it is settled. `Final P#` replaces every
+  // "thru P#" on a single-closed range. The `through` field also
+  // switches its preposition from "thru" to "in" so descriptors like
+  // "of revenue thru P8" read as "of revenue in P8".
+  //
+  //   through   - inline preposition phrase ("of revenue thru P8",
+  //               "of revenue in P8", "of revenue period to date")
+  //   actuals   - noun phrase for actuals headers/hero ("Final P8",
+  //               "thru P8", "period to date"). Same string as
+  //               `through` on FYTD + single_open; differs on
+  //               single_closed.
   if (isFytd) {
     const first = rc?.verified?.first ?? 1;
     const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
+    const thruLast = `thru P${last}`;
     return {
       kind: "fytd",
-      through: `thru P${last}`,
+      through: thruLast,
+      actuals: thruLast,
       period_span: first === last ? `P${last}` : `P${first}-P${last}`,
       period_last: `P${last}`,
     };
@@ -2431,6 +2527,7 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
     return {
       kind: "single_open",
       through: "period to date",
+      actuals: "period to date",
       period_span: n != null ? `P${n}` : null,
       period_last: n != null ? `P${n}` : null,
     };
@@ -2439,7 +2536,8 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
     const n = range.period_no;
     return {
       kind: "single_closed",
-      through: `thru P${n}`,
+      through: `in P${n}`,
+      actuals: `Final P${n}`,
       period_span: `P${n}`,
       period_last: `P${n}`,
     };
@@ -2447,6 +2545,7 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
   return {
     kind: "explicit",
     through: "to date",
+    actuals: "to date",
     period_span: null,
     period_last: null,
   };
