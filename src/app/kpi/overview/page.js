@@ -417,12 +417,9 @@ export default function KpiOverviewPage() {
           rangeMeta={rangeMeta}
           scCountsWithoutDollars={data.sc_counts_without_dollars}
           hasTarget={data.has_target}
-          revenuePacePct={data.revenue_pace_pct}
           revenueSourceState={data.revenue_source_state}
-          rangeComposition={data.range_composition}
           rangeLabels={data.range_labels}
           revenueModel={data.revenue_model}
-          inventoryStatus={data.inventory_status}
         />
         {/* PR-2 layout branch: two-column single-account grid ONLY
             when the EFFECTIVE account is a single site. A corporate

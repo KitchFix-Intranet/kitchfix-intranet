@@ -128,16 +128,21 @@ async function mockAuth(page) {
 }
 
 async function auditDom() {
-  console.log("## DOM assertions D1-D3");
+  // Kevin ruling 2026-09-03 (top-simplify): D1 retired - the "ADJUSTED
+  // BUDGET" / "P8 BUDGET" COGS sub-label lived on the card sub-pair
+  // that is now gone. Envelope note also moved off the card face
+  // into the COGS tooltip; D3 becomes "no envelope figure on the card
+  // face" - asserted here per Kevin's ruling. Cost-lines table header
+  // (D2) still fork per model - that assertion stays.
+  console.log("## DOM assertions D2 (cost-lines header) + D3 (no envelope on card face)");
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1680, height: 1050 } });
   const page = await ctx.newPage();
   await mockAuth(page);
-  // One account of each model on P8 (verified).
   const cases = [
-    { name: "TBJ - FL", model: "sc_driven",       expectedLabel: /BUDGET ADJUSTED P8|BUDGET ADJUSTED PERIOD TO DATE/i, cogsSubLabel: /ADJUSTED BUDGET/i, envelopePresent: true },
-    { name: "CIN - OH", model: "management_fee",  expectedLabel: /P8 BUDGET/i,                                          cogsSubLabel: /P8 BUDGET/i,      envelopePresent: false },
-    { name: "TXR - TX - V", model: "sales_based", expectedLabel: /BUDGET ADJUSTED P8/i,                                 cogsSubLabel: /ADJUSTED BUDGET/i, envelopePresent: true /* sales-based follows SC-driven surface */ },
+    { name: "TBJ - FL", model: "sc_driven",       expectedLabel: /BUDGET ADJUSTED P8|BUDGET ADJUSTED PERIOD TO DATE/i },
+    { name: "CIN - OH", model: "management_fee",  expectedLabel: /P8 BUDGET/i },
+    { name: "TXR - TX - V", model: "sales_based", expectedLabel: /BUDGET ADJUSTED P8/i },
   ];
   for (const c of cases) {
     const url = `${BASE}/kpi/overview?account=${acct(c.name)}&start=2026-07-13&end=2026-08-09`;
@@ -146,27 +151,24 @@ async function auditDom() {
     await page.waitForTimeout(1000);
     const info = await page.evaluate(() => {
       const cogsCard = document.querySelector('[data-kpi-ov="card-cogs"]');
-      const cogsSub = cogsCard ? [...cogsCard.querySelectorAll(".kpi-ov-hz-k")].map(k => k.innerText.trim()) : [];
-      const envPresent = !!document.querySelector('[data-kpi-ov="envelope-delta"]');
+      const cogsBody = cogsCard?.querySelector('.kpi-ov-cb')?.innerText || "";
+      const envOnCardFace = !!cogsCard?.querySelector('[data-kpi-ov="envelope-delta"]');
+      // Text scan on the card body - the "$X more/less than the
+      // original budget" sentence must not render on the card face.
+      const envInCardText = /envelope|more than|less than/i.test(cogsBody);
       const clTable = document.querySelector('[data-kpi-ov="cost-lines-table"]');
       const clHeaders = clTable ? [...clTable.querySelectorAll("thead th")].map(t => t.innerText.trim()) : [];
-      return { cogsSub, envPresent, clHeaders };
+      return { envOnCardFace, envInCardText, clHeaders };
     });
-    // D1
-    const cogsMatch = info.cogsSub.some(l => c.cogsSubLabel.test(l));
-    if (!cogsMatch) fail(`${c.name} D1`, `COGS sub-labels ${JSON.stringify(info.cogsSub)} - want ${c.cogsSubLabel}`);
     // D2
     const clMatch = info.clHeaders.some(h => c.expectedLabel.test(h));
     if (!clMatch) fail(`${c.name} D2`, `cost-lines headers ${JSON.stringify(info.clHeaders)} - want ${c.expectedLabel}`);
-    // D3
-    if (c.envelopePresent && !info.envPresent) {
-      // For SC-driven on a range with revenue, envelope should be present.
-      fail(`${c.name} D3`, `envelope-delta expected present, absent`);
-    }
-    if (!c.envelopePresent && info.envPresent) {
-      fail(`${c.name} D3`, `envelope-delta expected absent, present`);
-    }
-    console.log(`  ${c.name} (${c.model})  cogsSub=${JSON.stringify(info.cogsSub)}  envPresent=${info.envPresent}`);
+    // D3 (simplified per top-simplify ruling): no envelope figure on
+    // the card face. The tooltip may carry the sentence; the card
+    // body must not.
+    if (info.envOnCardFace) fail(`${c.name} D3`, `envelope-delta DOM node present on card face`);
+    if (info.envInCardText) fail(`${c.name} D3`, `envelope sentence text leaked onto card body`);
+    console.log(`  ${c.name} (${c.model})  envOnCardFace=${info.envOnCardFace} envInCardText=${info.envInCardText}`);
   }
   await browser.close();
   console.log(`  ${FAILS.length === 0 ? "OK" : `FAIL (${FAILS.length})`}`);

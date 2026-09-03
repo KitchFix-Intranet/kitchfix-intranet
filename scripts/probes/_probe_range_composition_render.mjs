@@ -33,18 +33,19 @@ async function scrape(page, url) {
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
   await page.waitForResponse(r => r.url().includes("/api/kpi/overview"), { timeout: 15000 }).catch(() => null);
   await page.waitForTimeout(1200);
-  // Open the freshness pop by clicking the pill in the command bar.
   const chipPrimary = await page.locator(".kpi-rmenu-label-primary").first().innerText().catch(() => null);
   const revLinePill = await page.locator('[data-kpi-ov="revenue-lines-pill"]').first().innerText().catch(() => null);
-  const revComposition = await page.locator('[data-kpi-ov="revenue-composition-summary"]').first().innerText().catch(() => null);
   const statusProgress = await page.evaluate(() => {
-    // status line is rendered by StatusLine; find the third segment.
+    // Kevin ruling 2026-09-03 (top-simplify): status line collapsed
+    // to a single pill (state_copy). The "periods verified" third
+    // clause was removed - assertions must key off innerText of the
+    // pill, not sub-segments.
     const el = document.querySelector('[data-kpi-ov="status-line"]');
     if (!el) return null;
     return el.innerText.trim();
   });
   // Open freshness pop (Data current pill) - click and read.
-  let popRevenueRow = null, popConsequence = null;
+  let popRevenueRow = null, popConsequence = null, popPeriodsRow = null;
   const pill = page.locator('button.kpi-fresh').first();
   const pillCount = await pill.count();
   if (pillCount) {
@@ -62,20 +63,29 @@ async function scrape(page, url) {
       }
       return null;
     });
+    popPeriodsRow = await page.evaluate(() => {
+      // Kevin ruling 2026-09-03 (top-simplify) item 3: composition
+      // moved from the Revenue card sub-line into a "Periods" row on
+      // the Data-current popover.
+      const el = document.querySelector('[data-kpi-ov="data-current-periods"]');
+      return el ? el.querySelector('b')?.innerText.trim() : null;
+    });
     popConsequence = await page.evaluate(() => {
       const el = document.querySelector('[data-kpi-ov="revenue-consequence"]');
       return el ? el.innerText.trim() : null;
     });
-    // Close the pop by pressing Escape (avoids stealing focus).
     await page.keyboard.press("Escape").catch(() => null);
   }
-  return { chipPrimary, revLinePill, revComposition, statusProgress, popRevenueRow, popConsequence };
+  return { chipPrimary, revLinePill, statusProgress, popRevenueRow, popPeriodsRow, popConsequence };
 }
 
 // Kevin 2026-09-02 PR-1 of language pass: FYTD ends at last closed
 // period. Composition on FYTD is all-verified; no still-running tail,
 // no consequence sentence, no "N of M periods verified" third clause
 // (the range is closed, not partially closed). Chip reads "P1-P8".
+// Kevin ruling 2026-09-03 (top-simplify): the Revenue card
+// composition sub-line moved to the Data-current popover as a new
+// "Periods" row. `popPeriodsRowContains` replaces `revComposition*`.
 const CASES = [
   {
     name: "TBJ - FL FYTD",
@@ -84,7 +94,7 @@ const CASES = [
     expect: {
       chipPrimaryContains: "FYTD · P1-P8",
       revLinePill: "8 verified",
-      revCompositionContains: "P1-P8 verified",
+      popPeriodsRowContains: "P1-P8 verified",
       statusProgressAbsent: true,
       popRevenueRowContains: ["P1-P8 verified against the finance P&L"],
       popConsequenceAbsent: true,
@@ -97,7 +107,7 @@ const CASES = [
     expect: {
       chipPrimaryContains: "FYTD · P1-P8",
       revLinePill: "8 verified",
-      revCompositionContains: "P1-P8 verified",
+      popPeriodsRowContains: "P1-P8 verified",
       statusProgressAbsent: true,
       popRevenueRowContains: ["P1-P8 verified against the finance P&L"],
       popConsequenceAbsent: true,
@@ -109,7 +119,7 @@ const CASES = [
     acct: "TBJ - FL",
     expect: {
       revLinePill: "Verified",
-      revCompositionAbsent: true,
+      popPeriodsRowContains: "P8 verified",
       popRevenueRowContains: ["P8 verified against the finance P&L"],
       popConsequenceAbsent: true,
     },
@@ -120,7 +130,7 @@ const CASES = [
     acct: "TBJ - FL",
     expect: {
       revLinePill: "Live",
-      revCompositionAbsent: true,
+      popPeriodsRowAbsent: true,
       popRevenueRowContains: ["P9 live from Service Calendar"],
       popConsequenceContains: "will change when the period closes",
     },
@@ -144,7 +154,7 @@ async function main() {
     console.log(`  case: ${c.name}`);
     console.log(`    chipPrimary: ${JSON.stringify(scraped.chipPrimary)}`);
     console.log(`    revLinePill: ${JSON.stringify(scraped.revLinePill)}`);
-    console.log(`    revComposition: ${JSON.stringify(scraped.revComposition)}`);
+    console.log(`    popPeriodsRow: ${JSON.stringify(scraped.popPeriodsRow)}`);
     console.log(`    statusProgress: ${JSON.stringify(scraped.statusProgress)}`);
     console.log(`    popRevenueRow: ${JSON.stringify(scraped.popRevenueRow)}`);
     console.log(`    popConsequence: ${JSON.stringify(scraped.popConsequence)}`);
@@ -156,11 +166,11 @@ async function main() {
     if (e.revLinePill && (scraped.revLinePill || "").toLowerCase() !== e.revLinePill.toLowerCase()) {
       fail(c.name, `revenue-lines pill "${scraped.revLinePill}" != "${e.revLinePill}" (case-insensitive)`);
     }
-    if (e.revCompositionContains && !(scraped.revComposition || "").includes(e.revCompositionContains)) {
-      fail(c.name, `revenue composition missing "${e.revCompositionContains}"`);
+    if (e.popPeriodsRowContains && !(scraped.popPeriodsRow || "").includes(e.popPeriodsRowContains)) {
+      fail(c.name, `Data-current Periods row missing "${e.popPeriodsRowContains}"`);
     }
-    if (e.revCompositionAbsent && scraped.revComposition) {
-      fail(c.name, `revenue composition should be absent, got "${scraped.revComposition}"`);
+    if (e.popPeriodsRowAbsent && scraped.popPeriodsRow) {
+      fail(c.name, `Data-current Periods row should be absent (single-open), got "${scraped.popPeriodsRow}"`);
     }
     if (e.statusProgressContains && !(scraped.statusProgress || "").includes(e.statusProgressContains)) {
       fail(c.name, `status progress missing "${e.statusProgressContains}"`);
