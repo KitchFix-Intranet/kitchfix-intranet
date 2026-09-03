@@ -280,20 +280,26 @@ async function auditDom() {
     if (!has(atHeaders, "Spent")) fail("D5", `also-tracked sub-header missing "Spent": ${JSON.stringify(atHeaders)}`);
   }
 
-  // D6: full P&L headers (open the fold)
+  // Kevin ruling final-P&L (2026-09-03): D6 retargeted. The P&L
+  // header collapses to three zones (Plan · Actual · Variance) with
+  // universal sub-headers - the per-range verbs ("Budget thru P8" /
+  // "Actuals thru P8") retire, matching the tables' Plan/Actual
+  // shape. `_probe_pnl_and_picker.mjs` asserts the zones + the
+  // parent-sum invariant.
   const foldBtn = page.locator('[data-kpi-ov="fold-pnl"]').first();
   if (await foldBtn.count()) {
-    await foldBtn.click();
+    await foldBtn.click({ force: true });
     await page.waitForTimeout(400);
     const pnlHeaders = await page.evaluate(() => {
-      const table = document.querySelector('[data-kpi-ov="statement"] table');
+      const table = document.querySelector('[data-kpi-ov="pnl-table"]');
       if (!table) return null;
       return [...table.querySelectorAll("thead th")].map(t => t.innerText.trim());
     });
     if (pnlHeaders) {
-      if (!has(pnlHeaders, "Budget thru P8")) fail("D6", `P&L header missing "Budget thru P8": ${JSON.stringify(pnlHeaders)}`);
-      if (!has(pnlHeaders, "Actuals thru P8")) fail("D6", `P&L header missing "Actuals thru P8": ${JSON.stringify(pnlHeaders)}`);
-      if (has(pnlHeaders, "Period budget")) fail("D6", `P&L header should NOT include "Period budget" on FYTD`);
+      if (!has(pnlHeaders, "Plan")) fail("D6", `P&L group header missing "Plan": ${JSON.stringify(pnlHeaders)}`);
+      if (!has(pnlHeaders, "Actual")) fail("D6", `P&L group header missing "Actual": ${JSON.stringify(pnlHeaders)}`);
+      if (!has(pnlHeaders, "Variance")) fail("D6", `P&L group header missing "Variance": ${JSON.stringify(pnlHeaders)}`);
+      if (has(pnlHeaders, "Period budget")) fail("D6", `P&L header should NOT include legacy "Period budget"`);
     }
   }
 

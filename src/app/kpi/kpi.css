@@ -1042,18 +1042,21 @@
   border-radius: var(--rad-10);
   box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
   padding: 0;
-  min-width: 452px;
-  width: 452px;
-  display: block;
+  min-width: 640px;
+  width: 640px;
+  display: grid;
+  grid-template-columns: minmax(0, 215px) minmax(0, 1fr);
   overflow: hidden;
 }
-/* Range redesign 2026-09-03 (Item 5): sections stack top-to-bottom;
-   the two-column layout with a 140px preset sidebar is retired. */
-.kpi-rmenu-pop-stack .kpi-rmenu-sec {
+/* Kevin ruling final-picker (2026-09-03) item 8: two columns - quick
+   ranges on the left at 215px, period grid on the right. Panel ~640px.
+   `.kpi-rmenu-pop-stack` class kept on the wrapper (harmless) so the
+   markup stays stable; the grid on .kpi-rmenu-pop drives the layout. */
+.kpi-rmenu-pop .kpi-rmenu-sec {
   padding: var(--kpi-sp-3) var(--kpi-sp-4);
 }
-.kpi-rmenu-pop-stack .kpi-rmenu-sec + .kpi-rmenu-sec {
-  border-top: 1px solid var(--border-muted, var(--border-default));
+.kpi-rmenu-pop .kpi-rmenu-sec + .kpi-rmenu-sec {
+  border-left: 1px solid var(--border-muted, var(--border-default));
 }
 .kpi-rmenu-h-row { display: flex; align-items: center; }
 .kpi-rmenu-h-note {
@@ -1074,11 +1077,11 @@
    .kpi-rmenu-stagenote. New markup uses .kpi-rmenu-qr /
    .kpi-rmenu-pgrid / .kpi-rmenu-legend below. */
 
-/* Item 4: quick ranges with dates on every button. Three across so
-   four presets flow to a 3/1 layout - Next period joins the row
-   (item 6b). Each button carries a title + a date sub-line. */
+/* Kevin ruling final-picker (2026-09-03) items 8+9: quick ranges
+   stack vertically in the narrow left column (215px). Four presets,
+   each carrying a title + a date sub-line. */
 .kpi-rmenu-qr {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: grid; grid-template-columns: 1fr;
   gap: var(--kpi-sp-2);
 }
 .kpi-rmenu-qrb {
@@ -1145,11 +1148,14 @@
   background: var(--kpi-warn-tint, #FFF2E2);
   color: var(--kpi-warn-strong, #B25800);
 }
+/* Kevin ruling final-picker (2026-09-03) item 11: "next" reads as a
+   dashed navy border - a planning-only visual distinct from closed
+   (default), running (amber) and not-started (disabled). */
 .kpi-rmenu-pgb.st-next {
   border-color: var(--kpi-accent);
+  border-style: dashed;
   background: var(--surface-card);
   color: var(--kpi-accent-strong);
-  box-shadow: inset 0 0 0 1px var(--kpi-accent);
 }
 .kpi-rmenu-pgb:disabled {
   background: var(--surface-sunken);
@@ -1193,8 +1199,7 @@
 }
 .kpi-rmenu-lgi-nxt {
   background: var(--surface-card);
-  border-color: var(--kpi-accent);
-  box-shadow: inset 0 0 0 1px var(--kpi-accent);
+  border: 1px dashed var(--kpi-accent);
 }
 .kpi-rmenu-lgi-fut {
   background: var(--surface-sunken);
@@ -1207,15 +1212,22 @@
    custom era; nothing renders them today. */
 
 @media (max-width: 767px) {
-  /* V6-24 - Range menu becomes a full-width sheet under 767px. */
+  /* V6-24 - Range menu becomes a full-width sheet under 767px. Two-
+     column desktop layout collapses to stacked sections; border-left
+     between sections falls back to a top border. */
   .kpi-rmenu-pop {
     position: fixed;
     top: var(--kpi-cmd-h); left: var(--kpi-sp-2); right: var(--kpi-sp-2);
     min-width: 0; width: auto;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
+    grid-template-columns: 1fr;
   }
-  .kpi-rmenu-qr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-rmenu-pop .kpi-rmenu-sec + .kpi-rmenu-sec {
+    border-left: none;
+    border-top: 1px solid var(--border-muted, var(--border-default));
+  }
+  .kpi-rmenu-qr { grid-template-columns: 1fr; }
 }
 
 /* ── V25-12 · table control bar - one height, one rhythm ─────────

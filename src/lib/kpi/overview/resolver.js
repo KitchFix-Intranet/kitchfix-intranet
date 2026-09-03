@@ -29,7 +29,7 @@
 import { performance } from "node:perf_hooks";
 
 // Labor + purchasing engines (library-call, no HTTP hop).
-import { buildBoard } from "@/app/kpi/labor/lib/board.js";
+import { buildBoard, computeBudgetToDateDays as computeLaborBudgetToDateDays } from "@/app/kpi/labor/lib/board.js";
 import { paginateActuals as paginateLaborActuals, resolveMemberBudget } from "@/lib/labor/loaders.js";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta.js";
 import { buildWorkerToEmail } from "@/lib/labor/personCount.js";
@@ -1737,41 +1737,84 @@ export async function resolveOverview({
   // in pnl_actuals. The client renders "-" (missing) rather than
   // guessing.
   if (includeSalary && access.salary_toggle_visible) {
-    const sumSubLineFromPnl = (lineCode) => {
+    // Kevin ruling final-P&L (2026-09-03) item 3: source both
+    // sub-rows from the SAME engine that produces the parent. The
+    // parent `3100` reads laborBoard.spent_to_date, which is the
+    // sum of hourly (laborActuals) + salary (salaryRows) after the
+    // R-63 effectiveEnd cap. Previously the sub-rows read pnl_actuals
+    // directly, so 3100.1 + 3100.2 did not sum to 3100 (TBJ - FL
+    // FYTD was $2,532 off - a defect finance would find on the
+    // first read). Sourcing from the same engine ties them by
+    // construction.
+    const sumRows = (rows, field = "amount") => {
       let amt = 0;
       let anyReported = false;
-      for (const m of members) {
-        const byAcct = pnl.get(m);
-        for (const p of periods) {
-          const row = byAcct?.get(p)?.get(lineCode);
-          if (row && row.actual != null) {
-            amt += Number(row.actual);
-            anyReported = true;
-          }
+      for (const r of rows || []) {
+        const v = r?.[field];
+        if (v != null) {
+          amt += Number(v);
+          anyReported = true;
         }
       }
       return anyReported ? r2(amt) : null;
     };
-    const hourly = sumSubLineFromPnl("3100.1");
-    const salary = sumSubLineFromPnl("3100.2");
-    // Kevin PR-B item 12 (2026-09-03): the salary reveal sub-rows
-    // were shipped with `budget_to_date: null` and `period_budget:
-    // null` in the initial R-28 build, so the P&L rendered a dash
-    // in the budget column for 3100.1 / 3100.2 even though the
-    // underlying kpi_budgets rows exist ($282,193.64 hourly and
-    // $131,089.20 salary on TBJ - FL P1-P8, matching the finance
-    // workbook to the dollar). The data is loaded already
-    // (loadOverviewBudgets pulls 3100.1 + 3100.2 into overviewBudgets)
-    // - the sub-row builder just wasn't reading it. Look up per-line
-    // budget-to-date + period-budget via the same helpers every
-    // other statement row uses. No new loader needed; the read shape
-    // is unchanged.
-    const hourlyBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.1", members });
-    const hourlyBTD = computeBudgetToDateForLine({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods, today, throughISO: effectiveEndISO });
-    const hourlyPB = computeFullPeriodBudget({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods });
-    const salaryBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.2", members });
-    const salaryBTD = computeBudgetToDateForLine({ budgetByPeriod: salaryBudPerP, periodsInRange: periods, today, throughISO: effectiveEndISO });
-    const salaryPB = computeFullPeriodBudget({ budgetByPeriod: salaryBudPerP, periodsInRange: periods });
+    const hourly = sumRows(laborActuals || [], "amount");
+    const salary = sumRows(salaryRows || [], "amount");
+    // Kevin ruling final-P&L (2026-09-03) item 3: budgets must sum
+    // to parent too. Use the SAME inputs the labor engine consumes
+    // to build laborBudgetPeriods (parent's input):
+    //   hourly = laborBudgetPeriodsHourly (pre-merge; resolveMemberBudget
+    //            output; on revenue-flex accounts this is the SC-derived
+    //            hourly budget, NOT the kpi_budgets_overview 3100.1
+    //            line - which is why the sub-row previously diverged
+    //            from the parent on TXR - TX - H by $30k).
+    //   salary = salaryBudgetByPeriod (aggregate map)
+    // Both feed computeBudgetToDateDays (labor engine's helper) so the
+    // same days-elapsed math applies to sub-rows and parent.
+    const salaryBudgetPeriodsArr = [...salaryBudgetByPeriod.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([p, amt]) => ({ period_no: p, amount: r2(amt) }));
+    const hourlyBTDLabor = computeLaborBudgetToDateDays({
+      budget_periods: laborBudgetPeriodsHourly,
+      start: rng.start,
+      end: effectiveEndISO,
+      today,
+      throughISO: effectiveEndISO,
+    });
+    const salaryBTDLabor = computeLaborBudgetToDateDays({
+      budget_periods: salaryBudgetPeriodsArr,
+      start: rng.start,
+      end: effectiveEndISO,
+      today,
+      throughISO: effectiveEndISO,
+    });
+    const hourlyBTD = { amount: hourlyBTDLabor.amount };
+    const salaryBTD = { amount: salaryBTDLabor.amount };
+    // Period-budget (full range budget) computed from the same per-
+    // period inputs so it stays consistent with budget_to_date.
+    const sumPeriodBudget = (arr) => arr.reduce((acc, bp) => {
+      if (periods.includes(bp.period_no)) return acc + Number(bp.amount || 0);
+      return acc;
+    }, 0);
+    const hourlyPB = r2(sumPeriodBudget(laborBudgetPeriodsHourly));
+    const salaryPB = r2(sumPeriodBudget(salaryBudgetPeriodsArr));
+    // Kevin ruling final-P&L (2026-09-03) item 4: sub-rows gain
+    // Target % and Adjusted so the split can be judged on the same
+    // axis as the parent. Both are computable and both sum to the
+    // parent's figures by construction. "The parent says labour is
+    // $10,504 over - mild. The split says hourly is roughly $36,581
+    // over and salary roughly $26,077 under. They partly cancel and
+    // the parent hides both."
+    //
+    // Hourly (3100.1) is measured as a percent of revenue - it's the
+    // controllable line. Salary (3100.2) is fixed at hire and does
+    // NOT track revenue; Kevin's item 5 says salary sub-rows and
+    // tracked lines hatch the Target % + Adjusted cells (not-
+    // applicable, marked with flags:["not_applicable"]).
+    const hourlyTargetPct = has_target ? pctOf(hourlyBTD.amount || hourlyPB, revenue_budget_full_period) : null;
+    const hourlyBatr = (has_target && totalRevenue != null && hourlyTargetPct != null)
+      ? r2((hourlyTargetPct / 100) * totalRevenue)
+      : null;
     statementRows.push({
       line_code: "3100.1",
       section: "cogs",
@@ -1781,11 +1824,13 @@ export async function resolveOverview({
       actual: hourly,
       budget_to_date: hourlyBTD.amount,
       period_budget: hourlyPB,
-      variance: null,
+      // Item 6: variance ties. Cost sub-rows measure against Adjusted.
+      variance: (hourly != null && hourlyBatr != null) ? r2(hourly - hourlyBatr) : null,
       variance_pct: null,
       actual_pct: pctOf(hourly, totalRevenue),
-      target_pct: null,
-      sources: ["pnl_actuals"],
+      target_pct: hourlyTargetPct,
+      budget_at_this_revenue: hourlyBatr,
+      sources: ["labor_actuals"],
       flags: [],
     });
     statementRows.push({
@@ -1797,12 +1842,19 @@ export async function resolveOverview({
       actual: salary,
       budget_to_date: salaryBTD.amount,
       period_budget: salaryPB,
-      variance: null,
+      // Salary is fixed - variance is dollar over/under the salary
+      // BUDGET, not against a % of revenue. Emit against budget_to_date
+      // so the P&L variance column still ties for the sub-row without
+      // needing an Adjusted figure that doesn't apply.
+      variance: (salary != null && salaryBTD.amount != null) ? r2(salary - salaryBTD.amount) : null,
       variance_pct: null,
       actual_pct: pctOf(salary, totalRevenue),
       target_pct: null,
-      sources: ["pnl_actuals"],
-      flags: [],
+      budget_at_this_revenue: null,
+      sources: ["labor_salary_actuals"],
+      // Item 5: salary sub-rows are not measured on % of revenue;
+      // hatch the Target % and Adjusted cells in the P&L.
+      flags: ["not_applicable_target_pct"],
     });
   }
   // 2026-09-01 polish PR (E16 + E17): tagging + verdict suppression
