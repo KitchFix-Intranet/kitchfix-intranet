@@ -90,8 +90,15 @@ async function auditPayload() {
       if (rl?.kind === "fytd" && rl.through !== "thru P8") {
         fail(`${a} ${r.name}`, `FYTD through=${rl.through} (want "thru P8" for today's boundary)`);
       }
-      if (rl?.kind === "single_closed" && rl.through !== `thru P${j.range.period_no}`) {
-        fail(`${a} ${r.name}`, `single_closed through=${rl.through} (want "thru P${j.range.period_no}")`);
+      // Kevin PR-B (2026-09-03): single_closed uses "in P#" preposition
+      // ("of revenue in P8"); actuals uses "Final P#".
+      if (rl?.kind === "single_closed") {
+        if (rl.through !== `in P${j.range.period_no}`) {
+          fail(`${a} ${r.name}`, `single_closed through=${rl.through} (want "in P${j.range.period_no}")`);
+        }
+        if (rl.actuals !== `Final P${j.range.period_no}`) {
+          fail(`${a} ${r.name}`, `single_closed actuals=${rl.actuals} (want "Final P${j.range.period_no}")`);
+        }
       }
       if (rl?.kind === "single_open" && rl.through !== "period to date") {
         fail(`${a} ${r.name}`, `single_open through=${rl.through} (want "period to date")`);

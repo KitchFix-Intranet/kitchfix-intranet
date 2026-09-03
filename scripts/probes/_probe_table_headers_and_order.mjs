@@ -48,8 +48,11 @@ const TABLES = [
     key: "cost-lines",
     sel: '[data-kpi-ov="cost-lines-table"]',
     expectedOrder: {
+      // Kevin PR-B item 4 (2026-09-03): closed periods use `Final P#`
+      // as the actuals header - `Spent` implies partway. FYTD + open
+      // keep the verb form.
       fytd:          ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_closed: ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      single_closed: ["LINE", /BUDGET ADJUSTED P\d+/i, /FINAL P\d+/i, "% OF REV", "TARGET %", "VS TARGET"],
       single_open:   ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
     },
   },
@@ -75,7 +78,9 @@ const TABLES = [
     sel: '[data-kpi-ov="also-tracked"] table',
     expectedOrder: {
       fytd:          ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /SPEND (THRU P\d+|PERIOD TO DATE)/i, "VS BUDGET"],
-      single_closed: ["LINE", "BUDGET", "ACTUAL", "VS BUDGET"],
+      // Kevin PR-B item 5 (2026-09-03): also-tracked on single closed
+      // uses `P# budget` + `Final P#` - matches the other tables.
+      single_closed: ["LINE", /P\d+ BUDGET/i, /FINAL P\d+/i, "VS BUDGET"],
       single_open:   ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /SPEND (THRU P\d+|PERIOD TO DATE)/i, "VS BUDGET"],
     },
   },

@@ -1602,6 +1602,24 @@ export async function resolveOverview({
     };
     const hourly = sumSubLineFromPnl("3100.1");
     const salary = sumSubLineFromPnl("3100.2");
+    // Kevin PR-B item 12 (2026-09-03): the salary reveal sub-rows
+    // were shipped with `budget_to_date: null` and `period_budget:
+    // null` in the initial R-28 build, so the P&L rendered a dash
+    // in the budget column for 3100.1 / 3100.2 even though the
+    // underlying kpi_budgets rows exist ($282,193.64 hourly and
+    // $131,089.20 salary on TBJ - FL P1-P8, matching the finance
+    // workbook to the dollar). The data is loaded already
+    // (loadOverviewBudgets pulls 3100.1 + 3100.2 into overviewBudgets)
+    // - the sub-row builder just wasn't reading it. Look up per-line
+    // budget-to-date + period-budget via the same helpers every
+    // other statement row uses. No new loader needed; the read shape
+    // is unchanged.
+    const hourlyBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.1", members });
+    const hourlyBTD = computeBudgetToDateForLine({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods, today });
+    const hourlyPB = computeFullPeriodBudget({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods });
+    const salaryBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.2", members });
+    const salaryBTD = computeBudgetToDateForLine({ budgetByPeriod: salaryBudPerP, periodsInRange: periods, today });
+    const salaryPB = computeFullPeriodBudget({ budgetByPeriod: salaryBudPerP, periodsInRange: periods });
     statementRows.push({
       line_code: "3100.1",
       section: "cogs",
@@ -1609,8 +1627,8 @@ export async function resolveOverview({
       label: "Hourly wages",
       reported: hourly != null,
       actual: hourly,
-      budget_to_date: null,
-      period_budget: null,
+      budget_to_date: hourlyBTD.amount,
+      period_budget: hourlyPB,
       variance: null,
       variance_pct: null,
       actual_pct: pctOf(hourly, totalRevenue),
@@ -1625,8 +1643,8 @@ export async function resolveOverview({
       label: "Salary wages",
       reported: salary != null,
       actual: salary,
-      budget_to_date: null,
-      period_budget: null,
+      budget_to_date: salaryBTD.amount,
+      period_budget: salaryPB,
       variance: null,
       variance_pct: null,
       actual_pct: pctOf(salary, totalRevenue),
@@ -2279,11 +2297,24 @@ function buildStatusLine({ ticker, cogsLines, weeks_closed, weeks_total, period_
     ? (biggest_lever.direction === "under" ? "good" : "bad")
     : null;
 
+  // Kevin PR-B item 6 (2026-09-03): status pill on a closed period
+  // says the period is closed. "ON TRACK" reads as though the period
+  // is still running. On single closed: PERIOD CLOSED · ON TARGET /
+  // OFF TARGET. FYTD (now closed-only after R-52) reads the same.
+  // Open ranges keep the running wording.
+  const rangeIsClosed = range_kind === "period" && period_state !== "open";
+  const rangeIsFytdClosed = range_kind === "fytd";
+  const closedCopyOverride = (has_target && (rangeIsClosed || rangeIsFytdClosed))
+    ? (statusTone === "good" ? "Period closed · on target" : "Period closed · off target")
+    : null;
+  const finalStateCopy = closedCopyOverride
+    || (has_target ? ticker.state_copy : "No target");
+
   return {
     // PR-1 item 1: "No target" state pill on rolling windows. Neutral
     // tone, no verdict.
     state: has_target ? ticker.state : "on_track_below",
-    state_copy: has_target ? ticker.state_copy : "No target",
+    state_copy: finalStateCopy,
     tone: statusTone,
     gm_actual_display,
     gm_target_display,
@@ -2315,12 +2346,26 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
   const isSingleOpen = isSinglePeriod && periodState === "open";
   const isSingleClosed = isSinglePeriod && !isSingleOpen;
 
+  // Kevin R-60 + PR-B items 1-5 (2026-09-03): a closed period is not
+  // "through" anything - it is settled. `Final P#` replaces every
+  // "thru P#" on a single-closed range. The `through` field also
+  // switches its preposition from "thru" to "in" so descriptors like
+  // "of revenue thru P8" read as "of revenue in P8".
+  //
+  //   through   - inline preposition phrase ("of revenue thru P8",
+  //               "of revenue in P8", "of revenue period to date")
+  //   actuals   - noun phrase for actuals headers/hero ("Final P8",
+  //               "thru P8", "period to date"). Same string as
+  //               `through` on FYTD + single_open; differs on
+  //               single_closed.
   if (isFytd) {
     const first = rc?.verified?.first ?? 1;
     const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
+    const thruLast = `thru P${last}`;
     return {
       kind: "fytd",
-      through: `thru P${last}`,
+      through: thruLast,
+      actuals: thruLast,
       period_span: first === last ? `P${last}` : `P${first}-P${last}`,
       period_last: `P${last}`,
     };
@@ -2330,6 +2375,7 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
     return {
       kind: "single_open",
       through: "period to date",
+      actuals: "period to date",
       period_span: n != null ? `P${n}` : null,
       period_last: n != null ? `P${n}` : null,
     };
@@ -2338,7 +2384,8 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
     const n = range.period_no;
     return {
       kind: "single_closed",
-      through: `thru P${n}`,
+      through: `in P${n}`,
+      actuals: `Final P${n}`,
       period_span: `P${n}`,
       period_last: `P${n}`,
     };
@@ -2346,6 +2393,7 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
   return {
     kind: "explicit",
     through: "to date",
+    actuals: "to date",
     period_span: null,
     period_last: null,
   };

@@ -258,8 +258,16 @@ export default function CostLines({ payload, previewAccount = null }) {
   // date" on single open (Kevin: "the period is not 'through'
   // anything yet"). Item 19: "Budget at this revenue" -> "Budget
   // adjusted P8" (naming the period the adjustment corresponds to).
+  // Item 4 (Kevin 2026-09-03): on a closed period the actuals header
+  // is just `Final P#` (no verb) - `Spent` implies partway. FYTD +
+  // open keep the verb form (`Spent thru P#` / `Spent period to
+  // date`). Total row uses the same fork: "in P8" preposition on
+  // single_closed matches the COGS card's descriptor.
   const rl = payload.range_labels;
-  const spentLabel = rl?.through ? `Spent ${rl.through}` : "Spent period to date";
+  const isSingleClosed = rl?.kind === "single_closed";
+  const spentLabel = isSingleClosed
+    ? rl.actuals
+    : (rl?.through ? `Spent ${rl.through}` : "Spent period to date");
   const adjustedLabel = rl?.period_last
     ? `Budget adjusted ${rl.period_last}`
     : "Budget at this revenue";

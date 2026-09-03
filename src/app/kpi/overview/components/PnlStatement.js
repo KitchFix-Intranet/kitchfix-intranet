@@ -155,6 +155,21 @@ function StatementRow({ row, isOpen, leverPctByLine, indent = false }) {
       <td className="kpi-ov-num">
         {isInactive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(bt)} reported={bt != null} />}
       </td>
+      {/* Kevin PR-B item 13 (2026-09-03): new "Budget adjusted P#"
+          column between period budget and Actual spent. Shows the
+          row's `budget_at_this_revenue` - the same figure the COGS
+          cost-lines table has always shown. On management-fee
+          accounts BATR == period budget by construction (contractual
+          revenue), so the cell is suppressed to a dash rather than
+          repeating the number one column over. Revenue rows have no
+          "adjusted" concept; render "—". */}
+      <td className="kpi-ov-num kpi-ov-nb">
+        {isInactive ? <DashOrValue state="not_active" />
+          : row.section === "revenue" ? <span className="kpi-ov-nb">—</span>
+          : (row.budget_at_this_revenue != null
+            ? <DashOrValue value={fmtMoney(row.budget_at_this_revenue)} reported={true} />
+            : <span className="kpi-ov-nb">—</span>)}
+      </td>
       <td className="kpi-ov-num">
         {isInactive ? <DashOrValue state="not_active" /> : <DashOrValue value={fmtMoney(actual)} reported={row.reported} />}
       </td>
@@ -301,9 +316,16 @@ export default function PnlStatement({ payload, open, onToggle }) {
                        vocabulary rule (no bare "Actual" headers). Column
                        collapse: closed period only (isOpen=false → 6
                        cols); This period + FYTD both open → 7 cols. */}
+                  {/* Kevin PR-B item 13 (2026-09-03): new "Budget
+                      adjusted P#" column between the period budget
+                      and Actual spent, on every range. Fed from
+                      row.budget_at_this_revenue (already computed
+                      per row). MF accounts render "—" in the cell
+                      to avoid duplicating the period budget. */}
                   <th className="l">Line</th>
                   {isOpen && <th>Period budget</th>}
                   <th>{budgetHeader}</th>
+                  <th>{rl?.period_last ? `Budget adjusted ${rl.period_last}` : "Budget adjusted"}</th>
                   <th>{actualsHeader}</th>
                   <th>Variance</th>
                   <th style={{ width: 66 }}>Actual %</th>
@@ -311,7 +333,7 @@ export default function PnlStatement({ payload, open, onToggle }) {
                 </tr>
               </thead>
               <tbody>
-                <tr className="sect"><td colSpan={isOpen ? 7 : 6}>Revenue</td></tr>
+                <tr className="sect"><td colSpan={isOpen ? 8 : 7}>Revenue</td></tr>
                 {revenueRows
                   .filter(r => dense === "full" || ["2200", "2300", "2400.1"].includes(r.line_code))
                   .map(r => (
@@ -335,6 +357,10 @@ export default function PnlStatement({ payload, open, onToggle }) {
                     <td className="kpi-ov-num">
                       <DashOrValue value={revenueCard.budget_to_date_display} reported={revenueCard.budget_to_date != null} />
                     </td>
+                    {/* Item 13: revenue has no "adjusted" concept -
+                        actual and budget are on the same axis, not
+                        derived from a target %. Suppress. */}
+                    <td className="kpi-ov-num kpi-ov-nb">—</td>
                     <td className="kpi-ov-num">
                       <DashOrValue value={revenueCard.hero_actual_display} reported={revenueCard.hero_reported} />
                     </td>
@@ -357,7 +383,7 @@ export default function PnlStatement({ payload, open, onToggle }) {
                   </tr>
                 )}
 
-                <tr className="sect"><td colSpan={isOpen ? 7 : 6}>Cost of goods sold</td></tr>
+                <tr className="sect"><td colSpan={isOpen ? 8 : 7}>Cost of goods sold</td></tr>
                 {cogsRows
                   /* Sub-line rows (parent_line_code set) render only
                      in Full mode - Summary keeps the four totals
@@ -391,6 +417,14 @@ export default function PnlStatement({ payload, open, onToggle }) {
                     )}
                     <td className="kpi-ov-num">
                       <DashOrValue value={cogsCard.budget_to_date_display} reported={cogsCard.budget_to_date != null} />
+                    </td>
+                    {/* Item 13: total-COGS Budget adjusted = server's
+                        statement_totals.cogs.budget_at_this_revenue.
+                        MF accounts render "—" (BATR==period budget). */}
+                    <td className="kpi-ov-num kpi-ov-nb">
+                      {payload.revenue_model === "management_fee" || payload.statement_totals?.cogs?.budget_at_this_revenue == null
+                        ? "—"
+                        : fmtMoney(payload.statement_totals.cogs.budget_at_this_revenue)}
                     </td>
                     <td className="kpi-ov-num">
                       <DashOrValue value={cogsCard.hero_actual_display} reported={cogsCard.hero_reported} />
@@ -442,6 +476,14 @@ export default function PnlStatement({ payload, open, onToggle }) {
                     )}
                     <td className="kpi-ov-num">
                       <DashOrValue value={gmCard.budget_to_date_display} reported={gmCard.budget_to_date != null} />
+                    </td>
+                    {/* Item 13: total-GM Budget adjusted = margin at
+                        this revenue (rev × target_margin_pct). MF
+                        renders "—" (equals period budget). */}
+                    <td className="kpi-ov-num kpi-ov-nb">
+                      {payload.revenue_model === "management_fee" || payload.statement_totals?.gross_margin?.margin_at_this_revenue == null
+                        ? "—"
+                        : fmtMoney(payload.statement_totals.gross_margin.margin_at_this_revenue)}
                     </td>
                     <td className="kpi-ov-num">
                       <DashOrValue value={gmCard.hero_actual_display} reported={gmCard.hero_reported} />

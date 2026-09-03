@@ -975,6 +975,17 @@
   gap: 14px;
   min-width: 0;
 }
+/* Kevin PR-B item 11 (2026-09-03): the chart card was rendering ~12px
+   lower than the revenue-lines card in the right column because it
+   carried `kpi-ov-mt` (margin-top: kpi-sp-3) inline while the right
+   column's first card did not. The flex `gap` already spaces siblings;
+   the initial top-of-column offset is set once by `.kpi-ov-split`
+   above. Zero the first-child margin so both columns start at the
+   same top edge. */
+.kpi-app .kpi-ov-split-left > .kpi-ov-card:first-child,
+.kpi-app .kpi-ov-split-right > .kpi-ov-card:first-child {
+  margin-top: 0;
+}
 @media (max-width: 1199px) {
   .kpi-app .kpi-ov-split { grid-template-columns: 1fr; }
 }
