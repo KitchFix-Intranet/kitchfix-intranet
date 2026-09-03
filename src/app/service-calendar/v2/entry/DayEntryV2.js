@@ -209,6 +209,11 @@ import "../accentRail.css";
 // only; BillRailFee (fee-no-dollar) keeps its BillRail.
 import EntryLedgerRail from "./EntryLedgerRail";
 import "./entryLedgerRail.css";
+// SC cleanup 5b (2026-09-03): shared partition helper. Same rule as
+// EntryLedgerRail uses on the right rail; applied here to the main
+// body so within-group not-scheduled services collapse into a fold
+// beneath the running rows.
+import { partitionServicesByRunning } from "./partitionServices";
 
 function DayEntryV2({
   day,
@@ -1314,6 +1319,35 @@ function DayEntryV2({
     return { activeGroups: active, inactiveGroups: inactive };
   }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, day.date, stRenderTop]);
 
+  // 2026-09-03 (SC cleanup 5b): within-group running-vs-not-running
+  // partition. Uses the same helper as EntryLedgerRail on the right
+  // rail. Each activeGroup gets its services split: running ones
+  // render as rows in the main body, not-running ones collapse into
+  // a fold below. A group that ends up with zero running services
+  // (every service is not-running today) drops out entirely - it
+  // never rendered a value or a projection so nothing was going to
+  // render anyway.
+  //
+  // Kevin's spec: "N services not running today" mirrors PR-H's
+  // ledger design. Depends on editValues + touched + focusedColIndex
+  // so the classifier reruns on every keystroke - matches the rail's
+  // behavior where typing into a row moves it from not-running to
+  // running instantly.
+  const {
+    runningGroups: activeGroupsRunning,
+    notRunningByGroup: activeNotRunningByGroup,
+    totalNotRunning: activeTotalNotRunning,
+  } = useMemo(
+    () => partitionServicesByRunning({
+      serviceGroups: activeGroups,
+      day,
+      editValues,
+      touched,
+      focusedColIndex,
+    }),
+    [activeGroups, day, editValues, touched, focusedColIndex]
+  );
+
   // R3-cleanup (2026-08-01): rail-scope groups.
   //
   // `activeGroups` above drives ledger-vs-drawer placement and must NOT
@@ -1584,7 +1618,14 @@ function DayEntryV2({
               getNotScheduled={getNotScheduled}
             />
           )}
-          {activeGroups.map(group => (
+          {/* 2026-09-03 (SC cleanup 5b): iterate the running-only view
+              of activeGroups. Each GroupBlock receives only its
+              running services; not-running services fall through to
+              the NotRunningFold below. Groups that end up with zero
+              running services (every service not running today) drop
+              out entirely - they would have rendered as a header with
+              no visible rows either way. */}
+          {activeGroupsRunning.map(group => (
             <GroupBlock
               key={group.name}
               group={group}
@@ -1607,6 +1648,18 @@ function DayEntryV2({
               getNotScheduled={getNotScheduled}
             />
           ))}
+          {/* SC cleanup 5b: within-group not-running services collapse
+              here. Distinct from the inactive-groups drawer below,
+              which collapses ENTIRE groups where no service has any
+              value today. Two layers of fold: (a) here, per-service
+              inside active groups; (b) below, whole-group when the
+              group has zero activity. */}
+          {activeTotalNotRunning > 0 && (
+            <NotRunningFoldMainBody
+              notRunningByGroup={activeNotRunningByGroup}
+              totalNotRunning={activeTotalNotRunning}
+            />
+          )}
           {(inactiveGroups.length > 0 || stRenderDrawer) && (
             <details className="sc-v2-entry-inactive">
               <summary>Show {inactiveGroups.length + (stRenderDrawer ? 1 : 0)} inactive {inactiveGroups.length + (stRenderDrawer ? 1 : 0) === 1 ? "group" : "groups"}</summary>
@@ -1858,6 +1911,39 @@ function DayEntryV2({
 // that keeps the rate cell via prop mistake. ServiceRow reads the
 // same variant to drop matching cells; caller applies the matching
 // CSS wrapper class via the same variant.
+
+// ─── NotRunningFoldMainBody (2026-09-03, SC cleanup 5b) ──────────
+//
+// Main-body twin of EntryLedgerRail's NotRunningFold. Same rule
+// (partitionServicesByRunning classifies rows as "not running today"
+// when proj=0 and no touched entry and no saved actual), different
+// visual - matches the sc-v2-entry-* main-body vocabulary rather
+// than the sc-elr-* right-rail vocabulary. Native `<details>` for
+// the toggle (mirrors the pattern used by .sc-v2-entry-inactive
+// drawer below).
+function NotRunningFoldMainBody({ notRunningByGroup, totalNotRunning }) {
+  const label = `${totalNotRunning} service${totalNotRunning === 1 ? "" : "s"} not running today`;
+  return (
+    <details className="sc-v2-entry-not-running">
+      <summary>{label}</summary>
+      <div className="sc-v2-entry-not-running-body">
+        {notRunningByGroup.map((g) => (
+          <div key={g.name} className="sc-v2-entry-not-running-group">
+            <span className="sc-v2-entry-not-running-group-name">{g.name}</span>
+            <ul className="sc-v2-entry-not-running-list">
+              {g.services.map((s) => (
+                <li key={s.colIndex} className="sc-v2-entry-not-running-item">
+                  {s.name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export function GroupBlock({
   group, day, editValues, touched, flashMap, accountSegment,
   onChange, onFocus, onBlur, onFillProjections,
