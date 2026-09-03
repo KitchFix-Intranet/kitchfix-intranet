@@ -94,11 +94,12 @@ test("F4 shape: test-mode finalize on TXR - AZ fires N1 to Kevin only, subject [
         subject: `[TEST] Invoice ready: ${args.accountKey}, week of Jul 27`,
         preheader: "1 invoice, $58.90 pre-tax. Ready for AP review.",
         html: "<html>...</html>",
-        emailResult: "sent",
+        email: { result: "sent" },
+        slack: { text: "[TEST] *Invoice draft ready* ...", result: { sent: true } },
       };
     },
     fireN2: async () => { throw new Error("N2 must not fire on happy path"); },
-    logger: { info: () => {} },
+    logger: { info: () => {}, warn: () => {} },
   };
 
   const result = await runFinalizeEffects(baseCtx(), deps);
@@ -267,11 +268,13 @@ test("live mode: qboMode='live' + accountMap threaded to postInvoiceDraft and fi
       return {
         recipients: { to: ["sebastian@kitchfix.com", KEVIN_EMAIL, "joe@kitchfix.com", "josh@kitchfix.com", "l.ochoa@kitchfix.com", "leader@kitchfix.com"], cc: [] },
         subject: `Invoice ready: ${args.accountKey}, week of Jul 27`,
-        html: "", emailResult: "sent",
+        html: "",
+        email: { result: "sent" },
+        slack: { text: "*Invoice draft ready* ...", result: { sent: true } },
       };
     },
     fireN2: () => { throw new Error("N2 must not fire"); },
-    logger: { info: () => {} },
+    logger: { info: () => {}, warn: () => {} },
   };
   const result = await runFinalizeEffects(baseCtx(), deps);
   assert.equal(result.pushed, true);

@@ -61,7 +61,7 @@ test("fireN1 test mode: routes to Kevin only, subject prefixed [TEST]", async ()
   assert.match(res.subject, /^\[TEST\] Invoice ready: TXR - AZ,/);
   assert.equal(email.calls.length, 1, "one email dispatched");
   assert.deepEqual(email.calls[0].to, [KEVIN_EMAIL]);
-  assert.equal(res.emailResult, "sent");
+  assert.equal(res.email.result, "sent");
 });
 
 test("fireN1 live mode: routes to §A6 matrix (static + salaried + submitter)", async () => {
@@ -201,7 +201,81 @@ test("fireN1 send=false: composes but does not dispatch", async () => {
     deps: { emailSender: email.impl },
   });
   assert.equal(email.calls.length, 0);
-  assert.equal(res.emailResult, "not_sent");
+  assert.equal(res.email.result, "not_sent");
+  assert.equal(res.slack.result.sent, false);
+  assert.ok(res.slack.result.skipped, "slack skipped when send=false");
+});
+
+// ─── Ruling 2 (2026-09-03): fireN1 gains Slack + env presence check ───
+
+test("fireN1 test mode: Slack fires with [TEST] prefix + TEST_SLACK_FOOTER", async () => {
+  const email = makeFakeSender();
+  const slack = makeFakeSlack();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    invoiceRecords: [{ ...N1_ARGS_BASE.invoiceRecords[0], isTest: true }],
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: { emailSender: email.impl, sendSlack: slack.impl, slackWebhookUrl: "https://hooks.slack.example/n1" },
+  });
+  assert.equal(slack.calls.length, 1, "one Slack post dispatched");
+  const posted = slack.calls[0].text;
+  assert.ok(posted.startsWith("[TEST] "),
+    "test mode Slack post OPENS with [TEST] prefix (parity with N2)");
+  assert.ok(posted.includes(TEST_SLACK_FOOTER),
+    "test mode Slack post carries the TEST_SLACK_FOOTER literal (parity with N2)");
+  assert.equal(res.slack.result.sent, true);
+});
+
+test("fireN1 live mode: Slack fires WITHOUT [TEST] markers", async () => {
+  const email = makeFakeSender();
+  const slack = makeFakeSlack();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "live",
+    accountMap: { salariedManagerEmails: ["l.ochoa@kitchfix.com"], rdoEmail: null },
+    deps: { emailSender: email.impl, sendSlack: slack.impl, slackWebhookUrl: "https://hooks.slack.example/n1" },
+  });
+  assert.equal(slack.calls.length, 1);
+  const posted = slack.calls[0].text;
+  assert.ok(!posted.startsWith("[TEST] "), "live Slack post has no [TEST] prefix");
+  assert.ok(!posted.includes(TEST_SLACK_FOOTER), "live Slack post has no test footer");
+  assert.equal(res.slack.result.sent, true);
+});
+
+test("fireN1 missing SLACK_SC_BILLING_WEBHOOK_URL silently skips Slack; email still sends", async () => {
+  const email = makeFakeSender();
+  const res = await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    invoiceRecords: [{ ...N1_ARGS_BASE.invoiceRecords[0], isTest: true }],
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: { emailSender: email.impl, slackWebhookUrl: null },
+  });
+  assert.equal(email.calls.length, 1, "email still sent when Slack webhook is absent");
+  assert.equal(res.email.result, "sent");
+  assert.equal(res.slack.result.sent, false);
+  assert.equal(res.slack.result.skipped, "no webhook");
+});
+
+test("fireN1 test mode: Slack text enumerates per-slot QBO deep-links", async () => {
+  const email = makeFakeSender();
+  const slack = makeFakeSlack();
+  await fireN1({
+    ...N1_ARGS_BASE,
+    qboMode: "test",
+    invoiceRecords: [
+      { invoiceSlot: "milb", qboLink: "https://qbo.example/inv/1", pretaxTotalCents: 10000, lineCount: 5, isTest: true },
+      { invoiceSlot: "mlb",  qboLink: "https://qbo.example/inv/2", pretaxTotalCents: 20000, lineCount: 8, isTest: true },
+      { invoiceSlot: "ssm",  qboLink: "https://qbo.example/inv/3", pretaxTotalCents: 5000,  lineCount: 3, isTest: true },
+    ],
+    accountMap: { salariedManagerEmails: [], rdoEmail: null },
+    deps: { emailSender: email.impl, sendSlack: slack.impl, slackWebhookUrl: "https://hooks/x" },
+  });
+  const posted = slack.calls[0].text;
+  assert.ok(posted.includes("milb: https://qbo.example/inv/1"), "milb link enumerated");
+  assert.ok(posted.includes("mlb: https://qbo.example/inv/2"),  "mlb link enumerated");
+  assert.ok(posted.includes("ssm: https://qbo.example/inv/3"),  "ssm link enumerated");
 });
 
 // ─── Legacy render entry points (PR-C tests preserve) ────────────

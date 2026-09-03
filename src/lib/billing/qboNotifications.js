@@ -43,15 +43,26 @@ import { sendEmailSA } from "@/lib/gmail";
 
 // ─── Copy constants ───────────────────────────────────────────────
 
-// Sender identity for outbound. Uses the same `support@kitchfix.com`
-// impersonation as the incidents email path (`src/app/api/people/
-// route.js:75`) which has proven Gmail SA domain-wide-delegation.
-// A dedicated `ops-hub@kitchfix.com` sender was tried 2026-08-13 and
-// failed at Gmail SA auth ("invalid_grant: Invalid email or User ID")
-// - that address is not on the SA's DWD allowlist. Display name
-// remains "KitchFix Ops Hub" so recipients still see the ops-hub
-// brand in the From header.
-const EMAIL_SENDER       = "support@kitchfix.com";
+// Sender identity for outbound. Switched 2026-09-03 from support@
+// to kitchfix.admin@ after the 2026-09-03 fireN1 probe caught
+// `invalid_grant: Invalid email or User ID` from Gmail SA and Kevin
+// identified support@kitchfix.com as deactivated. The error text
+// reads like a permissions problem but is actually "impersonation
+// target does not exist as an active mailbox" - see docs/GOTCHAS.md
+// entry "invalid_grant from a deactivated impersonation target".
+//
+// Prior sender history:
+//   - support@kitchfix.com: worked historically; deactivated at some
+//     unknown date before 2026-09-03. Silent failure until the probe.
+//   - ops-hub@kitchfix.com: tried 2026-08-13, also failed with
+//     invalid_grant. That was the same class of failure and would
+//     have shown up on the probe too, but wasn't run. Deleted/never-
+//     created status unknown; do not resurrect without verifying.
+//
+// Display name remains "KitchFix Ops Hub" so recipients still see
+// the ops-hub brand in the From header even though the underlying
+// mailbox is kitchfix.admin@.
+const EMAIL_SENDER       = "kitchfix.admin@kitchfix.com";
 const EMAIL_DISPLAY_NAME = "KitchFix Ops Hub";
 
 // Fixed literal for the test-mode footer. Kept as a constant so a
@@ -236,6 +247,46 @@ function n2SlackText({ accountKey, weekStart, weekEnd, errorText, retryLink, isT
   );
 }
 
+// Slack payload for N1. Mirror of n2SlackText - test mode carries
+// [TEST] prefix + TEST_SLACK_FOOTER; live mode carries neither.
+// Enumerates every invoice's QBO deep-link (matches the email body's
+// per-slot enumeration added 2026-09-02 for TBJ's 3-8 invoices).
+function n1SlackText({ accountKey, weekStart, invoiceRecords, isTest, scWeekLink }) {
+  const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
+  const count = invoiceRecords.length;
+  const head = isTest
+    ? `[TEST] *Invoice draft ready* for \`${accountKey}\`, week of ${fmtWeekTitle(weekStart)}. ${count} invoice(s), ${formatCents(totalCents)} pre-tax. AP reviews and sends.`
+    : `*Invoice draft ready* for \`${accountKey}\`, week of ${fmtWeekTitle(weekStart)}. ${count} invoice(s), ${formatCents(totalCents)} pre-tax. AP reviews and sends.`;
+  const linkList = invoiceRecords
+    .filter((r) => r.qboLink)
+    .map((r) => `• ${r.invoiceSlot || "invoice"}: ${r.qboLink}`)
+    .join("\n");
+  const foot = isTest ? `\n${TEST_SLACK_FOOTER}` : "";
+  return (
+    `${head}\n` +
+    (linkList ? `${linkList}\n` : "") +
+    (scWeekLink ? `Service Calendar: ${scWeekLink}\n` : "") +
+    foot
+  );
+}
+
+// Presence check for the Gmail service-account impersonation env
+// vars. sendEmailSA in src/lib/gmail.js swallows exceptions and
+// returns "failed" on any error - including missing env - which
+// silently hides misconfiguration. Check at fire-time so the caller
+// gets a named-block signal ("missing_env:GOOGLE_PRIVATE_KEY")
+// rather than a generic "failed". Both keys must be present for
+// the JWT construction to succeed.
+function checkGmailSaEnv() {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+    return { ok: false, missing: "GOOGLE_SERVICE_ACCOUNT_EMAIL" };
+  }
+  if (!process.env.GOOGLE_PRIVATE_KEY) {
+    return { ok: false, missing: "GOOGLE_PRIVATE_KEY" };
+  }
+  return { ok: true };
+}
+
 // ─── Live-send helpers ────────────────────────────────────────────
 
 async function sendSlack({ webhookUrl, text }) {
@@ -259,6 +310,25 @@ async function sendSlack({ webhookUrl, text }) {
  * Build and (optionally) send N1. Recipients resolved via
  * resolveRecipients - test mode returns Kevin only, structurally.
  *
+ * Return shape (matches fireN2 as of 2026-09-03 Ruling 2):
+ *   { recipients, subject, preheader, html,
+ *     email: { result: 'sent'|'failed'|'not_sent'|'missing_env:<key>' },
+ *     slack: { text, result: {sent, error?, skipped?} } }
+ *
+ * The email.result value 'missing_env:GOOGLE_PRIVATE_KEY' (or
+ * '_EMAIL') distinguishes "we did not try because the env is missing"
+ * from "we tried and Gmail said no". This is the failure mode
+ * that silently killed every N1 on 2026-09-03 - the SA layer
+ * swallowed the exception and returned 'failed' with no operator
+ * signal. Presence-check at fire-time surfaces the miss as a
+ * named error instead.
+ *
+ * Slack posts in both modes (parallel to fireN2), which is the
+ * redundant signal for Gmail SA failures - had Slack been wired
+ * to N1 on 2026-09-03, Kevin would have known immediately that the
+ * email path was broken instead of waiting for AP to notice no
+ * mail arrived.
+ *
  * @param {Object} args
  * @param {"test"|"live"} args.qboMode
  * @param {string} args.accountKey
@@ -270,8 +340,8 @@ async function sendSlack({ webhookUrl, text }) {
  * @param {Object} [args.accountMap]  {salariedManagerEmails, rdoEmail}
  * @param {boolean} [args.send=true]  When false, returns the render
  *                                    without dispatching (for tests).
- * @param {Object} [args.deps]        { emailSender } for tests.
- * @returns {Promise<{recipients:{to:string[],cc:string[]}, subject:string, html:string, preheader:string, emailResult?:string}>}
+ * @param {Object} [args.deps]        { emailSender, sendSlack, slackWebhookUrl } for tests.
+ * @returns {Promise<{recipients:{to:string[],cc:string[]}, subject:string, html:string, preheader:string, email:{result:string}, slack:{text:string, result:object}}>}
  */
 export async function fireN1(args) {
   const {
@@ -285,7 +355,6 @@ export async function fireN1(args) {
     submitterEmail, accountMap,
   });
   const totalCents = invoiceRecords.reduce((s, r) => s + (r.pretaxTotalCents || 0), 0);
-  const totalMeals = invoiceRecords.reduce((s, r) => s + (r.lineCount || 0), 0);
   const testPrefix = isTest ? "[TEST] " : "";
   const subject = `${testPrefix}Invoice ready: ${accountKey}, week of ${fmtWeekTitle(weekStart)}`;
   const preheader = `${invoiceRecords.length} invoice(s), ${formatCents(totalCents)} pre-tax. Ready for AP review.`;
@@ -293,19 +362,58 @@ export async function fireN1(args) {
     preheader,
     body: n1Body({ accountKey, weekStart, weekEnd, submitterEmail, invoiceRecords, scWeekLink, isTest }),
   });
+  const slackText = n1SlackText({ accountKey, weekStart, invoiceRecords, isTest, scWeekLink });
 
   let emailResult = "not_sent";
-  if (send && recipients.to.length > 0) {
-    const sender = deps?.emailSender || sendEmailSA;
-    emailResult = await sender({
-      sender: EMAIL_SENDER,
-      displayName: EMAIL_DISPLAY_NAME,
-      to: recipients.to,
-      subject,
-      html,
+  let slackResult = { sent: false, skipped: "not sent (send=false)" };
+
+  if (send) {
+    // Email. Presence-check env vars first when running the real
+    // sendEmailSA (test-injected senders skip the check by design so
+    // unit tests don't need to stub env). A missing env yields
+    // 'missing_env:<KEY>' so the operator log tier surfaces WHICH
+    // key is absent, not just "failed".
+    if (recipients.to.length > 0) {
+      const injectedSender = deps?.emailSender;
+      if (!injectedSender) {
+        const envCheck = checkGmailSaEnv();
+        if (!envCheck.ok) {
+          emailResult = `missing_env:${envCheck.missing}`;
+        } else {
+          emailResult = await sendEmailSA({
+            sender: EMAIL_SENDER,
+            displayName: EMAIL_DISPLAY_NAME,
+            to: recipients.to,
+            subject,
+            html,
+          });
+        }
+      } else {
+        emailResult = await injectedSender({
+          sender: EMAIL_SENDER,
+          displayName: EMAIL_DISPLAY_NAME,
+          to: recipients.to,
+          subject,
+          html,
+        });
+      }
+    }
+
+    // Slack. Parallel to fireN2 - posts in both modes when webhook
+    // is set. Missing webhook returns {sent:false, skipped:"no webhook"}
+    // from sendSlack; not a bug, but a signal Kevin should see.
+    const slackWebhook = deps?.slackWebhookUrl || process.env.SLACK_SC_BILLING_WEBHOOK_URL;
+    slackResult = await (deps?.sendSlack || sendSlack)({
+      webhookUrl: slackWebhook,
+      text: slackText,
     });
   }
-  return { recipients, subject, preheader, html, emailResult };
+
+  return {
+    recipients, subject, preheader, html,
+    email: { result: emailResult },
+    slack: { text: slackText, result: slackResult },
+  };
 }
 
 // ─── N2: push failed ──────────────────────────────────────────────

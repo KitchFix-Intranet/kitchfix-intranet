@@ -135,8 +135,13 @@ export async function GET(request) {
       </div>`;
 
       try {
+        // Default fallback rotated 2026-09-03 from support@ (deactivated)
+        // to kitchfix.admin@ per docs/GOTCHAS.md "invalid_grant from a
+        // deactivated impersonation target". If PEOPLE_OPS_FROM_EMAIL is
+        // set in env it wins; unset falls to kitchfix.admin@ which is on
+        // the SA's DWD allowlist.
         const status = await sendEmailSA({
-          sender: process.env.PEOPLE_OPS_FROM_EMAIL || "support@kitchfix.com",
+          sender: process.env.PEOPLE_OPS_FROM_EMAIL || "kitchfix.admin@kitchfix.com",
           displayName: "KitchFix People Ops",
           to: recipients,
           subject,
