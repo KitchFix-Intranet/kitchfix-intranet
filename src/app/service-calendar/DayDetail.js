@@ -240,9 +240,18 @@ export const LEDGER_HEAD_FEE = (
 // entry where the view will never surface a result. Pure YYYY-MM-DD
 // string compare; both inputs are already in that form (day.date from
 // loadMonthData, activeUntil from sc_services.active_until DATE).
+// 2026-09-03 (Kevin ruling on SC cleanup 5a): strict `<`, not `<=`.
+// active_until means "archived AS OF this date" - i.e. the first day
+// the service is OUT of service. Prior `<=` predicate rendered the
+// service as in-service on the archive date itself (off-by-one). DB
+// verified no rows exist in sc_daily_projections/actuals for the two
+// currently-archived services on their exact active_until date, so
+// the boundary shift is not a data loss - just a UI correction.
+// Server-side mirror at src/app/api/service-calendar/route.js:2475-2478
+// must stay in sync.
 export function isInServiceOnDay(svc, dayDate) {
   if (!svc.activeUntil) return true;
-  return dayDate <= String(svc.activeUntil).slice(0, 10);
+  return dayDate < String(svc.activeUntil).slice(0, 10);
 }
 
 function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, dayIndex, totalDays, monthRevenue, accountName, accountSegment = "", onPrev, onNext, onNextException, onClose, isFeeAccount, homestandContext, scopeLabel = "month" }, ref) {

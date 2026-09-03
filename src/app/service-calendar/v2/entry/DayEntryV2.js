@@ -1283,11 +1283,27 @@ function DayEntryV2({
   // rule 4 was written for. Scope: fee-shape AND in-phase only. Out
   // of phase, the semantics are byte-identical to pre-R3-5.
   const { activeGroups, inactiveGroups } = useMemo(() => {
+    // 2026-09-03 (Kevin ruling on SC cleanup 5a): the operator entry
+    // modal filters archived services out entirely. Admins see
+    // archived state in AdminPanel; operators submitting counts do
+    // not. Filter applied here at the useMemo so every downstream
+    // consumer (main body GroupBlocks + inactive-groups drawer +
+    // SpringTrainingSection when it renders below) sees the same
+    // in-service-only view. The archive predicate (isInServiceOnDay
+    // at DayDetail.js:243-246) uses strict `<` post-2026-09-03: a
+    // service with active_until = day.date is OUT.
+    const filterInService = (g) => ({
+      ...g,
+      services: g.services.filter(s => isInServiceOnDay(s, day.date)),
+    });
+    const filteredGroups = regularServiceGroups
+      .map(filterInService)
+      .filter(g => g.services.length > 0);
     if (stRenderTop) {
-      return { activeGroups: regularServiceGroups, inactiveGroups: [] };
+      return { activeGroups: filteredGroups, inactiveGroups: [] };
     }
     const active = [], inactive = [];
-    for (const g of regularServiceGroups) {
+    for (const g of filteredGroups) {
       const hasAnyValue = g.services.some(s =>
         (day.projected[s.colIndex] ?? 0) > 0 ||
         (day.hasActuals && (day.actual[s.colIndex] ?? 0) > 0)
@@ -1296,7 +1312,7 @@ function DayEntryV2({
       else inactive.push(g);
     }
     return { activeGroups: active, inactiveGroups: inactive };
-  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, stRenderTop]);
+  }, [regularServiceGroups, day.projected, day.actual, day.hasActuals, day.date, stRenderTop]);
 
   // R3-cleanup (2026-08-01): rail-scope groups.
   //

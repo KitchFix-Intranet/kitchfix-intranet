@@ -103,6 +103,15 @@ export default function WeekFinalizeControl({
   // 'weekly' | 'biweekly'. Read from sc_qbo_account_map.cadence via
   // sc-finalize-states. Drives §A4 rendering.
   accountCadence = null,
+  // 2026-09-03 (Kevin ruling on SC cleanup item 2): true when the
+  // caller is the CALENDAR / MONTH drill rather than the Period drill.
+  // The week ghosting + state captions render unchanged; every action
+  // button (Finalize week / Finalize 2-week period / Retry / Unlock /
+  // RevertAction) is suppressed. The rationale is that offering
+  // finalize from a month-shaped screen invites finalizing a billing
+  // week from the wrong context. The jump chip stays because it is
+  // navigation, not a finalize affordance.
+  readOnlyFinalize = false,
 }) {
   const [saving, setSaving] = useState(false);
   const [errText, setErrText] = useState(null);
@@ -155,7 +164,7 @@ export default function WeekFinalizeControl({
           <span className="sc-week-finalize-failbar-msg">
             Billing push failed - Kevin has been alerted
           </span>
-          {isOverrideUser && (
+          {isOverrideUser && !readOnlyFinalize && (
             <>
               <button
                 type="button"
@@ -211,7 +220,7 @@ export default function WeekFinalizeControl({
             {" · Sent to AP for review"}
           </span>
         </span>
-        {isOverrideUser && liveRow.status === "finalized" && (
+        {isOverrideUser && liveRow.status === "finalized" && !readOnlyFinalize && (
           <RevertAction
             accountKey={accountKey}
             weekStart={weekStart}
@@ -319,18 +328,20 @@ export default function WeekFinalizeControl({
   return (
     <div className="sc-week-finalize sc-week-finalize--open" aria-label={`Week ${weekStart}`}>
       {isComplete && !pairPartnerGate ? (
-        <button
-          ref={openButtonRef}
-          type="button"
-          className="sc-week-finalize-btn"
-          disabled={saving}
-          onClick={() => {
-            setErrText(null);
-            setOverlayMode("confirm");
-          }}
-        >
-          {buttonLabel}
-        </button>
+        readOnlyFinalize ? null : (
+          <button
+            ref={openButtonRef}
+            type="button"
+            className="sc-week-finalize-btn"
+            disabled={saving}
+            onClick={() => {
+              setErrText(null);
+              setOverlayMode("confirm");
+            }}
+          >
+            {buttonLabel}
+          </button>
+        )
       ) : (
         <>
           {/* PR-D1 (2026-08-13): single clickable count line replaces
@@ -362,7 +373,7 @@ export default function WeekFinalizeControl({
               {missing.length} day{missing.length === 1 ? "" : "s"} still need entry or no-service
             </button>
           )}
-          {!suppressButton && (
+          {!suppressButton && !readOnlyFinalize && (
             <button
               ref={openButtonRef}
               type="button"

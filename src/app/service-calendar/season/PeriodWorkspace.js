@@ -1285,6 +1285,13 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                       daysServed={daysServed}
                       totalMeals={totalMeals}
                       pretaxTotalDollars={pretaxTotalDollars}
+                      /* 2026-09-03 (Kevin ruling on SC cleanup item 2):
+                         finalize affordance is period-only. Month drill
+                         keeps the week ghosting + status captions but
+                         suppresses every action button. Preventing
+                         finalize from a month-shaped screen that frames
+                         weeks by month rather than by billing period. */
+                      readOnlyFinalize={scope !== "period"}
                     />
                   </div>
                 );
