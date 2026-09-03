@@ -260,9 +260,17 @@ export default function CostLines({ payload, previewAccount = null }) {
   // adjusted P8" (naming the period the adjustment corresponds to).
   const rl = payload.range_labels;
   const spentLabel = rl?.through ? `Spent ${rl.through}` : "Spent period to date";
-  const adjustedLabel = rl?.period_last
-    ? `Budget adjusted ${rl.period_last}`
-    : "Budget at this revenue";
+  // Kevin R-58/R-59 (2026-09-03): management-fee accounts show
+  // "P{N} budget" rather than "Budget adjusted P{N}" because their
+  // revenue is contractual - the adjusted budget always equals the
+  // period budget by construction. SC-driven + sales-based keep the
+  // adjusted framing.
+  const isManagementFee = payload.revenue_model === "management_fee";
+  const adjustedLabel = isManagementFee
+    ? (rl?.period_last ? `${rl.period_last} budget` : "Period budget")
+    : (rl?.period_last
+      ? `Budget adjusted ${rl.period_last}`
+      : "Budget at this revenue");
   const totalLabel = rl?.through
     ? `Total cost of goods sold ${rl.through}`
     : "Total cost of goods sold";

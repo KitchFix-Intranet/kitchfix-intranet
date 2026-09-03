@@ -228,6 +228,31 @@ function ovRdoDisplayName(email) {
 
 const FY_START_ISO = "2025-12-29";
 
+// Kevin R-58 (2026-09-03): every account belongs to one of three
+// revenue models. Source of truth is kpi_account_flags.revenue_model
+// (migration docs/migrations/pnl-2-revenue-model.sql). This map is a
+// PRE-MIGRATION FALLBACK ONLY - dev environments or a fresh row can
+// return null revenue_model. In production the column is populated
+// per Kevin's ruling and the fallback is never consulted. Kept in
+// sync with the SQL backfill; if either changes, both change.
+const REVENUE_MODEL_FALLBACK = {
+  "TBR - FL": "sc_driven",
+  "TBJ - FL": "sc_driven",
+  "TBJ - NY": "sc_driven",
+  "CIN - AZ": "sc_driven",
+  "CIN - KY": "sc_driven",
+  "TXR - AZ": "sc_driven",
+  "STL - FL": "management_fee",
+  "STL - MO": "management_fee",
+  "CIN - OH": "management_fee",
+  "TXR - TX - H": "management_fee",
+  "TXR - TX - V": "sales_based",
+};
+function accountRevenueModel(accountKey, flagRow) {
+  if (flagRow && flagRow.revenue_model) return flagRow.revenue_model;
+  return REVENUE_MODEL_FALLBACK[accountKey] || null;
+}
+
 // P2-3 / P2-5 (2026-09-01): normalize an `explicit` (start, end) that
 // matches a known preset window to that preset's canonical kind so
 // downstream consumers (range chip label, revenue card full-year
@@ -1101,6 +1126,18 @@ export async function resolveOverview({
     return (acctFlags && acctFlags.sc_revenue_live === true) ? "live" : "planned";
   })();
 
+  // Kevin R-58 (2026-09-03): revenue_model on payload root. Cards,
+  // cost lines, help copy and probes read this to gate the "adjusted
+  // budget" surface. Portfolio scope has no single model; the value
+  // is null there and downstream surfaces default to the SC-driven
+  // shape (the corporate rollup mixes all three models). Single-
+  // account: read from kpi_account_flags.revenue_model (fallback to
+  // the pre-migration map).
+  const revenue_model = isAggregate
+    ? null
+    : accountRevenueModel(accountKey, accountFlags.get(accountKey) || null);
+  const isManagementFee = revenue_model === "management_fee";
+
   // PR-1 item 2 (2026-09-02). Envelope + pace helpers.
   // revenue_pace_pct: how far revenue came in against its own budget-
   //   to-date. Not a target percent - a pace measurement on revenue.
@@ -1229,7 +1266,13 @@ export async function resolveOverview({
       // budget_at_this_revenue = cost the target buys at actual rev.
       // envelope_delta = budget_to_date - budget_at_this_revenue.
       budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
-      envelope_delta: envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
+      // Kevin R-58/R-59 (2026-09-03): management-fee accounts have
+      // contractual revenue, so budget_at_this_revenue equals the
+      // period budget by construction and the delta is $0 in
+      // perpetuity. Emit envelope_delta as null on those accounts so
+      // the card + cost-lines can suppress the "$0 more than planned"
+      // line rather than render a figure that can never move.
+      envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
       delta_dollars: r2(cogsDelta),
       delta_display: gapDollarsCost(cogsDelta),
       delta_direction: directionOfDelta(cogsDelta, "cost"),
@@ -1320,7 +1363,8 @@ export async function resolveOverview({
       variance_pct: (has_target && actualPct != null && targetPct != null) ? r2(actualPct - targetPct) : null,
       variance_pct_display: (has_target && actualPct != null && targetPct != null) ? gapPointsCost(actualPct - targetPct) : null,
       budget_at_this_revenue: batr,
-      envelope_delta: envelopeDelta(budgetToDate, batr),
+      // R-58/R-59: MF accounts get null envelope (contractual revenue).
+      envelope_delta: isManagementFee ? null : envelopeDelta(budgetToDate, batr),
       direction: dv != null ? directionOfDelta(dv, "cost") : null,
       flag: code === "3400" && flags.packaging_gap ? "mapping_gap" : null,
     };
@@ -1560,7 +1604,8 @@ export async function resolveOverview({
       actual_pct: labor3100_inactive ? null : _actPct,
       target_pct: labor3100_inactive ? null : _tgtPct,
       budget_at_this_revenue: labor3100_inactive ? null : _batr,
-      envelope_delta: labor3100_inactive ? null : envelopeDelta(labor3100_budget_to_date_days, _batr),
+      // R-58/R-59: MF accounts null out envelope (contractual revenue).
+      envelope_delta: (labor3100_inactive || isManagementFee) ? null : envelopeDelta(labor3100_budget_to_date_days, _batr),
       sources: ["labor_actuals"],
       flags: labor3100_inactive ? ["inactive"] : [],
     });
@@ -1711,7 +1756,8 @@ export async function resolveOverview({
       actual_pct: _actPct,
       target_pct: _tgtPct,
       budget_at_this_revenue: _batr,
-      envelope_delta: (suppress || btd == null) ? null : envelopeDelta(btd, _batr),
+      // R-58/R-59: MF accounts null envelope (contractual revenue).
+      envelope_delta: (suppress || btd == null || isManagementFee) ? null : envelopeDelta(btd, _batr),
       sources: ["purchasing_actuals"],
       flags: [
         ...(billed_back ? ["billed_back"] : []),
@@ -2133,7 +2179,8 @@ export async function resolveOverview({
         // reference: variance = actual - budget_at_this_revenue,
         // pcts = actual/revenue vs cogs_budget/rev_budget.
         budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
-        envelope_delta: envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
+        // R-58/R-59: MF accounts null envelope (contractual revenue).
+        envelope_delta: isManagementFee ? null : envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
         variance: (cogsActual != null && budgetAtThisRevenue(cogsBudget) != null)
           ? r2(cogsActual - budgetAtThisRevenue(cogsBudget)) : null,
         actual_pct: pctOf(cogsActual, totalRevenue),
@@ -2167,6 +2214,10 @@ export async function resolveOverview({
     // PR-1 payload additions (2026-09-02).
     has_target,
     revenue_source_state,
+    // Kevin R-58 (2026-09-03): three-way account model - source of
+    // truth for gating "adjusted budget" copy on cards + cost lines.
+    // Null on portfolio scope (mixed models across members).
+    revenue_model,
     revenue_pace_pct,
     sc_counts_without_dollars,
     also_tracked: alsoTracked,
