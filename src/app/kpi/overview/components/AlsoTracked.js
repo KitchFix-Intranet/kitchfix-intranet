@@ -26,10 +26,16 @@ function fmtMoney(n) {
   return n < 0 ? "-" + s : s;
 }
 
-function Row({ row }) {
+function Row({ row, isOpen }) {
   const { line_code, label, actual, budget, actual_display, budget_display, variance } = row;
   const bothNullish = (actual == null || actual === 0) && (budget == null || budget === 0);
   const noBudget = (budget == null || budget === 0) && actual != null && actual !== 0;
+  // Kevin ruling 2026-09-03 item 3: on closed ranges an empty tracked
+  // row reads "no spend" - the period is over and the money genuinely
+  // wasn't spent. On open ranges keep "no activity" - the period is
+  // still running so the truth of whether anything landed is not yet
+  // final. Same word for both sides of the row.
+  const emptyPhrase = isOpen ? "no activity" : "no spend";
 
   return (
     <tr data-kpi-ov="tracked-row" data-kpi-ov-line-code={line_code}>
@@ -49,17 +55,14 @@ function Row({ row }) {
           : <DashOrValue value={actual_display} reported={row.reported} />}
       </td>
       <td className="kpi-ov-num">
-        {/* Kevin PR-B item 7 (2026-09-03): empty tracked lines all
-            read "no activity". Prior logic branched to "no data" when
-            variance was null despite the row also being empty - two
-            wordings for the identical state (5002.1 vs 5017.3 on the
-            same account). One wording. */}
-        {bothNullish ? <span className="kpi-ov-dash">no activity</span>
+        {/* Kevin ruling 2026-09-03 item 3: empty tracked rows read
+            "no spend" on closed, "no activity" on open - see Row(). */}
+        {bothNullish ? <span className="kpi-ov-dash" data-kpi-ov="tracked-empty">{emptyPhrase}</span>
           : noBudget ? <DashOrValue state="missing" />
           : variance != null && Math.abs(variance) < 1 ? <span className="kpi-ov-nb">on budget</span>
           : variance != null
             ? <span className={variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad"}>{fmtMoney(Math.abs(variance))} {variance <= 0 ? "under" : "over"}</span>
-            : <span className="kpi-ov-dash">no activity</span>}
+            : <span className="kpi-ov-dash" data-kpi-ov="tracked-empty">{emptyPhrase}</span>}
       </td>
     </tr>
   );
@@ -127,7 +130,7 @@ export default function AlsoTracked({ payload }) {
           </thead>
           <tbody>
             {payload.also_tracked.map((r) => (
-              <Row key={r.line_code} row={r} />
+              <Row key={r.line_code} row={r} isOpen={isOpen} />
             ))}
           </tbody>
         </table>

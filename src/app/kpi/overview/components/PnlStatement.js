@@ -323,7 +323,12 @@ export default function PnlStatement({ payload, open, onToggle }) {
                       per row). MF accounts render "—" in the cell
                       to avoid duplicating the period budget. */}
                   <th className="l">Line</th>
-                  {isOpen && <th>Period budget</th>}
+                  {/* Kevin ruling 2026-09-03 item 1 (option A): the
+                      column holds the period budget, not an annual
+                      figure - name it what it is so the header matches
+                      the cards' `P{N} budget` label. Open ranges only;
+                      no annual-budget column is added. */}
+                  {isOpen && <th>{rl?.period_last ? `${rl.period_last} budget` : "Period budget"}</th>}
                   <th>{budgetHeader}</th>
                   <th>{rl?.period_last ? `Budget adjusted ${rl.period_last}` : "Budget adjusted"}</th>
                   <th>{actualsHeader}</th>
