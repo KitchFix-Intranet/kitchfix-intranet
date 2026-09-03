@@ -151,11 +151,16 @@ export function computeInitialView({ urlView, urlPeriod, isAdmin, role = null, r
       landOnCurrentPeriod: true,
     };
   }
-  // 4) leadership / unknown / floor-without-home -> Season overview
-  //    (today's default; the picker + account dropdown drive the
-  //    operator to their preferred surface).
+  // 4) leadership / unknown / floor-without-home -> Season overview,
+  //    Period lens (2026-09-03 ruling). Prior default was
+  //    lens="calendar" for this branch; Kevin ruled Period is the
+  //    right default view for everyone because the calendar-shaped
+  //    month view invites finalizing a billing week from a month-
+  //    shaped screen (see item 2 finalize scope). Session-only: no
+  //    persistence. If Kevin sees people re-toggling to Calendar,
+  //    revisit with a preference column.
   return {
-    scope: "year", lens: "calendar",
+    scope: "year", lens: "period",
     isAdminView: false, periodKey: null,
     landOnCurrentPeriod: false,
   };
