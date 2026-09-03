@@ -1041,11 +1041,25 @@
   border: 1px solid var(--border-default);
   border-radius: var(--rad-10);
   box-shadow: 0 12px 34px rgba(10, 37, 72, 0.18);
-  padding: var(--kpi-sp-4);
-  min-width: 640px;
-  display: grid;
-  grid-template-columns: 150px 1fr 1fr;
-  gap: var(--kpi-sp-4);
+  padding: 0;
+  min-width: 452px;
+  width: 452px;
+  display: block;
+  overflow: hidden;
+}
+/* Range redesign 2026-09-03 (Item 5): sections stack top-to-bottom;
+   the two-column layout with a 140px preset sidebar is retired. */
+.kpi-rmenu-pop-stack .kpi-rmenu-sec {
+  padding: var(--kpi-sp-3) var(--kpi-sp-4);
+}
+.kpi-rmenu-pop-stack .kpi-rmenu-sec + .kpi-rmenu-sec {
+  border-top: 1px solid var(--border-muted, var(--border-default));
+}
+.kpi-rmenu-h-row { display: flex; align-items: center; }
+.kpi-rmenu-h-note {
+  margin-left: auto; text-transform: none; letter-spacing: 0;
+  font-weight: 600; font-size: var(--kpi-t-meta);
+  color: var(--text-subtle);
 }
 .kpi-rmenu-h {
   margin: 0 0 var(--kpi-sp-2);
@@ -1053,88 +1067,155 @@
   color: var(--text-subtle);
   text-transform: uppercase; font-weight: 700;
 }
-.kpi-rmenu-list { display: flex; flex-direction: column; }
-.kpi-rmenu-item {
-  text-align: left; width: 100%;
-  padding: var(--kpi-sp-2) var(--kpi-sp-2);
-  background: none; border: 0; border-radius: var(--rad-4);
-  font: inherit; font-size: var(--kpi-t-body);
-  color: var(--text-strong);
-  cursor: pointer;
+/* Range redesign 2026-09-03: pre-redesign classes retired.
+   Deleted (no consumers remain, grepped): .kpi-rmenu-col,
+   .kpi-rmenu-list, .kpi-rmenu-item(+.on/:hover/:disabled),
+   .kpi-rmenu-grid, .kpi-rmenu-gp(+.on/.staged/:hover),
+   .kpi-rmenu-stagenote. New markup uses .kpi-rmenu-qr /
+   .kpi-rmenu-pgrid / .kpi-rmenu-legend below. */
+
+/* Item 4: quick ranges with dates on every button. Three across so
+   four presets flow to a 3/1 layout - Next period joins the row
+   (item 6b). Each button carries a title + a date sub-line. */
+.kpi-rmenu-qr {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--kpi-sp-2);
 }
-.kpi-rmenu-item:hover:not(:disabled) { background: var(--surface-sunken); }
-.kpi-rmenu-item.on {
-  background: var(--kpi-accent);
-  color: var(--n-0); font-weight: 600;
-}
-.kpi-rmenu-item:disabled { opacity: 0.4; cursor: not-allowed; }
-.kpi-rmenu-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--kpi-sp-1);
-}
-.kpi-rmenu-gp {
+.kpi-rmenu-qrb {
+  text-align: left;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
   border: 1px solid var(--border-default);
-  background: var(--surface-sunken);
-  border-radius: var(--rad-4);
-  padding: var(--kpi-sp-2) 0;
-  font: inherit; font-size: var(--kpi-t-meta); font-weight: 700;
-  color: var(--text-subtle);
-  cursor: pointer;
+  background: var(--surface-card);
+  border-radius: var(--rad-7);
+  cursor: pointer; font: inherit;
+  color: var(--text-strong);
+  min-height: 44px;
 }
-.kpi-rmenu-gp:hover { border-color: var(--kpi-accent); color: var(--kpi-accent-strong); }
-.kpi-rmenu-gp.on {
+.kpi-rmenu-qrb:hover:not(:disabled) {
+  border-color: var(--kpi-accent);
+  background: var(--surface-sunken);
+}
+.kpi-rmenu-qrb:disabled { opacity: 0.45; cursor: not-allowed; }
+.kpi-rmenu-qrb.on {
   background: var(--kpi-accent);
   border-color: var(--kpi-accent);
   color: var(--n-0);
 }
-/* Range PR-2 2026-08-24 - first click stages a start for multi-select.
-   Visual: outline-only tint (border colour + text colour, no fill) so
-   the staged state reads as PENDING, distinct from `.on` which is the
-   already-committed selection. Second click promotes to `.on` on
-   commit (or reveals a range if the user picked a different button). */
-.kpi-rmenu-gp.staged {
-  background: transparent;
+.kpi-rmenu-qrb-t {
+  display: block;
+  font-size: var(--kpi-t-body); font-weight: 700;
+}
+.kpi-rmenu-qrb-d {
+  display: block; margin-top: 2px;
+  font-size: var(--kpi-t-meta); font-weight: 600;
+  color: var(--text-subtle);
+  font-variant-numeric: var(--num-tabular);
+}
+.kpi-rmenu-qrb.on .kpi-rmenu-qrb-d { color: rgba(255, 255, 255, 0.75); }
+
+/* Item 3: 5-across period grid (13 periods -> 5 / 5 / 3). Item 1:
+   date sub-line under every period. Item 2: four states via
+   .st-closed / .st-running / .st-next / .st-not_started + native
+   :disabled for the last one. */
+.kpi-rmenu-pgrid {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--kpi-sp-1);
+}
+.kpi-rmenu-pgb {
+  padding: 6px 4px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  border-radius: var(--rad-7);
+  text-align: center;
+  cursor: pointer; font: inherit;
+  color: var(--text-strong);
+  position: relative;
+}
+.kpi-rmenu-pgb:hover:not(:disabled) {
   border-color: var(--kpi-accent);
+  background: var(--surface-sunken);
+}
+.kpi-rmenu-pgb.on {
+  background: var(--kpi-accent);
+  border-color: var(--kpi-accent);
+  color: var(--n-0);
+}
+.kpi-rmenu-pgb.st-running {
+  border-color: var(--kpi-warn, #B25800);
+  background: var(--kpi-warn-tint, #FFF2E2);
+  color: var(--kpi-warn-strong, #B25800);
+}
+.kpi-rmenu-pgb.st-next {
+  border-color: var(--kpi-accent);
+  background: var(--surface-card);
   color: var(--kpi-accent-strong);
   box-shadow: inset 0 0 0 1px var(--kpi-accent);
 }
-.kpi-rmenu-stagenote {
-  display: block;
-  margin-top: var(--kpi-sp-2);
-  font-size: var(--kpi-t-meta);
+.kpi-rmenu-pgb:disabled {
+  background: var(--surface-sunken);
+  border-color: var(--border-muted, var(--border-default));
+  cursor: not-allowed;
   color: var(--text-subtle);
+  opacity: 0.55;
 }
-.kpi-rmenu-foot {
-  grid-column: 1 / -1;
-  border-top: 1px dashed var(--border-default);
-  padding-top: var(--kpi-sp-3);
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: var(--kpi-t-body); color: var(--text-muted);
+.kpi-rmenu-pgb-n {
+  display: block; font-size: var(--kpi-t-body); font-weight: 800;
+  line-height: 1.15;
 }
-.kpi-rmenu-custom-btn {
-  background: none; border: 0;
-  color: var(--text-strong); font: inherit; font-size: var(--kpi-t-body); font-weight: 600;
-  cursor: pointer;
+.kpi-rmenu-pgb-d {
+  display: block; margin-top: 1px;
+  font-size: calc(var(--kpi-t-meta) - 0.5px); font-weight: 600;
+  color: var(--text-subtle);
+  font-variant-numeric: var(--num-tabular);
+  white-space: nowrap;
 }
-.kpi-rmenu-foot-hint { color: var(--text-subtle); font-size: var(--kpi-t-meta); }
-.kpi-rmenu-custom {
-  grid-column: 1 / -1;
-  border-top: 1px dashed var(--border-default);
-  padding-top: var(--kpi-sp-3);
+.kpi-rmenu-pgb.on .kpi-rmenu-pgb-d { color: rgba(255, 255, 255, 0.75); }
+.kpi-rmenu-pgb:disabled .kpi-rmenu-pgb-d { color: var(--text-subtle); opacity: 0.85; }
+
+/* Item 2: legend naming every state under the grid. */
+.kpi-rmenu-legend {
+  display: flex; gap: var(--kpi-sp-3);
+  margin-top: var(--kpi-sp-2);
+  font-size: var(--kpi-t-meta); font-weight: 600;
+  color: var(--text-subtle);
+  align-items: center; flex-wrap: wrap;
 }
-.kpi-rmenu-custom-nav {
-  display: flex; justify-content: space-between; margin-bottom: var(--kpi-sp-2);
+.kpi-rmenu-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.kpi-rmenu-lgi {
+  width: 9px; height: 9px; border-radius: 3px;
+  display: inline-block;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
 }
+.kpi-rmenu-lgi-run {
+  background: var(--kpi-warn-tint, #FFF2E2);
+  border-color: var(--kpi-warn, #B25800);
+}
+.kpi-rmenu-lgi-nxt {
+  background: var(--surface-card);
+  border-color: var(--kpi-accent);
+  box-shadow: inset 0 0 0 1px var(--kpi-accent);
+}
+.kpi-rmenu-lgi-fut {
+  background: var(--surface-sunken);
+  border-color: var(--border-muted, var(--border-default));
+  opacity: 0.75;
+}
+/* Range redesign 2026-09-03: .kpi-rmenu-foot, .kpi-rmenu-custom-btn,
+   .kpi-rmenu-foot-hint, .kpi-rmenu-custom, .kpi-rmenu-custom-nav
+   deleted (no consumers, grepped). Held over from the pre-retire-
+   custom era; nothing renders them today. */
+
 @media (max-width: 767px) {
-  /* V6-24 - Range menu becomes a full-width sheet under 1024px, and
-     the pop grid drops to a single column. */
+  /* V6-24 - Range menu becomes a full-width sheet under 767px. */
   .kpi-rmenu-pop {
     position: fixed;
     top: var(--kpi-cmd-h); left: var(--kpi-sp-2); right: var(--kpi-sp-2);
     min-width: 0; width: auto;
-    grid-template-columns: 1fr;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
   }
+  .kpi-rmenu-qr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ── V25-12 · table control bar - one height, one rhythm ─────────

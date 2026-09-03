@@ -758,9 +758,9 @@ export default function KpiLaborPage() {
   //   preset  -> setLastPreset(value); rely on inferred label
   //   period  -> "PERIOD n" via inferRangeSelection + PR-2 URL label
   //   month   -> "<MONTH> <year>" via inferRangeSelection + label
-  //   periods -> PR-2 multi-select, label "P1 - P3"
   //   months  -> PR-2 multi-select, label "Jan - Apr 2026"
   //   custom  -> no label, chip falls back to the date range
+  // Range redesign 2026-09-03: `periods` (multi-period) kind retired.
   // Also writes { startISO, endISO } to localStorage (kpi.range).
   function onRangeCommit(startISO, endISO, selection) {
     if (selection?.kind === "preset" && selection.value) {

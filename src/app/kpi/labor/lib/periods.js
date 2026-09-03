@@ -85,6 +85,37 @@ export function currentPeriodNo(todayISO) {
   return periodOf(todayISO);
 }
 
+// Range redesign 2026-09-03 (R-62). Small pure helper the RangeMenu
+// picker (PR-A) and the planning view (PR-B) both consume so their
+// notion of "what's clickable" cannot drift.
+//
+//   closed       -> ended before today (default, clickable)
+//   running      -> contains today (amber, clickable)
+//   next         -> the period after running (clickable - R-62)
+//   not_started  -> every period after next (disabled)
+//
+// Pure calendar function - no DB, no accountPeriods. Returns null for
+// out-of-range period_no so the caller can decide.
+export function periodPickerState(periodNo, todayISO) {
+  if (!Number.isInteger(periodNo) || periodNo < 1 || periodNo > 13) return null;
+  const running = currentPeriodNo(todayISO);
+  if (running == null) return null;
+  if (periodNo < running) return "closed";
+  if (periodNo === running) return "running";
+  if (periodNo === running + 1) return "next";
+  return "not_started";
+}
+
+// Range redesign 2026-09-03 · item 1. The picker shows every period
+// with its dates. "P5 · 04/20 – 05/17" instead of bare "P5". Same
+// month/day slicing the command bar already uses.
+export function periodDateShort(periodNo) {
+  const s = periodStartISO(periodNo);
+  const e = periodEndISO(periodNo);
+  if (!s || !e) return null;
+  return `${s.slice(5, 7)}/${s.slice(8, 10)} – ${e.slice(5, 7)}/${e.slice(8, 10)}`;
+}
+
 // V6-1 - week-of-period (1..4) for the given ISO date within its
 // containing fiscal period. Used in the command bar fiscal context.
 // Returns null when the date falls outside FY2026.

@@ -3,42 +3,56 @@
 //
 // The ONE time surface across Overview, Labor and Purchasing.
 //
-// 2026-09-02 retire-months follow-up (Kevin): the MONTHS column
-// emitted URLs the server snapped to the containing period (calendar
-// months are not period-aligned). A control that lies to the operator
-// is worse than no control; the period jump list P1..P13 already
-// covers every "how did that stretch go" question. MONTHS retired.
+// 2026-09-02 retire-months + retire-custom PRs: MONTHS column,
+// last_4wk, custom-drag calendar, and the `custom` selection kind
+// all removed in prior work.
 //
-// 2026-09-02 retire-custom + rolling PR (already shipped): every range
-// the platform resolves is FYTD or period-aligned. `last_4wk` preset,
-// the custom-drag calendar popover, and the `custom` selection kind
-// were removed in that PR. This one closes the MONTHS gap.
+// 2026-09-03 selector redesign (Kevin) + R-62: multi-period selection
+// retired, "Next period" joins the preset row, every period button
+// carries its dates, four period states (closed / running / next /
+// not-started) with a legend, 5-across grid, stacked layout, and
+// "FYTD" reads "This year" in the menu (the chip still reads FYTD
+// where space is tight and the audience is Kevin).
 //
 // What remains:
-//   PRESETS        - this_period, last_period, fytd
-//   FISCAL PERIODS - single or multi (P1..P13), shift-click for a
-//                    range (aligned by construction)
+//   QUICK RANGES  - this_period, next_period, last_period, fytd
+//                   (in that order per item 6b)
+//   PERIOD GRID   - single period (P1..P13), dates on every button,
+//                   four states via periodPickerState()
 //
 // Selection semantics:
-//   preset  - relative resolution (this/last period, FYTD)
+//   preset  - relative resolution (this/next/last period, FYTD)
 //   period  - that period's exact dates via rangeForPeriod
-//   periods - shift-click range (P1..P3), aligned to boundaries
+//
+// R-62: only the next period after the running one is enabled;
+// everything past it is disabled. See periodPickerState().
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtDate } from "../lib/formatting";
-import { rangeForPeriod } from "../lib/periods";
+import { rangeForPeriod, currentPeriodNo, periodPickerState, periodDateShort } from "../lib/periods";
 import { FY_START } from "../lib/accounts";
 import { validateLabel, formatSelection } from "../lib/rangeLabel";
 
 const PRESETS = [
   { key: "this_period", label: "This period" },
+  { key: "next_period", label: "Next period" },
   { key: "last_period", label: "Last period" },
-  { key: "fytd",        label: "FYTD"        },
+  { key: "fytd",        label: "This year"   },
 ];
 
 // Turn a preset key into a concrete range.
+// Redesign 2026-09-03: `next_period` joins the set (R-62 opens the
+// one period after the running one). Resolved directly off the FY
+// calendar - no accountPeriods entry is needed because the "next"
+// period never has actuals yet by definition.
 function resolvePreset(kind, { today, accountPeriods }) {
   if (kind === "fytd") return { startISO: FY_START, endISO: today };
+  if (kind === "next_period") {
+    const cur = currentPeriodNo(today);
+    if (cur == null) return null;
+    const r = rangeForPeriod(cur + 1);
+    return r ? { startISO: r.startISO, endISO: r.endISO } : null;
+  }
   const past = (accountPeriods || [])
     .filter(p => p.start && p.end && p.start <= today)
     .sort((a, b) => a.start.localeCompare(b.start));
@@ -102,18 +116,11 @@ export function RangeMenu({
   rangeSnap,             // { snapped, snapped_from, snapped_to } from payload.range_snap,
                          //   set when the server snapped a non-aligned URL to a period
   onCommit,              // (startISO, endISO, selection) => void
-                         // selection.kind: preset | period | periods
+                         // selection.kind: preset | period
   disabled,
 }) {
   const [open, setOpen] = useState(false);
-  // Staged period for multi-select (shift-click P1 then P3 -> P1..P3).
-  const [periodStaged, setPeriodStaged] = useState(null);
   const rootRef = useRef(null);
-  // Clear staging whenever the menu closes so an abandoned first
-  // click does not persist to the next open.
-  useEffect(() => {
-    if (!open) setPeriodStaged(null);
-  }, [open]);
 
   // Outside-click closes the menu.
   useEffect(() => {
@@ -147,7 +154,34 @@ export function RangeMenu({
     rangeSnap,
   });
 
-  const canPickPreset = (k) => !((k === "this_period" || k === "last_period") && !hasPeriods);
+  // Preset gates (2026-09-03 redesign):
+  //   this_period, last_period - need historical periods
+  //   next_period              - needs the running+1 slot inside FY
+  //   fytd                     - always pickable
+  const running = currentPeriodNo(todayISO);
+  const canPickPreset = (k) => {
+    if (k === "this_period" || k === "last_period") return !!hasPeriods;
+    if (k === "next_period") return running != null && running + 1 <= 13;
+    return true;
+  };
+
+  // Dates on every quick range (item 4). "This year" reads
+  // "P1 – P{running} to date" so an operator knows the span at a
+  // glance without opening the chip.
+  const presetDates = (k) => {
+    const r = resolvePreset(k, { today: todayISO, accountPeriods });
+    if (!r) return null;
+    if (k === "fytd") return running ? `P1 – P${running} to date` : null;
+    // this / next / last: derive the period_no from the resolved range
+    // so the date sub-label reads "P8 · 07/13 – 08/09".
+    for (let p = 1; p <= 13; p += 1) {
+      const rp = rangeForPeriod(p);
+      if (rp && rp.startISO === r.startISO && rp.endISO === r.endISO) {
+        return `P${p} · ${periodDateShort(p)}`;
+      }
+    }
+    return `${fmtDate(r.startISO)} – ${fmtDate(r.endISO)}`;
+  };
 
   return (
     <div className="kpi-rmenu" ref={rootRef}>
@@ -169,72 +203,79 @@ export function RangeMenu({
         <span className="kpi-rmenu-label kpi-rmenu-label-dates">{label.dates}</span>
       </button>
       {open && (
-        <div className="kpi-rmenu-pop" role="dialog" aria-label="Select date range">
-          <div className="kpi-rmenu-col">
-            <h5 className="kpi-rmenu-h">PRESETS</h5>
-            <div className="kpi-rmenu-list">
-              {PRESETS.map(p => (
-                <button
-                  key={p.key}
-                  type="button"
-                  className={`kpi-rmenu-item ${resolvedPreset === p.key ? "on" : ""}`}
-                  disabled={!canPickPreset(p.key)}
-                  onClick={() => {
-                    const r = resolvePreset(p.key, { today: todayISO, accountPeriods });
-                    if (r) commit(r.startISO, r.endISO, { kind: "preset", value: p.key });
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
+        <div className="kpi-rmenu-pop kpi-rmenu-pop-stack" role="dialog" aria-label="Select date range">
+          {/* Item 5: sections stack; no 140px sidebar. Item 4: every
+              quick range carries its dates. Item 6b: Next period
+              joined the preset row. Item 6c: "FYTD" reads "This year"
+              in the menu (label above). */}
+          <div className="kpi-rmenu-sec">
+            <h5 className="kpi-rmenu-h">Quick ranges</h5>
+            <div className="kpi-rmenu-qr">
+              {PRESETS.map(p => {
+                const enabled = canPickPreset(p.key);
+                const dates = enabled ? presetDates(p.key) : null;
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className={`kpi-rmenu-qrb ${resolvedPreset === p.key ? "on" : ""}`}
+                    disabled={!enabled}
+                    onClick={() => {
+                      const r = resolvePreset(p.key, { today: todayISO, accountPeriods });
+                      if (r) commit(r.startISO, r.endISO, { kind: "preset", value: p.key });
+                    }}
+                  >
+                    <span className="kpi-rmenu-qrb-t">{p.label}</span>
+                    {dates && <span className="kpi-rmenu-qrb-d">{dates}</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="kpi-rmenu-col">
-            <h5 className="kpi-rmenu-h">FISCAL PERIODS</h5>
-            <div className="kpi-rmenu-grid">
+          <div className="kpi-rmenu-sec">
+            <h5 className="kpi-rmenu-h kpi-rmenu-h-row">
+              A single period
+              <span className="kpi-rmenu-h-note">FY2026</span>
+            </h5>
+            {/* Item 3: 5-across. Item 2: four period states via
+                periodPickerState(); disabled attribute encodes
+                not_started. Item 1: dates on every button. */}
+            <div className="kpi-rmenu-pgrid">
               {Array.from({ length: 13 }, (_, i) => i + 1).map(p => {
+                const state = periodPickerState(p, todayISO);
                 const isSelected = selectedPeriodNo === p;
-                const isStaged = periodStaged === p;
+                const notStarted = state === "not_started";
+                const cls = [
+                  "kpi-rmenu-pgb",
+                  `st-${state || "closed"}`,
+                  isSelected ? "on" : "",
+                ].filter(Boolean).join(" ");
                 return (
                   <button
                     key={p}
                     type="button"
-                    className={`kpi-rmenu-gp ${isSelected ? "on" : ""} ${isStaged ? "staged" : ""}`}
+                    className={cls}
                     aria-pressed={isSelected ? "true" : "false"}
-                    onClick={(e) => {
-                      // Multi-select semantics:
-                      //   first click OR shift-click without staging
-                      //     -> stage as start
-                      //   second click on a DIFFERENT period, or
-                      //   shift-click on any period, or click that
-                      //   matches the staged one
-                      //     -> commit as periods range (staged..this)
-                      if (periodStaged == null || e.shiftKey === false && periodStaged === p) {
-                        if (periodStaged === p) {
-                          const r = rangeForPeriod(p);
-                          if (r) commit(r.startISO, r.endISO, { kind: "period", value: p });
-                          return;
-                        }
-                        setPeriodStaged(p);
-                        return;
-                      }
-                      const [start, end] = periodStaged <= p ? [periodStaged, p] : [p, periodStaged];
-                      const a = rangeForPeriod(start);
-                      const b = rangeForPeriod(end);
-                      if (a && b) {
-                        commit(a.startISO, b.endISO,
-                          start === end
-                            ? { kind: "period", value: start }
-                            : { kind: "periods", start, end });
-                      }
+                    disabled={notStarted}
+                    data-period-state={state}
+                    onClick={() => {
+                      const r = rangeForPeriod(p);
+                      if (r) commit(r.startISO, r.endISO, { kind: "period", value: p });
                     }}
-                  >P{p}</button>
+                  >
+                    <span className="kpi-rmenu-pgb-n">P{p}</span>
+                    <span className="kpi-rmenu-pgb-d">{periodDateShort(p)}</span>
+                  </button>
                 );
               })}
             </div>
-            {periodStaged != null && (
-              <span className="kpi-rmenu-stagenote">click another period to set the end, or click P{periodStaged} again</span>
-            )}
+            {/* Item 2 legend: four states named. */}
+            <div className="kpi-rmenu-legend" data-kpi-rmenu="legend">
+              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-clo" />closed</span>
+              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-run" />running</span>
+              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-nxt" />next</span>
+              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-fut" />not started</span>
+            </div>
           </div>
         </div>
       )}
