@@ -90,7 +90,7 @@ import {
 import { resolveAccessFlags, resolveIncludeSalary } from "./accessFlags.js";
 import { composeFlags, isPackagingGapAccount, isSeededAccount } from "./flags.js";
 
-import { periodOf, periodStartISO, periodEndISO, weekStartsInRange } from "@/app/kpi/labor/lib/periods.js";
+import { periodOf, periodStartISO, periodEndISO, weekStartsInRange, endOfLastCompleteWeek } from "@/app/kpi/labor/lib/periods.js";
 import { PURCHASING_ENVELOPE_EXCLUSIONS } from "@/lib/accountModels.js";
 
 const FISCAL_YEAR = 2026;
@@ -618,6 +618,22 @@ export async function resolveOverview({
   // that IS a dependency, so it runs AFTER Layer 1 in Layer 2.
   const periods = periodsInRangeFor(rng.start, rng.end);
 
+  // Kevin ruling R-63 (2026-09-03): revenue and cost both stop at the
+  // end of the last complete week in the range. On closed ranges every
+  // week is complete, so this is a no-op (effectiveEnd == rng.end).
+  // On open ranges (P9 today = week 4 running), this caps every loader
+  // and every proration at week 3's end (08/30), so revenue and cost
+  // both measure the same window and the acceptance
+  //   max(revenue_contrib_date) == max(cost_contrib_date)
+  // holds by construction.
+  //
+  // Supersedes the today - 1 cap from #976 on open ranges - 08/30 is
+  // earlier than today - 1 = 09/02, so #976's inequality still holds.
+  const lastCompleteWk = endOfLastCompleteWeek(rng.start, rng.end, today);
+  const effectiveEndISO = lastCompleteWk && lastCompleteWk.effectiveEndISO < rng.end
+    ? lastCompleteWk.effectiveEndISO
+    : rng.end;
+
   const layer1 = await timeIt("layer1_parallel", async () => Promise.all([
     loadPeriodStatus(supa, FISCAL_YEAR),
     loadAccountFlags(supa),
@@ -633,18 +649,25 @@ export async function resolveOverview({
     // revenue on open periods (TBJ - FL P9: 26 days vs 22 days of
     // budget). Same helper the sources-line label uses below -
     // label and query derive from one value.
-    loadScDailyRevenue(supa, { members, start: rng.start, end: rng.end, today }),
-    paginateLaborActuals(supa, { members, start: rng.start, end: rng.end }),
+    // R-63 (2026-09-03): every range-scoped loader takes effectiveEndISO
+    // instead of rng.end. On closed ranges effectiveEndISO == rng.end
+    // (no change); on open ranges it caps at the last complete week's
+    // end. SC's own capBeforeToday(today) is now redundant when the
+    // resolver caps upstream, but stays defensive for legacy callers.
+    loadScDailyRevenue(supa, { members, start: rng.start, end: effectiveEndISO, today }),
+    paginateLaborActuals(supa, { members, start: rng.start, end: effectiveEndISO }),
     Promise.all(members.map(m => resolveMemberBudget(supa, m))),
-    paginatePurchasingWeekly(supa, { members, start: rng.start, end: rng.end }),
-    paginatePurchasingActuals(supa, { members, start: rng.start, end: rng.end }),
-    loadPurchasingPending(supa, { members, start: rng.start, end: rng.end }),
+    paginatePurchasingWeekly(supa, { members, start: rng.start, end: effectiveEndISO }),
+    paginatePurchasingActuals(supa, { members, start: rng.start, end: effectiveEndISO }),
+    loadPurchasingPending(supa, { members, start: rng.start, end: effectiveEndISO }),
     loadPurchasingBudgets(supa, members, FISCAL_YEAR),
     // R-28 / §5.9 - salary is composed INTO 3100 unconditionally on
     // both postures. These two loaders feed the merge in step 5
     // (buildBoard) below.
     load3100_2Budgets(supa, members),
-    loadSalaryActuals(supa, members, rng.start, rng.end),
+    // R-63: salary actuals capped at effectiveEndISO too so labour and
+    // purchasing measure the same window.
+    loadSalaryActuals(supa, members, rng.start, effectiveEndISO),
     // P2-1 (2026-09-01): live accounts_directory for the folio rail.
     // Global read (independent of members). Cheap - one SELECT.
     fetchAccountsDirectoryOv(supa),
@@ -807,11 +830,16 @@ export async function resolveOverview({
   //    route's D26 salary-on branch, salaryBoard.js line 222-232).
   const salaryActualsShaped = salaryRows.map(shapeSalaryRow);
   const mergedLaborActuals = (laborActuals || []).concat(salaryActualsShaped);
+  // R-63 (Kevin 2026-09-03): pass effectiveEndISO as the range end AND
+  // as throughISO so labor's budget-to-date days proration stops at
+  // the same edge as revenue + purchasing. On closed ranges this is
+  // a no-op (effectiveEndISO == rng.end).
   const laborBoard = await timeIt("buildBoard(labor)", async () => buildBoard({
     account: accountKey,
     start: rng.start,
-    end: rng.end,
+    end: effectiveEndISO,
     today,
+    throughISO: effectiveEndISO,
     actuals: mergedLaborActuals,
     budget_periods: laborBudgetPeriods,
     account_state: "hourly_ok",
@@ -819,11 +847,17 @@ export async function resolveOverview({
   }));
 
   // 6. Call purchasing buildPurchasingBoard as a library call.
+  //
+  // R-63 (Kevin 2026-09-03): pass effectiveEndISO as the range end AND
+  // as throughISO so the purchasing board's own budget-to-date days
+  // proration lands on the same edge that the SC + labor loaders use.
+  // On closed ranges effectiveEndISO == rng.end (no change).
   const purchBoard = await timeIt("buildBoard(purchasing)", async () => buildPurchasingBoard({
     members,
     start: rng.start,
-    end: rng.end,
+    end: effectiveEndISO,
     today,
+    throughISO: effectiveEndISO,
     actualsRows: purchActuals,
     weeklyRows: purchWeekly,
     pendingRow: purchPending,
@@ -904,7 +938,7 @@ export async function resolveOverview({
   for (const line of REVENUE_LINE_CODES) {
     const byPeriod = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: line, members });
     if (byPeriod.size === 0) continue;
-    const bto = computeBudgetToDateForLine({ budgetByPeriod: byPeriod, periodsInRange: periods, today });
+    const bto = computeBudgetToDateForLine({ budgetByPeriod: byPeriod, periodsInRange: periods, today, throughISO: effectiveEndISO });
     if (bto.amount != null) {
       revBudgetToDate += bto.amount;
       anyRevBudget = true;
@@ -1584,7 +1618,7 @@ export async function resolveOverview({
   for (const line of REVENUE_LINE_CODES) {
     const rev = revenueByLine[line];
     const byPeriod = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: line, members });
-    const bto = computeBudgetToDateForLine({ budgetByPeriod: byPeriod, periodsInRange: periods, today });
+    const bto = computeBudgetToDateForLine({ budgetByPeriod: byPeriod, periodsInRange: periods, today, throughISO: effectiveEndISO });
     const fp = computeFullPeriodBudget({ budgetByPeriod: byPeriod, periodsInRange: periods });
     // E17 (2026-09-01): a revenue line the account does not run (no
     // budget, no actual) reads `inactive`, not a $0 variance. The
@@ -1719,10 +1753,10 @@ export async function resolveOverview({
     // other statement row uses. No new loader needed; the read shape
     // is unchanged.
     const hourlyBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.1", members });
-    const hourlyBTD = computeBudgetToDateForLine({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods, today });
+    const hourlyBTD = computeBudgetToDateForLine({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods, today, throughISO: effectiveEndISO });
     const hourlyPB = computeFullPeriodBudget({ budgetByPeriod: hourlyBudPerP, periodsInRange: periods });
     const salaryBudPerP = sumBudgetByPeriodForLine({ overviewBudgets, lineCode: "3100.2", members });
-    const salaryBTD = computeBudgetToDateForLine({ budgetByPeriod: salaryBudPerP, periodsInRange: periods, today });
+    const salaryBTD = computeBudgetToDateForLine({ budgetByPeriod: salaryBudPerP, periodsInRange: periods, today, throughISO: effectiveEndISO });
     const salaryPB = computeFullPeriodBudget({ budgetByPeriod: salaryBudPerP, periodsInRange: periods });
     statementRows.push({
       line_code: "3100.1",
@@ -2271,7 +2305,15 @@ export async function resolveOverview({
       range: { start: rng.start, end: rng.end, kind: rng.kind, period_no: rng.period_no },
       rangeComposition,
       periodState: displayPeriodState,
+      lastCompleteWk,
+      effectiveEndISO,
     }),
+    // Kevin ruling R-63 (2026-09-03): the "as of when" answer for
+    // every figure on the board. On closed ranges this equals
+    // rng.end; on open ranges it's the last complete week's end so
+    // revenue and cost measure the same window. PR-B renders the
+    // horizon line off range_labels.horizon (below).
+    range_effective_end: effectiveEndISO,
     // R-40 (2026-09-01): posture retired as a layout switch. Access
     // flags only, named for what they do.
     //
@@ -2483,12 +2525,36 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
 //     period_span: "P1-P8" | "P8" | null,
 //     period_last: "P8" | null,
 //   }
-function buildRangeLabels({ range, rangeComposition, periodState }) {
+function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk, effectiveEndISO }) {
   const rc = rangeComposition;
   const isFytd = range.kind === "fytd";
   const isSinglePeriod = range.kind === "period";
   const isSingleOpen = isSinglePeriod && periodState === "open";
   const isSingleClosed = isSinglePeriod && !isSingleOpen;
+
+  // Kevin ruling R-63 (2026-09-03): the "as of when" answer for the
+  // horizon line above the cards. Closed ranges read "P1-P8 · closed
+  // and verified" / "P8 · closed and verified"; open ranges read
+  // "through week N · MM/DD – MM/DD" where N + dates come from the
+  // last complete week helper. Rendered server-side so the value is
+  // one string in one place.
+  const fmtMMDD = (iso) => iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}` : null;
+  let horizon = null;
+  if (isSingleOpen) {
+    if (lastCompleteWk) {
+      horizon = `through week ${lastCompleteWk.weekNo} · ${fmtMMDD(lastCompleteWk.weekStartISO)} – ${fmtMMDD(lastCompleteWk.weekEndISO)}`;
+    } else {
+      horizon = "no complete weeks yet";
+    }
+  } else if (isSingleClosed && range.period_no != null) {
+    horizon = `P${range.period_no} · closed and verified`;
+  } else if (isFytd) {
+    const first = rc?.verified?.first ?? 1;
+    const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
+    horizon = first === last
+      ? `P${last} · closed and verified`
+      : `P${first}-P${last} · closed and verified`;
+  }
 
   // Kevin R-60 + PR-B items 1-5 (2026-09-03): a closed period is not
   // "through" anything - it is settled. `Final P#` replaces every
@@ -2512,6 +2578,8 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
       actuals: thruLast,
       period_span: first === last ? `P${last}` : `P${first}-P${last}`,
       period_last: `P${last}`,
+      horizon,
+      effective_end_iso: effectiveEndISO,
     };
   }
   if (isSingleOpen) {
@@ -2522,6 +2590,8 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
       actuals: "period to date",
       period_span: n != null ? `P${n}` : null,
       period_last: n != null ? `P${n}` : null,
+      horizon,
+      effective_end_iso: effectiveEndISO,
     };
   }
   if (isSingleClosed) {
@@ -2532,6 +2602,8 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
       actuals: `Final P${n}`,
       period_span: `P${n}`,
       period_last: `P${n}`,
+      horizon,
+      effective_end_iso: effectiveEndISO,
     };
   }
   return {
@@ -2540,6 +2612,8 @@ function buildRangeLabels({ range, rangeComposition, periodState }) {
     actuals: "to date",
     period_span: null,
     period_last: null,
+    horizon,
+    effective_end_iso: effectiveEndISO,
   };
 }
 
