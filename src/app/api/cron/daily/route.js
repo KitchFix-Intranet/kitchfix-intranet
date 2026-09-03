@@ -271,7 +271,16 @@ await writeNotification("ALL", `[OPS] New period started - ${label}`, "period_st
         );
         written++;
 
-        const apEmail = process.env.INVOICE_AP_EMAIL || "k.fietek@kitchfix.com";
+        // 2026-09-03: sender is hardcoded to the system sender used by
+        // every other SA-impersonated email path. INVOICE_AP_EMAIL was
+        // previously read here as a sender, but that env var is meant
+        // to hold the AP INTAKE ADDRESS (moved to INVOICE_AP_TO_EMAIL
+        // and read only as a recipient at src/lib/gmail.js:12). The
+        // dual-purpose read caused ~11 weeks of silent invalid_grant
+        // failures because Vercel's value (kitchfix@bill.com) is on a
+        // domain the Gmail SA cannot impersonate. See docs/GOTCHAS.md
+        // "cross-domain sender cannot be an SA impersonation target".
+        const senderEmail = "kitchfix.admin@kitchfix.com";
         const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px;">
         <h2 style="color: #153968;">Invoice Needs Attention</h2>
@@ -287,14 +296,17 @@ await writeNotification("ALL", `[OPS] New period started - ${label}`, "period_st
       </div>
     `;
 
+        // Reply-To goes to the AP intake address so the submitter can
+        // hit reply and reach AP directly, not the system sender.
+        const replyToAddress = process.env.INVOICE_AP_TO_EMAIL || "k.fietek@kitchfix.com";
         try {
           await sendEmailSA({
-            sender: apEmail,
+            sender: senderEmail,
             displayName: "KitchFix Invoice Capture",
             to: submitter,
             subject: `Action needed: ${vendor}${invNum} invoice returned - please fix and resubmit`,
             html,
-            replyTo: apEmail,
+            replyTo: replyToAddress,
           });
         } catch (emailErr) {
           console.warn(`[Cron] Invoice reminder email failed for ${inv.uuid}:`, emailErr.message);

@@ -9,7 +9,14 @@
 
 import { google } from "googleapis";
 
-const AP_EMAIL = process.env.INVOICE_AP_EMAIL || "k.fietek@kitchfix.com";
+// AP intake address for stamped-invoice submissions (Invoice Capture).
+// Renamed 2026-09-03 from INVOICE_AP_EMAIL to INVOICE_AP_TO_EMAIL to
+// disambiguate: this is a RECIPIENT address, not a sender. The user's
+// OAuth token sends TO this mailbox; no SA impersonation. Cross-domain
+// values (e.g. bill.com intake) are fine here.
+// See docs/GOTCHAS.md "cross-domain sender cannot be an SA impersonation
+// target" for the dual-purpose ambiguity bug this rename fixes.
+const AP_TO_EMAIL = process.env.INVOICE_AP_TO_EMAIL || "k.fietek@kitchfix.com";
 const AP_CC = ["k.fietek@kitchfix.com"];
 
 function getGmailClient(accessToken) {
@@ -50,8 +57,8 @@ export async function sendInvoiceEmail(accessToken, senderEmail, data, fallbackI
 
     const subject = buildSubject(data);
     const htmlBody = buildEmailHtml(data, typeLabel, senderEmail);
-    const toList = [AP_EMAIL];
-    const ccList = AP_CC.filter((e) => e !== AP_EMAIL && e !== senderEmail);
+    const toList = [AP_TO_EMAIL];
+    const ccList = AP_CC.filter((e) => e !== AP_TO_EMAIL && e !== senderEmail);
         
     // Build MIME message
     let rawMessage;

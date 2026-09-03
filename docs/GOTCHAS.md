@@ -394,6 +394,30 @@ Gmail service-account impersonation via `google.auth.JWT({subject: "<mailbox>"})
 
 **The general lesson.** An error message that names the wrong root cause is the durable failure shape. `invalid_grant` sounds like a grant problem. The class matches `NULL <> value` "silently pass on the state it exists to catch" from the Postgres section - a signal that reads like something else long enough for the real problem to hide.
 
+### Cross-domain sender cannot be an SA impersonation target
+
+Gmail service-account impersonation via `google.auth.JWT({subject: "<mailbox>"})` requires the mailbox to be an active user of the **SA's own Workspace domain** on the SA's DWD allowlist. Any address on a domain the SA doesn't own returns `invalid_grant: Invalid email or User ID` regardless of DWD configuration. The same error string as the deactivated-mailbox case above. Two failure classes, one error.
+
+**Realised on 2026-09-03.** After PR #995 rotated the sender to `kitchfix.admin@kitchfix.com`, an env audit surfaced `INVOICE_AP_EMAIL=kitchfix@bill.com` in Vercel production. The value was correct for its documented role (AP intake recipient for Invoice Capture at `src/lib/gmail.js:12`) but the same env var was ALSO read as a **sender** at `src/app/api/cron/daily/route.js:274` for the "invoice returned by AP more than 3 days ago" reminder cron. The SA cannot impersonate a bill.com address; that cron has been silently `invalid_grant`-failing on every daily fire since it shipped in commit 465ad30 on 2026-06-17 - approximately 11 weeks of silent misses. Every submitter with an aging returned invoice never learned they had an aging returned invoice.
+
+**Fix**: split the variable. `INVOICE_AP_TO_EMAIL` keeps the bill.com value at the recipient site. The sender site is hardcoded to the system sender `kitchfix.admin@kitchfix.com` - the same address every other SA-impersonated path uses. Committed in the split PR.
+
+**The general pattern - four failure classes, one error**. `invalid_grant: Invalid email or User ID` from `sendEmailSA` collapses across:
+
+1. **Cross-domain**: the sender is syntactically a valid email but on a domain the SA doesn't own (this bug).
+2. **Deactivated**: the sender is on the SA's domain but the Workspace user is disabled (support@ bug in PR #995).
+3. **Non-existent**: the sender is syntactically valid but no Workspace user by that name exists (typo).
+4. **Not on DWD allowlist**: the SA exists, the user exists, but the DWD row doesn't cover the sender email or the required scope.
+
+All four look identical from the `catch` clause in `sendEmailSA`. The revised investigation checklist starts with class 1 because it's the fastest to rule out:
+
+0. **Does the sender's domain match the SA's Workspace domain?** If not, class 1 - the sender is invalid regardless of everything else.
+1. Workspace admin -> Directory -> Users -> is the mailbox active?
+2. Workspace admin -> Security -> API controls -> Domain Wide Delegation -> is the SA's numeric client_id listed with the required scope?
+3. GCP console -> is the SA itself active?
+
+**The general lesson**: a dual-purpose env variable ("what does this address mean?") is a place ambiguity hides. A field that accepts syntactically-valid values but only a narrow subset actually works is a place silent failure hides. When `sendEmailSA`'s sender is env-driven, the field must be validated at read time OR the env var name must make its role unambiguous. `INVOICE_AP_EMAIL` did neither - the name didn't distinguish sender from recipient, and no validation caught the domain mismatch.
+
 ---
 
 ## AI / Claude API

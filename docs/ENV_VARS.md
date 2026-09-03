@@ -145,9 +145,9 @@ This is a discipline aid, not a CI check. Do not automate it.
 
 | Variable | Description | Scope | If missing |
 |---|---|---|---|
-| `INVOICE_AP_EMAIL` | Where stamped invoices are sent (currently `k.fietek@kitchfix.com`, future `ap@kitchfix.com`) | Prod, Preview | Invoice email fails |
+| `INVOICE_AP_TO_EMAIL` | AP intake **recipient** for stamped-invoice submissions from Invoice Capture. Read at `src/lib/gmail.js:12`. Sent by the user's OAuth token (not SA), so cross-domain values (`kitchfix@bill.com`) are fine. Also serves as the Reply-To on the returned-invoice reminder email (`src/app/api/cron/daily/route.js`) so submitters can hit reply and reach AP. Renamed 2026-09-03 from `INVOICE_AP_EMAIL` after a dual-purpose read at daily/route.js as a sender caused ~11 weeks of silent `invalid_grant` failures (the SA cannot impersonate a bill.com address). | Prod, Preview | Invoice Capture submissions fail; reminder Reply-To falls back to `k.fietek@kitchfix.com` |
 | `INCIDENT_CALENDAR_ORGANIZER` | Calendar organizer for incident events (default `m.chavez@kitchfix.com`) | Prod, Preview | Calendar events create with wrong organizer |
-| `PEOPLE_OPS_FROM_EMAIL` | Sender address for People-Ops outbound email (WoW plan cadence + incident-reminders cron). Read at `src/app/api/cron/incident-reminders/route.js:139` and `src/lib/wowPlanActions.js`, with fallback `"support@kitchfix.com"`. | Prod, Preview | Emails send from the `support@kitchfix.com` fallback (still deliverable; wrong reply-to for People Ops) |
+| `PEOPLE_OPS_FROM_EMAIL` | Sender address for People-Ops outbound email (incident-reminders cron). Read at `src/app/api/cron/incident-reminders/route.js:144` with fallback `"kitchfix.admin@kitchfix.com"` (rotated 2026-09-03 from `support@kitchfix.com` after that mailbox was identified as deactivated). Must be an active Workspace user on the SA's DWD allowlist within kitchfix.com. Cross-domain values fail with `invalid_grant`. | Prod, Preview | Emails send from the `kitchfix.admin@kitchfix.com` fallback |
 
 ### Slack webhooks
 
