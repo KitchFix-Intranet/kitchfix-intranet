@@ -37,15 +37,16 @@ function Row({ row }) {
         <span className="kpi-ov-glc kpi-ov-num">{line_code}</span>
         {label}
       </td>
-      <td className="kpi-ov-num">
-        {bothNullish
-          ? <DashOrValue state="missing" />
-          : <DashOrValue value={actual_display} reported={row.reported} />}
-      </td>
+      {/* Item 3 (Kevin 2026-09-03): budget cell before actual cell. */}
       <td className="kpi-ov-num kpi-ov-nb">
         {bothNullish ? <DashOrValue state="missing" />
           : noBudget ? <DashOrValue state="no_budget" />
           : <DashOrValue value={budget_display} reported={budget != null} />}
+      </td>
+      <td className="kpi-ov-num">
+        {bothNullish
+          ? <DashOrValue state="missing" />
+          : <DashOrValue value={actual_display} reported={row.reported} />}
       </td>
       <td className="kpi-ov-num">
         {bothNullish ? <span className="kpi-ov-dash">no activity</span>
@@ -110,10 +111,11 @@ export default function AlsoTracked({ payload }) {
       <div className="kpi-ov-cb">
         <table className="kpi-ov-lev">
           <thead>
+            {/* Kevin ruling 2026-09-03 Item 3: budget precedes actual. */}
             <tr>
               <th className="l">Line</th>
-              <th>{actualHeader}</th>
               <th>{budgetHeader}</th>
+              <th>{actualHeader}</th>
               <th style={{ width: 100 }}>vs budget</th>
             </tr>
           </thead>

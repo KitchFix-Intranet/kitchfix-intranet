@@ -395,28 +395,43 @@ export default function PnlStatement({ payload, open, onToggle }) {
                     <td className="kpi-ov-num">
                       <DashOrValue value={cogsCard.hero_actual_display} reported={cogsCard.hero_reported} />
                     </td>
+                    {/* Kevin ruling 2026-09-03 (BLOCKER): variance
+                        and percent MUST share a reference. Server
+                        ships statement_totals.cogs.variance (actual
+                        − budget_at_this_revenue) so the sign of the
+                        dollar cell agrees with the sign of the
+                        percent cell by construction. Previously used
+                        cogsCard.delta_dollars which measured against
+                        budget_to_date - same defect class as GM
+                        below, just less visible (both signs happened
+                        to align on this account). */}
                     <td className="kpi-ov-num">
-                      {cogsCard.delta_dollars != null ? (
+                      {payload.statement_totals?.cogs?.variance != null ? (
                         <ArrowVariance
-                          variance={cogsCard.delta_dollars}
+                          variance={payload.statement_totals.cogs.variance}
                           section="cogs"
-                          colorClass={cogsCard.delta_direction === "good" ? "kpi-ov-good" : cogsCard.delta_direction === "bad" ? "kpi-ov-bad" : ""}
+                          colorClass={payload.statement_totals.cogs.variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad"}
                         />
                       ) : (
                         <DashOrValue value={null} reported={false} />
                       )}
                     </td>
                     <td className="kpi-ov-num">
-                      <DashOrValue value={cogsCard.pct_of_revenue_display} reported={cogsCard.pct_of_revenue != null} />
+                      <DashOrValue value={fmtPct(payload.statement_totals?.cogs?.actual_pct)} reported={payload.statement_totals?.cogs?.actual_pct != null} />
                     </td>
                     <td className="kpi-ov-num kpi-ov-nb">
-                      <DashOrValue value={cogsCard.target_pct_display} reported={cogsCard.target_pct_of_revenue != null} />
+                      <DashOrValue value={fmtPct(payload.statement_totals?.cogs?.target_pct)} reported={payload.statement_totals?.cogs?.target_pct != null} />
                     </td>
                   </tr>
                 )}
 
-                {/* Gross margin row. E19 (2026-09-01): period-budget
-                    cell now reads statement_totals.gross_margin. */}
+                {/* Gross margin row. Kevin ruling 2026-09-03: server
+                    now ships {margin_at_this_revenue, variance,
+                    actual_pct, target_pct} on statement_totals.gross_
+                    margin. Client renders; it computes nothing. The
+                    variance is measured against margin_at_this_revenue
+                    (not budget_to_date), so it agrees in sign with the
+                    percent gap. */}
                 {gmCard && (
                   <tr className="gm" data-kpi-ov="statement-gm-total">
                     <td className="l">Gross margin</td>
@@ -432,21 +447,21 @@ export default function PnlStatement({ payload, open, onToggle }) {
                       <DashOrValue value={gmCard.hero_actual_display} reported={gmCard.hero_reported} />
                     </td>
                     <td className="kpi-ov-num">
-                      {gmCard.delta_dollars != null ? (
+                      {payload.statement_totals?.gross_margin?.variance != null ? (
                         <ArrowVariance
-                          variance={gmCard.delta_dollars}
+                          variance={payload.statement_totals.gross_margin.variance}
                           section="margin"
-                          colorClass={gmCard.delta_direction === "good" ? "kpi-ov-good" : gmCard.delta_direction === "bad" ? "kpi-ov-bad" : ""}
+                          colorClass={payload.statement_totals.gross_margin.variance >= 0 ? "kpi-ov-good" : "kpi-ov-bad"}
                         />
                       ) : (
                         <DashOrValue value={null} reported={false} />
                       )}
                     </td>
                     <td className="kpi-ov-num">
-                      <DashOrValue value={gmCard.pct_of_revenue_display} reported={gmCard.pct_of_revenue != null} />
+                      <DashOrValue value={fmtPct(payload.statement_totals?.gross_margin?.actual_pct)} reported={payload.statement_totals?.gross_margin?.actual_pct != null} />
                     </td>
                     <td className="kpi-ov-num kpi-ov-nb">
-                      <DashOrValue value={gmCard.target_pct_display} reported={gmCard.target_pct_of_revenue != null} />
+                      <DashOrValue value={fmtPct(payload.statement_totals?.gross_margin?.target_pct)} reported={payload.statement_totals?.gross_margin?.target_pct != null} />
                     </td>
                   </tr>
                 )}

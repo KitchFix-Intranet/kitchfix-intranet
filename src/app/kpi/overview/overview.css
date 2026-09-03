@@ -212,17 +212,26 @@
   text-transform: uppercase;
   color: var(--n-600);
   text-align: right;
-  padding: 0 0 var(--kpi-sp-2);
-  white-space: nowrap;
+  /* Kevin ruling 2026-09-03 Item 4: horizontal padding + min-width
+     on non-label headers. Prior padding was `0 0` which butted
+     adjacent headers directly together. Long labels ("Budget period
+     to date") wrap to two lines on the narrow right-column table
+     rather than overflow. */
+  padding: 0 var(--kpi-sp-3) var(--kpi-sp-2) var(--kpi-sp-3);
+  min-width: 108px;
+  line-height: 1.2;
+  vertical-align: bottom;
 }
-.kpi-app .kpi-ov-lev th.l { text-align: left; }
+.kpi-app .kpi-ov-lev th.l { text-align: left; padding-left: 0; min-width: 0; }
+.kpi-app .kpi-ov-lev th:last-child { padding-right: 0; }
 .kpi-app .kpi-ov-lev td {
-  padding: var(--kpi-sp-2) 0;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
   border-top: 1px solid var(--n-200);
   text-align: right;
   font-weight: 600;
 }
-.kpi-app .kpi-ov-lev td.l { text-align: left; font-weight: 700; }
+.kpi-app .kpi-ov-lev td.l { text-align: left; font-weight: 700; padding-left: 0; }
+.kpi-app .kpi-ov-lev td:last-child { padding-right: 0; }
 .kpi-app .kpi-ov-lev tr.tot td {
   border-top: 1px solid var(--n-400);
   font-weight: 800;
@@ -1027,17 +1036,24 @@
   text-transform: uppercase;
   color: var(--n-600);
   text-align: right;
-  padding: 0 0 8px;
+  /* Kevin ruling 2026-09-03 Item 4: horizontal padding + min-width
+     on the two dollar columns so shorter labels ("Spent thru P8")
+     don't get a narrower slot than longer ones ("Budget adjusted
+     P8") and run into their neighbour. */
+  padding: 0 var(--kpi-sp-3) 8px var(--kpi-sp-3);
+  min-width: 128px;
 }
-.kpi-app .kpi-ov-cl th.l { text-align: left; }
+.kpi-app .kpi-ov-cl th.l { text-align: left; padding-left: 0; min-width: 0; }
+.kpi-app .kpi-ov-cl th:last-child { padding-right: 0; }
 .kpi-app .kpi-ov-cl td {
-  padding: 9px 0;
+  padding: 9px var(--kpi-sp-3);
   border-top: 1px solid var(--n-200);
   text-align: right;
   font-weight: 700;
   vertical-align: middle;
 }
-.kpi-app .kpi-ov-cl td.l { text-align: left; }
+.kpi-app .kpi-ov-cl td.l { text-align: left; padding-left: 0; }
+.kpi-app .kpi-ov-cl td:last-child { padding-right: 0; }
 .kpi-app .kpi-ov-cl .kpi-ov-cl-line { width: 45%; }
 /* Row is a hover surface for the clickable link inside its label cell. */
 .kpi-app .kpi-ov-cl-row:hover { background: var(--navy-50); }
@@ -1113,16 +1129,23 @@
   text-transform: uppercase;
   color: var(--n-600);
   text-align: right;
-  padding: 0 0 8px;
+  /* Kevin ruling 2026-09-03 Item 4: horizontal padding + min-width
+     so adjacent headers can't butt directly against each other and
+     a shorter label can't get a narrower column than a longer one. */
+  padding: 0 var(--kpi-sp-3) 8px var(--kpi-sp-3);
+  white-space: nowrap;
+  min-width: 108px;
 }
-.kpi-app .kpi-ov-revlines th.l { text-align: left; }
+.kpi-app .kpi-ov-revlines th.l { text-align: left; padding-left: 0; min-width: 0; }
+.kpi-app .kpi-ov-revlines th:last-child { padding-right: 0; min-width: 0; }
 .kpi-app .kpi-ov-revlines td {
-  padding: 7px 0;
+  padding: 7px var(--kpi-sp-3);
   border-top: 1px solid var(--n-200);
   text-align: right;
   font-weight: 700;
 }
-.kpi-app .kpi-ov-revlines td.l { text-align: left; font-weight: 700; }
+.kpi-app .kpi-ov-revlines td.l { text-align: left; font-weight: 700; padding-left: 0; }
+.kpi-app .kpi-ov-revlines td:last-child { padding-right: 0; }
 
 /* ── Item 20 (FYTD per-period dashed budget line inside each bar) ── */
 .kpi-app .kpi-ov-bar-perbud {
