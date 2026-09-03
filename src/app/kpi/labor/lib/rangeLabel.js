@@ -35,6 +35,15 @@
 // semantics with PR-1's "calendar months are exact" promise so a
 // picker click AND a hand-crafted URL both round-trip through
 // validateLabel. See rangeForCalendarMonth for the FY clamp.
+//
+// Range selector redesign 2026-09-03 (Kevin ruling): multi-period
+// selection retired. The client no longer emits `kind: "periods"`;
+// the P1-P3 shift-click path is gone. `parseLabel` still recognises
+// legacy `P1-P3` URLs and REJECTS them (returns null) so the server
+// snap-or-refuse path handles stale bookmarks. `formatSelection` +
+// `serializeSelection` no longer carry a periods branch. Server-side
+// `rng.kind === "periods"` handling in the resolver stays defensive
+// for anything the range-snap module still emits.
 import { rangeForPeriod, rangeForCalendarMonth } from "./periods.js";
 
 const MONTH_LONG = [
@@ -47,9 +56,12 @@ const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
  * Parse a URL label string into a structured selection.
  * Returns null if the label does not match any known shape.
  *
+ * Redesign 2026-09-03: multi-period `P1-P3` shape is intentionally
+ * NOT recognised. Legacy URLs carrying it fall through to null and
+ * the server's range-snap path decides what the range resolves to.
+ *
  * @param {string|null|undefined} label
  * @returns {null | {kind: "period", value: number}
- *              | {kind: "periods", start: number, end: number}
  *              | {kind: "month", value: {year: number, monthIndex: number}}
  *              | {kind: "months", start: {year, monthIndex}, end: {year, monthIndex}}}
  */
@@ -57,15 +69,6 @@ export function parseLabel(label) {
   if (!label || typeof label !== "string") return null;
   const s = label.trim();
   if (!s) return null;
-
-  const mpMulti = s.match(/^P(\d{1,2})-P(\d{1,2})$/);
-  if (mpMulti) {
-    const start = parseInt(mpMulti[1], 10);
-    const end = parseInt(mpMulti[2], 10);
-    if (start < 1 || end < 1 || start > 13 || end > 13 || end < start) return null;
-    if (start === end) return { kind: "period", value: start };
-    return { kind: "periods", start, end };
-  }
 
   const mpSingle = s.match(/^P(\d{1,2})$/);
   if (mpSingle) {
@@ -109,12 +112,6 @@ function validMonth(m) {
 export function labelToRange(parsed) {
   if (!parsed) return null;
   if (parsed.kind === "period") return rangeForPeriod(parsed.value);
-  if (parsed.kind === "periods") {
-    const a = rangeForPeriod(parsed.start);
-    const b = rangeForPeriod(parsed.end);
-    if (!a || !b) return null;
-    return { startISO: a.startISO, endISO: b.endISO };
-  }
   if (parsed.kind === "month") {
     return rangeForCalendarMonth(parsed.value.year, parsed.value.monthIndex);
   }
@@ -149,7 +146,6 @@ export function validateLabel(label, startISO, endISO) {
 export function formatSelection(sel) {
   if (!sel) return null;
   if (sel.kind === "period") return `PERIOD ${sel.value}`;
-  if (sel.kind === "periods") return `P${sel.start} - P${sel.end}`;
   if (sel.kind === "month") {
     return `${MONTH_LONG[sel.value.monthIndex]} ${sel.value.year}`;
   }
@@ -171,7 +167,6 @@ export function formatSelection(sel) {
 export function serializeSelection(sel) {
   if (!sel) return null;
   if (sel.kind === "period") return `P${sel.value}`;
-  if (sel.kind === "periods") return `P${sel.start}-P${sel.end}`;
   if (sel.kind === "month") {
     const mm = String(sel.value.monthIndex + 1).padStart(2, "0");
     return `${sel.value.year}-${mm}`;

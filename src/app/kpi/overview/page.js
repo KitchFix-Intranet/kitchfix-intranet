@@ -240,16 +240,12 @@ export default function KpiOverviewPage() {
   }, [setParams]);
 
   // Range commit - carries the same shape labor + purchasing pass.
+  // Redesign 2026-09-03: multi-period selection retired; only preset
+  // + single-period land here.
   const onCommitRange = useCallback((startISO, endISO, selection) => {
     const patch = { start: startISO, end: endISO };
-    // Preserve preset info in the label param so the chip reads back
-    // correctly on reload.
-    if (selection?.kind === "preset") {
-      patch.label = null;
-    } else if (selection?.kind === "period") {
+    if (selection?.kind === "period") {
       patch.label = `P${selection.value}`;
-    } else if (selection?.kind === "periods") {
-      patch.label = `P${selection.start} - P${selection.end}`;
     } else {
       patch.label = null;
     }
