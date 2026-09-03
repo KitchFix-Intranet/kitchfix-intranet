@@ -237,18 +237,57 @@ function n33Body({ accountKey, weekStart, weekEnd, complete, total, missingDates
 </table>`;
 }
 
-// ─── N3.3 Slack payload ───────────────────────────────────────────
+// ─── N3.x Slack payloads ──────────────────────────────────────────
 //
-// Only stage in the ladder that posts to Slack. Test mode: [TEST]
-// prefix + TEST_SLACK_FOOTER. Site-lead names are printed if we
-// have them (via siteLeadNames arg - the resolver passes the names
-// of the salaried_manager_emails so the Slack post can name them).
+// All three chase stages post to Slack as of 2026-09-03. Prior to
+// that date only N3.3 posted; N3.1 + N3.2 were email-only, which is
+// the class of redundancy gap that hid the support@-deactivated
+// sender bug for weeks (silent email failure with no redundant
+// signal). Kevin's ruling 2026-09-03: chase failure is higher-cost
+// than N1 failure, so redundancy on chase matters more than on N1.
+//
+// All three payloads: test mode opens with [TEST] prefix + closes
+// with TEST_SLACK_FOOTER (same hardening rule as N2 + N3.3, addendum
+// §A5 amend 2026-08-13). Kevin decision on channel: keep the single
+// SLACK_SC_BILLING_WEBHOOK_URL - operational simplicity, one channel
+// Kevin already watches for N2. Reaching site leaders directly via
+// Slack is a follow-up (per-user DMs or a dedicated site-leaders
+// channel; both require Slack workspace admin work outside code).
 
-function n33SlackText({ accountKey, weekStart, weekEnd, complete, total, missingDates, siteLeadNames, isTest }) {
-  const dayList = (missingDates || []).map(iso => {
+// Format `missingDates` as a compact `Fri Sep 5 and Sat Sep 6` list.
+function fmtMissingDates(missingDates) {
+  return (missingDates || []).map(iso => {
     const d = new Date(`${iso}T12:00:00Z`);
     return `${d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })} ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`;
   }).join(" and ");
+}
+
+// N3.1 - Friday noon reminder. Tone: reminder, not urgent yet.
+function n31SlackText({ accountKey, weekStart, complete, total, missingDates, isTest }) {
+  const dayList = fmtMissingDates(missingDates);
+  const headPrefix = isTest ? "[TEST] " : "";
+  const head = `${headPrefix}Reminder: *${accountKey}* has ${complete} of ${total} days entered for the ${fmtWeekOfPhrase(weekStart)}. Finalize by Monday at noon.`;
+  const detail = dayList ? `${dayList} still need entry` : "All days entered; finalize the week to confirm.";
+  const foot = isTest ? `\n${TEST_SLACK_FOOTER}` : "";
+  return `${head}\n${detail}${foot}`;
+}
+
+// N3.2 - Monday noon urgent. Tone: last-call. Billing runs tomorrow.
+function n32SlackText({ accountKey, weekStart, complete, total, missingDates, isTest }) {
+  const dayList = fmtMissingDates(missingDates);
+  const headPrefix = isTest ? "[TEST] " : "";
+  const head = `${headPrefix}Action needed: *${accountKey}* still has ${(missingDates || []).length} day${(missingDates || []).length === 1 ? "" : "s"} unentered for the ${fmtWeekOfPhrase(weekStart)}. Billing runs tomorrow.`;
+  const detail = `${complete} of ${total} days entered${dayList ? ` · ${dayList} still need entry` : ""}`;
+  const foot = isTest ? `\n${TEST_SLACK_FOOTER}` : "";
+  return `${head}\n${detail}${foot}`;
+}
+
+// N3.3 - Tuesday morning past-due. Tone: billing is running, this
+// account is being skipped. Only stage that carries siteLeadNames
+// (populated for the resolver at N3.3 fire-time so the Slack post
+// can name whose escalation this is).
+function n33SlackText({ accountKey, weekStart, weekEnd, complete, total, missingDates, siteLeadNames, isTest }) {
+  const dayList = fmtMissingDates(missingDates);
   const headPrefix = isTest ? "[TEST] " : "";
   const head = `${headPrefix}*${accountKey}* has not finalized the ${fmtWeekOfPhrase(weekStart)}. Billing runs this morning and this account will be skipped.`;
   const detail = `${complete} of ${total} days entered${dayList ? ` · ${dayList} still need entry` : ""}`;
@@ -343,6 +382,20 @@ export async function fireN3(args) {
   });
   const html = emailShell({ preheader, body });
 
+  // Pick the stage's Slack composer once. 2026-09-03: all three
+  // stages post to Slack; previously only N3.3. See "N3.x Slack
+  // payloads" section above for the tone-per-stage rationale + the
+  // Kevin ruling on redundancy priority.
+  const slackComposers = {
+    [NOTIFICATION_TYPES.N3_1]: n31SlackText,
+    [NOTIFICATION_TYPES.N3_2]: n32SlackText,
+    [NOTIFICATION_TYPES.N3_3]: n33SlackText,
+  };
+  const composeSlack = () => slackComposers[stage]({
+    accountKey, weekStart, weekEnd, complete, total, missingDates,
+    siteLeadNames, isTest,
+  });
+
   // Send.
   let emailResult = "not_sent";
   let slackOut = null;
@@ -358,16 +411,14 @@ export async function fireN3(args) {
         html,
       });
     }
-    if (stage === NOTIFICATION_TYPES.N3_3) {
-      const slackText = n33SlackText({ accountKey, weekStart, weekEnd, complete, total, missingDates, siteLeadNames, isTest });
-      const webhookUrl = deps?.slackWebhookUrl || process.env.SLACK_SC_BILLING_WEBHOOK_URL;
-      const slackResult = await (deps?.sendSlack || sendSlack)({ webhookUrl, text: slackText });
-      slackOut = { text: slackText, result: slackResult };
-    }
-  } else if (stage === NOTIFICATION_TYPES.N3_3) {
+    const slackText = composeSlack();
+    const webhookUrl = deps?.slackWebhookUrl || process.env.SLACK_SC_BILLING_WEBHOOK_URL;
+    const slackResult = await (deps?.sendSlack || sendSlack)({ webhookUrl, text: slackText });
+    slackOut = { text: slackText, result: slackResult };
+  } else {
     // Render-only: build the slack text so tests can assert it.
     slackOut = {
-      text: n33SlackText({ accountKey, weekStart, weekEnd, complete, total, missingDates, siteLeadNames, isTest }),
+      text: composeSlack(),
       result: { sent: false, skipped: "send=false" },
     };
   }
@@ -384,6 +435,7 @@ export async function fireN3(args) {
 // Test hooks so unit tests can reach the render helpers without a
 // real SA send.
 export const _internals = {
-  n31Body, n32Body, n33Body, n33SlackText,
+  n31Body, n32Body, n33Body,
+  n31SlackText, n32SlackText, n33SlackText,
   subjectFor, daychipsHtml, dayChipText, fmtBillsDate,
 };

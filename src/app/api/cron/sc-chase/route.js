@@ -453,7 +453,10 @@ export async function GET(request) {
         recipients_to:  [],
         recipients_cc:  [],
         is_test:        isTest,
-        slack_ok:       stage === NOTIFICATION_TYPES.N3_3 ? false : null,
+        // 2026-09-03: all three chase stages now post to Slack (was
+        // N3.3 only). Initialize slack_ok = false for every stage;
+        // the post-send UPDATE stamps the actual outcome.
+        slack_ok:       false,
       })
       .select("id")
       .maybeSingle();
@@ -500,11 +503,10 @@ export async function GET(request) {
     }
 
     // Post-send: stamp email_result + slack_ok on the ledger row so
-    // the audit trail records the outcome.
+    // the audit trail records the outcome. 2026-09-03: slack_ok
+    // tracked for all three stages (was N3.3 only).
     const emailResultText = fireRes?.email?.result === "sent" ? "sent" : "failed";
-    const slackOk = stage === NOTIFICATION_TYPES.N3_3
-      ? !!fireRes?.slack?.result?.sent
-      : null;
+    const slackOk = !!fireRes?.slack?.result?.sent;
     if (ledgerId) {
       const updRes = await supa
         .from("sc_week_chase_sent")
@@ -521,7 +523,7 @@ export async function GET(request) {
       }
     }
 
-    log.push(`${accountKey}: ${stage} ${emailResultText}${stage === NOTIFICATION_TYPES.N3_3 ? ` slack=${slackOk}` : ""} week=${weekStart} to=${fireRes.recipients.to.length} cc=${fireRes.recipients.cc.length}${fireRes.noSiteRecipient ? " NO_SITE_RECIPIENT" : ""}`);
+    log.push(`${accountKey}: ${stage} ${emailResultText} slack=${slackOk} week=${weekStart} to=${fireRes.recipients.to.length} cc=${fireRes.recipients.cc.length}${fireRes.noSiteRecipient ? " NO_SITE_RECIPIENT" : ""}`);
     results.push({
       accountKey, stage, weekStart, complete, total,
       missing, isTest, rdoEmail,
