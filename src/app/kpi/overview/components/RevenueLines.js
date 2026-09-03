@@ -61,12 +61,7 @@ function Row({ row, totalRevenue, showBudgetToDate, showPeriodBudget }) {
         <span className="kpi-ov-glc kpi-ov-num">{row.line_code}</span>
         <span className="kpi-ov-cl-lbl">{row.label}</span>
       </td>
-      <td className="kpi-ov-num">
-        {isInactive ? <span className="kpi-ov-notactive">not active</span>
-          : isScAbsent ? <span className="kpi-ov-nb">—</span>
-          : row.reported ? fmtMoney(row.actual)
-          : <span className="kpi-ov-nb">—</span>}
-      </td>
+      {/* Item 3 (Kevin 2026-09-03): budget cells first, actual second. */}
       {showBudgetToDate && (
         <td className="kpi-ov-num kpi-ov-nb">
           {isInactive ? "—" : (row.budget_to_date != null ? fmtMoney(row.budget_to_date) : "—")}
@@ -77,6 +72,12 @@ function Row({ row, totalRevenue, showBudgetToDate, showPeriodBudget }) {
           {isInactive ? "—" : (row.period_budget != null ? fmtMoney(row.period_budget) : "—")}
         </td>
       )}
+      <td className="kpi-ov-num">
+        {isInactive ? <span className="kpi-ov-notactive">not active</span>
+          : isScAbsent ? <span className="kpi-ov-nb">—</span>
+          : row.reported ? fmtMoney(row.actual)
+          : <span className="kpi-ov-nb">—</span>}
+      </td>
       <td className="kpi-ov-num kpi-ov-nb">
         {isInactive || actualPct == null ? "—" : fmtPct(actualPct)}
       </td>
@@ -189,11 +190,14 @@ export default function RevenueLines({ payload }) {
       <div className="kpi-ov-cb">
         <table className="kpi-ov-revlines" data-kpi-ov="revenue-lines-table">
           <thead>
+            {/* Kevin ruling 2026-09-03 Item 3: budget precedes
+                actual. Both budget cells (budget-to-date and period
+                budget) render BEFORE the actual "thru P#" column. */}
             <tr>
               <th className="l">Line</th>
-              <th>{ptdLabel}</th>
               {showBudgetToDate && <th>{budgetToDateLabel}</th>}
               {showPeriodBudget && <th>{pdLabel}</th>}
+              <th>{ptdLabel}</th>
               <th style={{ width: 60 }}>% of rev</th>
             </tr>
           </thead>
@@ -209,15 +213,16 @@ export default function RevenueLines({ payload }) {
             ))}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="revenue-lines-total">
               <td className="l">Total revenue</td>
-              <td className="kpi-ov-num">
-                {totalRevenue != null ? fmtMoney(totalRevenue) : <span className="kpi-ov-nb">—</span>}
-              </td>
+              {/* Item 3 (Kevin 2026-09-03): budget cells first, actual second. */}
               {showBudgetToDate && (
                 <td className="kpi-ov-num kpi-ov-nb">{revBudTd != null ? fmtMoney(revBudTd) : "—"}</td>
               )}
               {showPeriodBudget && (
                 <td className="kpi-ov-num kpi-ov-nb">{revBudFull != null ? fmtMoney(revBudFull) : "—"}</td>
               )}
+              <td className="kpi-ov-num">
+                {totalRevenue != null ? fmtMoney(totalRevenue) : <span className="kpi-ov-nb">—</span>}
+              </td>
               <td className="kpi-ov-num kpi-ov-nb">{totalRevenue != null ? "100%" : "—"}</td>
             </tr>
           </tbody>

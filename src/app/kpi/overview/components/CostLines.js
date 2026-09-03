@@ -148,13 +148,14 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
           over={over}
         />
       </td>
-      <td className="kpi-ov-num">
-        {actualText != null ? actualText : <span className="kpi-ov-nb">—</span>}
-      </td>
+      {/* Item 3 (Kevin 2026-09-03): budget before actual. */}
       <td className="kpi-ov-num kpi-ov-nb">
         {isBilledBack ? <span className="kpi-ov-chip-fixed">billed back</span>
           : isInactive ? <span className="kpi-ov-notactive">not active</span>
           : batrText != null ? batrText : "—"}
+      </td>
+      <td className="kpi-ov-num">
+        {actualText != null ? actualText : <span className="kpi-ov-nb">—</span>}
       </td>
       <td className={`kpi-ov-num ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`}>
         {isBilledBack || isInactive ? <span className="kpi-ov-nb">—</span>
@@ -221,8 +222,9 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel }) {
   return (
     <tr className="kpi-ov-cl-tot" data-kpi-ov="cost-lines-total">
       <td className="l">{totalLabel || "Total cost of goods sold"}</td>
-      <td className="kpi-ov-num">{totalActual || "—"}</td>
+      {/* Item 3 (Kevin 2026-09-03): budget before actual, total row. */}
       <td className="kpi-ov-num kpi-ov-nb">{hasTarget && totalBatr ? totalBatr : "—"}</td>
+      <td className="kpi-ov-num">{totalActual || "—"}</td>
       <td className={`kpi-ov-num ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : ""}`}>
         {fmtPct(cogsPct) || "—"}
       </td>
@@ -304,9 +306,13 @@ export default function CostLines({ payload, previewAccount = null }) {
         <table className="kpi-ov-cl" data-kpi-ov="cost-lines-table">
           <thead>
             <tr>
+              {/* Kevin ruling 2026-09-03 Item 3: budget precedes
+                  actual on every table. Budget is the reference the
+                  actual is judged against; a reader scans left to
+                  right so the answer should not precede the question. */}
               <th className="l">Line</th>
-              <th>{spentLabel}</th>
               <th>{adjustedLabel}</th>
+              <th>{spentLabel}</th>
               <th style={{ width: 68 }}>% of rev</th>
               <th style={{ width: 68 }}>Target %</th>
               <th style={{ width: 108 }}>vs target</th>

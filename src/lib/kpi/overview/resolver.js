@@ -1551,7 +1551,11 @@ export async function resolveOverview({
       actual: labor3100_actual,
       budget_to_date: labor3100_budget_to_date_days,
       period_budget: labor3100_budget,
-      variance: (!labor3100_inactive && labor3100_actual != null && labor3100_budget_to_date_days != null) ? r2(labor3100_actual - labor3100_budget_to_date_days) : null,
+      // Kevin ruling 2026-09-03 (BLOCKER): row variance must share
+      // the reference with the row's percent gap. Measured against
+      // budget_at_this_revenue - not budget_to_date - so the dollar
+      // and percent columns on the same row agree in sign.
+      variance: (!labor3100_inactive && labor3100_actual != null && _batr != null) ? r2(labor3100_actual - _batr) : null,
       variance_pct: (has_target && !labor3100_inactive && _actPct != null && _tgtPct != null) ? r2(_actPct - _tgtPct) : null,
       actual_pct: labor3100_inactive ? null : _actPct,
       target_pct: labor3100_inactive ? null : _tgtPct,
@@ -1698,7 +1702,11 @@ export async function resolveOverview({
       actual,
       budget_to_date: suppress ? null : btd,
       period_budget: budget,
-      variance: (!suppress && actual != null && btd != null) ? r2(actual - btd) : null,
+      // Kevin ruling 2026-09-03 (BLOCKER): row variance shares
+      // reference with the row's percent gap - measured against
+      // budget_at_this_revenue, not budget_to_date. Same fix as the
+      // GM total row and the cost-lines table.
+      variance: (!suppress && actual != null && _batr != null) ? r2(actual - _batr) : null,
       variance_pct: (has_target && !suppress && _actPct != null && _tgtPct != null) ? r2(_actPct - _tgtPct) : null,
       actual_pct: _actPct,
       target_pct: _tgtPct,
@@ -2094,23 +2102,66 @@ export async function resolveOverview({
     // PR-1 item 2 (2026-09-02): envelope + pace on the COGS total so
     // the PR-2 lever-table row-and-total agreement probe has a
     // reconciled number to check against per line.
+    // Kevin ruling 2026-09-03: every P&L row carrying both a percent
+    // gap and a dollar variance MUST measure both against the SAME
+    // reference. The reference is `x_at_this_revenue` (actual revenue
+    // times the target ratio) - not `budget_to_date`. With BOTH
+    // computed against the same denominator, `variance` and (actual_
+    // pct - target_pct) agree in sign by construction, because
+    //   variance = actual - x_at_this_revenue
+    //            = actual - revenue × target_ratio
+    //            = revenue × (actual/revenue - target_ratio)
+    //            = revenue × (actual_pct - target_pct) / 100
+    // Fourth instance of the split-reference defect class. Client
+    // renders these fields; it computes NOTHING.
     statement_totals: {
       revenue: {
         period_budget: revenue_budget_full_period,
         budget_to_date: revenue_budget_to_date,
         actual: totalRevenue,
+        // Revenue has no `%-of-revenue` counterpart to disagree with -
+        // actual_pct is always 100 by definition. The dollar variance
+        // measures revenue vs planned (its own comparison axis). No
+        // split possible; audited 2026-09-03.
       },
       cogs: {
         period_budget: r2(cogsBudget),
         budget_to_date: r2(cogsBudgetToDateDays),
         actual: r2(cogsActual),
+        // BATR was already shipped for the COGS card + cost lines
+        // envelope note. Explicitly repurposed here as the unified
+        // reference: variance = actual - budget_at_this_revenue,
+        // pcts = actual/revenue vs cogs_budget/rev_budget.
         budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
         envelope_delta: envelopeDelta(r2(cogsBudgetToDateDays), budgetAtThisRevenue(cogsBudget)),
+        variance: (cogsActual != null && budgetAtThisRevenue(cogsBudget) != null)
+          ? r2(cogsActual - budgetAtThisRevenue(cogsBudget)) : null,
+        actual_pct: pctOf(cogsActual, totalRevenue),
+        target_pct: (revenue_budget_full_period != null && revenue_budget_full_period > 0)
+          ? pctOf(cogsBudget, revenue_budget_full_period) : null,
       },
       gross_margin: {
         period_budget: (revenue_budget_full_period != null) ? r2(revenue_budget_full_period - cogsBudget) : null,
         budget_to_date: grossMarginBudget,
         actual: grossMargin,
+        // Kevin ruling 2026-09-03 (BLOCKER): the P&L GM row was
+        // rendering ↑ $29,215 in GREEN next to "2.0 points BEHIND"
+        // in RED - percent vs target, dollar vs budget_to_date, two
+        // different references. Unified reference:
+        //   margin_at_this_revenue = revenue × target_margin_pct
+        //   variance               = actual - margin_at_this_revenue
+        // Fires green/red on the same axis as actual_pct - target_pct.
+        margin_at_this_revenue: budgetAtThisRevenue(
+          (revenue_budget_full_period != null) ? (revenue_budget_full_period - cogsBudget) : null,
+        ),
+        variance: (grossMargin != null
+          && budgetAtThisRevenue((revenue_budget_full_period != null) ? (revenue_budget_full_period - cogsBudget) : null) != null)
+          ? r2(grossMargin - budgetAtThisRevenue(
+              (revenue_budget_full_period != null) ? (revenue_budget_full_period - cogsBudget) : null,
+            ))
+          : null,
+        actual_pct: pctOf(grossMargin, totalRevenue),
+        target_pct: gmPctBudget,
       },
     },
     // PR-1 payload additions (2026-09-02).
