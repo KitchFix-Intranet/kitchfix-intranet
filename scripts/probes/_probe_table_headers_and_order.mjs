@@ -43,52 +43,42 @@ const CASES = [
   { name: "CIN - KY FYTD (salaried)", account: "CIN - KY", qs: "" },
 ];
 
+// Kevin ruling final-presentation (2026-09-03) item 3: every table
+// carries a Plan / Actual band. The scraper below reads the SUB-HEADER
+// row (skipping the group header row that contains empty + PLAN +
+// ACTUAL cells with colspan). Sub-header expected shapes:
+//   cost-lines    Line · Budget* · Target % · Spent · % of rev
+//   revenue-lines Line · Forecast · [P# budget] · Received · % of rev
+//   also-tracked  Line · Budget · Spent · vs budget
 const TABLES = [
   {
     key: "cost-lines",
     sel: '[data-kpi-ov="cost-lines-table"]',
-    // Kevin ruling 2026-09-03 (simplified-layout): cost table headers
-    // become universal `Line · Budget* · Actual · % of rev · Target %`
-    // across FYTD, single_closed, single_open. The per-model split
-    // (MF `P{N} budget` vs SC `Budget adjusted P{N}`) and the
-    // per-range verb (`Spent thru P#` / `Final P#` / `Spent period
-    // to date`) both retire on this table. Reasons live in the
-    // footnote below and the COGS card tooltip. `vs target` column
-    // dropped entirely (the two percentages sit adjacent).
-    // Note: rendered header text is "Budget*" (asterisk marks a
-    // footnote), which the DOM reads as "BUDGET*".
     expectedOrder: {
-      fytd:          ["LINE", /^BUDGET\*?$/i, "ACTUAL", "% OF REV", "TARGET %"],
-      single_closed: ["LINE", /^BUDGET\*?$/i, "ACTUAL", "% OF REV", "TARGET %"],
-      single_open:   ["LINE", /^BUDGET\*?$/i, "ACTUAL", "% OF REV", "TARGET %"],
+      fytd:          ["LINE", /^BUDGET\*?$/i, "TARGET %", "SPENT", "% OF REV"],
+      single_closed: ["LINE", /^BUDGET\*?$/i, "TARGET %", "SPENT", "% OF REV"],
+      single_open:   ["LINE", /^BUDGET\*?$/i, "TARGET %", "SPENT", "% OF REV"],
     },
   },
   {
     key: "revenue-lines",
     sel: '[data-kpi-ov="revenue-lines-table"]',
-    // Revenue lines shows budget-to-date (Budget thru P#) + optionally
-    // period budget (single open only). Actual header is ptdLabel
-    // ("Thru P8" on FYTD/verified single, "Period to date" on open).
+    // Revenue: single plan col on FYTD + single_closed ("Forecast");
+    // both plan cols on single_open ("Forecast" + "P# budget").
+    // Actual sub-headers: "Received" + "% of rev".
     expectedOrder: {
-      // FYTD (closed-only after PR-1): showBudgetToDate=true,
-      // showPeriodBudget=false -> [Line, Budget thru P#, Thru P#, %]
-      fytd:          ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /(THRU P\d+|PERIOD TO DATE|FINAL P\d+)/i, "% OF REV"],
-      // Verified single: showBudgetToDate=false, showPeriodBudget=true
-      // -> [Line, P# budget, Final P#, %]
-      single_closed: ["LINE", /P\d+ BUDGET/i, /(THRU P\d+|FINAL P\d+)/i, "% OF REV"],
-      // Open single: both columns shown -> [Line, Budget PTD, P# budget, PTD, %]
-      single_open:   ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /P\d+ BUDGET/i, /(THRU P\d+|PERIOD TO DATE)/i, "% OF REV"],
+      fytd:          ["LINE", "FORECAST", "RECEIVED", "% OF REV"],
+      single_closed: ["LINE", /P\d+ BUDGET/i, "RECEIVED", "% OF REV"],
+      single_open:   ["LINE", "FORECAST", /P\d+ BUDGET/i, "RECEIVED", "% OF REV"],
     },
   },
   {
     key: "also-tracked",
     sel: '[data-kpi-ov="also-tracked"] table',
     expectedOrder: {
-      fytd:          ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /SPEND (THRU P\d+|PERIOD TO DATE)/i, "VS BUDGET"],
-      // Kevin PR-B item 5 (2026-09-03): also-tracked on single closed
-      // uses `P# budget` + `Final P#` - matches the other tables.
-      single_closed: ["LINE", /P\d+ BUDGET/i, /FINAL P\d+/i, "VS BUDGET"],
-      single_open:   ["LINE", /BUDGET (THRU P\d+|PERIOD TO DATE)/i, /SPEND (THRU P\d+|PERIOD TO DATE)/i, "VS BUDGET"],
+      fytd:          ["LINE", "BUDGET", "SPENT", "VS BUDGET"],
+      single_closed: ["LINE", "BUDGET", "SPENT", "VS BUDGET"],
+      single_open:   ["LINE", "BUDGET", "SPENT", "VS BUDGET"],
     },
   },
 ];
@@ -124,7 +114,13 @@ async function scrapeAndCheck(page, c) {
     const info = await page.evaluate(({ sel }) => {
       const table = document.querySelector(sel);
       if (!table) return null;
-      const ths = [...table.querySelectorAll("thead th")];
+      // Kevin ruling final-presentation (2026-09-03): the Plan / Actual
+      // group header row sits on the band. Skip it - the sub-header
+      // row is what carries the column names + widths the reader
+      // scans against.
+      const rows = [...table.querySelectorAll("thead tr")];
+      const subRow = rows.find(r => !r.classList.contains("kpi-ov-tband-grp")) || rows[rows.length - 1];
+      const ths = subRow ? [...subRow.querySelectorAll("th")] : [];
       const labels = ths.map(th => th.innerText.trim());
       // Kevin's "gap" is a visual concept - the labels can't butt
       // together. With border-collapse:collapse the DOM rects touch

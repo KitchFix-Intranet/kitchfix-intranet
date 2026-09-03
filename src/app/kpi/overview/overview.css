@@ -22,13 +22,28 @@
  * docs/renders/overview-polish-LOCKED.html:60-68 for the render
  * ruling. */
 /* Kevin ruling 2026-09-03 (top-simplify): status line collapses to
-   a single pill on its own row above the cards. Two-tone: on-target
-   or better = green; off = red; No-target = neutral. Every sentence
-   segment retired to the cards below. */
-.kpi-app .kpi-ov-status {
+   a single pill. Kevin ruling final-presentation (2026-09-03): pill
+   sits on a row alongside the horizon line - the "as of when" answer
+   an operator needs before trusting a percentage. Both derive from
+   the same server value (range_labels.horizon) so they can't drift. */
+.kpi-app .kpi-ov-statusrow {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-3);
   margin-bottom: var(--kpi-sp-3);
+  flex-wrap: wrap;
+}
+.kpi-app .kpi-ov-status {
+  /* Kept for the old-selector back-compat during layout probe transition;
+     child .kpi-ov-status-pill provides the actual visual. */
 }
 .kpi-app .kpi-ov-status-pill { display: inline-flex; }
+.kpi-app .kpi-ov-status-horizon {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--text-subtle);
+  font-variant-numeric: var(--num-tabular);
+}
 .kpi-app .kpi-ov-status-st {
   display: inline-flex;
   align-items: center;
@@ -692,6 +707,86 @@
 }
 .kpi-app .kpi-ov-pair-ref .kpi-ov-pair-k {
   color: var(--n-600);
+}
+/* Kevin ruling final-presentation (2026-09-03) item 2: COGS + GM
+   cards carry a small grey dollar beside the percent. Percent stays
+   the hero; dollar is context. */
+.kpi-app .kpi-ov-pair-sub {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-600);
+  margin-left: var(--kpi-sp-2);
+  letter-spacing: 0;
+  font-variant-numeric: var(--num-tabular);
+}
+.kpi-app .kpi-ov-pair-ref .kpi-ov-pair-sub {
+  font-size: var(--kpi-t-meta);
+}
+
+/* Kevin ruling final-presentation (2026-09-03) item 3: Plan / Actual
+   band across every table. Seamless #F7F9FC background on every plan
+   cell from the group header row through the total row. Vertical
+   hairlines rendered as inset box-shadows (Kevin: "not borders -
+   borders leave gaps between rows and the band steps"). Weight
+   carries the hierarchy: plan cells 600/n-700, actual 800/n-900. */
+.kpi-app .kpi-ov-tband th.plan,
+.kpi-app .kpi-ov-tband td.plan {
+  background: #F7F9FC;
+}
+.kpi-app .kpi-ov-tband th.plan-first,
+.kpi-app .kpi-ov-tband td.plan-first {
+  box-shadow: inset 1px 0 0 var(--n-200);
+}
+.kpi-app .kpi-ov-tband th.plan-last,
+.kpi-app .kpi-ov-tband td.plan-last {
+  box-shadow: inset -1px 0 0 var(--n-200);
+}
+.kpi-app .kpi-ov-tband th.plan-first.plan-last,
+.kpi-app .kpi-ov-tband td.plan-first.plan-last {
+  box-shadow: inset 1px 0 0 var(--n-200), inset -1px 0 0 var(--n-200);
+}
+/* Plan-side type: subordinate. Actual-side type: primary. */
+.kpi-app .kpi-ov-tband td.plan {
+  color: var(--n-700);
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-tband tbody td:not(.plan):not(.l) {
+  color: var(--n-900);
+  font-weight: 800;
+}
+/* Group header row - centred, rule beneath: grey under Plan, navy
+   under Actual. Text uppercase + tracked, one size smaller than the
+   sub-header. */
+.kpi-app .kpi-ov-tband-grp th {
+  text-align: center;
+  font-size: calc(9px * var(--kpi-t-scale, 1));
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  font-weight: 800;
+  padding-top: var(--kpi-sp-2);
+  padding-bottom: var(--kpi-sp-1);
+}
+.kpi-app .kpi-ov-tband-grp th.kpi-ov-tband-plan {
+  color: var(--n-600);
+  border-bottom: 1px solid var(--n-400);
+}
+.kpi-app .kpi-ov-tband-grp th.kpi-ov-tband-act {
+  color: var(--navy-700);
+  border-bottom: 1px solid var(--navy-700);
+}
+.kpi-app .kpi-ov-tband-grp th.l {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+/* Headers never wrap - Kevin: "headers never wrap (white-space:
+   nowrap); labels wrap freely". */
+.kpi-app .kpi-ov-tband thead th { white-space: nowrap; }
+.kpi-app .kpi-ov-tband tbody td.l { white-space: normal; }
+/* "not reported" - grey subordinate, matches the tone-per-half. */
+.kpi-app .kpi-ov-not-reported {
+  color: var(--n-600);
+  font-weight: 600;
 }
 
 /* SC-absent branch keeps the em-dash hero + service-days sub-line. */

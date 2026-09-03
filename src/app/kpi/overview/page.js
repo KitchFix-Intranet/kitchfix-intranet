@@ -265,11 +265,10 @@ export default function KpiOverviewPage() {
   }, [setParams]);
 
   // ── Fold state ──────────────────────────────────────────────
-  // Both folds default closed per Kevin ruling 2026-09-03: the P&L
-  // and the trajectory chart both sit below the primary comparison
-  // surfaces.
+  // Kevin ruling final-presentation (2026-09-03): the chart moves
+  // back into the right column beneath Cost of goods, always open;
+  // only P&L remains a fold at the bottom.
   const [pnlOpen, setPnlOpen] = useState(false);
-  const [chartOpen, setChartOpen] = useState(false);
 
   // ── Fiscal context (today / period / week) ──────────────────
   const fiscal = useMemo(() => {
@@ -415,7 +414,7 @@ export default function KpiOverviewPage() {
             current pill popover (passed as freshnessPop to Shell,
             below). The ticker retired - a single-sentence StatusLine
             with a fixed shape (no account-model notes) replaces it. */}
-        <StatusLine statusLine={data.status_line} />
+        <StatusLine statusLine={data.status_line} rangeLabels={data.range_labels} />
         <CardsRow
           cards={data.cards}
           rangeMeta={rangeMeta}
@@ -442,17 +441,16 @@ export default function KpiOverviewPage() {
             <AlsoTracked payload={data} />
           </>
         ) : (
-          /* Kevin ruling 2026-09-03 (simplified-layout): the split
-              columns swap. Cost of goods sold moves to the RIGHT and
-              carries the wider column (7fr) because it has four number
-              columns and five rows. Revenue lines + Also tracked move
-              to the LEFT at 5fr. The trajectory chart moves to the
-              bottom as a fold beneath the P&L fold; both folds are
-              closed by default (they explain the top-of-board
-              comparison, not lead it).
-              PacePanel removed 2026-09-02 (R-52): the Overview is a
-              scoreboard, not a forecast. Counts-without-dollars is
-              rehomed to the Revenue card. */
+          /* Kevin ruling final-presentation (2026-09-03): the chart
+              moves out of the bottom fold and back into the right
+              column beneath Cost of goods sold, always open. It's the
+              only surface showing shape over time - "the tables show
+              where you are; the chart shows whether you are drifting"
+              - and it belongs where the cost story is. P&L stays a
+              fold at the bottom.
+              Columns still swap per simplified-layout ruling: Revenue
+              lines + Also tracked on the LEFT (5fr); Cost of goods
+              sold + Chart on the RIGHT (7fr). */
           <>
             <div className="kpi-ov-split" data-kpi-ov="single-account-split">
               <div className="kpi-ov-split-left">
@@ -461,15 +459,10 @@ export default function KpiOverviewPage() {
               </div>
               <div className="kpi-ov-split-right">
                 <CostLines payload={data} previewAccount={data.preview_account} />
+                <Chart chart={data.chart} revenueModel={data.revenue_model} />
               </div>
             </div>
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
-            <Chart
-              chart={data.chart}
-              revenueModel={data.revenue_model}
-              open={chartOpen}
-              onToggle={() => setChartOpen(o => !o)}
-            />
           </>
         )}
       </div>

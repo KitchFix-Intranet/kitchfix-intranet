@@ -176,7 +176,10 @@ async function main() {
         }
       }
       if (cols.right) {
-        const expectedRight = ["cost-lines"];
+        // Kevin ruling final-presentation (2026-09-03) item 4: chart
+        // moves back into the right column below cost-lines, always
+        // open. Right column carries [cost-lines, chart].
+        const expectedRight = ["cost-lines", "chart"];
         if (JSON.stringify(cols.right) !== JSON.stringify(expectedRight)) {
           fail(`${c.name} @${viewport}`, `right column kids=${JSON.stringify(cols.right)} != ${JSON.stringify(expectedRight)}`);
         }

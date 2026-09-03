@@ -148,20 +148,22 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
           over={over}
         />
       </td>
-      {/* Item 3 (Kevin 2026-09-03): budget before actual. */}
-      <td className="kpi-ov-num kpi-ov-nb">
+      {/* Kevin ruling final-presentation (2026-09-03) item 3: Plan
+          band. Order becomes:
+            Line · [Budget* · Target %] · [Spent · % of rev]
+          Target % moves INSIDE the plan half so the two percentages
+          sit adjacent across the group boundary. */}
+      <td className="kpi-ov-num kpi-ov-nb plan plan-first" data-kpi-ov="cost-line-budget">
         {isBilledBack ? <span className="kpi-ov-chip-fixed">billed back</span>
           : isInactive ? <span className="kpi-ov-notactive">not active</span>
           : batrText != null ? batrText : "—"}
       </td>
+      <td className="kpi-ov-num kpi-ov-nb plan plan-last" data-kpi-ov="cost-line-target-pct">
+        {suppressVerdict ? "—" : (targetPctText != null ? targetPctText : "—")}
+      </td>
       {/* Kevin R-61 (2026-09-03): on 3200 (food) + 3400 (packaging)
-          rows that carry an inventory adjustment, show the trio:
-          "$X purchased · −$Y inventory = $Z". `actual` is already the
-          ADJUSTED figure (finance-side); `actual_purchased` is the
-          raw purchases figure the operator would see in their own
-          records. An adjustment silently absorbed into the number
-          means an operator comparing the board to purchases will not
-          reconcile - the trio makes the difference legible. */}
+          rows that carry an inventory adjustment, show the trio inline
+          in the Spent cell. */}
       <td className="kpi-ov-num" data-kpi-ov="cost-line-actual">
         {actualText == null ? <span className="kpi-ov-nb">—</span>
           : row.inventory_je != null && Math.abs(row.inventory_je) >= 1 ? (
@@ -175,16 +177,10 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
             </>
           ) : actualText}
       </td>
-      <td className={`kpi-ov-num ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`}>
+      <td className={`kpi-ov-num ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`} data-kpi-ov="cost-line-actual-pct">
         {isBilledBack || isInactive ? <span className="kpi-ov-nb">—</span>
           : actualPctText != null ? actualPctText : <span className="kpi-ov-nb">—</span>}
       </td>
-      <td className="kpi-ov-num kpi-ov-nb">
-        {suppressVerdict ? "—" : (targetPctText != null ? targetPctText : "—")}
-      </td>
-      {/* Kevin ruling 2026-09-03 (simplified-layout): `vs target`
-          column dropped. The two percentages sit adjacent and the
-          reader sees the gap; the card pill already carries it. */}
     </tr>
   );
 }
@@ -233,12 +229,14 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel }) {
   return (
     <tr className="kpi-ov-cl-tot" data-kpi-ov="cost-lines-total">
       <td className="l">{totalLabel || "Total cost of goods sold"}</td>
-      {/* Item 3 (Kevin 2026-09-03): budget before actual, total row. */}
-      <td className="kpi-ov-num kpi-ov-nb">{hasTarget && totalBatr ? totalBatr : "—"}</td>
-      {/* Kevin ruling 2026-09-03 (simplified-layout): dropped the
-          `vs target` column. The dollar gap moves BENEATH the actual
-          in the total row - one cell, the only figure added back
-          after the column drop. */}
+      {/* Plan half: Budget* then Target %. */}
+      <td className="kpi-ov-num kpi-ov-nb plan plan-first" data-kpi-ov="cost-lines-total-budget">
+        {hasTarget && totalBatr ? totalBatr : "—"}
+      </td>
+      <td className="kpi-ov-num kpi-ov-nb plan plan-last" data-kpi-ov="cost-lines-total-target-pct">
+        {hasTarget ? (fmtPct(cogsTargetPct) || "—") : "—"}
+      </td>
+      {/* Actual half: Spent (with dollar gap beneath) then % of rev. */}
       <td className="kpi-ov-num" data-kpi-ov="cost-lines-total-actual">
         <div>{totalActual || "—"}</div>
         {hasTarget && varianceText && (
@@ -250,10 +248,9 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel }) {
           </div>
         )}
       </td>
-      <td className={`kpi-ov-num ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : ""}`}>
+      <td className={`kpi-ov-num ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : ""}`} data-kpi-ov="cost-lines-total-actual-pct">
         {fmtPct(cogsPct) || "—"}
       </td>
-      <td className="kpi-ov-num kpi-ov-nb">{hasTarget ? (fmtPct(cogsTargetPct) || "—") : "—"}</td>
     </tr>
   );
 }
@@ -316,20 +313,25 @@ export default function CostLines({ payload, previewAccount = null }) {
         </span>
       </div>
       <div className="kpi-ov-cb">
-        <table className="kpi-ov-cl" data-kpi-ov="cost-lines-table">
+        <table className="kpi-ov-cl kpi-ov-tband" data-kpi-ov="cost-lines-table">
           <thead>
+            {/* Kevin ruling final-presentation (2026-09-03) item 3:
+                every table carries a Plan / Actual band. Group header
+                row on the band; sub-headers named per group ("Spent"
+                on cost, no "Actual / Actual" stack). */}
+            <tr className="kpi-ov-tband-grp" data-kpi-ov="tband-group">
+              <th className="l"></th>
+              <th colSpan={2} className="plan plan-first plan-last kpi-ov-tband-plan">Plan</th>
+              <th colSpan={2} className="kpi-ov-tband-act">Actual</th>
+            </tr>
             <tr>
-              {/* Kevin ruling 2026-09-03 Item 3: budget precedes
-                  actual on every table. Budget is the reference the
-                  actual is judged against; a reader scans left to
-                  right so the answer should not precede the question. */}
               <th className="l">Line</th>
-              <th>
+              <th className="plan plan-first">
                 Budget<sup className="kpi-ov-cl-fn-mark">*</sup>
               </th>
-              <th>Actual</th>
+              <th className="plan plan-last" style={{ width: 68 }}>Target %</th>
+              <th>Spent</th>
               <th style={{ width: 68 }}>% of rev</th>
-              <th style={{ width: 68 }}>Target %</th>
             </tr>
           </thead>
           <tbody>

@@ -50,20 +50,24 @@ function Row({ row, totalRevenue, showBudgetToDate, showPeriodBudget }) {
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   const isScAbsent = Array.isArray(row.flags) && row.flags.includes("sc_counts_without_dollars");
   const actualPct = row.reported && totalRevenue ? (row.actual / totalRevenue) * 100 : null;
+  // Kevin ruling final-presentation (2026-09-03) item 3: plan cells
+  // carry the band class from header through total. Sub-header on
+  // revenue reads "Forecast" (single plan col); actual sub-headers
+  // "Received" + "% of rev".
+  const notReportedText = <span className="kpi-ov-nb kpi-ov-not-reported">not reported</span>;
   return (
     <tr data-kpi-ov="revenue-line-row" data-kpi-ov-line-code={row.line_code}>
       <td className="l">
         <span className="kpi-ov-glc kpi-ov-num">{row.line_code}</span>
         <span className="kpi-ov-cl-lbl">{row.label}</span>
       </td>
-      {/* Item 3 (Kevin 2026-09-03): budget cells first, actual second. */}
       {showBudgetToDate && (
-        <td className="kpi-ov-num kpi-ov-nb">
+        <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">
           {isInactive ? "—" : (row.budget_to_date != null ? fmtMoney(row.budget_to_date) : "—")}
         </td>
       )}
       {showPeriodBudget && (
-        <td className="kpi-ov-num kpi-ov-nb">
+        <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">
           {isInactive ? "—" : (row.period_budget != null ? fmtMoney(row.period_budget) : "—")}
         </td>
       )}
@@ -71,7 +75,7 @@ function Row({ row, totalRevenue, showBudgetToDate, showPeriodBudget }) {
         {isInactive ? <span className="kpi-ov-notactive">not active</span>
           : isScAbsent ? <span className="kpi-ov-nb">—</span>
           : row.reported ? fmtMoney(row.actual)
-          : <span className="kpi-ov-nb">—</span>}
+          : notReportedText}
       </td>
       <td className="kpi-ov-num kpi-ov-nb">
         {isInactive || actualPct == null ? "—" : fmtPct(actualPct)}
@@ -97,8 +101,19 @@ export default function RevenueLines({ payload }) {
   });
   if (rows.length === 0) return null;
   const totalRevenue = payload.cards?.find(c => c.key === "revenue")?.hero_actual;
-  const revBudTd = payload.statement_totals?.revenue?.budget_to_date;
-  const revBudFull = payload.statement_totals?.revenue?.period_budget;
+  // Kevin ruling final-presentation (2026-09-03) item 5: unreported
+  // lines must not contribute to the totals. On TBJ - FL P9, service
+  // charges are unreported (SC counts not yet entered / not yet
+  // rolled up); the total must be the meal-service figure alone, NOT
+  // meal-service actual plus a forecast for a line the table just
+  // told the operator has not landed. Sum the FORECAST + PERIOD
+  // BUDGET across reported rows only. Actual already comes from the
+  // revenue card's hero_actual, which the resolver derives from
+  // reported actuals.
+  const revBudTd = rows.reduce((acc, r) => acc + (r.reported && r.budget_to_date != null ? Number(r.budget_to_date) : 0), 0);
+  const revBudFull = rows.reduce((acc, r) => acc + (r.reported && r.period_budget != null ? Number(r.period_budget) : 0), 0);
+  const anyReportedBudTd = rows.some(r => r.reported && r.budget_to_date != null);
+  const anyReportedBudFull = rows.some(r => r.reported && r.period_budget != null);
   const rangeKind = payload.range?.kind;
   const rng = payload.range;
   const periodState = payload.period_state;
@@ -183,16 +198,35 @@ export default function RevenueLines({ payload }) {
         </span>
       </div>
       <div className="kpi-ov-cb">
-        <table className="kpi-ov-revlines" data-kpi-ov="revenue-lines-table">
+        <table className="kpi-ov-revlines kpi-ov-tband" data-kpi-ov="revenue-lines-table">
           <thead>
-            {/* Kevin ruling 2026-09-03 Item 3: budget precedes
-                actual. Both budget cells (budget-to-date and period
-                budget) render BEFORE the actual "thru P#" column. */}
+            {/* Kevin ruling final-presentation (2026-09-03) item 3:
+                Plan / Actual band. Group header on the band; sub-
+                header "Forecast" on the plan side (not "Actual" -
+                that would stack with the actual sub-header and read
+                ACTUAL / ACTUAL). Actual sub-headers: "Received" +
+                "% of rev". */}
+            <tr className="kpi-ov-tband-grp" data-kpi-ov="tband-group">
+              <th className="l"></th>
+              {(showBudgetToDate || showPeriodBudget) && (
+                <th
+                  colSpan={(showBudgetToDate ? 1 : 0) + (showPeriodBudget ? 1 : 0)}
+                  className="plan plan-first plan-last kpi-ov-tband-plan"
+                >
+                  Plan
+                </th>
+              )}
+              <th colSpan={2} className="kpi-ov-tband-act">Actual</th>
+            </tr>
             <tr>
               <th className="l">Line</th>
-              {showBudgetToDate && <th>{budgetToDateLabel}</th>}
-              {showPeriodBudget && <th>{pdLabel}</th>}
-              <th>{ptdLabel}</th>
+              {showBudgetToDate && (
+                <th className={`plan plan-first ${showPeriodBudget ? "" : "plan-last"}`}>Forecast</th>
+              )}
+              {showPeriodBudget && (
+                <th className={`plan plan-last ${showBudgetToDate ? "" : "plan-first"}`}>{pdLabel}</th>
+              )}
+              <th>Received</th>
               <th style={{ width: 60 }}>% of rev</th>
             </tr>
           </thead>
@@ -208,12 +242,15 @@ export default function RevenueLines({ payload }) {
             ))}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="revenue-lines-total">
               <td className="l">Total revenue</td>
-              {/* Item 3 (Kevin 2026-09-03): budget cells first, actual second. */}
               {showBudgetToDate && (
-                <td className="kpi-ov-num kpi-ov-nb">{revBudTd != null ? fmtMoney(revBudTd) : "—"}</td>
+                <td className={`kpi-ov-num kpi-ov-nb plan plan-first ${showPeriodBudget ? "" : "plan-last"}`}>
+                  {anyReportedBudTd ? fmtMoney(revBudTd) : "—"}
+                </td>
               )}
               {showPeriodBudget && (
-                <td className="kpi-ov-num kpi-ov-nb">{revBudFull != null ? fmtMoney(revBudFull) : "—"}</td>
+                <td className={`kpi-ov-num kpi-ov-nb plan plan-last ${showBudgetToDate ? "" : "plan-first"}`}>
+                  {anyReportedBudFull ? fmtMoney(revBudFull) : "—"}
+                </td>
               )}
               <td className="kpi-ov-num">
                 {totalRevenue != null ? fmtMoney(totalRevenue) : <span className="kpi-ov-nb">—</span>}

@@ -114,12 +114,18 @@ async function inspect(page, c) {
       };
     };
     const status = (() => {
-      const s = document.querySelector('[data-kpi-ov="status-line"]');
-      if (!s) return null;
+      // Kevin ruling final-presentation (2026-09-03) item 1: the
+      // status row carries the pill AND a horizon line. Read the pill
+      // via .kpi-ov-status-pill, not the parent statusrow which
+      // includes the horizon text.
+      const pill = document.querySelector(".kpi-ov-status-pill");
+      const row = document.querySelector('[data-kpi-ov="status-line"]');
+      if (!pill && !row) return null;
+      const src = pill || row;
       return {
-        state: s.getAttribute("data-kpi-ov-state"),
-        tone: s.getAttribute("data-kpi-ov-tone"),
-        text: s.innerText.trim(),
+        state: (pill || row)?.getAttribute("data-kpi-ov-state") || row?.getAttribute("data-kpi-ov-state") || null,
+        tone: (pill || row)?.getAttribute("data-kpi-ov-tone") || row?.getAttribute("data-kpi-ov-tone") || null,
+        text: pill?.innerText.trim() || row?.querySelector('[data-kpi-ov="status-state"]')?.innerText.trim() || "",
       };
     })();
     // The Data-current popover: read the Periods + Inventory rows if
@@ -146,13 +152,15 @@ async function inspect(page, c) {
   return info;
 }
 
-function assertCard(name, cardName, info, c, expectedActualLabel, expectedRefLabel) {
+function assertCard(name, cardName, info, c, expectedActualLabel, expectedRefLabel, expectedFigCount) {
   if (!info) { fail(`${name} ${cardName}`, `card missing`); return; }
-  // Item 2: exactly two money-or-percent figures on the card body.
-  if (info.bodyFigureCount !== 2) {
-    fail(`${name} ${cardName}`, `body figure count = ${info.bodyFigureCount}, want 2 · body="${info.bodyText}"`);
+  // Item 2 (final-presentation): Revenue card carries 2 figures
+  // (Actual $ + Forecast $). COGS + GM cards carry 4 figures each
+  // (pct + $ on both Actual and Target).
+  if (info.bodyFigureCount !== expectedFigCount) {
+    fail(`${name} ${cardName}`, `body figure count = ${info.bodyFigureCount}, want ${expectedFigCount} · body="${info.bodyText}"`);
   }
-  // Item 4: row labels carry horizon.
+  // Item 4: row labels carry horizon on open ranges.
   if (info.actualK !== expectedActualLabel) {
     fail(`${name} ${cardName}`, `actual label = ${JSON.stringify(info.actualK)}, want ${JSON.stringify(expectedActualLabel)}`);
   }
@@ -196,13 +204,12 @@ async function main() {
       }
     }
 
-    // Item 2 + 4: each card.
-    // Kevin ruling 2026-09-03 follow-up: Revenue reference row reads
-    // Forecast (not Budget) on every account, every range.
+    // Item 2 + 4: each card. Revenue = 2 figures (dollars only per
+    // both rows). COGS + GM = 4 figures each (pct + $ on both rows).
     const revRefLabel = isOpen ? "Forecast to date" : "Forecast";
-    assertCard(c.name, "Revenue", info.revenue, c, actualLabel, revRefLabel);
-    assertCard(c.name, "COGS", info.cogs, c, actualLabel, "Target");
-    assertCard(c.name, "GM", info.gm, c, actualLabel, "Target");
+    assertCard(c.name, "Revenue", info.revenue, c, actualLabel, revRefLabel, 2);
+    assertCard(c.name, "COGS", info.cogs, c, actualLabel, "Target", 4);
+    assertCard(c.name, "GM", info.gm, c, actualLabel, "Target", 4);
 
     // Item 3: Data-current popover shows Periods on any range with
     // verified content. Single-open ranges have nothing verified in

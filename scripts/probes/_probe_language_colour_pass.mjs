@@ -254,31 +254,30 @@ async function auditDom() {
     if (!eq(clHeaders.totLabel, wantTot)) fail("D3", `cost lines total label = ${JSON.stringify(clHeaders.totLabel)} (want ${JSON.stringify(wantTot)})`);
   }
 
-  // D4: revenue lines header
+  // Kevin ruling final-presentation (2026-09-03) item 3: every table
+  // gains a Plan / Actual band. Sub-headers named per group:
+  //   revenue-lines: "Forecast" (plan) / "Received" (actual)
+  //   also-tracked:  "Budget" (plan) / "Spent" (actual)
+  // The per-range verbs ("Budget thru P8", "Spend thru P8") retire
+  // in favor of Plan/Actual grouping. D4 + D5 assertions updated to
+  // match the new sub-header shape.
   const rlHeaders = await page.evaluate(() => {
     const table = document.querySelector('[data-kpi-ov="revenue-lines-table"]');
     if (!table) return null;
     return [...table.querySelectorAll("thead th")].map(t => t.innerText.trim());
   });
-  if (rlHeaders && !has(rlHeaders, "Budget thru P8")) {
-    fail("D4", `revenue lines header missing "Budget thru P8": ${JSON.stringify(rlHeaders)}`);
+  if (rlHeaders) {
+    if (!has(rlHeaders, "Forecast")) fail("D4", `revenue lines sub-header missing "Forecast": ${JSON.stringify(rlHeaders)}`);
+    if (!has(rlHeaders, "Received")) fail("D4", `revenue lines sub-header missing "Received": ${JSON.stringify(rlHeaders)}`);
   }
-
-  // D5: also-tracked headers
   const atHeaders = await page.evaluate(() => {
     const table = document.querySelector('[data-kpi-ov="also-tracked"] table');
     if (!table) return null;
     return [...table.querySelectorAll("thead th")].map(t => t.innerText.trim());
   });
   if (atHeaders) {
-    // FYTD is verified so displays "Actual"/"Budget"? No wait - on FYTD closed only,
-    // period_state="verified"; isOpen=false; header falls to "Actual"/"Budget thru P8".
-    // Kevin's item 21-22 specifies FYTD gets "Spend thru P8" and "Budget thru P8".
-    // I mapped: isOpen -> "Spend thru P8". FYTD is NOT isOpen (verified). So it renders
-    // "Actual" + "Budget thru P8". Kevin's intent for FYTD - probably wants "Spend thru P8"
-    // and "Budget thru P8" regardless of open/verified. Adjust the assertion.
-    if (!has(atHeaders, "Budget thru P8")) fail("D5", `also-tracked header missing "Budget thru P8": ${JSON.stringify(atHeaders)}`);
-    if (!has(atHeaders, "Spend thru P8")) fail("D5", `also-tracked header missing "Spend thru P8": ${JSON.stringify(atHeaders)}`);
+    if (!has(atHeaders, "Budget")) fail("D5", `also-tracked sub-header missing "Budget": ${JSON.stringify(atHeaders)}`);
+    if (!has(atHeaders, "Spent")) fail("D5", `also-tracked sub-header missing "Spent": ${JSON.stringify(atHeaders)}`);
   }
 
   // D6: full P&L headers (open the fold)
