@@ -2471,10 +2471,15 @@ export async function POST(request) {
 
       // Archive-edge predicate (mirrors DayDetail.js:243-246). A
       // (service, day) pair is in service iff the service has no
-      // active_until OR the day is on or before active_until.
+      // active_until OR the day is BEFORE active_until.
+      // 2026-09-03 (Kevin ruling on SC cleanup 5a): strict `<`, not
+      // `<=`. active_until means "archived AS OF this date" - the
+      // first day OUT of service. Prior `<=` treated the archive
+      // date itself as still in-service (off-by-one). Client mirror
+      // at DayDetail.js:243-246; both flipped together.
       const isInServiceOnDay = (svc, dayDate) => {
         if (!svc.active_until) return true;
-        return dayDate <= String(svc.active_until).slice(0, 10);
+        return dayDate < String(svc.active_until).slice(0, 10);
       };
 
       const projRes = await supa.from("sc_daily_projections")
