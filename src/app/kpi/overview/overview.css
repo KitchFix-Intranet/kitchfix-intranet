@@ -711,6 +711,17 @@
 }
 .kpi-app .kpi-ov-sub b { color: var(--n-900); font-weight: 800; }
 .kpi-app .kpi-ov-sub-sep { color: var(--n-400); }
+/* Kevin R-61 (2026-09-03): inventory-status badge on the Revenue
+   card. Actualized reads green (finance-tied); pending reads amber
+   (a JE is outstanding for one or more finalised periods). Kevin's
+   green/red rule applies to VERDICTS, not to source-state signals -
+   inventory status is a source-state (like the "Planned" revenue
+   pill), so amber is legitimate here. */
+.kpi-app .kpi-ov-inv-badge {
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-inv-badge-actualized { color: var(--green-600); }
+.kpi-app .kpi-ov-inv-badge-pending    { color: var(--amber-600); }
 
 /* ── B8+B9 What is left: two cards with split layout ─────────────
  * Headline on the left, two labelled stats right-aligned. Both
@@ -1025,6 +1036,15 @@
 .kpi-app .kpi-ov-hz-note {
   color: var(--n-600);
   font-weight: 600;
+}
+/* Kevin R-61 (2026-09-03): inventory JE trio inside cost-line cells.
+   Meta text, muted. The equals sign + adjusted total render bold to
+   pull the reader's eye to the finance-side figure. */
+.kpi-app .kpi-ov-inv-je {
+  color: var(--n-600);
+  font-weight: 600;
+  font-size: var(--kpi-t-meta);
+  white-space: nowrap;
 }
 /* Kevin 2026-09-02 language pass Item 10: envelope delta is neutral,
    not a verdict. Purple with arrow + more/less. Contrast against

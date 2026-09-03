@@ -154,8 +154,26 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
           : isInactive ? <span className="kpi-ov-notactive">not active</span>
           : batrText != null ? batrText : "—"}
       </td>
-      <td className="kpi-ov-num">
-        {actualText != null ? actualText : <span className="kpi-ov-nb">—</span>}
+      {/* Kevin R-61 (2026-09-03): on 3200 (food) + 3400 (packaging)
+          rows that carry an inventory adjustment, show the trio:
+          "$X purchased · −$Y inventory = $Z". `actual` is already the
+          ADJUSTED figure (finance-side); `actual_purchased` is the
+          raw purchases figure the operator would see in their own
+          records. An adjustment silently absorbed into the number
+          means an operator comparing the board to purchases will not
+          reconcile - the trio makes the difference legible. */}
+      <td className="kpi-ov-num" data-kpi-ov="cost-line-actual">
+        {actualText == null ? <span className="kpi-ov-nb">—</span>
+          : row.inventory_je != null && Math.abs(row.inventory_je) >= 1 ? (
+            <>
+              {fmtMoney(row.actual_purchased)}
+              {" "}
+              <span className="kpi-ov-inv-je" data-kpi-ov="inventory-je">
+                · {row.inventory_je < 0 ? "+" : "−"} {fmtMoney(Math.abs(row.inventory_je))} inv
+              </span>
+              {" = "}<b data-kpi-ov="actual-adjusted">{actualText}</b>
+            </>
+          ) : actualText}
       </td>
       <td className={`kpi-ov-num ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`}>
         {isBilledBack || isInactive ? <span className="kpi-ov-nb">—</span>

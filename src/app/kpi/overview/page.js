@@ -426,6 +426,7 @@ export default function KpiOverviewPage() {
           rangeComposition={data.range_composition}
           rangeLabels={data.range_labels}
           revenueModel={data.revenue_model}
+          inventoryStatus={data.inventory_status}
         />
         {/* PR-2 layout branch: two-column single-account grid ONLY
             when the EFFECTIVE account is a single site. A corporate

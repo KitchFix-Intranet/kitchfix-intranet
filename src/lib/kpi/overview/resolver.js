@@ -62,6 +62,7 @@ import {
   loadAccountFlags,
   loadPnlActuals,
   loadOverviewBudgets,
+  loadInventoryAdjustments,
   loadScDailyRevenue,
   derivePeriodState,
   capBeforeToday,
@@ -651,13 +652,18 @@ export async function resolveOverview({
     // through (last CLOSED card date) + last_derive_at (drives the
     // Overview's command-bar freshness chip via last_walk_at echo).
     loadPurchasingFreshness(supa),
+    // Kevin R-61 (2026-09-03): Sebastian's inventory adjusting JEs.
+    // Ships an empty map pre-migration; the resolver treats absent
+    // JEs as "no adjustment", not zero (absent-vs-zero rule). Never
+    // fabricates rows for accounts that carry no inventory.
+    loadInventoryAdjustments(supa, { members, periods, fiscalYear: FISCAL_YEAR }),
   ]));
   const [
     periodStatusResp, accountFlagsResp, overviewBudgetsResp, pnlResp,
     scResp, laborActualsResp, memberBudgetResults,
     purchWeeklyResp, purchActualsResp, purchPendingResp, purchBudgetsResp,
     salaryBudgetsResp, salaryActualsResp,
-    dirResp, purchFreshness,
+    dirResp, purchFreshness, invAdjResp,
   ] = layer1;
 
   const errs = [];
@@ -677,6 +683,7 @@ export async function resolveOverview({
   if (salaryBudgetsResp.error) errs.push({ scope: "kpi_budgets_3100_2", error: salaryBudgetsResp.error });
   if (salaryActualsResp.error) errs.push({ scope: "labor_salary_actuals", error: salaryActualsResp.error });
   if (dirResp?.error) errs.push({ scope: "accounts_directory", error: dirResp.error });
+  if (invAdjResp?.error) errs.push({ scope: "inventory_adjustments", error: invAdjResp.error });
   // purchFreshness never returns an `error` field per its loader
   // shape (loadFreshness returns the freshness object directly),
   // so no err check here.
@@ -698,6 +705,41 @@ export async function resolveOverview({
   const purchActuals = purchActualsResp.data;
   const purchPending = purchPendingResp.data;
   const purchBudgets = purchBudgetsResp.data;
+  // Kevin R-61 (2026-09-03): inventory adjusting JEs keyed by
+  // (account, period, gl_line_code). Pre-migration this is empty.
+  const invAdjByAcct = invAdjResp?.data || new Map();
+  // Finalised periods (closed_awaiting or verified) - NEVER open.
+  // JEs are booked at close; the running period shows purchases
+  // alone. Computed once here + reused for the row + status
+  // computations later.
+  const finalisedPeriods = periods.filter(p => {
+    const state = derivePeriodState({
+      periodNo: p,
+      todayISO: today,
+      periodStatusRow: periodStatus.get(p) || null,
+    });
+    return state !== "open";
+  });
+  // Sum JEs across members × finalised periods for a given GL code.
+  // Returns 0 (not null) when no JEs found; this is a SUM, not an
+  // actual-vs-null value. Callers subtract from purchases to get
+  // adjusted cost.
+  const sumInventoryJeForGl = (glLineCode) => {
+    let total = 0;
+    for (const m of members) {
+      const byPeriod = invAdjByAcct.get(m);
+      if (!byPeriod) continue;
+      for (const p of finalisedPeriods) {
+        const byGl = byPeriod.get(p);
+        if (!byGl) continue;
+        const je = byGl.get(glLineCode);
+        if (je != null) total += je;
+      }
+    }
+    return r2(total);
+  };
+  const foodInventoryJe = sumInventoryJeForGl("3200");
+  const packagingInventoryJe = sumInventoryJeForGl("3400");
   // Salary side (§5.9 / R-28). Always composed - no toggle guard.
   const salary3100_2Budgets = salaryBudgetsResp.byAccount || new Map();
   const salaryRows = salaryActualsResp.rows || [];
@@ -891,12 +933,26 @@ export async function resolveOverview({
     ? (laborBoard.budget_to_date_days?.amount ?? null)
     : null;
 
-  const food_actual = purchBoard.buckets["3200"]?.period_total ?? null;
+  // Raw purchases (what was BOUGHT). Kevin R-61 (2026-09-03): the
+  // Overview shows finance-side numbers - what was USED, not what
+  // was bought - by subtracting Sebastian's inventory adjusting JEs.
+  // Both figures ship on the cost-lines row so the operator sees the
+  // reconciliation ("$X purchased · −$Y inventory = $Z"). Every
+  // downstream calc (cogsActual, pcts, variance, verdicts) uses the
+  // ADJUSTED value. 3200 (food) + 3400 (packaging + supplies) only;
+  // labor + vehicle carry no inventory.
+  const food_actual_purchased = purchBoard.buckets["3200"]?.period_total ?? null;
   const food_budget = purchBoard.buckets["3200"]?.budget ?? null;
-  const packaging_actual = purchBoard.buckets["3400"]?.period_total ?? null;
+  const packaging_actual_purchased = purchBoard.buckets["3400"]?.period_total ?? null;
   const packaging_budget = purchBoard.buckets["3400"]?.budget ?? null;
   const vehicle_actual = purchBoard.buckets["3500"]?.period_total ?? null;
   const vehicle_budget = purchBoard.buckets["3500"]?.budget ?? null;
+  const food_actual = food_actual_purchased != null
+    ? r2(food_actual_purchased - foodInventoryJe)
+    : null;
+  const packaging_actual = packaging_actual_purchased != null
+    ? r2(packaging_actual_purchased - packagingInventoryJe)
+    : null;
 
   // Budget-to-date-days for the buckets aggregate. purchBoard's
   // totals block ships buckets_budget_to_date_days as an aggregate;
@@ -1736,7 +1792,35 @@ export async function resolveOverview({
     "3400": packaging_budget_to_date_days,
     "3500": vehicle_budget_to_date_days,
   };
-  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [] }) => {
+  // Kevin R-61 (2026-09-03): inventory status - card 1 states
+  // whether the range is `Inventory actualized` (every finalised
+  // period on every applicable member has at least one JE row) or
+  // `Pending inventory` (any finalised period lacks one). Only
+  // applicable to accounts that CAN carry inventory (per-meal /
+  // sales-based). Management-fee + pass-through accounts (billed-
+  // back food) never carry inventory; status is null on those.
+  const inventoryApplicable = !isAggregate && !isPassThrough && !isFeeAccount;
+  const inventory_status = (() => {
+    if (!inventoryApplicable) return null;
+    if (finalisedPeriods.length === 0) return null;
+    let allActualized = true;
+    const pendingPeriods = [];
+    for (const p of finalisedPeriods) {
+      let hasAny = false;
+      for (const m of members) {
+        const byPeriod = invAdjByAcct.get(m);
+        if (byPeriod && byPeriod.get(p)) { hasAny = true; break; }
+      }
+      if (!hasAny) { allActualized = false; pendingPeriods.push(p); }
+    }
+    return {
+      status: allActualized ? "actualized" : "pending",
+      finalised_periods: finalisedPeriods.slice(),
+      pending_periods: pendingPeriods,
+    };
+  })();
+
+  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [], inventoryJe = 0, actualPurchased = null }) => {
     const billed_back = isPassThrough;
     // inactive takes precedence over billed_back only when there is
     // truly nothing to say (no actual and no budget). Billed-back
@@ -1775,7 +1859,15 @@ export async function resolveOverview({
       target_pct: _tgtPct,
       budget_at_this_revenue: _batr,
       // R-58/R-59: MF accounts null envelope (contractual revenue).
+      // Kevin R-61 (2026-09-03): inventory adjustment on 3200/3400.
+      // `actual` above is the ADJUSTED figure (purchases - JE) so
+      // every downstream calc uses the finance-side number; the raw
+      // purchases figure ships alongside for the cost-lines trio
+      // display. Non-adjustable rows (3100 labor, 3500 vehicle) emit
+      // inventory_je=null so the client knows to skip the trio.
       envelope_delta: (suppress || btd == null || isManagementFee) ? null : envelopeDelta(btd, _batr),
+      inventory_je: (line_code === "3200" || line_code === "3400") ? r2(inventoryJe) : null,
+      actual_purchased: (line_code === "3200" || line_code === "3400") ? actualPurchased : null,
       sources: ["purchasing_actuals"],
       flags: [
         ...(billed_back ? ["billed_back"] : []),
@@ -1787,13 +1879,17 @@ export async function resolveOverview({
   statementRows.push(buildCostRow({
     line_code: "3200",
     label: "Food purchased",
-    actual: food_actual,
+    actual: food_actual,           // adjusted (purchases - foodInventoryJe)
+    actualPurchased: food_actual_purchased,
+    inventoryJe: foodInventoryJe,
     budget: food_budget,
   }));
   statementRows.push(buildCostRow({
     line_code: "3400",
     label: "Packaging and supplies",
-    actual: packaging_actual,
+    actual: packaging_actual,      // adjusted
+    actualPurchased: packaging_actual_purchased,
+    inventoryJe: packagingInventoryJe,
     budget: packaging_budget,
     extraFlags: flags.packaging_gap ? ["packaging_gap"] : [],
   }));
@@ -2238,6 +2334,11 @@ export async function resolveOverview({
     revenue_model,
     revenue_pace_pct,
     sc_counts_without_dollars,
+    // Kevin R-61 (2026-09-03): inventory adjustment status. Card 1
+    // states whether every finalised period in range carries an
+    // adjusting JE. `null` on accounts that don't carry inventory
+    // (management-fee / pass-through) and on single-open ranges.
+    inventory_status,
     also_tracked: alsoTracked,
     drill,
     // A3+A4 (2026-09-01): the ticker retired. A single status line
