@@ -67,6 +67,17 @@ import {
   derivePeriodState,
   capBeforeToday,
 } from "./pnl-loader.js";
+
+// R-67 (Kevin ruling 2026-09-03): contractual revenue lines - fixed
+// per-period contracts finance books alongside meal-service counts.
+// A line in this set with a non-zero period budget accrues its
+// budget × N complete weeks / 4 whenever (a) the picker returned it
+// and (b) the period is not verified and (c) no actual has landed.
+// Meal-service lines (2400.1 / 2400.2) are count-derived, not in
+// this set. Fee + tracked account pickers return only 2400.1 so
+// this set never fires on those accounts - preserving visibility
+// of loader defects like STL - MO 2300 missing from pnl_actuals.
+const CONTRACTUAL_ACCRUAL_LINES = new Set(["2200", "2300", "2600"]);
 import { resolveRevenueSource, classifyForRevenue, assertScReadAllowed } from "./revenue-source.js";
 import {
   computeBudgetToDateForLine,
@@ -446,6 +457,41 @@ function computePeriodRevenueByLine({
               }
             }
             bucket.sources.add("sc_daily_revenue");
+          } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
+            // R-67 (Kevin ruling 2026-09-03): contractual lines on
+            // sc_driven per-meal accounts accrue that period's budget
+            // × N complete weeks / 4 whenever the period is not
+            // verified and the line has no actual. Prior code let
+            // 2300 / 2200 / 2600 fall through as `not_reported`
+            // here, dropping earned contractual revenue (TBJ - FL
+            // P9 through week 3: $18,877 of service charges shown
+            // as absent).
+            //
+            // Guard: this branch only fires on non-verified periods
+            // (verified goes through pnl_actuals_verified above), so
+            // the "never accrue over a verified period" rule holds
+            // by construction. Verified periods with no actual mean
+            // finance booked nothing - and nothing is the answer.
+            //
+            // Fee + tracked accounts never reach this branch: their
+            // picker returns line_codes: ["2400.1"] only, so 2300
+            // is not in memberContribs. That preserves visibility
+            // of loader defects like STL - MO 2300 $35,715 missing
+            // from pnl_actuals; we do not paper over them with a
+            // coincidental accrual.
+            const pStart = periodStartISO(p);
+            const pEnd = periodEndISO(p);
+            const byAcct = overviewBudgets.get(line)?.get(m);
+            const amtRaw = byAcct?.get(p);
+            if (amtRaw != null && Number(amtRaw) > 0) {
+              const wk = endOfLastCompleteWeek(pStart, pEnd, todayISO);
+              const weeksComplete = wk ? wk.weekNo : 0;
+              if (weeksComplete > 0) {
+                bucket.amount += Number(amtRaw) * (weeksComplete / 4);
+                bucket.any_actual = true;
+                bucket.sources.add("kpi_budgets_contractual_accrual");
+              }
+            }
           }
         } else {
           // kpi_budgets_* (contractual / estimate / planned / tracked).
