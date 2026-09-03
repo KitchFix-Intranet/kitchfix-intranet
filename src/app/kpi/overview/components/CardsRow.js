@@ -196,22 +196,16 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
               {range?.kind === "fytd"
                 ? (revBudFullYear != null ? fmtMoney(revBudFullYear) : "—")
                 : (revBudFull != null ? fmtMoney(revBudFull) : "—")}
-              {/* Kevin PR-B item 8 (2026-09-03): "N.N% recognised" is
-                  finance jargon on an operator surface. Show the
-                  dollar gap and the direction word instead - that's
-                  what the operator acts on; the percentage is
-                  derivable. Kevin proposed "$4,193 under the P8
-                  budget"; wording rules with him. */}
-              {pctRecognised != null && pctRecognisedDenom != null && (() => {
-                const delta = revActual - pctRecognisedDenom;
-                if (Math.abs(delta) < 1) return null;
-                const dir = delta < 0 ? "under" : "over";
-                return (
-                  <span className="kpi-ov-hz-note">
-                    {" · "}{fmtMoney(Math.abs(delta))} {dir} the {budgetLabel.toLowerCase()}
-                  </span>
-                );
-              })()}
+              {/* Kevin ruling 2026-09-03 item 2 (option C): sub-line
+                  states the proportion, not the gap. Direction is
+                  already carried by the pill. Denominator is the same
+                  figure the card shows beside it (pctRecognisedDenom
+                  per the same-surface probe). */}
+              {pctRecognised != null && (
+                <span className="kpi-ov-hz-note" data-kpi-ov="revenue-pct-of-budget">
+                  {" · "}{pctRecognised.toFixed(1)}% of budget
+                </span>
+              )}
             </div>
           </div>
         </div>
