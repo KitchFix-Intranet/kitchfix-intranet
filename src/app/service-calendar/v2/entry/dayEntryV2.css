@@ -493,6 +493,53 @@
   margin-top: var(--sc2-space-3);
 }
 
+/* Not-running-services fold (2026-09-03, SC cleanup 5b).
+   Reads as part of the main body surface, not transplanted from the
+   right-rail ledger. Sits between activeGroups (running rows only)
+   and the inactive-groups drawer below. Distinct from inactive - the
+   dashed border matches the drawer's affordance vocabulary but the
+   background stays paper so it doesn't compete with running groups
+   above for attention. */
+.sc-v2-entry-not-running {
+  border: var(--sc2-border-thin) dashed var(--sc2-line-2);
+  border-radius: var(--sc2-radius-container);
+  padding: var(--sc2-space-2) var(--sc2-space-3);
+  color: var(--sc2-ink-muted);
+  font-size: var(--sc2-size-caption);
+}
+.sc-v2-entry-not-running > summary {
+  cursor: pointer;
+  font-weight: var(--sc2-wt-semibold);
+  padding: var(--sc2-space-1) 0;
+}
+.sc-v2-entry-not-running-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-3);
+  margin-top: var(--sc2-space-2);
+}
+.sc-v2-entry-not-running-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc2-space-1);
+}
+.sc-v2-entry-not-running-group-name {
+  font-weight: var(--sc2-wt-semibold);
+  color: var(--sc2-ink-default);
+  font-size: var(--sc2-size-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--sc2-track-caps);
+}
+.sc-v2-entry-not-running-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--sc2-space-3);
+}
+.sc-v2-entry-not-running-item {
+  padding: var(--sc2-space-1) 0;
+  color: var(--sc2-ink-muted);
+}
+
 /* Mark-no-service link */
 .sc-v2-entry-nsvc {
   display: flex;

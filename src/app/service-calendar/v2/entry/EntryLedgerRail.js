@@ -39,27 +39,12 @@ import { useMemo, useState } from "react";
 import { fmt$, round2 } from "../../season/format";
 import { isInServiceOnDay } from "../../DayDetail";
 import { shouldFlagVariance } from "@/lib/billing/variance";
-
-// Classify each in-service row as done / focused / pending. Groups
-// filter out services not in service on the day; a service is "not
-// running today" when it IS in-service on the day but has projection 0
-// AND no touched entry AND no saved actual.
-function classifyRow({ svc, day, editValues, touched, focusedColIndex }) {
-  const proj = day.projected?.[svc.colIndex] ?? 0;
-  const editVal = editValues[svc.colIndex] ?? "";
-  const isTouched = touched.has(svc.colIndex);
-  const isEmpty = editVal === "";
-  const isFocused = focusedColIndex === svc.colIndex;
-  const isDone = isTouched && !isEmpty;
-  // "Not running today" per Kevin's spec: projection zero, nothing
-  // entered, nothing focused. Actuals check for edit-mode of an
-  // already-saved day (touched carries edits; actual carries the
-  // saved value the parent hydrated into editValues at mount).
-  const hasSavedActual = day.hasActuals && (day.actual?.[svc.colIndex] ?? 0) > 0;
-  const isNotRunning = proj <= 0 && !isDone && !hasSavedActual && !isFocused;
-  const state = isDone ? "done" : (isFocused ? "focus" : "pending");
-  return { proj, editVal, isTouched, isEmpty, isDone, isFocused, isNotRunning, state };
-}
+// 2026-09-03 (SC cleanup 5b): classifyRow + partitionServicesByRunning
+// extracted to ./partitionServices.js so DayEntryV2's main body can
+// share the same rule. This file's downstream code (LedgerRow /
+// LedgerGroup / NotRunningFold / default export) is unchanged - it
+// just imports the classifier instead of defining it locally.
+import { classifyRow, partitionServicesByRunning } from "./partitionServices";
 
 // Row atom - the one-grid single-line row per Best design.
 function LedgerRow({ svc, day, editValues, touched, focusedColIndex }) {
@@ -182,34 +167,13 @@ export default function EntryLedgerRail({
   totalToEnter,
   hasTouchedAny,
 }) {
-  // Partition once: services that render above the fold vs services
-  // that go into the "not running today" disclosure.
-  const { runningGroups, notRunningByGroup, totalNotRunning, firstPendingName } = useMemo(() => {
-    const running = [];
-    const notRunning = [];
-    let firstPending = null;
-    for (const g of serviceGroups) {
-      const runningSvcs = [];
-      const notRunningSvcs = [];
-      for (const s of g.services) {
-        if (!isInServiceOnDay(s, day.date)) continue;
-        const c = classifyRow({ svc: s, day, editValues, touched, focusedColIndex });
-        if (c.isNotRunning) notRunningSvcs.push(s);
-        else {
-          runningSvcs.push(s);
-          if (!firstPending && !c.isDone) firstPending = s.name;
-        }
-      }
-      if (runningSvcs.length) running.push({ ...g, services: runningSvcs });
-      if (notRunningSvcs.length) notRunning.push({ name: g.name, services: notRunningSvcs });
-    }
-    return {
-      runningGroups: running,
-      notRunningByGroup: notRunning,
-      totalNotRunning: notRunning.reduce((n, g) => n + g.services.length, 0),
-      firstPendingName: firstPending,
-    };
-  }, [serviceGroups, day, editValues, touched, focusedColIndex]);
+  // Partition via shared helper (2026-09-03 SC cleanup 5b). Prior
+  // inline logic moved to ./partitionServices.js; DayEntryV2's main
+  // body uses the same helper.
+  const { runningGroups, notRunningByGroup, totalNotRunning, firstPendingName } = useMemo(
+    () => partitionServicesByRunning({ serviceGroups, day, editValues, touched, focusedColIndex }),
+    [serviceGroups, day, editValues, touched, focusedColIndex]
+  );
 
   const pctComplete = totalToEnter > 0 ? Math.round((enteredCount / totalToEnter) * 100) : 0;
   const isAllEntered = totalToEnter > 0 && enteredCount === totalToEnter;
