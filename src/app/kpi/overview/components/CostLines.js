@@ -59,28 +59,9 @@ function rowHref({ lineCode, filters, previewAccount }) {
   return qs ? `${base}?${qs}` : base;
 }
 
-// Meter per line. Fill green when at or under, red when over.
-// Dark notch at budget-at-this-revenue; second grey notch at
-// period_budget (open range only) since on a closed period btr and
-// period_budget coincide.
-function Meter({ actual, batr, periodBudget, isOpenRange, over }) {
-  const maxVal = Math.max(actual || 0, batr || 0, periodBudget || 0, 1);
-  const fillPct = actual != null ? Math.min(100, (actual / maxVal) * 100) : 0;
-  const batrPct = batr != null ? Math.min(100, (batr / maxVal) * 100) : null;
-  const pdPct = (isOpenRange && periodBudget != null) ? Math.min(100, (periodBudget / maxVal) * 100) : null;
-  const fillColor = over ? "var(--red-500)" : "var(--green-500)";
-  return (
-    <div className="kpi-ov-meter" data-kpi-ov="cost-line-meter">
-      <i style={{ width: `${fillPct}%`, background: fillColor }} aria-hidden="true" />
-      {batrPct != null && (
-        <span className="kpi-ov-meter-tk" style={{ left: `${batrPct}%` }} aria-hidden="true" />
-      )}
-      {pdPct != null && (
-        <span className="kpi-ov-meter-tk kpi-ov-meter-tk-pd" style={{ left: `${pdPct}%` }} aria-hidden="true" />
-      )}
-    </div>
-  );
-}
+// Kevin ruling cleanup (2026-09-03) item 7: Meter component removed.
+// The red/green bar beneath each cost line was noise - the percentages
+// and the verdict colour on % of rev already carry the story.
 
 function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull }) {
   const href = rowHref({ lineCode: row.line_code, filters, previewAccount });
@@ -140,13 +121,6 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
           <span className="kpi-ov-cl-lbl">{row.label}</span>
           <span className="kpi-ov-cl-go" aria-hidden="true">→</span>
         </Link>
-        <Meter
-          actual={row.actual}
-          batr={row.budget_at_this_revenue}
-          periodBudget={row.period_budget}
-          isOpenRange={isOpenRange}
-          over={over}
-        />
       </td>
       {/* Kevin ruling final-presentation (2026-09-03) item 3: Plan
           band. Order becomes:
@@ -161,21 +135,28 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
       <td className="kpi-ov-num kpi-ov-nb plan plan-last" data-kpi-ov="cost-line-target-pct">
         {suppressVerdict ? "—" : (targetPctText != null ? targetPctText : "—")}
       </td>
-      {/* Kevin R-61 (2026-09-03): on 3200 (food) + 3400 (packaging)
-          rows that carry an inventory adjustment, show the trio inline
-          in the Spent cell. */}
+      {/* Kevin R-61 (2026-09-03) + cleanup (2026-09-03) item 6: on
+          3200 (food) + 3400 (packaging) rows with an inventory
+          adjustment, primary reads the adjusted actual and the
+          derivation sits below as an italic sub-line with uniform
+          weight on every part.
+            $403,556 − $3,349 inventory = $400,207
+          No leading dot; spell "inventory" (not "inv"); the − and =
+          are same size and weight as the numerals; whole sub-line
+          italic. */}
       <td className="kpi-ov-num" data-kpi-ov="cost-line-actual">
-        {actualText == null ? <span className="kpi-ov-nb">—</span>
-          : row.inventory_je != null && Math.abs(row.inventory_je) >= 1 ? (
-            <>
-              {fmtMoney(row.actual_purchased)}
-              {" "}
-              <span className="kpi-ov-inv-je" data-kpi-ov="inventory-je">
-                · {row.inventory_je < 0 ? "+" : "−"} {fmtMoney(Math.abs(row.inventory_je))} inv
-              </span>
-              {" = "}<b data-kpi-ov="actual-adjusted">{actualText}</b>
-            </>
-          ) : actualText}
+        {actualText == null ? <span className="kpi-ov-nb">—</span> : (
+          <>
+            <span data-kpi-ov="actual-adjusted">{actualText}</span>
+            {row.inventory_je != null && Math.abs(row.inventory_je) >= 1 && (
+              <div className="kpi-ov-inv-je" data-kpi-ov="inventory-je">
+                {fmtMoney(row.actual_purchased)}{" "}
+                {row.inventory_je < 0 ? "+" : "−"}{" "}
+                {fmtMoney(Math.abs(row.inventory_je))} inventory = {actualText}
+              </div>
+            )}
+          </>
+        )}
       </td>
       <td className={`kpi-ov-num ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`} data-kpi-ov="cost-line-actual-pct">
         {isBilledBack || isInactive ? <span className="kpi-ov-nb">—</span>

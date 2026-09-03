@@ -71,12 +71,24 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
         const val = Number(s.spent || 0);
         const bud = Number(dashValue(s) || 0);
         const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
-        const budPct = bud > 0 ? (bud / mx) * 100 : null;
         const classSuffix =
           s.state === "in_progress" ? "kpi-ov-bar-hatch"
           : s.state === "not_started" ? "kpi-ov-bar-dash"
           : val <= bud ? "kpi-ov-bar-good"
           : "kpi-ov-bar-over";
+        // Kevin ruling cleanup (2026-09-03) item 1 (DEFECT): the dash
+        // sits at budget/mx of the plot height. Relative to a bar
+        // whose own height is spend/mx, that is exactly (budget/spend)
+        // × 100% of the bar. A budget above its spend gives > 100%
+        // and the dash renders above the bar. Prior formula used a
+        // rounded hgt in the denominator, which shifted the dash 1-2%
+        // higher on the bar than the true budget position - producing
+        // Kevin's live measurement of 6 of 8 dashes sitting AT the
+        // bar top on TBJ - FL FYTD when only P3 (the actual overspend)
+        // should have had its dash inside its bar.
+        //
+        // Assertion (permanent probe): dash_top < bar_top iff bud > val.
+        const dashBottomPct = val > 0 && bud >= 0 ? (bud / val) * 100 : null;
         return (
           <i
             key={i}
@@ -87,13 +99,13 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
             data-kpi-ov-bar-val={val}
             data-kpi-ov-bar-bud={bud}
           >
-            {budPct != null && (
+            {dashBottomPct != null && (
               <span
                 className="kpi-ov-bar-perbud"
                 style={{
                   left: "-5%",
                   right: "-5%",
-                  bottom: hgt > 0 ? `${(budPct / hgt) * 100}%` : "0%",
+                  bottom: `${dashBottomPct}%`,
                 }}
                 aria-hidden="true"
                 data-kpi-ov="bar-budget-dash"
@@ -117,11 +129,18 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
       ))}
     </div>
   );
+  // Kevin ruling cleanup (2026-09-03) item 1 tail: legend shows only
+  // the states present in the range. Prior legend hard-coded
+  // "running" on FYTD where every period is closed - a legend entry
+  // for a state that appears on zero bars.
+  const hasClosedGood = series.some(s => s.state !== "in_progress" && s.state !== "not_started" && Number(s.spent || 0) <= Number(dashValue(s) || 0));
+  const hasClosedOver = series.some(s => s.state !== "in_progress" && s.state !== "not_started" && Number(s.spent || 0) > Number(dashValue(s) || 0));
+  const hasRunning = series.some(s => s.state === "in_progress");
   const legend = (
     <div className="kpi-ov-legend">
-      <span><i className="kpi-ov-bar-good" />under budget</span>
-      <span><i className="kpi-ov-bar-over" />over budget</span>
-      <span><i className="kpi-ov-bar-hatch" />running</span>
+      {hasClosedGood && <span><i className="kpi-ov-bar-good" />under budget</span>}
+      {hasClosedOver && <span><i className="kpi-ov-bar-over" />over budget</span>}
+      {hasRunning && <span><i className="kpi-ov-bar-hatch" />running</span>}
     </div>
   );
   if (bare) {
