@@ -47,13 +47,20 @@ const TABLES = [
   {
     key: "cost-lines",
     sel: '[data-kpi-ov="cost-lines-table"]',
+    // Kevin R-58/R-59 (2026-09-03): management-fee accounts read
+    // "P{N} budget" instead of "Budget adjusted P{N}" - revenue is
+    // contractual so no adjustment applies. Accepted patterns cover
+    // both shapes.
     expectedOrder: {
-      // Kevin PR-B item 4 (2026-09-03): closed periods use `Final P#`
-      // as the actuals header - `Spent` implies partway. FYTD + open
-      // keep the verb form.
-      fytd:          ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_closed: ["LINE", /BUDGET ADJUSTED P\d+/i, /FINAL P\d+/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_open:   ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      // Merged 2026-09-03: PR-A (R-58/R-59) added the "P{N} budget"
+      // alternation on the budget column for management-fee accounts;
+      // PR-B (item 4) added the "Final P#" actuals header on closed
+      // periods. Both survive: budget takes main's alternation on all
+      // three range kinds, actuals takes the branch's FINAL P# on
+      // single_closed only.
+      fytd:          ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      single_closed: ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /FINAL P\d+/i, "% OF REV", "TARGET %", "VS TARGET"],
+      single_open:   ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET|PERIOD BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
     },
   },
   {

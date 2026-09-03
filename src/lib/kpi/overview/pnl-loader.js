@@ -74,16 +74,38 @@ export async function loadPeriodStatus(supa, fiscalYear = 2026) {
 
 // ─── kpi_account_flags reader ───────────────────────────────────────
 //
-// Returns Map<account_key, { sc_revenue_live, set_at, set_by }>.
+// Returns Map<account_key, { sc_revenue_live, revenue_model, set_at,
+// set_by }>.
+//
+// `revenue_model` (Kevin R-58, 2026-09-03) is one of:
+//   'sc_driven'      revenue fluctuates with SC meal counts
+//   'management_fee' revenue is contractual and locked
+//   'sales_based'    revenue is sales against budget (TXR - TX - V)
+// The column was added by docs/migrations/pnl-2-revenue-model.sql.
+// If a row has null revenue_model (fresh env before migration seeds),
+// callers should fall back to a safe default; see accountRevenueModel
+// in the resolver.
 export async function loadAccountFlags(supa) {
-  const q = await supa
+  // Migration-gated: revenue_model column is added by
+  // docs/migrations/pnl-2-revenue-model.sql. Pre-migration we
+  // gracefully fall back to a select without the column so the
+  // Overview keeps rendering. Post-migration the resolver reads the
+  // column value directly. The `accountRevenueModel` helper on the
+  // resolver side handles the null-revenue_model row transparently.
+  let q = await supa
     .from("kpi_account_flags")
-    .select("account_key, sc_revenue_live, set_at, set_by");
-  if (q.error) return { error: q.error, scope: "kpi_account_flags" };
+    .select("account_key, sc_revenue_live, revenue_model, set_at, set_by");
+  if (q.error) {
+    q = await supa
+      .from("kpi_account_flags")
+      .select("account_key, sc_revenue_live, set_at, set_by");
+    if (q.error) return { error: q.error, scope: "kpi_account_flags" };
+  }
   const out = new Map();
   for (const r of q.data || []) {
     out.set(r.account_key, {
       sc_revenue_live: !!r.sc_revenue_live,
+      revenue_model: r.revenue_model || null,
       set_at: r.set_at || null,
       set_by: r.set_by || null,
     });

@@ -264,13 +264,20 @@ export default function CostLines({ payload, previewAccount = null }) {
   // date`). Total row uses the same fork: "in P8" preposition on
   // single_closed matches the COGS card's descriptor.
   const rl = payload.range_labels;
+  // Merged 2026-09-03: PR-B took spent by period state (Final P# on
+  // single_closed, Spent thru P# on FYTD/open); PR-A took adjusted
+  // by revenue model (P{N} budget on management-fee, Budget adjusted
+  // P{N} on SC/sales). Both survive - one axis each, no collision.
   const isSingleClosed = rl?.kind === "single_closed";
   const spentLabel = isSingleClosed
     ? rl.actuals
     : (rl?.through ? `Spent ${rl.through}` : "Spent period to date");
-  const adjustedLabel = rl?.period_last
-    ? `Budget adjusted ${rl.period_last}`
-    : "Budget at this revenue";
+  const isManagementFee = payload.revenue_model === "management_fee";
+  const adjustedLabel = isManagementFee
+    ? (rl?.period_last ? `${rl.period_last} budget` : "Period budget")
+    : (rl?.period_last
+      ? `Budget adjusted ${rl.period_last}`
+      : "Budget at this revenue");
   const totalLabel = rl?.through
     ? `Total cost of goods sold ${rl.through}`
     : "Total cost of goods sold";

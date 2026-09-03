@@ -86,11 +86,31 @@ async function checkPayload(a, r) {
   if (cogsRows.length === 0) return;
   const totalRevenue = j.cards?.find(c => c.key === "revenue")?.hero_actual;
 
+  // Kevin R-58/R-59 (2026-09-03): management-fee accounts have
+  // contractual revenue and the resolver deliberately nulls
+  // envelope_delta on those accounts (btd + batr stay present as
+  // meaningful values). Widen the matched-trio guard: btd+batr must
+  // both be null or both present; envelope may be null while both
+  // are present on MF.
+  const isMFAccount = j.revenue_model === "management_fee";
   for (const row of cogsRows) {
     if (isSuppressed(row)) continue;
-    const nullSet = [row.budget_to_date, row.budget_at_this_revenue, row.envelope_delta].map(v => v == null);
-    if (nullSet.some(x => x !== nullSet[0])) {
-      fail(`${a} ${r.tag} ${row.line_code}`, `half-null: btd=${row.budget_to_date} batr=${row.budget_at_this_revenue} env=${row.envelope_delta}`);
+    const btdNull = row.budget_to_date == null;
+    const batrNull = row.budget_at_this_revenue == null;
+    const envNull = row.envelope_delta == null;
+    if (btdNull !== batrNull) {
+      fail(`${a} ${r.tag} ${row.line_code}`, `half-null btd/batr: btd=${row.budget_to_date} batr=${row.budget_at_this_revenue}`);
+      continue;
+    }
+    // Envelope must be null on management_fee (per R-58/R-59) and
+    // present-or-null aligned with btd on every other account.
+    if (isMFAccount) {
+      if (!envNull) {
+        fail(`${a} ${r.tag} ${row.line_code}`, `management_fee row emits envelope_delta=${row.envelope_delta} (want null)`);
+        continue;
+      }
+    } else if (btdNull !== envNull) {
+      fail(`${a} ${r.tag} ${row.line_code}`, `half-null (non-MF): btd=${row.budget_to_date} batr=${row.budget_at_this_revenue} env=${row.envelope_delta}`);
       continue;
     }
     if (row.budget_to_date != null && row.budget_at_this_revenue != null && row.envelope_delta != null) {
