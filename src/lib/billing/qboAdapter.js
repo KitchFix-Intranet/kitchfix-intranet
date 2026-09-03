@@ -375,6 +375,16 @@ export async function postInvoiceDraft(payload, ctx) {
       "postInvoiceDraft: live mode requires ctx.accountMap.qbo_customer_id (per-mode fence read)."
     );
   }
+  // sc-41: parity guard with qbo_customer_id above. buildInvoicePayload
+  // has already thrown on missing qbo_class_id at build time, so a
+  // live payload reaching this call site with a valid CustomerRef but
+  // no class id shouldn't be possible; the adapter still checks the
+  // fence so a hand-built payload cannot slip through unclassed.
+  if (ctx.qboMode === "live" && !ctx?.accountMap?.qbo_class_id) {
+    throw new Error(
+      "postInvoiceDraft: live mode requires ctx.accountMap.qbo_class_id (per-line ClassRef seed)."
+    );
+  }
 
   const invoiceSlot = payload._slot || "main";
   const isTest = ctx.qboMode === "test";

@@ -181,6 +181,15 @@ export function buildInvoicePayload({
   if (isoDow(weekStart) !== 1) {
     throw new Error(`buildInvoicePayload: weekStart must be a Monday (ISO), got ${weekStart}`);
   }
+  // sc-41: ClassRef is per-account and required on every line. QBO
+  // does not echo the Item's default class onto the line on write
+  // (verified via Chat-Claude probe 2026-09-03). Without a class the
+  // revenue orphans on the class-segmented P&L. Fail early rather
+  // than build an unclassed payload.
+  if (!accountMap.qbo_class_id) {
+    throw new Error(`buildInvoicePayload: accountMap.qbo_class_id missing for ${accountKey}`);
+  }
+  const classRef = { value: String(accountMap.qbo_class_id) };
 
   const warnings = [];
 
@@ -378,6 +387,7 @@ export function buildInvoicePayload({
       SalesItemLineDetail: {
         ServiceDate: first.date,
         ItemRef: { value: first.mapping.qbo_item_id, name: first.mapping.qbo_line_description },
+        ClassRef: classRef,
         UnitPrice: rate,
         Qty: totalQty,
         TaxCodeRef: { value: first.mapping.tax_override || "TAX" },
@@ -409,6 +419,7 @@ export function buildInvoicePayload({
         SalesItemLineDetail: {
           ServiceDate: weekMonday,
           ItemRef: { value: ff.mapping.qbo_item_id, name: ff.mapping.qbo_line_description },
+          ClassRef: classRef,
           UnitPrice: rate,
           Qty: 1,
           TaxCodeRef: { value: ff.mapping.tax_override || "TAX" },

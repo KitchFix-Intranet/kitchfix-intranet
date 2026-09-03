@@ -26,6 +26,7 @@ const TXR_MAP = {
   qbo_customer_id: "19000",
   qbo_customer_name: "Texas Rangers - Surprise, AZ",
   qbo_taxcode_id: "36",
+  qbo_class_id: "1200000000000411132",  // PFS:TXR - AZ (sc-41)
   cadence: "weekly",
   qbo_mode: "test",           // PR-F sc-35 column
   salaried_manager_emails: [],
@@ -116,6 +117,30 @@ test("allowedCustomerIdsFor: live mode returns {accountMap.qbo_customer_id}", ()
 
 test("allowedCustomerIdsFor: live mode without qbo_customer_id throws", () => {
   assert.throws(() => allowedCustomerIdsFor("live", {}), /qbo_customer_id/);
+});
+
+// sc-41: parity guard - postInvoiceDraft refuses a live post without
+// qbo_class_id on the accountMap. Matches the qbo_customer_id guard
+// pattern; catches a hand-built accountMap that slipped through the
+// buildInvoicePayload gate.
+test("postInvoiceDraft: live mode without qbo_class_id throws with named field", async () => {
+  const supa = makeSupaMock({ tables: { sc_export_ledger: [] } });
+  const fetchImpl = async () => { throw new Error("must not reach network"); };
+  const mapWithoutClass = { ...TXR_MAP, qbo_mode: "live" };
+  delete mapWithoutClass.qbo_class_id;
+
+  await assert.rejects(
+    () => postInvoiceDraft(
+      { CustomerRef: { value: "19000", name: "Texas Rangers" }, Line: [], TxnDate: "2026-07-27" },
+      {
+        accountKey: "TXR - AZ", weekStart: "2026-07-27", weekEnd: "2026-08-02",
+        cadenceUnit: "weekly", createdBy: "test",
+        accountMap: mapWithoutClass, qboMode: "live",
+        deps: { supa, fetchImpl },
+      },
+    ),
+    /qbo_class_id/,
+  );
 });
 
 test("allowedCustomerIdsFor: unknown mode throws", () => {
