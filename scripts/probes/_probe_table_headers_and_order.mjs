@@ -47,10 +47,14 @@ const TABLES = [
   {
     key: "cost-lines",
     sel: '[data-kpi-ov="cost-lines-table"]',
+    // Kevin R-58/R-59 (2026-09-03): management-fee accounts read
+    // "P{N} budget" instead of "Budget adjusted P{N}" - revenue is
+    // contractual so no adjustment applies. Accepted patterns cover
+    // both shapes.
     expectedOrder: {
-      fytd:          ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_closed: ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
-      single_open:   ["LINE", /BUDGET ADJUSTED P\d+/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      fytd:          ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      single_closed: ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
+      single_open:   ["LINE", /(BUDGET ADJUSTED P\d+|P\d+ BUDGET|PERIOD BUDGET)/i, /SPENT (THRU P\d+|PERIOD TO DATE)/i, "% OF REV", "TARGET %", "VS TARGET"],
     },
   },
   {

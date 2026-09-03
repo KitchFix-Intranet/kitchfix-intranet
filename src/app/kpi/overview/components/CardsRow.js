@@ -28,7 +28,13 @@ const PILL_TONE = {
 
 const HELP_BODIES = {
   revenue: <p>What this account bills for the food and service delivered. Every cost below is judged as a percent of this number.</p>,
-  cogs: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Judged as a percent of revenue. Target percent is set at budget and does not move when revenue moves.</p>,
+  // Kevin R-58/R-59 (2026-09-03): COGS tooltip varies by revenue
+  // model. SC-driven / sales-based accounts explain the revenue-
+  // adjusted allowance (adjusted budget = revenue × target %).
+  // Management-fee accounts have contractual revenue - no adjustment
+  // is possible, so the tooltip names that explicitly.
+  cogs_sc: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Judged as a percent of revenue. Target percent is set at budget and does not move when revenue moves. Adjusted budget is what that percent buys at the revenue actually earned.</p>,
+  cogs_fee: <p>Labor, food purchased, packaging and supplies, vehicle - the lines the operator controls. Judged as a percent of revenue. Revenue on this account is contractual, so the period budget is fixed - the target percent buys the same dollars every period.</p>,
   gross_margin: <p>Revenue minus cost of goods sold. This is the account-level measure. Stops here - SG&A is not part of it, so this is not profit.</p>,
 };
 
@@ -205,11 +211,19 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
 
 // COGS + GM share a heroline shape: pct leads, dollars trail after
 // a divider. Sub-pair varies by card.
-function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels }) {
+function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel }) {
   const ptd = labelPtd(rangeLabels, periodState);
   const heroPctText = card.pct_of_revenue_display;
   const heroActualText = card.hero_actual_display;
   const isCogs = kind === "cogs";
+  // Kevin R-58/R-59 (2026-09-03): management-fee accounts have
+  // contractual revenue, so adjusted budget equals period budget and
+  // the delta is always $0. Drop the "Adjusted budget" framing and
+  // read "P{N} budget" instead; suppress the envelope note.
+  const isManagementFee = revenueModel === "management_fee";
+  const cogsBudgetLabel = isManagementFee
+    ? (rangeLabels?.period_last ? `${rangeLabels.period_last} budget` : "Period budget")
+    : "Adjusted budget";
   const hasTarget = extra?.hasTarget;
   const targetPctText = card.target_pct_display;
   const batrText = fmtMoney(card.budget_at_this_revenue);
@@ -238,7 +252,13 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
     <div className={`kpi-ov-card ${isCogs ? "kpi-ov-card-cogs" : "kpi-ov-card-gm"}`} data-kpi-ov={`card-${kind}`}>
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">{card.label}</span>
-        <HelpPop id={`overview-card-${kind}`} title={card.label} body={HELP_BODIES[kind]} />
+        <HelpPop
+          id={`overview-card-${kind}`}
+          title={card.label}
+          body={isCogs
+            ? (isManagementFee ? HELP_BODIES.cogs_fee : HELP_BODIES.cogs_sc)
+            : HELP_BODIES[kind]}
+        />
         <Pill pill={card.pill} />
       </div>
       <div className="kpi-ov-cb">
@@ -274,8 +294,12 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
                     Item 10: envelope delta is NEUTRAL, not a verdict -
                     render in purple with a direction arrow and the word
                     more or less. Revenue moving the envelope is a
-                    consequence, not performance. */}
-                <div className="kpi-ov-hz-k">Adjusted budget</div>
+                    consequence, not performance.
+                    R-58/R-59 (Kevin 2026-09-03): management-fee accounts
+                    have contractual revenue, so the label becomes
+                    "P{N} budget" and the envelope note is suppressed
+                    (server ships envelope_delta as null for MF). */}
+                <div className="kpi-ov-hz-k">{cogsBudgetLabel}</div>
                 <div className="kpi-ov-hz-v kpi-ov-num">
                   {!hasTarget ? <span className="kpi-ov-nb">—</span>
                     : batrText == null ? "—"
@@ -321,7 +345,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
   );
 }
 
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition, rangeLabels }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition, rangeLabels, revenueModel }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
@@ -349,6 +373,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           kind="cogs"
           extra={{ hasTarget, revenueIsPlanned }}
           rangeLabels={rangeLabels}
+          revenueModel={revenueModel}
         />
       )}
       {gm && (
@@ -359,6 +384,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           kind="gross_margin"
           extra={{ hasTarget }}
           rangeLabels={rangeLabels}
+          revenueModel={revenueModel}
         />
       )}
     </div>
