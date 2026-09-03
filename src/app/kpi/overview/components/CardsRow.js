@@ -230,6 +230,15 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
     : card.pill?.tone === "bad" ? "kpi-ov-bad"
     : "";
 
+  // Kevin ruling final-presentation (2026-09-03) item 2: the percent
+  // stays the hero; a small grey dollar sits after it. Both cards
+  // read the same shape.
+  //   COGS   actual $ = hero_actual_display, target $ = budget_at_this_revenue_display
+  //   GM     actual $ = hero_actual_display, target $ = budget_at_this_revenue_display
+  //          (GM's batr = revenue - cogs_batr, shipped by resolver)
+  const actualDollarText = card.hero_actual_display;
+  const targetDollarText = card.budget_at_this_revenue_display;
+
   const helpBody = isCogs
     ? cogsTooltip({
         isManagementFee,
@@ -250,13 +259,23 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
           <span className="kpi-ov-pair-k">{actualLabel(periodState)}</span>
           <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov={`hero-${kind}`}>
             {actualText || "—"}
+            {actualDollarText && (
+              <small className="kpi-ov-pair-sub" data-kpi-ov={`hero-${kind}-dollar`}>{actualDollarText}</small>
+            )}
           </span>
         </div>
         <div className="kpi-ov-pair-rule" aria-hidden="true" />
         <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
           <span className="kpi-ov-pair-k">Target</span>
           <span className="kpi-ov-pair-v kpi-ov-num">
-            {hasTarget ? (targetText || "—") : <span className="kpi-ov-nb">—</span>}
+            {hasTarget ? (
+              <>
+                {targetText || "—"}
+                {targetDollarText && (
+                  <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-dollar`}>{targetDollarText}</small>
+                )}
+              </>
+            ) : <span className="kpi-ov-nb">—</span>}
           </span>
         </div>
       </div>

@@ -1359,6 +1359,9 @@ export async function resolveOverview({
       // budget_at_this_revenue = cost the target buys at actual rev.
       // envelope_delta = budget_to_date - budget_at_this_revenue.
       budget_at_this_revenue: budgetAtThisRevenue(cogsBudget),
+      // Kevin ruling final-presentation (2026-09-03) item 2: display
+      // string beside the target percent on the card face.
+      budget_at_this_revenue_display: formatMoneyWhole(budgetAtThisRevenue(cogsBudget)),
       // Kevin R-58/R-59 (2026-09-03): management-fee accounts have
       // contractual revenue, so budget_at_this_revenue equals the
       // period budget by construction and the delta is $0 in
@@ -1404,6 +1407,17 @@ export async function resolveOverview({
       // PR-1 item 1: null target when !has_target.
       target_pct_of_revenue: has_target ? gmPctBudget : null,
       target_pct_display: has_target ? formatPct(gmPctBudget) : null,
+      // Kevin ruling final-presentation (2026-09-03) item 2: GM card
+      // carries a target dollar beside the target percent. Derived as
+      // revenue - cogs_budget_at_this_revenue so the value agrees by
+      // construction with the cost table's plan column + COGS card's
+      // target dollar. Null when has_target is false.
+      budget_at_this_revenue: (has_target && totalRevenue != null)
+        ? r2(totalRevenue - budgetAtThisRevenue(cogsBudget))
+        : null,
+      budget_at_this_revenue_display: (has_target && totalRevenue != null)
+        ? formatMoneyWhole(r2(totalRevenue - budgetAtThisRevenue(cogsBudget)))
+        : null,
       delta_dollars: gmDelta,
       delta_display: gmDelta != null ? gapDollarsMargin(gmDelta) : null,
       delta_direction: gmDelta != null ? directionOfDelta(gmDelta, "margin") : null,

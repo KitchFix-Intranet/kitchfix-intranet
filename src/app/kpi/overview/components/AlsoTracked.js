@@ -43,8 +43,8 @@ function Row({ row, isOpen }) {
         <span className="kpi-ov-glc kpi-ov-num">{line_code}</span>
         {label}
       </td>
-      {/* Item 3 (Kevin 2026-09-03): budget cell before actual cell. */}
-      <td className="kpi-ov-num kpi-ov-nb">
+      {/* Plan band: Budget cell carries the band class row-by-row. */}
+      <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">
         {bothNullish ? <DashOrValue state="missing" />
           : noBudget ? <DashOrValue state="no_budget" />
           : <DashOrValue value={budget_display} reported={budget != null} />}
@@ -118,13 +118,20 @@ export default function AlsoTracked({ payload }) {
         <span className="kpi-ov-pill kpi-ov-pill-neutral">Not scored</span>
       </div>
       <div className="kpi-ov-cb">
-        <table className="kpi-ov-lev">
+        <table className="kpi-ov-lev kpi-ov-tband">
           <thead>
-            {/* Kevin ruling 2026-09-03 Item 3: budget precedes actual. */}
+            {/* Kevin ruling final-presentation (2026-09-03) item 3:
+                Plan / Actual band. Sub-headers: Budget (plan) ·
+                Spent + vs budget (actual). "Spent" not "Actual". */}
+            <tr className="kpi-ov-tband-grp" data-kpi-ov="tband-group">
+              <th className="l"></th>
+              <th className="plan plan-first plan-last kpi-ov-tband-plan">Plan</th>
+              <th colSpan={2} className="kpi-ov-tband-act">Actual</th>
+            </tr>
             <tr>
               <th className="l">Line</th>
-              <th>{budgetHeader}</th>
-              <th>{actualHeader}</th>
+              <th className="plan plan-first plan-last">Budget</th>
+              <th>Spent</th>
               <th style={{ width: 100 }}>vs budget</th>
             </tr>
           </thead>

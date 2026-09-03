@@ -130,11 +130,25 @@ async function main() {
       }
     }
 
-    // Cost table headers
-    const wantHeaders = ["LINE", "BUDGET*", "ACTUAL", "% OF REV", "TARGET %"];
+    // Cost table headers - Kevin ruling final-presentation (2026-09-03):
+    // Plan / Actual band adds a group header row above the sub-header;
+    // Target % moves INTO the plan half; "Actual" sub-header becomes
+    // "Spent" to avoid the ACTUAL / ACTUAL stack. Sub-header is now:
+    //   [Line, Budget*, Target %, Spent, % of rev]
+    const wantSubHeaders = ["LINE", "BUDGET*", "TARGET %", "SPENT", "% OF REV"];
+    // The probe's clHeaders returns ALL thead ths (group + sub).
+    // Extract just the sub-header row: skip the first 3 cells which
+    // are the group header (empty + Plan + Actual).
     const gotHeaders = info.clHeaders.map(h => h.toUpperCase());
-    if (JSON.stringify(gotHeaders) !== JSON.stringify(wantHeaders)) {
-      fail(c.name, `cost-lines headers = ${JSON.stringify(gotHeaders)}, want ${JSON.stringify(wantHeaders)}`);
+    // The group header row has 3 th (empty, PLAN, ACTUAL). Sub-header
+    // has 5 th (Line, Budget*, Target %, Spent, % of rev).
+    const groupCells = gotHeaders.slice(0, 3);
+    const subCells = gotHeaders.slice(3);
+    if (JSON.stringify(groupCells) !== JSON.stringify(["", "PLAN", "ACTUAL"])) {
+      fail(c.name, `cost-lines group header = ${JSON.stringify(groupCells)}, want ["", "PLAN", "ACTUAL"]`);
+    }
+    if (JSON.stringify(subCells) !== JSON.stringify(wantSubHeaders)) {
+      fail(c.name, `cost-lines sub-headers = ${JSON.stringify(subCells)}, want ${JSON.stringify(wantSubHeaders)}`);
     }
     // Footnote present
     if (!info.footnote || !/adjusted/i.test(info.footnote) || !/target percent buys/i.test(info.footnote)) {
@@ -155,19 +169,16 @@ async function main() {
       }
     }
 
-    // Chart fold: present, collapsed, bars not rendered.
-    if (!info.chartOpen) fail(c.name, `chart fold missing · [data-kpi-ov="chart-fold"] absent`);
-    if (info.chartOpen !== "0") fail(c.name, `chart fold not collapsed by default · data-kpi-ov-open=${JSON.stringify(info.chartOpen)}`);
-    if (info.chartTriggerExpanded !== "false") fail(c.name, `chart trigger aria-expanded=${JSON.stringify(info.chartTriggerExpanded)}, want "false"`);
-    if (info.chartBarsWhileCollapsed) fail(c.name, `chart bars rendered while fold collapsed`);
-    // Chart is after P&L in DOM
-    if (info.chartAfterPnl === false) fail(c.name, `chart fold not beneath P&L fold`);
+    // Kevin ruling final-presentation (2026-09-03) item 4: chart is
+    // no longer a fold - it moves back into the right column below
+    // cost of goods, always open. `_probe_final_presentation.mjs`
+    // asserts chart-not-fold + chart-in-right; skip those here.
 
-    // P&L fold collapsed by default too.
+    // P&L fold collapsed by default (the only remaining fold).
     if (info.pnlOpen !== "0") fail(c.name, `P&L fold not collapsed by default · data-kpi-ov-open=${JSON.stringify(info.pnlOpen)}`);
 
     const after = FAILS.length;
-    console.log(`  ${after === before ? "OK  " : "FAIL"} ${c.name.padEnd(16)} cols=${info.cols} chartFold=${info.chartOpen} pnlFold=${info.pnlOpen}`);
+    console.log(`  ${after === before ? "OK  " : "FAIL"} ${c.name.padEnd(16)} cols=${info.cols} pnlFold=${info.pnlOpen}`);
   }
 
   await browser.close();
