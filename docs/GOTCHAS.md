@@ -31,6 +31,32 @@ Corollary for anything asynchronous: if a network call is expected and none appe
 
 Incident: SC stale-view-after-save (B8). Three fixes at the cache layer, all wrong; the cache was never broken, the code that triggers it was being skipped. Two console traces resolved it in seconds.
 
+### A path that reports success unconditionally cannot surface its own failure
+
+Three instances in two days (2026-09-02 to 2026-09-03), same durable shape. The report or signal downstream of an operation runs regardless of whether the operation actually succeeded. When the operation silently fails, the report still says "OK" - because the report was never derived from the outcome. Nothing operator-visible ever contradicts the pretence, and the failure hides for weeks.
+
+**The three instances:**
+
+1. **UI copy claiming delivery that never happened** (2026-09-02, `verify_behaviour_before_shipping_copy` feedback memory). A confirmation page said "AP has been emailed" - a hardcoded string in the render, independent of whether the email code ran or succeeded. Two live UI lies traced to this in one session; the render was the "signal", the actual delivery was never checked.
+
+2. **Postflight `WHERE col <> value` on a nullable column** (2026-09-03, sc-40 original postflight). If the un-updated state was NULL, `NULL <> value` returned NULL, the WHERE dropped the row, and the postflight counted zero bad rows regardless of whether the UPDATE fired. The postflight passed on the exact failure it was written to catch. See the Postgres section entry for the technical detail + `IS DISTINCT FROM` fix.
+
+3. **`log.info("[N1 fired]", ...)` regardless of email delivery** (2026-09-03, this PR). `scWeekFinalize.js` logged `[N1 fired]` after every successful invoice push, with `emailResult` embedded in the payload - but the log line itself was at `info` and unconditional, and `sendEmailSA` swallowed the underlying `invalid_grant` exception into a benign `"failed"` return that no operator was grepping for. N1 email had been silently failing since sender deactivation (unknown pre-2026-09-03 date, but the code path shipped 2026-08-11 in PR-C so the maximum window is 23 days). Kevin noticed only when a live finalize on 2026-09-03 produced no email he was expecting.
+
+**The pattern.** A signal is only a signal if it derives from the thing it claims to represent. `render("AP has been emailed")` is a claim about an email that was never checked. `postflight WHERE <> value` is a claim about a WHERE-filtered count that cannot see the state it needs to catch. `log.info("[N1 fired]")` at `info` level regardless of `emailResult` is a claim about firing that is not conditioned on the fire.
+
+**The rule.** Before writing a report / render / log / postflight / dashboard tile that claims success, ask: "would this signal still say success if the operation silently failed?" If yes, the signal is architecturally incapable of failing and is not a signal - it is decoration. Either:
+
+1. **Derive the report from the outcome.** `render(emailResult === "sent" ? "AP has been emailed" : "AP email failed - flag for retry")`. Different string on different outcome. If the outcome is not observable, do (2).
+2. **Split the log tier on the outcome.** `if (result.ok) log.info(...) else log.warn(...)`. Same event, different levels, greppable separation. This PR does that for N1: `log.info("[N1 fired]", ...)` for both-channels-sent, `log.warn("[N1 delivery incomplete]", ...)` otherwise.
+3. **Use NULL-aware comparisons in postflights**, so a nullable column being NULL is treated as "distinct from the expected value", not "unknown, drop the row". `IS DISTINCT FROM` for scalars, `COALESCE(fn(col), 0)` for functions that return NULL on empty.
+
+**Where to sweep**:
+- Every UI copy string with a verb like "sent", "saved", "created", "confirmed", "recorded". If the string is a hardcoded render, verify a caller upstream actually did the thing.
+- Every `catch { return "failed" }` or `catch { return [] }` inside a helper that a caller logs at `info` without branching. The helper's return-shape lies about success.
+- Every `log.info` / `console.log` / status write that runs unconditionally after an async operation. Ask: does the log line's presence prove the operation succeeded? If not, split the tier.
+- Every postflight or verify block. Trace through the failure case mentally: if the mutation was blocked, would the postflight fire? If no, rewrite.
+
 ---
 
 ## Data & Sheets
@@ -238,11 +264,13 @@ The Sheets `catch { return { headers: [], rows: [] } }` sites (`src/lib/sheets.j
 
 ### Postflight `<>` against a nullable column silently passes on the state it exists to catch
 
+Postgres-specific instance of the broader pattern **"A path that reports success unconditionally cannot surface its own failure"** (Debugging method section). Kept here for the technical detail + `IS DISTINCT FROM` fix.
+
 sc-40 (2026-09-03) shipped a postflight of the form `WHERE rdo_email <> 's.lynch@kitchfix.com'`. If a WHERE-guarded UPDATE didn't fire and the row stayed `rdo_email = NULL`, the postflight evaluated `NULL <> 's.lynch@kitchfix.com'` which returns `NULL`, not `TRUE`. The `WHERE` filter drops NULL-predicate rows, so the failure-check counted zero bad rows and the postflight passed on the exact state it was written to detect. Empty arrays are the same class: `array_length(ARRAY[]::text[], 1)` returns `NULL`, so `array_length(...) <> 3` is also `NULL` and never fires.
 
 **The rule.** Postflights on nullable columns use `IS DISTINCT FROM`, not `<>`. `IS DISTINCT FROM` treats `NULL` as a real value and returns `TRUE` on the mismatch. For array-length predicates, wrap the call: `COALESCE(array_length(col, 1), 0) IS DISTINCT FROM N`. `array_length` on an empty array returns `NULL` regardless of the underlying element type.
 
-**Second failure in two days, same outcome.** The 2026-09-02 precision-recon verify block reported "no variance" while pointed at the wrong price row (JAN canonical vs latest-per-service). Different mechanism - a wrong join instead of a NULL comparison - but the same durable failure shape: a check that says "PASS" while looking at data that cannot answer the question. When a verify block is written, ask both "does this check the intended state" AND "would this check still pass if the state was wrong in the way I most fear."
+**Related instance from a different mechanism**: the 2026-09-02 precision-recon verify block reported "no variance" while pointed at the wrong price row (JAN canonical vs latest-per-service). Not a NULL comparison, but the same "PASS while looking at data that cannot answer the question" shape - both are subcases of the Debugging method pattern above.
 
 **When sweeping for this class**, grep migration files for `<>` inside a `WHERE` clause that references a nullable column (rdo_email, salaried_manager_emails, any recently-added column that hasn't been backfilled). Any `<>` against a column that can be NULL is a candidate for rewrite to `IS DISTINCT FROM`. Same for `=` inside `NOT (...)` expressions - `NOT (col = 'x')` is `NULL` when `col IS NULL`.
 
