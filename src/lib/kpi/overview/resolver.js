@@ -1288,9 +1288,12 @@ export async function resolveOverview({
         if (sc_counts_without_dollars) return { label: "Not yet reporting", tone: "neutral" };
         if (flags.planned) return { label: "Planned", tone: "warn" };
         if (revenueDelta == null) return { label: "No data", tone: "neutral" };
+        // Kevin ruling 2026-09-03 follow-up: Revenue reads Forecast,
+        // not Budget. Pill echoes the row label the same way COGS pill
+        // echoes "target".
         return revenueDelta >= 0
-          ? { label: "Above budget", tone: "good" }
-          : { label: "Below budget", tone: "bad" };
+          ? { label: "Above forecast", tone: "good" }
+          : { label: "Below forecast", tone: "bad" };
       })(),
       sources: [...totalRevSources],
     },

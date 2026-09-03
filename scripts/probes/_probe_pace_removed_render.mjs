@@ -149,9 +149,9 @@ async function main() {
     }
     console.log("");
   }
-  // A2 - right column has exactly two children (Revenue lines +
-  // Also tracked) in that order on single-account view (skip FYTD
-  // aggregate cases).
+  // A2 - Kevin ruling 2026-09-03 (simplified-layout): columns swap.
+  // LEFT column now carries Revenue lines + Also tracked; RIGHT
+  // column carries Cost lines.
   for (const viewport of [1680, 1366]) {
     for (const c of CASES) {
       const url = c.qs
@@ -161,15 +161,24 @@ async function main() {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
       await page.waitForResponse(r => r.url().includes("/api/kpi/overview"), { timeout: 15000 }).catch(() => null);
       await page.waitForTimeout(400);
-      const kids = await page.evaluate(() => {
+      const cols = await page.evaluate(() => {
+        const left = document.querySelector('.kpi-ov-split-left');
         const right = document.querySelector('.kpi-ov-split-right');
-        if (!right) return null;
-        return [...right.children].map(el => el.getAttribute("data-kpi-ov"));
+        return {
+          left:  left  ? [...left.children ].map(el => el.getAttribute("data-kpi-ov")) : null,
+          right: right ? [...right.children].map(el => el.getAttribute("data-kpi-ov")) : null,
+        };
       });
-      if (kids) {
-        const expected = ["revenue-lines", "also-tracked"];
-        if (JSON.stringify(kids) !== JSON.stringify(expected)) {
-          fail(`${c.name} @${viewport}`, `right column kids=${JSON.stringify(kids)} != ${JSON.stringify(expected)}`);
+      if (cols.left) {
+        const expectedLeft = ["revenue-lines", "also-tracked"];
+        if (JSON.stringify(cols.left) !== JSON.stringify(expectedLeft)) {
+          fail(`${c.name} @${viewport}`, `left column kids=${JSON.stringify(cols.left)} != ${JSON.stringify(expectedLeft)}`);
+        }
+      }
+      if (cols.right) {
+        const expectedRight = ["cost-lines"];
+        if (JSON.stringify(cols.right) !== JSON.stringify(expectedRight)) {
+          fail(`${c.name} @${viewport}`, `right column kids=${JSON.stringify(cols.right)} != ${JSON.stringify(expectedRight)}`);
         }
       }
     }
@@ -203,7 +212,7 @@ async function main() {
   }
   console.log("");
   if (FAILS.length === 0) {
-    console.log(`Result: PacePanel gone, right column is Revenue lines then Also tracked, counts-without-dollars renders on Revenue card.`);
+    console.log(`Result: PacePanel gone, left column is Revenue lines then Also tracked (per 2026-09-03 swap), counts-without-dollars renders on Revenue card.`);
     process.exit(0);
   }
   console.log(`Result: ${FAILS.length} violation(s):`);

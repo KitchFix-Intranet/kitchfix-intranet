@@ -31,7 +31,7 @@ function fmtMoney(n) {
 // from the chart entirely. The axis labels + bar height carry the
 // signal; a tooltip that duplicates them is noise.
 
-function ChartPeriodGrain({ series, revenueModel }) {
+function ChartPeriodGrain({ series, revenueModel, bare = false }) {
   // Kevin PR-B item 10 (2026-09-03): caption + tooltip vary by
   // revenue model. SC-driven + sales-based accounts draw dashes at
   // ADJUSTED budget; management-fee accounts draw them at PERIOD
@@ -61,6 +61,76 @@ function ChartPeriodGrain({ series, revenueModel }) {
   // seeded axis fires when the max is computed from bars alone.
   const mx = Math.max(...spends, ...dashes, 1) * 1.16;
 
+  // Kevin ruling 2026-09-03 (simplified-layout): `bare` mode skips
+  // the outer .kpi-ov-card + .kpi-ov-ch header when the caller (the
+  // fold shell in Chart's default export) provides them. Portfolio
+  // scope still renders the full card.
+  const bars = (
+    <div className="kpi-ov-bars kpi-ov-bars-inset">
+      {series.map((s, i) => {
+        const val = Number(s.spent || 0);
+        const bud = Number(dashValue(s) || 0);
+        const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
+        const budPct = bud > 0 ? (bud / mx) * 100 : null;
+        const classSuffix =
+          s.state === "in_progress" ? "kpi-ov-bar-hatch"
+          : s.state === "not_started" ? "kpi-ov-bar-dash"
+          : val <= bud ? "kpi-ov-bar-good"
+          : "kpi-ov-bar-over";
+        return (
+          <i
+            key={i}
+            className={`kpi-ov-bar ${classSuffix}`}
+            style={{ height: `${hgt}%` }}
+            data-kpi-ov-bar-state={s.state}
+            data-kpi-ov-period={s.period_no}
+            data-kpi-ov-bar-val={val}
+            data-kpi-ov-bar-bud={bud}
+          >
+            {budPct != null && (
+              <span
+                className="kpi-ov-bar-perbud"
+                style={{
+                  left: "-5%",
+                  right: "-5%",
+                  bottom: hgt > 0 ? `${(budPct / hgt) * 100}%` : "0%",
+                }}
+                aria-hidden="true"
+                data-kpi-ov="bar-budget-dash"
+                data-kpi-ov-dash-val={bud}
+              />
+            )}
+          </i>
+        );
+      })}
+    </div>
+  );
+  const axis = (
+    <div className="kpi-ov-axis">
+      {series.map((s, i) => (
+        <span key={i}>
+          P{s.period_no}
+          <span className={`kpi-ov-amt ${s.state === "in_progress" || s.state === "not_started" ? "kpi-ov-nb" : (Number(s.spent || 0) <= Number(dashValue(s) || 0) ? "kpi-ov-good" : "kpi-ov-bad")}`}>
+            {s.state === "in_progress" ? "running" : s.state === "not_started" ? "not started" : fmtMoney(Number(s.spent || 0))}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+  const legend = (
+    <div className="kpi-ov-legend">
+      <span><i className="kpi-ov-bar-good" />under budget</span>
+      <span><i className="kpi-ov-bar-over" />over budget</span>
+      <span><i className="kpi-ov-bar-hatch" />running</span>
+    </div>
+  );
+  if (bare) {
+    return (
+      <div className="kpi-ov-cb" data-kpi-ov="chart" data-kpi-ov-grain="period">
+        {bars}{axis}{legend}
+      </div>
+    );
+  }
   return (
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="period">
       <div className="kpi-ov-ch">
@@ -74,74 +144,13 @@ function ChartPeriodGrain({ series, revenueModel }) {
         <span className="kpi-ov-pill kpi-ov-pill-neutral">{series.length} periods</span>
       </div>
       <div className="kpi-ov-cb">
-        <div className="kpi-ov-bars kpi-ov-bars-inset">
-          {series.map((s, i) => {
-            const val = Number(s.spent || 0);
-            const bud = Number(dashValue(s) || 0);
-            const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
-            const budPct = bud > 0 ? (bud / mx) * 100 : null;
-            const classSuffix =
-              s.state === "in_progress" ? "kpi-ov-bar-hatch"
-              : s.state === "not_started" ? "kpi-ov-bar-dash"
-              : val <= bud ? "kpi-ov-bar-good"
-              : "kpi-ov-bar-over";
-            return (
-              <i
-                key={i}
-                className={`kpi-ov-bar ${classSuffix}`}
-                style={{ height: `${hgt}%` }}
-                data-kpi-ov-bar-state={s.state}
-                data-kpi-ov-period={s.period_no}
-                data-kpi-ov-bar-val={val}
-                data-kpi-ov-bar-bud={bud}
-              >
-                {/* Item 14 fix (Kevin 2026-09-02): dash sits at each
-                    period's OWN budget height. Prior formula
-                    ((budPct - hgt) / hgt) * 100 anchored the dash to
-                    (budget - value) above bar bottom rather than to
-                    the budget value itself - so on a period where
-                    revenue was much larger than spend the dash
-                    collapsed to the bottom of the bar. Correct
-                    formula: (budPct / hgt) * 100 places the dash at
-                    `budPct%` of the chart, regardless of bar height. */}
-                {budPct != null && (
-                  <span
-                    className="kpi-ov-bar-perbud"
-                    style={{
-                      left: "-5%",
-                      right: "-5%",
-                      bottom: hgt > 0 ? `${(budPct / hgt) * 100}%` : "0%",
-                    }}
-                    aria-hidden="true"
-                    data-kpi-ov="bar-budget-dash"
-                    data-kpi-ov-dash-val={bud}
-                  />
-                )}
-              </i>
-            );
-          })}
-        </div>
-        <div className="kpi-ov-axis">
-          {series.map((s, i) => (
-            <span key={i}>
-              P{s.period_no}
-              <span className={`kpi-ov-amt ${s.state === "in_progress" || s.state === "not_started" ? "kpi-ov-nb" : (Number(s.spent || 0) <= Number(dashValue(s) || 0) ? "kpi-ov-good" : "kpi-ov-bad")}`}>
-                {s.state === "in_progress" ? "running" : s.state === "not_started" ? "not started" : fmtMoney(Number(s.spent || 0))}
-              </span>
-            </span>
-          ))}
-        </div>
-        <div className="kpi-ov-legend">
-          <span><i className="kpi-ov-bar-good" />under budget</span>
-          <span><i className="kpi-ov-bar-over" />over budget</span>
-          <span><i className="kpi-ov-bar-hatch" />running</span>
-        </div>
+        {bars}{axis}{legend}
       </div>
     </div>
   );
 }
 
-function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
+function ChartWeekGrain({ series, weeklyBudget, periodNo, bare = false }) {
   const wkB = Number(weeklyBudget || 0);
   const spends = series.map(s => Number(s.spent || 0));
   // PR-2 item 17 (2026-09-02): scale to max * 1.16. See period-grain
@@ -159,6 +168,71 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
   // Item 13 (Kevin 2026-09-02 language pass): tooltip removed. The
   // axis + bar colour carry the signal.
 
+  // Kevin ruling 2026-09-03 (simplified-layout): `bare` mode drops
+  // the outer card + header when the fold shell owns them.
+  const budgetLabelStrip = wkB > 0 ? (
+    <div className="kpi-ov-tgt-label" data-kpi-ov="chart-budget-label">
+      budget {fmtMoney(wkB)} / wk
+    </div>
+  ) : null;
+  const bars = (
+    <div className="kpi-ov-bars kpi-ov-bars-inset">
+      {wkB > 0 && (
+        <div className="kpi-ov-tgt" style={{ bottom: `${Math.round((wkB / mx) * 100)}%` }} aria-hidden="true" />
+      )}
+      {series.map((s, i) => {
+        const val = Number(s.spent || 0);
+        if (s.state === "not_started") {
+          return (
+            <i
+              key={i}
+              className="kpi-ov-bar kpi-ov-bar-dash"
+              data-kpi-ov-bar-state="not_started"
+              data-kpi-ov-week-start={s.week_start}
+            />
+          );
+        }
+        const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
+        const classSuffix =
+          s.state === "in_progress" ? "kpi-ov-bar-hatch"
+          : val <= wkB ? "kpi-ov-bar-good"
+          : "kpi-ov-bar-over";
+        return (
+          <i
+            key={i}
+            className={`kpi-ov-bar ${classSuffix}`}
+            style={{ height: `${hgt}%` }}
+            data-kpi-ov-bar-state={s.state}
+            data-kpi-ov-week-start={s.week_start}
+          />
+        );
+      })}
+    </div>
+  );
+  const axis = (
+    <div className="kpi-ov-axis">
+      {series.map((s, i) => (
+        <span key={i}>
+          Week {i + 1}
+          <small>{fmtWeekLabel(s.week_start, s.week_end)}</small>
+          <span className={`kpi-ov-amt ${s.state === "closed" ? (Number(s.spent || 0) <= (wkB || 0) ? "kpi-ov-good" : "kpi-ov-bad") : "kpi-ov-nb"}`}>
+            {s.state === "not_started" ? "- starts later"
+              : s.state === "in_progress" ? "running"
+              : fmtMoney(Number(s.spent || 0))}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+  if (bare) {
+    return (
+      <div className="kpi-ov-cb" data-kpi-ov="chart" data-kpi-ov-grain="week">
+        {budgetLabelStrip}
+        {bars}
+        {axis}
+      </div>
+    );
+  }
   return (
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="week">
       <div className="kpi-ov-ch">
@@ -178,72 +252,54 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo }) {
         </span>
       </div>
       <div className="kpi-ov-cb">
-        {/* C12 (2026-09-01): budget label moves out of the bar area
-            and sits above the chart to the left, so it cannot collide
-            with the weeks-closed pill on the right. The dashed target
-            line remains anchored to the wkB height inside the bar area
-            (kpi-ov-tgt); only its label moved out. */}
-        {wkB > 0 && (
-          <div className="kpi-ov-tgt-label" data-kpi-ov="chart-budget-label">
-            budget {fmtMoney(wkB)} / wk
-          </div>
-        )}
-        <div className="kpi-ov-bars kpi-ov-bars-inset">
-          {wkB > 0 && (
-            <div className="kpi-ov-tgt" style={{ bottom: `${Math.round((wkB / mx) * 100)}%` }} aria-hidden="true" />
-          )}
-          {series.map((s, i) => {
-            const val = Number(s.spent || 0);
-            if (s.state === "not_started") {
-              return (
-                <i
-                  key={i}
-                  className="kpi-ov-bar kpi-ov-bar-dash"
-                  data-kpi-ov-bar-state="not_started"
-                  data-kpi-ov-week-start={s.week_start}
-                />
-              );
-            }
-            const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
-            const classSuffix =
-              s.state === "in_progress" ? "kpi-ov-bar-hatch"
-              : val <= wkB ? "kpi-ov-bar-good"
-              : "kpi-ov-bar-over";
-            return (
-              <i
-                key={i}
-                className={`kpi-ov-bar ${classSuffix}`}
-                style={{ height: `${hgt}%` }}
-                data-kpi-ov-bar-state={s.state}
-                data-kpi-ov-week-start={s.week_start}
-              />
-            );
-          })}
-        </div>
-        <div className="kpi-ov-axis">
-          {series.map((s, i) => (
-            <span key={i}>
-              Week {i + 1}
-              <small>{fmtWeekLabel(s.week_start, s.week_end)}</small>
-              <span className={`kpi-ov-amt ${s.state === "closed" ? (Number(s.spent || 0) <= (wkB || 0) ? "kpi-ov-good" : "kpi-ov-bad") : "kpi-ov-nb"}`}>
-                {s.state === "not_started" ? "- starts later"
-                  : s.state === "in_progress" ? "running"
-                  : fmtMoney(Number(s.spent || 0))}
-              </span>
-            </span>
-          ))}
-        </div>
+        {budgetLabelStrip}
+        {bars}
+        {axis}
       </div>
     </div>
   );
 }
 
-export default function Chart({ chart, revenueModel }) {
+// Kevin ruling 2026-09-03 (simplified-layout): the chart moves to
+// the bottom of the board and renders as a fold. Both P&L + Chart
+// are folds; neither is open by default. `open` + `onToggle` optional
+// so the portfolio branch (no fold state wired) still renders inline.
+export default function Chart({ chart, revenueModel, open, onToggle }) {
   if (!chart || !Array.isArray(chart.series) || chart.series.length === 0) {
     return null;
   }
-  if (chart.grain === "period") {
-    return <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} />;
+  // Portfolio branch (no fold props): render the full self-contained
+  // card, unchanged from pre-2026-09-03.
+  if (typeof onToggle !== "function") {
+    return chart.grain === "period"
+      ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} />
+      : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} />;
   }
-  return <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} />;
+  const body = chart.grain === "period"
+    ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} bare />
+    : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} bare />;
+
+  const grainLabel = chart.grain === "period"
+    ? "period by period"
+    : "week by week";
+  return (
+    <div
+      className={`kpi-ov-card kpi-ov-card-cogs kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
+      data-kpi-ov="chart-fold"
+      data-kpi-ov-open={open ? "1" : "0"}
+    >
+      <button
+        type="button"
+        className="kpi-ov-fold-trigger"
+        data-kpi-ov="fold-chart"
+        onClick={onToggle}
+        aria-expanded={open ? "true" : "false"}
+      >
+        <span className="kpi-ov-eb">Cost of goods sold, {grainLabel}</span>
+        <span className="kpi-ov-gl">bars are spend · line is the budget</span>
+        <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
+      </button>
+      {open && body}
+    </div>
+  );
 }

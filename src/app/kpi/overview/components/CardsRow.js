@@ -66,11 +66,16 @@ function fmtPct(n) {
 
 // Item 4: horizon in the row labels. Open range means the two figures
 // carry a time dimension; closed range does not.
+//
+// Kevin ruling 2026-09-03 follow-up: the Revenue card's reference row
+// reads Forecast (not Budget), on every account and every range. Cost
+// and margin cards still measure against a Target, so this rename
+// only applies to Revenue.
 function actualLabel(periodState) {
   return periodState === "open" ? "Actual to date" : "Actual";
 }
-function budgetLabel(periodState) {
-  return periodState === "open" ? "Budget to date" : "Budget";
+function forecastLabel(periodState) {
+  return periodState === "open" ? "Forecast to date" : "Forecast";
 }
 
 // Static tooltip fragments. Envelope + full-year live figures merged
@@ -202,7 +207,7 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
         </div>
         <div className="kpi-ov-pair-rule" aria-hidden="true" />
         <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
-          <span className="kpi-ov-pair-k">{budgetLabel(periodState)}</span>
+          <span className="kpi-ov-pair-k">{forecastLabel(periodState)}</span>
           <span className="kpi-ov-pair-v kpi-ov-num">
             {budgetRefText != null ? budgetRefText : "—"}
           </span>

@@ -178,7 +178,6 @@ async function main() {
     const info = await inspect(page, c);
     const isOpen = c.kind === "single_open";
     const actualLabel = isOpen ? "Actual to date" : "Actual";
-    const budgetLabel = isOpen ? "Budget to date" : "Budget";
 
     // Item 1: pill copy per range.
     if (!info.status) {
@@ -198,7 +197,10 @@ async function main() {
     }
 
     // Item 2 + 4: each card.
-    assertCard(c.name, "Revenue", info.revenue, c, actualLabel, budgetLabel);
+    // Kevin ruling 2026-09-03 follow-up: Revenue reference row reads
+    // Forecast (not Budget) on every account, every range.
+    const revRefLabel = isOpen ? "Forecast to date" : "Forecast";
+    assertCard(c.name, "Revenue", info.revenue, c, actualLabel, revRefLabel);
     assertCard(c.name, "COGS", info.cogs, c, actualLabel, "Target");
     assertCard(c.name, "GM", info.gm, c, actualLabel, "Target");
 
