@@ -269,11 +269,14 @@ export function RangeMenu({
                 );
               })}
             </div>
-            {/* Item 2 legend: four states named. */}
+            {/* Kevin ruling final-picker (2026-09-03) item 11: four
+                states named. "running now" (was "running"); "next ·
+                budget only" (was "next") - the sub-note names why
+                the next-period board reads as a planning surface. */}
             <div className="kpi-rmenu-legend" data-kpi-rmenu="legend">
               <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-clo" />closed</span>
-              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-run" />running</span>
-              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-nxt" />next</span>
+              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-run" />running now</span>
+              <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-nxt" />next · budget only</span>
               <span><i className="kpi-rmenu-lgi kpi-rmenu-lgi-fut" />not started</span>
             </div>
           </div>
