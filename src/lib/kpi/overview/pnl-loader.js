@@ -91,6 +91,61 @@ export async function loadAccountFlags(supa) {
   return { data: out };
 }
 
+// ─── inventory_adjustments reader ───────────────────────────────────
+//
+// Kevin R-61 (2026-09-03): Sebastian's per-period inventory adjusting
+// journal entries are booked at each period close and applied to
+// 3200 (food) + 3400 (packaging + supplies) to convert purchases into
+// USED cost - the way finance measures it.
+//
+//   adjusted_cost = purchases - adjusting_je
+//
+// Migration-gated: docs/migrations/inventory-adjustments-1.sql. If
+// the table doesn't exist yet (pre-migration environment), returns
+// an empty map so the Overview keeps rendering purchases-as-is.
+//
+// Returns Map<account_key, Map<period_no, Map<gl_line_code, adjusting_je_sum>>>.
+// gl_line_code: "3200" (food) or "3400" (packaging + supplies summed).
+// adjusting_je is the SIGNED sum for the (account, period, gl) tuple.
+export async function loadInventoryAdjustments(supa, { members, periods, fiscalYear = 2026 }) {
+  if (!members || members.length === 0 || !periods || periods.length === 0) {
+    return { data: new Map() };
+  }
+  const out = new Map();
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    const q = await supa
+      .from("inventory_adjustments")
+      .select("account_key, period_no, gl_line_code, adjusting_je")
+      .eq("fiscal_year", fiscalYear)
+      .in("account_key", memberChunk)
+      .in("period_no", periods);
+    if (q.error) {
+      // Pre-migration: table absent. Ship an empty map; the resolver's
+      // callers must treat "no JE" as "no adjustment" per the absent-
+      // vs-zero rule. Never fabricate a zero.
+      // Postgres native: 42P01 (undefined_table). PostgREST/Supabase
+      // wraps this as PGRST205 with the "Could not find the table"
+      // message. Match either code.
+      if (q.error.code === "42P01" || q.error.code === "PGRST205") {
+        return { data: out };
+      }
+      return { error: q.error, scope: "inventory_adjustments" };
+    }
+    for (const r of q.data || []) {
+      const acct = String(r.account_key);
+      const per = Number(r.period_no);
+      const gl = String(r.gl_line_code);
+      const je = Number(r.adjusting_je || 0);
+      if (!out.has(acct)) out.set(acct, new Map());
+      const byAcct = out.get(acct);
+      if (!byAcct.has(per)) byAcct.set(per, new Map());
+      const byPer = byAcct.get(per);
+      byPer.set(gl, (byPer.get(gl) || 0) + je);
+    }
+  }
+  return { data: out };
+}
+
 // ─── pnl_actuals reader (per-member, per-period range) ──────────────
 //
 // Returns a nested Map:

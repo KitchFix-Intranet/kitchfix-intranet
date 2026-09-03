@@ -74,7 +74,7 @@ function labelBudget(range, periodState) {
   return "Period budget";
 }
 
-function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars, rangeComposition, rangeLabels }) {
+function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithoutDollars, rangeComposition, rangeLabels, inventoryStatus }) {
   const ptd = labelPtd(rangeLabels, periodState);
   const budgetLabel = labelBudget(range, periodState);
   // Item 4: eyebrow "Revenue actuals P1-P8" on FYTD; on a single
@@ -196,6 +196,22 @@ function RevenueCard({ card, range, periodState, revenuePacePct, scCountsWithout
             data-kpi-ov="revenue-composition-summary"
           >
             {rangeComposition.summary}
+          </div>
+        )}
+        {/* Kevin R-61 (2026-09-03): inventory status badge - card 1's
+            statement on whether the range's cost figures reflect
+            Sebastian's finalised inventory adjusting journal entries.
+            Absent on accounts that don't carry inventory (management-
+            fee / pass-through) and on single-open ranges. */}
+        {inventoryStatus && (
+          <div
+            className={`kpi-ov-sub kpi-ov-inv-badge kpi-ov-inv-badge-${inventoryStatus.status}`}
+            data-kpi-ov="inventory-status"
+            data-kpi-ov-inv-status={inventoryStatus.status}
+          >
+            {inventoryStatus.status === "actualized"
+              ? "Inventory actualized"
+              : `Pending inventory · ${inventoryStatus.pending_periods.map(p => "P" + p).join(", ")}`}
           </div>
         )}
       </div>
@@ -321,7 +337,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels })
   );
 }
 
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition, rangeLabels }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenuePacePct, revenueSourceState, rangeComposition, rangeLabels, inventoryStatus }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
@@ -339,6 +355,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           scCountsWithoutDollars={scCountsWithoutDollars}
           rangeComposition={rangeComposition}
           rangeLabels={rangeLabels}
+          inventoryStatus={inventoryStatus}
         />
       )}
       {cogs && (
