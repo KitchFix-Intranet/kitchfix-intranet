@@ -35,6 +35,13 @@ export default function Ribbon({
   todayLabel,
   periodNum,
   weekNum,
+  // 2026-09-03 (SC cleanup item 4): account-switch skeleton. When
+  // true, TODAY / PERIOD / WEEK stat values render as shimmer bars
+  // instead of "-" placeholder dashes. Account picker + scope
+  // toggles stay real (chrome, not data). Threaded through to
+  // RibbonMeta so the meta readout can render the same shape as
+  // loaded but with skeletoned values.
+  isLoading = false,
   /* G4 (2026-07-19): fee/homestand accounts render "TODAY | GAME DAYS
      {n}/{m}" instead of TODAY | PERIOD | WEEK.
      DP2-02b (2026-07-20): the GAME DAYS treatment is for TRUE MLB fee
@@ -124,6 +131,7 @@ export default function Ribbon({
               isFeeAccount={isFeeAccount}
               gameDaysEntered={gameDaysEntered}
               totalGameDays={totalGameDays}
+              isLoading={isLoading}
             />
             {drillNavEnd && (
               <>
@@ -187,25 +195,34 @@ function RibbonMeta({
   isFeeAccount,
   gameDaysEntered,
   totalGameDays,
+  isLoading = false,
 }) {
   // DP2-02b (2026-07-20): GAME DAYS variant reserved for TRUE MLB fee
   // homestand (fee + homestand). MiLB is per-meal + homestand-shape
   // but its ribbon readout should read PERIOD/WEEK like per-meal.
   const showGameDays = hasHomestandSchedule && isFeeAccount;
+  // 2026-09-03 (SC cleanup item 4): skeleton bars replace "-"
+  // placeholder dashes during account-switch load. Zero risk of
+  // reading as real data - the shimmer sweeps left-to-right.
+  const skel = <span className="sc-skel-shimmer sc-skel-bar-ribbon" aria-hidden="true" />;
   return (
     <div className="sc-ribbon-meta" aria-label="Current context readout">
       <span className="sc-ribbon-meta-seg">
         <span className="sc-ribbon-meta-label">TODAY</span>
-        <span className="sc-ribbon-meta-value">{todayLabel || "-"}</span>
+        <span className="sc-ribbon-meta-value">{isLoading ? skel : (todayLabel || "-")}</span>
       </span>
       {showGameDays ? (
-        (totalGameDays || 0) > 0 && (
+        // GAME DAYS: when loading, render the segment with a skeleton
+        // count. Without this branch it hides during load, which
+        // silently changes the ribbon shape mid-swap; skeletoning
+        // keeps the meta shape stable.
+        (isLoading || (totalGameDays || 0) > 0) && (
           <>
             <span className="sc-ribbon-meta-sep" aria-hidden="true" />
             <span className="sc-ribbon-meta-seg">
               <span className="sc-ribbon-meta-label">GAME DAYS</span>
               <span className="sc-ribbon-meta-value">
-                {gameDaysEntered || 0}/{totalGameDays}
+                {isLoading ? skel : `${gameDaysEntered || 0}/${totalGameDays}`}
               </span>
             </span>
           </>
@@ -215,14 +232,14 @@ function RibbonMeta({
           <span className="sc-ribbon-meta-sep" aria-hidden="true" />
           <span className="sc-ribbon-meta-seg">
             <span className="sc-ribbon-meta-label">PERIOD</span>
-            <span className="sc-ribbon-meta-value">{periodNum || "-"}</span>
+            <span className="sc-ribbon-meta-value">{isLoading ? skel : (periodNum || "-")}</span>
           </span>
-          {weekNum && (
+          {(isLoading || weekNum) && (
             <>
               <span className="sc-ribbon-meta-sep" aria-hidden="true" />
               <span className="sc-ribbon-meta-seg">
                 <span className="sc-ribbon-meta-label">WEEK</span>
-                <span className="sc-ribbon-meta-value">{weekNum}</span>
+                <span className="sc-ribbon-meta-value">{isLoading ? skel : weekNum}</span>
               </span>
             </>
           )}

@@ -1,0 +1,238 @@
+/* ═══════════════════════════════════════════════════════════════════
+   SkeletonSurface styles - SC account-switch loading state.
+   2026-09-03 (SC cleanup item 4).
+   ═══════════════════════════════════════════════════════════════════
+
+   Own custom properties (--sc2-skeleton-*) rather than reusing
+   --sc2-line-2 / --sc2-paper per Kevin's ruling: "a skeleton needs
+   to be tunable without touching border and surface colours
+   everywhere else, and reusing them means the next person adjusting
+   a border accidentally changes the loading state."
+
+   Motion is the signal. A static gray reads as empty state; the
+   shimmer reads as pending. 1.4s cycle picks a rhythm that reads
+   as "working" without being distracting.
+
+   Design floor 375px (per CLAUDE.md): the surface uses simple
+   percentages + flex-wrap so the two-column body+rail stacks
+   vertically on narrow. */
+
+:root {
+  --sc2-skeleton-base:      #e6ecf2;  /* base tint, quiet paper-adjacent */
+  --sc2-skeleton-highlight: #f5f7fa;  /* highlight, near-white for sweep */
+  --sc2-skeleton-radius:    6px;
+  --sc2-skeleton-radius-lg: 10px;
+}
+
+/* Prefers-dark: could darken the palette if SC ever ships a dark
+   theme. Not shipping today; hook is here so a future add is one
+   media query, not a class rewrite. */
+
+@keyframes sc-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes sc-skeleton-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Shimmer atom - width comes from parent class. Every skeleton
+   element on the surface uses this animation via composition. */
+.sc-skel-shimmer {
+  display: inline-block;
+  background:
+    linear-gradient(
+      90deg,
+      var(--sc2-skeleton-base) 0%,
+      var(--sc2-skeleton-highlight) 50%,
+      var(--sc2-skeleton-base) 100%
+    );
+  background-size: 200% 100%;
+  animation: sc-skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--sc2-skeleton-radius);
+  min-height: 12px;
+}
+
+/* Spinner glyph - a real animation, not just static "…". Used in
+   the caption at the top of the surface + at the top of the rail. */
+.sc-skel-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--sc2-skeleton-base);
+  border-top-color: #7a8ea3;
+  border-radius: 50%;
+  animation: sc-skeleton-spin 0.9s linear infinite;
+}
+
+/* Surface container - matches the layout the real drill/season
+   render occupies. Grows to fill; two-column on wide, stacked on
+   narrow. */
+.sc-skel-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  min-height: 320px;
+}
+
+/* Caption row - "Loading" + spinner. No account name per Kevin
+   ruling (the picker directly above already shows it). */
+.sc-skel-caption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #7a8ea3;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sc-skel-caption-text {
+  font-weight: 600;
+}
+
+/* Body + rail - two-column flex, stacks on narrow. */
+.sc-skel-body-and-rail {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+@media (max-width: 720px) {
+  .sc-skel-body-and-rail {
+    flex-direction: column;
+  }
+}
+
+/* Body area - the calendar/period grid stand-in. Fills available
+   width; tiles wrap. */
+.sc-skel-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sc-skel-tile-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .sc-skel-tile-row {
+    grid-template-columns: repeat(7, minmax(30px, 1fr));
+    gap: 4px;
+  }
+}
+
+/* Tile - preserves day-cell / month-card shape. Two stacked shimmer
+   bars inside a bordered container. */
+.sc-skel-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--sc2-skeleton-base);
+  border-radius: var(--sc2-skeleton-radius-lg);
+  background: #fafbfc;
+  min-height: 76px;
+}
+
+.sc-skel-tile-top {
+  height: 10px;
+  width: 40%;
+}
+
+.sc-skel-tile-mid {
+  height: 20px;
+  width: 100%;
+  margin-top: auto;
+}
+
+/* Rail area - fixed width on wide, full width when stacked. */
+.sc-skel-rail {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--sc2-skeleton-base);
+  border-radius: var(--sc2-skeleton-radius-lg);
+  background: #fafbfc;
+  min-height: 320px;
+}
+
+@media (max-width: 720px) {
+  .sc-skel-rail {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 200px;
+  }
+}
+
+.sc-skel-rail-spinner {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.sc-skel-rail-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sc2-skeleton-base);
+}
+
+.sc-skel-bar-hero {
+  height: 32px;
+  width: 70%;
+  border-radius: var(--sc2-skeleton-radius);
+}
+
+.sc-skel-rail-hero-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #7a8ea3;
+  text-transform: uppercase;
+}
+
+.sc-skel-rail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sc-skel-bar-sm {
+  height: 10px;
+  width: 40%;
+}
+
+.sc-skel-bar-md {
+  height: 12px;
+  width: 60%;
+}
+
+.sc-skel-bar-lg {
+  height: 12px;
+  width: 85%;
+}
+
+/* Ribbon inline shimmer - used by Ribbon.js in isLoading mode to
+   replace the TODAY/PERIOD stat values with a shimmer bar. Sits in
+   the same slot as the .sc-ribbon-meta-value span so ribbon layout
+   is byte-identical to the loaded state. */
+.sc-skel-bar-ribbon {
+  display: inline-block;
+  height: 12px;
+  width: 44px;
+  vertical-align: middle;
+  border-radius: var(--sc2-skeleton-radius);
+}

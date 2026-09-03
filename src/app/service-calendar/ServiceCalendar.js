@@ -7,6 +7,11 @@ import { useDialogA11y } from "./useDialogA11y";
 import SeasonShell from "./season/SeasonShell";
 import PeriodWorkspace from "./season/PeriodWorkspace";
 import StateLegend from "./season/StateLegend";
+// 2026-09-03 (SC cleanup item 4): account-switch skeleton. Wraps
+// the calendar body + rail during the data-loading window that
+// used to flash Select... / TODAY - / PERIOD - / $0.00 ENTERED.
+// Gate lives in this file (isAccountLoading derived below).
+import SkeletonSurface from "./skeleton/SkeletonSurface";
 import ChromeBar, { AsOf } from "./season/ChromeBar";
 import ExportControl from "./season/ExportControl";
 import PeriodHeaderNav, { PeriodTodayChip, OverviewTodayChip } from "./season/PeriodHeaderNav";
@@ -1519,6 +1524,36 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // actual data. Item 18 carve-out guards still satisfied.
   const selectedAccountRecord = accounts.find(a => a.key === selectedAccount) || null;
   const hasHomestandSchedule = !!selectedAccountRecord?.hasHomestandSchedule;
+  // 2026-09-03 (SC cleanup item 4, Approach C): account-switch skeleton
+  // gate. Renders the structural skeleton in place of the calendar body
+  // whenever we've committed to a new account but the underlying
+  // fetches (sc-load -> data, sc-year-summary -> yearData +
+  // periodRanges, per-month monthCache) haven't landed yet. The reset
+  // effect at :790-809 clears these on account switch by design (was
+  // preventing prior-account data flashing under the new-account CSS
+  // scoping). Instead of showing the intermediate empty state
+  // (Select... / TODAY - / PERIOD - / $0.00 ENTERED) that read as
+  // data loss, the skeleton fills the same viewport slot with
+  // shimmering shapes so the operator reads "pending" not "empty."
+  //
+  // First-load behavior (Kevin's ruling 2026-09-03): the gate keys on
+  // data absence, not on a separate account-switch marker, so the
+  // skeleton also fires on very first mount between "selectedAccount
+  // hydrated from URL/fallback" and "first data landed." That is
+  // deliberate - cold load gets the same treatment as warm switch.
+  // The `!!selectedAccount` prefix means the skeleton does NOT
+  // render before the mount effect sets `initial` (accounts is
+  // still [] at that point too), so no cross-mount flash.
+  //
+  // Non-goal: this gate does NOT fire on background refetches (save
+  // reloads etc.) because data/yearData/monthCache aren't nulled by
+  // reloadKey changes - only by account switch.
+  const isAccountLoading = !!selectedAccount && (
+    !data ||
+    !yearData ||
+    (lens === "period" && !periodRanges) ||
+    (isMonthView && !monthCache[monthKey])
+  );
   const homestandMap = data?.homestandMap || {};
   // sc-17 (2026-07-11): the current-month scheduleOverlay from the
   // sc-load payload. Non-flagged accounts NEVER see a scheduleOverlay
@@ -3223,6 +3258,9 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           isFeeAccount={isFeeAccount}
           gameDaysEntered={yearBannerStats?.gameDaysEntered || 0}
           totalGameDays={yearBannerStats?.totalGameDays || 0}
+          /* 2026-09-03 (SC cleanup item 4): TODAY/PERIOD/WEEK render
+             as shimmer bars during the account-switch load window. */
+          isLoading={isAccountLoading}
           exportControl={
             // HF-5 (2026-07-20): export renders in ribbon-right on
             // ALL non-admin scopes (was year-view only). Scope prop
@@ -3363,13 +3401,23 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       )}
 
       <div className="sc-body">
+        {/* 2026-09-03 (SC cleanup item 4): account-switch skeleton.
+            When isAccountLoading is true, the entire body (season /
+            period / month / homestand) is replaced by a shimmering
+            structural skeleton. Skips in admin view (admin isn't the
+            operator-switching scenario). Kevin's approved render
+            (Approach C): preserve layout so the loading state is
+            visually distinguishable from a real zero. */}
+        {isAccountLoading && !isAdminView && (
+          <SkeletonSurface />
+        )}
         {/* M-2 defect fix (2026-07-29): isYearViewEffective covers
             both scope=year AND scope=homestand-on-non-pilot fall-
             through. A non-pilot deep-linked `?homestand=<key>` URL
             lands here (immediate render) while the URL-cleanup
             effect above strips the param. Matches "land them where
             they would have been" per owner ruling. */}
-        {isYearViewEffective && (() => {
+        {!isAccountLoading && isYearViewEffective && (() => {
           const seasonShell = (
             <SeasonShell
               account={data?.account}
@@ -3589,7 +3637,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         })()}
 
 
-        {isPeriodView && (() => {
+        {!isAccountLoading && isPeriodView && (() => {
           // Read the ?day= target once; only meaningful when the
           // target date falls inside the current drill window
           // (URL-cleared per Step 0 contract on ?reset=1 / leaving drill).
@@ -3810,7 +3858,14 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                     width including rail). scv2 only; v1 path (the
                     !scV2 branch above the drill scope) still uses
                     the sibling render at :2774. */}
-                {scV2 && (
+                {/* 2026-09-03 (SC cleanup Observation A + item 4):
+                    StateLegend gated on data readiness. Prior gate was
+                    scV2 only, so the legend rendered through the
+                    account-switch load window and paired with skeleton
+                    body / empty ribbon values, reading as its own
+                    empty state. Now suppresses until the same signals
+                    that hide the skeleton say data has landed. */}
+                {scV2 && !isAccountLoading && (
                   <StateLegend
                     hasHomestandSchedule={hasHomestandSchedule}
                     isFeeAccount={isFeeAccount}
@@ -3855,7 +3910,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             monthCache directly (single-month payload; no cross-month
             merge). Header nav swaps to MonthHeaderNav via ChromeBar's
             drillNav slot above. */}
-        {isMonthView && (() => {
+        {!isAccountLoading && isMonthView && (() => {
           const dayTarget = searchParams?.get("day") || null;
           const focusTargetDate = (
             dayTarget && monthRange
@@ -4027,7 +4082,14 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
                     width including rail). scv2 only; v1 path (the
                     !scV2 branch above the drill scope) still uses
                     the sibling render at :2774. */}
-                {scV2 && (
+                {/* 2026-09-03 (SC cleanup Observation A + item 4):
+                    StateLegend gated on data readiness. Prior gate was
+                    scV2 only, so the legend rendered through the
+                    account-switch load window and paired with skeleton
+                    body / empty ribbon values, reading as its own
+                    empty state. Now suppresses until the same signals
+                    that hide the skeleton say data has landed. */}
+                {scV2 && !isAccountLoading && (
                   <StateLegend
                     hasHomestandSchedule={hasHomestandSchedule}
                     isFeeAccount={isFeeAccount}
@@ -4077,7 +4139,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             in the Ribbon. A key-mismatch (block not in payload) is
             handled INSIDE HomestandDetail so the surface can render
             an empty state instead of blanking. */}
-        {isHomestandOnPilot && (
+        {!isAccountLoading && isHomestandOnPilot && (
           <HomestandDetail
             account={data?.account}
             year={year}
@@ -4110,7 +4172,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
             INSIDE .sc-drill-main (see the two drill blocks above).
             v1 (flag off) keeps the sibling render here so v1
             layout is byte-identical. */}
-        {(isPeriodView || isMonthView) && !scV2 && (
+        {(isPeriodView || isMonthView) && !scV2 && !isAccountLoading && (
           <StateLegend
             hasHomestandSchedule={hasHomestandSchedule}
             isFeeAccount={isFeeAccount}
