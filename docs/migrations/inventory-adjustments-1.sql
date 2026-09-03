@@ -49,4 +49,11 @@ CREATE INDEX IF NOT EXISTS inventory_adjustments_by_range
 CREATE INDEX IF NOT EXISTS inventory_adjustments_by_line
   ON inventory_adjustments (fiscal_year, account_key, gl_line_code);
 
+-- Grants for the API service role (the SUPABASE_SERVICE_ROLE_KEY
+-- the resolver + loader use). Mirrors the pattern in
+-- pnl-1-actuals-and-status.sql (GRANTs at lines 148, 235, 353).
+-- Missing on 2026-09-03 first apply - loader failed with 42501
+-- until this was added. Re-applying is idempotent.
+GRANT SELECT, INSERT, UPDATE, DELETE ON inventory_adjustments TO service_role;
+
 COMMIT;
