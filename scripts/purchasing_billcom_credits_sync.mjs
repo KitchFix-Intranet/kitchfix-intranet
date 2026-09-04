@@ -47,7 +47,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   fetchJson, extractRowsV3,
   vendorCreditsUrl, vendorCreditByIdUrl,
-  contentHash,
+  contentHash, glBucketFor,
 } from "../src/lib/billcom.js";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
@@ -94,15 +94,10 @@ const accountToNumber = new Map();
 for (const r of coaQ.data || []) accountToNumber.set(r.id, r.account_number);
 console.log(`    classes=${classMap.size} coa=${accountToNumber.size}`);
 
-const glBucketFor = (glCode) => {
-  const s = String(glCode || "");
-  if (s.startsWith("3200")) return "3200";
-  if (s.startsWith("3400")) return "3400";
-  if (s.startsWith("3500")) return "3500";
-  if (s.startsWith("13"))   return "reimbursable";
-  if (s.startsWith("50") || s.startsWith("51")) return "sga";
-  return "other";
-};
+// glBucketFor imported from src/lib/billcom.js - single source of
+// truth for the gl_line_code → gl_bucket mapping shared with bills
+// rederive. Constraint on purchasing_actuals.gl_bucket allows
+// pl_cogs / reimbursable / sga / other only.
 
 // ─── 2. Walk /vendor-credits via nextPage cursor ────────────────────
 console.log("\n  walking /vendor-credits...");

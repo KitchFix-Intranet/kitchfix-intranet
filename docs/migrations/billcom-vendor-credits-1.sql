@@ -168,4 +168,25 @@ GRANT USAGE ON SEQUENCE billcom_raw_vendor_credit_lines_id_seq  TO service_role;
 GRANT SELECT ON billcom_raw_vendor_credits_latest      TO service_role;
 GRANT SELECT ON billcom_raw_vendor_credit_lines_latest TO service_role;
 
+-- ═══════════════════════════════════════════════════════════════════
+-- 5. Extend purchasing_actuals.source CHECK constraint
+-- ═══════════════════════════════════════════════════════════════════
+-- Original constraint (purchasing-1-schema.sql:396) allows:
+--   source IN ('billcom', 'rippling_spend', 'upload')
+-- Add 'billcom_credit' so the rederive step can write credit rows.
+-- Drop-and-recreate is the standard PostgreSQL pattern for CHECK
+-- constraint modification.
+--
+-- Failure mode without this: the credits loader errors on
+--   check constraint "purchasing_actuals_source_check"
+-- and the raw tables load correctly but purchasing_actuals stays
+-- empty of credits, so the Overview never surfaces them.
+
+ALTER TABLE purchasing_actuals
+  DROP CONSTRAINT IF EXISTS purchasing_actuals_source_check;
+
+ALTER TABLE purchasing_actuals
+  ADD CONSTRAINT purchasing_actuals_source_check
+  CHECK (source IN ('billcom', 'billcom_credit', 'rippling_spend', 'upload'));
+
 COMMIT;

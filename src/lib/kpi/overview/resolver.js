@@ -1095,13 +1095,14 @@ export async function resolveOverview({
   const packaging_budget_to_date_days = prorateBucketToDate(packaging_budget);
   const vehicle_budget_to_date_days   = prorateBucketToDate(vehicle_budget);
 
-  // R-71 Stage 2 (Kevin 2026-09-04): sum vendor-credit amounts (signed
-  // negative, stored that way by the loader) per parent bucket. Used
-  // by the cost row's "$X invoiced - $Y credits = $Z" sub-line
-  // display; and by the sub-row generator to emit a synthetic
-  // "{parent}.CREDITS" line for the P&L Full view. Parent cost row's
-  // `actual` already includes credits (purchBoard bucket period_total
-  // sums all rows in the bucket); we surface the split for legibility.
+  // R-71 Stage 2 (Kevin ruling 2026-09-04): sum vendor-credit amounts
+  // (signed negative, stored that way by the loader) per parent bucket.
+  // Used by the cost row's "$X invoiced - $Y credits = $Z" sub-line
+  // display. Credits FOLD into the GL-coded sub-line (they carry a
+  // chartOfAccountId), so no synthetic CREDITS sub-row is emitted;
+  // the per-gl aggregation naturally nets them into e.g. 3200.1.
+  // The per-bucket total is retained solely for the cost-row derivation
+  // sub-line's visibility.
   const creditsByBucket = { "3200": 0, "3400": 0, "3500": 0 };
   const purchasesByBucket = { "3200": 0, "3400": 0, "3500": 0 };
   for (const r of (purchActuals || [])) {
@@ -2216,28 +2217,34 @@ export async function resolveOverview({
   // Collect every gl_line_code present in either engine under the
   // three parents. Sort by parent then by gl for stable render.
   //
-  // R-71 Stage 2 (Kevin 2026-09-04): vendor-credits land in
-  // purchasing_actuals with source='billcom_credit' and NEGATIVE
-  // amounts. The parent cost row's actual already picks them up
-  // (via purchBoard bucket period_total which sums all rows in the
-  // bucket). For SUB-ROWS, we EXCLUDE billcom_credit rows from the
-  // per-gl_line_code aggregation and emit a separate synthetic
-  // "Credits" sub-row per parent (mirrors the 3200.INVJE pattern).
-  // Otherwise a credit on line 3200.1 would be double-counted
-  // (bumped into 3200.1's sub-row AND surfaced as CREDITS).
+  // R-71 Stage 2 (Kevin ruling 2026-09-04): vendor-credits FOLD into
+  // the GL-coded sub-line, not a synthetic CREDITS row.
+  //
+  // Kevin's ruling: "A credit carries a chartOfAccountId. It is
+  // GL-coded to 3200.1 or 3200.2, so it belongs on that line -
+  // unlike an inventory JE, which has no GL line of its own and
+  // genuinely needs a synthetic row."
+  //
+  // Fold means: include billcom_credit rows in the per-gl aggregation
+  // (they naturally reduce the sub-row's actual by their negative
+  // amount) and DO NOT emit a separate `{parent}.CREDITS` synthetic.
+  // The parent-row derivation sub-line still surfaces the credit
+  // amount ("$X invoiced - $Y credits = $Z") so visibility survives
+  // without double-listing.
+  //
+  // Two knock-on wins: (1) sub-line becomes comparable to finance's
+  // 3200.1 (finance also folds credits in), closing the $19k+ display
+  // gap on TBJ - FL. (2) The pass-through parent-sum edge case
+  // disappears - no synthetic row to gate, so sub-rows tie to parent
+  // on billed-back accounts without a special-case guard.
   const glsUnderParent = new Map(PARENT_PREFIXES.map(p => [p, new Set()]));
   const purchActualsByLine = new Map();
   const purchActualsLinesPresent = new Set();
-  // creditsByParent uses the same aggregation as creditsByBucket
-  // (computed earlier at line ~1099). Kept as a Map for the sub-row
-  // emission below.
-  const creditsByParent = new Map(PARENT_PREFIXES.map(p => [p, creditsByBucket[p] || 0]));
   for (const r of (purchActuals || [])) {
     const gl = String(r.gl_line_code || "");
     if (!gl) continue;
     const parent = parentPrefixOf(gl);
     if (!parent) continue;
-    if (r.source === "billcom_credit") continue;    // already in creditsByParent
     glsUnderParent.get(parent).add(gl);
     purchActualsByLine.set(gl, (purchActualsByLine.get(gl) || 0) + Number(r.amount || 0));
     purchActualsLinesPresent.add(gl);
@@ -2366,34 +2373,6 @@ export async function resolveOverview({
         envelope_delta: null,
         sources: ["inventory_adjustments"],
         flags: ["inventory_adjustment"],
-      });
-    }
-    // R-71 Stage 2 (Kevin 2026-09-04): vendor-credits synthetic sub-
-    // row per parent. Sums the negative-amount billcom_credit rows
-    // filtered out of the per-gl sub-rows above. Parent actual already
-    // includes these via purchBoard.buckets[parent].period_total (sum
-    // of ALL rows in the bucket, credits included), so sub-sum ties
-    // parent when the CREDITS row carries the same negative total.
-    // Never renders when zero (absence contract). No budget side.
-    const creditsTotal = creditsByParent.get(parent) || 0;
-    if (Math.abs(creditsTotal) >= 0.01 && !parentSuppressed_) {
-      statementRows.push({
-        line_code: `${parent}.CREDITS`,
-        section: "cogs",
-        parent_line_code: parent,
-        label: "Vendor credits",
-        reported: true,
-        actual: r2(creditsTotal),
-        budget_to_date: null,
-        period_budget: null,
-        variance: null,
-        variance_pct: null,
-        actual_pct: null,
-        target_pct: null,
-        budget_at_this_revenue: null,
-        envelope_delta: null,
-        sources: ["billcom_credit"],
-        flags: ["vendor_credits"],
       });
     }
   }
