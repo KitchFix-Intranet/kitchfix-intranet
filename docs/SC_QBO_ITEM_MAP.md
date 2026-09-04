@@ -19,12 +19,14 @@ Related docs:
 
 ## Account map
 
-| Account key | QBO customer id | QBO DisplayName | Tax code | Cadence | Mode |
-|---|---|---|---|---|---|
-| TBR - FL | 17860 | Tampa Bay Rays MiLB/MLB | 26 | weekly | test |
-| TBJ - FL | 16971 | Rogers Blue Jays Baseball Partnership | 26 | weekly | test |
+| Account key | QBO customer id | QBO DisplayName | Tax code | QBO class id | Class name | Cadence | Mode |
+|---|---|---|---|---|---|---|---|
+| TBR - FL | 17860 | Tampa Bay Rays MiLB/MLB | 26 | 1200000000000091984 | PFS:TBR - FL | weekly | test |
+| TBJ - FL | 16971 | Rogers Blue Jays Baseball Partnership | 26 | 1200000000000081313 | PFS:TBJ - FL | weekly | test |
+| CIN - AZ | 17752 | Cincinnati Reds (Goodyear, AZ) | 37 | 1200000000000130911 | PFS:CIN - AZ (REDS) | biweekly | test |
+| TXR - AZ | 19000 | Texas Rangers - Surprise, AZ | 36 | 1200000000000411132 | PFS:TXR - AZ | weekly | test |
 
-Both accounts ship in `qbo_mode='test'` and route to the ZZ TEST customer
+All four accounts ship in `qbo_mode='test'` and route to the ZZ TEST customer
 until Kevin runs a live drill and flips to `live`. Flip is a one-cell UPDATE
 per account; see the qbo_mode adapter path for the fence rules.
 
@@ -32,6 +34,19 @@ per account; see the qbo_mode adapter path for the fence rules.
 `CustomerRef {value, name}` pair. The names above are pulled live from QBO,
 not derived from the SC's account_key. A wrong name causes QBO to reject
 the invoice.
+
+**Every invoice line carries `ClassRef` from `qbo_class_id`** (sc-41,
+2026-09-03). Kevin's discovery: QBO Items carry a default `ClassRef` in
+their config but QBO does NOT echo it onto lines written via API. Before
+sc-41, every invoice the system generated landed unclassed, orphaning
+revenue on Kevin's class-segmented P&L. Fix: `qbo_class_id` on the
+account map, builder emits `ClassRef: { value: qbo_class_id }` on every
+line. Class is per-account, not per-service - verified across the four
+fixtures (CIN main + CIN rehab, TXR week 0720 + week 0727) all sharing
+one class id per account. **Any test invoices generated between PR-F
+merge (2026-08-11) and sc-41 apply (2026-09-03) need voiding, not
+reclassing** - QBO's edit UI does not backfill per-line ClassRef the
+way a fresh POST does.
 
 ---
 

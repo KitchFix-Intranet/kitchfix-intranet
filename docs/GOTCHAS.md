@@ -31,31 +31,50 @@ Corollary for anything asynchronous: if a network call is expected and none appe
 
 Incident: SC stale-view-after-save (B8). Three fixes at the cache layer, all wrong; the cache was never broken, the code that triggers it was being skipped. Two console traces resolved it in seconds.
 
-### A path that reports success unconditionally cannot surface its own failure
+### An operation that reports success regardless of outcome
 
-Three instances in two days (2026-09-02 to 2026-09-03), same durable shape. The report or signal downstream of an operation runs regardless of whether the operation actually succeeded. When the operation silently fails, the report still says "OK" - because the report was never derived from the outcome. Nothing operator-visible ever contradicts the pretence, and the failure hides for weeks.
+The recurring shape hunted through the 2026-09-02 → 2026-09-04 arc. A report / log / write / postflight downstream of an operation runs regardless of whether the operation actually succeeded. When the operation silently fails, the signal still says "OK" - because the signal was never derived from the outcome. Nothing operator-visible ever contradicts the pretence, and the failure hides for as long as nobody notices the absence.
 
-**The three instances:**
+**Five instances in two days:**
 
-1. **UI copy claiming delivery that never happened** (2026-09-02, `verify_behaviour_before_shipping_copy` feedback memory). A confirmation page said "AP has been emailed" - a hardcoded string in the render, independent of whether the email code ran or succeeded. Two live UI lies traced to this in one session; the render was the "signal", the actual delivery was never checked.
+1. **`[N1 fired]` logging success while the email failed** (2026-09-03). `scWeekFinalize.js:590` logged `log.info("[N1 fired]", { emailResult })` after every finalize regardless of `emailResult`. Underneath, `sendEmailSA` was throwing `invalid_grant` on `support@kitchfix.com` because the mailbox was deactivated; the throw was caught and turned into a `"failed"` string that nobody grepped for. Window: at least 23 days (PR-C shipped 2026-08-11), plausibly longer.
 
-2. **Postflight `WHERE col <> value` on a nullable column** (2026-09-03, sc-40 original postflight). If the un-updated state was NULL, `NULL <> value` returned NULL, the WHERE dropped the row, and the postflight counted zero bad rows regardless of whether the UPDATE fired. The postflight passed on the exact failure it was written to catch. See the Postgres section entry for the technical detail + `IS DISTINCT FROM` fix.
+2. **The AP-reminder cron writing its dedupe key before confirming the send** (2026-09-03 audit; in-code since 2026-06-17). `src/app/api/cron/daily/route.js:263-317` writes the notification-log dedupe entry BEFORE the `sendEmailSA` at :303, so the log claimed "reminder sent" even when Gmail failed. Sender was `INVOICE_AP_EMAIL=kitchfix@bill.com`, which the SA cannot impersonate (cross-domain; see below). Window: ~11 weeks of daily silent misses.
 
-3. **`log.info("[N1 fired]", ...)` regardless of email delivery** (2026-09-03, this PR). `scWeekFinalize.js` logged `[N1 fired]` after every successful invoice push, with `emailResult` embedded in the payload - but the log line itself was at `info` and unconditional, and `sendEmailSA` swallowed the underlying `invalid_grant` exception into a benign `"failed"` return that no operator was grepping for. N1 email had been silently failing since sender deactivation (unknown pre-2026-09-03 date, but the code path shipped 2026-08-11 in PR-C so the maximum window is 23 days). Kevin noticed only when a live finalize on 2026-09-03 produced no email he was expecting.
+3. **Postflight `<>` against a nullable column so it passed on the exact state it existed to catch** (2026-09-03, sc-40 original postflight). `WHERE rdo_email <> 's.lynch@kitchfix.com'` evaluated `NULL <> value` = `NULL`, `WHERE` dropped the row, `COUNT(*)` returned 0, `RAISE EXCEPTION` never fired. Would have shipped un-caught if Kevin hadn't code-reviewed. Window: caught pre-apply, zero minutes in prod.
 
-**The pattern.** A signal is only a signal if it derives from the thing it claims to represent. `render("AP has been emailed")` is a claim about an email that was never checked. `postflight WHERE <> value` is a claim about a WHERE-filtered count that cannot see the state it needs to catch. `log.info("[N1 fired]")` at `info` level regardless of `emailResult` is a claim about firing that is not conditioned on the fire.
+4. **`.catch(() => {})` on the PAF send** (2026-09-04 audit). Nine sites in `src/app/api/people/route.js` wrap `notify(...)` in `.catch(() => {})`. Any thrown template error, sheets read error, or downstream email failure gets discarded before the HTTP response returns 200. Silent forever unless the recipient notices the missing email. Window: latent, indefinite.
 
-**The rule.** Before writing a report / render / log / postflight / dashboard tile that claims success, ask: "would this signal still say success if the operation silently failed?" If yes, the signal is architecturally incapable of failing and is not a signal - it is decoration. Either:
+5. **`getNotificationRecipients` returning `[]` on a Sheets read error** (2026-09-03 outage). `catch (e) { return []; }` at `people/route.js:112-115` (pre-Wave-2). Sheets read-quota error → return [] → `notify()` reads it as "no admin recipients configured" → admin pipeline silently skips → PAF email never reaches Kevin + Mariela while Slack fires normally. Fixed by Wave 2 (notify-1 migration + reader repoint, 2026-09-04). Window: latent until the specific 2026-09-03 PAF surfaced it.
 
-1. **Derive the report from the outcome.** `render(emailResult === "sent" ? "AP has been emailed" : "AP email failed - flag for retry")`. Different string on different outcome. If the outcome is not observable, do (2).
-2. **Split the log tier on the outcome.** `if (result.ok) log.info(...) else log.warn(...)`. Same event, different levels, greppable separation. This PR does that for N1: `log.info("[N1 fired]", ...)` for both-channels-sent, `log.warn("[N1 delivery incomplete]", ...)` otherwise.
-3. **Use NULL-aware comparisons in postflights**, so a nullable column being NULL is treated as "distinct from the expected value", not "unknown, drop the row". `IS DISTINCT FROM` for scalars, `COALESCE(fn(col), 0)` for functions that return NULL on empty.
+**The rank.** Rank failures by how long they could run unobserved, not by severity. An 11-week silent failure on the AP-reminder cron beats a loud crash on something more important because the loud one gets fixed. The five above sort worst-first by unobserved window:
+
+| Rank | Instance | Actual / plausible unobserved window |
+|---|---|---|
+| 1 | AP-reminder cron dedupe-before-send | ~11 weeks in prod |
+| 2 | N1 `[N1 fired]` swallowing invalid_grant | ~3 weeks in prod, up to sender-deactivation-date |
+| 3 | `getNotificationRecipients` return-[] | latent; surfaced by one specific PAF's quota error |
+| 4 | PAF `.catch(() => {})` | latent, indefinite - only visible on recipient noticing an absence |
+| 5 | sc-40 postflight `<>` on nullable | zero minutes in prod (caught in review) |
+
+**The rule.** Before writing a report / render / log / postflight / dashboard tile / dedupe-write that claims success, ask: **"would this signal still say success if the operation silently failed?"** If yes, the signal is architecturally incapable of failing and is not a signal - it is decoration. Fixes, in order of preference:
+
+1. **Derive the report from the outcome.** `render(emailResult === "sent" ? "AP emailed" : "AP email failed")`. Different string on different outcome.
+2. **Split the log tier on the outcome.** `if (result.ok) log.info(...) else log.warn(...)`. Same event, different levels, greppable separation. `fireN1` post-2026-09-03 does this: `[N1 fired]` at `info` when both channels sent, `[N1 delivery incomplete]` at `warn` otherwise.
+3. **Write dedupe keys AFTER the operation confirms, not before.** `incident-reminders/route.js:150` is the right shape (`throw` on non-sent, then `updateCellSA` the dedupe key). `daily/route.js:263` is the wrong shape and still needs fixing.
+4. **Use NULL-aware comparisons in postflights.** `IS DISTINCT FROM` for scalars, `COALESCE(fn(col), 0)` for functions that return NULL on empty (see Postgres section).
+5. **Return a discriminated shape, not a placeholder.** `{ ok: true, data }` / `{ ok: false, error }` forces the caller to branch. `return []` on a read error is a placeholder that looks like success.
+6. **A `.catch(() => {})` on a fire-and-forget is an assertion that nothing important can fail there.** If that assertion is not true, split the log tier or route through the [shared notify() wrapper](backlog/NOTIFY_WRAPPER.md).
 
 **Where to sweep**:
-- Every UI copy string with a verb like "sent", "saved", "created", "confirmed", "recorded". If the string is a hardcoded render, verify a caller upstream actually did the thing.
-- Every `catch { return "failed" }` or `catch { return [] }` inside a helper that a caller logs at `info` without branching. The helper's return-shape lies about success.
-- Every `log.info` / `console.log` / status write that runs unconditionally after an async operation. Ask: does the log line's presence prove the operation succeeded? If not, split the tier.
-- Every postflight or verify block. Trace through the failure case mentally: if the mutation was blocked, would the postflight fire? If no, rewrite.
+- Every UI copy string with a verb like "sent", "saved", "created", "confirmed", "recorded" - verify a caller upstream actually did the thing.
+- Every `catch { return "failed" }` / `catch { return [] }` / `catch { return {} }` inside a helper that a caller logs at `info` without branching.
+- Every `log.info` / `console.log` / status write that runs unconditionally after an async operation.
+- Every postflight or verify block. Trace the failure case: if the mutation was blocked, would the postflight fire?
+- Every `.catch(() => {})` on a fire-and-forget.
+- Every cron whose write-order puts the dedupe write BEFORE the operation's confirmation.
+
+Standing codebase-wide sweep of every `.catch(() => {})` + fire-and-forget parked as [`docs/backlog/SILENT_FAILURE_SWEEP.md`](backlog/SILENT_FAILURE_SWEEP.md).
 
 ---
 
@@ -390,45 +409,31 @@ When Vendor Portal Slack notifications were first written, deactivate/reactivate
 
 A Slack message like "vendor deactivated" tells you nothing in 2 days when you're trying to figure out what happened.
 
-### `invalid_grant: Invalid email or User ID` from a deactivated impersonation target
+### `invalid_grant: Invalid email or User ID` - four causes, one error string
 
-Gmail service-account impersonation via `google.auth.JWT({subject: "<mailbox>"})` returns `invalid_grant: Invalid email or User ID` from Google's OAuth endpoint when the `subject` mailbox is **deactivated** at the Workspace level. The error text reads like a DWD authorization problem ("the SA is not authorized to impersonate this user") but it is actually a target-mailbox existence problem ("the mailbox you asked to impersonate is not an active user account"). The two look identical from the caller side.
+Gmail service-account impersonation via `google.auth.JWT({subject: "<mailbox>"})` returns `invalid_grant: Invalid email or User ID` from Google's OAuth endpoint whenever the impersonation target is invalid for ANY of four reasons. The error text reads like a DWD authorization problem; the actual cause is often something else. `sendEmailSA` (`src/lib/gmail.js:411-450`) swallows the error in `catch` and returns `"failed"` - silent unless the caller checks + surfaces.
 
-**Realised on 2026-09-03.** After weeks of silent N1 misses, an isolated probe (`scripts/probes/_probe_n1_gmail_sa.mjs`) surfaced the error string. Every operator-side hypothesis first went to DWD - "check the Workspace admin console for the SA's client_id, verify `gmail.send` is listed for the domain" - and the DWD row was intact. The actual cause: `support@kitchfix.com` had been deactivated at some earlier date. `sendEmailSA` (`src/lib/gmail.js:411-450`) swallows the error in `catch` and returns `"failed"`, so N1 + N2 + N3.1 + N3.2 + N3.3 all silently failed for weeks. N2 and N3.3 reached Kevin via their redundant Slack channel; N1, N3.1, N3.2 had no redundant channel and produced zero operator signal.
+**The four failure classes:**
 
-**The rule.** When `invalid_grant: Invalid email or User ID` shows up on a Gmail SA impersonation call, check whether the impersonated mailbox still exists as an active Workspace user *before* investigating DWD. Order of investigation:
+1. **Cross-domain** - the sender is syntactically a valid email but on a domain the SA doesn't own. `kitchfix@bill.com` at `daily/route.js:274` was this class for ~11 weeks (in-code since 2026-06-17, surfaced 2026-09-03).
+2. **Deactivated** - the sender is on the SA's domain but the Workspace user is disabled. `support@kitchfix.com` at every SA sender site for ~3 weeks minimum (all rotated to `kitchfix.admin@` in PR #995 on 2026-09-03).
+3. **Non-existent** - the sender is syntactically valid but no Workspace user by that name exists. Typos.
+4. **Not on DWD allowlist** - SA exists, user exists, but the DWD row doesn't cover the sender email or the required scope (`https://www.googleapis.com/auth/gmail.send`).
 
-1. Workspace admin -> Directory -> Users -> search the impersonation target. If deactivated or missing, that is the fix.
-2. If active, verify the SA's numeric `client_id` is in Workspace admin -> Security -> API controls -> Domain Wide Delegation with the required scope (`https://www.googleapis.com/auth/gmail.send`). The `client_id` can be fetched via `scripts/probes/_probe_gmail_sa_client_id.mjs`.
-3. If both check out, look at the SA itself in GCP console for disabled/suspended state.
+**The investigation checklist starts at step 0 because it's the fastest to rule out:**
 
-**Sender rotation is not a one-file edit.** As of 2026-09-03 the codebase had six hardcoded / env-fallback sites referencing `support@kitchfix.com` as a sender: `qboNotifications.js`, `chaseNotifications.js`, `people/route.js`, `incident-reminders/route.js`, and env-default sites in `daily/route.js` + `emailShared.js`. Rotating the sender means editing every site or introducing a shared constant. When adding a new sendEmailSA call site, prefer a shared constant over a new local declaration so the next rotation is one edit.
+0. **Does the sender's domain match the SA's Workspace domain?** If not, class 1 - the sender is invalid regardless of everything else. Fix at the caller.
+1. Workspace admin → Directory → Users → is the impersonation target active? If deactivated / missing, class 2 or 3. Fix at Workspace admin.
+2. Workspace admin → Security → API controls → Domain Wide Delegation → is the SA's numeric `client_id` listed with the required scope? If not, class 4. Fix at Workspace admin. Fetch the client_id via `scripts/probes/_probe_gmail_sa_client_id.mjs`.
+3. GCP console → is the SA itself active / not suspended?
 
-**The general lesson.** An error message that names the wrong root cause is the durable failure shape. `invalid_grant` sounds like a grant problem. The class matches `NULL <> value` "silently pass on the state it exists to catch" from the Postgres section - a signal that reads like something else long enough for the real problem to hide.
+Historical instance: after weeks of silent N1 misses, an isolated probe (`scripts/probes/_probe_n1_gmail_sa.mjs`) surfaced the error string. Every operator-side hypothesis first went to DWD; the DWD row was intact. Real cause was `support@kitchfix.com` deactivation (class 2). N1 + N2 + N3.1 + N3.2 + N3.3 all silently failed for weeks; N2 and N3.3 reached Kevin via their redundant Slack channel, N1 + N3.1 + N3.2 produced zero operator signal.
 
-### Cross-domain sender cannot be an SA impersonation target
+**Sender rotation is not a one-file edit.** As of 2026-09-03 the codebase had six hardcoded / env-fallback sites referencing `support@kitchfix.com` as a sender. Rotating means editing every site or introducing a shared constant. When adding a new `sendEmailSA` call site, prefer a shared constant over a new local declaration.
 
-Gmail service-account impersonation via `google.auth.JWT({subject: "<mailbox>"})` requires the mailbox to be an active user of the **SA's own Workspace domain** on the SA's DWD allowlist. Any address on a domain the SA doesn't own returns `invalid_grant: Invalid email or User ID` regardless of DWD configuration. The same error string as the deactivated-mailbox case above. Two failure classes, one error.
+**Dual-purpose env variables are cross-domain traps.** `INVOICE_AP_EMAIL` was correctly the AP intake RECIPIENT (`gmail.js:12`) and simultaneously used as the SENDER at `daily/route.js:274`. Same env value, different roles; the sender role broke silently. Split as `INVOICE_AP_TO_EMAIL` (recipient) + hardcoded system sender.
 
-**Realised on 2026-09-03.** After PR #995 rotated the sender to `kitchfix.admin@kitchfix.com`, an env audit surfaced `INVOICE_AP_EMAIL=kitchfix@bill.com` in Vercel production. The value was correct for its documented role (AP intake recipient for Invoice Capture at `src/lib/gmail.js:12`) but the same env var was ALSO read as a **sender** at `src/app/api/cron/daily/route.js:274` for the "invoice returned by AP more than 3 days ago" reminder cron. The SA cannot impersonate a bill.com address; that cron has been silently `invalid_grant`-failing on every daily fire since it shipped in commit 465ad30 on 2026-06-17 - approximately 11 weeks of silent misses. Every submitter with an aging returned invoice never learned they had an aging returned invoice.
-
-**Fix**: split the variable. `INVOICE_AP_TO_EMAIL` keeps the bill.com value at the recipient site. The sender site is hardcoded to the system sender `kitchfix.admin@kitchfix.com` - the same address every other SA-impersonated path uses. Committed in the split PR.
-
-**The general pattern - four failure classes, one error**. `invalid_grant: Invalid email or User ID` from `sendEmailSA` collapses across:
-
-1. **Cross-domain**: the sender is syntactically a valid email but on a domain the SA doesn't own (this bug).
-2. **Deactivated**: the sender is on the SA's domain but the Workspace user is disabled (support@ bug in PR #995).
-3. **Non-existent**: the sender is syntactically valid but no Workspace user by that name exists (typo).
-4. **Not on DWD allowlist**: the SA exists, the user exists, but the DWD row doesn't cover the sender email or the required scope.
-
-All four look identical from the `catch` clause in `sendEmailSA`. The revised investigation checklist starts with class 1 because it's the fastest to rule out:
-
-0. **Does the sender's domain match the SA's Workspace domain?** If not, class 1 - the sender is invalid regardless of everything else.
-1. Workspace admin -> Directory -> Users -> is the mailbox active?
-2. Workspace admin -> Security -> API controls -> Domain Wide Delegation -> is the SA's numeric client_id listed with the required scope?
-3. GCP console -> is the SA itself active?
-
-**The general lesson**: a dual-purpose env variable ("what does this address mean?") is a place ambiguity hides. A field that accepts syntactically-valid values but only a narrow subset actually works is a place silent failure hides. When `sendEmailSA`'s sender is env-driven, the field must be validated at read time OR the env var name must make its role unambiguous. `INVOICE_AP_EMAIL` did neither - the name didn't distinguish sender from recipient, and no validation caught the domain mismatch.
+**The general lesson.** An error message that names the wrong root cause is a durable failure shape. `invalid_grant` sounds like a grant problem. Same class as `NULL <> value` postflights passing on the state they exist to catch. Cross-reference: [`An operation that reports success regardless of outcome`](#an-operation-that-reports-success-regardless-of-outcome) in the Debugging method section.
 
 ---
 
