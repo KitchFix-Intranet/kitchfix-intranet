@@ -58,16 +58,16 @@ import {
 } from "react";
 
 /* Delay before the onFinalize callback (next-day advance / modal
-   close) fires. Was 1350ms in the P3-B "one clock" design - the beat
-   at which the ambient effects (tile flip, session strip) had
-   settled and the operator was ready to move on. Bumped to 1800ms
-   2026-08-03 (sc-save-confirm #598 ruling 3): the SaveConfirmation
-   overlay owns this window as its visible-hold budget, and 1350ms
-   was too fast to register the count + money before the advance
-   fired. 1800 gives ~800ms of full-opacity hold, which is the
-   register-time floor for a static confirmation. Owner is the final
-   word if a live run reads this as too long or still too short. */
-const FINALIZE_DELAY = 1800;
+   close) fires. Was 1350ms in the P3-B "one clock" design, 1800ms
+   from 2026-08-03 (#598 ruling 3), halved to 900ms 2026-09-04
+   (motion-cleanup owner ruling): a chef entering a twelve-day
+   backlog at the old 1800ms hold ate 21.6s of cumulative advance-
+   tax; 900ms halves that to 10.8s. The hold still registers the
+   count + money because the confirmation overlay reads statically
+   during the window - the shortened budget trades some
+   register-time for a faster session cadence. Uniform, not session-
+   aware (that variant was rejected as unpredictable). */
+const FINALIZE_DELAY = 900;
 
 const HandoffContext = createContext(null);
 
