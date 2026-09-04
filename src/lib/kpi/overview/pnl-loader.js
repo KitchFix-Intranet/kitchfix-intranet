@@ -355,10 +355,22 @@ export async function loadScDailyRevenue(supa, { members, start, end, today }) {
 // kpi_period_status record for verified_at. See module docblock for
 // why the calendar is authoritative for calendar-closed.
 //
-// Returns 'open' | 'closed_awaiting' | 'verified'.
+// Returns 'planned' | 'open' | 'closed_awaiting' | 'verified'.
+//
+// Kevin Prompt 2 PR-B (2026-09-04): "planned" is a new state for a
+// future period whose start date is after today. Prior to this the
+// resolver returned "open" for future periods, which produced a
+// board with zero actuals and no explanation - the "silent zero" the
+// picker's R-62 rule prevents in the UI. The state is authoritative
+// so the client can render the Planning view instead of the standard
+// This period surface (budget-hero, not-started reference, no
+// verdicts on the top cards).
 export function derivePeriodState({ periodNo, todayISO, periodStatusRow }) {
+  const pStart = periodStartISO(periodNo);
   const pEnd = periodEndISO(periodNo);
   if (!pEnd) return "open";
+  // Future period - hasn't started yet.
+  if (pStart && pStart > todayISO) return "planned";
   const calendarClosed = pEnd < todayISO;
   const verifiedAt = periodStatusRow?.verified_at || null;
   if (verifiedAt) return "verified";

@@ -1689,3 +1689,99 @@
     transition: none;
   }
 }
+
+/* ── Kevin Prompt 2 PR-B (2026-09-04): Planning view ────────────────
+   Rendered when payload.period_state === "planned". Card furniture
+   reuses .kpi-ov-card + .kpi-ov-pair + .kpi-ov-pair-rule from This
+   period so the visual grammar is identical - only roles swap. The
+   classes here handle just the Planning-specific pieces: the status
+   pill, the "not started" italic reference text, the weekly/daily
+   rate strip beneath each card, the loss-callout, and the share-of-
+   envelope meter in the cost-planning table. */
+
+.kpi-app .kpi-ov-statusrow[data-kpi-ov="planning-statusrow"] {
+  display: flex;
+  align-items: center;
+  gap: var(--kpi-sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--kpi-sp-3);
+}
+.kpi-app .kpi-ov-pln-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--kpi-t-meta);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 999px;
+  color: var(--n-0);
+}
+.kpi-app .kpi-ov-pln-pill-plan { background: var(--navy-700); }
+.kpi-app .kpi-ov-pln-pill-loss { background: var(--red-600); }
+.kpi-app .kpi-ov-pln-through {
+  font-size: var(--kpi-t-body);
+  font-weight: 700;
+  color: var(--n-600);
+}
+
+/* Loss callout - navy background, above the cards, names the loss
+   as intent. Copies read from PlanningBoard component. */
+.kpi-app .kpi-ov-pln-callout {
+  background: var(--navy-50);
+  border: 1px solid #C3D4EA;
+  border-radius: 10px;
+  padding: 13px 16px;
+  margin-bottom: var(--kpi-sp-3);
+  font-size: var(--kpi-t-body);
+  color: var(--navy-700);
+  font-weight: 600;
+  line-height: 1.6;
+}
+.kpi-app .kpi-ov-pln-callout b { color: var(--n-900); }
+
+/* "not started" italic text in the reference slot (bottom pair on
+   every planning card). Grey subordinate - the reader's eye lands
+   on the budget above, not this. */
+.kpi-app .kpi-ov-pln-notstarted {
+  font-style: italic;
+  color: var(--n-600);
+  font-weight: 700;
+  font-size: calc(19px * var(--kf-scale, 1));
+}
+
+/* Rate strip beneath the card body: a week / a day / vs prior. */
+.kpi-app .kpi-ov-pln-rate {
+  display: flex;
+  gap: var(--kpi-sp-4);
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+}
+.kpi-app .kpi-ov-pln-rate div {
+  font-size: var(--kpi-t-meta);
+  color: var(--n-600);
+  font-weight: 600;
+}
+.kpi-app .kpi-ov-pln-rate b {
+  display: block;
+  font-size: calc(15px * var(--kf-scale, 1));
+  color: var(--n-900);
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+/* Share-of-envelope meter in the cost-planning table's rightmost
+   column. 6px bar, navy fill, share expressed as a percentage width. */
+.kpi-app .kpi-ov-pln-meter {
+  height: 6px;
+  background: var(--n-200);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.kpi-app .kpi-ov-pln-meter i {
+  display: block;
+  height: 100%;
+  background: var(--navy-700);
+  border-radius: 3px;
+}
