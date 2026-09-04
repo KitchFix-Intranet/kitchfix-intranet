@@ -21,7 +21,7 @@
 
 import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
 import { REVENUE_LINE_CODES, loadPnlActuals, loadOverviewBudgets } from "@/lib/kpi/overview/pnl-loader.js";
-import { periodEndISO } from "@/app/kpi/labor/lib/periods.js";
+import { periodEndISO, periodOf } from "@/app/kpi/labor/lib/periods.js";
 
 const FISCAL_YEAR = 2026;
 
@@ -142,7 +142,7 @@ export async function loadRangeRevenueBasis(supa, { members, periods }) {
  * itself when no closed subset is available (e.g., single closed
  * period - Last period P8 - where range_budget already IS closed).
  */
-export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, closedLaborBudget = null } = {}) {
+export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, closedLaborBudget = null, closedPeriods = null } = {}) {
   if (!board || board.applies === false) return board;
   const laborBudgetForBatr = closedLaborBudget != null ? closedLaborBudget : board.range_budget;
   const batr = sharedBatr({
@@ -155,5 +155,31 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
   board.total_revenue_for_batr = revenueBasis.totalRevenue;
   board.revenue_budget_for_batr = revenueBasis.revenueBudgetFullPeriod;
   board.closed_range_budget = laborBudgetForBatr;
+
+  // Kevin Labor PR-A item 8 UI (2026-09-04): the hero must show
+  // spent for CLOSED periods only, not the whole range including
+  // the running period. Sum board.weeks filtered to closed periods.
+  // Kevin: "the payload now carries closed_range_budget at $413,283
+  // while the screen still shows $365,398 - right number, wrong
+  // surface. A site lead reading the board today still sees the
+  // wrong figure." This adds the matching closed_spent_to_date so
+  // the UI can display the correct actual.
+  if (Array.isArray(board.weeks) && Array.isArray(closedPeriods)) {
+    const closedSet = new Set(closedPeriods);
+    let closedSpent = 0;
+    let closedWeeks = 0;
+    for (const w of board.weeks) {
+      const wPeriod = w.week_start ? periodOf(w.week_start) : null;
+      if (wPeriod != null && closedSet.has(wPeriod) && w.spent != null) {
+        closedSpent += Number(w.spent);
+        closedWeeks += 1;
+      }
+    }
+    board.closed_spent_to_date = Math.round(closedSpent * 100) / 100;
+    board.closed_weeks_in_range = closedWeeks;
+    board.closed_variance = (batr != null)
+      ? Math.round((closedSpent - batr) * 100) / 100
+      : null;
+  }
   return board;
 }

@@ -1327,7 +1327,10 @@ export async function GET(request) {
     account_state: "hourly_ok",
     workerToEmail,
   });
-  attachBatrToBoard(boardSingle, revenueBasisSingle, { closedLaborBudget: closedLaborBudgetSingle });
+  attachBatrToBoard(boardSingle, revenueBasisSingle, {
+    closedLaborBudget: closedLaborBudgetSingle,
+    closedPeriods: closedPeriodsSingle,
+  });
 
   let bodySingle = {
     ok: true,
@@ -1397,7 +1400,10 @@ export async function GET(request) {
     const closedLaborBudgetMerged = (bodySingle.budget_periods || [])
       .filter(bp => closedPeriodsSingle.includes(bp.period_no))
       .reduce((s, bp) => s + Number(bp.amount || 0), 0);
-    attachBatrToBoard(bodySingle.board, revenueBasisSingle, { closedLaborBudget: closedLaborBudgetMerged });
+    attachBatrToBoard(bodySingle.board, revenueBasisSingle, {
+      closedLaborBudget: closedLaborBudgetMerged,
+      closedPeriods: closedPeriodsSingle,
+    });
     // Legacy CIN - AZ re-resolve retained as belt-and-braces: the
     // salary-first resolve above covers this today, but a future
     // refactor that changes the merge shape shouldn't silently drop
