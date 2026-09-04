@@ -169,7 +169,7 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
   );
 }
 
-function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = false }) {
+function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, periodInvAdj = 0, periodAlloc = 0, bare = false }) {
   const wkB = Number(weeklyBudget || 0);
   const spends = series.map(s => Number(s.spent || 0));
   // PR-2 item 17 (2026-09-02): scale to max * 1.16. See period-grain
@@ -249,10 +249,28 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
       week {runningWeekNo} in progress, not yet counted
     </div>
   ) : null;
+  // Kevin R-72 Item 2 (2026-09-04): JEs + allocations are period-
+  // level entries booked at close; a week-grain chart cannot honestly
+  // split them across weeks. Show them in the caption so an operator
+  // adding the bars reconciles to the cost card.
+  const invNote = Math.abs(Number(periodInvAdj || 0)) >= 1 || Math.abs(Number(periodAlloc || 0)) >= 1 ? (
+    <div className="kpi-ov-gl" data-kpi-ov="chart-period-adjustment">
+      period total also includes
+      {Math.abs(Number(periodInvAdj || 0)) >= 1 && (
+        <> {periodInvAdj > 0 ? "-" : "+"}{fmtMoney(Math.abs(periodInvAdj))} inventory adjustment</>
+      )}
+      {Math.abs(Number(periodAlloc || 0)) >= 1 && (
+        <>
+          {Math.abs(Number(periodInvAdj || 0)) >= 1 ? " and" : ""} +{fmtMoney(Math.abs(periodAlloc))} corporate allocations
+        </>
+      )}
+    </div>
+  ) : null;
   if (bare) {
     return (
       <div className="kpi-ov-cb" data-kpi-ov="chart" data-kpi-ov-grain="week">
         {runningNote}
+        {invNote}
         {budgetLabelStrip}
         {bars}
         {axis}
@@ -283,6 +301,7 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
         )}
       </div>
       <div className="kpi-ov-cb">
+        {invNote}
         {budgetLabelStrip}
         {bars}
         {axis}
@@ -304,11 +323,11 @@ export default function Chart({ chart, revenueModel, open, onToggle }) {
   if (typeof onToggle !== "function") {
     return chart.grain === "period"
       ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} />
-      : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} />;
+      : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} periodInvAdj={chart.period_inventory_adjustment} periodAlloc={chart.period_allocation} />;
   }
   const body = chart.grain === "period"
     ? <ChartPeriodGrain series={chart.series} revenueModel={revenueModel} bare />
-    : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} bare />;
+    : <ChartWeekGrain series={chart.series} weeklyBudget={chart.weekly_budget} periodNo={chart.period_no} runningWeekNo={chart.running_week_no} periodInvAdj={chart.period_inventory_adjustment} periodAlloc={chart.period_allocation} bare />;
 
   const grainLabel = chart.grain === "period"
     ? "period by period"

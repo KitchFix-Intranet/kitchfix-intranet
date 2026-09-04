@@ -63,6 +63,7 @@ import {
   loadPnlActuals,
   loadOverviewBudgets,
   loadInventoryAdjustments,
+  loadCostAllocations,
   loadScDailyRevenue,
   derivePeriodState,
   capBeforeToday,
@@ -726,13 +727,19 @@ export async function resolveOverview({
     // JEs as "no adjustment", not zero (absent-vs-zero rule). Never
     // fabricates rows for accounts that carry no inventory.
     loadInventoryAdjustments(supa, { members, periods, fiscalYear: FISCAL_YEAR }),
+    // Kevin R-72 (2026-09-04): corporate cost allocations (vehicle
+    // insurance etc). Real costs finance posts straight to the P&L
+    // that appear in no operational feed. Applied on CLOSED periods
+    // only, same rule as inventory JEs. Pre-migration ships an
+    // empty map; no account changes until Kevin uploads.
+    loadCostAllocations(supa, { members, periods, fiscalYear: FISCAL_YEAR }),
   ]));
   const [
     periodStatusResp, accountFlagsResp, overviewBudgetsResp, pnlResp,
     scResp, laborActualsResp, memberBudgetResults,
     purchWeeklyResp, purchActualsResp, purchPendingResp, purchBudgetsResp,
     salaryBudgetsResp, salaryActualsResp,
-    dirResp, purchFreshness, invAdjResp,
+    dirResp, purchFreshness, invAdjResp, allocResp,
   ] = layer1;
 
   const errs = [];
@@ -753,6 +760,7 @@ export async function resolveOverview({
   if (salaryActualsResp.error) errs.push({ scope: "labor_salary_actuals", error: salaryActualsResp.error });
   if (dirResp?.error) errs.push({ scope: "accounts_directory", error: dirResp.error });
   if (invAdjResp?.error) errs.push({ scope: "inventory_adjustments", error: invAdjResp.error });
+  if (allocResp?.error) errs.push({ scope: "cost_allocations", error: allocResp.error });
   // purchFreshness never returns an `error` field per its loader
   // shape (loadFreshness returns the freshness object directly),
   // so no err check here.
@@ -809,6 +817,48 @@ export async function resolveOverview({
   };
   const foodInventoryJe = sumInventoryJeForGl("3200");
   const packagingInventoryJe = sumInventoryJeForGl("3400");
+  // Kevin R-72 (2026-09-04): corporate cost allocations by (account,
+  // period, gl_line_code). Same closed-period rule as inventory JEs.
+  const allocByAcct = allocResp?.data || new Map();
+  // Sum allocation amounts across members × finalised periods for a
+  // given GL code. Additive to actual cost; never fabricates zeros.
+  const sumAllocationForGl = (glLineCode) => {
+    let total = 0;
+    let anyFound = false;
+    for (const m of members) {
+      const byPeriod = allocByAcct.get(m);
+      if (!byPeriod) continue;
+      for (const p of finalisedPeriods) {
+        const byGl = byPeriod.get(p);
+        if (!byGl) continue;
+        const v = byGl.get(glLineCode);
+        if (v != null) { total += v; anyFound = true; }
+      }
+    }
+    return anyFound ? r2(total) : 0;
+  };
+  // Per-parent-bucket allocation totals. Sums every gl code under the
+  // parent prefix so e.g. 3500 gets 3500.2 + 3500.5 + any other
+  // 3500.x code Kevin uploads. Kept simple: iterate all discovered
+  // gl codes in the allocation map, group by parent.
+  const bucketAllocationTotal = (parentPrefix) => {
+    const seenGls = new Set();
+    for (const m of members) {
+      const byPeriod = allocByAcct.get(m);
+      if (!byPeriod) continue;
+      for (const [_, byGl] of byPeriod) {
+        for (const gl of byGl.keys()) {
+          if (typeof gl === "string" && gl.startsWith(parentPrefix)) seenGls.add(gl);
+        }
+      }
+    }
+    let total = 0;
+    for (const gl of seenGls) total += sumAllocationForGl(gl);
+    return r2(total);
+  };
+  const vehicleAllocation   = bucketAllocationTotal("3500");
+  const foodAllocation      = bucketAllocationTotal("3200");
+  const packagingAllocation = bucketAllocationTotal("3400");
   // Salary side (§5.9 / R-28). Always composed - no toggle guard.
   const salary3100_2Budgets = salaryBudgetsResp.byAccount || new Map();
   const salaryRows = salaryActualsResp.rows || [];
@@ -1040,14 +1090,23 @@ export async function resolveOverview({
   const food_budget = purchBoard.buckets["3200"]?.budget ?? null;
   const packaging_actual_purchased = purchBoard.buckets["3400"]?.period_total ?? null;
   const packaging_budget = purchBoard.buckets["3400"]?.budget ?? null;
-  const vehicle_actual = purchBoard.buckets["3500"]?.period_total ?? null;
+  const vehicle_actual_operational = purchBoard.buckets["3500"]?.period_total ?? null;
   const vehicle_budget = purchBoard.buckets["3500"]?.budget ?? null;
   const food_actual = food_actual_purchased != null
-    ? r2(food_actual_purchased - foodInventoryJe)
+    ? r2(food_actual_purchased - foodInventoryJe + foodAllocation)
     : null;
   const packaging_actual = packaging_actual_purchased != null
-    ? r2(packaging_actual_purchased - packagingInventoryJe)
+    ? r2(packaging_actual_purchased - packagingInventoryJe + packagingAllocation)
     : null;
+  // Kevin R-72 (2026-09-04): vehicle actual now sums operational
+  // spend (bill.com + Rippling) PLUS corporate allocations finance
+  // posts straight to the P&L (vehicle insurance, R&M when we get
+  // it). Allocations apply on CLOSED periods only via
+  // sumAllocationForGl. Same absent-vs-zero rule: no allocation row
+  // → no contribution.
+  const vehicle_actual = vehicle_actual_operational != null
+    ? r2(vehicle_actual_operational + vehicleAllocation)
+    : (vehicleAllocation > 0 ? r2(vehicleAllocation) : null);
 
   // Budget-to-date-days for the buckets aggregate. purchBoard's
   // totals block ships buckets_budget_to_date_days as an aggregate;
@@ -1569,6 +1628,51 @@ export async function resolveOverview({
   // 17. Chart series. Period grain for FYTD; week grain for a single
   //     period. Weeks come from the purchasing weekly view + labor
   //     week aggregates.
+  //
+  // R-72 Item 2 (Kevin 2026-09-04): chart's spent series carries the
+  // SAME adjustment the cost card does. Prior chart drew pre-JE and
+  // pre-allocation weekly rows; sum-to-card assertion failed by the
+  // period's inventory JE on every closed range. Fix:
+  //   - period grain: apply per-period JE (subtract) + per-period
+  //     allocation (add) to each period's spent value
+  //   - week grain: leave weekly bars alone (Kevin's rule - a JE is
+  //     a period-level entry and splitting it across weeks would be
+  //     fiction). Ship period-level `period_inventory_adjustment`
+  //     and `period_allocation` fields on the chart payload so the
+  //     client caption reads "period total includes $X inventory
+  //     adjustment" and the sum-to-card assertion becomes
+  //     `sum(bars) + inventory_adj + allocation = cost card actual`.
+  //
+  // Helpers: per-period signed JE (food + packaging) and per-period
+  // allocation total (vehicle + any other allocated bucket) across
+  // members. Never applied on open periods (JEs booked at close;
+  // allocations booked at close - same rule).
+  const perPeriodJeSum = (p) => {
+    // JE is booked only on finalised periods. Return 0 on open.
+    if (!finalisedPeriods.includes(p)) return 0;
+    let total = 0;
+    for (const m of members) {
+      const byPeriod = invAdjByAcct.get(m);
+      if (!byPeriod) continue;
+      const byGl = byPeriod.get(p);
+      if (!byGl) continue;
+      const food = byGl.get("3200"); if (food != null) total += Number(food);
+      const pack = byGl.get("3400"); if (pack != null) total += Number(pack);
+    }
+    return r2(total);
+  };
+  const perPeriodAllocationSum = (p) => {
+    if (!finalisedPeriods.includes(p)) return 0;
+    let total = 0;
+    for (const m of members) {
+      const byPeriod = allocByAcct.get(m);
+      if (!byPeriod) continue;
+      const byGl = byPeriod.get(p);
+      if (!byGl) continue;
+      for (const [, amt] of byGl) total += Number(amt || 0);
+    }
+    return r2(total);
+  };
   let chart;
   if (rng.kind === "period") {
     // Week grain. Iterate the weeks in the period and read from both
@@ -1662,7 +1766,24 @@ export async function resolveOverview({
     // chart header can say "week N in progress, not yet counted"
     // beside the weeks-closed pill.
     const runningWeekNo = runningIdx >= 0 ? runningIdx + 1 : null;
-    chart = { grain: "week", series, weekly_budget: wkBudget, period_no: rng.period_no, running_week_no: runningWeekNo };
+    // R-72 Item 2: on week grain the JE + allocation are period-level
+    // entries booked at close. Splitting them across weeks would be
+    // fiction, per Kevin's ruling. Ship the period totals alongside
+    // the bars so the client caption reads e.g. "inventory adjustment
+    // -$3,389 applied at period close" and the sum-to-card assertion
+    // reads: sum(closed_week_bars) + period_inventory_adjustment
+    //        + period_allocation = cost card actual.
+    const periodInvAdj = perPeriodJeSum(rng.period_no);
+    const periodAlloc = perPeriodAllocationSum(rng.period_no);
+    chart = {
+      grain: "week",
+      series,
+      weekly_budget: wkBudget,
+      period_no: rng.period_no,
+      running_week_no: runningWeekNo,
+      period_inventory_adjustment: periodInvAdj,
+      period_allocation: periodAlloc,
+    };
   } else {
     // Period grain for FYTD or explicit range - build one point per
     // fiscal period in the range.
@@ -1731,15 +1852,28 @@ export async function resolveOverview({
       const adjustedBudget = (targetCostRatio != null && periodRevenueActual > 0)
         ? r2(periodRevenueActual * targetCostRatio)
         : null;
+      // R-72 Item 2: apply per-period JE (subtract - inventory grew =
+      // cost lower) + per-period allocation (add - allocations are
+      // additional cost). Both zero on open periods so open-period
+      // bars stay pre-adjustment (parity with the cost card, which
+      // also folds these in on closed periods only).
+      const periodJe = perPeriodJeSum(p);
+      const periodAlloc = perPeriodAllocationSum(p);
+      const rawSpent = (laborByPeriod.get(p) || 0) + (purchByPeriod.get(p) || 0);
+      const adjustedSpent = state === "not_started" ? null : r2(rawSpent - periodJe + periodAlloc);
       return {
         period_no: p,
         state,
-        spent: state === "not_started" ? null : r2((laborByPeriod.get(p) || 0) + (purchByPeriod.get(p) || 0)),
+        spent: adjustedSpent,
         budget: r2(laborBudP + purchBudP),
         // Item 15: adjusted per-period budget for the chart's target
         // line. `budget` above is retained for legacy consumers.
         revenue_actual: r2(periodRevenueActual),
         adjusted_budget: adjustedBudget,
+        // R-72 Item 2: expose the JE + allocation applied so the
+        // client can render a caption / tooltip. Zero on open.
+        inventory_adjustment: r2(periodJe),
+        allocation: r2(periodAlloc),
       };
     });
     chart = { grain: "period", series };
@@ -2057,7 +2191,7 @@ export async function resolveOverview({
     };
   })();
 
-  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [], inventoryJe = 0, actualPurchased = null }) => {
+  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [], inventoryJe = 0, actualPurchased = null, allocation = 0 }) => {
     const billed_back = isPassThrough;
     // inactive takes precedence over billed_back only when there is
     // truly nothing to say (no actual and no budget). Billed-back
@@ -2105,7 +2239,14 @@ export async function resolveOverview({
       envelope_delta: (suppress || btd == null || isManagementFee) ? null : envelopeDelta(btd, _batr),
       inventory_je: (line_code === "3200" || line_code === "3400") ? r2(inventoryJe) : null,
       actual_purchased: (line_code === "3200" || line_code === "3400") ? actualPurchased : null,
-      sources: ["purchasing_actuals"],
+      // Kevin R-72 (2026-09-04): corporate cost allocations - dollars
+      // finance posts straight to the P&L. Rendered on the cost-line
+      // row so the operator sees the reconciliation ("$X operational +
+      // $Y allocations = $Z"). Only 3500 (vehicle) carries allocations
+      // for FY26 (vehicle insurance); other parents pass 0.
+      allocation: r2(allocation),
+      actual_operational: allocation > 0 ? r2(actual - allocation) : null,
+      sources: allocation > 0 ? ["purchasing_actuals", "cost_allocations"] : ["purchasing_actuals"],
       flags: [
         ...(billed_back ? ["billed_back"] : []),
         ...(inactive ? ["inactive"] : []),
@@ -2133,8 +2274,9 @@ export async function resolveOverview({
   statementRows.push(buildCostRow({
     line_code: "3500",
     label: "Vehicle",
-    actual: vehicle_actual,
+    actual: vehicle_actual,           // operational + allocations
     budget: vehicle_budget,
+    allocation: vehicleAllocation,
   }));
 
   // Kevin PR-B item 6 (2026-09-03) + follow-up: sub-lines under 3200 /
@@ -2308,6 +2450,36 @@ export async function resolveOverview({
         envelope_delta: null,
         sources: ["inventory_adjustments"],
         flags: ["inventory_adjustment"],
+      });
+    }
+    // R-72 (Kevin 2026-09-04): allocation synthetic sub-row. Mirrors
+    // the INVJE pattern - parent actual now includes allocations, so
+    // parent = sum(children) requires a child that carries the
+    // allocation total. Currently only 3500 (vehicle) has allocations
+    // (vehicle insurance FY26), but the shape works for any parent.
+    const allocForParent = {
+      "3200": foodAllocation,
+      "3400": packagingAllocation,
+      "3500": vehicleAllocation,
+    }[parent] || 0;
+    if (allocForParent > 0 && !parentSuppressed_) {
+      statementRows.push({
+        line_code: `${parent}.ALLOC`,
+        section: "cogs",
+        parent_line_code: parent,
+        label: "Corporate allocations",
+        reported: true,
+        actual: r2(allocForParent),
+        budget_to_date: null,
+        period_budget: null,
+        variance: null,
+        variance_pct: null,
+        actual_pct: null,
+        target_pct: null,
+        budget_at_this_revenue: null,
+        envelope_delta: null,
+        sources: ["cost_allocations"],
+        flags: ["allocation"],
       });
     }
   }
