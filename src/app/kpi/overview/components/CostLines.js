@@ -177,11 +177,23 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
         {actualText == null ? <span className="kpi-ov-nb">—</span> : (
           <>
             <span data-kpi-ov="actual-adjusted">{actualText}</span>
-            {row.inventory_je != null && Math.abs(row.inventory_je) >= 1 && (
-              <div className="kpi-ov-inv-je" data-kpi-ov="inventory-je">
-                {fmtMoney(row.actual_purchased)}{" "}
-                {row.inventory_je < 0 ? "+" : "−"}{" "}
-                {fmtMoney(Math.abs(row.inventory_je))} inventory = {actualText}
+            {/* R-71 Stage 2 (Kevin 2026-09-04): "$X invoiced - $Y credits
+                (- or +) $Z inventory = $W" derivation sub-line. Reads
+                as one italic line when either credits or inventory is
+                non-zero. Precedence: pre-R-71 wording read "$X purchases
+                +/- $Y inventory = $Z"; the credit case sits between
+                invoiced and inventory. */}
+            {((row.inventory_je != null && Math.abs(row.inventory_je) >= 1) ||
+              (row.credits_total != null && Math.abs(row.credits_total) >= 1)) && (
+              <div className="kpi-ov-inv-je" data-kpi-ov="cost-derivation">
+                {fmtMoney(row.actual_purchased)} invoiced
+                {row.credits_total != null && Math.abs(row.credits_total) >= 1 && (
+                  <> {row.credits_total < 0 ? "−" : "+"} {fmtMoney(Math.abs(row.credits_total))} credits</>
+                )}
+                {row.inventory_je != null && Math.abs(row.inventory_je) >= 1 && (
+                  <> {row.inventory_je < 0 ? "+" : "−"} {fmtMoney(Math.abs(row.inventory_je))} inventory</>
+                )}
+                {" "}= {actualText}
               </div>
             )}
           </>

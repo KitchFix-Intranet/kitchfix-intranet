@@ -1095,6 +1095,30 @@ export async function resolveOverview({
   const packaging_budget_to_date_days = prorateBucketToDate(packaging_budget);
   const vehicle_budget_to_date_days   = prorateBucketToDate(vehicle_budget);
 
+  // R-71 Stage 2 (Kevin 2026-09-04): sum vendor-credit amounts (signed
+  // negative, stored that way by the loader) per parent bucket. Used
+  // by the cost row's "$X invoiced - $Y credits = $Z" sub-line
+  // display; and by the sub-row generator to emit a synthetic
+  // "{parent}.CREDITS" line for the P&L Full view. Parent cost row's
+  // `actual` already includes credits (purchBoard bucket period_total
+  // sums all rows in the bucket); we surface the split for legibility.
+  const creditsByBucket = { "3200": 0, "3400": 0, "3500": 0 };
+  const purchasesByBucket = { "3200": 0, "3400": 0, "3500": 0 };
+  for (const r of (purchActuals || [])) {
+    const gl = String(r.gl_line_code || "");
+    const bucket = gl.startsWith("3200") ? "3200"
+                 : gl.startsWith("3400") ? "3400"
+                 : gl.startsWith("3500") ? "3500"
+                 : null;
+    if (!bucket) continue;
+    const amt = Number(r.amount || 0);
+    if (r.source === "billcom_credit") {
+      creditsByBucket[bucket] += amt;
+    } else {
+      purchasesByBucket[bucket] += amt;
+    }
+  }
+
   // PR-1 item 1 (2026-09-02). has_target is the invariant "there is a
   // real target to compare against on this range". Rules:
   //   - Single fiscal period (kind === "period")     -> true
@@ -2057,7 +2081,7 @@ export async function resolveOverview({
     };
   })();
 
-  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [], inventoryJe = 0, actualPurchased = null }) => {
+  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [], inventoryJe = 0, actualPurchased = null, creditsTotal = 0 }) => {
     const billed_back = isPassThrough;
     // inactive takes precedence over billed_back only when there is
     // truly nothing to say (no actual and no budget). Billed-back
@@ -2104,8 +2128,16 @@ export async function resolveOverview({
       // inventory_je=null so the client knows to skip the trio.
       envelope_delta: (suppress || btd == null || isManagementFee) ? null : envelopeDelta(btd, _batr),
       inventory_je: (line_code === "3200" || line_code === "3400") ? r2(inventoryJe) : null,
-      actual_purchased: (line_code === "3200" || line_code === "3400") ? actualPurchased : null,
-      sources: ["purchasing_actuals"],
+      actual_purchased: (line_code === "3200" || line_code === "3400" || line_code === "3500") ? actualPurchased : null,
+      // R-71 Stage 2 (Kevin 2026-09-04): vendor-credits total (signed
+      // negative) surfaces on the cost row so the client can render
+      // "$X invoiced - $Y credits = $Z" sub-line, mirroring the
+      // inventory-je pattern. Zero on rows/accounts without credits;
+      // client suppresses the sub-line when zero.
+      credits_total: (line_code === "3200" || line_code === "3400" || line_code === "3500") ? r2(creditsTotal) : null,
+      sources: Math.abs(Number(creditsTotal || 0)) >= 0.01
+        ? ["purchasing_actuals", "billcom_credit"]
+        : ["purchasing_actuals"],
       flags: [
         ...(billed_back ? ["billed_back"] : []),
         ...(inactive ? ["inactive"] : []),
@@ -2113,20 +2145,29 @@ export async function resolveOverview({
       ],
     };
   };
+  // R-71 Stage 2: `actualPurchased` shipped to the row is the pre-
+  // credit, pre-JE invoiced total. The client renders the derivation
+  // sub-line "$X invoiced - $Y credits - $Z inventory = $W". Prior
+  // to R-71 `actualPurchased` was `purchBoard.buckets[X].period_total`
+  // which included credits (since credits landed in purchasing_actuals
+  // once the loader ran); use `purchasesByBucket[X]` here so the
+  // display is honestly labelled.
   statementRows.push(buildCostRow({
     line_code: "3200",
     label: "Food purchased",
-    actual: food_actual,           // adjusted (purchases - foodInventoryJe)
-    actualPurchased: food_actual_purchased,
+    actual: food_actual,           // adjusted (purchases + credits - foodInventoryJe)
+    actualPurchased: r2(purchasesByBucket["3200"]),
     inventoryJe: foodInventoryJe,
+    creditsTotal: creditsByBucket["3200"],
     budget: food_budget,
   }));
   statementRows.push(buildCostRow({
     line_code: "3400",
     label: "Packaging and supplies",
-    actual: packaging_actual,      // adjusted
-    actualPurchased: packaging_actual_purchased,
+    actual: packaging_actual,
+    actualPurchased: r2(purchasesByBucket["3400"]),
     inventoryJe: packagingInventoryJe,
+    creditsTotal: creditsByBucket["3400"],
     budget: packaging_budget,
     extraFlags: flags.packaging_gap ? ["packaging_gap"] : [],
   }));
@@ -2134,6 +2175,8 @@ export async function resolveOverview({
     line_code: "3500",
     label: "Vehicle",
     actual: vehicle_actual,
+    actualPurchased: r2(purchasesByBucket["3500"]),
+    creditsTotal: creditsByBucket["3500"],
     budget: vehicle_budget,
   }));
 
@@ -2172,14 +2215,29 @@ export async function resolveOverview({
   const parentPrefixOf = (gl) => PARENT_PREFIXES.find(p => isPrefixMatch(gl, p)) || null;
   // Collect every gl_line_code present in either engine under the
   // three parents. Sort by parent then by gl for stable render.
+  //
+  // R-71 Stage 2 (Kevin 2026-09-04): vendor-credits land in
+  // purchasing_actuals with source='billcom_credit' and NEGATIVE
+  // amounts. The parent cost row's actual already picks them up
+  // (via purchBoard bucket period_total which sums all rows in the
+  // bucket). For SUB-ROWS, we EXCLUDE billcom_credit rows from the
+  // per-gl_line_code aggregation and emit a separate synthetic
+  // "Credits" sub-row per parent (mirrors the 3200.INVJE pattern).
+  // Otherwise a credit on line 3200.1 would be double-counted
+  // (bumped into 3200.1's sub-row AND surfaced as CREDITS).
   const glsUnderParent = new Map(PARENT_PREFIXES.map(p => [p, new Set()]));
   const purchActualsByLine = new Map();
   const purchActualsLinesPresent = new Set();
+  // creditsByParent uses the same aggregation as creditsByBucket
+  // (computed earlier at line ~1099). Kept as a Map for the sub-row
+  // emission below.
+  const creditsByParent = new Map(PARENT_PREFIXES.map(p => [p, creditsByBucket[p] || 0]));
   for (const r of (purchActuals || [])) {
     const gl = String(r.gl_line_code || "");
     if (!gl) continue;
     const parent = parentPrefixOf(gl);
     if (!parent) continue;
+    if (r.source === "billcom_credit") continue;    // already in creditsByParent
     glsUnderParent.get(parent).add(gl);
     purchActualsByLine.set(gl, (purchActualsByLine.get(gl) || 0) + Number(r.amount || 0));
     purchActualsLinesPresent.add(gl);
@@ -2308,6 +2366,34 @@ export async function resolveOverview({
         envelope_delta: null,
         sources: ["inventory_adjustments"],
         flags: ["inventory_adjustment"],
+      });
+    }
+    // R-71 Stage 2 (Kevin 2026-09-04): vendor-credits synthetic sub-
+    // row per parent. Sums the negative-amount billcom_credit rows
+    // filtered out of the per-gl sub-rows above. Parent actual already
+    // includes these via purchBoard.buckets[parent].period_total (sum
+    // of ALL rows in the bucket, credits included), so sub-sum ties
+    // parent when the CREDITS row carries the same negative total.
+    // Never renders when zero (absence contract). No budget side.
+    const creditsTotal = creditsByParent.get(parent) || 0;
+    if (Math.abs(creditsTotal) >= 0.01 && !parentSuppressed_) {
+      statementRows.push({
+        line_code: `${parent}.CREDITS`,
+        section: "cogs",
+        parent_line_code: parent,
+        label: "Vendor credits",
+        reported: true,
+        actual: r2(creditsTotal),
+        budget_to_date: null,
+        period_budget: null,
+        variance: null,
+        variance_pct: null,
+        actual_pct: null,
+        target_pct: null,
+        budget_at_this_revenue: null,
+        envelope_delta: null,
+        sources: ["billcom_credit"],
+        flags: ["vendor_credits"],
       });
     }
   }
