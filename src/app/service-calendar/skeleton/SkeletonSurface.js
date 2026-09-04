@@ -61,7 +61,6 @@ export default function SkeletonSurface() {
           loading is one more thing that can render mid-swap with the
           wrong name. Less to get wrong). */}
       <div className="sc-skel-caption">
-        <span className="sc-skel-spinner" aria-hidden="true" />
         <span className="sc-skel-caption-text">Loading</span>
       </div>
 
@@ -89,9 +88,6 @@ export default function SkeletonSurface() {
             number possible), shimmer bars for the ring + queue + notes
             + footer sections. */}
         <div className="sc-skel-rail">
-          <div className="sc-skel-rail-spinner">
-            <span className="sc-skel-spinner" aria-hidden="true" />
-          </div>
           <div className="sc-skel-rail-hero">
             <SkeletonBar className="sc-skel-bar-hero" />
             <span className="sc-skel-rail-hero-label">ENTERED</span>

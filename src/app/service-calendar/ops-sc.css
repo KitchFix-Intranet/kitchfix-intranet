@@ -144,7 +144,7 @@
   background: rgba(0,0,0,0.32); backdrop-filter: blur(1.5px);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-6);
-  animation: scOverlayIn 0.2s ease;
+  animation: scOverlayIn var(--duration-base) var(--ease-standard);
 }
 @keyframes scOverlayIn { from { opacity: 0; } to { opacity: 1; } }
 .sc-overlay-card {
@@ -153,7 +153,7 @@
   box-shadow: var(--elevation-popover);
   display: flex; flex-direction: column;
   overflow: hidden;
-  animation: scCardUp 0.25s ease;
+  animation: scCardUp var(--duration-slow) var(--ease-emphasized);
 }
 @keyframes scCardUp { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
@@ -285,7 +285,7 @@
      their gutter and nothing behind them. */
 }
 
-.sc-fade-in { animation: scFadeIn 0.3s ease; }
+.sc-fade-in { animation: scFadeIn var(--duration-slow) var(--ease-standard); }
 @keyframes scFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 /* ══════════════════════════════════════
    COMING SOON

@@ -8,6 +8,13 @@ import ServiceCalendar from "./ServiceCalendar";
 // block. oh-toast remains the primitive on Financial + Ops per Kevin
 // ruling (see GOTCHAS "SC toast is the reference implementation").
 import Toast from "./toast/Toast";
+// 2026-09-04 (motion cleanup M1): the HandoffProvider is lifted to
+// page.js so the Toast render can read `monthComplete` and suppress
+// itself when the MonthCompleteCard modal is on screen. Two
+// confirmations in the same visual band at the same moment reads as
+// duplication; the modal is the stronger voice, the toast steps
+// aside. Save code stays unaware of the completing-save case.
+import { HandoffProvider, useHandoffSafe } from "./v2/handoff/coordinator";
 // P3-A (2026-07-25): note-posted chip uses the accent-rail primitive.
 // Import the CSS at the page level so the chip renders with correct
 // styles regardless of which SC subtree fires the toast.
@@ -27,6 +34,15 @@ import "./skeleton/skeleton.css";
 // screen. When the site-lead rollout expands access, swap this for a
 // dedicated SC_DEV_EMAILS list in admin.js.
 export default function ServiceCalendarPage() {
+  return (
+    <HandoffProvider>
+      <ServiceCalendarPageBody />
+    </HandoffProvider>
+  );
+}
+
+function ServiceCalendarPageBody() {
+  const handoff = useHandoffSafe();
   const { data: session, status } = useSession();
   const [heroImage, setHeroImage] = useState("");
   const [toast, setToast] = useState(null);
@@ -165,7 +181,7 @@ export default function ServiceCalendarPage() {
           not confirmations. The three post-action confirmation
           patterns (day-saved, bulk-saved, no-service / week-finalized
           / day-cleared / failed) all render through <Toast /> below. */}
-      {toast && (toast.variant === "note-posted" || toast.variant === "offline-chip") && (
+      {toast && !handoff.monthComplete && (toast.variant === "note-posted" || toast.variant === "offline-chip") && (
         <div className="oh-toast-container oh-toast-container--sc-center">
           {toast.variant === "note-posted" ? (
             <div
@@ -210,7 +226,7 @@ export default function ServiceCalendarPage() {
           )}
         </div>
       )}
-      {toast && toast.variant !== "note-posted" && toast.variant !== "offline-chip" && (
+      {toast && !handoff.monthComplete && toast.variant !== "note-posted" && toast.variant !== "offline-chip" && (
         <div className="sc-toast-container">
           <Toast
             tier={toast.tier || "ok"}
