@@ -39,7 +39,7 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 // src/lib/kpi/shared/batr.js for the R-77 invariant.
 import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
 import { REVENUE_LINE_CODES, loadPnlActuals, loadOverviewBudgets } from "@/lib/kpi/overview/pnl-loader.js";
-import { loadRangeRevenueBasis, attachBatrToBoard } from "@/lib/labor/labor-batr.js";
+import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore } from "@/lib/labor/labor-batr.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
 // only consumed by paginateActuals / resolveMemberBudget /
 // buildPriorPeriodComparison; the loaders module owns those imports now.
@@ -1299,20 +1299,26 @@ export async function GET(request) {
   // 2026-08-28 person-key fix (single-account path).
   const workerToEmail = buildWorkerToEmail(workerMeta);
 
-  // R-77 fix (Kevin Labor PR-A 2026-09-04): load the revenue basis
-  // once. The labor budget the batr formula reads is the FINAL
-  // board's range_budget, which changes with the salary toggle -
-  // attach batr AFTER any withSalary merge (below) so the hourly
-  // and hourly+salary paths both get a batr computed against their
-  // own labor budget. Overview always uses salary-inclusive labor
-  // budget (R-68), so the salary-inclusive parity is the one that
-  // matters for the R-77 assertion.
+  // R-77 fix + Labor PR-A item 8 (Kevin 2026-09-04): the parity
+  // assertion holds only when both boards restrict batr to the same
+  // period set. Overview's This year batr uses P1-P8 (last-closed)
+  // - the running period renders hatched and does not enter the
+  // total. Labor's batr must exclude the running period too.
+  //
+  // Compute a CLOSED-only period set for batr (revenue basis + labor
+  // budget both restricted to periods whose end < today). The full
+  // range set stays for everything else the labor board carries;
+  // batr is the one figure that must agree with Overview's R-63 rule.
   const rangePeriodsSingle = (account_periods || [])
     .filter(p => p.start && p.end && p.start <= end && p.end >= start)
     .map(p => p.period_no);
+  const closedPeriodsSingle = periodsClosedBefore(rangePeriodsSingle, today);
+  const closedLaborBudgetSingle = (budget_periods || [])
+    .filter(bp => closedPeriodsSingle.includes(bp.period_no))
+    .reduce((s, bp) => s + Number(bp.amount || 0), 0);
   const revenueBasisSingle = await loadRangeRevenueBasis(supa, {
     members: [account],
-    periods: rangePeriodsSingle,
+    periods: closedPeriodsSingle,
   });
   const boardSingle = buildBoard({
     account, start, end, today,
@@ -1321,7 +1327,7 @@ export async function GET(request) {
     account_state: "hourly_ok",
     workerToEmail,
   });
-  attachBatrToBoard(boardSingle, revenueBasisSingle);
+  attachBatrToBoard(boardSingle, revenueBasisSingle, { closedLaborBudget: closedLaborBudgetSingle });
 
   let bodySingle = {
     ok: true,
@@ -1382,13 +1388,16 @@ export async function GET(request) {
       salaryRows: actQ.rows,
       workerToEmail: mergedWorkerToEmail,
     });
-    // R-77 fix (Kevin Labor PR-A 2026-09-04): withSalaryMerge rebuilds
-    // the board from scratch, dropping the batr fields the hourly-
-    // only path attached. Re-attach against the merged board's
-    // range_budget (which now includes salary) so the salary-inclusive
-    // batr matches Overview's 3100 (which is always salary-inclusive
-    // per R-68).
-    attachBatrToBoard(bodySingle.board, revenueBasisSingle);
+    // R-77 fix + item 8 (Kevin Labor PR-A 2026-09-04): withSalaryMerge
+    // rebuilds the board from scratch, dropping the batr fields the
+    // hourly-only path attached. Re-attach against the closed-only
+    // labor budget - now hourly + salary - so the salary-inclusive
+    // parity holds. Overview's 3100 is always salary-inclusive per
+    // R-68; matching that here is the R-77 assertion Kevin named.
+    const closedLaborBudgetMerged = (bodySingle.budget_periods || [])
+      .filter(bp => closedPeriodsSingle.includes(bp.period_no))
+      .reduce((s, bp) => s + Number(bp.amount || 0), 0);
+    attachBatrToBoard(bodySingle.board, revenueBasisSingle, { closedLaborBudget: closedLaborBudgetMerged });
     // Legacy CIN - AZ re-resolve retained as belt-and-braces: the
     // salary-first resolve above covers this today, but a future
     // refactor that changes the merge shape shouldn't silently drop
