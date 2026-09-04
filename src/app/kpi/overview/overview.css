@@ -1431,21 +1431,13 @@
 }
 /* Kevin ruling 2026-09-03 (top-simplify): .kpi-ov-hz sub-pair grid
    retired - cards now render as .kpi-ov-pair rows (above). Envelope
-   note moved into COGS card tooltip. Kept: .kpi-ov-inv-je (used by
-   cost-lines table, not cards). */
-/* Kevin ruling cleanup (2026-09-03) item 6: inventory derivation
-   reads as a single italic sub-line beneath the adjusted actual.
-   Uniform weight and size across every part - the − and = match
-   the numerals. Grey subordinate so it reads as a derivation of the
-   primary above rather than competing with it. */
-.kpi-app .kpi-ov-inv-je {
-  color: var(--n-600);
-  font-weight: 600;
-  font-size: var(--kpi-t-meta);
-  font-style: italic;
-  white-space: nowrap;
-  margin-top: 2px;
-}
+   note moved into COGS card tooltip.
+   Kevin addendum 2026-09-04: .kpi-ov-inv-je removed. The italic
+   derivation sub-line ("$X invoiced - $Y credits - $Z inventory =
+   $W") on cost-lines table 3200 + 3400 rows was retired because the
+   P&L below the fold now carries credits + inventory as real sub-
+   rows - the summary above should not repeat what the table below
+   already has. Tooltip on the row label carries the explanation. */
 
 /* ── Item 5: cost lines table (primary surface on the left) ─── */
 .kpi-app .kpi-ov-cl {
