@@ -423,6 +423,7 @@ export default function KpiOverviewPage() {
           revenueSourceState={data.revenue_source_state}
           rangeLabels={data.range_labels}
           revenueModel={data.revenue_model}
+          statementTotals={data.statement_totals}
         />
         {/* PR-2 layout branch: two-column single-account grid ONLY
             when the EFFECTIVE account is a single site. A corporate
