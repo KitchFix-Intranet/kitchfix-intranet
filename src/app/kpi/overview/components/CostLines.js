@@ -44,26 +44,25 @@ function gapDollars(delta, goodWord, badWord) {
   return `${abs} ${delta <= 0 ? goodWord : badWord}`;
 }
 
-// Build the destination href for a cost line. Kevin ruling this-
-// period (2026-09-03) item 4: the drill URL passes
-//   end = range_effective_end (not range.end)
-// so the Labor / Purchasing board queries the SAME window R-63 used
-// for the row. Without this, on P9 open the row shows "through week
-// 3" ($30,082) but drills to $37,294 (through week 4 in-progress) -
-// the classic drill-through disagrees with the row that opens it.
-// Also carries `include_salary` when the current toggle is on, so
-// the drill target matches the row's salary state.
-function rowHref({ lineCode, filters, previewAccount, rangeEffectiveEnd, includeSalary }) {
+// Build the destination href for a cost line. Kevin ruling R-68
+// (2026-09-04): the 3100 row is ALWAYS salary-inclusive on the
+// Overview (labor's parent total never moves by toggle - the toggle
+// gates disclosure only). So the drill URL always passes
+// include_salary=1 for 3100, regardless of the payload's toggle
+// state. Otherwise the row shows salary-inclusive $896k and the
+// drill target opens hourly-only $780k - the exact defect item 4
+// of this-period was written to prevent.
+//
+// Also carries end=range_effective_end so the drill queries the
+// same R-63 window the row reads.
+function rowHref({ lineCode, filters, previewAccount, rangeEffectiveEnd }) {
   const params = new URLSearchParams();
   if (filters?.account) params.set("account", filters.account);
   if (filters?.range?.start) params.set("start", filters.range.start);
-  // Prefer the effective end shipped in the payload (R-63) so the
-  // drill queries the exact window the row read. Fall back to the
-  // range end on closed ranges where effective_end == range.end.
   const endToUse = rangeEffectiveEnd || filters?.range?.end;
   if (endToUse) params.set("end", endToUse);
   if (previewAccount) params.set("preview", previewAccount);
-  if (includeSalary && lineCode === "3100") params.set("include_salary", "1");
+  if (lineCode === "3100") params.set("include_salary", "1");
   const base = lineCode === "3100" ? "/kpi/labor" : "/kpi/purchasing";
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
@@ -73,8 +72,8 @@ function rowHref({ lineCode, filters, previewAccount, rangeEffectiveEnd, include
 // The red/green bar beneath each cost line was noise - the percentages
 // and the verdict colour on % of rev already carry the story.
 
-function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull, rangeEffectiveEnd, includeSalary }) {
-  const href = rowHref({ lineCode: row.line_code, filters, previewAccount, rangeEffectiveEnd, includeSalary });
+function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull, rangeEffectiveEnd }) {
+  const href = rowHref({ lineCode: row.line_code, filters, previewAccount, rangeEffectiveEnd });
   const isBilledBack = Array.isArray(row.flags) && row.flags.includes("billed_back");
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   const actualPctText = fmtPct(row.actual_pct);
@@ -131,6 +130,26 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
           <span className="kpi-ov-cl-lbl">{row.label}</span>
           <span className="kpi-ov-cl-go" aria-hidden="true">→</span>
         </Link>
+        {/* Kevin R-68 item 4 (2026-09-04): vehicle insurance +
+            repair-and-maintenance are corporate allocations posted
+            straight to the P&L, not visible on bill.com or Rippling.
+            An operator comparing to the P&L should find the
+            explanation on the board, not assume the number is wrong. */}
+        {row.line_code === "3500" && (
+          <HelpPop
+            id="overview-cost-line-3500"
+            title="Vehicle"
+            body={
+              <p>
+                Vehicle insurance and repair &amp; maintenance are billed
+                centrally as corporate allocations posted straight to the
+                P&amp;L. They do not appear in bill.com invoices or Rippling
+                card charges, so they are not visible on this board or on
+                the purchasing board it opens.
+              </p>
+            }
+          />
+        )}
       </td>
       {/* Kevin ruling final-presentation (2026-09-03) item 3: Plan
           band. Order becomes:
@@ -252,7 +271,6 @@ export default function CostLines({ payload, previewAccount = null }) {
   const hasTarget = !!payload.has_target;
   const isOpenRange = payload.period_state === "open";
   const rangeEffectiveEnd = payload.range_effective_end || null;
-  const includeSalary = !!filters?.include_salary;
   const cogsRows = payload.statement_rows
     .filter(r => r.section === "cogs" && !r.parent_line_code)
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
@@ -337,7 +355,6 @@ export default function CostLines({ payload, previewAccount = null }) {
                 filters={filters}
                 previewAccount={previewAccount}
                 rangeEffectiveEnd={rangeEffectiveEnd}
-                includeSalary={includeSalary}
                 revBudFull={payload.statement_totals?.revenue?.period_budget}
               />
             ))}

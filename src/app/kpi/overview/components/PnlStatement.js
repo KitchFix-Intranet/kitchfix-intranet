@@ -165,7 +165,16 @@ function SectionRow({ label }) {
 }
 
 export default function PnlStatement({ payload, open, onToggle }) {
+  // Kevin R-68 item 1 (2026-09-04): the P&L Full view is LOCKED when
+  // the caller has no salary access. Salary-inclusive totals appear
+  // everywhere already (labor is always composed with salary); Full
+  // is the surface that reveals 3100.1 hourly vs 3100.2 salary, and
+  // that split is exactly what managers below site-leader must not
+  // see. When include_salary=false, the segment control is hidden
+  // and the dense state is forced to Summary.
+  const includeSalary = !!payload?.filters?.include_salary;
   const [dense, setDense] = useState("sum"); // 'sum' | 'full'
+  const effectiveDense = includeSalary ? dense : "sum";
 
   if (!payload?.statement_rows) return null;
 
@@ -186,9 +195,9 @@ export default function PnlStatement({ payload, open, onToggle }) {
   const totalRevenue = revenueCard?.hero_actual;
 
   // Summary drops: inactive lines, sub-rows, tracked band.
-  const showInactive = dense === "full";
-  const showSubs = dense === "full";
-  const showTracked = dense === "full";
+  const showInactive = effectiveDense === "full";
+  const showSubs = effectiveDense === "full";
+  const showTracked = effectiveDense === "full";
 
   const revenueRows = showInactive
     ? revenueRowsAll
@@ -207,7 +216,7 @@ export default function PnlStatement({ payload, open, onToggle }) {
       className={`kpi-ov-card kpi-ov-card-cogs kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
       data-kpi-ov="statement"
       data-kpi-ov-open={open ? "1" : "0"}
-      data-kpi-ov-dense={dense}
+      data-kpi-ov-dense={effectiveDense}
     >
       <button
         type="button"
@@ -218,17 +227,17 @@ export default function PnlStatement({ payload, open, onToggle }) {
       >
         <span className="kpi-ov-eb">Full profit and loss</span>
         <span className="kpi-ov-gl">every line the way finance sees it</span>
-        {open && (
+        {open && includeSalary && (
           <span className="kpi-ov-seg" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
-              className={dense === "full" ? "on" : ""}
+              className={effectiveDense === "full" ? "on" : ""}
               onClick={(e) => { e.stopPropagation(); setDense("full"); }}
               data-kpi-ov="dense-full"
             >Full</button>
             <button
               type="button"
-              className={dense === "sum" ? "on" : ""}
+              className={effectiveDense === "sum" ? "on" : ""}
               onClick={(e) => { e.stopPropagation(); setDense("sum"); }}
               data-kpi-ov="dense-sum"
             >Summary</button>
