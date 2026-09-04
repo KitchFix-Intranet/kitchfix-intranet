@@ -1,15 +1,20 @@
-name: purchasing sync (billcom + rippling spend)
+name: purchasing sync (billcom bills + credits + rippling spend)
 
-# Nightly ingest of bill.com bills + Rippling card spend into Postgres
-# for KPI PURCHASING PHASE 1 (spec §2). Two independent sync scripts,
-# sequential: bill.com first (references + bills + derive), Rippling
-# spend second (raw + candidate maps + derive).
+# Nightly ingest of bill.com bills + bill.com vendor credits + Rippling
+# card spend into Postgres for KPI PURCHASING PHASE 1 (spec §2). Three
+# independent sync scripts, sequential: bills first (references + bills
+# + derive), credits second (walks /vendor-credits, derives against the
+# just-refreshed ref-accounts), Rippling spend third.
 #
 # One script per source keeps the lock granularity clean:
 #   purchasing_sync_locks: holder='purchasing_billcom_sync'
 #   purchasing_sync_locks: holder='purchasing_rippling_sync'
-# The two lock rows are independent so an operator running one manually
-# does not block the other's nightly.
+# The lock rows are independent so an operator running one manually
+# does not block the other's nightly. The credits sync does not
+# currently take a lock row (its writes are scoped by
+# source='billcom_credit' and touched_credit_ids, so concurrent runs
+# would re-derive the same rows deterministically); if a real
+# collision surfaces, add a 'purchasing_billcom_credits_sync' lock.
 #
 # Reason for a NEW workflow (vs extending rippling-sync.yml):
 #   1. rippling-sync.yml runs the LABOR pipeline (4 walks + labor
@@ -59,7 +64,7 @@ concurrency:
 
 jobs:
   sync:
-    name: purchasing sync (billcom + rippling spend)
+    name: purchasing sync (billcom bills + credits + rippling spend)
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -100,6 +105,37 @@ jobs:
           fi
           echo "purchasing_billcom_sync ${ARGS}"
           node scripts/purchasing_billcom_sync.mjs ${ARGS}
+
+      # bill.com vendor credits sync (R-71). Ships credits from the
+      # /vendor-credits proxy endpoint into billcom_raw_vendor_credits
+      # + billcom_raw_vendor_credit_lines, then derives into
+      # purchasing_actuals (source='billcom_credit').
+      #
+      # Placed AFTER the bills sync deliberately - the bills sync
+      # refreshes billcom_ref_accounts, and the credits derive reads
+      # chart_of_account_id -> gl_line_code from that table. Running
+      # credits BEFORE bills risks deriving against a stale ref table.
+      # (The credits sync itself now has a HIT_CAP guard that fails
+      # loudly if the ref-accounts load truncates; the ordering here
+      # is defence-in-depth on top of that.)
+      #
+      # Uses `if: always()` for the same reason rippling does:
+      # bill.com's /vendor-credits and /bills endpoints are proxied
+      # independently, so a bills-endpoint failure should NOT skip
+      # the credits refresh. Aggregate workflow status stays RED on
+      # any step failure.
+      - name: Run billcom vendor credits sync
+        if: always()
+        id: billcom_credits
+        run: |
+          SOURCE="${{ inputs.source || 'nightly' }}"
+          DRY_RUN="${{ inputs.dry_run || 'false' }}"
+          ARGS="--source=${SOURCE}"
+          if [ "${DRY_RUN}" = "true" ]; then
+            ARGS="${ARGS} --dry-run"
+          fi
+          echo "purchasing_billcom_credits_sync ${ARGS}"
+          node scripts/purchasing_billcom_credits_sync.mjs ${ARGS}
 
       # Rippling spend sync runs regardless of billcom outcome (`if:
       # always()`). Rationale: the two data lanes are independent; a

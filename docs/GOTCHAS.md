@@ -217,11 +217,12 @@ Postgres does not confer any permission on a newly created table beyond the owne
 
 PostgREST's default row cap is 1000. Ask for more and you get the first 1000 back with **no error, no warning, no header change that most clients surface** - the response looks successful and complete. Every consumer that trusted the return has been silently reading a truncated set.
 
-**Bit us in four places:**
+**Bit us in five places:**
 - `ref_accounts` map build - the account resolver was truncated to 1000 rows, so every lookup for an account outside the first page fell through to the default (fixed in commit `12a1f4b`).
 - S1h pay-segment scan - the segment enumerator returned the first 1000 pay periods and the derive silently under-counted.
 - Multiple in-script probe denominators - probes calling `.select("*", { count: "exact" })` for a total, then `.select()` for the rows, and reporting the small number without noticing the cap.
 - `_probe_salary_s2` - same shape.
+- `purchasing_billcom_credits_sync.mjs:87` on 2026-09-04 - `.range(0, 9999)` on `billcom_ref_accounts` returned 1000 of 1072 rows. The 72 truncated rows held the `chart_of_account_id → account_number` mappings for 113 FY26 vendor credits. The derive wrote `gl_line_code = null` for all 113; the KPI resolver's `startsWith("3200")` predicate skipped null-gl rows silently; the credits appeared to be "vendors sending credits without classification" for three days before the truncation was diagnosed. Now guarded via `loadWithCapGuard()` in that file - authoritative count-exact head probe followed by paginated load, mismatch fails the run.
 
 **The rule.** Never trust a single `.select()` to return "all rows." Two paired discipline steps:
 
@@ -816,6 +817,21 @@ If you have already applied without committing, the recovery is the same three s
 
 **Do NOT wait for "the PR" to include the migration.** The PR is downstream of the commit. A file that was executed against production but exists only in the working tree is one `git reset` or worktree flip away from becoming a phantom migration - real in production, invisible in git, no record of who applied it or why. `git blame` returns nothing for a file that never got committed.
 
+### A status check not in the required-status-checks list blocks nothing
+
+Adding a check via a `.github/workflows/*.yml` file wires the workflow to run. It does NOT enforce the check on merge. Enforcement lives in the branch-protection ruleset (`GET /repos/.../rulesets/<id>`) under `parameters.required_status_checks`. A workflow that runs and fails on every triggering PR while its name is absent from that list is decorative - authors see the red X, merge past it, and the failure teaches nobody anything.
+
+**Bit us on 2026-09-01 -> 2026-09-04.** The `Generated blocks match code` check in the `Design doc drift gate` workflow was wired in PR #940 at 2026-09-01 17:45 UTC. The first CSS change that broke it (65 `.opd-app` tokens landing in `src/app/opd/opd.css`) merged at 19:26 UTC the same day - **100 minutes later**. The gate ran on that PR, failed visibly on the PR page, and merged anyway because `Generated blocks match code` was not in the `main protection` ruleset's `required_status_checks` list. It then failed silently on ~15 more PRs across 71 hours before an unrelated PR (R-71 #1016) prompted a look at the failing check and PR #1018 regenerated the doc.
+
+**The rule.** Adding a status-check workflow is a two-step operation:
+
+1. Land the workflow in `.github/workflows/*.yml` on main.
+2. Add the exact check name (as it appears in the PR's checks tab) to the branch-protection ruleset's `required_status_checks` list. In the classic UI: Settings -> Rules -> ruleset -> "Require status checks to pass" -> Add.
+
+A workflow that runs but is not required is not a guard. Kevin's Migration gate pattern demonstrates the correct shape: workflow + required-status-check + owner-only comment-driven flip. Copy the shape when adding any new mandatory pre-merge check.
+
+**Adjacent:** even a required check needs `strict_required_status_checks_policy: false` if the workflow is path-filtered, so PRs that don't trigger the workflow (check absent from the SHA) can still merge. The intranet's `main protection` ruleset already has this set. Verify the setting before making a path-filtered workflow required, or every unrelated PR blocks on a check that never ran.
+
 ---
 
 ## Testing & CI
@@ -837,6 +853,20 @@ The `auth.setup.ts` URL regex must also be flexible (matches any `^https?://[^/]
 **When this bites:** CI was previously green, now suddenly failing on the home dashboard test with login-redirect symptoms. Either the cookies expired (Google's schedule) or someone regenerated against the wrong environment.
 
 ## CSS
+
+### `border-radius` is silently ignored under `border-collapse: collapse`
+
+A `<table>` styled with `border-collapse: collapse` (the default in most component libraries) will silently discard `border-radius` on the table itself, on `thead`, on `tbody`, and on `tr` and `td` corner cells. No warning, no console noise, no DevTools indicator - the rule appears in the computed styles panel with the correct value and does nothing. Corners render square.
+
+**Why.** `border-collapse: collapse` merges adjacent cell borders into a single border shared between two cells. That merged border has no owner and no independent corner geometry, so the browser has nowhere to apply the radius. `border-collapse: separate` (each cell keeps its own borders) is the mode `border-radius` actually works under.
+
+**The three workarounds, in order of preference:**
+
+1. **`border-collapse: separate` + `border-spacing: 0`** on the table. Restores independent cell borders (the space between cells stays zero, so it looks collapsed), and `border-radius` starts working on the outer table and the corner cells. Requires targeting `tr:first-child td:first-child` for top-left, etc., because there's no `table > tbody > border-radius` inheritance.
+2. **Wrap the table in a rounded container with `overflow: hidden`**. The container carries the radius; the table stays `border-collapse: collapse`. Cheap and reliable when you only need outer rounding.
+3. **`clip-path: inset(0 round <radius>)`** on the table. Works but interacts oddly with box-shadow and can clip focus rings on interactive cells.
+
+**Bit us on 2026-09-04** while polishing an overview table's outer corners - rules were in the stylesheet, DevTools showed the computed value, corners stayed square. Diagnosis took twenty minutes because the "computed style says the rule is applied" reasoning path is the wrong one; the rule was applied and ignored.
 
 ### Module prefix collisions are real - `oh-inv-` vs `oh-inv-mgmt-`
 

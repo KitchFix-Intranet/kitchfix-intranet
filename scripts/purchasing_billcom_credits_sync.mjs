@@ -80,19 +80,56 @@ const supa = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 const num = (v) => v == null ? null : Number(v);
 
 // ─── 1. Load reference maps ─────────────────────────────────────────
+//
+// Pagination + HIT_CAP guard. Supabase .select() silently caps at
+// 1000 rows regardless of .range() or .limit() values passed in.
+// billcom_ref_accounts holds 1072 rows today - a naive
+// `.range(0, 9999)` returned 1000 and silently dropped 72, and the
+// derive step wrote gl_line_code=null for every credit whose
+// chartOfAccountId lived in those 72. 113 FY26 credits looked like
+// unclassified vendor data for three days from that single bug.
+//
+// The mirror-shape guard in the bills refresh is at
+// scripts/purchasing_billcom_sync.mjs:260 - "HIT_CAP: walked N pages
+// with a full last page - silent truncation prevented, run fails".
+// This is the same pattern for the credits-sync-side lookup.
 console.log(`purchasing_billcom_credits_sync source=${args.source} dryRun=${args.dryRun} started=${new Date().toISOString()}`);
 console.log("  loading class map + chart-of-accounts map...");
-const [clsQ, coaQ] = await Promise.all([
-  supa.from("billcom_class_site_map").select("actg_class_id, account_key, excluded").range(0, 999),
-  supa.from("billcom_ref_accounts").select("id, account_number").range(0, 9999),
+
+async function loadAllPaginated(table, cols) {
+  const rows = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supa.from(table).select(cols).range(from, from + PAGE - 1);
+    if (error) { console.error(`[${table}] page ${from / PAGE + 1} FAILED: ${error.message}`); process.exit(2); }
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return rows;
+}
+async function loadWithCapGuard(table, cols) {
+  const { count, error: cErr } = await supa.from(table).select("*", { count: "exact", head: true });
+  if (cErr) { console.error(`[${table}] count FAILED: ${cErr.message}`); process.exit(2); }
+  const rows = await loadAllPaginated(table, cols);
+  if (rows.length !== count) {
+    console.error(`[${table}] HIT_CAP: authoritative count=${count} but loader returned ${rows.length} - silent truncation prevented, run fails`);
+    process.exit(2);
+  }
+  return rows;
+}
+
+const [clsRows, coaRows] = await Promise.all([
+  loadWithCapGuard("billcom_class_site_map", "actg_class_id, account_key, excluded"),
+  loadWithCapGuard("billcom_ref_accounts", "id, account_number"),
 ]);
-if (clsQ.error) { console.error(clsQ.error); process.exit(2); }
-if (coaQ.error) { console.error(coaQ.error); process.exit(2); }
 const classMap = new Map();
-for (const r of clsQ.data || []) classMap.set(r.actg_class_id, { account_key: r.account_key, excluded: !!r.excluded });
+for (const r of clsRows) classMap.set(r.actg_class_id, { account_key: r.account_key, excluded: !!r.excluded });
 const accountToNumber = new Map();
-for (const r of coaQ.data || []) accountToNumber.set(r.id, r.account_number);
-console.log(`    classes=${classMap.size} coa=${accountToNumber.size}`);
+for (const r of coaRows) accountToNumber.set(r.id, r.account_number);
+console.log(`    classes=${classMap.size} coa=${accountToNumber.size} (both cap-guarded)`);
 
 // glBucketFor imported from src/lib/billcom.js - single source of
 // truth for the gl_line_code → gl_bucket mapping shared with bills
