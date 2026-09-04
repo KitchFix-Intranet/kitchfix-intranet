@@ -150,6 +150,41 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
             }
           />
         )}
+        {/* Kevin addendum 2026-09-04: replaces the italic derivation
+            sub-line that used to shout the invoiced/credits/inventory
+            arithmetic on every row of every range. The P&L below the
+            fold carries credits + inventory as real sub-rows; the
+            explanation an operator needs when the food figure is
+            lower than what they were invoiced lives here in the
+            tooltip instead. */}
+        {row.line_code === "3200" && (
+          <HelpPop
+            id="overview-cost-line-3200"
+            title="Food purchased"
+            body={
+              <p>
+                The figure shown is the adjusted actual - invoiced food, less
+                vendor credits (short deliveries, quarterly rebates), plus or
+                minus the period&rsquo;s inventory adjustment. Each piece
+                appears on its own line in the P&amp;L below.
+              </p>
+            }
+          />
+        )}
+        {row.line_code === "3400" && (
+          <HelpPop
+            id="overview-cost-line-3400"
+            title="Packaging and supplies"
+            body={
+              <p>
+                The figure shown is the adjusted actual - invoiced packaging
+                and supplies, less vendor credits, plus or minus the
+                period&rsquo;s inventory adjustment. Each piece appears on
+                its own line in the P&amp;L below.
+              </p>
+            }
+          />
+        )}
       </td>
       {/* Kevin ruling final-presentation (2026-09-03) item 3: Plan
           band. Order becomes:
@@ -164,40 +199,18 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
       <td className="kpi-ov-num kpi-ov-nb plan plan-last" data-kpi-ov="cost-line-target-pct">
         {suppressVerdict ? "—" : (targetPctText != null ? targetPctText : "—")}
       </td>
-      {/* Kevin R-61 (2026-09-03) + cleanup (2026-09-03) item 6: on
-          3200 (food) + 3400 (packaging) rows with an inventory
-          adjustment, primary reads the adjusted actual and the
-          derivation sits below as an italic sub-line with uniform
-          weight on every part.
-            $403,556 − $3,349 inventory = $400,207
-          No leading dot; spell "inventory" (not "inv"); the − and =
-          are same size and weight as the numerals; whole sub-line
-          italic. */}
+      {/* Kevin addendum 2026-09-04: the italic "$X invoiced - $Y
+          credits - $Z inventory = $W" derivation sub-line is removed.
+          The P&L below the fold now carries credits + inventory as
+          real sub-rows on their own lines, so the summary above must
+          not repeat. Same reasoning as the Labor cards Kevin cut this
+          session - if the table below has it, the summary above does
+          not repeat. Arithmetic unchanged; only the inline string
+          goes. The `?` tooltip on 3200 + 3400 keeps the explanation
+          (added below in the label cell). */}
       <td className="kpi-ov-num" data-kpi-ov="cost-line-actual">
-        {actualText == null ? <span className="kpi-ov-nb">—</span> : (
-          <>
-            <span data-kpi-ov="actual-adjusted">{actualText}</span>
-            {/* R-71 Stage 2 (Kevin 2026-09-04): "$X invoiced - $Y credits
-                (- or +) $Z inventory = $W" derivation sub-line. Reads
-                as one italic line when either credits or inventory is
-                non-zero. Precedence: pre-R-71 wording read "$X purchases
-                +/- $Y inventory = $Z"; the credit case sits between
-                invoiced and inventory. */}
-            {((row.inventory_je != null && Math.abs(row.inventory_je) >= 1) ||
-              (row.credits_total != null && Math.abs(row.credits_total) >= 1)) && (
-              <div className="kpi-ov-inv-je" data-kpi-ov="cost-derivation">
-                {fmtMoney(row.actual_purchased)} invoiced
-                {row.credits_total != null && Math.abs(row.credits_total) >= 1 && (
-                  <> {row.credits_total < 0 ? "−" : "+"} {fmtMoney(Math.abs(row.credits_total))} credits</>
-                )}
-                {row.inventory_je != null && Math.abs(row.inventory_je) >= 1 && (
-                  <> {row.inventory_je < 0 ? "+" : "−"} {fmtMoney(Math.abs(row.inventory_je))} inventory</>
-                )}
-                {" "}= {actualText}
-              </div>
-            )}
-          </>
-        )}
+        {actualText == null ? <span className="kpi-ov-nb">—</span>
+          : <span data-kpi-ov="actual-adjusted">{actualText}</span>}
       </td>
       <td className={`kpi-ov-num ${showPeriodCols ? "prev" : ""} ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`} data-kpi-ov="cost-line-actual-pct">
         {isBilledBack || isInactive ? <span className="kpi-ov-nb">—</span>
