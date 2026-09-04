@@ -31,6 +31,14 @@ on mismatch. If Kevin edits either workbook again (spreadsheet renames,
 column shifts, cell corrections), the hash changes and the pinned constant
 in the script must be bumped in the same PR that lands the edit.
 
+**Reconciliation audit (2026-09-04)**: for the method + numeric result of
+tying SC → QuickBooks → Sebastian's P&L for TBR and TBJ P8, see
+[`docs/audits/SC_BILLING_RECONCILIATION_2026-09-04.md`](audits/SC_BILLING_RECONCILIATION_2026-09-04.md).
+That audit is the source of the standing facts folded back into this mapping
+(TBR's four gap days billed-and-unrecorded; the two-rate price model; MLB
+spring-training-only; Extra Protein separated in July; the Scout / Media /
+MLB Catering unmapped queue).
+
 ## Conventions used throughout this doc
 
 - Column letters refer to the Excel column letter (A, B, ..., AJ, AK, ...).
