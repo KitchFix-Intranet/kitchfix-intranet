@@ -20,6 +20,14 @@ import {
   buildIncidentPdf,
 } from "@/lib/incidentActions";
 import { readSheetSA, appendRowSA, updateRangeSA, updateCellByRowColSA, clearRangeSA, getServiceAccountSheetsClient, SHEET_IDS } from "@/lib/sheets";
+// Wave 2 of Sheets retirement (2026-09-04): PAF admin-recipient
+// resolution moved off HUB / notifications to the Postgres
+// notification_recipients table (notify-1 migration 2026-09-03).
+// Extracted for testability + to encode Kevin's Rulings 1 + 6
+// (throw on read error, warn on unknown key). Sheets tab left in
+// place as documented fallback reference; nothing in this file
+// reads it anymore.
+import { getNotificationRecipients } from "@/lib/notifications/getNotificationRecipients";
 import {
   getSubmissions,
   getSubmissionByToken,
@@ -82,38 +90,19 @@ const GMAIL_SENDER_NAME = "KitchFix People Ops";
 // ═══════════════════════════════════════
 // NOTIFICATION ENGINE
 // ═══════════════════════════════════════
-
-// Read notification recipients from the notifications sheet
-// Sheet format: [actionKey, enabled1, email1, enabled2, email2, enabled3, email3, enabled4, email4]
-async function getNotificationRecipients(actionKey) {
-  try {
-    const { rows } = await readSheetSA(SHEET_IDS.HUB, SHEETS.NOTIFICATIONS);
-    const searchKey = String(actionKey).trim().toLowerCase().replace(/\s+/g, "_");
-    const recipients = [];
-
-    for (const row of rows) {
-      const rowKey = String(row[0] || "").trim().toLowerCase().replace(/\s+/g, "_");
-      if (rowKey === searchKey) {
-        // Up to 4 toggle/email pairs: cols [1,2], [3,4], [5,6], [7,8]
-        for (let i = 0; i < 4; i++) {
-          const enabled = String(row[1 + i * 2] || "").trim().toUpperCase();
-          const emails = String(row[2 + i * 2] || "");
-          if (enabled === "TRUE" || enabled === "1") {
-            emails.split(/[,;]+/).forEach((e) => {
-              const trimmed = e.trim();
-              if (trimmed.includes("@")) recipients.push(trimmed);
-            });
-          }
-        }
-        break;
-      }
-    }
-    return recipients;
-  } catch (e) {
-    console.error("[Notifications] Failed to get recipients:", e.message);
-    return [];
-  }
-}
+//
+// getNotificationRecipients moved to src/lib/notifications/
+// getNotificationRecipients.js as of 2026-09-04 (Wave 2 of Sheets
+// retirement). The Postgres-backed implementation encodes Kevin's
+// Rulings 1 (throw on read error) and 6 (warn on unknown key,
+// silent on legitimate empty), which the previous Sheets-backed
+// swallow-into-[] implementation did not. See the imported
+// module for the full contract.
+//
+// SHEETS.NOTIFICATIONS is left in the SHEETS constant map below
+// because the Sheets tab still exists as a documented fallback
+// reference per owner ruling - the constant may be read by a
+// future recovery script, but nothing in this file uses it.
 
 // sendEmail adapter: closes over the sender + display name and forwards to canonical
 // sendEmailSA in src/lib/gmail.js. Preserves the (to, subject, html, replyTo) =>
