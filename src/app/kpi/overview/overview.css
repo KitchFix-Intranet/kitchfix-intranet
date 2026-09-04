@@ -215,7 +215,12 @@
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--kpi-t-body);
-  table-layout: fixed;
+  /* Kevin table-width ruling 2026-09-04: numeric columns take what
+     they need, no more. Auto layout hands freed space to the label
+     column (the one column whose content genuinely varies). Prior
+     `fixed` + 108px per-column min-width forced tables wider than
+     their card on narrow viewports. */
+  table-layout: auto;
 }
 .kpi-app .kpi-ov-lev th {
   font-size: var(--kpi-t-label);
@@ -224,17 +229,14 @@
   text-transform: uppercase;
   color: var(--n-600);
   text-align: right;
-  /* Kevin ruling 2026-09-03 Item 4: horizontal padding + min-width
-     on non-label headers. Prior padding was `0 0` which butted
-     adjacent headers directly together. Long labels ("Budget period
-     to date") wrap to two lines on the narrow right-column table
-     rather than overflow. */
   padding: 0 var(--kpi-sp-3) var(--kpi-sp-2) var(--kpi-sp-3);
-  min-width: 108px;
   line-height: 1.2;
   vertical-align: bottom;
+  /* Headers never wrap (item 4). If a header does not fit on one
+     line, shorten it. */
+  white-space: nowrap;
 }
-.kpi-app .kpi-ov-lev th.l { text-align: left; padding-left: 0; min-width: 0; }
+.kpi-app .kpi-ov-lev th.l { text-align: left; padding-left: 0; }
 .kpi-app .kpi-ov-lev th:last-child { padding-right: 0; }
 .kpi-app .kpi-ov-lev td {
   padding: var(--kpi-sp-2) var(--kpi-sp-3);
@@ -1119,8 +1121,13 @@
   padding-top: 11px;
 }
 /* Headers never wrap - Kevin: "headers never wrap (white-space:
-   nowrap); labels wrap freely". */
+   nowrap); labels wrap freely".
+   Kevin table-width ruling 2026-09-04 item 4: numeric + percentage
+   cells never wrap either. `$18,877` on two lines is a defect. Data
+   cells default to nowrap; label cells (`td.l`) override to normal -
+   the one column where wrapping is legitimate. */
 .kpi-app .kpi-ov-tband thead th { white-space: nowrap; }
+.kpi-app .kpi-ov-tband tbody td { white-space: nowrap; }
 .kpi-app .kpi-ov-tband tbody td.l { white-space: normal; }
 /* "not reported" - grey subordinate, matches the tone-per-half. */
 .kpi-app .kpi-ov-not-reported {
@@ -1444,6 +1451,14 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--kpi-t-body);
+  /* Kevin table-width ruling 2026-09-04: numeric columns take what
+     they need, no more (tabular-nums makes width predictable from
+     the longest value the column holds). Fixed 128px min-width per
+     column produced 7 × 128 + 136 = 1032px demand inside an 833px
+     card on This period - the Left column clipped. table-layout auto
+     + no per-column min-widths lets the browser size to content and
+     hand the freed space to the label column. */
+  table-layout: auto;
 }
 .kpi-app .kpi-ov-cl th {
   font-size: var(--kpi-t-label);
@@ -1452,25 +1467,51 @@
   text-transform: uppercase;
   color: var(--n-600);
   text-align: right;
-  /* Kevin ruling 2026-09-03 Item 4: horizontal padding + min-width
-     on the two dollar columns so shorter labels ("Spent thru P8")
-     don't get a narrower slot than longer ones ("Budget adjusted
-     P8") and run into their neighbour. */
+  /* Kevin table-width ruling 2026-09-04: reduced from --kpi-sp-3
+     (12px) to 8px per side on data cells so the 7-column This period
+     layout fits at 1366 (7 * 24px padding = 168px was too much on a
+     575px card). Headers keep the same padding for visual rhythm. */
   padding: 0 var(--kpi-sp-3) 8px var(--kpi-sp-3);
-  min-width: 128px;
+  /* Item 4: headers never wrap. If a header does not fit on one
+     line, shorten it (see item 3 wording changes in the components). */
+  white-space: nowrap;
 }
-.kpi-app .kpi-ov-cl th.l { text-align: left; padding-left: 0; min-width: 0; }
+.kpi-app .kpi-ov-cl th.l { text-align: left; padding-left: 0; }
 .kpi-app .kpi-ov-cl th:last-child { padding-right: 0; }
 .kpi-app .kpi-ov-cl td {
-  padding: 9px var(--kpi-sp-3);
+  padding: 9px 6px;
   border-top: 1px solid var(--n-200);
   text-align: right;
   font-weight: 700;
   vertical-align: middle;
+  /* Item 4: numeric + percentage cells never wrap. `$18,877` on two
+     lines is a defect and it happens today. Label cells (td.l)
+     override this below. */
+  white-space: nowrap;
 }
-.kpi-app .kpi-ov-cl td.l { text-align: left; padding-left: 0; }
+.kpi-app .kpi-ov-cl th:not(.l) {
+  /* Match the tighter data-cell padding on non-label headers so
+     column widths align to their content, not to a wider header
+     padding envelope. */
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.kpi-app .kpi-ov-cl td.l {
+  text-align: left;
+  padding-left: 0;
+  padding-right: 8px;
+  /* Item 5: the label column gets the freed space. Minimum 130px
+     keeps single-word labels on one line at 1366; multi-word
+     labels ("Packaging and supplies") may wrap to two lines -
+     acceptable, it is the one column where wrapping is legitimate.
+     At 1680 the browser hands more space and every label fits. */
+  white-space: normal;
+  min-width: 130px;
+}
 .kpi-app .kpi-ov-cl td:last-child { padding-right: 0; }
-.kpi-app .kpi-ov-cl .kpi-ov-cl-line { width: 45%; }
+/* Auto layout replaces the width: 45% hint - the label column
+   claims its min-width and grows as content demands, with numeric
+   columns shrinking to their widest value. */
 /* Row is a hover surface for the clickable link inside its label cell.
    Item 6 (2026-09-03): adopt Labor's --duration-fast + --ease-standard
    motion tokens so hover fades in/out rather than snapping. */

@@ -162,9 +162,18 @@ export default function RevenueLines({ payload }) {
   // while the card names the pace metric. Both figures are the same
   // dollar amount (budget-to-date); different labels for different
   // roles.
+  // Kevin table-width ruling 2026-09-04 item 3: "WK 1 – WK 3 BUDGET"
+  // / "WK 1 – WK 3 ACTUALS" -> "BUDGET" / "ACTUALS" (uppercased by
+  // CSS text-transform, unchanged case here). On open ranges the wk
+  // range is already stated in the status line and the period-columns
+  // group header; the column header does not need to repeat it. On
+  // closed / FYTD ranges the range_labels-provided string (e.g.
+  // "P1-P8 BUDGET") stays - the period name IS the span there and
+  // the header is the only place it appears on this table.
   const rangeLabels = payload.range_labels;
-  const budgetHeader  = rangeLabels?.budget_header  || "BUDGET";
-  const actualsHeader = rangeLabels?.actuals_header || "ACTUALS";
+  const isOpenPeriod = periodState === "open";
+  const budgetHeader  = isOpenPeriod ? "Budget"  : (rangeLabels?.budget_header  || "BUDGET");
+  const actualsHeader = isOpenPeriod ? "Actuals" : (rangeLabels?.actuals_header || "ACTUALS");
   // Kevin Prompt 1 item 1b (2026-09-04): revenue lines get one
   // period column ("P{N} forecast", not "P{N} budget" - revenue reads
   // Forecast per the card rename). Only on open ranges.

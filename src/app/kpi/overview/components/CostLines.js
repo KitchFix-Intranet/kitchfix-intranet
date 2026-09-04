@@ -348,27 +348,23 @@ export default function CostLines({ payload, previewAccount = null }) {
   // period-number prefix for "P{N} budget" / "Left".
   const showPeriodCols = isOpenRange;
   const rl = payload.range_labels;
-  // "Spent" -> "Actuals wk 1 – wk 3" per item 1c. Falls back to
-  // "Spent" on ranges without a week count (aggregate / closed).
-  const spanRaw = rl?.spanHeader || rl?.actuals_header?.replace(/\s+ACTUALS\s*$/i, "");
-  const wkPhrase = spanRaw ? spanRaw.toLowerCase() : null;
-  const actualsHeader = (showPeriodCols && wkPhrase)
-    ? `Actuals ${wkPhrase}`
-    : "Spent";
+  // Kevin table-width ruling 2026-09-04 item 3: "Actuals wk 1 – wk 3"
+  // -> "Actuals". The wk range is stated three times on the page
+  // today (status line, group header, column header); once is enough
+  // and the status line is the right place. Falls back to "Spent"
+  // on closed ranges where no period columns render.
+  const actualsHeader = showPeriodCols ? "Actuals" : "Spent";
   const periodNo = payload.range?.period_no;
   const periodBudgetHeader = periodNo != null
     ? `P${periodNo} budget`
     : "Period budget";
-  // Kevin ruling 2026-09-03 (simplified-layout): cost table headers
-  // become universal. `Line · Budget* · Actual · % of rev · Target %`.
-  // The per-range language (Spent thru P8 / Budget adjusted P8) and
-  // the per-model split (MF P{N} budget vs SC Budget adjusted P{N})
-  // both retire on this table. Reasons live in the footnote below
-  // the table and in the COGS card tooltip (both already carry the
-  // "adjusted at this revenue" concept per the top-simplify PR).
-  const totalLabel = rl?.through
-    ? `Total cost of goods sold ${rl.through}`
-    : "Total cost of goods sold";
+  // Kevin table-width ruling 2026-09-04 item 3: "Total cost of goods
+  // sold period to date" -> "Total cost of goods". "Period to date"
+  // is the range chip's job; repeating it in the row label crowds
+  // the column that already houses the longest labels (3400
+  // Packaging and supplies). Same rule the column headers now
+  // follow.
+  const totalLabel = "Total cost of goods";
   // Header "N of M over" count uses the SAME dollar operand the
   // rows show: actual - budget_at_this_revenue. > 0 = over. This
   // agrees with the per-row percent verdict by construction (Kevin
