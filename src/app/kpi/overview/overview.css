@@ -916,9 +916,12 @@
 }
 .kpi-app .kpi-ov-tband .kpi-ov-tband-grp th.kpi-ov-tband-plan {
   color: var(--n-600);
-  /* border-bottom removed per item 2 - band runs unbroken from group
-     header through total. Kevin: "the visible break is the group-
-     header row, which sits above the band rather than on it". */
+  /* Kevin PR-B item 7 (2026-09-03): re-add the inner hairline
+     between the PLAN group header and its row beneath. All four
+     tables above the P&L now match the P&L, which already carries
+     this rule via .kpi-ov-pnl-grp-plan. Supersedes the earlier
+     "band runs unbroken" ruling. */
+  border-bottom: 1px solid var(--n-400);
 }
 .kpi-app .kpi-ov-tband .kpi-ov-tband-grp th.kpi-ov-tband-act {
   color: var(--navy-700);

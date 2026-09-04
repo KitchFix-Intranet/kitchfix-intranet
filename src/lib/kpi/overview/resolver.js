@@ -1391,15 +1391,26 @@ export async function resolveOverview({
         // pill reads TRENDING ABOVE / TRENDING BELOW with a neutral
         // tone. Green on an AT-RISK card would read as good news
         // mid-period. Closed ranges keep the settled verdict.
+        //
+        // Kevin ruling PR-B item 1 (2026-09-03): the pill states its
+        // dollar gap. Cost + margin both do; revenue should too. Under
+        // $1 renders as "on forecast" (parity with gapDollars's
+        // "on budget" for cost). CSS uppercases via .kpi-vpill so the
+        // resolver stays lowercase.
         const openRange = displayPeriodState === "open";
+        const gapAbs = Math.abs(Math.round(revenueDelta));
+        const gapStr = gapAbs >= 1 ? `$${gapAbs.toLocaleString("en-US")} ` : "";
+        if (Math.abs(revenueDelta) < 1) {
+          return { label: "on forecast", tone: openRange ? "neutral" : "good" };
+        }
         if (openRange) {
           return revenueDelta >= 0
-            ? { label: "Trending above", tone: "neutral" }
-            : { label: "Trending below", tone: "neutral" };
+            ? { label: `${gapStr}trending above`, tone: "neutral" }
+            : { label: `${gapStr}trending below`, tone: "neutral" };
         }
         return revenueDelta >= 0
-          ? { label: "Above forecast", tone: "good" }
-          : { label: "Below forecast", tone: "bad" };
+          ? { label: `${gapStr}above forecast`, tone: "good" }
+          : { label: `${gapStr}below forecast`, tone: "bad" };
       })(),
       sources: [...totalRevSources],
     },
@@ -1448,16 +1459,18 @@ export async function resolveOverview({
       pill: (() => {
         // PR-1 item 1: rolling window -> "No target", neutral tone.
         if (!has_target) return { label: "No target", tone: "neutral" };
-        const pa = pctOf(cogsActual, totalRevenue);
-        const pt = pctOf(cogsBudget, revenue_budget_full_period);
-        if (pa == null || pt == null) return { label: "No data", tone: "neutral" };
-        // B6 (2026-09-01): the gap moves INTO the pill. Prior copy was
-        // "Under target" plus a separate "10.4% under" below - two
-        // statements of one fact. Now the pill carries both.
-        const absPct = Math.abs(Number(pa) - Number(pt)).toFixed(1);
-        return pa <= pt
-          ? { label: `${absPct}% UNDER TARGET`, tone: "good" }
-          : { label: `${absPct}% OVER TARGET`, tone: "bad" };
+        // Kevin PR-B item 4 (2026-09-03): the pill reads OVER BUDGET
+        // / UNDER BUDGET, tied to total cost of goods against its
+        // adjusted budget - not a count of lines and not the % gap.
+        // Simple, and it agrees with the card above it (which
+        // displays actual vs budget_at_this_revenue). Algebraically
+        // identical to the prior actual-% vs target-% comparison,
+        // stated in the natural "total vs total" idiom.
+        const budAtRev = budgetAtThisRevenue(cogsBudget);
+        if (budAtRev == null || cogsActual == null) return { label: "No data", tone: "neutral" };
+        return cogsActual <= budAtRev
+          ? { label: "under budget", tone: "good" }
+          : { label: "over budget", tone: "bad" };
       })(),
       mini: [
         { label: "Labor",     actual: labor3100_actual, display: formatMoneyWhole(labor3100_actual) },
@@ -1577,9 +1590,25 @@ export async function resolveOverview({
       }
     }
     const weekStarts = weekStartsInRange(rng.start, rng.end);
-    const wkBudget = laborBoard?.applies && laborBoard.range_budget != null
-      ? r2((laborBoard.range_budget + (purchBoard.totals.buckets_budget || 0)) / weekStarts.length)
-      : null;
+    // Kevin PR-B item 5 (2026-09-03): the weekly budget line is drawn
+    // from the ADJUSTED budget (cogs.budget_at_this_revenue) divided
+    // by COMPLETE weeks in the range - same figure the cost card
+    // displays as its target, and the same rule the FYTD per-period
+    // dashes already follow. Prior formula (period_budget / 4) was
+    // off by ~$780/wk on TBJ - FL P9 because it used the un-adjusted
+    // period budget and divided by every week (not just complete
+    // ones). Closed ranges reduce to the same answer (all weeks
+    // complete, revenue is settled).
+    const budAtRev = has_target ? budgetAtThisRevenue(cogsBudget) : null;
+    const closedWeeksCount = weekStarts.filter(ws => {
+      const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * 86400000).toISOString().slice(0, 10);
+      return wEnd < today;
+    }).length;
+    const wkBudget = (budAtRev != null && closedWeeksCount > 0)
+      ? r2(budAtRev / closedWeeksCount)
+      : (laborBoard?.applies && laborBoard.range_budget != null
+          ? r2((laborBoard.range_budget + (purchBoard.totals.buckets_budget || 0)) / weekStarts.length)
+          : null);
     const series = weekStarts.map(ws => {
       const laborS = laborWeeks.get(ws) || 0;
       const purchS = purchWeekMap.get(ws) || 0;
@@ -2112,6 +2141,181 @@ export async function resolveOverview({
     budget: vehicle_budget,
   }));
 
+  // Kevin PR-B item 6 (2026-09-03) + follow-up: sub-lines under 3200 /
+  // 3400 / 3500 sourced DATA-DRIVEN from purchasing_actuals AND
+  // kpi_budgets_purchasing - every gl_line_code that appears under
+  // one of the three parent prefixes gets a sub-row. Finance labels
+  // for the codes the P8 workbook names; bare gl_code + `unmapped`
+  // flag for anything the workbook doesn't (finding for Sebastian).
+  //
+  // Parent-sum invariant (HARD, per Kevin's ruling): parent equals
+  // sum(children) on every parent, every account, every range, both
+  // budget and actual. Emissions honour this by construction:
+  //   - actuals sum: subs sum raw purchasing_actuals per gl code;
+  //     an "Inventory adjustment" synthetic sub-row carries the
+  //     foodInventoryJe / packagingInventoryJe offset so post-JE
+  //     parents still tie to sub-sum.
+  //   - budget sum: subs are suppressed to null WHEN the parent is
+  //     suppressed (billed_back / inactive), propagating the fee-
+  //     account exclusion down the tree. Kevin's second-defect fix.
+  //
+  // Finance labels from the P8 workbook (source of truth):
+  const FINANCE_LABELS = {
+    "3200.1": "General Food",
+    "3200.2": "Resale Food",
+    "3400.1": "Packaging",
+    "3400.2": "Supplies",
+    "3400.5": "Linen",
+    "3500.2": "Vehicle Insurance",
+    "3500.3": "Leased Vehicle",
+    "3500.4": "Fuel",
+    "3500.5": "Vehicle Repair & Maintenance",
+  };
+  const PARENT_PREFIXES = ["3200", "3400", "3500"];
+  const isPrefixMatch = (gl, parent) => typeof gl === "string" && gl.startsWith(parent) && gl !== parent;
+  const parentPrefixOf = (gl) => PARENT_PREFIXES.find(p => isPrefixMatch(gl, p)) || null;
+  // Collect every gl_line_code present in either engine under the
+  // three parents. Sort by parent then by gl for stable render.
+  const glsUnderParent = new Map(PARENT_PREFIXES.map(p => [p, new Set()]));
+  const purchActualsByLine = new Map();
+  const purchActualsLinesPresent = new Set();
+  for (const r of (purchActuals || [])) {
+    const gl = String(r.gl_line_code || "");
+    if (!gl) continue;
+    const parent = parentPrefixOf(gl);
+    if (!parent) continue;
+    glsUnderParent.get(parent).add(gl);
+    purchActualsByLine.set(gl, (purchActualsByLine.get(gl) || 0) + Number(r.amount || 0));
+    purchActualsLinesPresent.add(gl);
+  }
+  if (purchBudgets && typeof purchBudgets.keys === "function") {
+    for (const gl of purchBudgets.keys()) {
+      const parent = parentPrefixOf(gl);
+      if (parent) glsUnderParent.get(parent).add(gl);
+    }
+  }
+  // Per-line budget sum across members + periods. purchBudgets shape
+  // is gl → account → period → amount. PURCHASING_ENVELOPE_EXCLUSIONS
+  // handled explicitly.
+  const sumPurchByPeriod = (lineCode) => {
+    const perLine = purchBudgets?.get?.(lineCode);
+    if (!perLine) return new Map();
+    const out = new Map();
+    for (const m of members) {
+      if (PURCHASING_ENVELOPE_EXCLUSIONS.has(m)) continue;
+      const byAcct = perLine.get(m);
+      if (!byAcct) continue;
+      for (const [pn, amt] of byAcct) {
+        out.set(pn, (out.get(pn) || 0) + Number(amt));
+      }
+    }
+    return out;
+  };
+  // Per-parent suppression: mirror buildCostRow's `suppress`. If the
+  // parent is billed_back (pass_through) OR inactive (no actual AND
+  // no budget), children carry null on every budget/batr field so the
+  // parent-null → children-null invariant holds. Actual still flows
+  // through on billed_back (real spend, real gl_line_codes) so parent
+  // actual and sub-sum tie via the inventory-JE synthetic row.
+  const parentIsSuppressed = (parent) => {
+    if (isPassThrough) return true;
+    if (parent === "3200") return isCostInactive(food_actual, food_budget);
+    if (parent === "3400") return isCostInactive(packaging_actual, packaging_budget);
+    if (parent === "3500") return isCostInactive(vehicle_actual, vehicle_budget);
+    return false;
+  };
+  // Inventory-JE offset: parent 3200/3400 actual is
+  //   food_actual  = food_actual_purchased  - foodInventoryJe
+  //   packaging    = packaging_purchased    - packagingInventoryJe
+  // Sub actuals sum the pre-JE purchasing_actuals. Emit a synthetic
+  // "Inventory adjustment" sub-row per parent carrying the -JE so
+  // sub-sum = parent post-JE.
+  const parentInventoryJe = {
+    "3200": Number(foodInventoryJe || 0),
+    "3400": Number(packagingInventoryJe || 0),
+    "3500": 0,
+  };
+  for (const parent of PARENT_PREFIXES) {
+    const parentSuppressed_ = parentIsSuppressed(parent);
+    const glList = [...glsUnderParent.get(parent)].sort();
+    for (const gl of glList) {
+      const actualPresent = purchActualsLinesPresent.has(gl);
+      const actual = actualPresent ? r2(purchActualsByLine.get(gl) || 0) : null;
+      const byPeriod = sumPurchByPeriod(gl);
+      let periodBudget = 0;
+      let anyBudget = false;
+      for (const p of periods) {
+        const v = byPeriod.get(p);
+        if (v != null) {
+          periodBudget += Number(v);
+          anyBudget = true;
+        }
+      }
+      const period_budget_raw = anyBudget ? r2(periodBudget) : null;
+      const btd = computeBudgetToDateForLine({
+        budgetByPeriod: byPeriod,
+        periodsInRange: periods,
+        today,
+        throughISO: effectiveEndISO,
+      });
+      const budget_to_date_raw = btd.amount;
+      const period_budget = parentSuppressed_ ? null : period_budget_raw;
+      const budget_to_date = parentSuppressed_ ? null : budget_to_date_raw;
+      const isInactive = actual == null && (period_budget == null || period_budget === 0);
+      const _actPct = (parentSuppressed_ || isInactive) ? null : pctOf(actual, totalRevenue);
+      const _tgtPct = (parentSuppressed_ || isInactive || !has_target) ? null : pctOf(period_budget, revenue_budget_full_period);
+      const _batr = (parentSuppressed_ || isInactive) ? null : budgetAtThisRevenue(period_budget);
+      const label = FINANCE_LABELS[gl] || gl;
+      const unmapped = !FINANCE_LABELS[gl];
+      statementRows.push({
+        line_code: gl,
+        section: "cogs",
+        parent_line_code: parent,
+        label,
+        reported: actual != null,
+        actual,
+        budget_to_date,
+        period_budget,
+        variance: (actual != null && _batr != null) ? r2(actual - _batr) : null,
+        variance_pct: (has_target && _actPct != null && _tgtPct != null) ? r2(_actPct - _tgtPct) : null,
+        actual_pct: _actPct,
+        target_pct: _tgtPct,
+        budget_at_this_revenue: _batr,
+        envelope_delta: (parentSuppressed_ || isInactive || isManagementFee) ? null : envelopeDelta(budget_to_date, _batr),
+        sources: ["purchasing_actuals"],
+        flags: [
+          ...(parentSuppressed_ ? ["billed_back"] : []),
+          ...(isInactive ? ["inactive"] : []),
+          ...(unmapped ? ["unmapped"] : []),
+        ],
+      });
+    }
+    // Inventory-JE synthetic sub-row (3200 / 3400 only). Reconciles
+    // sub-actuals (pre-JE) with parent actual (post-JE). Renders with
+    // the inventory_adjustment flag; no budget side.
+    const je = parentInventoryJe[parent];
+    if (je && je !== 0 && !parentSuppressed_) {
+      statementRows.push({
+        line_code: `${parent}.INVJE`,
+        section: "cogs",
+        parent_line_code: parent,
+        label: "Inventory adjustment",
+        reported: true,
+        actual: r2(-je),
+        budget_to_date: null,
+        period_budget: null,
+        variance: null,
+        variance_pct: null,
+        actual_pct: null,
+        target_pct: null,
+        budget_at_this_revenue: null,
+        envelope_delta: null,
+        sources: ["inventory_adjustments"],
+        flags: ["inventory_adjustment"],
+      });
+    }
+  }
+
   // Also-tracked rows
   // 2026-09-01 defect fix: the tracked lines (5002.1 / 5002.5 /
   // 5017.3) are Rippling-card spend that returns period_total=0 when
@@ -2125,7 +2329,7 @@ export async function resolveOverview({
   // Absence-contract fix: when reported=false, variance is null so
   // the client renders "no data" instead of a fake savings figure.
   const alsoTracked = [
-    { line_code: "5002.1", label: "General repair and maintenance", actual: rm_actual, budget: rm_budget },
+    { line_code: "5002.1", label: "Gen. Repair & Maintenance", actual: rm_actual, budget: rm_budget },
     { line_code: "5002.5", label: "Equipment",                     actual: equip_actual, budget: equip_budget },
     { line_code: "5017.3", label: "Perks",                         actual: perks_actual, budget: perks_budget },
   ].map(r => {
@@ -2716,34 +2920,42 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
   const fmtMMDD = (iso) => iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}` : null;
   let horizon = null;
   // Kevin ruling this-period (2026-09-03) item 3: revenue table's
-  // forecast column header names the span. On open the range is
-  // partial - "WK 1 – WK 3 FORECAST" - since there is no complete
-  // period. On closed the range IS the period - "P8 FORECAST" (or
-  // "P1-P8 FORECAST" on FYTD).
-  let forecastHeader = "FORECAST";
+  // plan-column header names the span. On open the range is partial
+  // ("WK 1 – WK 3") since no complete period; on closed the range
+  // IS the period ("P8", or "P1-P8" on FYTD).
+  //
+  // Kevin ruling PR-B item 2 (2026-09-03): the revenue table now
+  // renders BOTH a budget and an actuals column - same span header
+  // suffixed by "BUDGET" / "ACTUALS" respectively. Emit the span
+  // by itself so the render composes both column heads without
+  // duplicating the branching. `forecast_header` stays for backward
+  // compat with other consumers of the range-labels shape.
+  let spanHeader = null;
   if (isSingleOpen) {
     if (lastCompleteWk) {
       horizon = `through week ${lastCompleteWk.weekNo} · ${fmtMMDD(range.start)} – ${fmtMMDD(lastCompleteWk.weekEndISO)}`;
-      forecastHeader = lastCompleteWk.weekNo === 1
-        ? "WK 1 FORECAST"
-        : `WK 1 – WK ${lastCompleteWk.weekNo} FORECAST`;
+      spanHeader = lastCompleteWk.weekNo === 1
+        ? "WK 1"
+        : `WK 1 – WK ${lastCompleteWk.weekNo}`;
     } else {
       horizon = "no complete weeks yet";
-      forecastHeader = "FORECAST";
     }
   } else if (isSingleClosed && range.period_no != null) {
     horizon = `P${range.period_no} · closed and verified`;
-    forecastHeader = `P${range.period_no} FORECAST`;
+    spanHeader = `P${range.period_no}`;
   } else if (isFytd) {
     const first = rc?.verified?.first ?? 1;
     const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
     horizon = first === last
       ? `P${last} · closed and verified`
       : `P${first}-P${last} · closed and verified`;
-    forecastHeader = first === last
-      ? `P${last} FORECAST`
-      : `P${first}-P${last} FORECAST`;
+    spanHeader = first === last
+      ? `P${last}`
+      : `P${first}-P${last}`;
   }
+  const forecastHeader = spanHeader ? `${spanHeader} FORECAST` : "FORECAST";
+  const budgetHeader   = spanHeader ? `${spanHeader} BUDGET`   : "BUDGET";
+  const actualsHeader  = spanHeader ? `${spanHeader} ACTUALS`  : "ACTUALS";
 
   // Kevin R-60 + PR-B items 1-5 (2026-09-03): a closed period is not
   // "through" anything - it is settled. `Final P#` replaces every
@@ -2769,6 +2981,8 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       period_last: `P${last}`,
       horizon,
       forecast_header: forecastHeader,
+      budget_header: budgetHeader,
+      actuals_header: actualsHeader,
       effective_end_iso: effectiveEndISO,
     };
   }
@@ -2782,6 +2996,8 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       period_last: n != null ? `P${n}` : null,
       horizon,
       forecast_header: forecastHeader,
+      budget_header: budgetHeader,
+      actuals_header: actualsHeader,
       effective_end_iso: effectiveEndISO,
     };
   }
@@ -2795,6 +3011,8 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       period_last: `P${n}`,
       horizon,
       forecast_header: forecastHeader,
+      budget_header: budgetHeader,
+      actuals_header: actualsHeader,
       effective_end_iso: effectiveEndISO,
     };
   }

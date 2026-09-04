@@ -226,7 +226,7 @@ export async function GET(request) {
     ws.views = [{ state: "frozen", ySplit: 1 }];
   }
   addLedgerSheet("Equipment",    "equipment");
-  addLedgerSheet("R&M",          "repair");
+  addLedgerSheet("Gen. Repair & Maintenance", "repair");
   addLedgerSheet("Reimbursable", "reimbursable");
 
   // ── Card purchases sheet ─────────────────────────────

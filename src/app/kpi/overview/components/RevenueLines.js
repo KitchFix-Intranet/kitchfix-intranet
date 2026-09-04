@@ -139,14 +139,20 @@ export default function RevenueLines({ payload }) {
   // and its budget-to-date sum equals the period-budget sum, but the
   // column is still a meaningful "Budget thru P8" comparison Kevin
   // wants visible.
-  // Kevin ruling this-period (2026-09-03) item 3: single Forecast
-  // column. The period-budget column is dropped - it was two forecast
-  // figures on one screen ("Forecast to date" + "P9 budget") meaning
-  // the same kind of thing at two horizons. Header names the span:
-  // "WK 1 – WK 3 FORECAST" on open, "P8 FORECAST" on closed, computed
-  // server-side into range_labels.forecast_header.
+  // Kevin ruling PR-B item 2 (2026-09-03): the two plan/actual columns
+  // both name the span - "WK 1 – WK 3 BUDGET" + "WK 1 – WK 3 ACTUALS"
+  // (open), "P8 BUDGET" + "P8 ACTUALS" (closed), "P1-P8 BUDGET" +
+  // "P1-P8 ACTUALS" (FYTD). Server composes both headers from a
+  // single span so the pair stays matched.
+  //
+  // The card carries "Forecast" wording; the table carries "Budget /
+  // Actuals" - the pair reads cleanly as an accounting statement,
+  // while the card names the pace metric. Both figures are the same
+  // dollar amount (budget-to-date); different labels for different
+  // roles.
   const rangeLabels = payload.range_labels;
-  const forecastHeader = rangeLabels?.forecast_header || "FORECAST";
+  const budgetHeader  = rangeLabels?.budget_header  || "BUDGET";
+  const actualsHeader = rangeLabels?.actuals_header || "ACTUALS";
 
   return (
     <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="revenue-lines">
@@ -180,8 +186,8 @@ export default function RevenueLines({ payload }) {
             </tr>
             <tr>
               <th className="l">Line</th>
-              <th className="plan plan-first plan-last">{forecastHeader}</th>
-              <th>Actuals</th>
+              <th className="plan plan-first plan-last">{budgetHeader}</th>
+              <th>{actualsHeader}</th>
               <th style={{ width: 60 }}>% of rev</th>
             </tr>
           </thead>

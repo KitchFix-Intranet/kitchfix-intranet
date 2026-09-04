@@ -1119,7 +1119,7 @@ export const LEDGER_DEFS = [
   { key: "equip", label: "Equipment",              sub: "5002.5", glLineCode: "5002.5",
     strokeClass: "kpi-p-b-equip",  legend: "#0F766E",
     payloadKey: "equipment" },
-  { key: "rm",    label: "Repair & maintenance",   sub: "5002.1", glLineCode: "5002.1",
+  { key: "rm",    label: "Gen. Repair & Maintenance", sub: "5002.1", glLineCode: "5002.1",
     strokeClass: "kpi-p-b-rm",     legend: "#B45309",
     payloadKey: "repair" },
   // PR-2 R6 Part B - reimbursable is a bucket (13xx family), not a single
