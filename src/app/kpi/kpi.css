@@ -1089,7 +1089,9 @@
   padding: var(--kpi-sp-2) var(--kpi-sp-3);
   border: 1px solid var(--border-default);
   background: var(--surface-card);
-  border-radius: var(--rad-7);
+  /* Kevin Prompt 2 PR-A item 6 (2026-09-04): 10px radius on buttons -
+     "square controls inside a rounded panel look wrong". */
+  border-radius: 10px;
   cursor: pointer; font: inherit;
   color: var(--text-strong);
   min-height: 44px;
@@ -1128,7 +1130,8 @@
   padding: 6px 4px;
   border: 1px solid var(--border-default);
   background: var(--surface-card);
-  border-radius: var(--rad-7);
+  /* Kevin Prompt 2 PR-A item 6 (2026-09-04): 10px radius. */
+  border-radius: 10px;
   text-align: center;
   cursor: pointer; font: inherit;
   color: var(--text-strong);
@@ -1143,10 +1146,16 @@
   border-color: var(--kpi-accent);
   color: var(--n-0);
 }
+/* Kevin Prompt 2 PR-A item 2 (2026-09-04): running-period state is
+   PURPLE, not amber. White-on-amber measured 3.19:1 and fails
+   contrast; purple-700 on purple-50 measures 8.08:1. Amber also
+   reads as a warning colour, and a running period is not a warning -
+   it is just where you are. Palette: purple = #7c3aed, purple-50 =
+   #F5F1FE, purple-700 = #5B21B6 (from the render of record). */
 .kpi-rmenu-pgb.st-running {
-  border-color: var(--kpi-warn, #B25800);
-  background: var(--kpi-warn-tint, #FFF2E2);
-  color: var(--kpi-warn-strong, #B25800);
+  border-color: #7c3aed;
+  background: #F5F1FE;
+  color: #5B21B6;
 }
 /* Kevin ruling final-picker (2026-09-03) item 11: "next" reads as a
    dashed navy border - a planning-only visual distinct from closed
@@ -1188,14 +1197,17 @@
 }
 .kpi-rmenu-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .kpi-rmenu-lgi {
-  width: 9px; height: 9px; border-radius: 3px;
+  /* Kevin Prompt 2 PR-A item 6 (2026-09-04): legend swatches at 4px
+     radius (buttons at 10px, swatches at 4px per the render). */
+  width: 11px; height: 11px; border-radius: 4px;
   display: inline-block;
   border: 1px solid var(--border-default);
   background: var(--surface-card);
 }
 .kpi-rmenu-lgi-run {
-  background: var(--kpi-warn-tint, #FFF2E2);
-  border-color: var(--kpi-warn, #B25800);
+  /* Purple to match st-running (2026-09-04). */
+  background: #F5F1FE;
+  border-color: #7c3aed;
 }
 .kpi-rmenu-lgi-nxt {
   background: var(--surface-card);

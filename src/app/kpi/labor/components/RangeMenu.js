@@ -165,13 +165,23 @@ export function RangeMenu({
     return true;
   };
 
-  // Dates on every quick range (item 4). "This year" reads
-  // "P1 – P{running} to date" so an operator knows the span at a
-  // glance without opening the chip.
+  // Dates on every quick range (item 4). Kevin Prompt 2 PR-A item 5
+  // (2026-09-04): "This year" reads `closed periods · P1 – P{N}` where
+  // N is the last CLOSED period - not "P1 – P{running} to date".
+  // FYTD is closed-only, so it is not the year to date; it is the
+  // closed part of it. "Someone in week 3 of P9 could reasonably
+  // assume their current spend was included" - the label must say
+  // otherwise.
   const presetDates = (k) => {
     const r = resolvePreset(k, { today: todayISO, accountPeriods });
     if (!r) return null;
-    if (k === "fytd") return running ? `P1 – P${running} to date` : null;
+    if (k === "fytd") {
+      const lastClosed = running != null ? running - 1 : null;
+      if (lastClosed == null || lastClosed < 1) return null;
+      return lastClosed === 1
+        ? `closed period · P1`
+        : `closed periods · P1 – P${lastClosed}`;
+    }
     // this / next / last: derive the period_no from the resolved range
     // so the date sub-label reads "P8 · 07/13 – 08/09".
     for (let p = 1; p <= 13; p += 1) {
