@@ -37,11 +37,12 @@ function fmtPct(n) {
 // "not reported" in the actual column but their FORECAST still counts
 // in the total - the "unreported" rule applies to the actual column
 // only. That makes the forecast total agree with the revenue card.
-function Row({ row, totalRevenue }) {
+function Row({ row, totalRevenue, showPeriodCol }) {
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   const isScAbsent = Array.isArray(row.flags) && row.flags.includes("sc_counts_without_dollars");
   const actualPct = row.reported && totalRevenue ? (row.actual / totalRevenue) * 100 : null;
   const notReportedText = <span className="kpi-ov-nb kpi-ov-not-reported">not reported</span>;
+  const pf = row.period_budget;
   return (
     <tr data-kpi-ov="revenue-line-row" data-kpi-ov-line-code={row.line_code}>
       <td className="l">
@@ -57,9 +58,20 @@ function Row({ row, totalRevenue }) {
           : row.reported ? fmtMoney(row.actual)
           : notReportedText}
       </td>
-      <td className="kpi-ov-num kpi-ov-nb">
+      <td className={`kpi-ov-num kpi-ov-nb ${showPeriodCol ? "prev" : ""}`}>
         {isInactive || actualPct == null ? "—" : fmtPct(actualPct)}
       </td>
+      {/* Kevin Prompt 1 item 1b (2026-09-04): revenue lines get ONE
+          period column - "P{N} forecast" (not "P{N} budget"; revenue
+          reads Forecast per Kevin's card-rename ruling). Single-cell
+          period band uses period-first + period-last together to
+          close both edges of the 8px radius. */}
+      {showPeriodCol && (
+        <td className="kpi-ov-num kpi-ov-nb period period-first period-last" data-kpi-ov="revenue-line-period-forecast">
+          {isInactive || pf == null ? <span className="kpi-ov-nb">—</span>
+            : (fmtMoney(pf) || <span className="kpi-ov-nb">—</span>)}
+        </td>
+      )}
     </tr>
   );
 }
@@ -153,6 +165,14 @@ export default function RevenueLines({ payload }) {
   const rangeLabels = payload.range_labels;
   const budgetHeader  = rangeLabels?.budget_header  || "BUDGET";
   const actualsHeader = rangeLabels?.actuals_header || "ACTUALS";
+  // Kevin Prompt 1 item 1b (2026-09-04): revenue lines get one
+  // period column ("P{N} forecast", not "P{N} budget" - revenue reads
+  // Forecast per the card rename). Only on open ranges.
+  const showPeriodCol = periodState === "open";
+  const periodNo = rng?.period_no;
+  const periodForecastHeader = periodNo != null
+    ? `P${periodNo} forecast`
+    : "Period forecast";
 
   return (
     <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="revenue-lines">
@@ -182,13 +202,19 @@ export default function RevenueLines({ payload }) {
             <tr className="kpi-ov-tband-grp" data-kpi-ov="tband-group">
               <th className="l"></th>
               <th className="plan plan-first plan-last kpi-ov-tband-plan">Plan</th>
-              <th colSpan={2} className="kpi-ov-tband-act">Actual</th>
+              <th colSpan={2} className={showPeriodCol ? "kpi-ov-tband-act prev" : "kpi-ov-tband-act"}>Actual</th>
+              {showPeriodCol && (
+                <th className="period period-first period-last kpi-ov-tband-period">Period</th>
+              )}
             </tr>
             <tr>
               <th className="l">Line</th>
               <th className="plan plan-first plan-last">{budgetHeader}</th>
               <th>{actualsHeader}</th>
-              <th style={{ width: 60 }}>% of rev</th>
+              <th className={showPeriodCol ? "prev" : ""} style={{ width: 60 }}>% of rev</th>
+              {showPeriodCol && (
+                <th className="period period-first period-last">{periodForecastHeader}</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -197,6 +223,7 @@ export default function RevenueLines({ payload }) {
                 key={r.line_code}
                 row={r}
                 totalRevenue={totalRevenue}
+                showPeriodCol={showPeriodCol}
               />
             ))}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="revenue-lines-total">
@@ -207,7 +234,14 @@ export default function RevenueLines({ payload }) {
               <td className="kpi-ov-num">
                 {totalRevenue != null ? fmtMoney(totalRevenue) : <span className="kpi-ov-nb">—</span>}
               </td>
-              <td className="kpi-ov-num kpi-ov-nb">{totalRevenue != null ? "100%" : "—"}</td>
+              <td className={`kpi-ov-num kpi-ov-nb ${showPeriodCol ? "prev" : ""}`}>{totalRevenue != null ? "100%" : "—"}</td>
+              {/* Kevin ruling item 1b (2026-09-04): total row period
+                  cell is empty - card carries the total, repeating in
+                  the table is the same figure twice. Cell still emits
+                  the period class so band background + border render. */}
+              {showPeriodCol && (
+                <td className="period period-first period-last" data-kpi-ov="revenue-lines-total-period-forecast" aria-hidden="true"></td>
+              )}
             </tr>
           </tbody>
         </table>

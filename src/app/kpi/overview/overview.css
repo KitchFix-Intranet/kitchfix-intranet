@@ -206,7 +206,14 @@
 .kpi-app .kpi-ov-mt { margin-top: var(--kpi-sp-3); }
 .kpi-app .kpi-ov-lev {
   width: 100%;
-  border-collapse: collapse;
+  /* Kevin ruling 2026-09-04: border-collapse: separate + zero
+     border-spacing so cell border-radius actually renders. Under
+     border-collapse: collapse the browser silently discards
+     border-radius on cells (see GOTCHAS "border-radius is silently
+     ignored under border-collapse: collapse"). The band treatment
+     that binds top/bottom-radius on outer cells depends on this. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--kpi-t-body);
   table-layout: fixed;
 }
@@ -396,6 +403,15 @@
   font-size: var(--kpi-t-meta);
   margin-top: 2px;
 }
+/* Kevin Prompt 1 item 1d (2026-09-04): "so far" label on the
+   in-progress week's live spend. Navy, upright (despite the <i>
+   tag), same size as the amount it sits next to. */
+.kpi-app .kpi-ov-axis .kpi-ov-chart-sofar {
+  font-style: normal;
+  color: var(--navy-700);
+  font-weight: 700;
+  margin-left: 4px;
+}
 
 .kpi-app .kpi-ov-legend {
   display: flex;
@@ -534,7 +550,11 @@
    for the shape. */
 .kpi-app .kpi-ov-pnl {
   width: 100%;
-  border-collapse: collapse;
+  /* Kevin ruling 2026-09-04: same border-collapse: separate change as
+     kpi-ov-lev - see comment above. Under collapse the plan-band's
+     corner radii silently no-op. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--kpi-t-body);
   table-layout: auto;
 }
@@ -560,24 +580,43 @@
 }
 .kpi-app .kpi-ov-pnl td.l { text-align: left; padding-left: 0; white-space: normal; }
 
-/* The plan band. Runs unbroken from the group header through the
-   gross-margin row - box-shadow hairlines, not borders, so the band
-   does not step between rows. */
+/* The plan band. Kevin ruling 2026-09-04: real borders, not inset
+   box-shadows. Inset draws inside the cell padding and puts the line
+   hard against the numbers; real border-left/border-right sits in
+   the gutter properly. Requires border-collapse: separate (above) so
+   the borders don't collapse into their neighbours. */
 .kpi-app .kpi-ov-pnl th.plan,
 .kpi-app .kpi-ov-pnl td.plan {
   background: #F7F9FC;
 }
 .kpi-app .kpi-ov-pnl th.plan-first,
 .kpi-app .kpi-ov-pnl td.plan-first {
-  box-shadow: inset 1px 0 0 var(--n-200);
+  border-left: 1px solid var(--n-200);
 }
 .kpi-app .kpi-ov-pnl th.plan-last,
 .kpi-app .kpi-ov-pnl td.plan-last {
-  box-shadow: inset -1px 0 0 var(--n-200);
+  border-right: 1px solid var(--n-200);
 }
-.kpi-app .kpi-ov-pnl th.plan-first.plan-last,
-.kpi-app .kpi-ov-pnl td.plan-first.plan-last {
-  box-shadow: inset 1px 0 0 var(--n-200), inset -1px 0 0 var(--n-200);
+/* Kevin ruling 2026-09-04: 8px radius on the P&L plan band top +
+   bottom corners, same shape as the kpi-ov-tband treatment above.
+   Top binds to `thead tr:first-child` (the group header row) and
+   bottom to `tbody tr:last-child` (the last data row - typically the
+   GM row on Overview, subtotal on shorter renders). */
+.kpi-app .kpi-ov-pnl thead tr:first-child th.plan-first {
+  border-top: 1px solid var(--n-200);
+  border-top-left-radius: 8px;
+}
+.kpi-app .kpi-ov-pnl thead tr:first-child th.plan-last {
+  border-top: 1px solid var(--n-200);
+  border-top-right-radius: 8px;
+}
+.kpi-app .kpi-ov-pnl tbody tr:last-child td.plan-first {
+  border-bottom: 1px solid var(--n-200);
+  border-bottom-left-radius: 8px;
+}
+.kpi-app .kpi-ov-pnl tbody tr:last-child td.plan-last {
+  border-bottom: 1px solid var(--n-200);
+  border-bottom-right-radius: 8px;
 }
 /* Plan cells: 600 / n-700. Actual cells (non-plan, non-label,
    non-variance): 800 / n-900. */
@@ -855,33 +894,129 @@
   letter-spacing: 0;
   font-variant-numeric: var(--num-tabular);
 }
+
+/* Kevin Prompt 1 item 1a (2026-09-04): the third block under each
+   card. Sits below the dashed rule (.kpi-ov-pair-rule) separated by
+   its own hairline so the actual-over-reference pair stays the hero.
+   Layout is label · budget-value · left-amount · left-word, with a
+   thin gauge below. Suppressed on closed ranges by the render side. */
+.kpi-app .kpi-ov-perb {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+}
+.kpi-app .kpi-ov-perb-k {
+  font-size: calc(9.5px * var(--kf-scale, 1));
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-perb-v {
+  font-size: calc(16px * var(--kf-scale, 1));
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-perb-left {
+  margin-left: auto;
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-perb-lw {
+  font-size: calc(9.5px * var(--kf-scale, 1));
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+/* Gauge: 8px bar with a fill and an optional notch mark. Fill colour
+   comes from an inline style so the render logic (variant + over
+   state) owns tone selection. */
+.kpi-app .kpi-ov-perb-gauge {
+  height: 8px;
+  background: var(--n-200);
+  border-radius: 4px;
+  margin-top: 9px;
+  overflow: visible;
+  position: relative;
+  width: 100%;
+  grid-column: 1 / -1;
+  flex-basis: 100%;
+}
+.kpi-app .kpi-ov-perb-gauge i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.kpi-app .kpi-ov-perb-gauge-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--n-900);
+  border-radius: 1px;
+}
+/* The perb container is a flex row; the gauge below is a block on
+   its own line by wrapping. Simpler than a grid + it matches the
+   render's stacking. */
+.kpi-app .kpi-ov-perb {
+  flex-wrap: wrap;
+}
 .kpi-app .kpi-ov-pair-ref .kpi-ov-pair-sub {
   font-size: var(--kpi-t-meta);
 }
 
-/* Kevin ruling final-presentation (2026-09-03) item 3 + cleanup
-   (2026-09-03) items 2-4: Plan / Actual band across every table.
-   Seamless #F7F9FC background on every plan cell from the group
-   header row through the total row. Vertical hairlines rendered as
-   inset box-shadows (Kevin: "not borders - borders leave gaps
-   between rows and the band steps"). Weight carries the hierarchy:
-   plan cells 600/n-700, actual 800/n-900. Item 4: 4px radius on top
-   + bottom band corners plus hairline rules top + bottom. */
+/* Kevin ruling 2026-09-04: Plan + Period band treatment across
+   every table. Two tints, deliberately different:
+     Plan   cool #F7F9FC  (existing)
+     Period warm #FBF7F1  (new)
+   Two groups, two kinds of thing. Real border-left / border-right in
+   the gutter (not box-shadow: inset, which puts the line hard against
+   the numbers). 8px radius on all four corners of every band.
+   Top edge binds to thead tr:first-child, bottom edge to tbody
+   tr:last-child - so tables without a total row (Also tracked) still
+   close their band on the bottom.
+   Reason for the rewrite: under border-collapse: collapse the
+   previous border-radius on corner cells was silently ignored. See
+   GOTCHAS "border-radius is silently ignored under border-collapse:
+   collapse". */
 .kpi-app .kpi-ov-tband th.plan,
 .kpi-app .kpi-ov-tband td.plan {
   background: #F7F9FC;
 }
 .kpi-app .kpi-ov-tband th.plan-first,
 .kpi-app .kpi-ov-tband td.plan-first {
-  box-shadow: inset 1px 0 0 var(--n-200);
+  border-left: 1px solid var(--n-200);
 }
 .kpi-app .kpi-ov-tband th.plan-last,
 .kpi-app .kpi-ov-tband td.plan-last {
-  box-shadow: inset -1px 0 0 var(--n-200);
+  border-right: 1px solid var(--n-200);
 }
-.kpi-app .kpi-ov-tband th.plan-first.plan-last,
-.kpi-app .kpi-ov-tband td.plan-first.plan-last {
-  box-shadow: inset 1px 0 0 var(--n-200), inset -1px 0 0 var(--n-200);
+.kpi-app .kpi-ov-tband th.period,
+.kpi-app .kpi-ov-tband td.period {
+  background: #FBF7F1;
+}
+.kpi-app .kpi-ov-tband th.period-first,
+.kpi-app .kpi-ov-tband td.period-first {
+  border-left: 1px solid var(--n-200);
+}
+.kpi-app .kpi-ov-tband th.period-last,
+.kpi-app .kpi-ov-tband td.period-last {
+  border-right: 1px solid var(--n-200);
+}
+.kpi-app .kpi-ov-tband td.period {
+  color: var(--n-700);
+  font-weight: 600;
+}
+/* Kevin ruling 2026-09-04: the column immediately left of a band
+   carries the extra right padding so the gutter between adjacent
+   groups is wide and the band stays tight around its own content.
+   Widening the band itself makes its numbers look lopsided. */
+.kpi-app .kpi-ov-tband th.prev,
+.kpi-app .kpi-ov-tband td.prev {
+  padding-right: 26px;
 }
 /* Plan-side type: subordinate. Actual-side type: primary. */
 .kpi-app .kpi-ov-tband td.plan {
@@ -933,35 +1068,55 @@
   border-bottom: none;
 }
 
-/* Item 4: 4px radius on band top + bottom corners; hairline rule top
-   + bottom of band. Applied on the OUTER edges of the group header
-   plan cell (top) and total row plan cells (bottom). Existing
-   left/right inset hairlines stay. */
-.kpi-app .kpi-ov-tband .kpi-ov-tband-grp th.plan-first {
+/* Kevin ruling 2026-09-04: 8px radius on band top + bottom corners
+   plus hairline rule top + bottom. Top edge binds to `thead
+   tr:first-child` (any first thead row - group header if there is
+   one, column header if not); bottom edge binds to `tbody
+   tr:last-child` (total row on CostLines / RevenueLines, last data
+   row on Also tracked). Previous bindings on `.kpi-ov-tband-grp`
+   (top) and `tr.kpi-ov-cl-tot` (bottom) missed Also tracked's
+   bottom because Also tracked has no total row - live defect. */
+.kpi-app .kpi-ov-tband thead tr:first-child th.plan-first,
+.kpi-app .kpi-ov-tband thead tr:first-child td.plan-first {
   border-top: 1px solid var(--n-200);
-  border-top-left-radius: 4px;
+  border-top-left-radius: 8px;
 }
-.kpi-app .kpi-ov-tband .kpi-ov-tband-grp th.plan-last {
+.kpi-app .kpi-ov-tband thead tr:first-child th.plan-last,
+.kpi-app .kpi-ov-tband thead tr:first-child td.plan-last {
   border-top: 1px solid var(--n-200);
-  border-top-right-radius: 4px;
+  border-top-right-radius: 8px;
 }
-.kpi-app .kpi-ov-tband .kpi-ov-tband-grp th.plan-first.plan-last {
+.kpi-app .kpi-ov-tband thead tr:first-child th.period-first,
+.kpi-app .kpi-ov-tband thead tr:first-child td.period-first {
   border-top: 1px solid var(--n-200);
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
+  border-top-left-radius: 8px;
 }
-.kpi-app .kpi-ov-tband tr.kpi-ov-cl-tot td.plan-first {
-  border-bottom: 1px solid var(--n-200);
-  border-bottom-left-radius: 4px;
+.kpi-app .kpi-ov-tband thead tr:first-child th.period-last,
+.kpi-app .kpi-ov-tband thead tr:first-child td.period-last {
+  border-top: 1px solid var(--n-200);
+  border-top-right-radius: 8px;
 }
-.kpi-app .kpi-ov-tband tr.kpi-ov-cl-tot td.plan-last {
+.kpi-app .kpi-ov-tband tbody tr:last-child td.plan-first {
   border-bottom: 1px solid var(--n-200);
-  border-bottom-right-radius: 4px;
+  border-bottom-left-radius: 8px;
 }
-.kpi-app .kpi-ov-tband tr.kpi-ov-cl-tot td.plan-first.plan-last {
+.kpi-app .kpi-ov-tband tbody tr:last-child td.plan-last {
   border-bottom: 1px solid var(--n-200);
-  border-bottom-left-radius: 4px;
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: 8px;
+}
+.kpi-app .kpi-ov-tband tbody tr:last-child td.period-first {
+  border-bottom: 1px solid var(--n-200);
+  border-bottom-left-radius: 8px;
+}
+.kpi-app .kpi-ov-tband tbody tr:last-child td.period-last {
+  border-bottom: 1px solid var(--n-200);
+  border-bottom-right-radius: 8px;
+}
+/* Kevin ruling 2026-09-04: 11px above the column headers beneath the
+   group rule - so column-header type is not tight against the group
+   header row's underline. */
+.kpi-app .kpi-ov-tband thead tr.kpi-ov-tband-grp + tr th {
+  padding-top: 11px;
 }
 /* Headers never wrap - Kevin: "headers never wrap (white-space:
    nowrap); labels wrap freely". */

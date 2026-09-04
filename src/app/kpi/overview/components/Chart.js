@@ -235,9 +235,17 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
         <span key={i}>
           Week {i + 1}
           <small>{fmtWeekLabel(s.week_start, s.week_end)}</small>
+          {/* Kevin Prompt 1 item 1d (2026-09-04): the in-progress week
+              shows its live figure with "so far" rather than the word
+              "running" - the operator already reads the running week
+              separately, so show what it says. Not-started weeks still
+              render the dash placeholder. Closed weeks render their
+              spend with the good/bad verdict. */}
           <span className={`kpi-ov-amt ${s.state === "closed" ? (Number(s.spent || 0) <= (wkB || 0) ? "kpi-ov-good" : "kpi-ov-bad") : "kpi-ov-nb"}`}>
             {s.state === "not_started" ? "- starts later"
-              : s.state === "in_progress" ? "running"
+              : s.state === "in_progress" ? (
+                <>{fmtMoney(Number(s.spent || 0))} <i className="kpi-ov-chart-sofar" data-kpi-ov="chart-week-sofar">so far</i></>
+              )
               : fmtMoney(Number(s.spent || 0))}
           </span>
         </span>
@@ -263,7 +271,11 @@ function ChartWeekGrain({ series, weeklyBudget, periodNo, runningWeekNo, bare = 
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="week">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">Cost of goods sold, week by week</span>
-        <span className="kpi-ov-gl">bars are spend · line is the weekly budget</span>
+        {/* Kevin Prompt 1 item 1d (2026-09-04): subtitle names the
+            "live to date" behaviour explicitly. Same source data as
+            before; the label now says what the source is (labour +
+            purchases, read live to date rather than settled totals). */}
+        <span className="kpi-ov-gl">labour and purchases, live to date · line is the weekly budget</span>
         <HelpPop
           id="overview-chart-week"
           title="Cost of goods sold by week"

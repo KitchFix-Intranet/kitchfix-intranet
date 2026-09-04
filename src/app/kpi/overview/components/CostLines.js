@@ -72,7 +72,7 @@ function rowHref({ lineCode, filters, previewAccount, rangeEffectiveEnd }) {
 // The red/green bar beneath each cost line was noise - the percentages
 // and the verdict colour on % of rev already carry the story.
 
-function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull, rangeEffectiveEnd }) {
+function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudFull, rangeEffectiveEnd, showPeriodCols }) {
   const href = rowHref({ lineCode: row.line_code, filters, previewAccount, rangeEffectiveEnd });
   const isBilledBack = Array.isArray(row.flags) && row.flags.includes("billed_back");
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
@@ -199,10 +199,37 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
           </>
         )}
       </td>
-      <td className={`kpi-ov-num ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`} data-kpi-ov="cost-line-actual-pct">
+      <td className={`kpi-ov-num ${showPeriodCols ? "prev" : ""} ${suppressVerdict ? "" : (over ? "kpi-ov-bad" : "kpi-ov-good")}`} data-kpi-ov="cost-line-actual-pct">
         {isBilledBack || isInactive ? <span className="kpi-ov-nb">—</span>
           : actualPctText != null ? actualPctText : <span className="kpi-ov-nb">—</span>}
       </td>
+      {/* Kevin Prompt 1 item 1b (2026-09-04): period columns render
+          only on open ranges. Two cells: P9 budget + Left. Left cell
+          takes the good/bad tone (over = red on a cost line). Row
+          reads period_budget from the payload the resolver already
+          emits per statement-row; no resolver change needed. */}
+      {showPeriodCols && (() => {
+        const pb = row.period_budget;
+        const suppressPeriod = isBilledBack || isInactive || pb == null;
+        const leftAmt = (pb != null && row.actual != null) ? (pb - row.actual) : null;
+        const leftOver = leftAmt != null && leftAmt < 0;
+        const leftAbs = leftAmt != null ? fmtMoney(Math.abs(leftAmt)) : null;
+        const leftToneCls = suppressPeriod ? ""
+          : leftOver ? "kpi-ov-bad"
+          : "kpi-ov-good";
+        return (
+          <>
+            <td className="kpi-ov-num kpi-ov-nb period period-first" data-kpi-ov="cost-line-period-budget">
+              {suppressPeriod ? <span className="kpi-ov-nb">—</span>
+                : (fmtMoney(pb) || <span className="kpi-ov-nb">—</span>)}
+            </td>
+            <td className={`kpi-ov-num period period-last ${leftToneCls}`} data-kpi-ov="cost-line-period-left">
+              {suppressPeriod || leftAmt == null ? <span className="kpi-ov-nb">—</span>
+                : <>{leftAbs}{leftOver ? " over" : ""}</>}
+            </td>
+          </>
+        );
+      })()}
     </tr>
   );
 }
@@ -218,7 +245,7 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
 //
 // actual: even suppressed rows show a $ value (billed_back rows can
 // have $37 packaging etc.), so total.actual sums ALL rows.
-function TotalRow({ rows, hasTarget, cogsCard, totalLabel }) {
+function TotalRow({ rows, hasTarget, cogsCard, totalLabel, showPeriodCols }) {
   const isSuppressed = (r) => {
     const flags = Array.isArray(r.flags) ? r.flags : [];
     return flags.includes("billed_back") || flags.includes("inactive");
@@ -270,9 +297,22 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel }) {
           </div>
         )}
       </td>
-      <td className={`kpi-ov-num ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : ""}`} data-kpi-ov="cost-lines-total-actual-pct">
+      <td className={`kpi-ov-num ${showPeriodCols ? "prev" : ""} ${hasTarget ? (over ? "kpi-ov-bad" : "kpi-ov-good") : ""}`} data-kpi-ov="cost-lines-total-actual-pct">
         {fmtPct(cogsPct) || "—"}
       </td>
+      {/* Kevin ruling Prompt 1 item 1b (2026-09-04): period cells on
+          the total row are EMPTY - the card block above already
+          carries the period total, and repeating it in the table is
+          the same figure twice. Cells still emit the `period` class
+          so the band background + border render cleanly across them;
+          `.period-first` / `.period-last` on the last tbody row close
+          the band's bottom radius. */}
+      {showPeriodCols && (
+        <>
+          <td className="period period-first" data-kpi-ov="cost-lines-total-period-budget" aria-hidden="true"></td>
+          <td className="period period-last" data-kpi-ov="cost-lines-total-period-left" aria-hidden="true"></td>
+        </>
+      )}
     </tr>
   );
 }
@@ -288,6 +328,24 @@ export default function CostLines({ payload, previewAccount = null }) {
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
   if (cogsRows.length === 0) return null;
   const cogsCard = payload.cards?.find(c => c.key === "cogs");
+  // Kevin Prompt 1 item 1b (2026-09-04): period columns render only
+  // on open ranges (a closed period has no "left"). Column labels
+  // come from the same range_labels the resolver already emits -
+  // "wk 1 – wk N" for the actuals-header rename (item 1c) and the
+  // period-number prefix for "P{N} budget" / "Left".
+  const showPeriodCols = isOpenRange;
+  const rl = payload.range_labels;
+  // "Spent" -> "Actuals wk 1 – wk 3" per item 1c. Falls back to
+  // "Spent" on ranges without a week count (aggregate / closed).
+  const spanRaw = rl?.spanHeader || rl?.actuals_header?.replace(/\s+ACTUALS\s*$/i, "");
+  const wkPhrase = spanRaw ? spanRaw.toLowerCase() : null;
+  const actualsHeader = (showPeriodCols && wkPhrase)
+    ? `Actuals ${wkPhrase}`
+    : "Spent";
+  const periodNo = payload.range?.period_no;
+  const periodBudgetHeader = periodNo != null
+    ? `P${periodNo} budget`
+    : "Period budget";
   // Kevin ruling 2026-09-03 (simplified-layout): cost table headers
   // become universal. `Line · Budget* · Actual · % of rev · Target %`.
   // The per-range language (Spent thru P8 / Budget adjusted P8) and
@@ -295,7 +353,6 @@ export default function CostLines({ payload, previewAccount = null }) {
   // both retire on this table. Reasons live in the footnote below
   // the table and in the COGS card tooltip (both already carry the
   // "adjusted at this revenue" concept per the top-simplify PR).
-  const rl = payload.range_labels;
   const totalLabel = rl?.through
     ? `Total cost of goods sold ${rl.through}`
     : "Total cost of goods sold";
@@ -338,14 +395,20 @@ export default function CostLines({ payload, previewAccount = null }) {
       <div className="kpi-ov-cb">
         <table className="kpi-ov-cl kpi-ov-tband" data-kpi-ov="cost-lines-table">
           <thead>
-            {/* Kevin ruling final-presentation (2026-09-03) item 3:
-                every table carries a Plan / Actual band. Group header
-                row on the band; sub-headers named per group ("Spent"
-                on cost, no "Actual / Actual" stack). */}
+            {/* Kevin ruling final-presentation (2026-09-03) item 3 +
+                Prompt 1 item 1b (2026-09-04): Plan / Actual / Period
+                band. Period band only renders on open ranges (a closed
+                period has no "left" to render). Period-band cells carry
+                the warm #FBF7F1 tint via the .period class; the corner
+                8px radii bind to thead tr:first-child / tbody tr:last-child
+                via the CSS rules in overview.css. */}
             <tr className="kpi-ov-tband-grp" data-kpi-ov="tband-group">
               <th className="l"></th>
               <th colSpan={2} className="plan plan-first plan-last kpi-ov-tband-plan">Plan</th>
-              <th colSpan={2} className="kpi-ov-tband-act">Actual</th>
+              <th colSpan={2} className={showPeriodCols ? "kpi-ov-tband-act prev" : "kpi-ov-tband-act"}>Actual</th>
+              {showPeriodCols && (
+                <th colSpan={2} className="period period-first period-last kpi-ov-tband-period">Period</th>
+              )}
             </tr>
             <tr>
               <th className="l">Line</th>
@@ -353,8 +416,14 @@ export default function CostLines({ payload, previewAccount = null }) {
                 Budget<sup className="kpi-ov-cl-fn-mark">*</sup>
               </th>
               <th className="plan plan-last" style={{ width: 68 }}>Target %</th>
-              <th>Spent</th>
-              <th style={{ width: 68 }}>% of rev</th>
+              <th>{actualsHeader}</th>
+              <th className={showPeriodCols ? "prev" : ""} style={{ width: 68 }}>% of rev</th>
+              {showPeriodCols && (
+                <>
+                  <th className="period period-first">{periodBudgetHeader}</th>
+                  <th className="period period-last" style={{ width: 84 }}>Left</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -368,9 +437,10 @@ export default function CostLines({ payload, previewAccount = null }) {
                 previewAccount={previewAccount}
                 rangeEffectiveEnd={rangeEffectiveEnd}
                 revBudFull={payload.statement_totals?.revenue?.period_budget}
+                showPeriodCols={showPeriodCols}
               />
             ))}
-            <TotalRow rows={cogsRows} hasTarget={hasTarget} cogsCard={cogsCard} totalLabel={totalLabel} />
+            <TotalRow rows={cogsRows} hasTarget={hasTarget} cogsCard={cogsCard} totalLabel={totalLabel} showPeriodCols={showPeriodCols} />
           </tbody>
         </table>
         {/* Kevin ruling 2026-09-03 (simplified-layout): footnote below

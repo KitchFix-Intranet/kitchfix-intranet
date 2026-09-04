@@ -71,11 +71,74 @@ function fmtPct(n) {
 // reads Forecast (not Budget), on every account and every range. Cost
 // and margin cards still measure against a Target, so this rename
 // only applies to Revenue.
-function actualLabel(periodState) {
-  return periodState === "open" ? "Actual to date" : "Actual";
+function actualLabel(periodState, throughWkLabel) {
+  // Kevin Prompt 1 item 1c (2026-09-04): "Actual to date" -> "Actuals
+  // wk 1 – wk N" so the operator sees the week count they're already
+  // reading, not a generic to-date phrase. Falls back to the plain
+  // form when the range label doesn't carry a week count (aggregate
+  // ranges, portfolio scope).
+  if (periodState !== "open") return "Actual";
+  return throughWkLabel ? `Actuals ${throughWkLabel}` : "Actual to date";
 }
-function forecastLabel(periodState) {
-  return periodState === "open" ? "Forecast to date" : "Forecast";
+function forecastLabel(periodState, throughWkLabel) {
+  if (periodState !== "open") return "Forecast";
+  return throughWkLabel ? `Forecast ${throughWkLabel}` : "Forecast to date";
+}
+
+// Kevin Prompt 1 item 1a (2026-09-04): third block under each card,
+// below the dashed rule, separated by a hairline. Shows the whole-
+// period budget + how much is left (or "to earn" on the margin card),
+// with a gauge below - fill is spend against period budget, notch is
+// where complete weeks over total weeks should put you.
+//
+// Suppressed on closed ranges (a finished period has no "left") and
+// when the period_budget is null/zero.
+//
+// `variant` values:
+//   "cost"     over = red/bad,  under = green/good, label "left"/"over"
+//   "revenue"  over = green/good (overshooting revenue is good), label "over"/"left"
+//   "margin"   fill is purple, label is "to earn" (margin is earned not spent)
+function PeriodBlock({ label, spent, budget, weeksDone, weeksTotal, variant }) {
+  if (budget == null || Math.abs(budget) < 1) return null;
+  if (spent == null) return null;
+  const left = budget - spent;
+  const over = left < 0;
+  const pct = Math.min(100, Math.max(0, (Math.abs(spent) / Math.abs(budget)) * 100));
+  const notchPct = (weeksTotal && weeksTotal > 0)
+    ? Math.min(100, Math.max(0, (weeksDone / weeksTotal) * 100))
+    : null;
+  let leftTone, leftWord, fillColor;
+  if (variant === "margin") {
+    leftTone = "kpi-ov-nb";  // grey - margin has no over/under valence on the card
+    leftWord = "to earn";
+    fillColor = "var(--kpi-purple, #7c3aed)";
+  } else if (variant === "revenue") {
+    leftTone = over ? "kpi-ov-good" : "kpi-ov-nb";
+    leftWord = over ? "over" : "left";
+    fillColor = over ? "var(--green-600)" : "var(--navy-700)";
+  } else {
+    // cost (default)
+    leftTone = over ? "kpi-ov-bad" : "kpi-ov-good";
+    leftWord = over ? "over" : "left";
+    fillColor = over ? "var(--red-600)" : "var(--navy-700)";
+  }
+  const dispAmount = Math.abs(Math.round(left));
+  const leftText = "$" + dispAmount.toLocaleString("en-US");
+  const budgetText = fmtMoney(budget);
+  return (
+    <div className="kpi-ov-perb" data-kpi-ov="card-period-block">
+      <span className="kpi-ov-perb-k">{label}</span>
+      <span className="kpi-ov-perb-v kpi-ov-num" data-kpi-ov="perb-budget">{budgetText}</span>
+      <span className={`kpi-ov-perb-left kpi-ov-num ${leftTone}`} data-kpi-ov="perb-left">{leftText}</span>
+      <span className="kpi-ov-perb-lw">{leftWord}</span>
+      <div className="kpi-ov-perb-gauge" data-kpi-ov="perb-gauge">
+        <i style={{ width: `${pct}%`, background: fillColor }} data-kpi-ov="perb-gauge-fill" />
+        {notchPct != null && (
+          <span className="kpi-ov-perb-gauge-mark" style={{ left: `${notchPct}%` }} data-kpi-ov="perb-gauge-mark" />
+        )}
+      </div>
+    </div>
+  );
 }
 
 // Static tooltip fragments. Envelope + full-year live figures merged
@@ -138,12 +201,50 @@ function revenueTooltip({ rangeKind, budgetFullYear, rangeLabels }) {
   );
 }
 
+// Kevin Prompt 1 item 1c (2026-09-04): "Actuals wk 1 – wk N" wording
+// derived from the same range_labels.spanHeader / horizon fields the
+// resolver already emits. Returns a lowercase phrase ("wk 1 – wk 3")
+// for card + table labels. Null when the range doesn't carry a week
+// count (closed / aggregate / portfolio scope).
+function throughWkPhrase(rangeLabels, periodState) {
+  if (periodState !== "open") return null;
+  // range_labels.spanHeader is "WK 1 – WK 3" or "WK 1" - already the
+  // form we want, just case-transform. Fallback via horizon regex if
+  // spanHeader is absent.
+  const raw = rangeLabels?.spanHeader || rangeLabels?.actuals_header || null;
+  if (raw) {
+    // "WK 1 – WK 3 ACTUALS" -> "WK 1 – WK 3", then lowercase "wk"
+    return raw.replace(/\s+ACTUALS\s*$/i, "").toLowerCase().replace(/^wk/, "wk");
+  }
+  // Fallback: parse from horizon "through week 3 · 08/10 – 08/30"
+  const m = /through week (\d+)/i.exec(rangeLabels?.horizon || "");
+  if (m) {
+    const n = parseInt(m[1], 10);
+    return n === 1 ? "wk 1" : `wk 1 – wk ${n}`;
+  }
+  return null;
+}
+// Weeks-done / weeks-total for the gauge notch. Standard KPI period
+// is 4 weeks; open period range gives weeksDone from horizon.
+function weekCountFrom(rangeLabels, rangeMeta) {
+  if (rangeMeta?.kind !== "period") return { done: null, total: null };
+  const m = /through week (\d+)/i.exec(rangeLabels?.horizon || "");
+  if (!m) return { done: null, total: 4 };
+  return { done: parseInt(m[1], 10), total: 4 };
+}
+// Period-total label - matches render "P9 budget total" / "P9 forecast".
+function periodTotalLabel(rangeMeta, kind) {
+  const n = rangeMeta?.period_no;
+  const pfx = n != null ? `P${n} ` : "";
+  return kind === "revenue" ? `${pfx}forecast total` : `${pfx}budget total`;
+}
+
 // Revenue card - dollars. Top row = Actual, bottom = Budget.
 // The reference figure on Revenue is the range-appropriate budget:
 //   open   -> budget_to_date       ("Budget to date $X")
 //   closed -> budget_full_period   ("Budget $X")   for single_closed
 //   FYTD closed -> budget_to_date  (FYTD budget through last-closed)
-function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDollars }) {
+function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDollars, periodBudget, weeksDone, weeksTotal, throughWkLabel }) {
   const isOpen = periodState === "open";
   const budgetRef = isOpen
     ? card.budget_to_date
@@ -200,18 +301,34 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
       </div>
       <div className="kpi-ov-cb">
         <div className="kpi-ov-pair" data-kpi-ov="card-actual">
-          <span className="kpi-ov-pair-k">{actualLabel(periodState)}</span>
+          <span className="kpi-ov-pair-k">{actualLabel(periodState, throughWkLabel)}</span>
           <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov="hero-revenue">
             <DashOrValue value={actualText} reported={card.hero_reported} />
           </span>
         </div>
         <div className="kpi-ov-pair-rule" aria-hidden="true" />
         <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
-          <span className="kpi-ov-pair-k">{forecastLabel(periodState)}</span>
+          <span className="kpi-ov-pair-k">{forecastLabel(periodState, throughWkLabel)}</span>
           <span className="kpi-ov-pair-v kpi-ov-num">
             {budgetRefText != null ? budgetRefText : "—"}
           </span>
         </div>
+        {/* Kevin Prompt 1 item 1a (2026-09-04): third block below the
+            dashed rule with period-total budget + how much is left.
+            Suppressed on closed ranges (finished period has no left)
+            and when period_budget is null/0. On revenue over-budget
+            is GOOD (booking more than planned), so the "over" state
+            uses the good tone. */}
+        {periodState === "open" && (
+          <PeriodBlock
+            label={periodTotalLabel(range, "revenue")}
+            spent={card.hero_actual}
+            budget={periodBudget}
+            weeksDone={weeksDone}
+            weeksTotal={weeksTotal}
+            variant="revenue"
+          />
+        )}
       </div>
     </div>
   );
@@ -220,7 +337,7 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
 // COGS + GM card - percent. Top = Actual %, bottom = Target %.
 // Pill carries the gap. Actual takes verdict colour; target stays
 // neutral grey.
-function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel }) {
+function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel, periodBudget, weeksDone, weeksTotal, throughWkLabel }) {
   const isCogs = kind === "cogs";
   const isManagementFee = revenueModel === "management_fee";
   const hasTarget = extra?.hasTarget;
@@ -256,7 +373,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
       </div>
       <div className="kpi-ov-cb">
         <div className="kpi-ov-pair" data-kpi-ov="card-actual">
-          <span className="kpi-ov-pair-k">{actualLabel(periodState)}</span>
+          <span className="kpi-ov-pair-k">{actualLabel(periodState, throughWkLabel)}</span>
           <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov={`hero-${kind}`}>
             {actualText || "—"}
             {actualDollarText && (
@@ -278,18 +395,44 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
             ) : <span className="kpi-ov-nb">—</span>}
           </span>
         </div>
+        {/* Kevin Prompt 1 item 1a (2026-09-04): third block on cost +
+            margin cards. COGS uses "left/over" language with the
+            standard cost tone (over = red); margin uses "to earn"
+            with a neutral tone (margin is earned not spent, and red
+            is reserved for missing a target - Kevin's R-75 rule). */}
+        {periodState === "open" && (
+          <PeriodBlock
+            label={periodTotalLabel(range, kind)}
+            spent={card.hero_actual}
+            budget={periodBudget}
+            weeksDone={weeksDone}
+            weeksTotal={weeksTotal}
+            variant={isCogs ? "cost" : "margin"}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenueSourceState, rangeLabels, revenueModel }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenueSourceState, rangeLabels, revenueModel, statementTotals }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
   const gm      = cards.find(c => c.key === "gross_margin");
   const periodState = rangeMeta?.period_state;
   const revenueIsPlanned = revenueSourceState === "planned";
+  // Kevin Prompt 1 item 1a (2026-09-04): period-total budgets are
+  // already emitted by the resolver at statement_totals.*.period_budget
+  // - no resolver change needed. Read them here and pass to each card
+  // for the third block. GM's period_budget is derived (revenue_pb
+  // minus cogs_pb) since the resolver doesn't ship a top-level
+  // gross_margin.period_budget.
+  const revPb = statementTotals?.revenue?.period_budget ?? null;
+  const cogPb = statementTotals?.cogs?.period_budget ?? null;
+  const gmPb  = (revPb != null && cogPb != null) ? (revPb - cogPb) : null;
+  const throughWkLabel = throughWkPhrase(rangeLabels, periodState);
+  const { done: weeksDone, total: weeksTotal } = weekCountFrom(rangeLabels, rangeMeta);
   return (
     <div className="kpi-ov-cards" data-kpi-ov="cards-row">
       {revenue && (
@@ -299,6 +442,10 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           periodState={periodState}
           scCountsWithoutDollars={scCountsWithoutDollars}
           rangeLabels={rangeLabels}
+          periodBudget={revPb}
+          weeksDone={weeksDone}
+          weeksTotal={weeksTotal}
+          throughWkLabel={throughWkLabel}
         />
       )}
       {cogs && (
@@ -310,6 +457,10 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           extra={{ hasTarget, revenueIsPlanned }}
           rangeLabels={rangeLabels}
           revenueModel={revenueModel}
+          periodBudget={cogPb}
+          weeksDone={weeksDone}
+          weeksTotal={weeksTotal}
+          throughWkLabel={throughWkLabel}
         />
       )}
       {gm && (
@@ -321,6 +472,10 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           extra={{ hasTarget }}
           rangeLabels={rangeLabels}
           revenueModel={revenueModel}
+          periodBudget={gmPb}
+          weeksDone={weeksDone}
+          weeksTotal={weeksTotal}
+          throughWkLabel={throughWkLabel}
         />
       )}
     </div>
