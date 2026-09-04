@@ -518,10 +518,11 @@ When a design choice could be reinforced by Slack notification quality, call it 
 | `--sc2-control-h` | `.scv2` | calc(36px * var(--sc2-scale)) |
 | `--sc2-control-h-icon` | `.scv2` | calc(32px * var(--sc2-scale)) |
 
-**`--opd-*`** (41 declarations)
+**`--opd-*`** (106 declarations)
 
 *Scope `:root`:* 25 tokens
 *Scope `.opd-frame`:* 16 tokens
+*Scope `.opd-app`:* 65 tokens
 
 | Token | Scope | Value |
 |---|---|---|
@@ -566,6 +567,71 @@ When a design choice could be reinforced by Slack notification quality, call it 
 | `--opd-class-ref-bg` | `.opd-frame` | rgba(120, 80, 35, 0.09) |
 | `--opd-class-ref-bd` | `.opd-frame` | rgba(120, 80, 35, 0.24) |
 | `--opd-class-ref-fg` | `.opd-frame` | #6b4f25 |
+| `--opd-t-label` | `.opd-app` | 10px |
+| `--opd-t-meta` | `.opd-app` | 11px |
+| `--opd-t-ui` | `.opd-app` | calc(12px * var(--kf-scale)) |
+| `--opd-t-ctl` | `.opd-app` | calc(13px * var(--kf-scale)) |
+| `--opd-t-h3` | `.opd-app` | calc(14px * var(--kf-scale)) |
+| `--opd-t-read` | `.opd-app` | 15px |
+| `--opd-t-hero` | `.opd-app` | calc(23px * var(--kf-scale)) |
+| `--opd-t-h2` | `.opd-app` | calc(25px * var(--kf-scale)) |
+| `--opd-sp-1` | `.opd-app` | calc(4px  * var(--kf-scale)) |
+| `--opd-sp-2` | `.opd-app` | calc(9px  * var(--kf-scale)) |
+| `--opd-sp-3` | `.opd-app` | calc(15px * var(--kf-scale)) |
+| `--opd-sp-4` | `.opd-app` | calc(22px * var(--kf-scale)) |
+| `--opd-sp-5` | `.opd-app` | calc(28px * var(--kf-scale)) |
+| `--opd-rail-w` | `.opd-app` | calc(242px * var(--kf-scale)) |
+| `--opd-measure` | `.opd-app` | calc(640px * var(--kf-scale)) |
+| `--opd-ease` | `.opd-app` | cubic-bezier(0.2, 0.9, 0.3, 1) |
+| `--opd-t-fast` | `.opd-app` | 0.14s |
+| `--opd-t-mid` | `.opd-app` | 0.28s |
+| `--opd-t-slow` | `.opd-app` | 0.44s |
+| `--opd-n50` | `.opd-app` | #FAFBFC |
+| `--opd-n100` | `.opd-app` | #F5F7FA |
+| `--opd-n200` | `.opd-app` | #EEF1F5 |
+| `--opd-n300` | `.opd-app` | #E5E7EB |
+| `--opd-n400` | `.opd-app` | #B8C2CF |
+| `--opd-n500` | `.opd-app` | #94A3B8 |
+| `--opd-n600` | `.opd-app` | #64748B |
+| `--opd-n700` | `.opd-app` | #475569 |
+| `--opd-n800` | `.opd-app` | #334155 |
+| `--opd-n900` | `.opd-app` | #0A2548 |
+| `--opd-navy` | `.opd-app` | #153968 |
+| `--opd-navy50` | `.opd-app` | #EEF3F9 |
+| `--opd-grn` | `.opd-app` | #16A34A |
+| `--opd-grnbg` | `.opd-app` | #E8F6EE |
+| `--opd-grnbd` | `.opd-app` | #BFE7CD |
+| `--opd-grnfg` | `.opd-app` | #0B7A3E |
+| `--opd-amb` | `.opd-app` | #D97706 |
+| `--opd-ambbg` | `.opd-app` | #FBF3E3 |
+| `--opd-ambbd` | `.opd-app` | #EFD9AC |
+| `--opd-ambfg` | `.opd-app` | #8A5209 |
+| `--opd-gov` | `.opd-app` | #214E82 |
+| `--opd-govbg` | `.opd-app` | rgba(33, 78, 130, 0.08) |
+| `--opd-govbd` | `.opd-app` | rgba(33, 78, 130, 0.22) |
+| `--opd-chrome` | `.opd-app` | 215px |
+| `--opd-teal` | `.opd-app` | #0F6E56 |
+| `--opd-tealsub` | `.opd-app` | #E1F5EE |
+| `--opd-pur` | `.opd-app` | #7C3AED |
+| `--opd-purbg` | `.opd-app` | #F4EFFE |
+| `--opd-purbd` | `.opd-app` | #DDCDFB |
+| `--opd-govbg2` | `.opd-app` | rgba(33, 78, 130, 0.09) |
+| `--opd-govbd2` | `.opd-app` | rgba(33, 78, 130, 0.24) |
+| `--opd-procbg` | `.opd-app` | rgba(15, 110, 86, 0.09) |
+| `--opd-procbd` | `.opd-app` | rgba(15, 110, 86, 0.24) |
+| `--opd-toolbg` | `.opd-app` | rgba(193, 122, 35, 0.11) |
+| `--opd-toolbd` | `.opd-app` | rgba(193, 122, 35, 0.28) |
+| `--opd-tool` | `.opd-app` | #8A5209 |
+| `--opd-sh-1` | `.opd-app` | 0 1px 2px rgba(10, 37, 72, 0.06), 0 10px 26px -10px rgba(... |
+| `--opd-sh-2` | `.opd-app` | 0 1px 2px rgba(10, 37, 72, 0.04) |
+| `--opd-sh-3` | `.opd-app` | 0 1px 2px rgba(10, 37, 72, 0.05), 0 6px 18px -6px rgba(10... |
+| `--opd-t-row` | `.opd-app` | calc(13.5px * var(--kf-scale)) |
+| `--opd-t-hero2` | `.opd-app` | calc(26px * var(--kf-scale)) |
+| `--opd-t-h2b` | `.opd-app` | calc(20px * var(--kf-scale)) |
+| `--opd-rail-w2` | `.opd-app` | calc(284px * var(--kf-scale)) |
+| `--opd-gut` | `.opd-app` | 11px |
+| `--opd-lead` | `.opd-app` | 44px |
+| `--opd-lmax` | `.opd-app` | min(520px, calc(100vh - 330px)) |
 
 **`--kpi-*`** (58 declarations)
 
@@ -633,15 +699,17 @@ When a design choice could be reinforced by Slack notification quality, call it 
 | `--kpi-blue-100` | `.kpi-app` | #E4F1FA |
 | `--kpi-purple-600` | `.kpi-app` | #7A3E9D |
 
-**`--kf-*`** (2 declarations)
+**`--kf-*`** (3 declarations)
 
 *Scope `:root`:* 1 tokens
 *Scope `.kpi-app`:* 1 tokens
+*Scope `.opd-app`:* 1 tokens
 
 | Token | Scope | Value |
 |---|---|---|
 | `--kf-scale` | `:root` | 1 |
 | `--kf-scale` | `.kpi-app` | 0.9 |
+| `--kf-scale` | `.opd-app` | 0.9 |
 
 ### Font stacks in use
 
