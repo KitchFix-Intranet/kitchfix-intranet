@@ -1095,6 +1095,31 @@ export async function resolveOverview({
   const packaging_budget_to_date_days = prorateBucketToDate(packaging_budget);
   const vehicle_budget_to_date_days   = prorateBucketToDate(vehicle_budget);
 
+  // R-71 Stage 2 (Kevin ruling 2026-09-04): sum vendor-credit amounts
+  // (signed negative, stored that way by the loader) per parent bucket.
+  // Used by the cost row's "$X invoiced - $Y credits = $Z" sub-line
+  // display. Credits FOLD into the GL-coded sub-line (they carry a
+  // chartOfAccountId), so no synthetic CREDITS sub-row is emitted;
+  // the per-gl aggregation naturally nets them into e.g. 3200.1.
+  // The per-bucket total is retained solely for the cost-row derivation
+  // sub-line's visibility.
+  const creditsByBucket = { "3200": 0, "3400": 0, "3500": 0 };
+  const purchasesByBucket = { "3200": 0, "3400": 0, "3500": 0 };
+  for (const r of (purchActuals || [])) {
+    const gl = String(r.gl_line_code || "");
+    const bucket = gl.startsWith("3200") ? "3200"
+                 : gl.startsWith("3400") ? "3400"
+                 : gl.startsWith("3500") ? "3500"
+                 : null;
+    if (!bucket) continue;
+    const amt = Number(r.amount || 0);
+    if (r.source === "billcom_credit") {
+      creditsByBucket[bucket] += amt;
+    } else {
+      purchasesByBucket[bucket] += amt;
+    }
+  }
+
   // PR-1 item 1 (2026-09-02). has_target is the invariant "there is a
   // real target to compare against on this range". Rules:
   //   - Single fiscal period (kind === "period")     -> true
@@ -2057,7 +2082,7 @@ export async function resolveOverview({
     };
   })();
 
-  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [], inventoryJe = 0, actualPurchased = null }) => {
+  const buildCostRow = ({ line_code, label, actual, budget, extraFlags = [], inventoryJe = 0, actualPurchased = null, creditsTotal = 0 }) => {
     const billed_back = isPassThrough;
     // inactive takes precedence over billed_back only when there is
     // truly nothing to say (no actual and no budget). Billed-back
@@ -2104,8 +2129,16 @@ export async function resolveOverview({
       // inventory_je=null so the client knows to skip the trio.
       envelope_delta: (suppress || btd == null || isManagementFee) ? null : envelopeDelta(btd, _batr),
       inventory_je: (line_code === "3200" || line_code === "3400") ? r2(inventoryJe) : null,
-      actual_purchased: (line_code === "3200" || line_code === "3400") ? actualPurchased : null,
-      sources: ["purchasing_actuals"],
+      actual_purchased: (line_code === "3200" || line_code === "3400" || line_code === "3500") ? actualPurchased : null,
+      // R-71 Stage 2 (Kevin 2026-09-04): vendor-credits total (signed
+      // negative) surfaces on the cost row so the client can render
+      // "$X invoiced - $Y credits = $Z" sub-line, mirroring the
+      // inventory-je pattern. Zero on rows/accounts without credits;
+      // client suppresses the sub-line when zero.
+      credits_total: (line_code === "3200" || line_code === "3400" || line_code === "3500") ? r2(creditsTotal) : null,
+      sources: Math.abs(Number(creditsTotal || 0)) >= 0.01
+        ? ["purchasing_actuals", "billcom_credit"]
+        : ["purchasing_actuals"],
       flags: [
         ...(billed_back ? ["billed_back"] : []),
         ...(inactive ? ["inactive"] : []),
@@ -2113,20 +2146,29 @@ export async function resolveOverview({
       ],
     };
   };
+  // R-71 Stage 2: `actualPurchased` shipped to the row is the pre-
+  // credit, pre-JE invoiced total. The client renders the derivation
+  // sub-line "$X invoiced - $Y credits - $Z inventory = $W". Prior
+  // to R-71 `actualPurchased` was `purchBoard.buckets[X].period_total`
+  // which included credits (since credits landed in purchasing_actuals
+  // once the loader ran); use `purchasesByBucket[X]` here so the
+  // display is honestly labelled.
   statementRows.push(buildCostRow({
     line_code: "3200",
     label: "Food purchased",
-    actual: food_actual,           // adjusted (purchases - foodInventoryJe)
-    actualPurchased: food_actual_purchased,
+    actual: food_actual,           // adjusted (purchases + credits - foodInventoryJe)
+    actualPurchased: r2(purchasesByBucket["3200"]),
     inventoryJe: foodInventoryJe,
+    creditsTotal: creditsByBucket["3200"],
     budget: food_budget,
   }));
   statementRows.push(buildCostRow({
     line_code: "3400",
     label: "Packaging and supplies",
-    actual: packaging_actual,      // adjusted
-    actualPurchased: packaging_actual_purchased,
+    actual: packaging_actual,
+    actualPurchased: r2(purchasesByBucket["3400"]),
     inventoryJe: packagingInventoryJe,
+    creditsTotal: creditsByBucket["3400"],
     budget: packaging_budget,
     extraFlags: flags.packaging_gap ? ["packaging_gap"] : [],
   }));
@@ -2134,6 +2176,8 @@ export async function resolveOverview({
     line_code: "3500",
     label: "Vehicle",
     actual: vehicle_actual,
+    actualPurchased: r2(purchasesByBucket["3500"]),
+    creditsTotal: creditsByBucket["3500"],
     budget: vehicle_budget,
   }));
 
@@ -2172,6 +2216,27 @@ export async function resolveOverview({
   const parentPrefixOf = (gl) => PARENT_PREFIXES.find(p => isPrefixMatch(gl, p)) || null;
   // Collect every gl_line_code present in either engine under the
   // three parents. Sort by parent then by gl for stable render.
+  //
+  // R-71 Stage 2 (Kevin ruling 2026-09-04): vendor-credits FOLD into
+  // the GL-coded sub-line, not a synthetic CREDITS row.
+  //
+  // Kevin's ruling: "A credit carries a chartOfAccountId. It is
+  // GL-coded to 3200.1 or 3200.2, so it belongs on that line -
+  // unlike an inventory JE, which has no GL line of its own and
+  // genuinely needs a synthetic row."
+  //
+  // Fold means: include billcom_credit rows in the per-gl aggregation
+  // (they naturally reduce the sub-row's actual by their negative
+  // amount) and DO NOT emit a separate `{parent}.CREDITS` synthetic.
+  // The parent-row derivation sub-line still surfaces the credit
+  // amount ("$X invoiced - $Y credits = $Z") so visibility survives
+  // without double-listing.
+  //
+  // Two knock-on wins: (1) sub-line becomes comparable to finance's
+  // 3200.1 (finance also folds credits in), closing the $19k+ display
+  // gap on TBJ - FL. (2) The pass-through parent-sum edge case
+  // disappears - no synthetic row to gate, so sub-rows tie to parent
+  // on billed-back accounts without a special-case guard.
   const glsUnderParent = new Map(PARENT_PREFIXES.map(p => [p, new Set()]));
   const purchActualsByLine = new Map();
   const purchActualsLinesPresent = new Set();

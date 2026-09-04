@@ -189,6 +189,35 @@ export function billLineItemsUrl(billId) {
   return `${base}/bills/${encodeURIComponent(billId)}/lineItems`;
 }
 
+// R-71 Stage 2 (Kevin 2026-09-04): vendor-credits endpoints. Josh
+// exposed both /billcom/vendor-credits (list, v3 envelope with
+// nextPage cursor) and /billcom/vendor-credits/<id> (per-id detail).
+// Note the HYPHEN - /vendor-credits, not /vendorcredits. The list
+// endpoint does NOT embed line items - each credit needs a detail
+// fetch to see its vendorCreditLineItems[].
+//
+// Pagination: same shape as /vendors (v3 cursor). start=<n> is
+// silently ignored - walk via page=<nextPage>. Same silent-loop
+// trap the vendors walk documented.
+//
+// Rate limit note: the FY26 corpus is 410 credits (recon 2026-09-04),
+// each requires a detail fetch; a full backfill is ~410 API round
+// trips. Nightly runs will be much smaller - only new + updated
+// credits since the last successful walk.
+export function vendorCreditsUrl({ pageCursor = null, max = 100 }) {
+  const base = _proxyBase();
+  const capped = Math.min(Number(max) || 100, 100);
+  const qs = new URLSearchParams({ max: String(capped) });
+  if (pageCursor) qs.set("page", String(pageCursor));
+  return `${base}/vendor-credits?${qs.toString()}`;
+}
+
+export function vendorCreditByIdUrl(creditId) {
+  if (!creditId) throw new Error("vendorCreditByIdUrl: creditId required");
+  const base = _proxyBase();
+  return `${base}/vendor-credits/${encodeURIComponent(creditId)}`;
+}
+
 // ─── Content hash ───────────────────────────────────────────────────
 //
 // Same discipline as src/lib/rippling.js: canonical projection with
@@ -198,11 +227,16 @@ export function billLineItemsUrl(billId) {
 // and no signed URLs.
 
 const HASH_EXCLUDE_TOP = {
-  bill:      ["updatedTime", "cacheAt", "__meta"],
-  bill_line: ["updatedTime", "cacheAt", "__meta"],
-  account:   ["updatedTime", "cacheAt", "__meta"],
-  class:     ["updatedTime", "cacheAt", "__meta"],
-  vendor:    ["updatedTime", "cacheAt", "__meta"],
+  bill:               ["updatedTime", "cacheAt", "__meta"],
+  bill_line:          ["updatedTime", "cacheAt", "__meta"],
+  account:            ["updatedTime", "cacheAt", "__meta"],
+  class:              ["updatedTime", "cacheAt", "__meta"],
+  vendor:             ["updatedTime", "cacheAt", "__meta"],
+  // R-71 Stage 2 (2026-09-04): vendor-credits. updatedTime + createdTime
+  // are audit fields that tick on every fetch; exclude so re-fetching
+  // the same content doesn't produce a bogus hash-change insert.
+  vendor_credit:      ["updatedTime", "createdTime", "cacheAt", "__meta"],
+  vendor_credit_line: ["cacheAt", "__meta"],
 };
 
 function _normalizeForHash(node, topExcludeSet) {
