@@ -1079,18 +1079,17 @@ export default function KpiLaborPage() {
                 salaryAvailable={data?.salary_available === true}
                 isFutureRange={data?.is_future_range === true}
               />
-              <SignalCards
-                board={data.board}
-                freshness={freshness}
-                salary={data?.salary_included ? {
-                  hours_basis: data.hours_basis,
-                  rate_basis: data.rate_basis,
-                  blended_rate_hourly: data.blended_rate_hourly,
-                } : null}
-                isFutureRange={data?.is_future_range === true}
-                hoursAvailableHourly={data?.hours_available_hourly}
-                approvalsHourly={data?.approvals_hourly}
-              />
+              {/* Kevin Labor PR-A item 7 (2026-09-04): Spending pace,
+                  Overtime, Approvals cards removed. Overtime + unapproved
+                  hours are already columns in WeekTable below - the cards
+                  were a second telling of the same figures one row up.
+                  Spending pace restated the panel, and its avg-per-week
+                  described no week that happened (seasonal average
+                  outside every period's 15% band). The board becomes
+                  three things: the panel, the chart, the table.
+                  The `9 people · oldest shift Sep 2` detail that lived
+                  in the Approvals card belongs in the period drill-down
+                  (not this PR). */}
               <ComparisonStrip
                 prior_period_comparison={data.prior_period_comparison}
                 salaryIncluded={data?.salary_included === true}
