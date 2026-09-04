@@ -856,43 +856,41 @@ export async function resolveOverview({
       salaryBudgetByPeriod.set(pn, (salaryBudgetByPeriod.get(pn) || 0) + Number(amt || 0));
     }
   }
-  // Kevin ruling this-period (2026-09-03) item 4: 3100 lever must
-  // equal the labour board's spent_to_date at the same dates AND
-  // the same salary state. This means the Overview's parent 3100
-  // now respects the include_salary toggle (default hourly), rather
-  // than the R-28 §5.9 "always compose salary" behavior that made
-  // the row disagree with the drill target when the toggle was off.
+  // Kevin ruling R-68 item 1 (2026-09-04) BLOCKER: revert the
+  // this-period item-4 gating. Labor ALWAYS composes salary into
+  // the 3100 total, target %, chart series and cost total. Never
+  // moves a number by toggle. The toggle is a DISCLOSURE control
+  // only - it gates the 3100.1 / 3100.2 sub-rows in the P&L and
+  // the P&L's Full-view button; the parent 3100 total is byte-
+  // identical between the two toggle states.
   //
-  // The 3100.1/3100.2 sub-rows are still gated by include_salary
-  // (they only render when the operator has explicitly toggled them
-  // on); the DIFFERENCE now is that the parent 3100 also reflects
-  // that toggle. laborBudgetPeriods + mergedLaborActuals branch on
-  // includeSalary. Drill URL from cost-lines row now passes
-  // include_salary + end=range_effective_end so the labour board is
-  // queried at the same window.
+  // Rationale from Kevin: managers below site-leader have no access
+  // to salary line items. The default view (hourly) must still tie
+  // to finance's P&L, so hourly-only can never be the composition
+  // seen by any reader. The prior item-4 behavior showed a cost
+  // ($780k) that was not the cost and a target (42.6%) that was not
+  // the target - $115k and seven points out.
+  //
+  // Drill URL from the cost-line row: also always passes
+  // include_salary=1 so the labor board opens at the same salary-
+  // inclusive composition the row's 3100 total reflects.
   const mergedBudget = mergeBudgetPeriods(laborBudgetPeriodsHourly, salaryBudgetByPeriod);
-  const laborBudgetPeriods = includeSalary
-    ? mergedBudget.periods
-    : laborBudgetPeriodsHourly;
+  const laborBudgetPeriods = mergedBudget.periods;
   // Merged per-period map for downstream consumers (chart per-period
-  // labor budget point). Mirrors the parent's toggle so chart bars +
-  // 3100 lever + drill target all agree.
+  // labor budget point). Always salary-inclusive per R-68.
   const laborBudgetSumMapMerged = new Map();
   for (const bp of laborBudgetPeriods) {
     laborBudgetSumMapMerged.set(bp.period_no, Number(bp.amount || 0));
   }
 
-  // 5. Call labor buildBoard as a library call, on the (possibly
-  //    hourly-only) inputs. account_state stays "hourly_ok" - the
-  //    salaried-only single accounts (CIN - KY, TBJ - NY) fall out
-  //    with applies:false when there are no hourly rows AND no salary
-  //    rows; when salary rows exist they get a real board (matches
-  //    the labor route's D26 salary-on branch, salaryBoard.js line
-  //    222-232).
+  // 5. Call labor buildBoard as a library call, on the merged (hourly +
+  //    salary) inputs. account_state stays "hourly_ok" - the salaried-
+  //    only single accounts (CIN - KY, TBJ - NY) fall out with applies=
+  //    false when there are no hourly rows AND no salary rows; when
+  //    salary rows exist they get a real board (matches the labor
+  //    route's D26 salary-on branch, salaryBoard.js line 222-232).
   const salaryActualsShaped = salaryRows.map(shapeSalaryRow);
-  const mergedLaborActuals = includeSalary
-    ? (laborActuals || []).concat(salaryActualsShaped)
-    : (laborActuals || []);
+  const mergedLaborActuals = (laborActuals || []).concat(salaryActualsShaped);
   // R-63 (Kevin 2026-09-03): pass effectiveEndISO as the range end AND
   // as throughISO so labor's budget-to-date days proration stops at
   // the same edge as revenue + purchasing. On closed ranges this is
@@ -1634,12 +1632,12 @@ export async function resolveOverview({
     const runningIdx = series.findIndex(s => s.state === "in_progress");
     if (runningIdx >= 0 && lastCompleteWk && effectiveEndISO < rng.end) {
       const rw = series[runningIdx];
+      // R-68 (2026-09-04): salary is always composed into the chart
+      // series (labor is always salary-inclusive per Kevin's ruling).
       const [rwLabor, rwPurch, rwSalary] = await Promise.all([
         paginateLaborActuals(supa, { members, start: rw.week_start, end: rw.week_end }),
         paginatePurchasingWeekly(supa, { members, start: rw.week_start, end: rw.week_end }),
-        includeSalary
-          ? loadSalaryActuals(supa, members, rw.week_start, rw.week_end)
-          : Promise.resolve({ rows: [] }),
+        loadSalaryActuals(supa, members, rw.week_start, rw.week_end),
       ]);
       let laborSum = 0;
       for (const r of (rwLabor.data || [])) laborSum += Number(r.amount || 0);
@@ -1651,9 +1649,7 @@ export async function resolveOverview({
         }
       }
       let salarySum = 0;
-      if (includeSalary) {
-        for (const r of (rwSalary.rows || [])) salarySum += Number(r.amount || 0);
-      }
+      for (const r of (rwSalary.rows || [])) salarySum += Number(r.amount || 0);
       series[runningIdx] = { ...rw, spent: r2(laborSum + purchSum + salarySum) };
     }
     // C13 (2026-09-01): bar hover leads with the period + its dates.
