@@ -32,6 +32,14 @@ import { fetchAllOffset } from "@/lib/rippling/paginate";
 import { buildWorkerToEmail } from "@/lib/labor/personCount";
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/kpi/labor/lib/board.js";
+// R-77 fix (Kevin 2026-09-04, Labor PR-A): budget_at_this_revenue on
+// the labor board needs revenue - which the labor payload does not
+// carry. Load pnl_actuals revenue + kpi_budgets revenue for the range,
+// then call the shared batr helper. See docs at
+// src/lib/kpi/shared/batr.js for the R-77 invariant.
+import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
+import { REVENUE_LINE_CODES, loadPnlActuals, loadOverviewBudgets } from "@/lib/kpi/overview/pnl-loader.js";
+import { loadRangeRevenueBasis, attachBatrToBoard } from "@/lib/labor/labor-batr.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
 // only consumed by paginateActuals / resolveMemberBudget /
 // buildPriorPeriodComparison; the loaders module owns those imports now.
@@ -1291,6 +1299,30 @@ export async function GET(request) {
   // 2026-08-28 person-key fix (single-account path).
   const workerToEmail = buildWorkerToEmail(workerMeta);
 
+  // R-77 fix (Kevin Labor PR-A 2026-09-04): load the revenue basis
+  // once. The labor budget the batr formula reads is the FINAL
+  // board's range_budget, which changes with the salary toggle -
+  // attach batr AFTER any withSalary merge (below) so the hourly
+  // and hourly+salary paths both get a batr computed against their
+  // own labor budget. Overview always uses salary-inclusive labor
+  // budget (R-68), so the salary-inclusive parity is the one that
+  // matters for the R-77 assertion.
+  const rangePeriodsSingle = (account_periods || [])
+    .filter(p => p.start && p.end && p.start <= end && p.end >= start)
+    .map(p => p.period_no);
+  const revenueBasisSingle = await loadRangeRevenueBasis(supa, {
+    members: [account],
+    periods: rangePeriodsSingle,
+  });
+  const boardSingle = buildBoard({
+    account, start, end, today,
+    actuals: actuals.data,
+    budget_periods,
+    account_state: "hourly_ok",
+    workerToEmail,
+  });
+  attachBatrToBoard(boardSingle, revenueBasisSingle);
+
   let bodySingle = {
     ok: true,
     filters: { account, start, end },
@@ -1306,13 +1338,7 @@ export async function GET(request) {
     // (was always "static", never read).
     accounts_directory,
     regional_directors_display,
-    board: buildBoard({
-      account, start, end, today,
-      actuals: actuals.data,
-      budget_periods,
-      account_state: "hourly_ok",
-      workerToEmail,
-    }),
+    board: boardSingle,
     week_budgets: buildWeekBudgets({ start, end, budget_periods }),
     prior_period_comparison: priorCmpSingle,
     name_availability: {
@@ -1356,6 +1382,13 @@ export async function GET(request) {
       salaryRows: actQ.rows,
       workerToEmail: mergedWorkerToEmail,
     });
+    // R-77 fix (Kevin Labor PR-A 2026-09-04): withSalaryMerge rebuilds
+    // the board from scratch, dropping the batr fields the hourly-
+    // only path attached. Re-attach against the merged board's
+    // range_budget (which now includes salary) so the salary-inclusive
+    // batr matches Overview's 3100 (which is always salary-inclusive
+    // per R-68).
+    attachBatrToBoard(bodySingle.board, revenueBasisSingle);
     // Legacy CIN - AZ re-resolve retained as belt-and-braces: the
     // salary-first resolve above covers this today, but a future
     // refactor that changes the merge shape shouldn't silently drop
