@@ -48,7 +48,7 @@ const COLUMNS_AT_RISK = [
   { key: "packaging", label: "Packaging & supplies", sub: "3400" },
   { key: "vehicle",   label: "Vehicle",              sub: "3500" },
   { key: "equipment", label: "Equipment",            sub: "5002.5" },
-  { key: "repair",    label: "R&M",                  sub: "5002.1" },
+  { key: "repair",    label: "Gen. Repair & Maintenance", sub: "5002.1" },
 ];
 // Pass-through column set - single Reimbursable column that aggregates
 // every 13xx GL code.  MVP: one column.  Kevin can rule on a finer

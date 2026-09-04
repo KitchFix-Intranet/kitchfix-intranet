@@ -3,7 +3,7 @@
 //
 // Three lines watched together, not part of gross margin or cost of
 // goods sold:
-//   5002.1 General repair and maintenance
+//   5002.1 Gen. Repair & Maintenance
 //   5002.5 Equipment
 //   5017.3 Perks
 //
@@ -43,9 +43,13 @@ function Row({ row, isOpen }) {
         <span className="kpi-ov-glc kpi-ov-num">{line_code}</span>
         {label}
       </td>
-      {/* Plan band: Budget cell carries the band class row-by-row. */}
+      {/* Plan band: Budget cell carries the band class row-by-row.
+          Kevin PR-B item 3 (2026-09-03): the empty plan cell on This
+          period reads `no budget` (same treatment This year already
+          gets) rather than a dash. Budget-null is the same signal
+          across both ranges - render it once. */}
       <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">
-        {bothNullish ? <DashOrValue state="missing" />
+        {bothNullish ? <DashOrValue state="no_budget" />
           : noBudget ? <DashOrValue state="no_budget" />
           : <DashOrValue value={budget_display} reported={budget != null} />}
       </td>
@@ -56,9 +60,12 @@ function Row({ row, isOpen }) {
       </td>
       <td className="kpi-ov-num">
         {/* Kevin ruling 2026-09-03 item 3: empty tracked rows read
-            "no spend" on closed, "no activity" on open - see Row(). */}
+            "no spend" on closed, "no activity" on open - see Row().
+            Kevin PR-B item 3 (2026-09-03): a line with spend but no
+            budget shows the spend in vs-budget, uncoloured - there
+            is no budget to be over. Not a dash, not coloured red. */}
         {bothNullish ? <span className="kpi-ov-dash" data-kpi-ov="tracked-empty">{emptyPhrase}</span>
-          : noBudget ? <DashOrValue state="missing" />
+          : noBudget ? <span className="kpi-ov-nb" data-kpi-ov="tracked-nobudget-actual">{actual_display}</span>
           : variance != null && Math.abs(variance) < 1 ? <span className="kpi-ov-nb">on budget</span>
           : variance != null
             ? <span className={variance <= 0 ? "kpi-ov-good" : "kpi-ov-bad"}>{fmtMoney(Math.abs(variance))} {variance <= 0 ? "under" : "over"}</span>
@@ -102,7 +109,7 @@ export default function AlsoTracked({ payload }) {
           body={
             <>
               <p>
-                Repair and maintenance, equipment and perks sit outside
+                Gen. Repair & Maintenance, equipment and perks sit outside
                 gross margin and cost of goods sold. They are not part of
                 how this account is measured - watched together because
                 the site influences them.

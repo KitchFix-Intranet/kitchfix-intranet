@@ -43,8 +43,15 @@ const FAILS = [];
 function fail(w, why) { FAILS.push(`${w}  ${why}`); }
 
 // Compare two numbers within a $1 tolerance (rounding).
+// Null-tolerant: null and 0 are considered equal for parent-sum
+// checks - parent value 0 with all children null is a suppressed
+// inactive sub-tree, not a mismatch.
 function nearEq(a, b, tol = 0.51) {
-  if (a == null || b == null) return a == null && b == null;
+  const aNull = a == null;
+  const bNull = b == null;
+  if (aNull && bNull) return true;
+  if (aNull) return Math.abs(Number(b)) <= tol;
+  if (bNull) return Math.abs(Number(a)) <= tol;
   return Math.abs(Number(a) - Number(b)) <= tol;
 }
 
@@ -67,10 +74,19 @@ function assertParentSum(name, statement_rows) {
     const kids = byParent.get(p.line_code) || [];
     if (kids.length === 0) continue;
     for (const field of ["actual", "budget_to_date"]) {
-      const sum = kids.reduce((acc, k) => acc + (k[field] != null ? Number(k[field]) : 0), 0);
+      // Null-preservation rule (Kevin PR-B item 6): if EVERY child's
+      // field is null, sum is treated as null (matching parent null).
+      // Otherwise sum treats nulls as 0. This preserves the parent=
+      // null → children=null propagation without falsely failing on
+      // billed-back families where the whole sub-tree is suppressed.
+      const anyKidReported = kids.some(k => k[field] != null);
+      const sum = anyKidReported
+        ? kids.reduce((acc, k) => acc + (k[field] != null ? Number(k[field]) : 0), 0)
+        : null;
       const parentVal = p[field] != null ? Number(p[field]) : null;
       if (!nearEq(sum, parentVal)) {
-        fail(`${name} parent-sum`, `${p.line_code}.${field}: parent=${parentVal}, sum(subs)=${sum.toFixed(2)}, kids=[${kids.map(k => k.line_code).join(",")}]`);
+        const sumDisp = sum == null ? "null" : sum.toFixed(2);
+        fail(`${name} parent-sum`, `${p.line_code}.${field}: parent=${parentVal}, sum(subs)=${sumDisp}, kids=[${kids.map(k => k.line_code).join(",")}]`);
       }
     }
   }

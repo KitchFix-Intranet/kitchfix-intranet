@@ -24,7 +24,7 @@ import { EQUIPMENT_BODY, REPAIR_BODY, REIMBURSABLE_BODY } from "./PurchasingHelp
 
 const LEDGER_HELP = {
   equip: { id: "qPurchEquip", title: "Equipment",            body: EQUIPMENT_BODY    },
-  rm:    { id: "qPurchRepair", title: "Repair & maintenance", body: REPAIR_BODY       },
+  rm:    { id: "qPurchRepair", title: "Gen. Repair & Maintenance", body: REPAIR_BODY   },
   reimb: { id: "qPurchReimb",  title: "Reimbursable",         body: REIMBURSABLE_BODY },
 };
 
