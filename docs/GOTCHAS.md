@@ -327,6 +327,18 @@ ORDER  BY 2 DESC LIMIT 20;
 
 A spike day with zero rows above the >3 threshold is a bulk re-land. Above threshold is a defect worth chasing. Chased once during the F-11 investigation (2026-09-01) - the base grew 21,578 -> 32,991 in six days and the cold-start-on-a-large-table hypothesis for `rippling_report_only_pending_v1` looked like it would benefit from a materialised view refresh. Growth was legitimate; the argument for the migration was thin. Would have shipped a schema change to fix a data defect that did not exist.
 
+### Shamrock Foods runs a quarterly rebate programme - one credit per account per quarter
+
+Observed during R-71 Stage 2 vendor-credits recon (2026-09-04): every Shamrock Foods account carries a Q<n>REB<vendor-id> reference-number credit per fiscal quarter, plus monthly <MMM><YY>REB<vendor-id> credits between them. These are earned-volume rebates, not delivery-failure credits, and land two-to-four weeks after the quarter closes.
+
+Concrete FY26 examples:
+- TXR - AZ: `Q226REB0149552` $-2,250.44 dated 2026-04-14 (Q2 close); `MAR26REB0149552` $-663.86; `FEB26REB0149552` $-587.96.
+- CIN - AZ: `Q226REB0146413` $-2,250.44 dated 2026-04-28 (same Q2 programme, different Shamrock division).
+
+**The rule.** Every Shamrock account should show a quarterly rebate landing within a month of quarter-end. **A Shamrock account that fails to show one is a signal**, not silence - either the programme lapsed for that division, our vendor mapping missed it, or bill.com dropped it on the floor. Watch for `Q<n>REB<vendor-id>` and `<MMM><YY>REB<vendor-id>` reference-number patterns in `billcom_raw_vendor_credits_latest` during quarterly close.
+
+Operationally these are different from short-delivery credits: a rebate is earned volume, a short is a delivery failure. If categorising credits by intent, split on the `REB` reference-number pattern.
+
 ---
 
 ## Time & Dates
