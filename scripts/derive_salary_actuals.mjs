@@ -30,6 +30,7 @@ import { createClient } from "@supabase/supabase-js";
 import { FY_START_ISO, periodOf } from "../src/app/kpi/labor/lib/periods.js";
 import { SALARIED_OT_EXEMPTION, isSalariedWorker } from "../src/lib/labor/salariedPredicate.js";
 import { fetchAllOffset, fetchAllKeyset } from "../src/lib/rippling/paginate.js";
+import { buildDeptResolver } from "./lib/dept_history.mjs";
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 const VALID_SOURCES = new Set(["backfill", "nightly", "manual"]);
@@ -138,7 +139,7 @@ const weeks = enumerateWeeks(windowStartISO, windowEndISO);
 console.log(`  window: ${windowStartISO} .. ${windowEndISO}  weeks=${weeks.length}`);
 
 // ─── 1. Load inputs ──────────────────────────────────────────────────
-console.log("  loading workers + compensations + department map...");
+console.log("  loading workers + compensations + department map + dept history...");
 const [workers, comps, deptMap] = await Promise.all([
   // 2026-08-27 - keyset on rippling_id for _latest views. See
   // src/lib/rippling/paginate.js for the incident rationale.
@@ -146,7 +147,28 @@ const [workers, comps, deptMap] = await Promise.all([
   fetchAllKeyset(supa, "rippling_raw_compensations_latest", "rippling_id, worker_id, payment_type, annual_value, salary_effective_date, currency"),
   fetchAll("rippling_department_map",           "department_id, account_key, is_container"),
 ]);
-console.log(`    workers=${workers.length}  compensations=${comps.length}  dept_map=${deptMap.length}`);
+// R-70 (Kevin 2026-09-04): Kevin-maintained per-worker effective-dated
+// attribution. Rippling exposes only current dept; this table fills
+// the gap so transfers land on the right account per week. Empty by
+// default; 99% of workers never move and fall through to the
+// worker.department_id fallback in buildDeptResolver.
+//
+// Feature-detected: pre-migration or in a fresh clone without
+// worker-dept-history-1.sql applied, this load fails with the table
+// missing. Treat that as an empty history (parity with the pre-R-70
+// behaviour) and log a warning rather than crashing the nightly run.
+let deptHistory = [];
+try {
+  deptHistory = await fetchAll("worker_dept_history", "worker_id, effective_from, end_date, account_key, source");
+} catch (e) {
+  if (/schema cache|worker_dept_history/.test(String(e?.message || ""))) {
+    console.log("    [WARN] worker_dept_history table not found - migration not yet applied. Falling back to current-department attribution for every worker (pre-R-70 behaviour).");
+    deptHistory = [];
+  } else {
+    throw e;
+  }
+}
+console.log(`    workers=${workers.length}  compensations=${comps.length}  dept_map=${deptMap.length}  dept_history=${deptHistory.length}`);
 
 // Corp department set. Salary NEVER lands for CORP-attributed workers.
 const corpDeptIds = new Set(
@@ -154,6 +176,25 @@ const corpDeptIds = new Set(
 );
 const deptToAccount = new Map();
 for (const d of deptMap) deptToAccount.set(d.department_id, { account_key: d.account_key, is_container: !!d.is_container });
+
+// R-70: build the workerId -> current-department index the resolver
+// falls back to when no history row matches. Same lookup the old
+// (pre-R-70) attribution used, now moved behind the resolver.
+const workerToCurrentDept = new Map();
+for (const w of workers) {
+  const wid = w.rippling_id;
+  const p = w.payload || {};
+  if (wid) workerToCurrentDept.set(wid, p.department_id || null);
+}
+
+// R-70: effective-dated attribution resolver. See scripts/lib/
+// dept_history.mjs for the spell-coverage rule + fallback contract.
+const attribute = buildDeptResolver({
+  historyRows: deptHistory,
+  workerToCurrentDept,
+  deptToAccount,
+});
+console.log(`    dept_history workers=${new Set(deptHistory.map(h => h.worker_id)).size}  (99% of workers rely on the current-dept fallback)`);
 
 // ─── 2. Index workers by rippling_id + admit EXEMPT only ─────────────
 //
@@ -242,33 +283,47 @@ let skippedNoCompForWeek = 0;
 let skippedCorp = 0;
 let skippedInactive = 0;
 
+// R-70 (Kevin 2026-09-04): account attribution is now PER-WEEK via
+// buildDeptResolver, not once-per-worker. A moved worker (Bailey,
+// Rouse, ...) can land on different accounts across the FY based
+// on worker_dept_history. The corp-account skip stays; it just
+// runs per-week instead of short-circuiting the whole worker.
 for (const [wid, list] of compsByWorker) {
   const worker = workerById.get(wid);
   if (!worker) { bumpUnattr("unknown_worker", null, wid); continue; }
-  const deptId = worker.department_id || null;
-  if (!deptId) { bumpUnattr("no_worker_department", null, wid); continue; }
-  if (corpDeptIds.has(deptId)) { skippedCorp += weeks.length; continue; }
-  const attr = deptToAccount.get(deptId);
-  if (!attr) { bumpUnattr("unknown_department", deptId, wid); continue; }
-  if (attr.is_container) { bumpUnattr("container_leak", deptId, wid); continue; }
-  const accountKey = attr.account_key;
-  if (!accountKey) { bumpUnattr("no_account_key", deptId, wid); continue; }
 
   for (const weekStartISO of weeks) {
     totalCandidateWeeks++;
     if (!isActiveInWeek(worker, weekStartISO)) { skippedInactive++; continue; }
+    const attr = attribute(wid, weekStartISO);
+    if (!attr) {
+      // No history match AND no current-dept fallback (or dept is
+      // container / unknown). Track by reason for parity with the
+      // pre-R-70 unattr counters.
+      const deptId = worker.department_id || null;
+      if (!deptId) bumpUnattr("no_worker_department", null, wid);
+      else if (deptToAccount.get(deptId)?.is_container) bumpUnattr("container_leak", deptId, wid);
+      else bumpUnattr("unknown_department", deptId, wid);
+      continue;
+    }
+    if (attr.account_key === "CORP") { skippedCorp++; continue; }
     const comp = annualInForceForWeek(wid, weekStartISO);
     if (!comp) { skippedNoCompForWeek++; continue; }
     const amount = Math.round((Number(comp.annual_value) / 52) * 100) / 100;
     rows.push({
-      account_key:              accountKey,
+      account_key:              attr.account_key,
       week_start:               weekStartISO,
       worker_id:                wid,
       amount:                   amount,
       annual_comp_at_time:      Number(comp.annual_value),
       effective_from:           comp.salary_effective_date || null,
       compensation_rippling_id: comp.rippling_id,
-      source:                   "rippling_compensations",
+      // R-70: source now signals which path attributed this row.
+      //   "history:kevin_manual"   -> worker_dept_history match
+      //   "worker_current_dept"    -> Rippling current-dept fallback
+      // Loader's write of `source` on the row lets Kevin eyeball
+      // which weeks came from the manual table vs the fallback.
+      source:                   attr.source,
     });
   }
 }
