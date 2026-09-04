@@ -270,13 +270,12 @@
 
 /* SC-016: card-shaped loading skeleton. The outer container reads as
    a card shell (border, radius, background), and three inner elements
-   carry the shimmer:
+   carry a flat fill:
    - title bar (~60% wide) at the top for the month name
    - a 7-col dot grid (2 rows = 14 dots) for the day-grid preview
    - a footer bar (~45% wide) for the stats line
    Height matches the loaded card (min-height 290px) so the swap
-   doesn't jump. Reused sc-season-shimmer keyframes - no new animation.
-   Reduced-motion falls back to flat fill on each inner element. */
+   doesn't jump. */
 .sc-season-month-skeleton {
   min-height: 290px;
   background: var(--surface-card);
@@ -290,9 +289,7 @@
 .sc-season-month-skeleton-title,
 .sc-season-month-skeleton-footer,
 .sc-season-month-skeleton-dot {
-  background: linear-gradient(90deg, var(--border-subtle) 25%, var(--surface-sunken) 50%, var(--border-subtle) 75%);
-  background-size: 200% 100%;
-  animation: sc-season-shimmer 1.6s linear infinite;
+  background: var(--border-subtle);
   border-radius: var(--rad-6);
 }
 .sc-season-month-skeleton-title {
@@ -314,11 +311,6 @@
   height: 10px;
   width: 45%;
   margin-top: auto;
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-season-month-skeleton-title,
-  .sc-season-month-skeleton-footer,
-  .sc-season-month-skeleton-dot { animation: none; background: var(--border-subtle); }
 }
 
 /* ───────── MONTH CARD ───────── */
@@ -370,26 +362,6 @@
 .sc-season-month-card--current {
   border-color: var(--status-today-ring);
   box-shadow: 0 0 0 2px var(--status-today-ring) inset;
-}
-/* HF-7 (2026-07-20) - one-shot pulse for the overview Today-jump.
-   The ribbon's ⊙ Today button in year view scrolls the current-
-   month card into view and toggles this class for ~1200ms so the
-   eye lands on the target. Reuses --status-today-ring (navy-700)
-   so the pulse reads as an intensified today halo rather than a
-   new visual language. RM branch removes the animation. */
-@keyframes sc-season-month-card-today-pulse {
-  0%   { box-shadow: 0 0 0 0   rgba(15, 32, 74, 0),
-                     0 0 0 2px var(--status-today-ring) inset; }
-  40%  { box-shadow: 0 0 0 6px rgba(15, 32, 74, 0.28),
-                     0 0 0 2px var(--status-today-ring) inset; }
-  100% { box-shadow: 0 0 0 0   rgba(15, 32, 74, 0),
-                     0 0 0 2px var(--status-today-ring) inset; }
-}
-.sc-season-month-card--today-pulse {
-  animation: sc-season-month-card-today-pulse 1.2s var(--ease-standard, ease-out);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-season-month-card--today-pulse { animation: none; }
 }
 
 .sc-season-month-card-header {

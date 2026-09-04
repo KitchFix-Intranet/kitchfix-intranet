@@ -68,7 +68,7 @@ import { isFeeNoDollar } from "./v2/vocab";
 // Owns sessionMap, month-complete card state, and the finalize timer
 // that closes/advances the modal on save. No flight layer after
 // retirement - the pill + clone motion never fired on any account.
-import { HandoffProvider, useHandoffSafe } from "./v2/handoff/coordinator";
+import { useHandoffSafe } from "./v2/handoff/coordinator";
 import MonthCompleteCard from "./v2/handoff/MonthCompleteCard";
 import "./v2/handoff/handoff.css";
 // HF-7 (2026-07-20) - overview ribbon Today-jump routes through
@@ -409,16 +409,14 @@ function AccountDropdown({ accounts, value, onChange }) {
   );
 }
 
-// P3-B (2026-07-28): wrap the root export in HandoffProvider so every
-// SC surface can consume useHandoff. Provider owns beat state,
-// sessionMap, and ref registration. Inner component keeps its full
-// hook list intact.
+// P3-B (2026-07-28): the HandoffProvider was originally wrapped here so
+// every SC surface could consume useHandoff. 2026-09-04 (motion cleanup
+// M1): the provider is lifted to page.js so the Toast render can read
+// monthComplete and suppress itself when the MonthCompleteCard is on
+// screen. The root export is now just the Inner component; the provider
+// wraps at the page level.
 export default function ServiceCalendar(props) {
-  return (
-    <HandoffProvider>
-      <ServiceCalendarInner {...props} />
-    </HandoffProvider>
-  );
+  return <ServiceCalendarInner {...props} />;
 }
 
 // P3-B (2026-07-28): ambient side-effects for the Handoff coordinator.
@@ -2434,6 +2432,13 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     let successCount = 0;
     let newlyEntered = 0;
     let queuedCount = 0;
+    // 2026-09-04 (motion cleanup M10a): capture noteFailCount here so
+    // the success toast at the bottom of this handler can upgrade its
+    // tier + detail when the batch-note write partially failed. Prior
+    // shape fired two showToast calls in the same tick and the second
+    // silently overwrote the first, losing the partial-failure signal.
+    // One save now produces one confirmation.
+    let noteFailCount = 0;
     try {
       const res = await fetch("/api/service-calendar", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "sc-bulk-submit", accountKey: data.account.key, entries: perDayEntries, batchNote }),
@@ -2446,17 +2451,10 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
         // note write may have partially failed. noteFailCount names
         // how many day-notes did NOT land so the operator knows how
         // many days to revisit. Actuals stay committed regardless -
-        // this is a warning, not an error.
+        // this is a warning, not an error. Captured here and folded
+        // into the success toast below (M10a merge).
         if (Number.isFinite(result.noteFailCount) && result.noteFailCount > 0) {
-          // PR-K2 (2026-08-18): split the compound partial-success
-          // string into title + detail. Actuals landed (warn tier,
-          // not bad) - the note is what didn't post.
-          showToast({
-            variant: "generic",
-            tier: "warn",
-            title: `Saved counts on ${successCount} day${successCount === 1 ? "" : "s"}`,
-            detail: `Batch note failed on ${result.noteFailCount} day${result.noteFailCount === 1 ? "" : "s"}. Re-post from the day if needed.`,
-          });
+          noteFailCount = result.noteFailCount;
         }
       } else {
         // A3 failure-UI (2026-07-24): server returns serviceDate for
@@ -2523,7 +2521,16 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       // line - sc-bulk-submit returns no per-day totals and printing
       // "$0" for a successful bulk save would be a lie. Days-count
       // progress meta still renders.
-      showToast(buildRecordedToast({ amount: null, meals: null, newlyEntered, isBulk: true, bulkDays: successCount }));
+      const payload = buildRecordedToast({ amount: null, meals: null, newlyEntered, isBulk: true, bulkDays: successCount });
+      // 2026-09-04 (motion cleanup M10a): merge the two prior toasts
+      // (success + partial-note-failure) into one. Same discipline as
+      // PR-K2's title-plus-detail split: title states what saved, detail
+      // names what did not and the recovery direction.
+      if (noteFailCount > 0) {
+        payload.tier = "warn";
+        payload.detail = `Batch note failed on ${noteFailCount} day${noteFailCount === 1 ? "" : "s"}. Re-post from the day if needed.`;
+      }
+      showToast(payload);
     }
     // Surgical monthCache invalidation: drop the affected months so
     // the drill-in refetches them. main's proven pattern - slow
@@ -3691,6 +3698,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               scV2={scV2}
               focusTargetDate={focusTargetDate}
               viewerEmail={session?.user?.email}
+              showToast={showToast}
             />
           );
           // W6: drop !isFeeAccount from the drill guard - fee accounts
@@ -3958,6 +3966,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               scV2={scV2}
               focusTargetDate={focusTargetDate}
               viewerEmail={session?.user?.email}
+              showToast={showToast}
             />
           );
           // P3-A gate 3 fix (2026-07-28): same un-gate as the period-

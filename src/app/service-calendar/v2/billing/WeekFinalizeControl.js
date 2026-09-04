@@ -15,7 +15,6 @@
 
 import { useMemo, useRef, useState } from "react";
 import FinalizeOverlay from "./FinalizeOverlay";
-import FinalizeToast from "./FinalizeToast";
 import { getQboMode, getInvoiceDestination } from "@/lib/billing/qboMode";
 
 // Days that satisfy the finalize completeness rule. Mirrors
@@ -112,6 +111,11 @@ export default function WeekFinalizeControl({
   // week from the wrong context. The jump chip stays because it is
   // navigation, not a finalize affordance.
   readOnlyFinalize = false,
+  // 2026-09-04 (motion cleanup): finalize success routes through the
+  // shared SC toast primitive rather than the retired FinalizeToast.
+  // Optional so old call-sites keep working; missing showToast becomes
+  // a no-op success (the overlay still closes cleanly).
+  showToast = null,
 }) {
   const [saving, setSaving] = useState(false);
   const [errText, setErrText] = useState(null);
@@ -121,12 +125,6 @@ export default function WeekFinalizeControl({
   //   'working' : overlay open in working mode
   const [overlayMode, setOverlayMode] = useState("idle");
   const [workingStepIndex, setWorkingStepIndex] = useState(0);
-  const [toastOpen, setToastOpen] = useState(false);
-  // sc-38 (2026-09-02): dynamic invoice count from finalize response.
-  // TBJ produces 3-8 invoices per week; the toast reflects the actual
-  // count. Confirm mode is unaware of the count (would need a preview
-  // endpoint); overlay working-step copy uses generic plural.
-  const [toastInvoiceCount, setToastInvoiceCount] = useState(1);
   const openButtonRef = useRef(null);
 
   // PR-E: prefer server-authoritative completeness. Falls back to
@@ -275,13 +273,24 @@ export default function WeekFinalizeControl({
         Array.isArray(finalizeResult?.invoiceRecords)
           ? finalizeResult.invoiceRecords.length
           : (Number.isFinite(finalizeResult?.invoiceCount) ? finalizeResult.invoiceCount : 1);
-      setToastInvoiceCount(count > 0 ? count : 1);
+      const displayCount = count > 0 ? count : 1;
       // Small settle to render the "Telling billing" step before
       // toast + close.
       await new Promise((r) => setTimeout(r, 250));
       setWorkingStepIndex(5);
       setOverlayMode("idle");
-      setToastOpen(true);
+      // 2026-09-04 (motion cleanup): use the shared SC toast. FinalizeToast
+      // retired. Same copy shape as the retired component:
+      //   1 invoice  -> "AP has the invoice for review."
+      //   N > 1      -> "AP has N invoices for review."
+      showToast?.({
+        variant: "generic",
+        tier: "ok",
+        title: "Week finalized",
+        detail: displayCount === 1
+          ? "AP has the invoice for review."
+          : `AP has ${displayCount} invoices for review.`,
+      });
     } catch (e) {
       clearInterval(tickTimer);
       setOverlayMode("idle");
@@ -413,12 +422,6 @@ export default function WeekFinalizeControl({
         invoiceDestination={invoiceDestination}
         pretaxTotalDollars={pretaxTotalDollars}
         qboMode={qboMode}
-      />
-
-      <FinalizeToast
-        open={toastOpen}
-        invoiceCount={toastInvoiceCount}
-        onDismiss={() => setToastOpen(false)}
       />
     </div>
   );

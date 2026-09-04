@@ -408,10 +408,11 @@ function useIsDesktop() {
 }
 
 // SC-016: card-shaped skeleton with month-card anatomy - a title bar,
-// a 7-column dot grid (2 rows = 14 dots), and a footer bar. Each part
-// carries its own shimmer via CSS reusing the sc-season-shimmer
-// keyframes (no new animation added). Reduced-motion falls back to
-// flat fills via the existing tokens.css duration override.
+// a 7-column dot grid (2 rows = 14 dots), and a footer bar. 2026-09-04
+// (motion cleanup): the parts render as flat fills. The prior
+// docstring claimed a "sc-season-shimmer" keyframe animation but the
+// keyframe was never defined anywhere in the tree; the shimmer was
+// silent no-op. Flat fill is what the skeleton has always looked like.
 function MonthSkeleton() {
   return (
     <div className="sc-season-month-skeleton">
