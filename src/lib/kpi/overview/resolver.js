@@ -1501,6 +1501,11 @@ export async function resolveOverview({
         { label: "Packaging", actual: packaging_actual, display: formatMoneyWhole(packaging_actual) },
         { label: "Vehicle",   actual: vehicle_actual,   display: formatMoneyWhole(vehicle_actual) },
       ],
+      // Kevin Prompt 2 PR-B (2026-09-04): the Planning view reads
+      // budget_full_period on the cogs + gm cards (revenue card
+      // already carries it). One field, same shape across three cards.
+      budget_full_period: r2(cogsBudget),
+      budget_full_period_display: formatMoneyWhole(cogsBudget),
     },
     {
       key: "gross_margin",
@@ -1510,6 +1515,16 @@ export async function resolveOverview({
       hero_reported: totalRevReported,
       budget_to_date: grossMarginBudget,
       budget_to_date_display: formatMoneyWhole(grossMarginBudget),
+      // Kevin Prompt 2 PR-B (2026-09-04): budget_full_period for the
+      // Planning view. GM's full-period budget is revenue_full_period
+      // minus cogs_full_period - the same accounting relationship the
+      // cards above express, restated on the margin card.
+      budget_full_period: (revenue_budget_full_period != null)
+        ? r2(revenue_budget_full_period - cogsBudget)
+        : null,
+      budget_full_period_display: (revenue_budget_full_period != null)
+        ? formatMoneyWhole(r2(revenue_budget_full_period - cogsBudget))
+        : null,
       pct_of_revenue: gmPctActual,
       pct_of_revenue_display: formatPct(gmPctActual),
       // PR-1 item 1: null target when !has_target.

@@ -69,6 +69,7 @@ import CostLines from "./components/CostLines";
 import RevenueLines from "./components/RevenueLines";
 import PnlStatement from "./components/PnlStatement";
 import AlsoTracked from "./components/AlsoTracked";
+import PlanningBoard from "./components/PlanningBoard";
 import SkeletonBoard from "./components/SkeletonBoard";
 
 const LAST_ACCOUNT_KEY = "kpi:overview:lastAccount";
@@ -414,24 +415,43 @@ export default function KpiOverviewPage() {
             current pill popover (passed as freshnessPop to Shell,
             below). The ticker retired - a single-sentence StatusLine
             with a fixed shape (no account-model notes) replaces it. */}
-        <StatusLine statusLine={data.status_line} rangeLabels={data.range_labels} />
-        <CardsRow
-          cards={data.cards}
-          rangeMeta={rangeMeta}
-          scCountsWithoutDollars={data.sc_counts_without_dollars}
-          hasTarget={data.has_target}
-          revenueSourceState={data.revenue_source_state}
-          rangeLabels={data.range_labels}
-          revenueModel={data.revenue_model}
-          statementTotals={data.statement_totals}
-        />
+        {/* Kevin Prompt 2 PR-B (2026-09-04): Planning view branch.
+            When the requested range is a future period (period_state
+            === "planned"), the board renders as a budget-hero surface
+            with no verdicts on the top cards, budget-only tables, and
+            (for TBR - FL P13 and similar) a callout naming a
+            budgeted-loss period as intent rather than defect. The
+            standard Overview components below are skipped for this
+            state - a future period has no actuals, so the This period
+            surface would render mostly empty and mislead. */}
+        {data.period_state === "planned" ? (
+          <PlanningBoard payload={data} />
+        ) : (
+          <>
+            <StatusLine statusLine={data.status_line} rangeLabels={data.range_labels} />
+            <CardsRow
+              cards={data.cards}
+              rangeMeta={rangeMeta}
+              scCountsWithoutDollars={data.sc_counts_without_dollars}
+              hasTarget={data.has_target}
+              revenueSourceState={data.revenue_source_state}
+              rangeLabels={data.range_labels}
+              revenueModel={data.revenue_model}
+              statementTotals={data.statement_totals}
+            />
+          </>
+        )}
         {/* PR-2 layout branch: two-column single-account grid ONLY
             when the EFFECTIVE account is a single site. A corporate
             user with landing_account=ALL who drilled into TBR - FL
             gets the single-account layout for TBR - FL - the
             portfolio branch belongs to ALL / EAST / WEST scope
-            itself (the aggregated view). */}
-        {PORTFOLIO_KEYS.includes(account) ? (
+            itself (the aggregated view). Kevin Prompt 2 PR-B
+            (2026-09-04): Planning-state boards render the whole
+            surface via <PlanningBoard/> above - skip the standard
+            split (Chart + tables have no meaning on a future
+            period). */}
+        {data.period_state === "planned" ? null : PORTFOLIO_KEYS.includes(account) ? (
           /* Portfolio scope (account ∈ ALL / EAST / WEST) keeps the
               pre-PR-2 single-column layout. PR-2 explicitly scoped
               its two-column reorg to single-account only - portfolio
