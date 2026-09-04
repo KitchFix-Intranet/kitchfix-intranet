@@ -1,0 +1,30 @@
+{
+  "source_ref": "finance FY26 P1-P8 vehicle insurance · seeded from pnl_actuals values 2026-09-04 (matches Kevin's spec YTD $4,900.09 TBJ-FL + $2,201.50 CIN-KY)",
+  "notes": [
+    "Vehicle Insurance (3500.2) is a corporate allocation posted straight to the P&L.",
+    "Appears in no bill.com invoice and no Rippling card charge (R-71 recon 2026-09-04).",
+    "Values here are the per-period actuals finance booked, pulled from pnl_actuals 3500.2 for TBJ - FL and CIN - KY.",
+    "Vehicle Repair & Maintenance (3500.5) had a workbook budget but $0 in pnl_actuals across all 8 periods — no allocation rows required.",
+    "Kevin adds P9 and later at each period close by extending this file and re-running the loader.",
+    "Loader upserts on (account_key, fiscal_year, period_no, gl_line_code); re-running with new rows is idempotent."
+  ],
+  "rows": [
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 1, "gl_line_code": "3500.2", "amount": 542.05},
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 2, "gl_line_code": "3500.2", "amount": 658.20},
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 3, "gl_line_code": "3500.2", "amount": 621.03},
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 4, "gl_line_code": "3500.2", "amount": 620.82},
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 5, "gl_line_code": "3500.2", "amount": 615.04},
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 6, "gl_line_code": "3500.2", "amount": 617.20},
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 7, "gl_line_code": "3500.2", "amount": 618.65},
+    {"account_key": "TBJ - FL", "fiscal_year": 2026, "period_no": 8, "gl_line_code": "3500.2", "amount": 607.10},
+
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 1, "gl_line_code": "3500.2", "amount": 243.53},
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 2, "gl_line_code": "3500.2", "amount": 295.72},
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 3, "gl_line_code": "3500.2", "amount": 279.01},
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 4, "gl_line_code": "3500.2", "amount": 278.92},
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 5, "gl_line_code": "3500.2", "amount": 276.32},
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 6, "gl_line_code": "3500.2", "amount": 277.30},
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 7, "gl_line_code": "3500.2", "amount": 277.95},
+    {"account_key": "CIN - KY", "fiscal_year": 2026, "period_no": 8, "gl_line_code": "3500.2", "amount": 272.75}
+  ]
+}

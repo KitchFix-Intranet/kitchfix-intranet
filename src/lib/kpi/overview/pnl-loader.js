@@ -168,6 +168,54 @@ export async function loadInventoryAdjustments(supa, { members, periods, fiscalY
   return { data: out };
 }
 
+// ─── cost_allocations reader (per-member, per-period range) ─────────
+//
+// Kevin R-72 (2026-09-04): corporate cost allocations. Real costs
+// finance posts straight to the P&L that never appear in bill.com
+// invoices or Rippling card charges. Vehicle insurance (3500.2) is
+// the FY26 case. Read by the Overview resolver, added to the cost
+// row's actual on CLOSED (finalised) periods only - same rule
+// inventory_adjustments follows. Never accrued on open periods.
+//
+// Migration-gated: docs/migrations/cost-allocations-1.sql. Pre-
+// migration returns an empty map (parity with inventory_adjustments).
+//
+// Returns Map<account_key, Map<period_no, Map<gl_line_code, amount_sum>>>.
+export async function loadCostAllocations(supa, { members, periods, fiscalYear = 2026 }) {
+  if (!members || members.length === 0 || !periods || periods.length === 0) {
+    return { data: new Map() };
+  }
+  const out = new Map();
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    const q = await supa
+      .from("cost_allocations")
+      .select("account_key, period_no, gl_line_code, amount")
+      .eq("fiscal_year", fiscalYear)
+      .in("account_key", memberChunk)
+      .in("period_no", periods);
+    if (q.error) {
+      // Pre-migration: table absent. Ship an empty map; downstream
+      // treats "no allocation" as null (no addition to actual).
+      if (q.error.code === "42P01" || q.error.code === "PGRST205") {
+        return { data: out };
+      }
+      return { error: q.error, scope: "cost_allocations" };
+    }
+    for (const r of q.data || []) {
+      const acct = String(r.account_key);
+      const per = Number(r.period_no);
+      const gl = String(r.gl_line_code);
+      const amt = Number(r.amount || 0);
+      if (!out.has(acct)) out.set(acct, new Map());
+      const byAcct = out.get(acct);
+      if (!byAcct.has(per)) byAcct.set(per, new Map());
+      const byPer = byAcct.get(per);
+      byPer.set(gl, (byPer.get(gl) || 0) + amt);
+    }
+  }
+  return { data: out };
+}
+
 // ─── pnl_actuals reader (per-member, per-period range) ──────────────
 //
 // Returns a nested Map:

@@ -141,11 +141,13 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
             title="Vehicle"
             body={
               <p>
-                Vehicle insurance and repair &amp; maintenance are billed
-                centrally as corporate allocations posted straight to the
-                P&amp;L. They do not appear in bill.com invoices or Rippling
-                card charges, so they are not visible on this board or on
-                the purchasing board it opens.
+                Vehicle insurance and repair &amp; maintenance are corporate
+                allocations - finance posts them straight to the P&amp;L and
+                they appear in no bill.com invoice or Rippling card charge.
+                The board reads them from Kevin&rsquo;s per-period upload and
+                adds them to the operational line so the total ties to
+                finance. Allocations apply on closed periods only; the running
+                period shows operational spend alone.
               </p>
             }
           />
@@ -182,6 +184,16 @@ function CostRow({ row, hasTarget, isOpenRange, filters, previewAccount, revBudF
                 {fmtMoney(row.actual_purchased)}{" "}
                 {row.inventory_je < 0 ? "+" : "−"}{" "}
                 {fmtMoney(Math.abs(row.inventory_je))} inventory = {actualText}
+              </div>
+            )}
+            {/* Kevin R-72 (2026-09-04): corporate allocations. Same
+                shape as the inventory-je sub-line - operational spend
+                on the left, allocation added, adjusted total on the
+                right. Vehicle insurance is the FY26 case; the same
+                render works for any future allocated bucket. */}
+            {row.allocation != null && Math.abs(row.allocation) >= 1 && row.actual_operational != null && (
+              <div className="kpi-ov-inv-je" data-kpi-ov="allocation">
+                {fmtMoney(row.actual_operational)} operational + {fmtMoney(row.allocation)} allocations = {actualText}
               </div>
             )}
           </>
