@@ -11,6 +11,7 @@
 // No new fetches, no engine changes.
 
 import { countActionableDays, countEnteredActionable, isActionableDay } from "../season/dayPredicates.js";
+import { detectMonthOff } from "@/lib/sc/detectMonthOff";
 
 // Client-local today derivation (matches season/dayResolvers.isPastDate
 // and audit Q5 policy - anchor pastness against local midnight, never
@@ -111,10 +112,12 @@ export function deriveMonthLines(yearData, year, today) {
     const hasActuals = entered > 0;
     const displayRev = hasActuals ? actualRev : projectedRev;
 
-    // Off-detect (matches MonthCard's detectNoService semantic surface -
-    // no revenue, no service days -> off; used to route to quiet render).
-    const isOff = !monthSummary
-      || (totalActionable === 0 && actualRev === 0 && projectedRev === 0);
+    // 2026-09-08: routed through shared src/lib/sc/detectMonthOff so
+    // this rail and MonthCard agree. Prior local check + MonthCard's
+    // detectNoService disagreed on 40 (account, month) pairs in the
+    // FY2026 scan - all going the same direction: MonthCard called
+    // OFF months this rail correctly rendered as IN-SERVICE.
+    const isOff = detectMonthOff(monthSummary);
 
     const isCurrent = i === todayMonth;
     const firstOfMonth = `${year}-${String(i + 1).padStart(2, "0")}-01`;

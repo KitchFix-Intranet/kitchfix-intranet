@@ -37,6 +37,7 @@ import { findPhaseAtDate } from "./phaseDerivation";
 // M-4b step 6 (2026-07-30): tile navigation on MLB game-day tiles.
 // One helper, one gate, one line to remove per owner constraint.
 import { makeTileHomestandClick } from "./homestandDerivation";
+import { detectMonthOff } from "@/lib/sc/detectMonthOff";
 
 const DOW_HEADER = ["M","T","W","T","F","S","S"];
 const MONTH_NAMES = [
@@ -52,7 +53,7 @@ export default function MonthCard({
   kind,                      // resolved DayKind from dayResolvers
   hasHomestandSchedule,      // bool - drives footer mode
   isFeeAccount,              // bool - drives footer mode
-  isMilb,                    // bool - drives no-service detection on per-meal
+  isMilb,                    // bool - reserved (no active reader after 2026-09-08 detectMonthOff extraction; SeasonShell still passes it)
   isDesktop = true,          // Bundle 1 D1: force-expanded gate; SSR-safe default
   loadState = "loaded",      // SC-033: "failed" forces every cell to the failed atom
   onClick,                   // (monthIndex) => void
@@ -73,12 +74,13 @@ export default function MonthCard({
   const todayMonth = todayDate ? Number(todayDate.slice(5, 7)) - 1 : null;
   const isCurrentMonth = todayMonth != null && todayMonth === monthIndex;
 
-  const noService = detectNoService({
-    monthSummary,
-    hasHomestandSchedule,
-    isFeeAccount,
-    isMilb,
-  });
+  // 2026-09-08: routed through shared src/lib/sc/detectMonthOff so
+  // this card and SeasonRail agree. Prior local detectNoService
+  // branched on hasHomestandSchedule and read sc_homestand_schedule
+  // as the truth source, which failed for 40 (account, month) pairs
+  // in FY2026 - most severely CIN-KY April with $27K actual revenue
+  // rendering as OFF. See detectMonthOff comment for the rule.
+  const noService = detectMonthOff(monthSummary);
 
   // Derive collapse default for MOBILE only. User can toggle with the
   // chevron / tap-to-expand. On DESKTOP, expanded is always true (the
@@ -592,25 +594,9 @@ function isFutureMonth(year, monthIndex, todayDate) {
   return firstOfMonth > todayDate;
 }
 
-function detectNoService({ monthSummary, hasHomestandSchedule, isFeeAccount, isMilb }) {
-  if (!monthSummary) return true;
-  if (hasHomestandSchedule) {
-    const hs = monthSummary.homestandSummary;
-    return !hs || (hs.gameDays === 0 && hs.prepDays === 0);
-  }
-  if (isFeeAccount) {
-    const projCovers = Number(monthSummary.projectedCovers) || 0;
-    const actCovers  = Number(monthSummary.actualCovers) || 0;
-    return Number(monthSummary.totalDays) === 0 || (projCovers === 0 && actCovers === 0);
-  }
-  if (isMilb) {
-    return Number(monthSummary.totalDays) === 0;
-  }
-  const projRev = Number(monthSummary.projectedRevenue) || 0;
-  const actRev  = Number(monthSummary.actualRevenue)    || 0;
-  const totalDays = Number(monthSummary.totalDays)      || 0;
-  return projRev === 0 && actRev === 0 && totalDays > 0;
-}
+// (detectNoService removed 2026-09-08 - replaced by shared
+// detectMonthOff imported at the top of this file. See the mount
+// site + the shared module for the rule.)
 
 function buildMonthWeeks(year, monthIndex) {
   const first = new Date(year, monthIndex, 1);
