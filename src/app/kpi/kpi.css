@@ -2467,6 +2467,115 @@
    the running-week identity. */
 .kpi-wb-d-warn { color: var(--amber-600); }
 
+/* Labor PR-B walkthrough (Kevin 2026-09-07) - week rail cards under
+   the chart. The render at docs/renders/labor-this-period-weekly-budget.html
+   specified a card per week; the board only shipped a caption. Each
+   tile does three jobs depending on state:
+     ahead   -> "schedule to $X" - the number a chef staffs against
+     running -> "N% used · M days left"
+     closed  -> "▲ $X" or "▼ $X" vs its own budget
+   Treatment per basis (Kevin ruling):
+     confirmed  solid border
+     partial    solid, muted (subtle grey wash)
+     forecast   dashed grey border
+   Grid: 4 columns on Tier A ranges (4-week periods). Falls to 2
+   columns at 640px so the tiles do not squeeze past readability.
+   All rules scoped under .kpi-wrail so they cannot collide with
+   other rail-shaped grids elsewhere. */
+.kpi-wrail {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kpi-sp-3); margin-top: var(--kpi-sp-4);
+}
+@media (max-width: 640px) {
+  .kpi-wrail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.kpi-wrail-tile {
+  border: 1px solid var(--n-300);
+  border-left: 4px solid var(--n-400);
+  border-radius: 8px;
+  padding: var(--kpi-sp-3) var(--kpi-sp-3);
+  background: var(--surface-card, #fff);
+  display: flex; flex-direction: column; gap: var(--kpi-sp-2);
+  min-width: 0;
+  position: relative;
+}
+/* Basis treatments */
+.kpi-wrail-tile[data-basis="partial"] { background: var(--n-50, #F8FAFC); }
+.kpi-wrail-tile[data-basis="forecast"] {
+  background: var(--n-50, #F8FAFC);
+  border-style: dashed;
+  border-left-style: dashed;
+}
+/* Temporal treatments (temporal takes precedence over basis on the
+   left border - closed under is green, closed over is red, running
+   is navy, ahead reads its basis colour). */
+.kpi-wrail-tile[data-verdict="under"] { border-left-color: var(--green-600, #008330); }
+.kpi-wrail-tile[data-verdict="over"]  { border-left-color: var(--red-600, #B9000C); }
+.kpi-wrail-tile[data-verdict="running"] {
+  border-left-color: var(--navy-700, #153968);
+  background: var(--navy-50, #F4F7FC);
+}
+.kpi-wrail-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--kpi-sp-2); min-width: 0;
+}
+.kpi-wrail-n {
+  font-size: var(--kpi-t-body); font-weight: 800;
+  color: var(--n-900); white-space: nowrap;
+}
+.kpi-wrail-dt {
+  font-size: var(--kpi-t-label); font-weight: 600;
+  color: var(--n-600); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.kpi-wrail-st {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--n-600);
+  white-space: nowrap;
+}
+.kpi-wrail-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: var(--kpi-t-label); font-weight: 700;
+  min-width: 0;
+}
+.kpi-wrail-row-k {
+  color: var(--n-600); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; flex: 1;
+}
+.kpi-wrail-row-v {
+  font-variant-numeric: var(--num-tabular);
+  color: var(--n-900);
+  white-space: nowrap;
+}
+.kpi-wrail-row-v-mute { color: var(--n-400, #CBD5E1); }
+.kpi-wrail-plan-tag {
+  display: inline-block; margin-left: var(--kpi-sp-1);
+  font-size: 9px; font-weight: 700;
+  color: var(--n-600); background: var(--n-100);
+  border: 1px solid var(--n-300); border-radius: var(--rad-pill);
+  padding: 0 var(--kpi-sp-1); line-height: 1.4;
+  vertical-align: middle;
+  text-transform: lowercase; letter-spacing: 0.02em;
+}
+.kpi-wrail-vd {
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  font-size: var(--kpi-t-body);
+  font-weight: 800;
+  font-variant-numeric: var(--num-tabular);
+  color: var(--n-700);
+}
+.kpi-wrail-vd-good { color: var(--green-700); }
+.kpi-wrail-vd-bad  { color: var(--red-700); }
+.kpi-wrail-vd-run  { color: var(--navy-700); }
+.kpi-wrail-vd-plan { color: var(--n-700); }
+.kpi-wrail-sub {
+  font-size: 9.5px; font-weight: 600;
+  color: var(--n-600); margin-top: 4px;
+}
+
 /* Labor PR-B (Kevin 2026-09-07) - forecast rendering. A week whose
    revenue basis is `forecast` (no confirmed counts) reads as
    provisional, not just a source label. Kevin ruling: TBJ - FL P9

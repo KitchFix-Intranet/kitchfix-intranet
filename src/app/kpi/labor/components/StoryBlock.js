@@ -782,6 +782,166 @@ function TierAStrip({ board, salary }) {
   );
 }
 
+// ── WEEK RAIL: the cards under the bars (Kevin PR-B walkthrough 2026-09-07) ─
+// The render at docs/renders/labor-this-period-weekly-budget.html
+// specified a card per week; the board only shipped a caption on
+// each bar. Kevin: "This is the piece that makes the board a
+// planning tool rather than a report. A chef opening Monday sees
+// `schedule to $3,981` for next week - a real number from counts
+// their client already gave them."
+//
+// Each tile does three different jobs depending on state:
+//   ahead   -> "schedule to $X" - the number a chef staffs against
+//   running -> "N% used" + "M days left" sub-line
+//   closed  -> "▲ $X over" or "▼ $X under" vs the week's OWN budget
+//
+// Treatment per basis (walkthrough item 3):
+//   confirmed  solid border
+//   partial    solid, muted (subtle grey wash)
+//   forecast   dashed grey border + `plan` tag on the budget number
+//
+// Revenue row copy per basis:
+//   confirmed  "Confirmed revenue"
+//   partial    "Confirmed + forecast"
+//   forecast   "Forecast revenue"
+//
+// Weeks with no budget_at_this_week_revenue (loader didn't run,
+// older route, salaried-only account) get a muted "budget unavailable"
+// tile rather than a skipped position - the rail stays 4-wide so the
+// eye can trace bar to tile.
+function WeekRail({ board }) {
+  const weeks = board?.weeks || [];
+  if (weeks.length === 0) return null;
+
+  return (
+    <div className="kpi-wrail" role="list" aria-label="Week detail tiles">
+      {weeks.map(w => {
+        const basis = w.revenue_basis || "forecast";
+        const temporal = w.revenue_basis_temporal
+          || (w.state === "closed" ? "closed" : w.state === "in_progress" ? "running" : "future");
+        const spent = w.spent != null ? Number(w.spent) : null;
+        const budget = w.budget_at_this_week_revenue != null ? Number(w.budget_at_this_week_revenue) : null;
+        const revenue = w.week_revenue != null ? Number(w.week_revenue) : null;
+
+        // State pill copy (top-right). Temporal takes precedence for
+        // closed/running so a chef sees the actionable state; ahead
+        // weeks show basis so the chef sees whether the number is
+        // real or projected.
+        const stateLabel = temporal === "closed"
+          ? "closed"
+          : temporal === "running"
+            ? "running"
+            : basis; // ahead -> confirmed | partial | forecast
+
+        // Revenue row label per basis.
+        const revLabel = basis === "confirmed"
+          ? "Confirmed revenue"
+          : basis === "partial"
+            ? "Confirmed + forecast"
+            : "Forecast revenue";
+
+        // Verdict/schedule/fraction line per temporal.
+        const hasSpent = spent != null && spent > 0.5;
+        const ok = hasSpent && budget != null && spent <= budget;
+        const over = hasSpent && budget != null && spent > budget;
+
+        let vdCls = "kpi-wrail-vd";
+        let vdText = "";
+        let subText = null;
+
+        if (temporal === "future" || (temporal === "running" && !hasSpent)) {
+          // Ahead (or running with no spend yet - walkthrough item 4a
+          // fall-through). Show the number to staff against.
+          vdCls += " kpi-wrail-vd-plan";
+          vdText = budget != null ? `schedule to ${fmt$(budget)}` : "budget unavailable";
+          if (temporal === "running") {
+            const daysLeft = w.days_left_in_week;
+            subText = daysLeft != null ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : null;
+          }
+        } else if (temporal === "running") {
+          // Running with real spend - R-80 fraction (no over/under).
+          vdCls += " kpi-wrail-vd-run";
+          const pct = budget != null && budget > 0 ? Math.round((spent / budget) * 100) : null;
+          vdText = pct != null ? `${pct}% used` : fmt$(spent);
+          const daysLeft = w.days_left_in_week;
+          subText = daysLeft != null
+            ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left · budget covers the whole week`
+            : null;
+        } else {
+          // Closed week - over or under against its OWN budget.
+          if (budget == null || !hasSpent) {
+            vdCls += " kpi-wrail-vd-plan";
+            vdText = hasSpent ? fmt$(spent) : "no spend";
+          } else if (over) {
+            vdCls += " kpi-wrail-vd-bad";
+            vdText = `▲ ${fmt$(spent - budget)}`;
+          } else {
+            vdCls += " kpi-wrail-vd-good";
+            vdText = `▼ ${fmt$(budget - spent)}`;
+          }
+        }
+
+        // Verdict for the left-border tint (temporal + spent).
+        const verdictAttr = temporal === "running"
+          ? "running"
+          : (temporal === "closed" && hasSpent && budget != null)
+            ? (over ? "over" : "under")
+            : null;
+
+        // Partial-tile sub caption: "N of M services confirmed"
+        // (walkthrough item 3). Sits beneath the verdict line as a
+        // secondary caption so a chef sees WHY the budget is
+        // provisional at a glance.
+        let partialSub = null;
+        if (basis === "partial" && w.total_services > 0) {
+          partialSub = `${w.confirmed_services} of ${w.total_services} services confirmed · budget will move`;
+        }
+
+        return (
+          <div
+            key={w.week_start}
+            className="kpi-wrail-tile"
+            role="listitem"
+            data-basis={basis}
+            data-temporal={temporal}
+            {...(verdictAttr ? { "data-verdict": verdictAttr } : {})}
+          >
+            <div className="kpi-wrail-head">
+              <div>
+                <div className="kpi-wrail-n">{`Wk of ${fmtDate(w.week_start)}`}</div>
+                <div className="kpi-wrail-dt">{fmtDate(w.week_start)} – {fmtDate(w.week_end)}</div>
+              </div>
+              <span className="kpi-wrail-st">{stateLabel}</span>
+            </div>
+            <div className="kpi-wrail-row">
+              <span className="kpi-wrail-row-k">{revLabel}</span>
+              <span className="kpi-wrail-row-v">{revenue != null ? fmt$(revenue) : "—"}</span>
+            </div>
+            <div className="kpi-wrail-row">
+              <span className="kpi-wrail-row-k">Budget</span>
+              <span className="kpi-wrail-row-v">
+                {budget != null ? fmt$(budget) : "—"}
+                {basis === "forecast" && budget != null && (
+                  <span className="kpi-wrail-plan-tag" aria-label="Projected budget">plan</span>
+                )}
+              </span>
+            </div>
+            <div className="kpi-wrail-row">
+              <span className="kpi-wrail-row-k">Spent</span>
+              <span className={`kpi-wrail-row-v${spent == null ? " kpi-wrail-row-v-mute" : ""}`}>
+                {spent != null ? fmt$(spent) : "—"}
+              </span>
+            </div>
+            <div className={vdCls}>{vdText}</div>
+            {subText && <div className="kpi-wrail-sub">{subText}</div>}
+            {partialSub && <div className="kpi-wrail-sub">{partialSub}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── TIER B: 7-13 weeks, one row of compact bars (untouched V21-10) ─
 function TierBStrip({ board }) {
   const weeks = board?.weeks || [];
@@ -1055,6 +1215,7 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
         </div>
 
         {tier === "A" && <TierAStrip board={board} salary={salary} />}
+        {tier === "A" && <WeekRail board={board} />}
         {tier === "B" && <TierBStrip board={board} />}
         {tier === "C" && (
           <>
