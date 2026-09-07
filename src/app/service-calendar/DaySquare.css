@@ -665,7 +665,7 @@
                            0 0 0 5px rgba(15, 32, 74, 0.32); }
 }
 .sc-daysq--today-pulse {
-  animation: sc-daysq-today-pulse 400ms var(--ease-standard, ease-out) 3;
+  animation: sc-daysq-today-pulse var(--duration-slow) var(--ease-standard) 3;
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-daysq--today-pulse { animation: none; }

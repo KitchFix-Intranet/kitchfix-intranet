@@ -1451,21 +1451,9 @@
     transform: scale(0.98);
   }
 
-  /* Seal - the success moment. The check circle drops in with a soft
-     scale-up, the hero fades in from below. Once per mount (justSaved
-     effect renders the whole success shell fresh, so animations fire
-     exactly at the seal moment). */
-  @keyframes sc-v2-entry-seal-check {
-    0%   { transform: scale(0.6); opacity: 0; }
-    60%  { transform: scale(1.08); opacity: 1; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-  @keyframes sc-v2-entry-seal-hero {
-    0%   { transform: translateY(8px); opacity: 0; }
-    100% { transform: translateY(0);   opacity: 1; }
-  }
   /* PR-K (2026-08-18): .sc-v2-entry--success (cream block) retired.
-     Its animation-scoped keyframes lived here; both are deleted. */
+     The sc-v2-entry-seal-check + sc-v2-entry-seal-hero keyframes that
+     scored the block were removed 2026-09-04 as dead code. */
 }
 
 /* Screen-reader-only utility class - used by the hero's live region

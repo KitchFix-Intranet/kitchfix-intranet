@@ -480,6 +480,17 @@ Pattern: a prop added to a component and a usage added to a module-level inner f
 - When a prop is threaded to a component that renders sibling/extracted functions in the same file, trace it into each extracted function's own parameter list. Per-file grep for the identifier is necessary but not sufficient - the compilation is clean and the crash only appears at render.
 - Route intercept stubs that mock a payload MUST include at least one entry that reaches the render path in question. An all-empty / all-ghost stub silently sails past the live bug and the guard spec is a lie. State the "must include a REAL day" requirement in a comment inside the spec so it can't be simplified into uselessness later.
 
+### A warning comment far from the hazard does not protect the hazard
+
+The `PeriodWorkspace.js` -> `DayGrid` sibling-function trap has hit this file **three times** now under different prop names. After PR-A1 (the first hit) landed, a comment was added at `PeriodWorkspace.js:434-437` at the `<DayGrid>` mount site warning that DayGrid is a sibling function and does not close over PeriodWorkspace's state - so any prop must be threaded explicitly. The next hit (#378 / DayGrid `syncingDates`, entry above) walked past that comment. **PR #1026 (2026-09-04) walked past it a third time**, blanking production for ~40 minutes when a `showToast` prop plumbed to a `<WeekFinalizeControl>` inside DayGrid's body threw `ReferenceError: showToast is not defined` on every drill mount.
+
+The comment is 850 lines from the site of the third bug. A code-read that starts at the mount site (line 1297) does not see the warning at line 434 unless the reader chose to read the whole file end-to-end, which nobody does when the diff is +1 line.
+
+**Rules:**
+- **Do not rely on a warning comment as a durable guard.** A comment that has to be read to prevent the bug is trivia; only structure prevents the bug. Comments rot, files grow, edits happen far from the anchor.
+- **The durable fix is structural, not documentary.** Either (a) hoist `DayGrid` into its own file so its parameter list is the first thing a reader sees when they open the file, or (b) refactor DayGrid to accept an explicit `finalizeContext` prop object that already threads every WeekFinalizeControl-adjacent prop (showToast, showFinalize, onFinalizeWeek, onRevertFinalize, ...) so the failure mode becomes "you forgot to add it to one object" rather than "you forgot which of thirty parameters this component needs." Both survive future edits by readers who never saw the comment.
+- **When you land a comment as a fix for a class of bug, treat it as a to-do for the structural fix, not the fix itself.** The comment buys time; the file split or props-object refactor spends it.
+
 ### Never define a function component inside another component's render body
 
 ```javascript

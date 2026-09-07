@@ -75,7 +75,6 @@ function mondayOfWeek(isoDate) {
 }
 import "../v2/billing/weekFinalize.css";
 import "../v2/billing/finalizeOverlay.css";
-import "../v2/billing/finalizeToast.css";
 
 export default function PeriodWorkspace({
   account,                  // { key, name, category, billingModel }
@@ -147,6 +146,9 @@ export default function PeriodWorkspace({
   // Drives the SC_LOCK_OVERRIDE affordances (Revert + Retry). Also
   // gates the FETCH of finalize states (skip when unknown).
   viewerEmail = null,
+  // 2026-09-04 (motion cleanup): finalize success routes through the
+  // shared page-level toast. WeekFinalizeControl consumes this.
+  showToast = null,
 }) {
   const kind = useMemo(
     () => resolveDayKind({
@@ -435,6 +437,7 @@ export default function PeriodWorkspace({
            ReferenceError: showFinalize is not defined. */
         showFinalize={showFinalize}
         isOverrideUser={isOverrideUser}
+        showToast={showToast}
         finalizeRowsByWeek={finalizeRowsByWeek}
         weeksMeta={weeksMeta}
         accountCadence={accountCadence}
@@ -947,10 +950,18 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
      PR-E (2026-08-14) adds weeksMeta + accountCadence + periodRange
      (periodRange is the month bounds in month scope; needed so the
      overlap tag reports days in the OTHER month relative to the
-     view month, not the leading cell's month). */
+     view month, not the leading cell's month).
+     2026-09-07 (motion cleanup reship): showToast added here after
+     PR #1026 shipped it as a naked reference inside the
+     WeekFinalizeControl mount below - blanking prod because DayGrid
+     is a sibling function and does not close over PeriodWorkspace's
+     scope. This is the third hit of the same trap; see GOTCHAS
+     "A warning comment far from the hazard does not protect the
+     hazard" for the durable-fix direction. */
   showFinalize = false, isOverrideUser = false, finalizeRowsByWeek = null,
   weeksMeta = {}, accountCadence = null, periodRange = null,
-  onFinalizeWeek = null, onRevertFinalize = null, onRetryFinalize = null }) {
+  onFinalizeWeek = null, onRevertFinalize = null, onRetryFinalize = null,
+  showToast = null }) {
   // Chunk the flat cells array into weeks of 7 for the row wrappers.
   // Null cells stay in place so column alignment holds on desktop; on
   // mobile they hide (see periodWorkspace.css @media).
@@ -1292,6 +1303,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                          finalize from a month-shaped screen that frames
                          weeks by month rather than by billing period. */
                       readOnlyFinalize={scope !== "period"}
+                      showToast={showToast}
                     />
                   </div>
                 );

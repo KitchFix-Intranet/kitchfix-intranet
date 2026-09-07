@@ -463,7 +463,7 @@
   height: 100%;
   border-radius: inherit;
   background: var(--sc2-state-entered-fg);
-  transition: width 0.2s ease-out;
+  transition: width var(--duration-base) var(--ease-standard);
 }
 .sc-homestand-rail-progress--over .sc-homestand-rail-progress-fill {
   background: var(--sc2-state-overdue-fg);
