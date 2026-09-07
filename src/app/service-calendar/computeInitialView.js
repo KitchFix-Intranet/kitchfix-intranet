@@ -52,6 +52,13 @@ export const ROLE_TIERS = {
   "chef de cuisine":        "floor",
   "hospitality manager":    "floor",
   "general manager":        "floor",
+  // Added 2026-09-09 after a landing-data-health sweep found Claire
+  // Parry (TBJ - FL) with people.title="Performance Chef" but
+  // contacts.role typed as her surname; her landing fell to Season
+  // overview instead of the Period workspace. Companion data fix
+  // corrects the contacts.role value; this entry ensures the real
+  // title maps for any future performance chef.
+  "performance chef":       "floor",
 
   // Leadership - the portfolio reviewer.
   "ceo":                              "leadership",
