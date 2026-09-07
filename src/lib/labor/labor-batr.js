@@ -1,60 +1,42 @@
 // src/lib/labor/labor-batr.js
 //
-// Loads the revenue basis (totalRevenue + revenueBudgetFullPeriod)
-// the Labor board needs to compute budget_at_this_revenue for the
-// 3100 lever, then hands it to the shared batr formula.
+// Labor's attachment layer for the shared period-basis module. This
+// file used to duplicate the picker + accrual + revenue-sum logic
+// (see #1049); those are now in src/lib/kpi/shared/periodBasis.js
+// and this file is a thin consumer.
 //
-// R-77 fix (Kevin 2026-09-04). Labor was built pre-R-44 + R-45 and
-// compared to the raw dollar budget. Overview compares to the
-// adjusted budget - the R-77 defect where the two boards give
-// opposite verdicts on the same account.
+// Two exports remain:
 //
-// Data source: pnl_actuals for verified revenue actuals, kpi_budgets
-// (via loadOverviewBudgets) for revenue budgets. Both are the same
-// tables the Overview resolver reads - if a source changes, both
-// boards move together. The formula lives in the shared module so
-// the invariant holds by construction.
+//   loadRangeRevenueBasis(supa, {...})
+//     Wraps the shared loader + revenue computation. Returns
+//     { totalRevenue, revenueBudgetFullPeriod } - the operand set
+//     the batr formula needs.
 //
-// PR-A scope: closed ranges only (This year + Last period). Returns
-// null when has_target is false, when no periods have revenue budget,
-// or when the range is not closed (Overview would return null too).
+//   attachBatrToBoard(board, revenueBasis, {...})
+//     Writes budget_at_this_revenue, closed_spent_to_date,
+//     closed_variance, and recomputes verdict against the adjusted
+//     budget so the pill agrees with the card (Kevin post-1049
+//     sweep item 5a).
+//
+//   periodsClosedBefore(periods, todayISO)
+//     Pure calendar helper. R-63: This year excludes running period.
 
-import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
 import {
+  budgetAtThisRevenue as sharedBatr,
+  loadPeriodBasisInputs,
+  computePeriodRevenueByLine,
+  sumPeriodRevenue,
   REVENUE_LINE_CODES,
-  loadPnlActuals,
-  loadOverviewBudgets,
-  loadScDailyRevenue,
-  loadPeriodStatus,
-  loadAccountFlags,
-  derivePeriodState,
-} from "@/lib/kpi/overview/pnl-loader.js";
-import { resolveRevenueSource } from "@/lib/kpi/overview/revenue-source.js";
-import { periodEndISO, periodStartISO, periodOf, endOfLastCompleteWeek } from "@/app/kpi/labor/lib/periods.js";
+} from "@/lib/kpi/shared/periodBasis.js";
+import { periodEndISO, periodOf } from "@/app/kpi/labor/lib/periods.js";
 
 const FISCAL_YEAR = 2026;
 
-// Kevin revenue-fallback prompt (2026-09-07, corrected). R-67
-// applies to EVERY account for contractual lines - service fees are
-// real revenue that belongs alongside SC counts. Same constant
-// resolver.js uses; kept in sync manually until the shared extraction
-// lands. If this drifts, the parity check will fail loudly.
-const CONTRACTUAL_ACCRUAL_LINES = new Set(["2200", "2300", "2600"]);
-
-// Kevin Labor PR-A item 8 (2026-09-04): "This year is P1 through the
-// last closed period. The running period renders hatched and does not
-// enter the total." Same rule as the Overview chart.
-//
-// Explicitly named so a future reader sees the rule and does not
-// silently revert it. The exclusion is what takes TBJ - FL from
-// $365,398 (P1-P9) to $341,586 (P1-P8) - the change most likely to
-// look like a bug to someone who does not know the rule.
-//
-// Given a set of periods, returns the subset whose end date is
-// strictly before today (calendar-closed). Verified-vs-awaiting is
-// the Overview's authoritative distinction elsewhere; for batr the
-// calendar boundary matches the R-63 rule that both boards must
-// share.
+// Kevin Labor PR-A item 8 (2026-09-04). Given a set of periods,
+// return the subset whose end date is strictly before today
+// (calendar-closed). Batr uses this so both boards restrict to the
+// same period set - "This year is P1 through the last closed period.
+// The running period renders hatched and does not enter the total."
 export function periodsClosedBefore(periods, todayISO) {
   return (periods || []).filter(p => {
     const end = periodEndISO(p);
@@ -62,35 +44,10 @@ export function periodsClosedBefore(periods, todayISO) {
   });
 }
 
-// Sum actual_revenue across REVENUE_LINE_CODES for the requested
-// members + periods. Filters non-revenue lines the same way Overview
-// does: NOT is_non_revenue on the read (pnl_actuals is already
-// filtered - the guard here is defence-in-depth for downstream
-// callers that pass unfiltered rows).
-function sumRevenueActuals(pnl, { members, periods }) {
-  let total = 0;
-  let anyReported = false;
-  for (const m of members) {
-    const byAcct = pnl.get(m);
-    if (!byAcct) continue;
-    for (const p of periods) {
-      const perPeriod = byAcct.get(p);
-      if (!perPeriod) continue;
-      for (const line of REVENUE_LINE_CODES) {
-        const row = perPeriod.get(line);
-        if (row && row.actual != null) {
-          total += Number(row.actual);
-          anyReported = true;
-        }
-      }
-    }
-  }
-  return anyReported ? total : null;
-}
-
-// Sum budget across REVENUE_LINE_CODES × members × periods.
-// Overview's `revenue_budget_full_period` is the same sum expressed
-// per-line then summed; the ordering doesn't matter for the total.
+// Sum revenue budget across REVENUE_LINE_CODES × members × periods.
+// Shared derivation kept local because it operates on the same
+// overviewBudgets map the shared module already loads; extracting a
+// third helper for a two-liner isn't worth the surface area.
 function sumRevenueBudget(overviewBudgets, { members, periods }) {
   let total = 0;
   let any = false;
@@ -102,10 +59,7 @@ function sumRevenueBudget(overviewBudgets, { members, periods }) {
       if (!byAcct) continue;
       for (const p of periods) {
         const v = byAcct.get(p);
-        if (v != null) {
-          total += Number(v);
-          any = true;
-        }
+        if (v != null) { total += Number(v); any = true; }
       }
     }
   }
@@ -113,121 +67,48 @@ function sumRevenueBudget(overviewBudgets, { members, periods }) {
 }
 
 /**
- * Load the range's revenue basis (totalRevenue + revenueBudgetFullPeriod)
- * using the SAME picker + sources Overview uses. Corrected per
- * Kevin's revenue-fallback prompt (2026-09-07):
- *   1. finance actual        pnl_actuals when verified
- *   2. Service Calendar      actual_revenue for count-derived lines
- *   3. contractual accrual   R-67, EVERY account, contractual lines
- *   4. nothing               never the budget
+ * Load the range's revenue basis via the shared module. Returns
+ *   { totalRevenue, revenueBudgetFullPeriod }
+ * using the same picker Overview uses so both boards agree cent-
+ * exact. Kevin's item 2 closes by construction.
  *
- * Prior implementation read pnl_actuals only, which returned null for
- * closed_awaiting periods and made Labor's batr disagree with Overview
- * whenever finance had not posted. Item 2 of Kevin's walkthrough sweep
- * closes by construction now that both boards apply the same rules.
+ * Prior implementation duplicated computePeriodRevenueByLine inline
+ * (#1049). Consolidated 2026-09-07 - see periodBasis.js header for
+ * the drift-prevention reasoning.
  */
 export async function loadRangeRevenueBasis(supa, { members, periods, start, end, today }) {
   if (!members || members.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null };
   if (!periods || periods.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null };
-  const [pnlRes, budRes, scRes, statusRes, flagsRes] = await Promise.all([
-    loadPnlActuals(supa, { members, periods, fiscalYear: FISCAL_YEAR }),
-    loadOverviewBudgets(supa, { members, fiscalYear: FISCAL_YEAR }),
-    loadScDailyRevenue(supa, { members, start, end, today }),
-    loadPeriodStatus(supa, FISCAL_YEAR),
-    loadAccountFlags(supa),
-  ]);
-  if (pnlRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: pnlRes.scope || "pnl_actuals", message: pnlRes.error.message || String(pnlRes.error) } };
-  if (budRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: budRes.scope || "kpi_budgets_overview", message: budRes.error.message || String(budRes.error) } };
-  if (scRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: scRes.scope || "sc_daily_revenue", message: scRes.error.message || String(scRes.error) } };
-  if (statusRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: statusRes.scope || "pnl_period_status", message: statusRes.error.message || String(statusRes.error) } };
-  if (flagsRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: flagsRes.scope || "kpi_account_flags", message: flagsRes.error.message || String(flagsRes.error) } };
 
-  const pnl = pnlRes.data || new Map();
-  const overviewBudgets = budRes.data || new Map();
-  const scByAcct = scRes.data || new Map();
-  const periodStatus = statusRes.data || new Map();
-  const accountFlags = flagsRes.data || new Map();
+  const inputs = await loadPeriodBasisInputs(supa, { members, periods, start, end, today });
+  if (inputs.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: inputs.error.scope, message: inputs.error.error?.message || String(inputs.error.error) } };
 
-  // Mirror computePeriodRevenueByLine's per-(member, period, line) picker
-  // so Labor's total matches Overview's total to the cent. `revSource`
-  // fixed to "sc" because Labor is always the SC-aware side.
+  // Same picker + rules Overview uses. revSource fixed to "sc"
+  // because Labor is always the SC-aware side.
+  const perPeriodRevenue = computePeriodRevenueByLine({
+    members,
+    periods,
+    periodStatus: inputs.periodStatus,
+    accountFlags: inputs.accountFlags,
+    todayISO: today,
+    overviewBudgets: inputs.overviewBudgets,
+    pnl: inputs.pnl,
+    scByAcct: inputs.scByAcct,
+    revSource: "sc",
+  });
+
   let totalRevenue = 0;
   let anyReported = false;
-  for (const p of periods) {
-    const statusRow = periodStatus.get(p) || null;
-    const state = derivePeriodState({ periodNo: p, todayISO: today, periodStatusRow: statusRow });
-    for (const m of members) {
-      const flags = accountFlags.get(m) || null;
-      const src = resolveRevenueSource({
-        accountKey: m,
-        periodState: state,
-        revSource: "sc",
-        accountFlags: flags,
-      });
-      for (const line of src.line_codes) {
-        if (src.source === "pnl_actuals_verified") {
-          const row = pnl.get(m)?.get(p)?.get(line);
-          if (row?.actual != null) { totalRevenue += Number(row.actual); anyReported = true; }
-        } else if (src.source === "sc_daily_revenue") {
-          if (line === "2400.1") {
-            const byDate = scByAcct.get(m);
-            if (byDate) {
-              const pStart = periodStartISO(p);
-              const pEnd = periodEndISO(p);
-              for (const [day, amt] of byDate) {
-                if (day >= pStart && day <= pEnd) {
-                  totalRevenue += Number(amt);
-                  anyReported = true;
-                }
-              }
-            }
-          } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
-            // R-67 accrual - Kevin's precedence #3, EVERY account.
-            const pStart = periodStartISO(p);
-            const pEnd = periodEndISO(p);
-            const amtRaw = overviewBudgets.get(line)?.get(m)?.get(p);
-            if (amtRaw != null && Number(amtRaw) > 0) {
-              const wk = endOfLastCompleteWeek(pStart, pEnd, today);
-              const weeksComplete = wk ? wk.weekNo : 0;
-              if (weeksComplete > 0) {
-                totalRevenue += Number(amtRaw) * (weeksComplete / 4);
-                anyReported = true;
-              }
-            }
-          }
-        } else if (src.source === "not_reported") {
-          // Precedence #4 - nothing.
-        } else {
-          // kpi_budgets_* for fee accounts (contractual) + tracked.
-          const amtRaw = overviewBudgets.get(line)?.get(m)?.get(p);
-          if (amtRaw != null) {
-            if (state === "open") {
-              const pStart = periodStartISO(p);
-              const pEnd = periodEndISO(p);
-              const parseISOUTC = (iso) => {
-                const mm = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                if (!mm) return null;
-                return new Date(Date.UTC(+mm[1], +mm[2] - 1, +mm[3]));
-              };
-              const MSD = 86400000;
-              const pS = parseISOUTC(pStart), pE = parseISOUTC(pEnd), tD = parseISOUTC(today);
-              if (pS && pE && tD) {
-                const daysIn = Math.floor((pE.getTime() - pS.getTime()) / MSD) + 1;
-                const elapsed = Math.min(daysIn, Math.max(0, Math.floor((tD.getTime() - pS.getTime()) / MSD)));
-                totalRevenue += Number(amtRaw) * (elapsed / daysIn);
-                anyReported = true;
-              }
-            } else {
-              totalRevenue += Number(amtRaw);
-              anyReported = true;
-            }
-          }
-        }
+  for (const [, entry] of perPeriodRevenue) {
+    for (const line of REVENUE_LINE_CODES) {
+      const rec = entry[line];
+      if (rec?.reported && rec.amount != null) {
+        totalRevenue += Number(rec.amount);
+        anyReported = true;
       }
     }
   }
-
-  const revenueBudgetFullPeriod = sumRevenueBudget(overviewBudgets, { members, periods });
+  const revenueBudgetFullPeriod = sumRevenueBudget(inputs.overviewBudgets, { members, periods });
   return {
     totalRevenue: anyReported ? Math.round(totalRevenue * 100) / 100 : null,
     revenueBudgetFullPeriod,
@@ -235,25 +116,14 @@ export async function loadRangeRevenueBasis(supa, { members, periods, start, end
 }
 
 /**
- * Attach budget_at_this_revenue to a labor board object. Idempotent -
- * safe to call again on a board that already carries the field (e.g.,
- * after withSalary merges hourly + salary and rebuilds the board with
- * a new range_budget).
+ * Attach budget_at_this_revenue + closed-only spend + verdict to a
+ * labor board.
  *
- * Kevin Labor PR-A item 8 (2026-09-04): when the range spans a
- * running period, the labor lineBudget passed to sharedBatr uses the
- * CLOSED-only subset - not board.range_budget which includes the
- * running period's budget. Overview does the same on its side (batr
- * against last-closed revenue + last-closed budget), so the R-77
- * assertion holds only when both sides restrict to the same period
- * set. `closed_range_budget` is exposed on the board so a probe can
- * verify the exclusion happened.
- *
- * Uses the FINAL board's range_budget as the source of "labor budget
- * per period touched by the range" - salary-inclusive when the
- * caller has passed the merged board. Falls back to range_budget
- * itself when no closed subset is available (e.g., single closed
- * period - Last period P8 - where range_budget already IS closed).
+ * Kevin post-1049 sweep item 5a (2026-09-07): verdict recomputed
+ * against the adjusted budget (batr) rather than the raw range
+ * budget lib/board.js set. Prior code: pill fired OVER (spent > raw)
+ * while the card showed UNDER $3,857 (spent < batr). Pill now agrees
+ * with the card by construction.
  */
 export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, closedLaborBudget = null, closedPeriods = null } = {}) {
   if (!board || board.applies === false) return board;
@@ -269,15 +139,7 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
   board.revenue_budget_for_batr = revenueBasis.revenueBudgetFullPeriod;
   board.closed_range_budget = laborBudgetForBatr;
 
-  // Kevin Labor PR-A item 8 UI (2026-09-04): the hero must show
-  // spent for CLOSED periods only, not the whole range including
-  // the running period. Sum board.weeks filtered to closed periods.
-  // Kevin: "the payload now carries closed_range_budget at $413,283
-  // while the screen still shows $365,398 - right number, wrong
-  // surface. A site lead reading the board today still sees the
-  // wrong figure." This adds the matching closed_spent_to_date so
-  // the UI can display the correct actual.
-  if (Array.isArray(board.weeks) && Array.isArray(closedPeriods)) {
+  if (Array.isArray(board.weeks) && Array.isArray(closedPeriods) && closedPeriods.length > 0) {
     const closedSet = new Set(closedPeriods);
     let closedSpent = 0;
     let closedWeeks = 0;
@@ -293,6 +155,30 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
     board.closed_variance = (batr != null)
       ? Math.round((closedSpent - batr) * 100) / 100
       : null;
+  }
+  // Kevin post-1049 sweep: leave closed_* fields UNSET when there
+  // are no closed periods in the range (This period on day 1).
+  // SpendCard's fallback chain: closed_spent_to_date -> spent_to_date;
+  // setting it to 0 breaks the fallback and shows $0 on a running
+  // period that has real spend.
+
+  // Kevin post-1049 sweep item 5a: recompute verdict against batr,
+  // not raw. Prior lib/board.js verdict used raw range_budget →
+  // pill said OVER while the panel card said UNDER $3,857. Same
+  // pace-points band rule as verdictBand; kept literal here to
+  // avoid a cross-module import for one function.
+  if (batr != null && batr > 0) {
+    const spentForVerdict = board.closed_spent_to_date != null
+      ? board.closed_spent_to_date
+      : board.spent_to_date;
+    if (spentForVerdict != null) {
+      const pacePct = (Number(spentForVerdict) / batr) * 100;
+      const pacePoints = pacePct - 100;
+      board.verdict = pacePoints >= 3 ? "over"
+        : pacePoints >= 0.5 ? "watch"
+        : "on_track";
+      board.variance = Math.round((Number(spentForVerdict) - batr) * 100) / 100;
+    }
   }
   return board;
 }

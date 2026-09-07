@@ -47,7 +47,9 @@ import { load3100_2Budgets, loadSalaryActuals, mergeBudgetPeriods, shapeSalaryRo
 import {
   budgetAtThisRevenue as sharedBatr,
   envelopeDelta as sharedEnvelopeDelta,
-} from "@/lib/kpi/shared/batr.js";
+  computePeriodRevenueByLine as sharedComputePeriodRevenueByLine,
+  contributesToTotal,
+} from "@/lib/kpi/shared/periodBasis.js";
 
 import { buildPurchasingBoard } from "@/app/kpi/purchasing/lib/resolver.js";
 import {
@@ -75,17 +77,14 @@ import {
   capBeforeToday,
 } from "./pnl-loader.js";
 
-// R-67 (Kevin ruling 2026-09-03): contractual revenue lines - fixed
-// per-period contracts finance books alongside meal-service counts.
-// A line in this set with a non-zero period budget accrues its
-// budget × N complete weeks / 4 whenever (a) the picker returned it
-// and (b) the period is not verified and (c) no actual has landed.
-// Meal-service lines (2400.1 / 2400.2) are count-derived, not in
-// this set. Fee + tracked account pickers return only 2400.1 so
-// this set never fires on those accounts - preserving visibility
-// of loader defects like STL - MO 2300 missing from pnl_actuals.
-const CONTRACTUAL_ACCRUAL_LINES = new Set(["2200", "2300", "2600"]);
-import { resolveRevenueSource, classifyForRevenue, assertScReadAllowed } from "./revenue-source.js";
+// R-67 constant + computePeriodRevenueByLine now live in
+// src/lib/kpi/shared/periodBasis.js (see imports above). Local
+// duplicates removed 2026-09-07 per Kevin's shared-basis PR.
+// classifyForRevenue + resolveRevenueSource stay in revenue-source.js
+// (still owned there); periodBasis re-exports them for convenience
+// but this file keeps the direct import for the two remaining
+// direct call sites.
+import { classifyForRevenue, resolveRevenueSource } from "./revenue-source.js";
 import {
   computeBudgetToDateForLine,
   computeFullPeriodBudget,
@@ -386,174 +385,6 @@ function periodsInRangeFor(start, end) {
   return [...new Set(weeks.map(w => periodOf(w)).filter(p => p != null))].sort((a, b) => a - b);
 }
 
-// Compute per-period revenue: pick the source per period and produce
-// { amount, reported: bool, source, model } for each period.
-function computePeriodRevenueByLine({
-  members,
-  periods,
-  periodStatus,
-  accountFlags,
-  todayISO,
-  overviewBudgets,
-  pnl,
-  scByAcct,
-  revSource,
-  scope,   // { accountKey, kind: 'single' | 'aggregate' }
-}) {
-  // Per-period, per-member picker. For an aggregate, we roll UP the
-  // per-member picks (source per member because per-meal vs fee can
-  // mix across members in ALL / EAST / WEST).
-  const perPeriod = new Map();  // period -> { line_code -> { amount, reported, sources[] } }
-  for (const p of periods) {
-    const statusRow = periodStatus.get(p) || null;
-    const state = derivePeriodState({ periodNo: p, todayISO, periodStatusRow: statusRow });
-    if (!perPeriod.has(p)) perPeriod.set(p, { state });
-    const perP = perPeriod.get(p);
-    const memberContribs = new Map();  // line_code -> {amount, reported, sources[]}
-    for (const m of members) {
-      const flags = accountFlags.get(m) || null;
-      const src = resolveRevenueSource({
-        accountKey: m,
-        periodState: state,
-        revSource,
-        accountFlags: flags,
-      });
-      for (const line of src.line_codes) {
-        if (!memberContribs.has(line)) {
-          memberContribs.set(line, { amount: 0, reported: false, sources: new Set(), any_actual: false });
-        }
-        const bucket = memberContribs.get(line);
-        // Pick the number:
-        //   source = pnl_actuals_verified  -> pnl_actuals row's `actual`
-        //   source = sc_daily_revenue      -> sum sc_daily_revenue for this
-        //                                     member across period days
-        //   source = kpi_budgets_*         -> budget-to-date proration by
-        //                                     day for the current period,
-        //                                     full budget for closed
-        //                                     (contractual / estimate /
-        //                                     planned / tracked all use
-        //                                     kpi_budgets amount)
-        if (src.source === "pnl_actuals_verified") {
-          const row = pnl.get(m)?.get(p)?.get(line);
-          if (row && row.actual != null) {
-            bucket.amount += Number(row.actual);
-            bucket.any_actual = true;
-          }
-          // Absent = not reported. Don't contribute.
-          bucket.sources.add("pnl_actuals");
-        } else if (src.source === "sc_daily_revenue") {
-          // Guard - belt-and-suspenders (picker already checked).
-          try { assertScReadAllowed({ accountKey: m, revSource, accountFlags: flags }); }
-          catch (e) { throw e; }
-          // For SC, we only credit line 2400.1 (the per-meal service line;
-          // sc_daily_revenue represents meal-service revenue only).
-          if (line === "2400.1") {
-            const byDate = scByAcct.get(m);
-            if (byDate) {
-              const pStart = periodStartISO(p);
-              const pEnd = periodEndISO(p);
-              // The period runs pStart..pEnd; SC data through
-              // yesterday is what the render displays "through DATA_
-              // THRU". Sum EVERY sc day in the period that we have
-              // (up to today; the resolver crops if end > today).
-              for (const [day, amt] of byDate) {
-                if (day >= pStart && day <= pEnd) {
-                  bucket.amount += Number(amt);
-                  bucket.any_actual = true;
-                }
-              }
-            }
-            bucket.sources.add("sc_daily_revenue");
-          } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
-            // Kevin revenue-fallback prompt (2026-09-07, corrected):
-            // R-67 applies to EVERY account, for contractual lines.
-            // Kevin ruling: "the service fee is real revenue. It
-            // belongs in their weekly revenue alongside the Service
-            // Calendar revenue." TBJ - FL bills 2300 every period
-            // ($18k - $118k in finance across P1-P8); dropping it
-            // would remove real money and inflate every cost pct.
-            //
-            // Corrected precedence:
-            //   1. finance actual (pnl_actuals verified)
-            //   2. SC actual (count-derived lines like 2400.1)
-            //   3. contractual accrual R-67 (EVERY account, contractual)
-            //   4. nothing
-            //
-            // R-67 accrual formula unchanged: budget × completeWeeks/4.
-            // Closed period => 4/4 = full budget.
-            const pStart = periodStartISO(p);
-            const pEnd = periodEndISO(p);
-            const byAcct = overviewBudgets.get(line)?.get(m);
-            const amtRaw = byAcct?.get(p);
-            if (amtRaw != null && Number(amtRaw) > 0) {
-              const wk = endOfLastCompleteWeek(pStart, pEnd, todayISO);
-              const weeksComplete = wk ? wk.weekNo : 0;
-              if (weeksComplete > 0) {
-                bucket.amount += Number(amtRaw) * (weeksComplete / 4);
-                bucket.any_actual = true;
-                bucket.sources.add("kpi_budgets_contractual_accrual");
-              }
-            }
-          }
-        } else if (src.source === "not_reported") {
-          // Kevin revenue fallback prompt (2026-09-07). Per_meal
-          // closed_awaiting on an account without sc_revenue_live -
-          // finance has not posted, SC is not available, so the
-          // period reads "not reported". A budget is never an
-          // actual. any_actual stays false so the line renders "—"
-          // and the source line names the state so a reader knows
-          // why.
-          bucket.sources.add("not_reported");
-        } else {
-          // kpi_budgets_* (contractual / planned / tracked).
-          // For a CLOSED period => full budget. For OPEN period =>
-          // budget-to-date by days. Compute here.
-          // Kevin walkthrough sweep (2026-09-07): the prior
-          // `kpi_budgets_2400_1_estimate` closed_awaiting source is
-          // gone - handled explicitly by `not_reported` above.
-          const byAcct = overviewBudgets.get(line)?.get(m);
-          const amtRaw = byAcct?.get(p);
-          if (amtRaw != null) {
-            if (state === "open") {
-              const pStart = periodStartISO(p);
-              const pEnd = periodEndISO(p);
-              // Days elapsed through yesterday inclusive.
-              const parseISOUTC = (iso) => {
-                const mm = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                if (!mm) return null;
-                return new Date(Date.UTC(+mm[1], +mm[2] - 1, +mm[3]));
-              };
-              const MSD = 86400000;
-              const pS = parseISOUTC(pStart), pE = parseISOUTC(pEnd), tD = parseISOUTC(todayISO);
-              if (pS && pE && tD) {
-                const daysIn = Math.floor((pE.getTime() - pS.getTime()) / MSD) + 1;
-                const elapsed = Math.min(daysIn, Math.max(0, Math.floor((tD.getTime() - pS.getTime()) / MSD)));
-                bucket.amount += Number(amtRaw) * (elapsed / daysIn);
-                bucket.any_actual = true;   // budget contributes (planned or contractual)
-              }
-            } else {
-              // Closed - full period budget (fee accounts get contract;
-              // per-meal closed_awaiting gets budget as estimate).
-              bucket.amount += Number(amtRaw);
-              bucket.any_actual = true;
-            }
-          }
-          bucket.sources.add(src.source);
-        }
-      }
-    }
-    // Fold member contribs -> period contribs.
-    for (const [line, b] of memberContribs) {
-      if (!perP[line]) perP[line] = { amount: 0, reported: false, sources: [] };
-      if (b.any_actual) {
-        perP[line].amount += b.amount;
-        perP[line].reported = true;
-      }
-      perP[line].sources.push(...[...b.sources]);
-    }
-  }
-  return perPeriod;
-}
 
 // Sum per-period contributions into range totals per line.
 function sumRangeRevenueByLine({ perPeriod, lineCodes }) {
@@ -940,7 +771,9 @@ export async function resolveOverview({
   }));
 
   // 7. Compute per-period revenue by line + range totals.
-  const perPeriodRevenue = computePeriodRevenueByLine({
+  // Kevin ruling 2026-09-07: shared periodBasis.js owns the picker
+  // + rules; this file is a consumer.
+  const perPeriodRevenue = sharedComputePeriodRevenueByLine({
     members,
     periods,
     periodStatus,
@@ -950,7 +783,6 @@ export async function resolveOverview({
     pnl,
     scByAcct,
     revSource: effRevSource,
-    scope: { accountKey, kind: isAggregate ? "aggregate" : "single" },
   });
   const revenueByLine = sumRangeRevenueByLine({
     perPeriod: perPeriodRevenue,
@@ -1802,12 +1634,17 @@ export async function resolveOverview({
     // line is that period's ADJUSTED budget - period actual revenue
     // times the target cost percentage. Same rule as the COGS card's
     // "Adjusted budget" figure. A period where revenue missed gets a
-    // lower budget line. Ratio is account-wide (cogsBudget / rev
-    // budget across the range); applied per period to per-period
-    // revenue.
-    const targetCostRatio = (revenue_budget_full_period && revenue_budget_full_period > 0)
-      ? cogsBudget / revenue_budget_full_period
-      : null;
+    // lower budget line.
+    //
+    // Kevin post-1049 sweep item 5b (2026-09-07): the ratio must be
+    // PER-PERIOD, never the annual one applied to every period.
+    // Prior code used the range-level ratio (cogsBudget /
+    // revenue_budget_full_period) which produced $67,998 for TBJ - FL
+    // P9 (51.5% annual) when P9's own budget says $79,227 (60.0%
+    // period-own) - an $11,229 gap that flipped P9's bar red when
+    // it should be green. Now uses computePeriodTargetPctForLines
+    // from the shared module - the SAME derivation Last period's
+    // single-period view uses, so the two agree by construction.
     const series = periods.map(p => {
       const pStart = periodStartISO(p);
       const pEnd = periodEndISO(p);
@@ -1846,8 +1683,29 @@ export async function resolveOverview({
           if (rec?.reported && rec.amount != null) periodRevenueActual += Number(rec.amount);
         }
       }
-      const adjustedBudget = (targetCostRatio != null && periodRevenueActual > 0)
-        ? r2(periodRevenueActual * targetCostRatio)
+      // Kevin post-1049 sweep item 5b: PER-PERIOD target ratio, not
+      // annual. Numerator = period's own cogs budget (labor + purch
+      // + inventory adjustment sign parity), denominator = period's
+      // revenue budget (sum of REVENUE_LINE_CODES from overviewBudgets).
+      // Adjusted budget = period revenue actual × period target pct.
+      let periodRevBudget = 0;
+      let anyRevBud = false;
+      for (const rline of REVENUE_LINE_CODES) {
+        const perR = overviewBudgets.get(rline);
+        if (!perR) continue;
+        for (const m of members) {
+          const byAcct = perR.get(m);
+          if (!byAcct) continue;
+          const v = byAcct.get(p);
+          if (v != null) { periodRevBudget += Number(v); anyRevBud = true; }
+        }
+      }
+      const perPeriodCogsBudget = laborBudP + purchBudP;
+      const perPeriodTargetPct = (anyRevBud && periodRevBudget > 0 && perPeriodCogsBudget > 0)
+        ? (perPeriodCogsBudget / periodRevBudget)
+        : null;
+      const adjustedBudget = (perPeriodTargetPct != null && periodRevenueActual > 0)
+        ? r2(periodRevenueActual * perPeriodTargetPct)
         : null;
       return {
         period_no: p,
@@ -3108,7 +2966,17 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       horizon = "no complete weeks yet";
     }
   } else if (isSingleClosed && range.period_no != null) {
-    horizon = `P${range.period_no} · closed and verified`;
+    // Kevin post-1049 sweep item 1 (2026-09-07). #1046 fixed this
+    // on This year but overlooked single_closed. Last period on
+    // TBJ - FL P9 said "closed and verified" while pnl_actuals had
+    // P1-P8 only. Check the awaiting bucket - if this period is
+    // in it, name the state honestly.
+    const isAwaiting = rc?.awaiting?.count > 0
+      && rc.awaiting.first === range.period_no
+      && rc.awaiting.last === range.period_no;
+    horizon = isAwaiting
+      ? `P${range.period_no} · awaiting verification`
+      : `P${range.period_no} · closed and verified`;
     spanHeader = `P${range.period_no}`;
   } else if (isFytd) {
     // Kevin walkthrough item 3 (2026-09-07). Prior FYTD label read
