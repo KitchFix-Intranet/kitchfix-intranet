@@ -34,22 +34,40 @@ test.describe("Labor walkthrough PR-A · panel adjusted + partial basis", () => 
     await expect(budgetCell).not.toContainText("19,109");
   });
 
-  test("TBJ - FL P10 W1 running week renders as PARTIAL not confirmed", async ({ page }) => {
-    await page.goto("/kpi/labor?account=TBJ%20-%20FL&start=2026-09-07&end=2026-10-04");
+  test("TBR - FL P10 W1: running week is PARTIAL in its natural habitat", async ({ page }) => {
+    // Kevin ruling 2026-09-07 (post-correction): TBR - FL P10 W1 is
+    // the partial case in its natural habitat - a running week,
+    // part-entered, mid-week. Not a contrived one. Measured live:
+    // 83 confirmed / 85 meaningful svcs (31 empty calendar slots
+    // excluded), actualRev $26,237 + projected $4,939.
+    await page.goto("/kpi/labor?account=TBR%20-%20FL&start=2026-09-07&end=2026-10-04");
     await expect(page.locator(".kpi-wbars").first()).toBeVisible({ timeout: 15_000 });
-
-    // Partial state renders `.kpi-wb-cap-forecast` (muted caption) on
-    // the tile. Not `.kpi-wb-target-forecast` because partial keeps
-    // the amber target line (per Kevin: "solid, muted").
-    const captions = page.locator(".kpi-wbars .kpi-wb-cap-forecast");
-    // W1 (partial) and W2 (partial 22/92) both muted; W3/W4 forecast
-    // also muted. So expect at least 1 partial tile visible.
-    expect(await captions.count()).toBeGreaterThanOrEqual(1);
 
     // The partial caption carries the "N of M services confirmed"
     // sub-copy per walkthrough item 3.
     const partialDates = page.locator(".kpi-wb-dates").filter({ hasText: /services confirmed · budget will move/ });
     expect(await partialDates.count()).toBeGreaterThanOrEqual(1);
+
+    // Muted caption tone on the partial tile.
+    const partialCaps = page.locator(".kpi-wbars .kpi-wb-cap-forecast");
+    expect(await partialCaps.count()).toBeGreaterThanOrEqual(1);
+  });
+
+  test("TBJ - FL P10: three states across four tiles (confirmed | confirmed | forecast | forecast)", async ({ page }) => {
+    // Kevin acceptance: use TBJ - FL P10 as the state-parade case.
+    // W1 + W2 confirmed (Kevin entered counts through W2), W3 + W4
+    // forecast (no counts yet). Every tile carries its own basis.
+    await page.goto("/kpi/labor?account=TBJ%20-%20FL&start=2026-09-07&end=2026-10-04");
+    await expect(page.locator(".kpi-wbars").first()).toBeVisible({ timeout: 15_000 });
+
+    // W3 + W4 forecast: dashed grey target lines
+    const forecastTargets = page.locator(".kpi-wb-target-forecast");
+    expect(await forecastTargets.count()).toBeGreaterThanOrEqual(2);
+
+    // W3 + W4 forecast: plan tags in captions (only future tiles carry
+    // the tag per current TierAWeekBar rendering)
+    const planTags = page.locator(".kpi-wb-plan-tag");
+    expect(await planTags.count()).toBeGreaterThanOrEqual(2);
   });
 
   test("Legend removes amber hatched entry (R-84)", async ({ page }) => {

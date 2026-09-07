@@ -30,11 +30,21 @@ import { loadOverviewBudgets } from "../../src/lib/kpi/overview/pnl-loader.js";
 const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const TODAY = "2026-09-07";
 
+// Kevin ruling 2026-09-07 (post-correction). Expected states after
+// Kevin entered the missing B&G Lunch count on 09/03 (which returned
+// TBR - FL P9 W4 to confirmed) and counts for 09/08 - 09/10 (which
+// covered TBR - FL P10 W1's front half):
+//
+//   TBJ - FL P10   wk1 confirmed | wk2 confirmed | wk3 forecast | wk4 forecast
+//   TBR - FL P10   wk1 PARTIAL   | wk2 forecast  | wk3 forecast | wk4 forecast
+//                                                                (running, part-entered)
+//   TBR - FL P9    all four confirmed
+//   TBJ - FL P9    all four confirmed
 const CASES = [
-  { account: "TBJ - FL", start: "2026-08-10", end: "2026-09-06", periods: [9], label: "P9 LP", expectedPanelBudget: 19346.42, hardGate: true },
-  { account: "TBR - FL", start: "2026-08-10", end: "2026-09-06", periods: [9], label: "P9 LP", hardGate: true },
-  { account: "TBJ - FL", start: "2026-09-07", end: "2026-10-04", periods: [10], label: "P10 TP - partial running week", hardGate: true, expectPartialW1: true },
-  { account: "TBR - FL", start: "2026-09-07", end: "2026-10-04", periods: [10], label: "P10 TP", hardGate: true },
+  { account: "TBJ - FL", start: "2026-08-10", end: "2026-09-06", periods: [9], label: "P9 LP - all confirmed", expect: ["confirmed","confirmed","confirmed","confirmed"] },
+  { account: "TBR - FL", start: "2026-08-10", end: "2026-09-06", periods: [9], label: "P9 LP - all confirmed (W4 returned after 09/03 B&G count)", expect: ["confirmed","confirmed","confirmed","confirmed"] },
+  { account: "TBJ - FL", start: "2026-09-07", end: "2026-10-04", periods: [10], label: "P10 TP - three states", expect: ["confirmed","confirmed","forecast","forecast"] },
+  { account: "TBR - FL", start: "2026-09-07", end: "2026-10-04", periods: [10], label: "P10 TP - W1 natural partial (running, part-entered)", expect: ["partial","forecast","forecast","forecast"] },
   { account: "CIN - AZ", start: "2026-09-07", end: "2026-10-04", periods: [10], label: "P10 TP" },
   { account: "TXR - AZ", start: "2026-08-10", end: "2026-09-06", periods: [9], label: "P9 LP" },
 ];
@@ -78,11 +88,14 @@ for (const c of CASES) {
       `${c.account} ${w.week_start}: basis in {confirmed,partial,forecast} (got ${w.revenue_basis})`);
   }
 
-  // Assertion 2 - service-level partial classification
-  if (c.expectPartialW1) {
-    const w1 = board.weeks[0];
-    assert(w1.revenue_basis === "partial",
-      `${c.account} W1 expected partial (was ${w1.revenue_basis}); ${w1.confirmed_services}/${w1.total_services} svcs`);
+  // Assertion 2 - expected basis sequence when the case names one.
+  if (c.expect) {
+    for (let i = 0; i < c.expect.length; i += 1) {
+      const w = board.weeks[i];
+      if (!w) continue;
+      assert(w.revenue_basis === c.expect[i],
+        `${c.account} ${c.label} W${i+1}: expected ${c.expect[i]}, got ${w.revenue_basis} (${w.confirmed_services}/${w.total_services} svcs, ${w.empty_slot_services} empty)`);
+    }
   }
 
   // Assertion 3 - unpriced_hrs stays empty
