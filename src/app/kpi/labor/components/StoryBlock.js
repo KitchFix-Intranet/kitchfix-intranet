@@ -78,10 +78,50 @@ function verdictDisplay(verdict) {
 // and left are secondary. Closed periods keep the under/over treatment
 // on the right cell of the pair.
 function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, isFutureRange }) {
-  const budget = board?.period_budget || board?.range_budget || null;
-  const spent = board?.spent_to_date ?? 0;
-  const variance = board?.variance ?? null;
   const kind = board?.kind;
+  // Kevin Labor PR-A items 1 + 6 + 8 (2026-09-04):
+  //
+  // Item 1 (both closed ranges) + Item 8 (This year excludes running
+  // period): on multi-period ranges that span a running period, the
+  // hero shows CLOSED-only spent - the same P1-P8 figures the
+  // Overview counts. On single closed periods (Last period), the
+  // range IS the closed subset. On single running periods (This
+  // period), the running week rule (item 6 PR-B) applies - not
+  // this PR's scope.
+  //
+  // R-77 fix: the comparison target is the ADJUSTED budget (batr) -
+  // what the target percent buys at the revenue actually earned -
+  // NOT the raw dollar budget. Shared batr helper on the payload
+  // enforces the R-77 invariant by construction. See
+  // src/lib/kpi/shared/batr.js.
+  //
+  // Kevin ruling: "right number, wrong surface. A site lead reading
+  // the board today still sees the wrong figure."
+  const isMultiWithClosedSubset = kind === "multi_period"
+    && board?.closed_range_budget != null
+    && board?.closed_spent_to_date != null;
+  // Actual: closed-only for multi-with-running, otherwise the range
+  // total. On a closed single period, spent_to_date IS the closed
+  // period sum.
+  const spent = isMultiWithClosedSubset
+    ? board.closed_spent_to_date
+    : (board?.spent_to_date ?? 0);
+  // Comparison target: batr when the payload carries it (R-77 fix).
+  // Falls back to raw range budget only when batr is unavailable
+  // (rolling windows, salaried-only account state, or a route that
+  // hasn't been updated). Existing consumers that read budget for
+  // display keep working - just against the adjusted figure now.
+  const budget = board?.budget_at_this_revenue != null
+    ? board.budget_at_this_revenue
+    : (board?.period_budget || board?.range_budget || null);
+  // Variance is spent - budget on whatever the current pair reads.
+  // When budget = batr (R-77 target), variance = spent - batr which
+  // matches the Overview's per-line dollar variance operand. Falls
+  // back to board.variance only when budget is null (no comparison
+  // possible either way).
+  const variance = (spent != null && budget != null)
+    ? Math.round((spent - budget) * 100) / 100
+    : (board?.variance ?? null);
   const noBudget = !budget || kind === "no_budget";
   const isPeriod = kind === "single_period_in_progress" || kind === "single_period_closed";
 

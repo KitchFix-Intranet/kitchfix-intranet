@@ -41,6 +41,13 @@ import { buildWorkerToEmail } from "@/lib/labor/personCount.js";
 // sub-rows in the statement; it never changes the 3100 total or any
 // derived figure (COGS, gross margin, ticker, chart).
 import { load3100_2Budgets, loadSalaryActuals, mergeBudgetPeriods, shapeSalaryRow } from "@/lib/labor/salaryBoard.js";
+// R-77 fix (Kevin 2026-09-04): budget_at_this_revenue moves to a
+// shared module so both boards compute the same figure. See the
+// header of src/lib/kpi/shared/batr.js for the invariant + reasoning.
+import {
+  budgetAtThisRevenue as sharedBatr,
+  envelopeDelta as sharedEnvelopeDelta,
+} from "@/lib/kpi/shared/batr.js";
 
 import { buildPurchasingBoard } from "@/app/kpi/purchasing/lib/resolver.js";
 import {
@@ -1323,12 +1330,17 @@ export async function resolveOverview({
   //   means the envelope shrank (revenue short); negative grew.
   const revenue_pace_pct = (totalRevenue != null && revenue_budget_to_date != null && revenue_budget_to_date > 0)
     ? r2((totalRevenue / revenue_budget_to_date) * 100) : null;
-  const budgetAtThisRevenue = (lineBudget) => {
-    if (!has_target || totalRevenue == null || lineBudget == null) return null;
-    const lineTarget = lineBudget / revenue_budget_full_period; // ratio, not pct
-    return r2(totalRevenue * lineTarget);
-  };
-  const envelopeDelta = (btd, batr) => (btd == null || batr == null) ? null : r2(btd - batr);
+  // R-77 fix (Kevin 2026-09-04): route through the shared helper.
+  // Formula is identical; the guard shape moves into the helper so
+  // Labor's route computes with the same rules. See
+  // src/lib/kpi/shared/batr.js for why one owner beats two.
+  const budgetAtThisRevenue = (lineBudget) => sharedBatr({
+    actualRevenue: totalRevenue,
+    lineBudget,
+    revenueBudgetFullPeriod: revenue_budget_full_period,
+    hasTarget: has_target,
+  });
+  const envelopeDelta = (btd, batr) => sharedEnvelopeDelta(btd, batr);
 
   // 14. Ticker.
   const isFeeAccount = !isAggregate && classifyForRevenue(accountKey) === "fee";
