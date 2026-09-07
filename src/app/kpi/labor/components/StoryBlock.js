@@ -106,50 +106,54 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
   const spent = isMultiWithClosedSubset
     ? board.closed_spent_to_date
     : (board?.spent_to_date ?? 0);
-  // Kevin walkthrough item 1 (2026-09-07). Comparison target =
-  // sum of per-week batr across the range. Prior code preferred
-  // board.budget_at_this_revenue but that computes only for
-  // single-period-closed ranges when P&L has verified data; when
-  // null (TBJ - FL P9 today, and every open range) the code fell
-  // back to board.range_budget which is the RAW figure and defeated
-  // R-77 on this surface.
+  // Kevin walkthrough sweep item 2 (2026-09-07). Precedence:
+  //   1. Range-level batr (board.budget_at_this_revenue) - authoritative
+  //      when defined. Uses P&L verified revenue across the whole range,
+  //      including periods pre-SC-seeding where per-week SC-derived
+  //      batr is zero.
+  //   2. Sum of per-week batr - correct for single-period ranges where
+  //      P&L has not verified yet (TBJ - FL P9 open period).
+  //   3. Raw range_budget - final fallback with the label rewritten
+  //      to plain "Budget" so nothing lies about adjustment.
   //
-  // Per-week batr sums to the same number as range-level batr for
-  // single-period ranges by construction (period_revenue * pct);
-  // for multi-period it is the period-weighted sum which is the
-  // more accurate figure. Kevin acceptance: "the panel's comparison
-  // figure equals the sum of the per-week budgets".
+  // Kevin measured live: TBJ - FL This year sum of per-week batr =
+  // $244,787.71 (misses P1-P4 pre-SC-seeding) vs range-level batr
+  // $305,312 (covers all periods). Range-level is right on multi-
+  // period; earlier walkthrough PR-A picked per-week first and drew
+  // the wrong number. Order flipped now.
   //
-  // For multi-period ranges spanning a running period, restrict to
-  // CLOSED weeks (matches R-63 "running period does not enter the
-  // total"). isMultiWithClosedSubset picks closed weeks; otherwise
-  // sum all weeks.
+  // For multi-period ranges spanning a running period, the per-week
+  // fallback restricts to CLOSED weeks (matches R-63); range-level
+  // batr already does this internally via periodsClosedBefore().
   const budget = (() => {
+    // Preferred: range-level batr from the resolver (whole-range,
+    // P&L-driven, closed-only for multi-with-running).
+    if (board?.budget_at_this_revenue != null) return board.budget_at_this_revenue;
+
+    // Fallback: sum of per-week batr for single-period ranges where
+    // P&L is not yet verified but SC data is present.
     const weeks = board?.weeks || [];
     if (weeks.length > 0) {
       const filter = isMultiWithClosedSubset
         ? (w => w.revenue_basis_temporal === "closed" || w.state === "closed")
         : (() => true);
-      const sum = weeks
-        .filter(filter)
-        .reduce((s, w) => s + (w.budget_at_this_week_revenue != null ? Number(w.budget_at_this_week_revenue) : 0), 0);
-      const anyWithBatr = weeks.filter(filter).some(w => w.budget_at_this_week_revenue != null);
-      if (anyWithBatr) return Math.round(sum * 100) / 100;
+      const eligible = weeks.filter(filter);
+      const anyWithBatr = eligible.some(w => w.budget_at_this_week_revenue != null);
+      if (anyWithBatr) {
+        const sum = eligible.reduce((s, w) => s + (w.budget_at_this_week_revenue != null ? Number(w.budget_at_this_week_revenue) : 0), 0);
+        return Math.round(sum * 100) / 100;
+      }
     }
-    // Fallback chain when per-week batr is missing (older routes,
-    // salaried-only, weeks outside FY2026): the pre-walkthrough path.
-    if (board?.budget_at_this_revenue != null) return board.budget_at_this_revenue;
+    // Final fallback: raw range_budget. Label flips to plain "Budget".
     return board?.period_budget || board?.range_budget || null;
   })();
-  // Was the comparison built from the adjusted per-week figures, or
-  // fell through to the raw range_budget? Drives the left-cell label
-  // ("Adjusted budget" vs "Budget") so the panel never claims to be
-  // adjusted when it isn't.
+  // Was the comparison built from the adjusted per-week or range-level
+  // figures, or did it fall through to raw? Label follows.
   const budgetIsAdjusted = (() => {
     if (budget == null) return false;
+    if (board?.budget_at_this_revenue != null) return true;
     const weeks = board?.weeks || [];
     if (weeks.some(w => w.budget_at_this_week_revenue != null)) return true;
-    if (board?.budget_at_this_revenue != null) return true;
     return false;
   })();
   // Variance is spent - budget on whatever the current pair reads.

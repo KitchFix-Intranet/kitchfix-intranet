@@ -346,7 +346,25 @@ export async function GET(request) {
   // gets a byte-identical default response whether they asked for
   // salary or not (spec §6, probe G4).
   const salary_available = gate.canSeeSalary(caller, account);
+  // Legacy disclosure gate (URL toggle AND permission). Used to
+  // decide whether the client SHOWS the hourly/salary split - not
+  // whether the merge happens. See mergeSalary below.
   const includeSalary = includeSalaryReq && salary_available;
+  // Kevin walkthrough sweep (2026-09-07) - R-68 restated for Labor:
+  // "the toggle controls disclosure of the split, never the number.
+  // Kitchen labour always shows its true total." Server now merges
+  // salary into the aggregate figures whenever the caller can see
+  // salary at all, regardless of the URL toggle. TBJ - FL This year
+  // measured on hourly toggle: Overview 3100 = $497,989, Labor
+  // hourly-only was $367,956 (delta $130,033 - the whole salary
+  // pool). With the merge always on, Labor matches Overview to the
+  // cent in both toggle states.
+  //
+  // The URL toggle (includeSalary above) still controls DISCLOSURE:
+  // salary_summary card visibility, salary worker rows in the
+  // WeekTable drill, header pill grammar. It no longer gates the
+  // aggregate math.
+  const mergeSalary = salary_available;
 
   // PR-2 range routing - one source per answer, never both. See
   // src/lib/labor/rangeResolver.js for the three-way rule.
@@ -386,7 +404,7 @@ export async function GET(request) {
   let allHomestands = null;
   let homestandBank = null;
   let homestandGameDatesByStand = null;   // Map<game_start ISO, Set<GAME ISO dates>>
-  try { allHomestands = await listHomestands(supa, account, 2026, { includeSalary }); }
+  try { allHomestands = await listHomestands(supa, account, 2026, { includeSalary: mergeSalary }); }
   catch (e) { return NextResponse.json(safeError("homestand_list", e), { status: 500 }); }
   if (allHomestands && allHomestands.length > 0) {
     // 2026-08-28 pagination sweep. labor_actuals_daily is 4,792 rows
@@ -438,7 +456,7 @@ export async function GET(request) {
       // when includeSalary; hourly-only otherwise.
       const actMap = new Map(hourlyActMap);
       const salaryX10000ByStand = new Map();
-      if (includeSalary) {
+      if (mergeSalary) {
         const salActuals = await loadSalaryActuals(supa, [account], "2025-12-29", "2026-12-27");
         if (salActuals.error) return NextResponse.json(safeError("homestand_salary_actuals", { message: salActuals.error }), { status: 500 });
         for (const h of allHomestands) {
@@ -986,7 +1004,10 @@ export async function GET(request) {
       },
     };
     Object.assign(body, pinHourlyOnly(body.board));
-    if (includeSalary) {
+    // Kevin walkthrough R-68 for Labor (2026-09-07). Merge whenever
+    // caller can see salary at all; the URL toggle only controls
+    // disclosure of the split (see mergeSalary above).
+    if (mergeSalary) {
       const [budQ, actQ] = await Promise.all([
         load3100_2Budgets(supa, members),
         loadSalaryActuals(supa, members, start, end),
@@ -1017,6 +1038,10 @@ export async function GET(request) {
       });
     }
     body.salary_available = salary_available;
+    // R-68 for Labor - disclosure flag reflects URL toggle. Aggregates
+    // are always salary-inclusive (see mergeSalary); this field tells
+    // the client whether to SHOW the hourly/salary breakdown.
+    body.salary_included = includeSalary;
     body.landing_account = landing_account;
     body.preview_account = preview_account;
     body.source = "weekly";
@@ -1054,7 +1079,7 @@ export async function GET(request) {
       week_budgets: [],
     };
     Object.assign(bodyD26, pinHourlyOnly(bodyD26.board));
-    if (includeSalary) {
+    if (mergeSalary) {
       // D26 accounts on the salary path get a real board. Override
       // account_state to hourly_ok so buildBoard emits the full shape;
       // hourly rows are still zero, but salary provides the figures.
@@ -1090,6 +1115,7 @@ export async function GET(request) {
       });
     }
     bodyD26.salary_available = salary_available;
+    bodyD26.salary_included = includeSalary;  // R-68: disclosure flag, not merge flag
     bodyD26.landing_account = landing_account;
     bodyD26.preview_account = preview_account;
     bodyD26.source = "weekly";
@@ -1384,7 +1410,7 @@ export async function GET(request) {
     },
   };
   Object.assign(bodySingle, pinHourlyOnly(bodySingle.board));
-  if (includeSalary) {
+  if (mergeSalary) {
     const [budQ, actQ] = await Promise.all([
       load3100_2Budgets(supa, [account]),
       loadSalaryActuals(supa, [account], start, end),
@@ -1453,6 +1479,7 @@ export async function GET(request) {
     }
   }
   bodySingle.salary_available = salary_available;
+  bodySingle.salary_included = includeSalary;  // R-68: disclosure flag, not merge flag
   bodySingle.landing_account = landing_account;
   bodySingle.preview_account = preview_account;
   bodySingle.source = "weekly";
