@@ -2308,13 +2308,13 @@
 .kpi-spend-cell-mute .kpi-spend-cell-val { color: var(--text-subtle); }
 .kpi-spend-cell-mute .kpi-spend-cell-lab { color: var(--text-subtle); }
 
-/* Kevin post-1057 sweep item 1 (2026-09-08). Percent-first panel
-   layout. Same grammar as the Overview's cost card: Actual row
-   (big percent + small dollars) over Target row (smaller, muted)
-   over a foot with variance dollars + arrow. Kevin's ruling: no
-   points figure, arrow next to number, pill reads "Over target"
-   or "On target". Render of record: docs/renders/labor-panel-
-   percent-first.html. */
+/* Panel actual/target rows. Kevin post-1061 sweep (2026-09-09):
+   flipped to DOLLARS-FIRST (R-91 supersedes R-89). Amount is hero;
+   percent sits beside as small text. Both figures on the Actual
+   row carry the verdict colour (small inherits from parent .v);
+   Target-ref stays muted. Overview's cost + margin cards + Labor
+   panel now read the same order. Render of record:
+   docs/renders/labor-panel-dollars-first.html. */
 .kpi-spend-pf-row {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: var(--kpi-sp-3);
@@ -2328,13 +2328,13 @@
   line-height: 1.15; font-variant-numeric: var(--num-tabular);
 }
 .kpi-spend-pf-row .v small {
-  font-size: 14px; font-weight: 700; color: var(--n-600);
+  font-size: 14px; font-weight: 700; color: inherit;
   margin-left: var(--kpi-sp-2);
 }
 .kpi-spend-pf-row.ref .v {
   font-size: 21px; color: var(--n-600); font-weight: 700;
 }
-.kpi-spend-pf-row.ref .v small { font-size: 12.5px; }
+.kpi-spend-pf-row.ref .v small { font-size: 12.5px; color: var(--n-600); }
 .kpi-spend-pf-row .v.over { color: var(--red-700); }
 .kpi-spend-pf-row .v.under { color: var(--green-700); }
 .kpi-spend-pf-rule {
