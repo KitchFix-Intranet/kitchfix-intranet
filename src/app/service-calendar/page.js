@@ -180,6 +180,24 @@ function ServiceCalendarPageBody() {
   }, [status]);
 
   if (status === "loading") {
+    // 2026-09-08 loading-unification PR: THIS IS THE ONE SURVIVING
+    // SPINNER. Do not delete it, and do not add another spinner
+    // anywhere else in the app. It runs during NextAuth session
+    // hydration, BEFORE any React component that reads useSession
+    // can render - which means no skeleton primitive can run either
+    // (React is not yet attached to the target subtree). It is a
+    // pre-hydration seam, not a load state; the two are different
+    // problems. Every other loading treatment app-wide is a
+    // SkeletonSurface variant (that migration is a follow-up PR).
+    //
+    // Handoff: once status flips to "authenticated", this block
+    // returns null and ServiceCalendar mounts. SC's own
+    // `isAccountLoading` gate takes over as the load state from
+    // that moment, rendering SkeletonSurface at ServiceCalendar.js
+    // :3615. If you find yourself wanting to add a spinner between
+    // this handoff and the SkeletonSurface (i.e. anywhere in the
+    // /service-calendar mount path), the answer is: extend the
+    // isAccountLoading gate or fix its plumbing, not add a spinner.
     return (
       <div className="oh-app">
         <div className="oh-bound" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
