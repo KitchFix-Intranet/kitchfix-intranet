@@ -440,9 +440,27 @@ export default function KpiLaborPage() {
         w.coverage_state = "partial";
       }
     }
+    // Kevin post-1055 sweep item 1+2 (2026-09-08). Enrich each client-
+    // side week aggregate with the API-supplied per-week adjusted
+    // budget (budget_at_this_week_revenue) so the table's period rows,
+    // week rows, and grand total read the same basis the panel + chart
+    // use. Prior state: weekAggregates was built from data.actuals
+    // rows alone and never carried the batr field, so WeekTable's
+    // periodTotals + per-week VS BUDGET quietly fell back to raw
+    // week_budget (period_budget / 4) even though #1055 wired the
+    // adjusted read - the fallback WAS the render. Reproducer:
+    // TBJ - FL This year P3 chart said $7,597 under, table said $719
+    // over ($8,316 apart, opposite sign) - both from the same payload.
+    const boardWeeksByStart = new Map((data?.board?.weeks || []).map(bw => [bw.week_start, bw]));
+    for (const w of byWeek.values()) {
+      const bw = boardWeeksByStart.get(w.week_start);
+      if (bw && bw.budget_at_this_week_revenue != null) {
+        w.budget_at_this_week_revenue = Number(bw.budget_at_this_week_revenue);
+      }
+    }
     // Sort desc so the newest week (P9 today) appears first.
     return [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start));
-  }, [filteredActuals, aggregateExcludedSet]);
+  }, [filteredActuals, aggregateExcludedSet, data?.board?.weeks]);
 
   const weeksInRange = weekAggregates.length; // canonical week count
 

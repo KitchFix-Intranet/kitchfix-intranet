@@ -521,10 +521,21 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     : (w.spent || 0);
   const isZero = !isNotStarted && (!value || value <= 0.5);
   const barPct = isNotStarted ? 0 : Math.max(0, Math.min(100, (value / scale) * 90));
+  // Kevin post-1055 sweep item 4 (2026-09-08). Closed-week bar fill
+  // colour is derived from the ADJUSTED variance (spent - per-week
+  // batr) so the fill matches the sign of its own caption. #1055
+  // fixed the caption but left the fill on w.delta_sign, which is
+  // the RAW basis (spent - original_target). Reproducer TBJ - FL
+  // Last period: bar fill red, caption green "under $2,940.90" -
+  // three weeks in a row.
+  const closedAdjBudget = w.budget_at_this_week_revenue;
+  const closedAdjSign = (isClosed && closedAdjBudget != null && w.spent != null)
+    ? ((Number(w.spent) - Number(closedAdjBudget)) > 0.005 ? "over" : "under")
+    : w.delta_sign;
   const barCls = isInProgress
     ? "kpi-wb-bar kpi-wb-bar-prog"
     : isClosed
-      ? `kpi-wb-bar ${w.delta_sign === "over" ? "kpi-wb-bar-over" : "kpi-wb-bar-under"}`
+      ? `kpi-wb-bar ${closedAdjSign === "over" ? "kpi-wb-bar-over" : "kpi-wb-bar-under"}`
       : "";
   // V42 REVISED (C2) - hatched cap. Estimated dollars for hours with
   // no covering pay-segment yet - "this bar will grow when payroll
