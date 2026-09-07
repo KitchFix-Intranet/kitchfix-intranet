@@ -664,7 +664,26 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     statusLine = <span className="kpi-wb-d kpi-wb-d-mute">
       week started · {daysLeft != null ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "budget covers the whole week"}
     </span>;
+  } else if (isClosed && perWeekAdjusted != null && w.spent != null) {
+    // Kevin post-1053 sweep item 1 (2026-09-08). Bar caption now
+    // uses the ADJUSTED per-week budget, not the raw
+    // period-budget/4 in w.delta_vs_original. Prior code: bar said
+    // "▲ OVER $672.87" (raw) while the week card said "▼ under
+    // $2,940.90" (adjusted) - same spend, opposite verdicts. Kevin's
+    // rule: "the over-or-under is the total labour spend against the
+    // adjusted budget. That logic carries across the bar graph, the
+    // week-by-week detail under it, and into the table."
+    const spentN = Number(w.spent);
+    const budN = Number(perWeekAdjusted);
+    const delta = Math.round((spentN - budN) * 100) / 100;
+    const sign = delta < -0.005 ? "under" : delta > 0.005 ? "over" : "flat";
+    const dir = sign === "under" ? "down" : sign === "over" ? "up" : "flat";
+    const cls = sign === "under" ? "kpi-wb-d-good" : sign === "over" ? "kpi-wb-d-bad" : "kpi-wb-d-mute";
+    statusLine = <span className={`kpi-wb-d ${cls}`}><Arrow dir={dir} />{fmt$(Math.abs(delta))} {sign}</span>;
   } else if (isClosed && w.delta_vs_original != null) {
+    // Legacy fallback - fires when the per-week batr loader has not
+    // attached (older routes, salaried-only boards). Reads the raw
+    // basis so the caption still renders something.
     const dir = w.delta_sign === "under" ? "down" : w.delta_sign === "over" ? "up" : "flat";
     const cls = w.delta_sign === "under" ? "kpi-wb-d-good" : w.delta_sign === "over" ? "kpi-wb-d-bad" : "kpi-wb-d-mute";
     statusLine = <span className={`kpi-wb-d ${cls}`}><Arrow dir={dir} />{fmt$(Math.abs(w.delta_vs_original))} {w.delta_sign}</span>;
@@ -1125,7 +1144,7 @@ function TierCStrip({ board, budgetPeriods }) {
   // spend/hours per period stays inline because the shape here (bar
   // heights) is chart-specific.
   const canonicalPeriods = periodsInBoardWeeks(board);
-  const perPeriod = new Map(canonicalPeriods.map(p => [p.period_no, { period_no: p.period_no, spent: 0, hours: 0, weeks: [] }]));
+  const perPeriod = new Map(canonicalPeriods.map(p => [p.period_no, { period_no: p.period_no, spent: 0, hours: 0, weeks: [], adjustedBudgetSum: 0, adjustedAny: false }]));
   for (const w of weeks) {
     const p = w.period_no;
     if (p == null) continue;
@@ -1134,13 +1153,32 @@ function TierCStrip({ board, budgetPeriods }) {
     cur.spent += w.spent || 0;
     cur.hours += w.hours || 0;
     cur.weeks.push(w);
+    if (w.budget_at_this_week_revenue != null) {
+      cur.adjustedBudgetSum += Number(w.budget_at_this_week_revenue);
+      cur.adjustedAny = true;
+    }
   }
-  const periods = [...perPeriod.values()].sort((a, b) => a.period_no - b.period_no);
-  for (const pp of periods) {
-    pp.budget = budgetByPeriod.has(pp.period_no) ? budgetByPeriod.get(pp.period_no) : null;
+  const allPeriods = [...perPeriod.values()].sort((a, b) => a.period_no - b.period_no);
+  for (const pp of allPeriods) {
+    // Kevin post-1053 sweep item 1 (2026-09-08). Period bar budget
+    // now uses the ADJUSTED per-period budget (sum of per-week batr)
+    // so the chart agrees with panel + table. Raw period budget is
+    // fallback when per-week batr not attached.
+    pp.budget = pp.adjustedAny
+      ? Math.round(pp.adjustedBudgetSum * 100) / 100
+      : (budgetByPeriod.has(pp.period_no) ? budgetByPeriod.get(pp.period_no) : null);
     const anyInProgress = pp.weeks.some(w => w.state === "in_progress" || w.state === "not_started");
     pp.in_progress = anyInProgress;
   }
+  // Kevin post-1053 sweep item 3 (2026-09-08). Running period drops
+  // out of the This year chart entirely. R-63: the running period
+  // does not enter the total and does not render as a bar. Prior
+  // behavior painted P10 as an "in progress" bar with a raw budget
+  // reference line even though it could not contribute to the
+  // closed-only comparison.
+  const periods = board?.kind === "multi_period"
+    ? allPeriods.filter(pp => !pp.in_progress)
+    : allPeriods;
 
   const maxScale = Math.max(
     ...periods.map(p => Math.max(p.spent, p.budget || 0)),
