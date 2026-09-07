@@ -1392,46 +1392,49 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
               // preserves it (BulkReview flags the row + the batch,
               // Ledger records every value as old->new).
               //
-              // Gate now reads SERVER status (d.status) not the resolved
+              // Gate reads SERVER status (d.status) not the resolved
               // display status: `resolveDayStatus` maps both `no-service`
               // AND `prep` to "off", which would conflate two different
               // rulings.
               //
-              // "no-service" splits on hasActuals - the classifier emits
-              // it for TWO distinct realities (serviceCalendar.js):
-              //   :303  hasAct && !anyNonZeroAct     -> recorded
+              // "no-service" is emitted by the classifier for two
+              // distinct realities (serviceCalendar.js:326 + :333) that
+              // downstream code can only tell apart via hasActuals:
+              //   :326  hasAct && !anyNonZeroAct     -> recorded
               //         cancellation (operator marked no-service; all-
               //         zero actuals exist). Selectable - re-entry is
               //         legitimate, audit trail via Ledger.
-              //   :310  !hasAct && hasProj &&        -> planned off-day
-              //         !anyNonZeroProj                (PR #167; nothing
-              //         ever scheduled). BLOCKED - schedule truth:
-              //         nothing scheduled, nothing to bulk-enter. A bulk
-              //         write here would inject zero-value rows into
-              //         sc_daily_actuals and flip the day's classifica-
-              //         tion from planned-off (:310) to recorded
-              //         no-service (:303), silently promoting a non-
-              //         scheduled day to a cancellation in the Ledger
-              //         and exports.
+              //   :333  !hasAct && hasProj &&        -> zero-projected
+              //         !anyNonZeroProj                day the pre-season
+              //         budget guessed off. Also selectable now (2026-
+              //         09-08 owner ruling): projections are a budget
+              //         built at the start of the year; clients set
+              //         actual service week by week. A day the budget
+              //         projected as no-service can absolutely have
+              //         service delivered, and must be selectable
+              //         through every path.
               //
-              // Full 9-status partition (owner Ruling 5, 2026-07-24):
+              // Full 9-status partition (owner rulings 2026-07-24 +
+              // 2026-09-08):
               //   ALLOW:
               //     entered, needs-entry, overdue, future,
-              //     no-service + hasActuals (kind 1)
+              //     no-service (both kinds - operator-marked + zero-
+              //                 projected untouched)
               //   BLOCK:
-              //     no-service + !hasActuals (kind 2),
-              //     off-season, prep,
+              //     off-season, prep (fee-account statuses; ruling
+              //                       held for owner - the same
+              //                       principle may apply but fee
+              //                       accounts bill a contracted
+              //                       amount regardless of counts,
+              //                       so the case is different; see
+              //                       docs/backlog/fee-account-bulk-
+              //                       selectable.md)
               //     exhibition, away (via isDisplayOnly)
-              //
-              // Do NOT drop the hasActuals term on no-service without
-              // reading serviceCalendar.js:303-310. Removing it re-
-              // admits planned off-days.
               const isExhibition = status === "exhibition";
               const isAway = status === "away";
               const isDisplayOnly = isExhibition || isAway;
               const dayNotScheduled = d.status === "off-season"
-                || d.status === "prep"
-                || (d.status === "no-service" && !d.hasActuals);
+                || d.status === "prep";
               const isBulkSelectable = bulkMode && !dayNotScheduled && !isDisplayOnly;
               const isRoving = flatIdx === focusIdx;
               return (

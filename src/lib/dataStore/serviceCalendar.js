@@ -323,13 +323,29 @@ export function classifyDayStatus(s, ctx) {
   // handling). All other per-meal accounts have no hs and the check
   // is a no-op.
   if (hs?.dayType === "AWAY") return "away";
+  // KIND 1 no-service (recorded cancellation): the operator explicitly
+  // saved all-zero actuals - hit "Mark day as no service" or manually
+  // typed zeros for every service. A deliberate claim on the record.
   if (s.hasAct && !s.anyNonZeroAct) return "no-service";
   if (s.hasAct) return "entered";
-  // 2026-06-17 (PR #167): per-meal accounts treat a day with all-zero
-  // projections AND no actuals as "no-service" (planned off-day, nothing
-  // to enter). Applies past AND future so the back half of the season
-  // isn't rendered as scheduled service. flat_fee + hasHomestandData
-  // uses the fee branch above and skips this.
+  // KIND 2 no-service (zero-projected, never touched): the pre-season
+  // budget guessed off and no operator has acted on the day. NOT a
+  // claim - the budget's absence is not the same as the client's
+  // cancellation. Kevin ruling 2026-09-08: operator can enter service
+  // on this day through every path (bulk selector too) since clients
+  // set actual service week by week regardless of what was projected.
+  // 2026-06-17 (PR #167): per-meal accounts. Applies past AND future so
+  // the back half of the season isn't rendered as scheduled service.
+  // flat_fee + hasHomestandData uses the fee branch above and skips this.
+  //
+  // KNOWN LIMITATION worth naming (2026-09-08): this classifier produces
+  // the SAME "no-service" label for Kind 1 and Kind 2, with hasActuals
+  // as the only downstream discriminator. That works today because the
+  // two happen to differ on that field. The day a feature needs to tell
+  // "the client cancelled" from "we never planned service" apart, the
+  // distinction has to exist HERE at the classification layer - not be
+  // inferred from hasActuals by every consumer. A `no_service_reason`
+  // dimension on the return shape would be the natural next step.
   if (!s.hasAct && s.hasProj && !s.anyNonZeroProj && !(ctx.billingModel === "flat_fee" && ctx.hasHomestandData)) return "no-service";
   if (isPast && isOverdue) return "overdue";
   if (isPast) return "needs-entry";
