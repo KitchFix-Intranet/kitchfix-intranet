@@ -254,6 +254,34 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
               {vd.label}
             </span>
           )}
+          {/* Labor unapproved-hours fix (Kevin 2026-09-07). Verdict
+              qualification pill. Kevin acceptance: "a period with
+              unapproved hours never renders an unqualified verdict".
+              Data: sum draft_hours across board.weeks in the range +
+              count of weeks with any draft_hours (the "N open weeks"
+              side of Kevin's phrasing "the open week and its size").
+              Only fires when verdict exists (skips future ranges,
+              nothing to approve).
+              Copy grammar: singular vs plural on both dimensions.
+              Muted outline pill - not a warning colour per Kevin
+              ("nothing is wrong, the week is simply not settled"). */}
+          {vd && (() => {
+            const weeks = board?.weeks || [];
+            const openWeeks = weeks.filter(w => Number(w.draft_hours || 0) > 0.004).length;
+            const totalDraft = weeks.reduce((s, w) => s + Number(w.draft_hours || 0), 0);
+            if (openWeeks === 0 || totalDraft < 0.004) return null;
+            const hrsLabel = totalDraft >= 100 ? totalDraft.toFixed(0) : totalDraft.toFixed(1);
+            const wkLabel = openWeeks === 1 ? "1 WK" : `${openWeeks} WKS`;
+            return (
+              <span
+                className="kpi-vpill kpi-vpill-awaiting"
+                aria-label={`${totalDraft.toFixed(1)} hours across ${openWeeks} week${openWeeks === 1 ? "" : "s"} awaiting site-lead approval`}
+                data-vpill-awaiting
+              >
+                AWAITING · {wkLabel} · {hrsLabel} HRS
+              </span>
+            );
+          })()}
           {salaryAvailable && (
             // homestand-fixes round 2 item 9 (2026-08-26): "HOURLY
             // ONLY" -> "HOURLY" (shorter, less crowding beside the
@@ -433,13 +461,44 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   const capPct = capDollars != null
     ? Math.max(0.5, Math.min(capHeadroom, capPctRaw))
     : 0;
+  // Labor unapproved-hours fix (Kevin 2026-09-07). Grey hatched slice
+  // sitting WITHIN the solid bar to name the priced-but-not-approved
+  // portion of this week's spend. Kevin: "86.88 hours at $21.58 is
+  // roughly $1,875 - nearly double the $986 the period is under by. A
+  // chef who reads ON TRACK on Monday, approves the weekend, and comes
+  // back to a different verdict will stop believing the board."
+  //
+  // Dollar math: draft_hours * rate. Slice height = barPct * (unapp $
+  // / spent $). Bar's total height unchanged - the slice OVERLAYS the
+  // top portion of the solid bar within the same height envelope,
+  // rather than adding to it (that's what the amber cap does for
+  // unpriced hours).
+  //
+  // Only fires on closed/in-progress weeks with real spend AND real
+  // draft_hours. Zero-spend and future weeks skip.
+  const draftHrs = Number(w.draft_hours || 0);
+  const unappDollars = (!isZero && !isNotStarted && draftHrs > 0.004 && rate)
+    ? draftHrs * Number(rate)
+    : 0;
+  const unappRatio = (unappDollars > 0 && value > 0.5)
+    ? Math.min(1, unappDollars / value)
+    : 0;
+  const unappPct = unappRatio > 0 ? barPct * unappRatio : 0;
+  const approvedPct = unappRatio > 0 ? barPct - unappPct : 0;
   // PR-C hatch gap fix (owner ruling 2026-08-24). When a cap is
   // present, remove the bar's rounded top so bar + cap merge cleanly.
   // Prior state: both elements carried `border-radius: 4px 4px 0 0`;
   // the bar's rounded top curved down at the corners while the cap's
   // flat bottom left a triangular gap. `.kpi-wb-bar-capped` overrides
   // border-radius to 0 so the pair reads as one column.
-  const barClsFinal = (barCls && capPct > 0) ? `${barCls} kpi-wb-bar-capped` : barCls;
+  //
+  // Extended for the unapproved slice: when a slice sits within the
+  // bar, the bar's top-rounded corners are hidden by the slice's flat
+  // bottom, so the corners visually disappear regardless. We still
+  // apply -capped so the slice's rounded top is what the reader sees
+  // (no double-round competing).
+  const hasOverlay = capPct > 0 || unappPct > 0;
+  const barClsFinal = (barCls && hasOverlay) ? `${barCls} kpi-wb-bar-capped` : barCls;
   // Labor PR-B item 4 - reference line reads this week's own budget
   // (budget_at_this_week_revenue = week_revenue × line_target_pct),
   // not a quarter of the period plan. The line is styled per basis:
@@ -552,6 +611,22 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
             style={{ height: `${capPct}%`, bottom: `${barPct}%` }}
             title={capDollars != null ? `Estimated ~${fmt$(capDollars)} not costed yet` : undefined}
             aria-label="not costed yet, estimated"
+          />
+        )}
+        {/* Labor unapproved-hours fix (Kevin 2026-09-07). Grey hatched
+            slice within the solid bar, positioned at the top of the
+            bar's height envelope. Kevin acceptance: "the hatched portion
+            of a week bar equals that week's unapproved share of its own
+            spend" - unappPct is barPct * (unappDollars / spent), so the
+            visual ratio exactly matches the dollar ratio.
+            Title carries the number so a hover on any bar surfaces the
+            dollars-at-stake without a second click. */}
+        {unappPct > 0 && (
+          <div
+            className="kpi-wb-bar kpi-wb-slice-unapp"
+            style={{ height: `${unappPct}%`, bottom: `${approvedPct}%` }}
+            title={`${draftHrs.toFixed(1)} hrs awaiting approval · ~${fmt$(unappDollars)}`}
+            aria-label={`${draftHrs.toFixed(1)} hours awaiting approval, roughly ${fmt$(unappDollars)}`}
           />
         )}
       </div>
@@ -910,15 +985,29 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
               the scope pill on the first card reads "+ SALARY". A
               third statement inside a legend that names the target
               lines is the wrong place; that legend names the lines. */}
-          {/* V42 REVISED (C2 legend) - name the hatched cap that
-              stacks on top of any bar with unpriced hours. Standing
-              rule: every tracker screen carries a visible state key;
-              never ship an unexplained pattern. */}
+          {/* Labor unapproved-hours fix (Kevin 2026-09-07). Two hatched
+              treatments now, one per state - the legend distinguishes
+              them by colour so the reader can tell which pattern is
+              which at a glance. Prior legend read "hatched = not costed
+              yet" and there was exactly one hatched element on the
+              page (the swatch itself; no bar used it in current data).
+              Kevin: "if it does not [fire], replace it" - the state
+              still exists in code (unpriced_hrs > 0 fires during
+              payroll processing windows) so both legends stay; each
+              names its own colour + placement. Standing rule: every
+              tracker carries a visible state key; never ship an
+              unexplained pattern. */}
           {tier === "A" && (
-            <span className="kpi-wh-tgt kpi-wh-tgt-cap">
-              <span className="kpi-wh-cap-swatch" aria-hidden="true" />
-              hatched = not costed yet
-            </span>
+            <>
+              <span className="kpi-wh-tgt kpi-wh-tgt-cap">
+                <span className="kpi-wh-unapp-swatch" aria-hidden="true" />
+                grey hatched = awaiting approval
+              </span>
+              <span className="kpi-wh-tgt kpi-wh-tgt-cap">
+                <span className="kpi-wh-cap-swatch" aria-hidden="true" />
+                amber hatched = not costed yet
+              </span>
+            </>
           )}
         </div>
 

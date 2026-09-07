@@ -2119,6 +2119,21 @@
   border-color: var(--n-300);
   font-weight: 600;
 }
+/* Labor unapproved-hours fix (Kevin 2026-09-07). Verdict-qualification
+   pill that renders alongside the state pill (ON TRACK / WATCH / OVER
+   BUDGET) whenever the range carries unapproved hours. Kevin ruling:
+   the verdict can flip when someone clicks approve, and an unqualified
+   pill hides that. This pill names the open week(s) and the hours at
+   stake so the reader knows the settlement is pending.
+   Not a warning colour - nothing is wrong, the week is not settled. */
+.kpi-vpill-awaiting {
+  background: transparent;
+  color: var(--n-700);
+  border-color: var(--n-400);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .kpi-spend-h-title {
   font-size: var(--kpi-t-meta); font-weight: 800; letter-spacing: 0.08em;
   color: var(--n-700); text-transform: uppercase; white-space: nowrap;
@@ -2301,6 +2316,20 @@
   border-radius: 2px;
   background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
 }
+/* Labor unapproved-hours fix (Kevin 2026-09-07) - grey hatched swatch
+   for the "awaiting approval" legend entry that names the slice sitting
+   WITHIN a solid bar. Distinct from the amber cap swatch above so
+   readers can distinguish the two states at a glance:
+     amber hatched cap    = not costed yet (sits above the bar, adds height)
+     grey  hatched slice  = awaiting approval (sits within the bar, splits height)
+   Neutral grey - Kevin ruling: "not a warning colour, nothing is
+   wrong; the week is simply not settled". */
+.kpi-wh-unapp-swatch {
+  display: inline-block;
+  width: var(--kpi-sp-3); height: var(--kpi-sp-2);
+  border-radius: 2px;
+  background: repeating-linear-gradient(45deg, var(--n-500, #64748B) 0 6px, var(--n-300, #CBD5E1) 6px 12px);
+}
 
 /* Tier A week columns (V8-12 + V29-7). Per-week target line: amber
    ORIGINAL on closed/in-progress weeks, light-blue ADJUSTED on
@@ -2372,6 +2401,22 @@
   border-radius: 4px 4px 0 0;
   background: repeating-linear-gradient(45deg, var(--amber-600) 0 6px, #F3D9AE 6px 12px);
   pointer-events: auto;   /* keep the title tooltip reachable */
+}
+/* Labor unapproved-hours fix (Kevin 2026-09-07). Grey hatched SLICE
+   that sits WITHIN a solid bar (not on top of it) to name the portion
+   of a week's spend that is priced but not yet site-lead approved.
+   The bar's total height is unchanged; the slice overlays the top
+   `unapprovedPct` of the bar's height envelope. Distinct from
+   .kpi-wb-cap-est - that one adds height above the bar for hours
+   not yet costed. This one splits existing height for hours awaiting
+   approval.
+   Kevin ruling: "Not a warning colour: nothing is wrong, the week
+   is simply not settled." Neutral grey. */
+.kpi-wb-slice-unapp {
+  position: absolute; left: 0; right: 0;
+  border-radius: 4px 4px 0 0;
+  background: repeating-linear-gradient(45deg, var(--n-500, #64748B) 0 6px, var(--n-300, #CBD5E1) 6px 12px);
+  pointer-events: auto;
 }
 .kpi-wb-cap {
   margin-top: var(--kpi-sp-3); text-align: center; line-height: 1.35;
