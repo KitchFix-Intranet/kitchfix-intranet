@@ -330,6 +330,67 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel, showPeriodCols }) {
   );
 }
 
+// Kevin R-92 PR-3 follow-up (2026-09-09). Simplified cost-lines
+// table for This period (single running period). Four columns only:
+// Line, Spent so far, P10 budget, Target %. No % of rev, no
+// adjusted budget, no Left, no total-row variance. Matches the
+// option A cards above by not rendering a verdict where the cards
+// already say "no percentage yet". Render of record:
+// docs/renders/overview-this-period-sc-revenue.html.
+function SimpleCostLinesTable({ cogsRows, periodNo }) {
+  const totalSpent = cogsRows.reduce((s, r) => s + Number(r.actual || 0), 0);
+  const totalBudget = cogsRows.reduce((s, r) => s + Number(r.period_budget || 0), 0);
+  const totalTargetPct = cogsRows.reduce((s, r) => s + Number(r.target_pct || 0), 0);
+  const periodBudgetHeader = periodNo != null ? `P${periodNo} budget` : "Period budget";
+  return (
+    <div className="kpi-ov-card kpi-ov-mt" data-kpi-ov="cost-lines">
+      <div className="kpi-ov-ch">
+        <span className="kpi-ov-eb">Where the money is going</span>
+        <span className="kpi-ov-gl">click a line to open it</span>
+        {/* No verdict pill on TP · the cards above say "no percentage
+            yet". A "N of X over" pill here would contradict that. */}
+      </div>
+      <div className="kpi-ov-cb">
+        <table className="kpi-ov-cl" data-kpi-ov="cost-lines-table">
+          <thead>
+            <tr>
+              <th className="l">Line</th>
+              <th className="kpi-ov-num">Spent so far</th>
+              <th className="kpi-ov-num">{periodBudgetHeader}</th>
+              <th className="kpi-ov-num" style={{ width: 68 }}>Target %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cogsRows.map(r => (
+              <tr key={r.line_code} className="kpi-ov-cl-row">
+                <td className="l kpi-ov-cl-line">
+                  <span className="kpi-ov-cl-code">{r.line_code}</span>
+                  <span className="kpi-ov-cl-lbl">{r.label}</span>
+                </td>
+                <td className="kpi-ov-num" data-kpi-ov="cost-line-actual">
+                  {fmtMoney(r.actual) || "—"}
+                </td>
+                <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-period-budget">
+                  {fmtMoney(r.period_budget) || "—"}
+                </td>
+                <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-target-pct">
+                  {fmtPct(r.target_pct) || "—"}
+                </td>
+              </tr>
+            ))}
+            <tr className="kpi-ov-cl-tot" data-kpi-ov="cost-lines-total">
+              <td className="l">Total cost of goods</td>
+              <td className="kpi-ov-num">{fmtMoney(totalSpent) || "—"}</td>
+              <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(totalBudget) || "—"}</td>
+              <td className="kpi-ov-num kpi-ov-nb">{fmtPct(totalTargetPct) || "—"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function CostLines({ payload, previewAccount = null }) {
   if (!payload?.statement_rows) return null;
   const filters = payload.filters;
@@ -341,6 +402,23 @@ export default function CostLines({ payload, previewAccount = null }) {
     .sort((a, b) => Number(a.line_code) - Number(b.line_code));
   if (cogsRows.length === 0) return null;
   const cogsCard = payload.cards?.find(c => c.key === "cogs");
+
+  // Kevin R-92 PR-3 follow-up (2026-09-09). On This period (single
+  // running period), the cost card holds its percentage (no verdict
+  // until invoices land). The cost lines TABLE was rendering option
+  // B - full Actuals / % of rev / Left / Total variance - which
+  // contradicted the option A cards four lines above ("A percentage
+  // now would read 8.2% and mean nothing") by printing 8.2% five
+  // times and "$26,217 under" on the total row.
+  //
+  // Fix: on TP running, render a SIMPLIFIED table (four columns:
+  // Line, Spent so far, P10 budget, Target %) with no percentage
+  // and no variance. Every other range keeps the existing table
+  // exactly as it is.
+  const isRunningSinglePeriod = payload.range?.kind === "period" && payload.period_state === "open";
+  if (isRunningSinglePeriod) {
+    return <SimpleCostLinesTable cogsRows={cogsRows} periodNo={payload.range?.period_no} />;
+  }
   // Kevin Prompt 1 item 1b (2026-09-04): period columns render only
   // on open ranges (a closed period has no "left"). Column labels
   // come from the same range_labels the resolver already emits -
