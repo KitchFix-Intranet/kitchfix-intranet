@@ -1436,7 +1436,7 @@ export async function resolveOverview({
         const gapAbs = Math.abs(Math.round(revenueDelta));
         const gapStr = gapAbs >= 1 ? `$${gapAbs.toLocaleString("en-US")} ` : "";
         if (Math.abs(revenueDelta) < 1) {
-          return { label: "on forecast", tone: openRange ? "neutral" : "good" };
+          return { label: "on projection", tone: openRange ? "neutral" : "good" };
         }
         if (openRange) {
           return revenueDelta >= 0
@@ -1444,8 +1444,8 @@ export async function resolveOverview({
             : { label: `${gapStr}trending below`, tone: "neutral" };
         }
         return revenueDelta >= 0
-          ? { label: `${gapStr}above forecast`, tone: "good" }
-          : { label: `${gapStr}below forecast`, tone: "bad" };
+          ? { label: `${gapStr}above projection`, tone: "good" }
+          : { label: `${gapStr}below projection`, tone: "bad" };
       })(),
       sources: [...totalRevSources],
     },
@@ -1502,7 +1502,16 @@ export async function resolveOverview({
         // identical to the prior actual-% vs target-% comparison,
         // stated in the natural "total vs total" idiom.
         const budAtRev = budgetAtThisRevenue(cogsBudget);
-        if (budAtRev == null || cogsActual == null) return { label: "No data", tone: "neutral" };
+        // Kevin walkthrough sweep item 6 (2026-09-07). "No data" fired
+        // whenever budAtRev was null (no revenue means no adjusted
+        // budget) even when cogsActual carried a real dollar figure -
+        // a contradiction: pill says no data on top of a shown number.
+        // Split the cases: if actual exists but batr can't compute
+        // (day one of a period, no revenue yet), say what is true -
+        // "cost, no revenue yet". If actual itself is missing, keep
+        // "No data".
+        if (cogsActual == null) return { label: "No data", tone: "neutral" };
+        if (budAtRev == null) return { label: "cost, no revenue yet", tone: "neutral" };
         return cogsActual <= budAtRev
           ? { label: "under budget", tone: "good" }
           : { label: "over budget", tone: "bad" };
@@ -1560,6 +1569,12 @@ export async function resolveOverview({
       pill: (() => {
         // PR-1 item 1: rolling window -> "No target", neutral tone.
         if (!has_target) return { label: "No target", tone: "neutral" };
+        // Kevin walkthrough sweep item 6 (2026-09-07). Split the No
+        // data case: if target exists but actual is a real number and
+        // gmPctActual can't compute (needs revenue as denominator),
+        // don't lie "No data" over a shown dollar hero. Same rule as
+        // cost.
+        if (gmPctActual == null && grossMargin != null) return { label: "cost, no revenue yet", tone: "neutral" };
         if (gmPctActual == null || gmPctBudget == null) return { label: "No data", tone: "neutral" };
         // B6 (2026-09-01): the gap moves INTO the pill. Same pattern
         // as COGS above - one statement, not two.
@@ -1758,6 +1773,23 @@ export async function resolveOverview({
         if (periodJe !== 0) invAdjByPeriod.set(pn, (invAdjByPeriod.get(pn) || 0) + periodJe);
       }
     }
+    // Kevin walkthrough sweep addendum F (2026-09-07). Labor's Tier A
+    // strip hatches the unapproved portion within each bar (see PR
+    // #1034); the Overview's cost-of-goods chart is showing the same
+    // labor hours in its aggregate spent and needs the same
+    // treatment. Compute per-period unapproved-labor dollars from
+    // labor board weeks (draft_hours × avg_rate) so the chart can
+    // render a hatched slice inside each bar sized to the ratio.
+    const laborRate = Number(laborBoard?.avg_rate || 0);
+    const unappLaborByPeriod = new Map();
+    if (laborRate > 0) {
+      for (const w of laborBoard?.weeks || []) {
+        const p = periodOf(w.week_start);
+        if (p == null) continue;
+        const dh = Number(w.draft_hours || 0);
+        if (dh > 0.004) unappLaborByPeriod.set(p, (unappLaborByPeriod.get(p) || 0) + dh * laborRate);
+      }
+    }
     // Kevin 2026-09-02 language pass Item 15: each period's budget
     // line is that period's ADJUSTED budget - period actual revenue
     // times the target cost percentage. Same rule as the COGS card's
@@ -1820,6 +1852,10 @@ export async function resolveOverview({
         // line. `budget` above is retained for legacy consumers.
         revenue_actual: r2(periodRevenueActual),
         adjusted_budget: adjustedBudget,
+        // Kevin walkthrough sweep addendum F (2026-09-07) - per-period
+        // unapproved-labor dollars, so the chart can render a hatched
+        // slice within the bar. Same math the Labor Tier A strip uses.
+        unapproved_labor_dollars: state === "not_started" ? null : r2(unappLaborByPeriod.get(p) || 0),
       };
     });
     chart = { grain: "period", series };
@@ -3069,7 +3105,11 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
       ? `P${last}`
       : `P${first}-P${last}`;
   }
-  const forecastHeader = spanHeader ? `${spanHeader} FORECAST` : "FORECAST";
+  // Kevin walkthrough sweep addendum item A (2026-09-07): the header
+  // reads "PROJECTION" on every revenue surface. `forecast_header` key
+  // preserved for backwards compat with existing consumers - only the
+  // string value flips.
+  const forecastHeader = spanHeader ? `${spanHeader} PROJECTION` : "PROJECTION";
   const budgetHeader   = spanHeader ? `${spanHeader} BUDGET`   : "BUDGET";
   const actualsHeader  = spanHeader ? `${spanHeader} ACTUALS`  : "ACTUALS";
 

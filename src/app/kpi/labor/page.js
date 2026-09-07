@@ -28,7 +28,6 @@ import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
 import { StoryBlock } from "./components/StoryBlock";
 import { SignalCards } from "./components/SignalCards";
-import { ComparisonStrip } from "./components/ComparisonStrip";
 import { WeekTable } from "./components/WeekTable";
 import { DayStrip } from "./components/DayStrip";
 import { HomestandBoard } from "./components/HomestandBoard";
@@ -1112,10 +1111,13 @@ export default function KpiLaborPage() {
                   The `9 people · oldest shift Sep 2` detail that lived
                   in the Approvals card belongs in the period drill-down
                   (not this PR). */}
-              <ComparisonStrip
-                prior_period_comparison={data.prior_period_comparison}
-                salaryIncluded={data?.salary_included === true}
-              />
+              {/* Kevin walkthrough sweep addendum D (2026-09-07):
+                  ComparisonStrip ("VS PERIOD 8") removed entirely,
+                  every range, every account. Kevin ruling: "it is not
+                  what an operator uses." The panel + week rail + chart
+                  + WeekTable carry every figure an operator reaches
+                  for; a comparison to the prior period taking a full
+                  strip did not earn its space. */}
               {/* PR-B (owner ruling 2026-08-24) - DetailsStrip "ALL THE
                   NUMBERS" folio removed entirely, dashboard-wide.
                   Every card above already carries the relevant figure;

@@ -375,6 +375,17 @@ export default function CostLines({ payload, previewAccount = null }) {
     if (r.actual == null || r.budget_at_this_revenue == null) return false;
     return (r.actual - r.budget_at_this_revenue) > 0;
   }).length;
+  // Kevin walkthrough sweep item 7 (2026-09-07). "all under" fires
+  // on 3 of 4 zero-spend lines - true and useless. Count rows that
+  // actually have material spend (> $0.50) so the pill only reads
+  // "all under" when there's real spending under budget across the
+  // scope. On day 1 of a period only labor may have spend; the pill
+  // reads "nothing spent yet" instead of a verdict.
+  const rowsWithSpend = cogsRows.filter(r => {
+    const flags = Array.isArray(r.flags) ? r.flags : [];
+    if (flags.includes("billed_back") || flags.includes("inactive")) return false;
+    return r.actual != null && Number(r.actual) > 0.5;
+  }).length;
 
   return (
     <div
@@ -397,8 +408,15 @@ export default function CostLines({ payload, previewAccount = null }) {
             </p>
           }
         />
-        <span className={`kpi-ov-pill ${overCount > 0 ? "kpi-ov-pill-bad" : "kpi-ov-pill-good"}`} data-kpi-ov="cost-lines-pill">
-          {overCount > 0 ? `${overCount} of ${cogsRows.length} over` : "all under"}
+        <span
+          className={`kpi-ov-pill ${overCount > 0 ? "kpi-ov-pill-bad" : rowsWithSpend > 0 ? "kpi-ov-pill-good" : "kpi-ov-pill-neutral"}`}
+          data-kpi-ov="cost-lines-pill"
+        >
+          {overCount > 0
+            ? `${overCount} of ${cogsRows.length} over`
+            : rowsWithSpend > 0
+              ? "all under"
+              : "nothing spent yet"}
         </span>
       </div>
       <div className="kpi-ov-cb">

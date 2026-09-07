@@ -1096,7 +1096,13 @@
   color: var(--text-strong);
   min-height: 44px;
 }
-.kpi-rmenu-qrb:hover:not(:disabled) {
+/* Kevin walkthrough sweep addendum B (2026-09-07): hover excludes
+   the already-selected button (.on). Previous rule flipped the
+   background to --surface-sunken (light) but the selected button's
+   text is --n-0 (white); white text on a light background under the
+   cursor made the label disappear. Selected buttons stay put on
+   hover; the .on treatment is the acknowledgement. */
+.kpi-rmenu-qrb:hover:not(:disabled):not(.on) {
   border-color: var(--kpi-accent);
   background: var(--surface-sunken);
 }
@@ -2077,7 +2083,15 @@
   flex: 1 1 auto;
 }
 .kpi-spend-h {
+  /* Kevin walkthrough sweep addendum E (2026-09-07). Prior single-
+     row flex crowded the title against three pills (verdict +
+     awaiting + scope). "FISCAL YEAR TO DATE" clipped on This year
+     when all three pills were live. Stack: title row on top,
+     pills on the second row so each has room. flex-wrap fallback
+     keeps single-line rendering when there's only the verdict pill. */
   display: flex; align-items: center; gap: var(--kpi-sp-3);
+  flex-wrap: wrap;
+  row-gap: var(--kpi-sp-2);
 }
 .kpi-spend-h-left {
   display: flex; align-items: baseline; gap: var(--kpi-sp-2);
@@ -2222,7 +2236,17 @@
 }
 .kpi-spend-cell-sub {
   font-size: var(--kpi-t-meta); color: var(--n-600);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Kevin walkthrough sweep item 9 (2026-09-07). Prior rule used
+     nowrap + ellipsis, which clipped "FY2026 range budget · range
+     closed throu…" by 60px on This year - the through-DATE at the
+     end is the whole point of the line. Wrap on the mid-dot
+     separator instead of clipping. line-height 1.35 leaves the
+     card height stable at 2-line wrap. */
+  overflow: hidden;
+  white-space: normal;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 /* Salary PR 3 C3 - vacancy line under the spend-pair when salary is
    on. States the arithmetic; the class carries the tone so under /

@@ -33,10 +33,14 @@ import { rangeForPeriod, currentPeriodNo, periodPickerState, periodDateShort } f
 import { FY_START } from "../lib/accounts";
 import { validateLabel, formatSelection } from "../lib/rangeLabel";
 
+// Kevin walkthrough sweep addendum C (2026-09-07): chronological
+// order - past, present, next, then the year. Prior order (this,
+// next, last, this-year) mixed the temporal axis and slowed the
+// eye picking a range.
 const PRESETS = [
+  { key: "last_period", label: "Last period" },
   { key: "this_period", label: "This period" },
   { key: "next_period", label: "Next period" },
-  { key: "last_period", label: "Last period" },
   { key: "fytd",        label: "This year"   },
 ];
 
