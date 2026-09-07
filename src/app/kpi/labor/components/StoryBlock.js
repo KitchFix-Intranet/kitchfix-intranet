@@ -33,7 +33,7 @@ const WEEK_BY_WEEK_BODY = (
   <>
     One bar per week. Bar height is what that week cost.
     <br /><br />
-    <b>The amber dashed line is your original weekly target</b> - budget split evenly across four weeks. <b>The blue dashed line is adjusted</b> - it moves as the period goes. Come in under one week and the line rises for the weeks left; go over and it drops.
+    <b>The reference line is that week&apos;s budget</b> - what your labour target buys at the week&apos;s revenue. <b>Amber dashed</b> for weeks with confirmed counts. <b>Grey dashed with a `plan` tag</b> for weeks still on projected counts. When counts confirm mid-week the number moves - the tile is deliberate about which state it is on.
     <br /><br />
     <b>Hatched means the number will grow.</b> Hours are clocked but not yet priced by Rippling, so that bar is not final.
     <span className="kpi-hs-pop-foot">A grey stub means nobody worked that day - genuinely zero, not missing.</span>
@@ -373,15 +373,37 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
 }
 
 // ── TIER A: per-week columns with captions ────────────────────────
-// V29-7 - each week carries ONLY the target line that applies to it:
-//   closed / in-progress -> AMBER original weekly target
-//   not-started          -> LIGHT BLUE adjusted target (weekly allowance)
-// V29-14 - a zero-spend week renders a baseline rule only, with NO
-// floating target line, so it does not read as broken.
+// Labor PR-B (Kevin 2026-09-07) - per-week revenue basis + adjusted
+// budget per week. Rewritten to consume board.weeks[i].revenue_basis
+// + budget_at_this_week_revenue when set (the PR-B payload) and fall
+// back to the pre-PR-B period-split target lines when unset (safety
+// for boards whose route doesn't run the weekly loader yet).
+//
+// Item 4 - reference line reads that week's own budget, not a
+// quarter of the period plan. Confirmed weeks: amber dashed at
+// budget_at_this_week_revenue. Forecast weeks: grey dashed at the
+// same field (based on projected revenue), with a `plan` tag on the
+// caption so the reader knows the number will move.
+//
+// Item 6 (R-80) - the running week caption renders as a fraction
+// (`$X of $Y · Z% used · N days left`), not a variance. Its budget
+// covers days not yet worked; an over/under against it is false.
+//
+// Kevin ruling: `forecast` must read as provisional, not just a
+// source label. Grounded in TBJ - FL P9 W2 flip ($13,167 forecast to
+// $21,876 confirmed - a chef who scheduled to the forecast was 60%
+// short). The tile carries the warning; no separate banner.
 function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   const isNotStarted = w.state === "not_started";
   const isInProgress = w.state === "in_progress";
   const isClosed = w.state === "closed";
+  // PR-B basis-aware temporal state. Falls back to w.state when the
+  // per-week loader hasn't attached fields (mixed-mode safety).
+  const basisTemporal = w.revenue_basis_temporal
+    || (isClosed ? "closed" : isInProgress ? "running" : "future");
+  const isRunning = basisTemporal === "running";
+  const isFuture = basisTemporal === "future";
+  const isForecast = w.revenue_basis === "forecast";
   const value = isNotStarted
     ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
     : (w.spent || 0);
@@ -418,44 +440,71 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   // flat bottom left a triangular gap. `.kpi-wb-bar-capped` overrides
   // border-radius to 0 so the pair reads as one column.
   const barClsFinal = (barCls && capPct > 0) ? `${barCls} kpi-wb-bar-capped` : barCls;
-  // V29-7 per-week target line. Amber for closed/in-progress at the
-  // week's ORIGINAL weekly target; light blue for not-started at the
-  // ADJUSTED target (weekly allowance). Omitted for zero-spend weeks
-  // (V29-14) and when no target is available.
-  const perWeekTarget = isNotStarted
+  // Labor PR-B item 4 - reference line reads this week's own budget
+  // (budget_at_this_week_revenue = week_revenue × line_target_pct),
+  // not a quarter of the period plan. The line is styled per basis:
+  // amber dashed for confirmed weeks, grey dashed for forecast weeks
+  // (with a `plan` tag on the caption to name the projection).
+  //
+  // Fallback: when the loader has not attached the per-week batr
+  // (older routes, salaried-only accounts where applies=false, weeks
+  // outside FY2026), keep the pre-PR-B target: amber original for
+  // closed/in-progress, blue allowance for not-started. Same shape,
+  // familiar look on legacy code paths.
+  const perWeekAdjusted = w.budget_at_this_week_revenue;
+  const perWeekLegacy = isNotStarted
     ? (w.weekly_allowance ?? weeklyAllowance)
     : (w.original_target ?? weeklyOriginal);
+  const perWeekTarget = perWeekAdjusted != null ? perWeekAdjusted : perWeekLegacy;
   const targetPct = (!isZero && perWeekTarget != null && perWeekTarget > 0)
     ? Math.max(0, Math.min(100, (perWeekTarget / scale) * 90))
     : null;
-  const targetCls = isNotStarted ? "kpi-wb-target kpi-wb-target-blue" : "kpi-wb-target";
+  const targetCls = (perWeekAdjusted != null && isForecast)
+    ? "kpi-wb-target kpi-wb-target-forecast"
+    : (perWeekAdjusted != null)
+      ? "kpi-wb-target"
+      : (isNotStarted ? "kpi-wb-target kpi-wb-target-blue" : "kpi-wb-target");
 
   // V42 REVISED - `≥` prefix on the caption fires when the bar will
   // grow (unpriced money signal), not when there are drafts.
   const hasUnpriced = (w.unpriced_hrs || 0) > 0.004;
-  const captionValue = hasUnpriced ? `≥ ${fmt$(value)}` : fmt$(value);
+  // Labor PR-B item 4 - future forecast weeks display the WEEK's
+  // ADJUSTED BUDGET (grey dashed reference above the baseline stub),
+  // not the weekly_allowance carry-over. When rendered, the caption
+  // reads that budget - the reader's next question after "this week
+  // has no spend yet" is "what's it planning against?".
+  const captionValueRaw = (isNotStarted && perWeekAdjusted != null)
+    ? perWeekAdjusted
+    : value;
+  const captionValue = hasUnpriced ? `≥ ${fmt$(captionValueRaw)}` : fmt$(captionValueRaw);
   let statusLine;
-  if (isClosed && w.delta_vs_original != null) {
+  if (isRunning && perWeekAdjusted != null) {
+    // Labor PR-B item 6 (R-80) - running week reads as a fraction,
+    // never a variance. Its budget covers days not yet worked, so an
+    // over/under against it is false. Kevin's example format:
+    //   $3,933 of $4,217 · 93% used · 2 days left
+    // Days-left comes from the payload (days_left_in_week attached by
+    // attachWeeklyBasisToBoard); pct rounds to nearest int; both figures
+    // read the per-week batr (basis-adjusted). The forecast tag on the
+    // budget number (below) still names when the reference itself is
+    // provisional.
+    const spent = value;
+    const bud = perWeekAdjusted;
+    const pct = bud > 0 ? Math.round((spent / bud) * 100) : null;
+    const daysLeft = w.days_left_in_week;
+    const parts = [`${fmt$(spent)} of ${fmt$(bud)}`];
+    if (pct != null) parts.push(`${pct}% used`);
+    if (daysLeft != null) parts.push(`${daysLeft} day${daysLeft === 1 ? "" : "s"} left`);
+    statusLine = <span className={`kpi-wb-d kpi-wb-d-frac`}>{parts.join(" · ")}</span>;
+  } else if (isClosed && w.delta_vs_original != null) {
     const dir = w.delta_sign === "under" ? "down" : w.delta_sign === "over" ? "up" : "flat";
     const cls = w.delta_sign === "under" ? "kpi-wb-d-good" : w.delta_sign === "over" ? "kpi-wb-d-bad" : "kpi-wb-d-mute";
     statusLine = <span className={`kpi-wb-d ${cls}`}><Arrow dir={dir} />{fmt$(Math.abs(w.delta_vs_original))} {w.delta_sign}</span>;
   } else if (isInProgress) {
-    // V42 REVISED (State 1 informational) - current week with drafts
-    // reads "running · N hrs not yet approved". PR-C (owner ruling
-    // 2026-08-24): the running-week caption now reads AMBER
-    // (kpi-wb-d-warn) so it matches the amber solid bar above; the
-    // muted grey used previously read as "not-started" which conflicts
-    // with the state.
-    //
-    // PR-E polish (owner verify 2026-08-24 caught this): PR-C's
-    // "$X budget" phrasing was gated behind `allow == null`, so it
-    // only fired on multi_period (no allowance) and single-period
-    // stayed on "$X allowance". Kevin's item was "running week should
-    // show budget" full stop. Fix: drop the allowance branch. The
-    // per-week ORIGINAL target (w.original_target ?? weeklyOriginal)
-    // is also the amber dashed line above the bar, so the caption and
-    // legend tie to the same reference. Adjusted allowance continues
-    // to name itself as ADJUSTED in the legend.
+    // Legacy in_progress path - fires when the per-week loader has
+    // not attached basis (older routes / boards). Keeps the pre-PR-B
+    // "running · $X budget" caption. When basis IS attached, the
+    // R-80 fraction branch above wins.
     const perWeekBudget = w.original_target ?? weeklyOriginal;
     const draftHrs = Number(w.draft_hours || 0);
     if (draftHrs > 0.004) {
@@ -465,10 +514,18 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     } else {
       statusLine = <span className="kpi-wb-d kpi-wb-d-warn">running</span>;
     }
+  } else if (isFuture && perWeekAdjusted != null) {
+    // Labor PR-B item 5 - future weeks (temporal=future) name their
+    // reference as "plan". The caption number IS the plan, so the
+    // status line just carries the descriptor. Distinct from a closed
+    // forecast week (data gap - has spend, needs the variance rule).
+    statusLine = <span className="kpi-wb-d kpi-wb-d-mute">plan for the week</span>;
   } else if (isNotStarted) {
     statusLine = <span className="kpi-wb-d kpi-wb-d-mute">to stay on budget</span>;
   }
-  const captionCls = isNotStarted ? "kpi-wb-cap-value kpi-wb-cap-roll" : "kpi-wb-cap-value";
+  const captionCls = ((isNotStarted && perWeekAdjusted == null) || (isNotStarted && isFuture && perWeekAdjusted != null))
+    ? "kpi-wb-cap-value kpi-wb-cap-roll"
+    : "kpi-wb-cap-value";
   return (
     <div className="kpi-wb">
       <div className="kpi-wb-plot">
@@ -498,9 +555,29 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
           />
         )}
       </div>
-      <div className="kpi-wb-cap">
-        <b className={captionCls}>{captionValue}</b>
-        <span className="kpi-wb-dates">{fmtDate(w.week_start)} – {fmtDate(w.week_end)}{isInProgress ? " · in progress" : ""}</span>
+      <div className={`kpi-wb-cap${isForecast ? " kpi-wb-cap-forecast" : ""}`}>
+        <b className={captionCls}>
+          {captionValue}
+          {/* Labor PR-B item 5 - `plan` tag on the budget number for
+              forecast weeks. Two contexts fire it:
+                1. Future forecast week - caption value IS the budget.
+                2. Closed/running forecast week with a data gap - caption
+                   value is the spent, but the reference line above the
+                   bar is the plan, so the tag names the reference the
+                   reader will next fixate on.
+              The tag is the visible warning Kevin asked for; without it
+              the operator cannot tell a $21,876 confirmed number apart
+              from a $13,167 forecast one. */}
+          {isForecast && perWeekAdjusted != null && isFuture && (
+            <span className="kpi-wb-plan-tag" aria-label="Projected from forecast counts">plan</span>
+          )}
+        </b>
+        <span className="kpi-wb-dates">
+          {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
+          {isInProgress ? " · in progress" : ""}
+          {isForecast && !isFuture && " · forecast, will move as counts confirm"}
+          {isForecast && isFuture && !isInProgress && " · projected"}
+        </span>
         {statusLine}
       </div>
     </div>
@@ -523,9 +600,15 @@ function TierAStrip({ board, salary }) {
       const v = w.state === "not_started"
         ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
         : (w.spent || 0);
-      const t = w.state === "not_started"
+      // PR-B - the per-week adjusted budget (batr) is the reference
+      // line for the bar. Include it in the scale so the dashed line
+      // never clips off the top on a forecast week whose projected
+      // revenue produces a batr above weekly_original_target.
+      const perWeekAdj = w.budget_at_this_week_revenue;
+      const perWeekLegacy = w.state === "not_started"
         ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
         : (w.original_target ?? weeklyOriginal ?? 0);
+      const t = perWeekAdj != null ? perWeekAdj : perWeekLegacy;
       const cap = estimateUnpricedDollars(w.unpriced_hrs, rate) || 0;
       const local = Math.max(v + cap, t || 0);
       if (local > max) max = local;
