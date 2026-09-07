@@ -101,7 +101,6 @@ export default function BulkReviewMatrix({
   titleId = "sc-bulk-review-title",
 }) {
   const [batchNote, setBatchNote] = useState("");
-  const [foldOpen, setFoldOpen]   = useState(false);
 
   // Sort days by date (defensive - caller usually already does).
   const sortedDays = useMemo(() => {
@@ -154,21 +153,14 @@ export default function BulkReviewMatrix({
     return { valuesByService: vals, serviceDayByService: sd };
   }, [flatServices, sortedDays, perDayServices, skips]);
 
-  // Partition services into two buckets - running-this-week vs
-  // not-running. A service is "not running this week" when every
-  // day in the span has serviceDay=false. Matches the entry-ledger
-  // rail's not-running predicate, extended across the span rather
-  // than one day.
-  const { runningServices, notRunningServices } = useMemo(() => {
-    const running = [];
-    const notRunning = [];
-    for (const s of flatServices) {
-      const flags = serviceDayByService.get(s.colIndex) || [];
-      if (flags.some(Boolean)) running.push(s);
-      else notRunning.push(s);
-    }
-    return { runningServices: running, notRunningServices: notRunning };
-  }, [flatServices, serviceDayByService]);
+  // 2026-09-07 (owner ruling): the prior running-vs-not-running
+  // partition + hidden "N services not running this week" fold were
+  // deleted here. Every active catalog service now renders as a row
+  // in the matrix regardless of projection presence. Un-projected
+  // rows show a dash per day (isOff branch below) - the operator
+  // sees the service exists and can jump to the day-entry modal to
+  // record a value. The matrix stays read-only per the fence at the
+  // top of this file; only the fold is gone.
 
   // Per-day footer figures (meals + dollars per column). Sourced from
   // perDayRow so the numbers agree with the header totals - the
@@ -184,39 +176,32 @@ export default function BulkReviewMatrix({
     });
   }, [sortedDays, perDayRow]);
 
-  // Modal computation per running service. Modal = most common value
-  // across service-days only (off-days excluded). If tied, no modal
-  // and no tint on that row.
+  // Modal computation per service. Modal = most common value across
+  // service-days only (off-days excluded via serviceDayFlags in
+  // computeMode). A service with zero service-days across the span
+  // returns null (all values excluded) so isDiff stays false and
+  // the row renders as plain cells - correct fallback for the
+  // un-projected case.
   const modeByService = useMemo(() => {
     const m = new Map();
-    for (const s of runningServices) {
+    for (const s of flatServices) {
       const values = valuesByService.get(s.colIndex) || [];
       const flags  = serviceDayByService.get(s.colIndex) || [];
       m.set(s.colIndex, computeMode(values, flags));
     }
     return m;
-  }, [runningServices, valuesByService, serviceDayByService]);
+  }, [flatServices, valuesByService, serviceDayByService]);
 
-  // Compose group-blocks: [{ groupName, services }] with only
-  // running-this-week services. Empty groups drop out.
-  const runningByGroup = useMemo(() => {
+  // Compose group-blocks: [{ groupName, services }] over every
+  // service in the catalog. Group order preserved from the input.
+  const allByGroup = useMemo(() => {
     const groups = new Map();
-    for (const s of runningServices) {
+    for (const s of flatServices) {
       if (!groups.has(s.__group)) groups.set(s.__group, []);
       groups.get(s.__group).push(s);
     }
     return [...groups.entries()].map(([groupName, services]) => ({ groupName, services }));
-  }, [runningServices]);
-
-  // notRunning fold: group names + service names.
-  const notRunningByGroup = useMemo(() => {
-    const groups = new Map();
-    for (const s of notRunningServices) {
-      if (!groups.has(s.__group)) groups.set(s.__group, []);
-      groups.get(s.__group).push(s);
-    }
-    return [...groups.entries()].map(([groupName, services]) => ({ groupName, services }));
-  }, [notRunningServices]);
+  }, [flatServices]);
 
   const dayCount    = sortedDays.length;
   const totalCols   = 1 + dayCount;
@@ -313,7 +298,7 @@ export default function BulkReviewMatrix({
                     </tr>
                   </thead>
                   <tbody>
-                    {runningByGroup.map(({ groupName, services }) => (
+                    {allByGroup.map(({ groupName, services }) => (
                       <>
                         <tr key={`grp-${groupName}`} className="sc-brm-row-group">
                           <td colSpan={totalCols}>{groupName}</td>
@@ -374,31 +359,9 @@ export default function BulkReviewMatrix({
                 </table>
               </div>
 
-              {notRunningServices.length > 0 && (
-                <div className={`sc-brm-fold${foldOpen ? " sc-brm-fold--open" : ""}`}>
-                  <button
-                    type="button"
-                    className="sc-brm-fold-toggle"
-                    onClick={() => setFoldOpen(v => !v)}
-                    aria-expanded={foldOpen}
-                  >
-                    <span>{notRunningServices.length} service{notRunningServices.length === 1 ? "" : "s"} not running this week</span>
-                    <span className="sc-brm-fold-cta">{foldOpen ? "HIDE" : "SHOW"}</span>
-                  </button>
-                  {foldOpen && (
-                    <div className="sc-brm-fold-body">
-                      {notRunningByGroup.map(g => (
-                        <div key={g.groupName} className="sc-brm-fold-group">
-                          <span className="sc-brm-fold-group-name">{g.groupName}</span>
-                          {g.services.map(s => (
-                            <div key={s.colIndex} className="sc-brm-fold-row">{s.name}</div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* 2026-09-07 (owner ruling): the "N services not
+                  running this week" fold was deleted here. Every
+                  service now renders as a row above. */}
             </div>
 
             <div className="sc-brm-note-composer">
