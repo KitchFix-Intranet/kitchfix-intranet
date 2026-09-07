@@ -222,6 +222,65 @@ export async function loadLiveFinalizeRow(accountKey, dateInWeek) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// resolveFinalizeReviewSpan (2026-09-08, week-review feature)
+// ─────────────────────────────────────────────────────────────────
+//
+// Returns the ISO date span the review + approval gate must cover
+// for a finalize action anchored at `weekStart`:
+//   - weekly account       -> 7 dates (Mon..Sun of weekStart)
+//   - biweekly close-week  -> 14 dates (partner Mon .. Sun of weekStart)
+//   - biweekly first-week  -> 7 dates (defensive - client already
+//                             suppresses the button on first-week per
+//                             addendum §A4; server returns the own
+//                             week so a stray POST doesn't crash the
+//                             gate)
+//
+// Same biweekly detection code path that runFinalizeEffects uses
+// at line 458-475: cadence from sc_qbo_account_map, weekIndex from
+// sc_day_metadata.week_label. Kept as its own helper so the sc-
+// finalize-week completeness + approval gates can compute the span
+// BEFORE the sc_week_finalize insert, and so sc-revert-finalize can
+// compute the same span for the review-state clear.
+//
+// Returns { dates, isBiweekly, weekIndex, spanStart, spanEnd } or
+// throws on a DB error. Never null; a missing cadence row defaults
+// to weekly (matches sc-finalize-states line 666).
+export async function resolveFinalizeReviewSpan(accountKey, weekStart) {
+  const supa = getServiceClient();
+  const monday = mondayOfWeek(weekStart);
+  const { data: accountMap, error: amErr } = await supa
+    .from("sc_qbo_account_map")
+    .select("cadence")
+    .eq("account_key", accountKey)
+    .maybeSingle();
+  if (amErr) throw new Error(`resolveFinalizeReviewSpan account_map: ${amErr.message}`);
+  const isBiweekly = accountMap?.cadence === "biweekly";
+  let spanStart = monday;
+  let weekIndex = null;
+  if (isBiweekly) {
+    const { data: meta, error: mErr } = await supa
+      .from("sc_day_metadata")
+      .select("week_label")
+      .eq("account_key", accountKey)
+      .eq("service_date", monday)
+      .maybeSingle();
+    if (mErr) throw new Error(`resolveFinalizeReviewSpan day_metadata: ${mErr.message}`);
+    weekIndex = parseWeekIndex(meta?.week_label);
+    if (weekIndex === 2 || weekIndex === 4) {
+      // Close-week: expand span to include the partner (first) week.
+      spanStart = addDaysIso(monday, -7);
+    }
+  }
+  const spanLength = (isBiweekly && (weekIndex === 2 || weekIndex === 4)) ? 14 : 7;
+  const spanEnd = addDaysIso(spanStart, spanLength - 1);
+  const dates = [];
+  for (let i = 0; i < spanLength; i++) {
+    dates.push(addDaysIso(spanStart, i));
+  }
+  return { dates, isBiweekly, weekIndex, spanStart, spanEnd };
+}
+
+// ─────────────────────────────────────────────────────────────────
 // The write-path predicate (matches assertDaysUnlockedForWrite).
 // ─────────────────────────────────────────────────────────────────
 //

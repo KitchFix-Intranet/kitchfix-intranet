@@ -1,0 +1,338 @@
+/* WeekReview - day-by-day approval gate before Finalize.
+   2026-09-08 (week-review-before-finalize feature).
+   Design authority: docs/design/KF_WEEK_REVIEW_RENDER.html.
+
+   Class prefix `.sc-week-review-*` per SC v2 convention. Tokens
+   come from the .scv2 scope; this modal must render inside a .scv2
+   ancestor (page.js wires the toast + modal container with the
+   class per the scope-boundary rule). */
+
+/* Scrim - matches sc-finalize-scrim shape. */
+.sc-week-review-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--n-900) calc(var(--opacity-scrim) * 100%), transparent);
+  animation: sc-week-review-scrim-fade var(--motion-surface);
+}
+@keyframes sc-week-review-scrim-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sc-week-review-modal {
+  background: var(--surface-card);
+  border-radius: var(--radius-container-lg);
+  width: min(720px, 100%);
+  max-height: calc(100vh - var(--space-6) * 2);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--elevation-popover);
+  animation: sc-week-review-modal-rise var(--duration-slow) var(--ease-standard);
+  outline: none;
+  overflow: hidden;
+}
+.sc-week-review-modal:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 0;
+}
+@keyframes sc-week-review-modal-rise {
+  from { opacity: 0; transform: translateY(var(--space-3)); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Head - solid navy bar, title + meta. TEST MODE inline. */
+.sc-week-review-head {
+  background: var(--sc2-bar-bg, #1A3050);
+  color: #fff;
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.sc-week-review-head-titleblock { flex: 1; min-width: 0; }
+.sc-week-review-title {
+  font-size: var(--sc2-size-h3, 19px);
+  line-height: 1.3;
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.sc-week-review-testtag {
+  background: var(--status-needs-strong, #E5A054);
+  color: #2B1A05;
+  font-size: var(--sc2-size-micro, 10px);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.05em;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-cell);
+  text-transform: uppercase;
+}
+.sc-week-review-meta {
+  font-size: var(--sc2-size-caption, 12px);
+  color: color-mix(in srgb, #fff 60%, transparent);
+  margin-top: var(--space-1);
+}
+
+/* Attention strip - cream, always visible. */
+.sc-week-review-strip {
+  background: var(--sc2-note-bg, #F5F0E4);
+  border-bottom: var(--sc2-border-thin) solid var(--sc2-note-bd, #E6DEC9);
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--sc2-size-body-sm, 13px);
+  color: var(--sc2-note-ink, #6B5B32);
+}
+.sc-week-review-strip b { color: var(--text-heading); }
+
+/* Scrollable body - stacked day cards. */
+.sc-week-review-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  background: var(--surface-page);
+}
+
+.sc-week-review-loading,
+.sc-week-review-loaderror {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--sc2-size-body-sm);
+}
+.sc-week-review-loaderror { color: var(--status-fail-fg, #B3261E); }
+
+/* Day card - one per date in the span. */
+.sc-week-review-day {
+  background: var(--surface-card);
+  border: var(--sc2-border-thin) solid var(--border-subtle);
+  border-left: 4px solid var(--border-subtle);
+  border-radius: var(--radius-container);
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+  box-shadow: var(--elevation-card, 0 1px 2px rgba(15,23,42,.05));
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
+}
+.sc-week-review-day[data-review="ok"] {
+  border-left-color: var(--status-ok-strong, #1F6B41);
+  background: color-mix(in srgb, var(--status-ok-subtle, #E8F5EC) 30%, var(--surface-card));
+}
+.sc-week-review-day[data-review="fix"] {
+  border-left-color: var(--status-fail-strong, #B3261E);
+  background: color-mix(in srgb, var(--status-fail-subtle, #FCEEED) 30%, var(--surface-card));
+}
+
+.sc-week-review-day-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--sc2-border-thin) solid var(--border-subtle);
+}
+.sc-week-review-day-date {
+  font-size: var(--sc2-size-body, 14px);
+  font-weight: var(--sc2-wt-bold);
+  min-width: 120px;
+}
+.sc-week-review-grow { flex: 1; }
+.sc-week-review-day-total {
+  font-size: var(--sc2-size-body, 15px);
+  font-weight: var(--sc2-wt-bold);
+}
+.sc-week-review-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-week-review-chip {
+  font-size: var(--sc2-size-micro, 10px);
+  font-weight: var(--sc2-wt-bold);
+  letter-spacing: 0.04em;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-cell);
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.sc-week-review-chip--warn {
+  background: var(--status-needs-subtle, #FDF3E6);
+  color: var(--status-needs-fg, #8A5A16);
+  border: var(--sc2-border-thin) solid var(--status-needs-bd, #F0D9B5);
+}
+.sc-week-review-chip--info {
+  background: var(--surface-quiet, #F1F5F9);
+  color: var(--text-secondary, #64748B);
+  border: var(--sc2-border-thin) solid var(--border-subtle);
+}
+
+/* Services list - 3-column grid: name | qty | amount. */
+.sc-week-review-svcs {
+  display: flex;
+  flex-direction: column;
+}
+.sc-week-review-svc {
+  display: grid;
+  grid-template-columns: 1fr 78px 100px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  align-items: center;
+  font-size: var(--sc2-size-body-sm, 13px);
+}
+.sc-week-review-svc + .sc-week-review-svc {
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
+}
+.sc-week-review-svc-name { color: var(--text-primary); }
+.sc-week-review-svc-qty {
+  text-align: right;
+  font-weight: var(--sc2-wt-bold);
+}
+.sc-week-review-svc-amt {
+  text-align: right;
+  color: var(--text-secondary);
+}
+.sc-week-review-svc--empty {
+  grid-column: 1 / -1;
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-size: var(--sc2-size-body-sm);
+}
+
+/* Day foot - hint + Approved/Needs fix segment. */
+.sc-week-review-day-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-quiet);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
+}
+.sc-week-review-day-hint {
+  font-size: var(--sc2-size-caption, 11px);
+  color: var(--text-tertiary);
+}
+.sc-week-review-day-err {
+  font-size: var(--sc2-size-caption);
+  color: var(--status-fail-fg, #B3261E);
+}
+
+.sc-week-review-seg { display: flex; gap: var(--space-2); }
+.sc-week-review-seg-btn {
+  font-family: inherit;
+  font-size: var(--sc2-size-caption, 12px);
+  font-weight: var(--sc2-wt-bold);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-input);
+  cursor: pointer;
+  border: var(--sc2-border-thin) solid var(--border-strong);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+.sc-week-review-seg-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.sc-week-review-seg-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.sc-week-review-seg-btn--ok[aria-pressed="true"] {
+  background: var(--status-ok-strong, #1F6B41);
+  border-color: var(--status-ok-strong, #1F6B41);
+  color: #fff;
+}
+.sc-week-review-seg-btn--fix[aria-pressed="true"] {
+  background: var(--status-fail-strong, #B3261E);
+  border-color: var(--status-fail-strong, #B3261E);
+  color: #fff;
+}
+.sc-week-review-seg-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* Foot - progress + Cancel + primary CTA. */
+.sc-week-review-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-top: var(--sc2-border-thin) solid var(--border-subtle);
+  background: var(--surface-card);
+}
+.sc-week-review-progress { flex: 1; min-width: 0; }
+.sc-week-review-progress-title {
+  font-size: var(--sc2-size-body-sm, 13px);
+  font-weight: var(--sc2-wt-bold);
+  color: var(--text-heading);
+}
+.sc-week-review-progress-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-quiet);
+  margin-top: var(--space-2);
+  overflow: hidden;
+}
+.sc-week-review-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--status-ok-strong, #1F6B41);
+  transition: width var(--duration-slow) var(--ease-standard);
+}
+.sc-week-review-progress-sub {
+  font-size: var(--sc2-size-caption, 11px);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.sc-week-review-btn {
+  font-family: inherit;
+  font-size: var(--sc2-size-body, 14px);
+  font-weight: var(--sc2-wt-bold);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-input);
+  border: none;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.sc-week-review-btn--ghost {
+  background: var(--surface-card);
+  border: var(--sc2-border-thin) solid var(--border-strong);
+  color: var(--text-secondary);
+}
+.sc-week-review-btn--go {
+  background: var(--status-ok-strong, #1F6B41);
+  color: #fff;
+}
+.sc-week-review-btn--go:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-ok-strong, #1F6B41) 88%, #000);
+}
+.sc-week-review-btn--fix {
+  background: var(--status-fail-strong, #B3261E);
+  color: #fff;
+}
+.sc-week-review-btn:disabled {
+  background: var(--surface-quiet);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Compact for narrow viewports. Same 375px floor as the rest of SC. */
+@media (max-width: 480px) {
+  .sc-week-review-modal { max-height: 100vh; border-radius: 0; }
+  .sc-week-review-day-head { flex-wrap: wrap; }
+  .sc-week-review-day-date { min-width: 0; flex: 1 0 100%; }
+  .sc-week-review-foot { flex-wrap: wrap; }
+  .sc-week-review-progress { flex: 1 0 100%; }
+  .sc-week-review-svc {
+    grid-template-columns: 1fr 60px 82px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+}

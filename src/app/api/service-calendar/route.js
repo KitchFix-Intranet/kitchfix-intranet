@@ -12,8 +12,18 @@ import {
   computeWeekCompleteness,
   loadLiveFinalizeRow,
   mondayOfWeek,
+  resolveFinalizeReviewSpan,
   runFinalizeEffects,
+  weekDates,
 } from "@/lib/scWeekFinalize";
+// 2026-09-08: week-review-before-finalize state helpers. See
+// docs/migrations/sc-42-day-review-state.sql for the column shape.
+import {
+  clearReviewStateForDays,
+  readReviewStateForDays,
+  requireAllDaysApproved,
+  alertReviewClearFailure,
+} from "@/lib/scReviewState";
 // PR-A: per-meal billing account gate for sc-finalize-week /
 // sc-revert-finalize. Fee accounts are structurally excluded.
 import { isPerMealBillingAccount } from "@/app/service-calendar/v2/billing/perMealAccounts";
@@ -1110,6 +1120,22 @@ export async function POST(request) {
       }
       const result = await saveActuals(accountKey, date, touched, email);
 
+      // 2026-09-08 (week-review): any write to a day invalidates a
+      // prior review approval on that day. Clear the review_status
+      // marker so the operator re-reviews before the finalize gate
+      // will re-pass. Non-fatal: the actuals ARE committed regardless;
+      // a clear failure just leaves the marker in place. The finalize
+      // gate will refuse re-finalize on a mismatched approval - the
+      // failure mode here is the opposite of the unlock-clear failure
+      // (which leaves the gate open); this one keeps the gate closed
+      // when it should have opened, so silent log is defensible.
+      try {
+        await clearReviewStateForDays(accountKey, [date]);
+      } catch (clearErr) {
+        // eslint-disable-next-line no-console
+        console.error("[sc-submit-day] clearReviewStateForDays failed:", clearErr);
+      }
+
       // SC-079: notes moved off the save path (#361's dayNotes upsert
       // retired). The mark-no-service flow still needs to leave a
       // trail, so it posts its literal via the same ledger table as
@@ -1201,6 +1227,233 @@ export async function POST(request) {
       return NextResponse.json(result);
     }
 
+    // ── sc-week-review-data: fetch per-day breakdown + review state ──
+    // 2026-09-08 (week-review). The WeekReview modal calls this on
+    // open. Returns everything the modal needs to render N cards
+    // (7 for weekly, 14 for biweekly pair close) with services +
+    // counts + amounts + variance + review markers.
+    //
+    // Server-driven span (via resolveFinalizeReviewSpan) so the
+    // client cannot ask for the wrong range. Cadence + week-index
+    // decide 7 vs 14; a stray weekStart that isn't a Monday resolves
+    // to that Monday's week.
+    if (action === "sc-week-review-data") {
+      const { accountKey, weekStart } = body;
+      if (!accountKey || !weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+        return NextResponse.json(
+          { success: false, error: "accountKey and weekStart (YYYY-MM-DD) required" },
+          { status: 400 }
+        );
+      }
+      let span;
+      try {
+        span = await resolveFinalizeReviewSpan(accountKey, weekStart);
+      } catch (e) {
+        return NextResponse.json(
+          { success: false, error: `resolveFinalizeReviewSpan: ${e.message}` },
+          { status: 500 }
+        );
+      }
+      const supa = getServiceClient();
+      // Pull per-day service breakdowns from sc_daily_revenue.
+      const { data: viewRows, error: vErr } = await supa
+        .from("sc_daily_revenue")
+        .select("service_date, service_id, service_name, group_name, projected_count, actual_count, price_at_date, projected_revenue, actual_revenue, is_flat_fee")
+        .eq("account_key", accountKey)
+        .gte("service_date", span.spanStart)
+        .lte("service_date", span.spanEnd)
+        .order("service_date", { ascending: true })
+        .order("service_id", { ascending: true });
+      if (vErr) {
+        return NextResponse.json(
+          { success: false, error: `sc_daily_revenue: ${vErr.message}` },
+          { status: 500 }
+        );
+      }
+      const reviewRead = await readReviewStateForDays(accountKey, span.dates, supa);
+      if (!reviewRead.success) {
+        return NextResponse.json(
+          { success: false, error: `readReviewStateForDays: ${reviewRead.error}` },
+          { status: 500 }
+        );
+      }
+      const reviewByDate = new Map();
+      for (const r of reviewRead.rows) {
+        reviewByDate.set(String(r.service_date).slice(0, 10), r);
+      }
+      const rowsByDate = new Map();
+      for (const r of viewRows || []) {
+        const d = String(r.service_date).slice(0, 10);
+        if (!rowsByDate.has(d)) rowsByDate.set(d, []);
+        rowsByDate.get(d).push(r);
+      }
+      const days = span.dates.map((d) => {
+        const dayRows = rowsByDate.get(d) || [];
+        const services = dayRows.map((r) => ({
+          serviceId:     r.service_id,
+          serviceName:   r.service_name,
+          groupName:     r.group_name,
+          projectedCount: Number(r.projected_count || 0),
+          actualCount:    Number(r.actual_count || 0),
+          priceAtDate:    Number(r.price_at_date || 0),
+          projectedRevenue: Number(r.projected_revenue || 0),
+          actualRevenue:    Number(r.actual_revenue || 0),
+          isFlatFee:      !!r.is_flat_fee,
+          hasActual:      r.actual_count != null,
+        }));
+        const totalActualMeals = services.reduce((a, s) => a + (s.hasActual ? s.actualCount : 0), 0);
+        const totalProjectedMeals = services.reduce((a, s) => a + s.projectedCount, 0);
+        const totalActualRevenue = services.reduce((a, s) => a + s.actualRevenue, 0);
+        const totalProjectedRevenue = services.reduce((a, s) => a + s.projectedRevenue, 0);
+        const rev = reviewByDate.get(d) || null;
+        return {
+          date: d,
+          services,
+          totals: {
+            actualMeals:      totalActualMeals,
+            projectedMeals:   totalProjectedMeals,
+            actualRevenue:    totalActualRevenue,
+            projectedRevenue: totalProjectedRevenue,
+          },
+          reviewStatus: rev?.review_status || null,
+          reviewedBy:   rev?.reviewed_by || null,
+          reviewedAt:   rev?.reviewed_at || null,
+        };
+      });
+      return NextResponse.json({
+        success: true,
+        span:  {
+          dates:      span.dates,
+          spanStart:  span.spanStart,
+          spanEnd:    span.spanEnd,
+          isBiweekly: span.isBiweekly,
+          weekIndex:  span.weekIndex,
+        },
+        days,
+      });
+    }
+
+    // ── sc-review-day: write approval or flag on one day ──
+    // 2026-09-08 (week-review). Called by the WeekReview modal on
+    // Approved / Needs fix. Writes review_status + reviewed_by +
+    // reviewed_at to sc_day_metadata for one (account, date). When
+    // review_status is 'flagged' also appends an append-only "marked
+    // for fix" ledger note per Kevin ruling 2 - same sc_day_note_
+    // entries path the bulk reset uses; the record survives the
+    // marker being cleared by a subsequent save.
+    //
+    // Fences:
+    //   - Actor + timestamp are server-derived. Client sends only the
+    //     day + status.
+    //   - review_status accepted values are 'approved' or 'flagged'.
+    //     DB-side CHECK constraint from sc-42 is the last line of
+    //     defense; validate here for the clean 400.
+    //   - This handler does NOT gate on finalize lock. The review
+    //     itself happens on unfinalized weeks; if a race saves the
+    //     day while the modal is open, the approve write is what
+    //     Kevin's ruling 1 addresses: "the flagged day carries a
+    //     review marker, and hitting Confirm & save on that day
+    //     clears the marker automatically." Approving after a save
+    //     is fine - the operator saw the current values.
+    if (action === "sc-review-day") {
+      const { accountKey, date, status } = body;
+      if (!accountKey || !date) {
+        return NextResponse.json(
+          { success: false, error: "accountKey and date required" },
+          { status: 400 }
+        );
+      }
+      if (status !== "approved" && status !== "flagged") {
+        return NextResponse.json(
+          { success: false, error: "status must be 'approved' or 'flagged'" },
+          { status: 400 }
+        );
+      }
+      const supa = getServiceClient();
+      const author = session.user?.name || session.user?.email || "";
+      const now    = new Date().toISOString();
+      // Row-per-day is created lazily elsewhere (sc-load populates
+      // day_metadata as periods are opened). If no row exists at
+      // review time, we insert a minimal one so the review write
+      // has somewhere to land. `service_date` + `account_key` is
+      // the composite key.
+      const { data: existing, error: exErr } = await supa
+        .from("sc_day_metadata")
+        .select("service_date")
+        .eq("account_key", accountKey)
+        .eq("service_date", date)
+        .maybeSingle();
+      if (exErr) {
+        return NextResponse.json(
+          { success: false, error: `sc_day_metadata lookup: ${exErr.message}` },
+          { status: 500 }
+        );
+      }
+      if (!existing) {
+        const { error: insErr } = await supa
+          .from("sc_day_metadata")
+          .insert({
+            account_key:   accountKey,
+            service_date:  date,
+            review_status: status,
+            reviewed_by:   author,
+            reviewed_at:   now,
+          });
+        if (insErr) {
+          return NextResponse.json(
+            { success: false, error: `sc_day_metadata insert: ${insErr.message}` },
+            { status: 500 }
+          );
+        }
+      } else {
+        const { error: updErr } = await supa
+          .from("sc_day_metadata")
+          .update({
+            review_status: status,
+            reviewed_by:   author,
+            reviewed_at:   now,
+          })
+          .eq("account_key", accountKey)
+          .eq("service_date", date);
+        if (updErr) {
+          return NextResponse.json(
+            { success: false, error: `sc_day_metadata update: ${updErr.message}` },
+            { status: 500 }
+          );
+        }
+      }
+      // Kevin ruling 2: flagged posts a "marked for fix" ledger note.
+      // Approved does NOT post a note - the state on sc_day_metadata
+      // is the record, and the modal shows the who + when. Approvals
+      // clear on any write to the day, so a note per approval would
+      // create ledger noise that outlives the state it documents.
+      let noteResult = null;
+      if (status === "flagged") {
+        try {
+          noteResult = await addDayNoteEntry(
+            accountKey,
+            date,
+            "Marked for fix during finalize review.",
+            author
+          );
+        } catch (err) {
+          // Non-fatal: the review state landed; the ledger note is
+          // the belt to the state's suspenders. Surface via response
+          // so the client can decide whether to warn.
+          // eslint-disable-next-line no-console
+          console.error(`[sc-review-day] note append failed for ${date}:`, err);
+          noteResult = { success: false, error: err?.message || String(err) };
+        }
+      }
+      return NextResponse.json({
+        success: true,
+        reviewedAt: now,
+        reviewedBy: author,
+        status,
+        noteResult,
+      });
+    }
+
     // ── sc-reset-day: undo a day's actuals ──
     // sc-25 (2026-08-01). Deletes that account's actuals for that
     // date, appends an authored note entry to the ledger recording
@@ -1263,6 +1516,14 @@ export async function POST(request) {
       const author = session.user?.name || session.user?.email || "";
       const noteText = "Day reset - all counts cleared";
       const noteRes = await addDayNoteEntry(accountKey, date, noteText, author);
+      // 2026-09-08 (week-review): clear the review marker if this day
+      // carried one. Reset is a write; write invalidates approval.
+      try {
+        await clearReviewStateForDays(accountKey, [date]);
+      } catch (clearErr) {
+        // eslint-disable-next-line no-console
+        console.error("[sc-reset-day] clearReviewStateForDays failed:", clearErr);
+      }
       return NextResponse.json({ success: true, ...noteRes });
     }
 
@@ -1339,6 +1600,15 @@ export async function POST(request) {
           }
         })
       );
+      // 2026-09-08 (week-review): clear review markers for every
+      // day in the batch. Bulk reset is a write; write invalidates
+      // approval.
+      try {
+        await clearReviewStateForDays(accountKey, uniqueDates);
+      } catch (clearErr) {
+        // eslint-disable-next-line no-console
+        console.error("[sc-bulk-reset] clearReviewStateForDays failed:", clearErr);
+      }
       return NextResponse.json({
         success: true,
         resetCount: uniqueDates.length,
@@ -1437,11 +1707,11 @@ export async function POST(request) {
       // returned so the client can name a specific number of days
       // that need re-post.
       const trimmedBatchNote = typeof batchNote === "string" ? batchNote.trim() : "";
+      const bulkUniqueDates = [...new Set(bulkDates)];
       if (result?.success && trimmedBatchNote.length > 0) {
-        const uniqueDates = [...new Set(bulkDates)];
         const author = session.user?.name || session.user?.email || "";
         let noteFailCount = 0;
-        for (const date of uniqueDates) {
+        for (const date of bulkUniqueDates) {
           try {
             const noteRes = await addDayNoteEntry(accountKey, date, trimmedBatchNote, author, "bulk");
             if (!noteRes?.success) noteFailCount++;
@@ -1449,8 +1719,25 @@ export async function POST(request) {
             noteFailCount++;
           }
         }
+        // 2026-09-08 (week-review): clear on write, applied to bulk.
+        if (result?.success) {
+          try {
+            await clearReviewStateForDays(accountKey, bulkUniqueDates);
+          } catch (clearErr) {
+            // eslint-disable-next-line no-console
+            console.error("[sc-bulk-submit] clearReviewStateForDays failed:", clearErr);
+          }
+        }
         if (noteFailCount > 0) {
           return NextResponse.json({ ...result, noteFailCount });
+        }
+      } else if (result?.success) {
+        // No batch note path - still needs the clear on success.
+        try {
+          await clearReviewStateForDays(accountKey, bulkUniqueDates);
+        } catch (clearErr) {
+          // eslint-disable-next-line no-console
+          console.error("[sc-bulk-submit] clearReviewStateForDays failed:", clearErr);
         }
       }
       return NextResponse.json(result);
@@ -1531,6 +1818,42 @@ export async function POST(request) {
             error: completeness.reason,
             code: "WEEK_INCOMPLETE",
             missingDates: completeness.missingDates,
+          },
+          { status: 400 }
+        );
+      }
+      // 2026-09-08 (week-review): all-days-approved gate. This gate
+      // is orthogonal to the completeness check above: completeness
+      // asks "is there a value for every day"; approval asks "has
+      // someone signed off on the values." Both must pass before an
+      // invoice can send. The span accounts for biweekly - close-week
+      // finalize requires all 14 days (both weeks) approved per
+      // owner ruling.
+      let reviewSpan;
+      try {
+        reviewSpan = await resolveFinalizeReviewSpan(accountKey, weekStart);
+      } catch (spanErr) {
+        return NextResponse.json(
+          { success: false, error: `resolveFinalizeReviewSpan: ${spanErr.message}` },
+          { status: 500 }
+        );
+      }
+      const approvalGate = await requireAllDaysApproved(accountKey, reviewSpan.dates);
+      if (!approvalGate.success) {
+        return NextResponse.json(
+          { success: false, error: `requireAllDaysApproved: ${approvalGate.error}` },
+          { status: 500 }
+        );
+      }
+      if (!approvalGate.allApproved) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: reviewSpan.isBiweekly && reviewSpan.dates.length === 14
+              ? `Cannot finalize - ${approvalGate.missingDates.length} of 14 days in the bi-weekly pair are not yet approved. Re-review the pair before finalizing.`
+              : `Cannot finalize - ${approvalGate.missingDates.length} of ${reviewSpan.dates.length} days are not yet approved. Re-review the week before finalizing.`,
+            code: "WEEK_NOT_REVIEWED",
+            missingDates: approvalGate.missingDates,
           },
           { status: 400 }
         );
@@ -1670,7 +1993,93 @@ export async function POST(request) {
           { status: 500 }
         );
       }
-      return NextResponse.json({ success: true, revertedRow: updated });
+      // 2026-09-08 (week-review): the unlock succeeded. Now clear
+      // the day-review markers for the reverted span so a re-
+      // finalize forces a fresh review, and drop one ledger note
+      // per day so the audit trail shows the review was cleared by
+      // an unlock (not by an operator save).
+      //
+      // Biweekly ruling: clearing on unlock covers BOTH weeks of the
+      // pair (14 days), not just the reverted week. A biweekly pair is
+      // one billing event; revert unlocks the pair; review clears for
+      // the pair. resolveFinalizeReviewSpan does the cadence + week-
+      // index lookup and returns the right span.
+      let reviewSpan;
+      try {
+        reviewSpan = await resolveFinalizeReviewSpan(accountKey, weekStart);
+      } catch (spanErr) {
+        // Failure to resolve the span is the same silent-billing-gate
+        // hazard as failure to clear: revert stands, but we cannot
+        // reason about which days to clear. Surface it, alert, and
+        // return.
+        await alertReviewClearFailure({
+          accountKey,
+          weekStart,
+          weekEnd:      weekDates(weekStart)[6],
+          affectedDates: [],
+          clearError:   `resolveFinalizeReviewSpan: ${spanErr.message}`,
+          revertedBy:   email,
+        });
+        return NextResponse.json({
+          success: true,
+          revertedRow: updated,
+          reviewClearWarning: {
+            error: `resolveFinalizeReviewSpan: ${spanErr.message}`,
+            note:  "The unlock stands but review markers could not be cleared. Re-approve each day in the finalize modal before re-finalizing.",
+          },
+        });
+      }
+      const clearRes = await clearReviewStateForDays(accountKey, reviewSpan.dates);
+      if (!clearRes.success) {
+        // Kevin ruling 2026-09-08 (correcting my earlier reasoning):
+        // "if the clear fails, the days keep review_status = 'approved',
+        // and the gate will pass, not refuse." A silent console.error
+        // on a path that leaves a billing gate open is this week's
+        // GOTCHAS pattern. Surface it via the response AND alert Slack.
+        // Do NOT roll back the revert - the unlock itself succeeded.
+        await alertReviewClearFailure({
+          accountKey,
+          weekStart:    reviewSpan.spanStart,
+          weekEnd:      reviewSpan.spanEnd,
+          affectedDates: reviewSpan.dates,
+          clearError:   clearRes.error,
+          revertedBy:   email,
+        });
+        return NextResponse.json({
+          success: true,
+          revertedRow: updated,
+          reviewClearWarning: {
+            error: clearRes.error,
+            note:  "The unlock stands but review markers could not be cleared. Re-approve each day in the finalize modal before re-finalizing.",
+            affectedDates: reviewSpan.dates,
+          },
+        });
+      }
+      // Per-day ledger notes (mirrors sc-bulk-reset). Append-only so
+      // the reset-by-unlock event survives a subsequent re-review.
+      const author = session.user?.name || session.user?.email || "";
+      const spanLabel = reviewSpan.dates.length === 14
+        ? `${reviewSpan.spanStart} to ${reviewSpan.spanEnd} (bi-weekly pair, 14 days)`
+        : `${reviewSpan.spanStart} to ${reviewSpan.spanEnd} (7 days)`;
+      const noteText = `Review cleared by unlock - ${spanLabel}. Re-approval required before re-finalize.`;
+      let noteFailCount = 0;
+      await Promise.all(
+        reviewSpan.dates.map(async (d) => {
+          try {
+            await addDayNoteEntry(accountKey, d, noteText, author);
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`[sc-revert-finalize] note append failed for ${d}:`, err);
+            noteFailCount++;
+          }
+        })
+      );
+      return NextResponse.json({
+        success: true,
+        revertedRow: updated,
+        reviewClear: { cleared: clearRes.cleared, dates: reviewSpan.dates },
+        noteFailCount,
+      });
     }
 
     // ── sc-admin-backdate-preview: warning payload for the panel ──
