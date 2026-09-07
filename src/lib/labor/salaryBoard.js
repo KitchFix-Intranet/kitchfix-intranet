@@ -285,13 +285,20 @@ export function withSalary(body, {
     ? buildWeekBudgets({ start, end, budget_periods: merged.periods })
     : body.week_budgets;
 
+  // Kevin walkthrough R-68 for Labor (2026-09-07). This module used
+  // to set salary_included: true unconditionally because the caller
+  // only invoked it when the URL toggle asked for the merge; the
+  // merge and the disclosure were coupled. R-68 restated: aggregates
+  // ALWAYS merge salary (Kitchen labour shows its true total); the
+  // URL toggle only controls DISCLOSURE. `salary_included` now
+  // reflects disclosure state, set by the route after the merge
+  // from the URL param. Do not overwrite it here.
   return {
     ...body,
     actuals: mergedActuals,
     budget_periods: merged.periods,
     week_budgets,
     board: mergedBoard,
-    salary_included: true,
     salary_summary,
     salary_vacancy,
     hours_basis: "hourly_only",

@@ -1732,6 +1732,32 @@ export async function resolveOverview({
         if (p != null) purchByPeriod.set(p, (purchByPeriod.get(p) || 0) + Number(w.amount || 0));
       }
     }
+    // Kevin walkthrough sweep item 4 (2026-09-07). Inventory adjusting
+    // JEs (R-61) were applied to the COGS card total but not to the
+    // chart's per-period bars. On Last period (single period), the fix
+    // that landed at the account level happens to net to the same
+    // figure because sum-over-one-period equals the whole; on This year
+    // (multi-period), the chart's sum-of-bars differs from the card by
+    // the total JE sum. Measured live 2026-09-07:
+    //   TBJ - FL  bars vs card off by  $3,842
+    //   TBR - FL                       $11,693
+    //
+    // Fix: build per-period inventory-adjustment map from invAdjByAcct
+    // and subtract from chart spent, mirroring the card's
+    // `adjusted_cost = purchases - adjusting_je` derivation (see
+    // pnl-loader.js line 123). 3200 + 3400 only per R-61.
+    const invAdjByPeriod = new Map();
+    for (const acct of members) {
+      const byAcct = invAdjByAcct.get(acct);
+      if (!byAcct) continue;
+      for (const [pn, byLine] of byAcct) {
+        let periodJe = 0;
+        for (const [gl, je] of byLine) {
+          if (gl === "3200" || gl === "3400") periodJe += Number(je || 0);
+        }
+        if (periodJe !== 0) invAdjByPeriod.set(pn, (invAdjByPeriod.get(pn) || 0) + periodJe);
+      }
+    }
     // Kevin 2026-09-02 language pass Item 15: each period's budget
     // line is that period's ADJUSTED budget - period actual revenue
     // times the target cost percentage. Same rule as the COGS card's
@@ -1786,7 +1812,9 @@ export async function resolveOverview({
       return {
         period_no: p,
         state,
-        spent: state === "not_started" ? null : r2((laborByPeriod.get(p) || 0) + (purchByPeriod.get(p) || 0)),
+        // Kevin walkthrough item 4 - subtract inventory-adjustment JE
+        // so the chart's per-period bars sum to the card total.
+        spent: state === "not_started" ? null : r2((laborByPeriod.get(p) || 0) + (purchByPeriod.get(p) || 0) - (invAdjByPeriod.get(p) || 0)),
         budget: r2(laborBudP + purchBudP),
         // Item 15: adjusted per-period budget for the chart's target
         // line. `budget` above is retained for legacy consumers.
