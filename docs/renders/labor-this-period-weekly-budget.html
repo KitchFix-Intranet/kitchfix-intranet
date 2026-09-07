@@ -1,0 +1,246 @@
+<meta charset="utf-8"><title>Labor · This period · a budget per week</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy-700:#153968;--navy-50:#F4F7FC;--amber-50:#FFF7ED;--amber-500:#D97706;--amber-600:#B25800;
+--green-600:#008330;--green-50:#E9FDEC;--red-600:#B9000C;--red-50:#FFEDE7;--red-500:#C0392B;
+--n-0:#FFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}
+.devbar .lbl{font-size:11px;color:#93a9c9}
+.devbar button{font-size:11px;font-weight:600;padding:5px 11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.nav{background:var(--n-0);border-bottom:1px solid var(--n-300);padding:0 24px;height:54px;display:flex;align-items:center}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:-.02em}
+.mark{width:25px;height:25px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.navlinks{display:flex;gap:20px;margin:0 auto}.navlinks span{font-size:12.5px;font-weight:600;color:var(--n-700)}
+.navlinks span.on{color:var(--navy-700);background:var(--navy-50);padding:6px 11px;border-radius:8px;margin:-6px -11px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--navy-700);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.wrap{max-width:1300px;margin:0 auto;padding:16px 22px 40px}
+.pv{background:var(--amber-50);border:1px solid #F7C299;border-radius:9px;padding:8px 13px;display:flex;align-items:center;font-size:12.5px;font-weight:600;color:var(--amber-600);margin-bottom:11px}
+.pv a{margin-left:auto;color:var(--amber-600);font-weight:700}
+.cmd{background:var(--navy-700);border-radius:11px;padding:0 18px;min-height:48px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.cmd .ttl{color:#fff;font-size:14px;font-weight:700}.cmd .acct{color:#fff;font-size:14px;font-weight:800}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 10px;display:flex;align-items:center;gap:6px}
+.chip .k{color:#93a9c9;font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.chip .v{color:#fff;font-size:12px;font-weight:600}.chip .d{color:#93a9c9;font-size:12px;font-weight:500}
+.meta{color:#b9c8de;font-size:10.5px;font-weight:600}.meta b{color:#fff}
+.ml{margin-left:auto}
+.tog{display:flex;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:8px;overflow:hidden}
+.tog button{font-size:12px;font-weight:700;padding:6px 11px;color:#cddbee;background:transparent;border:none}
+.tog button.on{background:#fff;color:var(--navy-700)}
+.dot{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:8px;padding:6px 11px;color:#cddbee;font-size:12px;font-weight:700}
+.dot i{width:7px;height:7px;border-radius:50%;background:#22c55e}
+.top{display:grid;grid-template-columns:minmax(0,27fr) minmax(0,73fr);gap:14px;margin-bottom:14px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;box-shadow:0 1px 2px rgba(10,37,72,.04),0 2px 8px rgba(10,37,72,.05)}
+.ch{display:flex;align-items:center;gap:8px;padding:12px 16px 0}
+.ch .eb{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.pill{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.pbad{background:var(--red-50);color:var(--red-600)}.pok{background:var(--green-50);color:var(--green-600)}
+.pneu{background:var(--n-100);color:var(--n-700)}.pnav{background:var(--navy-50);color:var(--navy-700)}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;position:relative;flex:none}
+.q:hover{background:var(--navy-700);color:#fff;border-color:var(--navy-700)}
+.q .tip{display:none;position:absolute;bottom:22px;left:-10px;width:310px;background:var(--n-900);color:#fff;font-size:10.5px;font-weight:500;line-height:1.6;padding:10px 12px;border-radius:8px;z-index:40;text-transform:none;letter-spacing:0;text-align:left}
+.q:hover .tip{display:block}
+.cb{padding:12px 16px 16px}
+.hero{border:1px solid var(--n-300);border-radius:8px;padding:13px 15px}
+.hero.bad{border-left:4px solid var(--red-600)}.hero.ok{border-left:4px solid var(--green-600)}
+.hero .k{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--n-600)}
+.hero .v{font-size:27px;font-weight:800;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.hero .d{font-size:10.5px;color:var(--n-600);font-weight:600;margin-top:5px}
+.pairrow{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:11px}
+.mini{border:1px solid var(--n-300);border-radius:8px;padding:11px 13px}
+.mini.bad{border-left:4px solid var(--red-600)}.mini.ok{border-left:4px solid var(--green-600)}
+.mini .k{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600)}
+.mini .v{font-size:17px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+.mini .d{font-size:10px;color:var(--n-600);font-weight:600;margin-top:3px}
+.src{margin-top:12px;padding:10px 13px;border-radius:9px;background:var(--navy-50);border:1px solid #C3D4EA;font-size:10.5px;font-weight:600;color:var(--navy-700);line-height:1.6}
+.src b{color:var(--n-900)}
+/* week rail */
+.rail{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:16px 0 0}
+.wk{border:1px solid var(--n-300);border-radius:9px;padding:11px 12px;position:relative}
+.wk.ok{border-left:4px solid var(--green-600)}
+.wk.bad{border-left:4px solid var(--red-600)}
+.wk.run{border-left:4px solid var(--navy-700);background:var(--navy-50)}
+.wk.plan{border-left:4px solid var(--n-400);background:var(--n-50);border-style:dashed}
+.wk.conf{border-left:4px solid var(--n-600);background:var(--n-0)}
+.wk .n{font-size:11px;font-weight:800}
+.wk .dt{font-size:9px;font-weight:600;color:var(--n-600);margin-top:1px}
+.wk .st{position:absolute;top:10px;right:11px;font-size:8px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-600)}
+.wk .row{display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:8px}
+.wk .row span:first-child{color:var(--n-600);font-weight:600;font-size:10px}
+.wk .vd{margin-top:9px;padding-top:8px;border-top:1px solid var(--n-200);font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.bars{display:flex;align-items:flex-end;gap:12px;height:128px;margin:16px 0 0;position:relative;padding-top:6px}
+.bcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;position:relative}
+.bcol i{display:block;border-radius:2px 2px 0 0;width:100%}
+.bba{background:var(--red-500)}.bok{background:var(--green-600)}
+.bpr{background:repeating-linear-gradient(45deg,#1e4d7b,#1e4d7b 3px,#3b6f9e 3px,#3b6f9e 7px)}
+.bcol .t{position:absolute;left:0;right:0;border-top:2px dashed #8b1a1a;z-index:3}
+.bcol.ok .t{border-top-color:var(--green-600)}
+.bcol.run .t{border-top-color:var(--navy-700)}
+.axis{display:flex;gap:12px;margin-top:9px}
+.axis span{flex:1;text-align:center;font-size:10px;font-weight:700}
+.axis small{display:block;font-weight:600;color:var(--n-600);margin-top:2px;font-size:9px}
+.axis em{display:block;font-style:normal;font-size:9px;font-weight:700;margin-top:2px}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px}
+.tbl th{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);padding:8px 10px;text-align:right;border-bottom:1px solid var(--n-300)}
+.tbl th:first-child{text-align:left}
+.tbl td{padding:10px;border-bottom:1px solid var(--n-200);text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.tbl td:first-child{text-align:left}
+.tbl tr.tot td{background:var(--navy-700);color:#fff;border:none;font-weight:800}
+.tag{font-size:8.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--n-100);color:var(--n-700);margin-left:6px}
+.tag.run{background:var(--navy-50);color:var(--navy-700)}
+.tag.pl{background:var(--n-100);color:var(--n-600)}
+.cap{font-size:11px;color:var(--n-600);padding:12px 22px 0;max-width:1300px;margin:0 auto;line-height:1.65}.cap b{color:var(--n-900)}
+.notes{max-width:1300px;margin:14px auto 0;padding:0 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
+.notes div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.notes h4{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.notes b{color:var(--n-900)}
+
+.runrow{margin-top:11px;padding:10px 13px;border-radius:9px;background:var(--navy-50);border:1px solid #C3D4EA;display:flex;align-items:baseline;gap:10px}
+.runrow .k{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--navy-700)}
+.runrow .v{font-size:17px;font-weight:800;color:var(--navy-700);font-variant-numeric:tabular-nums}
+.runrow .d{margin-left:auto;font-size:10px;font-weight:600;color:var(--n-600);text-align:right}
+</style>
+<div class="devbar"><b>Labor · This period</b><span class="h">TBJ - FL P9 · budget derived from confirmed Service Calendar counts</span>
+<span class="lbl">you are here:</span>
+<button id="t0" onclick="setT(0)">week 1</button>
+<button id="t1" onclick="setT(1)">week 2</button>
+<button id="t2" onclick="setT(2)">week 3</button>
+<button id="t3" class="on" onclick="setT(3)">week 4 · today</button><span style="width:12px"></span><span class="lbl">counts confirmed:</span><button id="c1" class="on" onclick="setC(1)">all weeks</button><button id="c0" onclick="setC(0)">only through this week</button></div>
+<div class="nav"><div class="brand"><span class="mark">KF</span>KitchFix</div>
+<div class="navlinks"><span>Home</span><span>People</span><span>Ops Hub</span><span>Service</span><span class="on">KPI</span><span>Playbook</span><span>Sous</span><span>Directory</span></div><div class="avatar">KF</div></div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+<div class="notes" id="notes"></div>
+<script>
+const TGT=0.1820;
+/* real: confirmed SC revenue and hourly labour, TBJ - FL P9 */
+const W=[
+ {n:"Wk 1",d:"08/10 – 08/16",rev:30646,proj:32082,sp:6556,hrs:315.6,ot:11.2,left:4},
+ {n:"Wk 2",d:"08/17 – 08/23",rev:21876,proj:13167,sp:6461,hrs:311.1,ot:12.2,left:4},
+ {n:"Wk 3",d:"08/24 – 08/30",rev:30400,proj:19377,sp:6862,hrs:330.4,ot:16.1,left:4},
+ {n:"Wk 4",d:"08/31 – 09/06",rev:23169,proj:10395,sp:3933,hrs:189.4,ot:4.2,left:2}];
+const DAYS=["08/16","08/23","08/30","09/04"];
+let TI=3, CONF=1;   /* CONF=1 all weeks confirmed (real TBJ P9) · CONF=0 only up to the running week */
+const $=i=>document.getElementById(i);
+const m=n=>n==null?"—":(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const tip=t=>'<span class="q">?<span class="tip">'+t+'</span></span>';
+function view(){
+ const cur=TI;                       /* index of the running week */
+ const rows=W.map((w,i)=>{
+  const state = i<cur ? "closed" : (i===cur ? "running" : "ahead");
+  const confirmed = CONF===1 ? true : (i<=cur);
+  const basis = confirmed ? w.rev : w.proj;      /* confirmed counts, else the planned figure */
+  const bud   = basis*TGT;
+  const sp = i<=cur ? w.sp : null;
+  return {...w, bud, basis, confirmed, state, sp};
+ });
+ const closed=rows.filter(r=>r.state==="closed");
+ const run=rows[cur];
+ const spentAll=rows.filter(r=>r.sp!=null).reduce((a,r)=>a+r.sp,0);
+ const budAll=rows.reduce((a,r)=>a+r.bud,0);
+ const budClosed=closed.reduce((a,r)=>a+r.bud,0);
+ const budToDate=budClosed;   /* closed weeks only - the running week's budget covers days not yet worked */
+ const spentClosed=closed.reduce((a,r)=>a+r.sp,0);
+ const over=spentClosed>budToDate;
+ let h='<div class="pv">Previewing as <b style="margin-left:5px">TBJ - FL</b><a href="#">exit</a></div>';
+ h+='<div class="cmd"><span class="ttl">KPI Dashboard ·</span><span class="acct">TBJ - FL</span>'+
+  '<span class="chip"><span class="k">Section</span><span class="v">Labor</span><span class="d">▾</span></span>'+
+  '<span class="chip"><span class="v">This period</span><span class="d">P9 · 08/10 – 09/06</span><span class="d">▾</span></span>'+
+  '<span class="meta">TODAY <b>'+DAYS[cur]+'</b> · PERIOD <b>9</b> · WEEK <b>'+(cur+1)+'</b></span>'+
+  '<span class="ml"></span><span class="tog"><button class="on">Hourly</button><button>+ Salary</button></span>'+
+  '<span class="dot"><i></i>Data current</span></div>';
+ h+='<div class="top">';
+ /* panel */
+ h+='<div class="card"><div class="ch"><span class="eb">Period 9 · week '+(cur+1)+' of 4</span><span class="ml"></span>'+
+  '<span class="pill '+(over?"pbad":"pok")+'">'+(over?"Over":"On track")+'</span>'+
+  tip("Each week has its own budget, worked out from the meal counts your team confirmed in the Service Calendar for that week, times the labour target percent. A week with confirmed counts has a real budget. A week without them falls back to the plan.")+
+  '</div><div class="cb">'+
+  '<div class="hero '+(over?"bad":"ok")+'"><div class="k">'+(closed.length?'Spent · weeks 1 – '+closed.length+' closed':'Week 1 running')+'</div><div class="v num">'+m(closed.length?spentClosed:run.sp)+'</div>'+
+  '<div class="d">'+(closed.length?(spentClosed/closed.reduce((a,r)=>a+r.basis,0)*100).toFixed(1)+'% of confirmed revenue · target '+(TGT*100).toFixed(1)+'%':'nothing closed yet')+'</div></div>'+
+  '<div class="pairrow"><div class="mini"><div class="k">Budget to date</div><div class="v num">'+m(budToDate)+'</div>'+
+  '<div class="d">from confirmed counts</div></div>'+
+  '<div class="mini '+(over?"bad":"ok")+'"><div class="k">'+(over?"Over":"Under")+'</div><div class="v num" style="color:'+(over?"var(--red-600)":"var(--green-600)")+'">'+m(Math.abs(spentAll-budToDate))+'</div>'+
+  '<div class="d">'+(closed.length?'weeks 1 – '+closed.length:'—')+'</div></div></div>'+'<div class="runrow"><span class="k">Week '+(cur+1)+' running</span><span class="v num">'+m(run.sp)+'</span><span class="d">of '+m(run.bud)+' · '+Math.round(run.sp/run.bud*100)+'% used · '+run.left+' days left</span></div>'+
+  '<div class="src">'+(rows.every(r=>r.confirmed)?'<b>Every week has confirmed counts.</b> Each week&rsquo;s budget comes from the revenue your team entered in the Service Calendar.':'<b>'+rows.filter(r=>r.confirmed).length+' of 4 weeks confirmed.</b> Weeks without counts fall back to the forecast, and their budget firms up the moment your client confirms.')+'</div>'+
+  '</div></div>';
+ /* week rail + chart */
+ h+='<div class="card"><div class="ch"><span class="eb">Week by week</span>'+
+  '<span class="ml" style="font-size:10px;color:var(--n-600);font-weight:700">— each week&rsquo;s own budget</span>'+
+  tip("The dashed line on each week is that week's budget, from its confirmed counts. Weeks ahead show their budget so you can schedule against it.")+
+  '</div><div class="cb">';
+ const mx=Math.max(...rows.map(r=>Math.max(r.sp||0,r.bud)))*1.28;
+ h+='<div class="bars">';
+ rows.forEach(r=>{
+  const ok=r.sp!=null && r.sp<=r.bud;
+  h+='<div class="bcol'+(r.state==="running"?" run":(ok?" ok":""))+'">'+
+   '<span class="t" style="bottom:'+(r.bud/mx*100)+'%"></span>'+
+   (r.sp!=null?'<i class="'+(r.state==="running"?"bpr":(ok?"bok":"bba"))+'" style="height:'+(r.sp/mx*100)+'%"></i>':'<i style="height:2px;background:var(--n-300)"></i>')+
+   '</div>';});
+ h+='</div><div class="axis">';
+ rows.forEach(r=>{h+='<span>'+r.n+'<small>'+r.d+'</small>'+
+  (r.sp==null?'<em style="color:var(--n-600)">budget '+m(r.bud)+'</em>'
+   :'<em style="color:'+(r.state==="running"?"var(--navy-700)":(r.sp<=r.bud?"var(--green-600)":"var(--red-600)"))+'">'+m(r.sp)+(r.state==="running"?" so far":"")+'</em>')+
+  '</span>';});
+ h+='</div>';
+ /* week rail */
+ h+='<div class="rail">';
+ rows.forEach(r=>{
+  const ok=r.sp!=null && r.sp<=r.bud;
+  const cls = r.state==="ahead" ? (r.confirmed?"conf":"plan") : (r.state==="running" ? "run" : (ok?"ok":"bad"));
+  h+='<div class="wk '+cls+'"><div class="n">'+r.n+'</div><div class="dt">'+r.d+'</div>'+
+   '<div class="st">'+(r.state==="ahead"?(r.confirmed?"confirmed":"forecast"):(r.state==="running"?"running":"closed"))+'</div>'+
+   '<div class="row"><span>'+(r.confirmed?'Confirmed revenue':'Forecast revenue')+'</span><span class="num">'+m(r.basis)+'</span></div>'+
+   '<div class="row"><span>Budget</span><span class="num">'+m(r.bud)+(r.confirmed?'':' <span style="font-size:9px;font-weight:700;color:var(--n-600)">plan</span>')+'</span></div>'+
+   '<div class="row"><span>Spent</span><span class="num">'+(r.sp==null?'—':m(r.sp))+'</span></div>'+
+   '<div class="vd" style="color:'+(r.sp==null?"var(--n-600)":(r.state==="running"?"var(--navy-700)":(ok?"var(--green-600)":"var(--red-600)")))+'">'+
+   (r.sp==null? 'schedule to '+m(r.bud)
+     : r.state==="running" ? Math.round(r.sp/r.bud*100)+'% used'
+     : (ok?"▼ ":"▲ ")+m(Math.abs(r.sp-r.bud)))+
+   '</div>'+
+   (r.state==="running"?'<div style="font-size:9.5px;font-weight:600;color:var(--n-600);margin-top:4px">'+r.left+' days left · budget covers the whole week</div>':'')+
+   '</div>';});
+ h+='</div>';
+ h+='</div></div>';
+ h+='</div>';
+ /* table */
+ h+='<div class="card"><div class="cb" style="padding:14px 16px">'+
+  '<table class="tbl"><tr><th>Week</th><th>Revenue basis</th><th>Budget</th><th>Spent</th><th>Vs budget</th><th>% of rev</th><th>Hours</th><th>OT 1.5×</th></tr>';
+ rows.forEach(r=>{
+  const ok=r.sp!=null&&r.sp<=r.bud;
+  h+='<tr><td><b>'+r.n.toUpperCase()+'</b><span style="font-weight:600;color:var(--n-600);font-size:10px;margin-left:7px">'+r.d+'</span>'+
+   (r.state==="running"?'<span class="tag run">running</span>':(r.state==="ahead"?'<span class="tag pl">to schedule</span>':''))+'</td>'+
+   '<td>'+m(r.basis)+(r.confirmed?'':' <span style="font-size:9px;font-weight:700;color:var(--n-600)">forecast</span>')+'</td><td style="color:var(--n-600);font-weight:600">'+m(r.bud)+'</td>'+
+   '<td>'+(r.sp==null?'—':m(r.sp))+'</td>'+
+   '<td style="color:'+(r.sp==null?"var(--n-400)":(r.state==="running"?"var(--navy-700)":(ok?"var(--green-600)":"var(--red-600)")))+'">'+
+    (r.sp==null?'—':(r.state==="running"?Math.round(r.sp/r.bud*100)+'% used':(ok?"▼ ":"▲ ")+m(Math.abs(r.sp-r.bud))))+'</td>'+
+   '<td style="color:'+(r.sp==null?"var(--n-400)":(ok?"var(--green-600)":"var(--red-600)"))+'">'+(r.sp==null?'—':(r.sp/r.basis*100).toFixed(1)+'%')+'</td>'+
+   '<td>'+(r.sp==null?'—':r.hrs.toFixed(1))+'</td><td>'+(r.sp==null?'—':r.ot.toFixed(1))+'</td></tr>';});
+ h+='<tr class="tot"><td>TOTAL · PERIOD 9 · WEEK '+(cur+1)+' OF 4</td>'+
+  '<td>'+m(rows.reduce((a,r)=>a+r.basis,0))+'</td><td>'+m(budAll)+'</td><td>'+m(spentAll)+'</td>'+
+  '<td>'+(over?"▲ ":"▼ ")+m(Math.abs(spentAll-budToDate))+'</td>'+
+  '<td>'+(spentAll/rows.filter(r=>r.sp!=null).reduce((a,r)=>a+r.basis,0)*100).toFixed(1)+'%</td>'+
+  '<td>'+rows.filter(r=>r.sp!=null).reduce((a,r)=>a+r.hrs,0).toFixed(1)+'</td>'+
+  '<td>'+rows.filter(r=>r.sp!=null).reduce((a,r)=>a+r.ot,0).toFixed(1)+'</td></tr>';
+ h+='</table></div></div>';
+ return h;
+}
+const CAPS=[
+ '<b>Week 1.</b> Weeks 2, 3 and 4 already carry a budget - your team confirmed those counts in the Service Calendar. <b>A chef schedules week 2 against $3,981</b>, not against a quarter of the period plan.',
+ '<b>Week 2.</b> Week 1 closed <b>$978 over its own budget</b>. Week 2 is running. Weeks 3 and 4 show what to schedule against - $5,533 and $4,217.',
+ '<b>Week 3.</b> Two weeks closed, both over. Week 4 already has its budget at $4,217, so there is time to pull it back.',
+ '<b>Week 4 · today.</b> Three closed, one running. <b>$23,812 spent against $19,309 of budget</b> - 22.4% of confirmed revenue against an 18.2% target.'];
+const NOTES=[
+ '<h4>The budget comes from the counts</h4>Your team confirms meal counts in the Service Calendar ahead of the week. <b>Every week of P9 has them entered</b> - including the one running now.<br><br>So each week&rsquo;s budget is <b>that week&rsquo;s confirmed revenue times the labour target</b>. Not a quarter of the period plan, and not a guess.<br><br>I had this backwards earlier. <b>Revenue is not waiting on the period to close - it is confirmed ahead of the labour.</b>',
+ '<h4>Why the projection is not good enough</h4><b>Week 2 was projected at $13,167 and actually earned $21,876.</b> A chef scheduling against the projection would have staffed for two thirds of the work.<br><br>The confirmed count is the number that matters, and it is there before the week starts. <b>That is the whole argument for using it.</b>',
+ '<h4>What a chef does with this</h4><b>Weeks ahead say "schedule to $4,217"</b> - a real number for a real week, from counts their client already gave them.<br><br><b>Weeks closed say over or under by how much</b> - their own budget, not a share of something.<br><br><b>The running week says where they are so far.</b> One board, three jobs, no verdict borrowed from somewhere else.'];
+function render(){$("app").innerHTML=view();$("cap").innerHTML=CAPS[TI];$("notes").innerHTML=NOTES.map(n=>'<div>'+n+'</div>').join('');
+ ["t0","t1","t2","t3"].forEach((b,i)=>$(b).className=(i===TI?"on":""));$("c1").className=CONF?"on":"";$("c0").className=CONF?"":"on";}
+function setT(i){TI=i;render();}
+function setC(v){CONF=v;render();}
+render();
+</script>
