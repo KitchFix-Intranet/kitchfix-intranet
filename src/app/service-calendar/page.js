@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { useSession } from "next-auth/react";
 import { SC_ADMINS } from "@/lib/admin";
 import ServiceCalendar from "./ServiceCalendar";
@@ -74,11 +74,102 @@ function ServiceCalendarPageBody() {
     }
   }, []);
 
-  // PR-K (2026-08-18): outside-click dismiss retired. The new Toast
-  // component owns auto-dismiss (5s), pause-on-hover, and explicit
-  // close via its own x button. An outside-click dismisser on the
-  // page was a workaround for the old SubmissionToast covering the
-  // grid; the new dark-bottom-centre shape does not need it.
+  // 2026-09-08: outside-click dismiss restored, scoped to plain toasts.
+  // Toasts carrying an action (bulk-reset Undo etc.) require the X or
+  // the timeout - a stray click must not kill the safety net. Rule:
+  // "if the toast has a button, click the button; it will not
+  // disappear on a stray click." The 15s lifetime is the passive path
+  // for actionful toasts; the click-outside path is the passive path
+  // for plain toasts. Symmetry.
+  const toastContainerRef = useRef(null);
+  useEffect(() => {
+    if (!toast) return undefined;
+    // Skip outside-click dismiss when the toast carries an action -
+    // predicate matches the render gate that shows the action button
+    // (Toast.js:144).
+    const hasAction = !!(toast.actionLabel && toast.onAction);
+    if (hasAction) return undefined;
+    // note-posted + offline-chip use a different container and skip
+    // outside-click too (offline-chip is persistent-until-syncing-clears
+    // by design; note-posted is a fast-fade chip that dismisses on
+    // its own click).
+    if (toast.variant === "note-posted" || toast.variant === "offline-chip") return undefined;
+    function onDocMouseDown(e) {
+      const el = toastContainerRef.current;
+      if (!el) return;
+      if (el.contains(e.target)) return;   // click inside the toast: leave it alone
+      setToast(null);
+    }
+    // Capture phase so we fire before any downstream handler that
+    // might stopPropagation. Mousedown (not click) so a drag-select
+    // that starts outside the toast dismisses on drag-start rather
+    // than only on release.
+    document.addEventListener("mousedown", onDocMouseDown, true);
+    return () => document.removeEventListener("mousedown", onDocMouseDown, true);
+  }, [toast]);
+
+  // 2026-09-08: anchor the toast to the .sc-root SC card, ~24px up
+  // from its lower edge. Prior shape had the container pinned to the
+  // viewport bottom (position: fixed; bottom: --sc2-space-5), which
+  // on a tall window floats it in dead space far below the calendar.
+  //
+  // Three rationales, worth keeping:
+  //   1. Do not cover what just changed. After a reset the days that
+  //      cleared are exactly what the operator wants to look at -
+  //      anchoring below the card keeps the grid visible.
+  //   2. Bottom is the toast convention. Centre-screen is where
+  //      modals live; a toast that looks like a modal reads as
+  //      blocking, which is wrong for a dismissable Undo.
+  //   3. Attaching to the card fixes the actual complaint - the
+  //      toast stays visually connected to the surface it describes.
+  //
+  // Fallback: if the card's lower edge is off-screen (rect.bottom
+  // outside the viewport in either direction), anchor to the viewport
+  // bottom instead. A toast that renders somewhere off-screen is
+  // worse than one in the wrong place.
+  //
+  // Kept as inline style on the container so the CSS positioning
+  // rules (position: fixed, z-index, transform for center) still
+  // come from toast.css. Only `bottom` is computed here.
+  const [toastBottomPx, setToastBottomPx] = useState(null);
+  useLayoutEffect(() => {
+    if (!toast) { setToastBottomPx(null); return undefined; }
+    const card = document.querySelector(".sc-root");
+    function recompute() {
+      const vh = window.innerHeight;
+      if (!card) { setToastBottomPx(null); return; }
+      const rect = card.getBoundingClientRect();
+      // Card bottom must be visible in the viewport for anchoring
+      // to make sense. Off-screen in either direction -> fall back.
+      const cardBottomVisible = rect.bottom >= 0 && rect.bottom <= vh;
+      if (!cardBottomVisible) { setToastBottomPx(null); return; }
+      // Distance from viewport bottom to card bottom, plus 24 lift.
+      const bottomPx = vh - rect.bottom + 24;
+      setToastBottomPx(bottomPx);
+    }
+    recompute();
+    window.addEventListener("scroll", recompute, { passive: true });
+    window.addEventListener("resize", recompute);
+    // 2026-09-08: card size changes when the drill data lands - a
+    // reset fires the toast + invalidates monthCache in the same
+    // tick, then the refetch grows the workspace back and the card
+    // height changes. Neither scroll nor resize fires for that.
+    // ResizeObserver on the card catches every layout-changing
+    // reflow that would otherwise leave the inline `bottom` stale.
+    // Probe caught this on first run: computed value 58px against
+    // card bottom actually at 749 (off-viewport) - the anchor was
+    // stuck at the pre-refetch position.
+    let observer = null;
+    if (card && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(recompute);
+      observer.observe(card);
+    }
+    return () => {
+      window.removeEventListener("scroll", recompute);
+      window.removeEventListener("resize", recompute);
+      if (observer) observer.disconnect();
+    };
+  }, [toast]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -240,7 +331,17 @@ function ServiceCalendarPageBody() {
         // moving the DOM. This is the third scope-boundary bug this
         // week (see GOTCHAS "A component that leaves its style scope
         // loses its style" for the pattern + earlier hits).
-        <div className="sc-toast-container scv2">
+        <div
+          ref={toastContainerRef}
+          className="sc-toast-container scv2"
+          // 2026-09-08: `bottom` overridden inline from useLayoutEffect
+          // above. When the SC card's lower edge is visible, anchors
+          // to (viewport bottom - card.bottom + 24). When it's not,
+          // falls back to the toast.css default (--sc2-space-5 above
+          // viewport bottom). See the useLayoutEffect for the fallback
+          // predicate and the rationale block.
+          style={toastBottomPx != null ? { bottom: `${toastBottomPx}px` } : undefined}
+        >
           <Toast
             tier={toast.tier || "ok"}
             title={toast.title}
