@@ -20,12 +20,18 @@ const TONE_CLASS = {
   good:    "kpi-ov-status-good",
   bad:     "kpi-ov-status-bad",
   neutral: "kpi-ov-status-neutral",
+  // Kevin R-94 (2026-09-09). Awaiting-verification tone. Amber,
+  // higher-contrast fill than the other tones (Kevin ruling: filled
+  // pill with leading indicator dot signals "still moving"), so the
+  // reader sees the state at a glance without reading the text.
+  wait:    "kpi-ov-status-wait",
 };
 
 export default function StatusLine({ statusLine, rangeLabels }) {
   if (!statusLine || !statusLine.state) return null;
   const toneClass = TONE_CLASS[statusLine.tone] || TONE_CLASS.neutral;
   const horizon = rangeLabels?.horizon || null;
+  const isWait = statusLine.tone === "wait";
 
   return (
     <div className="kpi-ov-statusrow" data-kpi-ov="status-line">
@@ -34,6 +40,7 @@ export default function StatusLine({ statusLine, rangeLabels }) {
         data-kpi-ov-state={statusLine.state}
         data-kpi-ov-tone={statusLine.tone}
       >
+        {isWait && <span className="kpi-ov-status-dot" aria-hidden="true" />}
         <span className="kpi-ov-status-st" data-kpi-ov="status-state">
           {statusLine.state_copy}
         </span>

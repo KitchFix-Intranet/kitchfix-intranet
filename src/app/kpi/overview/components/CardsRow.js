@@ -40,6 +40,9 @@ const PILL_TONE = {
   warn: "kpi-ov-pill-warn",
   bad: "kpi-ov-pill-bad",
   neutral: "kpi-ov-pill-neutral",
+  // Kevin R-94 (2026-09-09). Amber "Provisional" pill on cost +
+  // margin cards when the period is closed but not yet verified.
+  wait: "kpi-ov-pill-wait",
 };
 
 function Pill({ pill }) {
@@ -87,7 +90,7 @@ function fmtPct(n) {
 // $6,965" because batr $79,227 differs from budget_to_date $62,980).
 // Revenue uses card.delta_dollars (actual vs projection); no batr
 // applies on revenue.
-function VarianceFoot({ card, kind }) {
+function VarianceFoot({ card, kind, awaiting = false }) {
   if (!card) return null;
   const tone = card.pill?.tone;
   if (tone === "neutral") return null;
@@ -119,7 +122,12 @@ function VarianceFoot({ card, kind }) {
     label = positive ? "Above projection" : "Below projection";
     dir = positive ? "good" : "bad";
   }
-  const toneCls = dir === "good" ? "kpi-ov-foot-good" : "kpi-ov-foot-bad";
+  // Kevin R-94 (2026-09-09): awaiting-verification cost + margin
+  // footers render amber. The variance is still true and worth
+  // seeing; the colour carries the caveat that it will move.
+  const toneCls = awaiting
+    ? "kpi-ov-foot-wait"
+    : dir === "good" ? "kpi-ov-foot-good" : "kpi-ov-foot-bad";
   return (
     <div className={`kpi-ov-foot ${toneCls}`} data-kpi-ov={`foot-${kind}`}>
       <span className="kpi-ov-foot-k">{label}</span>
@@ -425,7 +433,7 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
 // are the amount answer; percent is the "is that right for the
 // revenue we earned" answer. Kevin's rule: "the amount leads and
 // the percentage sits beside it, both in the verdict colour."
-function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel, periodBudget, weeksDone, weeksTotal, throughWkLabel }) {
+function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel, periodBudget, weeksDone, weeksTotal, throughWkLabel, awaiting = false }) {
   const isCogs = kind === "cogs";
   const isManagementFee = revenueModel === "management_fee";
   const hasTarget = extra?.hasTarget;
@@ -435,7 +443,16 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
   const targetText = card.budget_at_this_revenue_display;
   const actualPctText = card.pct_of_revenue_display;
   const targetPctText = card.target_pct_display;
-  const actualToneCls = card.pill?.tone === "good" ? "kpi-ov-good"
+  // Kevin R-94 (2026-09-09): when the period is closed but not yet
+  // finance-verified, cost + margin cards read "Provisional" in AMBER
+  // instead of the settled verdict pill. The numbers, target and
+  // footer all stay - a chef still reads $69,945 against $79,227 and
+  // the footer still shows the variance in amber rather than green.
+  // A reading, not a result. Revenue does not go amber: Service
+  // Calendar counts are complete for a closed period.
+  const actualToneCls = awaiting
+    ? "kpi-ov-wait"
+    : card.pill?.tone === "good" ? "kpi-ov-good"
     : card.pill?.tone === "bad" ? "kpi-ov-bad"
     : "";
 
@@ -448,11 +465,14 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
     : <p>{HELP_BODIES.gross_margin}</p>;
 
   return (
-    <div className={`kpi-ov-card ${isCogs ? "kpi-ov-card-cogs" : "kpi-ov-card-gm"}`} data-kpi-ov={`card-${kind}`}>
+    <div className={`kpi-ov-card ${isCogs ? "kpi-ov-card-cogs" : "kpi-ov-card-gm"}${awaiting ? " kpi-ov-card-awaiting" : ""}`} data-kpi-ov={`card-${kind}`}>
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">{card.label}</span>
         <HelpPop id={`overview-card-${kind}`} title={card.label} body={helpBody} />
-        <Pill pill={card.pill} />
+        {awaiting
+          ? <Pill pill={{ label: "Provisional", tone: "wait" }} />
+          : <Pill pill={card.pill} />
+        }
       </div>
       <div className="kpi-ov-cb">
         <div className="kpi-ov-pair" data-kpi-ov="card-actual">
@@ -478,7 +498,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
             ) : <span className="kpi-ov-nb">—</span>}
           </span>
         </div>
-        <VarianceFoot card={card} kind={kind} />
+        <VarianceFoot card={card} kind={kind} awaiting={awaiting} />
 
         {/* Kevin Prompt 1 item 1a (2026-09-04): third block on cost +
             margin cards. COGS uses "left/over" language with the
@@ -500,7 +520,7 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
   );
 }
 
-export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenueSourceState, rangeLabels, revenueModel, statementTotals }) {
+export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenueSourceState, rangeLabels, revenueModel, statementTotals, awaiting = false }) {
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
@@ -546,6 +566,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           weeksDone={weeksDone}
           weeksTotal={weeksTotal}
           throughWkLabel={throughWkLabel}
+          awaiting={awaiting}
         />
       )}
       {gm && (
@@ -561,6 +582,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           weeksDone={weeksDone}
           weeksTotal={weeksTotal}
           throughWkLabel={throughWkLabel}
+          awaiting={awaiting}
         />
       )}
     </div>

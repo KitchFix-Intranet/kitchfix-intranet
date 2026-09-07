@@ -64,6 +64,7 @@ import {
 } from "@/app/kpi/labor/components/StateBoxes";
 
 import StatusLine from "./components/StatusLine";
+import SettlingStrip from "./components/SettlingStrip";
 import DataCurrentPop from "./components/DataCurrentPop";
 import CardsRow from "./components/CardsRow";
 import Chart from "./components/Chart";
@@ -441,6 +442,7 @@ export default function KpiOverviewPage() {
         ) : (
           <>
             <StatusLine statusLine={data.status_line} rangeLabels={data.range_labels} />
+            <SettlingStrip settling={data.settling} />
             <CardsRow
               cards={data.cards}
               rangeMeta={rangeMeta}
@@ -450,6 +452,7 @@ export default function KpiOverviewPage() {
               rangeLabels={data.range_labels}
               revenueModel={data.revenue_model}
               statementTotals={data.statement_totals}
+              awaiting={data.status_line?.tone === "wait"}
             />
           </>
         )}
