@@ -139,7 +139,7 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
   board.revenue_budget_for_batr = revenueBasis.revenueBudgetFullPeriod;
   board.closed_range_budget = laborBudgetForBatr;
 
-  if (Array.isArray(board.weeks) && Array.isArray(closedPeriods)) {
+  if (Array.isArray(board.weeks) && Array.isArray(closedPeriods) && closedPeriods.length > 0) {
     const closedSet = new Set(closedPeriods);
     let closedSpent = 0;
     let closedWeeks = 0;
@@ -156,6 +156,11 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
       ? Math.round((closedSpent - batr) * 100) / 100
       : null;
   }
+  // Kevin post-1049 sweep: leave closed_* fields UNSET when there
+  // are no closed periods in the range (This period on day 1).
+  // SpendCard's fallback chain: closed_spent_to_date -> spent_to_date;
+  // setting it to 0 breaks the fallback and shows $0 on a running
+  // period that has real spend.
 
   // Kevin post-1049 sweep item 5a: recompute verdict against batr,
   // not raw. Prior lib/board.js verdict used raw range_budget →

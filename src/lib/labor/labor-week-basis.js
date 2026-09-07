@@ -390,20 +390,23 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     w.week_projected_revenue = basis.projected_revenue;
 
     // Per-week contractual accrual: 1/4 of period total for CLOSED
-    // weeks. Zero for running / future.
+    // weeks. Zero for running / future. Kept unrounded here so
+    // sum(4 weeks) = period_total exactly - Kevin's acceptance:
+    // "the panel's budget equals the sum of the week-card budgets".
+    // Rounding per week breaks the identity by 2¢. Consumers round
+    // at display; server storage stays at full JS precision.
     const periodNo = periodOf(w.week_start);
     const periodAccrual = periodNo != null ? Number(accrualByPeriod.get(periodNo) || 0) : 0;
     const weekAccrual = (basis.temporal === "closed" && periodAccrual > 0)
-      ? Math.round((periodAccrual / 4) * 100) / 100
+      ? periodAccrual / 4
       : 0;
     w.week_contractual_accrual = weekAccrual;
     const revenueWithAccrual = Number(basis.revenue || 0) + weekAccrual;
-    w.week_revenue = Math.round(revenueWithAccrual * 100) / 100;
+    w.week_revenue = revenueWithAccrual;
 
     const pct = periodNo != null ? lineTargetPctByPeriod?.get?.(periodNo) : null;
     if (pct != null) {
-      const raw = revenueWithAccrual * Number(pct);
-      w.budget_at_this_week_revenue = Math.round(raw * 100) / 100;
+      w.budget_at_this_week_revenue = revenueWithAccrual * Number(pct);
     } else {
       w.budget_at_this_week_revenue = null;
     }
