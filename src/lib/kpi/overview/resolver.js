@@ -1082,6 +1082,13 @@ export async function resolveOverview({
   // before initialization". See block below.
   let confirmedWeeksCount = null;
   let totalWeeksCount = null;
+  // Kevin ruling PR-3 · item 2 (2026-09-09). Per-line split of the
+  // confirmed sum for This period. Server routes B&G Lunch to
+  // 2200 (Catering), everything else to 2400.1 (Meal service ·
+  // home). Mapping in src/lib/kpi/overview/serviceRevenueMapping.js.
+  // Statement rows read this to render actuals per line so the P&L
+  // table below the cards agrees with the total.
+  let confirmedRevByLine = null;
 
   // 11. Gross margin.
   // grossMargin (dollars) depends on totalRevenue - under
@@ -1163,6 +1170,34 @@ export async function resolveOverview({
         totalRevenue = Math.round(confirmedSum * 100) / 100;
         totalRevReported = true;
         totalRevSources.add("sc_daily_revenue");
+        // Per-line split for the statement rows. Sum equals
+        // confirmedSum by construction (loader routes every has_actuals
+        // row to exactly one line). Statement rows below pick up the
+        // per-line figures + set reported=true where non-zero.
+        confirmedRevByLine = { "2200": 0, "2400.1": 0 };
+        for (const w of confirmedWks) {
+          const byLine = w.actual_revenue_by_line || {};
+          confirmedRevByLine["2200"] += Number(byLine["2200"] || 0);
+          confirmedRevByLine["2400.1"] += Number(byLine["2400.1"] || 0);
+        }
+        confirmedRevByLine["2200"] = Math.round(confirmedRevByLine["2200"] * 100) / 100;
+        confirmedRevByLine["2400.1"] = Math.round(confirmedRevByLine["2400.1"] * 100) / 100;
+
+        // Patch revenueByLine so statement_rows read the confirmed
+        // split. 2200 (Catering) + 2400.1 (Meal service home) are the
+        // two lines the mapping covers; 2300 stays as computed
+        // (R-67 needs complete weeks, none on P10 - Kevin item 5).
+        // 2400.2 (Away) + 2600 (Consulting) unchanged.
+        revenueByLine["2200"] = {
+          amount: confirmedRevByLine["2200"],
+          reported: confirmedRevByLine["2200"] > 0,
+          sources: ["sc_daily_revenue"],
+        };
+        revenueByLine["2400.1"] = {
+          amount: confirmedRevByLine["2400.1"],
+          reported: confirmedRevByLine["2400.1"] > 0,
+          sources: ["sc_daily_revenue"],
+        };
       }
     }
   }

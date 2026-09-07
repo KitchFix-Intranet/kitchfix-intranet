@@ -53,14 +53,26 @@ for (const acct of ["TBJ - FL", "TBR - FL"]) {
     `TP revenue pill tone = "good" (client will render hero green via new logic)`);
   console.log(`  revenue.hero_actual=$${rev?.hero_actual}  delta_direction=${rev?.delta_direction}  pill.tone=${rev?.pill?.tone}  confirmed=${rev?.confirmed_weeks_count}/${rev?.total_weeks_count}`);
 
-  // Item 2 diagnostic: revenue lines vs total mismatch
-  console.log(`\n### Revenue lines vs total (item 2 report)`);
+  // Item 2 · confirmed sum attributed to statement rows via
+  // service mapping (B&G Lunch -> 2200, else -> 2400.1). Assert
+  // total unchanged and line split matches Kevin's spec.
+  console.log(`\n### Revenue lines (item 2 · post-fix)`);
   const revRows = (tp.statement_rows || []).filter(r => r.section === "revenue");
   const totalActual = tp.statement_totals?.revenue?.actual;
-  console.log(`  statement_totals.revenue.actual: $${totalActual}`);
-  for (const r of revRows) {
-    console.log(`  ${r.line_code} ${r.label}: reported=${r.reported} actual=${r.actual}`);
-  }
+  const line2200 = revRows.find(r => r.line_code === "2200");
+  const line2400_1 = revRows.find(r => r.line_code === "2400.1");
+  const line2300 = revRows.find(r => r.line_code === "2300");
+  console.log(`  2200 Catering:            reported=${line2200?.reported} actual=${line2200?.actual}`);
+  console.log(`  2300 Service charges:     reported=${line2300?.reported} actual=${line2300?.actual}  (Kevin item 5: null on TP because R-67 accrues on complete weeks)`);
+  console.log(`  2400.1 Meal service:      reported=${line2400_1?.reported} actual=${line2400_1?.actual}`);
+  console.log(`  Total revenue actual:     $${totalActual}`);
+  const linesSum = Math.round(((Number(line2200?.actual || 0)) + Number(line2400_1?.actual || 0)) * 100) / 100;
+  pass(Math.abs(linesSum - Number(totalActual)) < 0.02,
+    `lines 2200 + 2400.1 sum ($${linesSum}) = total revenue ($${totalActual})`);
+  pass(Number(rev?.hero_actual) === Number(totalActual),
+    `card hero_actual ($${rev?.hero_actual}) unchanged from statement total ($${totalActual})`);
+  pass(line2300?.reported === false,
+    `line 2300 stays unreported on TP (Kevin item 5 · no complete weeks in period)`);
 
   // Nothing else moves: Last period cost lines table unchanged.
   console.log(`\n## ${acct} · Last period (must not move)`);
