@@ -465,45 +465,40 @@ function computePeriodRevenueByLine({
             }
             bucket.sources.add("sc_daily_revenue");
           } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
-            // R-67 (Kevin ruling 2026-09-03): contractual lines on
-            // sc_driven per-meal accounts accrue that period's budget
-            // × N complete weeks / 4 whenever the period is not
-            // verified and the line has no actual. Prior code let
-            // 2300 / 2200 / 2600 fall through as `not_reported`
-            // here, dropping earned contractual revenue (TBJ - FL
-            // P9 through week 3: $18,877 of service charges shown
-            // as absent).
+            // Kevin revenue-fallback prompt (2026-09-07): per-meal
+            // contractual lines (2200/2300/2600) no longer accrue
+            // from budget on non-verified periods. Precedence #4
+            // is explicit - "nothing - never the budget". Prior R-67
+            // ruling let these accrue as budget × completeWeeks / 4;
+            // Kevin's new precedence limits contractual accrual to
+            // fee accounts (precedence #3), which reach this
+            // resolver via a different picker (contractual source)
+            // and are handled in the else branch below.
             //
-            // Guard: this branch only fires on non-verified periods
-            // (verified goes through pnl_actuals_verified above), so
-            // the "never accrue over a verified period" rule holds
-            // by construction. Verified periods with no actual mean
-            // finance booked nothing - and nothing is the answer.
-            //
-            // Fee + tracked accounts never reach this branch: their
-            // picker returns line_codes: ["2400.1"] only, so 2300
-            // is not in memberContribs. That preserves visibility
-            // of loader defects like STL - MO 2300 $35,715 missing
-            // from pnl_actuals; we do not paper over them with a
-            // coincidental accrual.
-            const pStart = periodStartISO(p);
-            const pEnd = periodEndISO(p);
-            const byAcct = overviewBudgets.get(line)?.get(m);
-            const amtRaw = byAcct?.get(p);
-            if (amtRaw != null && Number(amtRaw) > 0) {
-              const wk = endOfLastCompleteWeek(pStart, pEnd, todayISO);
-              const weeksComplete = wk ? wk.weekNo : 0;
-              if (weeksComplete > 0) {
-                bucket.amount += Number(amtRaw) * (weeksComplete / 4);
-                bucket.any_actual = true;
-                bucket.sources.add("kpi_budgets_contractual_accrual");
-              }
-            }
+            // Effect: per-meal 2300 for TBJ - FL P9 goes from
+            // $25,169 (budget) to null (not reported). Overview
+            // total revenue matches Labor's SC-only sum to the cent
+            // ($106,911.05) instead of $132,080 - the reason the two
+            // boards previously disagreed by exactly the accrued
+            // amount. Fee accounts unaffected.
+            bucket.sources.add("not_reported");
           }
+        } else if (src.source === "not_reported") {
+          // Kevin revenue fallback prompt (2026-09-07). Per_meal
+          // closed_awaiting on an account without sc_revenue_live -
+          // finance has not posted, SC is not available, so the
+          // period reads "not reported". A budget is never an
+          // actual. any_actual stays false so the line renders "—"
+          // and the source line names the state so a reader knows
+          // why.
+          bucket.sources.add("not_reported");
         } else {
-          // kpi_budgets_* (contractual / estimate / planned / tracked).
+          // kpi_budgets_* (contractual / planned / tracked).
           // For a CLOSED period => full budget. For OPEN period =>
           // budget-to-date by days. Compute here.
+          // Kevin walkthrough sweep (2026-09-07): the prior
+          // `kpi_budgets_2400_1_estimate` closed_awaiting source is
+          // gone - handled explicitly by `not_reported` above.
           const byAcct = overviewBudgets.get(line)?.get(m);
           const amtRaw = byAcct?.get(p);
           if (amtRaw != null) {

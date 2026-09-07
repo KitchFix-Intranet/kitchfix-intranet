@@ -163,13 +163,36 @@ export function resolveRevenueSource({ accountKey, periodState, revSource = "pla
     };
   }
   if (periodState === "closed_awaiting") {
-    // Closed but finance hasn't verified. Show estimate (from budget-
-    // to-date) with the "estimate" marker. Not SC even if flag is
-    // live - closed period estimate uses budget for simplicity per
-    // Kevin's scope §5.5 "our estimate, marked".
+    // Kevin walkthrough sweep + revenue fallback prompt (2026-09-07):
+    // "A budget is never an actual. If no actual exists, the board
+    // says so - it does not substitute the plan."
+    //
+    // Prior code returned `kpi_budgets_2400_1_estimate` here, which
+    // caused the caller to sum the BUDGET and label it "actual".
+    // Measured live: TBJ - FL P9 today - actual = budget cent-exact
+    // on both 2300 ($25,169) and 2400.1 ($79,826). Cost lines' pcts
+    // computed against a fabricated denominator.
+    //
+    // Corrected precedence for per_meal closed_awaiting:
+    //   1. Service Calendar actual, when the account is sc_revenue_live
+    //   2. nothing (source: "not_reported") - never the budget
+    //
+    // The `sc_estimate` model marker distinguishes this from open+SC
+    // (where the source is "live_count"). Both read sc_daily_revenue;
+    // the model tells the client whether the number is settled (closed
+    // period, counts complete = the answer for the period) or live
+    // (open period, counts through today = provisional).
+    if (scLive) {
+      return {
+        source: "sc_daily_revenue",
+        model: "sc_estimate",
+        line_codes: perMealLines,
+        read_sc_daily_revenue: true,
+      };
+    }
     return {
-      source: "kpi_budgets_2400_1_estimate",
-      model: "estimate_from_budget",
+      source: "not_reported",
+      model: "not_reported",
       line_codes: perMealLines,
       read_sc_daily_revenue: false,
     };
