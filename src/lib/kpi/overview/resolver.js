@@ -1267,25 +1267,27 @@ export async function resolveOverview({
         // tone. Green on an AT-RISK card would read as good news
         // mid-period. Closed ranges keep the settled verdict.
         //
-        // Kevin ruling PR-B item 1 (2026-09-03): the pill states its
-        // dollar gap. Cost + margin both do; revenue should too. Under
-        // $1 renders as "on forecast" (parity with gapDollars's
-        // "on budget" for cost). CSS uppercases via .kpi-vpill so the
-        // resolver stays lowercase.
+        // Kevin post-1060 sweep (2026-09-09): pill drops the dollar
+        // figure. It moves to the variance footer on the card body
+        // so the pill scans identically across all three cards. State
+        // words only. Render of record:
+        // docs/renders/overview-cards-variance-footer.html.
+        // Prior form: "$27,085 above projection". New form: "above
+        // projection". Trending state on open-mid-period is preserved
+        // (real semantic distinction from the settled verdict on a
+        // closed range).
         const openRange = displayPeriodState === "open";
-        const gapAbs = Math.abs(Math.round(revenueDelta));
-        const gapStr = gapAbs >= 1 ? `$${gapAbs.toLocaleString("en-US")} ` : "";
         if (Math.abs(revenueDelta) < 1) {
           return { label: "on projection", tone: openRange ? "neutral" : "good" };
         }
         if (openRange) {
           return revenueDelta >= 0
-            ? { label: `${gapStr}trending above`, tone: "neutral" }
-            : { label: `${gapStr}trending below`, tone: "neutral" };
+            ? { label: "trending above", tone: "neutral" }
+            : { label: "trending below", tone: "neutral" };
         }
         return revenueDelta >= 0
-          ? { label: `${gapStr}above projection`, tone: "good" }
-          : { label: `${gapStr}below projection`, tone: "bad" };
+          ? { label: "above projection", tone: "good" }
+          : { label: "below projection", tone: "bad" };
       })(),
       sources: [...totalRevSources],
     },
@@ -1416,14 +1418,15 @@ export async function resolveOverview({
         // cost.
         if (gmPctActual == null && grossMargin != null) return { label: "cost, no revenue yet", tone: "neutral" };
         if (gmPctActual == null || gmPctBudget == null) return { label: "No data", tone: "neutral" };
-        // B6 (2026-09-01): the gap moves INTO the pill. Same pattern
-        // as COGS above - one statement, not two.
-        // Kevin 2026-09-02 language pass Item 11: red or green only.
-        // 0.01% below target is red - no amber "behind" band.
-        const absPct = Math.abs(Number(gmPctActual) - Number(gmPctBudget)).toFixed(1);
+        // Kevin post-1060 sweep (2026-09-09): pill drops the percent
+        // figure. Cost + margin cards now carry a variance footer
+        // with dollar arrow/amount; the pill scans identically to
+        // revenue's ("above projection" / "below projection") and
+        // labor's ("Over target" / "On target"). Prior form:
+        // "0.7% AHEAD" / "0.7% BEHIND". New form: state words only.
         return gmPctActual >= gmPctBudget
-          ? { label: `${absPct}% AHEAD`, tone: "good" }
-          : { label: `${absPct}% BEHIND`, tone: "bad" };
+          ? { label: "ahead of target", tone: "good" }
+          : { label: "behind target", tone: "bad" };
       })(),
     },
   ];

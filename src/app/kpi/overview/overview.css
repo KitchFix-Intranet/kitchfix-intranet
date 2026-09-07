@@ -900,16 +900,56 @@
   color: var(--n-600);
 }
 /* Kevin ruling final-presentation (2026-09-03) item 2: COGS + GM
-   cards carry a small grey dollar beside the percent. Percent stays
-   the hero; dollar is context. */
+   cards carry a small figure beside the primary. Kevin post-1060
+   sweep (2026-09-09): the sub INHERITS the parent's colour on
+   the actual row so both dollars and percent read the verdict
+   tone; the reference row overrides back to muted below. */
 .kpi-app .kpi-ov-pair-sub {
   font-size: var(--kpi-t-body);
   font-weight: 700;
-  color: var(--n-600);
+  color: inherit;
   margin-left: var(--kpi-sp-2);
   letter-spacing: 0;
   font-variant-numeric: var(--num-tabular);
 }
+.kpi-app .kpi-ov-pair-ref .kpi-ov-pair-sub {
+  color: var(--n-600);
+}
+
+/* Kevin post-1060 sweep (2026-09-09) · variance footer. Present on
+   all three Overview cards when a target exists. Same shape as the
+   Labor panel foot: separator, label left (uppercase small), amount
+   right (arrow + dollars, verdict colour). Suppressed when the pill
+   is neutral (no target, TP day 1, contractual, planned, etc.) - no
+   comparison exists to render.
+   Render of record: docs/renders/overview-cards-variance-footer.html.
+   Colour follows meaning per axis: cost over = bad red, margin
+   over = good green, revenue over = good green. Wire to
+   card.delta_direction (axis-aware) not to sign - Kevin's warning:
+   "a good margin renders red - which is the defect we spent this
+   session removing from the other board." */
+.kpi-app .kpi-ov-foot {
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.kpi-app .kpi-ov-foot-k {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-foot-v {
+  font-size: var(--kpi-t-medium);
+  font-weight: 800;
+  font-variant-numeric: var(--num-tabular);
+}
+.kpi-app .kpi-ov-foot-good .kpi-ov-foot-v { color: var(--green-600); }
+.kpi-app .kpi-ov-foot-bad  .kpi-ov-foot-v { color: var(--red-600); }
 
 /* Kevin Prompt 1 item 1a (2026-09-04): the third block under each
    card. Sits below the dashed rule (.kpi-ov-pair-rule) separated by

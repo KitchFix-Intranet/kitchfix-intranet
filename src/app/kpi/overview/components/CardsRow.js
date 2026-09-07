@@ -64,6 +64,70 @@ function fmtPct(n) {
   return `${Number(n).toFixed(1)}%`;
 }
 
+// Kevin post-1060 sweep (2026-09-09). Variance footer under each of
+// the three Overview cards. Render of record:
+// docs/renders/overview-cards-variance-footer.html. Kevin's rulings:
+//
+// - Label per card: cost "Over/Under target", margin "Ahead of/Behind
+//   target", revenue "Above/Below projection".
+// - Arrow tracks the ARITHMETIC direction (▲ if delta > 0, ▼ if
+//   delta < 0). Colour follows the MEANING per axis: cost over = bad
+//   red, margin over = good green, revenue over = good green. Wiring
+//   colour to the sign would render a good margin red - the defect
+//   the prior sweep removed from the other board.
+// - No footer where there is no target - TP day 1, contractual
+//   accounts, rolling window ("No target"). Detected via pill tone
+//   neutral OR the operand missing.
+//
+// Cost + margin variance is measured against budget_at_this_revenue
+// (batr) to agree with the pill's under/over verdict. Prior draft
+// used card.delta_dollars which is against budget_to_date_days for
+// cost - the two diverge on periods where revenue overshot plan (LP
+// TBJ - FL: pill said "under budget" while delta_dollars said "over
+// $6,965" because batr $79,227 differs from budget_to_date $62,980).
+// Revenue uses card.delta_dollars (actual vs projection); no batr
+// applies on revenue.
+function VarianceFoot({ card, kind }) {
+  if (!card) return null;
+  const tone = card.pill?.tone;
+  if (tone === "neutral") return null;
+  let delta;
+  if (kind === "revenue") {
+    delta = card.delta_dollars;
+  } else {
+    // cogs + gross_margin: variance against batr, matching the pill.
+    const actual = card.hero_actual;
+    const target = card.budget_at_this_revenue;
+    if (actual == null || target == null) return null;
+    delta = Number(actual) - Number(target);
+  }
+  if (delta == null || !Number.isFinite(Number(delta))) return null;
+  if (Math.abs(Number(delta)) < 1) return null;   // "on target" - no arrow/amount
+  const positive = Number(delta) > 0;
+  const arrow = positive ? "▲" : "▼";
+  const abs = Math.abs(Math.round(Number(delta)));
+  const amount = "$" + abs.toLocaleString("en-US");
+  let label;
+  let dir;   // "good" | "bad" per axis-aware meaning
+  if (kind === "cogs") {
+    label = positive ? "Over target" : "Under target";
+    dir = positive ? "bad" : "good";
+  } else if (kind === "gross_margin") {
+    label = positive ? "Ahead of target" : "Behind target";
+    dir = positive ? "good" : "bad";
+  } else {
+    label = positive ? "Above projection" : "Below projection";
+    dir = positive ? "good" : "bad";
+  }
+  const toneCls = dir === "good" ? "kpi-ov-foot-good" : "kpi-ov-foot-bad";
+  return (
+    <div className={`kpi-ov-foot ${toneCls}`} data-kpi-ov={`foot-${kind}`}>
+      <span className="kpi-ov-foot-k">{label}</span>
+      <span className="kpi-ov-foot-v">{arrow} {amount}</span>
+    </div>
+  );
+}
+
 // Item 4: horizon in the row labels. Open range means the two figures
 // carry a time dimension; closed range does not.
 //
@@ -328,6 +392,7 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
             {budgetRefText != null ? budgetRefText : "—"}
           </span>
         </div>
+        <VarianceFoot card={card} kind="revenue" />
         {/* Kevin Prompt 1 item 1a (2026-09-04): third block below the
             dashed rule with period-total budget + how much is left.
             Suppressed on closed ranges (finished period has no left)
@@ -349,27 +414,30 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
   );
 }
 
-// COGS + GM card - percent. Top = Actual %, bottom = Target %.
-// Pill carries the gap. Actual takes verdict colour; target stays
-// neutral grey.
+// COGS + GM card - dollars first, percent beside. Actual + target
+// rows both carry dollars-big + percent-small; actual takes the
+// verdict colour on both figures; target stays neutral grey.
+// Variance footer sits below with the dollar delta + arrow.
+//
+// Kevin post-1060 sweep (2026-09-09): the panel was percent-first
+// per an earlier ruling; render of record
+// docs/renders/overview-cards-variance-footer.html flips it. Dollars
+// are the amount answer; percent is the "is that right for the
+// revenue we earned" answer. Kevin's rule: "the amount leads and
+// the percentage sits beside it, both in the verdict colour."
 function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel, periodBudget, weeksDone, weeksTotal, throughWkLabel }) {
   const isCogs = kind === "cogs";
   const isManagementFee = revenueModel === "management_fee";
   const hasTarget = extra?.hasTarget;
-  const actualText = card.pct_of_revenue_display;
-  const targetText = card.target_pct_display;
+  // Kevin post-1060 sweep (2026-09-09): swap - the dollar figure is
+  // the hero and the percent sits beside it as a small span.
+  const actualText = card.hero_actual_display;
+  const targetText = card.budget_at_this_revenue_display;
+  const actualPctText = card.pct_of_revenue_display;
+  const targetPctText = card.target_pct_display;
   const actualToneCls = card.pill?.tone === "good" ? "kpi-ov-good"
     : card.pill?.tone === "bad" ? "kpi-ov-bad"
     : "";
-
-  // Kevin ruling final-presentation (2026-09-03) item 2: the percent
-  // stays the hero; a small grey dollar sits after it. Both cards
-  // read the same shape.
-  //   COGS   actual $ = hero_actual_display, target $ = budget_at_this_revenue_display
-  //   GM     actual $ = hero_actual_display, target $ = budget_at_this_revenue_display
-  //          (GM's batr = revenue - cogs_batr, shipped by resolver)
-  const actualDollarText = card.hero_actual_display;
-  const targetDollarText = card.budget_at_this_revenue_display;
 
   const helpBody = isCogs
     ? cogsTooltip({
@@ -391,8 +459,8 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
           <span className="kpi-ov-pair-k">{actualLabel(periodState, throughWkLabel)}</span>
           <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov={`hero-${kind}`}>
             {actualText || "—"}
-            {actualDollarText && (
-              <small className="kpi-ov-pair-sub" data-kpi-ov={`hero-${kind}-dollar`}>{actualDollarText}</small>
+            {actualPctText && (
+              <small className="kpi-ov-pair-sub" data-kpi-ov={`hero-${kind}-pct`}>{actualPctText}</small>
             )}
           </span>
         </div>
@@ -403,13 +471,15 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
             {hasTarget ? (
               <>
                 {targetText || "—"}
-                {targetDollarText && (
-                  <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-dollar`}>{targetDollarText}</small>
+                {targetPctText && (
+                  <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-pct`}>{targetPctText}</small>
                 )}
               </>
             ) : <span className="kpi-ov-nb">—</span>}
           </span>
         </div>
+        <VarianceFoot card={card} kind={kind} />
+
         {/* Kevin Prompt 1 item 1a (2026-09-04): third block on cost +
             margin cards. COGS uses "left/over" language with the
             standard cost tone (over = red); margin uses "to earn"
