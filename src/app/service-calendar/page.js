@@ -227,7 +227,20 @@ function ServiceCalendarPageBody() {
         </div>
       )}
       {toast && !handoff.monthComplete && toast.variant !== "note-posted" && toast.variant !== "offline-chip" && (
-        <div className="sc-toast-container">
+        // 2026-09-08: `scv2` class added to the container. The toast
+        // is deliberately mounted at the .oh-app shell so it escapes
+        // any scrolling overflow (per toast.css:15 comment), which
+        // puts it OUTSIDE the .scv2 subtree at .sc-root where every
+        // --sc2-* token is defined. Without the class, the toast's
+        // background/padding/radius/box-shadow all resolve against
+        // undefined vars - Kevin observed the live production shape:
+        // computed background rgba(0,0,0,0), padding 0, radius 0,
+        // shadow none, which renders as bare white text far below
+        // the page content. The class restores token-scope without
+        // moving the DOM. This is the third scope-boundary bug this
+        // week (see GOTCHAS "A component that leaves its style scope
+        // loses its style" for the pattern + earlier hits).
+        <div className="sc-toast-container scv2">
           <Toast
             tier={toast.tier || "ok"}
             title={toast.title}
