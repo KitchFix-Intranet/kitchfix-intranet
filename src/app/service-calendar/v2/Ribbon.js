@@ -201,28 +201,42 @@ function RibbonMeta({
   // homestand (fee + homestand). MiLB is per-meal + homestand-shape
   // but its ribbon readout should read PERIOD/WEEK like per-meal.
   const showGameDays = hasHomestandSchedule && isFeeAccount;
-  // 2026-09-03 (SC cleanup item 4): skeleton bars replace "-"
-  // placeholder dashes during account-switch load. Zero risk of
-  // reading as real data - the shimmer sweeps left-to-right.
+  // 2026-09-08 loading-unification PR 2: value-driven shimmer.
+  // Prior shape was `isLoading ? skel : (value || "-")`, which meant
+  // the ribbon rendered "-" whenever isLoading flipped false BEFORE
+  // the values arrived - a real-looking placeholder during the tail
+  // of a load. Kevin's principle enforced here: "A body skeleton
+  // with a lying header beside it is still a lying screen."
+  //
+  // New rule: the shimmer follows the VALUE, not the outer isLoading
+  // signal. If the value is present, render it. If not, shimmer -
+  // regardless of whether the parent thinks it is done loading.
+  // isLoading is kept only to force the WEEK / GAME DAYS segments
+  // to stay mounted with a shimmer during load (segment-shape
+  // stability across the swap), never to gate the value cells
+  // themselves.
   const skel = <span className="sc-skel-shimmer sc-skel-bar-ribbon" aria-hidden="true" />;
   return (
     <div className="sc-ribbon-meta" aria-label="Current context readout">
       <span className="sc-ribbon-meta-seg">
         <span className="sc-ribbon-meta-label">TODAY</span>
-        <span className="sc-ribbon-meta-value">{isLoading ? skel : (todayLabel || "-")}</span>
+        <span className="sc-ribbon-meta-value">{todayLabel ? todayLabel : skel}</span>
       </span>
       {showGameDays ? (
-        // GAME DAYS: when loading, render the segment with a skeleton
-        // count. Without this branch it hides during load, which
-        // silently changes the ribbon shape mid-swap; skeletoning
-        // keeps the meta shape stable.
+        // GAME DAYS: keep the segment mounted with a shimmer during
+        // load (segment-shape stability across the swap). Once
+        // loading clears, hide the segment on accounts that have no
+        // game days at all - shimmer only ever appears while the
+        // load is in flight.
         (isLoading || (totalGameDays || 0) > 0) && (
           <>
             <span className="sc-ribbon-meta-sep" aria-hidden="true" />
             <span className="sc-ribbon-meta-seg">
               <span className="sc-ribbon-meta-label">GAME DAYS</span>
               <span className="sc-ribbon-meta-value">
-                {isLoading ? skel : `${gameDaysEntered || 0}/${totalGameDays}`}
+                {(totalGameDays || 0) > 0
+                  ? `${gameDaysEntered || 0}/${totalGameDays}`
+                  : skel}
               </span>
             </span>
           </>
@@ -232,14 +246,14 @@ function RibbonMeta({
           <span className="sc-ribbon-meta-sep" aria-hidden="true" />
           <span className="sc-ribbon-meta-seg">
             <span className="sc-ribbon-meta-label">PERIOD</span>
-            <span className="sc-ribbon-meta-value">{isLoading ? skel : (periodNum || "-")}</span>
+            <span className="sc-ribbon-meta-value">{periodNum ? periodNum : skel}</span>
           </span>
           {(isLoading || weekNum) && (
             <>
               <span className="sc-ribbon-meta-sep" aria-hidden="true" />
               <span className="sc-ribbon-meta-seg">
                 <span className="sc-ribbon-meta-label">WEEK</span>
-                <span className="sc-ribbon-meta-value">{isLoading ? skel : weekNum}</span>
+                <span className="sc-ribbon-meta-value">{weekNum ? weekNum : skel}</span>
               </span>
             </>
           )}

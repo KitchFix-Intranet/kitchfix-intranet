@@ -6,6 +6,7 @@ import ProgressRingMini from "@/app/ops/components/shared/ProgressRingMini";
 import PeriodCard from "@/app/ops/components/labor/PeriodCard";
 import PeriodSnapshot from "@/app/ops/components/labor/PeriodSnapshot";
 import ExecutiveDashboard from "@/app/ops/components/executive/ExecutiveDashboard";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 // ── API base — proxies through /api/financial → /api/ops backend
 // Change to '/api/financial' once financial/route.js is deployed
@@ -99,13 +100,10 @@ export default function FinancialTool({ showToast, openConfirm }) {
       .finally(() => setAcctLoading(false));
   }, [account]);
 
-  /* ── Loading spinner ── */
+  /* ── Loading skeleton (was .oh-spinner). See PR-2 of the loading-
+     unification arc for the principle. ── */
   if (loading) {
-    return (
-      <div className="oh-view" style={{ display: "flex", justifyContent: "center", padding: 60 }}>
-        <div className="oh-spinner" />
-      </div>
-    );
+    return <AppSkeleton variant="portal" label="Loading Financial" />;
   }
 
   const sm           = laborData?.seasonMetrics;

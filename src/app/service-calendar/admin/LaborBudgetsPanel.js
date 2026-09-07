@@ -9,6 +9,7 @@
 // as "$0". First real edit fills the field. Save requires a reason.
 
 import { useCallback, useEffect, useState } from "react";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 // sc-21 (2026-08-15): storage is BARE NUMERIC ("4"..."10"), matching
 // sc_day_metadata's house convention. Display adds the "P" prefix at
@@ -128,10 +129,7 @@ export default function LaborBudgetsPanel({ accountKey, showToast }) {
     return (
       <section className="sc-admin-fee-current-card">
         <p className="sc-admin-section-title">Labor budget</p>
-        <div className="sc-admin-loading">
-          <div className="oh-spinner" />
-          <p>Loading labor budgets...</p>
-        </div>
+        <AppSkeleton variant="list" label="Loading labor budgets" />
       </section>
     );
   }

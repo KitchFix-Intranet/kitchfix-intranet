@@ -4,6 +4,7 @@ import F from "@/app/ops/components/shared/F";
 import { ClipboardIcon } from "@/app/ops/components/shared/Icons";
 import CostInput from "@/app/ops/components/inventory/CostInput";
 import HistoryEntry from "@/app/ops/components/inventory/HistoryEntry";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 const CACHE_KEY = "kf_inv_draft";
 const LAST_ACC_KEY = "kf_ops_last_account";
@@ -686,7 +687,7 @@ export default function InventoryTool({ config, showToast, openConfirm, onNaviga
             {activeTab === "history" && (
               <div className="oh-history-panel">
                 {historyLoading ? (
-                  <div style={{ textAlign: "center", padding: 48 }}><div className="oh-spinner" style={{ margin: "0 auto" }} /></div>
+                  <AppSkeleton variant="list" label="Loading history" />
                 ) : (() => {
                   const filtered = (history || []).filter((h) => !account || h.account === account);
                   return filtered.length === 0 ? (

@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "../../playbook.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "../../_shared";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 const OPERATOR_STATUS_LABEL = { Live: "Ready" };
 function operatorStatusLabel(s) {
@@ -256,11 +257,10 @@ export default function DocumentFullPageClient({ docId, initialLang = "en" }) {
   }, [previewActiveHtml, tocEntries]);
 
   if (loading) {
-    return (
-      <div className="pb-fullpage-wrap">
-        <div className="pb-fullpage-loading">Loading document...</div>
-      </div>
-    );
+    // 2026-09-08 loading-unification PR 2: replaced "Loading
+    // document..." text with the shared AppSkeleton. Full-page
+    // document is closer to the portal variant (title + body).
+    return <AppSkeleton variant="portal" label="Loading document" />;
   }
 
   if (error === "Not found") {

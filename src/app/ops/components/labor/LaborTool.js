@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import SeasonPlanner from "@/app/ops/components/labor/SeasonPlanner";
 import SeasonAdmin from "@/app/ops/components/labor/SeasonAdmin";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 const ADMIN_EMAILS = [
   "k.fietek@kitchfix.com",
@@ -135,7 +136,7 @@ export default function LaborTool({ config, showToast, openConfirm, onNavigate }
   }, []);
 
   if (loading) {
-    return <div className="oh-view" style={{ display: "flex", justifyContent: "center", padding: 60 }}><div className="oh-spinner" /></div>;
+    return <AppSkeleton variant="portal" label="Loading Labor" />;
   }
 
   // Determine chef view body content
@@ -250,7 +251,7 @@ export default function LaborTool({ config, showToast, openConfirm, onNavigate }
               </div>
             );
           })() : showPlannerLoading ? (
-            <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><div className="oh-spinner" /></div>
+            <AppSkeleton variant="portal" label="Loading planner" />
           ) : showPlanner ? (
             <SeasonPlanner
               plannerData={plannerData}

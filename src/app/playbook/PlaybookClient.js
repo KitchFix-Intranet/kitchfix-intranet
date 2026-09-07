@@ -16,6 +16,7 @@ import "./playbook.css";
 import "../sous/sous.css";
 import { CLASS_LABELS, CLASS_FAMILY, STATUS_COLORS } from "./_shared";
 import SlideOverReader from "./SlideOverReader";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 import SousSurface from "../sous/SousSurface";
 import { PANEL_DOC_STARTERS, starterSetForHost } from "../sous/examples";
 
@@ -120,12 +121,10 @@ export default function PlaybookClient() {
 // State variants
 // ════════════════════════════════════════════════════════════════════════════
 function LoadingState() {
-  return (
-    <div className="pb-loading">
-      <div className="pb-loading-pulse" />
-      <div className="pb-loading-text">Loading The Playbook…</div>
-    </div>
-  );
+  // 2026-09-08 loading-unification PR 2: replaced .pb-loading-pulse
+  // with the shared AppSkeleton. Playbook's landing is hero + card
+  // shelves; portal variant fits that shape.
+  return <AppSkeleton variant="portal" label="Loading The Playbook" />;
 }
 
 function ErrorState({ message }) {

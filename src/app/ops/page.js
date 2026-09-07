@@ -8,6 +8,7 @@ import InventoryManager from "@/app/ops/components/inventory-manager/InventoryMa
 import LaborTool from "@/app/ops/components/labor/LaborTool";
 import InvoiceTool from "@/app/ops/components/invoice/InvoiceTool";
 import VendorPortal from "@/app/ops/components/vendors/VendorPortal";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 import './css/ops-shared.css';
 import './css/ops-inventory.css';
 import './css/ops-inv-mgmt.css';
@@ -61,12 +62,18 @@ export default function OpsHub() {
   }, [status, showToast]);
 
   if (status === "loading" || loading) {
+    // 2026-09-08 loading-unification PR 2: replaced .oh-spinner
+    // full-page with the shared AppSkeleton. Ops Hub landing is a
+    // nav grid + section cards; portal variant fits.
+    //
+    // Sibling .oh-spinner uses inside Ops submodules (Vendors,
+    // Invoice, Inventory Manager, Financial, Labor) are converted
+    // too - see each submodule for the section-scoped choice
+    // (some kept as inline button spinners which are ACTION
+    // scoped, not page scoped, and out of the arc's rule).
     return (
       <div className="oh-app">
-        <div className="oh-bound" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
-          <div className="oh-spinner" />
-          <p style={{ color: "#94a3b8", fontSize: 14, fontWeight: 600 }}>Loading Ops Hub...</p>
-        </div>
+        <AppSkeleton variant="portal" label="Loading Ops Hub" />
       </div>
     );
   }
