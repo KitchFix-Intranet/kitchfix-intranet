@@ -1390,6 +1390,20 @@ export async function POST(request) {
         );
       }
       if (!existing) {
+        // sc_day_metadata is populated at seed time from the projections
+        // tab (see scripts/_seed_sc_from_xlsx.mjs :566-612). Ad-hoc
+        // service days that only ever had actuals - never a projection -
+        // land in sc_daily_actuals without a corresponding metadata row.
+        // computeWeekCompleteness walks actuals+projections directly
+        // (not sc_day_metadata) so such a day CAN pass the completeness
+        // gate. Without this insert branch the review would be unable
+        // to mark it, which per Kevin's ruling would block finalize
+        // permanently.
+        //
+        // created_by is NOT NULL on the table; this insert supplies it.
+        // Approvals do not go through the notes ledger; created_by
+        // here reads honestly as "who first touched the day-metadata
+        // row" (i.e. the reviewer).
         const { error: insErr } = await supa
           .from("sc_day_metadata")
           .insert({
@@ -1398,6 +1412,7 @@ export async function POST(request) {
             review_status: status,
             reviewed_by:   author,
             reviewed_at:   now,
+            created_by:    author,
           });
         if (insErr) {
           return NextResponse.json(

@@ -154,6 +154,43 @@ WHERE review_status IS NOT NULL
 -- row after this landing.
 
 
+-- Query 4: confirm service_role can read + write the table.
+--
+-- New columns on an existing table inherit the table-level privileges
+-- (per Postgres semantics), so this SHOULD show service_role with
+-- SELECT, INSERT, UPDATE, DELETE from sc-1's earlier GRANT. But
+-- notify-1 failed on exactly this assumption - the failure surfaced
+-- at runtime as `permission denied for table`, not at migration time,
+-- because the migration itself does not exercise the grant.
+--
+-- Verify rather than assume. If this query returns service_role
+-- without one of SELECT / INSERT / UPDATE / DELETE, do NOT flip the
+-- migration gate green - add a second block:
+--
+--   GRANT SELECT, INSERT, UPDATE, DELETE ON sc_day_metadata TO service_role;
+--
+-- and re-run this query.
+SELECT grantee,
+       string_agg(privilege_type, ', ' ORDER BY privilege_type) AS grants
+FROM information_schema.table_privileges
+WHERE table_schema = 'public'
+  AND table_name   = 'sc_day_metadata'
+GROUP BY grantee
+ORDER BY grantee;
+
+-- Expected (from sc-1 baseline):
+--   anon             | REFERENCES, TRIGGER, TRUNCATE
+--   authenticated    | REFERENCES, TRIGGER, TRUNCATE
+--   postgres         | DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE
+--   service_role     | DELETE, INSERT, SELECT, UPDATE
+--   (plus owner grants; row set may vary slightly by role config)
+--
+-- The load-bearing line is `service_role | DELETE, INSERT, SELECT, UPDATE`.
+-- Without all four the reviewer cannot write review_status
+-- (INSERT + UPDATE), the finalize gate cannot READ it (SELECT), and
+-- the revert-clear cannot NULL it (UPDATE).
+
+
 -- ═══════════════════════════════════════════════════════════════════
 -- ROLLBACK (if needed - do not run in normal flow)
 -- ═══════════════════════════════════════════════════════════════════
