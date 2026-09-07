@@ -90,6 +90,43 @@ function fmtPct(n) {
 // $6,965" because batr $79,227 differs from budget_to_date $62,980).
 // Revenue uses card.delta_dollars (actual vs projection); no batr
 // applies on revenue.
+// Kevin R-92 (2026-09-09). Copy block that names WHY the cost or
+// margin card is holding its percentage on This period. Cost: name
+// the percent it WOULD show so a reader sees why it's suppressed.
+// Margin: name the missing side. Render of record:
+// docs/renders/overview-this-period-sc-revenue.html.
+function HoldReason({ card, kind }) {
+  const isCogs = kind === "cogs";
+  const spent = Number(card?.hero_actual || 0);
+  const revenue = null;   // deliberately unused; server holds pct off
+  let text;
+  if (isCogs) {
+    // Compute the "would-read" percent from the card's actual + the
+    // confirmed-revenue figure the resolver seeded on totalRevenue.
+    // The card doesn't ship revenue directly - infer from
+    // target_pct + budget_at_this_revenue: batr = revenue × tgt/100,
+    // so revenue = batr / (tgt/100).
+    const tgt = Number(card?.target_pct_of_revenue || 0);
+    const batr = Number(card?.budget_at_this_revenue || 0);
+    const rev = (tgt > 0 && batr > 0) ? (batr / (tgt / 100)) : null;
+    const wouldPct = (rev != null && rev > 0 && spent > 0) ? (spent / rev) * 100 : null;
+    const wouldStr = wouldPct != null ? `${wouldPct.toFixed(1)}%` : null;
+    text = (
+      <>
+        <b>No percentage yet.</b> Revenue is confirmed ahead of the week; invoices arrive weeks later.
+        {wouldStr && <> A percentage now would read <b>{wouldStr}</b> and mean nothing.</>}
+      </>
+    );
+  } else {
+    text = <>Margin needs both sides. <b>Revenue is confirmed, cost is not.</b> It arrives when the invoices do.</>;
+  }
+  return (
+    <div className="kpi-ov-hold" data-kpi-ov={`hold-${kind}`}>
+      {text}
+    </div>
+  );
+}
+
 function VarianceFoot({ card, kind, awaiting = false }) {
   if (!card) return null;
   const tone = card.pill?.tone;
@@ -388,26 +425,42 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
       </div>
       <div className="kpi-ov-cb">
         <div className="kpi-ov-pair" data-kpi-ov="card-actual">
-          <span className="kpi-ov-pair-k">{actualLabel(periodState, throughWkLabel)}</span>
+          <span className="kpi-ov-pair-k">{card.confirmed_weeks_count != null ? "Confirmed" : actualLabel(periodState, throughWkLabel)}</span>
           <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov="hero-revenue">
             <DashOrValue value={actualText} reported={card.hero_reported} />
           </span>
         </div>
         <div className="kpi-ov-pair-rule" aria-hidden="true" />
         <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
-          <span className="kpi-ov-pair-k">{forecastLabel(periodState, throughWkLabel)}</span>
+          <span className="kpi-ov-pair-k">
+            {card.confirmed_weeks_count != null
+              ? `P${range?.period_no ?? ""} projection`
+              : forecastLabel(periodState, throughWkLabel)}
+          </span>
           <span className="kpi-ov-pair-v kpi-ov-num">
             {budgetRefText != null ? budgetRefText : "—"}
           </span>
         </div>
-        <VarianceFoot card={card} kind="revenue" />
+        {/* Kevin R-92 (2026-09-09). This period · confirmed-weeks
+            caption. Names the count so a chef sees the actual is
+            partial. The rest of the period is forecast (SC counts
+            not yet entered); as counts land the number firms up. */}
+        {card.confirmed_weeks_count != null ? (
+          <div className="kpi-ov-hold" data-kpi-ov="revenue-confirmed-note">
+            <b>{card.confirmed_weeks_count} of {card.total_weeks_count} weeks confirmed</b> in the Service Calendar. The rest is forecast and will firm up as counts land.
+          </div>
+        ) : (
+          <VarianceFoot card={card} kind="revenue" />
+        )}
         {/* Kevin Prompt 1 item 1a (2026-09-04): third block below the
             dashed rule with period-total budget + how much is left.
             Suppressed on closed ranges (finished period has no left)
             and when period_budget is null/0. On revenue over-budget
             is GOOD (booking more than planned), so the "over" state
-            uses the good tone. */}
-        {periodState === "open" && (
+            uses the good tone.
+            Kevin R-92 (2026-09-09): suppressed when the confirmed-
+            weeks caption is shown - the caption is the third block. */}
+        {periodState === "open" && card.confirmed_weeks_count == null && (
           <PeriodBlock
             label={periodTotalLabel(range, "revenue")}
             spent={card.hero_actual}
@@ -433,7 +486,7 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
 // are the amount answer; percent is the "is that right for the
 // revenue we earned" answer. Kevin's rule: "the amount leads and
 // the percentage sits beside it, both in the verdict colour."
-function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel, periodBudget, weeksDone, weeksTotal, throughWkLabel, awaiting = false }) {
+function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, revenueModel, periodBudget, weeksDone, weeksTotal, throughWkLabel, awaiting = false, held = false }) {
   const isCogs = kind === "cogs";
   const isManagementFee = revenueModel === "management_fee";
   const hasTarget = extra?.hasTarget;
@@ -475,37 +528,88 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
         }
       </div>
       <div className="kpi-ov-cb">
-        <div className="kpi-ov-pair" data-kpi-ov="card-actual">
-          <span className="kpi-ov-pair-k">{actualLabel(periodState, throughWkLabel)}</span>
-          <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov={`hero-${kind}`}>
-            {actualText || "—"}
-            {actualPctText && (
-              <small className="kpi-ov-pair-sub" data-kpi-ov={`hero-${kind}-pct`}>{actualPctText}</small>
-            )}
-          </span>
-        </div>
-        <div className="kpi-ov-pair-rule" aria-hidden="true" />
-        <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
-          <span className="kpi-ov-pair-k">Target</span>
-          <span className="kpi-ov-pair-v kpi-ov-num">
-            {hasTarget ? (
-              <>
-                {targetText || "—"}
-                {targetPctText && (
-                  <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-pct`}>{targetPctText}</small>
+        {held ? (
+          // Kevin R-92 (2026-09-09). This period · option A. Cost +
+          // margin cards HOLD their percentages until cost catches
+          // up with the confirmed revenue. Revenue is confirmed
+          // ahead of the week; invoices arrive weeks later - a
+          // percent now reads 8.3% and means nothing. Numbers stay,
+          // percent doesn't, footer doesn't, progress bar doesn't.
+          // Copy names the reason.
+          //
+          // Cost:   Spent so far $X / P10 budget $Y (Z.Z% target) /
+          //         "No percentage yet. Revenue is confirmed ahead
+          //          of the week; invoices arrive weeks later. A
+          //          percentage now would read X.X% and mean
+          //          nothing."
+          // Margin: Actual - / P10 budget $Y (Z.Z% target) /
+          //         "Margin needs both sides. Revenue is confirmed,
+          //          cost is not."
+          <>
+            <div className="kpi-ov-pair" data-kpi-ov="card-actual">
+              <span className="kpi-ov-pair-k">{isCogs ? "Spent so far" : "Actual"}</span>
+              <span className="kpi-ov-pair-v kpi-ov-num" data-kpi-ov={`hero-${kind}`}>
+                {isCogs ? (actualText || "—") : "—"}
+              </span>
+            </div>
+            <div className="kpi-ov-pair-rule" aria-hidden="true" />
+            <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
+              <span className="kpi-ov-pair-k">{`${periodTotalLabel(range, kind).replace(/(budget|projection) total$/i, "budget")}`}</span>
+              <span className="kpi-ov-pair-v kpi-ov-num">
+                {(() => {
+                  const pb = periodBudget != null ? "$" + Math.abs(Math.round(Number(periodBudget))).toLocaleString("en-US") : "—";
+                  return (
+                    <>
+                      {pb}
+                      {targetPctText && (
+                        <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-pct`}>{targetPctText} target</small>
+                      )}
+                    </>
+                  );
+                })()}
+              </span>
+            </div>
+            <HoldReason card={card} kind={kind} />
+          </>
+        ) : (
+          <>
+            <div className="kpi-ov-pair" data-kpi-ov="card-actual">
+              <span className="kpi-ov-pair-k">{actualLabel(periodState, throughWkLabel)}</span>
+              <span className={`kpi-ov-pair-v kpi-ov-num ${actualToneCls}`} data-kpi-ov={`hero-${kind}`}>
+                {actualText || "—"}
+                {actualPctText && (
+                  <small className="kpi-ov-pair-sub" data-kpi-ov={`hero-${kind}-pct`}>{actualPctText}</small>
                 )}
-              </>
-            ) : <span className="kpi-ov-nb">—</span>}
-          </span>
-        </div>
-        <VarianceFoot card={card} kind={kind} awaiting={awaiting} />
+              </span>
+            </div>
+            <div className="kpi-ov-pair-rule" aria-hidden="true" />
+            <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
+              <span className="kpi-ov-pair-k">Target</span>
+              <span className="kpi-ov-pair-v kpi-ov-num">
+                {hasTarget ? (
+                  <>
+                    {targetText || "—"}
+                    {targetPctText && (
+                      <small className="kpi-ov-pair-sub" data-kpi-ov={`target-${kind}-pct`}>{targetPctText}</small>
+                    )}
+                  </>
+                ) : <span className="kpi-ov-nb">—</span>}
+              </span>
+            </div>
+            <VarianceFoot card={card} kind={kind} awaiting={awaiting} />
+          </>
+        )}
 
         {/* Kevin Prompt 1 item 1a (2026-09-04): third block on cost +
             margin cards. COGS uses "left/over" language with the
             standard cost tone (over = red); margin uses "to earn"
             with a neutral tone (margin is earned not spent, and red
-            is reserved for missing a target - Kevin's R-75 rule). */}
-        {periodState === "open" && (
+            is reserved for missing a target - Kevin's R-75 rule).
+            Kevin R-92 (2026-09-09): suppressed on This period - the
+            progress bar against a period budget with no comparable
+            cost is noise. Held state renders the "hold" body above
+            instead. */}
+        {periodState === "open" && !held && (
           <PeriodBlock
             label={periodTotalLabel(range, kind)}
             spent={card.hero_actual}
@@ -521,6 +625,12 @@ function PercentLeadCard({ card, range, periodState, kind, extra, rangeLabels, r
 }
 
 export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, hasTarget, revenueSourceState, rangeLabels, revenueModel, statementTotals, awaiting = false }) {
+  // Kevin R-92 (2026-09-09). Cost + margin HOLD on This period
+  // (single running period). Detected via rangeMeta - server pill
+  // copy also updates to name the hold state, but the layout gate
+  // is client-owned so the "hold body" (Spent so far / P10 budget /
+  // caption) sits close to the render.
+  const isRunningSinglePeriod = rangeMeta?.kind === "period" && rangeMeta?.period_state === "open";
   if (!Array.isArray(cards)) return null;
   const revenue = cards.find(c => c.key === "revenue");
   const cogs    = cards.find(c => c.key === "cogs");
@@ -567,6 +677,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           weeksTotal={weeksTotal}
           throughWkLabel={throughWkLabel}
           awaiting={awaiting}
+          held={isRunningSinglePeriod}
         />
       )}
       {gm && (
@@ -583,6 +694,7 @@ export default function CardsRow({ cards, rangeMeta, scCountsWithoutDollars, has
           weeksTotal={weeksTotal}
           throughWkLabel={throughWkLabel}
           awaiting={awaiting}
+          held={isRunningSinglePeriod}
         />
       )}
     </div>

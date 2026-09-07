@@ -131,6 +131,24 @@
   color: var(--amber-600);
 }
 
+/* Kevin R-92 (2026-09-09). Caption block on This period · option A.
+   Cost + margin cards HOLD their percentages until cost catches up
+   with confirmed revenue; the block names WHY. Revenue card uses the
+   same style for the confirmed-weeks count sub-caption. Muted
+   neutral - it explains state, doesn't add a verdict. */
+.kpi-app .kpi-ov-hold {
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3) var(--kpi-sp-3);
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  border-radius: var(--kpi-card-r);
+  font-size: var(--kpi-t-meta);
+  font-weight: 600;
+  color: var(--n-700);
+  line-height: 1.55;
+}
+.kpi-app .kpi-ov-hold b { color: var(--n-900); font-weight: 800; }
+
 /* ── Cards grid (element 4) ──────────────────────────────────────── */
 .kpi-app .kpi-ov-cards {
   display: grid;
