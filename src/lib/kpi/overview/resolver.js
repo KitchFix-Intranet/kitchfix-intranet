@@ -969,6 +969,7 @@ export async function resolveOverview({
   // (pill / popover / status) will lie.
   {
     const sum = rangeComposition.verified.count
+      + (rangeComposition.awaiting?.count || 0)
       + rangeComposition.live.count
       + rangeComposition.planned.count;
     if (sum !== rangeComposition.periods_total) {
@@ -2637,6 +2638,13 @@ export async function resolveOverview({
     if (rangeComposition.verified.count) {
       parts.push(`${rangeComposition.verified.label} verified against the finance P&L`);
     }
+    // Kevin walkthrough item 3 - awaiting bucket surfaces in the
+    // popover so the reader sees why a closed period's revenue is
+    // provisional. Sits between verified and live/planned to
+    // preserve the reading order.
+    if (rangeComposition.awaiting?.count) {
+      parts.push(`${rangeComposition.awaiting.label} closed but awaiting finance verification`);
+    }
     if (rangeComposition.live.count) {
       const dayLbl = scMaxDate ? formatDayLabel(scMaxDate) : null;
       const tail = dayLbl ? ` through ${dayLbl}` : "";
@@ -3060,14 +3068,21 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
     horizon = `P${range.period_no} · closed and verified`;
     spanHeader = `P${range.period_no}`;
   } else if (isFytd) {
-    const first = rc?.verified?.first ?? 1;
-    const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
-    horizon = first === last
-      ? `P${last} · closed and verified`
-      : `P${first}-P${last} · closed and verified`;
-    spanHeader = first === last
-      ? `P${last}`
-      : `P${first}-P${last}`;
+    // Kevin walkthrough item 3 (2026-09-07). Prior FYTD label read
+    // "P1-P8 · closed and verified" using verified.first + verified.last,
+    // which lagged the data (revenue aggregate already included P9
+    // via the closed_awaiting picker). Use `settled` (verified +
+    // awaiting = all calendar-closed periods) for the span, and
+    // append the awaiting note when a period is closed but not yet
+    // finance-verified.
+    const sfirst = rc?.settled?.first ?? rc?.verified?.first ?? 1;
+    const slast = rc?.settled?.last ?? rc?.verified?.last ?? rc?.periods_total ?? 1;
+    const spanCopy = sfirst === slast ? `P${slast}` : `P${sfirst}-P${slast}`;
+    const awaitingSuffix = rc?.awaiting?.count
+      ? ` · ${rc.awaiting.label} awaiting verification`
+      : " · closed and verified";
+    horizon = `${spanCopy}${awaitingSuffix}`;
+    spanHeader = spanCopy;
   }
   const forecastHeader = spanHeader ? `${spanHeader} FORECAST` : "FORECAST";
   const budgetHeader   = spanHeader ? `${spanHeader} BUDGET`   : "BUDGET";
@@ -3086,8 +3101,12 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
   //               `through` on FYTD + single_open; differs on
   //               single_closed.
   if (isFytd) {
-    const first = rc?.verified?.first ?? 1;
-    const last = rc?.verified?.last ?? rc?.periods_total ?? 1;
+    // Kevin walkthrough item 3 - use `settled` span (verified +
+    // awaiting) so labels match the data. Falls back to verified
+    // then periods_total to stay defined on legacy composition
+    // shapes.
+    const first = rc?.settled?.first ?? rc?.verified?.first ?? 1;
+    const last = rc?.settled?.last ?? rc?.verified?.last ?? rc?.periods_total ?? 1;
     const thruLast = `thru P${last}`;
     return {
       kind: "fytd",
@@ -3164,21 +3183,16 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
 // authority - do NOT reproduce its logic on the client.
 function buildRangeComposition({ periods, perPeriodRevenue }) {
   const verifiedNos = [];
+  const awaitingNos = [];
   const liveNos = [];
   const plannedNos = [];
   for (const p of periods) {
     const entry = perPeriodRevenue.get(p);
     if (!entry) {
-      // Should not happen for periods that came from periodsInRangeFor,
-      // but guard for the corporate/empty case. Treat as planned so
-      // the invariant holds.
       plannedNos.push(p);
       continue;
     }
     const state = entry.state;
-    // Union of sources this period saw across every revenue line +
-    // every member. If any member picked sc_daily_revenue this period,
-    // the period reads as "live" (verified always wins).
     let sawSc = false;
     for (const [key, v] of Object.entries(entry)) {
       if (key === "state") continue;
@@ -3189,7 +3203,21 @@ function buildRangeComposition({ periods, perPeriodRevenue }) {
       }
       if (sawSc) break;
     }
+    // Kevin walkthrough sweep item 3 (2026-09-07). The `closed_awaiting`
+    // state already existed in the pnl-loader (calendar-closed OR
+    // record-closed but P&L not yet posted) but did not surface here
+    // - it fell through to `live` or `planned`. On TBJ - FL FYTD today
+    // the label read "P1-P8 · closed and verified" while the revenue
+    // aggregate included P9's $104,995 (SC-sourced on the picker's
+    // closed_awaiting branch). Two lies at once: wrong span + a
+    // "verified" claim about a period finance has not posted.
+    //
+    // Kevin ruling: include P9 in the label, name the awaiting state
+    // explicitly. Add `awaiting` bucket. Downstream label helpers
+    // read `settled.label` (verified + awaiting) as the span and
+    // append "· PN awaiting verification" when awaiting.count > 0.
     if (state === "verified") verifiedNos.push(p);
+    else if (state === "closed_awaiting") awaitingNos.push(p);
     else if (sawSc) liveNos.push(p);
     else plannedNos.push(p);
   }
@@ -3205,17 +3233,26 @@ function buildRangeComposition({ periods, perPeriodRevenue }) {
     };
   };
   const verified = shape(verifiedNos);
+  const awaiting = shape(awaitingNos);
   const live = shape(liveNos);
   const planned = shape(plannedNos);
+  // Settled = calendar-closed periods, whether verified or awaiting P&L.
+  // The label reader wants the whole closed span so a chef sees the
+  // range they are looking at, not just the verified subset.
+  const settledNos = [...verifiedNos, ...awaitingNos].sort((a, b) => a - b);
+  const settled = shape(settledNos);
   const willChange = verified.count < periods.length;
   const parts = [];
   if (verified.count) parts.push(`${verified.label} verified`);
+  if (awaiting.count) parts.push(`${awaiting.label} awaiting verification`);
   if (live.count) parts.push(`${live.label} still running`);
   if (planned.count) parts.push(`${planned.label} planned`);
   const summary = parts.length ? parts.join(" · ") : null;
   return {
     periods_total: periods.length,
     verified,
+    awaiting,
+    settled,
     live,
     planned,
     will_change_at_close: willChange,
