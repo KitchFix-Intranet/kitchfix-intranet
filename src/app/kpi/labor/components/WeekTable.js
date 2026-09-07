@@ -753,7 +753,7 @@ export function WeekTable({
                     >Names hidden</button>
                   )}
                 </th>
-                <th className="kpi-tbl-vbcol">vs budget</th>
+                <th className="kpi-tbl-vbcol">vs adjusted</th>
                 {showShare && <th className="kpi-tbl-shrcol">Share</th>}
                 <th>Hours</th>
                 <th>OT 1.5&times;</th>
@@ -803,7 +803,7 @@ export function WeekTable({
                     return `in progress · ${done} of ${wkUnit(totalWeeks)}`;
                   }
                   return periodBudget != null
-                    ? `${wkUnit(weeksInBand)} · budget ${fmt$(periodBudget)}`
+                    ? `${wkUnit(weeksInBand)} · adjusted ${fmt$(periodBudget)}`
                     : wkUnit(weeksInBand);
                 })();
                 const bandVs = periodBudget == null
