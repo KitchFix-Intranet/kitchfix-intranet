@@ -1147,7 +1147,16 @@ export async function resolveOverview({
       totalWeeksCount = weeks.length;
       const confirmedWks = weeks.filter(w => w.basis === "confirmed");
       confirmedWeeksCount = confirmedWks.length;
-      const confirmedSum = confirmedWks.reduce((s, w) => s + Number(w.revenue || 0), 0);
+      // Kevin ratify R-92 PR-3 (2026-09-09). Use actual_revenue_in_
+      // denom (R-85 strict) instead of the general `revenue` field.
+      // The general field includes actuals from empty-slot rows
+      // (has_actuals=true but projected_revenue=0) which R-85
+      // excludes from the denominator. Using it here made the sum
+      // include a $207.90 tail on TBJ - FL 09/07 that didn't belong
+      // to the "12 of 12 confirmed" count, so the card's count and
+      // its figure disagreed. Denom-only match makes them agree by
+      // construction.
+      const confirmedSum = confirmedWks.reduce((s, w) => s + Number(w.actual_revenue_in_denom || 0), 0);
       if (confirmedSum > 0) {
         totalRevenue = Math.round(confirmedSum * 100) / 100;
         totalRevReported = true;

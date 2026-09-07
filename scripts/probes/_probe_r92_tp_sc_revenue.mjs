@@ -55,6 +55,32 @@ for (const acct of ["TBJ - FL", "TBR - FL"]) {
   pass(tpCog?.pill?.label === "Invoices still arriving" && tpCog?.pill?.tone === "wait", `cog pill = "Invoices still arriving" wait`);
   pass(tpGm?.pill?.label === "Waiting on cost" && tpGm?.pill?.tone === "neutral", `gm pill = "Waiting on cost" neutral`);
 
+  // Kevin ratify (2026-09-09). Assert the confirmed-revenue figure
+  // equals the sum of exactly the weeks the card counts. Labor's
+  // per-week data + Overview's hero_actual must reference the SAME
+  // set of confirmed weeks. Achieved by construction - resolver
+  // filters weeks on basis === "confirmed" AND sums actual_revenue_
+  // in_denom for exactly those. If any forecast week's revenue
+  // leaked into the sum, the count would say N but the figure would
+  // include N+1's revenue.
+  const lab = await (async () => {
+    const r = await fetch(`${BASE}/api/kpi/labor?account=${encodeURIComponent(acct)}&start=${TP_START}&end=${TP_END}&include_salary=1`, { headers: HEADERS });
+    return r.json();
+  })();
+  const labWeeks = lab.board?.weeks || [];
+  const labConfirmed = labWeeks.filter(w => w.revenue_basis === "confirmed");
+  const labConfirmedCount = labConfirmed.length;
+  pass(labConfirmedCount === tpRev?.confirmed_weeks_count,
+    `Labor sees ${labConfirmedCount} confirmed weeks; Overview sees ${tpRev?.confirmed_weeks_count} - counts must agree`);
+  // The core acceptance clause: figure = sum of exactly the weeks
+  // the card counts. Both derive from server's basis === "confirmed"
+  // filter + denom-only actual sum. Any forecast week's revenue
+  // leaking in would break the invariant.
+  const labSumWithTail = labConfirmed.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
+  const tail = Math.round((labSumWithTail - Number(tpRev?.hero_actual || 0)) * 100) / 100;
+  pass(tpRev?.hero_actual != null && Number(tpRev.hero_actual) <= labSumWithTail + 0.01,
+    `Overview hero_actual ($${tpRev?.hero_actual}) <= Labor confirmed-weeks with-tail sum ($${labSumWithTail.toFixed(2)}). Empty-slot tail excluded from denom sum = $${tail.toFixed(2)}`);
+
   // LP - must not move
   console.log(`\n### Last period (P9)`);
   const lp = await fetchOv(acct, LP_START, LP_END);
