@@ -89,6 +89,16 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
         //
         // Assertion (permanent probe): dash_top < bar_top iff bud > val.
         const dashBottomPct = val > 0 && bud >= 0 ? (bud / val) * 100 : null;
+        // Kevin walkthrough sweep addendum F (2026-09-07). Hatched
+        // slice for the unapproved-labor portion within the bar,
+        // matching Labor Tier A. Ratio = unapproved_labor_$ / spent
+        // clamped to 100; slice sits at the TOP of the bar in the
+        // same height envelope, so the bar total is unchanged and
+        // the reader sees "same lever, different state." Uses the
+        // grey-hatched .kpi-ov-bar-unapp treatment.
+        const unappD = Number(s.unapproved_labor_dollars || 0);
+        const unappRatio = (unappD > 0 && val > 0.5) ? Math.min(1, unappD / val) : 0;
+        const unappPctOfBar = unappRatio > 0 ? unappRatio * 100 : 0;
         return (
           <i
             key={i}
@@ -99,6 +109,18 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
             data-kpi-ov-bar-val={val}
             data-kpi-ov-bar-bud={bud}
           >
+            {unappPctOfBar > 0 && (
+              <span
+                className="kpi-ov-bar-unapp"
+                style={{
+                  height: `${unappPctOfBar}%`,
+                  bottom: `${100 - unappPctOfBar}%`,
+                }}
+                title={`~${Math.round(unappD).toLocaleString("en-US")} labor $ awaiting approval`}
+                aria-label={`${Math.round(unappD).toLocaleString("en-US")} dollars of labor awaiting approval`}
+                data-kpi-ov="bar-unapp-slice"
+              />
+            )}
             {dashBottomPct != null && (
               <span
                 className="kpi-ov-bar-perbud"

@@ -175,13 +175,14 @@ export default function RevenueLines({ payload }) {
   const budgetHeader  = isOpenPeriod ? "Budget"  : (rangeLabels?.budget_header  || "BUDGET");
   const actualsHeader = isOpenPeriod ? "Actuals" : (rangeLabels?.actuals_header || "ACTUALS");
   // Kevin Prompt 1 item 1b (2026-09-04): revenue lines get one
-  // period column ("P{N} forecast", not "P{N} budget" - revenue reads
-  // Forecast per the card rename). Only on open ranges.
+  // period column. Kevin walkthrough sweep addendum A (2026-09-07):
+  // revenue reads Projection - card, header, columns, banner. Only
+  // renders on open ranges.
   const showPeriodCol = periodState === "open";
   const periodNo = rng?.period_no;
   const periodForecastHeader = periodNo != null
-    ? `P${periodNo} forecast`
-    : "Period forecast";
+    ? `P${periodNo} projection`
+    : "Period projection";
 
   return (
     <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="revenue-lines">

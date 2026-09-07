@@ -68,21 +68,25 @@ function fmtPct(n) {
 // carry a time dimension; closed range does not.
 //
 // Kevin ruling 2026-09-03 follow-up: the Revenue card's reference row
-// reads Forecast (not Budget), on every account and every range. Cost
-// and margin cards still measure against a Target, so this rename
+// reads Projection (not Budget), on every account and every range.
+// Cost and margin cards still measure against a Target, so this rename
 // only applies to Revenue.
+//
+// Kevin walkthrough sweep addendum A (2026-09-07): renamed from
+// Forecast to Projection everywhere in revenue context. The word
+// `forecast` still means the counts-not-yet-confirmed state on
+// Labor's week tiles (a different concept) and stays there.
 function actualLabel(periodState, throughWkLabel) {
   // Kevin Prompt 1 item 1c (2026-09-04): "Actual to date" -> "Actuals
   // wk 1 – wk N" so the operator sees the week count they're already
   // reading, not a generic to-date phrase. Falls back to the plain
-  // form when the range label doesn't carry a week count (aggregate
-  // ranges, portfolio scope).
+  // form when the range label doesn't carry a week count.
   if (periodState !== "open") return "Actual";
   return throughWkLabel ? `Actuals ${throughWkLabel}` : "Actual to date";
 }
 function forecastLabel(periodState, throughWkLabel) {
-  if (periodState !== "open") return "Forecast";
-  return throughWkLabel ? `Forecast ${throughWkLabel}` : "Forecast to date";
+  if (periodState !== "open") return "Projection";
+  return throughWkLabel ? `Projection ${throughWkLabel}` : "Projection to date";
 }
 
 // Kevin Prompt 1 item 1a (2026-09-04): third block under each card,
@@ -214,7 +218,16 @@ function throughWkPhrase(rangeLabels, periodState) {
   const raw = rangeLabels?.spanHeader || rangeLabels?.actuals_header || null;
   if (raw) {
     // "WK 1 – WK 3 ACTUALS" -> "WK 1 – WK 3", then lowercase "wk"
-    return raw.replace(/\s+ACTUALS\s*$/i, "").toLowerCase().replace(/^wk/, "wk");
+    const stripped = raw.replace(/\s+ACTUALS\s*$/i, "").replace(/\s+PROJECTION\s*$/i, "").trim();
+    // Kevin walkthrough sweep item 5 (2026-09-07): on day one of a
+    // new period, actuals_header is just "ACTUALS" (no span prefix).
+    // Stripping ACTUALS leaves "", which the caller concatenated to
+    // "Actuals " with a trailing space (and rendered "Actuals actuals"
+    // when a wrapper prepended the word). Fall through to the horizon
+    // fallback OR the null return so the caller uses "Actual to date".
+    if (stripped) {
+      return stripped.toLowerCase().replace(/^wk/, "wk");
+    }
   }
   // Fallback: parse from horizon "through week 3 · 08/10 – 08/30"
   const m = /through week (\d+)/i.exec(rangeLabels?.horizon || "");
@@ -232,11 +245,13 @@ function weekCountFrom(rangeLabels, rangeMeta) {
   if (!m) return { done: null, total: 4 };
   return { done: parseInt(m[1], 10), total: 4 };
 }
-// Period-total label - matches render "P9 budget total" / "P9 forecast".
+// Period-total label - "P9 projection total" / "P9 budget total".
+// Kevin walkthrough sweep addendum A - Forecast renamed to Projection
+// on revenue.
 function periodTotalLabel(rangeMeta, kind) {
   const n = rangeMeta?.period_no;
   const pfx = n != null ? `P${n} ` : "";
-  return kind === "revenue" ? `${pfx}forecast total` : `${pfx}budget total`;
+  return kind === "revenue" ? `${pfx}projection total` : `${pfx}budget total`;
 }
 
 // Revenue card - dollars. Top row = Actual, bottom = Budget.

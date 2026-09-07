@@ -365,9 +365,19 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         const heroSub = (() => {
           if (isFutureRange) return "this range has not started";
           if (isMultiWithClosedSubset) {
-            const wks = board?.closed_weeks_in_range ?? null;
-            return wks != null
-              ? `${wks} closed weeks · running period not counted`
+            // Kevin walkthrough sweep item 8 (2026-09-07). Prior sub
+            // read "36 closed weeks · running period not counted" while
+            // the WeekTable below said "TOTAL · 10 PERIODS · 37 WEEKS".
+            // Both true, both on screen, and they looked like a
+            // disagreement. Name the total explicitly so the reader
+            // sees "36 of 37 · P10 not counted" as ONE statement.
+            const closedWks = board?.closed_weeks_in_range ?? null;
+            const totalWks = Array.isArray(board?.weeks) ? board.weeks.length : null;
+            if (closedWks != null && totalWks != null && totalWks > closedWks) {
+              return `${closedWks} of ${totalWks} weeks closed · running period not counted`;
+            }
+            return closedWks != null
+              ? `${closedWks} closed weeks · running period not counted`
               : "running period not counted";
           }
           return spentPct != null ? `${spentPct}% of budget` : "";
