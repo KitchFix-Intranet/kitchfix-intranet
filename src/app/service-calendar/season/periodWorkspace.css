@@ -494,6 +494,20 @@
   border-color: var(--border-default);
 }
 .sc-workspace-bulk-btn--outline:hover:not(:disabled) { background: var(--surface-sunken); }
+/* 2026-09-07: danger-tier outline for the bulk-reset action. Same
+   footprint as --outline so the row stays balanced; red border + red
+   text signal destructive without shouting via a filled red fill
+   (which would compete with the primary CTA for eye weight). */
+.sc-workspace-bulk-btn--danger {
+  background: var(--surface-card);
+  color: var(--text-danger);
+  border-color: var(--status-overdue-bd);
+}
+.sc-workspace-bulk-btn--danger:hover:not(:disabled) {
+  background: var(--status-overdue-subtle);
+  border-color: var(--status-overdue-strong);
+}
+.sc-workspace-bulk-btn--danger:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 /* SC-049 (2026-07-08): pressed feedback on bulk-mode actions +
    Cancel. Excludes :disabled so a disabled press does not translate. */
 .sc-workspace-bulk-btn:active:not(:disabled) { transform: translateY(1px); }

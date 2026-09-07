@@ -114,6 +114,7 @@ export default function PeriodWorkspace({
   bulkSelected,             // Set<dateStr>
   onBulkTileClick,          // (dateStr) => void (toggles selection)
   onBulkOpenPanel,          // opens the existing bulk entry panel
+  onBulkReset,              // 2026-09-07: opens the bulk-reset confirm
   onBulkReview,             // opens the "match projections" review overlay
   onBulkConfirmAsProjected, // runs handleBulkConfirm (kept for compat -
                             // no longer wired from BulkAffordance; the
@@ -402,6 +403,7 @@ export default function PeriodWorkspace({
         onCancel={onBulkCancel}
         onOpenPanel={onBulkOpenPanel}
         onReview={onBulkReview}
+        onReset={onBulkReset}
       />
 
       <DayGrid
@@ -837,7 +839,7 @@ function sumProjectedMeals(day) {
 // isSelected). Out of bulkMode, tile clicks open DayDetail. The mode
 // gate prevents the tap-to-open vs tap-to-select conflict the brief
 // pre-mortem flagged.
-function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, saving, onToggle, onCancel, onOpenPanel, onReview }) {
+function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, saving, onToggle, onCancel, onOpenPanel, onReview, onReset }) {
   // Rest-state trigger moved into TodayRail as "Bulk Update"; this
   // component now only renders the active-mode controls (selected count
   // + panel/confirm/cancel). Note: TodayRail only renders on the current
@@ -917,6 +919,22 @@ function BulkAffordance({ bulkMode, bulkSelected, periodDays, isFeeAccount, savi
         >
           Enter custom values
         </button>
+        {/* 2026-09-07: bulk-reset danger action. Visually separated
+            from the two positive actions above via the danger-tier
+            outline class + a spacer; same row so bulk mode's action
+            set stays one thing. Bulk mode requires deliberate entry
+            (TodayRail's "Bulk Update" button) so this cannot fire
+            from a passive drill. */}
+        {onReset && (
+          <button
+            type="button"
+            className="sc-workspace-bulk-btn sc-workspace-bulk-btn--danger"
+            disabled={saving || noneSelected}
+            onClick={onReset}
+          >
+            Reset selection
+          </button>
+        )}
         <button
           type="button"
           className="sc-workspace-bulk-cancel"
