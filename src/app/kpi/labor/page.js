@@ -33,7 +33,7 @@ import { WeekTable } from "./components/WeekTable";
 import { DayStrip } from "./components/DayStrip";
 import { HomestandBoard } from "./components/HomestandBoard";
 import {
-  StateLoading, StateEmptyFirstRun, StateEmptyFiltered, StateEmptyRange, StateError,
+  StateLoading, StateEmptyFirstRun, StateEmptyAccount, StateEmptyFiltered, StateEmptyRange, StateError,
   StateStale, StateSalaried, StateNotAuthorized, StateSessionExpired, LockedPanel,
   RefusalPanel,
   errorCode,
@@ -448,7 +448,17 @@ export default function KpiLaborPage() {
   const weeksInRange = weekAggregates.length; // canonical week count
 
   const grouped = useMemo(() => {
-    if (!weekAggregates.length) return [];
+    // Labor empty-state fix (Kevin 2026-09-07): removed the
+    // `if (!weekAggregates.length) return [];` early return that
+    // short-circuited the zero-labor placeholder walk below when a
+    // period had no actuals rows yet (Monday morning of a new
+    // period). Without the walk, WeekTable saw an empty grouped list
+    // and rendered nothing; the surviving canonical-periods loop
+    // (`if (!groupByMonth && data?.board)` below) now populates
+    // placeholder groups even when weekAggregates is empty, so the
+    // table renders the period skeleton with "no labor recorded"
+    // rows. The rest of this function iterates weekAggregates in
+    // ways that are naturally no-ops when the list is empty.
     // V6-5 - grouping mode implied by selection. Month selection
     // groups by calendar month (weeks belong to the month their
     // MONDAY falls in - the same rule fiscalMonthsWithWeeks uses,
@@ -1051,8 +1061,18 @@ export default function KpiLaborPage() {
           of loadState. During a warm refetch (loadState === "loading"
           with previous data) it renders at 0.45 opacity via
           `.kpi-board-loading`. It only unmounts on genuine cold start
-          (no data ever), where the skeleton below takes over. */}
-      {!inHomestandView && !isSalaried && (data?.actuals?.length || 0) > 0 && (
+          (no data ever), where the skeleton below takes over.
+
+          Labor empty-state fix (Kevin 2026-09-07). Gate rebound from
+          actuals row count to board.applies. The prior condition
+          `(data?.actuals?.length || 0) > 0` hid the entire panel on
+          Monday morning of a new period, throwing away the four-week
+          forecast plan that PR-B built. actuals is empty because no
+          hours have been worked YET, not because the account has
+          nothing to show. board.applies === true means the account
+          has a labor budget and can be compared; that is the honest
+          condition for rendering the panel. */}
+      {!inHomestandView && !isSalaried && data?.board?.applies === true && (
         <div
           ref={boardRef}
           tabIndex={-1}
@@ -1186,24 +1206,32 @@ export default function KpiLaborPage() {
            the period-empty branches so we do not stack an empty-range
            message underneath. */
         null
-      ) : loadState === "ok" && !filteredActuals.length ? (
-        // Fix 4 (D2.1) - three-way branch per spec 3.9 + v5 line ~1052:
-        //   worker filter active   -> StateEmptyFiltered
-        //   pipeline never derived -> StateEmptyFirstRun (keyed off
-        //                             derive_freshness.last_derive_at,
-        //                             not row count - the range being
-        //                             empty is a filter, not a pipeline
-        //                             failure)
-        //   otherwise              -> StateEmptyRange (the date range
-        //                             is a filter; one-tap Use FYTD)
-        selectedWorkers && selectedWorkers.size > 0 ? (
+      ) : loadState === "ok" && (
+        (selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0)
+        || data?.board?.applies === false
+      ) ? (
+        // Labor empty-state fix (Kevin 2026-09-07). Rebound from
+        // `!filteredActuals.length` (which treated Monday morning of
+        // a new period as "empty pipeline") to two conditions that
+        // actually mean empty:
+        //   worker filter matches nothing   -> StateEmptyFiltered
+        //                                      (board above renders;
+        //                                      only the table region
+        //                                      is empty)
+        //   board.applies === false         -> account has nothing to
+        //                                      show. Sub-routed by
+        //                                      board.kind:
+        //     empty_range (no fiscal weeks in the requested dates)
+        //       -> StateEmptyRange (one-tap Use FYTD)
+        //     everything else (defensive - salaried_only + envelope
+        //       route to StateSalaried earlier)
+        //       -> StateEmptyAccount (copy names the real condition)
+        selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0 ? (
           <StateEmptyFiltered
             workerCount={selectedWorkers.size}
             onClear={() => { setParam("workers", ""); setLiveMsg("Worker filter cleared."); setTimeout(focusBoard, 60); }}
           />
-        ) : !data?.derive_freshness?.last_derive_at ? (
-          <StateEmptyFirstRun />
-        ) : (
+        ) : data?.board?.kind === "empty_range" ? (
           <StateEmptyRange
             onUseFYTD={() => {
               applyPreset("fytd");
@@ -1211,13 +1239,25 @@ export default function KpiLaborPage() {
               setTimeout(focusBoard, 60);
             }}
           />
+        ) : (
+          <StateEmptyAccount />
         )
       ) : null}
 
       {/* V25-15 - WeekTable stays MOUNTED across every refetch as long
           as data exists. Warm loading dims to 0.45 via wrapper class;
-          cold start (no data) omits it (skeleton is above). */}
-      {!inHomestandView && !isSalaried && (data?.actuals?.length || 0) > 0 && filteredActuals.length > 0 && (
+          cold start (no data) omits it (skeleton is above).
+
+          Labor empty-state fix (Kevin 2026-09-07). Gate rebound from
+          actuals row count to board.applies + filter awareness. The
+          grouped memo now emits zero_labor placeholder groups for
+          every period in the range when weekAggregates is empty; the
+          table renders those placeholder rows so a Monday-morning
+          reader sees the shape of the month rather than "nothing
+          derived". The worker-filter case (selectedWorkers with zero
+          matches) still routes to StateEmptyFiltered above, so this
+          gate excludes it. */}
+      {!inHomestandView && !isSalaried && data?.board?.applies === true && !(selectedWorkers && selectedWorkers.size > 0 && filteredActuals.length === 0) && (
         <div className={loadState === "loading" ? "kpi-board-loading" : ""}>
         {/* PR-B (owner ruling 2026-08-24) - on portfolio views (ALL /
             EAST / WEST), hide the worker filter and the Names | Numbers
