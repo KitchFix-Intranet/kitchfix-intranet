@@ -353,7 +353,7 @@ function daysLeftInRunningWeek(weekStartISO, todayISO) {
  * Weeks not present in weeklyBasisData (defensive - the loader is
  * called against the same range) get no attach.
  */
-export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null }) {
+export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null, verifiedPeriodTotals = null }) {
   if (!board || board.applies === false) return board;
   if (!Array.isArray(board.weeks)) return board;
   if (!weeklyBasisData || !Array.isArray(weeklyBasisData.data)) return board;
@@ -374,6 +374,31 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
   // pass it (early callers pre-fix).
   const accrualByPeriod = contractualAccrualByPeriod || new Map();
 
+  // Kevin post-1056 sweep (2026-09-08). Direction A · per-week
+  // follows the Overview. For VERIFIED periods (finance-posted),
+  // week_revenue is the Overview's per-period total distributed by
+  // the Service Calendar's weekly shape - derived, not measured.
+  // Sum of per-week matches Overview cent-exact by construction.
+  // Non-verified periods keep the SC + budget-accrual path.
+  //
+  // verifiedPeriodTotals: Map<period_no, total_revenue_from_pnl>.
+  // Only periods whose state === "verified" appear here. Missing
+  // keys mean "not verified" - fall through to SC + accrual.
+  const verifiedTotals = verifiedPeriodTotals || new Map();
+
+  // Pass 1: aggregate per-period SC totals so the shape-weighting
+  // has a denominator. SC-weighted split needs sum(SC per week in
+  // period) as the denominator for each week's share.
+  const scByPeriod = new Map();
+  for (const w of board.weeks) {
+    const basis = byStart.get(w.week_start);
+    if (!basis) continue;
+    const periodNo = periodOf(w.week_start);
+    if (periodNo == null) continue;
+    const cur = scByPeriod.get(periodNo) || 0;
+    scByPeriod.set(periodNo, cur + Number(basis.revenue || 0));
+  }
+
   for (const w of board.weeks) {
     const basis = byStart.get(w.week_start);
     if (!basis) continue;
@@ -389,24 +414,50 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     w.week_actual_revenue = basis.actual_revenue;
     w.week_projected_revenue = basis.projected_revenue;
 
-    // Per-week contractual accrual: 1/4 of period total for CLOSED
-    // weeks. Zero for running / future. Kept unrounded here so
-    // sum(4 weeks) = period_total exactly - Kevin's acceptance:
-    // "the panel's budget equals the sum of the week-card budgets".
-    // Rounding per week breaks the identity by 2¢. Consumers round
-    // at display; server storage stays at full JS precision.
     const periodNo = periodOf(w.week_start);
-    const periodAccrual = periodNo != null ? Number(accrualByPeriod.get(periodNo) || 0) : 0;
-    const weekAccrual = (basis.temporal === "closed" && periodAccrual > 0)
-      ? periodAccrual / 4
-      : 0;
-    w.week_contractual_accrual = weekAccrual;
-    const revenueWithAccrual = Number(basis.revenue || 0) + weekAccrual;
-    w.week_revenue = revenueWithAccrual;
+    const isVerified = periodNo != null && verifiedTotals.has(periodNo);
+
+    let revenueForWeek;
+    let derivation;
+    if (isVerified) {
+      // Direction A · finance-posted period total distributed by SC
+      // shape. week_revenue = period_total × (sc_week / sc_period).
+      // Sum across the period's 4 weeks = period_total exactly.
+      const periodTotal = Number(verifiedTotals.get(periodNo));
+      const scPeriodTotal = Number(scByPeriod.get(periodNo) || 0);
+      const scWeek = Number(basis.revenue || 0);
+      if (scPeriodTotal > 0) {
+        revenueForWeek = periodTotal * (scWeek / scPeriodTotal);
+      } else {
+        // SC unavailable for the period - flat quarters so the
+        // period total still ties. Every week identical; the tile
+        // tooltip names the fallback.
+        revenueForWeek = periodTotal / 4;
+      }
+      derivation = "pnl_distributed_by_sc";
+      // Contractual accrual is already inside periodTotal (P&L
+      // includes 2200/2300/2600 actuals). Do not add it again.
+      w.week_contractual_accrual = 0;
+    } else {
+      // Non-verified: current path. Per-week SC + budget-accrual/4
+      // for closed weeks.
+      const periodAccrual = periodNo != null ? Number(accrualByPeriod.get(periodNo) || 0) : 0;
+      const weekAccrual = (basis.temporal === "closed" && periodAccrual > 0)
+        ? periodAccrual / 4
+        : 0;
+      w.week_contractual_accrual = weekAccrual;
+      revenueForWeek = Number(basis.revenue || 0) + weekAccrual;
+      derivation = weekAccrual > 0 ? "sc_plus_budget_accrual" : "sc_measured";
+    }
+    w.week_revenue = revenueForWeek;
+    // Tile / tooltip copy keys off this. "pnl_distributed_by_sc"
+    // renders "Verified revenue · finance-posted total, distributed
+    // by Service Calendar shape - derived, not measured."
+    w.week_revenue_derivation = derivation;
 
     const pct = periodNo != null ? lineTargetPctByPeriod?.get?.(periodNo) : null;
     if (pct != null) {
-      w.budget_at_this_week_revenue = revenueWithAccrual * Number(pct);
+      w.budget_at_this_week_revenue = revenueForWeek * Number(pct);
     } else {
       w.budget_at_this_week_revenue = null;
     }

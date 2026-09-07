@@ -37,7 +37,7 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 // carry. Load pnl_actuals revenue + kpi_budgets revenue for the range,
 // then call the shared period-basis module. See
 // src/lib/kpi/shared/periodBasis.js for the R-77 invariant + rules.
-import { loadOverviewBudgets, computeContractualAccrualByPeriod } from "@/lib/kpi/shared/periodBasis.js";
+import { loadOverviewBudgets, computeContractualAccrualByPeriod, sumPeriodRevenue } from "@/lib/kpi/shared/periodBasis.js";
 import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore, recomputeVerdictFromPanel } from "@/lib/labor/labor-batr.js";
 import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
@@ -1386,10 +1386,25 @@ export async function GET(request) {
     members: [account],
     periods: rangePeriodsSingle,
   });
+  // Kevin post-1056 sweep (2026-09-08). Direction A · per-week
+  // follows the Overview for VERIFIED periods. Extract per-period
+  // totals from the perPeriodRevenue map already computed inside
+  // loadRangeRevenueBasis; filter to state === "verified" only.
+  // Non-verified periods keep the SC + accrual path (their
+  // contract with the Overview picker already agrees).
+  const verifiedPeriodTotalsSingle = new Map();
+  if (revenueBasisSingle.perPeriodRevenue) {
+    for (const [pNo, entry] of revenueBasisSingle.perPeriodRevenue) {
+      if (entry?.state === "verified") {
+        verifiedPeriodTotalsSingle.set(pNo, sumPeriodRevenue(entry));
+      }
+    }
+  }
   attachWeeklyBasisToBoard(boardSingle, weeklyBasisSingle, {
     lineTargetPctByPeriod: lineTargetPctSingle,
     todayISO: today,
     contractualAccrualByPeriod: contractualAccrualSingle,
+    verifiedPeriodTotals: verifiedPeriodTotalsSingle,
   });
   // Kevin post-1051 sweep item 1: verdict must use the panel-
   // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
@@ -1483,6 +1498,7 @@ export async function GET(request) {
       lineTargetPctByPeriod: lineTargetPctMerged,
       todayISO: today,
       contractualAccrualByPeriod: contractualAccrualSingle,
+      verifiedPeriodTotals: verifiedPeriodTotalsSingle,
     });
     // Post-1051 sweep item 1: verdict recompute against panel figure
     // after per-week batr lands.

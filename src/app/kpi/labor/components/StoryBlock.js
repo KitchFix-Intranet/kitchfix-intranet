@@ -909,12 +909,23 @@ function WeekRail({ board }) {
             ? "running"
             : basis; // ahead -> confirmed | partial | forecast
 
-        // Revenue row label per basis.
-        const revLabel = basis === "confirmed"
-          ? "Confirmed revenue"
-          : basis === "partial"
-            ? "Confirmed + forecast"
-            : "Forecast revenue";
+        // Revenue row label per basis + derivation. Kevin post-1056
+        // sweep (2026-09-08): verified periods derive week revenue by
+        // distributing the finance-posted period total across weeks
+        // by Service Calendar shape. Chef needs to see that the
+        // number is derived, not measured, so the row label + a sub-
+        // caption + a hover tooltip all name the source.
+        const isDerivedFromPnl = w.week_revenue_derivation === "pnl_distributed_by_sc";
+        const revLabel = isDerivedFromPnl
+          ? "Verified revenue"
+          : basis === "confirmed"
+            ? "Confirmed revenue"
+            : basis === "partial"
+              ? "Confirmed + forecast"
+              : "Forecast revenue";
+        const derivedTooltip = isDerivedFromPnl
+          ? "Finance-posted period total, distributed by Service Calendar weekly shape. Derived, not measured - unlike closed-awaiting weeks whose revenue is the SC count itself."
+          : null;
 
         // Verdict/schedule/fraction line per temporal.
         const hasSpent = spent != null && spent > 0.5;
@@ -981,15 +992,16 @@ function WeekRail({ board }) {
             data-basis={basis}
             data-temporal={temporal}
             {...(verdictAttr ? { "data-verdict": verdictAttr } : {})}
+            {...(isDerivedFromPnl ? { "data-derived": "pnl_distributed_by_sc" } : {})}
           >
             <div className="kpi-wrail-head">
               <div>
                 <div className="kpi-wrail-n">{`Wk of ${fmtDate(w.week_start)}`}</div>
                 <div className="kpi-wrail-dt">{fmtDate(w.week_start)} – {fmtDate(w.week_end)}</div>
               </div>
-              <span className="kpi-wrail-st">{stateLabel}</span>
+              <span className="kpi-wrail-st" {...(isDerivedFromPnl ? { title: derivedTooltip } : {})}>{isDerivedFromPnl ? "verified" : stateLabel}</span>
             </div>
-            <div className="kpi-wrail-row">
+            <div className="kpi-wrail-row" {...(isDerivedFromPnl ? { title: derivedTooltip } : {})}>
               <span className="kpi-wrail-row-k">{revLabel}</span>
               <span className="kpi-wrail-row-v">{revenue != null ? fmt$(revenue) : "—"}</span>
             </div>
@@ -1011,6 +1023,11 @@ function WeekRail({ board }) {
             <div className={vdCls}>{vdText}</div>
             {subText && <div className="kpi-wrail-sub">{subText}</div>}
             {partialSub && <div className="kpi-wrail-sub">{partialSub}</div>}
+            {isDerivedFromPnl && (
+              <div className="kpi-wrail-sub" title={derivedTooltip}>
+                distributed by SC shape · derived, not measured
+              </div>
+            )}
           </div>
         );
       })}

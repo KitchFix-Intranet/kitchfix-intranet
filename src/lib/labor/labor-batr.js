@@ -77,11 +77,11 @@ function sumRevenueBudget(overviewBudgets, { members, periods }) {
  * the drift-prevention reasoning.
  */
 export async function loadRangeRevenueBasis(supa, { members, periods, start, end, today }) {
-  if (!members || members.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null };
-  if (!periods || periods.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null };
+  if (!members || members.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null, perPeriodRevenue: new Map() };
+  if (!periods || periods.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null, perPeriodRevenue: new Map() };
 
   const inputs = await loadPeriodBasisInputs(supa, { members, periods, start, end, today });
-  if (inputs.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: inputs.error.scope, message: inputs.error.error?.message || String(inputs.error.error) } };
+  if (inputs.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, perPeriodRevenue: new Map(), error: { scope: inputs.error.scope, message: inputs.error.error?.message || String(inputs.error.error) } };
 
   // Same picker + rules Overview uses. revSource fixed to "sc"
   // because Labor is always the SC-aware side.
@@ -112,6 +112,12 @@ export async function loadRangeRevenueBasis(supa, { members, periods, start, end
   return {
     totalRevenue: anyReported ? Math.round(totalRevenue * 100) / 100 : null,
     revenueBudgetFullPeriod,
+    // Kevin post-1056 sweep (2026-09-08). Return the per-period map so
+    // the per-week loader can source period totals directly from
+    // Overview's picker for VERIFIED periods (Direction A). Route
+    // extracts verifiedPeriodTotals from this and hands to
+    // attachWeeklyBasisToBoard.
+    perPeriodRevenue,
   };
 }
 
