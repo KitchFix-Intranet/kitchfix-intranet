@@ -188,6 +188,69 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
  * "over" on $4,222 P10 salary accrual against a $0 elapsed
  * expectation). Panel showed $4,222 of $29,499 = 14.3% used.
  */
+/**
+ * Recompute board.budget_at_this_revenue as the sum of per-week batr
+ * for weeks in periods that contribute to the total. R-86: a
+ * period's target percent is its own, never the annual one. Prior
+ * attachBatrToBoard applied the range's annual pct to the total
+ * revenue - which is a different figure whenever period pcts differ
+ * (spring training vs off season). The table already sums per-period
+ * batr; this closes the last disagreement between panel and table.
+ *
+ * Kevin post-1057 sweep item 2 (2026-09-08). Measured drift on the
+ * annual-pct panel figure vs sum-of-per-period batr:
+ *   TBJ - FL This year   $490,022 vs $493,695   Δ -$3,673
+ *   TBR - FL This year   $570,687 vs $577,454   Δ -$6,767
+ *
+ * Called AFTER attachWeeklyBasisToBoard so per-week batr fields are
+ * populated. Only sums weeks in periods with a concrete contribution
+ * (revenue_basis defined AND spent or budget non-null). Running-
+ * period weeks that haven't yet contributed are handled by the
+ * caller's period-filter upstream; here we just sum whatever
+ * per-week batr made it onto the board.
+ *
+ * Preserves the fallback for boards that never got per-week batr
+ * (loader disabled, salaried-only, older test fixtures): if no
+ * per-week field is set anywhere, leave board.budget_at_this_revenue
+ * as-is. Sets a new field board.panel_batr_from_per_week when the
+ * sum wins so downstream consumers can name the source.
+ */
+export function recomputePanelBatrFromPerWeek(board) {
+  if (!board || board.applies === false) return board;
+  if (!Array.isArray(board.weeks) || board.weeks.length === 0) return board;
+  // Multi-period ranges (This year, FYTD, N-period spans): sum CLOSED
+  // weeks only so panel batr matches the closed-only spent it's
+  // compared against (R-63 / R-78 running-period exclusion). Single-
+  // period ranges (Last period, This period): sum every week - a
+  // running-period card compares full-period forecast batr against
+  // to-date spend, and a closed-period card sums all four closed
+  // weeks. Both branches yield "sum of per-period batr for periods
+  // contributing to the comparison".
+  const isMultiPeriod = board.kind === "multi_period";
+  const contributingWeeks = isMultiPeriod
+    ? board.weeks.filter(w => w.state === "closed")
+    : board.weeks;
+  let sum = 0;
+  let anyPerWeek = false;
+  for (const w of contributingWeeks) {
+    if (w.budget_at_this_week_revenue != null) {
+      sum += Number(w.budget_at_this_week_revenue);
+      anyPerWeek = true;
+    }
+  }
+  if (!anyPerWeek) return board;
+  const rounded = Math.round(sum * 100) / 100;
+  board.budget_at_this_revenue = rounded;
+  board.panel_batr_from_per_week = true;
+  // Recompute closed_variance against the new panel figure - it was
+  // set by attachBatrToBoard against the annual formula, so it lags
+  // once we override batr here.
+  if (board.closed_spent_to_date != null) {
+    board.closed_variance = Math.round((Number(board.closed_spent_to_date) - rounded) * 100) / 100;
+  }
+  return board;
+}
+
 export function recomputeVerdictFromPanel(board) {
   if (!board || board.applies === false) return board;
   const batr = board.budget_at_this_revenue;
