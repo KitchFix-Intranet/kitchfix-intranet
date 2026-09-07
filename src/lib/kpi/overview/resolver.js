@@ -465,27 +465,22 @@ function computePeriodRevenueByLine({
             }
             bucket.sources.add("sc_daily_revenue");
           } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
-            // R-67 (Kevin ruling 2026-09-03): contractual lines on
-            // sc_driven per-meal accounts accrue that period's budget
-            // × N complete weeks / 4 whenever the period is not
-            // verified and the line has no actual. Prior code let
-            // 2300 / 2200 / 2600 fall through as `not_reported`
-            // here, dropping earned contractual revenue (TBJ - FL
-            // P9 through week 3: $18,877 of service charges shown
-            // as absent).
+            // Kevin revenue-fallback prompt (2026-09-07, corrected):
+            // R-67 applies to EVERY account, for contractual lines.
+            // Kevin ruling: "the service fee is real revenue. It
+            // belongs in their weekly revenue alongside the Service
+            // Calendar revenue." TBJ - FL bills 2300 every period
+            // ($18k - $118k in finance across P1-P8); dropping it
+            // would remove real money and inflate every cost pct.
             //
-            // Guard: this branch only fires on non-verified periods
-            // (verified goes through pnl_actuals_verified above), so
-            // the "never accrue over a verified period" rule holds
-            // by construction. Verified periods with no actual mean
-            // finance booked nothing - and nothing is the answer.
+            // Corrected precedence:
+            //   1. finance actual (pnl_actuals verified)
+            //   2. SC actual (count-derived lines like 2400.1)
+            //   3. contractual accrual R-67 (EVERY account, contractual)
+            //   4. nothing
             //
-            // Fee + tracked accounts never reach this branch: their
-            // picker returns line_codes: ["2400.1"] only, so 2300
-            // is not in memberContribs. That preserves visibility
-            // of loader defects like STL - MO 2300 $35,715 missing
-            // from pnl_actuals; we do not paper over them with a
-            // coincidental accrual.
+            // R-67 accrual formula unchanged: budget × completeWeeks/4.
+            // Closed period => 4/4 = full budget.
             const pStart = periodStartISO(p);
             const pEnd = periodEndISO(p);
             const byAcct = overviewBudgets.get(line)?.get(m);
@@ -500,10 +495,22 @@ function computePeriodRevenueByLine({
               }
             }
           }
+        } else if (src.source === "not_reported") {
+          // Kevin revenue fallback prompt (2026-09-07). Per_meal
+          // closed_awaiting on an account without sc_revenue_live -
+          // finance has not posted, SC is not available, so the
+          // period reads "not reported". A budget is never an
+          // actual. any_actual stays false so the line renders "—"
+          // and the source line names the state so a reader knows
+          // why.
+          bucket.sources.add("not_reported");
         } else {
-          // kpi_budgets_* (contractual / estimate / planned / tracked).
+          // kpi_budgets_* (contractual / planned / tracked).
           // For a CLOSED period => full budget. For OPEN period =>
           // budget-to-date by days. Compute here.
+          // Kevin walkthrough sweep (2026-09-07): the prior
+          // `kpi_budgets_2400_1_estimate` closed_awaiting source is
+          // gone - handled explicitly by `not_reported` above.
           const byAcct = overviewBudgets.get(line)?.get(m);
           const amtRaw = byAcct?.get(p);
           if (amtRaw != null) {
