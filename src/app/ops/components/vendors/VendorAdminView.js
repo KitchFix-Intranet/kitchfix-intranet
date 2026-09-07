@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { CATEGORIES, CATEGORY_COLORS } from "@/lib/vendorEnums";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 // ── All Vendors Cross-Account Table ──────────────────────────────────────────
 function AllVendorsTable({ showToast }) {
@@ -84,7 +85,7 @@ function AllVendorsTable({ showToast }) {
     }
   };
 
-  if (loading) return <div className="oh-vp-admin-loading"><span className="oh-spinner" /></div>;
+  if (loading) return <AppSkeleton variant="list" label="Loading vendors" />;
 
   return (
     <div className="oh-vp-all-vendors">
@@ -326,7 +327,7 @@ function DuplicateDetector({ showToast }) {
 
   const visibleGroups = groups.filter(g => !dismissed.includes(dismissKey(g)));
 
-  if (loading) return <div className="oh-vp-admin-loading"><span className="oh-spinner" /></div>;
+  if (loading) return <AppSkeleton variant="list" label="Loading vendors" />;
 
   return (
     <div className="oh-vp-dup-wrap">

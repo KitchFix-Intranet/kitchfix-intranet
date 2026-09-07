@@ -38,6 +38,7 @@ import {
   ALL_STATUSES,
 } from "../_shared";
 import SlideOverReader from "../SlideOverReader";
+import AppSkeleton, { AppSkelBar } from "@/components/loading/AppSkeleton";
 
 // Status options for the in-row dropdown - same canonical workflow values
 // the API allows. Includes Retired (the only status not in ALL_STATUSES) so
@@ -119,12 +120,9 @@ export default function AdminClient() {
 // isn't disclosed to non-owners.
 // ════════════════════════════════════════════════════════════════════════════
 function LoadingState() {
-  return (
-    <div className="pb-loading">
-      <div className="pb-loading-pulse" />
-      <div className="pb-loading-text">Loading dashboard…</div>
-    </div>
-  );
+  // 2026-09-08 loading-unification PR 2: admin dashboard is a
+  // filterable list of documents; grid variant fits.
+  return <AppSkeleton variant="grid" label="Loading dashboard" />;
 }
 
 function ErrorState({ message }) {
@@ -1397,7 +1395,7 @@ function ArchiveTab({ docs, onLoaded, onRestoreClick }) {
   }, [docs, onLoaded]);
 
   if (docs === null) {
-    return <div className="pb-admin-archive-loading">Loading archived documents…</div>;
+    return <AppSkeleton variant="list" label="Loading archived documents" />;
   }
   if (docs.length === 0) {
     return (
@@ -1919,7 +1917,17 @@ function MdxEditorSlideOver({ docId, onClose, onSubmitted }) {
         </div>
 
         {loading ? (
-          <div className="pb-slide-loading">Loading MDX source…</div>
+          // 2026-09-08 loading-unification PR 2: shimmer bars in the
+          // editor body slot. Slide-over chrome stays real (title +
+          // close button); only the source content shimmers.
+          <div className="pb-slide-loading">
+            <AppSkelBar width="45%" height={18} />
+            <AppSkelBar width="90%" height={12} />
+            <AppSkelBar width="85%" height={12} />
+            <AppSkelBar width="92%" height={12} />
+            <AppSkelBar width="78%" height={12} />
+            <AppSkelBar width="88%" height={12} />
+          </div>
         ) : error ? (
           <div className="pb-slide-error">Error: {error}</div>
         ) : fm ? (

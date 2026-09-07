@@ -15,6 +15,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { AppSkelBar } from "@/components/loading/AppSkeleton";
 import {
   CLASS_LABELS,
   CLASS_FAMILY,
@@ -103,7 +104,19 @@ export default function SlideOverReader({ docId, onClose, isOwner = false, onEdi
           <button className="pb-slide-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         {loading ? (
-          <div className="pb-slide-loading">Loading document…</div>
+          // 2026-09-08 loading-unification PR 2: "Loading document…"
+          // text replaced with shimmer bars matching the doc layout.
+          // Kept scoped to the slide-over interior so the panel
+          // chrome (back / close / title) does not itself shimmer -
+          // the panel HAS mounted; only the document content is
+          // loading.
+          <div className="pb-slide-loading">
+            <AppSkelBar width="55%" height={22} />
+            <AppSkelBar width="80%" height={12} />
+            <AppSkelBar width="90%" height={12} />
+            <AppSkelBar width="70%" height={12} />
+            <AppSkelBar width="85%" height={12} />
+          </div>
         ) : error ? (
           <div className="pb-slide-error">Error: {error}</div>
         ) : data ? (

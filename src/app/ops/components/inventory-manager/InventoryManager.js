@@ -6,6 +6,7 @@ import ProductPlacement from "./ProductPlacement";
 import ItemReview from "./ItemReview";
 import ItemCatalog from "./ItemCatalog";
 import ReviewQueueScreen from "./ReviewQueueScreen";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 const Icon = ({ d, size = 16, color = "#64748b", sw = 2, style = {} }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
@@ -127,7 +128,7 @@ export default function InventoryManager({ config, showToast, openConfirm, onNav
 
   if (loading && !data) return (
     <div className="oh-inv-mgmt-app">
-      <div className="oh-inv-mgmt-loading"><div className="oh-spinner" /><p>Loading Inventory Manager...</p></div>
+      <AppSkeleton variant="portal" label="Loading Inventory Manager" />
     </div>
   );
 

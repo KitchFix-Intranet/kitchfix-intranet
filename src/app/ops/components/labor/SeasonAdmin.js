@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 
 function fmt(n) { return "$" + Math.round(n).toLocaleString(); }
 function pct(n, d) { return d > 0 ? Math.round((n / d) * 100) : 0; }
@@ -38,7 +39,7 @@ export default function SeasonAdmin({ mlbAccounts, showToast, onSelectAccount })
   }, [mlbAccounts]);
 
   if (loading) {
-    return <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><div className="oh-spinner" /></div>;
+    return <AppSkeleton variant="list" label="Loading season data" />;
   }
 
   const accounts = mlbAccounts.map((a) => {

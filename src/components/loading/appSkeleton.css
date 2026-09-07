@@ -1,0 +1,190 @@
+/* ═══════════════════════════════════════════════════════════════════
+   AppSkeleton styles - app-wide loading treatment.
+   2026-09-08 loading-unification PR 2.
+   ═══════════════════════════════════════════════════════════════════
+
+   Shares its shimmer atom + palette with the SC SkeletonSurface
+   (src/app/service-calendar/skeleton/skeleton.css) - same keyframe
+   name, same tunable tokens, so a future adjustment to shimmer speed
+   or palette lands in one place per surface without cross-file
+   coordination. The two files can be consolidated once every non-SC
+   section is migrated. */
+
+:root {
+  --app-skeleton-base:      #E6ECF2;
+  --app-skeleton-highlight: #F5F7FA;
+  --app-skeleton-radius:    6px;
+  --app-skeleton-radius-lg: 10px;
+}
+
+@keyframes app-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.app-skel-shimmer {
+  display: inline-block;
+  background:
+    linear-gradient(
+      90deg,
+      var(--app-skeleton-base) 0%,
+      var(--app-skeleton-highlight) 50%,
+      var(--app-skeleton-base) 100%
+    );
+  background-size: 200% 100%;
+  animation: app-skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--app-skeleton-radius);
+  min-height: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-skel-shimmer {
+    animation: none;
+    background: var(--app-skeleton-base);
+  }
+}
+
+/* ─── Surface shell ─── */
+.app-skel-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 60vh;
+}
+
+.app-skel-caption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #7A8EA3;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.app-skel-caption-text {
+  font-weight: 600;
+}
+
+/* ─── Hero (portal variant) ─── */
+.app-skel-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 24px;
+  border: 1px solid var(--app-skeleton-base);
+  border-radius: var(--app-skeleton-radius-lg);
+  background: #FAFBFC;
+  min-height: 96px;
+}
+.app-skel-hero-title {
+  height: 22px;
+  width: 40%;
+  border-radius: var(--app-skeleton-radius);
+}
+.app-skel-hero-sub {
+  height: 14px;
+  width: 60%;
+  border-radius: var(--app-skeleton-radius);
+}
+
+/* ─── Toolbar (list + grid variants) ─── */
+.app-skel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--app-skeleton-base);
+  border-radius: var(--app-skeleton-radius-lg);
+  background: #FAFBFC;
+}
+.app-skel-toolbar-search {
+  flex: 1 1 auto;
+  height: 34px;
+  min-width: 120px;
+  border-radius: 999px;
+}
+.app-skel-toolbar-chip {
+  flex: 0 0 auto;
+  height: 26px;
+  width: 76px;
+  border-radius: 999px;
+}
+
+/* ─── Card row (portal variant) ─── */
+.app-skel-card-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .app-skel-card-row { grid-template-columns: 1fr; }
+}
+
+/* ─── Card grid (grid variant) ─── */
+.app-skel-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.app-skel-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--app-skeleton-base);
+  border-radius: var(--app-skeleton-radius-lg);
+  background: #FAFBFC;
+  min-height: 96px;
+}
+.app-skel-tile-top {
+  height: 14px;
+  width: 55%;
+}
+.app-skel-tile-mid {
+  height: 12px;
+  width: 90%;
+  margin-top: auto;
+}
+
+/* ─── List rows (all variants) ─── */
+.app-skel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.app-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--app-skeleton-base);
+  border-radius: var(--app-skeleton-radius-lg);
+  background: #FAFBFC;
+  min-height: 56px;
+}
+.app-skel-row-avatar {
+  flex: 0 0 auto;
+  height: 36px;
+  width: 36px;
+  border-radius: 50%;
+}
+.app-skel-row-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-skel-row-line1 { height: 12px; width: 40%; }
+.app-skel-row-line2 { height: 10px; width: 65%; }
+
+@media (max-width: 480px) {
+  .app-skel-surface { padding: 16px 12px; }
+  .app-skel-toolbar { padding: 10px 12px; }
+  .app-skel-toolbar-chip:nth-of-type(3) { display: none; }
+}

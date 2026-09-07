@@ -11,6 +11,7 @@ import LeadershipDugoutTool from "@/components/people/leadership-dugout/Leadersh
 import AdminQueue from "@/components/people/AdminQueue";
 import ConfirmModal from "@/components/people/ConfirmModal";
 import Toast from "@/components/people/Toast";
+import AppSkeleton from "@/components/loading/AppSkeleton";
 import "@/app/people/people.css";
 
 // ═══════════════════════════════════════
@@ -263,24 +264,21 @@ const showToast = useCallback((msgOrObj, type = "success") => {
     <div className="pp-app">
       {/* Fix #7: Show loading skeleton or error state until bootstrap completes */}
       {!bootstrapData ? (
-        <div className="pp-bound" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
-          {bootstrapError ? (
-            <>
-              <div style={{ fontSize: 40, marginBottom: 4 }}>⚠️</div>
-              <p style={{ color: "#64748b", fontSize: 14, fontWeight: 600 }}>Failed to load People Portal</p>
-              <button className="pp-btn pp-btn--primary" onClick={loadBootstrap} style={{ marginTop: 8 }}>Try Again</button>
-            </>
-          ) : (
-            <>
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%",
-                border: "3px solid #e9d5ff", borderTopColor: "#7c3aed",
-                animation: "pp-spin 0.8s linear infinite",
-              }} />
-              <p style={{ color: "#94a3b8", fontSize: 14, fontWeight: 600 }}>Loading People Portal...</p>
-            </>
-          )}
-        </div>
+        // 2026-09-08 loading-unification PR 2: replaced .pp-spin
+        // spinner + "Loading People Portal..." text with the shared
+        // AppSkeleton. Error state stays as a spinner-adjacent
+        // treatment because an error IS a claim (something happened)
+        // and needs the operator action button; a skeleton would
+        // hide the retry.
+        bootstrapError ? (
+          <div className="pp-bound" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 4 }}>⚠️</div>
+            <p style={{ color: "#64748b", fontSize: 14, fontWeight: 600 }}>Failed to load People Portal</p>
+            <button className="pp-btn pp-btn--primary" onClick={loadBootstrap} style={{ marginTop: 8 }}>Try Again</button>
+          </div>
+        ) : (
+          <AppSkeleton variant="portal" label="Loading People Portal" />
+        )
       ) : (
         <>
       {/* Hero */}

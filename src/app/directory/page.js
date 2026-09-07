@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import TeamGrid from '../../components/directory/TeamGrid';
 import DirectoryAdmin from '../../components/directory/DirectoryAdmin';
+import AppSkeleton, { AppSkelBar } from '@/components/loading/AppSkeleton';
 import './directory.css';
 
 const CACHE_KEY  = 'kf_td_cache';
@@ -146,6 +147,16 @@ export default function DirectoryPage() {
     return [...top, ...rest];
   }, [teams, filter, search, pinned]);
 
+  // 2026-09-08 loading-unification PR 2: when there is no cached
+  // data AND we are still loading, render the shared AppSkeleton
+  // (list variant - Directory is a searchable list). The cache-
+  // first path (teams present + still refreshing) keeps rendering
+  // real cards; the hero subtitle swaps its placeholder text for
+  // an inline shimmer bar via the ternary below, per Kevin's
+  // ruling that placeholder text is a real-looking claim.
+  if (loading && teams.length === 0) {
+    return <AppSkeleton variant="list" label="Loading Team Directory" />;
+  }
   return (
     <div className="td-page">
 
@@ -159,7 +170,9 @@ export default function DirectoryPage() {
           <div className="td-hero-content">
             <h1 className="td-hero-title">Team Directory</h1>
             <p className="td-hero-sub">
-              {loading ? 'Loading…' : getGreeting(firstName)}
+              {loading
+                ? <AppSkelBar width={220} height={16} />
+                : getGreeting(firstName)}
             </p>
           </div>
         </div>
