@@ -192,6 +192,16 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
   for (const w of weekStarts) byWeek.set(w, {
     confirmedSvcs: 0, projectedSvcs: 0, emptySlotSvcs: 0,
     actualRev: 0, projectedRev: 0,
+    // Kevin ratify R-92 PR-3 (2026-09-09). actualRevInDenom sums
+    // actual_revenue ONLY from rows in the R-85 denominator
+    // (has_projection && projected_revenue > 0). A confirmed week
+    // built from these rows gives the sum that matches the "N of X
+    // confirmed" count exactly - the previous actualRev included
+    // has_actuals rows on empty-slot services (projected_revenue = 0)
+    // which R-85 excludes from the denominator. Overview's confirmed-
+    // revenue-sum on This period reads this field so its count and
+    // figure agree by construction.
+    actualRevInDenom: 0,
     daysWithService: new Set(),
     daysWithConfirmedSvc: new Set(),
   });
@@ -200,13 +210,17 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     if (!ws || !byWeek.has(ws)) continue;
     const bucket = byWeek.get(ws);
     bucket.daysWithService.add(r.service_date);
+    const inDenom = r.has_projection && Number(r.projected_revenue || 0) > 0;
     if (r.has_actuals) {
       // Confirmed service. Counts in denominator regardless of what
       // was projected (a service that was served is a real service).
       bucket.confirmedSvcs += 1;
       bucket.actualRev += Number(r.actual_revenue || 0);
+      // R-85 denominator: this row only contributes to
+      // actualRevInDenom if it also had a real projection.
+      if (inDenom) bucket.actualRevInDenom += Number(r.actual_revenue || 0);
       bucket.daysWithConfirmedSvc.add(r.service_date);
-    } else if (r.has_projection && Number(r.projected_revenue || 0) > 0) {
+    } else if (inDenom) {
       // Real projected service - client planned to serve, hasn't been
       // confirmed yet. Counts in denominator.
       bucket.projectedSvcs += 1;
@@ -224,7 +238,7 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     const bucket = byWeek.get(ws);
     const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * MS_PER_DAY).toISOString().slice(0, 10);
 
-    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev } = bucket;
+    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev, actualRevInDenom } = bucket;
     const totalSvcs = confirmedSvcs + projectedSvcs;       // meaningful denominator
     const basis = totalSvcs === 0
       ? "forecast"                                         // no meaningful services -> nothing to compare
@@ -255,6 +269,11 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       total_services: totalSvcs,                            // meaningful denominator (non-zero projected + confirmed)
       empty_slot_services: emptySlotSvcs,                   // excluded from denominator; kept for the probe
       actual_revenue: Math.round(actualRev * 100) / 100,
+      // Kevin ratify R-92 PR-3 (2026-09-09). R-85-strict actualRev -
+      // only rows in the denom (has_projection && projected_rev > 0)
+      // contribute. Overview's confirmed-weeks-sum on This period
+      // sums this so its "N of X confirmed" count matches its figure.
+      actual_revenue_in_denom: Math.round(actualRevInDenom * 100) / 100,
       projected_revenue: Math.round(projectedRev * 100) / 100,
       revenue: basis === "forecast"
         ? Math.round(projectedRev * 100) / 100             // pure forecast: projections only

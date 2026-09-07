@@ -1,0 +1,217 @@
+<meta charset="utf-8"><title>Overview · This period · confirmed SC revenue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy-700:#153968;--navy-50:#F4F7FC;--amber-50:#FFF7ED;--amber-600:#B25800;--amber-500:#D97706;
+--green-600:#008330;--green-50:#E9FDEC;--red-600:#B9000C;--red-50:#FFEDE7;--purple:#7c3aed;--purple-50:#F5F1FE;
+--n-0:#FFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}.devbar .lbl{font-size:11px;color:#93a9c9}
+.devbar button{font-size:11px;font-weight:600;padding:5px 11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.wrap{max-width:1300px;margin:0 auto;padding:18px 22px 40px}
+.cap{font-size:11.5px;color:var(--n-600);padding:14px 22px 0;max-width:1300px;margin:0 auto;line-height:1.7}.cap b{color:var(--n-900)}
+.lane{margin-bottom:22px}
+.lane h3{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600);margin-bottom:9px}
+.lane.after h3{color:var(--navy-700)}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;box-shadow:0 1px 2px rgba(10,37,72,.04),0 2px 8px rgba(10,37,72,.05)}
+.card.rev{border-top:3px solid var(--green-600)}.card.cog{border-top:3px solid var(--red-600)}
+.card.cog.ok{border-top-color:var(--green-600)}.card.gm{border-top:3px solid var(--purple)}
+.card.mute{border-top-color:var(--n-400)}
+.card.earn{border-top-color:var(--navy-700)}
+.pnav{background:var(--navy-50);color:var(--navy-700)}
+.ch{display:flex;align-items:center;gap:8px;padding:13px 17px 0;flex-wrap:wrap}
+.ch .eb{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.pill{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;white-space:nowrap;margin-left:auto}
+.pok{background:var(--green-50);color:var(--green-600)}.pbad{background:var(--red-50);color:var(--red-600)}
+.pneu{background:var(--n-100);color:var(--n-700)}.pamb{background:var(--amber-50);color:var(--amber-600)}
+.cb{padding:12px 17px 16px}
+.orow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:3px 0}
+.orow .k{font-size:12.5px;font-weight:700;color:var(--n-600)}
+.orow .v{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.orow .v small{font-size:13.5px;font-weight:700;color:var(--n-600);margin-left:8px}
+.orow.ref .v{font-size:20px;color:var(--n-600);font-weight:700}.orow.ref .v small{font-size:12px}
+.rule{border-top:2px dashed var(--n-300);margin:11px 0}
+.foot{margin-top:12px;padding-top:11px;border-top:1px solid var(--n-200);display:flex;align-items:baseline;justify-content:space-between}
+.foot .k{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600)}
+.foot .v{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.meter{margin-top:12px;height:8px;background:var(--n-200);border-radius:4px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--navy-700);border-radius:4px}
+.src{margin-top:11px;padding:9px 12px;border-radius:8px;background:var(--navy-50);border:1px solid #C3D4EA;font-size:10px;font-weight:600;color:var(--navy-700);line-height:1.55}
+.src b{color:var(--n-900)}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px;margin-top:16px}
+.tbl th{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n-600);padding:8px 10px;text-align:right;border-bottom:1px solid var(--n-300);white-space:nowrap}
+.tbl th:first-child{text-align:left}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--n-200);text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.tbl td:first-child{text-align:left;font-weight:600}
+.tbl tr.tot td{background:var(--navy-700);color:#fff;border:none;font-weight:800}
+.wkstrip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.wk{border:1px solid var(--n-300);border-radius:8px;padding:9px 11px}
+.wk.conf{border-left:4px solid var(--green-600)}
+.wk.fc{border-left:4px solid var(--n-400);background:var(--n-50);border-style:dashed}
+.wk .n{font-size:10.5px;font-weight:800}
+.wk .s{font-size:8.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-600);margin-top:2px}
+.wk .v{font-size:14px;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
+.notes{max-width:1300px;margin:16px auto 0;padding:0 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
+.notes div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.notes h4{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.notes b{color:var(--n-900)}
+</style>
+<div class="devbar"><b>Overview · This period · confirmed SC revenue</b><span class="h">real figures · today 09/08, P10 week 1 of 4</span>
+<span class="lbl">account:</span>
+<button id="a0" class="on" onclick="setA('TBJ')">TBJ - FL</button>
+<button id="a1" onclick="setA('TBR')">TBR - FL</button><span style="width:12px"></span><span class="lbl">option:</span><button id="hA" class="on" onclick="setH('A')">A · hold everything (approved)</button><button id="hB" onclick="setH('B')">B · show a verdict</button><button id="hC" onclick="setH('C')">C · earned envelope</button></div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+<div class="notes" id="notes"></div>
+<script>
+const D={
+ TBJ:{lbl:"P10",periodBudget:{rev:108584.54,cog:64567.39,gm:44017.15},
+  cogTgt:59.46, gmTgt:40.54,
+  spent:{cog:4221.54, l3100:4222, l3200:0, l3400:0, l3500:0},
+  lines:[["3100","Kitchen labor",4222,36149,33.29],["3200","Food purchased",0,25009,23.03],
+         ["3400","Packaging and supplies",0,2655,2.44],["3500","Vehicle",0,756,0.70]],
+  weeks:[["Wk 1","09/07 – 09/13","confirmed",22961.40],["Wk 2","09/14 – 09/20","confirmed",28020.30],
+         ["Wk 3","09/21 – 09/27","forecast",20790.00],["Wk 4","09/28 – 10/04","forecast",16632.00]]},
+ TBR:{lbl:"P10",periodBudget:{rev:142248.30,cog:83356.06,gm:58892.24},
+  cogTgt:58.60, gmTgt:41.40,
+  spent:{cog:4182.70, l3100:4183, l3200:0, l3400:0, l3500:0},
+  lines:[["3100","Kitchen labor",4183,43704,30.72],["3200","Food purchased",0,31554,22.18],
+         ["3400","Packaging and supplies",0,5649,3.97],["3500","Vehicle",0,2450,1.72]],
+  weeks:[["Wk 1","09/07 – 09/13","confirmed",26237.25],["Wk 2","09/14 – 09/20","forecast",31860.00],
+         ["Wk 3","09/21 – 09/27","forecast",31860.00],["Wk 4","09/28 – 10/04","forecast",11710.00]]}};
+let A='TBJ', OPT='A';   /* Kevin ruling 2026-09-08: A. B and C kept viewable for the record. */   /* Kevin ruling 2026-09-08: option A - hold the percentages */   /* 1 = hold percentages until cost catches up · 0 = show them */
+const $=i=>document.getElementById(i);
+const m0=n=>n==null?"—":(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const p=v=>v==null?"—":v.toFixed(1)+"%";
+function conf(d){return d.weeks.filter(w=>w[2]==='confirmed').reduce((a,w)=>a+w[3],0);}
+function before(d){
+ return '<div class="row">'+
+ '<div class="card rev mute"><div class="ch"><span class="eb">Revenue '+d.lbl+'</span><span class="q">?</span><span class="pill pneu">No data</span></div><div class="cb">'+
+ '<div class="orow"><span class="k">Actuals</span><span class="v num" style="color:var(--n-600)">&mdash;</span></div>'+
+ '<div class="rule"></div><div class="orow ref"><span class="k">Projection</span><span class="v num">'+m0(d.periodBudget.rev)+'</span></div></div></div>'+
+ '<div class="card cog mute"><div class="ch"><span class="eb">Cost of goods sold</span><span class="q">?</span><span class="pill pamb">Cost, no revenue yet</span></div><div class="cb">'+
+ '<div class="orow"><span class="k">Actuals</span><span class="v num">&mdash;<small>'+m0(d.spent.cog)+'</small></span></div>'+
+ '<div class="rule"></div><div class="orow ref"><span class="k">Target</span><span class="v num">'+p(d.cogTgt)+'</span></div>'+
+ '<div style="margin-top:11px;font-size:10.5px;font-weight:700;color:var(--n-600)">P10 BUDGET TOTAL '+m0(d.periodBudget.cog)+'</div>'+
+ '<div class="meter"><i style="width:'+(d.spent.cog/d.periodBudget.cog*100).toFixed(1)+'%"></i></div>'+
+ '</div></div>'+
+ '<div class="card gm mute"><div class="ch"><span class="eb">Gross margin</span><span class="q">?</span><span class="pill pneu">No data</span></div><div class="cb">'+
+ '<div class="orow"><span class="k">Actuals</span><span class="v num" style="color:var(--n-600)">&mdash;</span></div>'+
+ '<div class="rule"></div><div class="orow ref"><span class="k">Target</span><span class="v num">'+p(d.gmTgt)+'</span></div></div></div>'+
+ '</div>';
+}
+function after(d){
+ const rev=conf(d);
+ const nConf=d.weeks.filter(w=>w[2]==='confirmed').length;
+ const cogPct=rev?d.spent.cog/rev*100:null;
+ const gmA=rev-d.spent.cog, gmPct=rev?gmA/rev*100:null;
+ const cogAdj=rev*d.cogTgt/100, gmAdj=rev*d.gmTgt/100;
+ const cogOver=cogPct>d.cogTgt, gmAhead=gmA>gmAdj;
+ let h='<div class="row">';
+ /* revenue - identical in both options */
+ h+='<div class="card rev"><div class="ch"><span class="eb">Revenue '+d.lbl+'</span><span class="q">?</span><span class="pill pok">Confirmed so far</span></div><div class="cb">'+
+  '<div class="orow"><span class="k">Confirmed</span><span class="v num" style="color:var(--green-600)">'+m0(rev)+'</span></div>'+
+  '<div class="rule"></div><div class="orow ref"><span class="k">P10 projection</span><span class="v num">'+m0(d.periodBudget.rev)+'</span></div>'+
+  '<div class="src"><b>'+nConf+' of 4 weeks confirmed</b> in the Service Calendar. The rest is forecast and will firm up as counts land.</div>'+
+  '</div></div>';
+ /* cost */
+ if(OPT==='A'){
+  h+='<div class="card cog mute"><div class="ch"><span class="eb">Cost of goods sold</span><span class="q">?</span>'+
+   '<span class="pill pamb">Invoices still arriving</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Spent so far</span><span class="v num">'+m0(d.spent.cog)+'</span></div>'+
+   '<div class="rule"></div><div class="orow ref"><span class="k">P10 budget</span><span class="v num">'+m0(d.periodBudget.cog)+'<small>'+p(d.cogTgt)+' target</small></span></div>'+
+   '<div class="src" style="background:var(--n-50);border-color:var(--n-300);color:var(--n-700)"><b>No percentage yet.</b> Revenue is confirmed ahead of the week; invoices arrive weeks later. A percentage now would read <b>'+cogPct.toFixed(1)+'%</b> and mean nothing.</div>'+
+   '</div></div>';
+ } else if(OPT==='B'){
+  h+='<div class="card cog'+(cogOver?'':' ok')+'"><div class="ch"><span class="eb">Cost of goods sold</span><span class="q">?</span>'+
+   '<span class="pill '+(cogOver?'pbad':'pok')+'">'+(cogOver?'Over target':'Under target')+'</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+(cogOver?'var(--red-600)':'var(--green-600)')+'">'+m0(d.spent.cog)+'<small style="color:'+(cogOver?'var(--red-600)':'var(--green-600)')+'">'+p(cogPct)+'</small></span></div>'+
+   '<div class="rule"></div><div class="orow ref"><span class="k">Target</span><span class="v num">'+m0(cogAdj)+'<small>'+p(d.cogTgt)+'</small></span></div>'+
+   '<div class="foot"><span class="k">'+(cogOver?'Over target':'Under target')+'</span>'+
+   '<span class="v" style="color:'+(cogOver?'var(--red-600)':'var(--green-600)')+'">'+(cogOver?'&#9650; ':'&#9660; ')+m0(Math.abs(d.spent.cog-cogAdj))+'</span></div>'+
+   '</div></div>';
+ } else {
+  h+='<div class="card cog earn"><div class="ch"><span class="eb">Cost of goods sold</span><span class="q">?</span>'+
+   '<span class="pill pnav">Earned so far</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Earned</span><span class="v num" style="color:var(--navy-700)">'+m0(cogAdj)+'<small>'+p(d.cogTgt)+' of confirmed revenue</small></span></div>'+
+   '<div class="rule"></div><div class="orow ref"><span class="k">Spent so far</span><span class="v num">'+m0(d.spent.cog)+'</span></div>'+
+   '<div class="foot"><span class="k">Left to spend</span><span class="v" style="color:var(--navy-700)">'+m0(cogAdj-d.spent.cog)+'</span></div>'+
+   '<div class="src">Budget <b>earned by the revenue confirmed so far</b>, not the whole period. It grows as more weeks confirm. <b>No verdict - invoices are still arriving.</b></div>'+
+   '</div></div>';
+ }
+ /* margin */
+ if(OPT==='A'){
+  h+='<div class="card gm mute"><div class="ch"><span class="eb">Gross margin</span><span class="q">?</span>'+
+   '<span class="pill pneu">Waiting on cost</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:var(--n-600)">&mdash;</span></div>'+
+   '<div class="rule"></div><div class="orow ref"><span class="k">P10 budget</span><span class="v num">'+m0(d.periodBudget.gm)+'<small>'+p(d.gmTgt)+' target</small></span></div>'+
+   '<div class="src" style="background:var(--n-50);border-color:var(--n-300);color:var(--n-700)">Margin needs both sides. <b>Revenue is confirmed, cost is not.</b> It arrives when the invoices do.</div>'+
+   '</div></div>';
+ } else if(OPT==='B'){
+  h+='<div class="card gm"><div class="ch"><span class="eb">Gross margin</span><span class="q">?</span>'+
+   '<span class="pill '+(gmAhead?'pok':'pbad')+'">'+(gmAhead?'Ahead of target':'Behind target')+'</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+(gmAhead?'var(--green-600)':'var(--red-600)')+'">'+m0(gmA)+'<small style="color:'+(gmAhead?'var(--green-600)':'var(--red-600)')+'">'+p(gmPct)+'</small></span></div>'+
+   '<div class="rule"></div><div class="orow ref"><span class="k">Target</span><span class="v num">'+m0(gmAdj)+'<small>'+p(d.gmTgt)+'</small></span></div>'+
+   '<div class="foot"><span class="k">'+(gmAhead?'Ahead of target':'Behind target')+'</span>'+
+   '<span class="v" style="color:'+(gmAhead?'var(--green-600)':'var(--red-600)')+'">'+(gmAhead?'&#9650; ':'&#9660; ')+m0(Math.abs(gmA-gmAdj))+'</span></div>'+
+   '</div></div>';
+ } else {
+  h+='<div class="card gm earn"><div class="ch"><span class="eb">Gross margin</span><span class="q">?</span>'+
+   '<span class="pill pnav">Earned so far</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Earned</span><span class="v num" style="color:var(--navy-700)">'+m0(gmAdj)+'<small>'+p(d.gmTgt)+' of confirmed revenue</small></span></div>'+
+   '<div class="rule"></div><div class="orow ref"><span class="k">P10 budget</span><span class="v num">'+m0(d.periodBudget.gm)+'</span></div>'+
+   '<div class="src">What the confirmed revenue is worth at target. <b>The result arrives when the cost does.</b></div>'+
+   '</div></div>';
+ }
+ h+='</div>';
+ /* week strip - both options */
+ h+='<div class="wkstrip">';
+ d.weeks.forEach(w=>{h+='<div class="wk '+(w[2]==='confirmed'?'conf':'fc')+'"><div class="n">'+w[0]+'</div>'+
+  '<div class="s">'+w[2]+' &middot; '+w[1]+'</div><div class="v">'+m0(w[3])+'</div></div>';});
+ h+='</div>';
+ /* cost lines */
+ h+= OPT==='B'
+  ? '<table class="tbl"><tr><th>Line</th><th>Actual</th><th>% of confirmed rev</th><th>Target %</th><th>P10 budget</th></tr>'
+  : OPT==='C'
+  ? '<table class="tbl"><tr><th>Line</th><th>Earned so far</th><th>Spent so far</th><th>Left</th><th>Target %</th></tr>'
+  : '<table class="tbl"><tr><th>Line</th><th>Spent so far</th><th>P10 budget</th><th>Target %</th></tr>';
+ d.lines.forEach(l=>{
+  const pc=rev?l[2]/rev*100:null;
+  const earned=rev*l[4]/100;
+  h+= OPT==='B'
+   ? '<tr><td>'+l[0]+'  '+l[1]+'</td><td>'+m0(l[2])+'</td><td style="color:'+((pc||0)>l[4]?'var(--red-600)':'var(--green-600)')+'">'+p(pc)+'</td><td style="color:var(--n-600);font-weight:600">'+p(l[4])+'</td><td style="color:var(--n-600);font-weight:600">'+m0(l[3])+'</td></tr>'
+   : OPT==='C'
+   ? '<tr><td>'+l[0]+'  '+l[1]+'</td><td style="color:var(--navy-700)">'+m0(earned)+'</td><td>'+m0(l[2])+'</td><td style="color:var(--navy-700);font-weight:800">'+m0(earned-l[2])+'</td><td style="color:var(--n-600);font-weight:600">'+p(l[4])+'</td></tr>'
+   : '<tr><td>'+l[0]+'  '+l[1]+'</td><td>'+m0(l[2])+'</td><td style="color:var(--n-600);font-weight:600">'+m0(l[3])+'</td><td style="color:var(--n-600);font-weight:600">'+p(l[4])+'</td></tr>';});
+ h+= OPT==='B'
+  ? '<tr class="tot"><td>Total cost of goods</td><td>'+m0(d.spent.cog)+'</td><td>'+p(cogPct)+'</td><td>'+p(d.cogTgt)+'</td><td>'+m0(d.periodBudget.cog)+'</td></tr></table>'
+  : OPT==='C'
+  ? '<tr class="tot"><td>Total cost of goods</td><td>'+m0(cogAdj)+'</td><td>'+m0(d.spent.cog)+'</td><td>'+m0(cogAdj-d.spent.cog)+'</td><td>'+p(d.cogTgt)+'</td></tr></table>'
+  : '<tr class="tot"><td>Total cost of goods</td><td>'+m0(d.spent.cog)+'</td><td>'+m0(d.periodBudget.cog)+'</td><td>'+p(d.cogTgt)+'</td></tr></table>';
+ return h;
+}
+const NOTES=[
+ '<h4>What is on the board today</h4>The Service Calendar has <b>two full weeks of confirmed counts on TBJ - FL</b> - 12 of 12 services each, <b>$22,961</b> and <b>$28,020</b>. Labor reads both.<br><br><b>The Overview shows nothing.</b> Every revenue line reads null and every percentage on the page is blank.<br><br>It is not ignoring the Service Calendar - it reads <b>SC through the last closed week</b>, and no week of P10 has closed.',
+ '<h4>What changes</h4>Revenue actual becomes <b>the confirmed weeks</b>, and the card says how many. <b>Cost and margin hold their percentages</b> until cost catches up - Kevin&rsquo;s ruling. Revenue is confirmed ahead of the week and invoices arrive weeks later, so a percentage now reads <b>8.3% cost and 91.7% margin</b>: right arithmetic, wrong story.<br><br><b>Forecast weeks are not counted as actual.</b> They appear in the week strip so a chef can see what is still to firm up, but the percentage is computed on confirmed revenue only.<br><br><b>The progress bar comes off the cost card</b> - Kevin\&rsquo;s ruling.',
+ '<h4>The rule this needs</h4><b>A week counts once its counts are confirmed, not once it has closed.</b><br><br>That is already how Labor works, and it is why the two boards disagree today.<br><br><b>TBR - FL is the other case</b> - one confirmed week, three forecast. The board should read <b>$26,237 confirmed</b>, not nothing, and say <b>1 of 4</b>.'];
+function render(){
+ const d=D[A];
+ $("app").innerHTML='<div class="lane"><h3>Today</h3>'+before(d)+'</div>'+
+  '<div class="lane after"><h3>Reading confirmed Service Calendar revenue</h3>'+after(d)+'</div>';
+ const rev=conf(d), n=d.weeks.filter(w=>w[2]==='confirmed').length;
+ $("cap").innerHTML='<b>'+(A==='TBJ'?'TBJ - FL':'TBR - FL')+' · P10, day 2.</b> The Service Calendar has <b>'+n+' of 4 weeks confirmed</b> - <b>'+m0(rev)+'</b>. The Overview shows <b>nothing</b>; Labor reads all of it. Below, the same board with confirmed revenue as the actual.';
+ $("notes").innerHTML=NOTES.map(x=>'<div>'+x+'</div>').join('');
+ $("a0").className=A==='TBJ'?'on':''; $("a1").className=A==='TBR'?'on':'';
+ $("hA").className=OPT==="A"?"on":""; $("hB").className=OPT==="B"?"on":""; $("hC").className=OPT==="C"?"on":"";
+ $("app").querySelector(".lane.after h3").innerHTML = OPT==="A"? "A · confirmed revenue, everything else held" : OPT==="B"? "B · confirmed revenue, a verdict on it" : "C · confirmed revenue, the envelope it earned";
+}
+function setA(a){A=a;render();}
+function setH(v){OPT=v;render();}
+render();
+</script>

@@ -31,6 +31,7 @@ import { performance } from "node:perf_hooks";
 // Labor + purchasing engines (library-call, no HTTP hop).
 import { buildBoard, computeBudgetToDateDays as computeLaborBudgetToDateDays } from "@/app/kpi/labor/lib/board.js";
 import { paginateActuals as paginateLaborActuals, resolveMemberBudget } from "@/lib/labor/loaders.js";
+import { loadWeeklyRevenueBasis as loadWeeklyRevenueBasisForOverview } from "@/lib/labor/labor-week-basis.js";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta.js";
 import { buildWorkerToEmail, countDistinctPeople } from "@/lib/labor/personCount.js";
 // Salary-side loaders + merge helper. Overview ALWAYS composes labor
@@ -1061,6 +1062,27 @@ export async function resolveOverview({
     totalRevenue = null;
   }
 
+  // Kevin R-92 (2026-09-09). On a running single period the standard
+  // SC path caps at capBeforeToday (today - 1) and misses the week's
+  // confirmed counts entered ahead of the day. Labor already reads
+  // per-week SC and treats a week as CONFIRMED when every projected
+  // service has a count - "a week counts once its counts are
+  // confirmed, not once it has closed." Overview follows the same
+  // rule on This period: revenue actual becomes the sum of confirmed
+  // weeks; the card names the count ("2 of 4 weeks confirmed in the
+  // Service Calendar"). Cost + margin cards HOLD (see cards[]
+  // overrides below and client gate).
+  //
+  // Only runs on a running single period (rng.kind === "period" +
+  // displayPeriodState === "open"). Every other range keeps its
+  // existing totalRevenue path.
+  // R-92 declarations moved below displayPeriodState (line 1130ish)
+  // to escape TDZ - the reference read displayPeriodState before its
+  // let-declaration and threw "Cannot access 'displayPeriodState'
+  // before initialization". See block below.
+  let confirmedWeeksCount = null;
+  let totalWeeksCount = null;
+
   // 11. Gross margin.
   // grossMargin (dollars) depends on totalRevenue - under
   // sc_counts_without_dollars it correctly nulls out. grossMarginBudget
@@ -1103,6 +1125,46 @@ export async function resolveOverview({
       todayISO: today,
       periodStatusRow: periodStatus.get(displayPeriodNo) || null,
     });
+  }
+
+  // Kevin R-92 (2026-09-09). Confirmed-weeks SC read for This period.
+  // Placed here (right after displayPeriodState resolves) so the
+  // isRunningSinglePeriod gate can key off displayPeriodState.
+  // Overrides totalRevenue when the range is a running single period
+  // and at least one week's SC counts are all confirmed - Labor
+  // already reads per-week and treats a week as CONFIRMED when every
+  // projected service has a count. Overview follows the same rule
+  // on This period: revenue actual becomes the sum of confirmed
+  // weeks; the card names the count. Cost + margin cards HOLD (see
+  // cards[] pill overrides + client gate).
+  const isRunningSinglePeriod = rng.kind === "period" && displayPeriodState === "open";
+  if (isRunningSinglePeriod && effRevSource === "sc") {
+    const wkBasis = await loadWeeklyRevenueBasisForOverview(supa, {
+      members, start: rng.start, end: rng.end, today,
+    });
+    if (wkBasis?.data?.length) {
+      const weeks = wkBasis.data;
+      totalWeeksCount = weeks.length;
+      const confirmedWks = weeks.filter(w => w.basis === "confirmed");
+      confirmedWeeksCount = confirmedWks.length;
+      // Kevin ratify (2026-09-09). Revenue for a confirmed week is
+      // EVERYTHING the operator entered - full actuals, no filter
+      // on whether a service was in the R-85 denominator. Kevin's
+      // rule: "a confirmed week is one the operator confirmed and
+      // saved. If they put in 160 breakfasts, 160 lunches and 6
+      // dinners, that is the week." R-85 (denom-only) is for
+      // COUNTING which weeks are confirmed - not for the revenue
+      // figure. Prior code used actual_revenue_in_denom here and
+      // reverted after Kevin's ratify; the $208 he traced to a
+      // stray forecast week was a week-boundary error in his own
+      // query, not a real leak.
+      const confirmedSum = confirmedWks.reduce((s, w) => s + Number(w.revenue || 0), 0);
+      if (confirmedSum > 0) {
+        totalRevenue = Math.round(confirmedSum * 100) / 100;
+        totalRevReported = true;
+        totalRevSources.add("sc_daily_revenue");
+      }
+    }
   }
 
   // 13. Flags block.
@@ -1237,6 +1299,15 @@ export async function resolveOverview({
       hero_actual: totalRevenue,
       hero_actual_display: formatMoneyWhole(totalRevenue),
       hero_reported: totalRevReported,
+      // Kevin R-92 (2026-09-09). Confirmed-weeks count for the
+      // running-period card caption: "N of X weeks confirmed in the
+      // Service Calendar. The rest is forecast and will firm up as
+      // counts land." Null on every other range - client omits the
+      // caption. See the confirmed-weeks override on totalRevenue
+      // above; these two fields expose the same computation for
+      // the card face.
+      confirmed_weeks_count: confirmedWeeksCount,
+      total_weeks_count: totalWeeksCount,
       budget_to_date: revenue_budget_to_date,
       budget_to_date_display: formatMoneyWhole(revenue_budget_to_date),
       budget_full_period: revenue_budget_full_period,
@@ -1277,7 +1348,16 @@ export async function resolveOverview({
         // projection". Trending state on open-mid-period is preserved
         // (real semantic distinction from the settled verdict on a
         // closed range).
+        //
+        // Kevin R-92 (2026-09-09): on a running single period with
+        // confirmed-weeks revenue, the pill reads "Confirmed so
+        // far" green - names what the figure is. The trending
+        // state above only fires on ranges where no week is fully
+        // confirmed yet (SC still filling in).
         const openRange = displayPeriodState === "open";
+        if (isRunningSinglePeriod && confirmedWeeksCount != null && confirmedWeeksCount > 0) {
+          return { label: "Confirmed so far", tone: "good" };
+        }
         if (Math.abs(revenueDelta) < 1) {
           return { label: "on projection", tone: openRange ? "neutral" : "good" };
         }
@@ -1337,6 +1417,12 @@ export async function resolveOverview({
       pill: (() => {
         // PR-1 item 1: rolling window -> "No target", neutral tone.
         if (!has_target) return { label: "No target", tone: "neutral" };
+        // Kevin R-92 (2026-09-09). On a running single period the
+        // cost pct is HELD - revenue is confirmed ahead of the week
+        // and invoices arrive weeks later, so a percentage now
+        // reads 8.3% and means nothing. Pill names the state that
+        // is preventing a verdict.
+        if (isRunningSinglePeriod) return { label: "Invoices still arriving", tone: "wait" };
         // Kevin PR-B item 4 (2026-09-03): the pill reads OVER BUDGET
         // / UNDER BUDGET, tied to total cost of goods against its
         // adjusted budget - not a count of lines and not the % gap.
@@ -1412,6 +1498,10 @@ export async function resolveOverview({
       pill: (() => {
         // PR-1 item 1: rolling window -> "No target", neutral tone.
         if (!has_target) return { label: "No target", tone: "neutral" };
+        // Kevin R-92 (2026-09-09). On a running single period the
+        // margin verdict is HELD - margin needs both sides and cost
+        // is not confirmed. Pill names what the card is waiting on.
+        if (isRunningSinglePeriod) return { label: "Waiting on cost", tone: "neutral" };
         // Kevin walkthrough sweep item 6 (2026-09-07). Split the No
         // data case: if target exists but actual is a real number and
         // gmPctActual can't compute (needs revenue as denominator),

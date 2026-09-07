@@ -34,7 +34,12 @@ function fmt$(v) {
 
 function derive(card, kind) {
   const tone = card?.pill?.tone;
-  if (tone === "neutral") return { hasFoot: false };
+  // R-92 (2026-09-09): cost + margin pills go "wait" tone on TP
+  // single-open. Client HOLD path renders no footer regardless.
+  // Revenue on TP renders a confirmed-weeks caption in place of the
+  // footer. Both surface no footer.
+  if (tone === "neutral" || tone === "wait") return { hasFoot: false };
+  if (kind === "revenue" && card?.confirmed_weeks_count != null) return { hasFoot: false };
   let delta;
   if (kind === "revenue") {
     delta = card?.delta_dollars;
