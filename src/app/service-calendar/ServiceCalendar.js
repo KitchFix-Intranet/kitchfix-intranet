@@ -1572,7 +1572,44 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // (setYearData(d.months) at :901 stores just the months array), but
   // it's cleared alongside `data` in the account-switch effect, so
   // the data clause covers the shared window.
-  const isAccountLoading = !!selectedAccount && (
+  // 2026-09-08 loading-unification PR: drop the `!!selectedAccount`
+  // clause that used to sit in front of this predicate. Prior shape
+  // gated on account-truthy first, which meant the pre-URL-hydration
+  // window (initial mount, selectedAccount === "") resolved to FALSE,
+  // and every `!isAccountLoading && ...` render clause fired against
+  // empty state - producing the placeholder statements ("Pick a
+  // period from the Season grid", "Select...", "TODAY -", "$0.00
+  // ENTERED") that Kevin's production RAF traces observed at 35ms
+  // on hard refresh + at the equivalent frame on Ops -> SC. The
+  // guiding principle: skeletons make no claim; spinners and empty
+  // states both make wrong ones. Any future extender of this gate
+  // MUST NOT reintroduce a truthy-check on selectedAccount here -
+  // treat that pre-hydration window as loading, not as absent.
+  //
+  // The two working paths (period-switch, account-switch) are
+  // unaffected: both hold selectedAccount truthy the entire time,
+  // so the new `!selectedAccount` clause is inert on both. Verified
+  // via RAF trace before/after (see PR body).
+  // 2026-09-08 loading-unification PR: drop the `!!selectedAccount`
+  // clause that used to sit in front of this predicate. Prior shape
+  // gated on account-truthy first, which meant the pre-URL-hydration
+  // window (initial mount, selectedAccount === "") resolved to FALSE,
+  // and every `!isAccountLoading && ...` render clause fired against
+  // empty state - producing the placeholder statements ("Pick a
+  // period from the Season grid", "Select...", "TODAY -", "$0.00
+  // ENTERED") that Kevin's production RAF traces observed at 35ms
+  // on hard refresh + at the equivalent frame on Ops -> SC. The
+  // guiding principle: skeletons make no claim; spinners and empty
+  // states both make wrong ones. Any future extender of this gate
+  // MUST NOT reintroduce a truthy-check on selectedAccount here -
+  // treat that pre-hydration window as loading, not as absent.
+  //
+  // The two working paths (period-switch, account-switch) are
+  // unaffected: both hold selectedAccount truthy the entire time,
+  // so the new `!selectedAccount` clause is inert on both. Verified
+  // via RAF trace before/after (see PR body).
+  const isAccountLoading = (
+    !selectedAccount ||
     !data ||
     data?.account?.key !== selectedAccount ||
     !yearData ||
