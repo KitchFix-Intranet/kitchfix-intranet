@@ -38,7 +38,7 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 // then call the shared period-basis module. See
 // src/lib/kpi/shared/periodBasis.js for the R-77 invariant + rules.
 import { loadOverviewBudgets, computeContractualAccrualByPeriod, sumPeriodRevenue } from "@/lib/kpi/shared/periodBasis.js";
-import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore, recomputeVerdictFromPanel } from "@/lib/labor/labor-batr.js";
+import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore, recomputeVerdictFromPanel, recomputePanelBatrFromPerWeek } from "@/lib/labor/labor-batr.js";
 import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
 // only consumed by paginateActuals / resolveMemberBudget /
@@ -1406,6 +1406,12 @@ export async function GET(request) {
     contractualAccrualByPeriod: contractualAccrualSingle,
     verifiedPeriodTotals: verifiedPeriodTotalsSingle,
   });
+  // Kevin post-1057 sweep item 2 (2026-09-08). R-86 · a period's
+  // target percent is its own, never the annual one. Sum per-week
+  // batr and overwrite panel batr so it equals the table's total.
+  // Runs BEFORE recomputeVerdictFromPanel so verdict picks up the
+  // corrected batr.
+  recomputePanelBatrFromPerWeek(boardSingle);
   // Kevin post-1051 sweep item 1: verdict must use the panel-
   // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
   // week batr fallback has data.
@@ -1500,6 +1506,8 @@ export async function GET(request) {
       contractualAccrualByPeriod: contractualAccrualSingle,
       verifiedPeriodTotals: verifiedPeriodTotalsSingle,
     });
+    // Post-1057 sweep item 2: R-86 per-period pct on the panel.
+    recomputePanelBatrFromPerWeek(bodySingle.board);
     // Post-1051 sweep item 1: verdict recompute against panel figure
     // after per-week batr lands.
     recomputeVerdictFromPanel(bodySingle.board);

@@ -63,12 +63,19 @@ function isoMinusDay(iso) {
   return d.toISOString().slice(0, 10);
 }
 
-// V8-7 verdict label + variant. One source of truth for the pill in
-// the spend card header (was in the retired sentence card's helper).
+// Verdict pill in the SpendCard header. One source of truth.
+// Kevin post-1057 sweep item 1 (2026-09-08): pill copy names the
+// TARGET, not the budget. "Over target" / "On target" reads with
+// the percent-first body, and mirrors the Overview cost card's
+// language directly. Prior copy ("OVER BUDGET", "ON TRACK") talked
+// about the dollar comparison; the panel is now a percent-first
+// board and the pill has to match. "watch" (0.5-3% over) stays as
+// an amber "Watch" pill - a real distinction Kevin ruled worth
+// keeping (post-1051 sweep item 2).
 function verdictDisplay(verdict) {
-  if (verdict === "on_track") return { label: "ON TRACK", cls: "good" };
-  if (verdict === "watch")    return { label: "WATCH",    cls: "warn" };
-  if (verdict === "over")     return { label: "OVER BUDGET", cls: "bad" };
+  if (verdict === "on_track") return { label: "On target", cls: "good" };
+  if (verdict === "watch")    return { label: "Watch", cls: "warn" };
+  if (verdict === "over")     return { label: "Over target", cls: "bad" };
   return null;
 }
 
@@ -173,7 +180,22 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
   // no verdict on a range that hasn't happened. Straddling ranges
   // (start <= today <= end) keep their pill because they ARE in
   // progress and the verdict is honest.
-  const vd = isFutureRange ? null : verdictDisplay(board?.verdict);
+  //
+  // Kevin post-1057 sweep item 3 (2026-09-08): This period on day 1
+  // has no revenue earned, so labour-as-percent-of-revenue can't be
+  // computed. Pill reads "Nothing earned yet" (neutral) instead of
+  // an on/off-target verdict against a comparison that doesn't
+  // exist. Detected via total_revenue_for_batr = null. Overrides
+  // the server verdict for this case only.
+  const revenueEarnedForPanel = (typeof board?.total_revenue_for_batr === "number" && board.total_revenue_for_batr > 0)
+    ? board.total_revenue_for_batr
+    : null;
+  const noRevenueYet = revenueEarnedForPanel == null;
+  const vd = isFutureRange
+    ? null
+    : noRevenueYet
+      ? { label: "Nothing earned yet", cls: "neu" }
+      : verdictDisplay(board?.verdict);
 
   // Left-cell (Spent so far) sub. Always the % of budget. On a
   // future range the sub reads "this range has not started" in muted
@@ -366,92 +388,114 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         </div>
       </div>
 
-      {/* Kevin Labor PR-A item 6 flip (2026-09-07): ACTUAL LEADS. The
-          hero position - navy accent, largest weight - was Budget;
-          it becomes Actual (spent). Budget moves to the left of the
-          pair beneath the hero. The V29-6 "BUDGET LEADS" ruling
-          predates the R-77 fix; with the comparison basis now
-          adjusted-at-revenue and the two boards agreed to the cent,
-          Actual becomes the story the eye lands on - matching the
-          Overview's card grammar.
-          CSS classes (.kpi-spend-budget-*) kept as-is so the visual
-          size + accent survive the semantic swap. */}
+      {/* Kevin post-1057 sweep item 1 + 3 (2026-09-08). Panel reads
+          percent-first, same grammar as the Overview's cost card.
+          Render of record: docs/renders/labor-panel-percent-first.html.
+          Actual row (big % + small $) over Target row (smaller,
+          muted) over foot with dollar variance + arrow.
+          Item 3: when no revenue has been earned yet (This period
+          day 1), keep dollars and add the "No percentage yet" copy
+          block. Computing % against a full-period basis would read
+          4.8% on TBJ - FL P10 - looks like a triumph. Not that. */}
       {(() => {
-        const actualText = fmt$(spent);
-        const isLong = actualText.length > 11;
-        const heroLabel = isFutureRange ? "Actual" : (isPeriod ? "Spent in Period" : "Actual · to date");
-        // Sub-line beneath the hero: on multi-period ranges with the
-        // running-period exclusion in force, name the closed-only
-        // window explicitly so a reader does not mistake the figure
-        // for the whole range. Falls back to % of budget otherwise
-        // (parity with the pre-flip cell sub).
-        const heroSub = (() => {
-          if (isFutureRange) return "this range has not started";
-          if (isMultiWithClosedSubset) {
-            // Kevin walkthrough sweep item 8 (2026-09-07). Prior sub
-            // read "36 closed weeks · running period not counted" while
-            // the WeekTable below said "TOTAL · 10 PERIODS · 37 WEEKS".
-            // Both true, both on screen, and they looked like a
-            // disagreement. Name the total explicitly so the reader
-            // sees "36 of 37 · P10 not counted" as ONE statement.
-            const closedWks = board?.closed_weeks_in_range ?? null;
-            const totalWks = Array.isArray(board?.weeks) ? board.weeks.length : null;
-            if (closedWks != null && totalWks != null && totalWks > closedWks) {
-              return `${closedWks} of ${totalWks} weeks closed · running period not counted`;
-            }
-            return closedWks != null
-              ? `${closedWks} closed weeks · running period not counted`
-              : "running period not counted";
-          }
-          return spentPct != null ? `${spentPct}% of budget` : "";
-        })();
+        if (noBudget) {
+          return (
+            <>
+              <div className="kpi-spend-pf-row">
+                <span className="k">{isPeriod ? "Spent in Period" : "Actual · to date"}</span>
+                <span className="v num">{fmt$(spent)}</span>
+              </div>
+              <div className="kpi-spend-pf-rule" />
+              <div className="kpi-spend-pf-row ref">
+                <span className="k">Budget</span>
+                <span className="v num" style={{ color: "var(--text-subtle)" }}>—</span>
+              </div>
+              <div className="kpi-spend-pf-nodata">
+                <b>{kind === "no_budget" ? "No budget for this range." : "Envelope-based - no fixed budget."}</b>
+              </div>
+            </>
+          );
+        }
+        const weeks = board?.weeks || [];
+        // Revenue basis for the actual %. board.total_revenue_for_batr
+        // is set by attachBatrToBoard = sum of per-period revenue from
+        // the Overview picker (closed periods only). Null on This
+        // period (no closed periods in range). actPct null in that
+        // case - card falls to "No percentage yet".
+        const revenueEarned = (typeof board?.total_revenue_for_batr === "number") ? board.total_revenue_for_batr : null;
+        // Target % denominator on TP falls to the forecast total so
+        // the tile can carry a legitimate "% target" figure - render
+        // of record's tgtPct=33.29 on TBJ - FL P10.
+        const rangeRevenueForTgt = revenueEarned != null && revenueEarned > 0
+          ? revenueEarned
+          : (() => {
+              const s = weeks.reduce((acc, w) => acc + (w.week_revenue != null ? Number(w.week_revenue) : 0), 0);
+              return s > 0 ? s : null;
+            })();
+        const actPct = (revenueEarned != null && revenueEarned > 0 && spent != null)
+          ? (Number(spent) / revenueEarned) * 100 : null;
+        const tgtPct = (rangeRevenueForTgt != null && budget != null && budget > 0)
+          ? (Number(budget) / rangeRevenueForTgt) * 100 : null;
+        const over = variance != null && variance > 0.005;
+        const under = variance != null && variance < -0.005;
+        const signCls = over ? "over" : under ? "under" : "";
+        const arrow = over ? "▲" : under ? "▼" : "";
+        if (actPct != null && !isFutureRange) {
+          return (
+            <>
+              <div className="kpi-spend-pf-row">
+                <span className="k">Actual</span>
+                <span className={`v num ${signCls}`}>
+                  {actPct.toFixed(1)}%
+                  <small>{fmt$(spent)}</small>
+                </span>
+              </div>
+              <div className="kpi-spend-pf-rule" />
+              <div className="kpi-spend-pf-row ref">
+                <span className="k">Target</span>
+                <span className="v num">
+                  {tgtPct != null ? `${tgtPct.toFixed(1)}%` : "—"}
+                  <small>{fmt$(budget)}</small>
+                </span>
+              </div>
+              <div className="kpi-spend-pf-foot">
+                <span className="k">{over ? "Over target" : under ? "Under target" : "On target"}</span>
+                <span className={`v ${signCls}`}>
+                  {arrow ? `${arrow} ` : ""}{fmt$(Math.abs(variance || 0))}
+                </span>
+              </div>
+            </>
+          );
+        }
+        // No revenue yet (TP day 1) OR future range. Dollars + copy.
+        const spentUsedPct = (budget != null && budget > 0 && spent != null)
+          ? (Number(spent) / Number(budget)) * 100 : null;
         return (
-          <div className="kpi-spend-budget">
-            <span className="kpi-spend-budget-accent" aria-hidden="true" />
-            <div className="kpi-spend-budget-lab">{heroLabel}</div>
-            <div className="kpi-spend-budget-val num" data-long={isLong ? "true" : "false"} data-kpi-labor-hero="actual">{actualText}</div>
-            <div className="kpi-spend-budget-sub">{heroSub}</div>
-          </div>
+          <>
+            <div className="kpi-spend-pf-row">
+              <span className="k">Spent so far</span>
+              <span className="v num">{fmt$(spent)}</span>
+            </div>
+            <div className="kpi-spend-pf-rule" />
+            <div className="kpi-spend-pf-row ref">
+              <span className="k">Budget</span>
+              <span className="v num">
+                {fmt$(budget)}
+                {tgtPct != null && <small>{tgtPct.toFixed(1)}% target</small>}
+              </span>
+            </div>
+            <div className="kpi-spend-pf-nodata">
+              {isFutureRange
+                ? <><b>Range has not started.</b> No spend, no revenue, nothing to be a percent of.</>
+                : <>
+                    <b>No percentage yet.</b> Labour as a percent of revenue needs revenue, and no week of this period has closed.
+                    {spentUsedPct != null && <> <b>{spentUsedPct.toFixed(1)}% of the budget used.</b></>}
+                  </>
+              }
+            </div>
+          </>
         );
       })()}
-
-      {/* Pair below: Budget (was Spent) on the left, verdict (was
-          Left-or-Under-Over) on the right. When there is no budget,
-          the pair mutes on both sides.
-          Kevin ruling 2026-09-07: the "Left to spend" running-period
-          concept is retired from this pair - Actual leads now, and
-          "how many days remain" belongs in the running-week sub of
-          PR-B rather than the SpendCard pair. */}
-      <div className="kpi-spend-pair">
-        <div className={`kpi-spend-cell ${noBudget ? "kpi-spend-cell-mute" : ""}`}>
-          {/* Walkthrough item 1 - label follows what is shown. Prior
-              code hardcoded "Adjusted budget" even when the value
-              fell back to the raw range_budget (TBJ - FL P9 defect).
-              Now: "Adjusted budget" only when the figure sums from
-              per-week batr or reads range-level batr; otherwise
-              plain "Budget" so the label does not lie about the
-              figure. */}
-          <div className="kpi-spend-cell-lab">{noBudget ? "no budget" : (budgetIsAdjusted ? "Adjusted budget" : "Budget")}</div>
-          <div className="kpi-spend-cell-val num">{noBudget ? "—" : fmt$(budget)}</div>
-          <div className="kpi-spend-cell-sub">{budgetSub}</div>
-        </div>
-        {isFutureRange ? (
-          /* Owner ruling 2026-08-24: no variance line, no colour on a
-             future range. Right cell renders a muted em-dash so the
-             two-column layout does not shift. */
-          <div className="kpi-spend-cell kpi-spend-cell-mute">
-            <div className="kpi-spend-cell-lab">vs budget</div>
-            <div className="kpi-spend-cell-val num">–</div>
-            <div className="kpi-spend-cell-sub"></div>
-          </div>
-        ) : (
-          <div className={`kpi-spend-cell ${right.variantCls}`}>
-            <div className="kpi-spend-cell-lab">{right.label}</div>
-            <div className="kpi-spend-cell-val num">{right.value}</div>
-            <div className="kpi-spend-cell-sub">{right.sub}</div>
-          </div>
-        )}
-      </div>
 
       {/* Salary PR 3 C3 - salary vacancy line. States the arithmetic;
           never guesses the cause (spec is explicit: "under budget can
@@ -983,6 +1027,18 @@ function WeekRail({ board }) {
         if (basis === "partial" && w.total_services > 0) {
           partialSub = `${w.confirmed_services} of ${w.total_services} services confirmed · budget will move`;
         }
+        // Kevin post-1057 sweep item 4 (2026-09-08). Week cards read
+        // the same language as the panel above them - percent where
+        // a percentage exists, dollars where it does not. Closed +
+        // running weeks with revenue carry an actual %/target %
+        // sub-caption; the ▲/▼ dollar variance stays the primary
+        // verdict line.
+        let pctSub = null;
+        if (revenue != null && revenue > 0 && spent != null && budget != null && budget > 0) {
+          const actP = (Number(spent) / Number(revenue)) * 100;
+          const tgtP = (Number(budget) / Number(revenue)) * 100;
+          pctSub = `${actP.toFixed(1)}% actual · ${tgtP.toFixed(1)}% target`;
+        }
 
         return (
           <div
@@ -1023,6 +1079,7 @@ function WeekRail({ board }) {
             <div className={vdCls}>{vdText}</div>
             {subText && <div className="kpi-wrail-sub">{subText}</div>}
             {partialSub && <div className="kpi-wrail-sub">{partialSub}</div>}
+            {pctSub && <div className="kpi-wrail-sub">{pctSub}</div>}
             {isDerivedFromPnl && (
               <div className="kpi-wrail-sub" title={derivedTooltip}>
                 distributed by SC shape · derived, not measured

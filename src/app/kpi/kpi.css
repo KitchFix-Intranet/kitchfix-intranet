@@ -1946,6 +1946,11 @@
 .kpi-vpill-good { background: var(--green-100); color: var(--green-700); border-color: #B5EAC8; }
 .kpi-vpill-warn { background: var(--amber-100); color: #92580A; border-color: #F3D9AE; }
 .kpi-vpill-bad  { background: var(--red-100);   color: var(--red-700);   border-color: #F3C4C4; }
+/* Kevin post-1057 sweep item 3 (2026-09-08): "Nothing earned yet"
+   pill on This period day 1 - no revenue, no percentage. Neutral
+   grey so the pill doesn't imply verdict either way. Matches the
+   render's `pneu` treatment. */
+.kpi-vpill-neu  { background: var(--n-100);     color: var(--n-700);     border-color: var(--n-300); }
 
 /* 2026-08-27 staleness banner - fires when max(labor_actuals.derived_at)
    or max(labor_actuals_daily.derived_at) is > 30h old. Amber tone
@@ -2302,6 +2307,66 @@
    render distinctly (standing owner rule). */
 .kpi-spend-cell-mute .kpi-spend-cell-val { color: var(--text-subtle); }
 .kpi-spend-cell-mute .kpi-spend-cell-lab { color: var(--text-subtle); }
+
+/* Kevin post-1057 sweep item 1 (2026-09-08). Percent-first panel
+   layout. Same grammar as the Overview's cost card: Actual row
+   (big percent + small dollars) over Target row (smaller, muted)
+   over a foot with variance dollars + arrow. Kevin's ruling: no
+   points figure, arrow next to number, pill reads "Over target"
+   or "On target". Render of record: docs/renders/labor-panel-
+   percent-first.html. */
+.kpi-spend-pf-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--kpi-sp-3);
+  padding: var(--kpi-sp-1) 0;
+}
+.kpi-spend-pf-row .k {
+  font-size: 12.5px; font-weight: 700; color: var(--n-600);
+}
+.kpi-spend-pf-row .v {
+  font-size: 29px; font-weight: 800; letter-spacing: -0.02em;
+  line-height: 1.15; font-variant-numeric: var(--num-tabular);
+}
+.kpi-spend-pf-row .v small {
+  font-size: 14px; font-weight: 700; color: var(--n-600);
+  margin-left: var(--kpi-sp-2);
+}
+.kpi-spend-pf-row.ref .v {
+  font-size: 21px; color: var(--n-600); font-weight: 700;
+}
+.kpi-spend-pf-row.ref .v small { font-size: 12.5px; }
+.kpi-spend-pf-row .v.over { color: var(--red-700); }
+.kpi-spend-pf-row .v.under { color: var(--green-700); }
+.kpi-spend-pf-rule {
+  border-top: 2px dashed var(--n-300);
+  margin: var(--kpi-sp-3) 0;
+}
+.kpi-spend-pf-foot {
+  margin-top: var(--kpi-sp-3);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+.kpi-spend-pf-foot .k {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--n-600);
+}
+.kpi-spend-pf-foot .v {
+  font-size: 17px; font-weight: 800;
+  font-variant-numeric: var(--num-tabular);
+}
+.kpi-spend-pf-foot .v.over  { color: var(--red-700); }
+.kpi-spend-pf-foot .v.under { color: var(--green-700); }
+.kpi-spend-pf-nodata {
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3);
+  border-radius: var(--kpi-card-r);
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  font-size: 10.5px; font-weight: 600;
+  color: var(--n-700); line-height: 1.6;
+}
+.kpi-spend-pf-nodata b { color: var(--n-900); }
 
 /* Week strip header (V8-11) */
 .kpi-wh { display: flex; align-items: center; gap: var(--kpi-sp-3); }
