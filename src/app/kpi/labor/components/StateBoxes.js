@@ -74,11 +74,33 @@ export function StateBox({ variant, title, children, cta, errCode }) {
 export function StateLoading() {
   return <StateBox variant="loading" title="Loading labor data" />;
 }
+// Labor empty-state fix (Kevin 2026-09-07). StateEmptyFirstRun is
+// retained for the case where a caller still routes to it, but the
+// copy now names the actual condition. The old copy ("Once the
+// nightly walk and derivation run...") implied a pending job on a
+// pipeline that had already run and found nothing - which happens
+// every Monday morning of a new period when the payload carries a
+// full four-week plan and no hours have been worked yet. Page.js
+// no longer routes to this on the actuals-count path; StateEmptyAccount
+// (below) is the survivor for board.applies === false.
 export function StateEmptyFirstRun() {
   return (
-    <StateBox variant="empty-first" title="No labor derived yet">
-      Once the nightly walk and derivation run, weekly labor for every
-      account appears here automatically. Nothing to configure.
+    <StateBox variant="empty-first" title="No labor data for this account">
+      This account has no hourly labor budget configured. Nothing is
+      pending; there is nothing to compare hours against.
+    </StateBox>
+  );
+}
+// Labor empty-state fix (Kevin 2026-09-07). Fires when
+// board.applies === false and kind is not "empty_range" - a defensive
+// residual path (salaried_only + envelope route to StateSalaried
+// earlier). Copy tells the operator what is true rather than
+// implying a system is late.
+export function StateEmptyAccount() {
+  return (
+    <StateBox variant="empty-first" title="No labor comparison for this account">
+      This account has no hourly labor budget or Service Calendar to
+      compare against. Nothing is pending.
     </StateBox>
   );
 }
