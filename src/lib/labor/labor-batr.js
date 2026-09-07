@@ -20,10 +20,26 @@
 // or when the range is not closed (Overview would return null too).
 
 import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
-import { REVENUE_LINE_CODES, loadPnlActuals, loadOverviewBudgets } from "@/lib/kpi/overview/pnl-loader.js";
-import { periodEndISO, periodOf } from "@/app/kpi/labor/lib/periods.js";
+import {
+  REVENUE_LINE_CODES,
+  loadPnlActuals,
+  loadOverviewBudgets,
+  loadScDailyRevenue,
+  loadPeriodStatus,
+  loadAccountFlags,
+  derivePeriodState,
+} from "@/lib/kpi/overview/pnl-loader.js";
+import { resolveRevenueSource } from "@/lib/kpi/overview/revenue-source.js";
+import { periodEndISO, periodStartISO, periodOf, endOfLastCompleteWeek } from "@/app/kpi/labor/lib/periods.js";
 
 const FISCAL_YEAR = 2026;
+
+// Kevin revenue-fallback prompt (2026-09-07, corrected). R-67
+// applies to EVERY account for contractual lines - service fees are
+// real revenue that belongs alongside SC counts. Same constant
+// resolver.js uses; kept in sync manually until the shared extraction
+// lands. If this drifts, the parity check will fail loudly.
+const CONTRACTUAL_ACCRUAL_LINES = new Set(["2200", "2300", "2600"]);
 
 // Kevin Labor PR-A item 8 (2026-09-04): "This year is P1 through the
 // last closed period. The running period renders hatched and does not
@@ -98,27 +114,124 @@ function sumRevenueBudget(overviewBudgets, { members, periods }) {
 
 /**
  * Load the range's revenue basis (totalRevenue + revenueBudgetFullPeriod)
- * once, so the caller can compute batr against different labor
- * budgets - hourly-only, hourly + salary - without re-querying.
+ * using the SAME picker + sources Overview uses. Corrected per
+ * Kevin's revenue-fallback prompt (2026-09-07):
+ *   1. finance actual        pnl_actuals when verified
+ *   2. Service Calendar      actual_revenue for count-derived lines
+ *   3. contractual accrual   R-67, EVERY account, contractual lines
+ *   4. nothing               never the budget
  *
- * Same query shape Overview uses (pnl_actuals + kpi_budgets, same
- * members + period set + filter rules). Under identical inputs the
- * two boards read identical revenue numbers by construction. If they
- * ever disagree, one side is either filtering or ordering differently
- * from the other and the parity gate surfaces it.
+ * Prior implementation read pnl_actuals only, which returned null for
+ * closed_awaiting periods and made Labor's batr disagree with Overview
+ * whenever finance had not posted. Item 2 of Kevin's walkthrough sweep
+ * closes by construction now that both boards apply the same rules.
  */
-export async function loadRangeRevenueBasis(supa, { members, periods }) {
+export async function loadRangeRevenueBasis(supa, { members, periods, start, end, today }) {
   if (!members || members.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null };
   if (!periods || periods.length === 0) return { totalRevenue: null, revenueBudgetFullPeriod: null };
-  const [pnlRes, budRes] = await Promise.all([
+  const [pnlRes, budRes, scRes, statusRes, flagsRes] = await Promise.all([
     loadPnlActuals(supa, { members, periods, fiscalYear: FISCAL_YEAR }),
     loadOverviewBudgets(supa, { members, fiscalYear: FISCAL_YEAR }),
+    loadScDailyRevenue(supa, { members, start, end, today }),
+    loadPeriodStatus(supa, FISCAL_YEAR),
+    loadAccountFlags(supa),
   ]);
   if (pnlRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: pnlRes.scope || "pnl_actuals", message: pnlRes.error.message || String(pnlRes.error) } };
   if (budRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: budRes.scope || "kpi_budgets_overview", message: budRes.error.message || String(budRes.error) } };
-  const totalRevenue = sumRevenueActuals(pnlRes.data || new Map(), { members, periods });
-  const revenueBudgetFullPeriod = sumRevenueBudget(budRes.data || new Map(), { members, periods });
-  return { totalRevenue, revenueBudgetFullPeriod };
+  if (scRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: scRes.scope || "sc_daily_revenue", message: scRes.error.message || String(scRes.error) } };
+  if (statusRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: statusRes.scope || "pnl_period_status", message: statusRes.error.message || String(statusRes.error) } };
+  if (flagsRes?.error) return { totalRevenue: null, revenueBudgetFullPeriod: null, error: { scope: flagsRes.scope || "kpi_account_flags", message: flagsRes.error.message || String(flagsRes.error) } };
+
+  const pnl = pnlRes.data || new Map();
+  const overviewBudgets = budRes.data || new Map();
+  const scByAcct = scRes.data || new Map();
+  const periodStatus = statusRes.data || new Map();
+  const accountFlags = flagsRes.data || new Map();
+
+  // Mirror computePeriodRevenueByLine's per-(member, period, line) picker
+  // so Labor's total matches Overview's total to the cent. `revSource`
+  // fixed to "sc" because Labor is always the SC-aware side.
+  let totalRevenue = 0;
+  let anyReported = false;
+  for (const p of periods) {
+    const statusRow = periodStatus.get(p) || null;
+    const state = derivePeriodState({ periodNo: p, todayISO: today, periodStatusRow: statusRow });
+    for (const m of members) {
+      const flags = accountFlags.get(m) || null;
+      const src = resolveRevenueSource({
+        accountKey: m,
+        periodState: state,
+        revSource: "sc",
+        accountFlags: flags,
+      });
+      for (const line of src.line_codes) {
+        if (src.source === "pnl_actuals_verified") {
+          const row = pnl.get(m)?.get(p)?.get(line);
+          if (row?.actual != null) { totalRevenue += Number(row.actual); anyReported = true; }
+        } else if (src.source === "sc_daily_revenue") {
+          if (line === "2400.1") {
+            const byDate = scByAcct.get(m);
+            if (byDate) {
+              const pStart = periodStartISO(p);
+              const pEnd = periodEndISO(p);
+              for (const [day, amt] of byDate) {
+                if (day >= pStart && day <= pEnd) {
+                  totalRevenue += Number(amt);
+                  anyReported = true;
+                }
+              }
+            }
+          } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
+            // R-67 accrual - Kevin's precedence #3, EVERY account.
+            const pStart = periodStartISO(p);
+            const pEnd = periodEndISO(p);
+            const amtRaw = overviewBudgets.get(line)?.get(m)?.get(p);
+            if (amtRaw != null && Number(amtRaw) > 0) {
+              const wk = endOfLastCompleteWeek(pStart, pEnd, today);
+              const weeksComplete = wk ? wk.weekNo : 0;
+              if (weeksComplete > 0) {
+                totalRevenue += Number(amtRaw) * (weeksComplete / 4);
+                anyReported = true;
+              }
+            }
+          }
+        } else if (src.source === "not_reported") {
+          // Precedence #4 - nothing.
+        } else {
+          // kpi_budgets_* for fee accounts (contractual) + tracked.
+          const amtRaw = overviewBudgets.get(line)?.get(m)?.get(p);
+          if (amtRaw != null) {
+            if (state === "open") {
+              const pStart = periodStartISO(p);
+              const pEnd = periodEndISO(p);
+              const parseISOUTC = (iso) => {
+                const mm = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (!mm) return null;
+                return new Date(Date.UTC(+mm[1], +mm[2] - 1, +mm[3]));
+              };
+              const MSD = 86400000;
+              const pS = parseISOUTC(pStart), pE = parseISOUTC(pEnd), tD = parseISOUTC(today);
+              if (pS && pE && tD) {
+                const daysIn = Math.floor((pE.getTime() - pS.getTime()) / MSD) + 1;
+                const elapsed = Math.min(daysIn, Math.max(0, Math.floor((tD.getTime() - pS.getTime()) / MSD)));
+                totalRevenue += Number(amtRaw) * (elapsed / daysIn);
+                anyReported = true;
+              }
+            } else {
+              totalRevenue += Number(amtRaw);
+              anyReported = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const revenueBudgetFullPeriod = sumRevenueBudget(overviewBudgets, { members, periods });
+  return {
+    totalRevenue: anyReported ? Math.round(totalRevenue * 100) / 100 : null,
+    revenueBudgetFullPeriod,
+  };
 }
 
 /**

@@ -1346,6 +1346,9 @@ export async function GET(request) {
   const revenueBasisSingle = await loadRangeRevenueBasis(supa, {
     members: [account],
     periods: closedPeriodsSingle,
+    start,
+    end,
+    today,
   });
   // Kevin Labor PR-B (2026-09-07). Per-week revenue basis + per-week
   // adjusted budget. Loader runs once for the range's weeks; per-period

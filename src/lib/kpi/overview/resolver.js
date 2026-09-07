@@ -465,23 +465,35 @@ function computePeriodRevenueByLine({
             }
             bucket.sources.add("sc_daily_revenue");
           } else if (CONTRACTUAL_ACCRUAL_LINES.has(line)) {
-            // Kevin revenue-fallback prompt (2026-09-07): per-meal
-            // contractual lines (2200/2300/2600) no longer accrue
-            // from budget on non-verified periods. Precedence #4
-            // is explicit - "nothing - never the budget". Prior R-67
-            // ruling let these accrue as budget × completeWeeks / 4;
-            // Kevin's new precedence limits contractual accrual to
-            // fee accounts (precedence #3), which reach this
-            // resolver via a different picker (contractual source)
-            // and are handled in the else branch below.
+            // Kevin revenue-fallback prompt (2026-09-07, corrected):
+            // R-67 applies to EVERY account, for contractual lines.
+            // Kevin ruling: "the service fee is real revenue. It
+            // belongs in their weekly revenue alongside the Service
+            // Calendar revenue." TBJ - FL bills 2300 every period
+            // ($18k - $118k in finance across P1-P8); dropping it
+            // would remove real money and inflate every cost pct.
             //
-            // Effect: per-meal 2300 for TBJ - FL P9 goes from
-            // $25,169 (budget) to null (not reported). Overview
-            // total revenue matches Labor's SC-only sum to the cent
-            // ($106,911.05) instead of $132,080 - the reason the two
-            // boards previously disagreed by exactly the accrued
-            // amount. Fee accounts unaffected.
-            bucket.sources.add("not_reported");
+            // Corrected precedence:
+            //   1. finance actual (pnl_actuals verified)
+            //   2. SC actual (count-derived lines like 2400.1)
+            //   3. contractual accrual R-67 (EVERY account, contractual)
+            //   4. nothing
+            //
+            // R-67 accrual formula unchanged: budget × completeWeeks/4.
+            // Closed period => 4/4 = full budget.
+            const pStart = periodStartISO(p);
+            const pEnd = periodEndISO(p);
+            const byAcct = overviewBudgets.get(line)?.get(m);
+            const amtRaw = byAcct?.get(p);
+            if (amtRaw != null && Number(amtRaw) > 0) {
+              const wk = endOfLastCompleteWeek(pStart, pEnd, todayISO);
+              const weeksComplete = wk ? wk.weekNo : 0;
+              if (weeksComplete > 0) {
+                bucket.amount += Number(amtRaw) * (weeksComplete / 4);
+                bucket.any_actual = true;
+                bucket.sources.add("kpi_budgets_contractual_accrual");
+              }
+            }
           }
         } else if (src.source === "not_reported") {
           // Kevin revenue fallback prompt (2026-09-07). Per_meal
