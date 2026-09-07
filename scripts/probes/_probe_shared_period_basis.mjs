@@ -38,8 +38,13 @@ console.log("\n## Item 1 · No range claims verified for a period absent from pn
 for (const acct of ["TBJ - FL", "TBR - FL"]) {
   const j = await fetchOv(acct, "2026-08-10", "2026-09-06");
   const horizon = j.range_labels?.horizon || "";
-  const isAwaiting = horizon.includes("awaiting verification");
-  if (!pass(isAwaiting, `${acct} Last period horizon (${horizon})`)) failures += 1;
+  // R-94 (2026-09-09): horizon copy changed from "P9 · awaiting
+  // verification" to "P9 · closed 09/06 · figures still settling".
+  // Same semantic - period is closed but not yet verified. Assert
+  // via period_state (robust) with horizon copy as belt-and-braces.
+  const periodState = j.period_state;
+  const horizonNamesUnsettled = horizon.includes("figures still settling") || horizon.includes("awaiting verification");
+  if (!pass(periodState === "closed_awaiting" && horizonNamesUnsettled, `${acct} Last period period_state="closed_awaiting" + horizon names unsettled (${horizon})`)) failures += 1;
 }
 
 console.log("\n## Item 2 · TBR - FL Last period revenue lines matching budget");

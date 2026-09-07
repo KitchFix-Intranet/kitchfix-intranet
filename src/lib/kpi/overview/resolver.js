@@ -32,7 +32,7 @@ import { performance } from "node:perf_hooks";
 import { buildBoard, computeBudgetToDateDays as computeLaborBudgetToDateDays } from "@/app/kpi/labor/lib/board.js";
 import { paginateActuals as paginateLaborActuals, resolveMemberBudget } from "@/lib/labor/loaders.js";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta.js";
-import { buildWorkerToEmail } from "@/lib/labor/personCount.js";
+import { buildWorkerToEmail, countDistinctPeople } from "@/lib/labor/personCount.js";
 // Salary-side loaders + merge helper. Overview ALWAYS composes labor
 // with salary included (R-28, §5.9): "Salary control reveals sub-lines
 // only; totals always include salary. Gross margin must equal
@@ -58,6 +58,7 @@ import {
   loadPending as loadPurchasingPending,
   loadPurchasingBudgets,
   loadFreshness as loadPurchasingFreshness,
+  loadCogsLineCountForPeriod,
   fetchMembers,
 } from "@/lib/purchasing/loaders.js";
 
@@ -2680,6 +2681,60 @@ export async function resolveOverview({
     last_walk_at: composedWalkAt,
   };
 
+  // Kevin R-94 (2026-09-09). Settling data for the "What is still
+  // moving" strip on Last period when displayPeriodState === "closed_
+  // awaiting". Names the two sources of movement on a period that
+  // closed on Sunday - invoice lag (bill.com nightly sync) + labour
+  // approval (unapproved hours land as approvals happen). Prior-
+  // period line count baseline ("36 against 80 in P8") is a separate
+  // targeted query so the range-scoped weekly load stays clean.
+  // Null on any state that isn't single-period closed_awaiting so the
+  // client omits the strip.
+  const settling = await (async () => {
+    if (rng.kind !== "period" || displayPeriodState !== "closed_awaiting") return null;
+    const p = rng.period_no;
+    if (p == null) return null;
+    const pStart = periodStartISO(p);
+    const pEnd = periodEndISO(p);
+    const priorP = p - 1;
+    const priorStart = priorP >= 1 ? periodStartISO(priorP) : null;
+    const priorEnd = priorP >= 1 ? periodEndISO(priorP) : null;
+
+    // Purchases: current + prior baseline. Sums line_count on food
+    // buckets (3200/3400/3500) from v_purchasing_by_site_week.
+    const [currentResp, priorResp] = await Promise.all([
+      loadCogsLineCountForPeriod(supa, { members, periodStart: pStart, periodEnd: pEnd }),
+      priorStart
+        ? loadCogsLineCountForPeriod(supa, { members, periodStart: priorStart, periodEnd: priorEnd })
+        : Promise.resolve({ data: { line_count: null } }),
+    ]);
+    const currentLines = currentResp?.data?.line_count ?? 0;
+    const priorLines = priorResp?.data?.line_count ?? null;
+
+    // Labour: sum draft_hours + count distinct people with any draft
+    // in the period. Reads laborActuals directly (already in scope,
+    // no extra query).
+    const inPeriod = (laborActuals || []).filter(r =>
+      r.week_start && periodOf(r.week_start) === p && Number(r.draft_hours || 0) > 0.004
+    );
+    const draftHours = inPeriod.reduce((s, r) => s + Number(r.draft_hours || 0), 0);
+    const draftPeople = countDistinctPeople(inPeriod, workerToEmail);
+
+    return {
+      period_no: p,
+      period_end: pEnd,
+      purchases: {
+        current_lines: currentLines,
+        prior_lines: priorLines,
+        prior_period_no: priorP >= 1 ? priorP : null,
+      },
+      labour: {
+        hours: Math.round(draftHours * 100) / 100,
+        people: draftPeople,
+      },
+    };
+  })();
+
   // 21. Payload assembly.
   const payload = {
     ok: true,
@@ -2844,6 +2899,12 @@ export async function resolveOverview({
       has_target,
       range_kind: rng.kind,
     }),
+    // Kevin R-94 (2026-09-09). "What is still moving" strip data
+    // on Last period when the period is closed but not yet
+    // finance-verified. Null on every other state; client omits the
+    // strip. Includes an amber-tone signal cost + margin cards
+    // consume to render Provisional.
+    settling,
     sources: sourcesLine,
     flags,
     freshness,
@@ -2897,6 +2958,22 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
     : gmDeltaForTone == null
       ? "neutral"
       : gmDeltaForTone >= 0 ? "good" : "bad";
+
+  // Kevin R-94 (2026-09-09). A closed-but-not-yet-verified period
+  // reads "Awaiting verification" in AMBER, not a settled verdict.
+  // The pill contradicts itself when it says "on target" beside a
+  // horizon line that says "awaiting verification" - and the
+  // figures are still moving, so the verdict is a reading, not a
+  // result. Wait tone is a NEW variant beyond good/bad/neutral;
+  // client renders it as amber with a leading indicator dot.
+  const rangeIsAwaiting = range_kind === "period" && period_state === "closed_awaiting";
+  if (rangeIsAwaiting) {
+    return {
+      state: "awaiting_verification",
+      state_copy: "Awaiting verification",
+      tone: "wait",
+    };
+  }
 
   // "Period closed · on target / off target" on any closed range
   // (single closed or FYTD). Open ranges keep the ticker's running
@@ -2977,9 +3054,19 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
     const isAwaiting = rc?.awaiting?.count > 0
       && rc.awaiting.first === range.period_no
       && rc.awaiting.last === range.period_no;
-    horizon = isAwaiting
-      ? `P${range.period_no} · awaiting verification`
-      : `P${range.period_no} · closed and verified`;
+    // Kevin R-94 (2026-09-09): awaiting horizon names the CLOSE
+    // DATE + explains the state ("figures still settling") so a
+    // reader sees why the pill went amber. Verified state keeps
+    // its terse "closed and verified" form.
+    if (isAwaiting) {
+      const pEnd = periodEndISO(range.period_no);
+      const md = pEnd ? `${pEnd.slice(5, 7)}/${pEnd.slice(8, 10)}` : "";
+      horizon = md
+        ? `P${range.period_no} · closed ${md} · figures still settling`
+        : `P${range.period_no} · awaiting verification`;
+    } else {
+      horizon = `P${range.period_no} · closed and verified`;
+    }
     spanHeader = `P${range.period_no}`;
   } else if (isFytd) {
     // Kevin walkthrough item 3 (2026-09-07). Prior FYTD label read

@@ -59,12 +59,77 @@
 .kpi-app .kpi-ov-status-good    .kpi-ov-status-st { background: var(--green-600); }
 .kpi-app .kpi-ov-status-bad     .kpi-ov-status-st { background: var(--red-600); }
 .kpi-app .kpi-ov-status-neutral .kpi-ov-status-st { background: var(--n-500); }
+/* Kevin R-94 (2026-09-09). AWAITING VERIFICATION pill. Amber fill
+   with a leading indicator dot so the "still moving" state reads
+   at a glance without reading the text. Render of record:
+   docs/renders/last-period-awaiting-verification.html. */
+.kpi-app .kpi-ov-status-wait    .kpi-ov-status-st { background: var(--amber-500, #D97706); }
+.kpi-app .kpi-ov-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.9;
+  margin-right: var(--kpi-sp-2);
+  margin-left: calc(var(--kpi-sp-4) * -0.5);
+  padding-left: 0;
+}
+.kpi-app .kpi-ov-status-wait .kpi-ov-status-st {
+  padding-left: var(--kpi-sp-3);
+}
 
 /* Direction words on the ticker */
 .kpi-app .kpi-ov-good { color: var(--green-600); }
 .kpi-app .kpi-ov-bad  { color: var(--red-600); }
 .kpi-app .kpi-ov-warn { color: var(--amber-600); }
+.kpi-app .kpi-ov-wait { color: var(--amber-600); }
 .kpi-app .kpi-ov-nb   { color: var(--n-700); font-weight: 600; }
+
+/* Kevin R-94 (2026-09-09). "What is still moving" strip above the
+   three cards on Last period when the period is closed but not yet
+   finance-verified. Names purchases (invoice lag) + labour
+   (unapproved hours) so the caveat becomes an action. Amber tint
+   matches the awaiting status pill. */
+.kpi-app .kpi-ov-settling {
+  margin-bottom: var(--kpi-sp-3);
+  background: var(--amber-50, #FFF7ED);
+  border: 1px solid var(--amber-200, #F7C299);
+  border-radius: var(--kpi-card-r);
+  padding: var(--kpi-sp-3) var(--kpi-card-pad);
+  display: flex;
+  gap: var(--kpi-sp-4);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.kpi-app .kpi-ov-settling-t {
+  font-size: var(--kpi-t-label);
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--amber-600);
+  white-space: nowrap;
+}
+.kpi-app .kpi-ov-settling-it {
+  font-size: var(--kpi-t-body);
+  font-weight: 600;
+  color: var(--n-700);
+  line-height: 1.5;
+}
+.kpi-app .kpi-ov-settling-it b {
+  color: var(--n-900);
+  font-weight: 800;
+}
+
+/* Cost + margin card pill in wait state (mirrors the status pill
+   fill so the two amber elements read as one signal). */
+.kpi-app .kpi-ov-pill-wait {
+  background: var(--amber-50, #FFF7ED);
+  color: var(--amber-600);
+}
+.kpi-app .kpi-ov-foot-wait .kpi-ov-foot-v {
+  color: var(--amber-600);
+}
 
 /* ── Cards grid (element 4) ──────────────────────────────────────── */
 .kpi-app .kpi-ov-cards {

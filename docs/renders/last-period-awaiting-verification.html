@@ -1,0 +1,147 @@
+<meta charset="utf-8"><title>Last period · awaiting verification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy-700:#153968;--navy-50:#F4F7FC;--amber-50:#FFF7ED;--amber-600:#B25800;--amber-500:#D97706;--amber-200:#F7C299;
+--green-600:#008330;--green-50:#E9FDEC;--red-600:#B9000C;--red-50:#FFEDE7;--purple:#7c3aed;--purple-50:#F5F1FE;
+--n-0:#FFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}.devbar .lbl{font-size:11px;color:#93a9c9}
+.devbar button{font-size:11px;font-weight:600;padding:5px 11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.wrap{max-width:1300px;margin:0 auto;padding:18px 22px 40px}
+.cap{font-size:11.5px;color:var(--n-600);padding:14px 22px 0;max-width:1300px;margin:0 auto;line-height:1.7}.cap b{color:var(--n-900)}
+.lane{margin-bottom:22px}
+.lane h3{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600);margin-bottom:9px}
+.lane.after h3{color:var(--navy-700)}
+/* status bar */
+.statusrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:13px}
+.spill{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:8px 15px;border-radius:999px;color:#fff}
+.sp-ok{background:var(--green-600)}.sp-bad{background:var(--red-600)}
+.sp-wait{background:var(--amber-500)}
+.sp-wait i{width:7px;height:7px;border-radius:50%;background:#fff;opacity:.9}
+.through{font-size:12px;font-weight:700;color:var(--n-600)}
+.through b{color:var(--n-900)}
+.settle{margin-bottom:14px;background:var(--amber-50);border:1px solid var(--amber-200);border-radius:10px;padding:11px 15px;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.settle .t{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--amber-600)}
+.settle .it{font-size:11.5px;font-weight:600;color:var(--n-700)}
+.settle .it b{color:var(--n-900);font-weight:800}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;box-shadow:0 1px 2px rgba(10,37,72,.04),0 2px 8px rgba(10,37,72,.05)}
+.card.rev{border-top:3px solid var(--green-600)}.card.cog{border-top:3px solid var(--red-600)}
+.card.cog.ok{border-top-color:var(--green-600)}.card.gm{border-top:3px solid var(--purple)}
+.card.wait{border-top-color:var(--amber-500)}
+.ch{display:flex;align-items:center;gap:8px;padding:13px 17px 0;flex-wrap:wrap}
+.ch .eb{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.pill{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;white-space:nowrap;margin-left:auto}
+.pok{background:var(--green-50);color:var(--green-600)}.pbad{background:var(--red-50);color:var(--red-600)}
+.pamb{background:var(--amber-50);color:var(--amber-600)}
+.cb{padding:12px 17px 16px}
+.orow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:3px 0}
+.orow .k{font-size:12.5px;font-weight:700;color:var(--n-600)}
+.orow .v{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.orow .v small{font-size:13.5px;font-weight:700;color:var(--n-600);margin-left:8px}
+.orow.ref .v{font-size:20px;color:var(--n-600);font-weight:700}.orow.ref .v small{font-size:12px}
+.rule{border-top:2px dashed var(--n-300);margin:11px 0}
+.foot{margin-top:12px;padding-top:11px;border-top:1px solid var(--n-200);display:flex;align-items:baseline;justify-content:space-between}
+.foot .k{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600)}
+.foot .v{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.prov{margin-top:10px;font-size:10px;font-weight:600;color:var(--amber-600);line-height:1.5}
+.notes{max-width:1300px;margin:16px auto 0;padding:0 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
+.notes div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.notes h4{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.notes b{color:var(--n-900)}
+</style>
+<div class="devbar"><b>Last period · awaiting verification</b><span class="h">real figures · P9 closed 09/06, today 09/08</span>
+<span class="lbl">account:</span>
+<button id="a0" class="on" onclick="setA('TBJ')">TBJ - FL</button>
+<button id="a1" onclick="setA('TBR')">TBR - FL</button>
+<span style="width:12px"></span><span class="lbl">state:</span>
+<button id="s0" class="on" onclick="setS('await')">awaiting verification</button>
+<button id="s1" onclick="setS('ver')">verified</button></div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+<div class="notes" id="notes"></div>
+<script>
+const D={
+ TBJ:{rev:{a:132080.07,r:104995.08},cog:{a:69945,adj:79227,ap:53.0,tp:60.0},gm:{a:62135,adj:52854,ap:47.0,tp:40.0},
+  inv:{lines:36,prior:80,lastWeek:'credits only'},lab:{hrs:226.25,people:10,weeks:1}},
+ TBR:{rev:{a:164429.62,r:165560},cog:{a:97104,adj:93610,ap:59.1,tp:56.9},gm:{a:67326,adj:70820,ap:40.9,tp:43.1},
+  inv:{lines:41,prior:74,lastWeek:'credits only'},lab:{hrs:86.88,people:3,weeks:1}}};
+let A='TBJ', S='await';
+const $=i=>document.getElementById(i);
+const m0=n=>n==null?"—":(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const p=v=>v==null?"—":v.toFixed(1)+"%";
+function card(kind,d,waiting){
+ const c=d[kind];
+ if(kind==='rev'){
+  const above=c.a>=c.r;
+  return '<div class="card rev"><div class="ch"><span class="eb">Revenue P9</span><span class="q">?</span>'+
+   '<span class="pill '+(above?'pok':'pbad')+'">'+(above?'Above projection':'Below projection')+'</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+(above?'var(--green-600)':'var(--red-600)')+'">'+m0(c.a)+'</span></div>'+
+   '<div class="rule"></div><div class="orow ref"><span class="k">Projection</span><span class="v num">'+m0(c.r)+'</span></div>'+
+   '<div class="foot"><span class="k">'+(above?'Above projection':'Below projection')+'</span>'+
+   '<span class="v" style="color:'+(above?'var(--green-600)':'var(--red-600)')+'">'+(above?'&#9650; ':'&#9660; ')+m0(Math.abs(c.a-c.r))+'</span></div>'+
+   '<div class="prov" style="color:var(--n-600)">Service Calendar counts are complete for this period.</div>'+
+   '</div></div>';
+ }
+ const isCog=kind==='cog';
+ const bad = isCog ? c.a>c.adj : c.a<c.adj;
+ const col = waiting ? 'var(--amber-600)' : (bad?'var(--red-600)':'var(--green-600)');
+ const lbl = isCog ? (bad?'Over target':'Under target') : (bad?'Behind target':'Ahead of target');
+ return '<div class="card '+kind+(waiting?' wait':(bad?'':' ok'))+'"><div class="ch"><span class="eb">'+(isCog?'Cost of goods sold':'Gross margin')+'</span><span class="q">?</span>'+
+  '<span class="pill '+(waiting?'pamb':(bad?'pbad':'pok'))+'">'+(waiting?'Provisional':lbl)+'</span></div><div class="cb">'+
+  '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+col+'">'+m0(c.a)+'<small style="color:'+col+'">'+p(c.ap)+'</small></span></div>'+
+  '<div class="rule"></div><div class="orow ref"><span class="k">Target</span><span class="v num">'+m0(c.adj)+'<small>'+p(c.tp)+'</small></span></div>'+
+  '<div class="foot"><span class="k">'+lbl+'</span>'+
+  '<span class="v" style="color:'+col+'">'+((isCog?c.a>c.adj:c.a>c.adj)?'&#9650; ':'&#9660; ')+m0(Math.abs(c.a-c.adj))+'</span></div>'+
+  (waiting?'<div class="prov">'+(isCog?'Still moving as invoices land.':'Moves with cost.')+'</div>':'')+
+  '</div></div>';
+}
+function view(){
+ const d=D[A], waiting=(S==='await');
+ let h='';
+ h+='<div class="statusrow">';
+ if(waiting){
+  h+='<span class="spill sp-wait"><i></i>Awaiting verification</span>'+
+   '<span class="through"><b>P9 · closed 09/06</b> · figures still settling</span>';
+ } else {
+  const bad=d.cog.a>d.cog.adj;
+  h+='<span class="spill '+(bad?'sp-bad':'sp-ok')+'">'+(bad?'Off target':'On target')+'</span>'+
+   '<span class="through"><b>P9 · closed and verified</b></span>';
+ }
+ h+='</div>';
+ if(waiting){
+  h+='<div class="settle"><span class="t">What is still moving</span>'+
+   '<span class="it"><b>Purchases</b> &middot; '+d.inv.lines+' invoice lines against '+d.inv.prior+' in P8 &middot; more land on the nightly sync</span>'+
+   '<span class="it"><b>Labour</b> &middot; '+d.lab.hrs+' hrs awaiting approval across '+d.lab.people+' people &middot; lands as they are approved</span>'+
+   '</div>';
+ }
+ h+='<div class="row">'+card('rev',d,false)+card('cog',d,waiting)+card('gm',d,waiting)+'</div>';
+ return h;
+}
+const NOTES=[
+ '<h4>What the pill was saying</h4>Today it reads <b>Period closed &middot; on target</b> - a settled verdict on a period whose numbers are still moving.<br><br><b>TBJ - FL P9 has 36 food invoice lines against P8&rsquo;s 80</b>, and its final week has credits and no purchases at all. <b>226 hours of labour are still awaiting approval.</b><br><br>The figures will change. The pill said they would not.',
+ '<h4>Two things are still landing</h4><b>Purchases</b> arrive on the nightly bill.com and card sync. A period that closed on Sunday has a week of invoices still to come.<br><br><b>Labour</b> is settled once the prior week&rsquo;s hours are approved. Unapproved hours are already costed - they confirm as the approvals happen.<br><br><b>The strip names both</b>, with the counts, so an operator knows what they are waiting on and can act on the half they control.',
+ '<h4>The verdict is still there</h4><b>The numbers and the variance do not disappear.</b> A chef can see $69,945 against $79,227 and read where they stand.<br><br>What changes is that it reads <b>Provisional</b> in amber rather than <b>Under budget</b> in green - <b>a reading, not a result</b>.<br><br><b>Revenue stays settled.</b> Service Calendar counts are complete for a closed period, so its pill and colour are unchanged.'];
+function render(){
+ $("app").innerHTML='<div class="lane"><h3>Today</h3>'+
+  '<div class="statusrow"><span class="spill '+(D[A].cog.a>D[A].cog.adj?'sp-bad':'sp-ok')+'">Period closed &middot; '+(D[A].cog.a>D[A].cog.adj?'off target':'on target')+'</span>'+
+  '<span class="through">P9 &middot; awaiting verification</span></div>'+
+  '<div class="row">'+card('rev',D[A],false)+card('cog',D[A],false)+card('gm',D[A],false)+'</div></div>'+
+  '<div class="lane after"><h3>'+(S==='await'?'Awaiting verification':'Verified · the following Monday')+'</h3>'+view()+'</div>';
+ $("cap").innerHTML = S==='await'
+  ? '<b>P9 closed on Sunday 09/06. Today is Tuesday 09/08.</b> The board says <b>Period closed &middot; on target</b> - a settled verdict on a period with <b>'+D[A].inv.lines+' of an expected ~'+D[A].inv.prior+' invoice lines</b> and <b>'+D[A].lab.hrs+' hours awaiting approval</b>. Below, the same board saying what is actually true.'
+  : '<b>Verified.</b> Once the invoices have landed and the hours are approved, the amber goes and the verdict is a result rather than a reading. <b>Same layout, different confidence.</b>';
+ $("notes").innerHTML=NOTES.map(n=>'<div>'+n+'</div>').join('');
+ $("a0").className=A==='TBJ'?'on':''; $("a1").className=A==='TBR'?'on':'';
+ $("s0").className=S==='await'?'on':''; $("s1").className=S==='ver'?'on':'';
+}
+function setA(a){A=a;render();}
+function setS(s){S=s;render();}
+render();
+</script>

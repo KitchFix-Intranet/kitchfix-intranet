@@ -174,6 +174,40 @@ export async function paginateWeekly(supa, { members, start, end }) {
   return { data: out };
 }
 
+// Kevin R-94 (2026-09-09). Sum line_count for the FOOD sub-lines
+// (gl_line_code LIKE '3200%') within a specific period. Used by the
+// Overview resolver's "settling" strip on Last period when the period
+// is closed_awaiting - names the invoice count against a prior-period
+// baseline ("36 invoice lines against 80 in P8"). Food-specific per
+// Kevin's spec; the food line is the strongest lag signal because
+// nightly deliveries land through the week after Sunday close.
+// Extra one-shot call so the strip has a comparison figure without
+// polluting the range-scoped weekly load.
+export async function loadCogsLineCountForPeriod(supa, { members, periodStart, periodEnd }) {
+  if (!members?.length || !periodStart || !periodEnd) return { data: { line_count: 0 } };
+  let lineCount = 0;
+  const PS = V6_PAGE_DEFAULT;
+  for (const memberChunk of chunk(members, IN_CHUNK)) {
+    let from = 0;
+    while (true) {
+      const q = await supa
+        .from("v_purchasing_by_site_week")
+        .select("gl_line_code, line_count")
+        .in("account_key", memberChunk)
+        .like("gl_line_code", "3200%")
+        .gte("week_start", periodStart)
+        .lte("week_start", periodEnd)
+        .range(from, from + PS - 1);
+      if (q.error) return { error: q.error };
+      const rows = q.data || [];
+      for (const r of rows) lineCount += Number(r.line_count || 0);
+      if (rows.length < PS) break;
+      from += PS;
+    }
+  }
+  return { data: { line_count: lineCount } };
+}
+
 // ── prior-period history for the closed-card sparkline ───────────────
 
 // R13 P0-1: prior-period + last-8-periods spend history for the
