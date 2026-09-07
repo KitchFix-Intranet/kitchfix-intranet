@@ -118,6 +118,19 @@ for (const acct of ["TBJ - FL", "TBR - FL"]) {
       const label = gm.pill.label;
       assert(!/\d+(\.\d+)?%/.test(label), `margin pill has no percent figure ("${label}")`);
     }
+    // Kevin ratification post-#1061 (2026-09-09). Drops the earlier
+    // "if cost and margin variances come out equal, one is being
+    // derived from the other" diagnostic - it false-alarms on any
+    // R-77-consistent implementation because margin_var = -(cost_var)
+    // is algebra (t·rev - cost = -(cost - t·rev)), not derivation.
+    // Replaces with the invariant that actually matters: the two
+    // target percents must sum to 100%. Fails loudly if either
+    // target drifts.
+    if (cogs?.target_pct_of_revenue != null && gm?.target_pct_of_revenue != null) {
+      const sum = Number(cogs.target_pct_of_revenue) + Number(gm.target_pct_of_revenue);
+      const delta = Math.abs(sum - 100);
+      assert(delta < 0.05, `cost target ${cogs.target_pct_of_revenue.toFixed(2)}% + margin target ${gm.target_pct_of_revenue.toFixed(2)}% = ${sum.toFixed(2)}% (must sum to 100%)`);
+    }
     // TP → no footer on any card.
     if (range.key === "TP") {
       for (const [card, kind, label] of [[revenue, "revenue", "Revenue"], [cogs, "cogs", "Cost"], [gm, "gross_margin", "Margin"]]) {
