@@ -36,6 +36,8 @@ import {
   inferRangeSelection,
   weekStartsInRange,
   rangeForPeriod,
+  r93FytdEndISO,
+  r93ExcludedPeriodNo,
 } from "@/app/kpi/labor/lib/periods";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
@@ -160,7 +162,12 @@ export default function KpiPurchasingPage() {
   const urlPreset = searchParams.get("preset");
   const presetResolved = (() => {
     if (!urlPreset || urlStart || urlEnd) return null;
-    if (urlPreset === "fytd")     return { startISO: FY_START_ISO,          endISO: today };
+    // R-93 (2026-09-09): fytd end is the last-settled period's end,
+    // not today. Consistent with Labor + Overview.
+    if (urlPreset === "fytd") {
+      const fytdEnd = r93FytdEndISO(today) || today;
+      return { startISO: FY_START_ISO, endISO: fytdEnd };
+    }
     // 2026-09-02: last_4wk preset retired.
     if (urlPreset === "this_period") {
       const r = rangeForPeriod(curPeriod);
@@ -724,7 +731,9 @@ export default function KpiPurchasingPage() {
   // (or `This period`, `Last period`, ...) instead of `Custom
   // 12/29/25 - 08/24/26`. Mirrors labor's inference exactly.
   const resolvedPreset = useMemo(() => {
-    if (start === FY_START_ISO && end === today) return "fytd";
+    // R-93 (2026-09-09): fytd end is the last-settled period's end.
+    const fytdEnd = r93FytdEndISO(today);
+    if (start === FY_START_ISO && fytdEnd && end === fytdEnd) return "fytd";
     // 2026-09-02 retire-custom PR: last_4wk inference removed (preset
     // retired). last_13wk was retired 2026-08-24 for the same reason:
     // rolling windows straddle periods and produce the grain-mismatch
@@ -955,7 +964,17 @@ export default function KpiPurchasingPage() {
       const wop = board.runningWeekIdxFull != null ? board.runningWeekIdxFull + 1 : null;
       const weeksInPeriodDenom = board.weeksInPeriod || board.weeksInRange || null;
       const cardTitle = (() => {
-        if (resolvedPreset === "fytd") return "FISCAL YEAR TO DATE";
+        if (resolvedPreset === "fytd") {
+          // R-93: name the settled span + the excluded period.
+          const fytdEnd = r93FytdEndISO(today);
+          const lastP = fytdEnd ? periodOf(fytdEnd) : null;
+          const excludedP = r93ExcludedPeriodNo(today);
+          if (lastP != null) {
+            const base = `CLOSED PERIODS · P1 – P${lastP}`;
+            return excludedP != null ? `${base} · P${excludedP} AWAITING VERIFICATION` : base;
+          }
+          return "FISCAL YEAR TO DATE";
+        }
         // 2026-09-02: last_4wk retired.
         if (resolvedPreset === "this_period" || resolvedPreset === "last_period" || rangePeriodNo != null) {
           return `PERIOD ${rangePeriodNo}`;
@@ -1090,7 +1109,17 @@ export default function KpiPurchasingPage() {
     // every multi-period range was a UX regression. "PERIOD n" is only
     // correct when the range EQUALS a single fiscal period.
     const cardTitle = (() => {
-      if (resolvedPreset === "fytd") return "FISCAL YEAR TO DATE";
+      if (resolvedPreset === "fytd") {
+        // R-93: name the settled span + the excluded period.
+        const fytdEnd = r93FytdEndISO(today);
+        const lastP = fytdEnd ? periodOf(fytdEnd) : null;
+        const excludedP = r93ExcludedPeriodNo(today);
+        if (lastP != null) {
+          const base = `CLOSED PERIODS · P1 – P${lastP}`;
+          return excludedP != null ? `${base} · P${excludedP} AWAITING VERIFICATION` : base;
+        }
+        return "FISCAL YEAR TO DATE";
+      }
       // 2026-09-02: last_4wk retired.
       if (resolvedPreset === "this_period" || resolvedPreset === "last_period" || rangePeriodNo != null) {
         return `PERIOD ${rangePeriodNo}`;

@@ -45,6 +45,8 @@ import {
   weekOfPeriod,
   inferRangeSelection,
   rangeForPeriod,
+  r93FytdEndISO,
+  r93ExcludedPeriodNo,
 } from "@/app/kpi/labor/lib/periods";
 import { addDaysISO } from "@/lib/kpi/dateResolve";
 import { Shell } from "@/app/kpi/labor/components/Shell";
@@ -305,8 +307,11 @@ export default function KpiOverviewPage() {
     // preset itself is retired. Any URL with dates that don't fold
     // into a period boundary gets snapped server-side; the returned
     // payload.range_snap drives the chip disclosure.
+    // R-93 (2026-09-09): fytd end is the last-settled period's end,
+    // not today. Excludes periods less than 8 days past close.
+    const fytdEnd = r93FytdEndISO(today);
     let resolvedPreset = null;
-    if (start === FY_START && end === today) {
+    if (start === FY_START && fytdEnd && end === fytdEnd) {
       resolvedPreset = "fytd";
     } else {
       const past = accountPeriods
@@ -328,7 +333,14 @@ export default function KpiOverviewPage() {
     if (resolvedPreset === "fytd" && rc && rc.periods_total > 1) {
       const first = 1;
       const last = rc.periods_total;
-      chipOverride = { primary: `FYTD · P${first}-P${last}` };
+      // R-93: chip primary names the closed span; the just-closed
+      // but unsettled period (P9 today) is appended as its own
+      // clause so an operator sees why the year does not include it.
+      const excludedP = r93ExcludedPeriodNo(today);
+      const primary = excludedP != null
+        ? `closed periods · P${first}-P${last} · P${excludedP} awaiting verification`
+        : `closed periods · P${first}-P${last}`;
+      chipOverride = { primary };
     }
     return {
       startISO: start,

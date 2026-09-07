@@ -29,7 +29,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtDate } from "../lib/formatting";
-import { rangeForPeriod, currentPeriodNo, periodPickerState, periodDateShort } from "../lib/periods";
+import { rangeForPeriod, currentPeriodNo, periodPickerState, periodDateShort, r93FytdEndISO } from "../lib/periods";
 import { FY_START } from "../lib/accounts";
 import { validateLabel, formatSelection } from "../lib/rangeLabel";
 
@@ -50,7 +50,14 @@ const PRESETS = [
 // calendar - no accountPeriods entry is needed because the "next"
 // period never has actuals yet by definition.
 function resolvePreset(kind, { today, accountPeriods }) {
-  if (kind === "fytd") return { startISO: FY_START, endISO: today };
+  // R-93 (Kevin 2026-09-09): fytd end is the last-settled period's
+  // end, not today. A period enters This year only after 8 days past
+  // its close so invoice lag does not flatter the year on incomplete
+  // cost. Consumed by Labor + Overview + Purchasing via this helper.
+  if (kind === "fytd") {
+    const fytdEnd = r93FytdEndISO(today) || today;
+    return { startISO: FY_START, endISO: fytdEnd };
+  }
   if (kind === "next_period") {
     const cur = currentPeriodNo(today);
     if (cur == null) return null;

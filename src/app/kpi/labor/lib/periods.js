@@ -85,6 +85,50 @@ export function currentPeriodNo(todayISO) {
   return periodOf(todayISO);
 }
 
+// R-93 (Kevin 2026-09-09). A period enters "This year" only after it
+// is BOTH closed AND at least one full week past its close. A period
+// closing on Sunday enters on the second Monday after (day 8 forward).
+// Rationale: a period that closed 2 days ago still has half its
+// invoices arriving; scoring it flatters the year on incomplete cost.
+// This is the This year half of the cost-completeness rule.
+//
+// Boundary: today - end > 7d. P9 ends 09-06 -> settled on 09-14
+// (today - end = 8d). On 09-13 (today - end = 7d) still not settled.
+//
+// r93FytdEndISO(today): the ISO date to use as the This year range
+// end. Returns the last SETTLED period's end. Pre-P1-settle edge
+// (never happens mid-season) returns null.
+export function r93FytdEndISO(todayISO) {
+  const t = parseISO(todayISO);
+  if (!t) return null;
+  const cutoffMs = t.getTime() - 7 * MS_PER_DAY;
+  const curP = periodOf(todayISO) ?? 13;
+  for (let p = Math.min(13, curP); p >= 1; p -= 1) {
+    const endISO = periodEndISO(p);
+    if (!endISO) continue;
+    const endMs = parseISO(endISO).getTime();
+    if (endMs < cutoffMs) return endISO;
+  }
+  return null;
+}
+
+// The period that IS closed but NOT yet settled - the one whose
+// existence needs naming on the This year status line ("P9 awaiting
+// verification"). Returns the just-closed period_no when it hasn't
+// yet crossed the R-93 boundary; null otherwise (all closed periods
+// are settled, or no period has closed).
+export function r93ExcludedPeriodNo(todayISO) {
+  const curP = periodOf(todayISO);
+  if (curP == null) return null;
+  const priorP = curP - 1;
+  if (priorP < 1) return null;
+  const priorEnd = periodEndISO(priorP);
+  if (!priorEnd) return null;
+  const cutoffMs = parseISO(todayISO).getTime() - 7 * MS_PER_DAY;
+  const priorEndMs = parseISO(priorEnd).getTime();
+  return priorEndMs < cutoffMs ? null : priorP;
+}
+
 // Range redesign 2026-09-03 (R-62). Small pure helper the RangeMenu
 // picker (PR-A) and the planning view (PR-B) both consume so their
 // notion of "what's clickable" cannot drift.

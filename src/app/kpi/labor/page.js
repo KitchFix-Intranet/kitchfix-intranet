@@ -22,7 +22,7 @@ import { computeStaleness } from "@/lib/labor/staleness";
 import { deriveClientAccount, shouldRestoreLastAccount, shouldAutoEnableSalary, shouldRenderLandingBridgeLoading } from "@/lib/kpi/previewAccess";
 import { ACCOUNTS, FY_START, folioMemberDescription } from "./lib/accounts";
 import { serializeSelection } from "./lib/rangeLabel";
-import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection } from "./lib/periods";
+import { periodOf, fiscalYearOf, currentPeriodNo as periodOfDate, weekOfPeriod, inferRangeSelection, r93FytdEndISO, r93ExcludedPeriodNo } from "./lib/periods";
 import { periodsInBoardWeeks } from "./lib/signalCardModels";
 import { Shell } from "./components/Shell";
 import { FolioRail, PSEUDO_KEYS } from "./components/FolioRail";
@@ -757,7 +757,10 @@ export default function KpiLaborPage() {
   // "· MM/DD/YY – MM/DD/YY".
   const resolvedPreset = useMemo(() => {
     if (lastPreset) return lastPreset; // user clicked one this session
-    if (start === FY_START && end === today) return "fytd";
+    // R-93 (2026-09-09): fytd end is the last-settled period's end, not
+    // today. A period enters the year only after 8 days past close.
+    const fytdEnd = r93FytdEndISO(today);
+    if (start === FY_START && fytdEnd && end === fytdEnd) return "fytd";
     // 2026-09-02 retire-custom PR: last_4wk inference removed - the
     // preset itself is retired (rolling window straddles periods and
     // produced the grain-mismatch defect Kevin measured on TBR - FL).
@@ -779,7 +782,13 @@ export default function KpiLaborPage() {
     const t = today;
     setLastPreset(kind);
     // 2026-09-02: last_4wk preset retired.
-    if (kind === "fytd")      return setParams({ start: FY_START,           end: t });
+    // R-93 (2026-09-09): fytd end is the last-settled period's end.
+    // Excludes periods less than 8 days past close so invoice lag
+    // does not flatter the year on incomplete cost.
+    if (kind === "fytd") {
+      const fytdEnd = r93FytdEndISO(t) || t;
+      return setParams({ start: FY_START, end: fytdEnd });
+    }
     const periods = data?.account_periods || [];
     if (!periods.length) return;
     const withStart = periods.filter(p => p.start && p.end).sort((a, b) => a.start.localeCompare(b.start));
@@ -965,7 +974,21 @@ export default function KpiLaborPage() {
       const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
       return `${months[rangeSelectionEarly.value.monthIndex]} ${rangeSelectionEarly.value.year}`;
     }
-    if (resolvedPreset === "fytd") return "fiscal year to date";
+    // R-93: label names the settled span. "This year" today =
+    // P1 - P8 (closed + settled); on 09-14 rolls to P1 - P9. The
+    // excluded (just-closed but not yet settled) period is named in
+    // the same label so an operator who just finished P9 and does
+    // not see it in the year sees why.
+    if (resolvedPreset === "fytd") {
+      const fytdEnd = r93FytdEndISO(today);
+      const lastP = fytdEnd ? periodOf(fytdEnd) : null;
+      const excludedP = r93ExcludedPeriodNo(today);
+      if (lastP != null) {
+        const base = `closed periods · P1 – P${lastP}`;
+        return excludedP != null ? `${base} · P${excludedP} awaiting verification` : base;
+      }
+      return "fiscal year to date";
+    }
     // 2026-09-02: last_4wk retired.
     if (resolvedPreset === "this_period" || resolvedPreset === "last_period") return `Period ${data?.board?.period_no ?? ""}`.trim();
     return `${start} to ${end}`;
