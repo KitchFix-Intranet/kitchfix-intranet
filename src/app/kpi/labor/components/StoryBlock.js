@@ -441,21 +441,29 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         const signCls = over ? "over" : under ? "under" : "";
         const arrow = over ? "▲" : under ? "▼" : "";
         if (actPct != null && !isFutureRange) {
+          // Kevin post-1061 sweep (2026-09-09). Dollars-first (R-91
+          // supersedes R-89). Amount is hero, percent sits beside as
+          // small text - both figures in the verdict colour on the
+          // Actual row. Same order as the Overview cost + margin
+          // cards; the two boards now read identically. Only the two
+          // hero-row string orders flip; the footer, pill, week
+          // cards and table stay as #1060 shipped them. Render of
+          // record: docs/renders/labor-panel-dollars-first.html.
           return (
             <>
               <div className="kpi-spend-pf-row">
                 <span className="k">Actual</span>
                 <span className={`v num ${signCls}`}>
-                  {actPct.toFixed(1)}%
-                  <small>{fmt$(spent)}</small>
+                  {fmt$(spent)}
+                  <small>{actPct.toFixed(1)}%</small>
                 </span>
               </div>
               <div className="kpi-spend-pf-rule" />
               <div className="kpi-spend-pf-row ref">
                 <span className="k">Target</span>
                 <span className="v num">
-                  {tgtPct != null ? `${tgtPct.toFixed(1)}%` : "—"}
-                  <small>{fmt$(budget)}</small>
+                  {fmt$(budget)}
+                  {tgtPct != null && <small>{tgtPct.toFixed(1)}%</small>}
                 </span>
               </div>
               <div className="kpi-spend-pf-foot">
