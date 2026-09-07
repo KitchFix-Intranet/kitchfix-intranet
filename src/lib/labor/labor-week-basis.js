@@ -161,66 +161,87 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     }
   }
 
-  // Bucket by (week_start, service_date). For each day: was any
-  // service on that day confirmed (has_actuals)? Sum the revenue.
-  const byWeek = new Map();  // week_start -> { byDate: Map<date, {hasActual, actualRev, projRev}> }
-  for (const w of weekStarts) byWeek.set(w, { byDate: new Map() });
+  // Kevin walkthrough item 3 (2026-09-07): basis is service-level,
+  // not day-level. A day with a breakfast confirmed + a dinner
+  // projected is PARTIAL, not confirmed. Previous logic classified
+  // the whole day as confirmed because ANY confirmed service on
+  // that day flipped `hasActual`; that produced TBJ - FL P10 W1
+  // reading "confirmed" at 24% (3 of 13 services). Fix: count
+  // services, not days.
+  //
+  // Three states:
+  //   confirmed  every service in the week has has_actuals
+  //   partial    some do, some don't
+  //   forecast   none do
+  //
+  // Revenue for partial + confirmed weeks: sum(actual $ where
+  // has_actuals) + sum(projected $ where !has_actuals). The
+  // partial week's budget uses confirmed + forecast for the rest,
+  // not one or the other - Kevin acceptance.
+  //
+  // Day counts stay on the payload for backwards compat (existing
+  // clients read them) and for the client's "3 of 13 services"
+  // sub-copy on partial tiles.
+  const byWeek = new Map();
+  for (const w of weekStarts) byWeek.set(w, {
+    confirmedSvcs: 0, projectedSvcs: 0,
+    actualRev: 0, projectedRev: 0,
+    daysWithService: new Set(),
+    daysWithConfirmedSvc: new Set(),
+  });
   for (const r of rows) {
     const ws = weekStartFor(r.service_date);
     if (!ws || !byWeek.has(ws)) continue;
     const bucket = byWeek.get(ws);
-    const d = bucket.byDate.get(r.service_date) || { hasActual: false, actualRev: 0, projRev: 0 };
+    bucket.daysWithService.add(r.service_date);
     if (r.has_actuals) {
-      d.hasActual = true;
-      d.actualRev += Number(r.actual_revenue || 0);
+      bucket.confirmedSvcs += 1;
+      bucket.actualRev += Number(r.actual_revenue || 0);
+      bucket.daysWithConfirmedSvc.add(r.service_date);
     } else if (r.has_projection) {
-      d.projRev += Number(r.projected_revenue || 0);
+      bucket.projectedSvcs += 1;
+      bucket.projectedRev += Number(r.projected_revenue || 0);
     }
-    bucket.byDate.set(r.service_date, d);
   }
 
-  // Emit per-week records with basis classification.
-  //
-  // A week is "confirmed" when ANY served day has has_actuals -
-  // Kevin's item 5 treats confirmed as the single tile treatment
-  // covering closed / running / confirmed sub-states. "Forecast"
-  // when no served day has actuals (the pure fallback path).
-  //
-  // This is the branch condition Kevin ruled to weight equally -
-  // no "if (!confirmedDays) fallback = ..." phrasing here.
   const data = weekStarts.map(ws => {
     const bucket = byWeek.get(ws);
     const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * MS_PER_DAY).toISOString().slice(0, 10);
 
-    let confirmedDays = 0;
-    let projectedDays = 0;
-    let actualRev = 0;
-    let projectedRev = 0;
-    for (const [, d] of bucket.byDate) {
-      if (d.hasActual) {
-        confirmedDays += 1;
-        actualRev += d.actualRev;
-      } else if (d.projRev > 0) {
-        projectedDays += 1;
-        projectedRev += d.projRev;
-      }
-    }
-    const emptyDays = 7 - confirmedDays - projectedDays;
+    const { confirmedSvcs, projectedSvcs, actualRev, projectedRev } = bucket;
+    const totalSvcs = confirmedSvcs + projectedSvcs;
+    const basis = totalSvcs === 0
+      ? "forecast"                                         // no services at all -> pure fallback
+      : projectedSvcs === 0
+        ? "confirmed"                                      // every service actual
+        : confirmedSvcs === 0
+          ? "forecast"                                     // no service actual, all projected
+          : "partial";                                     // some of each
 
-    const isConfirmed = confirmedDays > 0;
+    // Day counts retained for backwards compat + client copy. A day
+    // with any confirmed service counts on the confirmed side; days
+    // with only projections count on the projected side; the diff
+    // to 7 is `empty_days`.
+    const confirmedDays = bucket.daysWithConfirmedSvc.size;
+    const projectedDays = bucket.daysWithService.size - confirmedDays;
+    const emptyDays = 7 - bucket.daysWithService.size;
+
     return {
       week_start: ws,
       week_end: wEnd,
-      basis: isConfirmed ? "confirmed" : "forecast",
+      basis,
       temporal: weekTemporalState(ws, today),
       confirmed_days: confirmedDays,
       projected_days: projectedDays,
       empty_days: emptyDays < 0 ? 0 : emptyDays,
+      confirmed_services: confirmedSvcs,
+      projected_services: projectedSvcs,
+      total_services: totalSvcs,
       actual_revenue: Math.round(actualRev * 100) / 100,
       projected_revenue: Math.round(projectedRev * 100) / 100,
-      revenue: isConfirmed
-        ? Math.round((actualRev + projectedRev) * 100) / 100  // confirmed weeks may still carry projected tail (running week)
-        : Math.round(projectedRev * 100) / 100,               // pure forecast weeks read only projected
+      revenue: basis === "forecast"
+        ? Math.round(projectedRev * 100) / 100             // pure forecast: projections only
+        : Math.round((actualRev + projectedRev) * 100) / 100, // confirmed or partial: mix
     };
   });
   return { data };
@@ -333,6 +354,11 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     w.confirmed_days = basis.confirmed_days;
     w.projected_days = basis.projected_days;
     w.empty_days = basis.empty_days;
+    // Walkthrough item 3 - service-level counts for the "3 of 13"
+    // client copy on partial tiles.
+    w.confirmed_services = basis.confirmed_services;
+    w.projected_services = basis.projected_services;
+    w.total_services = basis.total_services;
     w.week_actual_revenue = basis.actual_revenue;
     w.week_projected_revenue = basis.projected_revenue;
     w.week_revenue = basis.revenue;

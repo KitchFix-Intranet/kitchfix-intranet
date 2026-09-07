@@ -106,14 +106,52 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
   const spent = isMultiWithClosedSubset
     ? board.closed_spent_to_date
     : (board?.spent_to_date ?? 0);
-  // Comparison target: batr when the payload carries it (R-77 fix).
-  // Falls back to raw range budget only when batr is unavailable
-  // (rolling windows, salaried-only account state, or a route that
-  // hasn't been updated). Existing consumers that read budget for
-  // display keep working - just against the adjusted figure now.
-  const budget = board?.budget_at_this_revenue != null
-    ? board.budget_at_this_revenue
-    : (board?.period_budget || board?.range_budget || null);
+  // Kevin walkthrough item 1 (2026-09-07). Comparison target =
+  // sum of per-week batr across the range. Prior code preferred
+  // board.budget_at_this_revenue but that computes only for
+  // single-period-closed ranges when P&L has verified data; when
+  // null (TBJ - FL P9 today, and every open range) the code fell
+  // back to board.range_budget which is the RAW figure and defeated
+  // R-77 on this surface.
+  //
+  // Per-week batr sums to the same number as range-level batr for
+  // single-period ranges by construction (period_revenue * pct);
+  // for multi-period it is the period-weighted sum which is the
+  // more accurate figure. Kevin acceptance: "the panel's comparison
+  // figure equals the sum of the per-week budgets".
+  //
+  // For multi-period ranges spanning a running period, restrict to
+  // CLOSED weeks (matches R-63 "running period does not enter the
+  // total"). isMultiWithClosedSubset picks closed weeks; otherwise
+  // sum all weeks.
+  const budget = (() => {
+    const weeks = board?.weeks || [];
+    if (weeks.length > 0) {
+      const filter = isMultiWithClosedSubset
+        ? (w => w.revenue_basis_temporal === "closed" || w.state === "closed")
+        : (() => true);
+      const sum = weeks
+        .filter(filter)
+        .reduce((s, w) => s + (w.budget_at_this_week_revenue != null ? Number(w.budget_at_this_week_revenue) : 0), 0);
+      const anyWithBatr = weeks.filter(filter).some(w => w.budget_at_this_week_revenue != null);
+      if (anyWithBatr) return Math.round(sum * 100) / 100;
+    }
+    // Fallback chain when per-week batr is missing (older routes,
+    // salaried-only, weeks outside FY2026): the pre-walkthrough path.
+    if (board?.budget_at_this_revenue != null) return board.budget_at_this_revenue;
+    return board?.period_budget || board?.range_budget || null;
+  })();
+  // Was the comparison built from the adjusted per-week figures, or
+  // fell through to the raw range_budget? Drives the left-cell label
+  // ("Adjusted budget" vs "Budget") so the panel never claims to be
+  // adjusted when it isn't.
+  const budgetIsAdjusted = (() => {
+    if (budget == null) return false;
+    const weeks = board?.weeks || [];
+    if (weeks.some(w => w.budget_at_this_week_revenue != null)) return true;
+    if (board?.budget_at_this_revenue != null) return true;
+    return false;
+  })();
   // Variance is spent - budget on whatever the current pair reads.
   // When budget = batr (R-77 target), variance = spent - batr which
   // matches the Overview's per-line dollar variance operand. Falls
@@ -349,7 +387,14 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
           PR-B rather than the SpendCard pair. */}
       <div className="kpi-spend-pair">
         <div className={`kpi-spend-cell ${noBudget ? "kpi-spend-cell-mute" : ""}`}>
-          <div className="kpi-spend-cell-lab">{noBudget ? "no budget" : "Adjusted budget"}</div>
+          {/* Walkthrough item 1 - label follows what is shown. Prior
+              code hardcoded "Adjusted budget" even when the value
+              fell back to the raw range_budget (TBJ - FL P9 defect).
+              Now: "Adjusted budget" only when the figure sums from
+              per-week batr or reads range-level batr; otherwise
+              plain "Budget" so the label does not lie about the
+              figure. */}
+          <div className="kpi-spend-cell-lab">{noBudget ? "no budget" : (budgetIsAdjusted ? "Adjusted budget" : "Budget")}</div>
           <div className="kpi-spend-cell-val num">{noBudget ? "—" : fmt$(budget)}</div>
           <div className="kpi-spend-cell-sub">{budgetSub}</div>
         </div>
@@ -431,7 +476,9 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     || (isClosed ? "closed" : isInProgress ? "running" : "future");
   const isRunning = basisTemporal === "running";
   const isFuture = basisTemporal === "future";
+  // Walkthrough item 3 (2026-09-07): three basis states now.
   const isForecast = w.revenue_basis === "forecast";
+  const isPartial = w.revenue_basis === "partial";
   const value = isNotStarted
     ? (w.weekly_allowance ?? weeklyAllowance ?? 0)
     : (w.spent || 0);
@@ -518,6 +565,10 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
   const targetPct = (!isZero && perWeekTarget != null && perWeekTarget > 0)
     ? Math.max(0, Math.min(100, (perWeekTarget / scale) * 90))
     : null;
+  // Walkthrough item 3 - target line styling per basis:
+  //   confirmed  amber dashed (default)
+  //   partial    amber dashed (day count on caption tells the story)
+  //   forecast   grey dashed
   const targetCls = (perWeekAdjusted != null && isForecast)
     ? "kpi-wb-target kpi-wb-target-forecast"
     : (perWeekAdjusted != null)
@@ -537,16 +588,19 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     : value;
   const captionValue = hasUnpriced ? `≥ ${fmt$(captionValueRaw)}` : fmt$(captionValueRaw);
   let statusLine;
-  if (isRunning && perWeekAdjusted != null) {
+  if (isRunning && perWeekAdjusted != null && value > 0.5) {
     // Labor PR-B item 6 (R-80) - running week reads as a fraction,
     // never a variance. Its budget covers days not yet worked, so an
     // over/under against it is false. Kevin's example format:
     //   $3,933 of $4,217 · 93% used · 2 days left
-    // Days-left comes from the payload (days_left_in_week attached by
-    // attachWeeklyBasisToBoard); pct rounds to nearest int; both figures
-    // read the per-week batr (basis-adjusted). The forecast tag on the
-    // budget number (below) still names when the reference itself is
-    // provisional.
+    //
+    // Kevin walkthrough item 4a (2026-09-07): the fraction only fires
+    // when spend exists. Prior gate rendered "$0.00 of $5,431.54 · 0%
+    // used · 7 days left" on day one - noise on a week that reads like
+    // any other not-started week. The `value > 0.5` guard drops the
+    // fraction until real spend lands; the caption then falls through
+    // to the `isRunning && !fraction` branch below which shows the
+    // week's budget as its plan.
     const spent = value;
     const bud = perWeekAdjusted;
     const pct = bud > 0 ? Math.round((spent / bud) * 100) : null;
@@ -555,6 +609,15 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     if (pct != null) parts.push(`${pct}% used`);
     if (daysLeft != null) parts.push(`${daysLeft} day${daysLeft === 1 ? "" : "s"} left`);
     statusLine = <span className={`kpi-wb-d kpi-wb-d-frac`}>{parts.join(" · ")}</span>;
+  } else if (isRunning && perWeekAdjusted != null) {
+    // Walkthrough item 4a fall-through - running week with zero spend
+    // reads like a not-started week. The bar draws the baseline stub
+    // (already handled by `isZero` above) and the caption names the
+    // per-week budget as the plan.
+    const daysLeft = w.days_left_in_week;
+    statusLine = <span className="kpi-wb-d kpi-wb-d-mute">
+      week started · {daysLeft != null ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "budget covers the whole week"}
+    </span>;
   } else if (isClosed && w.delta_vs_original != null) {
     const dir = w.delta_sign === "under" ? "down" : w.delta_sign === "over" ? "up" : "flat";
     const cls = w.delta_sign === "under" ? "kpi-wb-d-good" : w.delta_sign === "over" ? "kpi-wb-d-bad" : "kpi-wb-d-mute";
@@ -630,7 +693,7 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
           />
         )}
       </div>
-      <div className={`kpi-wb-cap${isForecast ? " kpi-wb-cap-forecast" : ""}`}>
+      <div className={`kpi-wb-cap${(isForecast || isPartial) ? " kpi-wb-cap-forecast" : ""}`}>
         <b className={captionCls}>
           {captionValue}
           {/* Labor PR-B item 5 - `plan` tag on the budget number for
@@ -650,7 +713,14 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
         <span className="kpi-wb-dates">
           {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
           {isInProgress ? " · in progress" : ""}
-          {isForecast && !isFuture && " · forecast, will move as counts confirm"}
+          {/* Walkthrough item 3 - partial state names the confirmed
+              share explicitly. "3 of 13 services confirmed · budget
+              will move" tells the reader why the number is
+              provisional without leaning on the forecast label alone. */}
+          {isPartial && w.total_services > 0 && (
+            ` · ${w.confirmed_services} of ${w.total_services} services confirmed · budget will move`
+          )}
+          {isForecast && !isFuture && !isPartial && " · forecast, will move as counts confirm"}
           {isForecast && isFuture && !isInProgress && " · projected"}
         </span>
         {statusLine}
@@ -938,14 +1008,6 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
   const weekCount = (board?.weeks || []).length;
   const tier = classifyTier(weekCount);
   const stripTitle = tier === "C" ? "THE RANGE · PERIOD BY PERIOD" : (tier === "A" ? "THE PERIOD · WEEK BY WEEK" : "THE RANGE · WEEK BY WEEK");
-  // V29-7 - Tier A strip header labels each line ONCE. Amber ORIGINAL
-  // for closed / in-progress weeks; light-blue ADJUSTED for not-started
-  // weeks (only rendered when the allowance applies - single-period
-  // in-progress ranges with weeks not yet started).
-  const showOriginalLabel = tier === "A" && board?.weekly_original_target != null;
-  const showAdjustedLabel = tier === "A"
-    && board?.weekly_allowance != null
-    && (board?.not_started_weeks_count || 0) > 0;
 
   return (
     <div className="kpi-story">
@@ -958,54 +1020,35 @@ export function StoryBlock({ board, account, rangeLabel, budgetPeriods, todayISO
           <span className="kpi-wh-t">{stripTitle}</span>
           <HelpPop id="qWeekByWeek" title="Week by week" body={WEEK_BY_WEEK_BODY} />
           <span className="kpi-wh-sp" aria-hidden="true" />
-          {showOriginalLabel && (
-            <span className="kpi-wh-tgt">
-              <span className="kpi-wh-tgt-dash" aria-hidden="true" />
-              {/* V33 item 4d - `original` only means something when an
-                  adjusted line renders alongside it. On closed periods
-                  (no adjusted) label it plainly `weekly target`. */}
-              {showAdjustedLabel ? "original" : "weekly target"} <b>{fmt$(board.weekly_original_target)}</b>
-            </span>
-          )}
-          {showAdjustedLabel && (
-            <span className="kpi-wh-tgt kpi-wh-tgt-adj">
-              <span className="kpi-wh-tgt-dash" aria-hidden="true" />
-              adjusted <b>{fmt$(board.weekly_allowance)}</b>
-            </span>
-          )}
-          {/* Audit close 2026-08-24: the "· hourly + salary" span
-              was #718's Salary PR 3 C2. The className kpi-wh-tgt-basis
-              had ZERO rules in kpi.css so the span inherited body
-              defaults, rendered at full body scale inside a legend of
-              small-caps labels, and wrapped onto two lines. Only
-              surfaced with salary on, which is why it slipped past
-              live verify. Deleted per owner ruling: the basis is
-              already stated twice on the same screen - the budget
-              card sub-line reads "· hourly + salary" (SpendCard) and
-              the scope pill on the first card reads "+ SALARY". A
-              third statement inside a legend that names the target
-              lines is the wrong place; that legend names the lines. */}
-          {/* Labor unapproved-hours fix (Kevin 2026-09-07). Two hatched
-              treatments now, one per state - the legend distinguishes
-              them by colour so the reader can tell which pattern is
-              which at a glance. Prior legend read "hatched = not costed
-              yet" and there was exactly one hatched element on the
-              page (the swatch itself; no bar used it in current data).
-              Kevin: "if it does not [fire], replace it" - the state
-              still exists in code (unpriced_hrs > 0 fires during
-              payroll processing windows) so both legends stay; each
-              names its own colour + placement. Standing rule: every
-              tracker carries a visible state key; never ship an
-              unexplained pattern. */}
+          {/* Kevin walkthrough item 2 (2026-09-07). Prior legend had
+              "weekly target $4,777.27" (from board.weekly_original_target)
+              which named ONE flat number when each bar's line sits at
+              THAT week's own budget - the number in the legend was
+              wrong on every bar. On single-period-in-progress the
+              `original` and `adjusted` entries always read identically
+              ($4,940.60 on both); Kevin ruling: if two legend entries
+              always show the same number, one of them is not a real
+              distinction - resolve or remove. Removed. Replaced with a
+              descriptor naming the treatment, not a value.
+
+              R-84 (Kevin walkthrough item 4b, 2026-09-07): a legend may
+              not promise a treatment nothing uses. `amber hatched = not
+              costed yet` fires nowhere in current data (verified across
+              4 accounts x 2 ranges, all `unpriced_hrs = 0`). The
+              `.kpi-wb-cap-est` render code stays (defensive; may fire
+              during payroll windows) but the legend entry goes until
+              the treatment fires. If the amber cap ever renders and no
+              legend explains it, that gap is easy to notice and add
+              back. */}
           {tier === "A" && (
             <>
               <span className="kpi-wh-tgt kpi-wh-tgt-cap">
-                <span className="kpi-wh-unapp-swatch" aria-hidden="true" />
-                grey hatched = awaiting approval
+                <span className="kpi-wh-tgt-dash" aria-hidden="true" />
+                each week&rsquo;s own budget
               </span>
               <span className="kpi-wh-tgt kpi-wh-tgt-cap">
-                <span className="kpi-wh-cap-swatch" aria-hidden="true" />
-                amber hatched = not costed yet
+                <span className="kpi-wh-unapp-swatch" aria-hidden="true" />
+                grey hatched = awaiting approval
               </span>
             </>
           )}
