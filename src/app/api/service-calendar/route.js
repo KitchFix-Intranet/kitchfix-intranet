@@ -1266,6 +1266,86 @@ export async function POST(request) {
       return NextResponse.json({ success: true, ...noteRes });
     }
 
+    // ── sc-bulk-reset: undo actuals for a span of days ──
+    // 2026-09-07 (owner ruling): fan-out of sc-reset-day across a
+    // bulk selection. Same semantics per day - DELETE from
+    // sc_daily_actuals (not zero), BEFORE DELETE trigger writes the
+    // per-service history receipt, companion note appended to
+    // sc_day_note_entries.
+    //
+    // Two things distinguish this from sc-reset-day:
+    //   - Both locks (period + week-finalize) are checked against the
+    //     WHOLE date array up-front. All-or-nothing: one locked day
+    //     refuses the batch, the response names the offending dates.
+    //     A partial success shape would let an operator misread
+    //     "4 cleared, 1 skipped" as "5 cleared."
+    //   - The companion note wording marks these as a bulk sweep and
+    //     names the span, so a ledger reader six weeks out can tell
+    //     one deliberate bulk from N separate single-day decisions.
+    //
+    // Note-write failures are NOT fatal: the actuals delete is the
+    // billing truth, notes are audit metadata. Same partial-success
+    // shape as sc-bulk-submit (`noteFailCount`).
+    if (action === "sc-bulk-reset") {
+      const { accountKey, dates } = body;
+      if (!accountKey || !Array.isArray(dates) || dates.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "accountKey and non-empty dates required" },
+          { status: 400 }
+        );
+      }
+      const uniqueDates = [...new Set(dates)].sort();
+      const bulkResetLockRefusal = await assertDaysUnlockedForWrite(accountKey, uniqueDates, email);
+      if (bulkResetLockRefusal) {
+        return NextResponse.json({ success: false, ...bulkResetLockRefusal }, { status: 403 });
+      }
+      const bulkResetWeekRefusal = await assertWeekOpenForWrite(accountKey, uniqueDates, email);
+      if (bulkResetWeekRefusal) {
+        return NextResponse.json({ success: false, ...bulkResetWeekRefusal }, { status: 403 });
+      }
+      const supa = getServiceClient();
+      // Single DELETE covering the whole date set. Same BEFORE DELETE
+      // trigger fires per-row so history rows land per (service, day)
+      // deleted - preserves the sc-25 receipt shape at bulk scale.
+      const { error: bulkDelErr } = await supa
+        .from("sc_daily_actuals")
+        .delete()
+        .eq("account_key", accountKey)
+        .in("service_date", uniqueDates);
+      if (bulkDelErr) {
+        return NextResponse.json(
+          { success: false, error: `bulk reset failed: ${bulkDelErr.message}` },
+          { status: 500 }
+        );
+      }
+      // Companion notes - one per day, wording marks the bulk sweep
+      // and names the span. sc_day_note_entries is append-only (no
+      // DELETE grant) so these survive a subsequent undo, giving the
+      // ledger the honest reset-then-re-entered record.
+      const author = session.user?.name || session.user?.email || "";
+      const spanLabel = uniqueDates.length === 1
+        ? `${uniqueDates[0]} (1 day)`
+        : `${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]} (${uniqueDates.length} days)`;
+      const noteText = `Bulk reset - ${spanLabel}. All counts cleared.`;
+      let noteFailCount = 0;
+      await Promise.all(
+        uniqueDates.map(async (d) => {
+          try {
+            await addDayNoteEntry(accountKey, d, noteText, author);
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`[sc-bulk-reset] note append failed for ${d}:`, err);
+            noteFailCount++;
+          }
+        })
+      );
+      return NextResponse.json({
+        success: true,
+        resetCount: uniqueDates.length,
+        noteFailCount,
+      });
+    }
+
     // ── sc-bulk-submit: save actuals for multiple days ──
     if (action === "sc-bulk-submit") {
       const { accountKey, entries, batchNote } = body;

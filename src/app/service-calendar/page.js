@@ -236,6 +236,7 @@ function ServiceCalendarPageBody() {
             actionLabel={toast.actionLabel}
             onAction={toast.onAction}
             onDismiss={() => setToast(null)}
+            {...(toast.lifetimeMs ? { lifetimeMs: toast.lifetimeMs } : {})}
           />
         </div>
       )}

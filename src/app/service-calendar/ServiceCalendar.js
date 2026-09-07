@@ -61,6 +61,8 @@ import MobileBooksBar from "./v2/MobileBooksBar";
 // sites (match-projections + custom-values) both moved to the matrix.
 import BulkEntry from "./v2/bulk/BulkEntry";
 import BulkReviewMatrix from "./v2/bulk/BulkReviewMatrix";
+// 2026-09-07: bulk-reset confirmation modal.
+import BulkResetConfirm from "./v2/bulk/BulkResetConfirm";
 import "./v2/bulk/bulk.css";
 import "./v2/bulk/bulkReviewMatrix.css";
 import { isFeeNoDollar } from "./v2/vocab";
@@ -710,6 +712,9 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // leaves bulkValues intact so the operator can adjust.
   const [bulkCustomReviewOpen, setBulkCustomReviewOpen] = useState(false);
   const [bulkValues, setBulkValues] = useState({});
+  // 2026-09-07: bulk-reset confirmation modal state. Kevin ruling:
+  // routes N=1 through this same confirm; one code path, one component.
+  const [bulkResetConfirmOpen, setBulkResetConfirmOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/service-calendar?action=sc-accounts")
@@ -2343,6 +2348,164 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     }
   }, [data, showToast]);
 
+  // ── Bulk reset: DELETEs sc_daily_actuals across a date span ──
+  // 2026-09-07. Fan-out of handleResetDay across the bulk selection.
+  // Same semantics per day (Q1 finding): the single-day reset already
+  // implements Kevin's "clear back to nothing, not zero" semantics -
+  // rows are DELETEd, days return to amber unentered, ledger note
+  // appended per day, DELETE trigger writes per-service history rows.
+  //
+  // Two things this handler owns beyond fan-out:
+  //   - Undo payload captured BEFORE the reset fires (Kevin's explicit
+  //     ruling). Once DELETE lands the pre-reset values are only in
+  //     history; we capture from the in-memory day.actual so the toast
+  //     Undo can re-POST them via sc-bulk-submit.
+  //   - Toast lifetime bumped to 15s (up from the shared 5s default).
+  //     Undo is the primary safety net for a bulk-destructive action,
+  //     so the escape hatch must be reachable by a distracted operator.
+  //     page.js forwards the payload lifetimeMs to Toast.
+  //
+  // Server all-or-nothing guards (sc-bulk-reset): one locked day fails
+  // the whole batch and names the offending dates. Client surfaces the
+  // server's message verbatim (it already names the specific week or
+  // date).
+  const handleBulkReset = useCallback(async () => {
+    if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
+    // Snapshot pre-reset actuals from every selected day BEFORE the
+    // server DELETE fires. Once the delete lands, day.actual is gone
+    // from sc_daily_actuals and only survives in the history table -
+    // an undo re-post would need to reconstruct from history rows,
+    // which is a lot more moving pieces than "keep the values we
+    // already have in memory." Undo becomes cheap by capturing here.
+    const selectedDates = [...bulkSelected].sort();
+    const undoEntries = [];
+    for (const dk of selectedDates) {
+      const day = activeDrillDays?.find(d => d.date === dk) || dayMap[dk];
+      if (!day || !day.actual) continue;
+      for (const g of data.serviceGroups) {
+        for (const s of g.services) {
+          const v = day.actual[s.colIndex];
+          if (v == null) continue;
+          undoEntries.push({ colIndex: s.colIndex, date: dk, value: Number(v) || 0 });
+        }
+      }
+    }
+    const controller = new AbortController();
+    inFlightControllersRef.current.add(controller);
+    try {
+      const res = await fetch("/api/service-calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sc-bulk-reset",
+          accountKey: data.account.key,
+          dates: selectedDates,
+        }),
+        signal: controller.signal,
+      });
+      const result = await res.json();
+      if (!isMountedRef.current) return result;
+      if (!result.success) {
+        // Server refusal surfaces verbatim - assertDaysUnlockedForWrite
+        // and assertWeekOpenForWrite already name the specific date or
+        // week that blocked the batch. Prior copy said "Cannot reset -
+        // ..."; we surface it as detail + a Try again action.
+        showToast({
+          variant: "generic",
+          tier: "bad",
+          title: "Could not reset selection",
+          detail: result.message || result.error || "Nothing was changed. Check your connection and try again.",
+          actionLabel: "Try again",
+          onAction: () => handleBulkReset(),
+        });
+        return result;
+      }
+      // Success. Drop every affected month from the cache and bump
+      // reloadKey so the drill refetches - same pattern as
+      // handleResetDay, extended across the affected months.
+      const affectedMonths = new Set();
+      for (const dk of selectedDates) affectedMonths.add(dk.slice(0, 7));
+      setMonthCache(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const mk of affectedMonths) if (mk in next) { delete next[mk]; changed = true; }
+        return changed ? next : prev;
+      });
+      setReloadKey(k => k + 1);
+      // Exit bulk mode + clear selection - the operation is done and
+      // the operator should return to the normal drill view.
+      setBulkMode(false);
+      setBulkSelected(new Set());
+      // Success toast with Undo. 15s lifetime (Kevin ruling): a
+      // bulk-destructive action needs a reachable escape hatch.
+      const dayCount = selectedDates.length;
+      const spanDetail = dayCount === 1
+        ? fmtDateShort(selectedDates[0])
+        : `${fmtDateShort(selectedDates[0])} to ${fmtDateShort(selectedDates[dayCount - 1])} - ${dayCount} days`;
+      const canUndo = undoEntries.length > 0;
+      showToast({
+        variant: "generic",
+        tier: "warn",
+        title: dayCount === 1 ? "Day cleared" : `${dayCount} days cleared`,
+        detail: `${spanDetail} - entries removed`,
+        lifetimeMs: 15000,
+        ...(canUndo ? {
+          actionLabel: "Undo",
+          onAction: async () => {
+            const undoRes = await fetch("/api/service-calendar", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "sc-bulk-submit",
+                accountKey: data.account.key,
+                entries: undoEntries,
+              }),
+            });
+            const undoJson = await undoRes.json();
+            if (undoJson?.success) {
+              setMonthCache(prev => {
+                let changed = false;
+                const next = { ...prev };
+                for (const mk of affectedMonths) if (mk in next) { delete next[mk]; changed = true; }
+                return changed ? next : prev;
+              });
+              setReloadKey(k => k + 1);
+              showToast({
+                variant: "generic",
+                tier: "ok",
+                title: "Undo saved",
+                detail: spanDetail,
+              });
+            } else {
+              showToast({
+                variant: "generic",
+                tier: "bad",
+                title: "Could not undo",
+                detail: undoJson?.message || undoJson?.error || "Check your connection and try again.",
+              });
+            }
+          },
+        } : {}),
+      });
+      return result;
+    } catch (err) {
+      if (err?.name === "AbortError") return { success: false, error: "aborted" };
+      if (isMountedRef.current) {
+        showToast({
+          variant: "generic",
+          tier: "bad",
+          title: "Could not reset selection",
+          detail: "Nothing was changed. Check your connection and try again.",
+          actionLabel: "Try again",
+          onAction: () => handleBulkReset(),
+        });
+      }
+      return { success: false, error: "Network error" };
+    } finally {
+      inFlightControllersRef.current.delete(controller);
+    }
+  }, [data, bulkSelected, activeDrillDays, dayMap, showToast]);
+
   // ── Bulk save: writes same values to all selected days ──
   const handleBulkSave = useCallback(async (batchNote = "") => {
     if (!data?.account || !data?.serviceGroups || bulkSelected.size === 0) return;
@@ -3700,6 +3863,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               onBulkTileClick={toggleBulkSelect}
               onBulkOpenPanel={() => setBulkPanelOpen(true)}
               onBulkReview={() => setBulkReviewOpen(true)}
+              onBulkReset={() => setBulkResetConfirmOpen(true)}
               onBulkConfirmAsProjected={handleBulkConfirm}
               onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
               saving={saving}
@@ -3968,6 +4132,7 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
               onBulkTileClick={toggleBulkSelect}
               onBulkOpenPanel={() => setBulkPanelOpen(true)}
               onBulkReview={() => setBulkReviewOpen(true)}
+              onBulkReset={() => setBulkResetConfirmOpen(true)}
               onBulkConfirmAsProjected={handleBulkConfirm}
               onBulkCancel={() => { setBulkMode(false); setBulkSelected(new Set()); setBulkPanelOpen(false); setBulkReviewOpen(false); }}
               saving={saving}
@@ -4405,6 +4570,19 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
           />
         );
       })()}
+
+      {/* 2026-09-07: bulk-reset confirmation modal. Same modal is
+          used for N=1 and N>1 per Kevin ruling (one code path, one
+          confirm component). On confirm, closes itself + fires
+          handleBulkReset - which owns the pre-reset snapshot capture,
+          the server POST, the toast with Undo, and the bulk-mode
+          cleanup. */}
+      <BulkResetConfirm
+        open={bulkResetConfirmOpen}
+        dates={[...bulkSelected]}
+        onCancel={() => setBulkResetConfirmOpen(false)}
+        onConfirm={() => { setBulkResetConfirmOpen(false); handleBulkReset(); }}
+      />
 
       {/* Bulk match-projections review (Phase 2A 2026-07-24, owner
           Ruling 1). Was an inline IIFE; both bulk paths converge on
