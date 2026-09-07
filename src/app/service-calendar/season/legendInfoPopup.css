@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
-  animation: scLegendPopupIn 160ms ease;
+  animation: scLegendPopupIn var(--duration-base) var(--ease-standard);
 }
 
 @keyframes scLegendPopupIn {

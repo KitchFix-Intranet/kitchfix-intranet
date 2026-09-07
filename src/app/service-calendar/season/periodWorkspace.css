@@ -650,13 +650,8 @@
 }
 
 .sc-workspace-skel {
-  background: linear-gradient(90deg, var(--surface-sunken) 25%, var(--border-subtle) 50%, var(--surface-sunken) 75%);
-  background-size: 200% 100%;
-  animation: sc-season-shimmer 1.6s linear infinite;
+  background: var(--surface-sunken);
   border-radius: var(--radius-control);
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-workspace-skel { animation: none; background: var(--surface-sunken); }
 }
 .sc-workspace-skel--frame { height: 130px; }
 .sc-workspace-skel--hero  { height: 110px; }

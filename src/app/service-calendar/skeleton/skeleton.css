@@ -33,13 +33,11 @@
   100% { background-position: -200% 0; }
 }
 
-@keyframes sc-skeleton-spin {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
 /* Shimmer atom - width comes from parent class. Every skeleton
-   element on the surface uses this animation via composition. */
+   element on the surface uses this animation via composition.
+   2026-09-04 (motion cleanup): the sibling spinner glyph +
+   sc-skeleton-spin keyframe were dropped. One tempo per loading
+   surface; the shimmer is the tempo. */
 .sc-skel-shimmer {
   display: inline-block;
   background:
@@ -55,16 +53,15 @@
   min-height: 12px;
 }
 
-/* Spinner glyph - a real animation, not just static "…". Used in
-   the caption at the top of the surface + at the top of the rail. */
-.sc-skel-spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--sc2-skeleton-base);
-  border-top-color: #7a8ea3;
-  border-radius: 50%;
-  animation: sc-skeleton-spin 0.9s linear infinite;
+/* Reduced-motion: collapse the shimmer to a flat fill. Matches the
+   discipline every other SC animation file follows via the token
+   layer; skeleton.css uses a hardcoded 1.4s so the token collapse
+   does not reach it, and needs its own guard. */
+@media (prefers-reduced-motion: reduce) {
+  .sc-skel-shimmer {
+    animation: none;
+    background: var(--sc2-skeleton-base);
+  }
 }
 
 /* Surface container - matches the layout the real drill/season
@@ -173,12 +170,6 @@
     width: 100%;
     min-height: 200px;
   }
-}
-
-.sc-skel-rail-spinner {
-  display: flex;
-  justify-content: center;
-  padding: 8px 0;
 }
 
 .sc-skel-rail-hero {

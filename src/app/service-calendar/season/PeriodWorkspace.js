@@ -75,7 +75,6 @@ function mondayOfWeek(isoDate) {
 }
 import "../v2/billing/weekFinalize.css";
 import "../v2/billing/finalizeOverlay.css";
-import "../v2/billing/finalizeToast.css";
 
 export default function PeriodWorkspace({
   account,                  // { key, name, category, billingModel }
@@ -147,6 +146,9 @@ export default function PeriodWorkspace({
   // Drives the SC_LOCK_OVERRIDE affordances (Revert + Retry). Also
   // gates the FETCH of finalize states (skip when unknown).
   viewerEmail = null,
+  // 2026-09-04 (motion cleanup): finalize success routes through the
+  // shared page-level toast. WeekFinalizeControl consumes this.
+  showToast = null,
 }) {
   const kind = useMemo(
     () => resolveDayKind({
@@ -1292,6 +1294,7 @@ function DayGrid({ cells, today, kind, hasHomestandSchedule, isFeeAccount, isMil
                          finalize from a month-shaped screen that frames
                          weeks by month rather than by billing period. */
                       readOnlyFinalize={scope !== "period"}
+                      showToast={showToast}
                     />
                   </div>
                 );
