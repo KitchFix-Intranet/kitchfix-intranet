@@ -1551,8 +1551,30 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // Non-goal: this gate does NOT fire on background refetches (save
   // reloads etc.) because data/yearData/monthCache aren't nulled by
   // reloadKey changes - only by account switch.
+  // 2026-09-08: account-identity clause added. Prior gate keyed only
+  // on "is a data slot empty" - `!data`, `!yearData`, `!periodRanges`,
+  // missing monthCache month. That fires TRUE only after the account-
+  // switch effect at :801 nulls those slots, which happens post-render.
+  // The intermediate render (immediately after setSelectedAccount, but
+  // before the effect fires) sees the NEW `selectedAccount` alongside
+  // the OLD account's data - every existing clause reads false, gate
+  // returns false, `<PeriodWorkspace>` mounts with stale periodRanges +
+  // periodKey (URL-parse effect fires first, resetting periodKey to raw
+  // "6" while OLD periodRanges list uses "P6"). `drillPeriodRange`
+  // resolves to null; the empty-state "Pick a period from the Season
+  // grid." branch reaches the screen for one render before the skeleton
+  // takes over. Documented as the "wrong readiness signal" pattern
+  // (Motion Observation A). The account-identity clause detects the
+  // stale-data case directly: `data.account.key` is the loaded
+  // account's key; if it doesn't match `selectedAccount`, we're in the
+  // transition window and the gate stays TRUE until fresh data lands.
+  // yearData doesn't carry account identity in the payload shape
+  // (setYearData(d.months) at :901 stores just the months array), but
+  // it's cleared alongside `data` in the account-switch effect, so
+  // the data clause covers the shared window.
   const isAccountLoading = !!selectedAccount && (
     !data ||
+    data?.account?.key !== selectedAccount ||
     !yearData ||
     (lens === "period" && !periodRanges) ||
     (isMonthView && !monthCache[monthKey])
