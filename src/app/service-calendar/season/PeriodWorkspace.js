@@ -253,7 +253,21 @@ export default function PeriodWorkspace({
         console.warn("[PeriodWorkspace] sc-finalize-states fetch failed:", err?.message || err);
       });
     return () => { cancelled = true; };
-  }, [showFinalize, accountKey, periodRange?.start, periodRange?.end, finalizeReloadTick]);
+    // 2026-09-08: `periodDays` added to deps. Prior shape only re-fetched
+    // sc-finalize-states on finalizeReloadTick (post-finalize) - not on
+    // sc-submit-day. Result: a future week fully entered by the operator
+    // kept rendering "N days still need entry or no-service" because
+    // weeksMeta stayed stale. Server-side `computeWeekCompleteness`
+    // correctly recomputed on refetch; the CLIENT never re-asked. Adding
+    // periodDays ties the fetch to the drill's data version: monthCache
+    // invalidations from saves/resets/undos all produce a new periodDays
+    // reference, which re-fires this effect and refreshes weeksMeta
+    // (and thus every WeekFinalizeControl's serverWeekInfo). Slight
+    // over-fetch on some drill navs that shouldn't need it, but the
+    // fetch is cheap (server round-trip on a bounded date range) and
+    // the correctness is worth the trade. Same class as the account-
+    // switch gate: a consumer keying on the wrong readiness signal.
+  }, [showFinalize, accountKey, periodRange?.start, periodRange?.end, finalizeReloadTick, periodDays]);
 
   const handleFinalize = useCallback(async ({ accountKey: acctK, weekStart }) => {
     const res = await fetch("/api/service-calendar", {
