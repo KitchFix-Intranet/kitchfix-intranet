@@ -57,6 +57,27 @@ function fmtMoney(dollars) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+// 2026-09-09 (operator-test fix #2): bucket a day's services by their
+// group. Preserves first-appearance order for both groups and services
+// within each group (server returns them in service-id order today, which
+// tracks catalog sort-order after transform). A service with no groupName
+// buckets under a single "__ungrouped__" section rendered header-less;
+// this is a defensive fallback - every real catalog carries a group.
+function groupServicesByGroup(services) {
+  if (!Array.isArray(services) || services.length === 0) return [];
+  const order = [];
+  const byGroup = new Map();
+  for (const s of services) {
+    const key = s.groupName || "__ungrouped__";
+    if (!byGroup.has(key)) {
+      byGroup.set(key, { groupName: s.groupName || null, services: [] });
+      order.push(key);
+    }
+    byGroup.get(key).services.push(s);
+  }
+  return order.map((k) => byGroup.get(k));
+}
+
 function focusableWithin(root) {
   if (!root) return [];
   const q =
@@ -293,15 +314,33 @@ export default function WeekReview({
                       No services entered for this day.
                     </div>
                   )}
-                  {day.services.map((s) => (
-                    <div key={s.serviceId} className="sc-week-review-svc">
-                      <span className="sc-week-review-svc-name">{s.serviceName}</span>
-                      <span className="sc-week-review-svc-qty sc-week-review-num">
-                        {s.hasActual ? s.actualCount : "-"}
-                      </span>
-                      <span className="sc-week-review-svc-amt sc-week-review-num">
-                        {s.hasActual ? fmtMoney(s.actualRevenue) : "-"}
-                      </span>
+                  {/* 2026-09-09 (operator-test fix #2): group services by
+                      groupName with a header per group. Prior flat render
+                      showed TBJ - FL's MiLB "Dinner" and MLB "Dinner" as
+                      two identical rows with nothing to distinguish them.
+                      Grouped shape matches DayEntryV2's entry surface;
+                      visual continuity between entry and review is worth
+                      the header rows. Groups with no services simply
+                      don't render - simple accounts (one group) see one
+                      section header, same density as before. */}
+                  {groupServicesByGroup(day.services).map((group) => (
+                    <div key={group.groupName || "__ungrouped__"} className="sc-week-review-svc-group">
+                      {group.groupName && (
+                        <div className="sc-week-review-svc-group-header">
+                          {group.groupName}
+                        </div>
+                      )}
+                      {group.services.map((s) => (
+                        <div key={s.serviceId} className="sc-week-review-svc">
+                          <span className="sc-week-review-svc-name">{s.serviceName}</span>
+                          <span className="sc-week-review-svc-qty sc-week-review-num">
+                            {s.hasActual ? s.actualCount : "-"}
+                          </span>
+                          <span className="sc-week-review-svc-amt sc-week-review-num">
+                            {s.hasActual ? fmtMoney(s.actualRevenue) : "-"}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
