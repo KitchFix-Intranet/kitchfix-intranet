@@ -1,0 +1,138 @@
+<meta charset="utf-8"><title>Overview cards · variance footer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy-700:#153968;--navy-50:#F4F7FC;--amber-50:#FFF7ED;--amber-600:#B25800;
+--green-600:#008330;--green-50:#E9FDEC;--red-600:#B9000C;--red-50:#FFEDE7;--purple:#7c3aed;--purple-50:#F5F1FE;
+--n-0:#FFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}.devbar .lbl{font-size:11px;color:#93a9c9}
+.devbar button{font-size:11px;font-weight:600;padding:5px 11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.wrap{max-width:1300px;margin:0 auto;padding:18px 22px 40px}
+.cap{font-size:11.5px;color:var(--n-600);padding:14px 22px 0;max-width:1300px;margin:0 auto;line-height:1.7}.cap b{color:var(--n-900)}
+.lane{margin-bottom:22px}
+.lane h3{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600);margin-bottom:9px}
+.lane.after h3{color:var(--navy-700)}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;box-shadow:0 1px 2px rgba(10,37,72,.04),0 2px 8px rgba(10,37,72,.05)}
+.card.rev{border-top:3px solid var(--green-600)}
+.card.cog{border-top:3px solid var(--red-600)}
+.card.cog.ok{border-top-color:var(--green-600)}
+.card.gm{border-top:3px solid var(--purple)}
+.ch{display:flex;align-items:center;gap:8px;padding:13px 17px 0;flex-wrap:wrap}
+.ch .eb{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.pill{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;white-space:nowrap;margin-left:auto}
+.pok{background:var(--green-50);color:var(--green-600)}.pbad{background:var(--red-50);color:var(--red-600)}
+.pneu{background:var(--n-100);color:var(--n-700)}.pamb{background:var(--amber-50);color:var(--amber-600)}
+.ppur{background:var(--purple-50);color:#5B21B6}
+.cb{padding:12px 17px 16px}
+.orow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:3px 0}
+.orow .k{font-size:12.5px;font-weight:700;color:var(--n-600)}
+.orow .v{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.orow .v small{font-size:13.5px;font-weight:700;color:var(--n-600);margin-left:8px}
+.orow.ref .v{font-size:20px;color:var(--n-600);font-weight:700}
+.orow.ref .v small{font-size:12px}
+.rule{border-top:2px dashed var(--n-300);margin:11px 0}
+.foot{margin-top:12px;padding-top:11px;border-top:1px solid var(--n-200);display:flex;align-items:baseline;justify-content:space-between}
+.foot .k{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600)}
+.foot .v{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.newtag{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--amber-50);color:var(--amber-600);padding:2px 6px;border-radius:4px;margin-left:7px;vertical-align:middle}
+.notes{max-width:1300px;margin:16px auto 0;padding:0 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
+.notes div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.notes h4{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.notes b{color:var(--n-900)}
+</style>
+<div class="devbar"><b>Overview cards · dollars first, percent beside, variance footer</b><span class="h">real figures · 2026-09-08</span>
+<span class="lbl">account:</span>
+<button id="a0" class="on" onclick="setA('TBJ')">TBJ - FL</button>
+<button id="a1" onclick="setA('TBR')">TBR - FL</button>
+<span style="width:12px"></span><span class="lbl">range:</span>
+<button id="g0" class="on" onclick="setG('LP')">Last period</button>
+<button id="g1" onclick="setG('TY')">This year</button>
+<button id="g2" onclick="setG('TP')">This period</button></div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+<div class="notes" id="notes"></div>
+<script>
+const D={
+ "TBJ|LP":{lbl:"P9",rev:{a:132080.07,r:104995.08,pill:"$27,085 above projection"},
+   cog:{a:69945,adj:79227,ap:53.0,tp:60.0},gm:{a:62135,adj:52854,ap:47.0,tp:40.0,pill:"7.0% ahead"}},
+ "TBJ|TY":{lbl:"P1 – P9",rev:{a:1834951.72,r:1680510,pill:"$154,442 above projection"},
+   cog:{a:958117,adj:944684,ap:52.2,tp:51.5},gm:{a:876835,adj:890268,ap:47.8,tp:48.5,pill:"0.7% behind"}},
+ "TBJ|TP":{lbl:"P10 · week 1",rev:{a:null,r:108585,pill:"No data"},
+   cog:{a:4222,adj:null,ap:null,tp:59.5},gm:{a:null,adj:null,ap:null,tp:40.5,pill:"No data"}},
+ "TBR|LP":{lbl:"P9",rev:{a:164429.62,r:165560,pill:"$1,130 below projection"},
+   cog:{a:97104,adj:93616,ap:59.1,tp:56.9},gm:{a:67326,adj:71944,ap:40.9,tp:43.1,pill:"2.2% behind"}},
+ "TBR|TY":{lbl:"P1 – P9",rev:{a:1982781.20,r:1972244,pill:"$10,537 above projection"},
+   cog:{a:1125979,adj:1134535,ap:56.8,tp:57.2},gm:{a:856802,adj:848246,ap:43.2,tp:42.8,pill:"0.4% ahead"}},
+ "TBR|TP":{lbl:"P10 · week 1",rev:{a:null,r:142248,pill:"No data"},
+   cog:{a:4183,adj:null,ap:null,tp:58.6},gm:{a:null,adj:null,ap:null,tp:41.4,pill:"No data"}}};
+let A='TBJ', G='LP';
+const $=i=>document.getElementById(i);
+const m0=n=>n==null?"—":(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const p=v=>v==null?"—":v.toFixed(1)+"%";
+function card(kind,d,withFoot){
+ const c=d[kind==='rev'?'rev':kind];
+ if(kind==='rev'){
+  const above=c.a!=null&&c.a>=c.r, va=c.a!=null?c.a-c.r:null;
+  return '<div class="card rev"><div class="ch"><span class="eb">Revenue '+d.lbl+'</span><span class="q">?</span>'+
+   '<span class="pill '+(c.a==null?'pneu':(above?'pok':'pbad'))+'">'+
+     (c.a==null?'No data':(withFoot?(above?'Above projection':'Below projection'):c.pill))+'</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+(c.a==null?'var(--n-600)':(above?'var(--green-600)':'var(--red-600)'))+'">'+(c.a==null?'—':m0(c.a))+'</span></div>'+
+   '<div class="rule"></div>'+
+   '<div class="orow ref"><span class="k">Projection</span><span class="v num">'+m0(c.r)+'</span></div>'+
+   (withFoot&&va!=null? '<div class="foot"><span class="k">'+(above?'Above projection':'Below projection')+'</span>'+
+     '<span class="v" style="color:'+(above?'var(--green-600)':'var(--red-600)')+'">'+(above?'▲ ':'▼ ')+m0(Math.abs(va))+'</span></div>':'')+
+   '</div></div>';
+ }
+ if(kind==='cog'){
+  const over=c.adj!=null&&c.a>c.adj, va=c.adj!=null?c.a-c.adj:null;
+  return '<div class="card cog'+(over?'':' ok')+'"><div class="ch"><span class="eb">Cost of goods sold</span><span class="q">?</span>'+
+   '<span class="pill '+(c.adj==null?'pamb':(over?'pbad':'pok'))+'">'+(c.adj==null?'Cost, no revenue yet':(over?'Over budget':'Under budget'))+'</span></div><div class="cb">'+
+   '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+(c.adj==null?'var(--n-900)':(over?'var(--red-600)':'var(--green-600)'))+'">'+
+     m0(c.a)+(c.ap!=null?'<small style="color:'+(over?'var(--red-600)':'var(--green-600)')+'">'+p(c.ap)+'</small>':'')+'</span></div>'+
+   '<div class="rule"></div>'+
+   '<div class="orow ref"><span class="k">Target</span><span class="v num">'+(c.adj!=null?m0(c.adj):'—')+'<small>'+p(c.tp)+'</small></span></div>'+
+   (withFoot&&va!=null? '<div class="foot"><span class="k">'+(over?'Over target':'Under target')+'</span>'+
+     '<span class="v" style="color:'+(over?'var(--red-600)':'var(--green-600)')+'">'+(over?'▲ ':'▼ ')+m0(Math.abs(va))+'</span></div>':'')+
+   '</div></div>';
+ }
+ const ahead=c.adj!=null&&c.a>c.adj, va=c.adj!=null?c.a-c.adj:null;
+ return '<div class="card gm"><div class="ch"><span class="eb">Gross margin</span><span class="q">?</span>'+
+  '<span class="pill '+(c.adj==null?'pneu':(ahead?'pok':'pbad'))+'">'+
+    (c.adj==null?'No data':(withFoot?(ahead?'Ahead of target':'Behind target'):c.pill))+'</span></div><div class="cb">'+
+  '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+(c.adj==null?'var(--n-600)':(ahead?'var(--green-600)':'var(--red-600)'))+'">'+
+    (c.a==null?'—':m0(c.a)+(c.ap!=null?'<small style="color:'+(ahead?'var(--green-600)':'var(--red-600)')+'">'+p(c.ap)+'</small>':''))+'</span></div>'+
+  '<div class="rule"></div>'+
+  '<div class="orow ref"><span class="k">Target</span><span class="v num">'+(c.adj!=null?m0(c.adj):'—')+'<small>'+p(c.tp)+'</small></span></div>'+
+  (withFoot&&va!=null? '<div class="foot"><span class="k">'+(ahead?'Ahead of target':'Behind target')+'</span>'+
+    '<span class="v" style="color:'+(ahead?'var(--green-600)':'var(--red-600)')+'">'+(ahead?'▲ ':'▼ ')+m0(Math.abs(va))+'</span></div>':'')+
+  '</div></div>';
+}
+const CAPS={
+ LP:'<b>Last period.</b> Today a chef reads <b>under budget</b> and has to subtract $69,945 from $79,227 to learn it is <b>$9,281</b>. The footer says it.<br><br>Note the margin card: <b>ahead by the same $9,281</b>, and its arrow points up in green. <b>Over on cost is bad; over on margin is good</b> - the colour follows the meaning, not the sign.',
+ TY:'<b>This year.</b> TBJ is <b>$13,433 over</b> on cost and <b>$13,433 behind</b> on margin - the same number, two questions. TBR is <b>$8,556 under</b> and <b>$8,556 ahead</b>.',
+ TP:'<b>This period.</b> No revenue yet, so no target and <b>no footer</b>. The cards show what exists and nothing more - the footer appears only when there is a target to be over or under.'};
+const NOTES=[
+ '<h4>What changes</h4><b>The amount leads and the percentage sits beside it</b>, both carrying the verdict colour - matching the Labor panel exactly. <b>The cost card previously read percent first</b>; it now reads dollars first like everything else.<br><br>A footer row on <b>all three cards</b>: label, arrow, dollars, colour.<br><br><b>Revenue keeps its pill and gets no footer.</b> <b>"$27,085 above projection"</b> is already the variance in words - a footer would say it twice.',
+ '<h4>The arrow inverts on margin</h4><b>Over on cost is bad. Over on margin is good.</b><br><br>So the colour follows the meaning, not the sign: cost over renders <b>red ▲</b>, margin ahead renders <b>green ▲</b>.<br><br>Get this wrong and a good margin renders red - which is the defect we spent today removing from the other board.',
+ '<h4>The two are the same number</h4>Cost over by $9,281 and margin behind by $9,281 are arithmetically identical.<br><br><b>Show both anyway.</b> They answer different questions - <i>did I overspend</i> and <i>what did I keep</i> - and an operator reads one or the other depending on what they are doing.<br><br><b>No footer where there is no target.</b> This period has no revenue, so no comparison exists.'];
+function render(){
+ const d=D[A+'|'+G];
+ $("app").innerHTML=
+  '<div class="lane"><h3>Today</h3><div class="row">'+card('rev',d,false)+card('cog',d,false)+card('gm',d,false)+'</div></div>'+
+  '<div class="lane after"><h3>Dollars first, percent beside, variance footer <span class="newtag">new</span></h3><div class="row">'+card('rev',d,true)+card('cog',d,true)+card('gm',d,true)+'</div></div>';
+ $("cap").innerHTML=CAPS[G];
+ $("notes").innerHTML=NOTES.map(n=>'<div>'+n+'</div>').join('');
+ $("a0").className=A==='TBJ'?'on':''; $("a1").className=A==='TBR'?'on':'';
+ ["g0","g1","g2"].forEach((b,i)=>$(b).className=(['LP','TY','TP'][i]===G?'on':''));
+}
+function setA(a){A=a;render();}
+function setG(g){G=g;render();}
+render();
+</script>
