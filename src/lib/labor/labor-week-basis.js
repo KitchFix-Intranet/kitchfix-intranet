@@ -161,66 +161,102 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     }
   }
 
-  // Bucket by (week_start, service_date). For each day: was any
-  // service on that day confirmed (has_actuals)? Sum the revenue.
-  const byWeek = new Map();  // week_start -> { byDate: Map<date, {hasActual, actualRev, projRev}> }
-  for (const w of weekStarts) byWeek.set(w, { byDate: new Map() });
+  // Kevin walkthrough item 3 (2026-09-07, corrected). Basis is
+  // service-level. Original rule counted every row in the denominator,
+  // which turned complete weeks into "120 of 133" partial because
+  // sc_daily_revenue carries EMPTY CALENDAR SLOTS (`has_projection`
+  // rows with `projected_revenue = 0`) alongside real projected
+  // services. TBJ - FL P9 W1 had 13 zero-projection slots on 08/16
+  // (a non-service day), which is what turned "12 of 12 confirmed"
+  // into "120 of 133 partial" under the naive count.
+  //
+  // Corrected rule: **only services with a non-zero projection are
+  // in the denominator.** An actual service always counts as
+  // confirmed (has_actuals=true regardless of projected_revenue).
+  // A row with has_projection=true AND projected_revenue=0 AND
+  // !has_actuals is an empty calendar slot - excluded entirely.
+  //
+  // Three states:
+  //   confirmed  every projected (non-zero) service has a count
+  //   partial    some do, some don't
+  //   forecast   none do
+  //
+  // Revenue for partial + confirmed: sum(actual $ where has_actuals)
+  //   + sum(projected $ where !has_actuals). Partial and confirmed
+  //   both include the actual + projected mix; forecast is projected
+  //   only. Zero-projection slots contribute $0 to either side, so
+  //   they never affect the revenue number - only the classification.
+  const byWeek = new Map();
+  for (const w of weekStarts) byWeek.set(w, {
+    confirmedSvcs: 0, projectedSvcs: 0, emptySlotSvcs: 0,
+    actualRev: 0, projectedRev: 0,
+    daysWithService: new Set(),
+    daysWithConfirmedSvc: new Set(),
+  });
   for (const r of rows) {
     const ws = weekStartFor(r.service_date);
     if (!ws || !byWeek.has(ws)) continue;
     const bucket = byWeek.get(ws);
-    const d = bucket.byDate.get(r.service_date) || { hasActual: false, actualRev: 0, projRev: 0 };
+    bucket.daysWithService.add(r.service_date);
     if (r.has_actuals) {
-      d.hasActual = true;
-      d.actualRev += Number(r.actual_revenue || 0);
+      // Confirmed service. Counts in denominator regardless of what
+      // was projected (a service that was served is a real service).
+      bucket.confirmedSvcs += 1;
+      bucket.actualRev += Number(r.actual_revenue || 0);
+      bucket.daysWithConfirmedSvc.add(r.service_date);
+    } else if (r.has_projection && Number(r.projected_revenue || 0) > 0) {
+      // Real projected service - client planned to serve, hasn't been
+      // confirmed yet. Counts in denominator.
+      bucket.projectedSvcs += 1;
+      bucket.projectedRev += Number(r.projected_revenue || 0);
     } else if (r.has_projection) {
-      d.projRev += Number(r.projected_revenue || 0);
+      // Empty calendar slot - has_projection=true but projected_revenue=0.
+      // Excluded from denominator per Kevin's ruling; tracked so the
+      // probe can name why a week is confirmed at "12 of 12" when
+      // sc_daily_revenue has 80 rows for the week.
+      bucket.emptySlotSvcs += 1;
     }
-    bucket.byDate.set(r.service_date, d);
   }
 
-  // Emit per-week records with basis classification.
-  //
-  // A week is "confirmed" when ANY served day has has_actuals -
-  // Kevin's item 5 treats confirmed as the single tile treatment
-  // covering closed / running / confirmed sub-states. "Forecast"
-  // when no served day has actuals (the pure fallback path).
-  //
-  // This is the branch condition Kevin ruled to weight equally -
-  // no "if (!confirmedDays) fallback = ..." phrasing here.
   const data = weekStarts.map(ws => {
     const bucket = byWeek.get(ws);
     const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * MS_PER_DAY).toISOString().slice(0, 10);
 
-    let confirmedDays = 0;
-    let projectedDays = 0;
-    let actualRev = 0;
-    let projectedRev = 0;
-    for (const [, d] of bucket.byDate) {
-      if (d.hasActual) {
-        confirmedDays += 1;
-        actualRev += d.actualRev;
-      } else if (d.projRev > 0) {
-        projectedDays += 1;
-        projectedRev += d.projRev;
-      }
-    }
-    const emptyDays = 7 - confirmedDays - projectedDays;
+    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev } = bucket;
+    const totalSvcs = confirmedSvcs + projectedSvcs;       // meaningful denominator
+    const basis = totalSvcs === 0
+      ? "forecast"                                         // no meaningful services -> nothing to compare
+      : projectedSvcs === 0
+        ? "confirmed"                                      // every projected service has a count
+        : confirmedSvcs === 0
+          ? "forecast"                                     // none confirmed - pure forecast
+          : "partial";                                     // some of each
 
-    const isConfirmed = confirmedDays > 0;
+    // Day counts retained for backwards compat + client copy. A day
+    // with any confirmed service counts on the confirmed side; days
+    // with only projections count on the projected side; the diff
+    // to 7 is `empty_days`.
+    const confirmedDays = bucket.daysWithConfirmedSvc.size;
+    const projectedDays = bucket.daysWithService.size - confirmedDays;
+    const emptyDays = 7 - bucket.daysWithService.size;
+
     return {
       week_start: ws,
       week_end: wEnd,
-      basis: isConfirmed ? "confirmed" : "forecast",
+      basis,
       temporal: weekTemporalState(ws, today),
       confirmed_days: confirmedDays,
       projected_days: projectedDays,
       empty_days: emptyDays < 0 ? 0 : emptyDays,
+      confirmed_services: confirmedSvcs,
+      projected_services: projectedSvcs,
+      total_services: totalSvcs,                            // meaningful denominator (non-zero projected + confirmed)
+      empty_slot_services: emptySlotSvcs,                   // excluded from denominator; kept for the probe
       actual_revenue: Math.round(actualRev * 100) / 100,
       projected_revenue: Math.round(projectedRev * 100) / 100,
-      revenue: isConfirmed
-        ? Math.round((actualRev + projectedRev) * 100) / 100  // confirmed weeks may still carry projected tail (running week)
-        : Math.round(projectedRev * 100) / 100,               // pure forecast weeks read only projected
+      revenue: basis === "forecast"
+        ? Math.round(projectedRev * 100) / 100             // pure forecast: projections only
+        : Math.round((actualRev + projectedRev) * 100) / 100, // confirmed or partial: mix
     };
   });
   return { data };
@@ -333,6 +369,12 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     w.confirmed_days = basis.confirmed_days;
     w.projected_days = basis.projected_days;
     w.empty_days = basis.empty_days;
+    // Walkthrough item 3 - service-level counts for the "3 of 13"
+    // client copy on partial tiles.
+    w.confirmed_services = basis.confirmed_services;
+    w.projected_services = basis.projected_services;
+    w.total_services = basis.total_services;
+    w.empty_slot_services = basis.empty_slot_services;
     w.week_actual_revenue = basis.actual_revenue;
     w.week_projected_revenue = basis.projected_revenue;
     w.week_revenue = basis.revenue;
