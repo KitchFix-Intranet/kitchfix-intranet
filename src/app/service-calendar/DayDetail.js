@@ -834,7 +834,20 @@ function DayDetail({ day, serviceGroups, overrides, onSave, onAddNote, saving, d
   // decays on a slower N-day cadence; separate concern).
   const dayIsPast = isPastDate(day.date);
   const isOverdue = dayIsPast && day.isLocked && !day.hasActuals;
-  const status = day.hasActuals ? "entered" : isOverdue ? "overdue" : dayIsPast ? "needs-entry" : "upcoming";
+  // 2026-09-09 (operator-test fix #3): early-out on SERVER-classified
+  // no-service family. Parity with DayEntryV2:1010 - the local status
+  // recompute used to ignore day.status, so a past no-service day
+  // rendered the red "Past due" banner. Coaching map at :924 has no
+  // entry for these statuses; banner render at :1261 (`{coaching &&
+  // ...}`) hides. Entry affordance gates on hasScheduledService +
+  // isInServiceOnDay, not on this local status - Kevin's fold ruling
+  // holds: no-service days still show entry rows.
+  const isServerNoService = day.status === "no-service"
+    || day.status === "off-season"
+    || day.status === "prep";
+  const status = isServerNoService
+    ? day.status
+    : (day.hasActuals ? "entered" : isOverdue ? "overdue" : dayIsPast ? "needs-entry" : "upcoming");
 
   // Entry flow refs + progress. Auto-focus the first un-entered ghost
   // input on open (and on each day-nav) so the operator can start typing

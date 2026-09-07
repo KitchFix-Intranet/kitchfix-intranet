@@ -1007,7 +1007,29 @@ function DayEntryV2({
   // know they are operating outside the normal path.
   const isPeriodLocked = !!day.isPeriodLocked;
   const isLockedForViewer = isPeriodLocked && !viewerCanEditPastPeriods;
-  const rawStatus = day.hasActuals ? "entered" : isOverdue ? "overdue" : dayIsPast ? "needs-entry" : "upcoming";
+  // 2026-09-09 (operator-test fix #3): early-out on the SERVER-
+  // classified no-service family before recomputing status from raw
+  // fields. Prior derivation ignored day.status and only branched on
+  // hasActuals + dayIsPast + day.isLocked - so a past no-service day
+  // (TBJ Sunday Aug 16: no projections, no actuals, locked by
+  // cutoff) evaluated isOverdue=true and rendered the red "Past due"
+  // banner. Same shape as the detectMonthOff bug just fixed: two
+  // surfaces (tile + modal) recomputed the same predicate and
+  // disagreed. The tile trusts day.status; the modal recomputed.
+  //
+  // Coaching map at :1202 has no entry for these statuses, so the
+  // banner render at :1520 (`{coaching && ...}`) simply hides.
+  // Entry affordance (service rows, mark-no-service button) is
+  // gated separately on isInServiceOnDay + day.status, not on this
+  // local status - Kevin's fold ruling holds: a day projected as
+  // no-service still shows service rows for entry, only the wrong
+  // banner goes away.
+  const isServerNoService = day.status === "no-service"
+    || day.status === "off-season"
+    || day.status === "prep";
+  const rawStatus = isServerNoService
+    ? day.status
+    : (day.hasActuals ? "entered" : isOverdue ? "overdue" : dayIsPast ? "needs-entry" : "upcoming");
   const status = isPeriodLocked ? (isLockedForViewer ? "locked" : "locked-slt") : rawStatus;
 
   // Progress counter for the rail meta.

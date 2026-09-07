@@ -194,6 +194,25 @@
 .sc-week-review-svc + .sc-week-review-svc {
   border-top: 1px solid var(--border-subtle, #E2E8F0);
 }
+
+/* 2026-09-09 (operator-test fix #2): grouped services with a header
+   per group. TBJ - FL and other multi-group accounts have services
+   with identical names across groups (MiLB Dinner + MLB Dinner);
+   grouping disambiguates without repeating the group label on every
+   row. Simple accounts (one group) still see one header. */
+.sc-week-review-svc-group + .sc-week-review-svc-group {
+  border-top: 1px solid var(--border-subtle, #E2E8F0);
+}
+.sc-week-review-svc-group-header {
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  background: var(--surface-sunken, #F8FAFC);
+  border-bottom: 1px solid var(--border-subtle, #E2E8F0);
+  font-size: var(--sc2-size-micro, 10px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #64748B);
+}
 .sc-week-review-svc-name { color: var(--text-default, #334155); }
 .sc-week-review-svc-qty {
   text-align: right;

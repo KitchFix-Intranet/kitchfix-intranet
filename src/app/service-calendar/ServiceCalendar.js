@@ -1084,7 +1084,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       // month lookup - falls through to the year default instead.
       setIsAdminView(false); setScope("month"); setLens("calendar"); setPeriodKey(null); setMonthKey(month); setHomestandKey(null);
     } else {
-      setIsAdminView(false); setScope("year"); setLens("calendar"); setPeriodKey(null); setMonthKey(null); setHomestandKey(null);
+      // 2026-09-09: lens="period" is the app-wide default per the
+      // 2026-09-03 ruling (see computeInitialView.js branch 4). Prior
+      // fallback here set lens="calendar", which fired on every clean-
+      // URL mount AFTER the useState init and AFTER computeInitialView
+      // returned "period" - producing the Calendar landing Kevin kept
+      // seeing despite the earlier fix. This effect runs on cold mount
+      // before the landing effect at :1179, and its dep set is
+      // [searchParams, isAdmin] so it CANNOT read the computed landing
+      // shape - it has to carry the same default value directly.
+      //
+      // scope stays "year". isYearView (line 657) is
+      // `scope === "year" && (lens === "calendar" || lens === "period")`,
+      // so both lens values render the Season overview; the lens flips
+      // which tab is active inside it. Period is the default for every
+      // tier, no exceptions.
+      setIsAdminView(false); setScope("year"); setLens("period"); setPeriodKey(null); setMonthKey(null); setHomestandKey(null);
     }
   }, [searchParams, isAdmin]);
 
