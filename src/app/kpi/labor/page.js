@@ -824,7 +824,9 @@ export default function KpiLaborPage() {
     return (<div className="kpi-app"><div className="kpi-wrap"><StateNotAuthorized /></div></div>);
   }
 
-  const hasData = !isSalaried && loadState === "ok" && (data?.actuals?.length || 0) > 0;
+  // Labor empty-state fix follow-up (Kevin 2026-09-07): dead
+  // `hasData` variable removed. Assigned + never referenced; kept as
+  // a trap that could reintroduce the actuals-count gate.
 
   // Extract account list from data for the folio (D3 will replace with
   // server aggregate). For D2 the roster is the ACCOUNTS constant.
