@@ -3097,7 +3097,22 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
   // SeasonShell. It does NOT drive the Season-vs-Workspace switch -
   // that's driven by drilling (month-card or period-card click).
   // We lift the sub-view here so the chrome bar can host the toggle.
-  const [seasonView, setSeasonView] = useState("calendar");
+  //
+  // 2026-09-09: default flipped from "calendar" to "period" per the
+  // Kevin ruling ("Period is the default for every tier, no exceptions").
+  // This state is INDEPENDENT of `lens` at :522 - the tab render in
+  // the Ribbon toggle reads `view={seasonView}`, not lens. The first
+  // fix to this bug (SC cleanup item 1, computeInitialView branch 4)
+  // and the second (PR #1059, URL-sync fallback at :1102) both
+  // touched lens; neither wrote seasonView. Runtime probe confirmed
+  // Calendar button aria-pressed=true on clean-URL cold mount despite
+  // lens=period. Third writer found via grep + runtime observation
+  // per the instrument-after-second-failure rule.
+  //
+  // See tests/probe-sc-landing-view.spec.ts for the observation
+  // shape. Uncomment its final assertion after this fix lands to
+  // convert into a regression guard.
+  const [seasonView, setSeasonView] = useState("period");
   const handleSeasonViewChange = useCallback((next) => {
     setSeasonView(next === "period" ? "period" : "calendar");
   }, []);
