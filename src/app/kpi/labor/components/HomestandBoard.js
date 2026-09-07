@@ -264,8 +264,14 @@ function SeasonToDateCard({ bank, homestands }) {
         </span>
       </div>
       <div className="kpi-hs-sbar-key">
-        <span><b data-key-season-budget>{fmt$0(seasonBudget)}</b> season budget</span>
+        {/* Kevin ruling 2026-09-07: flip the prose to match the bar.
+            The bar reads left-to-right as SPENT -> BANK -> REMAINING
+            and the season budget is the container the bar is scaled
+            to. Prior prose read budget first, spent second - two
+            halves of one component disagreeing was worse than either
+            order. Prose now leads with spent, matching the bar. */}
         <span><b data-key-spent>{fmt$0(spent)}</b> spent · {finishedCount} stand{finishedCount === 1 ? "" : "s"}</span>
+        <span><b data-key-season-budget>{fmt$0(seasonBudget)}</b> season budget</span>
         <span className={bankVal >= 0 ? "kpi-hs-good" : "kpi-hs-bad"} data-key-bank>
           {/* item 4 - "under target so far" / "over target" replaces
               "in the bank" / "budget deficit". "over target" reads
@@ -656,11 +662,19 @@ function unapprovedHoursTotal(employees) {
 // On part-played, card 1's "Spent so far" > 0 - naturally handled by
 // data. The rest of the cards remain forward-looking; the plan is
 // still what a chef schedules against for the games remaining.
-function UpcomingCards({ stand, estimate, split, hourlyRate }) {
+function UpcomingCards({ stand, estimate, split, hourlyRate, todayISO }) {
   if (!stand) return null;
   const budget = Number(stand.budget || 0);
   const spent = Number(split?.spent_to_date || 0);
   const left = Math.max(0, budget - spent);
+  // Kevin ruling 2026-09-07: apply R-76 (planning-view treatment) to
+  // the "What you have" card on future stands. A future stand has no
+  // actual, so actual-leads has nothing to lead with - keep budget in
+  // the hero and put "not started" in the reference slot. Detects
+  // future stands via gameState (game_start > todayISO). Part-played
+  // and all-played fall through to the existing spent + left display.
+  const gs = gameState(stand, todayISO);
+  const notStarted = gs === "not_started";
   const planTotal = Number(estimate?.total || 0);
   const nightTotal = sumEstimateByDayType(estimate, "night");
   const dayTotal   = sumEstimateByDayType(estimate, "day");
@@ -694,8 +708,20 @@ function UpcomingCards({ stand, estimate, split, hourlyRate }) {
         <div className="kpi-hs-hero kpi-hs-good">{fmt$0(budget)}</div>
         <div className="kpi-hs-sub">budget for this homestand</div>
         <div className="kpi-hs-facts">
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Spent so far</div><div className="kpi-hs-fact-v">{fmt$0(spent)}</div></div>
-          <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Left</div><div className="kpi-hs-fact-v kpi-hs-good">{fmt$0(left)}</div></div>
+          {notStarted ? (
+            /* R-76 pattern (Kevin ruling 2026-09-07): a future stand
+               has no actual - reference slot reads "not started"
+               italic, matching the PlanningBoard grammar. */
+            <>
+              <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Spent so far</div><div className="kpi-hs-fact-v kpi-hs-notstarted">not started</div></div>
+              <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Left</div><div className="kpi-hs-fact-v kpi-hs-notstarted">not started</div></div>
+            </>
+          ) : (
+            <>
+              <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Spent so far</div><div className="kpi-hs-fact-v">{fmt$0(spent)}</div></div>
+              <div className="kpi-hs-fact"><div className="kpi-hs-fact-k">Left</div><div className="kpi-hs-fact-v kpi-hs-good">{fmt$0(left)}</div></div>
+            </>
+          )}
         </div>
       </div>
 
@@ -1105,6 +1131,7 @@ export function HomestandBoard({
                     estimate={data?.homestand_estimated}
                     split={split}
                     hourlyRate={hourlyRate}
+                    todayISO={todayISO}
                   />
                 )}
               </>

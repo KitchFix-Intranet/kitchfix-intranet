@@ -4125,6 +4125,16 @@
   margin-top: 2px;
   white-space: nowrap;
 }
+/* Kevin ruling 2026-09-07: R-76 pattern for the "What you have"
+   upcoming card on future stands. Reference slot reads "not started"
+   in italic grey - matches the PlanningBoard reference text
+   (kpi-ov-pln-notstarted). Same visual grammar so a reader moving
+   between planning surfaces sees the same "not started" affordance. */
+.kpi-hs-fact-v.kpi-hs-notstarted {
+  font-style: italic;
+  color: var(--n-600, #64748B);
+  font-weight: 700;
+}
 /* 2026-08-26 homestand redesign tokens */
 /* hero unit - small "hrs" or "people" suffix beside a big numeric
    hero. Mirrors .kpi-sig-hero-unit on the period board. */
