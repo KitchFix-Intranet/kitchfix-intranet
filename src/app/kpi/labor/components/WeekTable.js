@@ -499,11 +499,22 @@ export function WeekTable({
 
   // Per-period totals (aggregation of the weeks in the band). Used for
   // period-band data row (V9-8).
+  //
+  // Kevin post-1053 sweep item 1 (2026-09-08). Period-band + month-
+  // band budgets are now the sum of per-week ADJUSTED budgets
+  // (budget_at_this_week_revenue) rather than the raw period budget
+  // from budgetByPeriod. Prior code rendered "4 wks · budget
+  // $35,495.25" (raw range budget) while the cards + spend card show
+  // the adjusted figure. Kevin's rule: "one basis, every surface."
+  // Falls back to raw only when no week in the band has per-week batr
+  // (older routes / boards without the shared-basis attachment).
   const periodTotals = useMemo(() => grouped.map(g => {
     const t = { hours: 0, ot: 0, hol: 0, unpriced: 0, amount: 0 };
     const states = [];
     let periodBudget = null;
     let weeksInBand = 0;
+    let adjustedSum = 0;
+    let adjustedAny = false;
     for (const w of g.weeks) {
       t.hours += (w.hours_regular || 0) + (w.hours_overtime || 0) + (w.hours_double_time || 0);
       t.ot += w.hours_overtime || 0;
@@ -514,11 +525,18 @@ export function WeekTable({
       t.amount += w.amount || 0;
       states.push(w.coverage_state);
       weeksInBand += 1;
+      if (w.budget_at_this_week_revenue != null) {
+        adjustedSum += Number(w.budget_at_this_week_revenue);
+        adjustedAny = true;
+      }
     }
-    if (g.groupHint?.kind === "period" && g.period_no != null) {
+    if (adjustedAny) {
+      periodBudget = Math.round(adjustedSum * 100) / 100;
+    } else if (g.groupHint?.kind === "period" && g.period_no != null) {
       periodBudget = budgetByPeriod.has(g.period_no) ? budgetByPeriod.get(g.period_no) : null;
     } else if (g.groupHint?.kind === "month") {
-      // Month bands: sum of weekly budgets for the weeks in the month.
+      // Month bands legacy fallback: sum of weekly raw budgets when
+      // per-week batr not present.
       let sum = 0, any = false;
       for (const w of g.weeks) {
         const wb = weekBudgetsByWeekStart.get(w.week_start);
@@ -528,6 +546,18 @@ export function WeekTable({
     }
     return { g, totals: t, states, periodBudget, weeksInBand };
   }), [grouped, budgetByPeriod, weekBudgetsByWeekStart]);
+
+  // Kevin post-1053 sweep item 3 (2026-09-08). Multi-period ranges
+  // (This year, FYTD, N-period spans) drop the running-period row
+  // from the table so the render matches the closed-only comparison
+  // the SpendCard and TierCStrip chart show. R-63: the running
+  // period does not enter the total and does not render as its own
+  // row. Single-period ranges (This period, Last period) always
+  // render their one band - the branches above ensure that.
+  const displayPeriodTotals = useMemo(() => {
+    if ((grouped?.length || 0) <= 1) return periodTotals;
+    return periodTotals.filter(({ g }) => !(g.groupHint?.kind === "period" && isPeriodInProgress(g, todayISO)));
+  }, [periodTotals, grouped, todayISO]);
 
   // In-progress period detection.
   //
@@ -734,7 +764,7 @@ export function WeekTable({
               </tr>
             </thead>
             <tbody>
-              {periodTotals.map(({ g, totals, states, periodBudget, weeksInBand }) => {
+              {displayPeriodTotals.map(({ g, totals, states, periodBudget, weeksInBand }) => {
                 // 2026-08-26 polish round 2 item 6 - zero-labor period
                 // (no actuals rows in the range) renders as a single
                 // muted row so the table's period list matches
@@ -930,7 +960,14 @@ function FragmentRows({
         }
         const inProgress = w.week_end >= todayISO && w.week_start <= todayISO;
         const isClosed = w.week_end < todayISO;
-        const weekBudget = weekBudgetsByWeekStart.get(w.week_start)?.amount ?? null;
+        // Kevin post-1053 sweep item 1 (2026-09-08). Week-row VS
+        // BUDGET column now reads the ADJUSTED per-week budget
+        // (budget_at_this_week_revenue) so the table row agrees with
+        // the bar caption + the week card variance. Raw week budget
+        // (period_budget / 4) is the fallback only.
+        const weekBudget = w.budget_at_this_week_revenue != null
+          ? Number(w.budget_at_this_week_revenue)
+          : (weekBudgetsByWeekStart.get(w.week_start)?.amount ?? null);
         const vs = weekBudget == null
           ? { mode: "muted" }
           : inProgress
