@@ -562,7 +562,16 @@ function TierAWeekBar({ w, weeklyOriginal, weeklyAllowance, scale, rate }) {
     ? (w.weekly_allowance ?? weeklyAllowance)
     : (w.original_target ?? weeklyOriginal);
   const perWeekTarget = perWeekAdjusted != null ? perWeekAdjusted : perWeekLegacy;
-  const targetPct = (!isZero && perWeekTarget != null && perWeekTarget > 0)
+  // Kevin walkthrough follow-up (2026-09-07): running-week target
+  // line was suppressed on zero-spend weeks (Monday morning of a
+  // new period) via the `!isZero` gate. V29-14's original rule
+  // hid the line so an empty week did not "read as broken"; that
+  // rule now inverts. Kevin: "the budget exists whether or not
+  // anything has been spent against it, and an empty bar with a
+  // line above it is precisely the useful picture on Monday
+  // morning." Every week gets its line whenever the budget is
+  // defined, including zero-spend weeks.
+  const targetPct = (perWeekTarget != null && perWeekTarget > 0)
     ? Math.max(0, Math.min(100, (perWeekTarget / scale) * 90))
     : null;
   // Walkthrough item 3 - target line styling per basis:
