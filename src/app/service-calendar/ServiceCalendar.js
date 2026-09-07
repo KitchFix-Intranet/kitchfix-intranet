@@ -2577,6 +2577,15 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
     // the pairs the write drops. See handleBulkSave comment for full
     // semantics (archive not projection; already refused elsewhere;
     // catalog end date is the lever).
+    // 2026-09-07 (owner ruling): Match-projections cascades ONLY the
+    // services that carry a projection for this day. The prior shape
+    // used `day.projected[s.colIndex] ?? 0` and pushed a zero row for
+    // every un-projected service - the cascade silently wrote zeros
+    // for services nobody forecast, which was wrong independent of
+    // whether the row was later visible. "Match projections" means
+    // exactly that: cascade what was projected. Un-projected services
+    // stay unentered; the operator picks them up per-day in the
+    // modal, which now shows them as regular ServiceRows.
     const days = [];
     const perDayEntries = [];
     for (const dk of bulkSelected) {
@@ -2586,13 +2595,15 @@ function ServiceCalendarInner({ showToast, session, heroImage, firstName, isDev 
       for (const g of data.serviceGroups) {
         for (const s of g.services) {
           if (!isInServiceOnDay(s, day.date)) continue;
-          perDayEntries.push({ colIndex: s.colIndex, date: day.date, value: day.projected[s.colIndex] ?? 0 });
+          const projValue = day.projected[s.colIndex];
+          if (projValue == null) continue;   // un-projected: cascade skips
+          perDayEntries.push({ colIndex: s.colIndex, date: day.date, value: projValue });
           pushedForThisDay++;
         }
       }
       // Zero-applicable-day exclusion. Under match-projections this
-      // only fires if EVERY catalog service is archived on this day -
-      // rare. Kept for parity with handleBulkSave.
+      // fires when EVERY catalog service is either archived or
+      // un-projected on this day - the cascade has nothing to write.
       if (pushedForThisDay > 0) days.push(day);
     }
     if (days.length === 0 || perDayEntries.length === 0) {
