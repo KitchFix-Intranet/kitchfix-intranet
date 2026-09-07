@@ -2421,6 +2421,50 @@
    .kpi-wb-d-mute which read as "not-started" tone and conflicted with
    the running-week identity. */
 .kpi-wb-d-warn { color: var(--amber-600); }
+
+/* Labor PR-B (Kevin 2026-09-07) - forecast rendering. A week whose
+   revenue basis is `forecast` (no confirmed counts) reads as
+   provisional, not just a source label. Kevin ruling: TBJ - FL P9
+   week 2 went from a $13,167 forecast to $21,876 confirmed - a chef
+   scheduling to the forecast would have staffed 60% of the work.
+   The tile must warn that the figure will move.
+
+   Three surfaces carry the signal:
+     1. Target line: grey dashed instead of amber - matches the tile
+        border pattern in item 5's table.
+     2. Plan tag: small pill on the budget caption reading `plan`.
+        Distinguishes an adjusted-for-forecast number from a
+        confirmed one at a glance.
+     3. Caption tone: `.kpi-wb-cap-forecast` mutes the whole caption
+        (values + copy) so a forecast week does not compete visually
+        with a confirmed one on the same strip. */
+.kpi-wb-target-forecast {
+  border-top: 2px dashed var(--n-400);
+}
+.kpi-wb-plan-tag {
+  display: inline-block; margin-left: var(--kpi-sp-2);
+  font-size: var(--kpi-t-label); font-weight: 700;
+  color: var(--text-muted); background: var(--n-100);
+  border: 1px solid var(--n-300); border-radius: var(--rad-pill);
+  padding: 0 var(--kpi-sp-2); line-height: 1.4;
+  vertical-align: middle;
+  text-transform: lowercase; letter-spacing: 0.02em;
+}
+.kpi-wb-cap-forecast .kpi-wb-cap-value { color: var(--text-muted); }
+.kpi-wb-cap-forecast .kpi-wb-dates { color: var(--text-subtle); }
+
+/* Labor PR-B item 6 (R-80) - running week shows a fraction, never a
+   variance. Kevin's example: `$3,933 of $4,217 · 93% used · 2 days
+   left`. Renders in the .kpi-wb-d slot in place of the ▲/▼ under/over
+   line. Tone: amber (matches the running-week caption + solid amber
+   bar above), body-size body number so the fraction is scannable. */
+.kpi-wb-d-frac {
+  color: var(--amber-600);
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+
 .kpi-wb-warn {
   display: inline-flex; align-items: center; gap: var(--kpi-sp-1);
   font-size: var(--kpi-t-label); font-weight: 700; color: #92580A;

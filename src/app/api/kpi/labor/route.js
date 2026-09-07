@@ -40,6 +40,7 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
 import { REVENUE_LINE_CODES, loadPnlActuals, loadOverviewBudgets } from "@/lib/kpi/overview/pnl-loader.js";
 import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore } from "@/lib/labor/labor-batr.js";
+import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
 // only consumed by paginateActuals / resolveMemberBudget /
 // buildPriorPeriodComparison; the loaders module owns those imports now.
@@ -1320,6 +1321,17 @@ export async function GET(request) {
     members: [account],
     periods: closedPeriodsSingle,
   });
+  // Kevin Labor PR-B (2026-09-07). Per-week revenue basis + per-week
+  // adjusted budget. Loader runs once for the range's weeks; per-period
+  // line_target_pct comes from the overviewBudgets Map (same read that
+  // feeds the range-level batr, keyed per period this time). Ruling:
+  // build the fallback (forecast) as the main path, not the exception.
+  const [weeklyBasisSingle, overviewBudgetsSingle] = await Promise.all([
+    loadWeeklyRevenueBasis(supa, {
+      members: [account], start, end, today,
+    }),
+    loadOverviewBudgets(supa, { members: [account] }),
+  ]);
   const boardSingle = buildBoard({
     account, start, end, today,
     actuals: actuals.data,
@@ -1330,6 +1342,16 @@ export async function GET(request) {
   attachBatrToBoard(boardSingle, revenueBasisSingle, {
     closedLaborBudget: closedLaborBudgetSingle,
     closedPeriods: closedPeriodsSingle,
+  });
+  const lineTargetPctSingle = computeLineTargetPctByPeriod({
+    budgetPeriods: budget_periods,
+    overviewBudgets: overviewBudgetsSingle?.data || new Map(),
+    members: [account],
+    periods: rangePeriodsSingle,
+  });
+  attachWeeklyBasisToBoard(boardSingle, weeklyBasisSingle, {
+    lineTargetPctByPeriod: lineTargetPctSingle,
+    todayISO: today,
   });
 
   let bodySingle = {
@@ -1403,6 +1425,21 @@ export async function GET(request) {
     attachBatrToBoard(bodySingle.board, revenueBasisSingle, {
       closedLaborBudget: closedLaborBudgetMerged,
       closedPeriods: closedPeriodsSingle,
+    });
+    // Labor PR-B - salary-merged path. withSalaryMerge rebuilt board
+    // from scratch and dropped the per-week basis fields the hourly
+    // path attached. Recompute line_target_pct against the merged
+    // (salary-inclusive) labor budget per period - R-68: Overview 3100
+    // is always salary-inclusive; per-week rate must match.
+    const lineTargetPctMerged = computeLineTargetPctByPeriod({
+      budgetPeriods: bodySingle.budget_periods,
+      overviewBudgets: overviewBudgetsSingle?.data || new Map(),
+      members: [account],
+      periods: rangePeriodsSingle,
+    });
+    attachWeeklyBasisToBoard(bodySingle.board, weeklyBasisSingle, {
+      lineTargetPctByPeriod: lineTargetPctMerged,
+      todayISO: today,
     });
     // Legacy CIN - AZ re-resolve retained as belt-and-braces: the
     // salary-first resolve above covers this today, but a future
