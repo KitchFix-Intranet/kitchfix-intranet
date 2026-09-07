@@ -865,6 +865,40 @@ The `auth.setup.ts` URL regex must also be flexible (matches any `^https?://[^/]
 
 ## CSS
 
+### A component rendered outside its token scope loses its styling
+
+CSS custom properties are inherited across the DOM tree, not across the source-file tree. A rule that reads `background: var(--sc2-toast-bg)` resolves against the CLOSEST ancestor that defines `--sc2-toast-bg`. If no ancestor defines it, the var falls through to the default (nothing), and the computed style silently reads as `rgba(0, 0, 0, 0)` / `0px` / `none`. No console noise, no warning; the rule "is applied" per DevTools, and does nothing.
+
+**Third hit of this shape this week** (2026-09-08). Same class as the `.scav-f label` bug earlier in the week and the `.sc-monthcomplete-ring svg` motion-cleanup descendant-selector spill: a component that mounts outside its expected scope loses the guarantee its author assumed.
+
+**The toast incident.** `.sc-toast-container` is deliberately mounted at the `.oh-app` shell in `page.js:230` (comment at `toast.css:15` explains why: escape any scrolling overflow so it can be viewport-fixed at bottom-center). The SC v2 design system's `--sc2-*` tokens are defined on `.scv2`, which lives INSIDE `ServiceCalendar` at `.sc-root`. So the toast rendered ABOVE its token scope. Kevin's live-prod DevTools inspection:
+
+```
+--sc2-toast-bg is defined on: .scv2
+  resolves on .sc-workspace : #101b2d
+  resolves on .oh-app       : (undefined)
+  resolves on :root         : (undefined)
+```
+
+Result: `background rgba(0,0,0,0)`, `padding 0px`, `border-radius 0px`, `box-shadow none`. Toast rendered as bare white text far below the page content. Every class was on the element; every rule was in the stylesheet; every var lookup returned nothing.
+
+**Two fixes; pick with reasoning:**
+
+1. **Add the scope class to the outlier component's container.** `<div className="sc-toast-container scv2">`. Smallest possible diff. Preserves the deliberate scoping decision (v1 SC surfaces like Financial + Ops intentionally don't get v2 tokens). Each future outlier component pays the same one-word cost.
+2. **Promote the tokens to `:root`.** Durable if MANY components mount outside `.scv2`. Undoes the intentional design-system boundary — any v1 surface at app level would inherit v2 values by default, which is what the scoping was preventing.
+
+**We picked #1** (2026-09-08 toast fix). The design-system boundary is deliberate architecture, not an accident to route around. Root-promotion also has a large blast radius: promoting all 20 `--sc2-*` tokens the toast uses (colors, sizes, weights, spacing) would leak v2-specific values into every surface at app level.
+
+**How to catch this class before the operator does:**
+
+- **Any component mounted at the app-shell for viewport-fixed positioning needs its style scope carried up with it.** Toast, modals with portals, tooltips, popovers - all render OUTSIDE the parent that defines their tokens.
+- **When adding a new fixed-position overlay: at authoring time, DevTools -> Computed on the live element -> check every `--*` referenced in the stylesheet resolves.** If any resolve to nothing, the container is above their scope.
+- **A `probe-*` Playwright spec cannot catch this by grepping the DOM classes.** The classes will be correct. The rule that would catch it is `getComputedStyle(el).backgroundColor !== "rgba(0, 0, 0, 0)"` on the toast element — an actual CSS-resolved check, not a class-presence check.
+
+**Cross-references.** Same class of "component leaves its expected scope" as:
+- React sibling-function scope trap (this same file, above): `PeriodWorkspace.js` / `DayGrid` — three hits.
+- CSS descendant-selector spilling into a nested element: `.sc-monthcomplete-ring svg` (motion cleanup, PR-K) rotated the nested check-icon SVG along with the ring, turning a check into a chevron. Same shape: something that assumes a scope but doesn't check.
+
 ### `border-radius` is silently ignored under `border-collapse: collapse`
 
 A `<table>` styled with `border-collapse: collapse` (the default in most component libraries) will silently discard `border-radius` on the table itself, on `thead`, on `tbody`, and on `tr` and `td` corner cells. No warning, no console noise, no DevTools indicator - the rule appears in the computed styles panel with the correct value and does nothing. Corners render square.
