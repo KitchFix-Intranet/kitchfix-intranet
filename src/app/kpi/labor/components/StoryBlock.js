@@ -200,11 +200,34 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
       };
     }
     // Closed period or multi-period range with a resolved budget.
-    if (variance != null && variance > 0.5) {
+    // Kevin post-1051 sweep item 2 (2026-09-08): card label must
+    // agree with pill state. Prior code said "Over budget" for any
+    // variance > 0.5 - but a WATCH pill (0.5-3% over) with a card
+    // saying "OVER BUDGET" reads as two different verdicts. Read
+    // board.verdict directly so pill + card come from the same
+    // owner (attachBatrToBoard); server-side verdict already uses
+    // the same panel figure per item 1.
+    const verdict = board?.verdict;
+    if (verdict === "over") {
       return {
         variantCls: "kpi-spend-cell-over",
         label: "Over budget",
-        value: fmt$(Math.abs(variance)),
+        value: variance != null ? fmt$(Math.abs(variance)) : "—",
+        sub: "vs budget",
+      };
+    }
+    if (verdict === "watch") {
+      // Watch is real (0.5-3% over). Say what it means: the exact
+      // percent over. Amber tone (existing kpi-spend-cell-over
+      // colour reads red; keep the over class for variance colouring
+      // but the label names the state).
+      const pctOver = (variance != null && budget > 0)
+        ? Math.round((variance / budget) * 1000) / 10  // 1 decimal
+        : null;
+      return {
+        variantCls: "kpi-spend-cell-over",
+        label: pctOver != null ? `${pctOver}% over` : "Watch",
+        value: variance != null ? fmt$(Math.abs(variance)) : "—",
         sub: "vs budget",
       };
     }

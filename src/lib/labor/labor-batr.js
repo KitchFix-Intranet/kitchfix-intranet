@@ -162,22 +162,49 @@ export function attachBatrToBoard(board, revenueBasis, { hasTarget = true, close
   // setting it to 0 breaks the fallback and shows $0 on a running
   // period that has real spend.
 
-  // Kevin post-1049 sweep item 5a: recompute verdict against batr,
-  // not raw. Prior lib/board.js verdict used raw range_budget →
-  // pill said OVER while the panel card said UNDER $3,857. Same
-  // pace-points band rule as verdictBand; kept literal here to
-  // avoid a cross-module import for one function.
-  if (batr != null && batr > 0) {
+  // Verdict recompute now lives in recomputeVerdictFromPanel below,
+  // called by the route AFTER attachWeeklyBasisToBoard so per-week
+  // batr fields are available for the fallback chain.
+  return board;
+}
+
+/**
+ * Recompute board.verdict + board.variance against the SAME figure
+ * the panel displays. Called by the route AFTER both
+ * attachBatrToBoard and attachWeeklyBasisToBoard so the per-week
+ * batr fallback (used on This period day 1 when range-level batr is
+ * null) has data to sum.
+ *
+ * Kevin post-1051 sweep item 1 (2026-09-08). SpendCard's fallback
+ * chain: budget_at_this_revenue → sum(per-week batr) → raw. Prior
+ * verdict used only the first; on This period batr was null so
+ * verdict fell to lib/board.js's raw pace-vs-elapsed calc (fired
+ * "over" on $4,222 P10 salary accrual against a $0 elapsed
+ * expectation). Panel showed $4,222 of $29,499 = 14.3% used.
+ */
+export function recomputeVerdictFromPanel(board) {
+  if (!board || board.applies === false) return board;
+  const batr = board.budget_at_this_revenue;
+  const panelBudget = (() => {
+    if (batr != null && batr > 0) return batr;
+    if (Array.isArray(board.weeks) && board.weeks.length > 0) {
+      const sum = board.weeks.reduce((s, w) => s + (w.budget_at_this_week_revenue != null ? Number(w.budget_at_this_week_revenue) : 0), 0);
+      const anyBatr = board.weeks.some(w => w.budget_at_this_week_revenue != null);
+      if (anyBatr && sum > 0) return Math.round(sum * 100) / 100;
+    }
+    return null;
+  })();
+  if (panelBudget != null && panelBudget > 0) {
     const spentForVerdict = board.closed_spent_to_date != null
       ? board.closed_spent_to_date
       : board.spent_to_date;
     if (spentForVerdict != null) {
-      const pacePct = (Number(spentForVerdict) / batr) * 100;
+      const pacePct = (Number(spentForVerdict) / panelBudget) * 100;
       const pacePoints = pacePct - 100;
       board.verdict = pacePoints >= 3 ? "over"
         : pacePoints >= 0.5 ? "watch"
         : "on_track";
-      board.variance = Math.round((Number(spentForVerdict) - batr) * 100) / 100;
+      board.variance = Math.round((Number(spentForVerdict) - panelBudget) * 100) / 100;
     }
   }
   return board;

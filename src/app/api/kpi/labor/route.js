@@ -38,7 +38,7 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 // then call the shared period-basis module. See
 // src/lib/kpi/shared/periodBasis.js for the R-77 invariant + rules.
 import { loadOverviewBudgets, computeContractualAccrualByPeriod } from "@/lib/kpi/shared/periodBasis.js";
-import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore } from "@/lib/labor/labor-batr.js";
+import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore, recomputeVerdictFromPanel } from "@/lib/labor/labor-batr.js";
 import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
 // only consumed by paginateActuals / resolveMemberBudget /
@@ -1391,6 +1391,10 @@ export async function GET(request) {
     todayISO: today,
     contractualAccrualByPeriod: contractualAccrualSingle,
   });
+  // Kevin post-1051 sweep item 1: verdict must use the panel-
+  // displayed figure. Runs AFTER attachWeeklyBasisToBoard so per-
+  // week batr fallback has data.
+  recomputeVerdictFromPanel(boardSingle);
 
   let bodySingle = {
     ok: true,
@@ -1480,6 +1484,9 @@ export async function GET(request) {
       todayISO: today,
       contractualAccrualByPeriod: contractualAccrualSingle,
     });
+    // Post-1051 sweep item 1: verdict recompute against panel figure
+    // after per-week batr lands.
+    recomputeVerdictFromPanel(bodySingle.board);
     // Legacy CIN - AZ re-resolve retained as belt-and-braces: the
     // salary-first resolve above covers this today, but a future
     // refactor that changes the merge shape shouldn't silently drop
