@@ -1,0 +1,344 @@
+/* WeekReview - day-by-day approval gate before Finalize.
+   2026-09-08 (week-review-before-finalize feature).
+   Design authority: docs/design/KF_WEEK_REVIEW_RENDER.html.
+
+   Class prefix `.sc-week-review-*` per SC v2 convention. Tokens come
+   from tokens.css `:root` + the .scv2 scope. Every var() carries an
+   explicit fallback literal so a missed token failure surfaces on
+   the design side rather than silently rendering transparent. The
+   mount-verify probe (tests/probe-week-review-mount.spec.ts)
+   confirms every token-driven surface resolves to a non-transparent
+   value. */
+
+/* Scrim - matches sc-finalize-scrim shape. */
+.sc-week-review-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay, 1200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4, 16px);
+  background: rgba(15, 23, 42, 0.55);
+  animation: sc-week-review-scrim-fade var(--motion-surface, 180ms cubic-bezier(.3, 0, 0, 1));
+}
+@keyframes sc-week-review-scrim-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sc-week-review-modal {
+  background: var(--surface-card, #FFFFFF);
+  border-radius: var(--radius-container-lg, 14px);
+  width: min(720px, 100%);
+  max-height: calc(100vh - var(--space-6, 24px) * 2);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--elevation-popover, 0 14px 36px rgba(15, 23, 42, .14));
+  animation: sc-week-review-modal-rise var(--duration-slow, 280ms) var(--ease-standard, cubic-bezier(.2, 0, 0, 1));
+  outline: none;
+  overflow: hidden;
+}
+.sc-week-review-modal:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--focus-ring-color, #153968);
+  outline-offset: 0;
+}
+@keyframes sc-week-review-modal-rise {
+  from { opacity: 0; transform: translateY(var(--space-3, 12px)); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Head - solid navy bar, title + meta. TEST MODE inline. */
+.sc-week-review-head {
+  background: #1A3050;
+  color: #FFFFFF;
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  display: flex;
+  gap: var(--space-3, 12px);
+  align-items: flex-start;
+}
+.sc-week-review-head-titleblock { flex: 1; min-width: 0; }
+.sc-week-review-title {
+  font-size: var(--sc2-size-h3, 19px);
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+}
+.sc-week-review-testtag {
+  background: var(--status-needs-strong, #D97706);
+  color: #2B1A05;
+  font-size: var(--sc2-size-micro, 10px);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border-radius: var(--radius-cell, 4px);
+  text-transform: uppercase;
+}
+.sc-week-review-meta {
+  font-size: var(--sc2-size-caption, 12px);
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: var(--space-1, 4px);
+}
+
+/* Attention strip - cream, always visible. */
+.sc-week-review-strip {
+  background: var(--sc2-band-cream-bg, #F5F0E4);
+  border-bottom: 1px solid var(--sc2-band-cream-bd, #E6DEC9);
+  padding: var(--space-3, 12px) var(--space-5, 20px);
+  font-size: var(--sc2-size-body-sm, 13px);
+  color: var(--sc2-band-cream-ink, #6B5B32);
+}
+.sc-week-review-strip b { color: var(--text-heading, #0F172A); }
+
+/* Scrollable body - stacked day cards. */
+.sc-week-review-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3, 12px) var(--space-5, 20px) var(--space-4, 16px);
+  background: var(--surface-page, #EDEFF2);
+}
+
+.sc-week-review-loading,
+.sc-week-review-loaderror {
+  padding: var(--space-5, 20px);
+  text-align: center;
+  color: var(--text-muted, #64748B);
+  font-size: var(--sc2-size-body-sm, 13px);
+}
+.sc-week-review-loaderror { color: var(--text-danger, #DC2626); }
+
+/* Day card - one per date in the span. */
+.sc-week-review-day {
+  background: var(--surface-card, #FFFFFF);
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-left: 4px solid var(--border-subtle, #E2E8F0);
+  border-radius: var(--radius-container, 10px);
+  margin-bottom: var(--space-3, 12px);
+  overflow: hidden;
+  box-shadow: var(--elevation-card, 0 1px 2px rgba(15, 23, 42, .05));
+  transition: border-color var(--duration-fast, 120ms) var(--ease-standard, cubic-bezier(.2, 0, 0, 1)),
+              background var(--duration-fast, 120ms) var(--ease-standard, cubic-bezier(.2, 0, 0, 1));
+}
+.sc-week-review-day[data-review="ok"] {
+  border-left-color: var(--green-700, #006515);
+  background: color-mix(in srgb, var(--status-entered-subtle, #C6EBCB) 30%, var(--surface-card, #FFFFFF));
+}
+.sc-week-review-day[data-review="fix"] {
+  border-left-color: var(--red-500, #DC2626);
+  background: color-mix(in srgb, var(--status-overdue-subtle, #FFEDE7) 30%, var(--surface-card, #FFFFFF));
+}
+
+.sc-week-review-day-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-bottom: 1px solid var(--border-subtle, #E2E8F0);
+}
+.sc-week-review-day-date {
+  font-size: var(--sc2-size-body, 14px);
+  font-weight: 800;
+  min-width: 120px;
+  color: var(--text-heading, #0F172A);
+}
+.sc-week-review-grow { flex: 1; }
+.sc-week-review-day-total {
+  font-size: var(--sc2-size-body, 15px);
+  font-weight: 800;
+  color: var(--text-heading, #0F172A);
+}
+.sc-week-review-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-week-review-chip {
+  font-size: var(--sc2-size-micro, 10px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border-radius: var(--radius-cell, 4px);
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.sc-week-review-chip--warn {
+  background: var(--status-needs-subtle, #FFDABE);
+  color: var(--status-needs-fg, #8C3A00);
+  border: 1px solid var(--status-needs-bd, #E4AD84);
+}
+.sc-week-review-chip--info {
+  background: var(--n-100, #F1F5F9);
+  color: var(--text-muted, #64748B);
+  border: 1px solid var(--border-subtle, #E2E8F0);
+}
+
+/* Services list - 3-column grid: name | qty | amount. */
+.sc-week-review-svcs {
+  display: flex;
+  flex-direction: column;
+}
+.sc-week-review-svc {
+  display: grid;
+  grid-template-columns: 1fr 78px 100px;
+  gap: var(--space-3, 12px);
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  align-items: center;
+  font-size: var(--sc2-size-body-sm, 13px);
+}
+.sc-week-review-svc + .sc-week-review-svc {
+  border-top: 1px solid var(--border-subtle, #E2E8F0);
+}
+.sc-week-review-svc-name { color: var(--text-default, #334155); }
+.sc-week-review-svc-qty {
+  text-align: right;
+  font-weight: 800;
+  color: var(--text-heading, #0F172A);
+}
+.sc-week-review-svc-amt {
+  text-align: right;
+  color: var(--text-muted, #64748B);
+}
+.sc-week-review-svc--empty {
+  grid-column: 1 / -1;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  color: var(--text-muted, #64748B);
+  font-style: italic;
+  font-size: var(--sc2-size-body-sm, 13px);
+}
+
+/* Day foot - hint + Approved/Needs fix segment. */
+.sc-week-review-day-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  background: var(--surface-sunken, #F8FAFC);
+  border-top: 1px solid var(--border-subtle, #E2E8F0);
+}
+.sc-week-review-day-hint {
+  font-size: var(--sc2-size-caption, 11px);
+  color: var(--text-muted, #64748B);
+}
+.sc-week-review-day-err {
+  font-size: var(--sc2-size-caption, 11px);
+  color: var(--text-danger, #DC2626);
+}
+
+.sc-week-review-seg { display: flex; gap: var(--space-2, 8px); }
+.sc-week-review-seg-btn {
+  font-family: inherit;
+  font-size: var(--sc2-size-caption, 12px);
+  font-weight: 800;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: var(--radius-control, 10px);
+  cursor: pointer;
+  border: 1px solid var(--border-default, #CBD5E1);
+  background: var(--surface-card, #FFFFFF);
+  color: var(--text-default, #334155);
+  transition: all var(--duration-fast, 120ms) var(--ease-standard, cubic-bezier(.2, 0, 0, 1));
+}
+.sc-week-review-seg-btn:hover:not(:disabled) {
+  border-color: var(--border-strong, #94A3B8);
+  color: var(--text-heading, #0F172A);
+}
+.sc-week-review-seg-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.sc-week-review-seg-btn--ok[aria-pressed="true"] {
+  background: var(--green-700, #006515);
+  border-color: var(--green-700, #006515);
+  color: #FFFFFF;
+}
+.sc-week-review-seg-btn--fix[aria-pressed="true"] {
+  background: var(--red-500, #DC2626);
+  border-color: var(--red-500, #DC2626);
+  color: #FFFFFF;
+}
+.sc-week-review-seg-btn:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--focus-ring-color, #153968);
+  outline-offset: 2px;
+}
+
+/* Foot - progress + Cancel + primary CTA. */
+.sc-week-review-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4, 16px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border-top: 1px solid var(--border-subtle, #E2E8F0);
+  background: var(--surface-card, #FFFFFF);
+}
+.sc-week-review-progress { flex: 1; min-width: 0; }
+.sc-week-review-progress-title {
+  font-size: var(--sc2-size-body-sm, 13px);
+  font-weight: 800;
+  color: var(--text-heading, #0F172A);
+}
+.sc-week-review-progress-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--n-200, #E2E8F0);
+  margin-top: var(--space-2, 8px);
+  overflow: hidden;
+}
+.sc-week-review-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--green-700, #006515);
+  transition: width var(--duration-slow, 280ms) var(--ease-standard, cubic-bezier(.2, 0, 0, 1));
+}
+.sc-week-review-progress-sub {
+  font-size: var(--sc2-size-caption, 11px);
+  color: var(--text-muted, #64748B);
+  margin-top: var(--space-1, 4px);
+}
+
+.sc-week-review-btn {
+  font-family: inherit;
+  font-size: var(--sc2-size-body, 14px);
+  font-weight: 800;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: var(--radius-control, 10px);
+  border: none;
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) var(--ease-standard, cubic-bezier(.2, 0, 0, 1));
+}
+.sc-week-review-btn--ghost {
+  background: var(--surface-card, #FFFFFF);
+  border: 1px solid var(--border-default, #CBD5E1);
+  color: var(--text-default, #334155);
+}
+.sc-week-review-btn--go {
+  background: var(--green-700, #006515);
+  color: #FFFFFF;
+}
+.sc-week-review-btn--go:hover:not(:disabled) {
+  background: var(--green-800, #004800);
+}
+.sc-week-review-btn--fix {
+  background: var(--red-500, #DC2626);
+  color: #FFFFFF;
+}
+.sc-week-review-btn:disabled {
+  background: var(--n-200, #E2E8F0);
+  color: var(--text-muted, #64748B);
+  cursor: not-allowed;
+}
+
+/* Compact for narrow viewports. Same 375px floor as the rest of SC. */
+@media (max-width: 480px) {
+  .sc-week-review-modal { max-height: 100vh; border-radius: 0; }
+  .sc-week-review-day-head { flex-wrap: wrap; }
+  .sc-week-review-day-date { min-width: 0; flex: 1 0 100%; }
+  .sc-week-review-foot { flex-wrap: wrap; }
+  .sc-week-review-progress { flex: 1 0 100%; }
+  .sc-week-review-svc {
+    grid-template-columns: 1fr 60px 82px;
+    gap: var(--space-2, 8px);
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+  }
+}

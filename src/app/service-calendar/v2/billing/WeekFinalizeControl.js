@@ -15,7 +15,9 @@
 
 import { useMemo, useRef, useState } from "react";
 import FinalizeOverlay from "./FinalizeOverlay";
+import WeekReview from "./WeekReview";
 import { getQboMode, getInvoiceDestination } from "@/lib/billing/qboMode";
+import "./weekReview.css";
 
 // Days that satisfy the finalize completeness rule. Mirrors
 // scWeekFinalize.js `computeWeekCompleteness` for per-meal accounts:
@@ -121,6 +123,12 @@ export default function WeekFinalizeControl({
   const [errText, setErrText] = useState(null);
   // Overlay state machine within the OPEN branch.
   //   'idle'    : button visible (blocked or ready)
+  //   'review'  : WeekReview modal open (day-by-day approval gate).
+  //               2026-09-08: NEW step inserted before confirm per the
+  //               week-review-before-finalize feature. Clicking
+  //               Finalize now opens WeekReview first; only after all
+  //               days are approved does the transition to 'confirm'
+  //               fire.
   //   'confirm' : overlay open in confirm mode
   //   'working' : overlay open in working mode
   const [overlayMode, setOverlayMode] = useState("idle");
@@ -345,7 +353,11 @@ export default function WeekFinalizeControl({
             disabled={saving}
             onClick={() => {
               setErrText(null);
-              setOverlayMode("confirm");
+              // 2026-09-08 (week-review): open the review, not the
+              // confirm. Confirm is now reached from WeekReview's
+              // "Finalize and send to billing" primary CTA once all
+              // days are approved.
+              setOverlayMode("review");
             }}
           >
             {buttonLabel}
@@ -397,8 +409,29 @@ export default function WeekFinalizeControl({
       )}
       {errText && <span className="sc-week-finalize-err" role="alert">{errText}</span>}
 
+      <WeekReview
+        open={overlayMode === "review"}
+        accountKey={accountKey}
+        weekStart={weekStart}
+        qboMode={qboMode}
+        invokerRef={openButtonRef}
+        onCancel={() => {
+          if (saving) return;
+          setOverlayMode("idle");
+        }}
+        onAllApproved={() => {
+          if (saving) return;
+          setOverlayMode("confirm");
+        }}
+        onFixFirstFlagged={(iso) => {
+          if (saving) return;
+          setOverlayMode("idle");
+          if (iso) onOpenDay?.(iso);
+        }}
+      />
+
       <FinalizeOverlay
-        open={overlayMode !== "idle"}
+        open={overlayMode === "confirm" || overlayMode === "working"}
         mode={overlayMode === "working" ? "working" : "confirm"}
         workingStepIndex={workingStepIndex}
         onCancel={() => {
