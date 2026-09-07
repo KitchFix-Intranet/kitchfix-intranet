@@ -273,45 +273,62 @@ function SpendCard({ board, eyebrowLabel, dateRange, salary, salaryAvailable, is
         </div>
       </div>
 
-      {/* V29-6 BUDGET LEADS - hero-size budget card with navy accent.
-          V29-2: hero > 11 chars falls back to VALUE size so a millions
-          figure ($1,637,503.83 = 13 chars) renders complete. */}
+      {/* Kevin Labor PR-A item 6 flip (2026-09-07): ACTUAL LEADS. The
+          hero position - navy accent, largest weight - was Budget;
+          it becomes Actual (spent). Budget moves to the left of the
+          pair beneath the hero. The V29-6 "BUDGET LEADS" ruling
+          predates the R-77 fix; with the comparison basis now
+          adjusted-at-revenue and the two boards agreed to the cent,
+          Actual becomes the story the eye lands on - matching the
+          Overview's card grammar.
+          CSS classes (.kpi-spend-budget-*) kept as-is so the visual
+          size + accent survive the semantic swap. */}
       {(() => {
-        const budgetText = noBudget ? "—" : fmt$(budget);
-        const isLong = budgetText.length > 11;
+        const actualText = fmt$(spent);
+        const isLong = actualText.length > 11;
+        const heroLabel = isFutureRange ? "Actual" : (isPeriod ? "Spent in Period" : "Actual · to date");
+        // Sub-line beneath the hero: on multi-period ranges with the
+        // running-period exclusion in force, name the closed-only
+        // window explicitly so a reader does not mistake the figure
+        // for the whole range. Falls back to % of budget otherwise
+        // (parity with the pre-flip cell sub).
+        const heroSub = (() => {
+          if (isFutureRange) return "this range has not started";
+          if (isMultiWithClosedSubset) {
+            const wks = board?.closed_weeks_in_range ?? null;
+            return wks != null
+              ? `${wks} closed weeks · running period not counted`
+              : "running period not counted";
+          }
+          return spentPct != null ? `${spentPct}% of budget` : "";
+        })();
         return (
           <div className="kpi-spend-budget">
             <span className="kpi-spend-budget-accent" aria-hidden="true" />
-            <div className="kpi-spend-budget-lab">Budget</div>
-            <div className="kpi-spend-budget-val num" data-long={isLong ? "true" : "false"}>{budgetText}</div>
-            <div className="kpi-spend-budget-sub">{budgetSub}</div>
+            <div className="kpi-spend-budget-lab">{heroLabel}</div>
+            <div className="kpi-spend-budget-val num" data-long={isLong ? "true" : "false"} data-kpi-labor-hero="actual">{actualText}</div>
+            <div className="kpi-spend-budget-sub">{heroSub}</div>
           </div>
         );
       })()}
 
-      {/* PR-B (owner ruling 2026-08-24) - "Spent so far" gets a
-          kind-aware label so the copy names what the figure IS:
-            - single_period_in_progress / single_period_closed
-              -> "Spent in Period"
-            - multi_period (FYTD / Last-4-Weeks / custom range)
-              -> "Spend to date"
-          Same figure (board.spent_to_date), different noun for the
-          scope it summarises. */}
+      {/* Pair below: Budget (was Spent) on the left, verdict (was
+          Left-or-Under-Over) on the right. When there is no budget,
+          the pair mutes on both sides.
+          Kevin ruling 2026-09-07: the "Left to spend" running-period
+          concept is retired from this pair - Actual leads now, and
+          "how many days remain" belongs in the running-week sub of
+          PR-B rather than the SpendCard pair. */}
       <div className="kpi-spend-pair">
-        <div className="kpi-spend-cell">
-          <div className="kpi-spend-cell-lab">{isPeriod ? "Spent in Period" : "Spend to date"}</div>
-          <div className="kpi-spend-cell-val num">{fmt$(spent)}</div>
-          {isFutureRange ? (
-            <div className="kpi-spend-cell-sub kpi-spend-cell-mute">this range has not started</div>
-          ) : (
-            <div className="kpi-spend-cell-sub">{spentPct != null ? `${spentPct}% of budget` : ""}</div>
-          )}
+        <div className={`kpi-spend-cell ${noBudget ? "kpi-spend-cell-mute" : ""}`}>
+          <div className="kpi-spend-cell-lab">{noBudget ? "no budget" : "Adjusted budget"}</div>
+          <div className="kpi-spend-cell-val num">{noBudget ? "—" : fmt$(budget)}</div>
+          <div className="kpi-spend-cell-sub">{budgetSub}</div>
         </div>
         {isFutureRange ? (
           /* Owner ruling 2026-08-24: no variance line, no colour on a
              future range. Right cell renders a muted em-dash so the
-             two-column layout does not shift; the SPENT cell's sub
-             carries the "not started" note. */
+             two-column layout does not shift. */
           <div className="kpi-spend-cell kpi-spend-cell-mute">
             <div className="kpi-spend-cell-lab">vs budget</div>
             <div className="kpi-spend-cell-val num">–</div>
