@@ -635,8 +635,20 @@ export default function KpiLaborPage() {
 
   const grand = useMemo(() => {
     if (!grouped.length) return null;
+    // Kevin post-1049 sweep item 3 (2026-09-07). Multi-period ranges
+    // exclude the running period from the grand total (R-78, matching
+    // Overview). Prior code summed every group; TBJ - FL This year
+    // total included P10 day-1 salary accrual and disagreed with
+    // the panel's own "36 of 37 weeks closed · running not counted".
+    // Single-period ranges that ARE the running period still
+    // contribute (the whole point of viewing them).
     const g = { hours_regular: 0, hours_overtime: 0, hours_double_time: 0, amount: 0, hours_without_dollars: 0, draft_hours: 0 };
+    const currentP = periodOfDate(today);
     for (const period of grouped) {
+      const isRunning = period.groupHint?.kind === "period"
+        && period.period_no === currentP
+        && grouped.length > 1;
+      if (isRunning) continue;
       g.hours_regular       += period.subtotal.hours_regular;
       g.hours_overtime      += period.subtotal.hours_overtime;
       g.hours_double_time   += period.subtotal.hours_double_time;
@@ -645,7 +657,7 @@ export default function KpiLaborPage() {
       g.draft_hours           += period.subtotal.draft_hours || 0;
     }
     return g;
-  }, [grouped]);
+  }, [grouped, today]);
 
   const periodsIsAllHoursOnly = useMemo(() => {
     const set = new Set();

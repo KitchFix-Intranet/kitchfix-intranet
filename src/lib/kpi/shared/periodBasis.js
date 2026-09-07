@@ -187,6 +187,37 @@ export function computePeriodTargetPctForLines({ members, period, lineCodes, ove
   return linesBud / revBud;
 }
 
+// ─── Per-period contractual accrual (R-67) ─────────────────────────
+//
+// Returns Map<period_no, total_dollars> summing budgets for the
+// contractual lines (2200/2300/2600) across members. Consumers that
+// attribute revenue per week (Labor's week cards) divide this by 4
+// per closed week to include the accrual in each week's basis - the
+// panel/week-card $8,509 gap on TBJ - FL P9 came from the week cards
+// missing this share.
+//
+// R-67 formula for a period: budget × completeWeeks / 4. Per week
+// (when closed): budget / 4.
+export function computeContractualAccrualByPeriod({ overviewBudgets, members, periods }) {
+  const out = new Map();
+  if (!overviewBudgets) return out;
+  for (const p of periods) {
+    let sum = 0;
+    for (const line of CONTRACTUAL_ACCRUAL_LINES) {
+      const perLine = overviewBudgets.get(line);
+      if (!perLine) continue;
+      for (const m of members) {
+        const byAcct = perLine.get(m);
+        if (!byAcct) continue;
+        const v = byAcct.get(p);
+        if (v != null) sum += Number(v);
+      }
+    }
+    if (sum > 0) out.set(p, sum);
+  }
+  return out;
+}
+
 // ─── Per-(member, period) revenue by line ──────────────────────────
 //
 // Moved from resolver.js. Every consumer that computes revenue for

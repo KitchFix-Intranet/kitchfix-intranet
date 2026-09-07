@@ -590,9 +590,16 @@ export function WeekTable({
     // now derive from the shared helper so they cannot disagree.
     // Month grouping still sums g.weeks.length - months come from a
     // different derivation and weeks_in_period is not populated there.
-    const totalWeeks = grouped.reduce((n, g) => n + (g.groupHint?.kind === "period" ? (g.weeks_in_period ?? g.weeks.length) : g.weeks.length), 0);
+    // Kevin post-1049 sweep item 3a (2026-09-07). Exclude the running
+    // period on multi-period ranges so the table's caption agrees
+    // with the panel's own "36 of 37 weeks closed · running period
+    // not counted" sub. Running-period identified by
+    // isPeriodInProgress. Single-period ranges are covered by the
+    // branches above.
+    const closedGrouped = grouped.filter(g => !(g.groupHint?.kind === "period" && isPeriodInProgress(g, todayISO)));
+    const totalWeeks = closedGrouped.reduce((n, g) => n + (g.groupHint?.kind === "period" ? (g.weeks_in_period ?? g.weeks.length) : g.weeks.length), 0);
     const isMonth = grouped[0]?.groupHint?.kind === "month";
-    return `TOTAL · ${grouped.length} ${isMonth ? "MONTH" : "PERIOD"}${grouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}${acctSuffix}`;
+    return `TOTAL · ${closedGrouped.length} ${isMonth ? "MONTH" : "PERIOD"}${closedGrouped.length === 1 ? "" : "S"} · ${totalWeeks} WEEK${totalWeeks === 1 ? "" : "S"}${acctSuffix}`;
   })();
 
   // V25-2 scope note. Renders above the table on aggregate views where
@@ -604,9 +611,16 @@ export function WeekTable({
     : null;
 
   // Grand budget = sum of period budgets covered by the range.
+  // Kevin post-1049 sweep item 3 (2026-09-07). Exclude running
+  // period on multi-period ranges so the grand budget matches the
+  // closed total on the panel.
   const grandBudget = (() => {
     let sum = 0, any = false;
     for (const pt of periodTotals) {
+      const isRunning = pt.g?.groupHint?.kind === "period"
+        && isPeriodInProgress(pt.g, todayISO)
+        && grouped.length > 1;
+      if (isRunning) continue;
       if (pt.periodBudget != null) { sum += pt.periodBudget; any = true; }
     }
     return any ? Math.round(sum * 100) / 100 : null;

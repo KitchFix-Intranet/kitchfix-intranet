@@ -40,8 +40,10 @@
 // FY_START (2025-12-29). See src/app/kpi/labor/lib/periods.js for
 // the weekStartsInRange helper.
 
-import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
-import { REVENUE_LINE_CODES } from "@/lib/kpi/overview/pnl-loader.js";
+// Kevin ruling 2026-09-07: shared periodBasis.js owns REVENUE_LINE_CODES,
+// batr formula, and CONTRACTUAL_ACCRUAL_LINES. Import from there so
+// this file has no locally-owned duplication.
+import { REVENUE_LINE_CODES, CONTRACTUAL_ACCRUAL_LINES } from "@/lib/kpi/shared/periodBasis.js";
 import { periodOf } from "@/app/kpi/labor/lib/periods.js";
 
 const IN_CHUNK = 60;
@@ -351,7 +353,7 @@ function daysLeftInRunningWeek(weekStartISO, todayISO) {
  * Weeks not present in weeklyBasisData (defensive - the loader is
  * called against the same range) get no attach.
  */
-export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO }) {
+export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPctByPeriod, todayISO, contractualAccrualByPeriod = null }) {
   if (!board || board.applies === false) return board;
   if (!Array.isArray(board.weeks)) return board;
   if (!weeklyBasisData || !Array.isArray(weeklyBasisData.data)) return board;
@@ -361,6 +363,17 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     byStart.set(w.week_start, w);
   }
 
+  // Kevin post-1049 sweep item 4/5b (2026-09-07). Sum of per-week
+  // batr must equal the panel's range-level batr. Panel uses total
+  // revenue = SC + R-67 contractual accrual (precedence #3). Per
+  // week must include the same accrual split evenly across the 4
+  // weeks of a period. Only CLOSED weeks accrue - running/future
+  // haven't earned their share. contractualAccrualByPeriod is a
+  // Map<period_no, total_dollars> from shared
+  // computeContractualAccrualByPeriod; empty when caller doesn't
+  // pass it (early callers pre-fix).
+  const accrualByPeriod = contractualAccrualByPeriod || new Map();
+
   for (const w of board.weeks) {
     const basis = byStart.get(w.week_start);
     if (!basis) continue;
@@ -369,20 +382,27 @@ export function attachWeeklyBasisToBoard(board, weeklyBasisData, { lineTargetPct
     w.confirmed_days = basis.confirmed_days;
     w.projected_days = basis.projected_days;
     w.empty_days = basis.empty_days;
-    // Walkthrough item 3 - service-level counts for the "3 of 13"
-    // client copy on partial tiles.
     w.confirmed_services = basis.confirmed_services;
     w.projected_services = basis.projected_services;
     w.total_services = basis.total_services;
     w.empty_slot_services = basis.empty_slot_services;
     w.week_actual_revenue = basis.actual_revenue;
     w.week_projected_revenue = basis.projected_revenue;
-    w.week_revenue = basis.revenue;
 
+    // Per-week contractual accrual: 1/4 of period total for CLOSED
+    // weeks. Zero for running / future.
     const periodNo = periodOf(w.week_start);
+    const periodAccrual = periodNo != null ? Number(accrualByPeriod.get(periodNo) || 0) : 0;
+    const weekAccrual = (basis.temporal === "closed" && periodAccrual > 0)
+      ? Math.round((periodAccrual / 4) * 100) / 100
+      : 0;
+    w.week_contractual_accrual = weekAccrual;
+    const revenueWithAccrual = Number(basis.revenue || 0) + weekAccrual;
+    w.week_revenue = Math.round(revenueWithAccrual * 100) / 100;
+
     const pct = periodNo != null ? lineTargetPctByPeriod?.get?.(periodNo) : null;
-    if (pct != null && basis.revenue != null) {
-      const raw = Number(basis.revenue) * Number(pct);
+    if (pct != null) {
+      const raw = revenueWithAccrual * Number(pct);
       w.budget_at_this_week_revenue = Math.round(raw * 100) / 100;
     } else {
       w.budget_at_this_week_revenue = null;

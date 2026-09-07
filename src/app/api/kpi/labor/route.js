@@ -35,10 +35,9 @@ import { buildBoard, buildWeekBudgets, buildAggregateWeekBudgets } from "@/app/k
 // R-77 fix (Kevin 2026-09-04, Labor PR-A): budget_at_this_revenue on
 // the labor board needs revenue - which the labor payload does not
 // carry. Load pnl_actuals revenue + kpi_budgets revenue for the range,
-// then call the shared batr helper. See docs at
-// src/lib/kpi/shared/batr.js for the R-77 invariant.
-import { budgetAtThisRevenue as sharedBatr } from "@/lib/kpi/shared/batr.js";
-import { REVENUE_LINE_CODES, loadPnlActuals, loadOverviewBudgets } from "@/lib/kpi/overview/pnl-loader.js";
+// then call the shared period-basis module. See
+// src/lib/kpi/shared/periodBasis.js for the R-77 invariant + rules.
+import { loadOverviewBudgets, computeContractualAccrualByPeriod } from "@/lib/kpi/shared/periodBasis.js";
 import { loadRangeRevenueBasis, attachBatrToBoard, periodsClosedBefore } from "@/lib/labor/labor-batr.js";
 import { loadWeeklyRevenueBasis, computeLineTargetPctByPeriod, attachWeeklyBasisToBoard } from "@/lib/labor/labor-week-basis.js";
 // PR-1 extract (2026-08-31) - periods.js + computePeriodMeasures were
@@ -1378,9 +1377,19 @@ export async function GET(request) {
     members: [account],
     periods: rangePeriodsSingle,
   });
+  // Kevin post-1049 sweep item 4/5b: per-week contractual accrual so
+  // sum(per-week batr) equals panel batr. R-67 accrues 2200/2300/2600
+  // budget × completeWeeks/4 per period; per week: budget / 4 for
+  // closed weeks.
+  const contractualAccrualSingle = computeContractualAccrualByPeriod({
+    overviewBudgets: overviewBudgetsSingle?.data || new Map(),
+    members: [account],
+    periods: rangePeriodsSingle,
+  });
   attachWeeklyBasisToBoard(boardSingle, weeklyBasisSingle, {
     lineTargetPctByPeriod: lineTargetPctSingle,
     todayISO: today,
+    contractualAccrualByPeriod: contractualAccrualSingle,
   });
 
   let bodySingle = {
@@ -1469,6 +1478,7 @@ export async function GET(request) {
     attachWeeklyBasisToBoard(bodySingle.board, weeklyBasisSingle, {
       lineTargetPctByPeriod: lineTargetPctMerged,
       todayISO: today,
+      contractualAccrualByPeriod: contractualAccrualSingle,
     });
     // Legacy CIN - AZ re-resolve retained as belt-and-braces: the
     // salary-first resolve above covers this today, but a future
