@@ -1043,6 +1043,26 @@ The Ops Hub and Financial pages continue to use the older `oh-toast` primitive d
 
 ---
 
+### `AppSkeleton` is the app-wide loading primitive; KPI's `SkeletonBoard` is a deliberate exception
+
+The loading-unification arc (PRs #1050 + #1052, 2026-09-08) established one rule:
+
+> **Skeletons make no claim; spinners and empty states both make wrong ones.**
+
+Every page-scoped loading treatment across People, Directory, Playbook, Ops Hub, Financial, and the SC admin surfaces routes through `src/components/loading/AppSkeleton.js` (`variant="portal|list|grid"`). SC's own `src/app/service-calendar/skeleton/SkeletonSurface.js` is the SC drill-workspace variant of the same shimmer discipline. SC's `Ribbon` per-stat shimmer follows the value, not the outer `isLoading` signal - if the value is present, render it; if not, shimmer.
+
+**KPI (`/kpi/labor`, `/kpi/overview`, `/kpi/purchasing`) intentionally keeps its own `SkeletonBoard` primitive.** It matches KPI's card-grid layout with a shimmer-and-ghost pattern (cold load shows skeleton; refetch shows prior board at reduced opacity with a skeleton overlay). The KPI state machine (`loadState = idle | loading | refetching | loaded | error | auth` via `StateBox` variants) has no analogue in AppSkeleton, and being a different primitive is not a defect worth a PR before training.
+
+**Rule for future work:**
+- Any NEW page-scoped loading treatment: use `AppSkeleton` or extend its variants. Do not add a new spinner. Do not render "-" / "Loading..." text / a real-looking zero during a load.
+- Action-scoped inline spinners (`oh-btn-spinner`, submit-in-flight pills) are OUT of this rule - they are per-action affordances, not page-scoped loading states.
+- Cold-hydration seams (`page.js` `.oh-spinner` in SC + Ops) also OUT - they run BEFORE React attaches, so no skeleton primitive can replace them.
+- **Do not "unify" KPI's `SkeletonBoard` into AppSkeleton.** Kevin ruled 2026-09-08: *"KPI stays as-is. Its SkeletonBoard works; being a different primitive is not a defect worth a PR before training."* This is a documented exception, not an oversight.
+
+**Related:** the arc landed alongside a code comment on `page.js:186`'s `.oh-spinner` naming it as the one surviving spinner in the SC subtree (pre-hydration seam). Comment names the handoff to SkeletonSurface so a future cleanup does not delete it or add a second spinner elsewhere.
+
+---
+
 ## Service Calendar
 
 ### SC PDC phases: the "Camp Name" column is the source of truth, not meal-count inference
