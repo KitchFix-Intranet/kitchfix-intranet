@@ -330,62 +330,176 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel, showPeriodCols }) {
   );
 }
 
-// Kevin R-92 PR-3 follow-up (2026-09-09). Simplified cost-lines
-// table for This period (single running period). Four columns only:
-// Line, Spent so far, P10 budget, Target %. No % of rev, no
-// adjusted budget, no Left, no total-row variance. Matches the
-// option A cards above by not rendering a verdict where the cards
-// already say "no percentage yet". Render of record:
-// docs/renders/overview-this-period-sc-revenue.html.
-function SimpleCostLinesTable({ cogsRows, periodNo }) {
+// Kevin CC prompt 2026-09-08 item 5. Running-single-period cost
+// table gains an envelope row + "Adjusted now" column so the cost
+// envelope reads against the revenue the period is projecting, not
+// the plan. Render of record: docs/renders/current-period-hybrid.html.
+//
+// projRev = sum(week_rail.weeks[i].week_revenue) = SC forecast+
+// actual for all 4 weeks + full period fee. planRev =
+// revenue_budget_full_period.
+//
+// Colour rule (Kevin ruling): "Adjusted now" is coloured by the
+// direction the revenue moved, NOT by a per-line comparison. Every
+// line carries the SAME colour - green when projRev > planRev,
+// red when below. Do not colour per-line vs per-line-plan; that
+// produces the same result today and the wrong one the moment a
+// line's target% changes. The envelope row's ▲/▼ keeps the same
+// direction - one signal repeated.
+function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullPeriod, cogsCard, gmCard }) {
   const totalSpent = cogsRows.reduce((s, r) => s + Number(r.actual || 0), 0);
   const totalBudget = cogsRows.reduce((s, r) => s + Number(r.period_budget || 0), 0);
   const totalTargetPct = cogsRows.reduce((s, r) => s + Number(r.target_pct || 0), 0);
-  const periodBudgetHeader = periodNo != null ? `P${periodNo} budget` : "Period budget";
+  const periodBudgetHeader = periodNo != null ? `P${periodNo} plan` : "Period plan";
+  // Envelope compute: projRev + planRev + delta.
+  const planRev = Number(revenueBudgetFullPeriod || 0);
+  const weeks = weekRail?.weeks || [];
+  const projRev = weeks.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
+  const delta = projRev - planRev;
+  const pct = planRev > 0 ? (delta / planRev) * 100 : null;
+  // Kevin single-direction colour rule. Every adjusted cell (and
+  // the envelope ▲/▼) use the SAME class - one signal repeated.
+  const envToneCls = delta === 0
+    ? ""
+    : delta > 0 ? "kpi-ov-good" : "kpi-ov-bad";
+  const confirmedWeeks = weeks.filter(w => w.revenue_basis === "confirmed").length;
+  const totalWeeks = weeks.length;
+  const settled = totalWeeks > 0 && confirmedWeeks >= totalWeeks;
+  // "N wks confirmed + M forecast, plus the full service fee" clause.
+  const srcClause = totalWeeks > 0
+    ? `${confirmedWeeks} wk${confirmedWeeks === 1 ? "" : "s"} confirmed + ${totalWeeks - confirmedWeeks} forecast, plus the full service fee`
+    : null;
+  // Row's Adjusted = projRev × target_pct / 100.
+  const adjustedFor = (targetPct) => (targetPct != null && projRev > 0)
+    ? projRev * (Number(targetPct) / 100)
+    : null;
+  const totalAdjusted = adjustedFor(totalTargetPct);
+  // GM at target row.
+  const gmTargetPct = totalTargetPct != null ? 100 - Number(totalTargetPct) : null;
+  const gmPlanBudget = (planRev > 0 && totalBudget != null) ? (planRev - totalBudget) : null;
+  const gmAdjusted = (gmTargetPct != null && projRev > 0) ? projRev * (gmTargetPct / 100) : null;
   return (
     <div className="kpi-ov-card kpi-ov-mt" data-kpi-ov="cost-lines">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">Where the money is going</span>
         <span className="kpi-ov-gl">click a line to open it</span>
-        {/* No verdict pill on TP · the cards above say "no percentage
-            yet". A "N of X over" pill here would contradict that. */}
+        {settled && (
+          <span className="kpi-ov-pill kpi-ov-pill-good" data-kpi-ov="cost-lines-pill-final">
+            targets final
+          </span>
+        )}
       </div>
       <div className="kpi-ov-cb">
+        {/* Envelope row: Revenue this period · $plan planned → $proj
+            projected · ▲/▼ delta · pct. Same signal that colours
+            every Adjusted cell below. */}
+        {planRev > 0 && (
+          <div className="kpi-ov-envrow" data-kpi-ov="cost-envelope-row">
+            <span className="kpi-ov-envrow-k">Revenue this period</span>
+            <span className="kpi-ov-envrow-e">
+              <b>{fmtMoney(planRev)}</b> planned
+            </span>
+            <span className="kpi-ov-envrow-arw" aria-hidden="true">→</span>
+            <span className="kpi-ov-envrow-e">
+              <b className={envToneCls}>{fmtMoney(projRev)}</b> projected
+            </span>
+            {delta !== 0 && pct != null && (
+              <span className={`kpi-ov-envrow-chg ${envToneCls}`} data-kpi-ov="cost-envelope-delta">
+                {delta > 0 ? "▲" : "▼"} {fmtMoney(Math.abs(delta))} · {pct >= 0 ? pct.toFixed(1) : Math.abs(pct).toFixed(1)}%
+              </span>
+            )}
+            {srcClause && (
+              <span className="kpi-ov-envrow-src">{srcClause}</span>
+            )}
+          </div>
+        )}
         <table className="kpi-ov-cl" data-kpi-ov="cost-lines-table">
           <thead>
             <tr>
               <th className="l">Line</th>
-              <th className="kpi-ov-num">Spent so far</th>
-              <th className="kpi-ov-num">{periodBudgetHeader}</th>
               <th className="kpi-ov-num" style={{ width: 68 }}>Target %</th>
+              <th className="kpi-ov-num">{periodBudgetHeader}</th>
+              <th className="kpi-ov-num">Adjusted now</th>
+              <th className="kpi-ov-num">Landed</th>
+              <th className="kpi-ov-num">Left to spend</th>
             </tr>
           </thead>
           <tbody>
-            {cogsRows.map(r => (
-              <tr key={r.line_code} className="kpi-ov-cl-row">
-                <td className="l kpi-ov-cl-line">
-                  <span className="kpi-ov-cl-code">{r.line_code}</span>
-                  <span className="kpi-ov-cl-lbl">{r.label}</span>
-                </td>
-                <td className="kpi-ov-num" data-kpi-ov="cost-line-actual">
-                  {fmtMoney(r.actual) || "—"}
-                </td>
-                <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-period-budget">
-                  {fmtMoney(r.period_budget) || "—"}
-                </td>
-                <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-target-pct">
-                  {fmtPct(r.target_pct) || "—"}
-                </td>
-              </tr>
-            ))}
+            {cogsRows.map(r => {
+              const adj = adjustedFor(r.target_pct);
+              const landed = Number(r.actual || 0);
+              const left = adj != null ? adj - landed : null;
+              return (
+                <tr key={r.line_code} className="kpi-ov-cl-row">
+                  <td className="l kpi-ov-cl-line">
+                    <span className="kpi-ov-cl-code">{r.line_code}</span>
+                    <span className="kpi-ov-cl-lbl">{r.label}</span>
+                  </td>
+                  <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-target-pct">
+                    {fmtPct(r.target_pct) || "—"}
+                  </td>
+                  <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-period-budget">
+                    {fmtMoney(r.period_budget) || "—"}
+                  </td>
+                  <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="cost-line-adjusted-now">
+                    {adj != null ? fmtMoney(adj) : "—"}
+                  </td>
+                  <td className="kpi-ov-num" data-kpi-ov="cost-line-landed">
+                    {fmtMoney(landed) || "—"}
+                  </td>
+                  <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-left">
+                    {left != null ? fmtMoney(left) : "—"}
+                  </td>
+                </tr>
+              );
+            })}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="cost-lines-total">
               <td className="l">Total cost of goods</td>
-              <td className="kpi-ov-num">{fmtMoney(totalSpent) || "—"}</td>
-              <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(totalBudget) || "—"}</td>
               <td className="kpi-ov-num kpi-ov-nb">{fmtPct(totalTargetPct) || "—"}</td>
+              <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(totalBudget) || "—"}</td>
+              <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="cost-total-adjusted">
+                {totalAdjusted != null ? fmtMoney(totalAdjusted) : "—"}
+              </td>
+              <td className="kpi-ov-num">{fmtMoney(totalSpent) || "—"}</td>
+              <td className="kpi-ov-num kpi-ov-nb">
+                {totalAdjusted != null ? fmtMoney(totalAdjusted - totalSpent) : "—"}
+              </td>
             </tr>
+            {gmTargetPct != null && gmPlanBudget != null && gmAdjusted != null && (
+              <tr className="kpi-ov-cl-tot kpi-ov-cl-tot-gm" data-kpi-ov="cost-lines-total-gm">
+                <td className="l">Gross margin at target</td>
+                <td className="kpi-ov-num kpi-ov-nb">{fmtPct(gmTargetPct)}</td>
+                <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(gmPlanBudget)}</td>
+                <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="cost-gm-adjusted">
+                  {fmtMoney(gmAdjusted)}
+                </td>
+                <td className="kpi-ov-num kpi-ov-nb">—</td>
+                <td className="kpi-ov-num kpi-ov-nb">—</td>
+              </tr>
+            )}
           </tbody>
         </table>
+        {/* Kevin CC prompt 2026-09-08 item 5 · the envelope note.
+            Two states: weeks-outstanding (targets still move) vs
+            all-four-confirmed (targets final for the period). */}
+        {planRev > 0 && (
+          <div className="kpi-ov-cl-envnote" data-kpi-ov="cost-envelope-note">
+            {settled ? (
+              <>
+                <b>All four weeks are confirmed, so these targets are final for the period.</b>{" "}
+                The period earned {fmtMoney(projRev)} against a plan of {fmtMoney(planRev)}.{" "}
+                What is left to spend is what is left - it will not move again.
+              </>
+            ) : (
+              <>
+                <b>Your cost envelope moves with revenue.</b> The plan assumed {fmtMoney(planRev)}.{" "}
+                With {confirmedWeeks} of {totalWeeks} weeks confirmed the period is projecting {fmtMoney(projRev)}.{" "}
+                <b>Targets move each time a week confirms.</b>{" "}
+                Be aware of your projections for future weeks - if you know they are going to be lower than budget, you need to prepare for those adjustments.
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -417,7 +531,16 @@ export default function CostLines({ payload, previewAccount = null }) {
   // exactly as it is.
   const isRunningSinglePeriod = payload.range?.kind === "period" && payload.period_state === "open";
   if (isRunningSinglePeriod) {
-    return <SimpleCostLinesTable cogsRows={cogsRows} periodNo={payload.range?.period_no} />;
+    return (
+      <SimpleCostLinesTable
+        cogsRows={cogsRows}
+        periodNo={payload.range?.period_no}
+        weekRail={payload.week_rail}
+        revenueBudgetFullPeriod={cogsCard?.hero_budget_full_period ?? payload.statement_totals?.revenue?.period_budget ?? null}
+        cogsCard={cogsCard}
+        gmCard={payload.cards?.find(c => c.key === "gross_margin")}
+      />
+    );
   }
   // Kevin Prompt 1 item 1b (2026-09-04): period columns render only
   // on open ranges (a closed period has no "left"). Column labels

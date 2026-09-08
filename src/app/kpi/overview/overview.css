@@ -1825,6 +1825,79 @@
   border-top: 1px solid var(--n-400);
   font-weight: 800;
 }
+/* Kevin CC prompt 2026-09-08 item 5. Running-single-period cost
+   table adds a Gross-margin-at-target row alongside the total. Uses
+   the same total-row treatment; purple tint marks it as the margin
+   axis (aligns to the margin card's border-top). */
+.kpi-app .kpi-ov-cl-tot-gm td {
+  background: color-mix(in oklab, var(--kpi-purple-600, #7A3E9D) 8%, transparent);
+  border-top: 1px solid var(--n-300);
+}
+/* Envelope row above the cost table. "Revenue this period · $plan
+   planned → $projected · ▲ delta · pct · N wks confirmed + M
+   forecast, plus the full service fee." Same-family classes so a
+   token pass flows through. */
+.kpi-app .kpi-ov-envrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kpi-sp-3);
+  flex-wrap: wrap;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  margin: var(--kpi-sp-2) 0 var(--kpi-sp-3);
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  border-radius: 9px;
+}
+.kpi-app .kpi-ov-envrow-k {
+  font-size: calc(10px * var(--kf-scale, 1));
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-envrow-e {
+  font-size: calc(13px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-600);
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-envrow-e b {
+  font-size: calc(16px * var(--kf-scale, 1));
+  font-weight: 800;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-envrow-arw {
+  color: var(--n-400);
+  font-size: calc(15px * var(--kf-scale, 1));
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-envrow-chg {
+  font-size: calc(13px * var(--kf-scale, 1));
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-envrow-src {
+  margin-left: auto;
+  font-size: calc(11px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-600);
+}
+/* Envelope note below the cost table. Two states (moving/settled)
+   in the component; the visual is the same. */
+.kpi-app .kpi-ov-cl-envnote {
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3);
+  border-radius: 9px;
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  font-size: calc(11.5px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-700);
+  line-height: 1.65;
+}
+.kpi-app .kpi-ov-cl-envnote b {
+  color: var(--n-900);
+}
 /* Kevin ruling 2026-09-03 (simplified-layout): dollar gap stacks
    beneath the actual figure in the total row (one cell, added back
    after the vs-target column was dropped). Meta-weight so the reader
