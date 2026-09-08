@@ -230,6 +230,83 @@ if (mismatchesDedup.length === 0) {
   }
 }
 
+// ─── Finding 3: half-entered contacts.name ────────────────────────
+// Claire's second bug (surfaced after the role fix): her contacts.name
+// reads "Claire" - first name only, no surname. Same free-text-with-
+// no-validation shape as the role bug. Wherever contacts.name renders
+// (Slack chase, notification recipient labels, admin lists) she reads
+// as a first-name mononym.
+//
+// Two detection rules:
+//   3a. contacts.name has no whitespace (single-word: likely first-
+//       only or last-only). A legitimate one-word mononym is possible
+//       but vanishingly unlikely in a corporate context.
+//   3b. contacts.name disagrees with people.display_name for the same
+//       email. This is the "two fields, one truth" shape - both hold
+//       the same fact, hand-maintained contacts.name has diverged
+//       from Rippling-sourced people.display_name.
+console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+console.log(`FINDING 3 - contacts.name looks half-entered`);
+console.log(`  Consequence: renders as a first-only or last-only`);
+console.log(`  fragment anywhere contacts.name is displayed (Slack`);
+console.log(`  chase, notification labels, admin lists).`);
+console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+const nameSingleWord = [];       // 3a
+const nameMismatch = [];         // 3b
+for (const [email, r] of byEmail.entries()) {
+  for (const cn of r.contactNames) {
+    if (!cn) continue;
+    const trimmed = cn.trim();
+    if (!/\s/.test(trimmed)) {
+      // Only report if we actually have a people.display_name to
+      // compare against - reduces false positives for people who
+      // don't have an ACTIVE people row (e.g. owner-level accounts).
+      nameSingleWord.push({ email, r, contactName: trimmed });
+    } else if (r.peopleName && trimmed.toLowerCase() !== r.peopleName.trim().toLowerCase()) {
+      nameMismatch.push({ email, r, contactName: trimmed });
+    }
+  }
+}
+
+// Rank both by training-week presence.
+function rankTrainingFirst(a, b) {
+  const aTw = TRAINING_WEEK_ACCOUNTS.has(a.r.peopleAccountKey);
+  const bTw = TRAINING_WEEK_ACCOUNTS.has(b.r.peopleAccountKey);
+  if (aTw !== bTw) return aTw ? -1 : 1;
+  return a.email.localeCompare(b.email);
+}
+nameSingleWord.sort(rankTrainingFirst);
+nameMismatch.sort(rankTrainingFirst);
+
+console.log(`  3a. contacts.name is a single word (no whitespace):`);
+if (nameSingleWord.length === 0) {
+  console.log(`      (none)\n`);
+} else {
+  for (const { email, r, contactName } of nameSingleWord) {
+    const tw = TRAINING_WEEK_ACCOUNTS.has(r.peopleAccountKey);
+    console.log(`      ${tw ? "[TRAINING WK]" : "[background] "} ${email}`);
+    console.log(`        contacts.name:            "${contactName}"   ← single word`);
+    console.log(`        people.display_name:      "${r.peopleName || "(no ACTIVE people row)"}"`);
+    console.log(`        people.account_key:       ${r.peopleAccountKey || "(none)"}`);
+    console.log(``);
+  }
+}
+
+console.log(`  3b. contacts.name disagrees with people.display_name:`);
+if (nameMismatch.length === 0) {
+  console.log(`      (none)\n`);
+} else {
+  for (const { email, r, contactName } of nameMismatch) {
+    const tw = TRAINING_WEEK_ACCOUNTS.has(r.peopleAccountKey);
+    console.log(`      ${tw ? "[TRAINING WK]" : "[background] "} ${email}`);
+    console.log(`        contacts.name:            "${contactName}"`);
+    console.log(`        people.display_name:      "${r.peopleName}"   ← disagrees`);
+    console.log(`        people.account_key:       ${r.peopleAccountKey}`);
+    console.log(``);
+  }
+}
+
 // ─── Summary counts ─────────────────────────────────────────────
 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 console.log(`SUMMARY`);
@@ -244,5 +321,15 @@ const twMismatch = mismatchesDedup.filter(m => TRAINING_WEEK_ACCOUNTS.has(m.r.pe
 console.log(`    training-week users:  ${twMismatch.length}`);
 console.log(`    background users:     ${mismatchesDedup.length - twMismatch.length}`);
 console.log(`    TOTAL:                ${mismatchesDedup.length}\n`);
+console.log(`  Finding 3a (contacts.name is a single word):`);
+const twSingle = nameSingleWord.filter(n => TRAINING_WEEK_ACCOUNTS.has(n.r.peopleAccountKey));
+console.log(`    training-week users:  ${twSingle.length}`);
+console.log(`    background users:     ${nameSingleWord.length - twSingle.length}`);
+console.log(`    TOTAL:                ${nameSingleWord.length}\n`);
+console.log(`  Finding 3b (contacts.name ≠ people.display_name):`);
+const twMisname = nameMismatch.filter(n => TRAINING_WEEK_ACCOUNTS.has(n.r.peopleAccountKey));
+console.log(`    training-week users:  ${twMisname.length}`);
+console.log(`    background users:     ${nameMismatch.length - twMisname.length}`);
+console.log(`    TOTAL:                ${nameMismatch.length}\n`);
 
 process.exit(0);

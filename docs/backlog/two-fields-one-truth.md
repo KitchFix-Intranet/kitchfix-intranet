@@ -1,6 +1,6 @@
 # Two fields, one truth - a recurring class
 
-**Filed:** 2026-09-09, third instance of the same shape found this week.
+**Filed:** 2026-09-09. Four instances of the same shape found this week (three shipped, one ruled park).
 **Status:** Report + ruling deferred until after training.
 **Trigger to unpark:** post-training week, after Kevin has bandwidth to review the shape rather than each instance separately.
 
@@ -35,7 +35,24 @@ Two DB fields carry the same fact. Neither is designated authoritative. The code
 
 **Fix shape**: flipped `useState("calendar")` to `useState("period")` at :3100. Comment on the line names the two failed fixes so a future reader sees the arc.
 
-### 3. contacts.role vs people.title (this backlog entry - unshipped)
+### 3. contacts.name vs people.display_name (2026-09-09, Kevin ruling parked)
+
+**Two fields**: `contacts.name` (free-text, hand-maintained) vs `people.display_name` (Rippling-sourced, structured, the answer to "what does this person go by").
+
+**Two instances flagged, deliberately not fixed** (Kevin ruling 2026-09-09):
+
+- **Liz Randall** (`e.randall@kitchfix.com`, TXR - AZ): `contacts.name = "Elizabeth Randall"`, `people.display_name = "Liz Randall"`.
+- **Josh Forkner** (`j.forkner@kitchfix.com`, TXR - TX - H): `contacts.name = "Joshua Forkner"`, `people.display_name = "Josh Forkner"`.
+
+**Why parked instead of overwritten**: A misspelling is unambiguously wrong. "Elizabeth" versus "Liz" is not - it is two correct answers to different questions, and overwriting one with the other destroys information rather than fixing it. Neither is currently causing a problem.
+
+Both rows are the same shape: `people.display_name` carries what the person actually goes by (nickname); `contacts.name` was probably filled in with their formal name at some point. Both values are legitimate for different surfaces - a formal notification email might want "Elizabeth Randall" in the salutation; a Slack chase message wants "Liz". Overwriting one with the other for consistency destroys the information about which is which.
+
+**The right question is not which value to keep. It is which field is authoritative for which surface.** That is exactly the two-fields-one-truth pattern this entry names.
+
+**Spelling errors from the same sweep were fixed** (Claire's single-word name + Desiree / Diego / Jordan misspellings) via `docs/migrations/2026-09-09-contacts-name-spelling-fixes.sql`. Those are unambiguously wrong; the two nickname mismatches are ambiguously right.
+
+### 4. contacts.role vs people.title (2026-09-09, PR #1069 - unshipped)
 
 **Two fields**: `contacts.role` (free-text, hand-maintained) vs `people.title` (Rippling-sourced, structured).
 
@@ -51,7 +68,7 @@ Both landed on Season overview instead of the Period workspace because `ROLE_TIE
 
 ## The pattern named plainly
 
-Third instance in three days. Same shape each time:
+Four instances in three days. Same shape each time:
 
 1. Two fields carry overlapping truth.
 2. Neither is authoritative in the DB layer (no CHECK, no trigger, no view alias).
