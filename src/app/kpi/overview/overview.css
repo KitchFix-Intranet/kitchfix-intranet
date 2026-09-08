@@ -779,13 +779,55 @@
    for the shape. */
 .kpi-app .kpi-ov-pnl {
   width: 100%;
-  /* Kevin ruling 2026-09-04: same border-collapse: separate change as
-     kpi-ov-lev - see comment above. Under collapse the plan-band's
-     corner radii silently no-op. */
+  /* Kevin ruling 2026-09-04: border-collapse: separate so the
+     plan-band's corner radii don't silently no-op. */
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--kpi-t-body);
-  table-layout: auto;
+  /* Kevin ruling 2026-09-08 (post-#1080). table-layout: fixed +
+     <colgroup> so every row obeys the SAME per-column widths.
+     Under table-layout: auto every row sized from its own content,
+     which let sub-rows escape the parent's sizing on Full view -
+     Kevin measured 3100 parent label 772px, 3100.1 sub label 142px
+     in the same tbody. Fixed layout consults the colgroup only;
+     content in individual cells does not influence width. Removes
+     the class, not the instance - which is what a financial table
+     wants regardless. */
+  table-layout: fixed;
+}
+/* Column widths for .kpi-ov-pnl. Six numeric columns declared;
+   the label column has no width and receives the remainder of the
+   table's 100%. Values chosen from the live board's parent-row
+   measurements so the render's proportions survive. Scaled by
+   --kf-scale so the ratio holds under user-adjusted scale. */
+.kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-budget    { width: calc(100px * var(--kf-scale, 1)); }
+.kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-target    { width: calc(76px  * var(--kf-scale, 1)); }
+.kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-adjusted  { width: calc(108px * var(--kf-scale, 1)); }
+.kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-actual    { width: calc(108px * var(--kf-scale, 1)); }
+.kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-pctrev    { width: calc(66px  * var(--kf-scale, 1)); }
+.kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-var       { width: calc(132px * var(--kf-scale, 1)); }
+/* Kevin ruling 2026-09-08 (post-#1080 follow-up). Narrow-viewport
+   escape hatch. At the default numeric-column budget (590px total)
+   the label column collapses to ~59px around 700px viewport - Kevin
+   measured "Maintenance" (~76px) clipping. Below 1024px, numeric
+   columns shrink so the label column keeps enough room for the
+   longest single word. Numeric values still fit ($282,194 ≈ 56px at
+   12.5px tabular-nums; column stays > 60px after shrink). The
+   Sept-4 label-column-collapse pattern belongs on the standing
+   probe (_probe_pnl_label_column.mjs), not in an accepted-defect
+   comment. */
+@media (max-width: 1024px) {
+  /* Rebalanced from a raw 15% shrink after live probe caught
+     "not active" (54px italic) clipping the two narrowest columns
+     (Target % at 50px, % of rev at 47px). Widened those two, took
+     the space out of Budget + vs adjusted where the widest
+     realistic content ("$1,256,682", "↑ $12,345") still fits. */
+  .kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-budget    { width: calc(74px * var(--kf-scale, 1)); }
+  .kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-target    { width: calc(64px * var(--kf-scale, 1)); }
+  .kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-adjusted  { width: calc(82px * var(--kf-scale, 1)); }
+  .kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-actual    { width: calc(82px * var(--kf-scale, 1)); }
+  .kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-pctrev    { width: calc(62px * var(--kf-scale, 1)); }
+  .kpi-app .kpi-ov-pnl col.kpi-ov-pnl-col-var       { width: calc(82px * var(--kf-scale, 1)); }
 }
 .kpi-app .kpi-ov-pnl th {
   font-size: calc(9.5px * var(--kf-scale, 1));
@@ -1952,18 +1994,20 @@
   border-top: 1px solid var(--n-300);
   border-bottom: 1px solid var(--n-300);
 }
-.kpi-app .kpi-ov-pnl-sub-tot td {
-  background: var(--navy-50, #F4F7FC);
-  font-weight: 800;
-  border-top: 1px solid var(--n-300);
-}
-.kpi-app .kpi-ov-pnl-sub {
-  display: block;
-  font-size: calc(10px * var(--kf-scale, 1));
-  font-weight: 600;
-  color: var(--n-600);
-  margin-top: 1px;
-}
+/* Kevin ruling 2026-09-08 (post-#1080). Dead CSS from the previous
+   RunningPeriodPnl removed. Both .kpi-ov-pnl-sub-tot and the second
+   .kpi-ov-pnl-sub rule below targeted a caption <span> used inside
+   the OLD RunningPeriodPnl cost table (retired when the P&L one-
+   table PR folded that component). No JSX consumer remains for
+   either.
+   The `display: block` on .kpi-ov-pnl-sub was fatal: it matched the
+   LineRow variant="sub" <tr class="kpi-ov-pnl-sub">, breaking those
+   rows out of table-layout: fixed and letting every sub-row escape
+   the colgroup's width - the exact bug Kevin reported on Full view
+   (3100 parent label 772px vs 3100.1 sub label 142px). Removing the
+   rule restores per-column width uniformity.
+   The valid .kpi-ov-pnl-sub styling for sub-<tr> lives at the tds
+   above (padding, font-size, weight, color, indent). */
 /* Kevin ruling 2026-09-03 (simplified-layout): dollar gap stacks
    beneath the actual figure in the total row (one cell, added back
    after the vs-target column was dropped). Meta-weight so the reader

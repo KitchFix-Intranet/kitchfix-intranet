@@ -348,6 +348,21 @@ export default function PnlStatement({ payload, open, onToggle }) {
           </div>
           <div className="kpi-ov-cb">
             <table className="kpi-ov-pnl" data-kpi-ov="pnl-table">
+              {/* Kevin ruling 2026-09-08 (post-#1080). Column widths
+                  declared via <colgroup> so every row obeys the same
+                  per-column sizing under table-layout: fixed. Label
+                  col has no width and receives the remainder of the
+                  table's 100%. See .kpi-ov-pnl in overview.css for
+                  the numeric-column widths. */}
+              <colgroup>
+                <col />
+                <col className="kpi-ov-pnl-col-budget" />
+                <col className="kpi-ov-pnl-col-target" />
+                <col className="kpi-ov-pnl-col-adjusted" />
+                <col className="kpi-ov-pnl-col-actual" />
+                <col className="kpi-ov-pnl-col-pctrev" />
+                <col className="kpi-ov-pnl-col-var" />
+              </colgroup>
               <thead>
                 {/* Group header row. Kevin ruling 2026-09-08 (P&L one-
                     table): the 7th cell is empty (was "Variance"); on
@@ -365,8 +380,8 @@ export default function PnlStatement({ payload, open, onToggle }) {
                   <th className="plan">Target %</th>
                   <th className="plan plan-last">Adjusted</th>
                   <th>{actualHeaderLabel}</th>
-                  <th style={{ width: 66 }}>% of rev</th>
-                  <th style={{ width: 130 }}>{lastColHeaderLabel}</th>
+                  <th>% of rev</th>
+                  <th>{lastColHeaderLabel}</th>
                 </tr>
               </thead>
               <tbody>
