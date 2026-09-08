@@ -334,14 +334,12 @@ export default function KpiOverviewPage() {
     if (resolvedPreset === "fytd" && rc && rc.periods_total > 1) {
       const first = 1;
       const last = rc.periods_total;
-      // R-93: chip primary names the closed span; the just-closed
-      // but unsettled period (P9 today) is appended as its own
-      // clause so an operator sees why the year does not include it.
-      const excludedP = r93ExcludedPeriodNo(today);
-      const primary = excludedP != null
-        ? `closed periods · P${first}-P${last} · P${excludedP} awaiting verification`
-        : `closed periods · P${first}-P${last}`;
-      chipOverride = { primary };
+      // Kevin ruling 2026-09-08. Chip is a range selector label - it
+      // says the range, not the status. #1063 folded "P9 awaiting
+      // verification" into the chip label; that's status text, and
+      // it now moves to its own pill in the status area (see
+      // StatusLine + the `awaiting` prop passed from page below).
+      chipOverride = { primary: `P${first}-P${last}` };
     }
     return {
       startISO: start,
@@ -441,7 +439,29 @@ export default function KpiOverviewPage() {
           <PlanningBoard payload={data} />
         ) : (
           <>
-            <StatusLine statusLine={data.status_line} rangeLabels={data.range_labels} />
+            <StatusLine
+              statusLine={data.status_line}
+              rangeLabels={data.range_labels}
+              awaiting={(() => {
+                // Kevin ruling 2026-09-08. Second pill beside the
+                // status pill: "● P9 awaiting verification · closes
+                // 9/14" - amber, only while a period is past its
+                // end and before its R-93 settle date. Chip carries
+                // the span; this pill carries the state. Same
+                // helper as R-93, no new date logic.
+                const p = r93ExcludedPeriodNo(today);
+                if (p == null) return null;
+                const pEnd = periodEndISO(p);
+                if (!pEnd) return null;
+                const t = new Date(pEnd + "T00:00:00Z").getTime();
+                const settle = new Date(t + 8 * 86400000).toISOString().slice(0, 10);
+                return {
+                  period_no: p,
+                  close_iso: pEnd,
+                  settle_iso: settle,
+                };
+              })()}
+            />
             <SettlingStrip settling={data.settling} />
             <CardsRow
               cards={data.cards}

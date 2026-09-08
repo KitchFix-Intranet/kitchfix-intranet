@@ -1,0 +1,229 @@
+<meta charset="utf-8"><title>Close date rule · This year and Last period</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy-700:#153968;--navy-50:#F4F7FC;--amber-50:#FFF7ED;--amber-600:#B25800;--amber-500:#D97706;--amber-200:#F7C299;
+--green-600:#008330;--green-50:#E9FDEC;--red-600:#B9000C;--red-50:#FFEDE7;--purple:#7c3aed;--purple-50:#F5F1FE;
+--n-0:#FFF;--n-50:#F8FAFC;--n-100:#F1F5F9;--n-200:#E7EDF4;--n-300:#DDE5EE;--n-400:#CBD5E1;--n-600:#64748B;--n-700:#475569;--n-900:#0A2548;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:var(--n-100);color:var(--n-900);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}button{font-family:inherit;cursor:pointer}
+.devbar{position:sticky;top:0;z-index:60;background:#0A2548;color:#fff;padding:9px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.devbar b{font-size:12px}.devbar .h{font-size:11px;color:#93a9c9;margin-right:auto}.devbar .lbl{font-size:11px;color:#93a9c9}
+.devbar button{font-size:11px;font-weight:600;padding:5px 11px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#cddbee;border-radius:6px}
+.devbar button.on{background:#fff;color:#0A2548;border-color:#fff}
+.wrap{max-width:1300px;margin:0 auto;padding:16px 22px 40px}
+.cap{font-size:11.5px;color:var(--n-600);padding:14px 22px 0;max-width:1300px;margin:0 auto;line-height:1.7}.cap b{color:var(--n-900)}
+.cmd{background:var(--navy-700);border-radius:11px;padding:0 18px;min-height:48px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:13px}
+.cmd .ttl{color:#fff;font-size:14px;font-weight:700}.cmd .acct{color:#fff;font-size:14px;font-weight:800}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 10px;display:flex;align-items:center;gap:6px}
+.chip .k{color:#93a9c9;font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.chip .v{color:#fff;font-size:12px;font-weight:600}.chip .d{color:#93a9c9;font-size:12px;font-weight:500}
+.meta{color:#b9c8de;font-size:10.5px;font-weight:600}.meta b{color:#fff}
+.statusrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.spill{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:8px 15px;border-radius:999px;color:#fff}
+.sp-ok{background:var(--green-600)}.sp-bad{background:var(--red-600)}.sp-wait{background:var(--amber-500)}
+.sp-wait i{width:7px;height:7px;border-radius:50%;background:#fff;opacity:.9}
+.pend{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px 14px;border-radius:999px;background:var(--amber-50);border:1px solid var(--amber-200);color:var(--amber-600)}
+.pend i{width:6px;height:6px;border-radius:50%;background:var(--amber-500)}
+.through{font-size:12px;font-weight:700;color:var(--n-600)}.through b{color:var(--n-900)}
+.settle{margin-bottom:13px;background:var(--amber-50);border:1px solid var(--amber-200);border-radius:10px;padding:11px 15px;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.settle .t{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--amber-600)}
+.settle .it{font-size:11.5px;font-weight:600;color:var(--n-700)}.settle .it b{color:var(--n-900);font-weight:800}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+.card{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;box-shadow:0 1px 2px rgba(10,37,72,.04),0 2px 8px rgba(10,37,72,.05)}
+.card.rev{border-top:3px solid var(--green-600)}.card.cog{border-top:3px solid var(--red-600)}
+.card.cog.ok{border-top-color:var(--green-600)}.card.gm{border-top:3px solid var(--purple)}
+.card.wait{border-top-color:var(--amber-500)}
+.ch{display:flex;align-items:center;gap:8px;padding:12px 16px 0;flex-wrap:wrap}
+.ch .eb{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-700)}
+.q{width:15px;height:15px;border-radius:50%;border:1px solid var(--n-400);color:var(--n-600);font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.pill{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;white-space:nowrap;margin-left:auto}
+.pok{background:var(--green-50);color:var(--green-600)}.pbad{background:var(--red-50);color:var(--red-600)}
+.pamb{background:var(--amber-50);color:var(--amber-600)}
+.cb{padding:11px 16px 15px}
+.orow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:3px 0}
+.orow .k{font-size:12.5px;font-weight:700;color:var(--n-600)}
+.orow .v{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.orow .v small{font-size:13px;font-weight:700;margin-left:8px}
+.orow.ref .v{font-size:19px;color:var(--n-600);font-weight:700}.orow.ref .v small{font-size:11.5px;color:var(--n-600)}
+.rule{border-top:2px dashed var(--n-300);margin:10px 0}
+.foot{margin-top:11px;padding-top:10px;border-top:1px solid var(--n-200);display:flex;align-items:baseline;justify-content:space-between}
+.foot .k{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--n-600)}
+.foot .v{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+.notes{max-width:1300px;margin:15px auto 0;padding:0 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
+.notes div{background:var(--n-0);border:1px solid var(--n-300);border-radius:10px;padding:12px 14px;font-size:11.5px;line-height:1.75;color:var(--n-700)}
+.notes h4{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--n-900);margin-bottom:6px}
+.notes b{color:var(--n-900)}
+
+.lower{margin-top:13px}
+.lrow{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:13px}
+.lcard{overflow:hidden}
+.t{width:100%;border-collapse:separate;border-spacing:0;font-size:11px}
+.t th{font-size:8.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--n-600);padding:7px 9px;text-align:right;border-bottom:1px solid var(--n-300);white-space:nowrap}
+.t th:first-child{text-align:left}
+.t td{padding:8px 9px;border-bottom:1px solid var(--n-200);text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.t td:first-child{text-align:left;font-weight:600}
+.t td.mut{color:var(--n-600);font-weight:600}
+.t tr.tot td{background:var(--navy-700);color:#fff;border:none;font-weight:800}
+.pneu2{background:var(--n-100);color:var(--n-700)}
+.bars{display:flex;align-items:flex-end;gap:7px;height:96px;margin-top:8px}
+.bcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;position:relative}
+.bcol i{display:block;border-radius:2px 2px 0 0;width:100%}
+.bok{background:var(--green-600)}.bba{background:#C0392B}
+.bcol .tt{position:absolute;left:0;right:0;border-top:2px dashed #8b1a1a;z-index:3}
+.axis{display:flex;gap:7px;margin-top:7px}
+.axis span{flex:1;text-align:center;font-size:9px;font-weight:700}
+.axis small{display:block;font-weight:600;color:var(--n-600);margin-top:2px;font-size:8px}
+</style>
+<div class="devbar"><b>Close date rule · one date, two views</b><span class="h">TBJ - FL · P9 ends 09/06, closes 09/14</span>
+<span class="lbl">date:</span>
+<button id="d0" class="on" onclick="setD('before')">Wed 09/09 · before close</button>
+<button id="d1" onclick="setD('after')">Mon 09/14 · closed</button>
+<span style="width:12px"></span><span class="lbl">view:</span>
+<button id="v0" class="on" onclick="setV('ty')">This year</button>
+<button id="v1" onclick="setV('lp')">Last period</button></div>
+<p class="cap" id="cap"></p>
+<div class="wrap"><div id="app"></div></div>
+<div class="notes" id="notes"></div>
+<script>
+const D={
+ p18:{rev:1702872,cog:888500,gm:814372,cogAdj:876000,gmAdj:826872,cogPct:52.2,gmPct:47.8,cogTgt:51.5,gmTgt:48.5,revProj:1575513},
+ p19:{rev:1834952,cog:958117,gm:876835,cogAdj:944684,gmAdj:890268,cogPct:52.2,gmPct:47.8,cogTgt:51.5,gmTgt:48.5,revProj:1680510},
+ p9 :{rev:132080,cog:69945,gm:62135,cogAdj:79227,gmAdj:52854,cogPct:53.0,gmPct:47.0,cogTgt:60.0,gmTgt:40.0,revProj:104995}};
+let DATE='before', VIEW='ty';
+const $=i=>document.getElementById(i);
+const m0=n=>n==null?"—":(n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const p=v=>v==null?"—":v.toFixed(1)+"%";
+function card(kind,d,prov){
+ const isRev=kind==='rev', isCog=kind==='cog';
+ const a=isRev?d.rev:(isCog?d.cog:d.gm);
+ const ref=isRev?d.revProj:(isCog?d.cogAdj:d.gmAdj);
+ const pct=isRev?null:(isCog?d.cogPct:d.gmPct);
+ const tgt=isRev?null:(isCog?d.cogTgt:d.gmTgt);
+ const good=isRev?a>=ref:(isCog?a<=ref:a>=ref);
+ const col=(!isRev&&prov)?'var(--amber-600)':(good?'var(--green-600)':'var(--red-600)');
+ const lbl=isRev?(good?'Above projection':'Below projection'):(isCog?(good?'Under target':'Over target'):(good?'Ahead of target':'Behind target'));
+ const pillTxt=(!isRev&&prov)?'Provisional':lbl;
+ const pillCls=(!isRev&&prov)?'pamb':(good?'pok':'pbad');
+ return '<div class="card '+kind+((!isRev&&prov)?' wait':(good?' ok':''))+'"><div class="ch"><span class="eb">'+
+  (isRev?'Revenue':(isCog?'Cost of goods sold':'Gross margin'))+'</span><span class="q">?</span>'+
+  '<span class="pill '+pillCls+'">'+pillTxt+'</span></div><div class="cb">'+
+  '<div class="orow"><span class="k">Actual</span><span class="v num" style="color:'+col+'">'+m0(a)+
+   (pct!=null?'<small style="color:'+col+'">'+p(pct)+'</small>':'')+'</span></div>'+
+  '<div class="rule"></div>'+
+  '<div class="orow ref"><span class="k">'+(isRev?'Projection':'Target')+'</span><span class="v num">'+m0(ref)+
+   (tgt!=null?'<small>'+p(tgt)+'</small>':'')+'</span></div>'+
+  '<div class="foot"><span class="k">'+lbl+'</span><span class="v" style="color:'+col+'">'+
+   (good===(isCog?false:true)?'▲ ':'▼ ')+m0(Math.abs(a-ref))+'</span></div>'+
+  '</div></div>';
+}
+function view(){
+ const after=DATE==='after';
+ const ty=VIEW==='ty';
+ const d = ty ? (after?D.p19:D.p18) : D.p9;
+ const span = ty ? (after?'P1 – P9':'P1 – P8') : 'P9';
+ let h='<div class="cmd"><span class="ttl">KPI Dashboard ·</span><span class="acct">TBJ - FL</span>'+
+  '<span class="chip"><span class="k">Section</span><span class="v">P&amp;L Overview</span><span class="d">▾</span></span>'+
+  '<span class="chip"><span class="v">'+(ty?'This year':'Last period')+'</span><span class="d">'+
+   (ty?span:'08/10/26 – 09/06/26')+'</span><span class="d">▾</span></span>'+
+  '<span class="meta">TODAY <b>'+(after?'09/14':'09/09')+'</b> · PERIOD <b>10</b> · WEEK <b>'+(after?'2':'1')+'</b></span>'+
+  '</div>';
+ /* status */
+ h+='<div class="statusrow">';
+ if(ty){
+  h+='<span class="spill sp-ok">Period closed · on target</span>'+
+   '<span class="through"><b>'+span+' closed and verified</b></span>';
+  if(!after) h+='<span class="pend"><i></i>P9 awaiting verification · closes 9/14</span>';
+ } else {
+  if(after){
+   h+='<span class="spill sp-ok">Period closed · on target</span><span class="through"><b>P9 · closed 09/14</b></span>';
+  } else {
+   h+='<span class="spill sp-wait"><i></i>Awaiting verification</span>'+
+    '<span class="through"><b>P9 · ends 09/06</b> · closes 09/14 · figures still settling</span>';
+  }
+ }
+ h+='</div>';
+ /* settling strip - last period only, before close */
+ if(!ty && !after){
+  h+='<div class="settle"><span class="t">What is still moving</span>'+
+   '<span class="it"><b>Purchases</b> · 36 invoice lines against 80 in P8 · more land on the nightly sync</span>'+
+   '<span class="it"><b>Labour</b> · 226.25 hrs awaiting approval across 10 people · lands as they are approved</span>'+
+   '</div>';
+ }
+ const prov = !ty && !after;
+ h+='<div class="row">'+card('rev',d,false)+card('cog',d,prov)+card('gm',d,prov)+'</div>';
+ if(ty) h+=lower(after);
+
+ return h;
+}
+function lower(after){
+ const R = after
+  ? [['2200','Catering revenue',6239,0.3],['2300','Service charges',440119,24.3],['2400.1','Meal service (home)',1336508,73.9],['2600','Consulting',25000,1.4]]
+  : [['2200','Catering revenue',6239,0.4],['2300','Service charges',414950,24.4],['2400.1','Meal service (home)',1256682,73.8],['2600','Consulting',25000,1.5]];
+ const Rtot = after?1807867:1702872;
+ const C = after
+  ? [['3100','Kitchen labor',497989,27.1,26.7],['3200','Food purchased',419017,22.8,22.1],['3400','Packaging and supplies',40002,2.2,2.3],['3500','Vehicle',1108,0.1,0.4]]
+  : [['3100','Kitchen labor',457195,26.8,26.2],['3200','Food purchased',392340,23.0,22.1],['3400','Packaging and supplies',37653,2.2,2.3],['3500','Vehicle',5884,0.3,0.4]];
+ const Ctot = after?958117:888500;
+ const P = after
+  ? [['P1',70386,45191],['P2',182313,180582],['P3',201327,262083],['P4',93105,83851],['P5',96382,82452],['P6',75711,72632],['P7',82248,70515],['P8',86699,79378],['P9',69945,79227]]
+  : [['P1',70386,45191],['P2',182313,180582],['P3',201327,262083],['P4',93105,83851],['P5',96382,82452],['P6',75711,72632],['P7',82248,70515],['P8',86699,79378]];
+ let h='<div class="lower">';
+ /* revenue lines + cost lines side by side, as the live board */
+ h+='<div class="lrow">';
+ h+='<div class="card lcard"><div class="ch"><span class="eb">Revenue lines</span><span class="q">?</span><span class="pill pok">'+(after?'9 verified':'8 verified')+'</span></div>'+
+  '<div class="cb" style="padding-top:6px"><table class="t"><tr><th>Line</th><th>'+(after?'P1-P9':'P1-P8')+' budget</th><th>'+(after?'P1-P9':'P1-P8')+' actuals</th><th>% of rev</th></tr>';
+ R.forEach(r=>{h+='<tr><td>'+r[0]+'  '+r[1]+'</td><td class="mut">'+m0(r[2]*0.93)+'</td><td><b>'+m0(r[2])+'</b></td><td>'+r[3].toFixed(1)+'%</td></tr>';});
+ h+='<tr class="tot"><td>Total revenue</td><td>'+m0(Rtot*0.93)+'</td><td>'+m0(Rtot)+'</td><td>100%</td></tr></table></div></div>';
+ h+='<div class="card lcard"><div class="ch"><span class="eb">Where the money is going</span><span class="q">?</span><span class="pill pbad">2 of 4 over</span></div>'+
+  '<div class="cb" style="padding-top:6px"><table class="t"><tr><th>Line</th><th>Budget</th><th>Target %</th><th>Spent</th><th>% of rev</th></tr>';
+ C.forEach(r=>{const over=r[3]>r[4];
+  h+='<tr><td>'+r[0]+'  '+r[1]+'</td><td class="mut">'+m0(r[2]*0.97)+'</td><td class="mut">'+r[4].toFixed(1)+'%</td><td><b>'+m0(r[2])+'</b></td><td style="color:'+(over?'var(--red-600)':'var(--green-600)')+'">'+r[3].toFixed(1)+'%</td></tr>';});
+ h+='<tr class="tot"><td>Total cost of goods</td><td>'+m0(Ctot*0.97)+'</td><td>51.5%</td><td>'+m0(Ctot)+'</td><td>'+(Ctot/Rtot*100).toFixed(1)+'%</td></tr></table></div></div>';
+ h+='</div>';
+ /* also tracked + chart */
+ h+='<div class="lrow">';
+ h+='<div class="card lcard"><div class="ch"><span class="eb">Also tracked</span><span class="q">?</span><span class="pill pneu2">Not scored</span></div>'+
+  '<div class="cb" style="padding-top:6px"><table class="t"><tr><th>Line</th><th>Budget</th><th>Spent</th><th>Vs budget</th></tr>'+
+  '<tr><td>5002.1  Gen. Repair &amp; Maintenance</td><td class="mut">no budget</td><td>'+(after?'$10':'$10')+'</td><td>—</td></tr>'+
+  '<tr><td>5002.5  Equipment</td><td class="mut">'+(after?'$2,077':'$1,846')+'</td><td>'+(after?'$1,781':'$1,760')+'</td><td style="color:var(--green-600)">'+(after?'$296 under':'$86 under')+'</td></tr>'+
+  '<tr><td>5017.3  Perks</td><td class="mut">'+(after?'$1,488':'$1,323')+'</td><td>'+(after?'$410':'$357')+'</td><td style="color:var(--green-600)">'+(after?'$1,078 under':'$966 under')+'</td></tr>'+
+  '</table></div></div>';
+ const mx=Math.max(...P.map(x=>Math.max(x[1],x[2])))*1.15;
+ h+='<div class="card lcard"><div class="ch"><span class="eb">Cost of goods sold, period by period</span><span class="q">?</span><span class="pill pneu2">'+P.length+' periods</span></div>'+
+  '<div class="cb"><div class="bars">';
+ P.forEach(x=>{const ok=x[1]<=x[2];
+  h+='<div class="bcol"><span class="tt" style="bottom:'+(x[2]/mx*100)+'%"></span><i class="'+(ok?'bok':'bba')+'" style="height:'+(x[1]/mx*100)+'%"></i></div>';});
+ h+='</div><div class="axis">';
+ P.forEach(x=>{h+='<span>'+x[0]+'<small>'+m0(x[1])+'</small></span>';});
+ h+='</div></div></div>';
+ h+='</div>';
+ /* full P&L */
+ h+='<div class="card lcard" style="margin-top:13px"><div class="ch"><span class="eb">Full profit and loss</span>'+
+  '<span style="font-size:11px;color:var(--n-600);font-weight:600;margin-left:8px">every line the way finance sees it &middot; '+(after?'P1 – P9':'P1 – P8')+'</span>'+
+  '<span class="pill pneu2" style="margin-left:auto">▾</span></div></div>';
+ return h+'</div>';
+}
+const NOTES=[
+ '<h4>One rule, one date</h4><b>A period is not closed until a week after it ends.</b> P9 ends 09/06 and closes <b>Monday 09/14</b>.<br><br>That week lets <b>labour approvals</b> and <b>invoices</b> settle - P9 has 36 food invoice lines against P8&rsquo;s 80, and 226 hours still unapproved.<br><br><b>The same date drives both views.</b> No separate logic, one helper.',
+ '<h4>This year</h4><b>Contains only periods past their close date.</b> Today that is P1 – P8 - the chip, the label, every card and every table.<br><br><b>The closed verdict pill is unchanged</b> from before. A <b>second pill</b> names what is sitting just outside: <b>P9 awaiting verification · closes 9/14</b>.<br><br>On 09/14 the range becomes <b>P1 – P9</b> and the second pill clears.',
+ '<h4>Last period</h4><b>Exactly as it looks now.</b> <b>Awaiting verification</b>, <b>Provisional</b> on cost and margin, the still-moving strip with its counts.<br><br><b>The data keeps filling in daily</b> as the Rippling labour, bill.com and card syncs land - the same numbers, more complete each morning.<br><br><b>On 09/14 all three clear at once</b>: status goes to the closed verdict, Provisional goes, the strip goes.'];
+function render(){
+ $("app").innerHTML=view();
+ const after=DATE==='after';
+ $("cap").innerHTML = VIEW==='ty'
+  ? (after
+     ? '<b>This year on Monday 09/14.</b> P9 has passed its close date, so the range becomes <b>P1 – P9</b> and the second pill clears. Revenue $1,834,952.'
+     : '<b>This year on Wednesday 09/09.</b> P9 ended three days ago but does not close until 09/14, so the range is <b>P1 – P8</b> and every figure excludes it. Revenue <b>$1,702,872</b>. A second pill names P9 and its close date.')
+  : (after
+     ? '<b>Last period on Monday 09/14.</b> P9 is closed. The awaiting pill, the Provisional treatment and the still-moving strip <b>all clear at once</b>.'
+     : '<b>Last period on Wednesday 09/09.</b> Unchanged from what shipped - <b>Awaiting verification</b>, <b>Provisional</b> on cost and margin, the strip naming what is landing. <b>The figures fill in daily</b> until 09/14.');
+ $("notes").innerHTML=NOTES.map(n=>'<div>'+n+'</div>').join('');
+ $("d0").className=DATE==='before'?'on':''; $("d1").className=DATE==='after'?'on':'';
+ $("v0").className=VIEW==='ty'?'on':''; $("v1").className=VIEW==='lp'?'on':'';
+}
+function setD(x){DATE=x;render();}
+function setV(x){VIEW=x;render();}
+render();
+</script>
