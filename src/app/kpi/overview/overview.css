@@ -78,6 +78,14 @@
 .kpi-app .kpi-ov-status-wait .kpi-ov-status-st {
   padding-left: var(--kpi-sp-3);
 }
+/* Kevin ruling 2026-09-08. Running-single-period pill. Navy fill
+   with a leading indicator dot - names the state ("Period running")
+   two days into a period where a verdict pill would be premature.
+   Render of record: docs/renders/current-period-hybrid.html. */
+.kpi-app .kpi-ov-status-run    .kpi-ov-status-st { background: var(--navy-700); }
+.kpi-app .kpi-ov-status-run .kpi-ov-status-st {
+  padding-left: var(--kpi-sp-3);
+}
 
 /* Direction words on the ticker */
 .kpi-app .kpi-ov-good { color: var(--green-600); }

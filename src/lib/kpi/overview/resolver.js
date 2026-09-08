@@ -2907,6 +2907,7 @@ export async function resolveOverview({
       periodState: displayPeriodState,
       lastCompleteWk,
       effectiveEndISO,
+      todayISO: today,
     }),
     // Kevin ruling R-63 (2026-09-03): the "as of when" answer for
     // every figure on the board. On closed ranges this equals
@@ -3113,6 +3114,23 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
     };
   }
 
+  // Kevin ruling 2026-09-08. Running-single-period pill is
+  // "Period running" - a state, not a verdict. Two days into a
+  // period is no time to read "At risk" or "On track"; the ticker
+  // is judging a period against a whole-period budget. Horizon
+  // sub-line ("P10 · week 1 of 4 · day 2 of 28") carries the
+  // progress; the pill just names the state. New tone "run" -
+  // client renders navy with a leading dot (same treatment as
+  // "wait" but different palette).
+  const rangeIsRunning = range_kind === "period" && period_state === "open";
+  if (rangeIsRunning) {
+    return {
+      state: "period_running",
+      state_copy: "Period running",
+      tone: "run",
+    };
+  }
+
   // "Period closed · on target / off target" on any closed range
   // (single closed or FYTD - and post-2026-09-08 the aligned-explicit
   // path This year takes since #1063 sends R-93 dates as explicit).
@@ -3153,7 +3171,7 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
 //     period_span: "P1-P8" | "P8" | null,
 //     period_last: "P8" | null,
 //   }
-function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk, effectiveEndISO }) {
+function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk, effectiveEndISO, todayISO }) {
   const rc = rangeComposition;
   // Kevin ruling 2026-09-08. Explicit ranges that align to WHOLE
   // period boundaries render fytd-style labels (P1-P8 · closed and
@@ -3197,14 +3215,36 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
   // compat with other consumers of the range-labels shape.
   let spanHeader = null;
   if (isSingleOpen) {
-    if (lastCompleteWk) {
-      horizon = `through week ${lastCompleteWk.weekNo} · ${fmtMMDD(range.start)} – ${fmtMMDD(lastCompleteWk.weekEndISO)}`;
-      spanHeader = lastCompleteWk.weekNo === 1
-        ? "WK 1"
-        : `WK 1 – WK ${lastCompleteWk.weekNo}`;
-    } else {
-      horizon = "no complete weeks yet";
+    // Kevin ruling 2026-09-08. Current period horizon reads
+    // "P{n} · week X of 4 · day Y of Z" - progress-oriented, matches
+    // the running-period render of record. Replaces the prior
+    // closed-week-oriented "through week N" / "no complete weeks yet"
+    // forms; both were the This year treatment leaking onto the
+    // running period. Sub-line beside the "Period running" pill.
+    const runningWk = (lastCompleteWk?.weekNo ?? 0) + 1;
+    let dayNo = null;
+    let totalDays = null;
+    if (todayISO && range.start && range.end) {
+      const parseISO = (iso) => {
+        const mm = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return mm ? new Date(Date.UTC(+mm[1], +mm[2] - 1, +mm[3])) : null;
+      };
+      const s = parseISO(range.start), e = parseISO(range.end), t = parseISO(todayISO);
+      if (s && e && t) {
+        const MSD = 86400000;
+        totalDays = Math.floor((e.getTime() - s.getTime()) / MSD) + 1;
+        dayNo = Math.min(totalDays, Math.max(1, Math.floor((t.getTime() - s.getTime()) / MSD) + 1));
+      }
     }
+    const pNo = range.period_no != null ? `P${range.period_no}` : "This period";
+    if (dayNo != null && totalDays != null) {
+      horizon = `${pNo} · week ${runningWk} of 4 · day ${dayNo} of ${totalDays}`;
+    } else {
+      horizon = `${pNo} · week ${runningWk} of 4`;
+    }
+    spanHeader = lastCompleteWk
+      ? (lastCompleteWk.weekNo === 1 ? "WK 1" : `WK 1 – WK ${lastCompleteWk.weekNo}`)
+      : "WK 1";
   } else if (isSingleClosed && range.period_no != null) {
     // Kevin post-1049 sweep item 1 (2026-09-07). #1046 fixed this
     // on This year but overlooked single_closed. Last period on
