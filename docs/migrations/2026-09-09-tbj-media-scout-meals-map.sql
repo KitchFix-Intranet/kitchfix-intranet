@@ -20,8 +20,30 @@
 --   Scout Meals   3376          TBJ - Scouts        $11.55   scout-meals
 --
 -- Both services already exist in sc_services (active, not archived).
--- Neither is in sc_qbo_service_map today - clean INSERTs, no ON
--- CONFLICT logic needed.
+-- Neither is in sc_qbo_service_map today - clean INSERTs. Block A2
+-- proves absence at apply time; no ON CONFLICT clause. If A2
+-- returns any row, Kevin stops before running Block B.
+--
+-- Verified via live pg_constraint:
+--   PRIMARY KEY (service_id) - single column PK
+--   CHECK sc_qbo_service_map_item_id_or_excluded_check:
+--     export_excluded=false AND qbo_item_id IS NOT NULL, OR
+--     export_excluded=true
+--   CHECK sc_qbo_service_map_line_desc_or_excluded_check: same
+--     shape for qbo_line_description
+--   CHECK sc_qbo_service_map_invoice_slot_check:
+--     invoice_slot ~ '^[a-z][a-z0-9-]{0,31}$' (sc-39)
+--     - both new slot names pass (lowercase, hyphens, <=32 chars)
+--   CHECK sc_qbo_service_map_line_desc_style_check:
+--     line_desc_style IN ('plain_name') or NULL - 'plain_name' passes
+--   CHECK sc_qbo_service_map_tax_override_check:
+--     tax_override IN ('NON','TAX','ZERO') or NULL - NULL passes
+--
+-- export_excluded is set EXPLICITLY to false on each row (not
+-- relied on to default). Two CHECK constraints tie the qbo_item_id
+-- + qbo_line_description NOT NULL requirements to this column;
+-- omitting it in an INSERT reads as an oversight even though the
+-- default happens to be correct.
 --
 -- Shape:
 --   aggregate_group = NULL for both. Nothing else in the catalog
@@ -91,19 +113,25 @@ ORDER BY invoice_slot;
 
 
 -- ═══════════════════════════════════════════════════════════════════
--- BLOCK B: main (single transaction, idempotent via ON CONFLICT)
+-- BLOCK B: main (single transaction)
 -- ═══════════════════════════════════════════════════════════════════
-
+--
+-- No ON CONFLICT. Block A2 above verifies both rows are absent.
+-- If A2 returns any row, do NOT run Block B - the mapping already
+-- exists and the situation warrants a fresh look.
+--
+-- export_excluded=false set EXPLICITLY on each row per the header
+-- note; do not rely on the column default given the two related
+-- CHECK constraints.
 BEGIN;
 
 INSERT INTO sc_qbo_service_map
-  (service_id,                              account_key, qbo_item_id, qbo_line_description, aggregate_group, invoice_slot,   tax_override, line_desc_style)
+  (service_id,                              account_key, qbo_item_id, qbo_line_description, aggregate_group, invoice_slot,   tax_override, line_desc_style, export_excluded)
 VALUES
   -- Media Meals -> QBO item 3344 (TBJ - Media Meals), $15.00, own slot
-  ('84277f04-38e4-4232-b5b9-9f8318510f08', 'TBJ - FL',  '3344',      'TBJ - Media Meals',  NULL,            'media-meals',  NULL,         'plain_name'),
+  ('84277f04-38e4-4232-b5b9-9f8318510f08', 'TBJ - FL',  '3344',      'TBJ - Media Meals',  NULL,            'media-meals',  NULL,         'plain_name',    false),
   -- Scout Meals -> QBO item 3376 (TBJ - Scouts), $11.55 (see item-default note), own slot
-  ('41858327-adef-486e-b43d-734ec39d9c33', 'TBJ - FL',  '3376',      'TBJ - Scouts',       NULL,            'scout-meals',  NULL,         'plain_name')
-ON CONFLICT (service_id) DO NOTHING;
+  ('41858327-adef-486e-b43d-734ec39d9c33', 'TBJ - FL',  '3376',      'TBJ - Scouts',       NULL,            'scout-meals',  NULL,         'plain_name',    false);
 
 COMMIT;
 
@@ -113,9 +141,11 @@ COMMIT;
 -- ═══════════════════════════════════════════════════════════════════
 
 -- C1. Confirm both rows landed with the expected shape.
---     Expected 2 rows exactly matching the mapping table above.
+--     Expected 2 rows exactly matching the mapping table above,
+--     both with export_excluded=false.
 SELECT service_id, account_key, qbo_item_id, qbo_line_description,
-       aggregate_group, invoice_slot, tax_override, line_desc_style, active
+       aggregate_group, invoice_slot, tax_override, line_desc_style,
+       export_excluded, active
 FROM sc_qbo_service_map
 WHERE service_id IN (
   '84277f04-38e4-4232-b5b9-9f8318510f08',
