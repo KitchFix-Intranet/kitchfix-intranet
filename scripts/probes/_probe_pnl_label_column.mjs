@@ -18,12 +18,17 @@
 //      italic text at 54px overflowed the two narrowest columns
 //      after a naive 15% shrink; caught by this probe before it
 //      shipped).
-//   4. Every GM row cell is either painted (background) or hatched
-//      (.kpi-ov-pnl-na-cell). White text on transparent = invisible
-//      is the class of bug caused by using an undefined CSS variable
-//      (`var(--navy)` instead of `var(--navy-700)`) or by a
-//      specificity fight the row rule loses. Kevin: "the only
-//      automated thing that would catch a real one."
+//   4. Every GM row cell is either legible against its background
+//      or hatched (.kpi-ov-pnl-na-cell). Kevin ruling 2026-09-08
+//      (Option B post-#1083): the row's reversal-on-navy is
+//      removed - text now reads n-900 on the default background,
+//      plan cells on the plan tint, variance cell in green/red.
+//      The invariant that used to read "painted or hatched" (from
+//      the reversed treatment) now reads "legible or hatched":
+//      hatched, OR text colour is NOT white (which would signal
+//      the reversal was accidentally re-introduced OR a white-on-
+//      transparent leak like #1083). Kevin: "Update it to describe
+//      the new rule. Do not delete the check."
 //
 // Fixture: TBJ - FL Current year, Full view (all 13 sub rows visible).
 // Prereqs: `TEST_MODE=true npm run dev` running on :3000, Chromium
@@ -121,23 +126,19 @@ async function measure(viewportWidth) {
         }
       }
     }
-    // GM-row paint check. Kevin bug 2026-09-08 (post-#1082): my
-    // rule for the GM row used `var(--navy)` (undefined in KPI
-    // scope) so background resolved to transparent + specificity
-    // for the .plan override left half the row invisible. Only the
-    // label + non-plan-non-var cells were affected. The class of
-    // bug: white text on transparent = invisible - the row reads
-    // as "half-painted" and an operator can't tell what the row is
-    // (Kevin: "Asked what $44,017 40.5% $48,296 means"). Added to
-    // the standing probe after Kevin: "the only automated thing
-    // that would catch a real one."
+    // GM-row legibility check. Kevin ruling 2026-09-08 (Option B
+    // post-#1083): the row's reversal-on-navy came out - text now
+    // reads n-900 on default bg, plan on plan tint, variance in
+    // green/red. Prior invariant "painted or hatched" is retired;
+    // new invariant is "legible or hatched".
     //
-    // Rule: every cell in `.kpi-ov-pnl-gm` must either
-    //   (a) carry a non-transparent background, OR
-    //   (b) be a `.kpi-ov-pnl-na-cell` (hatched - correct on the
-    //       running-period GM row per R-99 "no margin until cost
-    //       lands").
-    // Any other combination is a white-on-white regression.
+    // Practical heuristic: `legible` = text colour is NOT white
+    // (rgb(255,255,255)). White text signals either the reversal
+    // was accidentally re-introduced (white on new light bg =
+    // invisible) OR a #1083-style var(--navy)-resolves-transparent
+    // leak (white on transparent = invisible). Hatched cells are
+    // allowed to have any text colour because they render no text
+    // (visually just the diagonal fill).
     const gmPaintSamples = [];
     const gmRow = tbl.querySelector('.kpi-ov-pnl-gm');
     if (gmRow) {
@@ -145,18 +146,15 @@ async function measure(viewportWidth) {
       for (let i = 0; i < gmCells.length; i += 1) {
         const td = gmCells[i];
         const cs = window.getComputedStyle(td);
-        const bg = cs.backgroundColor;
-        const bgImg = cs.backgroundImage;
+        const color = cs.color;
         const isHatched = td.classList.contains('kpi-ov-pnl-na-cell');
-        const isTransparent = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent';
-        const hasBgImage = bgImg && bgImg !== 'none';
-        // Regression signal: transparent AND no bg image AND not hatched.
-        if (isTransparent && !hasBgImage && !isHatched) {
+        const isWhiteText = color === 'rgb(255, 255, 255)' || color === '#fff' || color === '#ffffff';
+        if (!isHatched && isWhiteText) {
           gmPaintSamples.push({
             colIdx: i,
             cls: td.className,
             text: td.innerText.replace(/\s+/g, ' ').trim(),
-            bg,
+            color,
           });
         }
       }
@@ -205,12 +203,12 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
     console.log(`  no numeric-cell clipping`);
   }
   if (info.gmPaintSamples?.length) {
-    console.log(`  GM-ROW WHITE-ON-TRANSPARENT (${info.gmPaintSamples.length}):`);
+    console.log(`  GM-ROW ILLEGIBLE (${info.gmPaintSamples.length}):`);
     for (const s of info.gmPaintSamples) {
-      console.log(`    col${s.colIdx} cls="${s.cls}" bg=${s.bg} text="${s.text}"`);
+      console.log(`    col${s.colIdx} cls="${s.cls}" color=${s.color} text="${s.text}"`);
     }
   } else {
-    console.log(`  GM row: every cell painted or hatched`);
+    console.log(`  GM row: every cell legible or hatched`);
   }
 }
 
