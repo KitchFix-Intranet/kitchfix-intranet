@@ -101,24 +101,25 @@ function HoldReason({ card, kind }) {
   const revenue = null;   // deliberately unused; server holds pct off
   let text;
   if (isCogs) {
-    // Compute the "would-read" percent from the card's actual + the
-    // confirmed-revenue figure the resolver seeded on totalRevenue.
-    // The card doesn't ship revenue directly - infer from
-    // target_pct + budget_at_this_revenue: batr = revenue × tgt/100,
-    // so revenue = batr / (tgt/100).
-    const tgt = Number(card?.target_pct_of_revenue || 0);
-    const batr = Number(card?.budget_at_this_revenue || 0);
-    const rev = (tgt > 0 && batr > 0) ? (batr / (tgt / 100)) : null;
-    const wouldPct = (rev != null && rev > 0 && spent > 0) ? (spent / rev) * 100 : null;
-    const wouldStr = wouldPct != null ? `${wouldPct.toFixed(1)}%` : null;
+    // Kevin ruling 2026-09-08 item 3 (current-period rebuild). New
+    // cost-side wording names both delayed inputs (labor + invoices)
+    // rather than invoices alone. No "would-read percent" clause;
+    // R-92 holds - no percentages on the running-period cost card.
     text = (
       <>
-        <b>No percentage yet.</b> Revenue is confirmed ahead of the week; invoices arrive weeks later.
-        {wouldStr && <> A percentage now would read <b>{wouldStr}</b> and mean nothing.</>}
+        <b>No percentage yet.</b> Revenue is confirmed ahead of the week; labor is pending confirmation and invoices are still landing.
       </>
     );
   } else {
-    text = <>Margin needs both sides. <b>Revenue is confirmed, cost is not.</b> It arrives when the invoices do.</>;
+    // Kevin ruling 2026-09-08 item 3. Gross margin sub-note names
+    // the three systems an operator goes to act - Service Calendar
+    // for revenue, Invoice Capture for cost, Rippling for labor.
+    // Bolded so a reader sees the three action surfaces at a glance.
+    text = (
+      <>
+        Margin pending as revenue is confirmed through the <b>Service Calendar</b>, invoices are uploaded through <b>Invoice Capture</b> and labor is approved in <b>Rippling</b>.
+      </>
+    );
   }
   return (
     <div className="kpi-ov-hold" data-kpi-ov={`hold-${kind}`}>
@@ -458,7 +459,7 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
             not yet entered); as counts land the number firms up. */}
         {card.confirmed_weeks_count != null ? (
           <div className="kpi-ov-hold" data-kpi-ov="revenue-confirmed-note">
-            <b>{card.confirmed_weeks_count} of {card.total_weeks_count} weeks confirmed</b> in the Service Calendar. The rest is forecast and will firm up as counts land.
+            <b>{card.confirmed_weeks_count} of {card.total_weeks_count} weeks confirmed</b> in the Service Calendar. The service fee prorates by the same weeks. The rest is forecast and will firm up as counts land.
           </div>
         ) : (
           <VarianceFoot card={card} kind="revenue" />

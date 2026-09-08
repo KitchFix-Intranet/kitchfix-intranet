@@ -67,6 +67,7 @@ import StatusLine from "./components/StatusLine";
 import SettlingStrip from "./components/SettlingStrip";
 import DataCurrentPop from "./components/DataCurrentPop";
 import CardsRow from "./components/CardsRow";
+import WeekRail from "./components/WeekRail";
 import Chart from "./components/Chart";
 import CostLines from "./components/CostLines";
 import RevenueLines from "./components/RevenueLines";
@@ -481,6 +482,10 @@ export default function KpiOverviewPage() {
               statementTotals={data.statement_totals}
               awaiting={data.status_line?.tone === "wait"}
             />
+            {/* Kevin CC prompt 2026-09-08 item 4. Week rail below
+                the three cards on Current period. Null on every
+                other range (server-gated on isRunningSinglePeriod). */}
+            <WeekRail weekRail={data.week_rail} />
           </>
         )}
         {/* PR-2 layout branch: two-column single-account grid ONLY
