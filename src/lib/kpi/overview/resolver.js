@@ -1188,9 +1188,30 @@ export async function resolveOverview({
       // query, not a real leak.
       const confirmedSum = confirmedWks.reduce((s, w) => s + Number(w.revenue || 0), 0);
       if (confirmedSum > 0) {
-        totalRevenue = Math.round(confirmedSum * 100) / 100;
+        // Kevin ruling 2026-09-08. Running-period revenue is the
+        // Service Calendar confirmed-weeks sum PLUS the 2300 service
+        // fee prorated by the same confirmed weeks. Kept OUT of
+        // periodBasis's R-67 branch on purpose (Guard 1 in the CC
+        // prompt): this is an Overview presentation rule for the
+        // running period, not a shared accrual rule. periodBasis
+        // gets zero changes so Last period, Current year, and Labor
+        // are byte-identical.
+        //
+        // Kevin scope call (item 2): 2300 ONLY. Do not prorate 2200
+        // on TBR - its catering comes from the Service Calendar
+        // (B&G Lunch), so it is already in the SC figure. 2600
+        // untouched (rare, no B&G analogue).
+        const feeBudgetByPeriod = sumBudgetByPeriodForLine({
+          overviewBudgets, lineCode: "2300", members,
+        });
+        const feeThisPeriod = Number(feeBudgetByPeriod.get(displayPeriodNo) || 0);
+        const feeProrate = (feeThisPeriod > 0 && confirmedWeeksCount > 0)
+          ? feeThisPeriod * (confirmedWeeksCount / 4)
+          : 0;
+        totalRevenue = Math.round((confirmedSum + feeProrate) * 100) / 100;
         totalRevReported = true;
         totalRevSources.add("sc_daily_revenue");
+        if (feeProrate > 0) totalRevSources.add("kpi_budgets_2300_prorate");
         // Kevin ruling PR-3 follow-up (2026-09-08). Per-line
         // attribution on TP is an audit question, not a design one,
         // and comes back in a deliberate audit pass. Until then:
