@@ -86,6 +86,15 @@ function VarCell({ actual, ref, axis }) {
 // `axis` picks the variance sign convention.
 // `refField` picks which field the variance measures against
 // ("adjusted" for cost, "budget" for revenue).
+//
+// Kevin CC prompt 2026-09-08 (P&L one-table). Running-period overrides
+// let the same LineRow serve running P10 without a separate component.
+// When `runningAdjusted` and/or `runningLanded` are provided, they
+// take precedence over the row's budget_at_this_revenue / actual
+// (statement_rows revenue actuals are null on TP per R-92; the values
+// come from week_rail via the caller). `isRunning` flips the last
+// cell from variance to Left-to-spend and the Landed cell renders
+// the running value even when row.reported === false.
 function LineRow({
   row,
   variant = "line",
@@ -94,6 +103,9 @@ function LineRow({
   axis,
   refField,
   totalRevenue,
+  isRunning = false,
+  runningAdjusted = null,
+  runningLanded = null,
 }) {
   const isInactive = Array.isArray(row.flags) && row.flags.includes("inactive");
   const notApplicable = Array.isArray(row.flags) && row.flags.includes("not_applicable_target_pct");
@@ -115,14 +127,28 @@ function LineRow({
   }
   const budgetText = fmtMoney(row.budget_to_date);
   const targetPctText = fmtPct(row.target_pct);
-  const adjustedText = fmtMoney(row.budget_at_this_revenue);
-  const actualText = fmtMoney(row.actual);
+  // Running-period overrides: caller may pass a projected-revenue-
+  // derived Adjusted and a week_rail-derived Landed. Fall back to the
+  // row's own fields (closed-range shape).
+  const effectiveAdjusted = runningAdjusted != null ? runningAdjusted : row.budget_at_this_revenue;
+  const effectiveActual   = runningLanded   != null ? runningLanded   : row.actual;
+  const adjustedText = fmtMoney(effectiveAdjusted);
+  const actualText = fmtMoney(effectiveActual);
   const actualPct = row.actual_pct != null
     ? row.actual_pct
     : (row.reported && totalRevenue ? (Number(row.actual) / totalRevenue) * 100 : null);
-  const refValue = refField === "adjusted" ? row.budget_at_this_revenue : row.budget_to_date;
+  const refValue = refField === "adjusted" ? effectiveAdjusted : row.budget_to_date;
   const hatchTargetFinal = hatchTarget || notApplicable;
   const hatchAdjustedFinal = hatchAdjusted || notApplicable;
+  // On running, the last column is "Left to spend" = adjusted - landed
+  // (cost lines; positive = money still available). Revenue rows on
+  // running also render adjusted - landed (positive = fee not yet
+  // accrued for future weeks; SC not yet confirmed). Hatched when
+  // either input is null. GM's running-last-cell is hatched by the
+  // caller directly since Landed is intentionally absent on GM.
+  const leftToSpend = (effectiveAdjusted != null && effectiveActual != null)
+    ? Number(effectiveAdjusted) - Number(effectiveActual)
+    : null;
   return (
     <tr className={cls} data-kpi-ov="pnl-line-row" data-kpi-ov-line-code={row.line_code} data-kpi-ov-variant={variant}>
       <td className="l">
@@ -138,14 +164,22 @@ function LineRow({
         {hatchAdjustedFinal ? "" : (adjustedText != null ? adjustedText : "—")}
       </td>
       <td className="kpi-ov-num">
-        {row.reported === false
-          ? <span className="kpi-ov-pnl-notrep">not reported</span>
-          : (actualText != null ? actualText : "—")}
+        {isRunning
+          ? (actualText != null ? actualText : "—")
+          : (row.reported === false
+              ? <span className="kpi-ov-pnl-notrep">not reported</span>
+              : (actualText != null ? actualText : "—"))}
       </td>
       <td className="kpi-ov-num nb">
-        {actualPct != null && row.reported !== false ? fmtPct(actualPct) : "—"}
+        {actualPct != null && (isRunning || row.reported !== false) ? fmtPct(actualPct) : "—"}
       </td>
-      <VarCell actual={row.actual} ref={refValue} axis={axis} />
+      {isRunning ? (
+        <td className="kpi-ov-pnl-var nb">
+          {leftToSpend != null ? fmtMoney(leftToSpend) : "—"}
+        </td>
+      ) : (
+        <VarCell actual={row.actual} ref={refValue} axis={axis} />
+      )}
     </tr>
   );
 }
@@ -164,223 +198,15 @@ function SectionRow({ label }) {
   );
 }
 
-// Kevin CC prompt 2026-09-08 item 6, Guard 2 · isolated running-
-// period P&L component. Renders when payload.range.kind === "period"
-// && payload.period_state === "open". Path A per Kevin ruling:
-// early return in the default export, closed-range PnlStatement body
-// entirely untouched.
-//
-// Grammar matches the cost-lines table's Adjusted-column shape:
-//   Line · P{n} plan · Target % · Adjusted · Landed so far · Left to spend
-// Variance column dropped - "↓ $57,395" on day 2 is a false shortfall
-// that shrinks to nothing as the period runs.
-//
-// Adjusted derivation (Kevin binding · one number, both places):
-//   Cost rows:      projRev × target_pct / 100
-//   Total revenue:  projRev
-//   2300 fee row:   fee itself (contractual, does not move with vol)
-//   2400.1 SC row:  projSC (SC forecast + actual sum, no fee)
-//   GM row:         projRev - totalCogsAdjusted
-//
-// projRev = sum(week_rail.weeks[i].week_revenue). Same figure the
-// money table above renders in its envelope row.
-function RunningPeriodPnl({ payload, open, onToggle }) {
-  const rows = payload?.statement_rows || [];
-  const cogsRowsAll = rows.filter(r => r.section === "cogs" && !r.parent_line_code)
-    .sort((a, b) => Number(a.line_code) - Number(b.line_code));
-  const revenueCard = payload.cards?.find(c => c.key === "revenue");
-  const cogsCard = payload.cards?.find(c => c.key === "cogs");
-  const totals = payload.statement_totals || {};
-  const periodNo = payload.range?.period_no;
-
-  // Envelope inputs derived from week_rail (Kevin's answer to
-  // question 2: compute per-line landed from the same source the
-  // money table uses; statement_rows is deliberately null on TP).
-  const weeks = payload.week_rail?.weeks || [];
-  const feePerWeek = Number(weeks[0]?.fee_prorate || 0);
-  const feePeriod = feePerWeek * 4;
-  const projSC = weeks.reduce((s, w) => s + Number(w.meal_revenue || 0), 0);
-  const projRev = projSC + feePeriod;
-  const planRev = Number(totals?.revenue?.period_budget || 0);
-  const planFeeShare = feePeriod;
-  const planSC = planRev - feePeriod;
-  const confirmedWeeksCount = revenueCard?.confirmed_weeks_count ?? 0;
-  const totalWeeksCount = revenueCard?.total_weeks_count ?? weeks.length ?? 4;
-  const scConfirmed = weeks
-    .filter(w => w.revenue_basis === "confirmed")
-    .reduce((s, w) => s + Number(w.meal_revenue || 0), 0);
-  const feeLanded = feePerWeek * confirmedWeeksCount;
-
-  const revenueDelta = projRev - planRev;
-  const envToneCls = revenueDelta === 0
-    ? "" : revenueDelta > 0 ? "kpi-ov-good" : "kpi-ov-bad";
-
-  // Cost per-line adjusted uses projRev × target_pct / 100. Total
-  // adjusted = sum(row adjusted) which by algebra equals projRev ×
-  // totalTargetPct / 100 (rounding aside).
-  const adjustedFor = (targetPct) => (targetPct != null && projRev > 0)
-    ? projRev * (Number(targetPct) / 100)
-    : null;
-  const totalCogsPlan = cogsRowsAll.reduce((s, r) => s + Number(r.period_budget || 0), 0);
-  const totalCogsTargetPct = cogsRowsAll.reduce((s, r) => s + Number(r.target_pct || 0), 0);
-  const totalCogsAdjusted = adjustedFor(totalCogsTargetPct);
-  const totalCogsLanded = Number(cogsCard?.hero_actual || 0);
-
-  const gmPlanBudget = planRev > 0 ? planRev - totalCogsPlan : null;
-  const gmTargetPct = totalCogsTargetPct != null ? 100 - Number(totalCogsTargetPct) : null;
-  const gmAdjusted = totalCogsAdjusted != null ? projRev - totalCogsAdjusted : null;
-
-  const planHeader = periodNo != null ? `P${periodNo} plan` : "Period plan";
-
-  return (
-    <div
-      className={`kpi-ov-card kpi-ov-card-cogs kpi-ov-mt kpi-ov-fold-card${open ? " kpi-ov-fold-open" : ""}`}
-      data-kpi-ov="statement"
-      data-kpi-ov-open={open ? "1" : "0"}
-      data-kpi-ov-running="1"
-    >
-      <button
-        type="button"
-        className="kpi-ov-fold-trigger"
-        data-kpi-ov="fold-pnl"
-        onClick={onToggle}
-        aria-expanded={open ? "true" : "false"}
-      >
-        <span className="kpi-ov-eb">Full profit and loss</span>
-        <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
-      </button>
-      {open && (
-        <>
-          <div className="kpi-ov-fold-meta">
-            <HelpPop
-              id="overview-pnl-running"
-              title="Profit and loss · running period"
-              body={<p>Every line is measured against the revenue this period is projecting, not the original plan. Margin lands when cost does - revenue is confirmed ahead of the week and invoices arrive behind it.</p>}
-            />
-            <span className="kpi-ov-gl" data-kpi-ov="pnl-scope">
-              {payload.filters?.account} · {payload.range_labels?.horizon || `${payload.range?.start} – ${payload.range?.end}`}
-            </span>
-          </div>
-          <div className="kpi-ov-cb">
-            <table className="kpi-ov-cl" data-kpi-ov="pnl-running-table">
-              <thead>
-                <tr>
-                  <th className="l">Line</th>
-                  <th className="kpi-ov-num">{planHeader}</th>
-                  <th className="kpi-ov-num" style={{ width: 68 }}>Target %</th>
-                  <th className="kpi-ov-num">Adjusted</th>
-                  <th className="kpi-ov-num">Landed so far</th>
-                  <th className="kpi-ov-num">Left to spend</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="kpi-ov-pnl-grp" data-kpi-ov="pnl-grp-revenue">
-                  <td className="l" colSpan={6}>Revenue</td>
-                </tr>
-                {/* 2300 fee row · Adjusted = fee (contractual, does
-                    not move with volume). Landed = fee × confirmed /
-                    4. Sub caption names the proration state. */}
-                <tr className="kpi-ov-cl-row">
-                  <td className="l kpi-ov-cl-line">
-                    <span className="kpi-ov-cl-code">2300</span>
-                    <span className="kpi-ov-cl-lbl">Service charges</span>
-                    <span className="kpi-ov-pnl-sub">prorated · {confirmedWeeksCount}/{totalWeeksCount} wks</span>
-                  </td>
-                  <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(planFeeShare) || "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">{planRev > 0 ? fmtPct((planFeeShare / planRev) * 100) : "—"}</td>
-                  <td className="kpi-ov-num">{fmtMoney(feePeriod) || "—"}</td>
-                  <td className="kpi-ov-num">{fmtMoney(feeLanded) || "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">—</td>
-                </tr>
-                {/* 2400.1 meal-service row · Adjusted = projSC. Landed
-                    = confirmed SC sum. Sub caption names the confirm
-                    state. */}
-                <tr className="kpi-ov-cl-row">
-                  <td className="l kpi-ov-cl-line">
-                    <span className="kpi-ov-cl-code">2400.1</span>
-                    <span className="kpi-ov-cl-lbl">Meal service</span>
-                    <span className="kpi-ov-pnl-sub">{confirmedWeeksCount} of {totalWeeksCount} weeks confirmed</span>
-                  </td>
-                  <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(planSC) || "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">{planRev > 0 ? fmtPct((planSC / planRev) * 100) : "—"}</td>
-                  <td className={`kpi-ov-num ${envToneCls}`}>{fmtMoney(projSC) || "—"}</td>
-                  <td className="kpi-ov-num">{fmtMoney(scConfirmed) || "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">—</td>
-                </tr>
-                <tr className="kpi-ov-cl-tot kpi-ov-pnl-sub-tot" data-kpi-ov="pnl-total-revenue">
-                  <td className="l">Total revenue</td>
-                  <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(planRev) || "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">100%</td>
-                  <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="pnl-total-revenue-adjusted">
-                    {fmtMoney(projRev) || "—"}
-                  </td>
-                  <td className="kpi-ov-num">
-                    {fmtMoney(Number(revenueCard?.hero_actual || 0)) || "—"}
-                  </td>
-                  <td className="kpi-ov-num kpi-ov-nb">—</td>
-                </tr>
-                <tr className="kpi-ov-pnl-grp" data-kpi-ov="pnl-grp-cogs">
-                  <td className="l" colSpan={6}>Cost of goods sold</td>
-                </tr>
-                {cogsRowsAll.map(r => {
-                  const adj = adjustedFor(r.target_pct);
-                  const landed = Number(r.actual || 0);
-                  const left = adj != null ? adj - landed : null;
-                  return (
-                    <tr key={r.line_code} className="kpi-ov-cl-row">
-                      <td className="l kpi-ov-cl-line">
-                        <span className="kpi-ov-cl-code">{r.line_code}</span>
-                        <span className="kpi-ov-cl-lbl">{r.label}</span>
-                      </td>
-                      <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(r.period_budget) || "—"}</td>
-                      <td className="kpi-ov-num kpi-ov-nb">{fmtPct(r.target_pct) || "—"}</td>
-                      <td className={`kpi-ov-num ${envToneCls}`}>{adj != null ? fmtMoney(adj) : "—"}</td>
-                      <td className="kpi-ov-num">{fmtMoney(landed) || "—"}</td>
-                      <td className="kpi-ov-num kpi-ov-nb">{left != null ? fmtMoney(left) : "—"}</td>
-                    </tr>
-                  );
-                })}
-                <tr className="kpi-ov-cl-tot kpi-ov-pnl-sub-tot" data-kpi-ov="pnl-total-cogs">
-                  <td className="l">Total cost of goods</td>
-                  <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(totalCogsPlan) || "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">{fmtPct(totalCogsTargetPct) || "—"}</td>
-                  <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="pnl-total-cogs-adjusted">
-                    {totalCogsAdjusted != null ? fmtMoney(totalCogsAdjusted) : "—"}
-                  </td>
-                  <td className="kpi-ov-num">{fmtMoney(totalCogsLanded) || "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">
-                    {totalCogsAdjusted != null ? fmtMoney(totalCogsAdjusted - totalCogsLanded) : "—"}
-                  </td>
-                </tr>
-                {gmAdjusted != null && (
-                  <tr className="kpi-ov-cl-tot kpi-ov-cl-tot-gm" data-kpi-ov="pnl-total-gm">
-                    <td className="l">Gross margin</td>
-                    <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(gmPlanBudget) || "—"}</td>
-                    <td className="kpi-ov-num kpi-ov-nb">{fmtPct(gmTargetPct) || "—"}</td>
-                    <td className={`kpi-ov-num ${envToneCls}`}>{fmtMoney(gmAdjusted) || "—"}</td>
-                    <td className="kpi-ov-num kpi-ov-nb">—</td>
-                    <td className="kpi-ov-num kpi-ov-nb">—</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <div className="kpi-ov-cl-envnote" data-kpi-ov="pnl-running-note">
-              Every line is measured against <b>the revenue this period is projecting</b>, not the original plan. Margin lands when cost does - <b>revenue is confirmed ahead of the week and invoices arrive behind it.</b>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
+// Kevin CC prompt 2026-09-08 (P&L one-table). RunningPeriodPnl was
+// folded back into PnlStatement as a variant of the same skeleton.
+// Only three cells differ on a running period: group header + column
+// header both read "Landed" instead of "Actual", and the last column
+// reads "Left to spend" instead of "vs adjusted". Everything else -
+// plan band, sub-lines, hatching, Full/Summary toggle, Also-tracked
+// section - shared verbatim. The old isolated component + Guard-2
+// early-return removed with this PR.
 export default function PnlStatement({ payload, open, onToggle }) {
-  // Guard 2 · Kevin CC prompt 2026-09-08. Running single-period gets
-  // an isolated component (Path A). Every other range keeps the
-  // closed-range table below untouched.
-  if (payload?.range?.kind === "period" && payload?.period_state === "open") {
-    return <RunningPeriodPnl payload={payload} open={open} onToggle={onToggle} />;
-  }
   // Kevin R-68 item 1 (2026-09-04): the P&L Full view is LOCKED when
   // the caller has no salary access. Salary-inclusive totals appear
   // everywhere already (labor is always composed with salary); Full
@@ -426,6 +252,54 @@ export default function PnlStatement({ payload, open, onToggle }) {
   // rev_actual - cost_adjusted (when totalRevenue == rev_actual, which
   // is always true by construction). Use the server value verbatim.
   const gmAdjusted = totals?.gross_margin?.margin_at_this_revenue ?? null;
+
+  // Kevin CC prompt 2026-09-08 (P&L one-table). Running-period variant
+  // of the same skeleton. All Adjusted values struck against projRev
+  // (sum of week_rail week revenues = SC forecast+actual + full period
+  // fee); Landed for revenue rows comes from week_rail (statement_rows
+  // revenue actuals are null on TP per R-92); Landed for cost rows +
+  // Also tracked comes from statement_rows.actual (populated). Every
+  // Adjusted derivation matches the cost-lines table's `Adjusted now`
+  // column - one number, both places.
+  const isRunning = payload.range?.kind === "period" && payload.period_state === "open";
+  const weekRailWeeks = payload.week_rail?.weeks || [];
+  const feePerWeek = Number(weekRailWeeks[0]?.fee_prorate || 0);
+  const feePeriod = feePerWeek * 4;
+  const projSC = weekRailWeeks.reduce((s, w) => s + Number(w.meal_revenue || 0), 0);
+  const projRev = projSC + feePeriod;
+  const confirmedWeeksCount = revenueCard?.confirmed_weeks_count ?? 0;
+  const scConfirmedLanded = weekRailWeeks
+    .filter(w => w.revenue_basis === "confirmed")
+    .reduce((s, w) => s + Number(w.meal_revenue || 0), 0);
+  const feeLanded = feePerWeek * confirmedWeeksCount;
+  // Running-period revenue rendering is scoped to the 2300 fee +
+  // 2400.1 SC rows only. Other revenue lines (2200, 2400.2, 2600)
+  // don't carry meaningful data on a running per-meal account; they
+  // render as "not reported" today but Kevin's spec shows only 2300 +
+  // 2400.1 on the running P&L.
+  const revenueRowsForRunning = revenueRowsAll.filter(r => r.line_code === "2300" || r.line_code === "2400.1");
+  // Adjusted overrides per revenue row. 2300 = fee itself (contractual,
+  // doesn't move with volume). 2400.1 = projSC (SC sum, no fee).
+  const revenueRunningView = (r) => {
+    if (r.line_code === "2300") return { runningAdjusted: feePeriod, runningLanded: feeLanded };
+    if (r.line_code === "2400.1") return { runningAdjusted: projSC, runningLanded: scConfirmedLanded };
+    return { runningAdjusted: null, runningLanded: null };
+  };
+  // Cost adjusted = projRev × target_pct / 100. Landed = row.actual
+  // (statement_rows carries cost actuals on TP; only revenue rows are
+  // nulled per R-92).
+  const costAdjustedFor = (targetPct) => (targetPct != null && projRev > 0)
+    ? projRev * (Number(targetPct) / 100)
+    : null;
+  // Totals + GM running values.
+  const totalCogsTargetPct = totals?.cogs?.target_pct;
+  const totalCogsAdjustedRunning = costAdjustedFor(totalCogsTargetPct);
+  const gmAdjustedRunning = totalCogsAdjustedRunning != null ? projRev - totalCogsAdjustedRunning : null;
+  const revenueLandedRunning = Number(revenueCard?.hero_actual ?? 0);
+  const cogsLandedRunning = Number(cogsCard?.hero_actual ?? 0);
+
+  const actualHeaderLabel = isRunning ? "Landed" : "Actual";
+  const lastColHeaderLabel = isRunning ? "Left to spend" : "vs adjusted";
 
   return (
     <div
@@ -475,62 +349,98 @@ export default function PnlStatement({ payload, open, onToggle }) {
           <div className="kpi-ov-cb">
             <table className="kpi-ov-pnl" data-kpi-ov="pnl-table">
               <thead>
-                {/* Group header row: Plan (3) · Actual (2) · Variance (1). */}
+                {/* Group header row. Kevin ruling 2026-09-08 (P&L one-
+                    table): the 7th cell is empty (was "Variance"); on
+                    a running period the Actual group label reads
+                    "Landed" to match the last-column swap below. */}
                 <tr className="kpi-ov-pnl-grp" data-kpi-ov="pnl-group">
                   <th className="l"></th>
                   <th colSpan={3} className="plan plan-first plan-last kpi-ov-pnl-grp-plan">Plan</th>
-                  <th colSpan={2} className="kpi-ov-pnl-grp-act">Actual</th>
-                  <th className="kpi-ov-pnl-grp-var">Variance</th>
+                  <th colSpan={2} className="kpi-ov-pnl-grp-act">{actualHeaderLabel}</th>
+                  <th className="kpi-ov-pnl-grp-var"></th>
                 </tr>
                 <tr>
                   <th className="l">Line</th>
                   <th className="plan plan-first">Budget</th>
                   <th className="plan">Target %</th>
-                  <th className="plan plan-last">
-                    Adjusted<sup className="kpi-ov-pnl-fn-mark">*</sup>
-                  </th>
-                  <th>Actual</th>
+                  <th className="plan plan-last">Adjusted</th>
+                  <th>{actualHeaderLabel}</th>
                   <th style={{ width: 66 }}>% of rev</th>
-                  <th style={{ width: 130 }}>vs adjusted</th>
+                  <th style={{ width: 130 }}>{lastColHeaderLabel}</th>
                 </tr>
               </thead>
               <tbody>
-                {/* Revenue section. Revenue rows hatch Adjusted (revenue
-                    is not adjusted by revenue). Variance measured
-                    against Budget. */}
+                {/* Revenue section. Closed range: rows hatch Adjusted
+                    (revenue is not adjusted by revenue), variance
+                    measured against Budget. Running: 2300 + 2400.1
+                    only (other revenue lines don't render on a running
+                    per-meal account), Adjusted comes from week_rail
+                    (fee: contractual = fee; SC: projSC), Landed from
+                    week_rail (fee: fee × conf / 4; SC: confirmed sum),
+                    last column = Left to spend. */}
                 <SectionRow label="Revenue" />
-                {revenueRows.map(r => (
-                  <LineRow
-                    key={r.line_code}
-                    row={r}
-                    variant="line"
-                    hatchAdjusted
-                    axis="rev"
-                    refField="budget"
-                    totalRevenue={totalRevenue}
-                  />
-                ))}
-                {/* Total revenue */}
+                {(isRunning ? revenueRowsForRunning : revenueRows).map(r => {
+                  const rv = isRunning ? revenueRunningView(r) : null;
+                  return (
+                    <LineRow
+                      key={r.line_code}
+                      row={r}
+                      variant="line"
+                      hatchAdjusted={!isRunning}
+                      axis="rev"
+                      refField="budget"
+                      totalRevenue={totalRevenue}
+                      isRunning={isRunning}
+                      runningAdjusted={rv?.runningAdjusted ?? null}
+                      runningLanded={rv?.runningLanded ?? null}
+                    />
+                  );
+                })}
+                {/* Total revenue. On running, Adjusted = projRev and
+                    Landed = revenueCard.hero_actual (fee + SC sum,
+                    per step 1 of the current-period rebuild). Last
+                    cell renders Left to spend = projRev - hero_actual
+                    (positive = revenue yet to earn in the period). */}
                 <tr className="kpi-ov-pnl-tot" data-kpi-ov="pnl-total-revenue">
                   <td className="l">Total revenue</td>
                   <td className="kpi-ov-num plan plan-first">
                     {fmtMoney(totals.revenue?.budget_to_date) || "—"}
                   </td>
                   <td className="kpi-ov-num plan nb">100%</td>
-                  <td className="kpi-ov-num plan plan-last kpi-ov-pnl-na-cell"></td>
+                  {isRunning ? (
+                    <td className="kpi-ov-num plan plan-last">{fmtMoney(projRev) || "—"}</td>
+                  ) : (
+                    <td className="kpi-ov-num plan plan-last kpi-ov-pnl-na-cell"></td>
+                  )}
                   <td className="kpi-ov-num">
-                    {fmtMoney(totals.revenue?.actual) || "—"}
+                    {isRunning
+                      ? (fmtMoney(revenueLandedRunning) || "—")
+                      : (fmtMoney(totals.revenue?.actual) || "—")}
                   </td>
-                  <td className="kpi-ov-num nb">{totals.revenue?.actual != null ? "100%" : "—"}</td>
-                  <VarCell actual={totals.revenue?.actual} ref={totals.revenue?.budget_to_date} axis="rev" />
+                  <td className="kpi-ov-num nb">
+                    {isRunning
+                      ? (revenueLandedRunning > 0 ? "100%" : "—")
+                      : (totals.revenue?.actual != null ? "100%" : "—")}
+                  </td>
+                  {isRunning ? (
+                    <td className="kpi-ov-pnl-var nb">
+                      {fmtMoney(projRev - revenueLandedRunning) || "—"}
+                    </td>
+                  ) : (
+                    <VarCell actual={totals.revenue?.actual} ref={totals.revenue?.budget_to_date} axis="rev" />
+                  )}
                 </tr>
 
-                {/* Cost of goods sold section. Cost rows measure
-                    variance against Adjusted. Sub-rows only in Full;
-                    salary hatches Target % and Adjusted. */}
+                {/* Cost of goods sold section. Closed range: variance
+                    against Adjusted; sub-rows only in Full; salary
+                    hatches Target % and Adjusted. Running: Adjusted
+                    = projRev × target_pct / 100 for both parent and
+                    non-salary subs; Landed reads statement_rows.actual
+                    verbatim (populated on TP for cost lines). */}
                 <SectionRow label="Cost of goods sold" />
                 {cogsRowsAll.map(parent => {
                   const subs = cogsSubsByParent.get(parent.line_code) || [];
+                  const parentRunningAdj = isRunning ? costAdjustedFor(parent.target_pct) : null;
                   return (
                     <>
                       <LineRow
@@ -540,9 +450,13 @@ export default function PnlStatement({ payload, open, onToggle }) {
                         axis="cost"
                         refField="adjusted"
                         totalRevenue={totalRevenue}
+                        isRunning={isRunning}
+                        runningAdjusted={parentRunningAdj}
+                        runningLanded={isRunning ? Number(parent.actual ?? 0) : null}
                       />
                       {showSubs && subs.map(sub => {
                         const isSalary = Array.isArray(sub.flags) && sub.flags.includes("not_applicable_target_pct");
+                        const subRunningAdj = (isRunning && !isSalary) ? costAdjustedFor(sub.target_pct) : null;
                         return (
                           <LineRow
                             key={sub.line_code}
@@ -553,36 +467,71 @@ export default function PnlStatement({ payload, open, onToggle }) {
                             axis="cost"
                             refField={isSalary ? "budget" : "adjusted"}
                             totalRevenue={totalRevenue}
+                            isRunning={isRunning}
+                            runningAdjusted={subRunningAdj}
+                            runningLanded={isRunning ? Number(sub.actual ?? 0) : null}
                           />
                         );
                       })}
                     </>
                   );
                 })}
-                {/* Total COGS */}
+                {/* Total COGS. Running: Adjusted = projRev × total
+                    target_pct / 100 (same as sum of per-line rounded).
+                    Landed = cogsCard.hero_actual. Last cell = Adjusted
+                    - Landed. */}
                 <tr className="kpi-ov-pnl-tot" data-kpi-ov="pnl-total-cogs">
                   <td className="l">Total cost of goods sold</td>
                   <td className="kpi-ov-num plan plan-first">{fmtMoney(totals.cogs?.budget_to_date) || "—"}</td>
                   <td className="kpi-ov-num plan">{fmtPct(totals.cogs?.target_pct) || "—"}</td>
-                  <td className="kpi-ov-num plan plan-last">{fmtMoney(totals.cogs?.budget_at_this_revenue) || "—"}</td>
-                  <td className="kpi-ov-num">{fmtMoney(totals.cogs?.actual) || "—"}</td>
+                  <td className="kpi-ov-num plan plan-last">
+                    {fmtMoney(isRunning ? totalCogsAdjustedRunning : totals.cogs?.budget_at_this_revenue) || "—"}
+                  </td>
+                  <td className="kpi-ov-num">
+                    {fmtMoney(isRunning ? cogsLandedRunning : totals.cogs?.actual) || "—"}
+                  </td>
                   <td className="kpi-ov-num nb">{fmtPct(totals.cogs?.actual_pct) || "—"}</td>
-                  <VarCell actual={totals.cogs?.actual} ref={totals.cogs?.budget_at_this_revenue} axis="cost" />
+                  {isRunning ? (
+                    <td className="kpi-ov-pnl-var nb">
+                      {totalCogsAdjustedRunning != null
+                        ? (fmtMoney(totalCogsAdjustedRunning - cogsLandedRunning) || "—")
+                        : "—"}
+                    </td>
+                  ) : (
+                    <VarCell actual={totals.cogs?.actual} ref={totals.cogs?.budget_at_this_revenue} axis="cost" />
+                  )}
                 </tr>
 
                 {/* Gross margin - weight above the rest per the render.
-                    Adjusted DERIVED from server (margin_at_this_revenue
-                    = revenue × target_margin_pct, algebraically =
-                    actual_revenue - adjusted_cost). Variance ties to
-                    -cogs.variance by construction (probe asserts). */}
+                    Closed range: Adjusted DERIVED from server
+                    (margin_at_this_revenue = revenue × target_margin_pct,
+                    algebraically = actual_revenue - adjusted_cost),
+                    variance ties to -cogs.variance by construction.
+                    Running: Adjusted = projRev - totalCogsAdjusted,
+                    Landed absent, last cell hatched (verdict on an
+                    unfinished period is wrong). */}
                 <tr className="kpi-ov-pnl-gm" data-kpi-ov="pnl-total-gm">
                   <td className="l">Gross margin</td>
                   <td className="kpi-ov-num plan plan-first">{fmtMoney(totals.gross_margin?.budget_to_date) || "—"}</td>
                   <td className="kpi-ov-num plan">{fmtPct(totals.gross_margin?.target_pct) || "—"}</td>
-                  <td className="kpi-ov-num plan plan-last">{fmtMoney(gmAdjusted) || "—"}</td>
-                  <td className="kpi-ov-num">{fmtMoney(totals.gross_margin?.actual) || "—"}</td>
-                  <td className="kpi-ov-num nb">{fmtPct(totals.gross_margin?.actual_pct) || "—"}</td>
-                  <VarCell actual={totals.gross_margin?.actual} ref={gmAdjusted} axis="rev" />
+                  <td className="kpi-ov-num plan plan-last">
+                    {fmtMoney(isRunning ? gmAdjustedRunning : gmAdjusted) || "—"}
+                  </td>
+                  {isRunning ? (
+                    <td className="kpi-ov-num kpi-ov-pnl-na-cell"></td>
+                  ) : (
+                    <td className="kpi-ov-num">{fmtMoney(totals.gross_margin?.actual) || "—"}</td>
+                  )}
+                  {isRunning ? (
+                    <td className="kpi-ov-num kpi-ov-pnl-na-cell"></td>
+                  ) : (
+                    <td className="kpi-ov-num nb">{fmtPct(totals.gross_margin?.actual_pct) || "—"}</td>
+                  )}
+                  {isRunning ? (
+                    <td className="kpi-ov-pnl-var kpi-ov-pnl-na-cell"></td>
+                  ) : (
+                    <VarCell actual={totals.gross_margin?.actual} ref={gmAdjusted} axis="rev" />
+                  )}
                 </tr>
 
                 {/* Also tracked band. Full only. Target % + Adjusted
@@ -620,9 +569,11 @@ export default function PnlStatement({ payload, open, onToggle }) {
                 )}
               </tbody>
             </table>
-            <p className="kpi-ov-pnl-foot" data-kpi-ov="pnl-footnote">
-              <b><sup>*</sup>Adjusted</b> — the target percent applied to the revenue actually earned. It sits at the right edge of the plan group because it is the bridge: a planned <i>rate</i> against an actual <i>revenue</i>. It is the figure Actual is measured against, so the two sit side by side. The hatched cells carry none: revenue is not adjusted by revenue, and salary and tracked lines are not measured on a percent of it. <b>Variance</b> is measured against the adjusted budget on cost lines and against budget on revenue, so the dollar and the percent always agree in direction. <b>Food purchased</b> is what was used, not what was bought — inventory movement is folded in at close.
-            </p>
+            {/* Kevin ruling 2026-09-08 (P&L one-table): footnote
+                paragraph removed. Render of record does not carry it
+                and the Adjusted* asterisk it referenced was dropped
+                too. Semantics live in the render's page-level notes,
+                not per-table copy. */}
           </div>
         </>
       )}
