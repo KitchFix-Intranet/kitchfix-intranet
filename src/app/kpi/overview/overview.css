@@ -960,59 +960,49 @@
   font-weight: 700;
   color: var(--n-700);
 }
-/* Kevin ruling 2026-09-08 (P&L one-table): gross margin is reversed
-   on navy - white text on navy background - so it reads as the
-   load-bearing figure. Type scales to 13px per the render.
-   Kevin bug 2026-09-08 (post-#1082): the previous selector
-   `.kpi-app .kpi-ov-pnl-gm td` (specificity 0,2,1) LOST to
-   `.kpi-app .kpi-ov-pnl td.plan` (0,3,1) on the plan cells but also
-   left the label + non-plan non-var cells transparent - color
-   overrides fired via rule 903 (0,5,2 with `:not` chain) so the
-   label + Actual + %-of-rev + variance cells rendered white text on
-   transparent (invisible) or dark text on transparent (with the
-   plan segment painted correctly, so Kevin got half a navy stripe
-   and asked what the row was).
-   Fix: chain `.kpi-ov-pnl tr.kpi-ov-pnl-gm td` so specificity
-   becomes (0,3,2) - beats both .plan overrides and the :not chain
-   for background. Every cell gets navy; plan cells get the lighter
-   #24507f override on top; hatched cells (running-period Landed,
-   %-of-rev, Left) keep their `.kpi-ov-pnl-na-cell` gradient because
-   of !important there. */
+/* Kevin ruling 2026-09-08 (option B, post-#1083). The GM row's
+   white-on-navy reversal is removed. It cannot carry a verdict -
+   the variance cell reads the same in white regardless of whether
+   the account is behind or ahead - and GM already has its own card
+   at the top of the page, large and coloured. The P&L row is
+   reference; it does not need to shout.
+   New treatment: the row reads like every other row. n-900 text on
+   the default background, plan cells on the standard plan tint, a
+   2px navy rule above and below to mark the summary role. Type
+   stays at the larger 13px scale - it is still a summary row. The
+   variance cell keeps green/red via the existing VarCell +
+   .kpi-ov-good / .kpi-ov-bad tone rules; VarCell axis="rev" inverts
+   the sign convention so on GM `actual > adjusted = ahead = green`,
+   which is the opposite of every cost line's axis - and correct.
+   Rules-3 border above and below sit next to the total-COGS row's
+   own border-bottom; the two paint together (border-collapse:
+   separate) as declared in the render Kevin approved. */
 .kpi-app .kpi-ov-pnl tr.kpi-ov-pnl-gm td {
-  /* Kevin bug (post-#1082) root cause: my previous rule used
-     `var(--navy)`, which is NOT defined in the KPI overview scope
-     (kpi.css only exposes --navy-100, --navy-bd, --navy-700,
-     --navy-800). `var(--navy)` resolved to the CSS initial value
-     for background - transparent - which is why the paint didn't
-     land regardless of specificity. Switched to --navy-700 (the
-     same token the running-status pill uses). */
-  background: var(--navy-700);
-  color: #fff;
-  border: none;
+  border-top: 2px solid var(--navy-700);
+  border-bottom: 2px solid var(--navy-700);
   font-weight: 800;
   padding-top: var(--kpi-sp-3);
   padding-bottom: var(--kpi-sp-3);
   font-size: calc(13px * var(--kf-scale, 1));
 }
+/* Color is set per cell type, not on the row, so the variance cell's
+   .kpi-ov-good / .kpi-ov-bad tone rules survive. Row-level `color:
+   var(--n-900)` at (0,3,2) beats those tone rules at (0,2,0) and
+   turns the verdict dark - the exact defect the render fixes. */
+.kpi-app .kpi-ov-pnl tr.kpi-ov-pnl-gm td:not(.plan):not(.kpi-ov-pnl-var) {
+  color: var(--n-900);
+}
 .kpi-app .kpi-ov-pnl tr.kpi-ov-pnl-gm td.l { font-size: var(--kpi-t-body); }
 .kpi-app .kpi-ov-pnl tr.kpi-ov-pnl-gm td.plan {
-  /* Plan-side cells keep the plan band's colour palette (subordinate
-     grey), even inside the reversed GM row - the render darkens the
-     plan segment (`#24507f`) rather than reversing it. */
-  background: #24507f;
-  color: #fff;
+  /* Plan-side cells retain the plan band's tint + subordinate grey
+     type - the same treatment every plan cell in the table already
+     uses. No override needed for background (inherited from
+     .kpi-ov-pnl td.plan); this rule only reasserts font size +
+     weight so the plan-side reads subordinate to the actual side
+     within the summary row. */
+  color: var(--n-700);
   font-weight: 700;
   font-size: var(--kpi-t-body);
-}
-/* And the numeric cells that were being repainted by rule 903's
-   :not(.plan):not(.l):not(.kpi-ov-pnl-var) color: n-900 - force
-   white text at matching specificity so Actual + % of rev read on
-   navy. The variance cell (.kpi-ov-pnl-var) is excluded from rule
-   903 already; its .kpi-ov-good / .kpi-ov-bad tone rules keep
-   whatever colour they assign (green / red), still readable on
-   navy. */
-.kpi-app .kpi-ov-pnl tbody tr.kpi-ov-pnl-gm td:not(.plan):not(.l):not(.kpi-ov-pnl-var) {
-  color: #fff;
 }
 .kpi-app .kpi-ov-pnl-sub td {
   padding-top: 8px;
