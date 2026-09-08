@@ -18,6 +18,12 @@
 //      italic text at 54px overflowed the two narrowest columns
 //      after a naive 15% shrink; caught by this probe before it
 //      shipped).
+//   4. Every GM row cell is either painted (background) or hatched
+//      (.kpi-ov-pnl-na-cell). White text on transparent = invisible
+//      is the class of bug caused by using an undefined CSS variable
+//      (`var(--navy)` instead of `var(--navy-700)`) or by a
+//      specificity fight the row rule loses. Kevin: "the only
+//      automated thing that would catch a real one."
 //
 // Fixture: TBJ - FL Current year, Full view (all 13 sub rows visible).
 // Prereqs: `TEST_MODE=true npm run dev` running on :3000, Chromium
@@ -115,7 +121,47 @@ async function measure(viewportWidth) {
         }
       }
     }
-    return { tblWidth: Math.round(tblWidth), samples, subCount, numericSamples };
+    // GM-row paint check. Kevin bug 2026-09-08 (post-#1082): my
+    // rule for the GM row used `var(--navy)` (undefined in KPI
+    // scope) so background resolved to transparent + specificity
+    // for the .plan override left half the row invisible. Only the
+    // label + non-plan-non-var cells were affected. The class of
+    // bug: white text on transparent = invisible - the row reads
+    // as "half-painted" and an operator can't tell what the row is
+    // (Kevin: "Asked what $44,017 40.5% $48,296 means"). Added to
+    // the standing probe after Kevin: "the only automated thing
+    // that would catch a real one."
+    //
+    // Rule: every cell in `.kpi-ov-pnl-gm` must either
+    //   (a) carry a non-transparent background, OR
+    //   (b) be a `.kpi-ov-pnl-na-cell` (hatched - correct on the
+    //       running-period GM row per R-99 "no margin until cost
+    //       lands").
+    // Any other combination is a white-on-white regression.
+    const gmPaintSamples = [];
+    const gmRow = tbl.querySelector('.kpi-ov-pnl-gm');
+    if (gmRow) {
+      const gmCells = [...gmRow.querySelectorAll('td')];
+      for (let i = 0; i < gmCells.length; i += 1) {
+        const td = gmCells[i];
+        const cs = window.getComputedStyle(td);
+        const bg = cs.backgroundColor;
+        const bgImg = cs.backgroundImage;
+        const isHatched = td.classList.contains('kpi-ov-pnl-na-cell');
+        const isTransparent = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent';
+        const hasBgImage = bgImg && bgImg !== 'none';
+        // Regression signal: transparent AND no bg image AND not hatched.
+        if (isTransparent && !hasBgImage && !isHatched) {
+          gmPaintSamples.push({
+            colIdx: i,
+            cls: td.className,
+            text: td.innerText.replace(/\s+/g, ' ').trim(),
+            bg,
+          });
+        }
+      }
+    }
+    return { tblWidth: Math.round(tblWidth), samples, subCount, numericSamples, gmPaintSamples };
   });
   await browser.close();
   return info;
@@ -128,6 +174,7 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
   if (!info) { console.log("  (no .kpi-ov-pnl found)"); failures += 1; continue; }
   if (info.samples.some(s => s.clipped)) failures += 1;
   if ((info.numericSamples || []).length) failures += 1;
+  if ((info.gmPaintSamples || []).length) failures += 1;
   console.log(`  table width: ${info.tblWidth}px · sub rows: ${info.subCount}`);
   const clippers = info.samples.filter(s => s.clipped);
   const wrappers = info.samples.filter(s => s.wraps);
@@ -157,7 +204,15 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
   } else {
     console.log(`  no numeric-cell clipping`);
   }
+  if (info.gmPaintSamples?.length) {
+    console.log(`  GM-ROW WHITE-ON-TRANSPARENT (${info.gmPaintSamples.length}):`);
+    for (const s of info.gmPaintSamples) {
+      console.log(`    col${s.colIdx} cls="${s.cls}" bg=${s.bg} text="${s.text}"`);
+    }
+  } else {
+    console.log(`  GM row: every cell painted or hatched`);
+  }
 }
 
-console.log(`\n## Summary: ${failures === 0 ? "ALL PASS" : failures + " VIEWPORT(S) FAILED"}`);
+console.log(`\n## Summary: ${failures === 0 ? "ALL PASS" : failures + " VIEWPORT/CHECK COMBOS FAILED"}`);
 process.exit(failures === 0 ? 0 : 1);
