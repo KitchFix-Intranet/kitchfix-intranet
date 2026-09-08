@@ -31,7 +31,11 @@ import { performance } from "node:perf_hooks";
 // Labor + purchasing engines (library-call, no HTTP hop).
 import { buildBoard, computeBudgetToDateDays as computeLaborBudgetToDateDays } from "@/app/kpi/labor/lib/board.js";
 import { paginateActuals as paginateLaborActuals, resolveMemberBudget } from "@/lib/labor/loaders.js";
-import { loadWeeklyRevenueBasis as loadWeeklyRevenueBasisForOverview } from "@/lib/labor/labor-week-basis.js";
+import {
+  loadWeeklyRevenueBasis as loadWeeklyRevenueBasisForOverview,
+  attachWeeklyBasisToBoard,
+  computeLineTargetPctByPeriod,
+} from "@/lib/labor/labor-week-basis.js";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta.js";
 import { buildWorkerToEmail, countDistinctPeople } from "@/lib/labor/personCount.js";
 // Salary-side loaders + merge helper. Overview ALWAYS composes labor
@@ -50,6 +54,7 @@ import {
   envelopeDelta as sharedEnvelopeDelta,
   computePeriodRevenueByLine as sharedComputePeriodRevenueByLine,
   contributesToTotal,
+  computeContractualAccrualByPeriod,
 } from "@/lib/kpi/shared/periodBasis.js";
 
 import { buildPurchasingBoard } from "@/app/kpi/purchasing/lib/resolver.js";
@@ -1166,11 +1171,17 @@ export async function resolveOverview({
   // weeks; the card names the count. Cost + margin cards HOLD (see
   // cards[] pill overrides + client gate).
   const isRunningSinglePeriod = rng.kind === "period" && displayPeriodState === "open";
+  // Kevin ruling 2026-09-08 Path B. wkBasis lives at outer scope so
+  // both the R-92 confirmed-weeks compute (this block) and the
+  // week_rail compute (below the chart) read the same SC weekly
+  // rows. One fetch, two consumers.
+  let runningWkBasis = null;
   if (isRunningSinglePeriod && effRevSource === "sc") {
-    const wkBasis = await loadWeeklyRevenueBasisForOverview(supa, {
+    runningWkBasis = await loadWeeklyRevenueBasisForOverview(supa, {
       members, start: rng.start, end: rng.end, today,
     });
-    if (wkBasis?.data?.length) {
+    if (runningWkBasis?.data?.length) {
+      const wkBasis = runningWkBasis;
       const weeks = wkBasis.data;
       totalWeeksCount = weeks.length;
       const confirmedWks = weeks.filter(w => w.basis === "confirmed");
@@ -1883,6 +1894,126 @@ export async function resolveOverview({
       };
     });
     chart = { grain: "period", series };
+  }
+
+  // 17b. Week rail (Kevin CC prompt 2026-09-08 item 4). Four cards
+  // below the three, showing each week's confirmed / forecast meals
+  // + prorated service fee + cost target + cost landed + caveats.
+  // Running single-period only; null everywhere else.
+  //
+  // Data source: Path B (Kevin ruling). Structural parity with
+  // Labor comes from calling Labor's buildBoard a second time with
+  // end=rng.end (not effectiveEndISO, which caps at the last complete
+  // week on later dates in a period). One buildBoard call = one
+  // computation. Composing per-week from separate labor / SC /
+  // purchasing sources is exactly how the two boards drifted apart
+  // before; Path B refuses that.
+  //
+  // Purchasing per-week comes from purchBoard.buckets (already in
+  // scope). Only the labor+salary side needs the extra fetch.
+  let week_rail = null;
+  if (isRunningSinglePeriod && rng.period_no != null) {
+    const [railLaborActuals, railSalaryActuals] = await Promise.all([
+      paginateLaborActuals(supa, { members, start: rng.start, end: rng.end }),
+      loadSalaryActuals(supa, members, rng.start, rng.end),
+    ]);
+    const railSalaryShaped = (railSalaryActuals?.rows || []).map(shapeSalaryRow);
+    const railMergedLabor = (railLaborActuals?.data || []).concat(railSalaryShaped);
+    const railBoard = buildBoard({
+      account: accountKey,
+      start: rng.start,
+      end: rng.end,
+      today,
+      actuals: railMergedLabor,
+      budget_periods: laborBudgetPeriods,
+      account_state: "hourly_ok",
+      workerToEmail,
+    });
+    // Attach the SC weekly basis so each week carries revenue_basis
+    // + week_actual_revenue + week_projected_revenue. Uses the same
+    // runningWkBasis fetched for R-92 above (hoisted so both consume
+    // one query).
+    if (railBoard?.applies !== false && runningWkBasis?.data?.length) {
+      const railLineTargetPct = computeLineTargetPctByPeriod({
+        budgetPeriods: laborBudgetPeriods,
+        overviewBudgets,
+        members,
+        periods: [rng.period_no],
+      });
+      const railContractualAccrual = computeContractualAccrualByPeriod({
+        overviewBudgets,
+        members,
+        periods: [rng.period_no],
+      });
+      attachWeeklyBasisToBoard(railBoard, runningWkBasis, {
+        lineTargetPctByPeriod: railLineTargetPct,
+        todayISO: today,
+        contractualAccrualByPeriod: railContractualAccrual,
+        verifiedPeriodTotals: null,
+      });
+    }
+    // Purchasing per-week (3200 + 3400 + 3500), indexed by
+    // week_start. Same three buckets the chart's week grain uses.
+    const railPurchByWeek = new Map();
+    for (const key of ["3200", "3400", "3500"]) {
+      const bucket = purchBoard.buckets[key];
+      if (!bucket?.week_series) continue;
+      for (const w of bucket.week_series) {
+        railPurchByWeek.set(w.week_start, (railPurchByWeek.get(w.week_start) || 0) + Number(w.amount || 0));
+      }
+    }
+    // Fee prorated by week. 2300 budget / 4 flat per week; the
+    // period-level accrual (confirmedWeeks × fee/4) lives on the
+    // revenue card hero; this per-week figure is contractual and
+    // the same on every week regardless of state.
+    const feeBudgetByPeriod = sumBudgetByPeriodForLine({
+      overviewBudgets, lineCode: "2300", members,
+    });
+    const feePerWeek = Number(feeBudgetByPeriod.get(rng.period_no) || 0) / 4;
+    // Period COGS target% - used for cost_target per week
+    // (week_revenue × target%). Same figure the cost card displays.
+    const cogsTargetPct = (cogsBudget != null && revenue_budget_full_period != null && revenue_budget_full_period > 0)
+      ? (cogsBudget / revenue_budget_full_period) * 100
+      : null;
+    const runningWeekNoOut = (lastCompleteWk?.weekNo ?? 0) + 1;
+    const rows = (railBoard?.weeks || []).map((w, i) => {
+      const wkNo = i + 1;
+      // Meal revenue: confirmed weeks use SC actual; forecast weeks
+      // use projected. `week_actual_revenue` and `week_projected_
+      // revenue` are attached by attachWeeklyBasisToBoard.
+      const mealRev = w.revenue_basis === "confirmed"
+        ? Number(w.week_actual_revenue || 0)
+        : Number(w.week_projected_revenue || 0);
+      const weekRevTotal = mealRev + feePerWeek;
+      const costTarget = cogsTargetPct != null ? weekRevTotal * (cogsTargetPct / 100) : null;
+      const laborSpent = Number(w.spent || 0);
+      const purchSpent = Number(railPurchByWeek.get(w.week_start) || 0);
+      return {
+        week_no: wkNo,
+        week_start: w.week_start,
+        week_end: w.week_end,
+        state: w.state,                           // "closed" | "in_progress" | "not_started"
+        revenue_basis: w.revenue_basis || null,   // "confirmed" | "forecast" | null
+        meal_revenue: r2(mealRev),
+        fee_prorate: r2(feePerWeek),
+        week_revenue: r2(weekRevTotal),
+        cost_target: costTarget != null ? r2(costTarget) : null,
+        cost_landed: r2(laborSpent + purchSpent),
+        labor_landed: r2(laborSpent),
+        purchasing_landed: r2(purchSpent),
+        unapproved_hours: Number(w.unapproved_hours || 0),
+      };
+    });
+    week_rail = {
+      period_no: rng.period_no,
+      running_week_no: runningWeekNoOut,
+      // Kevin ruling: invoice-landed state derives from the week
+      // index, not from a date string. Client applies:
+      //   invoices_landed = (running_week_no - week_no) >= 2
+      // for each week's caveat line. Two-week rule holds at the
+      // boundary by construction.
+      weeks: rows,
+    };
   }
 
   // 18. Statement rows (per-line P&L) and also-tracked rows.
@@ -3044,6 +3175,10 @@ export async function resolveOverview({
     // strip. Includes an amber-tone signal cost + margin cards
     // consume to render Provisional.
     settling,
+    // Kevin CC prompt 2026-09-08 item 4. Week-by-week rail on the
+    // running single-period surface. Null on every other range; the
+    // client omits the section.
+    week_rail,
     sources: sourcesLine,
     flags,
     freshness,
