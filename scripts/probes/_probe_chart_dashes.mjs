@@ -3,14 +3,16 @@
 //
 // Kevin ruling cleanup (2026-09-03) item 1 (DEFECT). Permanent probe.
 //
-//   For every period, dash_position > bar_top iff budget < spend.
-//   Bar colour agrees with the same comparison.
-//   Chart legend shows only states present in the range.
+// 2026-09-08 update: the dashed per-period budget line was removed
+// (Kevin measured that it did not fall accurately enough on the
+// bars). Bar colour still carries the same comparison - green under,
+// red over, against the SAME budget the dash used - so the probe
+// re-points at the colour class instead of the dash position. Same
+// invariant, one fewer surface: colour(bar) iff (val vs bud).
 //
-// "dash_position > bar_top" (Kevin's screen-coord framing) = dash
-// sits INSIDE the bar (visible below bar top). Since the dash is
-// positioned at `bottom: (budget/spend) × 100%` of the bar height,
-// the math version is: `dashBottomPct <= 100 iff budget <= spend`.
+//   For every closed period, kpi-ov-bar-good iff val <= bud, and
+//   kpi-ov-bar-over iff val > bud.
+//   Chart legend shows only states present in the range.
 //
 // USAGE
 //   TEST_MODE=true PORT=3311 npm run dev &
@@ -60,44 +62,41 @@ async function check(page, a, r) {
       const bud = Number(b.getAttribute('data-kpi-ov-bar-bud'));
       const state = b.getAttribute('data-kpi-ov-bar-state');
       const cls = b.className;
-      const dash = b.querySelector('[data-kpi-ov="bar-budget-dash"]');
-      const dashBottomStyle = dash ? dash.style.bottom : null;
-      const dashBottomPct = dashBottomStyle ? parseFloat(dashBottomStyle.replace('%', '')) : null;
-      return { val, bud, state, cls, dashBottomPct };
+      // Regression guard: the dashed line was removed 2026-09-08. If
+      // it comes back this probe fails loudly - not silently.
+      const dashCount = b.querySelectorAll('[data-kpi-ov="bar-budget-dash"]').length;
+      return { val, bud, state, cls, dashCount };
     });
     const legend = [...chart.querySelectorAll('.kpi-ov-legend span')].map(s => s.innerText.trim().toLowerCase());
     return { bars, legend, present: true, grain };
   });
 
   if (!info.present) return; // portfolio scopes or ranges w/o chart
-  // Item 1's per-bar dash + legend assertion targets PERIOD grain
+  // Item 1's per-bar colour + legend assertion targets PERIOD grain
   // only. Week grain uses a flat weekly-budget line (kpi-ov-tgt),
   // covered by _probe_chart_scale.mjs.
   if (info.grain !== "period") return;
 
-  // Per-bar assertion (item 1 IFF).
+  // Per-bar assertion (item 1 IFF, colour edition).
   for (const b of info.bars) {
+    // Regression: dash resurrected?
+    if (b.dashCount > 0) {
+      fail(`${a} ${r.kind}`, `bar-budget-dash element found (count=${b.dashCount}); the per-period dashed line was removed 2026-09-08 and must not return without a fresh ruling`);
+    }
     if (b.state === "in_progress" || b.state === "not_started") continue;
     if (b.val <= 0 || b.bud < 0) continue;
     const isOver = b.val > b.bud;
     const isUnder = !isOver; // val <= bud
-    const dashInside = b.dashBottomPct != null && b.dashBottomPct <= 100;
-    const dashAbove = b.dashBottomPct != null && b.dashBottomPct > 100;
     const hasOverCls = /kpi-ov-bar-over/.test(b.cls);
     const hasGoodCls = /kpi-ov-bar-good/.test(b.cls);
-    // Kevin's IFF: dash inside iff over budget.
-    if (isOver && !dashInside) {
-      fail(`${a} ${r.kind}`, `over-budget bar (val=${b.val} > bud=${b.bud}) dashBottomPct=${b.dashBottomPct} should be <= 100`);
-    }
-    if (isUnder && !dashAbove) {
-      fail(`${a} ${r.kind}`, `under-budget bar (val=${b.val} <= bud=${b.bud}) dashBottomPct=${b.dashBottomPct} should be > 100`);
-    }
-    // Colour must agree.
+    // Colour must agree with the same comparison the dash used to
+    // draw. This IS the replacement assertion: the comparator lives
+    // on the class name now, not on a positioned element.
     if (isOver && !hasOverCls) {
-      fail(`${a} ${r.kind}`, `over-budget bar missing kpi-ov-bar-over class · cls=${b.cls}`);
+      fail(`${a} ${r.kind}`, `over-budget bar (val=${b.val} > bud=${b.bud}) missing kpi-ov-bar-over class · cls=${b.cls}`);
     }
     if (isUnder && !hasGoodCls) {
-      fail(`${a} ${r.kind}`, `under-budget bar missing kpi-ov-bar-good class · cls=${b.cls}`);
+      fail(`${a} ${r.kind}`, `under-budget bar (val=${b.val} <= bud=${b.bud}) missing kpi-ov-bar-good class · cls=${b.cls}`);
     }
   }
 
@@ -116,7 +115,7 @@ async function check(page, a, r) {
 }
 
 async function main() {
-  console.log(`# chart dashes + legend - ${new Date().toISOString()}`);
+  console.log(`# chart bar-colour + legend - ${new Date().toISOString()}`);
   console.log(`# BASE=${BASE}`);
   console.log("");
 
@@ -139,7 +138,7 @@ async function main() {
   await browser.close();
   console.log("");
   if (FAILS.length === 0) {
-    console.log("Result: dash position IFF + bar colour + legend-state coverage all hold.");
+    console.log("Result: bar colour IFF budget comparison + legend-state coverage all hold. No stray dashes.");
     process.exit(0);
   }
   console.log(`Result: ${FAILS.length} violation(s):`);

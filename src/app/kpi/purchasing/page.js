@@ -1072,7 +1072,7 @@ export default function KpiPurchasingPage() {
           <CardCompliance
             data={data?.compliance}
             isAggregate={isAggregate}
-            scopeLabel={`${account} · ${resolvedPreset === "fytd" ? "FYTD" : (rangeLabel || "custom")}`}
+            scopeLabel={`${account} · ${resolvedPreset === "fytd" ? "Current year" : (rangeLabel || "custom")}`}
           />
 
           {/* R16 P1 - drill table at pass-through with a single
@@ -1320,7 +1320,7 @@ export default function KpiPurchasingPage() {
         <CardCompliance
           data={data?.compliance}
           isAggregate={isAggregate}
-          scopeLabel={`${isAggregate ? (account === "ALL" ? "All accounts" : account) : account} · ${resolvedPreset === "fytd" ? "FYTD" : (rangeLabel || "custom")}`}
+          scopeLabel={`${isAggregate ? (account === "ALL" ? "All accounts" : account) : account} · ${resolvedPreset === "fytd" ? "Current year" : (rangeLabel || "custom")}`}
         />
 
         {/* PR 4 - drill-down table. Sits below Card purchases on the

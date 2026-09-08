@@ -1586,7 +1586,13 @@
 /* ── Item 5: cost lines table (primary surface on the left) ─── */
 .kpi-app .kpi-ov-cl {
   width: 100%;
-  border-collapse: collapse;
+  /* Kevin ruling 2026-09-08. Plan-band corner radii were silently
+     no-oping under border-collapse: collapse (see GOTCHAS "border-
+     radius is silently ignored under border-collapse: collapse").
+     Match kpi-ov-pnl's separate + border-spacing:0 so the .kpi-ov-
+     tband corner rules land here. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--kpi-t-body);
   /* Kevin table-width ruling 2026-09-04: numeric columns take what
      they need, no more (tabular-nums makes width predictable from
@@ -1728,7 +1734,11 @@
 /* ── Revenue lines compact table (right rail, item 12 companion) ── */
 .kpi-app .kpi-ov-revlines {
   width: 100%;
-  border-collapse: collapse;
+  /* Kevin ruling 2026-09-08. Same fix as .kpi-ov-cl above - separate
+     + border-spacing:0 so the .kpi-ov-tband plan-band corner radii
+     actually render. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--kpi-t-body);
 }
 .kpi-app .kpi-ov-revlines th {

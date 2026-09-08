@@ -3,7 +3,9 @@
 //
 // Element 6. Cost of goods sold vs budget.
 //
-//   - Bars are spend. Dashed line is budget. Below the line is green.
+//   - Bars are spend. Bar colour carries the comparison to budget:
+//     green under, red over. The week grain also draws a horizontal
+//     weekly-budget line inside its plot.
 //   - FYTD (grain='period'): one bar per fiscal period; running period
 //     hatched; hover shows Spent / Budget / Under-or-Over.
 //   - Single period (grain='week'): one bar per fiscal week; unstarted
@@ -33,18 +35,26 @@ function fmtMoney(n) {
 
 function ChartPeriodGrain({ series, revenueModel, bare = false }) {
   // Kevin PR-B item 10 (2026-09-03): caption + tooltip vary by
-  // revenue model. SC-driven + sales-based accounts draw dashes at
-  // ADJUSTED budget; management-fee accounts draw them at PERIOD
+  // revenue model. SC-driven + sales-based accounts compare to
+  // ADJUSTED budget; management-fee accounts compare to PERIOD
   // budget (revenue is contractual, no adjustment applies).
+  //
+  // Kevin ruling 2026-09-08 item 4: the dashed per-period budget
+  // line is removed - Kevin measured that the line did not fall
+  // accurately enough on the bars. Bar colouring (green under, red
+  // over, against the same budget) stays; the colour carries the
+  // comparison and the legend names it. Caption drops the "line is
+  // adjusted budget" clause. Help body reworded so it stops
+  // referencing a line that is no longer drawn.
   const isManagementFee = revenueModel === "management_fee";
-  const captionSuffix = isManagementFee ? "period budget" : "adjusted budget";
   const helpBody = isManagementFee
-    ? <p>Each period&rsquo;s cost of goods sold against its period budget. Revenue is contractual on this account, so no revenue adjustment applies. Below the line is under budget. The running period is hatched.</p>
-    : <p>Each period&rsquo;s cost of goods sold against its adjusted budget (revenue times the target cost percentage). Below the line is under budget. The running period is hatched.</p>;
-  // Kevin 2026-09-02 language pass Item 15: each period's dash is
-  // that period's ADJUSTED budget (period actual revenue × target
-  // cost pct). Falls back to the static `budget` when adjusted is
-  // null (a period with $0 revenue can't be adjusted; use the plan).
+    ? <p>Each period&rsquo;s cost of goods sold against its period budget. Revenue is contractual on this account, so no revenue adjustment applies. Green bars are under budget; red are over. The running period is hatched.</p>
+    : <p>Each period&rsquo;s cost of goods sold against its adjusted budget (revenue times the target cost percentage). Green bars are under budget; red are over. The running period is hatched.</p>;
+  // dashValue still feeds the bar-colour comparison + the axis
+  // amount colour, so it stays. Each period's comparator is that
+  // period's ADJUSTED budget (period actual revenue × target cost
+  // pct). Falls back to the static `budget` when adjusted is null
+  // (a period with $0 revenue can't be adjusted; use the plan).
   const dashValue = (s) => {
     const adj = s.adjusted_budget;
     if (adj != null) return Number(adj);
@@ -76,19 +86,9 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
           : s.state === "not_started" ? "kpi-ov-bar-dash"
           : val <= bud ? "kpi-ov-bar-good"
           : "kpi-ov-bar-over";
-        // Kevin ruling cleanup (2026-09-03) item 1 (DEFECT): the dash
-        // sits at budget/mx of the plot height. Relative to a bar
-        // whose own height is spend/mx, that is exactly (budget/spend)
-        // × 100% of the bar. A budget above its spend gives > 100%
-        // and the dash renders above the bar. Prior formula used a
-        // rounded hgt in the denominator, which shifted the dash 1-2%
-        // higher on the bar than the true budget position - producing
-        // Kevin's live measurement of 6 of 8 dashes sitting AT the
-        // bar top on TBJ - FL FYTD when only P3 (the actual overspend)
-        // should have had its dash inside its bar.
-        //
-        // Assertion (permanent probe): dash_top < bar_top iff bud > val.
-        const dashBottomPct = val > 0 && bud >= 0 ? (bud / val) * 100 : null;
+        // Kevin ruling 2026-09-08 item 4: per-period dashed budget
+        // line removed. bud is still consumed by the bar-colour
+        // classSuffix compare above; the dash render below is gone.
         // Kevin walkthrough sweep addendum F (2026-09-07). Hatched
         // slice for the unapproved-labor portion within the bar,
         // matching Labor Tier A. Ratio = unapproved_labor_$ / spent
@@ -119,19 +119,6 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
                 title={`~${Math.round(unappD).toLocaleString("en-US")} labor $ awaiting approval`}
                 aria-label={`${Math.round(unappD).toLocaleString("en-US")} dollars of labor awaiting approval`}
                 data-kpi-ov="bar-unapp-slice"
-              />
-            )}
-            {dashBottomPct != null && (
-              <span
-                className="kpi-ov-bar-perbud"
-                style={{
-                  left: "-5%",
-                  right: "-5%",
-                  bottom: `${dashBottomPct}%`,
-                }}
-                aria-hidden="true"
-                data-kpi-ov="bar-budget-dash"
-                data-kpi-ov-dash-val={bud}
               />
             )}
           </i>
@@ -176,7 +163,7 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
     <div className="kpi-ov-card kpi-ov-card-cogs kpi-ov-mt" data-kpi-ov="chart" data-kpi-ov-grain="period">
       <div className="kpi-ov-ch">
         <span className="kpi-ov-eb">Cost of goods sold, period by period</span>
-        <span className="kpi-ov-gl">bars are spend · line is {captionSuffix}</span>
+        <span className="kpi-ov-gl">bars are spend</span>
         <HelpPop
           id="overview-chart-period"
           title="Cost of goods sold by period"
@@ -361,7 +348,11 @@ export default function Chart({ chart, revenueModel, open, onToggle }) {
         aria-expanded={open ? "true" : "false"}
       >
         <span className="kpi-ov-eb">Cost of goods sold, {grainLabel}</span>
-        <span className="kpi-ov-gl">bars are spend · line is the budget</span>
+        <span className="kpi-ov-gl">
+          {chart.grain === "period"
+            ? "bars are spend"
+            : "bars are spend · line is the budget"}
+        </span>
         <span className="kpi-ov-fold-cv" aria-hidden="true">▾</span>
       </button>
       {open && body}

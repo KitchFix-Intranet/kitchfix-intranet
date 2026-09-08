@@ -2,30 +2,41 @@
 // scripts/probes/_probe_chart_scale.mjs
 //
 // Kevin ruling 2026-09-02: the chart's vertical scale must be the
-// max of EVERYTHING drawn - bars AND per-period dashes - never a
-// subset of it. If mx is computed from bars only, a period whose
-// adjusted budget exceeds spend renders its dash above 100% of the
-// plot area, and the dash floats outside the chart entirely.
+// max of EVERYTHING that contributes to a comparison - bars AND
+// per-period budgets - never a subset of it. If mx is computed from
+// bars only, the bar heights shift when a period whose budget
+// exceeds its spend is present (bar heights are relative to mx).
+// The same invariant survives the 2026-09-08 dash removal: the
+// budget is still the comparator (bar colour reflects val vs bud),
+// so mx must still include budgets - otherwise the visual scale
+// would move when the underlying comparator is unchanged.
 //
 // PAYLOAD ASSERTION
 //
-//   P1  For every account × FYTD chart series, the maximum of
-//       (spends ∪ dashes) is used to scale. Compute expected mx =
-//       max(all spent, all dash) × 1.16. Every dash's implied
-//       pct-of-chart (bud/mx * 100) is <= 100.
+//   P1  For every account × range chart series, mx = max(spends ∪
+//       budgets) × 1.16. Every bar's spent/mx and every budget's
+//       bud/mx is <= 100. Guarantees the compute doesn't overflow.
 //
 // DOM ASSERTION (Playwright)
 //
 //   D1  Every rendered bar's height is in [0, 100]% of the plot
 //       area.
-//   D2  Every rendered dash's center is in [0, 100]% of the plot
-//       area.
+//   D2  (2026-09-08 repoint - replaces the removed dash centre
+//       check.) Bar colour agrees with val vs bud: kpi-ov-bar-good
+//       iff val <= bud, kpi-ov-bar-over iff val > bud. This IS the
+//       comparison the dash used to draw - the visual moved from a
+//       positioned element onto a class name.
+//   D3  Regression guard. No element carries data-kpi-ov=
+//       "bar-budget-dash". The dashed line was removed 2026-09-08
+//       per Kevin ruling ("did not fall accurately enough on the
+//       bars"); it must not return without a fresh ruling.
 //
 // SEEDED FAILURE
 //
-//   SEEDED_FAILURE=1 recomputes mx from bars only (spends alone),
-//   asserts the resulting dash % exceeds 100 on TBJ - FL FYTD P3.
-//   Confirms this probe catches the regression Kevin diagnosed.
+//   SEEDED_FAILURE=1 recomputes mx from bars only, asserts that a
+//   period whose budget exceeds spend produces mx that fails the
+//   "budget fits" check. Confirms this probe catches the class of
+//   regression Kevin's original ruling addressed.
 //
 // USAGE
 //   TEST_MODE=true PORT=3311 npm run dev &
@@ -55,12 +66,12 @@ function seedAxis() {
   // TBJ - FL FYTD P3 approximate: spent 202815, adjusted 259199.
   // Bars-only mx = max(all spents, 1) × 1.16 (P3 is the max spent).
   const spents = [79908, 177880, 202815, 105244, 88384, 85927, 76793, 83384];
-  const dashes = [44694, 178594, 259199, 82928, 81544, 71833, 69739, 78504];
+  const budgets = [44694, 178594, 259199, 82928, 81544, 71833, 69739, 78504];
   const barsOnlyMx = Math.max(...spents, 1) * 1.16;
-  const p3Dash = dashes[2];
-  const p3DashPct = (p3Dash / barsOnlyMx) * 100;
-  const fires = p3DashPct > 100;
-  console.log(`  ${fires ? "PASS" : "FAIL"}  seeded (bars-only mx=${barsOnlyMx.toFixed(0)}) puts P3 dash at ${p3DashPct.toFixed(1)}% - must exceed 100`);
+  const p3Bud = budgets[2];
+  const p3BudPct = (p3Bud / barsOnlyMx) * 100;
+  const fires = p3BudPct > 100;
+  console.log(`  ${fires ? "PASS" : "FAIL"}  seeded (bars-only mx=${barsOnlyMx.toFixed(0)}) puts P3 budget at ${p3BudPct.toFixed(1)}% - must exceed 100`);
   return fires;
 }
 
@@ -76,13 +87,13 @@ async function auditPayload() {
       if (j.chart?.grain !== "period" || !Array.isArray(j.chart.series)) continue;
       const series = j.chart.series;
       const spends = series.map(s => Number(s.spent || 0));
-      const dashes = series.map(s => Number(s.adjusted_budget != null ? s.adjusted_budget : (s.budget || 0)));
-      const mx = Math.max(...spends, ...dashes, 1) * 1.16;
+      const budgets = series.map(s => Number(s.adjusted_budget != null ? s.adjusted_budget : (s.budget || 0)));
+      const mx = Math.max(...spends, ...budgets, 1) * 1.16;
       for (const s of series) {
         const bud = Number(s.adjusted_budget != null ? s.adjusted_budget : (s.budget || 0));
         const budPct = (bud / mx) * 100;
         if (budPct > 100 + 0.01) {
-          fail(`${a} ${r.name} P${s.period_no}`, `dash bud=${bud} exceeds mx=${mx.toFixed(0)} (budPct=${budPct.toFixed(1)}%)`);
+          fail(`${a} ${r.name} P${s.period_no}`, `budget bud=${bud} exceeds mx=${mx.toFixed(0)} (budPct=${budPct.toFixed(1)}%)`);
         }
         const spent = Number(s.spent || 0);
         const spentPct = (spent / mx) * 100;
@@ -106,7 +117,7 @@ async function mockAuth(page) {
 }
 
 async function auditDom() {
-  console.log("## DOM assertion D1+D2 (TBJ - FL FYTD)");
+  console.log("## DOM assertion D1+D2+D3 (TBJ - FL FYTD)");
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1680, height: 1050 } });
   const page = await ctx.newPage();
@@ -122,20 +133,24 @@ async function auditDom() {
     const bars = [...document.querySelectorAll('[data-kpi-ov-grain="period"] .kpi-ov-bar')];
     return bars.map(bar => {
       const barRect = bar.getBoundingClientRect();
-      const dash = bar.querySelector('[data-kpi-ov="bar-budget-dash"]');
-      const dashRect = dash ? dash.getBoundingClientRect() : null;
+      // D3 regression guard: dashes were removed; count any that
+      // return so the resurrection is caught immediately.
+      const dashCount = bar.querySelectorAll('[data-kpi-ov="bar-budget-dash"]').length;
       const chartHeight = boxRect.height;
-      // Percent from chart bottom for each side.
       const barBottomFromChartBottom = Math.max(0, boxRect.bottom - barRect.bottom);
       const barTopFromChartBottom = boxRect.bottom - barRect.top;
       const barTopPct = (barTopFromChartBottom / chartHeight) * 100;
       const barBottomPct = (barBottomFromChartBottom / chartHeight) * 100;
-      const dashMidPct = dashRect ? ((boxRect.bottom - (dashRect.top + dashRect.bottom) / 2) / chartHeight) * 100 : null;
+      const val = Number(bar.getAttribute('data-kpi-ov-bar-val'));
+      const bud = Number(bar.getAttribute('data-kpi-ov-bar-bud'));
+      const state = bar.getAttribute('data-kpi-ov-bar-state');
+      const cls = bar.className;
       return {
         p: bar.getAttribute("data-kpi-ov-period"),
         barTopPct: Number(barTopPct.toFixed(2)),
         barBottomPct: Number(barBottomPct.toFixed(2)),
-        dashMidPct: dashMidPct != null ? Number(dashMidPct.toFixed(2)) : null,
+        dashCount,
+        val, bud, state, cls,
       };
     });
   });
@@ -150,13 +165,26 @@ async function auditDom() {
       if (b.barBottomPct < 0 || b.barBottomPct > 100.01) {
         fail(`P${b.p}`, `bar bottom ${b.barBottomPct}% outside [0,100]`);
       }
-      // D2: dash mid within [0, 100]% of chart.
-      if (b.dashMidPct != null && (b.dashMidPct < 0 || b.dashMidPct > 100.01)) {
-        fail(`P${b.p}`, `dash mid ${b.dashMidPct}% outside [0,100]`);
+      // D3: dash resurrection guard.
+      if (b.dashCount > 0) {
+        fail(`P${b.p}`, `bar-budget-dash element present (count=${b.dashCount}) - dash was removed 2026-09-08 and must not return without a fresh ruling`);
+      }
+      // D2 (repoint): bar colour agrees with val vs bud on CLOSED
+      // bars (in-progress + not-started render neutral hatches).
+      if (b.state !== "in_progress" && b.state !== "not_started" && b.val > 0 && b.bud >= 0) {
+        const isOver = b.val > b.bud;
+        const hasOverCls = /kpi-ov-bar-over/.test(b.cls);
+        const hasGoodCls = /kpi-ov-bar-good/.test(b.cls);
+        if (isOver && !hasOverCls) {
+          fail(`P${b.p}`, `over-budget bar (val=${b.val} > bud=${b.bud}) missing kpi-ov-bar-over class`);
+        }
+        if (!isOver && !hasGoodCls) {
+          fail(`P${b.p}`, `under-budget bar (val=${b.val} <= bud=${b.bud}) missing kpi-ov-bar-good class`);
+        }
       }
     }
     for (const b of info) {
-      console.log(`  P${b.p}  bar=[${b.barBottomPct},${b.barTopPct}]  dash=${b.dashMidPct}`);
+      console.log(`  P${b.p}  bar=[${b.barBottomPct},${b.barTopPct}]  cls=${/(kpi-ov-bar-[a-z]+)/.exec(b.cls.replace(/kpi-ov-bar\b/,""))?.[1] || "-"}`);
     }
   }
 
@@ -177,7 +205,7 @@ async function main() {
   await auditPayload();
   await auditDom();
   if (FAILS.length === 0) {
-    console.log(`Result: every dash and every bar renders inside [0,100]% of the plot area.`);
+    console.log(`Result: every bar renders inside [0,100]% of the plot area, bar colour agrees with val vs bud, and no stray dashes.`);
     process.exit(0);
   }
   console.log(`Result: ${FAILS.length} violation(s):`);
