@@ -10,9 +10,12 @@
 // 2026-09-03 selector redesign (Kevin) + R-62: multi-period selection
 // retired, "Next period" joins the preset row, every period button
 // carries its dates, four period states (closed / running / next /
-// not-started) with a legend, 5-across grid, stacked layout, and
-// "FYTD" reads "This year" in the menu (the chip still reads FYTD
-// where space is tight and the audience is Kevin).
+// not-started) with a legend, 5-across grid, stacked layout.
+//
+// 2026-09-08 rename (Kevin, #1073): "FYTD" reads "Current year" in
+// the menu AND on the chip (the chip's primary comes from
+// PRESETS[fytd].label, so both stay in sync). "This period" also
+// renamed to "Current period" in the same pass.
 //
 // What remains:
 //   QUICK RANGES  - this_period, next_period, last_period, fytd
@@ -189,11 +192,23 @@ export function RangeMenu({
   // closed part of it. "Someone in week 3 of P9 could reasonably
   // assume their current spend was included" - the label must say
   // otherwise.
+  //
+  // Kevin ruling 2026-09-08. The `running - 1` shortcut disagreed
+  // with R-93: on the 09/07 – 09/13 window running=P10, running-1=P9,
+  // but P9 hasn't hit 8 days past close so the preset returns P1-P8.
+  // Two places computing the same thing - the same class as the
+  // original preset bug. Derive the last closed from r.endISO (the
+  // range the preset actually returns) so the label and the result
+  // cannot disagree.
   const presetDates = (k) => {
     const r = resolvePreset(k, { today: todayISO, accountPeriods });
     if (!r) return null;
     if (k === "fytd") {
-      const lastClosed = running != null ? running - 1 : null;
+      let lastClosed = null;
+      for (let p = 1; p <= 13; p += 1) {
+        const rp = rangeForPeriod(p);
+        if (rp && rp.endISO === r.endISO) { lastClosed = p; break; }
+      }
       if (lastClosed == null || lastClosed < 1) return null;
       return lastClosed === 1
         ? `closed period · P1`

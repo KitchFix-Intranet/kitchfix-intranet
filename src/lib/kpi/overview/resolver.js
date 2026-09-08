@@ -59,7 +59,6 @@ import {
   loadPending as loadPurchasingPending,
   loadPurchasingBudgets,
   loadFreshness as loadPurchasingFreshness,
-  loadCogsLineCountForPeriod,
   fetchMembers,
 } from "@/lib/purchasing/loaders.js";
 
@@ -2828,23 +2827,12 @@ export async function resolveOverview({
     if (rng.kind !== "period" || displayPeriodState !== "closed_awaiting") return null;
     const p = rng.period_no;
     if (p == null) return null;
-    const pStart = periodStartISO(p);
     const pEnd = periodEndISO(p);
-    const priorP = p - 1;
-    const priorStart = priorP >= 1 ? periodStartISO(priorP) : null;
-    const priorEnd = priorP >= 1 ? periodEndISO(priorP) : null;
 
-    // Purchases: current + prior baseline. Sums line_count on food
-    // buckets (3200/3400/3500) from v_purchasing_by_site_week.
-    const [currentResp, priorResp] = await Promise.all([
-      loadCogsLineCountForPeriod(supa, { members, periodStart: pStart, periodEnd: pEnd }),
-      priorStart
-        ? loadCogsLineCountForPeriod(supa, { members, periodStart: priorStart, periodEnd: priorEnd })
-        : Promise.resolve({ data: { line_count: null } }),
-    ]);
-    const currentLines = currentResp?.data?.line_count ?? 0;
-    const priorLines = priorResp?.data?.line_count ?? null;
-
+    // Kevin ruling 2026-09-08. Purchases line no longer renders
+    // counts - copy is period-dynamic + generic ("Invoices for
+    // P{period_no} finalizing"). Prior current + prior line-count
+    // queries removed with the fields; nothing else consumed them.
     // Labour: sum draft_hours + count distinct people with any draft
     // in the period. Reads laborActuals directly (already in scope,
     // no extra query).
@@ -2857,11 +2845,6 @@ export async function resolveOverview({
     return {
       period_no: p,
       period_end: pEnd,
-      purchases: {
-        current_lines: currentLines,
-        prior_lines: priorLines,
-        prior_period_no: priorP >= 1 ? priorP : null,
-      },
       labour: {
         hours: Math.round(draftHours * 100) / 100,
         people: draftPeople,

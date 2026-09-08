@@ -9,7 +9,9 @@
 //   2. Revenue's pill and colour are unchanged between awaiting and
 //      verified states. (Revenue pill tone remains good/bad based on
 //      actual vs projection, never "wait".)
-//   3. Settling strip data is present on closed_awaiting.
+//   3. Settling strip data is present on closed_awaiting - period_no
+//      + labour (2026-09-08 update: purchases counts came out per
+//      Kevin, new copy is period-dynamic + generic).
 //   4. Status line pill tone is "wait" + copy is "Awaiting verification"
 //      on closed_awaiting single-period range.
 //   5. Horizon reads "P9 · closed MM/DD · figures still settling" on
@@ -57,7 +59,6 @@ for (const acct of ["TBJ - FL", "TBR - FL"]) {
   console.log(`  settling:`);
   if (settling) {
     console.log(`    period_no:    ${settling.period_no}`);
-    console.log(`    purchases:    current=${settling.purchases?.current_lines}, prior=${settling.purchases?.prior_lines}, prior_P=${settling.purchases?.prior_period_no}`);
     console.log(`    labour:       hours=${settling.labour?.hours}, people=${settling.labour?.people}`);
   } else {
     console.log(`    null`);
@@ -69,8 +70,10 @@ for (const acct of ["TBJ - FL", "TBR - FL"]) {
   pass(horizon && horizon.includes("closed 09/06") && horizon.includes("figures still settling"), `horizon names close date + "figures still settling"`);
   pass(settling != null, `settling data is present`);
   pass(settling?.period_no === 9, `settling.period_no === 9`);
-  pass(settling?.purchases?.current_lines != null && settling.purchases.current_lines > 0, `settling.purchases.current_lines populated (${settling?.purchases?.current_lines})`);
-  pass(settling?.purchases?.prior_lines != null && settling.purchases.prior_lines > 0, `settling.purchases.prior_lines populated (${settling?.purchases?.prior_lines})`);
+  // Kevin ruling 2026-09-08. Purchases line no longer renders counts,
+  // so the fields are gone from the payload. Assert the removal so a
+  // regression that re-adds them fails loudly.
+  pass(settling?.purchases === undefined, `settling.purchases removed from payload (got ${JSON.stringify(settling?.purchases)})`);
   pass(settling?.labour != null, `settling.labour populated`);
 
   // Card-level: cogs + gm resolve to a settled verdict pill in the
