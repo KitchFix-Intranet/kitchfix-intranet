@@ -800,7 +800,12 @@
 }
 .kpi-app .kpi-ov-pnl th.l { text-align: left; padding-left: 0; }
 .kpi-app .kpi-ov-pnl td {
-  padding: var(--kpi-sp-2) 0 var(--kpi-sp-2) var(--kpi-sp-4);
+  /* Kevin CC prompt 2026-09-08 (P&L one-table). Cell padding aligned
+     to the render literal (`9px 11px 9px 0`) so the P&L reads as
+     one family with the cost-lines table above. Previously
+     `sp-2 0 sp-2 sp-4` (8 0 8 16) which produced a visibly tighter
+     scale on the P&L than on the cost lines. */
+  padding: 9px 11px 9px 0;
   border-top: 1px solid var(--n-200);
   text-align: right;
   font-weight: 700;
@@ -900,7 +905,12 @@
   padding-left: var(--kpi-sp-4);
 }
 .kpi-app .kpi-ov-pnl-tot td {
-  border-top: 1px solid var(--n-900);
+  /* Kevin ruling 2026-09-08 (P&L one-table): total rows carry a
+     navy-50 tint. Type stays at body size, weight 800 - matches the
+     render literal `12.5px / 800 on the navy tint`. */
+  background: var(--navy-50);
+  border-top: 1px solid var(--n-300);
+  border-bottom: 1px solid var(--n-300);
   font-weight: 800;
   padding-top: var(--kpi-sp-3);
 }
@@ -909,16 +919,26 @@
   color: var(--n-700);
 }
 .kpi-app .kpi-ov-pnl-gm td {
-  border-top: 2px solid var(--navy-700);
+  /* Kevin ruling 2026-09-08 (P&L one-table): gross margin is
+     reversed on navy - white text on navy background - so it
+     reads as the load-bearing figure. Type scales to 13px per the
+     render (was --kpi-t-medium = 15px). */
+  background: var(--navy);
+  color: #fff;
+  border: none;
   font-weight: 800;
   padding-top: var(--kpi-sp-3);
   padding-bottom: var(--kpi-sp-3);
-  font-size: var(--kpi-t-medium);
+  font-size: calc(13px * var(--kf-scale, 1));
 }
 .kpi-app .kpi-ov-pnl-gm td.l { font-size: var(--kpi-t-body); }
 .kpi-app .kpi-ov-pnl-gm td.plan {
+  /* Plan-side cells keep the plan band's colour palette (subordinate
+     grey), even inside the reversed GM row - the render darkens the
+     plan segment (`#24507f`) rather than reversing it. */
+  background: #24507f;
+  color: #fff;
   font-weight: 700;
-  color: var(--n-700);
   font-size: var(--kpi-t-body);
 }
 .kpi-app .kpi-ov-pnl-sub td {
@@ -936,6 +956,25 @@
 .kpi-app .kpi-ov-pnl-sub td.plan {
   font-weight: 500;
 }
+
+/* R-98 (Kevin CC prompt 2026-09-08). Running-period hourly-view
+   note. Sits under the P&L table when include_salary is false on
+   the running range - names the R-98 reveal (3100 shows hourly
+   only; total + GM stay salary-inclusive). Muted body with a bold
+   lead, same visual weight as the running-period envelope note on
+   the cost table above so the two carry the same feel. */
+.kpi-app .kpi-ov-pnl-note-hourly {
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3);
+  border-radius: 9px;
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  font-size: calc(11.5px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-700);
+  line-height: 1.65;
+}
+.kpi-app .kpi-ov-pnl-note-hourly b { color: var(--n-900); }
 
 /* Hatched "not applicable" cell - one absence marker, used
    consistently. Diagonal on the plan-band's own colour palette so it
