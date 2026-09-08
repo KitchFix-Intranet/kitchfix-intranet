@@ -957,6 +957,25 @@
   font-weight: 500;
 }
 
+/* R-98 (Kevin CC prompt 2026-09-08). Running-period hourly-view
+   note. Sits under the P&L table when include_salary is false on
+   the running range - names the R-98 reveal (3100 shows hourly
+   only; total + GM stay salary-inclusive). Muted body with a bold
+   lead, same visual weight as the running-period envelope note on
+   the cost table above so the two carry the same feel. */
+.kpi-app .kpi-ov-pnl-note-hourly {
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3);
+  border-radius: 9px;
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  font-size: calc(11.5px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-700);
+  line-height: 1.65;
+}
+.kpi-app .kpi-ov-pnl-note-hourly b { color: var(--n-900); }
+
 /* Hatched "not applicable" cell - one absence marker, used
    consistently. Diagonal on the plan-band's own colour palette so it
    reads as absence of a concept, not as a defect. */

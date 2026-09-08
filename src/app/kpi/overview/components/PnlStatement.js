@@ -440,19 +440,49 @@ export default function PnlStatement({ payload, open, onToggle }) {
                 <SectionRow label="Cost of goods sold" />
                 {cogsRowsAll.map(parent => {
                   const subs = cogsSubsByParent.get(parent.line_code) || [];
-                  const parentRunningAdj = isRunning ? costAdjustedFor(parent.target_pct) : null;
+                  // R-98 (Kevin CC prompt 2026-09-08). On Current
+                  // period + hourly view (include_salary=false), the
+                  // 3100 parent row shows 3100.1's hourly figures
+                  // rather than the composed 3100 total, and both
+                  // subs stay hidden. Kevin's correction to the
+                  // render: "on hourly, 3100 shows hourly figures
+                  // and neither sub-line renders. There is nothing
+                  // left to break out." Scoped to running period
+                  // per prompt; CY + LP keep R-68 semantics
+                  // untouched (dense forced to sum, no swap on
+                  // parent 3100).
+                  const hourlySub = (isRunning && !includeSalary && parent.line_code === "3100")
+                    ? subs.find(s => s.line_code === "3100.1") || null
+                    : null;
+                  const parentEffective = hourlySub
+                    ? { ...parent,
+                        budget_to_date: hourlySub.budget_to_date,
+                        target_pct: hourlySub.target_pct,
+                        actual: hourlySub.actual,
+                        actual_pct: hourlySub.actual_pct,
+                        budget_at_this_revenue: hourlySub.budget_at_this_revenue,
+                        reported: hourlySub.reported }
+                    : parent;
+                  const parentRunningAdj = isRunning
+                    ? (hourlySub
+                        ? costAdjustedFor(hourlySub.target_pct)
+                        : costAdjustedFor(parent.target_pct))
+                    : null;
+                  const parentRunningLanded = isRunning
+                    ? Number((hourlySub ? hourlySub.actual : parent.actual) ?? 0)
+                    : null;
                   return (
                     <>
                       <LineRow
                         key={parent.line_code}
-                        row={parent}
+                        row={parentEffective}
                         variant="line"
                         axis="cost"
                         refField="adjusted"
                         totalRevenue={totalRevenue}
                         isRunning={isRunning}
                         runningAdjusted={parentRunningAdj}
-                        runningLanded={isRunning ? Number(parent.actual ?? 0) : null}
+                        runningLanded={parentRunningLanded}
                       />
                       {showSubs && subs.map(sub => {
                         const isSalary = Array.isArray(sub.flags) && sub.flags.includes("not_applicable_target_pct");
@@ -574,6 +604,18 @@ export default function PnlStatement({ payload, open, onToggle }) {
                 and the Adjusted* asterisk it referenced was dropped
                 too. Semantics live in the render's page-level notes,
                 not per-table copy. */}
+            {/* R-98 (Kevin CC prompt 2026-09-08). Running-period
+                hourly view carries a note under the table: the 3100
+                row shows hourly wages only, but the total and gross
+                margin stay salary-inclusive - the lines will not
+                sum to the total by construction. Kevin: "That is
+                Kevin's ruling and it is deliberate." Scoped to TP;
+                CY + LP keep R-68 (no swap, no note). */}
+            {isRunning && !includeSalary && (
+              <p className="kpi-ov-pnl-note-hourly" data-kpi-ov="pnl-hourly-note">
+                <b>Hourly view.</b> Kitchen labor shows hourly wages only. Cost of goods sold and gross margin are the full figures.
+              </p>
+            )}
           </div>
         </>
       )}
