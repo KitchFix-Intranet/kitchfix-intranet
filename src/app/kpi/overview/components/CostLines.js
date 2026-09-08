@@ -350,7 +350,7 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
   const totalSpent = cogsRows.reduce((s, r) => s + Number(r.actual || 0), 0);
   const totalBudget = cogsRows.reduce((s, r) => s + Number(r.period_budget || 0), 0);
   const totalTargetPct = cogsRows.reduce((s, r) => s + Number(r.target_pct || 0), 0);
-  const periodBudgetHeader = periodNo != null ? `P${periodNo} plan` : "Period plan";
+  const periodBudgetHeader = periodNo != null ? `P${periodNo} budget` : "Period budget";
   // Envelope compute: projRev + planRev + delta.
   const planRev = Number(revenueBudgetFullPeriod || 0);
   const weeks = weekRail?.weeks || [];
@@ -413,15 +413,27 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
             )}
           </div>
         )}
-        <table className="kpi-ov-cl" data-kpi-ov="cost-lines-table">
+        {/* Kevin ruling 2026-09-08 item 2. Two-tier header + banded
+            plan columns, same shape as Last period's .kpi-ov-cl.
+            Group header groups the Plan half (budget + target %) so
+            the reader lands on "planned vs happening" instead of a
+            flat six-column strip. Same tband + plan classes so the
+            band background + corner radii inherit from
+            .kpi-ov-tband CSS rules already in overview.css. */}
+        <table className="kpi-ov-cl kpi-ov-tband" data-kpi-ov="cost-lines-table">
           <thead>
+            <tr className="kpi-ov-tband-grp" data-kpi-ov="tband-group">
+              <th className="l"></th>
+              <th colSpan={2} className="plan plan-first plan-last kpi-ov-tband-plan">Plan</th>
+              <th colSpan={3} className="kpi-ov-tband-act">Now</th>
+            </tr>
             <tr>
               <th className="l">Line</th>
-              <th className="kpi-ov-num" style={{ width: 68 }}>Target %</th>
-              <th className="kpi-ov-num">{periodBudgetHeader}</th>
-              <th className="kpi-ov-num">Adjusted now</th>
-              <th className="kpi-ov-num">Landed</th>
-              <th className="kpi-ov-num">Left to spend</th>
+              <th className="plan plan-first">{periodBudgetHeader}</th>
+              <th className="plan plan-last" style={{ width: 68 }}>Target %</th>
+              <th>Adjusted now</th>
+              <th>Landed</th>
+              <th style={{ width: 84 }}>Left to spend</th>
             </tr>
           </thead>
           <tbody>
@@ -435,11 +447,11 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
                     <span className="kpi-ov-cl-code">{r.line_code}</span>
                     <span className="kpi-ov-cl-lbl">{r.label}</span>
                   </td>
-                  <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-target-pct">
-                    {fmtPct(r.target_pct) || "—"}
-                  </td>
-                  <td className="kpi-ov-num kpi-ov-nb" data-kpi-ov="cost-line-period-budget">
+                  <td className="kpi-ov-num kpi-ov-nb plan plan-first" data-kpi-ov="cost-line-period-budget">
                     {fmtMoney(r.period_budget) || "—"}
+                  </td>
+                  <td className="kpi-ov-num kpi-ov-nb plan plan-last" data-kpi-ov="cost-line-target-pct">
+                    {fmtPct(r.target_pct) || "—"}
                   </td>
                   <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="cost-line-adjusted-now">
                     {adj != null ? fmtMoney(adj) : "—"}
@@ -455,8 +467,8 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
             })}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="cost-lines-total">
               <td className="l">Total cost of goods</td>
-              <td className="kpi-ov-num kpi-ov-nb">{fmtPct(totalTargetPct) || "—"}</td>
-              <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(totalBudget) || "—"}</td>
+              <td className="kpi-ov-num kpi-ov-nb plan plan-first">{fmtMoney(totalBudget) || "—"}</td>
+              <td className="kpi-ov-num kpi-ov-nb plan plan-last">{fmtPct(totalTargetPct) || "—"}</td>
               <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="cost-total-adjusted">
                 {totalAdjusted != null ? fmtMoney(totalAdjusted) : "—"}
               </td>
@@ -468,8 +480,8 @@ function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullP
             {gmTargetPct != null && gmPlanBudget != null && gmAdjusted != null && (
               <tr className="kpi-ov-cl-tot kpi-ov-cl-tot-gm" data-kpi-ov="cost-lines-total-gm">
                 <td className="l">Gross margin at target</td>
-                <td className="kpi-ov-num kpi-ov-nb">{fmtPct(gmTargetPct)}</td>
-                <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(gmPlanBudget)}</td>
+                <td className="kpi-ov-num kpi-ov-nb plan plan-first">{fmtMoney(gmPlanBudget)}</td>
+                <td className="kpi-ov-num kpi-ov-nb plan plan-last">{fmtPct(gmTargetPct)}</td>
                 <td className={`kpi-ov-num ${envToneCls}`} data-kpi-ov="cost-gm-adjusted">
                   {fmtMoney(gmAdjusted)}
                 </td>
