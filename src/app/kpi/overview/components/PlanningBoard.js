@@ -77,10 +77,14 @@ function RateStrip({ periodBudget, weeks, days, priorLabel, priorAmount }) {
   );
 }
 
-function PlanningCard({ eyebrow, tone, tipTitle, tipBody, budget, budgetSuffix, refLabel, refText, weeks, days, priorLabel, priorAmount, id }) {
+function PlanningCard({ eyebrow, tone, tipTitle, tipBody, budget, budgetSuffix, weeks, days, priorLabel, priorAmount, id }) {
   const toneCls = tone === "revenue" ? "kpi-ov-card-rev"
     : tone === "cogs" ? "kpi-ov-card-cogs"
     : "kpi-ov-card-gm";
+  // Kevin ruling 2026-09-08 (next-period reskin item 2). Drop the
+  // "Actual: not started" ref row - three repetitions of what the
+  // Planning-view pill above already says. Budget hero + rate strip
+  // (a week / a day) are the two things a chef needs when planning.
   return (
     <div className={`kpi-ov-card ${toneCls}`} data-kpi-ov={`planning-card-${tone}`}>
       <div className="kpi-ov-ch">
@@ -90,16 +94,11 @@ function PlanningCard({ eyebrow, tone, tipTitle, tipBody, budget, budgetSuffix, 
       </div>
       <div className="kpi-ov-cb">
         <div className="kpi-ov-pair" data-kpi-ov="card-actual">
-          <span className="kpi-ov-pair-k">Budgeted</span>
+          <span className="kpi-ov-pair-k">Planned</span>
           <span className="kpi-ov-pair-v kpi-ov-num">
             {fmtMoney(budget)}
             {budgetSuffix && <small className="kpi-ov-pair-sub">{budgetSuffix}</small>}
           </span>
-        </div>
-        <div className="kpi-ov-pair-rule" aria-hidden="true" />
-        <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
-          <span className="kpi-ov-pair-k">{refLabel}</span>
-          <span className="kpi-ov-pln-notstarted" data-kpi-ov="pln-not-started">{refText}</span>
         </div>
         <RateStrip periodBudget={budget} weeks={weeks} days={days} priorLabel={priorLabel} priorAmount={priorAmount} />
       </div>
@@ -120,14 +119,19 @@ function LossCallout({ periodLabel, revenueBudget, cogsBudget, laborBudget }) {
   );
 }
 
+// Kevin ruling 2026-09-08 (next-period reskin items 3-4). Revenue
+// plan table: 4 columns (Line | P{n} budget | A week | % of revenue).
+// Filter out rows with null period_budget so only lines this account
+// actually plans for the period render (TBJ has 2, TBR has 3).
 function PlanningRevenueTable({ rows, totalBudget, periodLabel, weeks }) {
+  const visibleRows = rows.filter(r => r.period_budget != null);
   return (
     <div className="kpi-ov-card kpi-ov-card-rev" data-kpi-ov="planning-revenue-lines">
       <div className="kpi-ov-ch">
-        <span className="kpi-ov-eb">Revenue by line</span>
+        <span className="kpi-ov-eb">Revenue plan</span>
         <HelpPop
           id="planning-revenue-lines"
-          title="Revenue by line"
+          title="Revenue plan"
           body={<p>What makes up the budgeted revenue above. Budget only - the period has not started.</p>}
         />
       </div>
@@ -137,20 +141,20 @@ function PlanningRevenueTable({ rows, totalBudget, periodLabel, weeks }) {
             <tr>
               <th className="l">Line</th>
               <th className="plan plan-first plan-last">{periodLabel} budget</th>
-              <th>a week</th>
-              <th style={{ width: 80 }}>% of rev</th>
+              <th>A week</th>
+              <th style={{ width: 96 }}>% of revenue</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
+            {visibleRows.map(r => (
               <tr key={r.line_code} data-kpi-ov="planning-revenue-row" data-kpi-ov-line-code={r.line_code}>
                 <td className="l">
                   <span className="kpi-ov-glc kpi-ov-num">{r.line_code}</span>
                   <span className="kpi-ov-cl-lbl">{r.label}</span>
                 </td>
                 <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">{fmtMoney(r.period_budget)}</td>
-                <td className="kpi-ov-num kpi-ov-nb">{r.period_budget != null ? fmtMoney(r.period_budget / weeks) : "—"}</td>
-                <td className="kpi-ov-num kpi-ov-nb">{(r.period_budget != null && totalBudget) ? fmtPct(r.period_budget / totalBudget * 100) : "—"}</td>
+                <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(r.period_budget / weeks)}</td>
+                <td className="kpi-ov-num kpi-ov-nb">{totalBudget ? fmtPct(r.period_budget / totalBudget * 100) : "—"}</td>
               </tr>
             ))}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="planning-revenue-lines-total">
@@ -166,14 +170,21 @@ function PlanningRevenueTable({ rows, totalBudget, periodLabel, weeks }) {
   );
 }
 
-function PlanningCostTable({ rows, totalBudget, totalRevenue, periodLabel, weeks }) {
+// Kevin ruling 2026-09-08 (next-period reskin items 3-4). Cost plan
+// table: 4 columns (Line | P{n} budget | A week | % of revenue).
+// Share-of-envelope bar column removed - Kevin: "no visualisations
+// on this page." The % of revenue value already carries the same
+// information, exactly, as a number. GM row appended to the total
+// group so the whole cost-of-goods vs margin split is here without
+// needing a separate table below.
+function PlanningCostTable({ rows, totalBudget, totalRevenue, periodLabel, weeks, gmBudget }) {
   return (
     <div className="kpi-ov-card kpi-ov-card-cogs" data-kpi-ov="planning-cost-lines">
       <div className="kpi-ov-ch">
-        <span className="kpi-ov-eb">Where the money is planned</span>
+        <span className="kpi-ov-eb">Cost plan</span>
         <HelpPop
           id="planning-cost-lines"
-          title="Where the money is planned"
+          title="Cost plan"
           body={<p>Each cost line&rsquo;s budget for the period, its weekly rate, and its share of budgeted revenue. No actuals - nothing has been spent.</p>}
         />
       </div>
@@ -182,41 +193,37 @@ function PlanningCostTable({ rows, totalBudget, totalRevenue, periodLabel, weeks
           <thead>
             <tr>
               <th className="l">Line</th>
-              <th className="plan plan-first">{periodLabel} budget</th>
-              <th className="plan plan-last">a week</th>
-              <th style={{ width: 80 }}>% of rev</th>
-              <th style={{ width: "34%" }}>share of envelope</th>
+              <th className="plan plan-first plan-last">{periodLabel} budget</th>
+              <th>A week</th>
+              <th style={{ width: 96 }}>% of revenue</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => {
-              const share = (r.period_budget != null && totalBudget)
-                ? (r.period_budget / totalBudget * 100)
-                : 0;
-              return (
-                <tr key={r.line_code} data-kpi-ov="planning-cost-row" data-kpi-ov-line-code={r.line_code}>
-                  <td className="l">
-                    <span className="kpi-ov-glc kpi-ov-num">{r.line_code}</span>
-                    <span className="kpi-ov-cl-lbl">{r.label}</span>
-                  </td>
-                  <td className="kpi-ov-num kpi-ov-nb plan plan-first">{fmtMoney(r.period_budget)}</td>
-                  <td className="kpi-ov-num kpi-ov-nb plan plan-last">{r.period_budget != null ? fmtMoney(r.period_budget / weeks) : "—"}</td>
-                  <td className="kpi-ov-num kpi-ov-nb">{(r.period_budget != null && totalRevenue) ? fmtPct(r.period_budget / totalRevenue * 100) : "—"}</td>
-                  <td>
-                    <div className="kpi-ov-pln-meter" aria-hidden="true">
-                      <i style={{ width: `${share.toFixed(1)}%` }} />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {rows.map(r => (
+              <tr key={r.line_code} data-kpi-ov="planning-cost-row" data-kpi-ov-line-code={r.line_code}>
+                <td className="l">
+                  <span className="kpi-ov-glc kpi-ov-num">{r.line_code}</span>
+                  <span className="kpi-ov-cl-lbl">{r.label}</span>
+                </td>
+                <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">{fmtMoney(r.period_budget)}</td>
+                <td className="kpi-ov-num kpi-ov-nb">{r.period_budget != null ? fmtMoney(r.period_budget / weeks) : "—"}</td>
+                <td className="kpi-ov-num kpi-ov-nb">{(r.period_budget != null && totalRevenue) ? fmtPct(r.period_budget / totalRevenue * 100) : "—"}</td>
+              </tr>
+            ))}
             <tr className="kpi-ov-cl-tot" data-kpi-ov="planning-cost-lines-total">
               <td className="l">Total cost of goods</td>
-              <td className="kpi-ov-num kpi-ov-nb plan plan-first">{fmtMoney(totalBudget)}</td>
-              <td className="kpi-ov-num kpi-ov-nb plan plan-last">{totalBudget != null ? fmtMoney(totalBudget / weeks) : "—"}</td>
+              <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">{fmtMoney(totalBudget)}</td>
+              <td className="kpi-ov-num kpi-ov-nb">{totalBudget != null ? fmtMoney(totalBudget / weeks) : "—"}</td>
               <td className="kpi-ov-num kpi-ov-nb">{(totalBudget != null && totalRevenue) ? fmtPct(totalBudget / totalRevenue * 100) : "—"}</td>
-              <td></td>
             </tr>
+            {gmBudget != null && (
+              <tr className="kpi-ov-cl-tot" data-kpi-ov="planning-cost-lines-gm">
+                <td className="l">Gross margin</td>
+                <td className="kpi-ov-num kpi-ov-nb plan plan-first plan-last">{fmtMoney(gmBudget)}</td>
+                <td className="kpi-ov-num kpi-ov-nb">{fmtMoney(gmBudget / weeks)}</td>
+                <td className="kpi-ov-num kpi-ov-nb">{totalRevenue ? fmtPct(gmBudget / totalRevenue * 100) : "—"}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -291,8 +298,6 @@ export default function PlanningBoard({ payload }) {
           tipTitle="Revenue"
           tipBody={`What ${account || "this account"} is budgeted to bill in ${periodLabel}. Every cost below is planned as a percent of this number.`}
           budget={revBud}
-          refLabel="Actual"
-          refText="not started"
           weeks={weeks}
           days={days}
           priorLabel={priorPeriodLabel}
@@ -300,14 +305,12 @@ export default function PlanningBoard({ payload }) {
         />
         <PlanningCard
           id={`planning-card-cogs-${periodLabel}`}
-          eyebrow={`Cost of goods ${periodLabel}`}
+          eyebrow="Cost of goods sold"
           tone="cogs"
           tipTitle="Cost of goods"
           tipBody={`The envelope for labour, food, packaging and vehicle in ${periodLabel}. Set at budget and does not move with revenue on a future period.`}
           budget={cogBud}
           budgetSuffix={(revBud && cogBud != null) ? `${fmtPct(cogBud / revBud * 100)} of revenue` : null}
-          refLabel="Spent"
-          refText="not started"
           weeks={weeks}
           days={days}
           priorLabel={priorPeriodLabel}
@@ -316,7 +319,7 @@ export default function PlanningBoard({ payload }) {
         {isLoss ? (
           <div className="kpi-ov-card kpi-ov-card-gm" data-kpi-ov="planning-card-gross_margin">
             <div className="kpi-ov-ch">
-              <span className="kpi-ov-eb">Gross margin {periodLabel}</span>
+              <span className="kpi-ov-eb">Gross margin</span>
               <HelpPop
                 id={`planning-card-gm-${periodLabel}`}
                 title="Gross margin"
@@ -326,13 +329,8 @@ export default function PlanningBoard({ payload }) {
             </div>
             <div className="kpi-ov-cb">
               <div className="kpi-ov-pair" data-kpi-ov="card-actual">
-                <span className="kpi-ov-pair-k">Budgeted</span>
+                <span className="kpi-ov-pair-k">Planned</span>
                 <span className="kpi-ov-pair-v kpi-ov-num">{fmtMoney(gmBud)}</span>
-              </div>
-              <div className="kpi-ov-pair-rule" aria-hidden="true" />
-              <div className="kpi-ov-pair kpi-ov-pair-ref" data-kpi-ov="card-reference">
-                <span className="kpi-ov-pair-k">Actual</span>
-                <span className="kpi-ov-pln-notstarted">not started</span>
               </div>
               <div className="kpi-ov-pln-rate">
                 <div>planned shortfall<b className="kpi-ov-num">{fmtMoney(Math.abs(gmBud || 0))}</b></div>
@@ -343,7 +341,7 @@ export default function PlanningBoard({ payload }) {
         ) : (
           <PlanningCard
             id={`planning-card-gm-${periodLabel}`}
-            eyebrow={`Gross margin ${periodLabel}`}
+            eyebrow="Gross margin"
             tone="gm"
             tipTitle="Gross margin"
             tipBody="Budgeted revenue minus budgeted cost of goods. On a period budgeted at a loss the percentage is suppressed."
@@ -375,6 +373,7 @@ export default function PlanningBoard({ payload }) {
             totalRevenue={revBud}
             periodLabel={periodLabel}
             weeks={weeks}
+            gmBudget={gmBud}
           />
         </div>
       </div>
