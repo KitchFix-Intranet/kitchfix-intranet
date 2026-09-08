@@ -984,7 +984,36 @@ export async function resolveOverview({
   // COGS + GM pills read "No target" (neutral tone). Cost variances
   // remain (dollars are honest without a target); cost pcts of
   // revenue remain (a ratio of two actuals, not a comparison).
-  const has_target = (rng.kind === "period" || rng.kind === "fytd")
+  // Kevin CC prompt 2026-09-08. #1063 made This year resolve as
+  // kind="explicit" (client sends R-93 dates directly, no preset
+  // param). The old predicate only recognized `period` / `fytd`, so
+  // has_target went false on This year - and every target_pct,
+  // variance_pct, envelope_delta and budget_at_this_revenue null'd
+  // out. Empty board.
+  //
+  // Widened: a target is meaningful whenever the range covers WHOLE
+  // fiscal periods with budgets present, however it was reached
+  // (preset, shared link, back button, typed URL). A rolling window
+  // whose start/end don't align to period boundaries stays false -
+  // that's the guard against going too far. Anyone landing on P3-P5
+  // by any route gets the same answer as clicking a "P3-P5" preset
+  // would today.
+  //
+  // A single-period / fytd fold still resolves via the existing
+  // resolveRange path so those keep has_target=true too; the alignment
+  // check catches the explicit path that #1063 introduced.
+  const rangeAlignsToPeriods = (() => {
+    if (rng.kind === "period" || rng.kind === "fytd") return true;
+    if (rng.kind !== "explicit" || !rng.start || !rng.end) return false;
+    let matchStart = false;
+    let matchEnd = false;
+    for (let p = 1; p <= 13; p += 1) {
+      if (periodStartISO(p) === rng.start) matchStart = true;
+      if (periodEndISO(p) === rng.end) matchEnd = true;
+    }
+    return matchStart && matchEnd;
+  })();
+  const has_target = rangeAlignsToPeriods
     && revenue_budget_full_period != null && revenue_budget_full_period > 0
     && cogsBudget > 0;
 
@@ -3081,12 +3110,18 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
   }
 
   // "Period closed · on target / off target" on any closed range
-  // (single closed or FYTD). Open ranges keep the ticker's running
-  // copy ("On track" / "Behind target" / "At risk"). No-target ranges
-  // read "No target" (neutral).
+  // (single closed or FYTD - and post-2026-09-08 the aligned-explicit
+  // path This year takes since #1063 sends R-93 dates as explicit).
+  // Open ranges keep the ticker's running copy ("On track" / "Behind
+  // target" / "At risk"). No-target ranges read "No target" (neutral).
   const rangeIsClosed = range_kind === "period" && period_state !== "open";
   const rangeIsFytdClosed = range_kind === "fytd";
-  const closedCopyOverride = (has_target && (rangeIsClosed || rangeIsFytdClosed))
+  // Kevin ruling 2026-09-08. Widen to aligned-explicit so This year
+  // (post-#1063) gets the same closed-copy override. has_target has
+  // already been widened upstream with the same predicate; caller
+  // passes it here so we don't recompute.
+  const rangeIsAlignedExplicit = range_kind === "explicit" && has_target;
+  const closedCopyOverride = (has_target && (rangeIsClosed || rangeIsFytdClosed || rangeIsAlignedExplicit))
     ? (statusTone === "good" ? "Period closed · on target" : "Period closed · off target")
     : null;
   const finalStateCopy = closedCopyOverride
@@ -3116,7 +3151,23 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
 //   }
 function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk, effectiveEndISO }) {
   const rc = rangeComposition;
-  const isFytd = range.kind === "fytd";
+  // Kevin ruling 2026-09-08. Explicit ranges that align to WHOLE
+  // period boundaries render fytd-style labels (P1-P8 · closed and
+  // verified). Otherwise they carry no target and the horizon path
+  // never fires. Widens the fytd branch to catch This year post-R-93
+  // (kind="explicit" with settle-day end). Same predicate the
+  // has_target check uses upstream.
+  const explicitAlignsToPeriods = (() => {
+    if (range.kind !== "explicit" || !range.start || !range.end) return false;
+    let matchStart = false;
+    let matchEnd = false;
+    for (let p = 1; p <= 13; p += 1) {
+      if (periodStartISO(p) === range.start) matchStart = true;
+      if (periodEndISO(p) === range.end) matchEnd = true;
+    }
+    return matchStart && matchEnd;
+  })();
+  const isFytd = range.kind === "fytd" || explicitAlignsToPeriods;
   const isSinglePeriod = range.kind === "period";
   const isSingleOpen = isSinglePeriod && periodState === "open";
   const isSingleClosed = isSinglePeriod && !isSingleOpen;
