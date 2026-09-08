@@ -513,7 +513,13 @@ export default function KpiOverviewPage() {
               its two-column reorg to single-account only - portfolio
               byte-diff test guards against drift. */
           <>
-            <Chart chart={data.chart} revenueModel={data.revenue_model} />
+            {/* Kevin ruling 2026-09-08 item 1 - Chart hidden on
+                Current period on any scope; the week rail above
+                is the replacement surface. Renders on every other
+                range. */}
+            {!(data.range?.kind === "period" && data.period_state === "open") && (
+              <Chart chart={data.chart} revenueModel={data.revenue_model} />
+            )}
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
             {/* Kevin ruling 2026-09-08 cleanup item 2 - Also tracked
                 does not render on Current period on any scope
@@ -546,9 +552,13 @@ export default function KpiOverviewPage() {
                 full-width - the natural layout that matches the
                 Current period render of record. */}
             {(data.range?.kind === "period" && data.period_state === "open") ? (
+              /* Kevin ruling 2026-09-08 item 1. The old
+                 "COST OF GOODS SOLD, WEEK BY WEEK" chart is
+                 replaced by the week rail (rendered above by
+                 <WeekRail>) on Current period. Chart still renders
+                 on every other range. */
               <>
                 <CostLines payload={data} previewAccount={data.preview_account} />
-                <Chart chart={data.chart} revenueModel={data.revenue_model} />
               </>
             ) : (
               <div className="kpi-ov-split" data-kpi-ov="single-account-split">
