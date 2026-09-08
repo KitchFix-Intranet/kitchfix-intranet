@@ -129,7 +129,13 @@ export default function KpiLaborPage() {
   const urlStart = searchParams.get("start");
   const urlEnd = searchParams.get("end");
   const start = urlStart || FY_START;
-  const end = urlEnd || today;
+  // Kevin ruling 2026-09-08. Landing with no range params applies the
+  // fytd preset, same as clicking "Current year" in the picker.
+  // Identical fix as Overview's page.js - two boards using the same
+  // landing rule was the class of disagreement we spent two days
+  // removing (Overview landed at $1,834,952 while picker showed
+  // $1,702,872 · #1072). Same R-93 helper both branches use.
+  const end = urlEnd || r93FytdEndISO(today) || today;
   // Range PR-2 2026-08-24: optional display hint for the range chip.
   // Read raw; RangeMenu validates against actual (start, end) via
   // lib/rangeLabel.js and falls back to the date range if the label

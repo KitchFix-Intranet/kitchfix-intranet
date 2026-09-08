@@ -37,11 +37,17 @@ import { validateLabel, formatSelection } from "../lib/rangeLabel";
 // order - past, present, next, then the year. Prior order (this,
 // next, last, this-year) mixed the temporal axis and slowed the
 // eye picking a range.
+// Kevin ruling 2026-09-08 item 5. Reorder puts the year first (the
+// most-picked range) and renames "This period" -> "Current period"
+// and "This year" -> "Current year" so the vocabulary reads
+// consistently. Keys unchanged - the label is not used as a key
+// anywhere, verified via grep. Shared component: Overview + Labor
+// pickers both consume this list.
 const PRESETS = [
-  { key: "last_period", label: "Last period" },
-  { key: "this_period", label: "This period" },
-  { key: "next_period", label: "Next period" },
-  { key: "fytd",        label: "This year"   },
+  { key: "fytd",        label: "Current year"   },
+  { key: "last_period", label: "Last period"    },
+  { key: "this_period", label: "Current period" },
+  { key: "next_period", label: "Next period"    },
 ];
 
 // Turn a preset key into a concrete range.

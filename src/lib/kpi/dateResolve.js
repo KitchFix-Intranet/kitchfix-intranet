@@ -16,14 +16,6 @@
 
 const FY_START = "2025-12-29";  // FY2026 opens
 
-// Range PR-2 2026-08-24: last_13wk retired (Joe's 2026-08-19 question).
-export const PRESET_LABELS = {
-  this_period: "This period",
-  last_period: "Last period",
-  last_4wk:    "Last 4 wk",
-  fytd:        "FYTD",
-};
-
 export function addDaysISO(iso, days) {
   const d = new Date(iso + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);

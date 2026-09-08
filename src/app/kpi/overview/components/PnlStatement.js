@@ -226,7 +226,6 @@ export default function PnlStatement({ payload, open, onToggle }) {
         aria-expanded={open ? "true" : "false"}
       >
         <span className="kpi-ov-eb">Full profit and loss</span>
-        <span className="kpi-ov-gl">every line the way finance sees it</span>
         {open && includeSalary && (
           <span className="kpi-ov-seg" onClick={(e) => e.stopPropagation()}>
             <button

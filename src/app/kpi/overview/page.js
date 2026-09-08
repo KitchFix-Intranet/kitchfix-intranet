@@ -124,7 +124,14 @@ export default function KpiOverviewPage() {
   const urlIncludeSalary = searchParams.get("include_salary") === "1";
 
   const start = urlStart || FY_START;
-  const end = urlEnd || today;
+  // Kevin ruling 2026-09-08. Landing with no range params applies the
+  // fytd preset, same as clicking "This year" in the picker. Prior
+  // default of `today` produced a Custom range (FY_START to today)
+  // that included the just-closed-but-not-yet-verified period and
+  // silently disagreed with the picker path - live verified TBJ - FL
+  // landed at $1,834,952 vs picker's $1,702,872. R-93 helper used
+  // (same one the picker's fytd branch uses), so both paths converge.
+  const end = urlEnd || r93FytdEndISO(today) || today;
 
   const rangeSelection = useMemo(() => inferRangeSelection(start, end), [start, end]);
 
