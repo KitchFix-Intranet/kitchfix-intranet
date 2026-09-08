@@ -73,13 +73,26 @@ for (const acct of ["TBJ - FL", "TBR - FL"]) {
   pass(labConfirmedCount === tpRev?.confirmed_weeks_count,
     `Labor sees ${labConfirmedCount} confirmed weeks; Overview sees ${tpRev?.confirmed_weeks_count} - counts must agree`);
   // The core acceptance clause: figure = sum of exactly the weeks
-  // the card counts. Both derive from server's basis === "confirmed"
-  // filter + denom-only actual sum. Any forecast week's revenue
-  // leaking in would break the invariant.
-  const labSumWithTail = labConfirmed.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
-  const tail = Math.round((labSumWithTail - Number(tpRev?.hero_actual || 0)) * 100) / 100;
-  pass(tpRev?.hero_actual != null && Number(tpRev.hero_actual) <= labSumWithTail + 0.01,
-    `Overview hero_actual ($${tpRev?.hero_actual}) <= Labor confirmed-weeks with-tail sum ($${labSumWithTail.toFixed(2)}). Empty-slot tail excluded from denom sum = $${tail.toFixed(2)}`);
+  // the card counts, PLUS the 2300 service fee prorated by the same
+  // confirmed weeks. Kevin ruling 2026-09-08: running-period revenue
+  // is SC-confirmed + fee × confirmedWeeks / 4. Both surfaces derive
+  // from the same confirmed-weeks basis; the fee prorate is an
+  // Overview presentation rule (not shared with Labor - the two
+  // boards will disagree on This period until Labor is walked).
+  //
+  // Overview payload exposes the fee prorate implicitly via week_rail:
+  // each week carries fee_prorate (= 2300 budget / 4), and confirmed
+  // weeks' fee_prorate sum is exactly what the hero adds on top of
+  // the SC sum. Recompute here and assert the equality.
+  const railWeeks = tp.week_rail?.weeks || [];
+  const railConfirmedFee = railWeeks
+    .filter(w => w.revenue_basis === "confirmed")
+    .reduce((s, w) => s + Number(w.fee_prorate || 0), 0);
+  const labSumConfirmed = labConfirmed.reduce((s, w) => s + Number(w.week_revenue || 0), 0);
+  const expectedHero = Math.round((labSumConfirmed + railConfirmedFee) * 100) / 100;
+  const actualHero = Math.round(Number(tpRev?.hero_actual || 0) * 100) / 100;
+  pass(Math.abs(actualHero - expectedHero) <= 0.02,
+    `Overview hero_actual ($${actualHero.toFixed(2)}) = Labor SC-confirmed sum ($${labSumConfirmed.toFixed(2)}) + prorated fee ($${railConfirmedFee.toFixed(2)}) = $${expectedHero.toFixed(2)}`);
 
   // LP - must not move
   console.log(`\n### Last period (P9)`);

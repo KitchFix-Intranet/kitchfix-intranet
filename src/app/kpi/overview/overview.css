@@ -78,6 +78,14 @@
 .kpi-app .kpi-ov-status-wait .kpi-ov-status-st {
   padding-left: var(--kpi-sp-3);
 }
+/* Kevin ruling 2026-09-08. Running-single-period pill. Navy fill
+   with a leading indicator dot - names the state ("Period running")
+   two days into a period where a verdict pill would be premature.
+   Render of record: docs/renders/current-period-hybrid.html. */
+.kpi-app .kpi-ov-status-run    .kpi-ov-status-st { background: var(--navy-700); }
+.kpi-app .kpi-ov-status-run .kpi-ov-status-st {
+  padding-left: var(--kpi-sp-3);
+}
 
 /* Direction words on the ticker */
 .kpi-app .kpi-ov-good { color: var(--green-600); }
@@ -284,6 +292,128 @@
   flex-wrap: wrap;
 }
 .kpi-app .kpi-ov-mini b { color: var(--n-900); font-weight: 700; }
+
+/* ── Week rail (Kevin CC prompt 2026-09-08 item 4) ─────────────────
+   Four cards below the three KPI cards on Current period. Confirmed
+   meals + prorated service fee + cost target vs landed + caveats
+   per week. Same-family classes as the KPI cards themselves; the
+   .kpi-ov-rail grid + .kpi-ov-rail-tile-* variants live here so a
+   future token change flows through. Render of record:
+   docs/renders/current-period-hybrid.html. */
+.kpi-app .kpi-ov-rail {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--kpi-sp-3);
+}
+@media (max-width: 900px) {
+  .kpi-app .kpi-ov-rail { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+  .kpi-app .kpi-ov-rail { grid-template-columns: 1fr; }
+}
+.kpi-app .kpi-ov-rail-tile {
+  background: var(--n-0);
+  border: 1px solid var(--n-300);
+  border-left: 4px solid var(--n-400);
+  border-radius: 10px;
+  padding: var(--kpi-sp-3) var(--kpi-sp-3);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Running: navy stripe + navy-tinted background */
+.kpi-app .kpi-ov-rail-tile-run {
+  border-left-color: var(--navy-700);
+  background: var(--navy-50, #F4F7FC);
+}
+/* Confirmed: green stripe, standard white background */
+.kpi-app .kpi-ov-rail-tile-conf {
+  border-left-color: var(--green-600);
+}
+/* Forecast: dashed grey stripe on a muted background - "not yet" */
+.kpi-app .kpi-ov-rail-tile-fc {
+  border-style: dashed;
+  border-left-style: solid;
+  background: var(--n-50);
+}
+.kpi-app .kpi-ov-rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--kpi-sp-2);
+}
+.kpi-app .kpi-ov-rail-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.kpi-app .kpi-ov-rail-n {
+  font-size: calc(12px * var(--kf-scale, 1));
+  font-weight: 800;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-rail-dt {
+  font-size: calc(10px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-rail-st {
+  font-size: calc(9px * var(--kf-scale, 1));
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-rail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: calc(11.5px * var(--kf-scale, 1));
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-rail-row .kpi-ov-rail-k {
+  color: var(--n-600);
+  font-weight: 600;
+  font-size: calc(11px * var(--kf-scale, 1));
+}
+.kpi-app .kpi-ov-rail-row-tot {
+  border-top: 1px solid var(--n-200);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.kpi-app .kpi-ov-rail-row-tot .kpi-ov-rail-k {
+  color: var(--n-900);
+  font-weight: 800;
+  font-size: calc(11.5px * var(--kf-scale, 1));
+}
+.kpi-app .kpi-ov-rail-row-tot .kpi-ov-rail-v {
+  font-weight: 800;
+}
+.kpi-app .kpi-ov-rail-vsline {
+  margin-top: var(--kpi-sp-2);
+  padding-top: var(--kpi-sp-2);
+  border-top: 1px solid var(--n-200);
+  font-size: calc(12.5px * var(--kf-scale, 1));
+  font-weight: 800;
+  color: var(--navy-700);
+}
+.kpi-app .kpi-ov-rail-vsline-plan {
+  color: var(--n-600);
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-rail-cav {
+  margin-top: 4px;
+  font-size: calc(10px * var(--kf-scale, 1));
+  font-weight: 600;
+  line-height: 1.4;
+}
+.kpi-app .kpi-ov-rail-cav-warn {
+  color: var(--amber-600, #B25800);
+}
+.kpi-app .kpi-ov-rail-cav-ok {
+  color: var(--green-600);
+}
 
 /* ── Lever table (element 5) ─────────────────────────────────────── */
 .kpi-app .kpi-ov-mt { margin-top: var(--kpi-sp-3); }
@@ -1694,6 +1824,106 @@
 .kpi-app .kpi-ov-cl-tot td {
   border-top: 1px solid var(--n-400);
   font-weight: 800;
+}
+/* Kevin CC prompt 2026-09-08 item 5. Running-single-period cost
+   table adds a Gross-margin-at-target row alongside the total. Uses
+   the same total-row treatment; purple tint marks it as the margin
+   axis (aligns to the margin card's border-top). */
+.kpi-app .kpi-ov-cl-tot-gm td {
+  background: color-mix(in oklab, var(--kpi-purple-600, #7A3E9D) 8%, transparent);
+  border-top: 1px solid var(--n-300);
+}
+/* Envelope row above the cost table. "Revenue this period · $plan
+   planned → $projected · ▲ delta · pct · N wks confirmed + M
+   forecast, plus the full service fee." Same-family classes so a
+   token pass flows through. */
+.kpi-app .kpi-ov-envrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kpi-sp-3);
+  flex-wrap: wrap;
+  padding: var(--kpi-sp-2) var(--kpi-sp-3);
+  margin: var(--kpi-sp-2) 0 var(--kpi-sp-3);
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  border-radius: 9px;
+}
+.kpi-app .kpi-ov-envrow-k {
+  font-size: calc(10px * var(--kf-scale, 1));
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+.kpi-app .kpi-ov-envrow-e {
+  font-size: calc(13px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-600);
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-envrow-e b {
+  font-size: calc(16px * var(--kf-scale, 1));
+  font-weight: 800;
+  color: var(--n-900);
+}
+.kpi-app .kpi-ov-envrow-arw {
+  color: var(--n-400);
+  font-size: calc(15px * var(--kf-scale, 1));
+  font-weight: 700;
+}
+.kpi-app .kpi-ov-envrow-chg {
+  font-size: calc(13px * var(--kf-scale, 1));
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-app .kpi-ov-envrow-src {
+  margin-left: auto;
+  font-size: calc(11px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-600);
+}
+/* Envelope note below the cost table. Two states (moving/settled)
+   in the component; the visual is the same. */
+.kpi-app .kpi-ov-cl-envnote {
+  margin-top: var(--kpi-sp-3);
+  padding: var(--kpi-sp-3);
+  border-radius: 9px;
+  background: var(--n-50);
+  border: 1px solid var(--n-300);
+  font-size: calc(11.5px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-700);
+  line-height: 1.65;
+}
+.kpi-app .kpi-ov-cl-envnote b {
+  color: var(--n-900);
+}
+/* Running-period P&L component (Guard 2). Group header row bands
+   the revenue and cost sections. Sub-total rows sit between group
+   and grand total. Sub caption on revenue rows names the proration
+   / confirm state without a full row. */
+.kpi-app .kpi-ov-pnl-grp td {
+  background: var(--n-50);
+  font-size: calc(10px * var(--kf-scale, 1));
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--n-700);
+  padding: 8px 10px;
+  border-top: 1px solid var(--n-300);
+  border-bottom: 1px solid var(--n-300);
+}
+.kpi-app .kpi-ov-pnl-sub-tot td {
+  background: var(--navy-50, #F4F7FC);
+  font-weight: 800;
+  border-top: 1px solid var(--n-300);
+}
+.kpi-app .kpi-ov-pnl-sub {
+  display: block;
+  font-size: calc(10px * var(--kf-scale, 1));
+  font-weight: 600;
+  color: var(--n-600);
+  margin-top: 1px;
 }
 /* Kevin ruling 2026-09-03 (simplified-layout): dollar gap stacks
    beneath the actual figure in the total row (one cell, added back

@@ -25,13 +25,19 @@ const TONE_CLASS = {
   // pill with leading indicator dot signals "still moving"), so the
   // reader sees the state at a glance without reading the text.
   wait:    "kpi-ov-status-wait",
+  // Kevin ruling 2026-09-08. Period-running tone. Navy filled pill
+  // with a leading dot - names the state ("Period running") on the
+  // running single-period surface. Same dot treatment as `wait`;
+  // different palette (navy = neutral/live, not amber = still
+  // moving).
+  run:     "kpi-ov-status-run",
 };
 
 export default function StatusLine({ statusLine, rangeLabels, awaiting = null }) {
   if (!statusLine || !statusLine.state) return null;
   const toneClass = TONE_CLASS[statusLine.tone] || TONE_CLASS.neutral;
   const horizon = rangeLabels?.horizon || null;
-  const isWait = statusLine.tone === "wait";
+  const showLeadingDot = statusLine.tone === "wait" || statusLine.tone === "run";
 
   // Kevin ruling 2026-09-08. Awaiting pill sits beside the status
   // pill on This year while a period is past its end and before its
@@ -51,7 +57,7 @@ export default function StatusLine({ statusLine, rangeLabels, awaiting = null })
         data-kpi-ov-state={statusLine.state}
         data-kpi-ov-tone={statusLine.tone}
       >
-        {isWait && <span className="kpi-ov-status-dot" aria-hidden="true" />}
+        {showLeadingDot && <span className="kpi-ov-status-dot" aria-hidden="true" />}
         <span className="kpi-ov-status-st" data-kpi-ov="status-state">
           {statusLine.state_copy}
         </span>

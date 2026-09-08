@@ -31,7 +31,11 @@ import { performance } from "node:perf_hooks";
 // Labor + purchasing engines (library-call, no HTTP hop).
 import { buildBoard, computeBudgetToDateDays as computeLaborBudgetToDateDays } from "@/app/kpi/labor/lib/board.js";
 import { paginateActuals as paginateLaborActuals, resolveMemberBudget } from "@/lib/labor/loaders.js";
-import { loadWeeklyRevenueBasis as loadWeeklyRevenueBasisForOverview } from "@/lib/labor/labor-week-basis.js";
+import {
+  loadWeeklyRevenueBasis as loadWeeklyRevenueBasisForOverview,
+  attachWeeklyBasisToBoard,
+  computeLineTargetPctByPeriod,
+} from "@/lib/labor/labor-week-basis.js";
 import { resolveWorkerMeta } from "@/lib/kpi/resolveWorkerMeta.js";
 import { buildWorkerToEmail, countDistinctPeople } from "@/lib/labor/personCount.js";
 // Salary-side loaders + merge helper. Overview ALWAYS composes labor
@@ -50,6 +54,7 @@ import {
   envelopeDelta as sharedEnvelopeDelta,
   computePeriodRevenueByLine as sharedComputePeriodRevenueByLine,
   contributesToTotal,
+  computeContractualAccrualByPeriod,
 } from "@/lib/kpi/shared/periodBasis.js";
 
 import { buildPurchasingBoard } from "@/app/kpi/purchasing/lib/resolver.js";
@@ -1166,11 +1171,17 @@ export async function resolveOverview({
   // weeks; the card names the count. Cost + margin cards HOLD (see
   // cards[] pill overrides + client gate).
   const isRunningSinglePeriod = rng.kind === "period" && displayPeriodState === "open";
+  // Kevin ruling 2026-09-08 Path B. wkBasis lives at outer scope so
+  // both the R-92 confirmed-weeks compute (this block) and the
+  // week_rail compute (below the chart) read the same SC weekly
+  // rows. One fetch, two consumers.
+  let runningWkBasis = null;
   if (isRunningSinglePeriod && effRevSource === "sc") {
-    const wkBasis = await loadWeeklyRevenueBasisForOverview(supa, {
+    runningWkBasis = await loadWeeklyRevenueBasisForOverview(supa, {
       members, start: rng.start, end: rng.end, today,
     });
-    if (wkBasis?.data?.length) {
+    if (runningWkBasis?.data?.length) {
+      const wkBasis = runningWkBasis;
       const weeks = wkBasis.data;
       totalWeeksCount = weeks.length;
       const confirmedWks = weeks.filter(w => w.basis === "confirmed");
@@ -1188,9 +1199,30 @@ export async function resolveOverview({
       // query, not a real leak.
       const confirmedSum = confirmedWks.reduce((s, w) => s + Number(w.revenue || 0), 0);
       if (confirmedSum > 0) {
-        totalRevenue = Math.round(confirmedSum * 100) / 100;
+        // Kevin ruling 2026-09-08. Running-period revenue is the
+        // Service Calendar confirmed-weeks sum PLUS the 2300 service
+        // fee prorated by the same confirmed weeks. Kept OUT of
+        // periodBasis's R-67 branch on purpose (Guard 1 in the CC
+        // prompt): this is an Overview presentation rule for the
+        // running period, not a shared accrual rule. periodBasis
+        // gets zero changes so Last period, Current year, and Labor
+        // are byte-identical.
+        //
+        // Kevin scope call (item 2): 2300 ONLY. Do not prorate 2200
+        // on TBR - its catering comes from the Service Calendar
+        // (B&G Lunch), so it is already in the SC figure. 2600
+        // untouched (rare, no B&G analogue).
+        const feeBudgetByPeriod = sumBudgetByPeriodForLine({
+          overviewBudgets, lineCode: "2300", members,
+        });
+        const feeThisPeriod = Number(feeBudgetByPeriod.get(displayPeriodNo) || 0);
+        const feeProrate = (feeThisPeriod > 0 && confirmedWeeksCount > 0)
+          ? feeThisPeriod * (confirmedWeeksCount / 4)
+          : 0;
+        totalRevenue = Math.round((confirmedSum + feeProrate) * 100) / 100;
         totalRevReported = true;
         totalRevSources.add("sc_daily_revenue");
+        if (feeProrate > 0) totalRevSources.add("kpi_budgets_2300_prorate");
         // Kevin ruling PR-3 follow-up (2026-09-08). Per-line
         // attribution on TP is an audit question, not a design one,
         // and comes back in a deliberate audit pass. Until then:
@@ -1862,6 +1894,126 @@ export async function resolveOverview({
       };
     });
     chart = { grain: "period", series };
+  }
+
+  // 17b. Week rail (Kevin CC prompt 2026-09-08 item 4). Four cards
+  // below the three, showing each week's confirmed / forecast meals
+  // + prorated service fee + cost target + cost landed + caveats.
+  // Running single-period only; null everywhere else.
+  //
+  // Data source: Path B (Kevin ruling). Structural parity with
+  // Labor comes from calling Labor's buildBoard a second time with
+  // end=rng.end (not effectiveEndISO, which caps at the last complete
+  // week on later dates in a period). One buildBoard call = one
+  // computation. Composing per-week from separate labor / SC /
+  // purchasing sources is exactly how the two boards drifted apart
+  // before; Path B refuses that.
+  //
+  // Purchasing per-week comes from purchBoard.buckets (already in
+  // scope). Only the labor+salary side needs the extra fetch.
+  let week_rail = null;
+  if (isRunningSinglePeriod && rng.period_no != null) {
+    const [railLaborActuals, railSalaryActuals] = await Promise.all([
+      paginateLaborActuals(supa, { members, start: rng.start, end: rng.end }),
+      loadSalaryActuals(supa, members, rng.start, rng.end),
+    ]);
+    const railSalaryShaped = (railSalaryActuals?.rows || []).map(shapeSalaryRow);
+    const railMergedLabor = (railLaborActuals?.data || []).concat(railSalaryShaped);
+    const railBoard = buildBoard({
+      account: accountKey,
+      start: rng.start,
+      end: rng.end,
+      today,
+      actuals: railMergedLabor,
+      budget_periods: laborBudgetPeriods,
+      account_state: "hourly_ok",
+      workerToEmail,
+    });
+    // Attach the SC weekly basis so each week carries revenue_basis
+    // + week_actual_revenue + week_projected_revenue. Uses the same
+    // runningWkBasis fetched for R-92 above (hoisted so both consume
+    // one query).
+    if (railBoard?.applies !== false && runningWkBasis?.data?.length) {
+      const railLineTargetPct = computeLineTargetPctByPeriod({
+        budgetPeriods: laborBudgetPeriods,
+        overviewBudgets,
+        members,
+        periods: [rng.period_no],
+      });
+      const railContractualAccrual = computeContractualAccrualByPeriod({
+        overviewBudgets,
+        members,
+        periods: [rng.period_no],
+      });
+      attachWeeklyBasisToBoard(railBoard, runningWkBasis, {
+        lineTargetPctByPeriod: railLineTargetPct,
+        todayISO: today,
+        contractualAccrualByPeriod: railContractualAccrual,
+        verifiedPeriodTotals: null,
+      });
+    }
+    // Purchasing per-week (3200 + 3400 + 3500), indexed by
+    // week_start. Same three buckets the chart's week grain uses.
+    const railPurchByWeek = new Map();
+    for (const key of ["3200", "3400", "3500"]) {
+      const bucket = purchBoard.buckets[key];
+      if (!bucket?.week_series) continue;
+      for (const w of bucket.week_series) {
+        railPurchByWeek.set(w.week_start, (railPurchByWeek.get(w.week_start) || 0) + Number(w.amount || 0));
+      }
+    }
+    // Fee prorated by week. 2300 budget / 4 flat per week; the
+    // period-level accrual (confirmedWeeks × fee/4) lives on the
+    // revenue card hero; this per-week figure is contractual and
+    // the same on every week regardless of state.
+    const feeBudgetByPeriod = sumBudgetByPeriodForLine({
+      overviewBudgets, lineCode: "2300", members,
+    });
+    const feePerWeek = Number(feeBudgetByPeriod.get(rng.period_no) || 0) / 4;
+    // Period COGS target% - used for cost_target per week
+    // (week_revenue × target%). Same figure the cost card displays.
+    const cogsTargetPct = (cogsBudget != null && revenue_budget_full_period != null && revenue_budget_full_period > 0)
+      ? (cogsBudget / revenue_budget_full_period) * 100
+      : null;
+    const runningWeekNoOut = (lastCompleteWk?.weekNo ?? 0) + 1;
+    const rows = (railBoard?.weeks || []).map((w, i) => {
+      const wkNo = i + 1;
+      // Meal revenue: confirmed weeks use SC actual; forecast weeks
+      // use projected. `week_actual_revenue` and `week_projected_
+      // revenue` are attached by attachWeeklyBasisToBoard.
+      const mealRev = w.revenue_basis === "confirmed"
+        ? Number(w.week_actual_revenue || 0)
+        : Number(w.week_projected_revenue || 0);
+      const weekRevTotal = mealRev + feePerWeek;
+      const costTarget = cogsTargetPct != null ? weekRevTotal * (cogsTargetPct / 100) : null;
+      const laborSpent = Number(w.spent || 0);
+      const purchSpent = Number(railPurchByWeek.get(w.week_start) || 0);
+      return {
+        week_no: wkNo,
+        week_start: w.week_start,
+        week_end: w.week_end,
+        state: w.state,                           // "closed" | "in_progress" | "not_started"
+        revenue_basis: w.revenue_basis || null,   // "confirmed" | "forecast" | null
+        meal_revenue: r2(mealRev),
+        fee_prorate: r2(feePerWeek),
+        week_revenue: r2(weekRevTotal),
+        cost_target: costTarget != null ? r2(costTarget) : null,
+        cost_landed: r2(laborSpent + purchSpent),
+        labor_landed: r2(laborSpent),
+        purchasing_landed: r2(purchSpent),
+        unapproved_hours: Number(w.unapproved_hours || 0),
+      };
+    });
+    week_rail = {
+      period_no: rng.period_no,
+      running_week_no: runningWeekNoOut,
+      // Kevin ruling: invoice-landed state derives from the week
+      // index, not from a date string. Client applies:
+      //   invoices_landed = (running_week_no - week_no) >= 2
+      // for each week's caveat line. Two-week rule holds at the
+      // boundary by construction.
+      weeks: rows,
+    };
   }
 
   // 18. Statement rows (per-line P&L) and also-tracked rows.
@@ -2886,6 +3038,7 @@ export async function resolveOverview({
       periodState: displayPeriodState,
       lastCompleteWk,
       effectiveEndISO,
+      todayISO: today,
     }),
     // Kevin ruling R-63 (2026-09-03): the "as of when" answer for
     // every figure on the board. On closed ranges this equals
@@ -3022,6 +3175,10 @@ export async function resolveOverview({
     // strip. Includes an amber-tone signal cost + margin cards
     // consume to render Provisional.
     settling,
+    // Kevin CC prompt 2026-09-08 item 4. Week-by-week rail on the
+    // running single-period surface. Null on every other range; the
+    // client omits the section.
+    week_rail,
     sources: sourcesLine,
     flags,
     freshness,
@@ -3092,6 +3249,23 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
     };
   }
 
+  // Kevin ruling 2026-09-08. Running-single-period pill is
+  // "Period running" - a state, not a verdict. Two days into a
+  // period is no time to read "At risk" or "On track"; the ticker
+  // is judging a period against a whole-period budget. Horizon
+  // sub-line ("P10 · week 1 of 4 · day 2 of 28") carries the
+  // progress; the pill just names the state. New tone "run" -
+  // client renders navy with a leading dot (same treatment as
+  // "wait" but different palette).
+  const rangeIsRunning = range_kind === "period" && period_state === "open";
+  if (rangeIsRunning) {
+    return {
+      state: "period_running",
+      state_copy: "Period running",
+      tone: "run",
+    };
+  }
+
   // "Period closed · on target / off target" on any closed range
   // (single closed or FYTD - and post-2026-09-08 the aligned-explicit
   // path This year takes since #1063 sends R-93 dates as explicit).
@@ -3132,7 +3306,7 @@ function buildStatusLine({ ticker, period_state, has_target, range_kind }) {
 //     period_span: "P1-P8" | "P8" | null,
 //     period_last: "P8" | null,
 //   }
-function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk, effectiveEndISO }) {
+function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk, effectiveEndISO, todayISO }) {
   const rc = rangeComposition;
   // Kevin ruling 2026-09-08. Explicit ranges that align to WHOLE
   // period boundaries render fytd-style labels (P1-P8 · closed and
@@ -3176,14 +3350,36 @@ function buildRangeLabels({ range, rangeComposition, periodState, lastCompleteWk
   // compat with other consumers of the range-labels shape.
   let spanHeader = null;
   if (isSingleOpen) {
-    if (lastCompleteWk) {
-      horizon = `through week ${lastCompleteWk.weekNo} · ${fmtMMDD(range.start)} – ${fmtMMDD(lastCompleteWk.weekEndISO)}`;
-      spanHeader = lastCompleteWk.weekNo === 1
-        ? "WK 1"
-        : `WK 1 – WK ${lastCompleteWk.weekNo}`;
-    } else {
-      horizon = "no complete weeks yet";
+    // Kevin ruling 2026-09-08. Current period horizon reads
+    // "P{n} · week X of 4 · day Y of Z" - progress-oriented, matches
+    // the running-period render of record. Replaces the prior
+    // closed-week-oriented "through week N" / "no complete weeks yet"
+    // forms; both were the This year treatment leaking onto the
+    // running period. Sub-line beside the "Period running" pill.
+    const runningWk = (lastCompleteWk?.weekNo ?? 0) + 1;
+    let dayNo = null;
+    let totalDays = null;
+    if (todayISO && range.start && range.end) {
+      const parseISO = (iso) => {
+        const mm = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return mm ? new Date(Date.UTC(+mm[1], +mm[2] - 1, +mm[3])) : null;
+      };
+      const s = parseISO(range.start), e = parseISO(range.end), t = parseISO(todayISO);
+      if (s && e && t) {
+        const MSD = 86400000;
+        totalDays = Math.floor((e.getTime() - s.getTime()) / MSD) + 1;
+        dayNo = Math.min(totalDays, Math.max(1, Math.floor((t.getTime() - s.getTime()) / MSD) + 1));
+      }
     }
+    const pNo = range.period_no != null ? `P${range.period_no}` : "This period";
+    if (dayNo != null && totalDays != null) {
+      horizon = `${pNo} · week ${runningWk} of 4 · day ${dayNo} of ${totalDays}`;
+    } else {
+      horizon = `${pNo} · week ${runningWk} of 4`;
+    }
+    spanHeader = lastCompleteWk
+      ? (lastCompleteWk.weekNo === 1 ? "WK 1" : `WK 1 – WK ${lastCompleteWk.weekNo}`)
+      : "WK 1";
   } else if (isSingleClosed && range.period_no != null) {
     // Kevin post-1049 sweep item 1 (2026-09-07). #1046 fixed this
     // on This year but overlooked single_closed. Last period on
