@@ -531,6 +531,30 @@ export async function resolveOverview({
     ? lastCompleteWk.effectiveEndISO
     : rng.end;
 
+  // Kevin ruling 2026-09-08 item 3 (Approach A). Calendar-derived
+  // gate that decides whether to fire the three rail-block queries
+  // in parallel with layer1 rather than serialising them after.
+  // Derived from rng + today alone - no DB read - so it can be
+  // evaluated BEFORE layer1 runs.
+  //
+  // "Open" per derivePeriodState() is calendar-authoritative when
+  // periodStatusRow carries no verified_at / closed_at OVERRIDE.
+  // So this gate is a superset of the real isRunningSinglePeriod
+  // (below, post-layer1): any period whose calendar window contains
+  // today AND has no early-close/early-verify override. Divergence
+  // asserted below and telemetry-logged; see the divergence branch
+  // for the two theoretical mismatch cases.
+  const railGatePStart = rng.kind === "period" && rng.period_no != null
+    ? periodStartISO(rng.period_no) : null;
+  const railGatePEnd = rng.kind === "period" && rng.period_no != null
+    ? periodEndISO(rng.period_no) : null;
+  const willBeRunningSinglePeriod = !!(
+    rng.kind === "period" &&
+    rng.period_no != null &&
+    railGatePStart && railGatePStart <= today &&
+    railGatePEnd && today <= railGatePEnd
+  );
+
   const layer1 = await timeIt("layer1_parallel", async () => Promise.all([
     loadPeriodStatus(supa, FISCAL_YEAR),
     loadAccountFlags(supa),
@@ -577,6 +601,29 @@ export async function resolveOverview({
     // JEs as "no adjustment", not zero (absent-vs-zero rule). Never
     // fabricates rows for accounts that carry no inventory.
     loadInventoryAdjustments(supa, { members, periods, fiscalYear: FISCAL_YEAR }),
+    // Kevin ruling 2026-09-08 item 3 (Approach A). Rail-block queries
+    // moved into layer1_parallel so they hide behind the slowest
+    // existing query instead of serialising after. Only fire when
+    // the calendar gate says the range is likely a running single
+    // period; otherwise resolve to null and the rail branch skips.
+    // Prod cost drops from ~1,250ms serialised to ~50-100ms concurrent
+    // per Kevin's page-cost timing.
+    //
+    // Wk basis fetch covers the FULL range (not effectiveEndISO) -
+    // the rail needs all four weeks including forecast, and the
+    // R-92 branch (below) reads the same result.
+    willBeRunningSinglePeriod
+      ? loadWeeklyRevenueBasisForOverview(supa, { members, start: rng.start, end: rng.end, today })
+      : Promise.resolve(null),
+    // Rail labor + salary full-range fetches (versus the existing
+    // effectiveEndISO-capped fetches above). Full range needed so
+    // buildBoard sees weeks 3+4 on later dates in a period.
+    willBeRunningSinglePeriod
+      ? paginateLaborActuals(supa, { members, start: rng.start, end: rng.end })
+      : Promise.resolve(null),
+    willBeRunningSinglePeriod
+      ? loadSalaryActuals(supa, members, rng.start, rng.end)
+      : Promise.resolve(null),
   ]));
   const [
     periodStatusResp, accountFlagsResp, overviewBudgetsResp, pnlResp,
@@ -584,6 +631,7 @@ export async function resolveOverview({
     purchWeeklyResp, purchActualsResp, purchPendingResp, purchBudgetsResp,
     salaryBudgetsResp, salaryActualsResp,
     dirResp, purchFreshness, invAdjResp,
+    railWkBasisResp, railLaborActualsResp, railSalaryActualsResp,
   ] = layer1;
 
   const errs = [];
@@ -604,6 +652,10 @@ export async function resolveOverview({
   if (salaryActualsResp.error) errs.push({ scope: "labor_salary_actuals", error: salaryActualsResp.error });
   if (dirResp?.error) errs.push({ scope: "accounts_directory", error: dirResp.error });
   if (invAdjResp?.error) errs.push({ scope: "inventory_adjustments", error: invAdjResp.error });
+  // Rail responses only checked when the gate fired (otherwise null).
+  if (railWkBasisResp?.error) errs.push({ scope: "rail_weekly_revenue_basis", error: railWkBasisResp.error });
+  if (railLaborActualsResp?.error) errs.push({ scope: "rail_labor_actuals", error: railLaborActualsResp.error });
+  if (railSalaryActualsResp?.error) errs.push({ scope: "rail_salary_actuals", error: railSalaryActualsResp.error });
   // purchFreshness never returns an `error` field per its loader
   // shape (loadFreshness returns the freshness object directly),
   // so no err check here.
@@ -1171,15 +1223,49 @@ export async function resolveOverview({
   // weeks; the card names the count. Cost + margin cards HOLD (see
   // cards[] pill overrides + client gate).
   const isRunningSinglePeriod = rng.kind === "period" && displayPeriodState === "open";
+  // Kevin ruling 2026-09-08 item 3. Assert the calendar-derived
+  // rail gate agrees with the real state post-layer1. The gate
+  // gets checked BEFORE any DB reads to decide whether to fire
+  // the three rail queries in parallel with layer1; if it ever
+  // disagrees, either wasted queries (false positive - gate fires
+  // but state isn't open) or missing data (false negative - state
+  // is open but queries didn't fire).
+  //
+  // Divergence cases from derivePeriodState:
+  //   false positive: calendar-open AND periodStatusRow.verified_at
+  //     OR closed_at set -> state = "verified" / "closed_awaiting".
+  //     Rare early-verify or early-close override. Wasted queries,
+  //     no wrong result (rail block skips).
+  //   false negative: state = "open" but calendar-not-open. Cannot
+  //     happen per derivePeriodState (returns "planned" for future,
+  //     "open" only when today in [pStart, pEnd] + no override).
+  //
+  // Warn on divergence so the telemetry catches an actual case if
+  // one appears in production.
+  if (willBeRunningSinglePeriod !== isRunningSinglePeriod) {
+    // eslint-disable-next-line no-console
+    console.warn("[overview] rail-gate divergence", {
+      account: accountKey,
+      range: { start: rng.start, end: rng.end, period_no: rng.period_no },
+      today,
+      willBeRunningSinglePeriod,
+      isRunningSinglePeriod,
+      displayPeriodState,
+      periodStatusRow: displayPeriodNo != null ? (periodStatus.get(displayPeriodNo) || null) : null,
+    });
+  }
   // Kevin ruling 2026-09-08 Path B. wkBasis lives at outer scope so
   // both the R-92 confirmed-weeks compute (this block) and the
   // week_rail compute (below the chart) read the same SC weekly
   // rows. One fetch, two consumers.
-  let runningWkBasis = null;
+  //
+  // Approach A (2026-09-08 item 3): the fetch itself moved into
+  // layer1_parallel above, gated on willBeRunningSinglePeriod. When
+  // the calendar gate agreed with the real state we already have
+  // the result; otherwise runningWkBasis stays null and the R-92
+  // branch skips.
+  let runningWkBasis = willBeRunningSinglePeriod ? railWkBasisResp : null;
   if (isRunningSinglePeriod && effRevSource === "sc") {
-    runningWkBasis = await loadWeeklyRevenueBasisForOverview(supa, {
-      members, start: rng.start, end: rng.end, today,
-    });
     if (runningWkBasis?.data?.length) {
       const wkBasis = runningWkBasis;
       const weeks = wkBasis.data;
@@ -1913,10 +1999,15 @@ export async function resolveOverview({
   // scope). Only the labor+salary side needs the extra fetch.
   let week_rail = null;
   if (isRunningSinglePeriod && rng.period_no != null) {
-    const [railLaborActuals, railSalaryActuals] = await Promise.all([
-      paginateLaborActuals(supa, { members, start: rng.start, end: rng.end }),
-      loadSalaryActuals(supa, members, rng.start, rng.end),
-    ]);
+    // Approach A (Kevin ruling 2026-09-08 item 3): rail's labor +
+    // salary fetches moved into layer1_parallel, gated on
+    // willBeRunningSinglePeriod. When the calendar gate agreed
+    // with the real state (~always in practice - divergence warned
+    // above) the results are already in hand. The false-positive
+    // divergence case (gate true, state !open) never reaches here
+    // because this branch keys off isRunningSinglePeriod itself.
+    const railLaborActuals = railLaborActualsResp;
+    const railSalaryActuals = railSalaryActualsResp;
     const railSalaryShaped = (railSalaryActuals?.rows || []).map(shapeSalaryRow);
     const railMergedLabor = (railLaborActuals?.data || []).concat(railSalaryShaped);
     const railBoard = buildBoard({
