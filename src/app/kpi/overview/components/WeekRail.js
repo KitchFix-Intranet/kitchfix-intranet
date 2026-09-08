@@ -21,11 +21,17 @@
 //     }],
 //   } | null
 //
-// State label mapping (calendar-relative label on the tile):
-//   state === "in_progress"                    -> "running"  (navy stripe)
-//   state === "closed" && basis === "confirmed" -> "confirmed"(green stripe)
-//   state === "closed" && basis !== "confirmed" -> "closed"   (grey)
-//   state === "not_started"                    -> "forecast" (dashed grey)
+// State label mapping (Kevin ruling 2026-09-08 · three states, not
+// two - the running/closed temporal position is orthogonal to the SC
+// revenue basis, and a week with confirmed counts must not read
+// "forecast" just because it hasn't started yet):
+//   in_progress                             -> "running"   (navy stripe)
+//   not-running AND basis === "confirmed"   -> "confirmed" (green stripe)
+//   not-running AND basis !== "confirmed"   -> "forecast"  (dashed grey)
+// The "confirmed" bucket catches BOTH not_started-with-counts (future
+// week whose operator has already entered SC counts) AND closed-
+// with-counts (past week later in the period). Both read the same
+// green treatment; the tile stripes off basis, not state.
 //
 // Kevin ruling: invoice state derives from week INDEX, not from a
 // date string.
@@ -48,16 +54,14 @@ function fmtMMDD(iso) {
 
 function tileVariant(state, revenue_basis) {
   if (state === "in_progress") return "run";
-  if (state === "not_started") return "fc";
-  if (state === "closed" && revenue_basis === "confirmed") return "conf";
-  return "conf";
+  if (revenue_basis === "confirmed") return "conf";
+  return "fc";
 }
 
 function tileStateLabel(state, revenue_basis) {
   if (state === "in_progress") return "running";
-  if (state === "not_started") return "forecast";
-  if (state === "closed" && revenue_basis === "confirmed") return "confirmed";
-  return "closed";
+  if (revenue_basis === "confirmed") return "confirmed";
+  return "forecast";
 }
 
 function mealLabel(revenue_basis) {
