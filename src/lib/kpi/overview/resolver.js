@@ -1163,6 +1163,21 @@ export async function resolveOverview({
         totalRevenue = Math.round(confirmedSum * 100) / 100;
         totalRevReported = true;
         totalRevSources.add("sc_daily_revenue");
+        // Kevin ruling PR-3 follow-up (2026-09-08). Per-line
+        // attribution on TP is an audit question, not a design one,
+        // and comes back in a deliberate audit pass. Until then:
+        // the confirmed sum lands as the TOTAL only. Each revenue
+        // line reads "not reported" - honest partial state beats
+        // per-line figures that don't sum to the total (a $3,765
+        // 2400.1 under a $51,190 total is worse than showing
+        // nothing on the lines). The standard SC-through-yesterday
+        // path had populated 2400.1 with a one-day partial;
+        // overwrite that null so the lines match the honest state.
+        for (const line of REVENUE_LINE_CODES) {
+          if (revenueByLine[line]) {
+            revenueByLine[line] = { amount: 0, reported: false, sources: [] };
+          }
+        }
       }
     }
   }
