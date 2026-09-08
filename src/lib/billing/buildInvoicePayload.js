@@ -85,6 +85,8 @@
 //   1 for everyone else. Empty `invoices[]` if no billable actuals
 //   (still valid; caller decides what to do).
 
+import { buildInvoiceMemo } from "./invoiceMemo";
+
 const MEAL_ORDER = new Map([
   ["Breakfast",              10],
   ["Continental Breakfast",  15],
@@ -461,6 +463,19 @@ export function buildInvoicePayload({
       TxnDate: closingSunday,
       TxnTaxDetail: {
         TxnTaxCodeRef: { value: accountMap.qbo_taxcode_id },
+      },
+      // 2026-09-09 (go-live recon Item 1b): uniform week-of-service
+      // memo on every generated invoice. Copy lives in
+      // src/lib/billing/invoiceMemo.js as named templates - edit
+      // there when Sebastian sends final wording. Test-mode drafts
+      // still get the "TEST" marker via qboAdapter.markPayloadAsTest;
+      // this live-path memo is overwritten in test mode by design.
+      CustomerMemo: {
+        value: buildInvoiceMemo({
+          weekStart,
+          weekEnd: closingSunday,
+          isBiweekly,
+        }),
       },
       Line: lines,
       _preTaxSubtotal: preTaxSubtotal,
