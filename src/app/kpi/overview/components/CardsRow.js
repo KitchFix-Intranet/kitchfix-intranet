@@ -378,9 +378,20 @@ function RevenueCard({ card, range, periodState, rangeLabels, scCountsWithoutDol
   const eyebrowLabel = (rangeLabels?.kind === "fytd" || rangeLabels?.kind === "single_closed")
     ? (rangeLabels.period_span ? `Revenue actuals ${rangeLabels.period_span}` : card.label)
     : card.label;
-  const actualToneCls = card.delta_direction === "good" ? "kpi-ov-good"
-    : card.delta_direction === "bad" ? "kpi-ov-bad"
-    : "";
+  // Kevin R-92 PR-3 follow-up (2026-09-09). On This period the
+  // revenue actual is a RUNNING TOTAL (confirmed weeks so far), not
+  // a settled figure. The card's pill reads "Confirmed so far"
+  // green; the hero must match that colour rather than deriving red
+  // from delta_direction ("bad" because $51K partial < $108K full
+  // projection). Prefer pill tone whenever confirmed_weeks_count is
+  // set - anchors the two elements to the same signal.
+  const actualToneCls = card.confirmed_weeks_count != null
+    ? (card.pill?.tone === "good" ? "kpi-ov-good"
+        : card.pill?.tone === "bad" ? "kpi-ov-bad"
+        : "")
+    : (card.delta_direction === "good" ? "kpi-ov-good"
+        : card.delta_direction === "bad" ? "kpi-ov-bad"
+        : "");
 
   const helpBody = revenueTooltip({
     rangeKind: range?.kind,
