@@ -457,6 +457,15 @@ export default function KpiOverviewPage() {
                 // end and before its R-93 settle date. Chip carries
                 // the span; this pill carries the state. Same
                 // helper as R-93, no new date logic.
+                //
+                // Kevin ruling 2026-09-08 cleanup (this PR). Scoped
+                // to Current year only. P9 has nothing to do with
+                // running P10 - the pill belongs on the range whose
+                // span omits that period (fytd's end sits at P8),
+                // not on the running period itself, and not on
+                // Last period (which IS P9 and carries its own
+                // "Awaiting verification" status pill via R-94).
+                if (rangeProps.resolvedPreset !== "fytd") return null;
                 const p = r93ExcludedPeriodNo(today);
                 if (p == null) return null;
                 const pEnd = periodEndISO(p);
@@ -506,7 +515,13 @@ export default function KpiOverviewPage() {
           <>
             <Chart chart={data.chart} revenueModel={data.revenue_model} />
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
-            <AlsoTracked payload={data} />
+            {/* Kevin ruling 2026-09-08 cleanup item 2 - Also tracked
+                does not render on Current period on any scope
+                (portfolio or single-account). Renders on every
+                other range. */}
+            {!(data.range?.kind === "period" && data.period_state === "open") && (
+              <AlsoTracked payload={data} />
+            )}
           </>
         ) : (
           /* Kevin ruling final-presentation (2026-09-03): the chart
@@ -520,16 +535,33 @@ export default function KpiOverviewPage() {
               lines + Also tracked on the LEFT (5fr); Cost of goods
               sold + Chart on the RIGHT (7fr). */
           <>
-            <div className="kpi-ov-split" data-kpi-ov="single-account-split">
-              <div className="kpi-ov-split-left">
-                <RevenueLines payload={data} />
-                <AlsoTracked payload={data} />
-              </div>
-              <div className="kpi-ov-split-right">
+            {/* Kevin ruling 2026-09-08 cleanup item 2. Revenue lines +
+                Also tracked do not render on Current period - the
+                revenue detail is in the week rail and the P&L; Also
+                tracked is not scored and has nothing to show on a
+                period two days old. Both still render on every other
+                range. Same isRunningSinglePeriod gate as CostLines +
+                PnlStatement use for their own branch swaps. Without
+                the split wrapper the two right-column pieces stack
+                full-width - the natural layout that matches the
+                Current period render of record. */}
+            {(data.range?.kind === "period" && data.period_state === "open") ? (
+              <>
                 <CostLines payload={data} previewAccount={data.preview_account} />
                 <Chart chart={data.chart} revenueModel={data.revenue_model} />
+              </>
+            ) : (
+              <div className="kpi-ov-split" data-kpi-ov="single-account-split">
+                <div className="kpi-ov-split-left">
+                  <RevenueLines payload={data} />
+                  <AlsoTracked payload={data} />
+                </div>
+                <div className="kpi-ov-split-right">
+                  <CostLines payload={data} previewAccount={data.preview_account} />
+                  <Chart chart={data.chart} revenueModel={data.revenue_model} />
+                </div>
               </div>
-            </div>
+            )}
             <PnlStatement payload={data} open={pnlOpen} onToggle={() => setPnlOpen(o => !o)} />
           </>
         )}
