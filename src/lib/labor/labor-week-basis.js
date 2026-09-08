@@ -45,7 +45,6 @@
 // this file has no locally-owned duplication.
 import { REVENUE_LINE_CODES, CONTRACTUAL_ACCRUAL_LINES } from "@/lib/kpi/shared/periodBasis.js";
 import { periodOf } from "@/app/kpi/labor/lib/periods.js";
-import { classifyServiceRevenueLine } from "@/lib/kpi/overview/serviceRevenueMapping.js";
 
 const IN_CHUNK = 60;
 const PS_DEFAULT = 1000;
@@ -147,7 +146,7 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     while (true) {
       const q = await supa
         .from("sc_daily_revenue")
-        .select("account_key, service_date, service_id, service_name, actual_revenue, projected_revenue, has_actuals, has_projection")
+        .select("account_key, service_date, service_id, actual_revenue, projected_revenue, has_actuals, has_projection")
         .in("account_key", memberChunk)
         .gte("service_date", start)
         .lte("service_date", end)
@@ -203,14 +202,6 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     // revenue-sum on This period reads this field so its count and
     // figure agree by construction.
     actualRevInDenom: 0,
-    // Kevin ruling PR-3 · item 2 (2026-09-09). Per-revenue-line
-    // split of the week's actual_revenue. Classify each row's
-    // service_name via serviceRevenueMapping; sum actual_revenue
-    // into the line bucket. Overview reads these to attribute
-    // confirmed-week SC revenue to the correct statement rows
-    // (B&G Lunch -> 2200, everything else -> 2400.1) without
-    // hardcoding names anywhere else.
-    actualRevByLine: { "2200": 0, "2400.1": 0 },
     daysWithService: new Set(),
     daysWithConfirmedSvc: new Set(),
   });
@@ -228,11 +219,6 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       // R-85 denominator: this row only contributes to
       // actualRevInDenom if it also had a real projection.
       if (inDenom) bucket.actualRevInDenom += Number(r.actual_revenue || 0);
-      // Per-line split. Every has_actuals row is attributed - the
-      // full-actuals rule Kevin ratified is applied line-by-line
-      // here so the sum-across-lines equals actualRev exactly.
-      const line = classifyServiceRevenueLine(r.service_name);
-      bucket.actualRevByLine[line] = (bucket.actualRevByLine[line] || 0) + Number(r.actual_revenue || 0);
       bucket.daysWithConfirmedSvc.add(r.service_date);
     } else if (inDenom) {
       // Real projected service - client planned to serve, hasn't been
@@ -252,7 +238,7 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
     const bucket = byWeek.get(ws);
     const wEnd = new Date(new Date(ws + "T00:00:00Z").getTime() + 6 * MS_PER_DAY).toISOString().slice(0, 10);
 
-    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev, actualRevInDenom, actualRevByLine } = bucket;
+    const { confirmedSvcs, projectedSvcs, emptySlotSvcs, actualRev, projectedRev, actualRevInDenom } = bucket;
     const totalSvcs = confirmedSvcs + projectedSvcs;       // meaningful denominator
     const basis = totalSvcs === 0
       ? "forecast"                                         // no meaningful services -> nothing to compare
@@ -285,20 +271,9 @@ export async function loadWeeklyRevenueBasis(supa, { members, start, end, today 
       actual_revenue: Math.round(actualRev * 100) / 100,
       // Kevin ratify R-92 PR-3 (2026-09-09). R-85-strict actualRev -
       // only rows in the denom (has_projection && projected_rev > 0)
-      // contribute. Kept on the payload for R-85 confirmation
-      // counting; the revenue figure itself uses full actual_revenue
-      // per Kevin's ruling that a confirmed week's revenue is
-      // everything the operator entered.
+      // contribute. Overview's confirmed-weeks-sum on This period
+      // sums this so its "N of X confirmed" count matches its figure.
       actual_revenue_in_denom: Math.round(actualRevInDenom * 100) / 100,
-      // Kevin ruling PR-3 · item 2 (2026-09-09). Per-line split of
-      // actual_revenue - Overview attributes confirmed SC revenue to
-      // statement rows via this map. Sum equals actual_revenue by
-      // construction (every has_actuals row contributes to exactly
-      // one line). Mapping owned by serviceRevenueMapping.js.
-      actual_revenue_by_line: {
-        "2200": Math.round((actualRevByLine["2200"] || 0) * 100) / 100,
-        "2400.1": Math.round((actualRevByLine["2400.1"] || 0) * 100) / 100,
-      },
       projected_revenue: Math.round(projectedRev * 100) / 100,
       revenue: basis === "forecast"
         ? Math.round(projectedRev * 100) / 100             // pure forecast: projections only
