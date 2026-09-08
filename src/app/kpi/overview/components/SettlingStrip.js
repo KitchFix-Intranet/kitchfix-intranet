@@ -19,31 +19,30 @@
 // Payload contract:
 //   settling: {
 //     period_no, period_end,
-//     purchases: { current_lines, prior_lines, prior_period_no },
 //     labour: { hours, people },
 //   } | null
+//
+// Kevin ruling 2026-09-08. Purchases line dropped its counts. New
+// copy is period-dynamic + generic ("Invoices for P{period_no}
+// finalizing, Invoices and Credit Card charges land on the nightly
+// sync.") and always renders when settling is present. The
+// current_lines / prior_lines / prior_period_no fields on
+// settling.purchases came out of the payload with this change - no
+// consumers remained after the render swap.
 
 export default function SettlingStrip({ settling }) {
   if (!settling) return null;
-  const { purchases, labour } = settling;
-  const hasPurchases = purchases && purchases.current_lines != null;
+  const { labour, period_no } = settling;
   const hasLabour = labour && Number(labour.hours || 0) > 0.04 && (labour.people || 0) > 0;
-  if (!hasPurchases && !hasLabour) return null;
 
   return (
     <div className="kpi-ov-settling" data-kpi-ov="settling-strip">
       <span className="kpi-ov-settling-t">What is still moving</span>
-      {hasPurchases && (
-        <span className="kpi-ov-settling-it" data-kpi-ov="settling-purchases">
-          <b>Purchases</b>
-          {" · "}
-          {purchases.current_lines} invoice line{purchases.current_lines === 1 ? "" : "s"}
-          {purchases.prior_lines != null && purchases.prior_period_no != null && (
-            <> against {purchases.prior_lines} in P{purchases.prior_period_no}</>
-          )}
-          {" · more land on the nightly sync"}
-        </span>
-      )}
+      <span className="kpi-ov-settling-it" data-kpi-ov="settling-purchases">
+        <b>Purchases</b>
+        {" · "}
+        Invoices for P{period_no} finalizing, Invoices and Credit Card charges land on the nightly sync.
+      </span>
       {hasLabour && (
         <span className="kpi-ov-settling-it" data-kpi-ov="settling-labour">
           <b>Labour</b>
