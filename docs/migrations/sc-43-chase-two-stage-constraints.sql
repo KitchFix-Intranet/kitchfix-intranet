@@ -34,13 +34,17 @@
 --                 email is deliberately skipped) - see the noSiteRecipient
 --                 branch in chaseNotifications.js.
 --
--- Owner ruling this codifies (Kevin 2026-09-09):
---   "Additive is the right shape. Historical ledger rows with N3.1/
---    N3.2/N3.3 stay valid; no data cleanup, no risk to the audit
---    trail. The old code path is gone in one atomic PR, so nothing
---    will write the old values again - but the values themselves
---    are still legal so a rollback would work without touching the
---    ledger."
+-- Rationale (CC, not owner-ruled):
+--   Additive keeps historical ledger rows with N3.1/N3.2/N3.3
+--   valid, so no data cleanup and no risk to the audit trail. The
+--   old code path is removed in this same PR, so nothing will write
+--   the old values again - but the values themselves stay legal so
+--   a rollback would work without touching the ledger. Kevin did
+--   not rule on this specifically; the additive choice is the
+--   safer default. If the preference is instead to hard-cut the
+--   old vocab (only N3.reminder + N3.urgent legal), delete the old
+--   values from the CHECK arrays here + delete every existing
+--   ledger row with the old stage before applying.
 --
 -- Fences:
 --   - Additive only. No existing row invalidated. No column dropped.
@@ -136,19 +140,7 @@ ORDER BY stage;
 -- (production has no rows for the new values yet). No error thrown.
 
 
--- Query 3: prove the new values are legal by dry-inserting one
--- of each. Rolled back so the ledger is untouched.
-BEGIN;
-INSERT INTO sc_week_chase_sent (account_key, week_start, stage, recipients_to, recipients_cc, is_test, slack_ok)
-  VALUES ('TXR - AZ', '2025-01-06', 'N3.reminder', ARRAY[]::text[], ARRAY[]::text[], true, false);
-INSERT INTO sc_week_chase_sent (account_key, week_start, stage, recipients_to, recipients_cc, is_test, slack_ok)
-  VALUES ('TXR - AZ', '2025-01-06', 'N3.urgent',   ARRAY[]::text[], ARRAY[]::text[], true, false);
--- If either INSERT fails, this transaction aborts. Success means
--- both new stage values pass every constraint.
-ROLLBACK;
-
-
--- Query 4: confirm the unique index on (account_key, week_start,
+-- Query 3: confirm the unique index on (account_key, week_start,
 -- stage) still exists. Migration did not touch it - this is a
 -- guard against accidental drop.
 SELECT indexname, indexdef
@@ -157,6 +149,12 @@ WHERE tablename = 'sc_week_chase_sent'
   AND indexname = 'uq_sc_week_chase_sent_stage';
 
 -- Expected 1 row: uq_sc_week_chase_sent_stage on (account_key, week_start, stage).
+
+-- The first live chase fire (Sun 18:00 or Mon 15:00 in an account's
+-- local tz) is the real acceptance test for the new stage vocabulary
+-- + slack_ok invariant. No dry-insert probe here - Studio has run
+-- statements independently in past sessions, and a partial paste
+-- that skipped a ROLLBACK would leave junk rows in the ledger.
 
 
 -- ═══════════════════════════════════════════════════════════════════
