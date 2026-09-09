@@ -2182,35 +2182,97 @@ export async function resolveOverview({
   const labor3100_inactive =
     (labor3100_actual == null || labor3100_actual === 0) &&
     (labor3100_budget == null || labor3100_budget === 0);
+  // R-98 (Kevin 2026-09-09): on Current period + Next period with the
+  // hourly toggle (include_salary=false), the 3100 parent row shows
+  // hourly-only figures - not the salary-inclusive combined figure.
+  // This is a SERVER-SIDE ACCESS DECISION, not a client render swap:
+  // salary must never leave the server for a request that will render
+  // the hourly view, because a client-side omit leaves the number in
+  // the payload one devtools tab away. Sub-row emission (3100.1 +
+  // 3100.2) still gated by include_salary+role below - on hourly they
+  // do NOT emit, so the parent row has to CARRY the hourly numbers
+  // itself (no sub-line to display them). Scope: only ranges where
+  // the toggle takes effect (single-period open OR planned). CY + LP
+  // keep the salary-inclusive parent + R-68 dense-sum-suppresses-subs
+  // behaviour so their payloads are byte-identical before + after.
+  //
+  // The compute here duplicates the hourly branch inside the +salary
+  // sub-row emission below (lines 2235 onward). The two paths are
+  // mutually exclusive (this fires when !includeSalary; that fires
+  // when includeSalary) so no double-execution; the duplication is
+  // accepted so this change is provably a no-op for +salary payloads.
+  const labor3100_hourly_swap_applies =
+    !includeSalary
+    && rng.kind === "period"
+    && (displayPeriodState === "open" || displayPeriodState === "planned");
+  const hourlyOnly3100 = (() => {
+    if (!labor3100_hourly_swap_applies) return null;
+    const sumActuals = (rows) => {
+      let amt = 0;
+      let anyReported = false;
+      for (const r of rows || []) {
+        const v = r?.amount;
+        if (v != null) { amt += Number(v); anyReported = true; }
+      }
+      return anyReported ? r2(amt) : null;
+    };
+    const sumPeriodBudget = (arr) => arr.reduce((acc, bp) => {
+      if (periods.includes(bp.period_no)) return acc + Number(bp.amount || 0);
+      return acc;
+    }, 0);
+    const actual = sumActuals(laborActuals || []);
+    const period_budget = r2(sumPeriodBudget(laborBudgetPeriodsHourly));
+    const btdRes = computeLaborBudgetToDateDays({
+      budget_periods: laborBudgetPeriodsHourly,
+      start: rng.start,
+      end: effectiveEndISO,
+      today,
+      throughISO: effectiveEndISO,
+    });
+    const budget_to_date = btdRes?.amount ?? null;
+    return { actual, period_budget, budget_to_date };
+  })();
+  const hourly_inactive = labor3100_hourly_swap_applies && hourlyOnly3100
+    && (hourlyOnly3100.actual == null || hourlyOnly3100.actual === 0)
+    && (hourlyOnly3100.period_budget == null || hourlyOnly3100.period_budget === 0);
   {
+    // R-98 (Kevin 2026-09-09): pick between salary-inclusive combined
+    // figures (CY, LP, +salary anywhere) and hourly-only figures
+    // (CP+NP hourly). Salary values NEVER reach the payload on the
+    // hourly-only branch.
+    const use_hourly = labor3100_hourly_swap_applies && !!hourlyOnly3100;
+    const row_actual = use_hourly ? hourlyOnly3100.actual : labor3100_actual;
+    const row_budget = use_hourly ? hourlyOnly3100.period_budget : labor3100_budget;
+    const row_budget_to_date = use_hourly ? hourlyOnly3100.budget_to_date : labor3100_budget_to_date_days;
+    const row_inactive = use_hourly ? hourly_inactive : labor3100_inactive;
     // PR-1 item 3 (2026-09-02): backfill actual_pct + target_pct on
     // the 3100 statement row so the P&L Target % column stops
     // rendering dashes. Same budget/budget rule the cards use.
-    const _actPct = pctOf(labor3100_actual, totalRevenue);
+    const _actPct = pctOf(row_actual, totalRevenue);
     // PR-1 item 1: budget/budget on full-period sums (horizon-invariant).
-    const _tgtPct = has_target ? pctOf(labor3100_budget, revenue_budget_full_period) : null;
-    const _batr = budgetAtThisRevenue(labor3100_budget);
+    const _tgtPct = has_target ? pctOf(row_budget, revenue_budget_full_period) : null;
+    const _batr = budgetAtThisRevenue(row_budget);
     statementRows.push({
       line_code: "3100",
       section: "cogs",
       label: "Kitchen labor",
-      reported: !labor3100_inactive && laborBoard?.applies === true,
-      actual: labor3100_actual,
-      budget_to_date: labor3100_budget_to_date_days,
-      period_budget: labor3100_budget,
+      reported: !row_inactive && laborBoard?.applies === true,
+      actual: row_actual,
+      budget_to_date: row_budget_to_date,
+      period_budget: row_budget,
       // Kevin ruling 2026-09-03 (BLOCKER): row variance must share
       // the reference with the row's percent gap. Measured against
       // budget_at_this_revenue - not budget_to_date - so the dollar
       // and percent columns on the same row agree in sign.
-      variance: (!labor3100_inactive && labor3100_actual != null && _batr != null) ? r2(labor3100_actual - _batr) : null,
-      variance_pct: (has_target && !labor3100_inactive && _actPct != null && _tgtPct != null) ? r2(_actPct - _tgtPct) : null,
-      actual_pct: labor3100_inactive ? null : _actPct,
-      target_pct: labor3100_inactive ? null : _tgtPct,
-      budget_at_this_revenue: labor3100_inactive ? null : _batr,
+      variance: (!row_inactive && row_actual != null && _batr != null) ? r2(row_actual - _batr) : null,
+      variance_pct: (has_target && !row_inactive && _actPct != null && _tgtPct != null) ? r2(_actPct - _tgtPct) : null,
+      actual_pct: row_inactive ? null : _actPct,
+      target_pct: row_inactive ? null : _tgtPct,
+      budget_at_this_revenue: row_inactive ? null : _batr,
       // R-58/R-59: MF accounts null out envelope (contractual revenue).
-      envelope_delta: (labor3100_inactive || isManagementFee) ? null : envelopeDelta(labor3100_budget_to_date_days, _batr),
+      envelope_delta: (row_inactive || isManagementFee) ? null : envelopeDelta(row_budget_to_date, _batr),
       sources: ["labor_actuals"],
-      flags: labor3100_inactive ? ["inactive"] : [],
+      flags: row_inactive ? ["inactive"] : [],
     });
   }
   // Salary reveal (R-28 / §5.9): emit 3100.1 (hourly) + 3100.2

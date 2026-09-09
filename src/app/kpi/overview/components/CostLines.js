@@ -346,10 +346,28 @@ function TotalRow({ rows, hasTarget, cogsCard, totalLabel, showPeriodCols }) {
 // produces the same result today and the wrong one the moment a
 // line's target% changes. The envelope row's ▲/▼ keeps the same
 // direction - one signal repeated.
-function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullPeriod, cogsCard, gmCard }) {
-  const totalSpent = cogsRows.reduce((s, r) => s + Number(r.actual || 0), 0);
-  const totalBudget = cogsRows.reduce((s, r) => s + Number(r.period_budget || 0), 0);
-  const totalTargetPct = cogsRows.reduce((s, r) => s + Number(r.target_pct || 0), 0);
+function SimpleCostLinesTable({ cogsRows, periodNo, weekRail, revenueBudgetFullPeriod, cogsCard, gmCard, statementTotals, includeSalary }) {
+  // R-98 (Kevin 2026-09-09). On CP running + hourly the 3100 row
+  // carries hourly-only figures (server swap at resolver.js), so a
+  // straight sum-of-visible-rows would show a total LOWER than the
+  // salary-inclusive Total cost of goods. Kevin: "Total cost of
+  // goods and Gross margin on both tables. Full figures, both
+  // states." Source the totals from statement_totals.cogs (server
+  // side, salary-inclusive) so the total row keeps the full figure
+  // while the 3100 row reads hourly. Visible-lines-vs-total
+  // mismatch is deliberate - Kevin: "an unspoken rule between
+  // corporate and the site leader." On +salary the two agree; the
+  // guard here is unconditional so the total is always the server
+  // figure - one source of truth on both toggle states.
+  const totalSpent = statementTotals?.cogs?.actual != null
+    ? Number(statementTotals.cogs.actual)
+    : cogsRows.reduce((s, r) => s + Number(r.actual || 0), 0);
+  const totalBudget = statementTotals?.cogs?.period_budget != null
+    ? Number(statementTotals.cogs.period_budget)
+    : cogsRows.reduce((s, r) => s + Number(r.period_budget || 0), 0);
+  const totalTargetPct = statementTotals?.cogs?.target_pct != null
+    ? Number(statementTotals.cogs.target_pct)
+    : cogsRows.reduce((s, r) => s + Number(r.target_pct || 0), 0);
   const periodBudgetHeader = periodNo != null ? `P${periodNo} budget` : "Period budget";
   // Envelope compute: projRev + planRev + delta.
   const planRev = Number(revenueBudgetFullPeriod || 0);
@@ -551,6 +569,8 @@ export default function CostLines({ payload, previewAccount = null }) {
         revenueBudgetFullPeriod={cogsCard?.hero_budget_full_period ?? payload.statement_totals?.revenue?.period_budget ?? null}
         cogsCard={cogsCard}
         gmCard={payload.cards?.find(c => c.key === "gross_margin")}
+        statementTotals={payload.statement_totals}
+        includeSalary={!!payload.filters?.include_salary}
       />
     );
   }
