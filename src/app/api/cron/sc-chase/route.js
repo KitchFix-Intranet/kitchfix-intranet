@@ -1,10 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════
-// /api/cron/sc-chase - hourly N3.1/N3.2/N3.3 chase resolver.
-// PR-G of the SC -> QBO billing arc (2026-08-14).
+// /api/cron/sc-chase - hourly N3.reminder / N3.urgent resolver.
+// Rebuilt 2026-09-09 to the two-stage design.
 // ═══════════════════════════════════════════════════════════════════
 //
-// Spec authority: docs/SC_QBO_SHAPE_SPEC_ADDENDUM_A.md §A5 (test/live),
-// §A6 (matrix), §A6b (Slack channel). Fired hourly on the hour by
+// Spec authority: docs/design/KF_CHASE_EMAILS_RENDER.html + the
+// CC_PROMPT_CHASE_REBUILD.md brief. Fired hourly on the hour by
 // Vercel Cron. For each per-meal account (perMealAccounts.js), the
 // handler resolves "is it a fire moment right now in this account's
 // local timezone?" and if so, checks suppression + idempotency and
@@ -12,14 +12,12 @@
 //
 // ─── Cron schedule ────────────────────────────────────────────────
 //
-// vercel.json entry (PROPOSED, not yet added - owner reviews +
-// applies to danger-zone file):
-//   { "path": "/api/cron/sc-chase", "schedule": "0 * * * *" }
+// vercel.json entry: { "path": "/api/cron/sc-chase", "schedule": "0 * * * *" }
 //
 // ─── Auth ─────────────────────────────────────────────────────────
 //
-// Vercel cron sends Bearer CRON_SECRET. Same pattern as the six
-// existing cron routes.
+// Vercel cron sends Bearer CRON_SECRET. Same pattern as the other
+// cron routes.
 //
 // ─── The resolver logic ──────────────────────────────────────────
 //
@@ -29,14 +27,13 @@
 //      from sc_qbo_account_map.
 //   3. Derive "now in local tz" -> { dayOfWeekLocal, hourLocal }.
 //   4. Match against the schedule:
-//        N3.1 Fri 12:00 local -> chase THIS week (Mon at or before today)
-//        N3.2 Mon 12:00 local -> chase LAST week (Mon of prior week)
-//        N3.3 Tue 09:00 local -> chase LAST week (Mon of prior week)
-//   5. Biweekly semantics: N3.2/N3.3 skip if last week's pair-role
+//        N3.reminder  Sun 18:00 local -> chase THIS week (Mon at or before today)
+//        N3.urgent    Mon 15:00 local -> chase LAST week (Mon of prior week)
+//   5. Biweekly semantics: N3.urgent skips if last week's pair-role
 //      is 'first' (a first-week cannot be finalized alone; the pair
-//      closes with next week). N3.1 fires on both first + close.
+//      closes with next week). N3.reminder fires on both first + close.
 //   6. Suppression: skip if the target week has a live sc_week_finalize
-//      row (status != 'reverted'). For biweekly first-weeks (N3.1
+//      row (status != 'reverted'). For biweekly first-weeks (N3.reminder
 //      case), also check the partner's live row.
 //   7. Idempotency: INSERT sc_week_chase_sent ... ON CONFLICT DO
 //      NOTHING. If 0 rows inserted, another cron already fired this
@@ -44,8 +41,18 @@
 //   8. RDO derivation: if sc_qbo_account_map.rdo_email is NULL,
 //      derive from accounts.region -> REGIONAL_DIRECTORS. If the
 //      region is CORP or missing, no RDO cc (graceful skip).
-//   9. Call fireN3.
-//  10. UPDATE the sc_week_chase_sent row with email_result + slack_ok.
+//   9. Resolve chased-person name for the Slack line via
+//      chasePersonName.js chain.
+//  10. Call fireN3.
+//  11. UPDATE the sc_week_chase_sent row with email_result + slack_ok.
+//
+// ─── Silent-no-recipient guard (Kevin ruling 2026-09-09) ─────────
+//
+// "If an account's salaried list ever comes back empty, the chase
+// would send to nobody and report success. Log the count and the
+// source so a silent no-recipient case is visible." The per-account
+// log line at the end includes to_count / cc_count / source, and
+// fireN3's noSiteRecipient flag surfaces in Slack.
 //
 // ─── Fee + MLB gate ──────────────────────────────────────────────
 //
@@ -60,6 +67,7 @@ import { computeWeekCompleteness, mondayOfWeek, weekDates } from "@/lib/scWeekFi
 import { REGIONAL_DIRECTORS } from "@/lib/incidentSchema";
 import { NOTIFICATION_TYPES } from "@/lib/billing/recipients";
 import { fireN3 } from "@/lib/billing/chaseNotifications";
+import { resolveChasePersonName } from "@/lib/billing/chasePersonName";
 
 export const dynamic    = "force-dynamic";
 export const maxDuration = 60;
@@ -157,17 +165,22 @@ async function isWeekFinalized(supa, accountKey, weekStart) {
   return !!data;
 }
 
-// ─── Site-lead name lookup for N3.3 Slack payload ────────────────
-
-async function siteLeadNamesFor(supa, salariedEmails) {
-  if (!Array.isArray(salariedEmails) || salariedEmails.length === 0) return [];
-  const emails = salariedEmails.map(e => String(e).toLowerCase());
-  const { data, error } = await supa
-    .from("contacts")
-    .select("name, email")
-    .in("email", emails);
-  if (error) return [];
-  return (data || []).map(r => r.name).filter(Boolean);
+// ─── RDO first-name lookup for the urgent email body ─────────────
+//
+// The render's urgent footer reads "Reply with the reason so
+// Sebastian and Shane know." Deriving Shane's first name from the
+// RDO email keeps the copy human. Falls back to "your RDO" in the
+// email body when the lookup finds nothing.
+async function rdoFirstNameFor(supa, rdoEmail) {
+  if (!rdoEmail) return null;
+  const { data } = await supa.from("people")
+    .select("display_name")
+    .eq("status", "ACTIVE")
+    .ilike("work_email", rdoEmail)
+    .maybeSingle();
+  const name = data?.display_name;
+  if (!name || typeof name !== "string") return null;
+  return name.trim().split(/\s+/)[0] || null;
 }
 
 // ─── Fire-window matcher ─────────────────────────────────────────
@@ -176,17 +189,21 @@ async function siteLeadNamesFor(supa, salariedEmails) {
 // exactly (a cron fires on the 0th minute; a stage window is one hour
 // wide). If a future need arises to fire off-the-hour, widen this
 // check.
+//
+// 2026-09-09: two-stage schedule replaces the three-stage ladder.
+// Old vocabulary N3.1 (Fri 12:00) / N3.2 (Mon 12:00) / N3.3 (Tue 9:00)
+// is retired. Kevin dropped the Friday nudge entirely; Tuesday past-
+// due named a fictional billing cron that never existed.
 
 function stageForLocalMoment({ dayName, hour24 }) {
-  if (dayName === "Friday"  && hour24 === 12) return NOTIFICATION_TYPES.N3_1;
-  if (dayName === "Monday"  && hour24 === 12) return NOTIFICATION_TYPES.N3_2;
-  if (dayName === "Tuesday" && hour24 === 9)  return NOTIFICATION_TYPES.N3_3;
+  if (dayName === "Sunday" && hour24 === 18) return NOTIFICATION_TYPES.N3_REMINDER;
+  if (dayName === "Monday" && hour24 === 15) return NOTIFICATION_TYPES.N3_URGENT;
   return null;
 }
 
 // Which week does this stage target (relative to now in local tz)?
 function targetMondayFor(stage, isoDateLocal) {
-  if (stage === NOTIFICATION_TYPES.N3_1) return mondayOfLocalDate(isoDateLocal);
+  if (stage === NOTIFICATION_TYPES.N3_REMINDER) return mondayOfLocalDate(isoDateLocal);
   return mondayOfPriorLocalWeek(isoDateLocal);
 }
 
@@ -222,7 +239,7 @@ async function acceptanceMatrix(request) {
   // 7-service-day denominator on live pilot data.
   const forcedTargetWeek = url.searchParams.get("target_week");
   const PILOTS = ["TXR - AZ", "CIN - AZ"];
-  const STAGES = [NOTIFICATION_TYPES.N3_1, NOTIFICATION_TYPES.N3_2, NOTIFICATION_TYPES.N3_3];
+  const STAGES = [NOTIFICATION_TYPES.N3_REMINDER, NOTIFICATION_TYPES.N3_URGENT];
 
   async function ctxOf(accountKey) {
     const [acc, map] = await Promise.all([
@@ -265,7 +282,8 @@ async function acceptanceMatrix(request) {
         complete: target.complete, total: target.total, missingDates: target.missing,
         scWeekLink: `${process.env.NEXT_PUBLIC_BASE_URL || ""}/service-calendar?account=${encodeURIComponent(account)}&month=${target.weekStart.slice(0,7)}&day=${target.weekStart}`,
         accountMap: { salariedManagerEmails: ctx.salaried, rdoEmail: ctx.rdoEmail },
-        siteLeadNames: [],
+        chasedPersonName: null,
+        rdoFirstName: null,
         send: false,
       });
       perStage.push({
@@ -285,15 +303,21 @@ async function acceptanceMatrix(request) {
     perPilot.push({ account, ctx, target, stages: perStage });
   }
 
-  // G7 live-mode empty salaried on TXR - AZ.
+  // G7 live-mode empty salaried on TXR - AZ. Under the new reminder
+  // shape, empty salaried means empty TO (Sunday sends salaried
+  // only). fireN3 sets noSiteRecipient=true and skips the email
+  // send; Slack still fires so the gap is visible on Kevin's
+  // monitoring channel.
   const target = await targetOf("TXR - AZ");
   const emptyLive = await fireN3({
-    stage: NOTIFICATION_TYPES.N3_1, qboMode: "live",
+    stage: NOTIFICATION_TYPES.N3_REMINDER, qboMode: "live",
     accountKey: "TXR - AZ",
     weekStart: target.weekStart, weekEnd: target.weekEnd,
     complete: target.complete, total: target.total, missingDates: target.missing,
     scWeekLink: "http://localhost:3000/",
     accountMap: { salariedManagerEmails: [], rdoEmail: "r.moore@kitchfix.com" },
+    chasedPersonName: null,
+    rdoFirstName: null,
     send: false,
   });
 
@@ -386,11 +410,15 @@ export async function GET(request) {
     const dates     = weekDates(weekStart);
     const weekEnd   = dates[6];
 
-    // Cadence + pair-role check for biweekly.
+    // Cadence + pair-role check for biweekly. N3.urgent skips on a
+    // first-week (last week is the first half of a still-open pair;
+    // the pair closes next Sunday). N3.reminder fires on both roles -
+    // an operator still benefits from a nudge to keep counts fresh
+    // even when the week doesn't bill alone.
     const pair = await pairRoleFor(supa, accountKey, weekStart, map.cadence);
     if (
       map.cadence === "biweekly"
-      && (stage === NOTIFICATION_TYPES.N3_2 || stage === NOTIFICATION_TYPES.N3_3)
+      && stage === NOTIFICATION_TYPES.N3_URGENT
       && pair.pairRole !== "close"
     ) {
       log.push(`${accountKey}: ${stage} skip - biweekly week ${weekStart} is not the close-week (role=${pair.pairRole})`);
@@ -403,11 +431,12 @@ export async function GET(request) {
       log.push(`${accountKey}: ${stage} skip - week ${weekStart} is already finalized`);
       continue;
     }
-    // Biweekly first-week (N3.1 only): partner already finalized closes the pair.
-    if (map.cadence === "biweekly" && stage === NOTIFICATION_TYPES.N3_1 && pair.pairRole === "first" && pair.partnerMonday) {
+    // Biweekly first-week (N3.reminder only): partner already finalized
+    // closes the pair.
+    if (map.cadence === "biweekly" && stage === NOTIFICATION_TYPES.N3_REMINDER && pair.pairRole === "first" && pair.partnerMonday) {
       const partnerFinalized = await isWeekFinalized(supa, accountKey, pair.partnerMonday);
       if (partnerFinalized) {
-        log.push(`${accountKey}: N3.1 skip - biweekly first-week ${weekStart} has partner ${pair.partnerMonday} already finalized`);
+        log.push(`${accountKey}: ${stage} skip - biweekly first-week ${weekStart} has partner ${pair.partnerMonday} already finalized`);
         continue;
       }
     }
@@ -440,7 +469,14 @@ export async function GET(request) {
     // already claimed this send - skip.
     const isTest = map.qbo_mode === "test";
     if (dryRun) {
-      log.push(`${accountKey}: ${stage} DRY-RUN would send to ${JSON.stringify({ to_len: (isTest ? 1 : (map.salaried_manager_emails || []).length), cc_len: 2 + (rdoEmail && stage === NOTIFICATION_TYPES.N3_3 ? 1 : 0) })}`);
+      // Recipient headcount for the log: test-mode collapses to Kevin;
+      // live-mode reminder = salaried only, urgent = salaried + Sebastian
+      // + Kevin + RDO (deduped later inside resolveRecipients).
+      const salariedCount = (map.salaried_manager_emails || []).length;
+      const liveToCount = stage === NOTIFICATION_TYPES.N3_URGENT
+        ? salariedCount + 2 + (rdoEmail ? 1 : 0)
+        : salariedCount;
+      log.push(`${accountKey}: ${stage} DRY-RUN would send to ${JSON.stringify({ to_len: isTest ? 1 : liveToCount, cc_len: 0 })}`);
       results.push({ accountKey, stage, weekStart, dryRun: true, moment, complete, total, missingCount: missing.length, isTest, rdoEmail });
       continue;
     }
@@ -453,9 +489,8 @@ export async function GET(request) {
         recipients_to:  [],
         recipients_cc:  [],
         is_test:        isTest,
-        // 2026-09-03: all three chase stages now post to Slack (was
-        // N3.3 only). Initialize slack_ok = false for every stage;
-        // the post-send UPDATE stamps the actual outcome.
+        // Both new stages Slack; initialize false, the post-send
+        // UPDATE stamps the outcome.
         slack_ok:       false,
       })
       .select("id")
@@ -474,12 +509,19 @@ export async function GET(request) {
     }
     const ledgerId = insertRes.data?.id;
 
-    // Site-lead names for the N3.3 Slack "Site leads:" line. Only
-    // needed for that stage; skip the round-trip otherwise.
-    let siteLeadNames = [];
-    if (stage === NOTIFICATION_TYPES.N3_3) {
-      siteLeadNames = await siteLeadNamesFor(supa, map.salaried_manager_emails);
-    }
+    // Chased-person + RDO first-name lookups (both stages need
+    // chasedPersonName for the Slack line; only urgent uses
+    // rdoFirstName for the email body's "Sebastian and Shane know"
+    // sentence, so scope that call to save a query on Sunday).
+    const chasedPerson = await resolveChasePersonName({
+      accountKey,
+      weekStart,
+      weekEnd,
+      salariedManagerEmails: map.salaried_manager_emails || [],
+    });
+    const rdoFirstName = stage === NOTIFICATION_TYPES.N3_URGENT
+      ? await rdoFirstNameFor(supa, rdoEmail)
+      : null;
 
     // fireN3. accountMap shape matches resolveRecipients expectations.
     let fireRes;
@@ -493,7 +535,8 @@ export async function GET(request) {
           salariedManagerEmails: map.salaried_manager_emails || [],
           rdoEmail,
         },
-        siteLeadNames,
+        chasedPersonName: chasedPerson?.displayName || null,
+        rdoFirstName,
       });
     } catch (e) {
       log.push(`${accountKey}: ${stage} FIRE THREW: ${e.message || e}`);
@@ -503,9 +546,11 @@ export async function GET(request) {
     }
 
     // Post-send: stamp email_result + slack_ok on the ledger row so
-    // the audit trail records the outcome. 2026-09-03: slack_ok
-    // tracked for all three stages (was N3.3 only).
-    const emailResultText = fireRes?.email?.result === "sent" ? "sent" : "failed";
+    // the audit trail records the outcome. Both stages Slack, both
+    // track email + slack outcomes.
+    const emailResultText = fireRes?.email?.result === "sent" ? "sent"
+      : fireRes?.email?.result === "skipped_no_recipients" ? "skipped_no_recipients"
+      : "failed";
     const slackOk = !!fireRes?.slack?.result?.sent;
     if (ledgerId) {
       const updRes = await supa
@@ -523,10 +568,16 @@ export async function GET(request) {
       }
     }
 
-    log.push(`${accountKey}: ${stage} ${emailResultText} slack=${slackOk} week=${weekStart} to=${fireRes.recipients.to.length} cc=${fireRes.recipients.cc.length}${fireRes.noSiteRecipient ? " NO_SITE_RECIPIENT" : ""}`);
+    // Silent-no-recipient guard (Kevin ruling 2026-09-09): the log
+    // line names to/cc counts + the person-name source so a chase
+    // that resolved to empty is visible. `source` is one of
+    // recent_submitter / site_leader / first_salaried / none.
+    const nameSource = chasedPerson?.source || "none";
+    log.push(`${accountKey}: ${stage} email=${emailResultText} slack=${slackOk} week=${weekStart} to=${fireRes.recipients.to.length} cc=${fireRes.recipients.cc.length} name_source=${nameSource}${fireRes.noSiteRecipient ? " NO_SITE_RECIPIENT" : ""}`);
     results.push({
       accountKey, stage, weekStart, complete, total,
       missing, isTest, rdoEmail,
+      chasedPerson: chasedPerson ? { displayName: chasedPerson.displayName, source: chasedPerson.source } : null,
       email: fireRes.email, slack: fireRes.slack,
       noSiteRecipient: fireRes.noSiteRecipient,
     });

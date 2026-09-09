@@ -87,35 +87,35 @@ test("F3 N2: Kevin + Sebastian only", () => {
   assert.deepEqual(out.cc, []);
 });
 
-test("F3 N3.1: salaried (to), Kevin+Sebastian (cc)", () => {
+// Chase-ladder rebuild 2026-09-09: N3_1/N3_2/N3_3 retired, replaced
+// by N3_REMINDER (Sun 18:00, salaried only) + N3_URGENT (Mon 15:00,
+// salaried + Sebastian + Kevin + RDO all TO). See
+// docs/design/KF_CHASE_EMAILS_RENDER.html.
+
+test("F3 N3.reminder: salaried list only (no RDO on Sunday)", () => {
   const out = resolveRecipients({
-    notification: NOTIFICATION_TYPES.N3_1,
+    notification: NOTIFICATION_TYPES.N3_REMINDER,
     accountKey: "TXR - AZ", mode: "live",
     accountMap: LIVE_ACCOUNT_MAP,
   });
   assert.deepEqual([...out.to].sort(), ["l.ochoa@kitchfix.com", "chef2@kitchfix.com"].sort());
-  assert.deepEqual([...out.cc].sort(), [KEVIN_EMAIL, SEBASTIAN_EMAIL].sort());
+  assert.deepEqual(out.cc, []);
+  assert.ok(!out.to.includes("s.lynch@kitchfix.com"), "RDO must not be on Sunday reminder");
+  assert.ok(!out.to.includes(SEBASTIAN_EMAIL),         "Sebastian must not be on Sunday reminder");
+  assert.ok(!out.to.includes(KEVIN_EMAIL),             "Kevin must not be on Sunday reminder");
 });
 
-test("F3 N3.2: salaried (to), Kevin+Sebastian (cc) - same as N3.1", () => {
+test("F3 N3.urgent: salaried + Sebastian + Kevin + RDO, all TO, no CC", () => {
   const out = resolveRecipients({
-    notification: NOTIFICATION_TYPES.N3_2,
+    notification: NOTIFICATION_TYPES.N3_URGENT,
     accountKey: "TXR - AZ", mode: "live",
     accountMap: LIVE_ACCOUNT_MAP,
   });
-  assert.deepEqual([...out.to].sort(), ["l.ochoa@kitchfix.com", "chef2@kitchfix.com"].sort());
-  assert.deepEqual([...out.cc].sort(), [KEVIN_EMAIL, SEBASTIAN_EMAIL].sort());
-});
-
-test("F3 N3.3: salaried (to), Kevin+Sebastian+RDO (cc)", () => {
-  const out = resolveRecipients({
-    notification: NOTIFICATION_TYPES.N3_3,
-    accountKey: "TXR - AZ", mode: "live",
-    accountMap: LIVE_ACCOUNT_MAP,
-  });
-  assert.deepEqual([...out.to].sort(), ["l.ochoa@kitchfix.com", "chef2@kitchfix.com"].sort());
-  assert.deepEqual([...out.cc].sort(),
-    [KEVIN_EMAIL, SEBASTIAN_EMAIL, "s.lynch@kitchfix.com"].sort());
+  assert.deepEqual([...out.to].sort(), [
+    "l.ochoa@kitchfix.com", "chef2@kitchfix.com",
+    SEBASTIAN_EMAIL, KEVIN_EMAIL, "s.lynch@kitchfix.com",
+  ].sort());
+  assert.deepEqual(out.cc, []);
 });
 
 test("F3 N4: adjuster, Joe, Josh, Sebastian, RDO (to)", () => {
@@ -146,13 +146,27 @@ test("live-mode: empty salariedManagerEmails leaves them out (no crash)", () => 
   assert.ok(!out.to.some(e => e === undefined || e === null));
 });
 
-test("live-mode: NULL rdo_email keeps N3.3 cc = [Kevin, Sebastian]", () => {
+test("live-mode: NULL rdo_email drops RDO from N3.urgent TO (dedup nulls out)", () => {
   const out = resolveRecipients({
-    notification: NOTIFICATION_TYPES.N3_3,
+    notification: NOTIFICATION_TYPES.N3_URGENT,
     accountKey: "TXR - AZ", mode: "live",
     accountMap: { salariedManagerEmails: ["a@x.com"], rdoEmail: null },
   });
-  assert.deepEqual([...out.cc].sort(), [KEVIN_EMAIL, SEBASTIAN_EMAIL].sort());
+  assert.deepEqual([...out.to].sort(),
+    ["a@x.com", SEBASTIAN_EMAIL, KEVIN_EMAIL].sort());
+  assert.deepEqual(out.cc, []);
+  assert.ok(!out.to.some(e => e == null),
+    "Null RDO must not leak into TO (dedup drops falsy)");
+});
+
+test("live-mode: empty salaried for N3.reminder leaves TO empty (caller flags noSiteRecipient)", () => {
+  const out = resolveRecipients({
+    notification: NOTIFICATION_TYPES.N3_REMINDER,
+    accountKey: "TXR - AZ", mode: "live",
+    accountMap: { salariedManagerEmails: [], rdoEmail: "r@x.com" },
+  });
+  assert.deepEqual(out.to, []);
+  assert.deepEqual(out.cc, []);
 });
 
 test("live-mode: duplicate submitter (already in static) dedups", () => {

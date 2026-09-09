@@ -43,13 +43,29 @@ export const JOSH_EMAIL      = "josh@kitchfix.com";    // Josh Katt (CEO), align
 // live-mode branch is a compile-time-esque error (the switch defaults
 // to a throw so mistakes surface at first fire, not on Sebastian's
 // invoice).
+//
+// Chase-ladder rebuild 2026-09-09: three stages became two per
+// Kevin's ruling to Sebastian (see docs/design/KF_CHASE_EMAILS_RENDER.html
+// and the CC_PROMPT_CHASE_REBUILD.md brief).
+//   N3.1 (Friday 12:00 reminder) - RETIRED. Kevin dropped the Friday
+//     nudge entirely.
+//   N3.2 (Monday 12:00 urgent)   - RETIRED, superseded by N3_URGENT
+//     with new time + recipients + copy.
+//   N3.3 (Tuesday 09:00 past-due) - RETIRED. The Tuesday billing-run
+//     concept it named was fiction; no cron actually bills at that
+//     time. New shape names real consequences instead.
+//   N3_REMINDER (Sunday 18:00 local) - NEW.
+//   N3_URGENT   (Monday 15:00 local) - NEW.
+//
+// Old symbol names retained below as commented notes; do not
+// re-export them - a caller passing "N3.1" now hits the switch's
+// default throw at first fire, which is the correct failure mode.
 export const NOTIFICATION_TYPES = Object.freeze({
-  N1:   "N1",     // Invoice ready
-  N2:   "N2",     // Push failed
-  N3_1: "N3.1",   // Friday 12:00 reminder
-  N3_2: "N3.2",   // Monday 12:00 urgent
-  N3_3: "N3.3",   // Tuesday 09:00 past due (+RDO cc)
-  N4:   "N4",     // Credit needed (+RDO to)
+  N1:          "N1",             // Invoice ready
+  N2:          "N2",             // Push failed
+  N3_REMINDER: "N3.reminder",    // Sunday 18:00 local - salaried list, no RDO
+  N3_URGENT:   "N3.urgent",      // Monday 15:00 local - salaried + Sebastian + Kevin + RDO
+  N4:          "N4",             // Credit needed (+RDO to)
 });
 
 // Deduplicate while preserving order + case-folded key so
@@ -116,20 +132,34 @@ export function resolveRecipients(args) {
       return { to: dedup([KEVIN_EMAIL, SEBASTIAN_EMAIL]), cc: [] };
     }
 
-    // N3.1 / N3.2: salaried managers (to), Kevin + Sebastian (cc)
-    case NOTIFICATION_TYPES.N3_1:
-    case NOTIFICATION_TYPES.N3_2: {
+    // N3.reminder (Sunday 18:00): salaried list only. No RDO on
+    // Sunday - Kevin's ruling. An RDO who covers two accounts and
+    // gets weekly Sunday emails per account regardless of whether
+    // anything is wrong learns to filter the sender. Under this
+    // shape, an email from the ladder means something needs their
+    // attention. See docs/design/KF_CHASE_EMAILS_RENDER.html.
+    case NOTIFICATION_TYPES.N3_REMINDER: {
       return {
         to: dedup(salaried),
-        cc: dedup([KEVIN_EMAIL, SEBASTIAN_EMAIL]),
+        cc: [],
       };
     }
 
-    // N3.3: salaried managers (to), Kevin + Sebastian + RDO (cc)
-    case NOTIFICATION_TYPES.N3_3: {
+    // N3.urgent (Monday 15:00): salaried list + Sebastian + Kevin +
+    // RDO. All primary, no cc split. The prior render suggested a
+    // submitter/other-salaried TO/CC split, but that required a
+    // submitter distinct from the salaried list which does not
+    // exist as a data concept (see Kevin ruling 2026-09-09). One
+    // list, one field, no derivation.
+    case NOTIFICATION_TYPES.N3_URGENT: {
       return {
-        to: dedup(salaried),
-        cc: dedup([KEVIN_EMAIL, SEBASTIAN_EMAIL, rdo]),
+        to: dedup([
+          ...salaried,
+          SEBASTIAN_EMAIL,
+          KEVIN_EMAIL,
+          rdo,
+        ]),
+        cc: [],
       };
     }
 
