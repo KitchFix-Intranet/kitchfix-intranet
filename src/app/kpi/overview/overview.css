@@ -1004,6 +1004,30 @@
   font-weight: 700;
   font-size: var(--kpi-t-body);
 }
+/* Kevin bug 2026-09-09 (post-#1086). Two plan-band cells
+   (.plan-first + .plan-last) closed the row with the plan band's
+   OWN 1px n-200 border-bottom + 8px corner radius, from
+   .kpi-app .kpi-ov-pnl tbody tr:last-child td.plan-first earlier
+   in the file - specificity (0,4,3), higher than the row rule
+   .kpi-app .kpi-ov-pnl tr.kpi-ov-pnl-gm td at (0,3,2). Result:
+   the 2px navy closing rule broke into three segments with two
+   1px n-200 gaps under Budget + Adjusted. Fix: matched specificity
+   (0,4,3) via tr.kpi-ov-pnl-gm on top of tbody + td, winning by
+   cascade order (this rule sits later in the file). Also zero the
+   corner radii so the navy line closes STRAIGHT across all seven
+   cells rather than curling into the plan band's rounded corner.
+   Top corners zeroed too - the top navy rule from the GM row block
+   above hits these same cells and would curl in symmetric fashion
+   without this. */
+.kpi-app .kpi-ov-pnl tbody tr.kpi-ov-pnl-gm td.plan-first,
+.kpi-app .kpi-ov-pnl tbody tr.kpi-ov-pnl-gm td.plan-last {
+  border-top: 2px solid var(--navy-700);
+  border-bottom: 2px solid var(--navy-700);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
 .kpi-app .kpi-ov-pnl-sub td {
   padding-top: 8px;
   padding-bottom: 8px;

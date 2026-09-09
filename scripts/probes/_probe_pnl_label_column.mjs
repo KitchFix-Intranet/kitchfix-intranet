@@ -29,6 +29,18 @@
 //      the reversal was accidentally re-introduced OR a white-on-
 //      transparent leak like #1083). Kevin: "Update it to describe
 //      the new rule. Do not delete the check."
+//   5. GM row closes as ONE line - every td on tbody's last row
+//      carries the same border-bottom colour + width. Added
+//      2026-09-09 after the post-#1086 bug where .plan-first +
+//      .plan-last cells retained the plan band's own 1px n-200
+//      border-bottom (specificity 0,4,3) instead of picking up
+//      the 2px navy closing rule from the row block (0,3,2), so
+//      the closing line broke into three segments with two 1px
+//      n-200 gaps under Budget + Adjusted. Same class of bug will
+//      recur any time a new cell-scoped rule for a plan-band or
+//      variance cell outranks the row-scoped border-bottom - this
+//      probe catches it by measuring every cell of tbody's
+//      last-row (which IS the GM row).
 //
 // Fixture: TBJ - FL Current year, Full view (all 13 sub rows visible).
 // Prereqs: `TEST_MODE=true npm run dev` running on :3000, Chromium
@@ -159,7 +171,54 @@ async function measure(viewportWidth) {
         }
       }
     }
-    return { tblWidth: Math.round(tblWidth), samples, subCount, numericSamples, gmPaintSamples };
+    // Invariant 5: GM row closes as one line. tbody's last row is
+    // the GM summary; the 2px navy border-bottom from the row rule
+    // must land on ALL seven cells. Post-#1086 bug: two plan-band
+    // rules on tr:last-child td.plan-first / td.plan-last carried
+    // higher specificity than the row rule and overrode with 1px
+    // n-200, breaking the closing line into three segments. Report
+    // any cell whose border-bottom width or colour differs from the
+    // row's modal value.
+    const gmBorderSamples = [];
+    let gmBorderMode = null;
+    if (gmRow) {
+      const gmCells = [...gmRow.querySelectorAll('td')];
+      const borders = gmCells.map(td => {
+        const cs = window.getComputedStyle(td);
+        return {
+          width: cs.borderBottomWidth,
+          color: cs.borderBottomColor,
+          style: cs.borderBottomStyle,
+        };
+      });
+      // Modal signature = most common {width|color|style}. If every
+      // cell agrees, gmBorderSamples stays empty.
+      const counts = new Map();
+      for (const b of borders) {
+        const key = `${b.width}|${b.color}|${b.style}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      let modeKey = null;
+      let modeCount = 0;
+      for (const [k, c] of counts) {
+        if (c > modeCount) { modeKey = k; modeCount = c; }
+      }
+      gmBorderMode = modeKey;
+      for (let i = 0; i < borders.length; i += 1) {
+        const b = borders[i];
+        const key = `${b.width}|${b.color}|${b.style}`;
+        if (key !== modeKey) {
+          gmBorderSamples.push({
+            colIdx: i,
+            cls: gmCells[i].className,
+            width: b.width,
+            color: b.color,
+            style: b.style,
+          });
+        }
+      }
+    }
+    return { tblWidth: Math.round(tblWidth), samples, subCount, numericSamples, gmPaintSamples, gmBorderSamples, gmBorderMode };
   });
   await browser.close();
   return info;
@@ -173,6 +232,7 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
   if (info.samples.some(s => s.clipped)) failures += 1;
   if ((info.numericSamples || []).length) failures += 1;
   if ((info.gmPaintSamples || []).length) failures += 1;
+  if ((info.gmBorderSamples || []).length) failures += 1;
   console.log(`  table width: ${info.tblWidth}px · sub rows: ${info.subCount}`);
   const clippers = info.samples.filter(s => s.clipped);
   const wrappers = info.samples.filter(s => s.wraps);
@@ -209,6 +269,14 @@ for (const vw of [1400, 1240, 1024, 900, 768, 700]) {
     }
   } else {
     console.log(`  GM row: every cell legible or hatched`);
+  }
+  if (info.gmBorderSamples?.length) {
+    console.log(`  GM-ROW CLOSING RULE BROKEN (${info.gmBorderSamples.length} cells differ from modal "${info.gmBorderMode}"):`);
+    for (const s of info.gmBorderSamples) {
+      console.log(`    col${s.colIdx} cls="${s.cls}"  ${s.width} ${s.style} ${s.color}`);
+    }
+  } else {
+    console.log(`  GM row: closes as one line (border-bottom ${info.gmBorderMode || "n/a"})`);
   }
 }
 
