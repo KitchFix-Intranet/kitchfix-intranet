@@ -85,6 +85,27 @@
 //   1 for everyone else. Empty `invoices[]` if no billable actuals
 //   (still valid; caller decides what to do).
 
+import { buildInvoiceMemo } from "./invoiceMemo";
+
+// ─── QBO Term ID for Net 30 (tenant-scoped constant) ─────────────
+//
+// Verified live against tenant realmId=1219933770 via
+// /query?query=select+*+from+Term on 2026-09-09 - Term Id=7 is the
+// active "Net 30" term (DueDays=30). Same ID appears on every fixture
+// invoice from July + August.
+//
+// Hardcoded rather than per-account column because every account is
+// Net 30 today and a column nobody varies goes stale (see PR body
+// for the full reasoning). When a per-account exception ever
+// appears (e.g. an account negotiates Net 45), promote to a nullable
+// sc_qbo_account_map.qbo_term_id column that defaults to this
+// constant. Not before.
+//
+// If QBO admin ever deletes + recreates Net 30 with a different ID,
+// the failure mode is a clean POST error surfaced via N2, not a
+// silent wrong-terms invoice.
+export const QBO_TERM_ID_NET30 = "7";
+
 const MEAL_ORDER = new Map([
   ["Breakfast",              10],
   ["Continental Breakfast",  15],
@@ -459,8 +480,30 @@ export function buildInvoicePayload({
         name: accountMap.qbo_customer_name,
       },
       TxnDate: closingSunday,
+      // 2026-09-09 (go-live recon Item 1): set SalesTermRef explicitly
+      // rather than relying on the customer's QBO-side default. A
+      // default that gets edited on the customer record ships wrong
+      // terms silently; an explicit ref cannot. Also fixes CIN - AZ
+      // which has no default term set today (probe 2026-09-09 shows
+      // Customer 17752 SalesTermRef=null). QBO computes DueDate =
+      // TxnDate + Term.DueDays automatically; we deliberately omit
+      // DueDate so there's one authoritative source per field.
+      SalesTermRef: { value: QBO_TERM_ID_NET30 },
       TxnTaxDetail: {
         TxnTaxCodeRef: { value: accountMap.qbo_taxcode_id },
+      },
+      // 2026-09-09 (go-live recon Item 1b): uniform week-of-service
+      // memo on every generated invoice. Copy lives in
+      // src/lib/billing/invoiceMemo.js as named templates - edit
+      // there when Sebastian sends final wording. Test-mode drafts
+      // still get the "TEST" marker via qboAdapter.markPayloadAsTest;
+      // this live-path memo is overwritten in test mode by design.
+      CustomerMemo: {
+        value: buildInvoiceMemo({
+          weekStart,
+          weekEnd: closingSunday,
+          isBiweekly,
+        }),
       },
       Line: lines,
       _preTaxSubtotal: preTaxSubtotal,
