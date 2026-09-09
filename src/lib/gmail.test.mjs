@@ -173,3 +173,141 @@ test("html body is base64-encoded inside multipart/alternative", () => {
   assert.ok(decoded.includes(expectedB64), "html should appear base64-encoded in body");
   assert.match(decoded, /Content-Type: multipart\/alternative; boundary="boundary_fixed_for_tests"/);
 });
+
+// ─── attachments ────────────────────────────────────────────────
+//
+// buildSAMime accepts `attachments: [{ filename, mimeType, base64 }]`
+// (added 2026-09-09 for the N1 record-copy). When present, top-level
+// Content-Type switches from multipart/alternative to multipart/mixed
+// with the HTML body wrapped in a nested multipart/alternative.
+// Audit BCC + cc plumbing must survive this shape switch - these
+// tests would fail loudly if a refactor dropped either.
+
+const ATTACHMENT_BASE = {
+  ...BASE,
+  innerBoundary: "boundary_inner_fixed",
+};
+
+test("no attachments -> Content-Type stays multipart/alternative", () => {
+  const res = buildSAMime({ ...ATTACHMENT_BASE });
+  const decoded = decode(res);
+  assert.match(decoded, /^Content-Type: multipart\/alternative;/m);
+  assert.ok(!/multipart\/mixed/.test(decoded));
+  assert.equal(res.headers.attachmentCount, 0);
+});
+
+test("no attachments -> empty attachments array is treated as absent", () => {
+  const res = buildSAMime({ ...ATTACHMENT_BASE, attachments: [] });
+  assert.match(decode(res), /^Content-Type: multipart\/alternative;/m);
+  assert.equal(res.headers.attachmentCount, 0);
+});
+
+test("one attachment -> Content-Type switches to multipart/mixed", () => {
+  const pdfBase64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    attachments: [{ filename: "test.pdf", mimeType: "application/pdf", base64: pdfBase64 }],
+  });
+  const decoded = decode(res);
+  assert.match(decoded, /^Content-Type: multipart\/mixed; boundary="boundary_fixed_for_tests"/m);
+  assert.equal(res.headers.attachmentCount, 1);
+});
+
+test("attachment: HTML body nested in multipart/alternative under the outer mixed", () => {
+  const pdfBase64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    attachments: [{ filename: "test.pdf", mimeType: "application/pdf", base64: pdfBase64 }],
+  });
+  const decoded = decode(res);
+  assert.match(decoded, /Content-Type: multipart\/alternative; boundary="boundary_inner_fixed"/);
+  const htmlB64 = Buffer.from("<p>body</p>").toString("base64");
+  assert.ok(decoded.includes(htmlB64), "HTML body must still be present, base64-encoded");
+});
+
+test("attachment: filename + mimeType + Content-Disposition emitted", () => {
+  const pdfBase64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    attachments: [{ filename: "TBR-FL_record.pdf", mimeType: "application/pdf", base64: pdfBase64 }],
+  });
+  const decoded = decode(res);
+  assert.match(decoded, /Content-Type: application\/pdf; name="TBR-FL_record.pdf"/);
+  assert.match(decoded, /Content-Disposition: attachment; filename="TBR-FL_record.pdf"/);
+  assert.ok(decoded.includes(pdfBase64), "attachment base64 payload present");
+});
+
+test("attachment: audit BCC still present alongside multipart/mixed", () => {
+  // This is the critical assertion Kevin flagged: the audit trail
+  // must survive the MIME shape change. If a refactor moves the
+  // Bcc header emission out of the shared header block, this test
+  // catches it before the next real send.
+  const pdfBase64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    attachments: [{ filename: "test.pdf", mimeType: "application/pdf", base64: pdfBase64 }],
+  });
+  assert.match(decode(res), new RegExp(`^Bcc: ${AUDIT_BCC_EMAIL}$`, "m"));
+  assert.deepEqual(res.headers.bcc, [AUDIT_BCC_EMAIL]);
+});
+
+test("attachment: audit BCC still dedups when audit in To (with attachment)", () => {
+  const pdfBase64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    to: [AUDIT_BCC_EMAIL, "other@x.com"],
+    attachments: [{ filename: "test.pdf", mimeType: "application/pdf", base64: pdfBase64 }],
+  });
+  assert.ok(!/^Bcc:/m.test(decode(res)));
+});
+
+test("attachment: cc still plumbs through when attachment present", () => {
+  const pdfBase64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    cc: ["a@x.com", "b@x.com"],
+    attachments: [{ filename: "test.pdf", mimeType: "application/pdf", base64: pdfBase64 }],
+  });
+  assert.match(decode(res), /^Cc: a@x.com, b@x.com$/m);
+});
+
+test("attachment: base64 payload chunked to 76 chars per RFC 2045", () => {
+  // Encode a long enough payload to force multiple chunks.
+  const payload = "A".repeat(300);
+  const b64 = Buffer.from(payload).toString("base64"); // 400 chars, > 76
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    attachments: [{ filename: "big.pdf", mimeType: "application/pdf", base64: b64 }],
+  });
+  const decoded = decode(res);
+  // Find the attachment section and confirm no line exceeds 76 chars
+  // between the attachment header and the next boundary.
+  const startMarker = "Content-Disposition: attachment; filename=\"big.pdf\"";
+  const startIdx = decoded.indexOf(startMarker);
+  assert.ok(startIdx >= 0);
+  const endMarker = "--boundary_fixed_for_tests--";
+  const endIdx = decoded.indexOf(endMarker, startIdx);
+  const attachmentBlock = decoded.slice(startIdx, endIdx);
+  const attachmentLines = attachmentBlock.split(/\r\n|\n/).filter((l) => /^[A-Za-z0-9+/=]/.test(l));
+  for (const line of attachmentLines) {
+    assert.ok(line.length <= 76, `attachment line exceeds 76 chars: ${line.slice(0, 40)}... (${line.length} chars)`);
+  }
+});
+
+test("attachment: multiple attachments emit multiple parts", () => {
+  const pdfA = Buffer.from("A pdf").toString("base64");
+  const pdfB = Buffer.from("B pdf").toString("base64");
+  const res = buildSAMime({
+    ...ATTACHMENT_BASE,
+    attachments: [
+      { filename: "a.pdf", mimeType: "application/pdf", base64: pdfA },
+      { filename: "b.pdf", mimeType: "application/pdf", base64: pdfB },
+    ],
+  });
+  const decoded = decode(res);
+  assert.match(decoded, /filename="a.pdf"/);
+  assert.match(decoded, /filename="b.pdf"/);
+  assert.ok(decoded.includes(pdfA));
+  assert.ok(decoded.includes(pdfB));
+  assert.equal(res.headers.attachmentCount, 2);
+});

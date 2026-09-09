@@ -450,10 +450,14 @@ function encodeSubjectSA(subject) {
  * The `cc` parameter was added 2026-09-09 (PR sc/sendEmailSA-cc-plumbing).
  * Prior to that fix, the signature omitted cc entirely - callers
  * that passed it (chaseNotifications.js) had their cc list silently
- * dropped because JS accepts unknown destructured properties. That
- * bug persisted for weeks because no test asserted a CC recipient
- * and every production caller happened to pass an empty cc list.
- * The tests in gmail.test.mjs now cover cc plumbing explicitly.
+ * dropped because JS accepts unknown destructured properties.
+ *
+ * The `attachments` parameter was added 2026-09-09 (PR sc/confirmation-
+ * record-copy) so the N1 confirmation email can carry the RECORD COPY
+ * PDF. When attachments is non-empty the top-level Content-Type
+ * switches from multipart/alternative to multipart/mixed with the HTML
+ * body wrapped in a nested multipart/alternative. Audit BCC and cc
+ * plumbing survive unchanged - covered by the same test suite.
  *
  * @param {Object} args
  * @param {string} args.sender
@@ -463,13 +467,17 @@ function encodeSubjectSA(subject) {
  * @param {string} args.subject
  * @param {string} args.html
  * @param {string} [args.replyTo]
+ * @param {Array<{ filename: string, mimeType: string, base64: string }>} [args.attachments]
  * @param {string} [args.boundary] - injectable for deterministic tests
- * @returns {{ raw: string, headers: { to: string[], cc: string[], bcc: string[] } }}
+ * @param {string} [args.innerBoundary] - injectable inner boundary for deterministic tests
+ * @returns {{ raw: string, headers: { to: string[], cc: string[], bcc: string[], attachmentCount: number } }}
  */
-export function buildSAMime({ sender, displayName, to, cc, subject, html, replyTo, boundary }) {
+export function buildSAMime({ sender, displayName, to, cc, subject, html, replyTo, attachments, boundary, innerBoundary }) {
   const toArr = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
   const ccArr = Array.isArray(cc) ? cc.filter(Boolean) : (cc ? [cc] : []);
+  const attArr = Array.isArray(attachments) ? attachments.filter(Boolean) : [];
   const _boundary = boundary || `boundary_${Date.now()}`;
+  const _innerBoundary = innerBoundary || `boundary_inner_${Date.now()}`;
   const htmlBody = Buffer.from(html).toString("base64");
 
   // Audit BCC via the shared auditBccFor helper - dedups against
@@ -479,7 +487,7 @@ export function buildSAMime({ sender, displayName, to, cc, subject, html, replyT
   // both SA and OAuth paths in lockstep.
   const bccArr = auditBccFor({ to: toArr, cc: ccArr });
 
-  const mimeLines = [
+  const headers = [
     `From: ${displayName} <${sender}>`,
     `To: ${toArr.join(", ")}`,
     ...(ccArr.length > 0 ? [`Cc: ${ccArr.join(", ")}`] : []),
@@ -487,17 +495,58 @@ export function buildSAMime({ sender, displayName, to, cc, subject, html, replyT
     `Subject: ${encodeSubjectSA(subject)}`,
     ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
     "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${_boundary}"`,
-    "",
-    `--${_boundary}`,
-    "Content-Type: text/html; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    htmlBody,
-    `--${_boundary}--`,
   ];
-  const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
-  return { raw, headers: { to: toArr, cc: ccArr, bcc: bccArr } };
+
+  let bodyLines;
+  if (attArr.length === 0) {
+    // Simple case (unchanged): multipart/alternative with HTML.
+    headers.push(`Content-Type: multipart/alternative; boundary="${_boundary}"`);
+    bodyLines = [
+      "",
+      `--${_boundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      htmlBody,
+      `--${_boundary}--`,
+    ];
+  } else {
+    // Attachment case: multipart/mixed at the top, HTML nested inside
+    // multipart/alternative, then each attachment as its own part.
+    // Base64 payloads are chunked to 76 chars per RFC 2045 (same as
+    // buildMimeWithAttachment) so any mail transport that folds long
+    // lines does not corrupt the body.
+    headers.push(`Content-Type: multipart/mixed; boundary="${_boundary}"`);
+    bodyLines = [
+      "",
+      `--${_boundary}`,
+      `Content-Type: multipart/alternative; boundary="${_innerBoundary}"`,
+      "",
+      `--${_innerBoundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      htmlBody,
+      `--${_innerBoundary}--`,
+    ];
+    for (const a of attArr) {
+      bodyLines.push(
+        `--${_boundary}`,
+        `Content-Type: ${a.mimeType}; name="${a.filename}"`,
+        `Content-Disposition: attachment; filename="${a.filename}"`,
+        "Content-Transfer-Encoding: base64",
+        "",
+        chunkString(a.base64, 76),
+      );
+    }
+    bodyLines.push(`--${_boundary}--`);
+  }
+
+  const raw = Buffer.from([...headers, ...bodyLines].join("\r\n")).toString("base64url");
+  return {
+    raw,
+    headers: { to: toArr, cc: ccArr, bcc: bccArr, attachmentCount: attArr.length },
+  };
 }
 
 /**
@@ -518,9 +567,10 @@ export function buildSAMime({ sender, displayName, to, cc, subject, html, replyT
  * @param {string} args.subject - subject (auto-RFC-2047-encoded for non-ASCII via encodeSubjectSA)
  * @param {string} args.html - HTML body (base64-encoded inside multipart/alternative)
  * @param {string} [args.replyTo] - optional Reply-To header
+ * @param {Array<{ filename: string, mimeType: string, base64: string }>} [args.attachments] - Attachments. When present the MIME shape switches to multipart/mixed. Audit BCC still applies.
  * @returns {Promise<"sent"|"failed">}
  */
-export async function sendEmailSA({ sender, displayName, to, cc, subject, html, replyTo }) {
+export async function sendEmailSA({ sender, displayName, to, cc, subject, html, replyTo, attachments }) {
   try {
     const auth = new google.auth.JWT({
       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -530,11 +580,11 @@ export async function sendEmailSA({ sender, displayName, to, cc, subject, html, 
     });
     const gmail = google.gmail({ version: "v1", auth });
 
-    const { raw, headers } = buildSAMime({ sender, displayName, to, cc, subject, html, replyTo });
+    const { raw, headers } = buildSAMime({ sender, displayName, to, cc, subject, html, replyTo, attachments });
 
     await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
     console.log(
-      `[Gmail SA] Email sent to=${headers.to.join(", ")} cc=${headers.cc.join(", ") || "none"} bcc=${headers.bcc.join(", ") || "none"}: ${subject}`
+      `[Gmail SA] Email sent to=${headers.to.join(", ")} cc=${headers.cc.join(", ") || "none"} bcc=${headers.bcc.join(", ") || "none"} attachments=${headers.attachmentCount}: ${subject}`
     );
     return "sent";
   } catch (e) {

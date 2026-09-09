@@ -58,7 +58,12 @@ const LIVE_ACCOUNT_MAP = {
   rdoEmail: "s.lynch@kitchfix.com",
 };
 
-test("F3 N1: static + salaried + submitter", () => {
+// N1 rebuild 2026-09-09: RDO added to the TO list per Kevin ruling
+// in the confirmation-email restyle brief ("all account managers and
+// RDO"). Previously the resolver explicitly excluded RDO from N1;
+// the exclusion has been dropped so an operator's Regional Director
+// receives the confirmation alongside the site's salaried managers.
+test("F3 N1: static + salaried + submitter + RDO (all TO)", () => {
   const out = resolveRecipients({
     notification: NOTIFICATION_TYPES.N1,
     accountKey: "TXR - AZ",
@@ -70,11 +75,23 @@ test("F3 N1: static + salaried + submitter", () => {
     SEBASTIAN_EMAIL, KEVIN_EMAIL, JOE_EMAIL, JOSH_EMAIL,
     "l.ochoa@kitchfix.com", "chef2@kitchfix.com",
     "site.leader@kitchfix.com",
+    "s.lynch@kitchfix.com",
   ].sort());
   assert.deepEqual(out.cc, []);
-  // No RDO on N1 (addendum §A6 explicit).
-  assert.ok(!out.to.includes("s.lynch@kitchfix.com"));
-  assert.ok(!out.cc.includes("s.lynch@kitchfix.com"));
+});
+
+test("F3 N1: null rdoEmail drops the RDO from TO (dedup nulls out)", () => {
+  const out = resolveRecipients({
+    notification: NOTIFICATION_TYPES.N1,
+    accountKey: "TXR - AZ",
+    mode: "live",
+    submitterEmail: "site.leader@kitchfix.com",
+    accountMap: { salariedManagerEmails: ["chef@kitchfix.com"], rdoEmail: null },
+  });
+  assert.ok(!out.to.some((e) => e == null),
+    "null RDO must not leak into TO");
+  assert.ok(!out.to.includes("s.lynch@kitchfix.com"),
+    "known RDO email must not appear when accountMap.rdoEmail is null");
 });
 
 test("F3 N2: Kevin + Sebastian only", () => {
