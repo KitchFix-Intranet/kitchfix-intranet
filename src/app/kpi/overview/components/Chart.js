@@ -81,9 +81,20 @@ function ChartPeriodGrain({ series, revenueModel, bare = false }) {
         const val = Number(s.spent || 0);
         const bud = Number(dashValue(s) || 0);
         const hgt = val > 0 ? Math.max(2, Math.round((val / mx) * 100)) : 2;
+        // Kevin ruling 2026-09-09 (post-#1094 follow-up). Same rule
+        // the week grain got: a closed period whose invoices are
+        // still arriving hatches, whatever its variance. Fires on
+        // 09/14 when R-93 pulls P9 into Current year - without the
+        // hatch the P9 bar would render solid while invoices are
+        // still landing. Server-side `invoices_landed` is true for
+        // verified periods (finance signed off) OR closed_awaiting
+        // periods where today's fiscal period is 2+ periods past
+        // the target, matching the week grain's 2-unit rule.
+        const invoicesStillArriving = s.state === "closed" && s.invoices_landed === false;
         const classSuffix =
           s.state === "in_progress" ? "kpi-ov-bar-hatch"
           : s.state === "not_started" ? "kpi-ov-bar-dash"
+          : invoicesStillArriving ? "kpi-ov-bar-hatch"
           : val <= bud ? "kpi-ov-bar-good"
           : "kpi-ov-bar-over";
         // Kevin ruling 2026-09-08 item 4: per-period dashed budget
